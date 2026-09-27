@@ -65,6 +65,12 @@ Lists published anonymously before accounts existed (`/lists/user/<slug>`) **sti
 
 ### 🔒 Security fixes
 
+- **An install link no longer exposes the provider keys and tokens inside it.** Install links get pasted into apps and shared.
+  - `/<id>/configure` used to write the link's TMDB, MDBList and Trakt keys and tokens into the page.
+  - `/api/resolve`, which "Import from link" uses, returned the MDBList and Trakt ones. Importing someone else's link also connected you to *their* Trakt and MDBList accounts.
+  - The builder doesn't need them since signed-out saves stopped storing keys. A signed-in save uses the account's own keys, which account sync restores on any device.
+  - A new test probes every route the Worker answers with an install link's secrets in storage, and checks none are ever returned. It reads the route list from the source, so new routes are covered automatically.
+
 - **A signed-in Trakt shelf could be served to another user from Cloudflare's edge cache.** A request that carries an `Authorization` header is now never edge-cached, whichever code path makes it. A test pins it; without the guard it fails on `calendars/my/shows`.
 - **Private keys and tokens are no longer accepted in URLs**, where they end up in logs and browser history. `/api/preview`, `/api/tmdb-my-lists`, `/api/mdblist-my-lists`, `/api/simkl/my-lists`, `/api/quick-channel-shows` and `/api/feedback/threads` refuse them in the query string and take them in a POST body instead. The site already sends them that way.
 - **TMDB sign-in is bound to the browser that started it.** The callback requires the request-token cookie, and a token in the URL has to match it.
@@ -102,6 +108,13 @@ With the `ANALYTICS` binding, every request writes one Analytics Engine data poi
 
 ### 🐛 Smaller fixes
 
+- **Faster TMDB-to-IMDb lookups.** `/api/imdb-ids` now resolves up to 100 posters per call (was 24), 8 at a time, so a whole See All page is one request.
+- **No sleeping inside the Trakt PIN request.** When Trakt rate-limits `/api/trakt/device/code`, the Worker now hands the 429 and its `Retry-After` back instead of sleeping. The page waits it out and retries once on its own. The OAuth callback keeps its single 1.5 s pause, because it is a browser redirect with no page to retry it.
+- **Admin leaderboards read their counters by key range.** They used `LIKE 'prefix%'`, which the `stats` table's `(kind, day)` primary key can't serve. The windowed leaderboard now looks up its prefix instead of reading every counter in the date window.
+- **Leftover budget code removed:** the `meter` fetch counting and the Airing Next budget pool, which nothing used after the Free-plan budgets went.
+- **The builder and `/api/save` share one list of personal shelves.** The page gets the server's list rendered into it, which adds the Simkl watchlist, history and Airing Next sentinels to the sign-in rule.
+- **Daily encrypted D1 backup.** `.github/workflows/d1-backup.yml` exports the database each day. It stays off until its four repository secrets are set (`docs/OPERATIONS.md` §5).
+
 - The "last good" copy of a catalog moved from KV to the Cache API, which takes it off KV's write budget.
 - `attachEventMeta` queries D1 in chunks of 90 ids. It used to bind every id into one `IN (...)` query, which goes over D1's limit of 100 parameters on a long list, and the failure was swallowed silently.
 - Badged posters carry the day in their URL, so a cached "airs tomorrow" badge doesn't outlive the day.
@@ -113,6 +126,7 @@ With the `ANALYTICS` binding, every request writes one Analytics Engine data poi
 - The test D1 enforces D1's real limits: at most 100 bound parameters per statement and 2 MB per row.
 - New suites cover sign-in-only likes and shares, the schema gate, request metrics, and credentialed requests never being edge-cached.
 - Tests written for anonymous voting now vote through real accounts, one per test IP.
+- The anime-unpacking tests used to pass any URL they hadn't stubbed to the real network. On a slow connection that meant a 10-second timeout and a failure. They now answer those URLs with a 404, so they never touch the network.
 - The "like lands mid-save" test used to wait a fixed 20 ms. Signing a voter in can take longer than that, and then the test deadlocked on itself; it now waits for the like to actually reach the gate.
 
 ### ✨ Most Watched Today rolls over instead of going empty at midnight

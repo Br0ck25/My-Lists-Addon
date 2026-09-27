@@ -94,6 +94,21 @@ Adding a binding before the code that uses it is harmless. Removing a binding th
 ## 5. Backups
 
 - **Before any migration:** D1 → `my-lists-db` → *Backups / Time Travel* (D1 keeps point-in-time recovery for 30 days on Paid), or export with `npx wrangler d1 export my-lists-db --remote --output=backup.sql`.
+- **Daily off-Cloudflare copy:** `.github/workflows/d1-backup.yml` exports the database every day at 04:17 UTC. It encrypts the export and keeps it as an Actions artifact for 30 days.
+  - It needs four repository secrets (Settings → Secrets and variables → Actions):
+    - `CLOUDFLARE_API_TOKEN`: an API token with *D1: Read*;
+    - `CLOUDFLARE_ACCOUNT_ID`;
+    - `D1_DATABASE_ID`: shown on the database's overview page;
+    - `BACKUP_PASSPHRASE`: a long random string.
+  - Until all four are set, the job skips itself with a warning.
+  - Keep a copy of the passphrase outside GitHub. Without it no backup can be read.
+  - The export is encrypted because this repository's Actions artifacts can be downloaded by other people, and the export holds every account's data.
+- **Restoring a daily copy:**
+  1. Download the artifact from the workflow run.
+  2. Decrypt it: `gpg --decrypt my-lists-db-<stamp>.sql.gz.gpg > backup.sql.gz` (it asks for the passphrase), then `gunzip backup.sql.gz`.
+  3. Load it into a **new, empty** database first and check it: `npx wrangler d1 create my-lists-restore`, then `npx wrangler d1 execute my-lists-restore --remote --file=backup.sql`.
+  4. Point the Worker's `DB` binding at the restored database only once it checks out.
+  5. Never load a backup into the live database on top of existing data.
 - The KV namespace has no built-in backup. The data that matters in KV is being moved to D1 (see `MIGRATION_PLAN.md`).
 
 ## 6. Recommended WAF rate-limiting rules

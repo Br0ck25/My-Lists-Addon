@@ -66,15 +66,30 @@ describe("/api/imdb-ids", () => {
     assert.equal(calls.length, 0, "and makes no outbound call for any of them");
   });
 
-  // The ceiling is what keeps this off the free plan's 50-subrequest limit.
-  it("caps how many it will look up in one request", async () => {
+  // A whole See All page in one call, but never more than 100 lookups, and
+  // never more than 8 of them in flight at once.
+  it("caps how many it will look up in one request, and how many at once", async () => {
     calls = [];
-    const env = makeEnv({ CONFIGS: makeKv() });
-    const many = Array.from({ length: 60 }, (_, i) => ({ id: "tmdb:" + (1000 + i), type: "movie" }));
-    const r = await post(env, many);
-    assert.equal(r.body.ok, true);
-    assert.ok(calls.length <= 24, "at most 24 outbound calls, got " + calls.length);
-    assert.ok(Object.keys(r.body.map).length <= 24);
+    let inFlight = 0;
+    let peak = 0;
+    const countingFetch = globalThis.fetch;
+    globalThis.fetch = async (input) => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, 2));
+      try { return await countingFetch(input); } finally { inFlight--; }
+    };
+    try {
+      const env = makeEnv({ CONFIGS: makeKv() });
+      const many = Array.from({ length: 150 }, (_, i) => ({ id: "tmdb:" + (1000 + i), type: "movie" }));
+      const r = await post(env, many);
+      assert.equal(r.body.ok, true);
+      assert.equal(calls.length, 100, "exactly the first 100 are looked up");
+      assert.equal(Object.keys(r.body.map).length, 100);
+      assert.ok(peak <= 8, "at most 8 lookups at once, saw " + peak);
+    } finally {
+      globalThis.fetch = countingFetch;
+    }
   });
 
   it("answers an empty request without calling out", async () => {

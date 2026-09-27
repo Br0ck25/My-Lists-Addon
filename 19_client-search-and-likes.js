@@ -528,7 +528,7 @@ async function applyBetterPostersToTmdbTiles(rootEl) {
 
   if (needed.length) {
     // One in-flight batch at a time, capped to what the endpoint accepts.
-    const batch = needed.slice(0, 24);
+    const batch = needed.slice(0, ${IMDB_ID_LOOKUP_MAX});
     try {
       const res = await fetch(ORIGIN + '/api/imdb-ids', {
         method: 'POST',

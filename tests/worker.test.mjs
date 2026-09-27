@@ -2031,8 +2031,13 @@ describe("D-8: a signed-out install link carries public lists only", () => {
   // signed-out visitor either builds something the save then refuses, or is
   // stopped from adding something the save would have taken.
   it("the builder page and the server draw the line in the same place", () => {
-    const server = loadSourceFunctions("04_config-resolution.js").entryAccountRequirement;
-    const isPersonalShelfSourceLine = loadOneClientFunction("16_client-row-core.js", "isPersonalShelfSourceLine", { URL });
+    const serverSb = loadSourceFunctions("00_constants.js", "04_config-resolution.js");
+    const server = serverSb.entryAccountRequirement;
+    // The page gets the server's own prefix list rendered into it.
+    const prefixes = vm.runInContext("PERSONAL_SHELF_URL_PREFIXES", serverSb);
+    const isPersonalShelfSourceLine = loadOneClientFunction("16_client-row-core.js", "isPersonalShelfSourceLine", {
+      URL, PERSONAL_SHELF_URL_PREFIXES: prefixes,
+    });
     const isPublicChannelRow = loadOneClientFunction("16_client-row-core.js", "isPublicChannelRow");
     const client = loadOneClientFunction("16_client-row-core.js", "rowNeedsAccount", { isPersonalShelfSourceLine, isPublicChannelRow });
     const ch = (p) => "channel:v1:" + JSON.stringify(p);
@@ -2045,12 +2050,146 @@ describe("D-8: a signed-out install link carries public lists only", () => {
       "tmdb:watchlist", "tmdb:favorites", "https://app.trakt.tv/users/x/continue-watching",
       "https://www.mdblist.com/watchlist", "https://mdblist.com/lists/x/history/", "autotrack:watchlist:series:bob",
       "https://trakt.tv/users/x/watchlist/extra", "HTTPS://TRAKT.TV/USERS/X/WATCHLIST", "not a url",
+      "simkl:watchlist", "simkl:history:shows", "simkl:airing-next", "simkl:chart:week",
     ];
     for (const url of cases) {
       assert.equal(client(url), server(url), `they disagree on ${JSON.stringify(url.slice(0, 60))}`);
     }
     assert.equal(server("https://trakt.tv/users/x/watchlist/extra"), "", "a deeper path is not the watchlist itself");
     assert.notEqual(server("HTTPS://TRAKT.TV/USERS/X/WATCHLIST"), "", "and case does not matter");
+  });
+});
+
+// P1-T2. Nothing the Worker answers hands a stored secret back to someone who
+// has not proved they own it. Every route literal in the router is probed --
+// read from the source, so a route added later is covered without anyone
+// remembering to list it -- as GET, GET naming the install link, and POST with
+// and without an install-link-shaped body. The install link itself is the
+// strongest thing a stranger can plausibly hold: it gets pasted into apps and
+// shared.
+//
+// Measured before the fix: GET /<id>/configure wrote the link's TMDB, MDBList
+// and Trakt keys and tokens into the page, and GET /api/resolve returned the
+// MDBList and Trakt ones. Neither is needed since D-8, and both are gone.
+describe("P1-T2: no route hands a stored secret to an unproven caller", () => {
+  it("probes every route, and none echoes a key, a token or a Creator Key", async () => {
+    const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
+    const u = await createUser(env, "leakowner");
+    const SECRETS = {
+      tmdbKey: "SECRETtmdbKEY0001", mdblistKey: "SECRETmdbKEY0002", mdblistAccessToken: "SECRETmdbTOKEN003",
+      traktKey: "SECRETtraktKEY004", traktAccessToken: "SECRETtraktTOK005", simklKey: "SECRETsimklKEY006",
+      simklAccessToken: "SECRETsimklTOK007",
+    };
+    const saved = await call(env, "/api/save", { method: "POST", json: {
+      creatorName: "leakowner", creatorKey: u.creatorKey,
+      entries: [
+        { id: "wh", name: "History", type: "series", url: "autotrack:watch-history:series:leakowner" },
+        { id: "pop", name: "Pop", type: "movie", url: "tmdb:chart:popular" },
+      ],
+      track: true, trackCreatorName: "leakowner", trackCreatorKey: u.creatorKey,
+      ...SECRETS,
+    }});
+    const id = saved.body.id;
+    assert.ok(id, "precondition: the secret-carrying install link was saved");
+    const stored = env.CONFIGS._store.get("cfg:" + id);
+    for (const v of Object.values(SECRETS)) assert.ok(stored.includes(v), "precondition: the link really holds the secrets");
+    await call(env, "/api/creator/sync/save", { method: "POST", json: {
+      creatorName: "leakowner", creatorKey: u.creatorKey, config: [{ a: 1 }],
+      keys: { tmdbKey: SECRETS.tmdbKey, traktAccessToken: SECRETS.traktAccessToken },
+    }});
+    const needles = new Map(Object.entries(SECRETS).map(([k, v]) => [v, k]));
+    needles.set(u.creatorKey, "Creator Key");
+
+    const routes = new Set();
+    for (const f of ["25_api-catalog-routes.js", "26_api-creator-and-admin-routes.js"]) {
+      const src = fs.readFileSync(path.join(REPO_ROOT, f), "utf8");
+      for (const m of src.matchAll(/(?:path|pathname|url\.pathname) === "(\/[^"]*)"/g)) routes.add(m[1]);
+    }
+    assert.ok(routes.size > 100, `expected the whole router, found ${routes.size} routes`);
+
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response("{}", { status: 404, headers: { "content-type": "application/json" } });
+    const leaks = [];
+    async function probe(p, opts = {}) {
+      const r = await call(env, p, opts);
+      for (const [needle, name] of needles) {
+        if (r.text.includes(needle)) leaks.push(`${opts.method || "GET"} ${p} -> ${r.status} returned ${name}`);
+      }
+    }
+    try {
+      for (const p of routes) {
+        await probe(p);
+        await probe(`${p}?config=${id}&id=${id}`);
+        await probe(p, { method: "POST", json: {} });
+        await probe(p, { method: "POST", json: {
+          config: id, id, url: `https://example.test/${id}/manifest.json`, username: "leakowner", creatorName: "leakowner",
+        } });
+      }
+      for (const p of [`/${id}/manifest.json`, `/${id}/configure`, `/${id}/catalog/series/wh.json`,
+        `/${id}/catalog/movie/pop.json`, `/${id}/meta/series/tt0903747.json`, "/configure", "/"]) {
+        await probe(p);
+        await probe(p, { headers: { "Sec-Fetch-Mode": "navigate" } });
+      }
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    assert.deepEqual(leaks, []);
+  });
+});
+
+// P1-F10. The device-code route used to sleep inside the request when Trakt
+// rate-limited it. It now hands the wait back; the page waits and retries.
+describe("Trakt device code: a rate limit is handed back, not slept on", () => {
+  it("answers 429 with Trakt's wait, after one upstream call and no pause", async () => {
+    const env = makeEnv({ TRAKT_CLIENT_ID: "cid" });
+    const realFetch = globalThis.fetch;
+    let upstream = 0;
+    globalThis.fetch = async (input) => {
+      if (String(input && input.url ? input.url : input).includes("api.trakt.tv/oauth/device/code")) {
+        upstream++;
+        return new Response("{}", { status: 429, headers: { "Retry-After": "7" } });
+      }
+      return new Response("{}", { status: 404 });
+    };
+    try {
+      const started = Date.now();
+      const r = await call(env, "/api/trakt/device/code", { method: "POST", json: { traktKey: "cid" } });
+      assert.equal(r.status, 429);
+      assert.equal(r.body.retryAfter, 7);
+      assert.equal(r.headers.get("Retry-After"), "7");
+      assert.equal(upstream, 1, "no retry inside the request");
+      assert.ok(Date.now() - started < 400, "and no sleep either");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+});
+
+// P2-10. The counter-family reads take a key range, not `LIKE 'prefix%'`,
+// which the (kind, day) primary key cannot serve.
+describe("P2-10: stats prefix reads use the primary key", () => {
+  const { statKindRange } = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "03_admin.js");
+
+  it("bounds a prefix exactly, underscores and all", () => {
+    const db = makeD1();
+    for (const k of ["list_copy:a", "list_copy:zz", "listXcopy:a", "list_copy", "list_copz:a", "list_copy;"]) {
+      db._db.exec(`INSERT INTO stats (kind, day, n) VALUES ('${k}', 'total', 1)`);
+    }
+    const [lo, hi] = statKindRange("list_copy:");
+    const got = db.q("SELECT kind FROM stats WHERE kind >= ? AND kind < ? ORDER BY kind", lo, hi).map((r) => r.kind);
+    assert.deepEqual(got, ["list_copy:a", "list_copy:zz"], "LIKE's `_` wildcard would also have matched listXcopy:a");
+  });
+
+  it("lets the windowed leaderboard seek its prefix instead of reading every counter in the window", () => {
+    const src = fs.readFileSync(path.join(REPO_ROOT, "03_admin.js"), "utf8");
+    const m = src.match(/"(SELECT kind, SUM\(n\) AS total FROM stats WHERE kind >= \? AND kind < \?[^"]*)"/);
+    assert.ok(m, "the windowed query reads a kind range");
+    const db = makeD1();
+    const plan = db.q("EXPLAIN QUERY PLAN " + m[1], "evt:watched:", "evt:watched;", "2026-09-20", "2026-09-26", 50)
+      .map((r) => r.detail).join(" | ");
+    assert.match(plan, /sqlite_autoindex_stats_1 \(kind>\? AND kind<\?\)/, plan);
+    const fn = src.slice(src.indexOf("async function d1CountsByKindPrefix"), src.indexOf("async function d1LeaderboardCounts"));
+    assert.ok(fn && !/LIKE/.test(fn), "no LIKE left in it");
   });
 });
 
@@ -10577,7 +10716,10 @@ describe("Anime Unpacking: restoring multi-season division for compressed anime 
           ],
         }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
-      return originalFetch(url, opts);
+      // Hermetic: anything not stubbed above is a 404, never the real
+      // network. Falling through to it made these tests hang for 10 s
+      // and fail whenever the network was slow.
+      return new Response("{}", { status: 404, headers: { "Content-Type": "application/json" } });
     };
 
     try {
@@ -10645,7 +10787,10 @@ describe("Anime Unpacking: restoring multi-season division for compressed anime 
           ],
         }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
-      return originalFetch(url, opts);
+      // Hermetic: anything not stubbed above is a 404, never the real
+      // network. Falling through to it made these tests hang for 10 s
+      // and fail whenever the network was slow.
+      return new Response("{}", { status: 404, headers: { "Content-Type": "application/json" } });
     };
 
     try {
@@ -10690,7 +10835,10 @@ describe("Anime Unpacking: restoring multi-season division for compressed anime 
           },
         }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
-      return originalFetch(url, opts);
+      // Hermetic: anything not stubbed above is a 404, never the real
+      // network. Falling through to it made these tests hang for 10 s
+      // and fail whenever the network was slow.
+      return new Response("{}", { status: 404, headers: { "Content-Type": "application/json" } });
     };
 
     try {
@@ -10727,7 +10875,10 @@ describe("Anime Unpacking: restoring multi-season division for compressed anime 
           ],
         }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
-      return originalFetch(url, opts);
+      // Hermetic: anything not stubbed above is a 404, never the real
+      // network. Falling through to it made these tests hang for 10 s
+      // and fail whenever the network was slow.
+      return new Response("{}", { status: 404, headers: { "Content-Type": "application/json" } });
     };
 
     try {
@@ -10760,7 +10911,10 @@ describe("Anime Unpacking: restoring multi-season division for compressed anime 
           ],
         }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
-      return originalFetch(url, opts);
+      // Hermetic: anything not stubbed above is a 404, never the real
+      // network. Falling through to it made these tests hang for 10 s
+      // and fail whenever the network was slow.
+      return new Response("{}", { status: 404, headers: { "Content-Type": "application/json" } });
     };
 
     try {
@@ -10809,7 +10963,10 @@ describe("Anime Unpacking: restoring multi-season division for compressed anime 
           ],
         }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
-      return originalFetch(url, opts);
+      // Hermetic: anything not stubbed above is a 404, never the real
+      // network. Falling through to it made these tests hang for 10 s
+      // and fail whenever the network was slow.
+      return new Response("{}", { status: 404, headers: { "Content-Type": "application/json" } });
     };
 
     try {
@@ -10860,7 +11017,10 @@ describe("Anime Unpacking: restoring multi-season division for compressed anime 
           ],
         }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
-      return originalFetch(url, opts);
+      // Hermetic: anything not stubbed above is a 404, never the real
+      // network. Falling through to it made these tests hang for 10 s
+      // and fail whenever the network was slow.
+      return new Response("{}", { status: 404, headers: { "Content-Type": "application/json" } });
     };
 
     try {
@@ -10905,7 +11065,10 @@ describe("Anime Unpacking: restoring multi-season division for compressed anime 
           },
         }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
-      return originalFetch(url, opts);
+      // Hermetic: anything not stubbed above is a 404, never the real
+      // network. Falling through to it made these tests hang for 10 s
+      // and fail whenever the network was slow.
+      return new Response("{}", { status: 404, headers: { "Content-Type": "application/json" } });
     };
 
     try {
@@ -12227,14 +12390,6 @@ describe("worker: episode air times", () => {
     assert.equal(out.next, null);
   });
 
-  it("counts its fetches for the batch budget", async () => {
-    const sb = loadAirTimeSource(async (url) => String(url).includes("/lookup/shows")
-      ? jsonRes({ ...BROADCAST_SHOW, _links: { nextepisode: { href: "https://api.tvmaze.com/episodes/999" } } })
-      : jsonRes({ season: 1, number: 1, airtime: "21:00" }));
-    const meter = { spent: 0 };
-    await sb.fetchShowAirTimeUncached("tt0944947", meter);
-    assert.equal(meter.spent, 2, "/api/details/batch has to see these to stay inside a free Worker's budget");
-  });
 });
 
 // A movie inside a channel is a known limit, not something this repo can fix.

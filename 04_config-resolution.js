@@ -376,14 +376,11 @@ function isPublicChannelRow(s) {
 // One source line, lowercased. The sentinel names match detectSource above;
 // the two URL shapes are the pasted forms of a provider watchlist or history.
 function isPersonalShelfSource(l) {
-  const named = (base) => l === base || l.startsWith(base + ":");
-  if (l.startsWith("autotrack:")) return true;
-  if (named("custom:watch-history") || named("custom:continue-watching") || l === "custom:watchlist") return true;
-  if (named("mdblist:watchlist") || named("mdblist:history") || named("mdblist:airing-next") || named("mdblist:upnext")) return true;
-  if (l.startsWith("mdblist:user:")) return true;
-  if (named("trakt:watchlist") || named("trakt:history") || named("trakt:airing-next") || named("trakt:continue-watching")) return true;
-  if (l.startsWith("trakt:user:") || l === "trakt:collection") return true;
-  if (l.startsWith("simkl:user:")) return true;
+  // PERSONAL_SHELF_URL_PREFIXES (00_constants.js) is the one list of provider
+  // and tracked shelves; "Remove duplicates across lists" reads it too.
+  if (PERSONAL_SHELF_URL_PREFIXES.some((p) => l.startsWith(p))) return true;
+  if (l.startsWith("custom:watch-history") || l.startsWith("custom:continue-watching") || l === "custom:watchlist") return true;
+  if (l === "trakt:collection") return true;
   if (l.startsWith("tmdb:account:") || l === "tmdb:watchlist" || l === "tmdb:favorites") return true;
   let u;
   try {

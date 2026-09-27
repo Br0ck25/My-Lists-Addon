@@ -772,17 +772,10 @@ async function importFromLink() {
       return;
     }
     restoreRows(data.entries);
-    if (data.mdblistKey) document.getElementById('mdblistKeyInput').value = data.mdblistKey;
-    if (data.mdblistAccessToken) {
-      mdblistAccessToken = data.mdblistAccessToken;
-      if (typeof renderMdblistConnectStatus === 'function') renderMdblistConnectStatus();
-    }
-    if (data.traktKey) document.getElementById('traktKeyInput').value = data.traktKey;
+    // A link carries no provider keys or tokens any more (/api/resolve): the
+    // accounts connected in this browser, or synced to the signed-in account,
+    // are the ones used.
     if (data.traktUsername) document.getElementById('traktUsernameInput').value = data.traktUsername;
-    if (data.traktAccessToken) {
-      traktAccessToken = data.traktAccessToken;
-      renderTraktConnectStatus();
-    }
     renumber();
     checkAllDuplicateUrls();
     saveState();

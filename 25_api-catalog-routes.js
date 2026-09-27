@@ -465,7 +465,15 @@ async function handleFetch(request, env, ctx) {
     let m = path.match(/^\/([^/]+)\/configure$/);
     if (m) {
       ctx.waitUntil(bumpStat(env, "pageviews"));
-      const { entries, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktUsername, traktAccessToken, shuffleShelves, shuffleItems, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists } = await resolveConfig(m[1], env);
+      // The page no longer carries the config's provider keys or tokens. It
+      // used to write them into the HTML, so anyone holding an install link --
+      // which gets pasted into apps and shared -- could read a Trakt or
+      // MDBList token straight out of /<id>/configure. The builder does not
+      // need them: a signed-in save uses the account's own keys (restored to
+      // any device by account sync), and a signed-out save stores none
+      // (docs/DECISIONS.md D-8). With nothing embedded, the page falls back to
+      // whatever this browser already has.
+      const { entries, traktUsername, shuffleShelves, shuffleItems, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists } = await resolveConfig(m[1], env);
       // The one page that still sends no-store (it renders the person's own
       // API keys -- see the note on the headers below), but it should not
       // also be re-sending the 1.3MB client bundle every time. The split
@@ -475,7 +483,7 @@ async function handleFetch(request, env, ctx) {
       return new Response(
         await pageWithExternalBundle(renderBuilder(url.origin, {
           initialEntries: entries,
-          initialKeys: { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktUsername, traktAccessToken, shuffleShelves, shuffleItems, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists },
+          initialKeys: { traktUsername, shuffleShelves, shuffleItems, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists },
           isConfigureMode: true,
         })),
         // The one builder page that deliberately keeps no-store rather than
@@ -2802,13 +2810,11 @@ function generateSearchVariations(query) {
     // a day), which is why the identical rows DO get BetterPosters artwork in
     // Live Preview and in Stremio/Nuvio while the dashboard cards did not.
     //
-    // Deliberately per-request and small rather than resolving the whole list
-    // up front: /api/recommendations returns up to 40 movies AND 40 shows, and
-    // 80 extra subrequests on a dashboard load would blow the 50-subrequest
-    // ceiling a free Workers plan gets. The caller asks only for the tiles it
-    // is about to draw, so a card costs ~9 and a See All page resolves more as
-    // it is scrolled. Every answer is edge-cached for a day, so the second
-    // visit costs nothing.
+    // Per-request rather than resolving a whole list up front: the caller asks
+    // only for the tiles it is about to draw, so a card costs ~9 lookups and a
+    // See All page up to IMDB_ID_LOOKUP_MAX, IMDB_ID_LOOKUP_CONCURRENCY at a
+    // time. Every answer is edge-cached for a day, so the second visit costs
+    // nothing.
     if (path === "/api/imdb-ids" && request.method === "POST") {
       let idBody;
       try {
@@ -2831,7 +2837,7 @@ function generateSearchVariations(query) {
       }
 
       const map = {};
-      await Promise.all(rawItems.map(async (raw) => {
+      await mapWithConcurrency(rawItems, IMDB_ID_LOOKUP_CONCURRENCY, async (raw) => {
         const key = String((raw && raw.id) || "").trim();
         if (!key.startsWith("tmdb:")) return;
         // The id segment only -- an episode id ("tmdb:1234:1:2") resolves to
@@ -2852,7 +2858,7 @@ function generateSearchVariations(query) {
             map[key] = data.imdb_id;
           }
         } catch (e) {}
-      }));
+      });
       return json({ ok: true, map }, 200, { "Cache-Control": "no-store" });
     }
 
@@ -3388,7 +3394,9 @@ function generateSearchVariations(query) {
         // One retry at most, after a short pause: Trakt answers a burst of
         // token exchanges with 429/403, and the code is single-use, so one more
         // try is worth it -- but not the 6 s of sleeping inside the request this
-        // used to allow.
+        // used to allow. The one in-request pause left in the Worker, on
+        // purpose: this is a browser redirect with no page in the loop to retry
+        // it, unlike the device-code flow, which hands its 429 back to the page.
         const delays = [0, 1500];
         for (const delay of delays) {
           if (delay > 0) await new Promise((r) => setTimeout(r, delay));
@@ -3480,20 +3488,16 @@ function generateSearchVariations(query) {
           body: JSON.stringify({ client_id: clientId }),
         });
 
-        // If rate limited by Trakt (429), automatically wait and retry once
+        // Rate limited: hand Trakt's wait straight back instead of sleeping
+        // inside the request. The page waits it out and asks once more (see
+        // startTraktDeviceLogin, 17_client-my-lists-and-trakt-oauth.js).
         if (res.status === 429) {
-          const retrySec = parseInt(res.headers.get("Retry-After") || "2", 10);
-          await new Promise((resolve) => setTimeout(resolve, Math.min(1500, Math.max(500, retrySec * 1000))));
-          res = await fetch("https://api.trakt.tv/oauth/device/code", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "trakt-api-version": "2",
-              "trakt-api-key": clientId,
-              "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-            },
-            body: JSON.stringify({ client_id: clientId }),
-          });
+          const retrySec = Math.min(30, Math.max(1, parseInt(res.headers.get("Retry-After") || "2", 10) || 2));
+          return json({
+            ok: false,
+            error: "Trakt is busy (rate limit). Please wait a few seconds and try again.",
+            retryAfter: retrySec,
+          }, 429, { "Retry-After": String(retrySec) });
         }
 
         const data = await res.json().catch(() => ({}));
@@ -6901,15 +6905,17 @@ function generateSearchVariations(query) {
       if (!config) return json({ ok: false, error: "Missing config." }, 400);
       try {
         const resData = await resolveConfig(config, env);
-        const { entries, mdblistKey, mdblistAccessToken, traktKey, traktUsername, traktAccessToken, watchHistory, continueWatching, watchlist, airingNext } = resData;
+        const { entries, traktUsername, watchHistory, continueWatching, watchlist, airingNext } = resData;
         if (!entries || !entries.length) return json({ ok: false, error: "That link has no lists in it." });
-        // jsonPrivate: this body is one account's -- it carries their MDBList
-        // key and their Trakt/MDBList OAuth tokens. json()'s successful-2xx
-        // default is max-age=3600 with no Vary, and this is a GET, so a
-        // browser or any shared cache in front of this Worker could store
-        // somebody's tokens for an hour. isPrivateApiPath now names this route
-        // too, so the header is set at the boundary as well; this says so at
-        // the call site.
+        // No provider keys or tokens. This used to hand back the link's MDBList
+        // key and Trakt/MDBList OAuth tokens, so "Import from link" connected
+        // whoever pasted a link to the link owner's accounts -- and anyone
+        // holding a shared install link could read the tokens. Importing needs
+        // only the rows: a signed-in builder uses its account's own keys and a
+        // signed-out one stores none (docs/DECISIONS.md D-8).
+        //
+        // jsonPrivate still: the tracking rows below are one account's. isPrivateApiPath
+        // names this route too, so the header is also set at the boundary.
         return jsonPrivate({
           ok: true,
           entries,
@@ -6917,11 +6923,7 @@ function generateSearchVariations(query) {
           continueWatching: continueWatching || [],
           watchlist: watchlist || [],
           airingNext: airingNext || [],
-          mdblistKey,
-          mdblistAccessToken,
-          traktKey,
           traktUsername,
-          traktAccessToken
         });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err) });

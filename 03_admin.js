@@ -675,20 +675,20 @@ async function attachEventMeta(env, eventType, ids) {
 // `kind` dimension list_copy:{slug} already uses. That is why this needed no
 // migration: the table it wants already exists.
 async function d1CountsByKindPrefix(env, prefix, window, candidateCap) {
-  const like = prefix.replace(/[%_]/g, "\\$&") + "%";
+  const [lo, hi] = statKindRange(prefix);
   let rows;
   if (window === "alltime") {
     rows = await env.DB.prepare(
-      "SELECT kind, n AS total FROM stats WHERE kind LIKE ? ESCAPE '\\' AND day = 'total' ORDER BY n DESC LIMIT ?"
-    ).bind(like, candidateCap).all();
+      "SELECT kind, n AS total FROM stats WHERE kind >= ? AND kind < ? AND day = 'total' ORDER BY n DESC LIMIT ?"
+    ).bind(lo, hi, candidateCap).all();
   } else {
     const days = window === "today" ? 1 : parseInt(window, 10) || 7;
     const nowMs = Date.now();
     const oldest = easternDateKey(new Date(nowMs - (days - 1) * 86400000));
     const newest = easternDateKey(new Date(nowMs));
     rows = await env.DB.prepare(
-      "SELECT kind, SUM(n) AS total FROM stats WHERE kind LIKE ? ESCAPE '\\' AND day >= ? AND day <= ? GROUP BY kind ORDER BY total DESC LIMIT ?"
-    ).bind(like, oldest, newest, candidateCap).all();
+      "SELECT kind, SUM(n) AS total FROM stats WHERE kind >= ? AND kind < ? AND day >= ? AND day <= ? GROUP BY kind ORDER BY total DESC LIMIT ?"
+    ).bind(lo, hi, oldest, newest, candidateCap).all();
   }
   return (rows && rows.results ? rows.results : [])
     .map((r) => ({ key: String(r.kind).slice(prefix.length), count: Number(r.total) || 0 }))
@@ -1253,8 +1253,8 @@ async function computeAudienceAnalytics(env) {
   if (env.DB) {
     try {
       const genreRows = await env.DB.prepare(
-        "SELECT kind, n FROM stats WHERE kind LIKE 'genre:%' AND day = 'total' ORDER BY n DESC LIMIT 50"
-      ).all();
+        "SELECT kind, n FROM stats WHERE kind >= ? AND kind < ? AND day = 'total' ORDER BY n DESC LIMIT 50"
+      ).bind(...statKindRange("genre:")).all();
       if (genreRows && Array.isArray(genreRows.results) && genreRows.results.length > 0) {
         validGenres = genreRows.results.map((r) => ({
           name: r.kind.slice("genre:".length),
@@ -1262,8 +1262,8 @@ async function computeAudienceAnalytics(env) {
         })).filter((g) => g.count > 0 && g.name);
       }
       const decadeRows = await env.DB.prepare(
-        "SELECT kind, n FROM stats WHERE kind LIKE 'decade:%' AND day = 'total' ORDER BY n DESC LIMIT 50"
-      ).all();
+        "SELECT kind, n FROM stats WHERE kind >= ? AND kind < ? AND day = 'total' ORDER BY n DESC LIMIT 50"
+      ).bind(...statKindRange("decade:")).all();
       if (decadeRows && Array.isArray(decadeRows.results) && decadeRows.results.length > 0) {
         validDecades = decadeRows.results.map((r) => ({
           name: r.kind.slice("decade:".length),
@@ -1428,8 +1428,17 @@ async function readStatCount(env, kind, bucket) {
 // 02_http-and-creator-utils.js): the input there was a username, which may
 // contain `_`. Nothing reaches the call sites below from a request today, but
 // a helper is cheaper than remembering the rule at each new one.
-function escapeLikePrefix(s) {
-  return String(s == null ? "" : s).replace(/[\\%_]/g, "\\$&");
+// Every `stats` row whose kind starts with `prefix`, as a half-open range
+// [prefix, upper) over the (kind, day) primary key. A `LIKE 'prefix%'` cannot
+// use that key and scans the table; a range can (BE-H11). The upper bound is
+// the prefix with its last character stepped up by one, so the range holds
+// every kind that starts with the prefix and nothing else -- and it has no
+// wildcards to escape, which is what the old `ESCAPE '\\'` was for (two of
+// the prefixes contain `_`, LIKE's single-character wildcard).
+function statKindRange(prefix) {
+  const p = String(prefix == null ? "" : prefix);
+  if (!p) return ["", "\uffff"];
+  return [p, p.slice(0, -1) + String.fromCharCode(p.charCodeAt(p.length - 1) + 1)];
 }
 
 // All-time totals for a family of counters ("catalog_add:", "list_copy:"),
@@ -1444,17 +1453,13 @@ async function readStatTotalsByPrefix(env, prefix) {
   if (!env || !env.CONFIGS) return out;
   if (env.DB) {
     try {
-      // ESCAPE, because two of the three prefixes this is called with
-      // (`catalog_add:`, `list_copy:`, `sourcegroup:`) contain `_`, which is
-      // LIKE's single-character wildcard -- so `kind LIKE 'list_copy:%'` also
-      // matches `listXcopy:...`. Every kind here is generated internally
-      // today, so nothing is actually mismatched; this is the same defect
-      // class as the account purge's `id LIKE` (see purgeCreatorData,
-      // 02_http-and-creator-utils.js) and is closed the same day rather than
-      // left as the one instance that happens to be safe.
+      // A key range, not LIKE: see statKindRange. (LIKE here needed an
+      // ESCAPE clause too, because `catalog_add:` and `list_copy:` contain
+      // `_`, LIKE's single-character wildcard.)
+      const [lo, hi] = statKindRange(prefix);
       const { results } = await env.DB.prepare(
-        "SELECT kind, n FROM stats WHERE day = 'total' AND kind LIKE ? ESCAPE '\\' ORDER BY n DESC LIMIT ?"
-      ).bind(escapeLikePrefix(prefix) + "%", STAT_TOTALS_READ_CAP).all();
+        "SELECT kind, n FROM stats WHERE day = 'total' AND kind >= ? AND kind < ? ORDER BY n DESC LIMIT ?"
+      ).bind(lo, hi, STAT_TOTALS_READ_CAP).all();
       if (results && results.length) {
         for (const row of results) {
           const name = String(row.kind).slice(prefix.length);

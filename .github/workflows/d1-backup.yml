@@ -1,0 +1,85 @@
+name: D1 backup
+
+# A daily off-Cloudflare copy of the production D1 database (task P1-B1).
+# D1 Time Travel already gives 30 days of point-in-time restore on Workers
+# Paid; this is the copy that survives losing the database itself.
+#
+# The dump holds every account's data, and this repository's Actions artifacts
+# can be downloaded by other people, so the dump is encrypted before it is
+# uploaded and the job refuses to run without a passphrase. Restore steps are
+# in docs/OPERATIONS.md §5.
+#
+# Repository secrets (Settings -> Secrets and variables -> Actions):
+#   CLOUDFLARE_API_TOKEN   an API token with "D1: Read" on the account
+#   CLOUDFLARE_ACCOUNT_ID  the account id
+#   D1_DATABASE_ID         my-lists-db's id (D1 -> my-lists-db -> overview)
+#   BACKUP_PASSPHRASE      a long random passphrase, also kept somewhere safe
+#                          outside GitHub -- without it a backup is unreadable
+
+on:
+  schedule:
+    - cron: "17 4 * * *" # daily, 04:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+    steps:
+      - name: Check the secrets are set
+        id: secrets
+        run: |
+          missing=""
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID D1_DATABASE_ID BACKUP_PASSPHRASE; do
+            if [ -z "${!name}" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::warning::D1 backup skipped. Missing repository secrets:$missing (see docs/OPERATIONS.md §5)."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.secrets.outputs.ready == 'true'
+        with:
+          node-version: "22"
+
+      - name: Export and encrypt
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p backup
+          cd backup
+          # A throwaway config naming the real database id: the repository's
+          # wrangler.toml carries a placeholder id and is for local use.
+          printf '%s\n' \
+            'name = "my-lists-backup"' \
+            '[[d1_databases]]' \
+            'binding = "DB"' \
+            'database_name = "my-lists-db"' \
+            "database_id = \"${D1_DATABASE_ID}\"" > wrangler.toml
+          stamp="$(date -u +%Y-%m-%dT%H%MZ)"
+          npx --yes wrangler@4 d1 export my-lists-db --remote --output="my-lists-db-${stamp}.sql"
+          test -s "my-lists-db-${stamp}.sql"
+          gzip -9 "my-lists-db-${stamp}.sql"
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" \
+            --symmetric --cipher-algo AES256 "my-lists-db-${stamp}.sql.gz"
+          # Only the encrypted file leaves this runner.
+          rm -f "my-lists-db-${stamp}.sql.gz" wrangler.toml
+          ls -l
+
+      - uses: actions/upload-artifact@v4
+        if: steps.secrets.outputs.ready == 'true'
+        with:
+          name: d1-backup-${{ github.run_id }}
+          path: backup/*.sql.gz.gpg
+          if-no-files-found: error
+          retention-days: 30

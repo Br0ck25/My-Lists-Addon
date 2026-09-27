@@ -878,7 +878,7 @@ function closeTraktDeviceModal() {
   if (modal) modal.style.display = 'none';
 }
 
-async function startTraktDeviceLogin() {
+async function startTraktDeviceLogin(retried) {
   if (!requireSignedInFor('connect your Trakt account')) return; // docs/DECISIONS.md D-8
   const modal = document.getElementById('traktDeviceModal');
   const codeEl = document.getElementById('traktDeviceUserCode');
@@ -897,6 +897,15 @@ async function startTraktDeviceLogin() {
       body: JSON.stringify({ traktKey: traktKey }),
     });
     const data = await res.json();
+    // Trakt rate-limits the code request now and then. The server hands the
+    // 429 straight back rather than sleeping inside the request; wait out its
+    // Retry-After once here and ask again.
+    if (res.status === 429 && !retried) {
+      const waitSec = Math.min(30, Math.max(1, Number(data.retryAfter) || 2));
+      if (statusEl) statusEl.innerText = 'Trakt is busy. Trying again in ' + waitSec + ' seconds...';
+      setTimeout(() => { startTraktDeviceLogin(true); }, waitSec * 1000);
+      return;
+    }
     if (!data.ok || !data.user_code) {
       if (codeEl) codeEl.innerText = 'ERROR';
       if (statusEl) {

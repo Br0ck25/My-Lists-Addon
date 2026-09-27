@@ -6005,6 +6005,44 @@ describe("client: storylines and Explore Channels add like public lists", () => 
   });
 });
 
+// P1-F10. The server no longer sleeps on a Trakt rate limit; the page waits
+// out Retry-After once and asks again.
+describe("client: Trakt device login waits out a rate limit once", () => {
+  it("retries after the server's Retry-After, then shows the code", async () => {
+    let answers = [
+      { status: 429, json: { ok: false, error: "busy", retryAfter: 3 } },
+      { json: { ok: true, user_code: "ABCD1234", device_code: "dev", verification_url: "https://trakt.tv/activate", interval: 5, expires_in: 600 } },
+    ];
+    const client = loadClient({ signedIn: true, routes: {
+      "/api/trakt/device/code": () => answers.shift() || { status: 429, json: { ok: false, error: "busy", retryAfter: 3 } },
+      "/api/trakt/device/token": () => ({ status: 400, json: { ok: false, pending: true } }),
+    } });
+    const timers = [];
+    client.set("setTimeout", (fn, ms) => { timers.push({ fn, ms }); return timers.length; });
+    await client.call("startTraktDeviceLogin");
+    assert.equal(requestsTo(client, "/api/trakt/device/code").length, 1);
+    assert.match(client.get("document").getElementById("traktDevicePollingStatus").innerText, /Trying again in 3 seconds/);
+    assert.equal(timers[0].ms, 3000);
+    timers[0].fn();
+    await new Promise((r) => setTimeout(r, 30)); // the retry is async; let it land
+    assert.equal(requestsTo(client, "/api/trakt/device/code").length, 2);
+    assert.equal(client.get("document").getElementById("traktDeviceUserCode").innerText, "ABCD1234");
+  });
+
+  it("gives up after one retry rather than looping", async () => {
+    const client = loadClient({ signedIn: true, routes: {
+      "/api/trakt/device/code": () => ({ status: 429, json: { ok: false, error: "Trakt is busy", retryAfter: 2 } }),
+    } });
+    const timers = [];
+    client.set("setTimeout", (fn, ms) => { timers.push({ fn, ms }); return timers.length; });
+    await client.call("startTraktDeviceLogin");
+    timers[0].fn();
+    await new Promise((r) => setTimeout(r, 30)); // the retry is async; let it land
+    assert.equal(timers.length, 1, "no second retry was scheduled");
+    assert.match(client.get("document").getElementById("traktDevicePollingStatus").innerHTML, /Trakt is busy/);
+  });
+});
+
 describe("client: channel share links", () => {
   const load = (routes = {}) => loadClient({ routes, storage: { "myListAddon:creatorKey": "KEY-1" }, signedIn: true });
 

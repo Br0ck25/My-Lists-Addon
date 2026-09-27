@@ -3489,8 +3489,7 @@ function setUnpackedCache(key, data) {
   UNPACKED_SHOW_CACHE.set(key, { data, expiry: Date.now() + UNPACKED_SHOW_TTL_MS });
 }
 
-async function resolveUnpackedShowData(tmdbId, imdbId, standardSeasons, apiKey, env = null, ctx = null, preloadedGroups = null, meter = null) {
-  const spend = () => { if (meter && typeof meter.spent === "number") meter.spent++; };
+async function resolveUnpackedShowData(tmdbId, imdbId, standardSeasons, apiKey, env = null, ctx = null, preloadedGroups = null) {
   const cleanTmdbId = tmdbId ? String(tmdbId).replace(/^tmdb:/, "").trim() : "";
   const cleanImdbId = imdbId ? String(imdbId).split(":")[0].trim() : "";
   const cacheKey = cleanTmdbId || cleanImdbId;
@@ -3516,7 +3515,6 @@ async function resolveUnpackedShowData(tmdbId, imdbId, standardSeasons, apiKey, 
   // If standardSeasons not passed and we have TMDB ID + key, load show info
   if (!effectiveSeasons && cleanTmdbId && apiKey) {
     try {
-      spend();
       const sRes = await fetch(`https://api.themoviedb.org/3/tv/${cleanTmdbId}?api_key=${encodeURIComponent(apiKey)}&append_to_response=episode_groups`, {
         headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` },
         cf: { cacheTtl: 604800, cacheEverything: true },
@@ -3549,7 +3547,6 @@ async function resolveUnpackedShowData(tmdbId, imdbId, standardSeasons, apiKey, 
   if (cleanTmdbId && apiKey) {
     try {
       if (!groups || (Array.isArray(groups) && groups.length === 0)) {
-        spend();
         const egRes = await fetch(`https://api.themoviedb.org/3/tv/${cleanTmdbId}/episode_groups?api_key=${encodeURIComponent(apiKey)}`, {
           headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` },
           cf: { cacheTtl: 604800, cacheEverything: true },
@@ -3563,7 +3560,6 @@ async function resolveUnpackedShowData(tmdbId, imdbId, standardSeasons, apiKey, 
       if (groups && Array.isArray(groups) && groups.length > 0) {
         const bestGroupId = pickDefaultEpisodeGroupId(groups, standardSeasonCount, standardEpisodeCount, totalEpisodeCountWithSpecials);
         if (bestGroupId) {
-          spend();
           const gRes = await fetch(`https://api.themoviedb.org/3/episode_group/${bestGroupId}?api_key=${encodeURIComponent(apiKey)}`, {
             headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` },
             cf: { cacheTtl: 604800, cacheEverything: true },
@@ -3579,7 +3575,6 @@ async function resolveUnpackedShowData(tmdbId, imdbId, standardSeasons, apiKey, 
 
   // 2. Cinemeta fallback
   if (!unpacked && cleanImdbId.startsWith("tt")) {
-    spend();
     unpacked = await fetchCinemetaSeriesUnpacked(cleanImdbId);
   }
 
@@ -3619,8 +3614,7 @@ async function resolveUnpackedShowData(tmdbId, imdbId, standardSeasons, apiKey, 
 // fact about a season, not about a day.
 const TVMAZE_API_BASE = "https://api.tvmaze.com";
 
-async function fetchShowAirTimeUncached(imdbId, meter) {
-  const spend = () => { if (meter) meter.spent++; };
+async function fetchShowAirTimeUncached(imdbId) {
   // A shape rather than null, so a show TVmaze has never heard of caches as
   // "asked, nothing there" instead of being looked up again on every hit.
   const nothing = { time: null, timezone: null, label: "", days: [], next: null };
@@ -3628,7 +3622,6 @@ async function fetchShowAirTimeUncached(imdbId, meter) {
   if (!baseImdb.startsWith("tt")) return nothing;
 
   try {
-    spend();
     const res = await fetch(TVMAZE_API_BASE + "/lookup/shows?imdb=" + encodeURIComponent(baseImdb), {
       headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` },
       cf: { cacheTtl: 43200, cacheEverything: true },
@@ -3662,7 +3655,6 @@ async function fetchShowAirTimeUncached(imdbId, meter) {
     const nextHref = show._links && show._links.nextepisode && show._links.nextepisode.href;
     if (nextHref && String(nextHref).startsWith(TVMAZE_API_BASE + "/")) {
       try {
-        spend();
         const epRes = await fetch(String(nextHref), {
           headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` },
           cf: { cacheTtl: 43200, cacheEverything: true },
@@ -3710,7 +3702,7 @@ function airTimeLabelForNextEpisode(airTime, nextEpInfo) {
   return null;
 }
 
-async function fetchShowAirTime(imdbId, env, ctx, meter) {
+async function fetchShowAirTime(imdbId, env, ctx) {
   const baseImdb = String(imdbId || "").split(":")[0].trim();
   if (!baseImdb.startsWith("tt")) return null;
   const cacheKey = `tvmaze:airtime:v3:${baseImdb}`;
@@ -3723,7 +3715,7 @@ async function fetchShowAirTime(imdbId, env, ctx, meter) {
     ctx: ctx,
     kvKey: cacheKey,
     kvTtlSec: 604800,
-    fetchFn: () => fetchShowAirTimeUncached(baseImdb, meter),
+    fetchFn: () => fetchShowAirTimeUncached(baseImdb),
   });
 }
 
@@ -3738,12 +3730,6 @@ async function fetchShowAirTime(imdbId, env, ctx, meter) {
 // not to be shared. Keyed on the resolved identity (imdbId + fallbackType)
 // rather than the internally-resolved tmdbId, since that's the only thing
 // known before the resolution work runs.
-// `meter` is optional and exists for /api/details/batch: an object with a
-// numeric `spent` field, incremented once per outbound fetch this resolution
-// actually makes. A cache hit -- memory, KV or edge -- never reaches fetchFn
-// and so never touches it, which is what lets the batch route keep spending
-// one invocation on a whole warm refresh while still fitting a free Worker's
-// 50-fetch budget when the ids are cold. Every other caller passes nothing.
 // The SHAPE of what this function returns, as a cache key segment. Bump it
 // whenever a field is added to or removed from the details payload.
 //
@@ -3760,7 +3746,7 @@ async function fetchShowAirTime(imdbId, env, ctx, meter) {
 // v3: air dates with timezone offset and streaming webChannel default times.
 const ITEM_DETAILS_SHAPE = "v3";
 
-async function fetchTmdbItemDetails(imdbId, apiKey, fallbackType, region, bypassCache, env, ctx, meter) {
+async function fetchTmdbItemDetails(imdbId, apiKey, fallbackType, region, bypassCache, env, ctx) {
   if (!apiKey || !imdbId) return null;
   const effectiveRegion = (region || "US").toUpperCase().slice(0, 2) || "US";
   const cacheKey = `tmdb:itemdetails:${ITEM_DETAILS_SHAPE}:${String(imdbId).trim()}:${fallbackType || ""}:${effectiveRegion}`;
@@ -3770,7 +3756,7 @@ async function fetchTmdbItemDetails(imdbId, apiKey, fallbackType, region, bypass
     const reg = d.seasonsData.filter((s) => s && s.season_number > 0);
     const epCount = reg.reduce((sum, s) => sum + (s.episode_count || 0), 0);
     if (reg.length === 1 && epCount > 1) {
-      const unpacked = await resolveUnpackedShowData(d.tmdbId, d.id, d.seasonsData, apiKey, env, ctx, null, meter);
+      const unpacked = await resolveUnpackedShowData(d.tmdbId, d.id, d.seasonsData, apiKey, env, ctx, null);
       if (unpacked && Array.isArray(unpacked.seasons) && unpacked.seasons.length > 1) {
         const upgraded = { ...d, seasonsData: unpacked.seasons, seasons: unpacked.seasons };
         setPerUserCache(cacheKey, upgraded);
@@ -3803,15 +3789,14 @@ async function fetchTmdbItemDetails(imdbId, apiKey, fallbackType, region, bypass
     ctx: ctx,
     kvKey: apiKey ? cacheKey : "",
     kvTtlSec: 604800,
-    fetchFn: () => fetchTmdbItemDetailsUncached(imdbId, apiKey, fallbackType, effectiveRegion, meter, env, ctx),
+    fetchFn: () => fetchTmdbItemDetailsUncached(imdbId, apiKey, fallbackType, effectiveRegion, env, ctx),
   });
   return await upgradeIfUnpacked(details);
 }
 
-async function fetchTmdbItemDetailsUncached(imdbId, apiKey, fallbackType, region, meter, env = null, ctx = null) {
+async function fetchTmdbItemDetailsUncached(imdbId, apiKey, fallbackType, region, env = null, ctx = null) {
   // One call per outbound fetch below. Counted here rather than by wrapping
   // fetch() globally, so nothing else in the Worker changes behaviour.
-  const spend = () => { if (meter) meter.spent++; };
   if (!apiKey || !imdbId) return null;
   const effectiveRegion = (region || "US").toUpperCase().slice(0, 2) || "US";
   const today = new Date().toISOString().slice(0, 10);
@@ -3834,7 +3819,6 @@ async function fetchTmdbItemDetailsUncached(imdbId, apiKey, fallbackType, region
     const baseImdbId = rawStr.startsWith("tt") ? rawStr.split(":")[0] : rawStr;
     if (baseImdbId.startsWith("tt")) {
       const findSrc = "https://api.themoviedb.org/3/find/" + encodeURIComponent(baseImdbId) + "?api_key=" + encodeURIComponent(apiKey) + "&external_source=imdb_id";
-      spend();
       const findRes = await fetch(findSrc, {
         headers: { "User-Agent": "my-list-addon/1.14" },
         cf: { cacheTtl: 604800, cacheEverything: true },
@@ -3868,7 +3852,6 @@ async function fetchTmdbItemDetailsUncached(imdbId, apiKey, fallbackType, region
         .replace(/\s*\(\d{4}\).*$/, "")
         .trim();
       try {
-        spend();
         const searchRes = await fetch("https://api.themoviedb.org/3/search/" + searchType + "?api_key=" + encodeURIComponent(apiKey) + "&query=" + encodeURIComponent(cleanTitle || baseImdbId) + "&page=1", {
           headers: { "User-Agent": "my-list-addon/1.14" },
           cf: { cacheTtl: 604800, cacheEverything: true },
@@ -3892,7 +3875,6 @@ async function fetchTmdbItemDetailsUncached(imdbId, apiKey, fallbackType, region
   let resolvedType = type;
   if (resolvedType) {
     const detailSrc = "https://api.themoviedb.org/3/" + resolvedType + "/" + tmdbId + "?api_key=" + encodeURIComponent(apiKey) + "&append_to_response=videos,release_dates,content_ratings,external_ids,credits" + (resolvedType === "tv" ? ",episode_groups" : "");
-    spend();
     const detailRes = await fetch(detailSrc, {
       headers: { "User-Agent": "my-list-addon/1.14" },
       cf: { cacheTtl: resolvedType === "tv" ? 3600 : 604800, cacheEverything: true },
@@ -3904,7 +3886,6 @@ async function fetchTmdbItemDetailsUncached(imdbId, apiKey, fallbackType, region
   if (!match) {
     // Try movie first
     const mSrc = "https://api.themoviedb.org/3/movie/" + tmdbId + "?api_key=" + encodeURIComponent(apiKey) + "&append_to_response=videos,release_dates,content_ratings,external_ids,credits";
-    spend();
     const mRes = await fetch(mSrc, {
       headers: { "User-Agent": "my-list-addon/1.14" },
       cf: { cacheTtl: 604800, cacheEverything: true },
@@ -3915,7 +3896,6 @@ async function fetchTmdbItemDetailsUncached(imdbId, apiKey, fallbackType, region
     } else {
       // Try tv
       const tvSrc = "https://api.themoviedb.org/3/tv/" + tmdbId + "?api_key=" + encodeURIComponent(apiKey) + "&append_to_response=videos,release_dates,content_ratings,external_ids,credits,episode_groups";
-      spend();
       const tvRes = await fetch(tvSrc, {
         headers: { "User-Agent": "my-list-addon/1.14" },
         cf: { cacheTtl: 3600, cacheEverything: true },
@@ -3978,7 +3958,6 @@ async function fetchTmdbItemDetailsUncached(imdbId, apiKey, fallbackType, region
   if ((!poster || !overview || !genres) && realImdbId.startsWith("tt")) {
     try {
       const cinemetaKind = type === "tv" ? "series" : "movie";
-      spend();
       const cmRes = await fetch("https://v3-cinemeta.strem.io/meta/" + cinemetaKind + "/" + encodeURIComponent(realImdbId) + ".json", {
         headers: { "User-Agent": "my-list-addon/1.14" },
         cf: { cacheTtl: 604800, cacheEverything: true },
@@ -4006,7 +3985,7 @@ async function fetchTmdbItemDetailsUncached(imdbId, apiKey, fallbackType, region
     const standardEpisodeCount = regSeasons.reduce((sum, s) => sum + (s.episode_count || 0), 0);
     if (regSeasons.length === 1 && standardEpisodeCount > 1) {
       const groups = match.episode_groups && Array.isArray(match.episode_groups.results) ? match.episode_groups.results : [];
-      const unpacked = await resolveUnpackedShowData(tmdbId, realImdbId, match.seasons, apiKey, env, ctx, groups, meter);
+      const unpacked = await resolveUnpackedShowData(tmdbId, realImdbId, match.seasons, apiKey, env, ctx, groups);
       if (unpacked && Array.isArray(unpacked.seasons) && unpacked.seasons.length > 1) {
         match.seasons = unpacked.seasons;
       }
@@ -4032,7 +4011,6 @@ async function fetchTmdbItemDetailsUncached(imdbId, apiKey, fallbackType, region
     const seasonToSearch = (match.next_episode_to_air && match.next_episode_to_air.season_number) || (match.last_episode_to_air && match.last_episode_to_air.season_number);
     if (seasonToSearch && tmdbId) {
       try {
-        spend();
         const sRes = await fetch("https://api.themoviedb.org/3/tv/" + tmdbId + "/season/" + seasonToSearch + "?api_key=" + encodeURIComponent(apiKey), {
           headers: { "User-Agent": "my-list-addon/1.14" },
           cf: { cacheTtl: 3600, cacheEverything: true },
@@ -4086,7 +4064,7 @@ async function fetchTmdbItemDetailsUncached(imdbId, apiKey, fallbackType, region
   // never looked up: its air time is a fact about the past, and nothing
   // displays a time against an episode that has already gone out.
   const airTime = (type === "tv" && (match.next_episode_to_air || isUnairedFuture))
-    ? await fetchShowAirTime(realImdbId, env, ctx, meter)
+    ? await fetchShowAirTime(realImdbId, env, ctx)
     : null;
 
   if (type === "tv" && isUnairedFuture && nextEpInfo.nextEpisodeSeasonNumber) {
@@ -4107,7 +4085,6 @@ async function fetchTmdbItemDetailsUncached(imdbId, apiKey, fallbackType, region
     // If mid-season (episodes 2..N-1), resolve the finale episode's air date
     if (!isSeasonPremiere && !isSeasonFinale && tmdbId && nextEpInfo.nextEpisodeSeasonNumber) {
       try {
-        spend();
         const sRes = await fetch("https://api.themoviedb.org/3/tv/" + tmdbId + "/season/" + nextEpInfo.nextEpisodeSeasonNumber + "?api_key=" + encodeURIComponent(apiKey), {
           headers: { "User-Agent": "my-list-addon/1.14" },
           cf: { cacheTtl: 3600, cacheEverything: true },
@@ -4599,16 +4576,11 @@ function airingNextEntryFromDetails(showId, d, known) {
   };
 }
 
-// Rebuilds one account's Airing Next from its tracking record. `pool` is the
-// tick's shared outbound-fetch budget ({ budget, reserved }), reserved per
-// lookup at TMDB_ITEM_DETAILS_MAX_FETCHES and refunded down to what the
-// lookup really spent -- the /api/details/batch route's accounting, since a
-// cached lookup spends nothing.
-//
-// Returns { items, complete }. A show the budget did not reach keeps the entry
-// it already had (if that has not aired), so running out part-way leaves the
-// shelf as it was for those shows rather than dropping them.
-async function rebuildAiringNextForRecord(env, ctx, record, pool) {
+// Rebuilds one account's Airing Next from its tracking record, looking up
+// every candidate show (four at a time). A show whose lookup fails keeps the
+// entry it already had (if that has not aired), so an outage leaves the shelf
+// as it was rather than dropping shows from it. Returns { items }.
+async function rebuildAiringNextForRecord(env, ctx, record) {
   const candidates = airingNextCandidatesFromRecord(record);
   const known = new Map();
   for (const it of (Array.isArray(record.watchHistory) ? record.watchHistory : [])) {
@@ -4618,18 +4590,11 @@ async function rebuildAiringNextForRecord(env, ctx, record, pool) {
   }
   const resolved = new Map();
   let cursor = 0;
-  let complete = true;
   async function worker() {
     while (cursor < candidates.length) {
-      if (pool.reserved + TMDB_ITEM_DETAILS_MAX_FETCHES > pool.budget) {
-        complete = false;
-        return;
-      }
       const showId = candidates[cursor++];
-      pool.reserved += TMDB_ITEM_DETAILS_MAX_FETCHES;
-      const meter = { spent: 0 };
       try {
-        const d = await fetchTmdbItemDetails(showId, TMDB_API_KEY, 'series', '', false, env, ctx, meter);
+        const d = await fetchTmdbItemDetails(showId, TMDB_API_KEY, 'series', '', false, env, ctx);
         // No details at all is a lookup that failed (TMDB down, nothing
         // cached), not a show with nothing coming -- left unresolved so it
         // keeps its entry. Only real details decide a show is off the shelf,
@@ -4638,11 +4603,9 @@ async function rebuildAiringNextForRecord(env, ctx, record, pool) {
       } catch {
         // Unresolved rather than "nothing coming": keeps its current entry.
       }
-      pool.reserved -= TMDB_ITEM_DETAILS_MAX_FETCHES - Math.min(meter.spent, TMDB_ITEM_DETAILS_MAX_FETCHES);
     }
   }
   await Promise.all(Array.from({ length: Math.min(4, candidates.length) }, worker));
-  if (cursor < candidates.length) complete = false;
 
   const existing = new Map();
   for (const it of (Array.isArray(record.airingNext) ? record.airingNext : [])) {
@@ -4670,17 +4633,17 @@ async function rebuildAiringNextForRecord(env, ctx, record, pool) {
     return true;
   }).filter((it) => !airingNextRemovalStands(record, String(it.showId)));
   items.sort((a, b) => String(a.airDate || '').localeCompare(String(b.airDate || '')));
-  return { items, complete };
+  return { items };
 }
 
 // The cron's half of Airing Next: a few accounts per tick, each at most every
 // AIRING_NEXT_SERVER_REFRESH_MS. Walks accounts with the same page-cursor-
 // plus-offset position checkForNewEpisodes keeps (below), for the same
 // reasons, under its own key.
-async function refreshAiringNextSweep(env, ctx, fetchBudget) {
+async function refreshAiringNextSweep(env, ctx) {
   if (!env || !env.CONFIGS || !TMDB_API_KEY) return;
-  // No budget means no outbound-fetch cap beyond the per-tick account count:
-  // the hosted Worker is on Workers Paid. A caller may still pass one.
+  // Bounded by AIRING_NEXT_SWEEP_ACCOUNTS_PER_TICK accounts per tick, not by
+  // an outbound-fetch budget: the hosted Worker is on Workers Paid.
   const CURSOR_KEY = 'cron:airingnext:cursor';
   let sweep = { c: '', o: 0 };
   try {
@@ -4704,12 +4667,11 @@ async function refreshAiringNextSweep(env, ctx, fetchBudget) {
     return;
   }
 
-  const pool = { budget: Number.isFinite(fetchBudget) ? fetchBudget : Infinity, reserved: 0 };
   const pageKeys = listResult.keys || [];
   let nextOffset = Math.min(Math.max(sweep.o, 0), pageKeys.length);
   let rebuilt = 0;
   for (let i = nextOffset; i < pageKeys.length; i++) {
-    if (rebuilt >= AIRING_NEXT_SWEEP_ACCOUNTS_PER_TICK || pool.reserved + TMDB_ITEM_DETAILS_MAX_FETCHES > pool.budget) break;
+    if (rebuilt >= AIRING_NEXT_SWEEP_ACCOUNTS_PER_TICK) break;
     nextOffset = i + 1;
     const username = pageKeys[i].name.slice('creator:'.length);
     // One account must not be able to stop the sweep -- see checkForNewEpisodes.
@@ -4722,7 +4684,7 @@ async function refreshAiringNextSweep(env, ctx, fetchBudget) {
       const record = JSON.parse(raw);
       if (!airingNextCandidatesFromRecord(record).length) continue;
       rebuilt++;
-      const { items, complete } = await rebuildAiringNextForRecord(env, ctx, record, pool);
+      const { items } = await rebuildAiringNextForRecord(env, ctx, record);
 
       // Written against a fresh read, owning only the one field it computed:
       // the lookups above took real time, and anything the account's browser
@@ -4741,10 +4703,7 @@ async function refreshAiringNextSweep(env, ctx, fetchBudget) {
         await env.CONFIGS.put(trackingKey, JSON.stringify(target));
         if (env.DB) await saveAiringNextD1(env, username, items, target.updatedAt, previousStamp);
       }
-      // A rebuild the budget cut short is due again in half an hour rather
-      // than six, by which time the lookups it did make have warmed the cache
-      // for the ones it did not.
-      const ttlSec = complete ? Math.round(AIRING_NEXT_SERVER_REFRESH_MS / 1000) : 1800;
+      const ttlSec = Math.round(AIRING_NEXT_SERVER_REFRESH_MS / 1000);
       await env.CONFIGS.put(checkedKey, '1', { expirationTtl: ttlSec });
     } catch (accountErr) {
       console.error(`[Cron] Airing Next: skipping ${username} this cycle:`, accountErr);

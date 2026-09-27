@@ -150,11 +150,6 @@ const BULK_RESOLVE_ITEMS_PER_MINUTE = 4000;
 
 // --- /api/details/batch --------------------------------------------------------
 //
-// The most outbound fetch() sites one uncached details lookup can pass through
-// (the find-or-search call, up to three detail calls while the type is being
-// narrowed, the Cinemeta fallback, and two season lookups). The Airing Next
-// sweep still uses it to account for its own work per tick.
-const TMDB_ITEM_DETAILS_MAX_FETCHES = 8;
 // Per-IP ceilings, charged in IDS rather than requests.
 const DETAILS_BATCH_IDS_PER_MINUTE = 3600;
 const DETAILS_BATCH_IDS_PER_MINUTE_OWN_KEY = 14400;
@@ -1039,10 +1034,13 @@ function isPersonalShelfUrl(url) {
   });
 }
 
-// How many TMDB->IMDB translations one /api/imdb-ids call will do. Sized to
-// cover a Curated card's poster strip plus headroom; each is one outbound
-// request. (Results are persisted in the media table in a later phase.)
-const IMDB_ID_LOOKUP_MAX = 24;
+// How many TMDB->IMDB translations one /api/imdb-ids call will do, and how
+// many run at once. 100 covers a whole See All page of tiles in one call; the
+// concurrency is what keeps a batch that size polite to TMDB. Each lookup is
+// one outbound request, edge-cached for a day. (Results are persisted in the
+// media table in a later phase.) The builder page batches to the same number.
+const IMDB_ID_LOOKUP_MAX = 100;
+const IMDB_ID_LOOKUP_CONCURRENCY = 8;
 
 // The Stremio/Nuvio artwork-overlay toggles, as stored in an install config.
 // Named in one place because they have to agree across four: the builder
