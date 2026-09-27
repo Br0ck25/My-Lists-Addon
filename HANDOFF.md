@@ -9,7 +9,7 @@
 - **Last Active AI**: Antigravity (Gemini 3.8 Flash)
 - **Active Task**: Phase 3a in progress. P3a-1 through P3a-7 are complete, verified and tested. Next: P3a-8 (installs: legacy resolver, transient base64 installs, new routes, management API, snapshot cache).
 - **Task State**: P3a-7 verified with comprehensive tests. All tests passing (1,344 passed, 0 failed, 1 skipped: the opt-in network test).
-- **Git State**: Ready to commit on `main`. Commit when work is verified; push only when the owner asks.
+- **Git State**: Clean working tree. Pushed to remote `origin/main` and `origin/feat/phase-3a-accounts` (commit `6737db5`).
 - **The owner is not a programmer.** Explain in plain words, do the git work for them, and ask before anything that changes stored user data or needs a dashboard change.
 
 ---
