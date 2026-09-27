@@ -1,3 +1,93 @@
+// --- Logs never carry a secret (S-14, task P2-7) -----------------------------
+//
+// Every console call in the Worker goes through here. This top-level `console`
+// shadows the global one for all the numbered files -- they share one module
+// scope -- the same way the `fetch` guard in 02_http-and-creator-utils.js does,
+// so the ~120 existing log lines and any added later are covered without each
+// one remembering. Each argument passes through redactForLog first.
+//
+// The real console is looked up at call time, so a test that swaps
+// console.error still sees every line. Declared first, in the first file, so
+// nothing can log before it exists; it and its helpers depend on nothing
+// declared later.
+const console = makeRedactingConsole();
+
+function makeRedactingConsole() {
+  const out = {};
+  for (const level of ["log", "info", "warn", "error", "debug"]) {
+    out[level] = (...args) => {
+      const real = globalThis.console;
+      if (!real || typeof real[level] !== "function") return;
+      let safe;
+      try {
+        safe = args.map((a) => redactForLog(a));
+      } catch {
+        safe = ["[log line dropped: it could not be redacted]"];
+      }
+      real[level](...safe);
+    };
+  }
+  return out;
+}
+
+// Masks secrets in a value that is about to be logged:
+//   - key, token and session query parameters in any URL in a string
+//     (api_key, apikey, access_token, refresh_token, token, key, client_secret,
+//     session_id, creatorKey, code);
+//   - "Bearer <token>" (an Authorization header value);
+//   - a Creator Key (MYL-XXXX-XXXX-XXXX);
+//   - in a plain object, array or Headers, any field whose name says it is a
+//     key, token, secret, password, cookie or Authorization -- two levels deep.
+// An Error keeps its name, with its message and stack redacted. Anything else
+// is logged as it is.
+// Types are told apart by their tag rather than instanceof, so an object made
+// in another realm (a test sandbox, a vm context) is recognized too.
+function redactForLog(value, depth = 0) {
+  if (typeof value === "string") return redactSecretsInText(value);
+  if (!value || typeof value !== "object") return value;
+  const tag = Object.prototype.toString.call(value);
+  if (tag === "[object Error]") {
+    const copy = new Error(redactSecretsInText(value.message));
+    copy.name = value.name;
+    if (value.stack) copy.stack = redactSecretsInText(value.stack);
+    return copy;
+  }
+  if (depth >= 2) return value;
+  if (tag === "[object Headers]" && typeof value.forEach === "function") {
+    const copy = {};
+    value.forEach((v, k) => { copy[k] = isSecretFieldName(k) ? "[redacted]" : redactSecretsInText(v); });
+    return copy;
+  }
+  if (Array.isArray(value)) return value.map((v) => redactForLog(v, depth + 1));
+  // A plain object: its prototype is some realm's Object.prototype (whose own
+  // prototype is null), or null. Class instances are logged as they are.
+  const proto = Object.getPrototypeOf(value);
+  if (tag !== "[object Object]" || (proto !== null && Object.getPrototypeOf(proto) !== null)) return value;
+  const copy = {};
+  for (const [k, v] of Object.entries(value)) {
+    copy[k] = isSecretFieldName(k) ? "[redacted]" : redactForLog(v, depth + 1);
+  }
+  return copy;
+}
+
+function redactSecretsInText(text) {
+  return String(text)
+    .replace(/([?&#;](?:api_key|apikey|access_token|refresh_token|token|key|client_secret|session_id|sessionid|creatorkey|code)=)[^&#\s"'<>]*/gi, "$1[redacted]")
+    .replace(/\b(Bearer)\s+[A-Za-z0-9._~+\/=-]+/gi, "$1 [redacted]")
+    .replace(/\bMYL-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}\b/g, "MYL-[redacted]");
+}
+
+// Field names that hold a credential: exact names (authorization, cookie,
+// password, token, secret) and names ending in one (apiKey, tmdbKey,
+// creatorKey, traktAccessToken, client_secret, sessionId). A bare `key` is
+// left alone -- in this codebase that is almost always a KV key name.
+function isSecretFieldName(name) {
+  const n = String(name);
+  if (/^(authorization|cookie|set-cookie|password|token|secret)$/i.test(n)) return true;
+  if (/(api_?key|_key|secret|_token|access_?token|refresh_?token|session_?id|password)$/i.test(n)) return true;
+  return /[a-z](Key|Token)$/.test(n);
+}
+
 const ADDON_ID = "app.my-list";
 const ADDON_VERSION = "1.5.5";
 const ADDON_NAME = "My Lists";

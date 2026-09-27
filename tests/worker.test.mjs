@@ -2193,6 +2193,101 @@ describe("P2-10: stats prefix reads use the primary key", () => {
   });
 });
 
+// P2-7. Every log line the Worker writes goes through redactForLog, via the
+// module-level `console` at the top of 00_constants.js.
+describe("P2-7: logs never carry a secret", () => {
+  it("masks keys and tokens in URLs, Bearer tokens and Creator Keys", () => {
+    const { redactForLog } = loadSourceFunctions("00_constants.js");
+    assert.equal(
+      redactForLog("GET https://api.themoviedb.org/3/tv/1?api_key=SECRET&language=en"),
+      "GET https://api.themoviedb.org/3/tv/1?api_key=[redacted]&language=en",
+    );
+    const line = redactForLog("x?apikey=A1&access_token=B2&token=C3&key=D4&code=E5 Bearer abc.def-ghi MYL-AB23-CD45-EF67");
+    for (const secret of ["A1", "B2", "C3", "D4", "E5", "abc.def-ghi", "AB23-CD45-EF67"]) {
+      assert.ok(!line.includes(secret), `${secret} survived: ${line}`);
+    }
+  });
+
+  it("masks credential fields in objects and headers, and keeps a KV key name readable", () => {
+    const sb = loadSourceFunctions("00_constants.js");
+    const out = sb.redactForLog({
+      key: "creator:alice", tmdbKey: "T1", traktAccessToken: "T2", creatorKey: "T3",
+      Authorization: "Bearer T4", nested: { api_key: "T5", url: "https://x/?token=T6" },
+    });
+    assert.equal(out.key, "creator:alice", "a KV key name is not a secret");
+    const flat = JSON.stringify(out);
+    for (const secret of ["T1", "T2", "T3", "T4", "T5", "T6"]) assert.ok(!flat.includes(secret), `${secret} survived: ${flat}`);
+    const h = sb.redactForLog(new Headers({ Authorization: "Bearer T7", "Content-Type": "application/json" }));
+    assert.equal(h.authorization, "[redacted]");
+    assert.equal(h["content-type"], "application/json");
+  });
+
+  it("redacts an Error's message and stack but keeps its name", () => {
+    const { redactForLog } = loadSourceFunctions("00_constants.js");
+    const err = new TypeError("fetch failed for https://api.trakt.tv/x?access_token=T8");
+    const out = redactForLog(err);
+    assert.equal(out.name, "TypeError");
+    assert.ok(!out.message.includes("T8") && !String(out.stack).includes("T8"));
+  });
+
+  it("routes the file's own console through it, to whatever console is current", () => {
+    const sb = loadSourceFunctions("00_constants.js");
+    const seen = [];
+    sb.console = { error: (...a) => seen.push(a), warn: (...a) => seen.push(a), log() {}, info() {}, debug() {} };
+    vm.runInContext(`console.error("TMDB failed:", "https://api.themoviedb.org/3/x?api_key=LEAKED1");
+      console.warn({ traktAccessToken: "LEAKED2" });`, sb);
+    assert.equal(seen.length, 2, "both lines reached the console that is current at call time");
+    assert.ok(!JSON.stringify(seen).includes("LEAKED"), JSON.stringify(seen));
+  });
+});
+
+// P2-3 / BE-M17. JSON responses are no-store unless the route says its data
+// is public. The old default (max-age=3600 for any success) had to be opted OUT
+// of, and the routes that forgot were personal.
+describe("P2-3: JSON is no-store unless a route opts in to caching", () => {
+  function stubFetch(handler) {
+    const real = globalThis.fetch;
+    globalThis.fetch = async (input) => handler(String(input && input.url ? input.url : input));
+    return () => { globalThis.fetch = real; };
+  }
+  const jsonRes = (body) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+
+  it("keeps the Stremio routes and public lookups cacheable for an hour", async () => {
+    const restore = stubFetch(() => jsonRes({ results: [], tv_results: [], movie_results: [] }));
+    try {
+      const env = makeEnv({ CONFIGS: makeKv(), TMDB_API_KEY: "k" });
+      const manifest = await call(env, "/manifest.json");
+      assert.equal(manifest.headers.get("cache-control"), "max-age=3600");
+      assert.ok(manifest.headers.get("access-control-allow-origin"), "and still CORS-enabled for the apps");
+      const search = await call(env, "/api/title-search?q=matrix&type=movie");
+      assert.equal(search.status, 200);
+      assert.equal(search.body.ok, true);
+      assert.equal(search.headers.get("cache-control"), "max-age=3600");
+    } finally {
+      restore();
+    }
+  });
+
+  it("makes a success no-store unless the route opts in", () => {
+    const sb = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js");
+    sb.Response = Response;
+    const cc = (res) => res.headers.get("cache-control");
+    assert.equal(cc(sb.json({ ok: true, lists: [] })), "no-store", "a route that says nothing is not cached");
+    assert.equal(cc(sb.jsonCacheable({ ok: true })), "max-age=3600");
+    assert.equal(cc(sb.jsonCacheable({ ok: false, error: "x" })), "no-store", "an ok:false body is an error");
+    assert.equal(cc(sb.jsonCacheable({ ok: true }, 404)), "no-store");
+    assert.equal(cc(sb.jsonCacheable({ ok: true }, 200, { "Cache-Control": "max-age=60" })), "max-age=60", "the route's own header wins");
+    assert.equal(cc(sb.jsonPublic({ metas: [] })), "max-age=3600", "Stremio responses stay cacheable");
+  });
+
+  it("never caches an error, even from a route that caches its answers", async () => {
+    const env = makeEnv({ CONFIGS: makeKv(), TMDB_API_KEY: "k" });
+    const r = await call(env, "/api/title-search");
+    assert.ok(r.status >= 400 || (r.body && r.body.ok === false), "precondition: the request fails");
+    assert.equal(r.headers.get("cache-control"), "no-store");
+  });
+});
+
 describe("My Channels does not quietly adopt a storyline or Explore row", () => {
   it("skips catalogOnly rows and still adopts a channel someone built", () => {
     let saved = null;

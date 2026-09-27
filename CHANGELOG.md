@@ -65,6 +65,18 @@ Lists published anonymously before accounts existed (`/lists/user/<slug>`) **sti
 
 ### 🔒 Security fixes
 
+- **Logs can't carry a secret.** Every log line the Worker writes now goes through `redactForLog`. It masks:
+  - key, token and session parameters in URLs (`api_key`, `access_token`, `token`, `key`, `code`, …);
+  - `Bearer` tokens;
+  - Creator Keys;
+  - credential-named fields in logged objects.
+
+  A module-level `console` at the top of `00_constants.js` does this, the same way the `fetch` guard works, so all ~120 existing log calls and any future ones are covered. A check on 2026-09-27 found no current log line writing a secret; this keeps it that way.
+- **API responses are no longer cacheable unless the route says so.** `json()` used to mark every success as cacheable for an hour, so personal routes had to remember to opt out, and `/api/resolve` once didn't. Success is now `no-store` by default.
+  - Public lookups (title and person search, show seasons and episodes, list search, the channel directory, published-list search) opt in with `jsonCacheable`.
+  - The Stremio routes opt in through `jsonPublic`.
+  - A probe of every route, plus a full test run with `json()` instrumented, confirmed the same public routes are still cached as before.
+
 - **An install link no longer exposes the provider keys and tokens inside it.** Install links get pasted into apps and shared.
   - `/<id>/configure` used to write the link's TMDB, MDBList and Trakt keys and tokens into the page.
   - `/api/resolve`, which "Import from link" uses, returned the MDBList and Trakt ones. Importing someone else's link also connected you to *their* Trakt and MDBList accounts.

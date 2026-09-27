@@ -21,6 +21,96 @@
  * NEXT_VERSION_ARCHITECTURE.md.
  */
 
+// --- Logs never carry a secret (S-14, task P2-7) -----------------------------
+//
+// Every console call in the Worker goes through here. This top-level `console`
+// shadows the global one for all the numbered files -- they share one module
+// scope -- the same way the `fetch` guard in 02_http-and-creator-utils.js does,
+// so the ~120 existing log lines and any added later are covered without each
+// one remembering. Each argument passes through redactForLog first.
+//
+// The real console is looked up at call time, so a test that swaps
+// console.error still sees every line. Declared first, in the first file, so
+// nothing can log before it exists; it and its helpers depend on nothing
+// declared later.
+const console = makeRedactingConsole();
+
+function makeRedactingConsole() {
+  const out = {};
+  for (const level of ["log", "info", "warn", "error", "debug"]) {
+    out[level] = (...args) => {
+      const real = globalThis.console;
+      if (!real || typeof real[level] !== "function") return;
+      let safe;
+      try {
+        safe = args.map((a) => redactForLog(a));
+      } catch {
+        safe = ["[log line dropped: it could not be redacted]"];
+      }
+      real[level](...safe);
+    };
+  }
+  return out;
+}
+
+// Masks secrets in a value that is about to be logged:
+//   - key, token and session query parameters in any URL in a string
+//     (api_key, apikey, access_token, refresh_token, token, key, client_secret,
+//     session_id, creatorKey, code);
+//   - "Bearer <token>" (an Authorization header value);
+//   - a Creator Key (MYL-XXXX-XXXX-XXXX);
+//   - in a plain object, array or Headers, any field whose name says it is a
+//     key, token, secret, password, cookie or Authorization -- two levels deep.
+// An Error keeps its name, with its message and stack redacted. Anything else
+// is logged as it is.
+// Types are told apart by their tag rather than instanceof, so an object made
+// in another realm (a test sandbox, a vm context) is recognized too.
+function redactForLog(value, depth = 0) {
+  if (typeof value === "string") return redactSecretsInText(value);
+  if (!value || typeof value !== "object") return value;
+  const tag = Object.prototype.toString.call(value);
+  if (tag === "[object Error]") {
+    const copy = new Error(redactSecretsInText(value.message));
+    copy.name = value.name;
+    if (value.stack) copy.stack = redactSecretsInText(value.stack);
+    return copy;
+  }
+  if (depth >= 2) return value;
+  if (tag === "[object Headers]" && typeof value.forEach === "function") {
+    const copy = {};
+    value.forEach((v, k) => { copy[k] = isSecretFieldName(k) ? "[redacted]" : redactSecretsInText(v); });
+    return copy;
+  }
+  if (Array.isArray(value)) return value.map((v) => redactForLog(v, depth + 1));
+  // A plain object: its prototype is some realm's Object.prototype (whose own
+  // prototype is null), or null. Class instances are logged as they are.
+  const proto = Object.getPrototypeOf(value);
+  if (tag !== "[object Object]" || (proto !== null && Object.getPrototypeOf(proto) !== null)) return value;
+  const copy = {};
+  for (const [k, v] of Object.entries(value)) {
+    copy[k] = isSecretFieldName(k) ? "[redacted]" : redactForLog(v, depth + 1);
+  }
+  return copy;
+}
+
+function redactSecretsInText(text) {
+  return String(text)
+    .replace(/([?&#;](?:api_key|apikey|access_token|refresh_token|token|key|client_secret|session_id|sessionid|creatorkey|code)=)[^&#\s"'<>]*/gi, "$1[redacted]")
+    .replace(/\b(Bearer)\s+[A-Za-z0-9._~+\/=-]+/gi, "$1 [redacted]")
+    .replace(/\bMYL-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}\b/g, "MYL-[redacted]");
+}
+
+// Field names that hold a credential: exact names (authorization, cookie,
+// password, token, secret) and names ending in one (apiKey, tmdbKey,
+// creatorKey, traktAccessToken, client_secret, sessionId). A bare `key` is
+// left alone -- in this codebase that is almost always a KV key name.
+function isSecretFieldName(name) {
+  const n = String(name);
+  if (/^(authorization|cookie|set-cookie|password|token|secret)$/i.test(n)) return true;
+  if (/(api_?key|_key|secret|_token|access_?token|refresh_?token|session_?id|password)$/i.test(n)) return true;
+  return /[a-z](Key|Token)$/.test(n);
+}
+
 const ADDON_ID = "app.my-list";
 const ADDON_VERSION = "1.5.5";
 const ADDON_NAME = "My Lists";
@@ -2852,15 +2942,14 @@ function json(data, status = 200, extraHeaders = {}) {
       // { ok: false, error } without changing the status code, and a status
       // check alone would have missed every one of them.
       //
-      // A successful 2xx keeps the previous default deliberately. Flipping it
-      // wholesale would strip edge caching from the catalog and provider
-      // endpoints this add-on leans on to stay inside upstream rate limits,
-      // which is a much larger change than the defect requires; the handful
-      // of successful responses that genuinely must not be cached set
-      // no-store explicitly at their call site instead.
-      "Cache-Control": (status >= 400 || (data && typeof data === "object" && data.ok === false))
-        ? "no-store"
-        : "max-age=3600",
+      // A success is no-store too, by default (BE-M17, task P2-3). It used to
+      // be max-age=3600, so every personal route had to remember to opt OUT,
+      // and /api/resolve once forgot. Public data that is the same for
+      // everyone opts IN with jsonCacheable (below), and the Stremio routes do
+      // through jsonPublic, so a route added later is safe unless it says
+      // otherwise. Every public GET that relied on the old default was moved
+      // to jsonCacheable in the same change, so nothing public lost caching.
+      "Cache-Control": "no-store",
       // Applied last so a caller (e.g. the admin dashboard's own JSON
       // endpoints -- see their own comment on why they need this) can
       // override the max-age default above, rather than every non-admin
@@ -2894,8 +2983,19 @@ function refuseQueryCredentials(url, names) {
   return null;
 }
 
+// A JSON response that may be cached for an hour: public data that is the
+// same for everyone who asks -- a title search, a show's seasons, the channel
+// directory, a Stremio catalog. An error, or an `ok: false` body, is still
+// never cached. A caller's own Cache-Control wins.
+function jsonCacheable(data, status = 200, extraHeaders = {}) {
+  const isError = status >= 400 || (data && typeof data === "object" && data.ok === false);
+  return json(data, status, isError ? extraHeaders : { "Cache-Control": "max-age=3600", ...extraHeaders });
+}
+
+// The Stremio protocol routes (manifest, catalog, meta, subtitles): CORS, and
+// cacheable for an hour, as they always have been.
 function jsonPublic(data, status = 200, extraHeaders = {}) {
-  return json(data, status, { ...corsHeaders(), ...extraHeaders });
+  return jsonCacheable(data, status, { ...corsHeaders(), ...extraHeaders });
 }
 
 // For a response whose BODY belongs to one account: their lists (public and
@@ -75174,7 +75274,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // this endpoint (see the comment above).
         ctx.waitUntil(bumpStat(env, "apiuse:mdblistpopular"));
         const lists = await fetchTopLists(MDBLIST_POPULAR_KEY, env, ctx);
-        return json({ ok: true, lists });
+        return jsonCacheable({ ok: true, lists });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err) });
       }
@@ -75313,7 +75413,7 @@ function generateSearchVariations(query) {
               isAdultPosterFiltered: isAdultFilterActive && isAdultItem,
             };
           });
-          return json({ ok: true, results });
+          return jsonCacheable({ ok: true, results });
         }
 
         // Active search: fetch all relevant search results across pages
@@ -75528,7 +75628,7 @@ function generateSearchVariations(query) {
           })
         );
 
-        return json({ ok: true, results });
+        return jsonCacheable({ ok: true, results });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err) });
       }
@@ -75548,7 +75648,7 @@ function generateSearchVariations(query) {
       if (env && env.CONFIGS) {
         try {
           const cached = await env.CONFIGS.get(cacheKey);
-          if (cached) return json({ ok: true, poster: cached });
+          if (cached) return jsonCacheable({ ok: true, poster: cached });
         } catch {}
       }
 
@@ -75636,7 +75736,7 @@ function generateSearchVariations(query) {
         ctx.waitUntil(env.CONFIGS.put(cacheKey, resolvedPoster, { expirationTtl: 604800 })); // 7-day cache
       }
 
-      return json({ ok: !!resolvedPoster, poster: resolvedPoster });
+      return jsonCacheable({ ok: !!resolvedPoster, poster: resolvedPoster });
     }
 
     // /api/show-seasons?tmdbId=...
@@ -75686,7 +75786,7 @@ function generateSearchVariations(query) {
           }
         }
         seasons = seasons.concat(specials);
-        return json({
+        return jsonCacheable({
           ok: true,
           imdbId: details.imdbId,
           name: data.name,
@@ -75718,7 +75818,7 @@ function generateSearchVariations(query) {
             thumbnail: e.still_path || null,
             runtime: Number.isInteger(e.runtime) ? e.runtime : null,
           }));
-          return json({ ok: true, episodes });
+          return jsonCacheable({ ok: true, episodes });
         }
 
         // Always the shared key.
@@ -75740,7 +75840,7 @@ function generateSearchVariations(query) {
               thumbnail: e.still_path || null,
               runtime: Number.isInteger(e.runtime) ? e.runtime : null,
             }));
-            return json({ ok: true, episodes });
+            return jsonCacheable({ ok: true, episodes });
           }
           return json({ ok: false, error: `TMDB season lookup failed (HTTP ${res.status}).` });
         }
@@ -75757,7 +75857,7 @@ function generateSearchVariations(query) {
           // downstream may require it.
           runtime: Number.isInteger(e.runtime) ? e.runtime : null,
         }));
-        return json({ ok: true, episodes });
+        return jsonCacheable({ ok: true, episodes });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err) });
       }
@@ -75865,7 +75965,7 @@ function generateSearchVariations(query) {
     // whose whole response shape is built around a title.
     if (path === "/api/person-search") {
       const q = (url.searchParams.get("q") || "").trim();
-      if (!q) return json({ ok: true, results: [] });
+      if (!q) return jsonCacheable({ ok: true, results: [] });
       try {
         ctx.waitUntil(bumpStat(env, "apiuse:tmdb"));
         const res = await fetch(
@@ -76251,7 +76351,7 @@ function generateSearchVariations(query) {
         ctx.waitUntil(bumpStatBy(env, "apiuse:tmdb", pagesFetched + (networkId ? 1 : 0) + candidates.length));
         const finalTitles = resolved.filter(Boolean).slice(0, limit);
         if (!finalTitles.length) return json({ ok: false, error: "Couldn't resolve any of those titles to IMDB." });
-        return json({ ok: true, items: finalTitles, shows: finalTitles, networkLogo });
+        return jsonCacheable({ ok: true, items: finalTitles, shows: finalTitles, networkLogo });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err) });
       }
@@ -76407,7 +76507,7 @@ function generateSearchVariations(query) {
         ctx.waitUntil(bumpStat(env, "apiuse:tmdb"));
         const details = await fetchTmdbDetails(tmdbId, "movie", TMDB_API_KEY);
         if (!details.imdbId) return json({ ok: false, error: "Couldn't resolve an IMDB id for this movie." });
-        return json({ ok: true, imdbId: details.imdbId, runtime: Number.isInteger(details.runtime) ? details.runtime : null });
+        return jsonCacheable({ ok: true, imdbId: details.imdbId, runtime: Number.isInteger(details.runtime) ? details.runtime : null });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err) });
       }
@@ -76423,7 +76523,7 @@ function generateSearchVariations(query) {
         ctx.waitUntil(bumpStat(env, "apiuse:tmdb"));
         const details = await fetchTmdbDetails(tmdbId, "tv", TMDB_API_KEY);
         if (!details.imdbId) return json({ ok: false, error: "Couldn't resolve an IMDB id for this show." });
-        return json({ ok: true, imdbId: details.imdbId });
+        return jsonCacheable({ ok: true, imdbId: details.imdbId });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err) });
       }
@@ -76546,7 +76646,7 @@ function generateSearchVariations(query) {
       const tmdbKey = tmdbKeyParam || TMDB_API_KEY;
       const isAdultFilterActive = url.searchParams.get("adultContentFilter") === "1";
       if (!q || !tmdbKey) {
-        return json({ ok: true, lists: [] });
+        return jsonCacheable({ ok: true, lists: [] });
       }
 
       try {
@@ -76663,7 +76763,7 @@ function generateSearchVariations(query) {
           }
         }
 
-        return json({ ok: true, lists: results.slice(0, 30) });
+        return jsonCacheable({ ok: true, lists: results.slice(0, 30) });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err), lists: [] });
       }
@@ -76680,7 +76780,7 @@ function generateSearchVariations(query) {
       try {
         const lists = await searchTraktLists(q, traktKey);
         if (!traktKey) ctx.waitUntil(bumpStatBy(env, "apiuse:trakt", 1 + lists.length));
-        return json({ ok: true, lists });
+        return jsonCacheable({ ok: true, lists });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err) });
       }
@@ -76767,7 +76867,7 @@ function generateSearchVariations(query) {
               });
           },
         });
-        return json({ ok: true, lists });
+        return jsonCacheable({ ok: true, lists });
       } catch (err) {
         return json({ ok: false, lists: [] });
       }
@@ -83747,7 +83847,7 @@ function generateSearchVariations(query) {
     // is read on every visit to the tab and a prefix scan plus one GET per
     // entry would be dozens of round trips for a page of cards.
     if (path === "/api/channel/directory" && request.method === "GET") {
-      if (!env || !env.CONFIGS) return json({ ok: true, channels: [] });
+      if (!env || !env.CONFIGS) return jsonCacheable({ ok: true, channels: [] });
       const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "60", 10) || 60, 1), PUBLIC_CHANNEL_INDEX_MAX);
       const sort = String(url.searchParams.get("sort") || "newest");
       const index = sortPublicChannelIndex(await readPublicChannelIndex(env), sort);
@@ -85438,7 +85538,7 @@ function generateSearchVariations(query) {
     // search to keep this fast even once a lot of lists have been
     // published.
     if (path === "/api/search-published-lists") {
-      if (!env || !env.CONFIGS) return json({ ok: true, lists: [] });
+      if (!env || !env.CONFIGS) return jsonCacheable({ ok: true, lists: [] });
       const rawQ = url.searchParams.get("q") || "";
       const q = rawQ.toLowerCase().trim();
 

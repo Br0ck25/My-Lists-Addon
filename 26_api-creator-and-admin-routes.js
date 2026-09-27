@@ -2609,7 +2609,7 @@
     // is read on every visit to the tab and a prefix scan plus one GET per
     // entry would be dozens of round trips for a page of cards.
     if (path === "/api/channel/directory" && request.method === "GET") {
-      if (!env || !env.CONFIGS) return json({ ok: true, channels: [] });
+      if (!env || !env.CONFIGS) return jsonCacheable({ ok: true, channels: [] });
       const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "60", 10) || 60, 1), PUBLIC_CHANNEL_INDEX_MAX);
       const sort = String(url.searchParams.get("sort") || "newest");
       const index = sortPublicChannelIndex(await readPublicChannelIndex(env), sort);
@@ -4300,7 +4300,7 @@
     // search to keep this fast even once a lot of lists have been
     // published.
     if (path === "/api/search-published-lists") {
-      if (!env || !env.CONFIGS) return json({ ok: true, lists: [] });
+      if (!env || !env.CONFIGS) return jsonCacheable({ ok: true, lists: [] });
       const rawQ = url.searchParams.get("q") || "";
       const q = rawQ.toLowerCase().trim();
 

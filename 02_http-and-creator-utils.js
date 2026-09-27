@@ -301,15 +301,14 @@ function json(data, status = 200, extraHeaders = {}) {
       // { ok: false, error } without changing the status code, and a status
       // check alone would have missed every one of them.
       //
-      // A successful 2xx keeps the previous default deliberately. Flipping it
-      // wholesale would strip edge caching from the catalog and provider
-      // endpoints this add-on leans on to stay inside upstream rate limits,
-      // which is a much larger change than the defect requires; the handful
-      // of successful responses that genuinely must not be cached set
-      // no-store explicitly at their call site instead.
-      "Cache-Control": (status >= 400 || (data && typeof data === "object" && data.ok === false))
-        ? "no-store"
-        : "max-age=3600",
+      // A success is no-store too, by default (BE-M17, task P2-3). It used to
+      // be max-age=3600, so every personal route had to remember to opt OUT,
+      // and /api/resolve once forgot. Public data that is the same for
+      // everyone opts IN with jsonCacheable (below), and the Stremio routes do
+      // through jsonPublic, so a route added later is safe unless it says
+      // otherwise. Every public GET that relied on the old default was moved
+      // to jsonCacheable in the same change, so nothing public lost caching.
+      "Cache-Control": "no-store",
       // Applied last so a caller (e.g. the admin dashboard's own JSON
       // endpoints -- see their own comment on why they need this) can
       // override the max-age default above, rather than every non-admin
@@ -343,8 +342,19 @@ function refuseQueryCredentials(url, names) {
   return null;
 }
 
+// A JSON response that may be cached for an hour: public data that is the
+// same for everyone who asks -- a title search, a show's seasons, the channel
+// directory, a Stremio catalog. An error, or an `ok: false` body, is still
+// never cached. A caller's own Cache-Control wins.
+function jsonCacheable(data, status = 200, extraHeaders = {}) {
+  const isError = status >= 400 || (data && typeof data === "object" && data.ok === false);
+  return json(data, status, isError ? extraHeaders : { "Cache-Control": "max-age=3600", ...extraHeaders });
+}
+
+// The Stremio protocol routes (manifest, catalog, meta, subtitles): CORS, and
+// cacheable for an hour, as they always have been.
 function jsonPublic(data, status = 200, extraHeaders = {}) {
-  return json(data, status, { ...corsHeaders(), ...extraHeaders });
+  return jsonCacheable(data, status, { ...corsHeaders(), ...extraHeaders });
 }
 
 // For a response whose BODY belongs to one account: their lists (public and

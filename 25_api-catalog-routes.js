@@ -1539,7 +1539,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // this endpoint (see the comment above).
         ctx.waitUntil(bumpStat(env, "apiuse:mdblistpopular"));
         const lists = await fetchTopLists(MDBLIST_POPULAR_KEY, env, ctx);
-        return json({ ok: true, lists });
+        return jsonCacheable({ ok: true, lists });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err) });
       }
@@ -1678,7 +1678,7 @@ function generateSearchVariations(query) {
               isAdultPosterFiltered: isAdultFilterActive && isAdultItem,
             };
           });
-          return json({ ok: true, results });
+          return jsonCacheable({ ok: true, results });
         }
 
         // Active search: fetch all relevant search results across pages
@@ -1893,7 +1893,7 @@ function generateSearchVariations(query) {
           })
         );
 
-        return json({ ok: true, results });
+        return jsonCacheable({ ok: true, results });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err) });
       }
@@ -1913,7 +1913,7 @@ function generateSearchVariations(query) {
       if (env && env.CONFIGS) {
         try {
           const cached = await env.CONFIGS.get(cacheKey);
-          if (cached) return json({ ok: true, poster: cached });
+          if (cached) return jsonCacheable({ ok: true, poster: cached });
         } catch {}
       }
 
@@ -2001,7 +2001,7 @@ function generateSearchVariations(query) {
         ctx.waitUntil(env.CONFIGS.put(cacheKey, resolvedPoster, { expirationTtl: 604800 })); // 7-day cache
       }
 
-      return json({ ok: !!resolvedPoster, poster: resolvedPoster });
+      return jsonCacheable({ ok: !!resolvedPoster, poster: resolvedPoster });
     }
 
     // /api/show-seasons?tmdbId=...
@@ -2051,7 +2051,7 @@ function generateSearchVariations(query) {
           }
         }
         seasons = seasons.concat(specials);
-        return json({
+        return jsonCacheable({
           ok: true,
           imdbId: details.imdbId,
           name: data.name,
@@ -2083,7 +2083,7 @@ function generateSearchVariations(query) {
             thumbnail: e.still_path || null,
             runtime: Number.isInteger(e.runtime) ? e.runtime : null,
           }));
-          return json({ ok: true, episodes });
+          return jsonCacheable({ ok: true, episodes });
         }
 
         // Always the shared key.
@@ -2105,7 +2105,7 @@ function generateSearchVariations(query) {
               thumbnail: e.still_path || null,
               runtime: Number.isInteger(e.runtime) ? e.runtime : null,
             }));
-            return json({ ok: true, episodes });
+            return jsonCacheable({ ok: true, episodes });
           }
           return json({ ok: false, error: `TMDB season lookup failed (HTTP ${res.status}).` });
         }
@@ -2122,7 +2122,7 @@ function generateSearchVariations(query) {
           // downstream may require it.
           runtime: Number.isInteger(e.runtime) ? e.runtime : null,
         }));
-        return json({ ok: true, episodes });
+        return jsonCacheable({ ok: true, episodes });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err) });
       }
@@ -2230,7 +2230,7 @@ function generateSearchVariations(query) {
     // whose whole response shape is built around a title.
     if (path === "/api/person-search") {
       const q = (url.searchParams.get("q") || "").trim();
-      if (!q) return json({ ok: true, results: [] });
+      if (!q) return jsonCacheable({ ok: true, results: [] });
       try {
         ctx.waitUntil(bumpStat(env, "apiuse:tmdb"));
         const res = await fetch(
@@ -2616,7 +2616,7 @@ function generateSearchVariations(query) {
         ctx.waitUntil(bumpStatBy(env, "apiuse:tmdb", pagesFetched + (networkId ? 1 : 0) + candidates.length));
         const finalTitles = resolved.filter(Boolean).slice(0, limit);
         if (!finalTitles.length) return json({ ok: false, error: "Couldn't resolve any of those titles to IMDB." });
-        return json({ ok: true, items: finalTitles, shows: finalTitles, networkLogo });
+        return jsonCacheable({ ok: true, items: finalTitles, shows: finalTitles, networkLogo });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err) });
       }
@@ -2772,7 +2772,7 @@ function generateSearchVariations(query) {
         ctx.waitUntil(bumpStat(env, "apiuse:tmdb"));
         const details = await fetchTmdbDetails(tmdbId, "movie", TMDB_API_KEY);
         if (!details.imdbId) return json({ ok: false, error: "Couldn't resolve an IMDB id for this movie." });
-        return json({ ok: true, imdbId: details.imdbId, runtime: Number.isInteger(details.runtime) ? details.runtime : null });
+        return jsonCacheable({ ok: true, imdbId: details.imdbId, runtime: Number.isInteger(details.runtime) ? details.runtime : null });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err) });
       }
@@ -2788,7 +2788,7 @@ function generateSearchVariations(query) {
         ctx.waitUntil(bumpStat(env, "apiuse:tmdb"));
         const details = await fetchTmdbDetails(tmdbId, "tv", TMDB_API_KEY);
         if (!details.imdbId) return json({ ok: false, error: "Couldn't resolve an IMDB id for this show." });
-        return json({ ok: true, imdbId: details.imdbId });
+        return jsonCacheable({ ok: true, imdbId: details.imdbId });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err) });
       }
@@ -2911,7 +2911,7 @@ function generateSearchVariations(query) {
       const tmdbKey = tmdbKeyParam || TMDB_API_KEY;
       const isAdultFilterActive = url.searchParams.get("adultContentFilter") === "1";
       if (!q || !tmdbKey) {
-        return json({ ok: true, lists: [] });
+        return jsonCacheable({ ok: true, lists: [] });
       }
 
       try {
@@ -3028,7 +3028,7 @@ function generateSearchVariations(query) {
           }
         }
 
-        return json({ ok: true, lists: results.slice(0, 30) });
+        return jsonCacheable({ ok: true, lists: results.slice(0, 30) });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err), lists: [] });
       }
@@ -3045,7 +3045,7 @@ function generateSearchVariations(query) {
       try {
         const lists = await searchTraktLists(q, traktKey);
         if (!traktKey) ctx.waitUntil(bumpStatBy(env, "apiuse:trakt", 1 + lists.length));
-        return json({ ok: true, lists });
+        return jsonCacheable({ ok: true, lists });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err) });
       }
@@ -3132,7 +3132,7 @@ function generateSearchVariations(query) {
               });
           },
         });
-        return json({ ok: true, lists });
+        return jsonCacheable({ ok: true, lists });
       } catch (err) {
         return json({ ok: false, lists: [] });
       }
