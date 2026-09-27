@@ -60,6 +60,7 @@ function isPrivateApiPath(path) {
   // fixed at the route, because this is the choke point that is supposed to
   // mean a route added later cannot forget.
   if (p === "/api/resolve") return true;
+  if (p === "/api/session" || p === "/api/me" || p.startsWith("/api/me/")) return true;
   return p.startsWith("/api/creator/") || p === "/admin" || p.startsWith("/admin/");
 }
 
@@ -739,6 +740,179 @@ async function isCreatorAuthMemoized(key, storedHash, username) {
 function invalidateCreatorAuthMemo() {
   CREATOR_AUTH_MEMO.clear();
 }
+
+// --- Session management (P3a-4) -------------------------------------------
+const SESSION_COOKIE_NAME = "mla_session";
+const SESSION_TTL_SEC = 30 * 24 * 60 * 60; // 30 days
+const SESSION_TTL_MS = SESSION_TTL_SEC * 1000;
+const SESSION_CACHE = new Map();
+const SESSION_CACHE_TTL_MS = 60 * 1000; // 60 s isolate cache
+const SESSION_CACHE_MAX = 1000;
+
+function extractSessionToken(request) {
+  if (!request) return null;
+  const cookieHeader = request.headers.get("Cookie") || request.headers.get("cookie") || "";
+  const match = cookieHeader.match(/(?:^|;\s*)mla_session=([^;]+)/);
+  if (match) {
+    try { return decodeURIComponent(match[1].trim()); } catch { return match[1].trim(); }
+  }
+  const authHeader = request.headers.get("Authorization") || request.headers.get("authorization") || "";
+  if (authHeader.startsWith("Bearer ")) {
+    return authHeader.slice(7).trim();
+  }
+  return null;
+}
+
+async function hashSessionToken(token) {
+  if (!token || typeof token !== "string") return "";
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+  return bufferToHex(new Uint8Array(digest));
+}
+
+function buildSessionCookieHeader(token) {
+  return `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL_SEC}`;
+}
+
+function buildClearSessionCookieHeader() {
+  return `${SESSION_COOKIE_NAME}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+}
+
+async function createSession(env, accountId, userAgent = null) {
+  if (!env || !env.DB) throw new Error("Database binding DB is required to create a session.");
+  const tokenBytes = crypto.getRandomValues(new Uint8Array(32));
+  const token = bufferToHex(tokenBytes);
+  const idHash = await hashSessionToken(token);
+  const now = Date.now();
+  const expiresAt = now + SESSION_TTL_MS;
+
+  await env.DB.prepare(
+    "INSERT INTO sessions (id_hash, account_id, created_at, last_seen_at, expires_at, user_agent, revoked_at) " +
+    "VALUES (?, ?, ?, ?, ?, ?, NULL)"
+  ).bind(idHash, accountId, now, now, expiresAt, userAgent || null).run();
+
+  return {
+    token,
+    idHash,
+    accountId,
+    createdAt: now,
+    lastSeenAt: now,
+    expiresAt,
+    userAgent: userAgent || null,
+  };
+}
+
+async function resolveSession(request, env) {
+  const token = extractSessionToken(request);
+  if (!token) return null;
+  const idHash = await hashSessionToken(token);
+  if (!idHash) return null;
+
+  const now = Date.now();
+  const cached = SESSION_CACHE.get(idHash);
+  if (cached) {
+    if (now - cached.cachedAt < SESSION_CACHE_TTL_MS) {
+      return { account: cached.account, session: cached.session };
+    }
+    SESSION_CACHE.delete(idHash);
+  }
+
+  if (!env || !env.DB) return null;
+
+  try {
+    const { results } = await env.DB.prepare(
+      "SELECT " +
+      "  s.id_hash, s.account_id, s.created_at AS session_created_at, s.last_seen_at, s.expires_at, s.user_agent, s.revoked_at, " +
+      "  a.id, a.username, a.display_name, a.key_hash, a.recovery_answer_hash, a.key_lookup_hmac, a.created_at AS account_created_at, a.last_active_at, a.version, a.deleted_at, a.status " +
+      "FROM sessions s " +
+      "JOIN accounts a ON a.id = s.account_id " +
+      "WHERE s.id_hash = ?"
+    ).bind(idHash).all();
+
+    if (!results || results.length === 0) return null;
+    const row = results[0];
+
+    // Check revocation, expiration, and account status
+    if (row.revoked_at != null) return null;
+    if (typeof row.expires_at === "number" && row.expires_at <= now) return null;
+    if (row.deleted_at != null || (row.status && row.status !== "active")) return null;
+
+    // Throttle last_seen_at update (at most once every 5 minutes per session)
+    if (typeof row.last_seen_at === "number" && now - row.last_seen_at > 5 * 60 * 1000) {
+      env.DB.prepare("UPDATE sessions SET last_seen_at = ? WHERE id_hash = ?").bind(now, idHash).run().catch(() => {});
+    }
+
+    const account = {
+      id: row.id,
+      username: row.username,
+      displayName: row.display_name,
+      createdAt: row.account_created_at,
+      lastActiveAt: row.last_active_at,
+      version: row.version || 0,
+      status: row.status || "active",
+    };
+
+    const session = {
+      idHash: row.id_hash,
+      accountId: row.account_id,
+      createdAt: row.session_created_at,
+      lastSeenAt: row.last_seen_at,
+      expiresAt: row.expires_at,
+      userAgent: row.user_agent,
+    };
+
+    if (SESSION_CACHE.size >= SESSION_CACHE_MAX) {
+      const oldestKey = SESSION_CACHE.keys().next().value;
+      if (oldestKey !== undefined) SESSION_CACHE.delete(oldestKey);
+    }
+    SESSION_CACHE.set(idHash, { account, session, cachedAt: now });
+
+    return { account, session };
+  } catch (e) {
+    // If table doesn't exist or DB errors, fail closed safely
+    return null;
+  }
+}
+
+async function revokeSession(env, idHash) {
+  if (!idHash) return;
+  SESSION_CACHE.delete(idHash);
+  if (env && env.DB) {
+    try {
+      const now = Date.now();
+      await env.DB.prepare("UPDATE sessions SET revoked_at = ? WHERE id_hash = ? AND revoked_at IS NULL").bind(now, idHash).run();
+    } catch {}
+  }
+}
+
+async function revokeAccountSessions(env, accountId, exceptIdHash = null) {
+  if (!accountId) return;
+  for (const [k, v] of SESSION_CACHE.entries()) {
+    if (v && v.account && v.account.id === accountId) {
+      if (!exceptIdHash || k !== exceptIdHash) {
+        SESSION_CACHE.delete(k);
+      }
+    }
+  }
+  if (env && env.DB) {
+    try {
+      const now = Date.now();
+      if (exceptIdHash) {
+        await env.DB.prepare(
+          "UPDATE sessions SET revoked_at = ? WHERE account_id = ? AND id_hash != ? AND revoked_at IS NULL"
+        ).bind(now, accountId, exceptIdHash).run();
+      } else {
+        await env.DB.prepare(
+          "UPDATE sessions SET revoked_at = ? WHERE account_id = ? AND revoked_at IS NULL"
+        ).bind(now, accountId).run();
+      }
+    } catch {}
+  }
+}
+
+function clearSessionCache() {
+  SESSION_CACHE.clear();
+}
+
 
 // MYL-XXXX-XXXX-XXXX -- excludes visually-ambiguous characters (0/O, 1/I/L)
 // so a key someone's reading off a screen to type into another device

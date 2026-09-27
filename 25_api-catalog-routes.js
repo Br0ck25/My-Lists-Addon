@@ -169,6 +169,13 @@ async function handleFetch(request, env, ctx) {
     // crashing -- see each key's usage for that message.
     applyEnvApiKeys(env);
 
+    // Resolve session if mla_session cookie or Bearer token is present
+    const sessionAuth = await resolveSession(request, env);
+    if (sessionAuth) {
+      request.account = sessionAuth.account;
+      request.session = sessionAuth.session;
+    }
+
     const url = new URL(request.url);
     const path = url.pathname;
 

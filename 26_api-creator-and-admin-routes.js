@@ -1133,6 +1133,228 @@
       });
     }
 
+    // --- Sessions API (Phase 3a: P3a-4) ------------------------------------
+
+    // POST /api/session  { username, key } -> { ok, account }
+    // Authenticates account credentials via PBKDF2, issues a 256-bit session token,
+    // stores its SHA-256 hash in D1 sessions, and sets the mla_session cookie.
+    if (path === "/api/session" && request.method === "POST") {
+      if (!env || !env.DB) return json({ ok: false, error: "Database unavailable." }, 503);
+      let body;
+      try {
+        body = await request.json();
+      } catch {
+        return json({ ok: false, error: "Invalid JSON body." }, 400);
+      }
+      const usernameRaw = body.username || body.creatorName;
+      const keyRaw = body.key || body.creatorKey;
+      if (!usernameRaw || !keyRaw) {
+        return json({ ok: false, error: "Username and Account Key are required." }, 400);
+      }
+      const v = validateCreatorUsername(usernameRaw);
+      if (!v.ok) {
+        return json({ ok: false, error: "Incorrect username or Account Key." }, 401);
+      }
+
+      // Look up account in accounts table
+      let accountRow = null;
+      try {
+        const { results } = await env.DB.prepare(
+          "SELECT * FROM accounts WHERE username = ? COLLATE NOCASE AND deleted_at IS NULL"
+        ).bind(v.normalized).all();
+        if (results && results.length > 0) {
+          accountRow = results[0];
+        }
+      } catch (e) {
+        console.error("D1 accounts lookup failed:", e);
+      }
+
+      // If not in accounts, check legacy creators / KV and lazy-backfill
+      if (!accountRow) {
+        const rawCreator = await getCreator(env, v.normalized);
+        if (rawCreator) {
+          await backfillAccounts(env).catch(() => {});
+          try {
+            const { results } = await env.DB.prepare(
+              "SELECT * FROM accounts WHERE username = ? COLLATE NOCASE AND deleted_at IS NULL"
+            ).bind(v.normalized).all();
+            if (results && results.length > 0) {
+              accountRow = results[0];
+            }
+          } catch {}
+        }
+      }
+
+      if (!accountRow || !accountRow.key_hash) {
+        return json({ ok: false, error: "Incorrect username or Account Key." }, 401);
+      }
+
+      const valid = await verifyCreatorKeyMemoized(keyRaw, accountRow.key_hash, accountRow.username);
+      if (!valid) {
+        return json({ ok: false, error: "Incorrect username or Account Key." }, 401);
+      }
+
+      // Check if iterations are below target, rehash if needed
+      const parts = String(accountRow.key_hash || "").split(":");
+      if (parts.length === 4 && parts[0] === "pbkdf2") {
+        const iterations = parseInt(parts[1], 10);
+        if (iterations < PBKDF2_ITERATIONS) {
+          try {
+            const upgradedHash = await hashCreatorKey(keyRaw);
+            await env.DB.prepare("UPDATE accounts SET key_hash = ? WHERE id = ?").bind(upgradedHash, accountRow.id).run();
+          } catch (e) {
+            console.error("Failed to upgrade PBKDF2 iterations:", e);
+          }
+        }
+      }
+
+      // Update last active
+      const now = Date.now();
+      await env.DB.prepare("UPDATE accounts SET last_active_at = ? WHERE id = ?").bind(now, accountRow.id).run().catch(() => {});
+      touchCreatorLastSeen(env, accountRow.username).catch(() => {});
+
+      // Create session
+      const userAgent = request.headers.get("user-agent") || null;
+      const session = await createSession(env, accountRow.id, userAgent);
+
+      const cookie = buildSessionCookieHeader(session.token);
+      return json(
+        {
+          ok: true,
+          account: {
+            id: accountRow.id,
+            username: accountRow.username,
+            displayName: accountRow.display_name,
+            createdAt: accountRow.created_at,
+            lastActiveAt: now,
+          },
+        },
+        200,
+        {
+          "Set-Cookie": cookie,
+          "Cache-Control": "no-store",
+        }
+      );
+    }
+
+    // DELETE /api/session -> logs out by revoking current session and clearing cookie
+    if (path === "/api/session" && request.method === "DELETE") {
+      const token = extractSessionToken(request);
+      if (token) {
+        const idHash = await hashSessionToken(token);
+        await revokeSession(env, idHash);
+      }
+      return json(
+        { ok: true },
+        200,
+        {
+          "Set-Cookie": buildClearSessionCookieHeader(),
+          "Cache-Control": "no-store",
+        }
+      );
+    }
+
+    // GET /api/me -> returns the current authenticated account profile
+    if (path === "/api/me" && request.method === "GET") {
+      if (!request.account) {
+        return json({ ok: false, error: "Authentication required." }, 401);
+      }
+      return json(
+        {
+          ok: true,
+          account: {
+            id: request.account.id,
+            username: request.account.username,
+            displayName: request.account.displayName,
+            createdAt: request.account.createdAt,
+            lastActiveAt: request.account.lastActiveAt,
+            version: request.account.version || 0,
+            status: request.account.status || "active",
+          },
+        },
+        200,
+        { "Cache-Control": "no-store" }
+      );
+    }
+
+    // GET /api/me/sessions -> lists active sessions for the current account
+    if (path === "/api/me/sessions" && request.method === "GET") {
+      if (!request.account || !env || !env.DB) {
+        return json({ ok: false, error: "Authentication required." }, 401);
+      }
+      const now = Date.now();
+      const currentHash = request.session ? request.session.idHash : null;
+      try {
+        const { results } = await env.DB.prepare(
+          "SELECT id_hash, created_at, last_seen_at, expires_at, user_agent " +
+          "FROM sessions " +
+          "WHERE account_id = ? AND revoked_at IS NULL AND expires_at > ? " +
+          "ORDER BY last_seen_at DESC"
+        ).bind(request.account.id, now).all();
+
+        const sessions = (results || []).map((s) => ({
+          id: s.id_hash.slice(0, 16),
+          createdAt: s.created_at,
+          lastSeenAt: s.last_seen_at,
+          expiresAt: s.expires_at,
+          userAgent: s.user_agent,
+          current: s.id_hash === currentHash,
+        }));
+        return json({ ok: true, sessions }, 200, { "Cache-Control": "no-store" });
+      } catch (e) {
+        return json({ ok: false, error: "Failed to load sessions." }, 500);
+      }
+    }
+
+    // DELETE /api/me/sessions -> revokes active sessions for current account
+    if (path === "/api/me/sessions" && request.method === "DELETE") {
+      if (!request.account || !env || !env.DB) {
+        return json({ ok: false, error: "Authentication required." }, 401);
+      }
+      let body = {};
+      try {
+        body = await request.json();
+      } catch {}
+
+      const currentHash = request.session ? request.session.idHash : null;
+      const url = new URL(request.url);
+      const revokeOthers = body.allExceptCurrent || url.searchParams.get("other") === "1";
+      const targetId = body.id || url.searchParams.get("id");
+
+      if (revokeOthers) {
+        await revokeAccountSessions(env, request.account.id, currentHash);
+        return json({ ok: true, revokedOthers: true }, 200, { "Cache-Control": "no-store" });
+      }
+
+      if (targetId) {
+        const { results } = await env.DB.prepare(
+          "SELECT id_hash FROM sessions WHERE account_id = ? AND id_hash LIKE ? AND revoked_at IS NULL"
+        ).bind(request.account.id, targetId + "%").all();
+
+        let revokedCurrent = false;
+        for (const r of (results || [])) {
+          await revokeSession(env, r.id_hash);
+          if (r.id_hash === currentHash) revokedCurrent = true;
+        }
+        const headers = { "Cache-Control": "no-store" };
+        if (revokedCurrent) {
+          headers["Set-Cookie"] = buildClearSessionCookieHeader();
+        }
+        return json({ ok: true, revoked: (results || []).length }, 200, headers);
+      }
+
+      // No target specified: revoke all sessions including current
+      await revokeAccountSessions(env, request.account.id, null);
+      return json(
+        { ok: true, revokedAll: true },
+        200,
+        {
+          "Set-Cookie": buildClearSessionCookieHeader(),
+          "Cache-Control": "no-store",
+        }
+      );
+    }
+
     // /api/creator/track-status  (POST)  { creatorName, creatorKey } ->
     // { ok, lastPingAt, lastPingId, matched } -- powers the "last ping"
     // status line on the Settings page's Auto-track playback panel, same

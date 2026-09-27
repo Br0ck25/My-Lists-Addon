@@ -18,9 +18,16 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 The new secrets `TOKEN_ENCRYPTION_KEY` and `LOOKUP_PEPPER` are **not needed yet**: nothing in this release uses them. They will be needed when the Phase 3a sign-in and account-storage code ships, and the release notes will say so then.
 
-### 🔒 Phase 3a groundwork: accounts tables, token encryption, and accounts backfill (P3a-1, P3a-2, P3a-3)
+### 🔒 Phase 3a: accounts, sessions, and authentication (P3a-1, P3a-2, P3a-3, P3a-4)
 
-Nothing in this release uses these for user sign-in yet; they are the foundation for sign-in sessions and for keeping provider tokens on the account instead of in install links.
+- **Sessions API and Authentication (P3a-4)**:
+  - `POST /api/session`: Authenticates with username and Account Key (or legacy `creatorName`/`creatorKey`). Verifies PBKDF2 hash, automatically upgrades PBKDF2 iterations to target (`PBKDF2_ITERATIONS`) on login, and lazily backfills accounts from legacy D1/KV records if not yet migrated. Generates a crypto-random 256-bit token stored as SHA-256 hash in D1 `sessions`, and sets the `mla_session` cookie (`HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=30d`).
+  - `DELETE /api/session`: Revokes the current session in D1 and isolate cache, and clears the session cookie (`Max-Age=0`).
+  - `GET /api/me`: Returns the authenticated account profile (`id`, `username`, `displayName`, `createdAt`, `lastActiveAt`, `version`, `status`) with strict `no-store` caching.
+  - `GET /api/me/sessions`: Lists active devices/sessions for the current account, indicating the current device (`current: true`), creation time, last active time, expiration, and user agent.
+  - `DELETE /api/me/sessions`: Device/session revocation endpoint supporting revoking all other sessions (`{ allExceptCurrent: true }` / `?other=1`), revoking a specific session by ID prefix (`{ id }`), or revoking all sessions across all devices.
+  - **Session resolution middleware**: Resolves sessions via `mla_session` cookie or `Authorization: Bearer <token>` in `handleFetch`, sets `request.account` and `request.session`, and caches verified sessions in isolate memory for 60 seconds.
+
 
 - **Accounts backfill job** (`backfillAccounts`, `reconcileAccounts` in `02_http-and-creator-utils.js`, `/admin/api/migrate-accounts` in `26_api-creator-and-admin-routes.js`):
   - Copies all identities from D1 `creators` and KV `creator:*` into the `accounts` table created in migration 0015.

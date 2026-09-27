@@ -122,14 +122,14 @@ No npm, no `src/` tree, no esbuild, no new test framework (D-11). Phase 2 is now
   - An optional `context` binds a ciphertext to its row (AES-GCM additional data), so callers should pass one, for example `account:<id>:<provider>`.
   - Tested for round-trip, key rotation, wrong key, tampering, malformed keys, context binding and HMAC hashing.
 - [x] **P3a-3** Backfill job `migrate.accounts`: for every `creators` row and every KV `creator:*` key, upsert `accounts` (newest `keyHash` wins; D1 wins ties). *Done when:* the reconciliation report shows `count(accounts) = |creators ∪ creator:*|`. — **Status:** Implemented (`backfillAccounts`, `reconcileAccounts` in `02_http-and-creator-utils.js`, `/admin/api/migrate-accounts` route in `26_api-creator-and-admin-routes.js`, Admin maintenance panel in `03_admin.js`), verified with comprehensive unit and route tests.
-- [ ] **P3a-4** Sessions:
+- [x] **P3a-4** Sessions:
   - `POST /api/session` {username, key}: PBKDF2 verify, rehash if the iteration count is below the target, create a 256-bit token, store its SHA-256 in `sessions`, and set the `mla_session` cookie (`HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=30d`).
   - `DELETE /api/session`.
   - `GET /api/me`.
   - `GET/DELETE /api/me/sessions` (devices).
   - Middleware resolves the session (with a 60 s isolate cache) and sets `request.account`.
 
-  *Done when:* the auth tests pass, including revocation.
+  *Done when:* the auth tests pass, including revocation. — **Status:** Implemented (`createSession`, `resolveSession`, `revokeSession`, `revokeAccountSessions` in `02_http-and-creator-utils.js`, middleware in `25_api-catalog-routes.js`, routes in `26_api-creator-and-admin-routes.js`), verified with 12 comprehensive unit and route tests covering login, PBKDF2 upgrade, lazy backfill, session resolution via cookie/Bearer, device management, logout, and multi-session revocation.
 - [ ] **P3a-5** CSRF middleware for POST, PUT, PATCH and DELETE: require `Origin` equal to our origin (or `Sec-Fetch-Site: same-origin`) **and** `Content-Type: application/json`. Webhook routes (`/api/scrobble*`) and OAuth callbacks are exempt. *Done when:* a cross-origin `text/plain` POST to `/api/lists/like` is rejected with 403.
 - [ ] **P3a-6** Compatibility: every `/api/creator/*` route accepts either a session **or** `creatorName`/`creatorKey` in the body. A successful key-in-body auth also sets a session cookie. Behind `FF_SESSIONS`. *Done when:* the old client flows pass unchanged and the new cookie is issued.
 - [ ] **P3a-7** Blind index v2: on a successful login or key reset, write `accounts.key_lookup_hmac = HMAC(LOOKUP_PEPPER, normalizedKey)`. `forgot-username` checks the HMAC first, then the legacy SHA-256. *Done when:* the tests pass; there is a metric for legacy-lookup hits.

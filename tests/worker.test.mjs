@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import fs from "node:fs";
@@ -14531,6 +14531,466 @@ describe("P3a-3: accounts backfill (migrate.accounts)", () => {
     assert.match(report.error, /apply migration 0015/i);
   });
 });
+
+describe("P3a-4: sessions API and authentication", () => {
+  const {
+    createSession,
+    resolveSession,
+    revokeSession,
+    revokeAccountSessions,
+    extractSessionToken,
+    hashSessionToken,
+    buildSessionCookieHeader,
+    buildClearSessionCookieHeader,
+    clearSessionCache,
+    hashCreatorKey,
+  } = loadSourceFunctions(
+    "00_constants.js",
+    "02_http-and-creator-utils.js"
+  );
+  const PBKDF2_ITERATIONS = 100000;
+
+  beforeEach(() => {
+    clearSessionCache();
+  });
+
+  function getTokenFromSetCookie(setCookie) {
+    if (!setCookie) return null;
+    const match = setCookie.match(/mla_session=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : null;
+  }
+
+  it("cookie and token helpers format and extract tokens correctly", async () => {
+    const dummyToken = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
+    const cookieHeader = buildSessionCookieHeader(dummyToken);
+    assert.match(cookieHeader, /^mla_session=abcdef0123456789/);
+    assert.match(cookieHeader, /HttpOnly/);
+    assert.match(cookieHeader, /Secure/);
+    assert.match(cookieHeader, /SameSite=Lax/);
+    assert.match(cookieHeader, /Max-Age=2592000/);
+
+    const clearHeader = buildClearSessionCookieHeader();
+    assert.match(clearHeader, /Max-Age=0/);
+    assert.match(clearHeader, /Expires=Thu, 01 Jan 1970/);
+
+    const reqWithCookie = new Request("https://example.test", {
+      headers: { Cookie: `foo=bar; mla_session=${dummyToken}; other=1` },
+    });
+    assert.equal(extractSessionToken(reqWithCookie), dummyToken);
+
+    const reqWithBearer = new Request("https://example.test", {
+      headers: { Authorization: `Bearer ${dummyToken}` },
+    });
+    assert.equal(extractSessionToken(reqWithBearer), dummyToken);
+
+    const reqEmpty = new Request("https://example.test");
+    assert.equal(extractSessionToken(reqEmpty), null);
+
+    const hashed = await hashSessionToken(dummyToken);
+    assert.equal(hashed.length, 64);
+    assert.equal(await hashSessionToken(""), "");
+    assert.equal(await hashSessionToken(null), "");
+  });
+
+  it("creates and resolves sessions directly", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const keyHash = await hashCreatorKey("MYL-AAAA-BBBB-CCCC");
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind("session_user", "Session User", keyHash, 1000).run();
+
+    const { results: accRows } = await env.DB.prepare("SELECT id FROM accounts WHERE username = ?").bind("session_user").all();
+    const accountId = accRows[0].id;
+
+    const sessionData = await createSession(env, accountId, "TestAgent/1.0");
+    assert.ok(sessionData.token);
+    assert.equal(sessionData.token.length, 64);
+    assert.ok(sessionData.idHash);
+    assert.equal(sessionData.accountId, accountId);
+    assert.equal(sessionData.userAgent, "TestAgent/1.0");
+
+    const req = new Request("https://example.test/api/me", {
+      headers: { Cookie: `mla_session=${sessionData.token}` },
+    });
+    const resolved = await resolveSession(req, env);
+    assert.ok(resolved);
+    assert.equal(resolved.account.username, "session_user");
+    assert.equal(resolved.session.idHash, sessionData.idHash);
+
+    // Isolate cache hit
+    const resolvedCached = await resolveSession(req, env);
+    assert.equal(resolvedCached.account.username, "session_user");
+
+    // Revoke and check resolution returns null
+    await revokeSession(env, sessionData.idHash);
+    const resolvedAfterRevoke = await resolveSession(req, env);
+    assert.equal(resolvedAfterRevoke, null);
+  });
+
+  it("logs in with valid username and key, sets cookie and creates session", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const key = "MYL-TEST-PASS-WORD";
+    const keyHash = await hashCreatorKey(key);
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind("login_user", "Login User", keyHash, 1000).run();
+
+    const res = await call(env, "/api/session", {
+      method: "POST",
+      json: { username: "login_user", key },
+      headers: { "User-Agent": "Mozilla/5.0 TestBrowser" },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+    assert.equal(res.body.account.username, "login_user");
+    assert.equal(res.body.account.displayName, "Login User");
+    assert.equal(res.headers.get("cache-control"), "no-store");
+
+    const setCookie = res.headers.get("set-cookie");
+    assert.ok(setCookie);
+    const token = getTokenFromSetCookie(setCookie);
+    assert.ok(token);
+    assert.equal(token.length, 64);
+
+    // Verify session stored in DB
+    const idHash = await hashSessionToken(token);
+    const { results: sRows } = await env.DB.prepare("SELECT * FROM sessions WHERE id_hash = ?").bind(idHash).all();
+    assert.equal(sRows.length, 1);
+    assert.equal(sRows[0].user_agent, "Mozilla/5.0 TestBrowser");
+    assert.equal(sRows[0].revoked_at, null);
+  });
+
+  it("supports legacy aliases creatorName and creatorKey on login", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const key = "MYL-LEGC-KEYY-TEST";
+    const keyHash = await hashCreatorKey(key);
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind("legacy_alias_user", "Alias User", keyHash, 1000).run();
+
+    const res = await call(env, "/api/session", {
+      method: "POST",
+      json: { creatorName: "legacy_alias_user", creatorKey: key },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+    assert.equal(res.body.account.username, "legacy_alias_user");
+  });
+
+  it("rejects invalid login attempts with appropriate status codes", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const key = "MYL-REAL-KEYY-TEST";
+    const keyHash = await hashCreatorKey(key);
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind("valid_user", "Valid User", keyHash, 1000).run();
+
+    // Wrong password/key
+    const wrongKey = await call(env, "/api/session", {
+      method: "POST",
+      json: { username: "valid_user", key: "MYL-WRON-KEYY-TEST" },
+    });
+    assert.equal(wrongKey.status, 401);
+    assert.equal(wrongKey.body.ok, false);
+
+    // Unknown username
+    const unknownUser = await call(env, "/api/session", {
+      method: "POST",
+      json: { username: "nonexistent_user", key },
+    });
+    assert.equal(unknownUser.status, 401);
+    assert.equal(unknownUser.body.ok, false);
+
+    // Missing key
+    const missingKey = await call(env, "/api/session", {
+      method: "POST",
+      json: { username: "valid_user" },
+    });
+    assert.equal(missingKey.status, 400);
+
+    // Missing username
+    const missingUser = await call(env, "/api/session", {
+      method: "POST",
+      json: { key },
+    });
+    assert.equal(missingUser.status, 400);
+
+    // Invalid JSON
+    const badJson = await call(env, "/api/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      form: null,
+    });
+    assert.equal(badJson.status, 400);
+  });
+
+  it("lazily backfills an account from D1 creators or KV creator:* on login", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const key = "MYL-LAZY-MIGR-TEST";
+    const keyHash = await hashCreatorKey(key);
+
+    // Put into legacy creators table, not yet in accounts table
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind("lazy_user", "Lazy User", keyHash, 1000).run();
+
+    const res = await call(env, "/api/session", {
+      method: "POST",
+      json: { username: "lazy_user", key },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+    assert.equal(res.body.account.username, "lazy_user");
+
+    // Verify it is now in accounts table
+    const { results: accRows } = await env.DB.prepare("SELECT * FROM accounts WHERE username = ?").bind("lazy_user").all();
+    assert.equal(accRows.length, 1);
+    assert.equal(accRows[0].display_name, "Lazy User");
+  });
+
+  it("upgrades PBKDF2 iterations on login when stored hash is below target", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const key = "MYL-UPGR-HASH-TEST";
+
+    // Generate lower iterations hash (5000 iterations)
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(key), "PBKDF2", false, ["deriveBits"]);
+    const derivedBits = await crypto.subtle.deriveBits(
+      { name: "PBKDF2", salt, iterations: 5000, hash: "SHA-256" },
+      keyMaterial,
+      256
+    );
+    const lowIterHash = `pbkdf2:5000:${Array.from(salt, b => b.toString(16).padStart(2, "0")).join("")}:${Array.from(new Uint8Array(derivedBits), b => b.toString(16).padStart(2, "0")).join("")}`;
+
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind("upgrade_user", "Upgrade User", lowIterHash, 1000).run();
+
+    const res = await call(env, "/api/session", {
+      method: "POST",
+      json: { username: "upgrade_user", key },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+
+    // Verify accounts.key_hash has been upgraded to PBKDF2_ITERATIONS
+    const { results: accRows } = await env.DB.prepare("SELECT key_hash FROM accounts WHERE username = ?").bind("upgrade_user").all();
+    assert.ok(accRows[0].key_hash.startsWith(`pbkdf2:${PBKDF2_ITERATIONS}:`));
+  });
+
+  it("GET /api/me requires auth and returns account profile with no-store", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const key = "MYL-GETM-AUTH-TEST";
+    const keyHash = await hashCreatorKey(key);
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind("me_user", "Me User", keyHash, 1000).run();
+
+    // Unauthenticated
+    const unauth = await call(env, "/api/me", { method: "GET" });
+    assert.equal(unauth.status, 401);
+    assert.equal(unauth.body.ok, false);
+
+    // Log in
+    const loginRes = await call(env, "/api/session", {
+      method: "POST",
+      json: { username: "me_user", key },
+    });
+    const cookie = (loginRes.headers.get("set-cookie") || "").split(";")[0];
+
+    // Authenticated via Cookie
+    const authRes = await call(env, "/api/me", { method: "GET", cookie });
+    assert.equal(authRes.status, 200);
+    assert.equal(authRes.body.ok, true);
+    assert.equal(authRes.body.account.username, "me_user");
+    assert.equal(authRes.body.account.displayName, "Me User");
+    assert.equal(authRes.headers.get("cache-control"), "no-store");
+
+    // Authenticated via Authorization: Bearer
+    const token = getTokenFromSetCookie(cookie);
+    const bearerRes = await call(env, "/api/me", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assert.equal(bearerRes.status, 200);
+    assert.equal(bearerRes.body.account.username, "me_user");
+  });
+
+  it("GET /api/me/sessions lists devices with current session flagged", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const key = "MYL-SESS-LIST-TEST";
+    const keyHash = await hashCreatorKey(key);
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind("device_user", "Device User", keyHash, 1000).run();
+
+    // Login device 1
+    const d1Res = await call(env, "/api/session", {
+      method: "POST",
+      json: { username: "device_user", key },
+      headers: { "User-Agent": "Device 1 Phone" },
+    });
+    const d1Cookie = (d1Res.headers.get("set-cookie") || "").split(";")[0];
+
+    // Login device 2
+    const d2Res = await call(env, "/api/session", {
+      method: "POST",
+      json: { username: "device_user", key },
+      headers: { "User-Agent": "Device 2 Laptop" },
+    });
+    const d2Cookie = (d2Res.headers.get("set-cookie") || "").split(";")[0];
+
+    // Query sessions from device 2
+    const listRes = await call(env, "/api/me/sessions", { method: "GET", cookie: d2Cookie });
+    assert.equal(listRes.status, 200);
+    assert.equal(listRes.body.ok, true);
+    assert.equal(listRes.body.sessions.length, 2);
+
+    const s1 = listRes.body.sessions.find(s => s.userAgent === "Device 1 Phone");
+    const s2 = listRes.body.sessions.find(s => s.userAgent === "Device 2 Laptop");
+    assert.ok(s1);
+    assert.ok(s2);
+    assert.equal(s1.current, false);
+    assert.equal(s2.current, true);
+    assert.equal(s1.id.length, 16);
+  });
+
+  it("DELETE /api/session logs out, revokes session and clears cookie", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const key = "MYL-LOGO-UTTT-TEST";
+    const keyHash = await hashCreatorKey(key);
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind("logout_user", "Logout User", keyHash, 1000).run();
+
+    const loginRes = await call(env, "/api/session", {
+      method: "POST",
+      json: { username: "logout_user", key },
+    });
+    const cookie = (loginRes.headers.get("set-cookie") || "").split(";")[0];
+    const token = getTokenFromSetCookie(cookie);
+
+    // Logout
+    const logoutRes = await call(env, "/api/session", { method: "DELETE", cookie });
+    assert.equal(logoutRes.status, 200);
+    assert.equal(logoutRes.body.ok, true);
+
+    const clearCookie = logoutRes.headers.get("set-cookie") || "";
+    assert.match(clearCookie, /Max-Age=0/);
+
+    // Verify revoked in D1
+    const idHash = await hashSessionToken(token);
+    const { results: sRows } = await env.DB.prepare("SELECT revoked_at FROM sessions WHERE id_hash = ?").bind(idHash).all();
+    assert.ok(sRows[0].revoked_at != null);
+
+    // Subsequent /api/me call with old cookie is rejected
+    const meRes = await call(env, "/api/me", { method: "GET", cookie });
+    assert.equal(meRes.status, 401);
+  });
+
+  it("DELETE /api/me/sessions supports revoking other sessions, specific session, and all sessions", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const key = "MYL-REVO-KEEE-TEST";
+    const keyHash = await hashCreatorKey(key);
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind("revoke_user", "Revoke User", keyHash, 1000).run();
+
+    // Create 3 sessions
+    const r1 = await call(env, "/api/session", { method: "POST", json: { username: "revoke_user", key }, headers: { "User-Agent": "Session 1" } });
+    const r2 = await call(env, "/api/session", { method: "POST", json: { username: "revoke_user", key }, headers: { "User-Agent": "Session 2" } });
+    const r3 = await call(env, "/api/session", { method: "POST", json: { username: "revoke_user", key }, headers: { "User-Agent": "Session 3" } });
+
+    const c1 = (r1.headers.get("set-cookie") || "").split(";")[0];
+    const c2 = (r2.headers.get("set-cookie") || "").split(";")[0];
+    const c3 = (r3.headers.get("set-cookie") || "").split(";")[0];
+
+    // 1. Revoke specific session (Session 3) by prefix
+    const listRes = await call(env, "/api/me/sessions", { method: "GET", cookie: c1 });
+    const s3Entry = listRes.body.sessions.find(s => s.userAgent === "Session 3");
+
+    const revokeSpecific = await call(env, "/api/me/sessions", {
+      method: "DELETE",
+      cookie: c1,
+      json: { id: s3Entry.id },
+    });
+    assert.equal(revokeSpecific.status, 200);
+    assert.equal(revokeSpecific.body.revoked, 1);
+
+    // Session 3 is now revoked
+    const checkS3 = await call(env, "/api/me", { method: "GET", cookie: c3 });
+    assert.equal(checkS3.status, 401);
+    // Session 1 and 2 are still valid
+    assert.equal((await call(env, "/api/me", { method: "GET", cookie: c1 })).status, 200);
+    assert.equal((await call(env, "/api/me", { method: "GET", cookie: c2 })).status, 200);
+
+    // 2. Revoke other sessions from Session 1
+    const revokeOther = await call(env, "/api/me/sessions", {
+      method: "DELETE",
+      cookie: c1,
+      json: { allExceptCurrent: true },
+    });
+    assert.equal(revokeOther.status, 200);
+    assert.equal(revokeOther.body.revokedOthers, true);
+
+    // Session 2 is now revoked
+    assert.equal((await call(env, "/api/me", { method: "GET", cookie: c2 })).status, 401);
+    // Session 1 remains valid
+    assert.equal((await call(env, "/api/me", { method: "GET", cookie: c1 })).status, 200);
+
+    // 3. Revoke all sessions
+    const revokeAll = await call(env, "/api/me/sessions", {
+      method: "DELETE",
+      cookie: c1,
+    });
+    assert.equal(revokeAll.status, 200);
+    assert.equal(revokeAll.body.revokedAll, true);
+    assert.match(revokeAll.headers.get("set-cookie") || "", /Max-Age=0/);
+
+    // Session 1 is now also revoked
+    assert.equal((await call(env, "/api/me", { method: "GET", cookie: c1 })).status, 401);
+  });
+
+  it("rejects expired sessions and soft-deleted or non-active accounts", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const key = "MYL-EXPI-REEE-TEST";
+    const keyHash = await hashCreatorKey(key);
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, created_at, status) VALUES (?, ?, ?, ?, ?)"
+    ).bind("status_user", "Status User", keyHash, 1000, "active").run();
+
+    const loginRes = await call(env, "/api/session", {
+      method: "POST",
+      json: { username: "status_user", key },
+    });
+    const cookie = (loginRes.headers.get("set-cookie") || "").split(";")[0];
+    const token = getTokenFromSetCookie(cookie);
+    const idHash = await hashSessionToken(token);
+
+    // Make session expired in DB
+    clearSessionCache();
+    await env.DB.prepare("UPDATE sessions SET expires_at = ? WHERE id_hash = ?").bind(Date.now() - 10000, idHash).run();
+
+    const expiredRes = await call(env, "/api/me", { method: "GET", cookie });
+    assert.equal(expiredRes.status, 401);
+
+    // Reset expiry, but set account status to suspended
+    clearSessionCache();
+    await env.DB.prepare("UPDATE sessions SET expires_at = ? WHERE id_hash = ?").bind(Date.now() + 100000, idHash).run();
+    await env.DB.prepare("UPDATE accounts SET status = 'suspended' WHERE username = 'status_user'").run();
+
+    const suspendedRes = await call(env, "/api/me", { method: "GET", cookie });
+    assert.equal(suspendedRes.status, 401);
+
+    // Soft-deleted account
+    clearSessionCache();
+    await env.DB.prepare("UPDATE accounts SET status = 'active', deleted_at = ? WHERE username = 'status_user'").bind(Date.now()).run();
+
+    const deletedRes = await call(env, "/api/me", { method: "GET", cookie });
+    assert.equal(deletedRes.status, 401);
+  });
+});
+
 
 
 
