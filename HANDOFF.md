@@ -6,10 +6,10 @@
 
 ## Current Status
 - **Last Updated**: 2026-09-27
-- **Last Active AI**: Antigravity (Gemini 3.8 Flash)
-- **Active Task**: Phase 3a in progress. P3a-1 through P3a-7 are complete, verified and tested. Next: P3a-8 (installs: legacy resolver, transient base64 installs, new routes, management API, snapshot cache).
-- **Task State**: P3a-7 verified with comprehensive tests. All tests passing (1,344 passed, 0 failed, 1 skipped: the opt-in network test).
-- **Git State**: Clean working tree. Pushed to remote `origin/main` and `origin/feat/phase-3a-accounts` (commit `6737db5`).
+- **Last Active AI**: Claude Code (Opus 5.5)
+- **Active Task**: Phase 3a in progress. P3a-1 through P3a-8 are complete, verified and tested, and P3a-4 to P3a-7 have been reviewed and fixed. Next: P3a-9 (connections).
+- **Task State**: All tests passing (1,372 passed, 0 failed, 1 skipped: the opt-in network test). `verify.sh` checks pass.
+- **Git State**: Committed on `main`, **not pushed** (the owner has not asked). The last pushed commit is `460be7c`.
 - **The owner is not a programmer.** Explain in plain words, do the git work for them, and ask before anything that changes stored user data or needs a dashboard change.
 
 ---
@@ -47,6 +47,8 @@ These are deliberate. Several are "one place" mechanisms that cover the whole Wo
 | `00_`, `REQUIRED_SCHEMA_VERSION`; `02_`, `schemaWriteGate` | API writes are refused (503 "being updated") while the database is behind the code. A new migration must: <br>1. end with an `INSERT` into `schema_migrations`; <br>2. be added to `schema.sql` and `D1_SCHEMA_MANIFEST`; <br>3. bump `REQUIRED_SCHEMA_VERSION` if the code depends on it. <br>See `docs/OPERATIONS.md` §4. |
 | `04_`, `resolveConfig(config, env, { withTracking })` | Reads a person's tracking record only when asked (the channel meta route and `/api/resolve`). Catalog rows must not ask. |
 | `/<id>/configure` and `/api/resolve` | Never return provider keys or tokens. The `P1-T2` test probes every route for this. |
+| `02_`, `getOrBackfillAccount(env, username, profile)` | The `accounts` row is a **mirror** of the creator profile (`creator:{u}` / `creators`), which stays the source of truth until Phase 10. Never trust `accounts.key_hash` on its own: authenticate with `authenticateCreator`, then sync the row from the profile. `deleteAccountRow` removes a row and everything under its id (sessions, installs, secrets, snapshots). |
+| `27_`, the install move | A moved `cfg:` record carries `_install` and no secrets; `resolveConfig` puts them back (`applyLegacyInstallRecord`). Reads never depend on the flags. **Never write code that reads a `cfg:` record's keys directly**: go through `resolveConfig`. A new secret install field must be added to `INSTALL_SECRET_COLUMNS` (a test checks). |
 | `02_`, `encryptToken` / `decryptToken` / `hmacLookupKey` | AES-256-GCM token encryption with key rotation (`TOKEN_ENCRYPTION_KEY`) and an HMAC-SHA256 blind index (`LOOKUP_PEPPER`). Always pass the key ring or `env` explicitly: there is no module-level `env`. Always pass a `context` naming the row (for example `account:<id>:<provider>`), and decrypt with the same one. Use these names only; do not add generic `encrypt` / `decrypt` functions. |
 
 ---
@@ -59,7 +61,9 @@ These are deliberate. Several are "one place" mechanisms that cover the whole Wo
    - `\n` in client code must be written `\\n`.
 3. **All numbered files share one scope.**
    - Top-level names must be unique across files.
-   - New server-only code goes in a new numbered file **after `26_`** (for example `27_...`), never between `09_` and `24_`.
+   - New server-only code goes in a new numbered file **after `26_`** (the next is `28_...`), never between `09_` and `24_`.
+   - `25_` and `26_` are the **inside** of `handleFetch` (they share `request`, `env`, `path`, `authenticateCreator`). `27_installs.js` comes after the `export default` block, at module level, so it cannot see those; pass what it needs.
+   - Tests that load source files into a sandbox (`loadSourceFunctions`) and call `resolveConfig` must include `27_installs.js`.
 4. **Shell heredocs in this environment mangle `\\` sequences.** Write patch scripts to a file and run them, or use the file-editing tool.
 5. **The test D1** (`tests/harness.mjs`, real SQLite) enforces D1's limits: 100 bound parameters, 2 MB per row, 100,000-byte statements. A query that trips these would fail in production too.
 6. The preview harness (`.claude/launch.json` → `mylists-harness`, port 8787) loads the built Worker once at startup. **Restart it after every rebuild.**
@@ -81,7 +85,9 @@ node scope_check.mjs worker worker_entry_combined.js
 ```
 Then delete `node_modules`.
 
-Last run (2026-09-27): all of the above pass, 1,288 tests passed, 0 failed, 1 skipped.
+Last run (2026-09-27): all of the above pass, 1,372 tests passed, 0 failed, 1 skipped.
+
+The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/json` to every POST, so a route test cannot notice a page that forgets them. A static test ("every mutating fetch the pages make sends a JSON content type") covers that instead.
 
 ---
 
@@ -109,6 +115,19 @@ Last run (2026-09-27): all of the above pass, 1,288 tests passed, 0 failed, 1 sk
   - **P3a-5:** CSRF protection middleware implemented (`verifyCsrf` in `02_http-and-creator-utils.js`, wired into `handleFetch` in `25_api-catalog-routes.js`). Enforces same-origin validation (`Origin` or `Sec-Fetch-Site: same-origin`) and `Content-Type: application/json` on state-changing requests (`POST`, `PUT`, `PATCH`, `DELETE`). Exempts webhooks (`/api/scrobble*`), OAuth callbacks, and admin login forms.
   - **P3a-6:** Creator routes dual authentication compatibility implemented behind `FF_SESSIONS` (`authenticateCreator` dual auth, `isSessionsEnabled`, `getOrBackfillAccount`, `withSecurityHeaders`). Every `/api/creator/*` route accepts either an active session or `creatorName`/`creatorKey` in the request body. Key-in-body auth automatically issues an `mla_session` cookie and creates a D1 session row (with lazy backfill of legacy accounts). Empty request bodies are tolerated when authenticated via session.
   - **P3a-7:** Blind index v2 implemented (`accounts.key_lookup_hmac`, `usernameForCreatorKeyLookup`, `recordLegacyLookupHit`). On successful login (`POST /api/session`, creator route auth) or key reset (`/api/creator/reset-key`, `/admin/api/reset-creator-key`), writes `accounts.key_lookup_hmac = HMAC(LOOKUP_PEPPER, normalizedKey)`. Key reset also updates `accounts.key_hash`. `forgot-username` checks the HMAC blind index first before falling back to legacy SHA-256 lookups. Legacy lookup hits emit metrics to Analytics Engine (`legacy_lookup_hit`) and KV `stats:legacy_lookup_hits`, and lazily upgrade accounts to Blind Index v2. Fails closed gracefully when `LOOKUP_PEPPER` is omitted.
+  - **Review of P3a-4 to P3a-7 (Claude, commit `37fb3b2`):**
+    - admin buttons that the CSRF check was refusing;
+    - `POST /api/session` now authenticates through `authenticateCreator` (it trusted an unsynced `accounts.key_hash`: a deleted account's key still signed in, and could take over a re-registered username);
+    - delete-account removes the `accounts` row, and create clears a leftover one;
+    - key resets sign every device out;
+    - no full backfill per sign-in;
+    - sessions are issued only on `/api/creator/*`, and not again when one is open.
+  - **P3a-8 (Claude):** installs, in `27_installs.js`.
+    - Legacy install links move their keys, tokens and Creator Key into `install_secrets` (encrypted) on first use, behind `INSTALL_MIGRATION_PERCENT` (0-100, off by default). The KV record is rewritten without them, and `resolveConfig` puts them back, so everything serves identically.
+    - v2 links `/i/{token}/...` and `GET/POST/PATCH/DELETE /api/installs`, behind `FF_INSTALLS`.
+    - A KV snapshot `install:{tokenHash}` (1 day) plus a 30 s isolate cache.
+    - The admin Maintenance tab has a progress panel and an emergency undo (`/admin/api/installs/restore`).
+    - Deviations from the plan, with reasons, are listed under P3a-8 in `NEXT_VERSION_TASKS.md`.
 
 ---
 
@@ -120,18 +139,25 @@ Last run (2026-09-27): all of the above pass, 1,288 tests passed, 0 failed, 1 sk
    4. paste `worker_entry_combined.js` and deploy;
    5. delete the retired variables `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET` and `CRON_SUBREQUEST_BUDGET`.
 
-   The secrets `TOKEN_ENCRYPTION_KEY` and `LOOKUP_PEPPER` are **not needed yet**. The assistant that ships the first code using them must tell the owner, generate the values for them, and add the step to the release notes.
+   The owner has been told about both secrets, and the release notes (`CHANGELOG.md`) and `docs/OPERATIONS.md` §3 and §8 carry the steps:
+   - `LOOKUP_PEPPER` is optional and used as soon as it is set;
+   - `TOKEN_ENCRYPTION_KEY` is needed only before `INSTALL_MIGRATION_PERCENT` is raised above 0.
+
+   Leave `FF_SESSIONS`, `FF_INSTALLS` and `INSTALL_MIGRATION_PERCENT` unset for now.
 
    Full steps are in `docs/OPERATIONS.md` §1, and `CHANGELOG.md` has them at the top of `[Unreleased]`.
-2. **Turn on backups:** add the GitHub repository secrets `CLOUDFLARE_API_TOKEN` (D1 Read), `CLOUDFLARE_ACCOUNT_ID`, `D1_DATABASE_ID` and `BACKUP_PASSPHRASE`. Keep a copy of the passphrase outside GitHub.
+2. **When ready, move install-link keys to encrypted storage:** follow `docs/OPERATIONS.md` §8 (apply 0015, back up D1, add `TOKEN_ENCRYPTION_KEY` and keep a copy of it, set `INSTALL_MIGRATION_PERCENT` to `10`, check progress, then raise it).
+3. **Turn on backups:** add the GitHub repository secrets `CLOUDFLARE_API_TOKEN` (D1 Read), `CLOUDFLARE_ACCOUNT_ID`, `D1_DATABASE_ID` and `BACKUP_PASSPHRASE`. Keep a copy of the passphrase outside GitHub.
 
 ---
 
 ## Next Steps for Incoming AI
-1. **Phase 3a continues** (`NEXT_VERSION_TASKS.md`; the reasoning is in `MIGRATION_PLAN.md` Phase 3a). P3a-1 through P3a-7 are done and verified. Next:
-   - **P3a-8**: Installs: legacy resolver, transient base64 installs, new routes (`/i/{token}/manifest.json`, `/catalog/...`, `/meta/...`, `/subtitles/...`), management API (`GET/POST/PATCH/DELETE /api/installs`), snapshot cache (`install:{tokenHash}`).
+1. **Phase 3a continues** (`NEXT_VERSION_TASKS.md`; the reasoning is in `MIGRATION_PLAN.md` Phase 3a). P3a-1 through P3a-8 are done and verified. Next:
    - **P3a-9**: Connections: server-side encrypted OAuth tokens without tokens in redirect URLs, local import, disconnection.
    - **P3a-10**: Provider calls for personal rows read tokens from `provider_connections`.
+     - Decide which wins when an install has its own keys in `install_secrets` and its owner also has a connection. Today `install_secrets` is the only source.
+     - v2 installs (`/i/{token}`) have no keys of their own, so their personal Trakt/MDBList/Simkl rows only work once this lands.
+   - A v2 link's `/i/{token}/configure` page renders, but its **Update** still saves a new legacy link through `/api/save`. The UI for v2 links (Phase 6) should `PATCH /api/installs/:id` instead.
 
 2. **Ask the owner first, every time, before anything that:**
    - **rewrites or deletes stored user data.** In particular, P3a-8 strips tokens out of existing install links (KV `cfg:` records). Get explicit approval, make sure a D1 backup and a KV export exist first, and do it gradually;

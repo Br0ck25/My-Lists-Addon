@@ -61,6 +61,7 @@ function isPrivateApiPath(path) {
   // mean a route added later cannot forget.
   if (p === "/api/resolve") return true;
   if (p === "/api/session" || p === "/api/me" || p.startsWith("/api/me/")) return true;
+  if (p === "/api/installs" || p.startsWith("/api/installs/")) return true;
   return p.startsWith("/api/creator/") || p === "/admin" || p.startsWith("/admin/");
 }
 
@@ -949,6 +950,8 @@ async function deleteAccountRow(env, username) {
   }
   for (const id of ids) {
     await revokeAccountSessions(env, id);
+    // Before the rows go: a snapshot would keep serving them for up to a day.
+    await forgetAccountInstallSnapshots(env, id);
     try {
       await env.DB.batch([
         env.DB.prepare("DELETE FROM sessions WHERE account_id = ?").bind(id),

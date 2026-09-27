@@ -235,13 +235,20 @@
     async function handleSubtitlesTrack(configParam, stremioType, id, env, request) {
       if (!env || !env.CONFIGS) return;
 
-      let track, trackCreatorName, trackCreatorKey, tmdbKey;
+      let track, trackCreatorName, trackCreatorKey, tmdbKey, installTrackOwner;
       try {
-        ({ track, trackCreatorName, trackCreatorKey, tmdbKey } = await resolveConfig(configParam, env));
+        ({ track, trackCreatorName, trackCreatorKey, tmdbKey, installTrackOwner } = await resolveConfig(configParam, env));
       } catch {
         return;
       }
-      if (!trackCreatorName || !trackCreatorKey) return;
+      // A v2 install link carries no Creator Key: its "track" scope, granted
+      // to the signed-in account that created it, stands in for one (see
+      // resolveV2InstallConfig, 27_installs.js).
+      if (installTrackOwner) {
+        trackCreatorName = installTrackOwner;
+      } else if (!trackCreatorName || !trackCreatorKey) {
+        return;
+      }
       if (!track) {
         // Auto-track Playback resolved to off for this install link. This
         // can happen even when the user sees the toggle on in Settings, if
@@ -257,7 +264,9 @@
         return;
       }
 
-      const auth = await authenticateCreator(trackCreatorName, trackCreatorKey);
+      const auth = installTrackOwner
+        ? ((await isCreatorTombstoned(env, installTrackOwner)) ? { ok: false } : { ok: true, username: installTrackOwner })
+        : await authenticateCreator(trackCreatorName, trackCreatorKey);
       const diagnosticsKey = `creatortrack:${auth.ok ? auth.username : String(trackCreatorName).toLowerCase()}`;
       const pingId = `${stremioType}:${id}`;
 
@@ -653,7 +662,13 @@
       if (!authUser && configParam) {
         try {
           const resolved = await resolveConfig(configParam, env);
-          if (resolved && resolved.trackCreatorName && resolved.trackCreatorKey) {
+          if (resolved && resolved.installTrackOwner) {
+            // A v2 install link with the "track" scope -- see handleSubtitlesTrack.
+            if (!(await isCreatorTombstoned(env, resolved.installTrackOwner))) {
+              authUser = resolved.installTrackOwner;
+              if (resolved.tmdbKey) effectiveTmdbKey = resolved.tmdbKey;
+            }
+          } else if (resolved && resolved.trackCreatorName && resolved.trackCreatorKey) {
             const auth = await authenticateCreator(resolved.trackCreatorName, resolved.trackCreatorKey);
             if (auth.ok) {
               authUser = auth.username;

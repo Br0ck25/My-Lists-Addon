@@ -18,9 +18,26 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 6. **Optional: add the secret `LOOKUP_PEPPER`** (Worker → Settings → Variables and Secrets → Add → type *Secret*). Any long random value; generate one with `openssl rand -base64 32`. With it set, "Forgot username" starts using the new key index (P3a-7). Without it, everything works as before. **Once set, never change or delete it**: every entry in the new index was computed from it.
 
-`TOKEN_ENCRYPTION_KEY` is **not needed yet**: nothing in this release encrypts with it.
+`TOKEN_ENCRYPTION_KEY` is needed only to start moving install-link keys into encrypted storage (P3a-8, below). That move stays **off** until `INSTALL_MIGRATION_PERCENT` is set, and `docs/OPERATIONS.md` §8 gives the steps. Deploying without it changes nothing.
 
-`FF_SESSIONS` stays **off** (unset). Leave it off until the new sign-in screens ship.
+`FF_SESSIONS` and `FF_INSTALLS` stay **off** (unset). Leave them off until the new sign-in and install-link screens ship.
+
+### 🔐 Install links: keys move to encrypted storage, and install links an account can manage (P3a-8)
+
+- **Existing install links keep their keys in encrypted D1 storage**, behind `INSTALL_MIGRATION_PERCENT` (off by default).
+  - When a link with a provider key, a token or a Creator Key is first used, those move from its KV `cfg:` record into `install_secrets`, encrypted with `TOKEN_ENCRYPTION_KEY`. The record is rewritten without them.
+  - When the link is read, they are decrypted and put back. Catalogs, playback tracking, and a key reset stopping that tracking behave exactly as before, and the URL never changes.
+  - The keys are checked before anything is removed: encrypted, decrypted again, and compared with the originals.
+  - A share of links can be moved first (for example `10`), chosen by a stable hash of the link.
+  - Links with nothing secret in them are never touched.
+  - A link whose owner is proven (its Creator Key verifies, or it carries the owner stamp) is tied to that account. Deleting the account deletes those rows and their keys. The link then serves its public rows only, and never the shelves of whoever registers that username next.
+  - `/admin` → Maintenance → **Install links** shows progress, and has an emergency **Undo the move** that puts every key back as it was.
+- **New install links, `/i/{token}/manifest.json`**, created by a signed-in account through `POST /api/installs`, behind `FF_INSTALLS`.
+  - Only the token's SHA-256 is stored, and the token is shown once.
+  - `GET /api/installs` lists an account's links: new ones, and old ones that have moved. `PATCH /api/installs/:id` renames, edits or rotates a link, and refuses an edit made from a stale copy. `DELETE /api/installs/:id` removes it, and its URL then serves nothing.
+  - A new link holds no keys or tokens, and may carry only its own account's personal shelves. Its playback tracking is authorised by the account that created it.
+  - A cached copy of each link (KV `install:*`, one day) is dropped on every change.
+- Old self-contained (base64) links are unchanged: read-only, served from the link itself.
 
 ### 🔒 Phase 3a review fixes (sign-in, sessions, CSRF)
 

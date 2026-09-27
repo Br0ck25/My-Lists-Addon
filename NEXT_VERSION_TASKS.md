@@ -140,14 +140,23 @@ No npm, no `src/` tree, no esbuild, no new test framework (D-11). Phase 2 is now
   - Key resets revoke every session (`revokeSessionsForUsername`).
   - Key-in-body issues a session on `/api/creator/*` only, and not when a live session for the account is already present.
   - Admin maintenance buttons send `Content-Type: application/json` (the CSRF check refused them); a test scans every mutating `fetch` in the pages.
-- [ ] **P3a-8** Installs:
+- [x] **P3a-8** Installs:
   - `src/installs/legacy-resolver.js` (MIGRATION_PLAN §3.2): converts `cfg:{id}` and bare ids into `installs` rows and binds the owner. Tokens go to `provider_connections` (when an owner exists) or `install_secrets`. **Rewrite the KV record without secrets.**
   - Base64: read-only transient install.
   - New routes: `/i/{token}/manifest.json`, `/catalog/...`, `/meta/...`, `/subtitles/...`.
   - Management API: `GET/POST/PATCH/DELETE /api/installs` (session required).
   - A KV snapshot `install:{tokenHash}` with a 1-day TTL, invalidated by bumping `version`.
 
-  *Done when:* a sample of legacy ids (fixtures) serves identical manifests and catalogs; KV `cfg:` records no longer contain `trackCreatorKey` or tokens after first use.
+  *Done when:* a sample of legacy ids (fixtures) serves identical manifests and catalogs; KV `cfg:` records no longer contain `trackCreatorKey` or tokens after first use. — **Status:** Done, in `27_installs.js`, with tests in `tests/worker.test.mjs` ("P3a-8"). Off until the owner sets `INSTALL_MIGRATION_PERCENT` (the move) and `FF_INSTALLS` (the API); `docs/OPERATIONS.md` §8 has the steps.
+  - **Where it differs from the plan, and why:**
+    - Only records that hold a secret move. A signed-out link has nothing to move and is left untouched.
+    - Secrets always go to `install_secrets`, **not** `provider_connections`. The install keeps its own keys, so it serves exactly as before even when an account's links hold different or stale tokens. Which store wins is P3a-9/P3a-10's decision.
+    - The Creator Key (`trackCreatorKey`) is stored encrypted too, not dropped. Reading the link puts it back, so playback tracking and "a key reset stops old links tracking" work unchanged, and the move can be undone.
+    - A legacy install's `config_json` is `'{}'`. Its config stays in the (now secret-free) `cfg:` record, which every request reads anyway, so D1's 2 MB row limit never applies to it.
+    - `token_hash` for a legacy install is `legacy:{id}`, which no SHA-256 can equal.
+    - Reads never depend on the flags: a moved record is always read through the table.
+  - **Added:** an emergency undo (`/admin/api/installs/restore`), the admin progress panel, and a check on each move that the stored keys decrypt back to the originals before KV is touched.
+  - **Base64 links:** already read-only and transient (`decodeConfig`); unchanged.
 - [ ] **P3a-9** Connections: the OAuth callbacks (Trakt, MDBList, Simkl, TMDB) store tokens server-side (encrypted, **including `refresh_token` and `expires_at`**) when a session exists, and redirect to `/settings/connections?connected=trakt` with **no token in the URL**. The signed-out fallback keeps today's behavior until P6. `POST /api/connections/import-local` accepts legacy browser tokens once, validates them, and stores them. `DELETE /api/connections/:provider` revokes (where the provider supports it) and deletes. *Done when:* no OAuth redirect contains a token for signed-in users.
 - [ ] **P3a-10** Provider calls for personal rows read tokens from `provider_connections` (install owner) instead of the config. *Done when:* personal Trakt, MDBList and Simkl rows work with configs stripped of tokens.
 

@@ -170,7 +170,10 @@ async function handleFetch(request, env, ctx) {
     applyEnvApiKeys(env);
 
     const url = new URL(request.url);
-    const path = url.pathname;
+    // A v2 install link, /i/{token}/..., is handed to the same manifest,
+    // catalog, meta, subtitles and configure routes as a legacy id, with the
+    // token as its config segment (see v2InstallPath, 27_installs.js).
+    const path = v2InstallPath(url.pathname) || url.pathname;
 
     if (request.method === "OPTIONS") {
       if (isPublicCorsPath(path)) {
@@ -189,6 +192,11 @@ async function handleFetch(request, env, ctx) {
       request.account = sessionAuth.account;
       request.session = sessionAuth.session;
     }
+
+    // /api/installs (an account's install links) and the admin status of the
+    // install move -- 27_installs.js.
+    const installsResponse = await handleInstallsApi(request, env, url, path);
+    if (installsResponse) return installsResponse;
 
     if (path === "/" || path === "") {
       ctx.waitUntil(bumpStat(env, "pageviews"));
@@ -765,6 +773,9 @@ async function handleFetch(request, env, ctx) {
         return Response.redirect(`${url.origin}/${m[1]}/configure`, 302);
       }
       const { entries, track, shuffleShelves } = await resolveConfig(m[1], env);
+      // Moves this link's keys and tokens out of its KV record, if they are
+      // still there and the move is switched on. After the response.
+      ctx.waitUntil(maybeMigrateLegacyInstall(env, m[1]));
       return jsonPublic(buildManifest(entries, url.origin, track, shuffleShelves, m[1]));
     }
 
@@ -1000,6 +1011,8 @@ Sitemap: ${url.origin}/sitemap.xml`;
       // Kept as a whole object as well as destructured: the betterPosters*
       // style keys are passed through wholesale rather than one at a time.
       const resolvedConfig = await resolveConfig(config, env);
+      // As in the manifest route: most installs ask for catalogs far more often.
+      ctx.waitUntil(maybeMigrateLegacyInstall(env, config));
       const { entries, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, trackCreatorName, trackOwner, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists, betterPosters, showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist } = resolvedConfig;
       const entryIndex = entries.findIndex((e) => e.id === id && e.type === type);
       const entry = entryIndex >= 0 ? entries[entryIndex] : null;

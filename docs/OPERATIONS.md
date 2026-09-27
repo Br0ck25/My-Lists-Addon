@@ -57,13 +57,15 @@ Adding a binding before the code that uses it is harmless. Removing a binding th
 | `SIMKL_CLIENT_ID`, `SIMKL_CLIENT_SECRET` | Simkl |
 | `MDBLIST_API_KEY`, `MDBLIST_POPULAR_KEY`, `MDBLIST_CLIENT_ID`, `MDBLIST_CLIENT_SECRET` | MDBList |
 | `RAPIDAPI_KEY` | New on Streaming fallback engine |
-| `TOKEN_ENCRYPTION_KEY` | 32-byte AES-GCM key (`k1:<base64>`) for server-side encrypted tokens. **Not needed yet:** add it when the Phase 3a account-storage code ships. Once set, never delete it; rotate by putting the new key first (`k2:<new>,k1:<old>`). |
+| `TOKEN_ENCRYPTION_KEY` | 32-byte AES-GCM key (`k1:<base64>`) for server-side encrypted tokens. Needed before `INSTALL_MIGRATION_PERCENT` is raised above 0 (§8). Generate with `openssl rand -base64 32` and store it as `k1:` followed by that value. **Once anything is encrypted with it, never delete or change it:** every moved install link would lose its keys. Rotate only by putting a new key first (`k2:<new>,k1:<old>`). Keep a copy outside Cloudflare. |
 | `LOOKUP_PEPPER` | HMAC pepper for the forgot-username lookup (P3a-7). **Optional:** without it, forgot-username uses the old lookup only. Any long random value (`openssl rand -base64 32`). Never change or delete it once set. |
-| `FF_SESSIONS` | Variable, not a secret. `1` turns on session sign-in for the `/api/creator/*` routes (P3a-6). **Leave unset** until the new sign-in screens ship. |
 
 **Plain variables:**
 
 - `NEW_ON_STREAMING_ENGINE` (optional; default `justwatch`).
+- `FF_SESSIONS` (optional): `1` turns on session sign-in for the `/api/creator/*` routes (P3a-6). **Leave unset** until the new sign-in screens ship.
+- `FF_INSTALLS` (optional): `1` turns on `/api/installs`, where a signed-in account creates, renames, rotates and removes `/i/{token}` install links (P3a-8). **Leave unset** until the screens for it ship. Links that already exist are served either way.
+- `INSTALL_MIGRATION_PERCENT` (optional, `0` to `100`): the share of existing install links whose keys and tokens move into encrypted D1 storage the first time they are used. See §8 before setting it.
 - **Delete** these retired variables if they are still set: `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET`, `CRON_SUBREQUEST_BUDGET`. The code ignores them.
 
 **Cron trigger** (Worker → Settings → Triggers): `*/6 * * * *`. Later phases replace this with a 5-minute dispatcher plus hourly and daily triggers.
@@ -135,3 +137,26 @@ Configure these under Security → WAF → Rate limiting rules on the zone. They
 
 - **Schema status:** migrations applied versus what the code expects.
 - **API usage:** which provider keys are configured.
+
+## 8. Moving install-link keys into encrypted storage (P3a-8)
+
+Every install link saved by a signed-in person keeps its provider keys and tokens (TMDB, MDBList, Trakt, Simkl) in its KV `cfg:` record, and a link with a personal shelf also keeps the person's Creator Key there. Phase 3a moves them into D1 (`install_secrets`), encrypted with `TOKEN_ENCRYPTION_KEY`. The KV record keeps everything else and a pointer (`_install`).
+
+- **Nothing changes for anyone who uses the link.** Its URL stays the same. When it is read, the Worker decrypts the keys and puts them back, so its rows, its playback tracking, and a Creator Key reset stopping that tracking all work exactly as before.
+- **Only links that hold a key or token move.** A link made signed out has none and is never touched.
+- **A link moves the first time it is used** (its manifest or a catalog row is requested), after the response has gone out.
+
+**Turning it on:**
+
+1. Apply migration `0015` (§4).
+2. Back up D1 (§5).
+3. Add the secret `TOKEN_ENCRYPTION_KEY` (§3). Keep a copy of it outside Cloudflare.
+4. Set the variable `INSTALL_MIGRATION_PERCENT` to `10` and deploy.
+5. Next day, check `/admin` → Maintenance → **Install links** → *Check progress*, and the Worker logs for "was not moved" or "could not decrypt". Then raise it to `50`, then `100`.
+
+**If something goes wrong:**
+
+1. Set `INSTALL_MIGRATION_PERCENT` to `0`. No more links move.
+2. `/admin` → Maintenance → **Install links** → *Undo the move*. It puts every moved link's keys back into its KV record, exactly as they were saved, and empties the table. Links an account removed stay removed.
+
+Undo needs the same `TOKEN_ENCRYPTION_KEY`. Without that key the moved keys cannot be read by anyone, which is why step 3 keeps a copy.
