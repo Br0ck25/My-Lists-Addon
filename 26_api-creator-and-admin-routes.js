@@ -35,7 +35,7 @@
           ok: true,
           username: request.account.username,
           displayName: request.account.displayName || request.account.username,
-          hasRecoveryAnswer: Boolean(request.account.recoveryAnswerHash),
+          hasRecoveryAnswer: Boolean(request.account.hasRecoveryAnswer),
           sessionAuth: true,
         };
       }
@@ -111,31 +111,34 @@
       touchCreatorLastSeen(env, v.normalized);
 
       // Behind FF_SESSIONS: a successful key-in-body auth also sets a session cookie (P3a-6).
-      if (sessionsEnabled && env.DB && request) {
-        if (!request._sessionCookie && (!request.account || request.account.username.toLowerCase() !== v.normalized || path === "/api/creator/restore")) {
+      //
+      // Only on the /api/creator/* routes, which the page calls and which keep
+      // the cookie. The same check also serves /api/preview, /api/save and the
+      // like, and a caller that never stores cookies would get a new 30-day
+      // session row on every request. And not when the request already carries
+      // a live session for this account: /api/creator/restore runs on every
+      // page load, so re-issuing there grew one row per visit.
+      if (sessionsEnabled && env.DB && request && typeof path === "string" && path.startsWith("/api/creator/")) {
+        if (!request._sessionCookie && (!request.account || request.account.username.toLowerCase() !== v.normalized)) {
           try {
-            const accountRow = await getOrBackfillAccount(env, v.normalized);
+            const accountRow = await getOrBackfillAccount(env, v.normalized, profile);
             if (accountRow) {
               const userAgent = request.headers ? (request.headers.get("user-agent") || null) : null;
               const session = await createSession(env, accountRow.id, userAgent);
               request._sessionCookie = buildSessionCookieHeader(session.token);
-              if (!request.account) {
-                request.account = {
-                  id: accountRow.id,
-                  username: accountRow.username,
-                  displayName: profile.displayName || accountRow.username,
-                  keyHash: profile.keyHash,
-                  recoveryAnswerHash: profile.recoveryAnswerHash,
-                  keyLookupHmac: accountRow.key_lookup_hmac,
-                  createdAt: accountRow.created_at,
-                  lastActiveAt: accountRow.last_active_at,
-                  version: accountRow.version || 0,
-                  status: accountRow.status || "active",
-                };
-              }
-              if (!request.session) {
-                request.session = session;
-              }
+              // Replaced, not filled in only when empty: a request carrying a
+              // session for a different account is now acting as this one.
+              request.account = {
+                id: accountRow.id,
+                username: accountRow.username,
+                displayName: profile.displayName || accountRow.username,
+                createdAt: accountRow.created_at,
+                lastActiveAt: accountRow.last_active_at,
+                version: accountRow.version || 0,
+                status: accountRow.status || "active",
+                hasRecoveryAnswer: Boolean(profile.recoveryAnswerHash),
+              };
+              request.session = session;
               if (env.LOOKUP_PEPPER && accountRow && creatorKey) {
                 try {
                   const hmac = await hmacLookupKey(creatorKey, env);
@@ -144,7 +147,6 @@
                       "UPDATE accounts SET key_lookup_hmac = ? WHERE id = ?"
                     ).bind(hmac, accountRow.id).run();
                     accountRow.key_lookup_hmac = hmac;
-                    if (request.account) request.account.keyLookupHmac = hmac;
                   }
                 } catch (hmacErr) {
                   console.error("Failed to write accounts.key_lookup_hmac on creator auth:", hmacErr);
@@ -1228,34 +1230,44 @@
       if (!usernameRaw || !keyRaw) {
         return json({ ok: false, error: "Username and Account Key are required." }, 400);
       }
-      const v = validateCreatorUsername(usernameRaw);
-      if (!v.ok) {
-        return json({ ok: false, error: "Incorrect username or Account Key." }, 401);
+      // The creator profile decides, exactly as it does for every key-in-body
+      // route: authenticateCreator applies the deletion tombstone, the per-IP
+      // PBKDF2 throttle and the memo. This used to verify against
+      // accounts.key_hash alone, which nothing kept current -- a deleted
+      // account's key still signed in, with no throttle on guessing.
+      const auth = await authenticateCreator(usernameRaw, keyRaw);
+      if (!auth.ok) return authFailureResponse(auth);
+
+      let profile = null;
+      try {
+        const raw = await getCreator(env, auth.username);
+        profile = raw ? JSON.parse(raw) : null;
+      } catch {
+        profile = null;
+      }
+      // Brought up to date from the profile just verified, before a session is
+      // tied to it. Null means the accounts table cannot be written: most
+      // likely migration 0015 has not been applied yet.
+      const accountRow = profile ? await getOrBackfillAccount(env, auth.username, profile) : null;
+      if (!accountRow) {
+        return json({ ok: false, error: "Signing in isn't available right now. Please try again later." }, 503);
       }
 
-      // Look up account in accounts table (lazy backfilling if needed)
-      let accountRow = await getOrBackfillAccount(env, v.normalized);
-
-      if (!accountRow || !accountRow.key_hash) {
-        return json({ ok: false, error: "Incorrect username or Account Key." }, 401);
-      }
-
-      const valid = await verifyCreatorKeyMemoized(keyRaw, accountRow.key_hash, accountRow.username);
-      if (!valid) {
-        return json({ ok: false, error: "Incorrect username or Account Key." }, 401);
-      }
-
-      // Check if iterations are below target, rehash if needed
-      const parts = String(accountRow.key_hash || "").split(":");
-      if (parts.length === 4 && parts[0] === "pbkdf2") {
-        const iterations = parseInt(parts[1], 10);
-        if (iterations < PBKDF2_ITERATIONS) {
-          try {
-            const upgradedHash = await hashCreatorKey(keyRaw);
-            await env.DB.prepare("UPDATE accounts SET key_hash = ? WHERE id = ?").bind(upgradedHash, accountRow.id).run();
-          } catch (e) {
-            console.error("Failed to upgrade PBKDF2 iterations:", e);
+      // A key stored under fewer PBKDF2 iterations than today's target is
+      // rehashed while the plaintext is at hand. Through the same path as a
+      // key reset (D1 first, then KV), because the profile is the copy that
+      // is checked: upgrading only the accounts row would change nothing.
+      const hashParts = String(profile.keyHash || "").split(":");
+      if (hashParts.length === 4 && hashParts[0] === "pbkdf2" && parseInt(hashParts[1], 10) < PBKDF2_ITERATIONS) {
+        try {
+          const upgradedHash = await hashCreatorKey(keyRaw);
+          const rotation = await rotateCreatorKeyHashInD1(env, auth.username, upgradedHash);
+          if (rotation.ok) {
+            await env.CONFIGS.put(`creator:${auth.username}`, JSON.stringify({ ...profile, keyHash: upgradedHash }));
+            accountRow.key_hash = upgradedHash;
           }
+        } catch (e) {
+          console.error("Failed to upgrade PBKDF2 iterations:", e);
         }
       }
 
@@ -1277,7 +1289,6 @@
       // Update last active
       const now = Date.now();
       await env.DB.prepare("UPDATE accounts SET last_active_at = ? WHERE id = ?").bind(now, accountRow.id).run().catch(() => {});
-      touchCreatorLastSeen(env, accountRow.username).catch(() => {});
 
       // Create session
       const userAgent = request.headers.get("user-agent") || null;
@@ -1585,7 +1596,17 @@
           error: "Couldn't set that Profile up just now. Please try again in a moment.",
         }, 503);
       }
-      
+      // Same principle for the accounts row: one left by an earlier holder of
+      // this username would carry its sessions, installs and provider
+      // connections into the new account. The uniqueness check above has
+      // established there is no live profile, so any row here is a leftover.
+      if (!(await deleteAccountRow(env, v.normalized)).ok) {
+        return json({
+          ok: false,
+          error: "Couldn't set that Profile up just now. Please try again in a moment.",
+        }, 503);
+      }
+
       // D1 write is authoritative when DB is bound: fail the request if D1 fails,
       // then populate the KV read-through cache.
       if (env.DB) {
@@ -1607,8 +1628,12 @@
         }
       }
       await env.CONFIGS.put(`creator:${v.normalized}`, JSON.stringify(profileObj));
+      // The accounts row from the start, so a new account never waits on the
+      // backfill. Best-effort: without migration 0015 this does nothing, and
+      // the first sign-in fills the row anyway.
+      await getOrBackfillAccount(env, v.normalized, profileObj);
       await storeCreatorKeyLookup(env, creatorKey, v.normalized);
-      
+
       try {
         const countRaw = await env.CONFIGS.get("stats:creator_count");
         const count = parseInt(countRaw || "0", 10) + 1;
@@ -1736,6 +1761,10 @@
         JSON.stringify({ ...profile, keyHash })
       );
       await storeCreatorKeyLookup(env, creatorKey, v.normalized);
+      // Every device signs in again with the new key. A session opened with the
+      // old one would otherwise outlive it, and a lost or leaked key is the
+      // usual reason to reset.
+      await revokeSessionsForUsername(env, v.normalized);
       return json({ ok: true, creatorName: v.normalized, displayName: profile.displayName, creatorKey }, 200, { "Cache-Control": "no-store" });
     }
 
@@ -1798,6 +1827,8 @@
         JSON.stringify({ ...profile, keyHash })
       );
       await storeCreatorKeyLookup(env, creatorKey, v.normalized);
+      // Signed out everywhere, for the same reason as the self-service reset.
+      await revokeSessionsForUsername(env, v.normalized);
       return json({ ok: true, creatorKey }, 200, { "Cache-Control": "no-store" });
     }
 
@@ -3295,14 +3326,10 @@
           cleared: { lists: purged.listsCleared, keys: purged.keysCleared },
         }, 500);
       }
+      // purgeCreatorData has already removed the accounts row and its sessions;
+      // this only tells the browser to drop the cookie.
       if (request.account || request._sessionCookie) {
         request._sessionCookie = buildClearSessionCookieHeader();
-      }
-      if (env.DB) {
-        try {
-          const acc = await getOrBackfillAccount(env, auth.username);
-          if (acc) await revokeAccountSessions(env, acc.id);
-        } catch {}
       }
       return json({ ok: true, cleared: { lists: purged.listsCleared, keys: purged.keysCleared } });
     }

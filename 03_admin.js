@@ -2771,7 +2771,7 @@ async function renderAdminDashboard(env) {
       try {
         while (safetyCounter < 500) {
           safetyCounter++;
-          const res = await fetch('/admin/api/backfill-trending', { method: 'POST' });
+          const res = await fetch('/admin/api/backfill-trending', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
           const data = await res.json();
           if (!data.ok) {
             status.textContent = 'Stopped: ' + (data.error || 'unknown error') + ' (processed ' + accountsDone + ' account' + (accountsDone === 1 ? '' : 's') + ')';
@@ -2804,7 +2804,7 @@ async function renderAdminDashboard(env) {
       try {
         while (safetyCounter < 1000) {
           safetyCounter++;
-          const res = await fetch('/admin/api/migrate-day-counts', { method: 'POST' });
+          const res = await fetch('/admin/api/migrate-day-counts', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
           const data = await res.json();
           if (!data.ok) {
             status.textContent = 'Stopped: ' + (data.error || 'unknown error') + ' (migrated ' + keysMigrated + ' day-count' + (keysMigrated === 1 ? '' : 's') + ')';
@@ -2846,7 +2846,7 @@ async function renderAdminDashboard(env) {
       try {
         while (safetyCounter < 1000) {
           safetyCounter++;
-          const res = await fetch('/admin/api/migrate-d1', { method: 'POST' });
+          const res = await fetch('/admin/api/migrate-d1', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
           const data = await res.json();
           if (!data.ok) {
             status.textContent = 'Failed: ' + (data.error || 'unknown error');
@@ -2881,7 +2881,7 @@ async function renderAdminDashboard(env) {
       btn.disabled = true;
       status.textContent = 'Working…';
       try {
-        const res = await fetch('/admin/api/migrate-accounts', { method: 'POST' });
+        const res = await fetch('/admin/api/migrate-accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         const data = await res.json();
         if (!data.ok) {
           status.textContent = 'Failed: ' + (data.error || 'unknown error');
@@ -3487,7 +3487,7 @@ async function renderAdminDashboard(env) {
       try {
         while (safetyCounter < 1000) {
           safetyCounter++;
-          const res = await fetch('/admin/api/rebuild-public-index', { method: 'POST' });
+          const res = await fetch('/admin/api/rebuild-public-index', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
           const data = await res.json();
           if (!data.ok) {
             status.textContent = 'Failed: ' + (data.error || 'unknown error');

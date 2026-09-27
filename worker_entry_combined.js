@@ -3625,37 +3625,148 @@ function isSessionsEnabled(env) {
   return env.FF_SESSIONS === "1" || env.FF_SESSIONS === "true" || env.FF_SESSIONS === true;
 }
 
-async function getOrBackfillAccount(env, username) {
+// The accounts row is a mirror of the creator profile (`creator:{u}` in KV,
+// `creators` in D1), which stays the source of truth until the legacy stores
+// retire: every key reset, recovery-answer change and deletion still writes
+// the profile first. So a row is never trusted on its own. A caller that has
+// just verified the profile passes it in, and a row that has drifted from it
+// (a key reset, a username deleted and registered again) is corrected before
+// a session is tied to it.
+//
+// A missing row is filled for this one account only. This used to run the
+// whole backfillAccounts() -- every creator in D1 and every creator:* key in
+// KV -- on each sign-in by an account the backfill had not reached yet.
+async function getOrBackfillAccount(env, username, profile = null) {
   if (!env || !env.DB) return null;
   const norm = String(username || "").trim().toLowerCase();
   if (!norm) return null;
-  try {
+  const selectRow = async () => {
     const { results } = await env.DB.prepare(
       "SELECT id, username, display_name, key_hash, recovery_answer_hash, key_lookup_hmac, created_at, last_active_at, version, status, deleted_at " +
-      "FROM accounts WHERE username = ? COLLATE NOCASE AND deleted_at IS NULL"
+      "FROM accounts WHERE username = ? COLLATE NOCASE"
     ).bind(norm).all();
-    if (results && results.length > 0) {
-      return results[0];
-    }
+    return results && results.length > 0 ? results[0] : null;
+  };
+  let row;
+  try {
+    row = await selectRow();
   } catch (e) {
+    // Most often migration 0015 not applied yet: no accounts table.
     console.error("D1 accounts lookup failed:", e);
+    return null;
+  }
+  const rowDeleted = Boolean(row) && (row.deleted_at != null || row.status === "deleted");
+  // Any other status (a suspension, say) is a decision about this account,
+  // not a leftover: signing in must neither undo it nor replace the row.
+  if (row && !rowDeleted && row.status && row.status !== "active") return null;
+  const rowIsLive = Boolean(row) && !rowDeleted;
+  if (rowIsLive && (!profile || accountRowMatchesProfile(row, profile))) return row;
+
+  if (!profile) {
+    try {
+      const raw = await getCreator(env, norm);
+      profile = raw ? JSON.parse(raw) : null;
+    } catch {
+      profile = null;
+    }
+    if (!profile || typeof profile.keyHash !== "string" || !profile.keyHash) return null;
+    if (rowIsLive && accountRowMatchesProfile(row, profile)) return row;
   }
 
-  // If not found in accounts, lazy-backfill if in creators or KV
   try {
-    const rawCreator = await getCreator(env, norm);
-    if (rawCreator) {
-      await backfillAccounts(env).catch(() => {});
-      const { results } = await env.DB.prepare(
-        "SELECT id, username, display_name, key_hash, recovery_answer_hash, key_lookup_hmac, created_at, last_active_at, version, status, deleted_at " +
-        "FROM accounts WHERE username = ? COLLATE NOCASE AND deleted_at IS NULL"
-      ).bind(norm).all();
-      if (results && results.length > 0) {
-        return results[0];
-      }
+    // A row marked deleted belongs to an earlier holder of this username.
+    // Reviving it would hand the new holder its id, and with it every
+    // session, install and provider connection still filed under that id.
+    if (rowDeleted && !(await deleteAccountRow(env, norm)).ok) return null;
+    await env.DB.prepare(
+      "INSERT INTO accounts (" +
+      "  username, display_name, key_hash, recovery_answer_hash," +
+      "  key_lookup_hmac, created_at, last_active_at, version, deleted_at, status" +
+      ") VALUES (?, ?, ?, ?, NULL, ?, NULL, 0, NULL, 'active') " +
+      "ON CONFLICT(username) DO UPDATE SET " +
+      "  display_name = excluded.display_name," +
+      "  key_hash = excluded.key_hash," +
+      "  recovery_answer_hash = excluded.recovery_answer_hash," +
+      // The blind index belongs to the key it was computed from. A new key
+      // hash means a new key, so the old entry would point forgot-username
+      // at this account for a key that no longer opens it.
+      "  key_lookup_hmac = CASE WHEN accounts.key_hash = excluded.key_hash THEN accounts.key_lookup_hmac ELSE NULL END"
+    ).bind(
+      norm,
+      profile.displayName || norm,
+      profile.keyHash,
+      profile.recoveryAnswerHash || null,
+      typeof profile.createdAt === "number" && profile.createdAt > 0 ? profile.createdAt : Date.now()
+    ).run();
+    return await selectRow();
+  } catch (e) {
+    console.error("D1 accounts upsert failed:", e);
+    return null;
+  }
+}
+
+function accountRowMatchesProfile(row, profile) {
+  if (!row || !profile) return false;
+  return row.key_hash === profile.keyHash &&
+    (row.recovery_answer_hash || null) === (profile.recoveryAnswerHash || null) &&
+    row.display_name === (profile.displayName || row.username);
+}
+
+// Removes an account's row and everything filed under its id. Called when the
+// identity itself goes (delete-account), and before a username is registered
+// again, so nothing an earlier holder left can be reached through it. Explicit
+// deletes rather than relying on ON DELETE CASCADE alone: provider_connections
+// holds third-party tokens, and their removal should not depend on a pragma.
+async function deleteAccountRow(env, username) {
+  if (!env || !env.DB) return { ok: true };
+  const norm = String(username || "").trim().toLowerCase();
+  if (!norm) return { ok: true };
+  let ids = [];
+  try {
+    const { results } = await env.DB.prepare(
+      "SELECT id FROM accounts WHERE username = ? COLLATE NOCASE"
+    ).bind(norm).all();
+    ids = (results || []).map((r) => r.id);
+  } catch (e) {
+    // No accounts table (migration 0015 not applied): nothing to remove.
+    if (String(e && e.message || e).includes("no such table")) return { ok: true };
+    console.error("deleteAccountRow: lookup failed:", e);
+    return { ok: false };
+  }
+  for (const id of ids) {
+    await revokeAccountSessions(env, id);
+    try {
+      await env.DB.batch([
+        env.DB.prepare("DELETE FROM sessions WHERE account_id = ?").bind(id),
+        env.DB.prepare("DELETE FROM provider_connections WHERE account_id = ?").bind(id),
+        env.DB.prepare("DELETE FROM account_settings WHERE account_id = ?").bind(id),
+        env.DB.prepare("DELETE FROM install_secrets WHERE install_id IN (SELECT id FROM installs WHERE account_id = ?)").bind(id),
+        env.DB.prepare("DELETE FROM installs WHERE account_id = ?").bind(id),
+        env.DB.prepare("DELETE FROM accounts WHERE id = ?").bind(id),
+      ]);
+    } catch (e) {
+      console.error("deleteAccountRow: delete failed:", e);
+      return { ok: false };
     }
-  } catch {}
-  return null;
+  }
+  return { ok: true };
+}
+
+// Signs every device out of one account. A key reset has to do this: the
+// reason to reset a key is usually that someone else has it, and a session
+// they opened with it would otherwise outlive the key by up to 30 days.
+async function revokeSessionsForUsername(env, username) {
+  if (!env || !env.DB) return;
+  const norm = String(username || "").trim().toLowerCase();
+  if (!norm) return;
+  try {
+    const { results } = await env.DB.prepare(
+      "SELECT id FROM accounts WHERE username = ? COLLATE NOCASE"
+    ).bind(norm).all();
+    for (const r of (results || [])) await revokeAccountSessions(env, r.id);
+  } catch {
+    // No accounts table yet: no sessions can exist either.
+  }
 }
 
 async function createSession(env, accountId, userAgent = null) {
@@ -3730,6 +3841,9 @@ async function resolveSession(request, env) {
       lastActiveAt: row.last_active_at,
       version: row.version || 0,
       status: row.status || "active",
+      // Whether one is set, never the hash: authenticateCreator reports it
+      // to the page, which offers to set one when it is missing.
+      hasRecoveryAnswer: Boolean(row.recovery_answer_hash),
     };
 
     const session = {
@@ -6652,6 +6766,16 @@ async function purgeCreatorData(env, username, options = {}) {
         } catch (dbErr) {
           console.error("D1 write error (purgeCreatorData identity):", dbErr);
           d1Ok = false;
+        }
+        // The accounts row goes with the identity, and every session with it.
+        // Left behind, it kept the old key's hash under a username that is
+        // about to be free: POST /api/session would still sign that key in,
+        // and once someone else registered the name, into their account.
+        // /api/creator/create clears a leftover too, so a failure here is
+        // logged rather than allowed to block the deletion.
+        if (d1Ok) {
+          const removed = await deleteAccountRow(env, u);
+          if (!removed.ok) console.error("purgeCreatorData: could not remove the accounts row for", u);
         }
       }
       if (d1Ok) {
@@ -11484,7 +11608,7 @@ async function renderAdminDashboard(env) {
       try {
         while (safetyCounter < 500) {
           safetyCounter++;
-          const res = await fetch('/admin/api/backfill-trending', { method: 'POST' });
+          const res = await fetch('/admin/api/backfill-trending', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
           const data = await res.json();
           if (!data.ok) {
             status.textContent = 'Stopped: ' + (data.error || 'unknown error') + ' (processed ' + accountsDone + ' account' + (accountsDone === 1 ? '' : 's') + ')';
@@ -11517,7 +11641,7 @@ async function renderAdminDashboard(env) {
       try {
         while (safetyCounter < 1000) {
           safetyCounter++;
-          const res = await fetch('/admin/api/migrate-day-counts', { method: 'POST' });
+          const res = await fetch('/admin/api/migrate-day-counts', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
           const data = await res.json();
           if (!data.ok) {
             status.textContent = 'Stopped: ' + (data.error || 'unknown error') + ' (migrated ' + keysMigrated + ' day-count' + (keysMigrated === 1 ? '' : 's') + ')';
@@ -11559,7 +11683,7 @@ async function renderAdminDashboard(env) {
       try {
         while (safetyCounter < 1000) {
           safetyCounter++;
-          const res = await fetch('/admin/api/migrate-d1', { method: 'POST' });
+          const res = await fetch('/admin/api/migrate-d1', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
           const data = await res.json();
           if (!data.ok) {
             status.textContent = 'Failed: ' + (data.error || 'unknown error');
@@ -11594,7 +11718,7 @@ async function renderAdminDashboard(env) {
       btn.disabled = true;
       status.textContent = 'Working…';
       try {
-        const res = await fetch('/admin/api/migrate-accounts', { method: 'POST' });
+        const res = await fetch('/admin/api/migrate-accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         const data = await res.json();
         if (!data.ok) {
           status.textContent = 'Failed: ' + (data.error || 'unknown error');
@@ -12200,7 +12324,7 @@ async function renderAdminDashboard(env) {
       try {
         while (safetyCounter < 1000) {
           safetyCounter++;
-          const res = await fetch('/admin/api/rebuild-public-index', { method: 'POST' });
+          const res = await fetch('/admin/api/rebuild-public-index', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
           const data = await res.json();
           if (!data.ok) {
             status.textContent = 'Failed: ' + (data.error || 'unknown error');
@@ -82168,7 +82292,7 @@ function generateSearchVariations(query) {
           ok: true,
           username: request.account.username,
           displayName: request.account.displayName || request.account.username,
-          hasRecoveryAnswer: Boolean(request.account.recoveryAnswerHash),
+          hasRecoveryAnswer: Boolean(request.account.hasRecoveryAnswer),
           sessionAuth: true,
         };
       }
@@ -82244,31 +82368,34 @@ function generateSearchVariations(query) {
       touchCreatorLastSeen(env, v.normalized);
 
       // Behind FF_SESSIONS: a successful key-in-body auth also sets a session cookie (P3a-6).
-      if (sessionsEnabled && env.DB && request) {
-        if (!request._sessionCookie && (!request.account || request.account.username.toLowerCase() !== v.normalized || path === "/api/creator/restore")) {
+      //
+      // Only on the /api/creator/* routes, which the page calls and which keep
+      // the cookie. The same check also serves /api/preview, /api/save and the
+      // like, and a caller that never stores cookies would get a new 30-day
+      // session row on every request. And not when the request already carries
+      // a live session for this account: /api/creator/restore runs on every
+      // page load, so re-issuing there grew one row per visit.
+      if (sessionsEnabled && env.DB && request && typeof path === "string" && path.startsWith("/api/creator/")) {
+        if (!request._sessionCookie && (!request.account || request.account.username.toLowerCase() !== v.normalized)) {
           try {
-            const accountRow = await getOrBackfillAccount(env, v.normalized);
+            const accountRow = await getOrBackfillAccount(env, v.normalized, profile);
             if (accountRow) {
               const userAgent = request.headers ? (request.headers.get("user-agent") || null) : null;
               const session = await createSession(env, accountRow.id, userAgent);
               request._sessionCookie = buildSessionCookieHeader(session.token);
-              if (!request.account) {
-                request.account = {
-                  id: accountRow.id,
-                  username: accountRow.username,
-                  displayName: profile.displayName || accountRow.username,
-                  keyHash: profile.keyHash,
-                  recoveryAnswerHash: profile.recoveryAnswerHash,
-                  keyLookupHmac: accountRow.key_lookup_hmac,
-                  createdAt: accountRow.created_at,
-                  lastActiveAt: accountRow.last_active_at,
-                  version: accountRow.version || 0,
-                  status: accountRow.status || "active",
-                };
-              }
-              if (!request.session) {
-                request.session = session;
-              }
+              // Replaced, not filled in only when empty: a request carrying a
+              // session for a different account is now acting as this one.
+              request.account = {
+                id: accountRow.id,
+                username: accountRow.username,
+                displayName: profile.displayName || accountRow.username,
+                createdAt: accountRow.created_at,
+                lastActiveAt: accountRow.last_active_at,
+                version: accountRow.version || 0,
+                status: accountRow.status || "active",
+                hasRecoveryAnswer: Boolean(profile.recoveryAnswerHash),
+              };
+              request.session = session;
               if (env.LOOKUP_PEPPER && accountRow && creatorKey) {
                 try {
                   const hmac = await hmacLookupKey(creatorKey, env);
@@ -82277,7 +82404,6 @@ function generateSearchVariations(query) {
                       "UPDATE accounts SET key_lookup_hmac = ? WHERE id = ?"
                     ).bind(hmac, accountRow.id).run();
                     accountRow.key_lookup_hmac = hmac;
-                    if (request.account) request.account.keyLookupHmac = hmac;
                   }
                 } catch (hmacErr) {
                   console.error("Failed to write accounts.key_lookup_hmac on creator auth:", hmacErr);
@@ -83361,34 +83487,44 @@ function generateSearchVariations(query) {
       if (!usernameRaw || !keyRaw) {
         return json({ ok: false, error: "Username and Account Key are required." }, 400);
       }
-      const v = validateCreatorUsername(usernameRaw);
-      if (!v.ok) {
-        return json({ ok: false, error: "Incorrect username or Account Key." }, 401);
+      // The creator profile decides, exactly as it does for every key-in-body
+      // route: authenticateCreator applies the deletion tombstone, the per-IP
+      // PBKDF2 throttle and the memo. This used to verify against
+      // accounts.key_hash alone, which nothing kept current -- a deleted
+      // account's key still signed in, with no throttle on guessing.
+      const auth = await authenticateCreator(usernameRaw, keyRaw);
+      if (!auth.ok) return authFailureResponse(auth);
+
+      let profile = null;
+      try {
+        const raw = await getCreator(env, auth.username);
+        profile = raw ? JSON.parse(raw) : null;
+      } catch {
+        profile = null;
+      }
+      // Brought up to date from the profile just verified, before a session is
+      // tied to it. Null means the accounts table cannot be written: most
+      // likely migration 0015 has not been applied yet.
+      const accountRow = profile ? await getOrBackfillAccount(env, auth.username, profile) : null;
+      if (!accountRow) {
+        return json({ ok: false, error: "Signing in isn't available right now. Please try again later." }, 503);
       }
 
-      // Look up account in accounts table (lazy backfilling if needed)
-      let accountRow = await getOrBackfillAccount(env, v.normalized);
-
-      if (!accountRow || !accountRow.key_hash) {
-        return json({ ok: false, error: "Incorrect username or Account Key." }, 401);
-      }
-
-      const valid = await verifyCreatorKeyMemoized(keyRaw, accountRow.key_hash, accountRow.username);
-      if (!valid) {
-        return json({ ok: false, error: "Incorrect username or Account Key." }, 401);
-      }
-
-      // Check if iterations are below target, rehash if needed
-      const parts = String(accountRow.key_hash || "").split(":");
-      if (parts.length === 4 && parts[0] === "pbkdf2") {
-        const iterations = parseInt(parts[1], 10);
-        if (iterations < PBKDF2_ITERATIONS) {
-          try {
-            const upgradedHash = await hashCreatorKey(keyRaw);
-            await env.DB.prepare("UPDATE accounts SET key_hash = ? WHERE id = ?").bind(upgradedHash, accountRow.id).run();
-          } catch (e) {
-            console.error("Failed to upgrade PBKDF2 iterations:", e);
+      // A key stored under fewer PBKDF2 iterations than today's target is
+      // rehashed while the plaintext is at hand. Through the same path as a
+      // key reset (D1 first, then KV), because the profile is the copy that
+      // is checked: upgrading only the accounts row would change nothing.
+      const hashParts = String(profile.keyHash || "").split(":");
+      if (hashParts.length === 4 && hashParts[0] === "pbkdf2" && parseInt(hashParts[1], 10) < PBKDF2_ITERATIONS) {
+        try {
+          const upgradedHash = await hashCreatorKey(keyRaw);
+          const rotation = await rotateCreatorKeyHashInD1(env, auth.username, upgradedHash);
+          if (rotation.ok) {
+            await env.CONFIGS.put(`creator:${auth.username}`, JSON.stringify({ ...profile, keyHash: upgradedHash }));
+            accountRow.key_hash = upgradedHash;
           }
+        } catch (e) {
+          console.error("Failed to upgrade PBKDF2 iterations:", e);
         }
       }
 
@@ -83410,7 +83546,6 @@ function generateSearchVariations(query) {
       // Update last active
       const now = Date.now();
       await env.DB.prepare("UPDATE accounts SET last_active_at = ? WHERE id = ?").bind(now, accountRow.id).run().catch(() => {});
-      touchCreatorLastSeen(env, accountRow.username).catch(() => {});
 
       // Create session
       const userAgent = request.headers.get("user-agent") || null;
@@ -83718,7 +83853,17 @@ function generateSearchVariations(query) {
           error: "Couldn't set that Profile up just now. Please try again in a moment.",
         }, 503);
       }
-      
+      // Same principle for the accounts row: one left by an earlier holder of
+      // this username would carry its sessions, installs and provider
+      // connections into the new account. The uniqueness check above has
+      // established there is no live profile, so any row here is a leftover.
+      if (!(await deleteAccountRow(env, v.normalized)).ok) {
+        return json({
+          ok: false,
+          error: "Couldn't set that Profile up just now. Please try again in a moment.",
+        }, 503);
+      }
+
       // D1 write is authoritative when DB is bound: fail the request if D1 fails,
       // then populate the KV read-through cache.
       if (env.DB) {
@@ -83740,8 +83885,12 @@ function generateSearchVariations(query) {
         }
       }
       await env.CONFIGS.put(`creator:${v.normalized}`, JSON.stringify(profileObj));
+      // The accounts row from the start, so a new account never waits on the
+      // backfill. Best-effort: without migration 0015 this does nothing, and
+      // the first sign-in fills the row anyway.
+      await getOrBackfillAccount(env, v.normalized, profileObj);
       await storeCreatorKeyLookup(env, creatorKey, v.normalized);
-      
+
       try {
         const countRaw = await env.CONFIGS.get("stats:creator_count");
         const count = parseInt(countRaw || "0", 10) + 1;
@@ -83869,6 +84018,10 @@ function generateSearchVariations(query) {
         JSON.stringify({ ...profile, keyHash })
       );
       await storeCreatorKeyLookup(env, creatorKey, v.normalized);
+      // Every device signs in again with the new key. A session opened with the
+      // old one would otherwise outlive it, and a lost or leaked key is the
+      // usual reason to reset.
+      await revokeSessionsForUsername(env, v.normalized);
       return json({ ok: true, creatorName: v.normalized, displayName: profile.displayName, creatorKey }, 200, { "Cache-Control": "no-store" });
     }
 
@@ -83931,6 +84084,8 @@ function generateSearchVariations(query) {
         JSON.stringify({ ...profile, keyHash })
       );
       await storeCreatorKeyLookup(env, creatorKey, v.normalized);
+      // Signed out everywhere, for the same reason as the self-service reset.
+      await revokeSessionsForUsername(env, v.normalized);
       return json({ ok: true, creatorKey }, 200, { "Cache-Control": "no-store" });
     }
 
@@ -85428,14 +85583,10 @@ function generateSearchVariations(query) {
           cleared: { lists: purged.listsCleared, keys: purged.keysCleared },
         }, 500);
       }
+      // purgeCreatorData has already removed the accounts row and its sessions;
+      // this only tells the browser to drop the cookie.
       if (request.account || request._sessionCookie) {
         request._sessionCookie = buildClearSessionCookieHeader();
-      }
-      if (env.DB) {
-        try {
-          const acc = await getOrBackfillAccount(env, auth.username);
-          if (acc) await revokeAccountSessions(env, acc.id);
-        } catch {}
       }
       return json({ ok: true, cleared: { lists: purged.listsCleared, keys: purged.keysCleared } });
     }

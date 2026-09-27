@@ -58,7 +58,8 @@ Adding a binding before the code that uses it is harmless. Removing a binding th
 | `MDBLIST_API_KEY`, `MDBLIST_POPULAR_KEY`, `MDBLIST_CLIENT_ID`, `MDBLIST_CLIENT_SECRET` | MDBList |
 | `RAPIDAPI_KEY` | New on Streaming fallback engine |
 | `TOKEN_ENCRYPTION_KEY` | 32-byte AES-GCM key (`k1:<base64>`) for server-side encrypted tokens. **Not needed yet:** add it when the Phase 3a account-storage code ships. Once set, never delete it; rotate by putting the new key first (`k2:<new>,k1:<old>`). |
-| `LOOKUP_PEPPER` | HMAC pepper for the forgot-username lookup. **Not needed yet:** add it when Phase 3a sign-in ships. Never change it once in use. |
+| `LOOKUP_PEPPER` | HMAC pepper for the forgot-username lookup (P3a-7). **Optional:** without it, forgot-username uses the old lookup only. Any long random value (`openssl rand -base64 32`). Never change or delete it once set. |
+| `FF_SESSIONS` | Variable, not a secret. `1` turns on session sign-in for the `/api/creator/*` routes (P3a-6). **Leave unset** until the new sign-in screens ship. |
 
 **Plain variables:**
 
