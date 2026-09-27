@@ -192,6 +192,60 @@ async function schemaWriteGate(request, env) {
   }, 503, { "Cache-Control": "no-store", "Retry-After": "120" });
 }
 
+// --- CSRF protection middleware (P3a-5) -----------------------------------
+// Enforces that state-changing requests (POST, PUT, PATCH, DELETE) come from
+// our own origin (or have Sec-Fetch-Site: same-origin) AND carry Content-Type: application/json.
+// Exemptions:
+// 1. Webhook ingestion routes (/api/scrobble*) - called by media servers/Stremio
+// 2. OAuth provider callbacks and starts (/api/*/oauth/*)
+// 3. Admin form login and logout (/admin/login, /admin/logout)
+function verifyCsrf(request) {
+  const method = (request.method || "GET").toUpperCase();
+  if (method !== "POST" && method !== "PUT" && method !== "PATCH" && method !== "DELETE") {
+    return null;
+  }
+
+  let url;
+  try {
+    url = new URL(request.url);
+  } catch {
+    return json({ ok: false, error: "Invalid request URL." }, 400);
+  }
+  const path = url.pathname;
+
+  // Exemptions
+  if (path.startsWith("/api/scrobble")) {
+    return null;
+  }
+  if (path.includes("/oauth/")) {
+    return null;
+  }
+  if (path === "/admin/login" || path === "/admin/logout") {
+    return null;
+  }
+
+  // Check Origin or Sec-Fetch-Site: must be same-origin
+  const origin = request.headers.get("Origin") || request.headers.get("origin");
+  const secFetchSite = request.headers.get("Sec-Fetch-Site") || request.headers.get("sec-fetch-site");
+  const requestOrigin = url.origin.toLowerCase();
+
+  const isSameOrigin = (origin && origin.toLowerCase() === requestOrigin) ||
+                       (secFetchSite && secFetchSite.toLowerCase() === "same-origin");
+
+  if (!isSameOrigin) {
+    return json({ ok: false, error: "Cross-origin request forbidden." }, 403);
+  }
+
+  // Check Content-Type: application/json
+  const contentType = request.headers.get("Content-Type") || request.headers.get("content-type") || "";
+  const mime = contentType.split(";")[0].trim().toLowerCase();
+  if (mime !== "application/json") {
+    return json({ ok: false, error: "Content-Type must be application/json." }, 403);
+  }
+
+  return null;
+}
+
 // --- Per-request metrics (Workers Analytics Engine) --------------------------
 //
 // When an Analytics Engine dataset is bound as ANALYTICS (dashboard: Settings

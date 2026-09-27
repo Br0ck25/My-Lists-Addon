@@ -169,13 +169,6 @@ async function handleFetch(request, env, ctx) {
     // crashing -- see each key's usage for that message.
     applyEnvApiKeys(env);
 
-    // Resolve session if mla_session cookie or Bearer token is present
-    const sessionAuth = await resolveSession(request, env);
-    if (sessionAuth) {
-      request.account = sessionAuth.account;
-      request.session = sessionAuth.session;
-    }
-
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -184,6 +177,17 @@ async function handleFetch(request, env, ctx) {
         return new Response(null, { headers: corsHeaders() });
       }
       return new Response(null, { status: 204 });
+    }
+
+    // CSRF protection for mutating requests (P3a-5)
+    const csrfErr = verifyCsrf(request);
+    if (csrfErr) return csrfErr;
+
+    // Resolve session if mla_session cookie or Bearer token is present
+    const sessionAuth = await resolveSession(request, env);
+    if (sessionAuth) {
+      request.account = sessionAuth.account;
+      request.session = sessionAuth.session;
     }
 
     if (path === "/" || path === "") {

@@ -64,6 +64,7 @@ const REPO_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 function loadSourceFunctions(...relFiles) {
   const sandbox = {
     console, URL, URLSearchParams, atob, btoa, Uint8Array, TextDecoder, TextEncoder,
+    Response, Headers, Request,
     crypto: globalThis.crypto,
   };
   sandbox.globalThis = sandbox;
@@ -2709,7 +2710,7 @@ describe("Phase 1: catalog ids and badge days", () => {
 describe("schema gate: a Worker ahead of its database refuses writes, not reads", () => {
   const send = (w, env, p, init = {}) => w.fetch(new Request("https://example.test" + p, {
     ...init,
-    headers: { "Content-Type": "application/json", "CF-Connecting-IP": nextIp(), ...(init.headers || {}) },
+    headers: { "Origin": "https://example.test", "Content-Type": "application/json", "CF-Connecting-IP": nextIp(), ...(init.headers || {}) },
   }), env, { waitUntil() {} });
   const create = (w, env, name) => send(w, env, "/api/creator/create", {
     method: "POST", body: JSON.stringify({ creatorName: name }),
@@ -6437,7 +6438,7 @@ describe("free-tier removal: /api/details/batch resolves the whole batch", () =>
       const ids = coldIds(60);
       const res = await (await w.fetch(new Request("https://example.test/api/details/batch", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.5" },
+        headers: { "Origin": "https://example.test", "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.5" },
         body: JSON.stringify({ ids, type: "series" }),
       }), env, { waitUntil() {} })).json();
       assert.equal(res.ok, true);
@@ -6456,7 +6457,7 @@ describe("free-tier removal: /api/details/batch resolves the whole batch", () =>
       const ids = coldIds(30);
       const post = (env) => w.fetch(new Request("https://example.test/api/details/batch", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.6" },
+        headers: { "Origin": "https://example.test", "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.6" },
         body: JSON.stringify({ ids, type: "series" }),
       }), env, { waitUntil() {} });
       const env = makeEnv({ TMDB_API_KEY: "k" });
@@ -6877,7 +6878,7 @@ describe("Tracking writes: a save that did not land must not report success", ()
       const res = await cold.fetch(
         new Request("https://example.test" + path, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "CF-Connecting-IP": nextIp() },
+          headers: { "Origin": "https://example.test", "Content-Type": "application/json", "CF-Connecting-IP": nextIp() },
           body: JSON.stringify(body),
         }),
         env,
@@ -9201,7 +9202,7 @@ describe("a Trakt list reports its real size, not its first page's length", () =
     const ctx = { waitUntil: (p) => pending.push(Promise.resolve(p).catch(() => {})) };
     const res = await isolate.fetch(new Request("https://example.test/api/preview", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "CF-Connecting-IP": nextIp() },
+      headers: { "Origin": "https://example.test", "Content-Type": "application/json", "CF-Connecting-IP": nextIp() },
       body: JSON.stringify(json),
     }), env, ctx);
     await Promise.all(pending);
@@ -14990,6 +14991,184 @@ describe("P3a-4: sessions API and authentication", () => {
     assert.equal(deletedRes.status, 401);
   });
 });
+
+describe("P3a-5: CSRF middleware", () => {
+  const { verifyCsrf } = loadSourceFunctions(
+    "00_constants.js",
+    "02_http-and-creator-utils.js"
+  );
+
+  it("rejects cross-origin text/plain POST to /api/lists/like with 403 (acceptance criterion)", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const res = await call(env, "/api/lists/like", {
+      method: "POST",
+      headers: {
+        Origin: "https://evil.attacker.com",
+        "Content-Type": "text/plain",
+      },
+      json: { slug: "any-slug", like: true },
+    });
+    assert.equal(res.status, 403);
+    assert.equal(res.body.ok, false);
+    assert.match(res.body.error, /cross-origin/i);
+  });
+
+  it("rejects cross-origin application/json POST with 403", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const res = await call(env, "/api/session", {
+      method: "POST",
+      headers: {
+        Origin: "https://evil.attacker.com",
+        "Content-Type": "application/json",
+      },
+      json: { username: "any", key: "any" },
+    });
+    assert.equal(res.status, 403);
+    assert.equal(res.body.ok, false);
+    assert.match(res.body.error, /cross-origin/i);
+  });
+
+  it("rejects same-origin POST with non-JSON Content-Type with 403", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const res = await call(env, "/api/lists/like", {
+      method: "POST",
+      headers: {
+        Origin: "https://example.test",
+        "Content-Type": "text/plain",
+      },
+      json: { slug: "any-slug", like: true },
+    });
+    assert.equal(res.status, 403);
+    assert.equal(res.body.ok, false);
+    assert.match(res.body.error, /Content-Type must be application\/json/i);
+  });
+
+  it("rejects Sec-Fetch-Site: cross-site requests with 403", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const res = await call(env, "/api/save", {
+      method: "POST",
+      headers: {
+        "Sec-Fetch-Site": "cross-site",
+        Origin: "https://evil.com",
+        "Content-Type": "application/json",
+      },
+      json: { entries: [] },
+    });
+    assert.equal(res.status, 403);
+    assert.equal(res.body.ok, false);
+  });
+
+  it("allows same-origin Sec-Fetch-Site: same-origin with application/json", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const res = await call(env, "/api/session", {
+      method: "POST",
+      headers: {
+        "Sec-Fetch-Site": "same-origin",
+        "Content-Type": "application/json",
+      },
+      json: { username: "any", key: "any" },
+    });
+    // Allowed through CSRF middleware to the route handler (which returns 401 for unknown user)
+    assert.equal(res.status, 401);
+  });
+
+  it("exempts webhook routes (/api/scrobble*) from CSRF enforcement", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const res = await call(env, "/api/scrobble", {
+      method: "POST",
+      headers: {
+        Origin: "https://foreign-media-server.com",
+        "Content-Type": "text/plain",
+      },
+      json: { ping: true },
+    });
+    // Webhooks are exempt from CSRF and reach handler (not 403)
+    assert.notEqual(res.status, 403);
+  });
+
+  it("exempts OAuth routes (/api/*/oauth/*) from CSRF enforcement", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const res = await call(env, "/api/trakt/oauth/callback", {
+      method: "GET",
+      headers: { Origin: "https://trakt.tv" },
+    });
+    // OAuth callbacks are handled by OAuth handler, not blocked with 403
+    assert.notEqual(res.status, 403);
+  });
+
+  it("exempts admin login (/admin/login) form POST from JSON requirement", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const res = await call(env, "/admin/login", {
+      method: "POST",
+      form: { key: "wrong-admin-key" },
+    });
+    // Not blocked by CSRF middleware with 403; handled by admin login logic (renders page or redirects)
+    assert.notEqual(res.status, 403);
+  });
+
+  it("does not block safe methods (GET, OPTIONS)", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const getRes = await call(env, "/api/me", {
+      method: "GET",
+      headers: { Origin: "https://evil.com" },
+    });
+    // GET reaches route handler (auth required -> 401, not CSRF 403)
+    assert.equal(getRes.status, 401);
+
+    const optRes = await call(env, "/api/lists/like", {
+      method: "OPTIONS",
+      headers: { Origin: "https://evil.com" },
+    });
+    assert.equal(optRes.status, 204);
+  });
+
+  it("direct verifyCsrf unit tests verify rules and boundary cases", () => {
+    // Safe methods return null
+    assert.equal(verifyCsrf(new Request("https://example.test/api/lists/like", { method: "GET" })), null);
+    assert.equal(verifyCsrf(new Request("https://example.test/api/lists/like", { method: "OPTIONS" })), null);
+    assert.equal(verifyCsrf(new Request("https://example.test/api/lists/like", { method: "HEAD" })), null);
+
+    // Exempt paths return null
+    assert.equal(verifyCsrf(new Request("https://example.test/api/scrobble", { method: "POST" })), null);
+    assert.equal(verifyCsrf(new Request("https://example.test/api/scrobble/webhook", { method: "POST" })), null);
+    assert.equal(verifyCsrf(new Request("https://example.test/api/trakt/oauth/callback", { method: "POST" })), null);
+    assert.equal(verifyCsrf(new Request("https://example.test/admin/login", { method: "POST" })), null);
+    assert.equal(verifyCsrf(new Request("https://example.test/admin/logout", { method: "POST" })), null);
+
+    // Cross-origin returns 403
+    const crossReq = new Request("https://example.test/api/lists/like", {
+      method: "POST",
+      headers: { Origin: "https://evil.com", "Content-Type": "application/json" },
+    });
+    const crossRes = verifyCsrf(crossReq);
+    assert.ok(crossRes);
+    assert.equal(crossRes.status, 403);
+
+    // Same-origin with text/plain returns 403
+    const textReq = new Request("https://example.test/api/lists/like", {
+      method: "POST",
+      headers: { Origin: "https://example.test", "Content-Type": "text/plain" },
+    });
+    const textRes = verifyCsrf(textReq);
+    assert.ok(textRes);
+    assert.equal(textRes.status, 403);
+
+    // Same-origin with application/json returns null
+    const validReq = new Request("https://example.test/api/lists/like", {
+      method: "POST",
+      headers: { Origin: "https://example.test", "Content-Type": "application/json; charset=utf-8" },
+    });
+    assert.equal(verifyCsrf(validReq), null);
+
+    // Sec-Fetch-Site: same-origin with application/json returns null
+    const secReq = new Request("https://example.test/api/lists/like", {
+      method: "POST",
+      headers: { "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json" },
+    });
+    assert.equal(verifyCsrf(secReq), null);
+  });
+});
+
 
 
 

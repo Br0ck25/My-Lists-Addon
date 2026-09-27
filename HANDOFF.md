@@ -7,8 +7,8 @@
 ## Current Status
 - **Last Updated**: 2026-09-27
 - **Last Active AI**: Antigravity (Gemini 3.8 Flash)
-- **Active Task**: Phase 3a in progress. P3a-1 (migration 0015), P3a-2 (token encryption, blind index), P3a-3 (accounts backfill), and P3a-4 (sessions API & authentication) are complete, verified and tested. Next: P3a-5 (CSRF middleware).
-- **Task State**: P3a-4 verified with comprehensive tests. All tests passing (1,308 passed, 0 failed, 1 skipped: the opt-in network test).
+- **Active Task**: Phase 3a in progress. P3a-1 through P3a-5 are complete, verified and tested. Next: P3a-6 (compatibility: session or key-in-body on `/api/creator/*` routes behind `FF_SESSIONS`).
+- **Task State**: P3a-5 verified with comprehensive tests. All tests passing (1,318 passed, 0 failed, 1 skipped: the opt-in network test).
 - **Git State**: Ready to commit on `main`. Commit when work is verified; push only when the owner asks.
 - **The owner is not a programmer.** Explain in plain words, do the git work for them, and ask before anything that changes stored user data or needs a dashboard change.
 
@@ -106,6 +106,7 @@ Last run (2026-09-27): all of the above pass, 1,288 tests passed, 0 failed, 1 sk
   - **P3a-2:** AES-GCM-256 token encryption/decryption with key rotation (`TOKEN_ENCRYPTION_KEY`) and blind index HMAC (`LOOKUP_PEPPER`) implemented in `02_http-and-creator-utils.js` and verified with comprehensive unit tests. Documentation updated in `README.md`, `wrangler.toml`, and `docs/OPERATIONS.md`.
   - **P3a-3:** Accounts backfill job implemented (`backfillAccounts`, `reconcileAccounts` in `02_http-and-creator-utils.js`, `/admin/api/migrate-accounts` route in `26_api-creator-and-admin-routes.js`, Admin maintenance panel in `03_admin.js`). Copies data from D1 `creators` and KV `creator:*` into `accounts` (newest `keyHash` wins; D1 wins ties), verifies `count(accounts) = |creators ∪ creator:*|`, leaves existing records intact.
   - **P3a-4:** Sessions API and authentication implemented (`createSession`, `resolveSession`, `revokeSession`, `revokeAccountSessions` in `02_http-and-creator-utils.js`, middleware in `25_api-catalog-routes.js`, routes in `26_api-creator-and-admin-routes.js`). Features 256-bit crypto tokens, SHA-256 in D1 `sessions`, `mla_session` cookie (`HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=30d`), 60s isolate cache, PBKDF2 iterations rehash upgrade, lazy backfill on login, and device management (`/api/me/sessions`).
+  - **P3a-5:** CSRF protection middleware implemented (`verifyCsrf` in `02_http-and-creator-utils.js`, wired into `handleFetch` in `25_api-catalog-routes.js`). Enforces same-origin validation (`Origin` or `Sec-Fetch-Site: same-origin`) and `Content-Type: application/json` on state-changing requests (`POST`, `PUT`, `PATCH`, `DELETE`). Exempts webhooks (`/api/scrobble*`), OAuth callbacks, and admin login forms.
 
 ---
 
@@ -125,12 +126,9 @@ Last run (2026-09-27): all of the above pass, 1,288 tests passed, 0 failed, 1 sk
 ---
 
 ## Next Steps for Incoming AI
-1. **Phase 3a continues** (`NEXT_VERSION_TASKS.md`; the reasoning is in `MIGRATION_PLAN.md` Phase 3a). P3a-1 through P3a-4 are done and verified. Next:
-   - **P3a-5**: CSRF middleware for POST, PUT, PATCH and DELETE:
-     - Require `Origin` equal to our origin (or `Sec-Fetch-Site: same-origin`) **and** `Content-Type: application/json`.
-     - Webhook routes (`/api/scrobble*`) and OAuth callbacks are exempt.
-     - Done when: a cross-origin `text/plain` POST to `/api/lists/like` is rejected with 403.
+1. **Phase 3a continues** (`NEXT_VERSION_TASKS.md`; the reasoning is in `MIGRATION_PLAN.md` Phase 3a). P3a-1 through P3a-5 are done and verified. Next:
    - **P3a-6**: Compatibility: every `/api/creator/*` route accepts either a session **or** `creatorName`/`creatorKey` in the body. A successful key-in-body auth also sets a session cookie. Behind `FF_SESSIONS`.
+     - Old client flows pass unchanged and the new cookie is issued.
    - **P3a-7**: Blind index v2: on a successful login or key reset, write `accounts.key_lookup_hmac = HMAC(LOOKUP_PEPPER, normalizedKey)`. `forgot-username` checks the HMAC first, then the legacy SHA-256.
 2. **Ask the owner first, every time, before anything that:**
    - **rewrites or deletes stored user data.** In particular, P3a-8 strips tokens out of existing install links (KV `cfg:` records). Get explicit approval, make sure a D1 backup and a KV export exist first, and do it gradually;

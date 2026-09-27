@@ -18,7 +18,13 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 The new secrets `TOKEN_ENCRYPTION_KEY` and `LOOKUP_PEPPER` are **not needed yet**: nothing in this release uses them. They will be needed when the Phase 3a sign-in and account-storage code ships, and the release notes will say so then.
 
-### 🔒 Phase 3a: accounts, sessions, and authentication (P3a-1, P3a-2, P3a-3, P3a-4)
+### 🔒 Phase 3a: accounts, sessions, and authentication (P3a-1, P3a-2, P3a-3, P3a-4, P3a-5)
+
+- **CSRF Protection Middleware (P3a-5)**:
+  - Enforces same-origin validation (`Origin` header matching Worker origin or `Sec-Fetch-Site: same-origin`) and `Content-Type: application/json` on all state-changing requests (`POST`, `PUT`, `PATCH`, `DELETE`).
+  - Blocks cross-origin mutating attempts and non-JSON payloads (such as `text/plain` beacon or simple form requests) with `403 Forbidden`.
+  - Safely exempts webhook ingestion routes (`/api/scrobble*`), OAuth provider flow routes (`/api/*/oauth/*`), and admin HTML login/logout forms (`/admin/login`, `/admin/logout`).
+  - Does not restrict safe methods (`GET`, `HEAD`, `OPTIONS`).
 
 - **Sessions API and Authentication (P3a-4)**:
   - `POST /api/session`: Authenticates with username and Account Key (or legacy `creatorName`/`creatorKey`). Verifies PBKDF2 hash, automatically upgrades PBKDF2 iterations to target (`PBKDF2_ITERATIONS`) on login, and lazily backfills accounts from legacy D1/KV records if not yet migrated. Generates a crypto-random 256-bit token stored as SHA-256 hash in D1 `sessions`, and sets the `mla_session` cookie (`HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=30d`).
