@@ -20,7 +20,14 @@ function savedConfigKey(id) {
   return SAVED_CONFIG_KEY_PREFIX + id;
 }
 
-async function resolveConfig(configParam, env) {
+// `withTracking`: also read the owner's tracking record (creatorsynctracking:)
+// and fill watchHistory / continueWatching / watchlist / airingNext from it.
+// Off by default (BE-H04, task P2-9): that record can be megabytes, and every
+// catalog row request used to read and parse it -- for a Trending row as much
+// as for Continue Watching -- while nothing on those paths used it. The
+// channel meta route and /api/resolve ask for it; a personal shelf reads its
+// own data in fetchAutoTrackedCatalog.
+async function resolveConfig(configParam, env, { withTracking = false } = {}) {
   if (configParam.length <= SHORT_ID_LENGTH && env && env.CONFIGS) {
     const stored = (await env.CONFIGS.get(savedConfigKey(configParam)))
       || (await env.CONFIGS.get(configParam));
@@ -76,7 +83,7 @@ async function resolveConfig(configParam, env) {
             trackOwner = String(creatorName).toLowerCase();
           }
         }
-        if (trackOwner && env.CONFIGS) {
+        if (withTracking && trackOwner && env.CONFIGS) {
           const trackingRaw = await env.CONFIGS.get(`creatorsynctracking:${trackOwner}`);
           if (trackingRaw) {
             try {

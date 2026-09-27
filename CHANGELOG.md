@@ -119,6 +119,13 @@ With the `ANALYTICS` binding, every request writes one Analytics Engine data poi
 - About 17 "the Worker owner needs to set X" messages now read "X is temporarily unavailable".
 - The in-app guide's Self-Hosting section was removed, and the page title no longer says "Self-Hosted".
 
+### ⚡ Catalog rows stop reading watch history they don't use
+
+Every Stremio row request for an install with a personal shelf used to read and parse the owner's whole tracking record, which can be megabytes, even for a Trending row. A "Recommended" row read it three times.
+- `resolveConfig` now reads the tracking record only when asked. Only the channel meta route and `/api/resolve` ask.
+- The curated and auto-tracked rows use the owner the catalog route already passes, instead of resolving the install config a second time.
+- Tests count the reads: none for a chart row, one for a curated row, and the install config read once per request.
+
 ### 🐛 Smaller fixes
 
 - **Opening Configure no longer switches Better Posters off.** The configure page was never told an install's Better Posters settings, so it showed them off, and pressing Update saved them off. All install-link settings now come from one list, `INSTALL_CONFIG_FIELDS` in `00_constants.js`. It is used by `/api/save`, `resolveConfig`, `decodeConfig`, the configure page, and the builder's save body and signed-out filter; each of those used to keep its own hand-written copy, and the copies had drifted:

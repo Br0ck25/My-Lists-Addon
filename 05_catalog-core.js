@@ -1830,8 +1830,14 @@ async function fetchCuratedCatalog(entry, skip = 0, keys = {}) {
   let storedRecs = null;
 
   if (keys.env && keys.env.CONFIGS) {
-    let username = keys.username || keys.creatorName || '';
-    if (!username && keys.configParam) {
+    // The catalog route passes the config's own trackCreatorName; this used to
+    // look only for `username` / `creatorName`, which it never passes, so every
+    // curated row resolved the whole config a second time (BE-M08). A caller
+    // that says nothing about the owner (no trackCreatorName key at all) still
+    // gets the fallback.
+    let username = keys.username || keys.creatorName || keys.trackCreatorName || '';
+    const ownerPassed = Object.prototype.hasOwnProperty.call(keys, 'trackCreatorName');
+    if (!username && !ownerPassed && keys.configParam) {
       try {
         const resolved = await resolveConfig(keys.configParam, keys.env);
         if (resolved && resolved.trackCreatorName) username = resolved.trackCreatorName;
@@ -1963,7 +1969,11 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
   }
 
   let verifiedOwner = String((keys && keys.verifiedOwner) || "");
-  if ((!username || !verifiedOwner) && keys && keys.configParam) {
+  // Resolved again only for a caller that did not already pass the config's
+  // owner (the catalog route passes verifiedOwner, even when it is "") --
+  // see BE-M08.
+  const ownerPassed = !!keys && Object.prototype.hasOwnProperty.call(keys, 'verifiedOwner');
+  if ((!username || !verifiedOwner) && !ownerPassed && keys && keys.configParam) {
     try {
       const resolved = await resolveConfig(keys.configParam, env);
       if (resolved) {

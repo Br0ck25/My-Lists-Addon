@@ -1367,7 +1367,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
           // dynamic Next Up channel. resolveConfig only fills them in for a
           // config that PROVED whose it is (see trackOwner there), so an
           // unverified config simply gets a channel with neither applied.
-          const { entries, watchHistory, continueWatching, tmdbKey, mdblistKey, traktKey, traktAccessToken } = await resolveConfig(config, env);
+          const { entries, watchHistory, continueWatching, tmdbKey, mdblistKey, traktKey, traktAccessToken } = await resolveConfig(config, env, { withTracking: true });
           let matchedEntry = null;
           for (const e of entries) {
             if (e.enabled === false) continue;
@@ -6907,7 +6907,7 @@ function generateSearchVariations(query) {
       const config = url.searchParams.get("config") || "";
       if (!config) return json({ ok: false, error: "Missing config." }, 400);
       try {
-        const resData = await resolveConfig(config, env);
+        const resData = await resolveConfig(config, env, { withTracking: true });
         const { entries, traktUsername, watchHistory, continueWatching, watchlist, airingNext } = resData;
         if (!entries || !entries.length) return json({ ok: false, error: "That link has no lists in it." });
         // No provider keys or tokens. This used to hand back the link's MDBList

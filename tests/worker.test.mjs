@@ -2434,6 +2434,73 @@ describe("P2-8: every install setting survives a save, from one schema", () => {
   });
 });
 
+// P2-9 / BE-H04. A catalog request reads the owner's tracking record (which
+// can be megabytes) only for a row that is built from it. A Trending row used
+// to read and parse it once, and a curated row three times.
+describe("P2-9: a catalog row reads the tracking record only if it needs it", () => {
+  async function setup() {
+    const env = makeEnv({ CONFIGS: makeKv() });
+    const proof = await accountProof(env, "p29owner");
+    await call(env, "/api/creator/sync/save-tracking", { method: "POST", json: {
+      ...proof, watchHistory: [{ id: "tt90:1:1", showId: "tt90", showTitle: "Mine", seasonNum: 1, episodeNum: 1, watchedAt: 1 }],
+    }});
+    const saved = await call(env, "/api/save", { method: "POST", json: {
+      ...proof,
+      entries: [
+        { id: "pop", name: "Pop", type: "movie", url: "tmdb:chart:popular" },
+        { id: "rec", name: "Recommended", type: "movie", url: "custom:curated:recommended" },
+        { id: "wh", name: "History", type: "series", url: "autotrack:watch-history:series:p29owner" },
+      ],
+      trackCreatorName: "p29owner", trackCreatorKey: proof.creatorKey,
+    }});
+    assert.ok(saved.body.id, JSON.stringify(saved.body));
+    let reads = 0;
+    let configReads = 0;
+    const realGet = env.CONFIGS.get.bind(env.CONFIGS);
+    env.CONFIGS.get = async (key, ...rest) => {
+      if (String(key).startsWith("creatorsynctracking:")) reads++;
+      if (String(key) === "cfg:" + saved.body.id) configReads++;
+      return realGet(key, ...rest);
+    };
+    return {
+      env, id: saved.body.id,
+      readsFor: async (path) => { reads = 0; await call(env, path); return reads; },
+      configReadsFor: async (path) => { configReads = 0; await call(env, path); return configReads; },
+    };
+  }
+
+  it("reads it zero times for a row that is not built from it", async () => {
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({ results: [] }), { status: 200, headers: { "content-type": "application/json" } });
+    try {
+      const { id, readsFor } = await setup();
+      assert.equal(await readsFor(`/${id}/catalog/movie/pop.json`), 0);
+      assert.equal(await readsFor(`/${id}/manifest.json`), 0);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("reads it once, not three times, for a curated row", async () => {
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({ results: [] }), { status: 200, headers: { "content-type": "application/json" } });
+    try {
+      const { id, readsFor, configReadsFor } = await setup();
+      assert.equal(await readsFor(`/${id}/catalog/movie/rec.json`), 1);
+      assert.equal(await configReadsFor(`/${id}/catalog/movie/rec.json`), 1,
+        "the install config is read once per request, not resolved again inside the row");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("still serves the personal shelf, which reads its own data", async () => {
+    const { env, id } = await setup();
+    const cat = await call(env, `/${id}/catalog/series/wh.json`);
+    assert.equal((cat.body.metas || []).length, 1, "the owner's shelf still has its item");
+  });
+});
+
 describe("My Channels does not quietly adopt a storyline or Explore row", () => {
   it("skips catalogOnly rows and still adopts a channel someone built", () => {
     let saved = null;

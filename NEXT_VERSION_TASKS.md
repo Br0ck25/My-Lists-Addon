@@ -106,7 +106,10 @@ No npm, no `src/` tree, no esbuild, no new test framework (D-11). Phase 2 is now
   - The page gets the list as `INSTALL_CONFIG_FIELD_LIST`.
   - It fixed a real bug: Configure dropped Better Posters.
   - `collectKeys` still reads each setting from its own control; a test checks it provides every field in the list.
-- [ ] **P2-9** Pass the resolved config through the catalog pipeline; remove the extra `resolveConfig` calls in `fetchAutoTrackedCatalog` / `fetchCuratedCatalog` (BE-H04, BE-M08). Stop merging the tracking blob into `resolveConfig`; personal rows read their own data. *Done when:* a catalog request for a non-personal row performs zero reads of `creatorsynctracking:`.
+- [x] **P2-9** Pass the resolved config through the catalog pipeline; remove the extra `resolveConfig` calls in `fetchAutoTrackedCatalog` / `fetchCuratedCatalog` (BE-H04, BE-M08). Stop merging the tracking blob into `resolveConfig`; personal rows read their own data. *Done when:* a catalog request for a non-personal row performs zero reads of `creatorsynctracking:`. — **Status:** Done.
+  - `resolveConfig(config, env, { withTracking })` reads `creatorsynctracking:` only when asked; the channel meta route and `/api/resolve` ask.
+  - `fetchCuratedCatalog` and `fetchAutoTrackedCatalog` use the owner the route passes, and resolve again only for callers that pass nothing.
+  - Measured by tests: 0 tracking reads for a chart row (was 1); 1 for a curated row (was 3); the install config read once per request.
 - [x] **P2-10** Replace the `stats` `LIKE 'prefix%'` queries with range predicates (`kind >= ? AND kind < ?`) (BE-H11 interim). *Done when:* `EXPLAIN QUERY PLAN` on D1 shows the primary-key index being used. — **Status:** Done: every `stats` prefix read uses a `[prefix, upper)` key range (`statKindRange`, `03_admin.js`). The windowed leaderboard query now searches the primary key. The all-time reads keep using the `(day, n, kind)` covering index, which they already did.
 
 ---

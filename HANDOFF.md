@@ -7,9 +7,9 @@
 ## Current Status
 - **Last Updated**: 2026-09-27
 - **Last Active AI**: Claude Code (Claude Opus 5.5)
-- **Active Task**: The next-version plan. Phase 1 code is finished, and the plan has been rewritten to keep the split files and `build.py` (no npm build).
-- **Task State**: All work committed. All tests passing (1,256 passed, 0 failed, 1 skipped: the opt-in network test).
-- **Git State**: Clean working tree on `main`. **Every commit after `88a39bd` ("Initial commit") is local only.** Check `git status -sb` for the count. Push to GitHub only when the owner says so.
+- **Active Task**: The next-version plan. Phase 1 code and Phase 2 (all of P2-1 to P2-10) are finished. The next phase in `NEXT_VERSION_TASKS.md` is Phase 3a.
+- **Task State**: All work committed. All tests passing (1,277 passed, 0 failed, 1 skipped: the opt-in network test).
+- **Git State**: Clean working tree on `main`. Commits up to `31e55d9` are on GitHub; the Phase 2 commits after it are local only (`git status -sb` shows how many). Push only when the owner says so.
 
 ---
 
@@ -69,11 +69,15 @@
 ---
 
 ## Next Steps for Incoming AI
-1. **Phase 2, in `NEXT_VERSION_TASKS.md`**, suggested order: P2-7 (log redaction), P2-3 (entry-point middleware, JSON `no-store` by default), P2-6 (`providerFetch` in a new `27_provider-http.js`), P2-8 (one install-config schema), P2-9 (pass the resolved config through the catalog pipeline).
-2. Follow D-11 strictly:
+1. Phase 2 is done. Its shared pieces live in the split files:
+   - log redaction and the install-config schema (`INSTALL_CONFIG_FIELDS`) in `00_`;
+   - the `fetch` guard with its default timeout, and `json` / `jsonCacheable` / `jsonPublic`, in `02_`;
+   - `resolveConfig(..., { withTracking })` in `04_`.
+2. The next phase in `NEXT_VERSION_TASKS.md` is **Phase 3a** (identity, sessions, installs, connections). Read `MIGRATION_PLAN.md` Phase 3a first: it adds D1 tables and needs migrations applied by the owner before any code that depends on them is deployed. Confirm the plan with the owner before starting it.
+3. Follow D-11 strictly:
    - edit only the split files;
    - put new server-only code in new numbered files after `26_` (never between `09_` and `24_`, which are inside the page's template literal);
    - keep top-level names unique across files;
    - write client code that needs no backslashes where possible.
-3. After every change, run `python build.py`, `python check_sync.py`, `node --check worker_entry_combined.js`, `python gen_map.py` and `node --test tests/*.test.mjs`. For the scope check: `npm install --no-save acorn@8.14.0 eslint-scope@8.2.0`, then `node scope_check.mjs worker worker_entry_combined.js`, then delete `node_modules`.
-4. Shell heredocs in this environment can mangle `\\` sequences. Write patch scripts to a file rather than piping them through a heredoc.
+4. After every change, run `python build.py`, `python check_sync.py`, `node --check worker_entry_combined.js`, `python gen_map.py` and `node --test tests/*.test.mjs`. For the scope check: `npm install --no-save acorn@8.14.0 eslint-scope@8.2.0`, then `node scope_check.mjs worker worker_entry_combined.js`, then delete `node_modules`.
+5. Shell heredocs in this environment can mangle `\\` sequences. Write patch scripts to a file rather than piping them through a heredoc.
