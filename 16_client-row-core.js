@@ -1,0 +1,3380 @@
+<!--
+  Two script elements follow, and the split between them is deliberate.
+
+  The client bundle is around 1.3MB, and it used to be inlined into this
+  page in full. That is fine for the home page, which is byte-identical for
+  everyone and now answers a repeat visit with a 304 -- but it is not fine
+  for the pages people actually share. Every distinct shared list URL, every
+  configure link and every deep link produces different HTML, so each one
+  re-sent the entire bundle, and the browser re-parsed it from scratch every
+  time because inline script gets no code cache.
+
+  So everything that varies per request lives in the small inline preamble
+  below, and everything that does not lives in a separate script served from
+  a content-hashed URL with immutable caching. The bundle is then fetched
+  once and reused across every page of the site, and a deploy changes the
+  hash so nobody is ever served a stale one.
+
+  Both are plain classic scripts with no defer/async, so they still execute
+  in order, and the preamble's const/let bindings are script-scoped globals
+  that the bundle reads and assigns exactly as it did when the two were one
+  element.
+-->
+<script>
+const ORIGIN = (typeof location !== 'undefined' && location.origin) ? location.origin : ${jsonForScript(origin)};
+const IS_CONFIGURE = ${isConfigureMode};
+// Populated by the /lists/<slug> route (25_api-catalog-routes.js) when this
+// exact page load resolved a known chart slug -- e.g. loading
+// /lists/TMDB-Trending directly (a bookmark, a shared link, a refresh)
+// rather than reaching it by clicking "See All" inside an already-running
+// session. null on every other page load (the normal case). See
+// handleInitialDeepLink in 24_client-backup-restore-presets.js, which
+// checks this before falling back to the older #/list?... hash format for
+// anything that isn't one of these known charts.
+const SERVER_DEEP_LINK_LIST = ${jsonForScript(deepLinkList)};
+// The signed-in person's OAuth tokens. These are the reason the preamble
+// exists at all: they are specific to one page load and must never end up
+// in the shared bundle below, which is cached publicly under a URL that is
+// identical for every visitor.
+let traktAccessToken = ${jsonForScript(initialTraktAccessToken)};
+let mdblistAccessToken = ${jsonForScript(initialMdblistAccessToken)};
+let simklAccessToken = ${jsonForScript(initialSimklAccessToken)};
+let simklUsername = ${jsonForScript(initialSimklUsername)};
+// Resolved from an install/configure link by the route that rendered this
+// page. Previously declared far down in 24_client-backup-restore-presets.js;
+// hoisted here because they differ per config. Moving a const declaration
+// earlier is always safe -- anything that read it before would have been a
+// temporal-dead-zone error, so nothing could have been relying on the old
+// position.
+const serverEntries = (${initialEntriesJson});
+const serverEntriesAreDefaults = ${usingDefaultEntries ? 'true' : 'false'};
+const serverShuffleShelves = ${initialShuffleShelves ? 'true' : 'false'};
+const serverShuffleItems = ${initialShuffleItems ? 'true' : 'false'};
+</script>
+<script>/*MYLISTS_APP_BUNDLE_START*/
+// Every native/official chart's (slug, name, movieUrl, showUrl) -- lets
+// openListDetailsPage (23_client-list-management.js) push the clean
+// /lists/<slug> path when the list it's opening is one of these, instead
+// of always falling back to the older #/list?... hash format.
+const CHART_SLUG_ENTRIES = ${jsonForScript(CHART_SLUG_ENTRIES)};
+// The curated shelves, from the same table the /lists/curated/<slug> route
+// resolves against (CURATED_LIST_ENTRIES, 08_quickadd-chart-data.js). This
+// list used to be a literal down in buildQuickAddPresets, which is why the
+// route had nothing to look a slug up in and guessed the name and type
+// instead -- and guessed wrong for "true-crime-mystery", which is a series.
+const CURATED_LIST_ENTRIES = ${jsonForScript(CURATED_LIST_ENTRIES)};
+
+// The Lists tab remembers which sub-tab you were last on, in localStorage, and
+// that value outlives the release that wrote it -- so it can name a panel this
+// build no longer renders. 'bulk' is exactly that: #listsSubBulk is gone from
+// the page, while the CSS that positioned it (09_page-shell.js) and the three
+// places that read it all stayed. switchListsSubmenu hides every panel before
+// showing the one it was asked for, so a browser still holding 'bulk' opened
+// the Lists tab to a blank page on every load, with no way back short of
+// clearing site data.
+//
+// Validated against the panels that actually exist rather than trusted.
+function normalizeListsSubmenu(raw) {
+  const known = { 'my-lists': 1, 'liked': 1, 'import': 1, 'create-list': 1 };
+  const v = String(raw || '');
+  return known[v] ? v : 'my-lists';
+}
+
+// escapeHtml/escapeAttr are defined once, in 19_client-search-and-likes.js.
+// They used to be declared here too; since every client module shares one
+// script scope in the browser, that later declaration won, and this copy
+// was dead. The two were not even equivalent -- this one used
+// String(s || ''), which turns a legitimate 0 into an empty string, while
+// the surviving one uses String(s == null ? '' : s) and renders "0". Both
+// are hoisted, so the survivor is available to every caller here.
+
+(function earlySubmenuSync() {
+  try {
+    // 1. Catalogs submenu early sync
+    var catSub = localStorage.getItem('myListAddon:catalogsSubmenu') || 'all';
+    var catBar = document.getElementById('catalogsFilterBar');
+    if (catBar) {
+      catBar.querySelectorAll('.subnav-pill').forEach(function(p) {
+        var match = p.getAttribute('data-sub') === catSub || (p.getAttribute('onclick') || '').indexOf("'" + catSub + "'") !== -1;
+        p.classList.toggle('active', match);
+        var c = p.querySelector('.check-icon'); if (c) c.remove();
+        if (match) p.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
+      });
+    }
+    var subShelves = document.getElementById('catalogsSubShelves');
+    var subQuickAdd = document.getElementById('catalogsSubQuickAdd');
+    var subBulk = document.getElementById('catalogsSubBulk');
+    if (subShelves) subShelves.style.display = (catSub === 'all' || catSub === 'shelves') ? 'block' : 'none';
+    if (subQuickAdd) subQuickAdd.style.display = (catSub === 'quickadd') ? 'block' : 'none';
+    if (subBulk) subBulk.style.display = (catSub === 'bulk') ? 'block' : 'none';
+
+    // 2. Lists submenu early sync
+    var listSub = normalizeListsSubmenu(localStorage.getItem('myListAddon:listsSubmenu'));
+    var listBar = document.getElementById('listsSubnavBar');
+    if (listBar) {
+      listBar.querySelectorAll('.subnav-pill').forEach(function(p) {
+        var match = p.getAttribute('data-sub') === listSub || (p.getAttribute('onclick') || '').indexOf("'" + listSub + "'") !== -1;
+        p.classList.toggle('active', match);
+        var c = p.querySelector('.check-icon'); if (c) c.remove();
+        if (match) p.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
+      });
+    }
+    var subMyLists = document.getElementById('listsSubMyLists');
+    var subLiked = document.getElementById('listsSubLiked');
+    var subListImport = document.getElementById('listsSubImport');
+    var subCreate = document.getElementById('listsSubCreateList');
+    if (subMyLists) subMyLists.style.display = (listSub === 'my-lists') ? 'block' : 'none';
+    if (subLiked) subLiked.style.display = (listSub === 'liked') ? 'block' : 'none';
+    if (subListImport) subListImport.style.display = (listSub === 'import') ? 'block' : 'none';
+    if (subCreate) subCreate.style.display = (listSub === 'create-list') ? 'block' : 'none';
+
+    // 3. Channels submenu early sync
+    var chSub = localStorage.getItem('myListAddon:channelsSubmenu') || 'my-channels';
+    var chBar = document.getElementById('channelsSubnavBar');
+    if (chBar) {
+      chBar.querySelectorAll('.subnav-pill').forEach(function(p) {
+        var match = p.getAttribute('data-sub') === chSub || (p.getAttribute('onclick') || '').indexOf("'" + chSub + "'") !== -1;
+        p.classList.toggle('active', match);
+        var c = p.querySelector('.check-icon'); if (c) c.remove();
+        if (match) p.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
+      });
+    }
+    var subMyChannels = document.getElementById('channelsSubMyChannels');
+    var subStorylines = document.getElementById('channelsSubStorylines');
+    var subChQuickAdd = document.getElementById('channelsSubQuickAdd');
+    var subChImport = document.getElementById('channelsSubImport');
+    var subBuild = document.getElementById('channelsSubBuild');
+    if (subMyChannels) subMyChannels.style.display = (chSub === 'my-channels') ? 'block' : 'none';
+    if (subStorylines) subStorylines.style.display = (chSub === 'storylines') ? 'block' : 'none';
+    if (subChQuickAdd) subChQuickAdd.style.display = (chSub === 'quickadd') ? 'block' : 'none';
+    if (subChImport) subChImport.style.display = (chSub === 'import') ? 'block' : 'none';
+    if (subBuild) subBuild.style.display = (chSub === 'build') ? 'block' : 'none';
+
+    // 4. Settings submenu early sync
+    var setSub = localStorage.getItem('myListAddon:settingsSubmenu') || 'account';
+    var setBar = document.getElementById('settingsSubnavBar');
+    if (setBar) {
+      setBar.querySelectorAll('.subnav-pill').forEach(function(p) {
+        var match = p.getAttribute('data-sub') === setSub || (p.getAttribute('onclick') || '').indexOf("'" + setSub + "'") !== -1;
+        p.classList.toggle('active', match);
+        var c = p.querySelector('.check-icon'); if (c) c.remove();
+        if (match) p.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
+      });
+    }
+    var subAccount = document.getElementById('settingsSubAccount');
+    var subExternal = document.getElementById('settingsSubExternal');
+    var subBackup = document.getElementById('settingsSubBackup');
+    var subFeedback = document.getElementById('settingsSubFeedback');
+    if (subAccount) subAccount.style.display = (setSub === 'account' || setSub === 'keys') ? 'block' : 'none';
+    if (subExternal) subExternal.style.display = (setSub === 'external') ? 'block' : 'none';
+    if (subBackup) subBackup.style.display = (setSub === 'backup') ? 'block' : 'none';
+    if (subFeedback) subFeedback.style.display = (setSub === 'feedback') ? 'block' : 'none';
+
+    // 5. Discover submenu early sync
+    var discSub = localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
+    if (discSub === 'all') discSub = 'movie';
+    var discBar = document.getElementById('discoverSubnavBar');
+    if (discBar) {
+      discBar.querySelectorAll('.subnav-pill').forEach(function(p) {
+        var match = p.getAttribute('data-sub') === discSub || (p.getAttribute('onclick') || '').indexOf("'" + discSub + "'") !== -1;
+        p.classList.toggle('active', match);
+        var c = p.querySelector('.check-icon'); if (c) c.remove();
+        if (match) p.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
+      });
+    }
+  } catch (e) {}
+})();
+
+function deslugify(s) {
+  return String(s || '')
+    .split('-')
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+function getListCleanPath(listUrl, name) {
+  const normName = String(name || '').toLowerCase().trim();
+  if (normName === 'continue watching' || normName === 'continue-watching' || normName === 'continue_watching') return '/lists/continue-watching';
+  if (normName === 'watch history' || normName === 'watch-history' || normName === 'watch_history') return '/lists/watch-history';
+  if (normName === 'watchlist') return '/lists/watchlist';
+
+  const cleanSlug = name ? String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : '';
+  const rawUrl = String(listUrl || '').trim();
+
+  if (!rawUrl) {
+    if (cleanSlug) return '/lists/custom/' + cleanSlug;
+    return null;
+  }
+
+  if (rawUrl.startsWith('autotrack:')) {
+    const parts = rawUrl.split(':');
+    const slug = parts[1] || 'watch-history';
+    return '/lists/' + slug;
+  }
+
+  if (rawUrl.startsWith('customlist:v1:')) {
+    try {
+      const payload = JSON.parse(rawUrl.slice('customlist:v1:'.length));
+      const slug = payload.localSlug || payload.creatorSlug || payload.slug;
+      if (slug === 'continue-watching' || slug === 'watch-history' || slug === 'watchlist') {
+        return '/lists/' + slug;
+      }
+      if (slug) return '/lists/custom/' + slug;
+    } catch (e) {}
+  }
+
+  if (rawUrl.startsWith('custom:')) {
+    const slug = rawUrl.slice(7);
+    if (slug === 'continue-watching' || slug === 'watch-history' || slug === 'watchlist') {
+      return '/lists/' + slug;
+    }
+    if (slug.startsWith('curated:')) {
+      return '/lists/curated/' + slug.slice(8);
+    }
+    return '/lists/custom/' + slug;
+  }
+
+  if (rawUrl === 'tmdb:chart:new_movies') return '/lists/new-movies';
+  if (rawUrl === 'tmdb:chart:new_shows') return '/lists/new-shows';
+
+  // 2. Known chart
+  if (typeof CHART_SLUG_ENTRIES !== 'undefined') {
+    const knownChart = CHART_SLUG_ENTRIES.find((e) => e.movieUrl === rawUrl || e.showUrl === rawUrl || e.url === rawUrl);
+    if (knownChart) return '/lists/' + knownChart.slug;
+  }
+
+  // 3. Addon internal list (/lists/:user/:slug)
+  if (typeof location !== 'undefined' && rawUrl.startsWith(location.origin + '/lists/')) {
+    return rawUrl.slice(location.origin.length);
+  }
+  if (rawUrl.startsWith('/lists/')) {
+    return rawUrl;
+  }
+
+  // 4. MDBList list
+  const mdbMatch = rawUrl.match(new RegExp('(?:https?:)?(?://)?(?:www\\.)?mdblist\\.com/lists/([^/]+)/([^/?#]+)', 'i'));
+  if (mdbMatch) {
+    return '/lists/mdblist/' + mdbMatch[1] + '/' + mdbMatch[2];
+  }
+  if (rawUrl === 'mdblist:watchlist' || (rawUrl.startsWith('mdblist:') && (normName.includes('watchlist') || normName.includes('watch list')))) {
+    return '/lists/mdblist/watchlist';
+  }
+  if (rawUrl === 'mdblist:history' || (rawUrl.startsWith('mdblist:') && (normName.includes('history') || normName.includes('watch history')))) {
+    return '/lists/mdblist/history';
+  }
+  if (rawUrl.startsWith('mdblist:list:')) {
+    const listId = rawUrl.slice('mdblist:list:'.length);
+    return '/lists/mdblist/' + listId + (cleanSlug && cleanSlug !== '-' ? '-' + cleanSlug : '');
+  }
+  if (rawUrl.startsWith('mdblist:')) {
+    const parts = rawUrl.slice(8).split(':');
+    if (parts.length >= 2) return '/lists/mdblist/' + parts[0] + '/' + parts[1];
+    return '/lists/mdblist/' + (cleanSlug || parts[0]);
+  }
+
+  // 5. Trakt list
+  const traktMatch = rawUrl.match(new RegExp('(?:https?:)?(?://)?(?:www\\.)?(?:api\\.)?trakt\\.tv/users/([^/]+)/lists/([^/?#]+)', 'i'));
+  if (traktMatch) {
+    return '/lists/trakt/' + traktMatch[1] + '/' + traktMatch[2];
+  }
+  if (rawUrl === 'trakt:watchlist' || (rawUrl.startsWith('trakt:') && (normName.includes('watchlist') || normName.includes('watch list')))) {
+    return '/lists/trakt/watchlist';
+  }
+  if (rawUrl === 'trakt:history' || (rawUrl.startsWith('trakt:') && (normName.includes('history') || normName.includes('watch history')))) {
+    return '/lists/trakt/history';
+  }
+  if (rawUrl === 'trakt:collection' || (rawUrl.startsWith('trakt:') && normName.includes('collection'))) {
+    return '/lists/trakt/collection';
+  }
+  if (rawUrl.startsWith('trakt:users/')) {
+    return '/lists/trakt/' + rawUrl.slice(12).replace('/lists/', '/');
+  }
+  if (rawUrl.startsWith('trakt:')) {
+    const parts = rawUrl.slice(6).split(':');
+    if (parts.length >= 2) return '/lists/trakt/' + parts[0] + '/' + parts[1];
+    return '/lists/trakt/' + (cleanSlug || parts[0]);
+  }
+
+  // 6. TMDB
+  const tmdbCollMatch = rawUrl.match(new RegExp('(?:https?:)?(?://)?(?:www\\.)?themoviedb\\.org/collection/([0-9]+)', 'i')) ||
+    (rawUrl.startsWith('tmdb:collection:') ? [null, rawUrl.slice('tmdb:collection:'.length).split(/[^0-9]/)[0]] : null);
+  if (tmdbCollMatch && tmdbCollMatch[1]) {
+    return '/lists/tmdb/collection/' + tmdbCollMatch[1] + (cleanSlug && cleanSlug !== '-' ? '-' + cleanSlug : '');
+  }
+  const tmdbMatch = rawUrl.match(new RegExp('(?:https?:)?(?://)?(?:www\\.)?themoviedb\\.org/list/([0-9]+)', 'i')) ||
+    (rawUrl.startsWith('tmdb:list:') ? [null, rawUrl.slice('tmdb:list:'.length).split(/[^0-9]/)[0]] : null);
+  if (tmdbMatch && tmdbMatch[1]) {
+    return '/lists/tmdb/' + tmdbMatch[1] + (cleanSlug && cleanSlug !== '-' ? '-' + cleanSlug : '');
+  }
+  if (rawUrl === 'tmdb:watchlist' || (rawUrl.startsWith('tmdb:') && normName.includes('watchlist'))) {
+    return '/lists/tmdb/watchlist';
+  }
+  if (rawUrl === 'tmdb:favorites' || (rawUrl.startsWith('tmdb:') && normName.includes('favorites'))) {
+    return '/lists/tmdb/favorites';
+  }
+
+  // 7. Simkl
+  if (rawUrl.startsWith('simkl:completed:movies') || normName === 'simkl completed (movies)') return '/lists/simkl/completed-movies';
+  if (rawUrl.startsWith('simkl:completed:shows') || normName === 'simkl completed (shows)') return '/lists/simkl/completed-shows';
+  if (rawUrl.startsWith('simkl:watching:movies') || normName === 'simkl watching (movies)') return '/lists/simkl/watching-movies';
+  if (rawUrl.startsWith('simkl:watching:shows') || normName === 'simkl watching (shows)') return '/lists/simkl/watching-shows';
+  if (rawUrl.startsWith('simkl:plantowatch:movies') || normName === 'simkl plan to watch (movies)') return '/lists/simkl/plantowatch-movies';
+  if (rawUrl.startsWith('simkl:plantowatch:shows') || normName === 'simkl plan to watch (shows)') return '/lists/simkl/plantowatch-shows';
+  if (rawUrl.startsWith('simkl:hold:movies') || normName === 'simkl on hold (movies)') return '/lists/simkl/hold-movies';
+  if (rawUrl.startsWith('simkl:hold:shows') || normName === 'simkl on hold (shows)') return '/lists/simkl/hold-shows';
+  if (rawUrl.startsWith('simkl:dropped:movies') || normName === 'simkl not interesting (movies)') return '/lists/simkl/dropped-movies';
+  if (rawUrl.startsWith('simkl:dropped:shows') || normName === 'simkl not interesting (shows)') return '/lists/simkl/dropped-shows';
+  const simklMatch = rawUrl.match(new RegExp('(?:https?:)?(?://)?(?:www\\.)?simkl\\.com/[^/]+/list/([0-9]+)(?:/([^/?#]+))?', 'i'));
+  if (simklMatch && simklMatch[1]) {
+    return '/lists/simkl/' + simklMatch[1] + (simklMatch[2] ? '-' + simklMatch[2] : (cleanSlug ? '-' + cleanSlug : ''));
+  }
+  if (rawUrl.startsWith('simkl:custom:')) {
+    const listId = rawUrl.slice(13);
+    return '/lists/simkl/' + listId + (cleanSlug ? '-' + cleanSlug : '');
+  }
+  // 8. Channels (My Channels / TV Channels)
+  if (rawUrl.startsWith('channel:')) {
+    if (cleanSlug) return '/channels/' + cleanSlug;
+    const chId = rawUrl.replace(/^channel:(?:id:|v1:)?/, '');
+    if (chId) return '/channels/' + chId;
+  }
+
+  if (cleanSlug) {
+    return '/lists/custom/' + cleanSlug;
+  }
+
+  return null;
+}
+
+function isListAddedToConfig(url, type, slug) {
+  let targetSlug = slug || '';
+  if (!targetSlug && url) {
+    if (url.startsWith('autotrack:')) {
+      targetSlug = url.split(':')[1] || '';
+    } else if (url.startsWith('custom:') && !url.startsWith('custom:curated:')) {
+      targetSlug = url.slice('custom:'.length);
+    } else if (url.startsWith('customlist:v1:')) {
+      const p = (typeof parseCustomListPayloadClient === 'function') ? parseCustomListPayloadClient(url) : null;
+      if (p) targetSlug = p.localSlug || p.listSlug || p.creatorSlug || p.slug || '';
+    }
+  }
+
+  const entries = document.querySelectorAll('#lists .entry');
+  for (const entry of entries) {
+    const t = entry.querySelector('.type') ? entry.querySelector('.type').value : '';
+    if (type && t && t !== type && t !== 'both' && type !== 'both' && type !== 'mixed' && t !== 'mixed') {
+      if (targetSlug !== 'continue-watching' && targetSlug !== 'watch-history' && targetSlug !== 'watchlist') {
+        continue;
+      }
+    }
+    const urlInputs = entry.querySelectorAll('.url');
+    for (const el of urlInputs) {
+      const u = el.value.trim();
+      if (url && (u === url.trim() || (u.startsWith('autotrack:') && url.startsWith('autotrack:') && u.split(':')[1] === url.split(':')[1]))) return true;
+      if (targetSlug) {
+        if (u === 'custom:' + targetSlug || u === 'autotrack:' + targetSlug) return true;
+        if (u.startsWith('autotrack:' + targetSlug + ':') || u.startsWith('autotrack:' + targetSlug)) return true;
+        if (u.startsWith('/lists/') && u.endsWith('/' + targetSlug)) return true;
+        const payload = (typeof parseCustomListPayloadClient === 'function') ? parseCustomListPayloadClient(u) : null;
+        if (payload && (payload.localSlug === targetSlug || payload.listSlug === targetSlug || payload.creatorSlug === targetSlug || payload.slug === targetSlug)) return true;
+      }
+    }
+    if (targetSlug && (targetSlug === 'continue-watching' || targetSlug === 'watch-history' || targetSlug === 'watchlist')) {
+      const urlInputs = entry.querySelectorAll('.url');
+      let hasExternalProviderUrl = false;
+      for (const el of urlInputs) {
+        const u = el.value.trim().toLowerCase();
+        if (u.startsWith('trakt:') || u.startsWith('mdblist:') || u.startsWith('simkl:') || u.startsWith('tmdb:') || u.startsWith('letterboxd:') || u.startsWith('http://') || u.startsWith('https://')) {
+          hasExternalProviderUrl = true;
+          break;
+        }
+      }
+      if (!hasExternalProviderUrl) {
+        const nameInput = entry.querySelector('.name');
+        const cleanName = targetSlug.replace('-', ' ');
+        if (nameInput && nameInput.value.trim().toLowerCase().startsWith(cleanName)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+function removeListFromConfig(url, type, slug) {
+  let targetSlug = slug || '';
+  if (!targetSlug && url) {
+    if (url.startsWith('autotrack:')) {
+      targetSlug = url.split(':')[1] || '';
+    } else if (url.startsWith('custom:') && !url.startsWith('custom:curated:')) {
+      targetSlug = url.slice('custom:'.length);
+    } else if (url.startsWith('customlist:v1:')) {
+      const p = (typeof parseCustomListPayloadClient === 'function') ? parseCustomListPayloadClient(url) : null;
+      if (p) targetSlug = p.localSlug || p.listSlug || p.creatorSlug || p.slug || '';
+    }
+  }
+
+  const entries = document.querySelectorAll('#lists .entry');
+  let removed = false;
+  for (const entry of entries) {
+    const t = entry.querySelector('.type') ? entry.querySelector('.type').value : '';
+    if (type && t && t !== type && t !== 'both' && type !== 'both' && type !== 'mixed' && t !== 'mixed') {
+      if (targetSlug !== 'continue-watching' && targetSlug !== 'watch-history' && targetSlug !== 'watchlist') {
+        continue;
+      }
+    }
+    const urlInputs = entry.querySelectorAll('.url');
+    let match = false;
+    for (const el of urlInputs) {
+      const u = el.value.trim();
+      if (url && (u === url.trim() || (u.startsWith('autotrack:') && url.startsWith('autotrack:') && u.split(':')[1] === url.split(':')[1]))) { match = true; break; }
+      if (targetSlug) {
+        if (u === 'custom:' + targetSlug || u === 'autotrack:' + targetSlug) { match = true; break; }
+        if (u.startsWith('autotrack:' + targetSlug + ':') || u.startsWith('autotrack:' + targetSlug)) { match = true; break; }
+        if (u.startsWith('/lists/') && u.endsWith('/' + targetSlug)) { match = true; break; }
+        const payload = (typeof parseCustomListPayloadClient === 'function') ? parseCustomListPayloadClient(u) : null;
+        if (payload && (payload.localSlug === targetSlug || payload.listSlug === targetSlug || payload.creatorSlug === targetSlug || payload.slug === targetSlug)) { match = true; break; }
+      }
+    }
+    if (!match && targetSlug && (targetSlug === 'continue-watching' || targetSlug === 'watch-history' || targetSlug === 'watchlist')) {
+      let hasExternalProviderUrl = false;
+      for (const el of urlInputs) {
+        const u = el.value.trim().toLowerCase();
+        if (u.startsWith('trakt:') || u.startsWith('mdblist:') || u.startsWith('simkl:') || u.startsWith('tmdb:') || u.startsWith('letterboxd:') || u.startsWith('http://') || u.startsWith('https://')) {
+          hasExternalProviderUrl = true;
+          break;
+        }
+      }
+      if (!hasExternalProviderUrl) {
+        const nameInput = entry.querySelector('.name');
+        const cleanName = targetSlug.replace('-', ' ');
+        if (nameInput && nameInput.value.trim().toLowerCase().startsWith(cleanName)) {
+          match = true;
+        }
+      }
+    }
+    if (match) {
+      entry.remove();
+      removed = true;
+    }
+  }
+  if (removed) {
+    if (typeof renumber === 'function') renumber();
+    if (typeof saveState === 'function') saveState();
+    if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
+  }
+  return removed;
+}
+
+function updateAllListAddButtons() {
+  // 1. Local list cards in My Lists
+  document.querySelectorAll('.localListAddToConfigBtn').forEach((btn) => {
+    const slug = btn.dataset.slug;
+    if (!slug) return;
+    const card = btn.closest('.list-card');
+    const type = card ? card.dataset.listType : null;
+    const isAdded = isListAddedToConfig(null, type, slug);
+    btn.classList.toggle('is-added', isAdded);
+    btn.classList.toggle('secondary', isAdded);
+    btn.classList.toggle('primary', !isAdded);
+    btn.textContent = isAdded ? 'Remove' : '+ Add';
+    btn.style.color = isAdded ? 'var(--danger)' : '';
+  });
+
+  // 2. Creator Profile server list cards
+  document.querySelectorAll('.creatorListAddToConfigBtn').forEach((btn) => {
+    const slug = btn.dataset.slug;
+    if (!slug) return;
+    const card = btn.closest('.list-card');
+    const type = card ? card.dataset.listType : null;
+    const isAdded = isListAddedToConfig(null, type, slug);
+    btn.classList.toggle('is-added', isAdded);
+    btn.classList.toggle('secondary', isAdded);
+    btn.classList.toggle('primary', !isAdded);
+    btn.textContent = isAdded ? 'Remove' : '+ Add';
+    btn.style.color = isAdded ? 'var(--danger)' : '';
+  });
+
+  // 3. See All / List Details page add button
+  const detailAddBtn = document.getElementById('detailAddBtn');
+  if (detailAddBtn && window._currentListDetailsParams) {
+    const { listUrl, type } = window._currentListDetailsParams;
+    const isAdded = isListAddedToConfig(listUrl, type);
+    detailAddBtn.classList.toggle('is-added', isAdded);
+    detailAddBtn.classList.toggle('secondary', isAdded);
+    detailAddBtn.classList.toggle('primary', !isAdded);
+    detailAddBtn.textContent = isAdded ? 'Remove' : '+ Add';
+    detailAddBtn.style.color = isAdded ? 'var(--danger)' : '';
+  }
+
+  // 4. Curated list add buttons
+  document.querySelectorAll('.curated-add-btn').forEach((btn) => {
+    const url = btn.dataset.url;
+    const type = btn.dataset.type;
+    const slug = btn.dataset.slug;
+    const isAdded = isListAddedToConfig(url, type, slug);
+    btn.classList.toggle('is-added', isAdded);
+    btn.classList.toggle('secondary', isAdded);
+    btn.classList.toggle('primary', !isAdded);
+    btn.textContent = isAdded ? 'Remove' : '+ Add';
+    btn.style.color = isAdded ? 'var(--danger)' : '';
+  });
+
+  // 5. Search result list add buttons
+  document.querySelectorAll('.list-search-add-btn, .searchAddBtn').forEach((btn) => {
+    const url = btn.dataset.url;
+    const type = btn.dataset.type;
+    const isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(url, type) || isListAddedToConfig(url, 'movie') || isListAddedToConfig(url, 'series') || isListAddedToConfig(url)) : false;
+    btn.classList.toggle('is-added', isAdded);
+    btn.classList.toggle('secondary', isAdded);
+    btn.classList.toggle('primary', !isAdded);
+    btn.textContent = isAdded ? 'Remove' : '+ Add';
+    btn.style.color = isAdded ? 'var(--danger)' : '';
+  });
+
+  // 6. Provider My Lists add buttons (Simkl, Trakt, MDBList, TMDB)
+  document.querySelectorAll('.myListAddBtn, .myPrivateListAddBtn').forEach((btn) => {
+    const url = btn.dataset.url;
+    const type = btn.dataset.type;
+    const isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(url, type) || isListAddedToConfig(null, type, url) || isListAddedToConfig(url, 'movie') || isListAddedToConfig(url, 'series') || isListAddedToConfig(url)) : false;
+    btn.classList.toggle('is-added', isAdded);
+    btn.classList.toggle('secondary', isAdded);
+    btn.classList.toggle('primary', !isAdded);
+    btn.textContent = isAdded ? 'Remove' : '+ Add';
+    btn.style.color = isAdded ? 'var(--danger)' : '';
+    btn.disabled = false;
+  });
+}
+
+
+function navigateBackFromDetail() {
+  const currentTab = document.querySelector('.tab-panel:not([hidden])')?.dataset?.tabPanel;
+  if (currentTab === 'item-details' && window._previousTab === 'list-details') {
+    if (history.length > 1) {
+      history.back();
+    } else {
+      switchTab('list-details');
+      if (typeof window._listScrollY === 'number') {
+        const scrollPos = window._listScrollY;
+        window.scrollTo({ top: scrollPos, behavior: 'instant' });
+      }
+    }
+  } else if (history.length > 1 && window._previousTab && window._previousTab !== 'list-details' && window._previousTab !== 'item-details') {
+    history.back();
+  } else {
+    const targetTab = window._originTab || window._previousTab || localStorage.getItem('myListAddon:activeTab') || 'discover';
+    const cleanTab = (targetTab === 'list-details' || targetTab === 'item-details') ? 'discover' : targetTab;
+    if (location.pathname.startsWith('/lists/') || location.pathname.startsWith('/channels/')) {
+      try {
+        history.replaceState({ view: 'tab', tab: cleanTab }, '', '/');
+      } catch (e) {}
+    }
+    switchTab(cleanTab);
+    if (cleanTab === 'catalogs') {
+      const targetSubmenu = window._previousCatalogsSubmenu || localStorage.getItem('myListAddon:catalogsSubmenu') || 'all';
+      if (typeof switchCatalogsSubmenu === 'function') switchCatalogsSubmenu(targetSubmenu);
+    } else if (cleanTab === 'channels') {
+      const targetSubmenu = window._previousChannelsSubmenu || localStorage.getItem('myListAddon:channelsSubmenu') || 'storylines';
+      if (typeof switchChannelsSubmenu === 'function') switchChannelsSubmenu(targetSubmenu);
+    }
+    if (typeof window._previousScrollY === 'number') {
+      const scrollPos = window._previousScrollY;
+      window.scrollTo({ top: scrollPos, behavior: 'instant' });
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: scrollPos, behavior: 'instant' });
+        setTimeout(() => {
+          window.scrollTo({ top: scrollPos, behavior: 'instant' });
+        }, 50);
+      });
+    }
+  }
+}
+
+// Global state variables
+var suppressSave = false;
+var activeCreator = (function() {
+  try {
+    const name = localStorage.getItem('myListAddon:creatorName');
+    const key = localStorage.getItem('myListAddon:creatorKey');
+    const disp = localStorage.getItem('myListAddon:creatorDisplayName') || name;
+    if (name && key) return { creatorName: name, displayName: disp };
+  } catch (e) {}
+  return null;
+})();
+var livePreviewShelfData = [];
+// No dedicated text input for this one (unlike the other keys) -- it's set
+// via the Connect Trakt button/OAuth flow, not typed in, so it lives as
+// its own piece of state instead of being read from a DOM field.
+var activeTraktToken = null;
+// traktAccessToken / mdblistAccessToken / simklAccessToken / simklUsername
+// are declared in the small per-request preamble at the top of this script
+// section, not here. They carry the signed-in person's OAuth tokens, so
+// they must stay in the inline page, out of the shared, cacheable bundle
+// below -- see the preamble's own comment. They are still ordinary
+// script-scoped bindings, so every assignment and read in this file works
+// exactly as before.
+
+async function compressJsonToBase64(obj) {
+  try {
+    const stream = new Blob([JSON.stringify(obj)]).stream().pipeThrough(new CompressionStream('gzip'));
+    const buffer = await new Response(stream).arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const chunkSize = 16384;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+    }
+    return btoa(binary);
+  } catch (e) {
+    return null;
+  }
+}
+async function decompressBase64ToJson(b64) {
+  try {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+    const text = await new Response(stream).text();
+    return JSON.parse(text);
+  } catch (e) {
+    return null;
+  }
+}
+
+// --- Tab & Submenu Navigation ---------------------------------------------
+// Arrow-key movement inside the two tab bars.
+//
+// role="tablist" was on both bars from the start, with no role="tab" beneath
+// it -- so assistive technology was told to expect tabs and found none. Adding
+// the roles without the keyboard behaviour they imply would be its own half
+// measure: a tablist is one tab stop, and the arrows move between the tabs.
+function handleTabBarKeydown(e) {
+  const btn = e.target && e.target.closest ? e.target.closest('.tab-btn, .bottom-nav-item') : null;
+  if (!btn) return;
+  const bar = btn.closest('[role="tablist"]');
+  if (!bar) return;
+  const tabs = [...bar.querySelectorAll('[role="tab"]')];
+  const i = tabs.indexOf(btn);
+  if (i === -1) return;
+  let next = -1;
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (i + 1) % tabs.length;
+  else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (i - 1 + tabs.length) % tabs.length;
+  else if (e.key === 'Home') next = 0;
+  else if (e.key === 'End') next = tabs.length - 1;
+  if (next === -1) return;
+  e.preventDefault();
+  tabs[next].focus();
+  tabs[next].click();
+}
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('keydown', handleTabBarKeydown);
+}
+
+function switchTab(name) {
+  if (name === 'backup') {
+    switchTab('settings');
+    switchSettingsSubmenu('backup', document.querySelector('#settingsSubnavBar button:nth-child(4)'));
+    return;
+  }
+  if (name === 'keys' || name === 'account') {
+    switchTab('settings');
+    switchSettingsSubmenu('account', document.querySelector('#settingsSubnavBar button:nth-child(1)'));
+    return;
+  }
+  if (name === 'quick-add' || name === 'toplists') {
+    switchTab('catalogs');
+    switchCatalogsSubmenu('quickadd', document.querySelector('#catalogsFilterBar button:nth-child(2)'));
+    return;
+  }
+
+  const titles = {
+    discover: { title: 'Discover', sub: 'Explore Popular & Streaming' },
+    catalogs: { title: 'Catalogs', sub: 'Manage Configured Catalogs' },
+    lists: { title: 'Lists', sub: 'Custom, Connected & Liked Lists' },
+    channels: { title: 'Channels', sub: '24/7 Continuous TV Streaming' },
+    search: { title: 'Search', sub: 'Find Movies, Shows & Lists' },
+    settings: { title: 'Settings', sub: 'Accounts, API Keys & Tools' }
+  };
+  const t = titles[name] || { title: 'My Lists Addon', sub: '' };
+  const titleEl = document.getElementById('pageMainTitle');
+  const subEl = document.getElementById('pageSubtitle');
+  if (titleEl) titleEl.textContent = t.title;
+  if (subEl) subEl.textContent = t.sub;
+
+  try {
+    document.documentElement.removeAttribute('data-initial-tab');
+  } catch (e) {}
+
+  // Instant DOM tab switching
+  const panels = document.querySelectorAll('.tab-panel');
+  for (let i = 0; i < panels.length; i++) {
+    const p = panels[i];
+    p.hidden = (p.getAttribute('data-tab-panel') !== name);
+  }
+  // aria-selected alongside the class, and a roving tabindex, because both bars
+  // declare role="tablist" and their buttons now carry role="tab". A tab widget
+  // is one stop in the page's tab order; the arrow keys move within it (see
+  // handleTabBarKeydown).
+  const tabBtns = document.querySelectorAll('.tab-btn');
+  for (let i = 0; i < tabBtns.length; i++) {
+    const b = tabBtns[i];
+    const on = b.getAttribute('data-tab') === name;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+    b.setAttribute('tabindex', on ? '0' : '-1');
+  }
+  const navItems = document.querySelectorAll('.bottom-nav-item');
+  for (let i = 0; i < navItems.length; i++) {
+    const b = navItems[i];
+    const on = b.getAttribute('data-tab') === name;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+    b.setAttribute('tabindex', on ? '0' : '-1');
+  }
+
+  if (name !== 'list-details' && name !== 'item-details') {
+    window._originTab = name;
+    window._previousTab = name;
+    try {
+      localStorage.setItem('myListAddon:activeTab', name);
+    } catch (e) {}
+    const hash = location.hash || '';
+    const isDetailUrl = hash.startsWith('#/item?') || hash.startsWith('#/list?') || (location.pathname.startsWith('/lists/') && location.pathname !== '/lists');
+    try {
+      if (isDetailUrl) {
+        history.pushState({ view: 'tab', tab: name, fromCatalogsSubmenu: window._currentCatalogsSubmenu }, '', '/');
+      } else {
+        history.replaceState({ view: 'tab', tab: name, fromCatalogsSubmenu: window._currentCatalogsSubmenu }, '', '/');
+      }
+    } catch (e) {}
+  }
+
+  if (name === 'catalogs') {
+    let savedSub = 'all';
+    try {
+      savedSub = localStorage.getItem('myListAddon:catalogsSubmenu') || 'all';
+    } catch (e) {}
+    if (typeof switchCatalogsSubmenu === 'function') switchCatalogsSubmenu(savedSub);
+  }
+
+  if (name === 'lists') {
+    if (typeof applyHiddenMyListsSections === 'function') applyHiddenMyListsSections();
+    if (!window._listsInitializedOnce) {
+      window._listsInitializedOnce = true;
+      let savedSub = 'my-lists';
+      try {
+        savedSub = normalizeListsSubmenu(localStorage.getItem('myListAddon:listsSubmenu'));
+      } catch (e) {}
+      const pills = document.querySelectorAll('#listsSubnavBar .subnav-pill');
+      let targetBtn = null;
+      pills.forEach((p) => {
+        const oc = p.getAttribute('onclick') || '';
+        if (oc.indexOf("'" + savedSub + "'") !== -1 || oc.indexOf('"' + savedSub + '"') !== -1) {
+          targetBtn = p;
+        }
+      });
+      switchListsSubmenu(savedSub, targetBtn || pills[0]);
+    }
+  }
+  if (name === 'settings') {
+    if (!window._settingsInitializedOnce) {
+      window._settingsInitializedOnce = true;
+      let savedSub = 'account';
+      try {
+        savedSub = localStorage.getItem('myListAddon:settingsSubmenu') || 'account';
+      } catch (e) {}
+      const pills = document.querySelectorAll('#settingsSubnavBar .subnav-pill');
+      let targetBtn = null;
+      pills.forEach((p) => {
+        const oc = p.getAttribute('onclick') || '';
+        if (oc.indexOf("'" + savedSub + "'") !== -1 || oc.indexOf('"' + savedSub + '"') !== -1) {
+          targetBtn = p;
+        }
+      });
+      switchSettingsSubmenu(savedSub, targetBtn || pills[0]);
+    }
+  }
+  if (name === 'channels') {
+    if (!window._channelsInitializedOnce) {
+      window._channelsInitializedOnce = true;
+      let savedSub = 'my-channels';
+      try {
+        savedSub = localStorage.getItem('myListAddon:channelsSubmenu') || 'my-channels';
+      } catch (e) {}
+      const pills = document.querySelectorAll('#channelsSubnavBar .subnav-pill');
+      let targetBtn = null;
+      pills.forEach((p) => {
+        const oc = p.getAttribute('onclick') || '';
+        if (oc.indexOf("'" + savedSub + "'") !== -1 || oc.indexOf('"' + savedSub + '"') !== -1) {
+          targetBtn = p;
+        }
+      });
+      if (typeof switchChannelsSubmenu === 'function') {
+        switchChannelsSubmenu(savedSub, targetBtn || pills[0]);
+      }
+    } else {
+      if (typeof renderMyCreatedChannelsList === 'function') renderMyCreatedChannelsList();
+    }
+  }
+  if (name === 'catalogs') {
+    if (!window._catalogsInitializedOnce) {
+      window._catalogsInitializedOnce = true;
+      const triggerLivePreview = () => {
+        const hasRows = document.getElementById('lists') && document.getElementById('lists').querySelector('.entry');
+        if (hasRows) {
+          if (typeof renderLivePreview === 'function') renderLivePreview();
+        } else {
+          setTimeout(triggerLivePreview, 50);
+        }
+      };
+      triggerLivePreview();
+    }
+  }
+  if (name === 'discover') {
+    if (!window._discoverInitializedOnce) {
+      window._discoverInitializedOnce = true;
+      let savedFilter = 'movie';
+      try {
+        savedFilter = localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
+      } catch (e) {}
+      if (savedFilter === 'all') savedFilter = 'movie';
+      const activeFilter = (window._currentDiscoverFilter && window._currentDiscoverFilter !== 'all') ? window._currentDiscoverFilter : savedFilter;
+      window._currentDiscoverFilter = activeFilter;
+      const pills = document.querySelectorAll('#discoverSubnavBar .subnav-pill');
+      let targetBtn = null;
+      pills.forEach((p) => {
+        const oc = p.getAttribute('onclick') || '';
+        if (oc.indexOf("'" + activeFilter + "'") !== -1 || oc.indexOf('"' + activeFilter + '"') !== -1) {
+          targetBtn = p;
+        }
+      });
+      filterDiscoverShelves(activeFilter, targetBtn || pills[0]);
+    }
+  }
+  if (name === 'search') {
+    // Cheap on a return visit: renderDefaultCatalogSearch keeps the view it
+    // last rendered and no-ops when the controls still describe it, so
+    // coming back from a poster, from See All, or from another tab no longer
+    // tears the results down and refetches them (see the view cache in
+    // 19_client-search-and-likes.js).
+    const input = document.getElementById('catalogSearchInput');
+    if (input && !input.value.trim()) {
+      if (typeof renderDefaultCatalogSearch === 'function') renderDefaultCatalogSearch();
+    }
+  }
+}
+
+let _appToastTimer = null;
+
+function showToast(message, type = 'info', options = {}) {
+  const duration = typeof options.duration === 'number' ? options.duration : 3000;
+  let container = document.getElementById('appToastContainer');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'appToastContainer';
+    container.className = 'app-toast-container';
+    container.setAttribute('role', 'region');
+    container.setAttribute('aria-label', 'Notifications');
+    document.body.appendChild(container);
+  }
+
+  container.innerHTML = '';
+  clearTimeout(_appToastTimer);
+
+  const toast = document.createElement('div');
+  toast.className = 'app-toast app-toast--' + (type || 'info');
+  toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+  toast.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
+
+  const textSpan = document.createElement('span');
+  textSpan.className = 'app-toast-msg';
+  textSpan.textContent = message || '';
+  toast.appendChild(textSpan);
+
+  if (options.actionText && typeof options.onAction === 'function') {
+    const actionBtn = document.createElement('button');
+    actionBtn.type = 'button';
+    actionBtn.className = 'app-toast-action';
+    actionBtn.textContent = options.actionText;
+    actionBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      options.onAction();
+      toast.classList.remove('show');
+      setTimeout(() => toast.remove(), 250);
+    });
+    toast.appendChild(actionBtn);
+  }
+
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'app-toast-close';
+  closeBtn.setAttribute('aria-label', 'Close notification');
+  closeBtn.innerHTML = '\u2715';
+  closeBtn.addEventListener('click', () => {
+    toast.classList.remove('show');
+    setTimeout(() => { if (toast.parentNode) toast.remove(); }, 250);
+  });
+  toast.appendChild(closeBtn);
+
+  const dismiss = () => {
+    toast.classList.remove('show');
+    setTimeout(() => { if (toast.parentNode) toast.remove(); }, 250);
+  };
+  toast.dismiss = dismiss;
+
+  container.appendChild(toast);
+
+  requestAnimationFrame(() => {
+    toast.classList.add('show');
+  });
+
+  if (duration > 0) {
+    _appToastTimer = setTimeout(dismiss, duration);
+  }
+
+  return toast;
+}
+
+function hideToast() {
+  clearTimeout(_appToastTimer);
+  const container = document.getElementById('appToastContainer');
+  if (container) {
+    const toasts = container.querySelectorAll('.app-toast');
+    toasts.forEach((t) => {
+      t.classList.remove('show');
+      setTimeout(() => { if (t.parentNode) t.remove(); }, 250);
+    });
+  }
+}
+
+function showAddedToast(msg) {
+  showToast(msg || 'Added to My Catalogs \u2713', 'success');
+}
+
+function debounce(fn, delayMs = 300) {
+  let timer = null;
+  const debounced = function(...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = null;
+      fn.apply(this, args);
+    }, delayMs);
+  };
+  debounced.cancel = function() {
+    clearTimeout(timer);
+    timer = null;
+  };
+  return debounced;
+}
+
+function formatRatingBadgeHtml(item, options = {}) {
+  if (!item) return '';
+  if (options.isLivePreviewShelf || item.isLivePreviewShelf) return '';
+  if (typeof getBadgeSetting === 'function' && !getBadgeSetting('showBadgeRating')) return '';
+  let ratingNum = null;
+  let ratingType = '';
+  if (item.imdbRating != null && item.imdbRating !== '') {
+    const p = parseFloat(item.imdbRating);
+    if (!isNaN(p) && p > 0) {
+      ratingNum = p;
+      ratingType = 'imdb';
+    }
+  }
+  if (ratingNum == null && item.rating != null && item.rating !== '') {
+    const p = parseFloat(item.rating);
+    if (!isNaN(p) && p > 0) {
+      ratingNum = p;
+      ratingType = (item.ratingSource === 'imdb' || (item.id && String(item.id).startsWith('tt'))) ? 'imdb' : 'tmdb';
+    }
+  }
+  if (ratingNum == null && item.vote_average != null && item.vote_average !== '') {
+    const p = parseFloat(item.vote_average);
+    if (!isNaN(p) && p > 0) {
+      ratingNum = p;
+      ratingType = 'tmdb';
+    }
+  }
+  if (ratingNum == null && item.score != null && item.score !== '') {
+    const p = parseFloat(item.score);
+    if (!isNaN(p) && p > 0) {
+      ratingNum = p > 10 ? p / 10 : p;
+      ratingType = 'tmdb';
+    }
+  }
+  if (ratingNum == null || ratingNum <= 0) return '';
+  if (typeof getBadgeSetting === 'function') {
+    if (ratingType === 'imdb' && !getBadgeSetting('showBadgeImdbRating')) return '';
+    if (ratingType === 'tmdb' && !getBadgeSetting('showBadgeTmdbRating')) return '';
+  }
+  const scoreClass = ratingNum >= 7.5 ? 'rating-high' : (ratingNum >= 6.0 ? 'rating-mid' : 'rating-low');
+  const title = ratingType === 'imdb' ? 'IMDb: ' + ratingNum.toFixed(1) : 'TMDb: ' + ratingNum.toFixed(1);
+  return '<div class="rating-badge ' + scoreClass + '" data-rating-type="' + escapeAttr(ratingType) + '" title="' + escapeAttr(title) + '">&#9733; ' + ratingNum.toFixed(1) + '</div>';
+}
+window.formatRatingBadgeHtml = formatRatingBadgeHtml;
+
+function formatRatingSpanHtml(item, options = {}) {
+  if (!item) return '';
+  if (options.isLivePreviewShelf || item.isLivePreviewShelf) return '';
+  const source = typeof getPosterRatingSource === 'function' ? getPosterRatingSource() : 'tmdb';
+  if (source === 'none') return '';
+  if (typeof getBadgeSetting === 'function' && !getBadgeSetting('showBadgeRating')) return '';
+  if (typeof getBadgeSetting === 'function' && !getBadgeSetting('showBadgeTmdbRating')) return '';
+
+  let ratingNum = null;
+  if (item.vote_average != null && item.vote_average !== '') {
+    const p = parseFloat(item.vote_average);
+    if (!isNaN(p) && p > 0) ratingNum = p;
+  } else if (item.tmdbRating != null && item.tmdbRating !== '') {
+    const p = parseFloat(item.tmdbRating);
+    if (!isNaN(p) && p > 0) ratingNum = p;
+  } else if (item.rating != null && item.rating !== '') {
+    const p = parseFloat(item.rating);
+    if (!isNaN(p) && p > 0) ratingNum = p;
+  } else if (item.score != null && item.score !== '') {
+    const p = parseFloat(item.score);
+    if (!isNaN(p) && p > 0) ratingNum = p > 10 ? p / 10 : p;
+  } else if (item.imdbRating != null && item.imdbRating !== '') {
+    const p = parseFloat(item.imdbRating);
+    if (!isNaN(p) && p > 0) ratingNum = p;
+  }
+
+  if (ratingNum == null || ratingNum <= 0) return '';
+  return '<span class="poster-rating" data-rating-type="tmdb" style="color:#f5c518; font-weight:700; font-size:0.75rem; margin-left:auto; flex-shrink:0;">&#9733; ' + ratingNum.toFixed(1) + '</span>';
+}
+window.formatRatingSpanHtml = formatRatingSpanHtml;
+
+function renderMediaCard(item, options = {}) {
+  if (!item) return '';
+  const title = item.title || item.name || '';
+  // Was an "item.poster ||" short-circuit, which meant a
+  // card that already had a poster never reached the funnel at all, so
+  // neither the Adult Content Filter nor Better Posters could touch it.
+  const poster = (typeof resolveClientPoster === 'function')
+    ? resolveClientPoster(item, item.poster || '')
+    : (item.poster || '');
+  const year = item.year || '';
+  
+  const cardClass = 'live-preview-poster-card' + (options.cardClass ? ' ' + options.cardClass : '');
+  
+  let dataAttrStr = '';
+  if (options.dataAttrs && typeof options.dataAttrs === 'object') {
+    for (const key in options.dataAttrs) {
+      if (options.dataAttrs[key] != null) {
+        dataAttrStr += ' data-' + escapeAttr(key) + '="' + escapeAttr(String(options.dataAttrs[key])) + '"';
+      }
+    }
+  }
+
+  const styleStr = options.style ? ' style="' + options.style + '"' : '';
+
+  const posterImg = poster
+    ? '<img class="live-preview-poster" src="' + escapeAttr(poster) + '" alt="" loading="lazy" onerror="handlePosterImgError(this)">'
+    : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
+
+  const topLeft = options.topLeftHtml !== undefined ? options.topLeftHtml : '';
+  const topRight = options.topRightHtml || '';
+  const overlay = options.overlayHtml || '';
+
+  let subtitle = options.subtitleHtml;
+  if (subtitle === undefined) {
+    const ratingSpan = (typeof formatRatingSpanHtml === 'function') ? formatRatingSpanHtml(item, options) : '';
+    if (ratingSpan && year) {
+      subtitle = '<div style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(String(year)) + '</span>' + ratingSpan + '</div>';
+    } else if (ratingSpan) {
+      subtitle = '<div style="display:flex; align-items:center; justify-content:flex-end; gap:4px; width:100%;">' + ratingSpan + '</div>';
+    } else {
+      subtitle = year ? escapeHtml(String(year)) : '';
+    }
+  }
+
+  return '<div class="' + escapeAttr(cardClass) + '"' + dataAttrStr + styleStr + '>' +
+    '<div style="position:relative; width:100%;">' +
+      posterImg +
+      topLeft +
+      topRight +
+      overlay +
+    '</div>' +
+    '<div class="live-preview-poster-name" title="' + escapeAttr(title) + '">' + escapeHtml(title) + '</div>' +
+    (subtitle ? '<div class="live-preview-poster-year">' + subtitle + '</div>' : '') +
+  '</div>';
+}
+
+function createSortableList(container, options = {}) {
+  if (!container) return null;
+  if (container._sortableList) return container._sortableList;
+
+  const itemSelector = options.itemSelector || '.entry';
+  const handleSelector = options.handleSelector !== undefined ? options.handleSelector : '.drag-handle, .drag-handle-list';
+  const dragClass = options.dragClass || 'dragging';
+  const onReorder = typeof options.onReorder === 'function' ? options.onReorder : () => {};
+  const axis = options.axis || 'y';
+  const holdDelay = typeof options.holdDelay === 'number' ? options.holdDelay : (handleSelector ? 0 : 120);
+
+  let activeItem = null;
+  let isDragging = false;
+  let holdTimer = null;
+  let startX = 0;
+  let startY = 0;
+
+  function cancelHold() {
+    if (holdTimer) {
+      clearTimeout(holdTimer);
+      holdTimer = null;
+    }
+  }
+
+  // The rows a dragged row is placed among: its SIBLINGS, not every matching
+  // descendant. This used to be a querySelectorAll over the whole subtree,
+  // which on Live Preview walks every poster of every shelf -- thousands of
+  // nodes -- on every dragover and every auto-scroll frame.
+  function siblingItems(parent) {
+    const out = [];
+    const kids = parent.children;
+    for (let i = 0; i < kids.length; i++) {
+      const child = kids[i];
+      if (child === activeItem || child.classList.contains(dragClass) || !child.matches(itemSelector)) continue;
+      out.push(child);
+    }
+    return out;
+  }
+
+  function nextItemSibling(el) {
+    let n = el.nextElementSibling;
+    while (n && !n.matches(itemSelector)) n = n.nextElementSibling;
+    return n;
+  }
+
+  // Moves the row only when its place actually changes.
+  //
+  // It used to re-insert the row on every call whether or not it had moved --
+  // several times a second from dragover, and every frame from auto-scroll.
+  // A re-insert is a real DOM mutation even when the row lands where it was:
+  // it throws away the page's layout, so the getBoundingClientRect reads on
+  // the next call re-laid-out the entire page, and it hands the moved row to
+  // the page-wide MutationObserver that badges posters (initWatchHistory),
+  // which re-badged every poster in it. On a Live Preview with poster
+  // shelves that was the whole frame budget and more, on every frame --
+  // what "the page freezes when I drag" was on a phone.
+  function moveItem(y, x) {
+    if (!activeItem) return;
+    const targetParent = activeItem.parentNode || container;
+    const items = siblingItems(targetParent);
+    if (axis === 'xy' && typeof x === 'number') {
+      let targetCard = null;
+      for (const child of items) {
+        const box = child.getBoundingClientRect();
+        if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) {
+          targetCard = child;
+          break;
+        }
+      }
+      if (targetCard) {
+        const box = targetCard.getBoundingClientRect();
+        const isAfter = (y > box.top + box.height / 2) || (y >= box.top && x > box.left + box.width / 2);
+        if (isAfter) {
+          if (targetCard.nextElementSibling !== activeItem) targetParent.insertBefore(activeItem, targetCard.nextSibling);
+        } else if (activeItem.nextElementSibling !== targetCard) {
+          targetParent.insertBefore(activeItem, targetCard);
+        }
+        return;
+      }
+    }
+    let afterEl = null;
+    let closest = -Infinity;
+    for (const child of items) {
+      const box = child.getBoundingClientRect();
+      const offset = y - box.top - box.height / 2;
+      if (offset < 0 && offset > closest) {
+        closest = offset;
+        afterEl = child;
+      }
+    }
+
+    if (afterEl == null) {
+      // Belongs after every other row -- already there if the last one comes
+      // before it.
+      const last = items[items.length - 1];
+      if (last && !(last.compareDocumentPosition(activeItem) & Node.DOCUMENT_POSITION_FOLLOWING)) {
+        targetParent.appendChild(activeItem);
+      }
+    } else if (nextItemSibling(activeItem) !== afterEl) {
+      targetParent.insertBefore(activeItem, afterEl);
+    }
+  }
+
+  // --- auto-scroll while dragging ------------------------------------------
+  //
+  // moveItem works in viewport coordinates, so a row can only ever be placed
+  // among the rows currently on screen. Nothing scrolled while a drag was in
+  // progress, so on any list taller than the window -- which is most of them
+  // once Live Preview shelves carry posters and each row is ~200px -- dragging
+  // past the last visible row did nothing at all: the row stopped at the edge
+  // and sat there. It applied to every list this function drives, on desktop
+  // and touch alike.
+  const AUTO_SCROLL_EDGE = 90;   // distance from an edge where scrolling starts
+  const AUTO_SCROLL_MAX = 20;    // px per frame at the very edge
+  let autoScrollRaf = null;
+  let lastClientX = 0;
+  let lastClientY = 0;
+  let scrollHost = null;
+  let anchorEl = null;
+  let anchorPrev = '';
+
+  // The page itself scrolls for the catalog and My Lists surfaces, but this
+  // same function also drives lists inside scrollable panels, so scroll
+  // whichever actually can. Resolved once when a drag starts: it walks every
+  // ancestor through getComputedStyle, and doing that every frame forced a
+  // style recalculation of the whole page sixty times a second.
+  function scrollHostFor(el) {
+    let n = el && el.parentElement;
+    while (n && n !== document.body && n !== document.documentElement) {
+      const oy = getComputedStyle(n).overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight + 1) return n;
+      n = n.parentElement;
+    }
+    return null;
+  }
+
+  // Called when a drag starts, by either path.
+  function beginDragSession() {
+    scrollHost = scrollHostFor(activeItem);
+    // Scroll anchoring off for the drag. Moving a tall row from above the
+    // fold to below it (which is what every step of a downward drag does)
+    // makes the browser shift the scroll position to keep what is on screen
+    // still -- underneath a drag that is itself scrolling and re-placing the
+    // row from the pointer's position, so the two fight each other.
+    anchorEl = scrollHost || document.scrollingElement || document.documentElement;
+    anchorPrev = anchorEl.style.overflowAnchor;
+    anchorEl.style.overflowAnchor = 'none';
+  }
+
+  function endDragSession() {
+    stopAutoScroll();
+    if (anchorEl) anchorEl.style.overflowAnchor = anchorPrev;
+    anchorEl = null;
+    scrollHost = null;
+  }
+
+  function scrollPos() {
+    return scrollHost ? scrollHost.scrollTop : (window.scrollY || window.pageYOffset || 0);
+  }
+
+  function autoScrollStep() {
+    autoScrollRaf = null;
+    if (!activeItem) return;
+    // The row is no longer on the page: the list was re-rendered under the
+    // drag (a background sync applying the account's config does this).
+    // Left running, this loop kept scrolling the page and re-attaching the
+    // stale row every frame, indefinitely.
+    if (!activeItem.isConnected) {
+      stopDragging();
+      return;
+    }
+    const hostBox = scrollHost ? scrollHost.getBoundingClientRect() : null;
+    const top = hostBox ? hostBox.top : 0;
+    const bottom = hostBox ? hostBox.bottom : (window.innerHeight || document.documentElement.clientHeight);
+    let delta = 0;
+    if (lastClientY < top + AUTO_SCROLL_EDGE) {
+      delta = -Math.ceil(AUTO_SCROLL_MAX * Math.min(1, (top + AUTO_SCROLL_EDGE - lastClientY) / AUTO_SCROLL_EDGE));
+    } else if (lastClientY > bottom - AUTO_SCROLL_EDGE) {
+      delta = Math.ceil(AUTO_SCROLL_MAX * Math.min(1, (lastClientY - (bottom - AUTO_SCROLL_EDGE)) / AUTO_SCROLL_EDGE));
+    }
+    if (delta) {
+      const before = scrollPos();
+      if (scrollHost) scrollHost.scrollTop += delta;
+      else window.scrollBy(0, delta);
+      // Re-place the row against the rows that just came into view, or the
+      // page would scroll underneath a row that never moves -- but only if
+      // it did scroll: at the top or bottom of the page there is nothing new
+      // to place it against.
+      if (scrollPos() !== before) moveItem(lastClientY, lastClientX);
+    }
+    queueAutoScroll();
+  }
+
+  function queueAutoScroll() {
+    if (autoScrollRaf != null || !activeItem) return;
+    if (typeof requestAnimationFrame !== 'function') return;
+    autoScrollRaf = requestAnimationFrame(autoScrollStep);
+  }
+
+  function stopAutoScroll() {
+    if (autoScrollRaf != null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(autoScrollRaf);
+    autoScrollRaf = null;
+  }
+
+  function startDragging(item) {
+    isDragging = true;
+    activeItem = item;
+    activeItem.classList.add(dragClass);
+    document.body.style.userSelect = 'none';
+    beginDragSession();
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      try { navigator.vibrate(30); } catch (err) {}
+    }
+  }
+
+  function stopDragging() {
+    cancelHold();
+    endDragSession();
+    if (isDragging && activeItem) {
+      activeItem.classList.remove(dragClass);
+      onReorder();
+    }
+    isDragging = false;
+    activeItem = null;
+    document.body.style.userSelect = '';
+  }
+
+  // Every reorder is driven by pointer events -- mouse, touch and pen alike.
+  //
+  // Mouse drags used to go through the browser's native drag-and-drop instead
+  // (draggable="true" handles, dragstart/dragover/dragend). That hands the
+  // gesture to the operating system's own drag loop, and this function then
+  // moves the dragged row around the page underneath it -- which is exactly
+  // what a native drag handles worst: a drag whose source moves or is
+  // re-rendered can end without dragend, or not end at all, leaving the page
+  // ignoring clicks until it is reloaded. That is what "the page completely
+  // freezes and I have to refresh" was, and why fixes to the work done per
+  // step never touched it. Pointer events keep the whole gesture in this
+  // function's hands: no drag image, no OS loop, and an end that always
+  // arrives (pointerup, pointercancel, or the window losing focus).
+  //
+  // Native drags are refused outright, too: a stale draggable attribute, or
+  // an <img> inside an item (images are draggable by default), would
+  // otherwise start one and cancel the pointer gesture under it.
+  container.addEventListener('dragstart', (e) => {
+    if (e.target && e.target.closest && e.target.closest(itemSelector)) e.preventDefault();
+  });
+
+  container.addEventListener('pointerdown', (e) => {
+    if (typeof options.canDrag === 'function' && !options.canDrag(e)) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (e.target.closest('input, button, select, textarea, a, .customListRemovePickBtn, .channelRemovePickBtn, .customListPosInput, .channelPosInput')) return;
+    const handle = handleSelector ? e.target.closest(handleSelector) : e.target.closest(itemSelector);
+    if (!handle || !container.contains(handle)) return;
+    const item = handle.closest(itemSelector);
+    if (!item) return;
+
+    // A gesture that never ended (its pointerup went to another window, say)
+    // is finished before this one starts, not left half-open underneath it.
+    if (activeItem) stopDragging();
+
+    const isTouch = e.pointerType === 'touch' || e.pointerType === 'pen';
+    // A mouse on a handle drags at once -- once it has actually moved, so a
+    // plain click on the handle is not a reorder. Touch waits out a short
+    // hold so a swipe past the handle still scrolls the page; lists without
+    // a handle keep their own hold delay on every pointer.
+    const immediate = !isTouch && !!handleSelector;
+    const delay = immediate ? 0 : (isTouch ? Math.max(holdDelay, 140) : holdDelay);
+    // No text selection and no native drag starting under a mouse drag.
+    if (!isTouch) e.preventDefault();
+
+    cancelHold();
+    activeItem = item;
+    isDragging = false;
+    startX = e.clientX;
+    startY = e.clientY;
+    if (delay > 0) {
+      holdTimer = setTimeout(() => {
+        startDragging(item);
+      }, delay);
+    }
+    try { handle.setPointerCapture(e.pointerId); } catch (err) {}
+
+    const onPointerMove = (ev) => {
+      if (!activeItem) return;
+      if (!isDragging) {
+        const dist = Math.hypot(ev.clientX - startX, ev.clientY - startY);
+        if (immediate) {
+          if (dist < 4) return;
+          startDragging(item);
+        } else {
+          if (dist > 12) {
+            cancelHold();
+            activeItem = null;
+          }
+          return;
+        }
+      }
+      if (ev.cancelable) ev.preventDefault();
+      lastClientX = ev.clientX;
+      lastClientY = ev.clientY;
+      moveItem(ev.clientY, ev.clientX);
+      queueAutoScroll();
+    };
+
+    const onPointerEnd = () => {
+      document.removeEventListener('pointermove', onPointerMove);
+      document.removeEventListener('pointerup', onPointerEnd);
+      document.removeEventListener('pointercancel', onPointerEnd);
+      window.removeEventListener('blur', onPointerEnd);
+      try { handle.releasePointerCapture(e.pointerId); } catch (err) {}
+      stopDragging();
+    };
+
+    document.addEventListener('pointermove', onPointerMove, { passive: false });
+    document.addEventListener('pointerup', onPointerEnd);
+    document.addEventListener('pointercancel', onPointerEnd);
+    window.addEventListener('blur', onPointerEnd);
+  });
+
+  const instance = {
+    destroy() {
+      delete container._sortableList;
+    }
+  };
+  container._sortableList = instance;
+  return instance;
+}
+
+// handlePosterImgError used to be defined here as well. Every client
+// module ends up in ONE script in the browser, so that second declaration
+// silently overrode this one (23_client-list-management.js is later in
+// build order) and this copy never ran -- editing it changed nothing,
+// which is exactly the trap a duplicate top-level declaration sets. The
+// surviving definition now covers both DOM shapes; see
+// showPosterPlaceholderFor there. html_checks.py fails the build if a
+// duplicate is ever reintroduced.
+
+function resolveMissingPostersInDom(rootEl) {
+  const container = rootEl || document;
+  container.querySelectorAll('.live-preview-poster-placeholder[data-needs-fallback="1"]').forEach(ph => {
+    if (ph.dataset.fallbackRequested) return;
+    ph.dataset.fallbackRequested = '1';
+    // The tile's own title, never its list card's -- see posterItemIdentity
+    // (23_client-list-management.js).
+    const who = posterItemIdentity(ph);
+    const title = who.title;
+    const type = who.type || 'movie';
+    const id = who.id;
+    if (!title && !id) return;
+    const tmdbId = id.startsWith('tmdb:') ? id.slice(5) : '';
+    const imdbId = id.startsWith('tt') ? id : '';
+    fetch(ORIGIN + '/api/poster-fallback?title=' + encodeURIComponent(title) + '&type=' + encodeURIComponent(type) + (tmdbId ? '&tmdbId=' + encodeURIComponent(tmdbId) : '') + (imdbId ? '&imdbId=' + encodeURIComponent(imdbId) : ''))
+      .then(r => r.json())
+      .then(data => {
+        if (data && data.ok && data.poster) {
+          const newImg = document.createElement('img');
+          newImg.className = 'live-preview-poster';
+          newImg.src = data.poster;
+          newImg.alt = '';
+          newImg.loading = 'lazy';
+          newImg.onerror = function() { handlePosterImgError(this); };
+          ph.replaceWith(newImg);
+        }
+      })
+      .catch(() => {});
+  });
+}
+
+// Locking the page behind a modal.
+//
+// Every caller used to set document.body.style.overflow = 'hidden', and it has
+// never done anything. html { overflow-x: hidden } (09_page-shell.js) gives the
+// root element an explicit overflow-y of auto -- a non-visible value on one axis
+// computes the other from visible to auto -- and once <html> has its own
+// overflow, the body's stops propagating to the viewport. Measured: with a modal
+// open and body.style.overflow === 'hidden', a wheel event over the backdrop
+// still scrolled the page 900px.
+//
+// So the lock goes on the element that actually scrolls. The scrollbar it
+// removes would shift the layout, hence the compensating padding; the scroll
+// position is restored because setting overflow on <html> does not preserve it
+// the way body's did on browsers where body's had an effect.
+//
+// Counted, not boolean: two overlays can be open at once (a confirm raised from
+// a dialog), and the inner one closing must not unlock the page under the outer.
+let _scrollLockDepth = 0;
+let _scrollLockY = 0;
+
+function lockBackgroundScroll(on) {
+  const root = document.documentElement;
+  if (!root || !root.style) return;
+  if (on) {
+    _scrollLockDepth++;
+    if (_scrollLockDepth > 1) return;
+    _scrollLockY = window.pageYOffset || root.scrollTop || 0;
+    // Measured across the change, not guessed from it. html now carries
+    // scrollbar-gutter: stable (09_page-shell.js), and whether that gutter
+    // survives overflow:hidden differs between engines -- computing the
+    // compensation from window.innerWidth - clientWidth BEFORE the switch
+    // would pad by a scrollbar width that is sometimes still reserved,
+    // shifting the page the other way. The width the lock actually removed
+    // is the difference in clientWidth across it, which is zero when the
+    // gutter stays.
+    const widthBefore = root.clientWidth;
+    root.style.overflow = 'hidden';
+    const barWidth = root.clientWidth - widthBefore;
+    if (barWidth > 0) root.style.paddingRight = barWidth + 'px';
+    return;
+  }
+  if (_scrollLockDepth === 0) return;
+  _scrollLockDepth--;
+  if (_scrollLockDepth > 0) return;
+  root.style.overflow = '';
+  root.style.paddingRight = '';
+  window.scrollTo(0, _scrollLockY);
+}
+
+// Where the keyboard was, so it can be put back. A modal that steals focus and
+// never returns it leaves a keyboard or screen-reader user at the top of the
+// document with no idea what happened.
+let _modalReturnFocus = null;
+
+function focusableInModal(overlay) {
+  return [...overlay.querySelectorAll(
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  )].filter((el) => el.offsetParent !== null || el === document.activeElement);
+}
+
+// Escape, Tab and focus for every dynamic modal at once. There was none of
+// this: measured, Escape closed nothing, focus never entered the dialog, and
+// Tab from inside walked straight out into the page behind it.
+function handleModalKeydown(e) {
+  const overlay = document.getElementById('activeModalOverlay');
+  if (!overlay) return;
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    closeModal();
+    return;
+  }
+  if (e.key !== 'Tab') return;
+  const items = focusableInModal(overlay);
+  if (!items.length) {
+    // Nothing to move to, so keep the keyboard inside rather than letting it
+    // wander into the page the dialog is covering.
+    e.preventDefault();
+    return;
+  }
+  const first = items[0];
+  const last = items[items.length - 1];
+  const active = document.activeElement;
+  if (e.shiftKey && (active === first || !overlay.contains(active))) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && (active === last || !overlay.contains(active))) {
+    e.preventDefault();
+    first.focus();
+  }
+}
+
+// Escape and focus for the four modals that predate showModal.
+//
+// createListModal, addShelfModal, selectListModal and traktDeviceModal are
+// static markup toggled with style.display, so none of showModal's handling
+// reached them: measured, Escape closed nothing and focus never entered any of
+// them. Rather than convert four dialogs to showModal -- which would mean
+// rebuilding markup that works -- this gives them the same three behaviours
+// from the outside.
+const STATIC_MODALS = [
+  { id: 'createListModal', close: 'closeCreateListModal' },
+  { id: 'selectListModal', close: 'closeSelectListModal' },
+  { id: 'addShelfModal', close: null },
+  { id: 'traktDeviceModal', close: 'closeTraktDeviceModal' },
+];
+
+function visibleStaticModal() {
+  for (let i = STATIC_MODALS.length - 1; i >= 0; i--) {
+    const el = document.getElementById(STATIC_MODALS[i].id);
+    if (el && el.style.display && el.style.display !== 'none') return STATIC_MODALS[i];
+  }
+  return null;
+}
+
+function closeStaticModal(entry) {
+  if (!entry) return;
+  if (entry.close && typeof window[entry.close] === 'function') {
+    window[entry.close]();
+    return;
+  }
+  const el = document.getElementById(entry.id);
+  if (el) el.style.display = 'none';
+  lockBackgroundScroll(false);
+}
+
+function handleStaticModalKeydown(e) {
+  // The dynamic overlay sits on top when both are open, and has its own
+  // handler -- leave it to that one.
+  if (document.getElementById('activeModalOverlay')) return;
+  const entry = visibleStaticModal();
+  if (!entry) return;
+  const overlay = document.getElementById(entry.id);
+  if (!overlay) return;
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    closeStaticModal(entry);
+    return;
+  }
+  if (e.key !== 'Tab') return;
+  const items = focusableInModal(overlay);
+  if (!items.length) { e.preventDefault(); return; }
+  const first = items[0];
+  const last = items[items.length - 1];
+  const active = document.activeElement;
+  if (e.shiftKey && (active === first || !overlay.contains(active))) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && (active === last || !overlay.contains(active))) {
+    e.preventDefault();
+    first.focus();
+  }
+}
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('keydown', handleStaticModalKeydown, true);
+}
+
+function showModal(innerHtml, extraClass) {
+  closeModal();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'activeModalOverlay';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.innerHTML = '<div class="modal-card' + (extraClass ? ' ' + extraClass : '') + '">' + innerHtml + '</div>';
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeModal();
+  });
+  _modalReturnFocus = (document.activeElement && document.activeElement !== document.body)
+    ? document.activeElement
+    : null;
+  document.body.appendChild(overlay);
+  document.addEventListener('keydown', handleModalKeydown, true);
+  lockBackgroundScroll(true);
+  // The heading first when there is one, so a screen reader announces what
+  // this dialog is before naming its buttons; otherwise the first control.
+  const items = focusableInModal(overlay);
+  const heading = overlay.querySelector('h2, h3');
+  if (heading) {
+    // Names the dialog as well as receiving focus. role="dialog" with no
+    // accessible name announces as just "dialog"; the heading is already the
+    // thing that says what this one is.
+    if (!heading.id) heading.id = 'activeModalTitle';
+    overlay.setAttribute('aria-labelledby', heading.id);
+    heading.setAttribute('tabindex', '-1');
+    heading.focus();
+  } else if (items.length) {
+    overlay.setAttribute('aria-label', 'Dialog');
+    items[0].focus();
+  }
+}
+
+function closeModal() {
+  const existing = document.getElementById('activeModalOverlay');
+  // Nothing of ours is open, so there is nothing of ours to release. This
+  // used to fall through and call lockBackgroundScroll(false) regardless,
+  // which spent a lock this function never took: showModal opens with a
+  // closeModal(), so raising any dialog over one of the four static modals
+  // (createListModal, selectListModal, addShelfModal, traktDeviceModal)
+  // consumed THAT modal's lock, and dismissing the dialog then let the page
+  // scroll away behind a modal still sitting open on top of it.
+  if (!existing) return;
+  existing.remove();
+  document.removeEventListener('keydown', handleModalKeydown, true);
+  lockBackgroundScroll(false);
+  if (_modalReturnFocus && typeof _modalReturnFocus.focus === 'function') {
+    try { _modalReturnFocus.focus(); } catch (e) {}
+  }
+  _modalReturnFocus = null;
+}
+
+function showAppAlert(title, message, isSuccess = false) {
+  const icon = isSuccess ? '\u2713' : '\u2715';
+  const iconColor = isSuccess ? 'var(--accent-2, #00b4d8)' : 'var(--danger, #e63946)';
+  const html =
+    '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">' +
+      '<h3 style="margin:0; font-size:1.1rem; display:flex; align-items:center; gap:8px;">' +
+        '<span style="color:' + iconColor + '; font-weight:bold; font-size:1.2rem;">' + icon + '</span> ' +
+        escapeHtml(title) +
+      '</h3>' +
+      '<button type="button" class="action-btn" aria-label="Close" onclick="closeModal()" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+    '</div>' +
+    '<p style="margin:0 0 16px; color:var(--muted); font-size:0.9rem; line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;">' + escapeHtml(message) + '</p>' +
+    '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
+      '<button type="button" class="primary" onclick="closeModal()" style="min-width:80px; padding:8px 16px;">OK</button>' +
+    '</div>';
+  showModal(html);
+}
+
+if (typeof window !== 'undefined') {
+  window.alert = function(message) {
+    if (typeof showToast === 'function') {
+      showToast(String(message), 'error');
+    } else if (typeof showAppAlert === 'function') {
+      showAppAlert('Notice', String(message));
+    }
+  };
+}
+
+// The third member of the showAppAlert/showAppConfirm family: a dialog for
+// the gap between confirming something slow and hearing how it went.
+//
+// Reset Account Data is the case that asked for it. It clears this browser,
+// then waits on a server round trip that empties the account -- one to two
+// seconds during which the confirm dialog had already closed, the lists on
+// screen had already emptied, and nothing said why or whether anything was
+// still happening. A person watching that has no way to tell a reset in
+// progress from one that silently failed, and clicking Reset again during it
+// is the obvious thing to try.
+//
+// Deliberately has no buttons: there is nothing to decide, and the caller
+// replaces it with showAppAlert (or another showModal) when the work
+// finishes. Escape and a backdrop click still dismiss it, like any other
+// dialog -- dismissing the status of an action does not cancel the action,
+// and the caller's own result dialog still arrives.
+function showAppBusy(title, message) {
+  const html =
+    '<h3 style="margin:0 0 12px; font-size:1.1rem; display:flex; align-items:center; gap:10px;">' +
+      '<span class="app-spinner" aria-hidden="true"></span> ' +
+      escapeHtml(title) +
+    '</h3>' +
+    '<p role="status" aria-live="polite" style="margin:0; color:var(--muted); font-size:0.9rem; line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;">' + escapeHtml(message || '') + '</p>';
+  showModal(html);
+}
+
+function showAppConfirm(title, message, confirmBtnText, onConfirm, isDanger = true) {
+  const icon = isDanger ? '&#x26A0;' : '?';
+  const iconColor = isDanger ? 'var(--danger, #e63946)' : 'var(--accent-2, #00b4d8)';
+  const confirmBtnStyle = isDanger ? 'background:var(--danger, #e63946); color:#fff; border:none;' : '';
+  const html =
+    '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">' +
+      '<h3 style="margin:0; font-size:1.1rem; display:flex; align-items:center; gap:8px;">' +
+        '<span style="color:' + iconColor + '; font-weight:bold; font-size:1.2rem;">' + icon + '</span> ' +
+        escapeHtml(title) +
+      '</h3>' +
+      '<button type="button" class="action-btn" aria-label="Close" onclick="closeModal()" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+    '</div>' +
+    '<p style="margin:0 0 16px; color:var(--muted); font-size:0.9rem; line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;">' + escapeHtml(message) + '</p>' +
+    '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
+      '<button type="button" class="secondary" onclick="closeModal()" style="min-width:80px; padding:8px 16px;">Cancel</button>' +
+      '<button type="button" class="primary" id="appConfirmBtn" style="min-width:80px; padding:8px 16px; ' + confirmBtnStyle + '">' + escapeHtml(confirmBtnText || 'Confirm') + '</button>' +
+    '</div>';
+  showModal(html);
+  const btn = document.getElementById('appConfirmBtn');
+  if (btn) {
+    btn.onclick = () => {
+      closeModal();
+      if (typeof onConfirm === 'function') onConfirm();
+    };
+  }
+}
+
+// Likes, channel sharing and publishing need a signed-in account: every like
+// and every shared link belongs to a real person who can take it back. Returns
+// true when signed in; otherwise explains why and offers the login screen.
+// --- Signed out: the site's public lists only (docs/DECISIONS.md D-8) ------
+//
+// A signed-out visitor can add the site's public lists to the Live Preview
+// and generate an install link. Everything personal or user-made -- custom
+// lists, channels, a watchlist, history or Airing Next, a connected provider
+// account -- asks them to sign in first, at the point they would start the
+// work rather than when they try to install it.
+function isSignedIn() {
+  if (typeof activeCreator === 'undefined' || !activeCreator) return false;
+  try {
+    return !!localStorage.getItem('myListAddon:creatorKey');
+  } catch (e) {
+    return false;
+  }
+}
+
+// What a row is, phrased to follow "Sign in to add ...", or '' when anyone may
+// add it. Mirrors entryAccountRequirement (04_config-resolution.js), which
+// /api/save enforces; a test keeps the two in agreement, so change both.
+function rowNeedsAccount(url) {
+  const s = String(url || '').trim();
+  if (!s) return '';
+  if (s.startsWith('customlist:v1:')) return 'custom lists';
+  if (s.startsWith('channel:v1:')) return isPublicChannelRow(s) ? '' : 'channels';
+  const lines = s.split('\\n');
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i].trim().toLowerCase();
+    if (!l) continue;
+    if (l.startsWith('customlist:v1:')) return 'custom lists';
+    if (l.startsWith('channel:v1:')) return 'channels';
+    if (isPersonalShelfSourceLine(l)) return 'your watchlist, history and Airing Next shelves';
+  }
+  return '';
+}
+
+// A storyline or an Explore Channels listing, added as it is. Mirrors
+// isPublicChannelRow (04_config-resolution.js).
+function isPublicChannelRow(s) {
+  let p = null;
+  try {
+    p = JSON.parse(String(s || '').trim().slice('channel:v1:'.length));
+  } catch (e) {
+    return false;
+  }
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return false;
+  if (typeof p.storylineId === 'string' && /^[a-z0-9][a-z0-9_-]{0,80}$/.test(p.storylineId)) return true;
+  if (typeof p.shareCode === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(p.shareCode)) return true;
+  return false;
+}
+
+function isPersonalShelfSourceLine(l) {
+  const named = (base) => l === base || l.startsWith(base + ':');
+  if (l.startsWith('autotrack:')) return true;
+  if (named('custom:watch-history') || named('custom:continue-watching') || l === 'custom:watchlist') return true;
+  if (named('mdblist:watchlist') || named('mdblist:history') || named('mdblist:airing-next') || named('mdblist:upnext')) return true;
+  if (l.startsWith('mdblist:user:')) return true;
+  if (named('trakt:watchlist') || named('trakt:history') || named('trakt:airing-next') || named('trakt:continue-watching')) return true;
+  if (l.startsWith('trakt:user:') || l === 'trakt:collection') return true;
+  if (l.startsWith('simkl:user:')) return true;
+  if (l.startsWith('tmdb:account:') || l === 'tmdb:watchlist' || l === 'tmdb:favorites') return true;
+  let u;
+  try {
+    u = new URL(l);
+  } catch (e) {
+    return false;
+  }
+  let host = u.hostname;
+  if (host.startsWith('www.') || host.startsWith('app.')) host = host.slice(4);
+  const segs = u.pathname.split('/').filter(Boolean);
+  if (host === 'mdblist.com') {
+    const tail = segs[0] === 'lists' ? segs[2] : segs[0];
+    return tail === 'watchlist' || tail === 'history';
+  }
+  if (host === 'trakt.tv') {
+    return segs.length === 3 && segs[0] === 'users' &&
+      (segs[2] === 'watchlist' || segs[2] === 'history' || segs[2] === 'continue-watching');
+  }
+  return false;
+}
+
+// Rows being put back rather than added: a saved builder on page load, an
+// install link opened for editing, an undo, a restored backup, an account
+// sync. They belong to an install that already exists, so they come back as
+// they were; /api/save is what asks for an account before a NEW link is made
+// from them.
+let rowRestoreDepth = 0;
+function restoreRows(entries) {
+  rowRestoreDepth++;
+  try {
+    (entries || []).forEach((e) => addRow(e.name, e.url, e.type, e.enabled, e.group, e.id));
+  } finally {
+    rowRestoreDepth--;
+  }
+}
+
+function requireSignedInFor(what) {
+  if (isSignedIn()) return true;
+  showAppConfirm(
+    'Sign in to ' + what,
+    'You need a free My Lists account to ' + what + '. It only takes a username.',
+    'Log in or sign up',
+    function () { if (typeof openRestoreModal === 'function') openRestoreModal(); },
+    false
+  );
+  return false;
+}
+
+function confirmDialog(message, title = 'Confirm Action', confirmBtnText = 'Confirm', isDanger = true) {
+  return new Promise((resolve) => {
+    let resolved = false;
+    const finish = (result) => {
+      if (!resolved) {
+        resolved = true;
+        resolve(result);
+      }
+    };
+    showAppConfirm(title, message, confirmBtnText, () => finish(true), isDanger);
+    const overlay = document.getElementById('activeModalOverlay');
+    if (overlay) {
+      const cancelBtn = overlay.querySelector('button.secondary');
+      if (cancelBtn) {
+        cancelBtn.onclick = () => {
+          closeModal();
+          finish(false);
+        };
+      }
+      const closeBtn = overlay.querySelector('.action-btn[aria-label="Close"]');
+      if (closeBtn) {
+        closeBtn.onclick = () => {
+          closeModal();
+          finish(false);
+        };
+      }
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) finish(false);
+      });
+      const onKey = (e) => {
+        if (e.key === 'Escape') {
+          document.removeEventListener('keydown', onKey, true);
+          finish(false);
+        }
+      };
+      document.addEventListener('keydown', onKey, true);
+    }
+  });
+}
+
+function showAppPrompt(title, message, defaultValue, onConfirm) {
+  const html =
+    '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">' +
+      '<h3 style="margin:0; font-size:1.1rem;">' + escapeHtml(title) + '</h3>' +
+      '<button type="button" class="action-btn" aria-label="Close" onclick="closeModal()" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+    '</div>' +
+    (message ? '<p style="margin:0 0 12px; color:var(--muted); font-size:0.9rem;">' + escapeHtml(message) + '</p>' : '') +
+    '<input type="text" id="appPromptInput" class="input" style="width:100%; margin-bottom:16px;" value="' + escapeAttr(defaultValue || '') + '" />' +
+    '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
+      '<button type="button" class="secondary" onclick="closeModal()" style="min-width:80px; padding:8px 16px;">Cancel</button>' +
+      '<button type="button" class="primary" id="appPromptBtn" style="min-width:80px; padding:8px 16px;">OK</button>' +
+    '</div>';
+  showModal(html);
+  const input = document.getElementById('appPromptInput');
+  const btn = document.getElementById('appPromptBtn');
+  if (input) {
+    input.focus();
+    input.select();
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (btn) btn.click();
+      }
+    });
+  }
+  if (btn) {
+    btn.onclick = () => {
+      const val = input ? input.value : '';
+      closeModal();
+      if (typeof onConfirm === 'function') onConfirm(val);
+    };
+  }
+}
+
+function promptDialog(title, message, defaultValue = '') {
+  return new Promise((resolve) => {
+    let resolved = false;
+    showAppPrompt(title, message, defaultValue, (val) => {
+      resolved = true;
+      resolve(val);
+    });
+    const overlay = document.getElementById('activeModalOverlay');
+    if (overlay) {
+      const cancelBtn = overlay.querySelector('button.secondary');
+      if (cancelBtn) {
+        cancelBtn.onclick = () => {
+          closeModal();
+          if (!resolved) { resolved = true; resolve(null); }
+        };
+      }
+    }
+  });
+}
+
+function restoreActiveTab() {
+  const p = (typeof location !== 'undefined' && location.pathname) ? location.pathname : '';
+  const h = (typeof location !== 'undefined' && location.hash) ? location.hash : '';
+  const isDeep = (typeof SERVER_DEEP_LINK_LIST !== 'undefined' && SERVER_DEEP_LINK_LIST) ||
+    (p.startsWith('/lists/') && p !== '/lists') ||
+    p.startsWith('/channels/') ||
+    h.startsWith('#/list?') ||
+    h.startsWith('#/item?');
+
+  if (isDeep) {
+    try {
+      window._originTab = localStorage.getItem('myListAddon:activeTab') || 'discover';
+      window._previousTab = window._originTab;
+    } catch (e) {}
+    return;
+  }
+
+  let tab = 'discover';
+  try {
+    tab = localStorage.getItem('myListAddon:activeTab') || 'discover';
+  } catch (e) {}
+  if (tab === 'item-details' || tab === 'list-details') tab = 'discover';
+  switchTab(tab);
+}
+
+function switchListsSubmenu(name, btn) {
+  try {
+    document.documentElement.removeAttribute('data-initial-lists-sub');
+    localStorage.setItem('myListAddon:listsSubmenu', name);
+  } catch (e) {}
+  document.querySelectorAll('#listsSubnavBar .subnav-pill').forEach(function(p) {
+    p.classList.remove('active');
+    const c = p.querySelector('.check-icon');
+    if (c) c.remove();
+  });
+  if (btn) {
+    btn.classList.add('active');
+    btn.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
+  }
+  const subpanels = {
+    'my-lists': 'listsSubMyLists',
+    'liked': 'listsSubLiked',
+    'create-list': 'listsSubCreateList',
+    'import': 'listsSubImport'
+  };
+  Object.keys(subpanels).forEach(function(k) {
+    const el = document.getElementById(subpanels[k]);
+    if (el) el.style.display = 'none';
+  });
+  const activeId = subpanels[name];
+  const activeEl = document.getElementById(activeId);
+  if (activeEl) activeEl.style.display = 'block';
+
+  if (name === 'my-lists') {
+    const creatorBox = document.getElementById('creatorDashboard');
+    const hasCreatorContent = creatorBox && (creatorBox.querySelector('.list-card') || (creatorBox.children.length > 0 && !creatorBox.innerText.includes('Loading')));
+    if (!hasCreatorContent && typeof renderCreatorDashboard === 'function') {
+      renderCreatorDashboard();
+    }
+    const mdbBox = document.getElementById('myMdblistListsResult');
+    const hasMdbContent = mdbBox && mdbBox.children.length > 0;
+    if (!hasMdbContent && typeof runMyMdblistLists === 'function') {
+      runMyMdblistLists();
+    }
+    const traktBox = document.getElementById('myTraktListsResult');
+    const privateTraktBox = document.getElementById('myPrivateTraktListsResult');
+    const hasTraktContent = (traktBox && traktBox.children.length > 0) || (privateTraktBox && privateTraktBox.children.length > 0);
+    if (!hasTraktContent && typeof runMyTraktLists === 'function') {
+      runMyTraktLists();
+    }
+    const tmdbBox = document.getElementById('myTmdbListsResult');
+    const hasTmdbContent = tmdbBox && tmdbBox.children.length > 0;
+    if (!hasTmdbContent && typeof runMyTmdbLists === 'function') {
+      runMyTmdbLists();
+    }
+    const simklBox = document.getElementById('mySimklListsResult');
+    const hasSimklContent = simklBox && simklBox.children.length > 0;
+    if (!hasSimklContent && typeof runMySimklLists === 'function') {
+      runMySimklLists();
+    }
+  }
+  if (name === 'liked') {
+    // Called unconditionally, unlike the five above, because #likedListsFeed
+    // is the one feed container that ships with a child in the markup -- the
+    // "No liked lists yet" placeholder. The "has it already loaded?" test the
+    // others use (children.length > 0) was therefore true from the very first
+    // paint here, so this never ran: the feed stayed empty until the Refresh
+    // button called it directly, and a browser reload put it straight back to
+    // empty. The others are genuinely empty divs, which is why only this one
+    // was affected.
+    //
+    // Nothing is lost by dropping the guard. renderLikedListsFeed already
+    // owns that decision and does it properly -- it returns early when the
+    // liked count it last rendered still matches and the container is not
+    // mid-load -- so this was a second, wrong copy of a check that was
+    // already being made one level down.
+    if (typeof renderLikedListsFeed === 'function') {
+      renderLikedListsFeed();
+    }
+  }
+}
+
+function switchSettingsSubmenu(name, btn) {
+  try {
+    document.documentElement.removeAttribute('data-initial-settings-sub');
+    localStorage.setItem('myListAddon:settingsSubmenu', name);
+  } catch (e) {}
+  if (btn) {
+    document.querySelectorAll('#settingsSubnavBar .subnav-pill').forEach(function(p) {
+      p.classList.remove('active');
+      const c = p.querySelector('.check-icon');
+      if (c) c.remove();
+    });
+    btn.classList.add('active');
+    btn.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
+  }
+  const subpanels = {
+    'account': 'settingsSubAccount',
+    'keys': 'settingsSubAccount',
+    'external': 'settingsSubExternal',
+    'backup': 'settingsSubBackup',
+    'feedback': 'settingsSubFeedback'
+  };
+  Object.keys(subpanels).forEach(function(k) {
+    const el = document.getElementById(subpanels[k]);
+    if (el) el.style.display = 'none';
+  });
+  const activeId = subpanels[name] || 'settingsSubAccount';
+  const activeEl = document.getElementById(activeId);
+  if (activeEl) activeEl.style.display = 'block';
+  if (name === 'backup' && typeof renderPresetsList === 'function') {
+    renderPresetsList();
+  }
+  if (name === 'external' && typeof populateImportTargetLists === 'function') {
+    populateImportTargetLists();
+  }
+  if (name === 'feedback' && typeof loadUserFeedbackThreads === 'function') {
+    loadUserFeedbackThreads();
+  }
+}
+
+// --- Two-Way Support & Feedback Chat Controller ------------------------------
+let userFeedbackThreads = [];
+let activeFeedbackThreadId = null;
+let isComposingNewFeedback = false;
+
+function getUserFeedbackThreadIds() {
+  try {
+    const raw = localStorage.getItem('myListAddon:feedbackThreadIds');
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveUserFeedbackThreadId(threadId) {
+  if (!threadId) return;
+  try {
+    const ids = getUserFeedbackThreadIds();
+    if (!ids.includes(threadId)) {
+      ids.unshift(threadId);
+      localStorage.setItem('myListAddon:feedbackThreadIds', JSON.stringify(ids.slice(0, 30)));
+    }
+  } catch (e) {}
+}
+
+// The signed-in identity to attach to a feedback message, but only when it
+// can actually be proven. /api/feedback authenticates any creatorName it is
+// given and ignores the claim when the key does not match, so a name without
+// a key buys nothing. Returns nulls when there is nothing provable, which the
+// server treats as an ordinary anonymous message.
+function feedbackCreatorAuth() {
+  const name = (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName)
+    ? activeCreator.creatorName
+    : null;
+  if (!name) return { creatorName: null, creatorKey: null };
+  let key = '';
+  try {
+    key = localStorage.getItem('myListAddon:creatorKey') || '';
+  } catch (e) {
+    key = '';
+  }
+  if (!key) return { creatorName: null, creatorKey: null };
+  return { creatorName: name, creatorKey: key };
+}
+
+async function loadUserFeedbackThreads() {
+  const threadIds = getUserFeedbackThreadIds();
+  const creatorName = (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) ? activeCreator.creatorName : null;
+  // The server requires creatorKey whenever creatorName is present (it
+  // authenticates and rejects the whole request otherwise, per-thread-id
+  // lookups included) -- see /api/feedback/threads. This used to send
+  // creatorName with no key, so every signed-in visitor's support panel
+  // 401'd silently and came back empty, even for their own threadIds.
+  const creatorKey = creatorName ? (localStorage.getItem('myListAddon:creatorKey') || '') : '';
+
+  try {
+    const res = await fetch(ORIGIN + '/api/feedback/threads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        threadIds: threadIds,
+        creatorName: creatorName,
+        creatorKey: creatorKey,
+      }),
+    });
+    const data = await res.json().catch(() => null);
+    if (data && data.ok && Array.isArray(data.threads)) {
+      userFeedbackThreads = data.threads;
+      data.threads.forEach((t) => saveUserFeedbackThreadId(t.id));
+      if (!activeFeedbackThreadId && userFeedbackThreads.length) {
+        activeFeedbackThreadId = userFeedbackThreads[0].id;
+      }
+    }
+  } catch (e) {}
+
+  renderUserFeedbackThreadsUI();
+}
+
+function refreshUserFeedbackThreads() {
+  const statusEl = document.getElementById('supportChatStatus');
+  if (statusEl) statusEl.textContent = 'Refreshing\u2026';
+  loadUserFeedbackThreads().then(() => {
+    if (statusEl) {
+      statusEl.textContent = 'Up to date';
+      setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2000);
+    }
+  });
+}
+
+function toggleNewFeedbackForm(showNew) {
+  isComposingNewFeedback = !!showNew;
+  renderUserFeedbackThreadsUI();
+  if (showNew) {
+    const msgInput = document.getElementById('feedbackMessageInput');
+    if (msgInput) { msgInput.focus(); }
+  }
+}
+
+function selectFeedbackThread(threadId) {
+  activeFeedbackThreadId = threadId;
+  isComposingNewFeedback = false;
+  renderUserFeedbackThreadsUI();
+}
+
+function renderUserFeedbackThreadsUI() {
+  const bar = document.getElementById('supportThreadsBar');
+  const chatView = document.getElementById('supportChatView');
+  const formWrap = document.getElementById('newFeedbackFormWrap');
+  const cancelBtn = document.getElementById('feedbackCancelNewBtn');
+  const newTicketBtn = document.getElementById('btnNewFeedbackTicket');
+
+  if (!userFeedbackThreads.length) {
+    if (bar) bar.style.display = 'none';
+    if (chatView) chatView.style.display = 'none';
+    if (formWrap) formWrap.style.display = 'block';
+    if (cancelBtn) cancelBtn.style.display = 'none';
+    if (newTicketBtn) newTicketBtn.style.display = 'none';
+    return;
+  }
+
+  if (newTicketBtn) newTicketBtn.style.display = 'inline-flex';
+
+  if (bar) {
+    bar.style.display = 'flex';
+    bar.innerHTML = userFeedbackThreads.map((t) => {
+      const isActive = t.id === activeFeedbackThreadId && !isComposingNewFeedback;
+      const catLabel = t.category ? (t.category.charAt(0).toUpperCase() + t.category.slice(1)) : 'Support';
+      const hasAdminReply = Array.isArray(t.messages) && t.messages.some((m) => m.sender === 'admin');
+      const badge = hasAdminReply ? ' \uD83D\uDCAC' : '';
+      return '<button type="button" class="support-thread-pill ' + (isActive ? 'active' : '') + '" onclick="selectFeedbackThread(&quot;' + escapeJsAttr(t.id) + '&quot;)">' +
+        escapeHtml(catLabel) + badge +
+      '</button>';
+    }).join('');
+  }
+
+  if (isComposingNewFeedback) {
+    if (chatView) chatView.style.display = 'none';
+    if (formWrap) formWrap.style.display = 'block';
+    if (cancelBtn) cancelBtn.style.display = 'inline-flex';
+    return;
+  }
+
+  if (formWrap) formWrap.style.display = 'none';
+  if (chatView) chatView.style.display = 'block';
+
+  const activeThread = userFeedbackThreads.find((t) => t.id === activeFeedbackThreadId) || userFeedbackThreads[0];
+  if (!activeThread) return;
+  activeFeedbackThreadId = activeThread.id;
+
+  const stream = document.getElementById('supportMessagesStream');
+  if (stream) {
+    const messages = Array.isArray(activeThread.messages) && activeThread.messages.length
+      ? activeThread.messages
+      : [{
+          id: 'msg_init',
+          sender: 'user',
+          senderName: activeThread.creatorName || 'You',
+          text: activeThread.message || '(Initial message)',
+          timestamp: activeThread.createdAt || Date.now(),
+        }];
+
+    stream.innerHTML = messages.map((m) => {
+      const isAdmin = m.sender === 'admin';
+      const senderLabel = isAdmin ? '\uD83D\uDC68\u200D\uD83D\uDCBB Developer' : (m.senderName || 'You');
+      const timeStr = m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+      return '<div class="support-bubble ' + (isAdmin ? 'admin' : 'user') + '">' +
+        '<div class="support-bubble-sender">' + escapeHtml(senderLabel) + '</div>' +
+        '<div>' + escapeHtml(m.text || '') + '</div>' +
+        (timeStr ? '<div class="support-bubble-time">' + escapeHtml(timeStr) + '</div>' : '') +
+      '</div>';
+    }).join('');
+
+    stream.scrollTop = stream.scrollHeight;
+  }
+}
+
+async function sendUserFeedbackReply() {
+  if (!activeFeedbackThreadId) return;
+  const input = document.getElementById('supportReplyInput');
+  const btn = document.getElementById('supportReplySendBtn');
+  const statusEl = document.getElementById('supportChatStatus');
+  const text = (input ? input.value : '').trim();
+  if (!text) return;
+
+  if (btn) btn.disabled = true;
+  if (statusEl) statusEl.textContent = 'Sending reply\u2026';
+
+  const thread = userFeedbackThreads.find((t) => t.id === activeFeedbackThreadId);
+  // Name AND key, or neither. The server proves any claimed identity before
+  // recording it (a bare name used to be taken on trust and rendered in the
+  // admin panel as the sender), so a name sent without a key is simply
+  // dropped there and the message is filed anonymously. Sending the pair
+  // when we have it is what keeps the thread attached to the account.
+  const creatorAuth = feedbackCreatorAuth();
+
+  try {
+    const res = await fetch(ORIGIN + '/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        threadId: activeFeedbackThreadId,
+        message: text,
+        creatorName: creatorAuth.creatorName,
+        creatorKey: creatorAuth.creatorKey,
+      }),
+    });
+    const data = await res.json().catch(() => null);
+    if (data && data.ok && data.entry) {
+      if (input) input.value = '';
+      if (statusEl) statusEl.textContent = '';
+      const idx = userFeedbackThreads.findIndex((t) => t.id === activeFeedbackThreadId);
+      if (idx !== -1) {
+        userFeedbackThreads[idx] = data.entry;
+      } else {
+        userFeedbackThreads.unshift(data.entry);
+      }
+      renderUserFeedbackThreadsUI();
+    } else {
+      if (statusEl) statusEl.textContent = (data && data.error) || 'Failed to send reply.';
+    }
+  } catch (e) {
+    if (statusEl) statusEl.textContent = 'Connection error.';
+  }
+  if (btn) btn.disabled = false;
+}
+
+async function submitFeedback() {
+  const btn = document.getElementById('feedbackSubmitBtn');
+  const statusEl = document.getElementById('feedbackStatus');
+  const category = document.getElementById('feedbackCategorySelect').value;
+  const message = document.getElementById('feedbackMessageInput').value.trim();
+  const contact = document.getElementById('feedbackContactInput').value.trim();
+  if (!message) {
+    if (statusEl) { statusEl.textContent = 'Write something first.'; statusEl.style.color = 'var(--danger)'; }
+    return;
+  }
+  if (btn) btn.disabled = true;
+  if (statusEl) { statusEl.textContent = 'Sending\u2026'; statusEl.style.color = 'var(--muted)'; }
+  try {
+    const res = await fetch(ORIGIN + '/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        category: category,
+        message: message,
+        contact: contact,
+        // See feedbackCreatorAuth: name and key travel together or not at all.
+        creatorName: feedbackCreatorAuth().creatorName,
+        creatorKey: feedbackCreatorAuth().creatorKey,
+      }),
+    });
+    const data = await res.json().catch(() => null);
+    if (data && data.ok && data.entry) {
+      if (statusEl) { statusEl.textContent = 'Message sent! Connecting to chat\u2026'; statusEl.style.color = 'var(--accent)'; }
+      document.getElementById('feedbackMessageInput').value = '';
+      document.getElementById('feedbackContactInput').value = '';
+      saveUserFeedbackThreadId(data.entry.id);
+      userFeedbackThreads.unshift(data.entry);
+      activeFeedbackThreadId = data.entry.id;
+      isComposingNewFeedback = false;
+      setTimeout(() => {
+        if (statusEl) statusEl.textContent = '';
+        renderUserFeedbackThreadsUI();
+      }, 600);
+    } else {
+      if (statusEl) { statusEl.textContent = (data && data.error) || 'Could not send \u2014 try again in a moment.'; statusEl.style.color = 'var(--danger)'; }
+    }
+  } catch (e) {
+    if (statusEl) { statusEl.textContent = 'Could not send \u2014 check your connection.'; statusEl.style.color = 'var(--danger)'; }
+  }
+  if (btn) btn.disabled = false;
+}
+
+// Fire-and-forget analytics beacon feeding recordTrackedEvent server-side
+// (see its own comment) -- never awaited by callers, and wrapped so a
+// failure here can never disrupt the actual watch/list action it's riding
+// along on. keepalive lets the request finish even if the page navigates
+// away right after (e.g. right after adding something and switching tabs).
+function trackEvent(eventType, id, title, mediaType) {
+  trackEventsBatch(eventType, [{ id: id, title: title, mediaType: mediaType }]);
+}
+
+function trackEventsBatch(eventType, items) {
+  if (!items || !items.length) return;
+  try {
+    // A missing id that has already been through String() arrives here as
+    // the text "null" / "undefined" -- not a title, so not a watch to count.
+    const junkId = /^(null|undefined|nan|true|false)(:|$)/i;
+    const events = items.slice(0, 50)
+      .filter((it) => it && it.id && !junkId.test(String(it.id).trim()))
+      .map((it) => ({ eventType: eventType, id: String(it.id), title: it.title || '', mediaType: it.mediaType === 'series' ? 'series' : 'movie' }));
+    if (!events.length) return;
+    fetch(ORIGIN + '/api/track-event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ events: events }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch (e) {
+    // non-critical -- this is optional telemetry, not a real feature
+  }
+}
+
+function filterDiscoverShelves(filter, btn) {
+  try {
+    document.documentElement.removeAttribute('data-initial-discover-sub');
+  } catch (e) {}
+  window._currentDiscoverFilter = filter || 'movie';
+  try {
+    localStorage.setItem('myListAddon:discoverSubmenu', filter || 'movie');
+  } catch (e) {}
+  if (btn) {
+    document.querySelectorAll('#discoverSubnavBar .subnav-pill').forEach(function(p) {
+      p.classList.remove('active');
+      const c = p.querySelector('.check-icon');
+      if (c) c.remove();
+    });
+    btn.classList.add('active');
+    btn.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
+    try {
+      btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    } catch (e) {}
+  }
+  const shelvesContainer = document.getElementById('discoverShelvesContainer');
+  const sharedContainer = document.getElementById('discoverSubSharedFeed');
+  const feedContainer = document.getElementById('discoverListsFeed');
+  const feedHeader = document.getElementById('discoverListsFeedHeader');
+  const popularContainer = document.getElementById('discoverSubPopular');
+  const curatedContainer = document.getElementById('discoverSubCurated');
+
+  if (popularContainer) popularContainer.style.display = 'none';
+  if (curatedContainer) curatedContainer.style.display = 'none';
+  if (sharedContainer) sharedContainer.style.display = 'none';
+  if (shelvesContainer) shelvesContainer.style.display = 'none';
+  if (feedContainer) feedContainer.style.display = 'none';
+  if (feedHeader) feedHeader.style.display = 'none';
+
+  if (filter === 'popular') {
+    if (popularContainer) {
+      popularContainer.style.display = 'block';
+      if (typeof loadPopularListsFeed === 'function') loadPopularListsFeed();
+    }
+  } else if (filter === 'curated') {
+    if (curatedContainer) {
+      curatedContainer.style.display = 'block';
+      if (typeof loadCuratedListsFeed === 'function') loadCuratedListsFeed();
+    }
+  } else {
+    if (sharedContainer) sharedContainer.style.display = 'block';
+    if (feedContainer) {
+      feedContainer.style.display = 'block';
+      if (feedHeader) {
+        feedHeader.style.display = 'flex';
+        const titleEl = document.getElementById('discoverListsFeedTitle');
+        if (titleEl) titleEl.textContent = DISCOVER_FEED_TITLES[window._currentDiscoverFilter] || 'Movies';
+        const descEl = document.getElementById('discoverListsFeedDesc');
+        if (descEl) descEl.textContent = DISCOVER_FEED_DESCRIPTIONS[window._currentDiscoverFilter] || '';
+      }
+      window._discoverFeedsCache = window._discoverFeedsCache || {};
+      if (window._discoverFeedsCache[filter]) {
+        feedContainer.innerHTML = window._discoverFeedsCache[filter];
+        window._currentDiscoverRenderedFilter = filter;
+        if (feedContainer.querySelector('.poster-preview-slot') && typeof populateSearchResultPosters === 'function') {
+          populateSearchResultPosters();
+        }
+      } else if (typeof renderDiscoverChartsList === 'function') {
+        renderDiscoverChartsList(filter);
+      }
+    }
+  }
+}
+
+// Title text for discoverListsFeedHeader, above -- the six pills that share
+// discoverListsFeed (all, Movies, Shows, Hidden Gems, Kids, Holidays,
+// Genres) each need their own, matching the pill label.
+const DISCOVER_FEED_TITLES = {
+  all: 'All',
+  movie: 'Movies',
+  series: 'Shows',
+  gems: 'Hidden Gems',
+  kids: 'Kids',
+  holidays: 'Holidays',
+  genres: 'Genres',
+};
+
+const DISCOVER_FEED_DESCRIPTIONS = {
+  all: 'Explore popular charts, trending movies, TV shows, and streaming catalogs across all services.',
+  movie: 'Top charts, new releases, and popular movie collections across streaming platforms.',
+  series: 'Trending TV series, top network charts, and new episodes across streaming platforms.',
+  popular: 'Top trending and highly-rated community lists shared by creators and viewers.',
+  curated: 'Personalized recommendations and curated lists tailored to your watch history and tastes.',
+  gems: 'Under-the-radar masterpieces, cult classics, and acclaimed titles you might have missed.',
+  kids: 'Family-friendly movies, animated favorites, and entertaining shows suitable for all ages.',
+  holidays: 'Seasonal favorites, festive classics, and holiday-themed movies and episodes for every celebration.',
+  genres: 'Browse top movies and series organized by action, comedy, sci-fi, horror, and more.',
+};
+
+// Renders the chart lists for the Movies or Shows tab in Discover as list-cards
+// (matching how search results and the Lists tab look) by converting the
+// baked-in chart data tables into the same object shape render5PosterListsFeed expects.
+function renderDiscoverChartsList(type, forceRefresh) {
+  const container = document.getElementById('discoverListsFeed');
+  if (!container) return;
+  window._discoverFeedsCache = window._discoverFeedsCache || {};
+  if (forceRefresh) {
+    window._discoverFeedsCache[type] = null;
+    if (window._listPreviewCache) window._listPreviewCache.clear();
+  }
+  if (!forceRefresh && window._discoverFeedsCache[type]) {
+    container.innerHTML = window._discoverFeedsCache[type];
+    window._currentDiscoverRenderedFilter = type;
+    return;
+  }
+  if (!forceRefresh && window._currentDiscoverRenderedFilter === type && container.children.length > 0 && !container.innerText.includes('Loading')) {
+    window._discoverFeedsCache[type] = container.innerHTML;
+    return;
+  }
+  window._currentDiscoverRenderedFilter = type;
+  container.innerHTML = '<p style="color:var(--muted); font-size:0.88rem;">Loading charts\u2026</p>';
+
+  // Build list objects from all chart tables, filtered to the right type.
+  const lists = [];
+
+  // Helper: push a pair entry
+  function pushPair(name, movieUrl, showUrl, group) {
+    if ((type === 'movie' || type === 'all') && movieUrl) {
+      lists.push({ name: name, url: movieUrl, type: 'movie', user: group, likes: 0 });
+    }
+    if ((type === 'series' || type === 'all') && showUrl) {
+      lists.push({ name: name, url: showUrl, type: 'series', user: group, likes: 0 });
+    }
+  }
+  // Helper: push single-type entry
+  function pushSingle(name, url, entryType, group) {
+    if (type === entryType || type === 'all' || type === 'gems' || type === 'kids' || type === 'holidays' || type === 'genres' || type === 'curated') {
+      lists.push({ name: name, url: url, type: entryType, user: group, likes: 0 });
+    }
+  }
+
+  // Each data table is baked in at render time via the server-side template.
+  // They are exposed as window._CHARTS_* globals by 09_page-shell.js.
+
+  if (type !== 'gems' && type !== 'kids' && type !== 'holidays' && type !== 'genres' && type !== 'curated') {
+    // This add-on's own charts lead the feed -- New on Streaming and Most
+    // Watched (MY_LISTS_ADDON_CHARTS, 08_quickadd-chart-data.js).
+    if (window._CHARTS_MY_LISTS_ADDON) {
+      window._CHARTS_MY_LISTS_ADDON.forEach(function(p) { pushPair(p.name, p.movieUrl, p.showUrl, 'My Lists Addon'); });
+    }
+    if (type === 'movie' || type === 'all') {
+      pushSingle('New Releases', 'tmdb:chart:new_movies', 'movie', 'TMDB');
+    }
+    if (type === 'series' || type === 'all') {
+      pushSingle('New Releases', 'tmdb:chart:new_shows', 'series', 'TMDB');
+    }
+    if (window._CHARTS_TMDB) {
+      window._CHARTS_TMDB.forEach(function(p) {
+        if (p.name.startsWith('New Releases')) return;
+        pushPair(p.name, p.movieUrl, p.showUrl, 'TMDB');
+      });
+    }
+    if (window._CHARTS_TRAKT) {
+      window._CHARTS_TRAKT.forEach(function(p) { pushPair(p.name, p.movieUrl, p.showUrl, 'Trakt'); });
+    }
+    if (window._CHARTS_TRAKT_BO) {
+      window._CHARTS_TRAKT_BO.forEach(function(p) { pushSingle(p.name, p.url, p.type, 'Trakt'); });
+    }
+    if (window._CHARTS_MDBLIST) {
+      window._CHARTS_MDBLIST.forEach(function(p) { pushPair(p.name, p.movieUrl, p.showUrl, 'MDBList'); });
+    }
+    if (window._CHARTS_SIMKL) {
+      window._CHARTS_SIMKL.forEach(function(p) { pushPair(p.name, p.movieUrl, p.showUrl, 'Simkl'); });
+    }
+    if (window._CHARTS_SIMKL_ANIME) {
+      window._CHARTS_SIMKL_ANIME.forEach(function(p) { pushSingle(p.name, p.url, p.type, 'Simkl'); });
+    }
+    if (window._CHARTS_STREAMING_TOP10) {
+      window._CHARTS_STREAMING_TOP10.forEach(function(p) { pushPair(p.name + ' Top 10', p.movieUrl, p.showUrl, 'Streaming Top 10'); });
+    }
+    if (window._CHARTS_STREAMING_ALL) {
+      window._CHARTS_STREAMING_ALL.forEach(function(p) { pushPair(p.name, p.movieUrl, p.showUrl, 'My Lists Addon'); });
+    }
+  }
+
+  if (type === 'curated' || type === 'all') {
+    // One table, shared with the server -- see CURATED_LIST_ENTRIES above.
+    const curatedPresets = CURATED_LIST_ENTRIES.map(function(e) {
+      return { name: e.name, url: 'custom:curated:' + e.slug, type: e.type, user: 'Curated' };
+    });
+    curatedPresets.forEach(function(item) {
+      pushSingle(item.name, item.url, item.type, 'Curated');
+    });
+  }
+
+  if (type === 'gems' || type === 'all') {
+    pushSingle('Hidden Gems', 'tmdb:hidden-gems', 'movie', 'Hidden Gems');
+    pushSingle('Hidden Gems', 'tmdb:hidden-gems', 'series', 'Hidden Gems');
+    pushSingle('Curated: Hidden Gems', 'custom:curated:hidden-gems', 'movie', 'Curated');
+  }
+
+  if (type === 'kids' || type === 'all') {
+    if (window._CHARTS_KIDS) {
+      window._CHARTS_KIDS.forEach(function(item) {
+        if (item.movieUrl) pushSingle(item.name, item.movieUrl, 'movie', 'Kids');
+        if (item.showUrl) pushSingle(item.name, item.showUrl, 'series', 'Kids');
+      });
+    }
+  }
+
+  if (type === 'holidays' || type === 'all') {
+    if (window._CHARTS_HOLIDAYS) {
+      window._CHARTS_HOLIDAYS.forEach(function(item) {
+        if (item.movieUrl) pushSingle(item.name, item.movieUrl, 'movie', 'Holidays');
+        if (item.showUrl) pushSingle(item.name, item.showUrl, 'series', 'Holidays');
+      });
+    }
+  }
+
+  if (type === 'genres' || type === 'all') {
+    if (window._CHARTS_GENRES) {
+      window._CHARTS_GENRES.forEach(function(item) {
+        if (item.movieUrl) pushSingle(item.name, item.movieUrl, 'movie', 'Genres');
+        if (item.showUrl) pushSingle(item.name, item.showUrl, 'series', 'Genres');
+      });
+    }
+  }
+
+  if (typeof render5PosterListsFeed === 'function') {
+    render5PosterListsFeed(container, lists);
+    window._discoverFeedsCache[type] = container.innerHTML;
+    setTimeout(() => {
+      if (container && window._currentDiscoverRenderedFilter === type) {
+        window._discoverFeedsCache[type] = container.innerHTML;
+      }
+    }, 400);
+  } else {
+    container.innerHTML = '<p style="color:var(--muted); font-size:0.88rem;">Could not load chart lists.</p>';
+  }
+}
+
+function switchCatalogsSubmenu(filter, btn) {
+  if (filter === 'channels') {
+    switchTab('channels');
+    return;
+  }
+  try {
+    document.documentElement.removeAttribute('data-initial-catalogs-sub');
+  } catch (e) {}
+  window._currentCatalogsSubmenu = filter || 'all';
+  try {
+    localStorage.setItem('myListAddon:catalogsSubmenu', filter || 'all');
+  } catch (e) {}
+  const hash = location.hash || '';
+  const isDetailUrl = hash.startsWith('#/item?') || hash.startsWith('#/list?') || (location.pathname.startsWith('/lists/') && location.pathname !== '/lists');
+  if (!isDetailUrl) {
+    try {
+      history.replaceState({ view: 'tab', tab: 'catalogs', fromCatalogsSubmenu: filter || 'all' }, '', '/');
+    } catch (e) {}
+  }
+  if (!btn) {
+    const selector = filter === 'quickadd' ? '#catalogsFilterBar button:nth-child(2)' : (filter === 'bulk' ? '#catalogsFilterBar button:nth-child(3)' : '#catalogsFilterBar button:nth-child(1)');
+    btn = document.querySelector(selector);
+  }
+  if (btn) {
+    document.querySelectorAll('#catalogsFilterBar .subnav-pill').forEach(function(p) {
+      p.classList.remove('active');
+      const c = p.querySelector('.check-icon');
+      if (c) c.remove();
+    });
+    btn.classList.add('active');
+    btn.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
+  }
+
+  const panels = {
+    'all': document.getElementById('catalogsSubShelves'),
+    'quickadd': document.getElementById('catalogsSubQuickAdd'),
+    'bulk': document.getElementById('catalogsSubBulk')
+  };
+
+  for (const key in panels) {
+    if (panels[key]) {
+      panels[key].style.display = (key === filter) ? 'block' : 'none';
+    }
+  }
+
+  const undoToast = document.getElementById('undoToast');
+  const resultDiv = document.getElementById('result');
+  if (filter !== 'all') {
+    if (undoToast) undoToast.style.display = 'none';
+    if (resultDiv) resultDiv.style.display = 'none';
+  } else {
+    // Make sure all list rows are visible since we no longer have row-level filters
+    document.querySelectorAll('#lists .entry').forEach(function(e) {
+      e.style.display = '';
+    });
+  }
+}
+
+function setListSearchChip(filter, btn) {
+  if (btn) {
+    document.querySelectorAll('#listSearchTypeChips .subnav-pill').forEach(function(p) {
+      p.classList.remove('active');
+      const c = p.querySelector('.check-icon');
+      if (c) c.remove();
+    });
+    btn.classList.add('active');
+    btn.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
+  }
+  const resultContainer = document.getElementById('listSearchResult');
+  if (resultContainer) {
+    resultContainer.setAttribute('data-type-filter', filter);
+  }
+  const cards = document.querySelectorAll('#listSearchResult .list-card');
+  cards.forEach(function(card) {
+    const cardType = card.getAttribute('data-list-type') || '';
+    if (filter === 'all') {
+      card.style.display = '';
+    } else if (filter === 'movie') {
+      card.style.display = (cardType === 'movie' || cardType === 'mixed') ? '' : 'none';
+    } else if (filter === 'series') {
+      card.style.display = (cardType === 'series' || cardType === 'mixed') ? '' : 'none';
+    } else if (filter === 'lists') {
+      card.style.display = '';
+    }
+  });
+}
+
+// Kept as a no-op (not removed) -- the poster-click handler in
+// 19_client-search-and-likes.js still calls this defensively before every
+// item-details open, and detailOverlay itself no longer exists (it's the
+// list-details tab panel now, see 09_page-shell.js and
+// openListDetailsPage in 23_client-list-management.js, which switchTab
+// already hides/shows the normal way). Safer to leave this as a harmless
+// no-op than to hunt down and remove every defensive call site.
+function closeDetailOverlay() {}
+
+
+// Renders one source URL row. A "merged" entry (multiple sources feeding
+// one shelf) has several of these inside its .sources container; a normal
+// entry has exactly one. Kept as its own function so addSourceRow can also
+// generate one when the person clicks "+ Add another source".
+function sourceRowHtml(u, readonly) {
+  if (readonly) {
+    return '<div class="source-row">' +
+      '<div class="row field-row">' +
+      '<input type="text" class="url" value="mdblist:watchlist" readonly style="opacity:0.75;">' +
+      '</div>' +
+      '<div class="testrow">' +
+      '<button type="button" class="btn-test secondary" onclick="testSourceRow(this)">Test</button>' +
+      '<div class="testresult"></div>' +
+      '</div>' +
+      '</div>';
+  }
+  return '<div class="source-row">' +
+    '<div class="row field-row">' +
+    '<input type="text" placeholder="mdblist.com, trakt.tv, or themoviedb.org list URL" class="url" value="' + escapeAttr(u) + '" oninput="checkDuplicateUrl(this)">' +
+    '<button type="button" class="movebtn removebtn remove-source-btn" aria-label="Remove this source" onclick="removeSourceRow(this)" style="display:none;">\u2715</button>' +
+    '</div>' +
+    '<small class="dup-warning" style="display:none;">\u26a0 Already added elsewhere in this list.</small>' +
+    '<div class="testrow">' +
+    '<button type="button" class="btn-test secondary" onclick="testSourceRow(this)">Test</button>' +
+    '<div class="testresult"></div>' +
+    '</div>' +
+    '</div>';
+}
+
+// Shared with editChannel below -- client-side twin of the server's
+// parseChannelPayload, since the builder page needs to read a channel's
+// payload back out too (to render its summary, and now to load it back
+// into the picker for editing).
+function parseChannelPayloadClient(u) {
+  try {
+    const raw = String(u || '').trim();
+    if (!raw.startsWith('channel:v1:')) return null;
+    const data = JSON.parse(raw.slice('channel:v1:'.length));
+    return data && Array.isArray(data.items) ? data : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function channelSourceRowHtml(u) {
+  let summary = 'Custom Channel';
+  const payload = parseChannelPayloadClient(u);
+  if (payload) {
+    const items = payload.items || [];
+    const epCount = items.filter((it) => it.kind === 'episode').length;
+    const movieCount = items.filter((it) => it.kind === 'movie').length;
+    const parts = [];
+    if (epCount) parts.push(epCount + ' episode' + (epCount === 1 ? '' : 's'));
+    if (movieCount) parts.push(movieCount + ' movie' + (movieCount === 1 ? '' : 's'));
+    summary = items.length + ' pick' + (items.length === 1 ? '' : 's') + (parts.length ? ' (' + parts.join(', ') + ')' : '');
+    if (payload.dailyRotate) {
+      summary = items.length + '-episode pool \u2014 shows ' + CHANNEL_ROTATION_SHOWS_PER_DAY + ' shows \u00d7 ' +
+        CHANNEL_ROTATION_EPISODES_PER_SHOW + ' episodes each, refreshed daily';
+      const rotatedOrder = channelPlayOrderLabel(payload);
+      if (rotatedOrder && rotatedOrder !== 'shuffled daily') summary += ', ' + rotatedOrder;
+    } else {
+      const order = channelPlayOrderLabel(payload);
+      if (order) summary += ' \u2014 ' + order;
+    }
+  }
+  return '<div class="source-row">' +
+    '<p style="margin:0;"><small>' + escapeHtml(summary) + ' \u2014 built with the Channels panel above.</small> ' +
+    '<button type="button" class="secondary channelEditBtn" style="padding:4px 10px; min-height:unset;" onclick="editChannel(this)">Edit</button></p>' +
+    '<input type="hidden" class="url" value="' + escapeAttr(u) + '">' +
+    '</div>';
+}
+
+// Custom Lists don't need the channelId/name-embedding machinery Channels
+// do -- each pick is already its own real, independently resolvable movie
+// or show (see fetchCustomListCatalog), so there's no synthetic identity
+// to keep stable across a merge the way a Channel's is; the ordinary
+// merge-into-one-shelf mechanism every other list type uses works fine
+// here unmodified.
+function parseCustomListPayloadClient(u) {
+  try {
+    const raw = String(u || '').trim();
+    if (!raw.startsWith('customlist:v1:')) return null;
+    const data = JSON.parse(raw.slice('customlist:v1:'.length));
+    if (!data || !Array.isArray(data.items)) return null;
+    if (data.type && data.type !== 'movie' && data.type !== 'series' && data.type !== 'mixed') return null;
+    return data;
+  } catch (e) {
+    return null;
+  }
+}
+
+function findCustomListBySlugOrName(slug, name) {
+  if (!slug && !name) return null;
+  const sLower = String(slug || '').toLowerCase().trim();
+  const nLower = String(name || '').toLowerCase().trim();
+  const slugifiedName = (typeof slugify === 'function' && name) ? slugify(name).toLowerCase() : '';
+  const deslugified = (typeof deslugify === 'function' && slug) ? deslugify(slug).toLowerCase() : '';
+
+  function matches(l) {
+    if (!l) return false;
+    const lSlug = String(l.slug || l.localSlug || l.creatorSlug || l.listSlug || '').toLowerCase();
+    const lName = String(l.name || '').toLowerCase();
+    const lNameSlug = (typeof slugify === 'function' && l.name) ? slugify(l.name).toLowerCase() : '';
+    if (sLower && (lSlug === sLower || lName === sLower || lNameSlug === sLower || (deslugified && lName === deslugified))) return true;
+    if (nLower && (lName === nLower || lSlug === nLower || lNameSlug === nLower || (slugifiedName && (lSlug === slugifiedName || lNameSlug === slugifiedName)))) return true;
+    return false;
+  }
+
+  // 1. Check loadLocalCustomLists()
+  try {
+    const map = (typeof loadLocalCustomLists === 'function') ? loadLocalCustomLists() : {};
+    if (sLower && map[sLower]) return map[sLower];
+    const found = Object.values(map).find(matches);
+    if (found) return found;
+  } catch (e) {}
+
+  // 2. Check DOM entries (#lists .entry)
+  try {
+    const entries = document.querySelectorAll('#lists .entry');
+    for (const entry of entries) {
+      const urlInput = entry.querySelector('.url');
+      if (!urlInput || !urlInput.value) continue;
+      const payload = (typeof parseCustomListPayloadClient === 'function') ? parseCustomListPayloadClient(urlInput.value) : null;
+      if (payload && matches(payload)) return payload;
+    }
+  } catch (e) {}
+
+  // 3. Check lastCreatorListsData
+  if (typeof lastCreatorListsData !== 'undefined' && Array.isArray(lastCreatorListsData)) {
+    const found = lastCreatorListsData.find(matches);
+    if (found) return found;
+  }
+
+  // 4. Check lastLocalCustomListsData
+  if (typeof lastLocalCustomListsData !== 'undefined' && Array.isArray(lastLocalCustomListsData)) {
+    const found = lastLocalCustomListsData.find(matches);
+    if (found) return found;
+  }
+
+  // 5. Check livePreviewShelfData
+  if (typeof livePreviewShelfData !== 'undefined' && Array.isArray(livePreviewShelfData)) {
+    const shelf = livePreviewShelfData.find(s => s && matches(s));
+    if (shelf && Array.isArray(shelf.sample) && shelf.sample.length) {
+      return { name: shelf.name, type: shelf.type, items: shelf.sample, slug: slug || shelf.slug };
+    }
+  }
+
+  return null;
+}
+
+function customListSourceRowHtml(u) {
+  let summary = 'Custom List';
+  const payload = parseCustomListPayloadClient(u);
+  let publishedLinkHtml = '';
+  if (payload) {
+    const items = payload.items || [];
+    const label = payload.type === 'movie' ? 'movie' : 'show';
+    summary = items.length + ' ' + label + (items.length === 1 ? '' : 's');
+    if (payload.shuffle) summary += ' \u2014 shuffled daily';
+    if (payload.publishedUrl) {
+      publishedLinkHtml = '<p style="margin:6px 0 0;"><small>Shared at: <a href="' + escapeAttr(payload.publishedUrl) + '" target="_blank" style="color:var(--accent-2); word-break:break-all;">' + escapeHtml(payload.publishedUrl) + '</a></small></p>';
+    }
+  }
+  return '<div class="source-row">' +
+    '<p style="margin:0;"><small>' + escapeHtml(summary) + ' \u2014 built with the Custom List panel above.</small> ' +
+    '<button type="button" class="secondary customListEditBtn" style="padding:4px 10px; min-height:unset;" onclick="editCustomList(this)">Edit</button> ' +
+    '<button type="button" class="secondary customListShareBtn" style="padding:4px 10px; min-height:unset;" onclick="startSaveListFlow(this)">Save List</button></p>' +
+    publishedLinkHtml +
+    '<input type="hidden" class="url" value="' + escapeAttr(u) + '">' +
+    '</div>';
+}
+
+function syncCustomListToCatalogRows(slug, items, name, type) {
+  if (!slug || !Array.isArray(items)) return;
+  let updatedAny = false;
+
+  document.querySelectorAll('#lists .entry').forEach((entry) => {
+    const sourceRows = entry.querySelectorAll('.source-row');
+    sourceRows.forEach((sourceRow) => {
+      const urlInput = sourceRow.querySelector('.url');
+      if (!urlInput || !urlInput.value.startsWith('customlist:v1:')) return;
+      try {
+        const payload = JSON.parse(urlInput.value.slice('customlist:v1:'.length));
+        const matchesSlug = payload.localSlug === slug || payload.listSlug === slug || payload.creatorSlug === slug || payload.slug === slug || (slug && payload.listId === slug);
+        if (!matchesSlug) return;
+
+        const shelfType = payload.type || type || 'movie';
+        let shelfItems = items;
+        if (shelfType === 'movie' && (type === 'mixed' || !type || items.some((it) => it && (it.kind === 'series' || it.type === 'series' || it.type === 'tv' || it.showId)))) {
+          shelfItems = items.filter((it) => it && (it.kind === 'movie' || it.type === 'movie' || (!it.kind && !it.type && !it.showId)));
+        } else if (shelfType === 'series' && (type === 'mixed' || !type || items.some((it) => it && (it.kind === 'movie' || it.type === 'movie')))) {
+          shelfItems = items.filter((it) => it && (it.kind === 'series' || it.type === 'series' || it.type === 'tv' || it.showId));
+        }
+
+        payload.items = shelfItems;
+        if (name && payload.name) payload.name = name;
+
+        const newUrl = 'customlist:v1:' + JSON.stringify(payload);
+        if (typeof customListSourceRowHtml === 'function') {
+          const temp = document.createElement('div');
+          temp.innerHTML = customListSourceRowHtml(newUrl);
+          if (temp.firstElementChild) {
+            sourceRow.replaceWith(temp.firstElementChild);
+          } else {
+            urlInput.value = newUrl;
+          }
+        } else {
+          urlInput.value = newUrl;
+        }
+
+        if (name && entry.querySelectorAll('.url').length === 1) {
+          const rowNameInput = entry.querySelector('.name');
+          if (rowNameInput) {
+            const isMixed = type === 'mixed' || (!type && items.some((it) => it && (it.kind === 'series' || it.type === 'series' || it.type === 'tv' || it.showId)) && items.some((it) => it && (it.kind === 'movie' || it.type === 'movie' || (!it.kind && !it.type && !it.showId))));
+            if (isMixed) {
+              if (payload.type === 'movie' && !name.toLowerCase().includes('(movies)')) {
+                rowNameInput.value = name + ' (Movies)';
+              } else if (payload.type === 'series' && !name.toLowerCase().includes('(shows)')) {
+                rowNameInput.value = name + ' (Shows)';
+              } else {
+                rowNameInput.value = name;
+              }
+            } else {
+              rowNameInput.value = name;
+            }
+          }
+        }
+
+        updatedAny = true;
+      } catch (e) {}
+    });
+  });
+
+  if (updatedAny) {
+    if (typeof saveState === 'function') saveState();
+    if (typeof renderLivePreview === 'function') renderLivePreview();
+  }
+}
+
+// A short, stable random id for a Channel row -- generated once when the
+// channel is first saved (see saveChannel), then carried forward as-is on
+// every reload/restore (see the addRow(..., e.id) calls below) rather than
+// being re-derived from content. Channels used to fall through to the
+// generic slugify(url)-based id like every other row, but a channel's
+// "url" is its whole JSON payload -- slugifying that just truncates to the
+// poster URL's prefix, producing a meaningless (and collision-prone) id.
+function generateChannelId() {
+  const rand = Math.random().toString(36).slice(2, 10);
+  const time = Date.now().toString(36).slice(-4);
+  return 'ch' + rand + time;
+}
+
+// Maps a list group/name string to one of 8 accent colours for the avatar dot.
+function entryAvatarColor(s) {
+  var palette = ['#007AFF','#FF9500','#34C759','#FF3B30','#AF52DE','#5856D6','#00C7BE','#FF6B35'];
+  var h = 0;
+  var str = s || '';
+  for (var i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) & 0xffff;
+  return palette[h % palette.length];
+}
+
+function openAddShelfModal() {
+  document.getElementById('addShelfModalName').value = '';
+  document.getElementById('addShelfModalLinksContainer').innerHTML = 
+    '<div class="add-shelf-link-row" style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">' +
+      '<input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd)" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" oninput="onAddShelfModalLinkInput(this); validateAddShelfModal()">' +
+    '</div>';
+  document.getElementById('addShelfModalType').value = 'movie';
+  validateAddShelfModal();
+  document.getElementById('addShelfModal').style.display = 'flex';
+  document.getElementById('addShelfModalName').focus();
+}
+
+function addShelfModalAddLink() {
+  const container = document.getElementById('addShelfModalLinksContainer');
+  const div = document.createElement('div');
+  div.className = 'add-shelf-link-row';
+  div.style.display = 'flex';
+  div.style.alignItems = 'center';
+  div.style.gap = '8px';
+  div.style.marginBottom = '12px';
+  div.innerHTML = 
+    '<input type="url" class="addShelfModalLinkInput" placeholder="Additional URL" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" oninput="onAddShelfModalLinkInput(this); validateAddShelfModal()">' +
+    '<button type="button" class="lc-btn secondary" aria-label="Remove this URL" style="padding: 12px;" onclick="this.closest(&quot;.add-shelf-link-row&quot;).remove(); validateAddShelfModal()">\u2715</button>';
+  container.appendChild(div);
+  validateAddShelfModal();
+}
+
+function validateAddShelfModal() {
+  const name = document.getElementById('addShelfModalName').value.trim();
+  const links = Array.from(document.querySelectorAll('.addShelfModalLinkInput')).map(el => el.value.trim()).filter(Boolean);
+  const btn = document.getElementById('addShelfModalBtn');
+  if (name && links.length > 0) {
+    btn.disabled = false;
+    btn.style.opacity = '1';
+  } else {
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+  }
+}
+
+function onAddShelfModalLinkInput(inputEl) {
+  const link = inputEl.value.trim().toLowerCase();
+  const typeSelect = document.getElementById('addShelfModalType');
+  // Only auto-switch type if it's the first input or type is currently 'movie' and we detect a show
+  if (link.includes('type=show') || link.includes('shows') || link.includes('series') || link.includes('tv')) {
+    typeSelect.value = 'series';
+  } else if (link.includes('movie') && typeSelect.value === 'series' && document.querySelectorAll('.addShelfModalLinkInput').length === 1) {
+    typeSelect.value = 'movie';
+  }
+}
+
+function submitAddShelfModal() {
+  const name = document.getElementById('addShelfModalName').value.trim();
+  const links = Array.from(document.querySelectorAll('.addShelfModalLinkInput')).map(el => el.value.trim()).filter(Boolean);
+  const type = document.getElementById('addShelfModalType').value;
+  if (!name || links.length === 0) return;
+  
+  if (links.length === 1) {
+    addRow(name, links[0], type, true, 'Custom');
+  } else {
+    addCombinedRow(name, links, type, 'Custom');
+  }
+  
+  document.getElementById('addShelfModal').style.display = 'none';
+  saveState();
+}
+
+function addRow(name, url, type, enabled, group, channelId) {
+  // Signed out, only the site's public lists (D-8, above). Every add path in
+  // the builder ends here, so this is the one check that cannot be missed.
+  if (!rowRestoreDepth && !isSignedIn()) {
+    const needs = rowNeedsAccount(url);
+    if (needs) {
+      requireSignedInFor('add ' + needs);
+      return null;
+    }
+  }
+  if (enabled === undefined) enabled = true;
+  const isCuratedRec = String(url || '').startsWith('custom:curated:recommended');
+  if (isCuratedRec && (name === 'Recommended Movies' || name === 'Recommended Shows' || !name || name === 'Curated List')) {
+    name = 'Recommended';
+  }
+  // A row whose own name is itself the pasted URL (typed into both the
+  // name and URL fields, however that happened) makes both the Live
+  // Preview shelf title and its See All page show the raw URL instead of
+  // a real name -- and on mobile, a long unbroken URL can force the See
+  // All header's like/+Add buttons off the edge of the screen (that pair
+  // sits in the same flex row as the title, pushed along with it -- see
+  // #detailTitle's own comment in 09_page-shell.js). Falls back to the
+  // same humanized name guessNameFromUrl already derives everywhere else
+  // a name isn't explicitly given (Bulk Import, "Import list from a
+  // link", ...), so a URL-shaped name never reaches the DOM at all.
+  if (name && typeof guessNameFromUrl === 'function' && new RegExp('^https?://', 'i').test(String(name).trim())) {
+    name = guessNameFromUrl(name);
+  }
+  const container = document.getElementById('lists');
+  const div = document.createElement('div');
+  div.className = 'entry';
+  div.dataset.group = group || 'Custom';
+  const isWatchlist = url === 'mdblist:watchlist';
+  const isChannel = String(url || '').startsWith('channel:v1:');
+  const isCustomList = String(url || '').startsWith('customlist:v1:');
+  const isPremade = (
+    String(url || '').startsWith('tmdb:chart:') ||
+    String(url || '').startsWith('tmdb:') ||
+    String(url || '').startsWith('autotrack:') ||
+    String(url || '').startsWith('custom:curated:') ||
+    (group && group !== 'Custom' && group !== 'Custom Lists' && !isChannel && !isCustomList)
+  );
+  
+  if (isPremade) {
+    div.classList.add('premade-shelf');
+  }
+  
+  if (isChannel) {
+    if (channelId && String(channelId).startsWith('merged-')) {
+      div.dataset.mergedId = channelId;
+    }
+    div.dataset.channelId = channelId || generateChannelId();
+  }
+  const urlList = isWatchlist
+    ? ['mdblist:watchlist']
+    : String(url || '').split('\\n').map((s) => s.trim()).filter(Boolean);
+  const rowsHtml = isChannel
+    ? urlList.map((u) => channelSourceRowHtml(u)).join('')
+    : isCustomList
+      ? urlList.map((u) => customListSourceRowHtml(u)).join('')
+      : (urlList.length ? urlList : ['']).map((u) => sourceRowHtml(u, isWatchlist)).join('');
+
+  // Avatar: first letter of name (or group), coloured by group
+  // String(...) rather than .trim() straight off the value: every other read
+  // in this function coerces (String(url || ''), String(name).trim() above,
+  // String(channelId)) and this one did not. A backup entry whose name is a
+  // JSON number -- a list literally called 2024, which is what a hand-edited
+  // or third-party-generated file produces -- threw
+  // "(name || group || 'L').trim is not a function" here, and the throw
+  // escaped applyImportedConfig and the click handler uncaught: the rows
+  // already cleared stayed cleared, the remaining entries were never added,
+  // and no report modal ever rendered. The restore silently ate the config
+  // it was restoring.
+  const avatarLetter = escapeHtml((String(name || group || 'L').trim()[0] || 'L'));
+  const avatarBg = entryAvatarColor(group || name || '');
+
+  div.innerHTML =
+    '<div class="entry-card-top" style="flex-direction: column;">' +
+      '<div class="entry-ctrl-row" style="width: 100%; justify-content: flex-start; margin-bottom: 2px;">' +
+        '<div class="entry-pos-wrap" style="display:flex; align-items:center;">' +
+          '<input type="number" class="pos" min="1" title="Type a position number to move this list there" onchange="movePosTo(this)">' +
+        '</div>' +
+        '<span class="drag-handle ec-btn" title="Drag to reorder" style="cursor:grab; font-size:1rem;">&#9776;</span>' +
+        '<button type="button" class="ec-btn movebtn secondary" onclick="moveRow(this, -1)" title="Move up">&#8593;</button>' +
+        '<button type="button" class="ec-btn movebtn secondary" onclick="moveRow(this, 1)" title="Move down">&#8595;</button>' +
+        ((isCustomList || isChannel) ? ('<button type="button" class="ec-btn secondary" style="margin-left: auto; margin-right: 6px; font-weight:600; padding: 2px 10px;" onclick="' + (isCustomList ? 'editEntryCustomList(this)' : 'editEntryChannel(this)') + '">Edit</button>') : '') +
+        '<button type="button" class="ec-btn movebtn removebtn danger" onclick="removeEntryWithUndo(this)" title="Remove this list" aria-label="Remove this list" style="' + (!(isCustomList || isChannel) ? 'margin-left: auto;' : '') + '">' +
+          '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none;">' +
+            '<polyline points="3 6 5 6 21 6"></polyline>' +
+            '<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>' +
+            '<path d="M10 11v6"></path><path d="M14 11v6"></path>' +
+            '<path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>' +
+          '</svg>' +
+        '</button>' +
+      '</div>' +
+      '<div style="display: flex; gap: 8px; width: 100%; align-items: center;">' +
+        '<div class="entry-card-body" style="flex-direction: row; gap: 10px; align-items: center; width: 100%;">' +
+          '<div class="entry-name-row" style="flex: 1;">' +
+            '<input type="text" placeholder="Name (e.g. Trending Movies)" class="name" value="' + escapeAttr(name || '') + '">' +
+          '</div>' +
+          '<div class="entry-type-row" style="width: auto;">' +
+            '<select class="type" aria-label="Catalog type" ' + ((isChannel || isCustomList) ? 'disabled title="Type is fixed for this list kind"' : '') + '>' +
+              '<option value="movie" ' + ((type === 'movie' || (isCustomList && type === 'movie')) ? 'selected' : '') + '>Movies</option>' +
+              '<option value="series" ' + ((type === 'series' || isChannel || (isCustomList && type === 'series')) ? 'selected' : '') + '>Shows</option>' +
+            '</select>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="sources">' + rowsHtml + '</div>' +
+    (isWatchlist
+      ? '<p class="watchlist-note"><small>Uses the MDBList API key from Settings.</small></p>'
+      : (isChannel || isCustomList || isPremade)
+        ? ''
+        : '<button type="button" class="secondary add-source-btn" onclick="addSourceRow(this)">+ Add another source (merge into one catalog)</button>') +
+    '<div class="live-preview-shelf" style="padding:0; margin:0; border:none; background:transparent;"><div class="live-preview-shelf-title"><span class="shelf-drag-handle" title="Drag to reorder catalog">&#x2630;</span><span class="shelf-title-text">' + escapeHtml(name || 'Unnamed') + ' - ' + (type === 'series' ? 'Series' : 'Movies') + '</span><span class="live-preview-shelf-status"></span><button type="button" class="text-action-btn" disabled>See All &rsaquo;</button></div><div class="live-preview-posters"><p style="color:var(--muted); font-size:0.88rem; text-align:center; padding: 20px;"><small>Click "Refresh Preview" above to load posters.</small></p></div></div>';
+  container.appendChild(div);
+  updateSourceRemoveButtons(div);
+  relocateAddSourceBtn(div);
+  initTouchDrag(div.querySelector('.drag-handle'));
+  initTouchDrag(div.querySelector('.shelf-drag-handle'));
+  checkAllDuplicateUrls();
+  renumber();
+  if (!suppressSave) {
+    showAddedToast('"' + (name || 'Catalog') + '" added to My Catalogs \u2713');
+  }
+  return div;
+}
+
+
+// Combined Charts quick-adds pass an array of sources instead of one URL --
+// this joins them the same newline-separated way a manually merged row's
+// sources end up joined (see collectEntries/addSourceRow), then hands off
+// to the regular addRow() so it's just an ordinary multi-source row from
+// here on, editable/removable a source at a time like any other.
+function addCombinedRow(name, urls, type, group) {
+  addRow(name, urls.join('\\n'), type, true, group);
+}
+
+${buildAddAllFnJs("addAllMdblistCharts", buildAddAllPairsCallsJs(MDBLIST_OFFICIAL_CHARTS, "MDBList Charts", ""))}
+
+${buildAddAllFnJs("addAllTmdbCharts", buildAddAllPairsCallsJs(TMDB_CHART_LISTS, "TMDB Charts", ""))}
+
+${buildAddAllFnJs("addAllTraktCharts", buildAddAllPairsCallsJs(TRAKT_CHART_LISTS, "Trakt Charts", "") + "\n" + buildAddAllSimpleCallsJs(TRAKT_BOXOFFICE_LIST, "Trakt Charts"))}
+
+${buildAddAllFnJs("addAllSimklCharts", buildAddAllPairsCallsJs(SIMKL_CHART_LISTS, "Simkl Charts", "") + "\n" + buildAddAllSimpleCallsJs(SIMKL_ANIME_LIST, "Simkl Charts"))}
+
+${buildAddAllFnJs("addAllStreaming", buildAddAllPairsCallsJs(STREAMING_ALL, "Streaming", ""))}
+
+${buildAddAllFnJs("addAllStreamingTop10", buildAddAllPairsCallsJs(STREAMING_TOP10, "Streaming Top 10", "Top 10"))}
+
+// Generates the client-side addAllCombinedCharts() function body straight
+// from COMBINED_CHART_LISTS -- the individual "+ Movies"/"+ Shows"
+// buttons on each row already get their (baked-in, hand-copy-free) source
+// arrays this same way via jsStringArrayLiteral (see buildCombinedChartsHtml
+// above). "Add all" used to be a second, hand-maintained copy of this same
+// data that referenced STREAMING_TOP10/STREAMING_ALL directly -- both of
+// which are server-side-only constants with no client-side equivalent, so
+// clicking "Add all" threw a ReferenceError partway through (right after
+// the hardcoded Popular/Trending/Streaming-Top-10-movies entries, which
+// happened to not need those variables) and silently never added Streaming
+// Top 10 Shows or Streaming (All Services) at all. Generating this
+// function from the same single source of truth as the per-row buttons
+// fixes that and makes a repeat impossible.
+${buildAddAllCombinedChartsJs()}
+
+${buildAddAllFnJs("addAllKidsCharts", buildAddAllPairsCallsJs(KIDS_LISTS, "Kids", ""))}
+${buildAddAllFnJs("addAllHolidayCharts", buildAddAllPairsCallsJs(HOLIDAY_LISTS, "Holidays", ""))}
+${buildAddAllFnJs("addAllGenreCharts", buildAddAllPairsCallsJs(GENRE_LISTS, "Genres", ""))}
+${buildAddAllFnJs("addAllMyListsAddonCharts", buildAddAllPairsCallsJs(MY_LISTS_ADDON_CHARTS, "My Lists Addon Charts", ""))}
+
+function addAllHiddenGems() {
+  addRow("Hidden Gems", "tmdb:hidden-gems", "movie", true, "Hidden Gems");
+  addRow("Hidden Gems", "tmdb:hidden-gems", "series", true, "Hidden Gems");
+  saveState();
+}
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-add-all-action]');
+  if (!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const action = btn.getAttribute('data-add-all-action');
+  if (action === 'mdblist-charts') addAllMdblistCharts();
+  else if (action === 'tmdb-charts') addAllTmdbCharts();
+  else if (action === 'trakt-charts') addAllTraktCharts();
+  else if (action === 'simkl-charts') addAllSimklCharts();
+  else if (action === 'streaming' || action === 'streaming-catalogs') addAllStreaming();
+  else if (action === 'streaming-top10') addAllStreamingTop10();
+  else if (action === 'combined-charts') addAllCombinedCharts();
+  else if (action === 'hidden-gems') addAllHiddenGems();
+  else if (action === 'kids') addAllKidsCharts();
+  else if (action === 'holidays') addAllHolidayCharts();
+  else if (action === 'genres') addAllGenreCharts();
+  else if (action === 'mylists-charts') addAllMyListsAddonCharts();
+});
+
+// Adds a blank source row to an existing entry -- this is how a normal
+// single-source row becomes a "merged" one: the server dedupes by IMDB id
+// across whatever sources end up here (see fetchMergedCatalog).
+function addSourceRow(btn) {
+  const entry = btn.closest('.entry');
+  const sources = entry.querySelector('.sources');
+  const wrap = document.createElement('div');
+  wrap.innerHTML = sourceRowHtml('', false);
+  sources.appendChild(wrap.firstElementChild);
+  updateSourceRemoveButtons(entry);
+  relocateAddSourceBtn(entry);
+  saveState();
+}
+
+function removeSourceRow(btn) {
+  const entry = btn.closest('.entry');
+  btn.closest('.source-row').remove();
+  updateSourceRemoveButtons(entry);
+  relocateAddSourceBtn(entry);
+  checkAllDuplicateUrls();
+  saveState();
+}
+
+// The per-source "remove" (\u2715) button only makes sense once an entry has
+// more than one source -- hide it on a lone source so people aren't tempted
+// to remove their only URL from here instead of using "Remove" on the
+// whole row.
+function updateSourceRemoveButtons(entry) {
+  const rows = entry.querySelectorAll('.source-row');
+  rows.forEach((row) => {
+    const btn = row.querySelector('.remove-source-btn');
+    if (btn) btn.style.display = rows.length > 1 ? '' : 'none';
+  });
+}
+
+// "+ Add another source" is rendered once per entry (there's only ever one,
+// regardless of how many source rows exist), while Test is rendered once
+// per source row inside .testrow -- moving the single add-source button
+// into the last row's .testrow puts them in the same flex container so
+// they sit on one line together (wrapping only if the combined text
+// genuinely can't fit), instead of the button rendering as its own
+// separate block below the whole .sources stack. Re-run after every
+// add/remove of a source row, since "the last row" changes each time.
+function relocateAddSourceBtn(entry) {
+  const btn = entry.querySelector('.add-source-btn');
+  if (!btn) return; // watchlist/channel/customlist rows don't have one
+  const testrows = entry.querySelectorAll('.sources .testrow');
+  const lastTestrow = testrows[testrows.length - 1];
+  if (!lastTestrow) return;
+  const testresult = lastTestrow.querySelector('.testresult');
+  if (testresult) lastTestrow.insertBefore(btn, testresult);
+  else lastTestrow.appendChild(btn);
+}
+
+// Warns (doesn't block) when the same URL has been pasted into more than
+// one source field anywhere in the builder -- catches an accidental double
+// add, whether within one merged entry or across two separate rows.
+function checkDuplicateUrl(input) {
+  const val = input.value.trim();
+  const row = input.closest('.source-row');
+  const warn = row ? row.querySelector('.dup-warning') : null;
+  if (!warn) return;
+  if (!val || val === 'mdblist:watchlist') { warn.style.display = 'none'; return; }
+  const all = [...document.querySelectorAll('#lists .url')];
+  const dupCount = all.filter((el) => el.value.trim() === val).length;
+  warn.style.display = dupCount > 1 ? '' : 'none';
+}
+
+function checkAllDuplicateUrls() {
+  document.querySelectorAll('#lists .url').forEach((el) => checkDuplicateUrl(el));
+}
+
+function editEntryCustomList(btn) {
+  const row = btn.closest('.entry');
+  if (!row) return;
+  const urlInput = row.querySelector('.sources .url');
+  if (urlInput) {
+    if (typeof editCustomList === 'function') {
+      editCustomList(urlInput); // editCustomList in 21_client-custom-list-builder.js uses btn.closest('.source-row'), so we pass an element inside .source-row
+    }
+  }
+}
+
+function editEntryChannel(btn) {
+  const row = btn.closest('.entry');
+  if (!row) return;
+  const urlInput = row.querySelector('.sources .url');
+  if (urlInput) {
+    if (typeof editChannel === 'function') {
+      editChannel(urlInput); // editChannel in 20_client-channel-builder.js uses btn.closest('.source-row')
+    }
+  }
+}
+
+// Enables mouse wheel horizontal scrolling on .subnav-pills-bar and horizontal scrolling bars
+document.addEventListener('wheel', (e) => {
+  const bar = e.target.closest('.subnav-pills-bar, .tab-bar, .provider-chips-bar');
+  if (!bar) return;
+  if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+    if ((e.deltaY > 0 && bar.scrollLeft + bar.clientWidth < bar.scrollWidth) || (e.deltaY < 0 && bar.scrollLeft > 0)) {
+      e.preventDefault();
+      bar.scrollLeft += e.deltaY;
+    }
+  }
+}, { passive: false });
+
+

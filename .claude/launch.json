@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mylists-harness",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["audit/frontend-2026-09-13/server.mjs"],
+      "port": 8787
+    }
+  ]
+}
