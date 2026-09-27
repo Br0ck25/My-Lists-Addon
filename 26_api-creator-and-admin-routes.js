@@ -2104,6 +2104,10 @@
         creatorName: auth.username,
         displayName: auth.displayName,
         hasRecoveryAnswer: Boolean(auth.hasRecoveryAnswer),
+        // Whether this browser now holds a session for the account (FF_SESSIONS).
+        // The page offers its locally held provider tokens to
+        // /api/connections/import-local only when it does (P3a-9).
+        session: Boolean(request.session && request.account && String(request.account.username || "").toLowerCase() === String(auth.username || "").toLowerCase()),
       });
     }
 

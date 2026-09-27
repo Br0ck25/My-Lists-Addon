@@ -62,6 +62,7 @@ function isPrivateApiPath(path) {
   if (p === "/api/resolve") return true;
   if (p === "/api/session" || p === "/api/me" || p.startsWith("/api/me/")) return true;
   if (p === "/api/installs" || p.startsWith("/api/installs/")) return true;
+  if (p === "/api/connections" || p.startsWith("/api/connections/")) return true;
   return p.startsWith("/api/creator/") || p === "/admin" || p.startsWith("/admin/");
 }
 

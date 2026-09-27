@@ -7,9 +7,12 @@
 ## Current Status
 - **Last Updated**: 2026-09-27
 - **Last Active AI**: Claude Code (Opus 5.5)
-- **Active Task**: Phase 3a in progress. P3a-1 through P3a-8 are complete, verified and tested, and P3a-4 to P3a-7 have been reviewed and fixed. Next: P3a-9 (connections).
-- **Task State**: All tests passing (1,372 passed, 0 failed, 1 skipped: the opt-in network test). `verify.sh` checks pass.
-- **Git State**: Committed on `main`, **not pushed** (the owner has not asked). The last pushed commit is `460be7c`.
+- **Active Task**: Phase 3a in progress. P3a-1 through P3a-9 are complete, verified and tested, and P3a-4 to P3a-7 have been reviewed and fixed. Next: P3a-10 (catalogs read tokens from `provider_connections`).
+- **Task State**: All tests passing (1,388 passed, 0 failed, 1 skipped: the opt-in network test). `verify.sh` checks pass.
+- **Git State**: Work is on branches, not on `main` (`main` = `origin/main` = `460be7c`):
+  - `feat/p3a-review-and-installs` (review fixes + P3a-8), pushed. The owner is opening its PR into `main`.
+  - `feat/p3a-9-connections` (P3a-9), stacked on it.
+  - Merge them in that order.
 - **The owner is not a programmer.** Explain in plain words, do the git work for them, and ask before anything that changes stored user data or needs a dashboard change.
 
 ---
@@ -49,6 +52,7 @@ These are deliberate. Several are "one place" mechanisms that cover the whole Wo
 | `/<id>/configure` and `/api/resolve` | Never return provider keys or tokens. The `P1-T2` test probes every route for this. |
 | `02_`, `getOrBackfillAccount(env, username, profile)` | The `accounts` row is a **mirror** of the creator profile (`creator:{u}` / `creators`), which stays the source of truth until Phase 10. Never trust `accounts.key_hash` on its own: authenticate with `authenticateCreator`, then sync the row from the profile. `deleteAccountRow` removes a row and everything under its id (sessions, installs, secrets, snapshots). |
 | `27_`, the install move | A moved `cfg:` record carries `_install` and no secrets; `resolveConfig` puts them back (`applyLegacyInstallRecord`). Reads never depend on the flags. **Never write code that reads a `cfg:` record's keys directly**: go through `resolveConfig`. A new secret install field must be added to `INSTALL_SECRET_COLUMNS` (a test checks). |
+| `28_`, `storeProviderConnection` | A signed-in OAuth callback stores the token and redirects to `/?connected=<provider>` with **no token in the URL**. It returns false (and the callback falls back to the old fragment redirect) when there is no session, no key or no table, so connecting never breaks. Never add a token to a redirect URL for a signed-in browser. |
 | `02_`, `encryptToken` / `decryptToken` / `hmacLookupKey` | AES-256-GCM token encryption with key rotation (`TOKEN_ENCRYPTION_KEY`) and an HMAC-SHA256 blind index (`LOOKUP_PEPPER`). Always pass the key ring or `env` explicitly: there is no module-level `env`. Always pass a `context` naming the row (for example `account:<id>:<provider>`), and decrypt with the same one. Use these names only; do not add generic `encrypt` / `decrypt` functions. |
 
 ---
@@ -61,8 +65,8 @@ These are deliberate. Several are "one place" mechanisms that cover the whole Wo
    - `\n` in client code must be written `\\n`.
 3. **All numbered files share one scope.**
    - Top-level names must be unique across files.
-   - New server-only code goes in a new numbered file **after `26_`** (the next is `28_...`), never between `09_` and `24_`.
-   - `25_` and `26_` are the **inside** of `handleFetch` (they share `request`, `env`, `path`, `authenticateCreator`). `27_installs.js` comes after the `export default` block, at module level, so it cannot see those; pass what it needs.
+   - New server-only code goes in a new numbered file **after `26_`** (the next is `29_...`), never between `09_` and `24_`.
+   - `25_` and `26_` are the **inside** of `handleFetch` (they share `request`, `env`, `path`, `authenticateCreator`). `27_installs.js` and `28_connections.js` come after the `export default` block, at module level, so they cannot see those; pass what they need. `tests/client-harness.mjs` renders the page from the code **before** `export default`, so page rendering must never depend on `27_`+.
    - Tests that load source files into a sandbox (`loadSourceFunctions`) and call `resolveConfig` must include `27_installs.js`.
 4. **Shell heredocs in this environment mangle `\\` sequences.** Write patch scripts to a file and run them, or use the file-editing tool.
 5. **The test D1** (`tests/harness.mjs`, real SQLite) enforces D1's limits: 100 bound parameters, 2 MB per row, 100,000-byte statements. A query that trips these would fail in production too.
@@ -128,6 +132,11 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
     - A KV snapshot `install:{tokenHash}` (1 day) plus a 30 s isolate cache.
     - The admin Maintenance tab has a progress panel and an emergency undo (`/admin/api/installs/restore`).
     - Deviations from the plan, with reasons, are listed under P3a-8 in `NEXT_VERSION_TASKS.md`.
+  - **P3a-9 (Claude):** connections, in `28_connections.js`.
+    - Signed in (with a session), the Trakt, MDBList, Simkl and TMDB callbacks store the token (plus refresh token and expiry) encrypted in `provider_connections`, and redirect to `/?connected=<provider>` with no token in the URL.
+    - The page fetches it once over its session (`POST /api/connections/:provider/token`), as a bridge until Phase 6.
+    - `POST /api/connections/import-local` (checked with each provider, once, rate-limited), `GET /api/connections`, and `DELETE /api/connections/:provider` (which revokes at Trakt and TMDB).
+    - Page changes: the `apply*Connection` helpers, `pickUpServerConnection`, `forgetServerConnection` and `importLocalConnectionsOnce` in `17_`, with hooks in `22_` and `24_`.
 
 ---
 
@@ -153,8 +162,9 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
 
 ## Next Steps for Incoming AI
 1. **Phase 3a continues** (`NEXT_VERSION_TASKS.md`; the reasoning is in `MIGRATION_PLAN.md` Phase 3a). P3a-1 through P3a-8 are done and verified. Next:
-   - **P3a-9**: Connections: server-side encrypted OAuth tokens without tokens in redirect URLs, local import, disconnection.
    - **P3a-10**: Provider calls for personal rows read tokens from `provider_connections`.
+     - `loadProviderConnection(env, accountId, provider)` (`28_`) returns them decrypted.
+     - Use the refresh token when `expires_at` has passed (Trakt, MDBList), and set `status`/`last_error` when a provider rejects one.
      - Decide which wins when an install has its own keys in `install_secrets` and its owner also has a connection. Today `install_secrets` is the only source.
      - v2 installs (`/i/{token}`) have no keys of their own, so their personal Trakt/MDBList/Simkl rows only work once this lands.
    - A v2 link's `/i/{token}/configure` page renders, but its **Update** still saves a new legacy link through `/api/save`. The UI for v2 links (Phase 6) should `PATCH /api/installs/:id` instead.

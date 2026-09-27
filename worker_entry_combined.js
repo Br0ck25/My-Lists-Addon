@@ -2848,6 +2848,7 @@ function isPrivateApiPath(path) {
   if (p === "/api/resolve") return true;
   if (p === "/api/session" || p === "/api/me" || p.startsWith("/api/me/")) return true;
   if (p === "/api/installs" || p.startsWith("/api/installs/")) return true;
+  if (p === "/api/connections" || p.startsWith("/api/connections/")) return true;
   return p.startsWith("/api/creator/") || p === "/admin" || p.startsWith("/admin/");
 }
 
@@ -34813,6 +34814,7 @@ function startMdblistConnect() {
 }
 
 function disconnectMdblist() {
+  forgetServerConnection('mdblist');
   const input = document.getElementById('mdblistKeyInput');
   if (input) input.value = '';
   mdblistAccessToken = '';
@@ -34889,34 +34891,40 @@ function renderMdblistConnectStatus() {
   }
 }
 
+// A newly connected MDBList account: from the address bar after a signed-out
+// connect, or from the server after a signed-in one (pickUpServerConnection).
+function applyMdblistConnection(token, username) {
+  mdblistAccessToken = token;
+  try {
+    localStorage.removeItem('myListAddon:mdblistDisconnected');
+  } catch (e) {}
+  if (username) {
+    mdblistUsername = username;
+    try {
+      localStorage.setItem('myListAddon:mdblistUsername', mdblistUsername);
+    } catch (e) {}
+  }
+  try {
+    localStorage.setItem('myListAddon:mdblistAccessToken', mdblistAccessToken);
+  } catch (e) {}
+  saveState();
+  if (typeof pushCreatorSync === 'function') pushCreatorSync();
+  if (typeof showAppAlert === 'function') {
+    showAppAlert('MDBList Connected', 'Connected to MDBList.', true);
+  } else {
+    alert('Connected to MDBList.');
+  }
+  renderMdblistConnectStatus();
+  scheduleMyMdblistListsRefresh();
+}
+
 function pickUpMdblistTokenFromUrl() {
   const hash = window.location.hash || '';
   const match = /(?:^|[#&])mdblist_token=([^&]+)/.exec(hash);
   if (match) {
-    mdblistAccessToken = decodeURIComponent(match[1]);
-    try {
-      localStorage.removeItem('myListAddon:mdblistDisconnected');
-    } catch (e) {}
     const userMatch = /(?:^|[#&])mdblist_username=([^&]+)/.exec(hash);
-    if (userMatch) {
-      mdblistUsername = decodeURIComponent(userMatch[1]);
-      try {
-        localStorage.setItem('myListAddon:mdblistUsername', mdblistUsername);
-      } catch (e) {}
-    }
-    try {
-      localStorage.setItem('myListAddon:mdblistAccessToken', mdblistAccessToken);
-    } catch (e) {}
-    saveState();
-    if (typeof pushCreatorSync === 'function') pushCreatorSync();
     history.replaceState(null, '', window.location.pathname + window.location.search);
-    if (typeof showAppAlert === 'function') {
-      showAppAlert('MDBList Connected', 'Connected to MDBList.', true);
-    } else {
-      alert('Connected to MDBList.');
-    }
-    renderMdblistConnectStatus();
-    scheduleMyMdblistListsRefresh();
+    applyMdblistConnection(decodeURIComponent(match[1]), userMatch ? decodeURIComponent(userMatch[1]) : '');
   }
   const params = new URLSearchParams(window.location.search);
   const err = params.get('mdblist_error');
@@ -34958,6 +34966,7 @@ function startTraktConnect() {
 }
 
 function disconnectTrakt() {
+  forgetServerConnection('trakt');
   const keyInput = document.getElementById('traktKeyInput');
   if (keyInput) keyInput.value = '';
   const userInput = document.getElementById('traktUsernameInput');
@@ -35043,34 +35052,39 @@ function renderTraktConnectStatus() {
 // the callback's own failure path. Either way, strips whatever it found
 // from the address bar immediately so a page refresh or a copied/shared
 // URL never carries it forward.
+// A newly connected Trakt account: from the address bar after a signed-out
+// connect, or from the server after a signed-in one (pickUpServerConnection).
+function applyTraktConnection(token, user) {
+  traktAccessToken = token;
+  try {
+    localStorage.setItem('myListAddon:traktAccessToken', traktAccessToken);
+    localStorage.removeItem('myListAddon:traktDisconnected');
+  } catch (e) {}
+  if (user) {
+    try {
+      localStorage.setItem('myListAddon:traktUsername', user);
+    } catch (e) {}
+    const uInput = document.getElementById('traktUsernameInput');
+    if (uInput) uInput.value = user;
+  }
+  saveState();
+  if (typeof pushCreatorSync === 'function') pushCreatorSync();
+  if (typeof showAppAlert === 'function') {
+    showAppAlert('Trakt Connected', 'Connected to Trakt.', true);
+  } else {
+    alert('Connected to Trakt.');
+  }
+  renderTraktConnectStatus();
+  scheduleMyTraktListsRefresh();
+}
+
 function pickUpTraktTokenFromUrl() {
   const hash = window.location.hash || '';
   const match = /(?:^|[#&])trakt_token=([^&]+)/.exec(hash);
   if (match) {
-    traktAccessToken = decodeURIComponent(match[1]);
-    try {
-      localStorage.setItem('myListAddon:traktAccessToken', traktAccessToken);
-      localStorage.removeItem('myListAddon:traktDisconnected');
-    } catch (e) {}
     const userMatch = /(?:^|[#&])trakt_username=([^&]+)/.exec(hash);
-    if (userMatch) {
-      const user = decodeURIComponent(userMatch[1]);
-      try {
-        localStorage.setItem('myListAddon:traktUsername', user);
-      } catch (e) {}
-      const uInput = document.getElementById('traktUsernameInput');
-      if (uInput) uInput.value = user;
-    }
-    saveState();
-    if (typeof pushCreatorSync === 'function') pushCreatorSync();
     history.replaceState(null, '', window.location.pathname + window.location.search);
-    if (typeof showAppAlert === 'function') {
-      showAppAlert('Trakt Connected', 'Connected to Trakt.', true);
-    } else {
-      alert('Connected to Trakt.');
-    }
-    renderTraktConnectStatus();
-    scheduleMyTraktListsRefresh();
+    applyTraktConnection(decodeURIComponent(match[1]), userMatch ? decodeURIComponent(userMatch[1]) : '');
   }
   const params = new URLSearchParams(window.location.search);
   const err = params.get('trakt_error');
@@ -35730,6 +35744,7 @@ function toggleListsTmdbConnection() {
 }
 
 function disconnectTmdb() {
+  forgetServerConnection('tmdb');
   const input = document.getElementById('tmdbKeyInput');
   if (input) input.value = '';
   tmdbSessionId = '';
@@ -35751,6 +35766,24 @@ function disconnectTmdb() {
   scheduleMyTmdbListsRefresh();
 }
 
+// A newly connected TMDB account: from the address bar after a signed-out
+// connect, or from the server after a signed-in one (pickUpServerConnection).
+function applyTmdbConnection(sess, acc, user) {
+  tmdbSessionId = sess;
+  tmdbAccountId = acc || '';
+  tmdbUsername = user || '';
+  try {
+    localStorage.removeItem('myListAddon:tmdbDisconnected');
+    localStorage.setItem('myListAddon:tmdbSessionId', tmdbSessionId);
+    if (tmdbAccountId) localStorage.setItem('myListAddon:tmdbAccountId', tmdbAccountId);
+    if (tmdbUsername) localStorage.setItem('myListAddon:tmdbUsername', tmdbUsername);
+  } catch (e) {}
+  saveState();
+  if (typeof pushCreatorSync === 'function') pushCreatorSync();
+  renderTmdbConnectStatus();
+  scheduleMyTmdbListsRefresh();
+}
+
 function pickUpTmdbTokenFromUrl() {
   const hash = window.location.hash || '';
   if (hash.startsWith('#') && hash.includes('tmdb_session=')) {
@@ -35759,24 +35792,12 @@ function pickUpTmdbTokenFromUrl() {
     const acc = params.get('tmdb_account');
     const user = params.get('tmdb_user');
     if (sess) {
-      tmdbSessionId = sess;
-      tmdbAccountId = acc || '';
-      tmdbUsername = user || '';
-      try {
-        localStorage.removeItem('myListAddon:tmdbDisconnected');
-        localStorage.setItem('myListAddon:tmdbSessionId', tmdbSessionId);
-        if (tmdbAccountId) localStorage.setItem('myListAddon:tmdbAccountId', tmdbAccountId);
-        if (tmdbUsername) localStorage.setItem('myListAddon:tmdbUsername', tmdbUsername);
-      } catch (e) {}
-      saveState();
-      if (typeof pushCreatorSync === 'function') pushCreatorSync();
       params.delete('tmdb_session');
       params.delete('tmdb_account');
       params.delete('tmdb_user');
       const rem = params.toString();
       history.replaceState(null, '', window.location.pathname + window.location.search + (rem ? '#' + rem : ''));
-      renderTmdbConnectStatus();
-      scheduleMyTmdbListsRefresh();
+      applyTmdbConnection(sess, acc, user);
     }
   }
 
@@ -36014,6 +36035,7 @@ function startSimklConnect() {
 }
 
 function disconnectSimkl() {
+  forgetServerConnection('simkl');
   const input = document.getElementById('simklKeyInput');
   if (input) input.value = '';
   simklAccessToken = '';
@@ -36043,32 +36065,131 @@ function toggleListsSimklConnection() {
   }
 }
 
+// A newly connected Simkl account: from the address bar after a signed-out
+// connect, or from the server after a signed-in one (pickUpServerConnection).
+function applySimklConnection(token, username) {
+  simklAccessToken = token;
+  try {
+    localStorage.removeItem('myListAddon:simklDisconnected');
+    localStorage.setItem('myListAddon:simklAccessToken', simklAccessToken);
+  } catch (e) {}
+  if (username) {
+    simklUsername = username;
+    try {
+      localStorage.setItem('myListAddon:simklUsername', simklUsername);
+    } catch (e) {}
+  }
+  saveState();
+  if (typeof pushCreatorSync === 'function') pushCreatorSync();
+  if (typeof showAppAlert === 'function') {
+    showAppAlert('Simkl Connected', 'Your Simkl account was successfully connected.', true);
+  } else {
+    alert('Connected to Simkl.');
+  }
+  renderSimklConnectStatus();
+  scheduleMySimklListsRefresh();
+}
+
+// --- Connections kept on the server (P3a-9) ----------------------------------
+//
+// Signed in, connecting Trakt, MDBList, Simkl or TMDB keeps the token on the
+// server and comes back as ?connected=<provider>, with no token in the address
+// bar. This page still works from its own copy of each token, so it asks for
+// that one once, over the signed-in session, and hands it to the same code a
+// token in the address bar reaches.
+async function pickUpServerConnection() {
+  const params = new URLSearchParams(window.location.search);
+  const provider = params.get('connected');
+  if (!provider) return;
+  let data = null;
+  let reached = false;
+  try {
+    const res = await fetch(ORIGIN + '/api/connections/' + encodeURIComponent(provider) + '/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    reached = true;
+    data = await res.json();
+  } catch (e) {}
+  // Left in the address bar only when the server could not be reached, so a
+  // reload tries again.
+  if (reached) {
+    params.delete('connected');
+    const qs = params.toString();
+    history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : '') + window.location.hash);
+  }
+  if (!data || !data.ok || !data.accessToken) {
+    const msg = reached
+      ? 'That account could not be loaded. Please connect it again from Settings.'
+      : 'Your account was connected, but this page could not load it. Reload the page to try again.';
+    if (typeof showAppAlert === 'function') showAppAlert('Connection', msg, false);
+    else alert(msg);
+    return;
+  }
+  if (provider === 'trakt') applyTraktConnection(data.accessToken, data.username || '');
+  else if (provider === 'mdblist') applyMdblistConnection(data.accessToken, data.username || '');
+  else if (provider === 'simkl') applySimklConnection(data.accessToken, data.username || '');
+  else if (provider === 'tmdb') applyTmdbConnection(data.accessToken, data.id || '', data.username || '');
+}
+
+// Disconnecting removes the server's copy too. Harmless when there is none, or
+// when this browser has no session (the server answers 401).
+function forgetServerConnection(provider) {
+  try {
+    fetch(ORIGIN + '/api/connections/' + encodeURIComponent(provider), {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+    }).catch(() => {});
+  } catch (e) {}
+}
+
+// Once per account on this device, and only once the browser has a session
+// (/api/creator/restore says so): offers the provider tokens this browser
+// already holds to the server, which checks each with its provider and keeps
+// the good ones.
+async function importLocalConnectionsOnce(creatorName) {
+  if (!creatorName || typeof collectKeys !== 'function') return;
+  const flag = 'myListAddon:connectionsImported:' + String(creatorName).toLowerCase();
+  try {
+    if (localStorage.getItem(flag) === '1') return;
+  } catch (e) {
+    return;
+  }
+  const k = collectKeys();
+  const keys = {
+    traktAccessToken: k.traktAccessToken, traktKey: k.traktKey, traktUsername: k.traktUsername,
+    mdblistAccessToken: k.mdblistAccessToken, mdblistKey: k.mdblistKey, mdblistUsername: k.mdblistUsername,
+    simklAccessToken: k.simklAccessToken, simklKey: k.simklKey, simklUsername: k.simklUsername,
+    tmdbSessionId: k.tmdbSessionId, tmdbKey: k.tmdbKey, tmdbAccountId: k.tmdbAccountId, tmdbUsername: k.tmdbUsername,
+  };
+  if (!keys.traktAccessToken && !keys.mdblistAccessToken && !keys.mdblistKey && !keys.simklAccessToken && !keys.tmdbSessionId) {
+    try { localStorage.setItem(flag, '1'); } catch (e) {}
+    return;
+  }
+  try {
+    const res = await fetch(ORIGIN + '/api/connections/import-local', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keys: keys }),
+    });
+    const data = await res.json();
+    // Finished once every token has had an answer about itself. One whose
+    // provider could not be reached is offered again on a later visit.
+    if (data && data.ok) {
+      const pending = Object.values(data.results || {}).some((r) => r === 'unreachable' || r === 'failed');
+      if (!pending) localStorage.setItem(flag, '1');
+    }
+  } catch (e) {}
+}
+
 function pickUpSimklTokenFromUrl() {
   const hash = window.location.hash || '';
   const match = /(?:^|[#&])simkl_token=([^&]+)/.exec(hash);
   if (match) {
-    simklAccessToken = decodeURIComponent(match[1]);
-    try {
-      localStorage.removeItem('myListAddon:simklDisconnected');
-      localStorage.setItem('myListAddon:simklAccessToken', simklAccessToken);
-    } catch (e) {}
     const userMatch = /(?:^|[#&])simkl_username=([^&]+)/.exec(hash);
-    if (userMatch) {
-      simklUsername = decodeURIComponent(userMatch[1]);
-      try {
-        localStorage.setItem('myListAddon:simklUsername', simklUsername);
-      } catch (e) {}
-    }
-    saveState();
-    if (typeof pushCreatorSync === 'function') pushCreatorSync();
     history.replaceState(null, '', window.location.pathname + window.location.search);
-    if (typeof showAppAlert === 'function') {
-      showAppAlert('Simkl Connected', 'Your Simkl account was successfully connected.', true);
-    } else {
-      alert('Connected to Simkl.');
-    }
-    renderSimklConnectStatus();
-    scheduleMySimklListsRefresh();
+    applySimklConnection(decodeURIComponent(match[1]), userMatch ? decodeURIComponent(userMatch[1]) : '');
   }
   const params = new URLSearchParams(window.location.search);
   const err = params.get('simkl_error');
@@ -62529,6 +62650,8 @@ async function submitRestoreProfile() {
     renderTrackPlaybackSection();
     renderCreatorDashboard();
     await loadCreatorSync();
+    // After the sync load, so tokens this account keeps in sync are included.
+    if (data.session && typeof importLocalConnectionsOnce === 'function') importLocalConnectionsOnce(data.creatorName);
   } catch (e) {
     errBox.innerHTML = '<p class="testresult err">Network error.</p>';
   } finally {
@@ -62699,7 +62822,10 @@ async function tryAutoRestoreCreatorProfile() {
       renderWatchlistPreferencesSection();
       renderTrackPlaybackSection();
       renderCreatorDashboard();
-      loadCreatorSync();
+      const syncing = loadCreatorSync();
+      if (data.session && typeof importLocalConnectionsOnce === 'function') {
+        Promise.resolve(syncing).catch(() => {}).then(() => importLocalConnectionsOnce(data.creatorName));
+      }
     }
   } catch (e) {
     // stay logged out
@@ -73603,6 +73729,8 @@ if (typeof renderHiddenListsSettingsSection === 'function') renderHiddenListsSet
 if (typeof renderRemovedAiringNextSettingsSection === 'function') renderRemovedAiringNextSettingsSection();
 renderTrackPlaybackSection();
 renderCreatorDashboard();
+// A signed-in connect comes back as ?connected=<provider> (P3a-9).
+if (typeof pickUpServerConnection === 'function') pickUpServerConnection();
 if (typeof pickUpMdblistTokenFromUrl === 'function') pickUpMdblistTokenFromUrl();
 if (typeof renderMdblistConnectStatus === 'function') renderMdblistConnectStatus();
 pickUpTraktTokenFromUrl();
@@ -75069,6 +75197,10 @@ async function handleFetch(request, env, ctx) {
     // install move -- 27_installs.js.
     const installsResponse = await handleInstallsApi(request, env, url, path);
     if (installsResponse) return installsResponse;
+    // /api/connections (an account's Trakt, MDBList, Simkl and TMDB
+    // connections) -- 28_connections.js.
+    const connectionsResponse = await handleConnectionsApi(request, env, url, path);
+    if (connectionsResponse) return connectionsResponse;
 
     if (path === "/" || path === "") {
       ctx.waitUntil(bumpStat(env, "pageviews"));
@@ -78356,6 +78488,20 @@ function generateSearchVariations(query) {
             if (meData && meData.username) traktUsername = meData.username;
           }
         } catch {}
+        // Signed in: the token is kept on the server, encrypted, and the
+        // address bar never carries it (P3a-9, 28_connections.js). The page
+        // fetches it back over the session. Anything else, as before.
+        if (await storeProviderConnection(env, request.account, "trakt", {
+          accessToken: tokenData.access_token,
+          refreshToken: tokenData.refresh_token,
+          expiresAt: tokenData.created_at && tokenData.expires_in ? (tokenData.created_at + tokenData.expires_in) * 1000 : null,
+          externalUser: { username: traktUsername },
+        })) {
+          return new Response(null, {
+            status: 302,
+            headers: { Location: `${url.origin}/?connected=trakt`, "Set-Cookie": clearStateCookie },
+          });
+        }
         return new Response(null, {
           status: 302,
           headers: {
@@ -78478,6 +78624,16 @@ function generateSearchVariations(query) {
           }
         } catch {}
 
+        // Kept on the server too when signed in (P3a-9). The token still comes
+        // back in this JSON: it never passes through an address bar here, and
+        // the page works from its own copy until Phase 6.
+        await storeProviderConnection(env, request.account, "trakt", {
+          accessToken: data.access_token,
+          refreshToken: data.refresh_token,
+          expiresAt: data.created_at && data.expires_in ? (data.created_at + data.expires_in) * 1000 : null,
+          apiKey: userKey || null,
+          externalUser: { username: traktUsername },
+        });
         return json({ ok: true, access_token: data.access_token, username: traktUsername });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err) }, 500);
@@ -78609,6 +78765,18 @@ function generateSearchVariations(query) {
             }
           } catch {}
         }
+        // Signed in: kept on the server, no token in the address bar (P3a-9).
+        if (await storeProviderConnection(env, request.account, "mdblist", {
+          accessToken: token,
+          refreshToken: tokenData.refresh_token,
+          expiresAt: tokenData.expires_in ? Date.now() + Number(tokenData.expires_in) * 1000 : null,
+          externalUser: { username: mdblistUsername },
+        })) {
+          return new Response(null, {
+            status: 302,
+            headers: { Location: `${url.origin}/?connected=mdblist`, "Set-Cookie": clearStateCookie },
+          });
+        }
         return new Response(null, {
           status: 302,
           headers: {
@@ -78724,6 +78892,16 @@ function generateSearchVariations(query) {
           }
         } catch {}
 
+        // Signed in: kept on the server, no token in the address bar (P3a-9).
+        if (await storeProviderConnection(env, request.account, "simkl", {
+          accessToken: token,
+          externalUser: { username: simklUsername },
+        })) {
+          return new Response(null, {
+            status: 302,
+            headers: { Location: `${url.origin}/?connected=simkl`, "Set-Cookie": clearStateCookie },
+          });
+        }
         return new Response(null, {
           status: 302,
           headers: {
@@ -80134,6 +80312,16 @@ function generateSearchVariations(query) {
         const accountId = accountData.id ? String(accountData.id) : "";
         const username = accountData.username || "";
 
+        // Signed in: kept on the server, no session id in the address bar (P3a-9).
+        if (await storeProviderConnection(env, request.account, "tmdb", {
+          accessToken: sessionId,
+          externalUser: { username, id: accountId },
+        })) {
+          return new Response(null, {
+            status: 302,
+            headers: { Location: `${url.origin}/?connected=tmdb`, "Set-Cookie": clearCookie },
+          });
+        }
         return new Response(null, {
           status: 302,
           headers: {
@@ -84457,6 +84645,10 @@ function generateSearchVariations(query) {
         creatorName: auth.username,
         displayName: auth.displayName,
         hasRecoveryAnswer: Boolean(auth.hasRecoveryAnswer),
+        // Whether this browser now holds a session for the account (FF_SESSIONS).
+        // The page offers its locally held provider tokens to
+        // /api/connections/import-local only when it does (P3a-9).
+        session: Boolean(request.session && request.account && String(request.account.username || "").toLowerCase() === String(auth.username || "").toLowerCase()),
       });
     }
 
@@ -91040,4 +91232,333 @@ async function installsStatus(env) {
     return { ...out, ok: false, error: "Migration 0015 has not been applied: " + safeErrorMessage(e) };
   }
   return out;
+}
+
+// --- Provider connections (Phase 3a, P3a-9) ---------------------------------
+//
+// A signed-in account's Trakt, MDBList, Simkl and TMDB connections, kept on the
+// server in provider_connections (migration 0015), each secret encrypted under
+// TOKEN_ENCRYPTION_KEY with the context "account:<id>:<provider>".
+//
+// How a connection gets here:
+//   * the OAuth callbacks (25_api-catalog-routes.js) store it whenever the
+//     browser finishing the sign-in has a session, and then redirect to
+//     /?connected=<provider> with no token in the address bar. Signed out, or
+//     with no encryption key or no table yet, they do what they always did;
+//   * the Trakt device-code flow stores it the same way;
+//   * POST /api/connections/import-local takes the tokens a browser already
+//     holds, once, checks each with its provider, and stores the good ones.
+//
+// The page still works from its own copy of each token (about 430 places read
+// one), so after a signed-in connect it asks for it once, over the session:
+// POST /api/connections/:provider/token. That bridge goes when the Phase 6
+// pages stop holding tokens. P3a-10 is what makes catalogs read from here.
+
+const CONNECTION_PROVIDERS = ["trakt", "mdblist", "simkl", "tmdb"];
+
+function isConnectionProvider(p) {
+  return CONNECTION_PROVIDERS.includes(p);
+}
+
+function connectionContext(accountId, provider) {
+  return `account:${accountId}:${provider}`;
+}
+
+// external_user holds who the connection is, as JSON: { username, id }. A
+// plain string (written by hand, or by an older build) reads as a username.
+function parseConnectionUser(raw) {
+  if (!raw) return { username: "", id: "" };
+  try {
+    const v = JSON.parse(raw);
+    if (v && typeof v === "object") return { username: String(v.username || ""), id: String(v.id || "") };
+  } catch {}
+  return { username: String(raw), id: "" };
+}
+
+// Stores (or replaces) one connection for a signed-in account. Answers false,
+// having stored nothing, when there is no account, no encryption key, or no
+// table -- the callers then fall back to what they did before, so connecting
+// never breaks because of this. An API key already on file is kept when the
+// new connection brings none (an OAuth sign-in never does).
+async function storeProviderConnection(env, account, provider, conn) {
+  if (!account || account.id == null || !env || !env.DB) return false;
+  if (!isConnectionProvider(provider) || !conn || !conn.accessToken) return false;
+  if (!hasTokenEncryptionKey(env)) return false;
+  try {
+    const context = connectionContext(account.id, provider);
+    const accessEnc = await encryptToken(conn.accessToken, env, context);
+    const refreshEnc = conn.refreshToken ? await encryptToken(conn.refreshToken, env, context) : null;
+    const apiKeyEnc = conn.apiKey ? await encryptToken(conn.apiKey, env, context) : null;
+    const user = conn.externalUser || {};
+    const externalUser = JSON.stringify({ username: String(user.username || ""), id: String(user.id || "") });
+    const expiresAt = Number.isFinite(conn.expiresAt) && conn.expiresAt > 0 ? Math.floor(conn.expiresAt) : null;
+    await env.DB.prepare(
+      "INSERT INTO provider_connections (account_id, provider, external_user, access_token_enc, refresh_token_enc, expires_at, api_key_enc, status, last_error, updated_at) " +
+      "VALUES (?, ?, ?, ?, ?, ?, ?, 'ok', NULL, ?) " +
+      "ON CONFLICT(account_id, provider) DO UPDATE SET " +
+      "  external_user = excluded.external_user," +
+      "  access_token_enc = excluded.access_token_enc," +
+      "  refresh_token_enc = excluded.refresh_token_enc," +
+      "  expires_at = excluded.expires_at," +
+      "  api_key_enc = COALESCE(excluded.api_key_enc, provider_connections.api_key_enc)," +
+      "  status = 'ok', last_error = NULL, updated_at = excluded.updated_at"
+    ).bind(account.id, provider, externalUser, accessEnc, refreshEnc, expiresAt, apiKeyEnc, Date.now()).run();
+    return true;
+  } catch (e) {
+    console.error(`Could not store a ${provider} connection:`, e);
+    return false;
+  }
+}
+
+// One connection, decrypted. Null when there is none, or it cannot be read.
+async function loadProviderConnection(env, accountId, provider) {
+  if (!env || !env.DB || accountId == null || !isConnectionProvider(provider)) return null;
+  try {
+    const row = await env.DB.prepare(
+      "SELECT external_user, access_token_enc, refresh_token_enc, expires_at, api_key_enc, status, updated_at " +
+      "FROM provider_connections WHERE account_id = ? AND provider = ?"
+    ).bind(accountId, provider).first();
+    if (!row) return null;
+    const context = connectionContext(accountId, provider);
+    const user = parseConnectionUser(row.external_user);
+    return {
+      provider,
+      accessToken: row.access_token_enc ? await decryptToken(row.access_token_enc, env, context) : "",
+      refreshToken: row.refresh_token_enc ? await decryptToken(row.refresh_token_enc, env, context) : "",
+      apiKey: row.api_key_enc ? await decryptToken(row.api_key_enc, env, context) : "",
+      expiresAt: row.expires_at,
+      username: user.username,
+      id: user.id,
+      status: row.status,
+      updatedAt: row.updated_at,
+    };
+  } catch (e) {
+    console.error(`Could not read a ${provider} connection:`, e);
+    return null;
+  }
+}
+
+// Asks the provider whether a token works: "ok" (with the username it belongs
+// to), "invalid" (the provider refused it), or "unreachable" (no answer we can
+// trust either way).
+async function checkProviderCredentials(env, provider, creds) {
+  const ua = `my-list-addon/${ADDON_VERSION}`;
+  const verdict = (res) => (res.status === 401 || res.status === 403 ? "invalid" : "unreachable");
+  try {
+    if (provider === "trakt") {
+      const clientId = creds.apiKey || TRAKT_CLIENT_ID;
+      if (!creds.accessToken || !clientId) return { status: "invalid" };
+      const res = await fetch("https://api.trakt.tv/users/me", {
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${creds.accessToken}`,
+          "trakt-api-version": "2",
+          "trakt-api-key": clientId,
+          "User-Agent": ua,
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!res.ok) return { status: verdict(res) };
+      const me = await res.json().catch(() => ({}));
+      return { status: "ok", username: (me && me.username) || creds.username || "" };
+    }
+    if (provider === "mdblist") {
+      const token = creds.accessToken || creds.apiKey;
+      if (!token) return { status: "invalid" };
+      const headers = { "User-Agent": ua, "Accept": "application/json" };
+      if (creds.accessToken) headers["Authorization"] = `Bearer ${creds.accessToken}`;
+      const res = await fetch(`https://api.mdblist.com/user?apikey=${encodeURIComponent(token)}`, {
+        headers,
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!res.ok) return { status: verdict(res) };
+      const u = await res.json().catch(() => ({}));
+      return { status: "ok", username: (u && (u.username || u.user_name || u.name)) || creds.username || "" };
+    }
+    if (provider === "simkl") {
+      const clientId = creds.apiKey || SIMKL_CLIENT_ID;
+      if (!creds.accessToken || !clientId) return { status: "invalid" };
+      const res = await fetch("https://api.simkl.com/users/settings", {
+        headers: {
+          "Authorization": `Bearer ${creds.accessToken}`,
+          "simkl-api-key": clientId,
+          "User-Agent": ua,
+          "Accept": "application/json",
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!res.ok) return { status: verdict(res) };
+      const s = await res.json().catch(() => ({}));
+      const user = s && s.user ? (s.user.username || s.user.name) : "";
+      return { status: "ok", username: user || creds.username || "" };
+    }
+    if (provider === "tmdb") {
+      const apiKey = creds.apiKey || TMDB_API_KEY;
+      if (!creds.accessToken || !apiKey) return { status: "invalid" };
+      const res = await fetch(
+        `https://api.themoviedb.org/3/account?api_key=${encodeURIComponent(apiKey)}&session_id=${encodeURIComponent(creds.accessToken)}`,
+        { headers: { "User-Agent": ua }, signal: AbortSignal.timeout(10000) }
+      );
+      if (!res.ok) return { status: verdict(res) };
+      const a = await res.json().catch(() => ({}));
+      return { status: "ok", username: (a && a.username) || creds.username || "", id: a && a.id != null ? String(a.id) : (creds.id || "") };
+    }
+  } catch {
+    return { status: "unreachable" };
+  }
+  return { status: "invalid" };
+}
+
+// Best effort: tells the provider to forget the token, where it has a way to.
+// Trakt only for tokens issued to this site's own client (its secret is the
+// one we hold); TMDB deletes the session. MDBList and Simkl have no revoke
+// endpoint, so for them removing our copy is all there is.
+async function revokeAtProvider(env, provider, conn) {
+  try {
+    if (provider === "trakt" && conn.accessToken && !conn.apiKey && TRAKT_CLIENT_ID && env && env.TRAKT_CLIENT_SECRET) {
+      await fetch("https://api.trakt.tv/oauth/revoke", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "User-Agent": `my-list-addon/${ADDON_VERSION}` },
+        body: JSON.stringify({ token: conn.accessToken, client_id: TRAKT_CLIENT_ID, client_secret: env.TRAKT_CLIENT_SECRET }),
+        signal: AbortSignal.timeout(10000),
+      });
+      return true;
+    }
+    if (provider === "tmdb" && conn.accessToken) {
+      const apiKey = conn.apiKey || TMDB_API_KEY;
+      if (!apiKey) return false;
+      await fetch(`https://api.themoviedb.org/3/authentication/session?api_key=${encodeURIComponent(apiKey)}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", "User-Agent": `my-list-addon/${ADDON_VERSION}` },
+        body: JSON.stringify({ session_id: conn.accessToken }),
+        signal: AbortSignal.timeout(10000),
+      });
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
+// The page's own keys (collectKeys, 23_client-list-management.js), as one
+// credential set per provider.
+function localConnectionCredentials(keys) {
+  const s = (v) => (typeof v === "string" ? v.trim() : "");
+  const k = keys && typeof keys === "object" ? keys : {};
+  return {
+    trakt: { accessToken: s(k.traktAccessToken), apiKey: s(k.traktKey), username: s(k.traktUsername) },
+    mdblist: { accessToken: s(k.mdblistAccessToken), apiKey: s(k.mdblistKey), username: s(k.mdblistUsername) },
+    simkl: { accessToken: s(k.simklAccessToken), apiKey: s(k.simklKey), username: s(k.simklUsername) },
+    tmdb: { accessToken: s(k.tmdbSessionId), apiKey: s(k.tmdbKey), username: s(k.tmdbUsername), id: s(k.tmdbAccountId) },
+  };
+}
+
+function connectionSummary(row) {
+  const user = parseConnectionUser(row.external_user);
+  return {
+    provider: row.provider,
+    username: user.username || null,
+    status: row.status,
+    expiresAt: row.expires_at,
+    updatedAt: row.updated_at,
+    hasToken: Boolean(row.access_token_enc),
+    hasApiKey: Boolean(row.api_key_enc),
+  };
+}
+
+async function handleConnectionsApi(request, env, url, path) {
+  if (path !== "/api/connections" && !path.startsWith("/api/connections/")) return null;
+  try {
+    return await handleConnectionsApiRoutes(request, env, url, path);
+  } catch (e) {
+    // Most often migration 0015 not applied yet.
+    console.error("Connections API failed:", e);
+    return json({ ok: false, error: "Connected accounts aren't available right now." }, 503);
+  }
+}
+
+async function handleConnectionsApiRoutes(request, env, url, path) {
+  if (!env || !env.DB) return json({ ok: false, error: "Connected accounts aren't available right now." }, 503);
+  if (!request.account) {
+    return json({ ok: false, error: "Sign in to manage your connected accounts.", signInRequired: true }, 401);
+  }
+  const accountId = request.account.id;
+
+  if (path === "/api/connections") {
+    if (request.method !== "GET") return json({ ok: false, error: "Method not allowed." }, 405);
+    const { results } = await env.DB.prepare(
+      "SELECT provider, external_user, access_token_enc, api_key_enc, expires_at, status, updated_at FROM provider_connections WHERE account_id = ? ORDER BY provider"
+    ).bind(accountId).all();
+    return json({ ok: true, connections: (results || []).map(connectionSummary) });
+  }
+
+  if (path === "/api/connections/import-local") {
+    if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405);
+    if (!hasTokenEncryptionKey(env)) return json({ ok: false, error: "Connected accounts can't be stored yet." }, 503);
+    // Each import can call four providers with this site's own client ids, so
+    // a loop of them would spend those providers' rate limits for everyone.
+    // The page imports once per device; five a minute per account is plenty.
+    if (await consumeRateLimit(env, null, "connimport", "a" + accountId, 5)) {
+      return json({ ok: false, error: "Too many attempts. Please wait a minute and try again." }, 429);
+    }
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return json({ ok: false, error: "Invalid JSON body." }, 400);
+    }
+    const local = localConnectionCredentials(body && body.keys ? body.keys : body);
+    const { results } = await env.DB.prepare(
+      "SELECT provider, status FROM provider_connections WHERE account_id = ?"
+    ).bind(accountId).all();
+    const existing = new Map((results || []).map((r) => [r.provider, r.status]));
+    const outcome = {};
+    for (const provider of CONNECTION_PROVIDERS) {
+      const creds = local[provider];
+      // MDBList works from an API key alone; the others need a sign-in token.
+      const credential = provider === "mdblist" ? (creds.accessToken || creds.apiKey) : creds.accessToken;
+      if (!credential) continue;
+      // Once: a connection already here is the newer one -- it came from a
+      // sign-in on the server, or from an earlier import.
+      if (existing.get(provider) === "ok") {
+        outcome[provider] = "exists";
+        continue;
+      }
+      const checked = await checkProviderCredentials(env, provider, creds);
+      if (checked.status !== "ok") {
+        outcome[provider] = checked.status;
+        continue;
+      }
+      const stored = await storeProviderConnection(env, request.account, provider, {
+        // An API-key-only MDBList connection keeps the key in both places, so
+        // whatever reads the token finds it.
+        accessToken: creds.accessToken || creds.apiKey,
+        apiKey: creds.apiKey,
+        externalUser: { username: checked.username || creds.username, id: checked.id || creds.id },
+      });
+      outcome[provider] = stored ? "imported" : "failed";
+    }
+    return json({ ok: true, results: outcome });
+  }
+
+  const m = /^\/api\/connections\/([a-z]+)(\/token)?$/.exec(path);
+  if (!m || !isConnectionProvider(m[1])) return json({ ok: false, error: "Not found." }, 404);
+  const provider = m[1];
+
+  // The bridge for this page (see the header above): the token, once, to the
+  // signed-in browser that just connected. POST, so the CSRF check applies.
+  if (m[2]) {
+    if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405);
+    const conn = await loadProviderConnection(env, accountId, provider);
+    if (!conn || !conn.accessToken) return json({ ok: false, error: "That account isn't connected." }, 404);
+    return json({ ok: true, provider, accessToken: conn.accessToken, username: conn.username, id: conn.id });
+  }
+
+  if (request.method === "DELETE") {
+    const conn = await loadProviderConnection(env, accountId, provider);
+    const revoked = conn ? await revokeAtProvider(env, provider, conn) : false;
+    await env.DB.prepare("DELETE FROM provider_connections WHERE account_id = ? AND provider = ?").bind(accountId, provider).run();
+    return json({ ok: true, removed: Boolean(conn), revokedAtProvider: revoked });
+  }
+
+  return json({ ok: false, error: "Method not allowed." }, 405);
 }

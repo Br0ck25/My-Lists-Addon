@@ -57,7 +57,7 @@ Adding a binding before the code that uses it is harmless. Removing a binding th
 | `SIMKL_CLIENT_ID`, `SIMKL_CLIENT_SECRET` | Simkl |
 | `MDBLIST_API_KEY`, `MDBLIST_POPULAR_KEY`, `MDBLIST_CLIENT_ID`, `MDBLIST_CLIENT_SECRET` | MDBList |
 | `RAPIDAPI_KEY` | New on Streaming fallback engine |
-| `TOKEN_ENCRYPTION_KEY` | 32-byte AES-GCM key (`k1:<base64>`) for server-side encrypted tokens. Needed before `INSTALL_MIGRATION_PERCENT` is raised above 0 (§8). Generate with `openssl rand -base64 32` and store it as `k1:` followed by that value. **Once anything is encrypted with it, never delete or change it:** every moved install link would lose its keys. Rotate only by putting a new key first (`k2:<new>,k1:<old>`). Keep a copy outside Cloudflare. |
+| `TOKEN_ENCRYPTION_KEY` | 32-byte AES-GCM key (`k1:<base64>`) for server-side encrypted tokens. Needed before `INSTALL_MIGRATION_PERCENT` is raised above 0 (§8), and for signed-in connected accounts to be kept on the server once `FF_SESSIONS` is on (without it they are kept in the browser, as before). Generate with `openssl rand -base64 32` and store it as `k1:` followed by that value. **Once anything is encrypted with it, never delete or change it:** every moved install link would lose its keys. Rotate only by putting a new key first (`k2:<new>,k1:<old>`). Keep a copy outside Cloudflare. |
 | `LOOKUP_PEPPER` | HMAC pepper for the forgot-username lookup (P3a-7). **Optional:** without it, forgot-username uses the old lookup only. Any long random value (`openssl rand -base64 32`). Never change or delete it once set. |
 
 **Plain variables:**

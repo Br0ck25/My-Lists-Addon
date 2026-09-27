@@ -197,6 +197,10 @@ async function handleFetch(request, env, ctx) {
     // install move -- 27_installs.js.
     const installsResponse = await handleInstallsApi(request, env, url, path);
     if (installsResponse) return installsResponse;
+    // /api/connections (an account's Trakt, MDBList, Simkl and TMDB
+    // connections) -- 28_connections.js.
+    const connectionsResponse = await handleConnectionsApi(request, env, url, path);
+    if (connectionsResponse) return connectionsResponse;
 
     if (path === "/" || path === "") {
       ctx.waitUntil(bumpStat(env, "pageviews"));
@@ -3484,6 +3488,20 @@ function generateSearchVariations(query) {
             if (meData && meData.username) traktUsername = meData.username;
           }
         } catch {}
+        // Signed in: the token is kept on the server, encrypted, and the
+        // address bar never carries it (P3a-9, 28_connections.js). The page
+        // fetches it back over the session. Anything else, as before.
+        if (await storeProviderConnection(env, request.account, "trakt", {
+          accessToken: tokenData.access_token,
+          refreshToken: tokenData.refresh_token,
+          expiresAt: tokenData.created_at && tokenData.expires_in ? (tokenData.created_at + tokenData.expires_in) * 1000 : null,
+          externalUser: { username: traktUsername },
+        })) {
+          return new Response(null, {
+            status: 302,
+            headers: { Location: `${url.origin}/?connected=trakt`, "Set-Cookie": clearStateCookie },
+          });
+        }
         return new Response(null, {
           status: 302,
           headers: {
@@ -3606,6 +3624,16 @@ function generateSearchVariations(query) {
           }
         } catch {}
 
+        // Kept on the server too when signed in (P3a-9). The token still comes
+        // back in this JSON: it never passes through an address bar here, and
+        // the page works from its own copy until Phase 6.
+        await storeProviderConnection(env, request.account, "trakt", {
+          accessToken: data.access_token,
+          refreshToken: data.refresh_token,
+          expiresAt: data.created_at && data.expires_in ? (data.created_at + data.expires_in) * 1000 : null,
+          apiKey: userKey || null,
+          externalUser: { username: traktUsername },
+        });
         return json({ ok: true, access_token: data.access_token, username: traktUsername });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err) }, 500);
@@ -3737,6 +3765,18 @@ function generateSearchVariations(query) {
             }
           } catch {}
         }
+        // Signed in: kept on the server, no token in the address bar (P3a-9).
+        if (await storeProviderConnection(env, request.account, "mdblist", {
+          accessToken: token,
+          refreshToken: tokenData.refresh_token,
+          expiresAt: tokenData.expires_in ? Date.now() + Number(tokenData.expires_in) * 1000 : null,
+          externalUser: { username: mdblistUsername },
+        })) {
+          return new Response(null, {
+            status: 302,
+            headers: { Location: `${url.origin}/?connected=mdblist`, "Set-Cookie": clearStateCookie },
+          });
+        }
         return new Response(null, {
           status: 302,
           headers: {
@@ -3852,6 +3892,16 @@ function generateSearchVariations(query) {
           }
         } catch {}
 
+        // Signed in: kept on the server, no token in the address bar (P3a-9).
+        if (await storeProviderConnection(env, request.account, "simkl", {
+          accessToken: token,
+          externalUser: { username: simklUsername },
+        })) {
+          return new Response(null, {
+            status: 302,
+            headers: { Location: `${url.origin}/?connected=simkl`, "Set-Cookie": clearStateCookie },
+          });
+        }
         return new Response(null, {
           status: 302,
           headers: {
@@ -5262,6 +5312,16 @@ function generateSearchVariations(query) {
         const accountId = accountData.id ? String(accountData.id) : "";
         const username = accountData.username || "";
 
+        // Signed in: kept on the server, no session id in the address bar (P3a-9).
+        if (await storeProviderConnection(env, request.account, "tmdb", {
+          accessToken: sessionId,
+          externalUser: { username, id: accountId },
+        })) {
+          return new Response(null, {
+            status: 302,
+            headers: { Location: `${url.origin}/?connected=tmdb`, "Set-Cookie": clearCookie },
+          });
+        }
         return new Response(null, {
           status: 302,
           headers: {

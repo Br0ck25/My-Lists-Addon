@@ -16740,3 +16740,276 @@ describe("P3a-8: undoing the install move", () => {
     assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM install_secrets").first()).n, 1, "the keys are kept");
   });
 });
+
+// P3a-9. Connections: a signed-in OAuth sign-in keeps the token on the server,
+// encrypted, and redirects with no token in the URL; the page fetches it back
+// over its session; tokens a browser already holds are imported once after a
+// check with the provider; disconnecting revokes and deletes.
+describe("P3a-9: provider connections", () => {
+  const TEST_KEY = "k1:" + Buffer.from(Uint8Array.from({ length: 32 }, (_, i) => 200 - i)).toString("base64");
+  const SITE = {
+    TOKEN_ENCRYPTION_KEY: TEST_KEY,
+    TRAKT_CLIENT_ID: "site-trakt-id", TRAKT_CLIENT_SECRET: "site-trakt-secret",
+    MDBLIST_CLIENT_ID: "site-mdb-id", MDBLIST_CLIENT_SECRET: "site-mdb-secret",
+    SIMKL_CLIENT_ID: "site-simkl-id", SIMKL_CLIENT_SECRET: "site-simkl-secret",
+    TMDB_API_KEY: "site-tmdb-key",
+  };
+
+  // Answers the provider endpoints the connection code calls. `valid` lists
+  // the tokens a provider accepts; anything else gets a 401.
+  function stubProviders({ valid = [], down = [] } = {}) {
+    const seen = [];
+    const ok = (body) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    const deny = () => new Response("{}", { status: 401, headers: { "content-type": "application/json" } });
+    globalThis.fetch = async (u, init = {}) => {
+      const href = typeof u === "string" ? u : u.url;
+      const headers = new Headers(init.headers || {});
+      const bearer = (headers.get("authorization") || "").replace(/^Bearer /, "");
+      seen.push({ href, method: init.method || "GET", body: init.body || null });
+      for (const d of down) if (href.includes(d)) return new Response("oops", { status: 502 });
+      if (href === "https://api.trakt.tv/oauth/token") {
+        return ok({ access_token: "TRAKT-ACCESS", refresh_token: "TRAKT-REFRESH", expires_in: 7776000, created_at: 1800000000 });
+      }
+      if (href === "https://api.trakt.tv/oauth/device/token") {
+        return ok({ access_token: "TRAKT-DEVICE-ACCESS", refresh_token: "TRAKT-DEVICE-REFRESH", expires_in: 100, created_at: 1800000000 });
+      }
+      if (href === "https://api.trakt.tv/users/me") return valid.includes(bearer) ? ok({ username: "traktfan" }) : deny();
+      if (href === "https://api.trakt.tv/oauth/revoke") return ok({});
+      if (href.startsWith("https://api.mdblist.com/oauth/token")) return ok({ access_token: "MDB-ACCESS", refresh_token: "MDB-REFRESH", expires_in: 3600 });
+      if (href.startsWith("https://api.mdblist.com/user")) {
+        const key = new URL(href).searchParams.get("apikey");
+        return valid.includes(key) ? ok({ username: "mdbfan" }) : deny();
+      }
+      if (href === "https://api.simkl.com/oauth/token") return ok({ access_token: "SIMKL-ACCESS" });
+      if (href === "https://api.simkl.com/users/settings") return valid.includes(bearer) ? ok({ user: { name: "simklfan" } }) : deny();
+      if (href.startsWith("https://api.themoviedb.org/3/authentication/session/new")) return ok({ success: true, session_id: "TMDB-SESSION" });
+      if (href.startsWith("https://api.themoviedb.org/3/authentication/session")) return ok({ success: true });
+      if (href.startsWith("https://api.themoviedb.org/3/account")) {
+        const sid = new URL(href).searchParams.get("session_id");
+        return valid.includes(sid) ? ok({ id: 4242, username: "tmdbfan" }) : deny();
+      }
+      return ok({});
+    };
+    return seen;
+  }
+
+  async function signedIn(name, extra = {}) {
+    const env = makeEnv({ DB: makeD1(), ...SITE, ...extra });
+    const u = await createUser(env, name);
+    const r = await call(env, "/api/session", { method: "POST", json: { username: name, key: u.creatorKey } });
+    const cookie = (r.headers.get("set-cookie") || "").split(";")[0];
+    return { env, u, cookie };
+  }
+  async function connectionRow(env, provider) {
+    return env.DB.prepare(
+      "SELECT pc.* FROM provider_connections pc JOIN accounts a ON a.id = pc.account_id WHERE pc.provider = ?"
+    ).bind(provider).first();
+  }
+
+  it("a signed-in Trakt sign-in keeps the token on the server and redirects with no token in the URL", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      stubProviders({ valid: ["TRAKT-ACCESS"] });
+      const { env, cookie } = await signedIn("conn1");
+      const r = await call(env, "/api/trakt/oauth/callback?code=CODE&state=abc123", {
+        cookie: `${cookie}; mla_trakt_state=abc123`,
+      });
+      assert.equal(r.status, 302);
+      const location = r.headers.get("location");
+      assert.equal(location, "https://example.test/?connected=trakt");
+      assert.doesNotMatch(location, /TRAKT-/);
+
+      const row = await connectionRow(env, "trakt");
+      assert.ok(row, "stored");
+      assert.doesNotMatch(JSON.stringify(row), /TRAKT-ACCESS|TRAKT-REFRESH/, "stored encrypted");
+      assert.equal(row.expires_at, (1800000000 + 7776000) * 1000);
+      assert.equal(JSON.parse(row.external_user).username, "traktfan");
+
+      // The page fetches it back over its session.
+      const reveal = await call(env, "/api/connections/trakt/token", { method: "POST", cookie, json: {} });
+      assert.equal(reveal.status, 200);
+      assert.equal(reveal.body.accessToken, "TRAKT-ACCESS");
+      assert.equal(reveal.body.username, "traktfan");
+      assert.equal(reveal.headers.get("cache-control"), "no-store");
+
+      const list = await call(env, "/api/connections", { cookie });
+      assert.deepEqual(list.body.connections.map((c) => [c.provider, c.username, c.hasToken]), [["trakt", "traktfan", true]]);
+      assert.doesNotMatch(JSON.stringify(list.body), /TRAKT-ACCESS/, "the list never carries a token");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("signed out, or with no encryption key, a sign-in behaves exactly as before", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      stubProviders({ valid: ["TRAKT-ACCESS"] });
+      const out = makeEnv({ DB: makeD1(), ...SITE });
+      const r1 = await call(out, "/api/trakt/oauth/callback?code=CODE&state=s1", { cookie: "mla_trakt_state=s1" });
+      assert.match(r1.headers.get("location"), /#trakt_token=TRAKT-ACCESS&trakt_username=traktfan$/);
+
+      const { env, cookie } = await signedIn("conn2", { TOKEN_ENCRYPTION_KEY: undefined });
+      const r2 = await call(env, "/api/trakt/oauth/callback?code=CODE&state=s2", { cookie: `${cookie}; mla_trakt_state=s2` });
+      assert.match(r2.headers.get("location"), /#trakt_token=TRAKT-ACCESS/);
+      assert.equal(await connectionRow(env, "trakt"), null);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("MDBList, Simkl and TMDB sign-ins do the same when signed in", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      stubProviders({ valid: ["MDB-ACCESS", "SIMKL-ACCESS", "TMDB-SESSION"] });
+      const { env, cookie } = await signedIn("conn3");
+
+      const mdb = await call(env, "/api/mdblist/oauth/callback?code=C&state=m1", { cookie: `${cookie}; mla_mdblist_state=m1:verifier` });
+      assert.equal(mdb.headers.get("location"), "https://example.test/?connected=mdblist");
+      const simkl = await call(env, "/api/simkl/oauth/callback?code=C&state=k1", { cookie: `${cookie}; mla_simkl_state=k1` });
+      assert.equal(simkl.headers.get("location"), "https://example.test/?connected=simkl");
+      const tmdb = await call(env, "/api/tmdb/oauth/callback?request_token=RT", { cookie: `${cookie}; mla_tmdb_token=RT` });
+      assert.equal(tmdb.headers.get("location"), "https://example.test/?connected=tmdb");
+
+      const m = await call(env, "/api/connections/mdblist/token", { method: "POST", cookie, json: {} });
+      assert.equal(m.body.accessToken, "MDB-ACCESS");
+      assert.ok((await connectionRow(env, "mdblist")).refresh_token_enc, "MDBList's refresh token is kept");
+      const s = await call(env, "/api/connections/simkl/token", { method: "POST", cookie, json: {} });
+      assert.equal(s.body.accessToken, "SIMKL-ACCESS");
+      const t = await call(env, "/api/connections/tmdb/token", { method: "POST", cookie, json: {} });
+      assert.equal(t.body.accessToken, "TMDB-SESSION");
+      assert.equal(t.body.id, "4242");
+      assert.equal(t.body.username, "tmdbfan");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("the Trakt device-code flow keeps a copy too, and still answers with the token", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      stubProviders({ valid: ["TRAKT-DEVICE-ACCESS"] });
+      const { env, cookie } = await signedIn("conn4");
+      const r = await call(env, "/api/trakt/device/token", { method: "POST", cookie, json: { code: "DEV" } });
+      assert.equal(r.body.access_token, "TRAKT-DEVICE-ACCESS");
+      const reveal = await call(env, "/api/connections/trakt/token", { method: "POST", cookie, json: {} });
+      assert.equal(reveal.body.accessToken, "TRAKT-DEVICE-ACCESS");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("imports the tokens a browser holds once, after checking each with its provider", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      const seen = stubProviders({ valid: ["LOCAL-TRAKT", "LOCAL-MDB-KEY"], down: ["api.simkl.com"] });
+      const { env, cookie } = await signedIn("conn5");
+      const keys = {
+        traktAccessToken: "LOCAL-TRAKT", traktKey: "", traktUsername: "old-name",
+        mdblistAccessToken: "", mdblistKey: "LOCAL-MDB-KEY",
+        simklAccessToken: "LOCAL-SIMKL",
+        tmdbSessionId: "STALE-TMDB", tmdbAccountId: "1",
+      };
+      const r = await call(env, "/api/connections/import-local", { method: "POST", cookie, json: { keys } });
+      assert.equal(r.status, 200, JSON.stringify(r.body));
+      assert.deepEqual(r.body.results, { trakt: "imported", mdblist: "imported", simkl: "unreachable", tmdb: "invalid" });
+      assert.ok(seen.some((s) => s.href === "https://api.trakt.tv/users/me"), "checked with Trakt");
+
+      const t = await call(env, "/api/connections/trakt/token", { method: "POST", cookie, json: {} });
+      assert.equal(t.body.accessToken, "LOCAL-TRAKT");
+      assert.equal(t.body.username, "traktfan", "the username the provider reports");
+      const m = await call(env, "/api/connections/mdblist/token", { method: "POST", cookie, json: {} });
+      assert.equal(m.body.accessToken, "LOCAL-MDB-KEY", "an API-key-only MDBList connection");
+      assert.equal((await call(env, "/api/connections/tmdb/token", { method: "POST", cookie, json: {} })).status, 404);
+
+      // Once: a connection already on the server is not replaced.
+      const again = await call(env, "/api/connections/import-local", {
+        method: "POST", cookie, json: { keys: { traktAccessToken: "LOCAL-TRAKT", mdblistKey: "LOCAL-MDB-KEY" } },
+      });
+      assert.deepEqual(again.body.results, { trakt: "exists", mdblist: "exists" });
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("disconnecting revokes the token at Trakt and deletes the server's copy", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      const seen = stubProviders({ valid: ["TRAKT-ACCESS"] });
+      const { env, cookie } = await signedIn("conn6");
+      await call(env, "/api/trakt/oauth/callback?code=CODE&state=d1", { cookie: `${cookie}; mla_trakt_state=d1` });
+      const del = await call(env, "/api/connections/trakt", { method: "DELETE", cookie });
+      assert.equal(del.body.removed, true);
+      assert.equal(del.body.revokedAtProvider, true);
+      const revoke = seen.find((s) => s.href === "https://api.trakt.tv/oauth/revoke");
+      assert.ok(revoke);
+      assert.equal(JSON.parse(revoke.body).token, "TRAKT-ACCESS");
+      assert.equal(await connectionRow(env, "trakt"), null);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("every connection route needs a signed-in session, and one account cannot read another's", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      stubProviders({ valid: ["TRAKT-ACCESS"] });
+      const { env, cookie } = await signedIn("conn7");
+      await call(env, "/api/trakt/oauth/callback?code=CODE&state=o1", { cookie: `${cookie}; mla_trakt_state=o1` });
+      for (const [p, method] of [["/api/connections", "GET"], ["/api/connections/trakt/token", "POST"], ["/api/connections/import-local", "POST"], ["/api/connections/trakt", "DELETE"]]) {
+        const r = await call(env, p, { method, json: method === "GET" ? undefined : {} });
+        assert.equal(r.status, 401, `${method} ${p}`);
+      }
+      const other = await createUser(env, "conn7other");
+      const otherLogin = await call(env, "/api/session", { method: "POST", json: { username: "conn7other", key: other.creatorKey } });
+      const otherCookie = (otherLogin.headers.get("set-cookie") || "").split(";")[0];
+      assert.equal((await call(env, "/api/connections/trakt/token", { method: "POST", cookie: otherCookie, json: {} })).status, 404);
+      // A cross-site page cannot ask for it with the victim's cookie.
+      const csrf = await call(env, "/api/connections/trakt/token", {
+        method: "POST", cookie, json: {}, headers: { Origin: "https://evil.example" },
+      });
+      assert.equal(csrf.status, 403);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("deleting the account deletes its connections", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      stubProviders({ valid: ["TRAKT-ACCESS"] });
+      const { env, u, cookie } = await signedIn("conn8");
+      await call(env, "/api/trakt/oauth/callback?code=CODE&state=x1", { cookie: `${cookie}; mla_trakt_state=x1` });
+      assert.ok(await connectionRow(env, "trakt"));
+      await call(env, "/api/creator/delete-account", {
+        method: "POST", json: { creatorName: u.creatorName, creatorKey: u.creatorKey, confirm: "DELETE" },
+      });
+      assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM provider_connections").first()).n, 0);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("restore tells the page whether it now holds a session", async () => {
+    const off = makeEnv({ DB: makeD1() });
+    const a = await createUser(off, "restoreflag1");
+    const r1 = await call(off, "/api/creator/restore", { method: "POST", json: { creatorName: "restoreflag1", creatorKey: a.creatorKey } });
+    assert.equal(r1.body.session, false);
+    const on = makeEnv({ DB: makeD1(), FF_SESSIONS: "1" });
+    const b = await createUser(on, "restoreflag2");
+    const r2 = await call(on, "/api/creator/restore", { method: "POST", json: { creatorName: "restoreflag2", creatorKey: b.creatorKey } });
+    assert.equal(r2.body.session, true);
+  });
+
+  it("the page picks up a server-kept connection, and removes the server's copy on disconnect", () => {
+    const init = fs.readFileSync(path.join(REPO_ROOT, "24_client-backup-restore-presets.js"), "utf8");
+    assert.match(init, /pickUpServerConnection\(\)/);
+    const oauth = fs.readFileSync(path.join(REPO_ROOT, "17_client-my-lists-and-trakt-oauth.js"), "utf8");
+    for (const p of ["Trakt", "Mdblist", "Simkl", "Tmdb"]) {
+      const body = oauth.slice(oauth.indexOf(`function disconnect${p}() {`)).split("\n}\n")[0];
+      assert.match(body, new RegExp(`forgetServerConnection\\('${p.toLowerCase()}'\\)`), `disconnect${p}`);
+    }
+    for (const p of ["trakt", "mdblist", "simkl", "tmdb"]) {
+      assert.match(oauth, new RegExp(`provider === '${p}'`), `pickUpServerConnection handles ${p}`);
+    }
+  });
+});

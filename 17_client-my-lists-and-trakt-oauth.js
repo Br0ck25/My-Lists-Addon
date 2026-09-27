@@ -575,6 +575,7 @@ function startMdblistConnect() {
 }
 
 function disconnectMdblist() {
+  forgetServerConnection('mdblist');
   const input = document.getElementById('mdblistKeyInput');
   if (input) input.value = '';
   mdblistAccessToken = '';
@@ -651,34 +652,40 @@ function renderMdblistConnectStatus() {
   }
 }
 
+// A newly connected MDBList account: from the address bar after a signed-out
+// connect, or from the server after a signed-in one (pickUpServerConnection).
+function applyMdblistConnection(token, username) {
+  mdblistAccessToken = token;
+  try {
+    localStorage.removeItem('myListAddon:mdblistDisconnected');
+  } catch (e) {}
+  if (username) {
+    mdblistUsername = username;
+    try {
+      localStorage.setItem('myListAddon:mdblistUsername', mdblistUsername);
+    } catch (e) {}
+  }
+  try {
+    localStorage.setItem('myListAddon:mdblistAccessToken', mdblistAccessToken);
+  } catch (e) {}
+  saveState();
+  if (typeof pushCreatorSync === 'function') pushCreatorSync();
+  if (typeof showAppAlert === 'function') {
+    showAppAlert('MDBList Connected', 'Connected to MDBList.', true);
+  } else {
+    alert('Connected to MDBList.');
+  }
+  renderMdblistConnectStatus();
+  scheduleMyMdblistListsRefresh();
+}
+
 function pickUpMdblistTokenFromUrl() {
   const hash = window.location.hash || '';
   const match = /(?:^|[#&])mdblist_token=([^&]+)/.exec(hash);
   if (match) {
-    mdblistAccessToken = decodeURIComponent(match[1]);
-    try {
-      localStorage.removeItem('myListAddon:mdblistDisconnected');
-    } catch (e) {}
     const userMatch = /(?:^|[#&])mdblist_username=([^&]+)/.exec(hash);
-    if (userMatch) {
-      mdblistUsername = decodeURIComponent(userMatch[1]);
-      try {
-        localStorage.setItem('myListAddon:mdblistUsername', mdblistUsername);
-      } catch (e) {}
-    }
-    try {
-      localStorage.setItem('myListAddon:mdblistAccessToken', mdblistAccessToken);
-    } catch (e) {}
-    saveState();
-    if (typeof pushCreatorSync === 'function') pushCreatorSync();
     history.replaceState(null, '', window.location.pathname + window.location.search);
-    if (typeof showAppAlert === 'function') {
-      showAppAlert('MDBList Connected', 'Connected to MDBList.', true);
-    } else {
-      alert('Connected to MDBList.');
-    }
-    renderMdblistConnectStatus();
-    scheduleMyMdblistListsRefresh();
+    applyMdblistConnection(decodeURIComponent(match[1]), userMatch ? decodeURIComponent(userMatch[1]) : '');
   }
   const params = new URLSearchParams(window.location.search);
   const err = params.get('mdblist_error');
@@ -720,6 +727,7 @@ function startTraktConnect() {
 }
 
 function disconnectTrakt() {
+  forgetServerConnection('trakt');
   const keyInput = document.getElementById('traktKeyInput');
   if (keyInput) keyInput.value = '';
   const userInput = document.getElementById('traktUsernameInput');
@@ -805,34 +813,39 @@ function renderTraktConnectStatus() {
 // the callback's own failure path. Either way, strips whatever it found
 // from the address bar immediately so a page refresh or a copied/shared
 // URL never carries it forward.
+// A newly connected Trakt account: from the address bar after a signed-out
+// connect, or from the server after a signed-in one (pickUpServerConnection).
+function applyTraktConnection(token, user) {
+  traktAccessToken = token;
+  try {
+    localStorage.setItem('myListAddon:traktAccessToken', traktAccessToken);
+    localStorage.removeItem('myListAddon:traktDisconnected');
+  } catch (e) {}
+  if (user) {
+    try {
+      localStorage.setItem('myListAddon:traktUsername', user);
+    } catch (e) {}
+    const uInput = document.getElementById('traktUsernameInput');
+    if (uInput) uInput.value = user;
+  }
+  saveState();
+  if (typeof pushCreatorSync === 'function') pushCreatorSync();
+  if (typeof showAppAlert === 'function') {
+    showAppAlert('Trakt Connected', 'Connected to Trakt.', true);
+  } else {
+    alert('Connected to Trakt.');
+  }
+  renderTraktConnectStatus();
+  scheduleMyTraktListsRefresh();
+}
+
 function pickUpTraktTokenFromUrl() {
   const hash = window.location.hash || '';
   const match = /(?:^|[#&])trakt_token=([^&]+)/.exec(hash);
   if (match) {
-    traktAccessToken = decodeURIComponent(match[1]);
-    try {
-      localStorage.setItem('myListAddon:traktAccessToken', traktAccessToken);
-      localStorage.removeItem('myListAddon:traktDisconnected');
-    } catch (e) {}
     const userMatch = /(?:^|[#&])trakt_username=([^&]+)/.exec(hash);
-    if (userMatch) {
-      const user = decodeURIComponent(userMatch[1]);
-      try {
-        localStorage.setItem('myListAddon:traktUsername', user);
-      } catch (e) {}
-      const uInput = document.getElementById('traktUsernameInput');
-      if (uInput) uInput.value = user;
-    }
-    saveState();
-    if (typeof pushCreatorSync === 'function') pushCreatorSync();
     history.replaceState(null, '', window.location.pathname + window.location.search);
-    if (typeof showAppAlert === 'function') {
-      showAppAlert('Trakt Connected', 'Connected to Trakt.', true);
-    } else {
-      alert('Connected to Trakt.');
-    }
-    renderTraktConnectStatus();
-    scheduleMyTraktListsRefresh();
+    applyTraktConnection(decodeURIComponent(match[1]), userMatch ? decodeURIComponent(userMatch[1]) : '');
   }
   const params = new URLSearchParams(window.location.search);
   const err = params.get('trakt_error');
@@ -1492,6 +1505,7 @@ function toggleListsTmdbConnection() {
 }
 
 function disconnectTmdb() {
+  forgetServerConnection('tmdb');
   const input = document.getElementById('tmdbKeyInput');
   if (input) input.value = '';
   tmdbSessionId = '';
@@ -1513,6 +1527,24 @@ function disconnectTmdb() {
   scheduleMyTmdbListsRefresh();
 }
 
+// A newly connected TMDB account: from the address bar after a signed-out
+// connect, or from the server after a signed-in one (pickUpServerConnection).
+function applyTmdbConnection(sess, acc, user) {
+  tmdbSessionId = sess;
+  tmdbAccountId = acc || '';
+  tmdbUsername = user || '';
+  try {
+    localStorage.removeItem('myListAddon:tmdbDisconnected');
+    localStorage.setItem('myListAddon:tmdbSessionId', tmdbSessionId);
+    if (tmdbAccountId) localStorage.setItem('myListAddon:tmdbAccountId', tmdbAccountId);
+    if (tmdbUsername) localStorage.setItem('myListAddon:tmdbUsername', tmdbUsername);
+  } catch (e) {}
+  saveState();
+  if (typeof pushCreatorSync === 'function') pushCreatorSync();
+  renderTmdbConnectStatus();
+  scheduleMyTmdbListsRefresh();
+}
+
 function pickUpTmdbTokenFromUrl() {
   const hash = window.location.hash || '';
   if (hash.startsWith('#') && hash.includes('tmdb_session=')) {
@@ -1521,24 +1553,12 @@ function pickUpTmdbTokenFromUrl() {
     const acc = params.get('tmdb_account');
     const user = params.get('tmdb_user');
     if (sess) {
-      tmdbSessionId = sess;
-      tmdbAccountId = acc || '';
-      tmdbUsername = user || '';
-      try {
-        localStorage.removeItem('myListAddon:tmdbDisconnected');
-        localStorage.setItem('myListAddon:tmdbSessionId', tmdbSessionId);
-        if (tmdbAccountId) localStorage.setItem('myListAddon:tmdbAccountId', tmdbAccountId);
-        if (tmdbUsername) localStorage.setItem('myListAddon:tmdbUsername', tmdbUsername);
-      } catch (e) {}
-      saveState();
-      if (typeof pushCreatorSync === 'function') pushCreatorSync();
       params.delete('tmdb_session');
       params.delete('tmdb_account');
       params.delete('tmdb_user');
       const rem = params.toString();
       history.replaceState(null, '', window.location.pathname + window.location.search + (rem ? '#' + rem : ''));
-      renderTmdbConnectStatus();
-      scheduleMyTmdbListsRefresh();
+      applyTmdbConnection(sess, acc, user);
     }
   }
 
@@ -1776,6 +1796,7 @@ function startSimklConnect() {
 }
 
 function disconnectSimkl() {
+  forgetServerConnection('simkl');
   const input = document.getElementById('simklKeyInput');
   if (input) input.value = '';
   simklAccessToken = '';
@@ -1805,32 +1826,131 @@ function toggleListsSimklConnection() {
   }
 }
 
+// A newly connected Simkl account: from the address bar after a signed-out
+// connect, or from the server after a signed-in one (pickUpServerConnection).
+function applySimklConnection(token, username) {
+  simklAccessToken = token;
+  try {
+    localStorage.removeItem('myListAddon:simklDisconnected');
+    localStorage.setItem('myListAddon:simklAccessToken', simklAccessToken);
+  } catch (e) {}
+  if (username) {
+    simklUsername = username;
+    try {
+      localStorage.setItem('myListAddon:simklUsername', simklUsername);
+    } catch (e) {}
+  }
+  saveState();
+  if (typeof pushCreatorSync === 'function') pushCreatorSync();
+  if (typeof showAppAlert === 'function') {
+    showAppAlert('Simkl Connected', 'Your Simkl account was successfully connected.', true);
+  } else {
+    alert('Connected to Simkl.');
+  }
+  renderSimklConnectStatus();
+  scheduleMySimklListsRefresh();
+}
+
+// --- Connections kept on the server (P3a-9) ----------------------------------
+//
+// Signed in, connecting Trakt, MDBList, Simkl or TMDB keeps the token on the
+// server and comes back as ?connected=<provider>, with no token in the address
+// bar. This page still works from its own copy of each token, so it asks for
+// that one once, over the signed-in session, and hands it to the same code a
+// token in the address bar reaches.
+async function pickUpServerConnection() {
+  const params = new URLSearchParams(window.location.search);
+  const provider = params.get('connected');
+  if (!provider) return;
+  let data = null;
+  let reached = false;
+  try {
+    const res = await fetch(ORIGIN + '/api/connections/' + encodeURIComponent(provider) + '/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    reached = true;
+    data = await res.json();
+  } catch (e) {}
+  // Left in the address bar only when the server could not be reached, so a
+  // reload tries again.
+  if (reached) {
+    params.delete('connected');
+    const qs = params.toString();
+    history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : '') + window.location.hash);
+  }
+  if (!data || !data.ok || !data.accessToken) {
+    const msg = reached
+      ? 'That account could not be loaded. Please connect it again from Settings.'
+      : 'Your account was connected, but this page could not load it. Reload the page to try again.';
+    if (typeof showAppAlert === 'function') showAppAlert('Connection', msg, false);
+    else alert(msg);
+    return;
+  }
+  if (provider === 'trakt') applyTraktConnection(data.accessToken, data.username || '');
+  else if (provider === 'mdblist') applyMdblistConnection(data.accessToken, data.username || '');
+  else if (provider === 'simkl') applySimklConnection(data.accessToken, data.username || '');
+  else if (provider === 'tmdb') applyTmdbConnection(data.accessToken, data.id || '', data.username || '');
+}
+
+// Disconnecting removes the server's copy too. Harmless when there is none, or
+// when this browser has no session (the server answers 401).
+function forgetServerConnection(provider) {
+  try {
+    fetch(ORIGIN + '/api/connections/' + encodeURIComponent(provider), {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+    }).catch(() => {});
+  } catch (e) {}
+}
+
+// Once per account on this device, and only once the browser has a session
+// (/api/creator/restore says so): offers the provider tokens this browser
+// already holds to the server, which checks each with its provider and keeps
+// the good ones.
+async function importLocalConnectionsOnce(creatorName) {
+  if (!creatorName || typeof collectKeys !== 'function') return;
+  const flag = 'myListAddon:connectionsImported:' + String(creatorName).toLowerCase();
+  try {
+    if (localStorage.getItem(flag) === '1') return;
+  } catch (e) {
+    return;
+  }
+  const k = collectKeys();
+  const keys = {
+    traktAccessToken: k.traktAccessToken, traktKey: k.traktKey, traktUsername: k.traktUsername,
+    mdblistAccessToken: k.mdblistAccessToken, mdblistKey: k.mdblistKey, mdblistUsername: k.mdblistUsername,
+    simklAccessToken: k.simklAccessToken, simklKey: k.simklKey, simklUsername: k.simklUsername,
+    tmdbSessionId: k.tmdbSessionId, tmdbKey: k.tmdbKey, tmdbAccountId: k.tmdbAccountId, tmdbUsername: k.tmdbUsername,
+  };
+  if (!keys.traktAccessToken && !keys.mdblistAccessToken && !keys.mdblistKey && !keys.simklAccessToken && !keys.tmdbSessionId) {
+    try { localStorage.setItem(flag, '1'); } catch (e) {}
+    return;
+  }
+  try {
+    const res = await fetch(ORIGIN + '/api/connections/import-local', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keys: keys }),
+    });
+    const data = await res.json();
+    // Finished once every token has had an answer about itself. One whose
+    // provider could not be reached is offered again on a later visit.
+    if (data && data.ok) {
+      const pending = Object.values(data.results || {}).some((r) => r === 'unreachable' || r === 'failed');
+      if (!pending) localStorage.setItem(flag, '1');
+    }
+  } catch (e) {}
+}
+
 function pickUpSimklTokenFromUrl() {
   const hash = window.location.hash || '';
   const match = /(?:^|[#&])simkl_token=([^&]+)/.exec(hash);
   if (match) {
-    simklAccessToken = decodeURIComponent(match[1]);
-    try {
-      localStorage.removeItem('myListAddon:simklDisconnected');
-      localStorage.setItem('myListAddon:simklAccessToken', simklAccessToken);
-    } catch (e) {}
     const userMatch = /(?:^|[#&])simkl_username=([^&]+)/.exec(hash);
-    if (userMatch) {
-      simklUsername = decodeURIComponent(userMatch[1]);
-      try {
-        localStorage.setItem('myListAddon:simklUsername', simklUsername);
-      } catch (e) {}
-    }
-    saveState();
-    if (typeof pushCreatorSync === 'function') pushCreatorSync();
     history.replaceState(null, '', window.location.pathname + window.location.search);
-    if (typeof showAppAlert === 'function') {
-      showAppAlert('Simkl Connected', 'Your Simkl account was successfully connected.', true);
-    } else {
-      alert('Connected to Simkl.');
-    }
-    renderSimklConnectStatus();
-    scheduleMySimklListsRefresh();
+    applySimklConnection(decodeURIComponent(match[1]), userMatch ? decodeURIComponent(userMatch[1]) : '');
   }
   const params = new URLSearchParams(window.location.search);
   const err = params.get('simkl_error');

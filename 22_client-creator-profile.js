@@ -1615,6 +1615,8 @@ async function submitRestoreProfile() {
     renderTrackPlaybackSection();
     renderCreatorDashboard();
     await loadCreatorSync();
+    // After the sync load, so tokens this account keeps in sync are included.
+    if (data.session && typeof importLocalConnectionsOnce === 'function') importLocalConnectionsOnce(data.creatorName);
   } catch (e) {
     errBox.innerHTML = '<p class="testresult err">Network error.</p>';
   } finally {
@@ -1785,7 +1787,10 @@ async function tryAutoRestoreCreatorProfile() {
       renderWatchlistPreferencesSection();
       renderTrackPlaybackSection();
       renderCreatorDashboard();
-      loadCreatorSync();
+      const syncing = loadCreatorSync();
+      if (data.session && typeof importLocalConnectionsOnce === 'function') {
+        Promise.resolve(syncing).catch(() => {}).then(() => importLocalConnectionsOnce(data.creatorName));
+      }
     }
   } catch (e) {
     // stay logged out

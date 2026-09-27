@@ -22,6 +22,19 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 `FF_SESSIONS` and `FF_INSTALLS` stay **off** (unset). Leave them off until the new sign-in and install-link screens ship.
 
+### 🔐 Connected accounts are kept on the server when signed in (P3a-9)
+
+- **Connecting Trakt, MDBList, Simkl or TMDB while signed in (with a session) keeps the token on the server**, encrypted with `TOKEN_ENCRYPTION_KEY` in `provider_connections`, together with its refresh token and expiry where the provider gives them.
+  - The sign-in comes back as `/?connected=trakt`, with no token in the address bar, the browser history or any log.
+  - The page then fetches the token once over its session (`POST /api/connections/:provider/token`), so every screen that uses it keeps working. That bridge goes away with the Phase 6 pages.
+  - The Trakt PIN-code flow keeps a copy too.
+  - Signed out, without a session (`FF_SESSIONS` off), or without `TOKEN_ENCRYPTION_KEY`, connecting works exactly as before.
+- **`POST /api/connections/import-local`**: after a sign-in that opens a session, the page offers the tokens it already holds, once per account on that device. Each is checked with its provider before it is kept. One already on the server is not replaced, and one the provider rejects is reported and not stored. Limited to five a minute per account.
+- **`GET /api/connections`** lists an account's connections without their tokens.
+- **Disconnecting** also removes the server's copy (`DELETE /api/connections/:provider`), and revokes the token at Trakt (for tokens issued to this site) and at TMDB. MDBList and Simkl have no revoke call.
+- Deleting an account deletes its connections.
+- Catalog rows do not read from here yet: that is P3a-10.
+
 ### 🔐 Install links: keys move to encrypted storage, and install links an account can manage (P3a-8)
 
 - **Existing install links keep their keys in encrypted D1 storage**, behind `INSTALL_MIGRATION_PERCENT` (off by default).
