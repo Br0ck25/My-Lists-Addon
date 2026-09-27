@@ -1145,6 +1145,115 @@ const STREMIO_BADGE_KEYS = [
   "showBadgesStremioCatalogs",
 ];
 
+// --- The install config, field by field (task P2-8) -------------------------
+//
+// Every setting an install link can carry, in one place. It used to be written
+// out by hand in six -- /api/save's allowlist, resolveConfig, decodeConfig, the
+// builder's save body, its signed-out filter and the configure page -- and the
+// copies drifted: the badge toggles and then Better Posters were each missing
+// from the save allowlist (the setting looked saved and never reached the
+// apps), resolveConfig never read simklUsername back, and the configure page
+// was never handed Better Posters, so opening Configure on an install that
+// used it showed it off, and pressing Update saved it off.
+//
+// kind:
+//   "account" -- belongs to a connected provider account. Stored only for a
+//                signed-in save (docs/DECISIONS.md D-8); read back as "".
+//                `secret` marks the keys and tokens, which never leave the
+//                server in a page or an API answer.
+//   "flag"    -- off unless set; stored only when on.
+//   "flagOn"  -- on unless set to false; stored only when off, so a config
+//                with everything on stays as small as it was.
+//   "choice"  -- a string with a default and, optionally, the values allowed
+//                (checked at the door: /api/save is unauthenticated and some of
+//                these end up in a URL); stored only when allowed and not the
+//                default.
+// requires: stored only while that flag is on (Better Posters' style options).
+//
+// Not here: `entries`, and the account-proof fields (track, trackCreatorName,
+// trackCreatorKey, trackOwner), which /api/save sets only after verifying the
+// account.
+const INSTALL_CONFIG_FIELDS = [
+  { name: "tmdbKey", kind: "account", secret: true },
+  { name: "mdblistKey", kind: "account", secret: true },
+  { name: "mdblistAccessToken", kind: "account", secret: true },
+  { name: "traktKey", kind: "account", secret: true },
+  { name: "traktUsername", kind: "account" },
+  { name: "traktAccessToken", kind: "account", secret: true },
+  { name: "simklKey", kind: "account", secret: true },
+  { name: "simklAccessToken", kind: "account", secret: true },
+  { name: "simklUsername", kind: "account" },
+  { name: "shuffleShelves", kind: "flag" },
+  { name: "shuffleItems", kind: "flag" },
+  { name: "region", kind: "choice", default: "US" },
+  { name: "hideNonDigitalReleases", kind: "flag" },
+  { name: "adultContentFilter", kind: "flag" },
+  { name: "dedupeAcrossLists", kind: "flag" },
+  ...STREMIO_BADGE_KEYS.map((name) => ({ name, kind: "flagOn" })),
+  { name: "betterPosters", kind: "flag" },
+  { name: "betterPostersGenre", kind: "flagOn", requires: "betterPosters" },
+  { name: "betterPostersRating", kind: "flagOn", requires: "betterPosters" },
+  { name: "betterPostersTrendTags", kind: "flagOn", requires: "betterPosters" },
+  { name: "betterPostersQuality", kind: "flag", requires: "betterPosters" },
+  { name: "betterPostersAge", kind: "flag", requires: "betterPosters" },
+  {
+    name: "betterPostersLang", kind: "choice", default: "en", requires: "betterPosters",
+    allowed: BETTER_POSTERS_LANGS.map((l) => l.value),
+  },
+  {
+    name: "betterPostersRatingSource", kind: "choice", default: "avg", requires: "betterPosters",
+    allowed: BETTER_POSTERS_RATING_SOURCES.map((r) => r.value),
+  },
+];
+
+// Every field, read out of a stored or decoded config with its default
+// applied. `parsed` may be anything -- an old link's bare entries array, or
+// garbage -- and the answer is always complete.
+function readInstallConfigFields(parsed) {
+  const src = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  const out = {};
+  for (const f of INSTALL_CONFIG_FIELDS) {
+    const v = src[f.name];
+    if (f.kind === "account") out[f.name] = typeof v === "string" ? v : "";
+    else if (f.kind === "flag") out[f.name] = !!v;
+    else if (f.kind === "flagOn") out[f.name] = v !== false;
+    else out[f.name] = (typeof v === "string" && v) ? v : f.default;
+  }
+  return out;
+}
+
+// The fields /api/save stores from a request body: only what differs from its
+// default, only what passes its check, and account fields only for a signed-in
+// save.
+function storedInstallConfigFields(body, withAccountFields) {
+  const src = body && typeof body === "object" ? body : {};
+  const out = {};
+  for (const f of INSTALL_CONFIG_FIELDS) {
+    if (f.requires && !src[f.requires]) continue;
+    const v = src[f.name];
+    if (f.kind === "account") {
+      if (withAccountFields && typeof v === "string" && v) out[f.name] = v;
+    } else if (f.kind === "flag") {
+      if (v) out[f.name] = true;
+    } else if (f.kind === "flagOn") {
+      if (v === false) out[f.name] = false;
+    } else if (typeof v === "string" && v && v !== f.default && (!f.allowed || f.allowed.includes(v))) {
+      out[f.name] = v;
+    }
+  }
+  return out;
+}
+
+// The same values with every key and token removed: what a page or an API
+// answer may carry (the configure page's starting values, for one).
+function nonSecretInstallConfigFields(values) {
+  const out = {};
+  for (const f of INSTALL_CONFIG_FIELDS) {
+    if (!f.secret && values && f.name in values) out[f.name] = values[f.name];
+  }
+  return out;
+}
+
 // --- Catalog rows that are one account's live state -------------------------
 //
 // The detectSource names (04_config-resolution.js) whose catalog response is

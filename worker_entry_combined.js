@@ -1168,6 +1168,115 @@ const STREMIO_BADGE_KEYS = [
   "showBadgesStremioCatalogs",
 ];
 
+// --- The install config, field by field (task P2-8) -------------------------
+//
+// Every setting an install link can carry, in one place. It used to be written
+// out by hand in six -- /api/save's allowlist, resolveConfig, decodeConfig, the
+// builder's save body, its signed-out filter and the configure page -- and the
+// copies drifted: the badge toggles and then Better Posters were each missing
+// from the save allowlist (the setting looked saved and never reached the
+// apps), resolveConfig never read simklUsername back, and the configure page
+// was never handed Better Posters, so opening Configure on an install that
+// used it showed it off, and pressing Update saved it off.
+//
+// kind:
+//   "account" -- belongs to a connected provider account. Stored only for a
+//                signed-in save (docs/DECISIONS.md D-8); read back as "".
+//                `secret` marks the keys and tokens, which never leave the
+//                server in a page or an API answer.
+//   "flag"    -- off unless set; stored only when on.
+//   "flagOn"  -- on unless set to false; stored only when off, so a config
+//                with everything on stays as small as it was.
+//   "choice"  -- a string with a default and, optionally, the values allowed
+//                (checked at the door: /api/save is unauthenticated and some of
+//                these end up in a URL); stored only when allowed and not the
+//                default.
+// requires: stored only while that flag is on (Better Posters' style options).
+//
+// Not here: `entries`, and the account-proof fields (track, trackCreatorName,
+// trackCreatorKey, trackOwner), which /api/save sets only after verifying the
+// account.
+const INSTALL_CONFIG_FIELDS = [
+  { name: "tmdbKey", kind: "account", secret: true },
+  { name: "mdblistKey", kind: "account", secret: true },
+  { name: "mdblistAccessToken", kind: "account", secret: true },
+  { name: "traktKey", kind: "account", secret: true },
+  { name: "traktUsername", kind: "account" },
+  { name: "traktAccessToken", kind: "account", secret: true },
+  { name: "simklKey", kind: "account", secret: true },
+  { name: "simklAccessToken", kind: "account", secret: true },
+  { name: "simklUsername", kind: "account" },
+  { name: "shuffleShelves", kind: "flag" },
+  { name: "shuffleItems", kind: "flag" },
+  { name: "region", kind: "choice", default: "US" },
+  { name: "hideNonDigitalReleases", kind: "flag" },
+  { name: "adultContentFilter", kind: "flag" },
+  { name: "dedupeAcrossLists", kind: "flag" },
+  ...STREMIO_BADGE_KEYS.map((name) => ({ name, kind: "flagOn" })),
+  { name: "betterPosters", kind: "flag" },
+  { name: "betterPostersGenre", kind: "flagOn", requires: "betterPosters" },
+  { name: "betterPostersRating", kind: "flagOn", requires: "betterPosters" },
+  { name: "betterPostersTrendTags", kind: "flagOn", requires: "betterPosters" },
+  { name: "betterPostersQuality", kind: "flag", requires: "betterPosters" },
+  { name: "betterPostersAge", kind: "flag", requires: "betterPosters" },
+  {
+    name: "betterPostersLang", kind: "choice", default: "en", requires: "betterPosters",
+    allowed: BETTER_POSTERS_LANGS.map((l) => l.value),
+  },
+  {
+    name: "betterPostersRatingSource", kind: "choice", default: "avg", requires: "betterPosters",
+    allowed: BETTER_POSTERS_RATING_SOURCES.map((r) => r.value),
+  },
+];
+
+// Every field, read out of a stored or decoded config with its default
+// applied. `parsed` may be anything -- an old link's bare entries array, or
+// garbage -- and the answer is always complete.
+function readInstallConfigFields(parsed) {
+  const src = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  const out = {};
+  for (const f of INSTALL_CONFIG_FIELDS) {
+    const v = src[f.name];
+    if (f.kind === "account") out[f.name] = typeof v === "string" ? v : "";
+    else if (f.kind === "flag") out[f.name] = !!v;
+    else if (f.kind === "flagOn") out[f.name] = v !== false;
+    else out[f.name] = (typeof v === "string" && v) ? v : f.default;
+  }
+  return out;
+}
+
+// The fields /api/save stores from a request body: only what differs from its
+// default, only what passes its check, and account fields only for a signed-in
+// save.
+function storedInstallConfigFields(body, withAccountFields) {
+  const src = body && typeof body === "object" ? body : {};
+  const out = {};
+  for (const f of INSTALL_CONFIG_FIELDS) {
+    if (f.requires && !src[f.requires]) continue;
+    const v = src[f.name];
+    if (f.kind === "account") {
+      if (withAccountFields && typeof v === "string" && v) out[f.name] = v;
+    } else if (f.kind === "flag") {
+      if (v) out[f.name] = true;
+    } else if (f.kind === "flagOn") {
+      if (v === false) out[f.name] = false;
+    } else if (typeof v === "string" && v && v !== f.default && (!f.allowed || f.allowed.includes(v))) {
+      out[f.name] = v;
+    }
+  }
+  return out;
+}
+
+// The same values with every key and token removed: what a page or an API
+// answer may carry (the configure page's starting values, for one).
+function nonSecretInstallConfigFields(values) {
+  const out = {};
+  for (const f of INSTALL_CONFIG_FIELDS) {
+    if (!f.secret && values && f.name in values) out[f.name] = values[f.name];
+  }
+  return out;
+}
+
 // --- Catalog rows that are one account's live state -------------------------
 //
 // The detectSource names (04_config-resolution.js) whose catalog response is
@@ -3160,7 +3269,10 @@ function deterministicDailyShuffle(array, salt = "") {
 // with no CONFIGS KV binding, and without KV there are no Creator Profiles for
 // a personal shelf to belong to.
 function decodeConfig(config) {
-  const empty = { entries: [], tmdbKey: "", mdblistKey: "", mdblistAccessToken: "", traktKey: "", traktUsername: "", traktAccessToken: "", simklKey: "", simklAccessToken: "", track: false, trackCreatorName: "", trackCreatorKey: "", trackOwner: "", shuffleShelves: false, shuffleItems: false, region: "US", hideNonDigitalReleases: false, adultContentFilter: false, dedupeAcrossLists: false, betterPosters: false };
+  // An old self-contained base64 install link. Its settings are read through
+  // the one install-config schema (INSTALL_CONFIG_FIELDS, 00_constants.js), so
+  // a field and its default are defined once for every kind of link.
+  const noAccount = { track: false, trackCreatorName: "", trackCreatorKey: "", trackOwner: "" };
   try {
     const b64 = config.replace(/-/g, "+").replace(/_/g, "/");
     const padded = b64 + "===".slice((b64.length + 3) % 4);
@@ -3170,68 +3282,25 @@ function decodeConfig(config) {
     const jsonStr = new TextDecoder().decode(bytes);
     const parsed = JSON.parse(jsonStr);
 
+    // The oldest links are a bare array of rows, with no settings at all.
     const rawEntries = Array.isArray(parsed) ? parsed : parsed.entries;
     const entries = Array.isArray(rawEntries)
       ? rawEntries
           .filter((e) => e && e.id && e.url && e.type)
           .map((e) => ({ ...e, enabled: e.enabled !== false }))
       : [];
+    const settings = Array.isArray(parsed) ? {} : parsed;
 
     return {
       entries,
-      tmdbKey: (!Array.isArray(parsed) && parsed.tmdbKey) || "",
-      mdblistKey: (!Array.isArray(parsed) && parsed.mdblistKey) || "",
-      mdblistAccessToken: (!Array.isArray(parsed) && parsed.mdblistAccessToken) || "",
-      traktKey: (!Array.isArray(parsed) && parsed.traktKey) || "",
-      traktUsername: (!Array.isArray(parsed) && parsed.traktUsername) || "",
-      traktAccessToken: (!Array.isArray(parsed) && parsed.traktAccessToken) || "",
-      simklKey: (!Array.isArray(parsed) && parsed.simklKey) || "",
-      simklAccessToken: (!Array.isArray(parsed) && parsed.simklAccessToken) || "",
-      track: !!(!Array.isArray(parsed) && parsed.track),
-      trackCreatorName: (!Array.isArray(parsed) && parsed.trackCreatorName) || "",
-      trackCreatorKey: (!Array.isArray(parsed) && parsed.trackCreatorKey) || "",
+      ...readInstallConfigFields(settings),
+      track: !!settings.track,
+      trackCreatorName: settings.trackCreatorName || "",
+      trackCreatorKey: settings.trackCreatorKey || "",
       trackOwner: "",
-      shuffleShelves: !!(!Array.isArray(parsed) && parsed.shuffleShelves),
-      shuffleItems: !!(!Array.isArray(parsed) && parsed.shuffleItems),
-      // Two-letter watch_region for streaming-availability catalogs
-      // (provider charts, Stream Releases) and content ratings -- see
-      // 07_source-fetchers-tmdb-simkl.js's tmdbProviderChartPaths and
-      // fetchTmdbItemDetailsUncached for where this actually gets used.
-      // Defaults to US so every install predating this feature keeps
-      // behaving exactly as it always did.
-      region: (!Array.isArray(parsed) && parsed.region) || "US",
-      // Filters items with no known digital release (movie charts only,
-      // see fetchTmdbChart's own comment for why) out of TMDB Trending/
-      // Popular movie catalogs. Defaults to false so every install
-      // predating this feature keeps showing everything, same reasoning
-      // as region's own default above.
-      hideNonDigitalReleases: !!(!Array.isArray(parsed) && parsed.hideNonDigitalReleases),
-      adultContentFilter: !!(!Array.isArray(parsed) && parsed.adultContentFilter),
-      // Keeps the first list of a given type in a config untouched and
-      // strips whatever a later list of the same type shares with an
-      // earlier one -- see dedupeAcrossListEntries (05_catalog-core.js) for
-      // where this is actually applied. Defaults to false, same reasoning
-      // as region/hideNonDigitalReleases above.
-      dedupeAcrossLists: !!(!Array.isArray(parsed) && parsed.dedupeAcrossLists),
-      // Badge toggles default ON when absent, the way the others here do, so
-      // an install predating this one keeps showing them.
-      showBadgesStremioWatchlist: Array.isArray(parsed) || parsed.showBadgesStremioWatchlist !== false,
-      // BetterPosters (btttr.cc) replacement artwork -- see
-      // applyBetterPostersToMetas (05_catalog-core.js). Opt-in, so it
-      // defaults to false and every install predating it is untouched. The
-      // style keys below only matter when betterPosters itself is on, and
-      // each one defaults to btttr.cc's own default for that option.
-      betterPosters: !!(!Array.isArray(parsed) && parsed.betterPosters),
-      betterPostersGenre: Array.isArray(parsed) || parsed.betterPostersGenre !== false,
-      betterPostersRating: Array.isArray(parsed) || parsed.betterPostersRating !== false,
-      betterPostersQuality: !!(!Array.isArray(parsed) && parsed.betterPostersQuality),
-      betterPostersAge: !!(!Array.isArray(parsed) && parsed.betterPostersAge),
-      betterPostersTrendTags: Array.isArray(parsed) || parsed.betterPostersTrendTags !== false,
-      betterPostersLang: (!Array.isArray(parsed) && parsed.betterPostersLang) || "en",
-      betterPostersRatingSource: (!Array.isArray(parsed) && parsed.betterPostersRatingSource) || "avg",
     };
   } catch {
-    return empty;
+    return { entries: [], ...readInstallConfigFields({}), ...noAccount };
   }
 }
 
@@ -12363,14 +12432,9 @@ async function resolveConfig(configParam, env) {
           continueWatching,
           watchlist,
           airingNext,
-          tmdbKey: parsed.tmdbKey || "",
-          mdblistKey: parsed.mdblistKey || "",
-          mdblistAccessToken: parsed.mdblistAccessToken || "",
-          traktKey: parsed.traktKey || "",
-          traktUsername: parsed.traktUsername || "",
-          traktAccessToken: parsed.traktAccessToken || "",
-          simklKey: parsed.simklKey || "",
-          simklAccessToken: parsed.simklAccessToken || "",
+          // Every install setting, with its default, from the one schema
+          // (INSTALL_CONFIG_FIELDS, 00_constants.js).
+          ...readInstallConfigFields(parsed),
           track: !!parsed.track,
           trackCreatorName: parsed.trackCreatorName || "",
           trackCreatorKey: parsed.trackCreatorKey || "",
@@ -12378,34 +12442,6 @@ async function resolveConfig(configParam, env) {
           // is gated on this rather than on trackCreatorName -- see the block
           // above and mayReadTrackedShelf (02_http-and-creator-utils.js).
           trackOwner,
-          shuffleShelves: !!parsed.shuffleShelves,
-          shuffleItems: !!parsed.shuffleItems,
-          region: parsed.region || "US",
-          hideNonDigitalReleases: !!parsed.hideNonDigitalReleases,
-          adultContentFilter: !!parsed.adultContentFilter,
-          dedupeAcrossLists: !!parsed.dedupeAcrossLists,
-          // See decodeConfig (02_http-and-creator-utils.js) for why
-          // betterPosters itself defaults off while its style keys default
-          // to btttr.cc's own defaults.
-          betterPosters: !!parsed.betterPosters,
-          betterPostersGenre: parsed.betterPostersGenre !== false,
-          betterPostersRating: parsed.betterPostersRating !== false,
-          betterPostersQuality: !!parsed.betterPostersQuality,
-          betterPostersAge: !!parsed.betterPostersAge,
-          betterPostersTrendTags: parsed.betterPostersTrendTags !== false,
-          betterPostersLang: parsed.betterPostersLang || "en",
-          betterPostersRatingSource: parsed.betterPostersRatingSource || "avg",
-          showBadgesAiringNext: parsed.showBadgesAiringNext !== false,
-          showBadgesContinueWatching: parsed.showBadgesContinueWatching !== false,
-          showBadgesWatchlist: parsed.showBadgesWatchlist !== false,
-          showBadgesTraktContinueWatching: parsed.showBadgesTraktContinueWatching !== false,
-          showBadgesMdblistUpNext: parsed.showBadgesMdblistUpNext !== false,
-          showBadgesCatalogs: parsed.showBadgesCatalogs !== false,
-          showBadgesStremioAiringNext: parsed.showBadgesStremioAiringNext !== false,
-          showBadgesStremioContinueWatching: parsed.showBadgesStremioContinueWatching !== false,
-          showBadgesStremioCatalogs: parsed.showBadgesStremioCatalogs !== false,
-          showBadgesStremioWatchlist: parsed.showBadgesStremioWatchlist !== false,
-          showBadgesStremio: parsed.showBadgesStremio !== false,
         };
       } catch {
         // fall through to legacy decode below
@@ -72063,6 +72099,11 @@ function copyLink(url) {
 // verifies it and never stores it in the link). Signed out, the save carries
 // no provider keys, tokens or playback tracking: a signed-out install is the
 // site's public lists only, and the server would not store them anyway.
+// The server's install-config schema (INSTALL_CONFIG_FIELDS, 00_constants.js),
+// written into the page when it is rendered: each field's name, and whether it
+// belongs to a connected account.
+const INSTALL_CONFIG_FIELD_LIST = ${jsonForScript(INSTALL_CONFIG_FIELDS.map((f) => ({ name: f.name, account: f.kind === 'account' })))};
+
 function withAccountProof(body) {
   const out = Object.assign({}, body);
   if (isSignedIn()) {
@@ -72070,10 +72111,22 @@ function withAccountProof(body) {
     try { out.creatorKey = localStorage.getItem('myListAddon:creatorKey') || ''; } catch (e) { out.creatorKey = ''; }
     return out;
   }
-  ['tmdbKey', 'mdblistKey', 'mdblistAccessToken', 'traktKey', 'traktUsername', 'traktAccessToken',
-    'simklKey', 'simklAccessToken', 'simklUsername', 'track', 'trackCreatorName', 'trackCreatorKey']
-    .forEach((k) => { delete out[k]; });
+  INSTALL_CONFIG_FIELD_LIST.forEach((f) => { if (f.account) delete out[f.name]; });
+  ['track', 'trackCreatorName', 'trackCreatorKey'].forEach((k) => { delete out[k]; });
   return out;
+}
+
+// What the builder sends to /api/save: the rows, the account-proof fields, and
+// every install setting the schema names, straight from collectKeys.
+function installSaveBody(entries, keys) {
+  const body = {
+    entries: entries,
+    track: keys.track,
+    trackCreatorName: keys.trackCreatorName,
+    trackCreatorKey: keys.trackCreatorKey,
+  };
+  INSTALL_CONFIG_FIELD_LIST.forEach((f) => { body[f.name] = keys[f.name]; });
+  return body;
 }
 
 // The rows a signed-out install link cannot carry, named, with a way in.
@@ -72116,46 +72169,7 @@ async function generate() {
     const res = await fetch(ORIGIN + '/api/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(withAccountProof({
-        entries,
-        tmdbKey: keys.tmdbKey,
-        mdblistKey: keys.mdblistKey,
-        mdblistAccessToken: keys.mdblistAccessToken,
-        traktKey: keys.traktKey,
-        traktUsername: keys.traktUsername,
-        traktAccessToken: keys.traktAccessToken,
-        simklKey: keys.simklKey,
-        simklAccessToken: keys.simklAccessToken,
-        simklUsername: keys.simklUsername,
-        track: keys.track,
-        trackCreatorName: keys.trackCreatorName,
-        trackCreatorKey: keys.trackCreatorKey,
-        shuffleShelves: keys.shuffleShelves,
-        shuffleItems: keys.shuffleItems,
-        region: keys.region,
-        hideNonDigitalReleases: keys.hideNonDigitalReleases,
-        adultContentFilter: keys.adultContentFilter,
-        dedupeAcrossLists: keys.dedupeAcrossLists,
-        // Must be listed explicitly: this body is an allowlist, and /api/save
-        // is the link Stremio/Nuvio actually install. Left out, the setting
-        // never leaves the browser and the feature looks dead in the apps
-        // while the website shows it working.
-        // Same allowlist problem as betterPosters below: left out, switching
-        // any of these off never leaves the browser.
-        showBadgesStremio: keys.showBadgesStremio,
-        showBadgesStremioAiringNext: keys.showBadgesStremioAiringNext,
-        showBadgesStremioContinueWatching: keys.showBadgesStremioContinueWatching,
-        showBadgesStremioWatchlist: keys.showBadgesStremioWatchlist,
-        showBadgesStremioCatalogs: keys.showBadgesStremioCatalogs,
-        betterPosters: keys.betterPosters,
-        betterPostersGenre: keys.betterPostersGenre,
-        betterPostersRating: keys.betterPostersRating,
-        betterPostersTrendTags: keys.betterPostersTrendTags,
-        betterPostersQuality: keys.betterPostersQuality,
-        betterPostersAge: keys.betterPostersAge,
-        betterPostersLang: keys.betterPostersLang,
-        betterPostersRatingSource: keys.betterPostersRatingSource,
-      })),
+      body: JSON.stringify(withAccountProof(installSaveBody(entries, keys))),
     });
     const data = await res.json();
     if (data.ok) {
@@ -74234,7 +74248,7 @@ async function handleFetch(request, env, ctx) {
       // any device by account sync), and a signed-out save stores none
       // (docs/DECISIONS.md D-8). With nothing embedded, the page falls back to
       // whatever this browser already has.
-      const { entries, traktUsername, shuffleShelves, shuffleItems, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists } = await resolveConfig(m[1], env);
+      const resolvedForPage = await resolveConfig(m[1], env);
       // The one page that still sends no-store (it renders the person's own
       // API keys -- see the note on the headers below), but it should not
       // also be re-sending the 1.3MB client bundle every time. The split
@@ -74243,8 +74257,11 @@ async function handleFetch(request, env, ctx) {
       // shared, immutable /app.js everyone else already has.
       return new Response(
         await pageWithExternalBundle(renderBuilder(url.origin, {
-          initialEntries: entries,
-          initialKeys: { traktUsername, shuffleShelves, shuffleItems, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists },
+          initialEntries: resolvedForPage.entries,
+          // Every setting the link carries except its keys and tokens. This
+          // used to name seven fields by hand and left Better Posters out, so
+          // the page showed it off for an install that had it on.
+          initialKeys: nonSecretInstallConfigFields(resolvedForPage),
           isConfigureMode: true,
         })),
         // The one builder page that deliberately keeps no-store rather than
@@ -80861,18 +80878,13 @@ function generateSearchVariations(query) {
         savedEntries = rewritten;
       }
 
-      const payload = { entries: savedEntries };
-      if (saveAccount) {
-        if (body.tmdbKey) payload.tmdbKey = body.tmdbKey;
-        if (body.mdblistKey) payload.mdblistKey = body.mdblistKey;
-        if (body.mdblistAccessToken) payload.mdblistAccessToken = body.mdblistAccessToken;
-        if (body.traktKey) payload.traktKey = body.traktKey;
-        if (body.traktUsername) payload.traktUsername = body.traktUsername;
-        if (body.traktAccessToken) payload.traktAccessToken = body.traktAccessToken;
-        if (body.simklKey) payload.simklKey = body.simklKey;
-        if (body.simklAccessToken) payload.simklAccessToken = body.simklAccessToken;
-        if (body.simklUsername) payload.simklUsername = body.simklUsername;
-      }
+      // Every install setting comes from the one schema
+      // (INSTALL_CONFIG_FIELDS, 00_constants.js): only what differs from its
+      // default, only what passes its check, and account keys and tokens only
+      // for a signed-in save. This used to be written out field by field here,
+      // and a field missing from that list was dropped on the floor -- the
+      // badge toggles and then Better Posters each were, once.
+      const payload = { entries: savedEntries, ...storedInstallConfigFields(body, !!saveAccount) };
       // `track` (the Auto-track Playback flag, which is what makes the manifest
       // declare a subtitles resource) and the account credential are now stored
       // independently. They used to be one branch, so a config with a personal
@@ -80887,50 +80899,6 @@ function generateSearchVariations(query) {
         // through a later Creator Key rotation instead of going empty the
         // moment the stored key stops matching. See resolveConfig.
         payload.trackOwner = saveVerifiedOwner;
-      }
-      if (body.shuffleShelves) payload.shuffleShelves = true;
-      if (body.shuffleItems) payload.shuffleItems = true;
-      if (body.region && body.region !== "US") payload.region = body.region;
-      if (body.hideNonDigitalReleases) payload.hideNonDigitalReleases = true;
-      if (body.adultContentFilter) payload.adultContentFilter = true;
-      if (body.dedupeAcrossLists) payload.dedupeAcrossLists = true;
-      // The Stremio/Nuvio artwork-overlay toggles. Stored only when switched
-      // OFF, because resolveConfig reads an absent key as on -- so a config
-      // with all of them on stays exactly the size it was.
-      //
-      // These were missing from this allowlist entirely, which meant turning
-      // any of them off never reached the install link: the setting looked
-      // saved, and the badges kept appearing in the apps. It read as harmless
-      // only because the default is on; the same gap left Better Posters
-      // (default off) looking completely dead. See that key below.
-      for (const badgeKey of STREMIO_BADGE_KEYS) {
-        if (body[badgeKey] === false) payload[badgeKey] = false;
-      }
-      // Better Posters. This builder is an allowlist -- a key it does not name
-      // is dropped on the floor -- and this is the PRIMARY install path
-      // whenever a CONFIGS KV namespace is bound, so a key missing here does
-      // not degrade the feature, it disables it outright: resolveConfig reads
-      // betterPosters back as false and Stremio/Nuvio get the plain artwork,
-      // no matter what the builder page shows. Only the base64 fallback link
-      // (buildConfig, 23_client-list-management.js) carried it before this.
-      // Each style key is stored only when it differs from btttr.cc's own
-      // default for that option, matching buildConfig.
-      if (body.betterPosters) {
-        payload.betterPosters = true;
-        if (body.betterPostersGenre === false) payload.betterPostersGenre = false;
-        if (body.betterPostersRating === false) payload.betterPostersRating = false;
-        if (body.betterPostersTrendTags === false) payload.betterPostersTrendTags = false;
-        if (body.betterPostersQuality) payload.betterPostersQuality = true;
-        if (body.betterPostersAge) payload.betterPostersAge = true;
-        // Validated at the door rather than only where the URL is built: this
-        // endpoint is unauthenticated, and there is no reason to persist a
-        // value btttr.cc would reject anyway.
-        if (BETTER_POSTERS_LANGS.some((l) => l.value === body.betterPostersLang) && body.betterPostersLang !== "en") {
-          payload.betterPostersLang = body.betterPostersLang;
-        }
-        if (BETTER_POSTERS_RATING_SOURCES.some((r) => r.value === body.betterPostersRatingSource) && body.betterPostersRatingSource !== "avg") {
-          payload.betterPostersRatingSource = body.betterPostersRatingSource;
-        }
       }
 
       const savePayload = JSON.stringify(payload);

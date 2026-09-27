@@ -121,6 +121,13 @@ With the `ANALYTICS` binding, every request writes one Analytics Engine data poi
 
 ### 🐛 Smaller fixes
 
+- **Opening Configure no longer switches Better Posters off.** The configure page was never told an install's Better Posters settings, so it showed them off, and pressing Update saved them off. All install-link settings now come from one list, `INSTALL_CONFIG_FIELDS` in `00_constants.js`. It is used by `/api/save`, `resolveConfig`, `decodeConfig`, the configure page, and the builder's save body and signed-out filter; each of those used to keep its own hand-written copy, and the copies had drifted:
+  - Configure left out Better Posters;
+  - `simklUsername` was stored but never read back;
+  - old base64 links read only one of the five badge toggles.
+
+  A test round-trips every field in the list, so a field added later is covered automatically. Another checks the builder sends every one.
+
 - **Faster TMDB-to-IMDb lookups.** `/api/imdb-ids` now resolves up to 100 posters per call (was 24), 8 at a time, so a whole See All page is one request.
 - **No sleeping inside the Trakt PIN request.** When Trakt rate-limits `/api/trakt/device/code`, the Worker now hands the 429 and its `Retry-After` back instead of sleeping. The page waits it out and retries once on its own. The OAuth callback keeps its single 1.5 s pause, because it is a browser redirect with no page to retry it.
 - **Admin leaderboards read their counters by key range.** They used `LIKE 'prefix%'`, which the `stats` table's `(kind, day)` primary key can't serve. The windowed leaderboard now looks up its prefix instead of reading every counter in the date window.

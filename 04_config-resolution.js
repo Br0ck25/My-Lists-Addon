@@ -103,14 +103,9 @@ async function resolveConfig(configParam, env) {
           continueWatching,
           watchlist,
           airingNext,
-          tmdbKey: parsed.tmdbKey || "",
-          mdblistKey: parsed.mdblistKey || "",
-          mdblistAccessToken: parsed.mdblistAccessToken || "",
-          traktKey: parsed.traktKey || "",
-          traktUsername: parsed.traktUsername || "",
-          traktAccessToken: parsed.traktAccessToken || "",
-          simklKey: parsed.simklKey || "",
-          simklAccessToken: parsed.simklAccessToken || "",
+          // Every install setting, with its default, from the one schema
+          // (INSTALL_CONFIG_FIELDS, 00_constants.js).
+          ...readInstallConfigFields(parsed),
           track: !!parsed.track,
           trackCreatorName: parsed.trackCreatorName || "",
           trackCreatorKey: parsed.trackCreatorKey || "",
@@ -118,34 +113,6 @@ async function resolveConfig(configParam, env) {
           // is gated on this rather than on trackCreatorName -- see the block
           // above and mayReadTrackedShelf (02_http-and-creator-utils.js).
           trackOwner,
-          shuffleShelves: !!parsed.shuffleShelves,
-          shuffleItems: !!parsed.shuffleItems,
-          region: parsed.region || "US",
-          hideNonDigitalReleases: !!parsed.hideNonDigitalReleases,
-          adultContentFilter: !!parsed.adultContentFilter,
-          dedupeAcrossLists: !!parsed.dedupeAcrossLists,
-          // See decodeConfig (02_http-and-creator-utils.js) for why
-          // betterPosters itself defaults off while its style keys default
-          // to btttr.cc's own defaults.
-          betterPosters: !!parsed.betterPosters,
-          betterPostersGenre: parsed.betterPostersGenre !== false,
-          betterPostersRating: parsed.betterPostersRating !== false,
-          betterPostersQuality: !!parsed.betterPostersQuality,
-          betterPostersAge: !!parsed.betterPostersAge,
-          betterPostersTrendTags: parsed.betterPostersTrendTags !== false,
-          betterPostersLang: parsed.betterPostersLang || "en",
-          betterPostersRatingSource: parsed.betterPostersRatingSource || "avg",
-          showBadgesAiringNext: parsed.showBadgesAiringNext !== false,
-          showBadgesContinueWatching: parsed.showBadgesContinueWatching !== false,
-          showBadgesWatchlist: parsed.showBadgesWatchlist !== false,
-          showBadgesTraktContinueWatching: parsed.showBadgesTraktContinueWatching !== false,
-          showBadgesMdblistUpNext: parsed.showBadgesMdblistUpNext !== false,
-          showBadgesCatalogs: parsed.showBadgesCatalogs !== false,
-          showBadgesStremioAiringNext: parsed.showBadgesStremioAiringNext !== false,
-          showBadgesStremioContinueWatching: parsed.showBadgesStremioContinueWatching !== false,
-          showBadgesStremioCatalogs: parsed.showBadgesStremioCatalogs !== false,
-          showBadgesStremioWatchlist: parsed.showBadgesStremioWatchlist !== false,
-          showBadgesStremio: parsed.showBadgesStremio !== false,
         };
       } catch {
         // fall through to legacy decode below

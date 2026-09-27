@@ -473,7 +473,7 @@ async function handleFetch(request, env, ctx) {
       // any device by account sync), and a signed-out save stores none
       // (docs/DECISIONS.md D-8). With nothing embedded, the page falls back to
       // whatever this browser already has.
-      const { entries, traktUsername, shuffleShelves, shuffleItems, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists } = await resolveConfig(m[1], env);
+      const resolvedForPage = await resolveConfig(m[1], env);
       // The one page that still sends no-store (it renders the person's own
       // API keys -- see the note on the headers below), but it should not
       // also be re-sending the 1.3MB client bundle every time. The split
@@ -482,8 +482,11 @@ async function handleFetch(request, env, ctx) {
       // shared, immutable /app.js everyone else already has.
       return new Response(
         await pageWithExternalBundle(renderBuilder(url.origin, {
-          initialEntries: entries,
-          initialKeys: { traktUsername, shuffleShelves, shuffleItems, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists },
+          initialEntries: resolvedForPage.entries,
+          // Every setting the link carries except its keys and tokens. This
+          // used to name seven fields by hand and left Better Posters out, so
+          // the page showed it off for an install that had it on.
+          initialKeys: nonSecretInstallConfigFields(resolvedForPage),
           isConfigureMode: true,
         })),
         // The one builder page that deliberately keeps no-store rather than
@@ -7100,18 +7103,13 @@ function generateSearchVariations(query) {
         savedEntries = rewritten;
       }
 
-      const payload = { entries: savedEntries };
-      if (saveAccount) {
-        if (body.tmdbKey) payload.tmdbKey = body.tmdbKey;
-        if (body.mdblistKey) payload.mdblistKey = body.mdblistKey;
-        if (body.mdblistAccessToken) payload.mdblistAccessToken = body.mdblistAccessToken;
-        if (body.traktKey) payload.traktKey = body.traktKey;
-        if (body.traktUsername) payload.traktUsername = body.traktUsername;
-        if (body.traktAccessToken) payload.traktAccessToken = body.traktAccessToken;
-        if (body.simklKey) payload.simklKey = body.simklKey;
-        if (body.simklAccessToken) payload.simklAccessToken = body.simklAccessToken;
-        if (body.simklUsername) payload.simklUsername = body.simklUsername;
-      }
+      // Every install setting comes from the one schema
+      // (INSTALL_CONFIG_FIELDS, 00_constants.js): only what differs from its
+      // default, only what passes its check, and account keys and tokens only
+      // for a signed-in save. This used to be written out field by field here,
+      // and a field missing from that list was dropped on the floor -- the
+      // badge toggles and then Better Posters each were, once.
+      const payload = { entries: savedEntries, ...storedInstallConfigFields(body, !!saveAccount) };
       // `track` (the Auto-track Playback flag, which is what makes the manifest
       // declare a subtitles resource) and the account credential are now stored
       // independently. They used to be one branch, so a config with a personal
@@ -7126,50 +7124,6 @@ function generateSearchVariations(query) {
         // through a later Creator Key rotation instead of going empty the
         // moment the stored key stops matching. See resolveConfig.
         payload.trackOwner = saveVerifiedOwner;
-      }
-      if (body.shuffleShelves) payload.shuffleShelves = true;
-      if (body.shuffleItems) payload.shuffleItems = true;
-      if (body.region && body.region !== "US") payload.region = body.region;
-      if (body.hideNonDigitalReleases) payload.hideNonDigitalReleases = true;
-      if (body.adultContentFilter) payload.adultContentFilter = true;
-      if (body.dedupeAcrossLists) payload.dedupeAcrossLists = true;
-      // The Stremio/Nuvio artwork-overlay toggles. Stored only when switched
-      // OFF, because resolveConfig reads an absent key as on -- so a config
-      // with all of them on stays exactly the size it was.
-      //
-      // These were missing from this allowlist entirely, which meant turning
-      // any of them off never reached the install link: the setting looked
-      // saved, and the badges kept appearing in the apps. It read as harmless
-      // only because the default is on; the same gap left Better Posters
-      // (default off) looking completely dead. See that key below.
-      for (const badgeKey of STREMIO_BADGE_KEYS) {
-        if (body[badgeKey] === false) payload[badgeKey] = false;
-      }
-      // Better Posters. This builder is an allowlist -- a key it does not name
-      // is dropped on the floor -- and this is the PRIMARY install path
-      // whenever a CONFIGS KV namespace is bound, so a key missing here does
-      // not degrade the feature, it disables it outright: resolveConfig reads
-      // betterPosters back as false and Stremio/Nuvio get the plain artwork,
-      // no matter what the builder page shows. Only the base64 fallback link
-      // (buildConfig, 23_client-list-management.js) carried it before this.
-      // Each style key is stored only when it differs from btttr.cc's own
-      // default for that option, matching buildConfig.
-      if (body.betterPosters) {
-        payload.betterPosters = true;
-        if (body.betterPostersGenre === false) payload.betterPostersGenre = false;
-        if (body.betterPostersRating === false) payload.betterPostersRating = false;
-        if (body.betterPostersTrendTags === false) payload.betterPostersTrendTags = false;
-        if (body.betterPostersQuality) payload.betterPostersQuality = true;
-        if (body.betterPostersAge) payload.betterPostersAge = true;
-        // Validated at the door rather than only where the URL is built: this
-        // endpoint is unauthenticated, and there is no reason to persist a
-        // value btttr.cc would reject anyway.
-        if (BETTER_POSTERS_LANGS.some((l) => l.value === body.betterPostersLang) && body.betterPostersLang !== "en") {
-          payload.betterPostersLang = body.betterPostersLang;
-        }
-        if (BETTER_POSTERS_RATING_SOURCES.some((r) => r.value === body.betterPostersRatingSource) && body.betterPostersRatingSource !== "avg") {
-          payload.betterPostersRatingSource = body.betterPostersRatingSource;
-        }
       }
 
       const savePayload = JSON.stringify(payload);

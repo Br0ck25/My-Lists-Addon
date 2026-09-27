@@ -2330,6 +2330,110 @@ describe("P2-6: an outbound call that sets no timeout still gets one", () => {
   });
 });
 
+// P2-8. One install-config schema (INSTALL_CONFIG_FIELDS, 00_constants.js)
+// drives /api/save, resolveConfig, decodeConfig, the configure page and the
+// builder's save body. Every field is round-tripped here, so a field added to
+// the schema is covered the moment it exists.
+describe("P2-8: every install setting survives a save, from one schema", () => {
+  const sb = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "04_config-resolution.js");
+  const FIELDS = vm.runInContext("INSTALL_CONFIG_FIELDS", sb).map((f) => ({ ...f }));
+  const ROW = { id: "pop", name: "Pop", type: "movie", url: "tmdb:chart:popular" };
+  // A value for each field that is NOT its default, so it has to be stored.
+  function nonDefault(f) {
+    if (f.kind === "account") return "V-" + f.name;
+    if (f.kind === "flag") return true;
+    if (f.kind === "flagOn") return false;
+    return f.allowed ? f.allowed.find((v) => v !== f.default) : "GB";
+  }
+
+  it("names every field once, with a kind this code understands", () => {
+    assert.ok(FIELDS.length >= 25, `expected the whole config, got ${FIELDS.length}`);
+    assert.equal(new Set(FIELDS.map((f) => f.name)).size, FIELDS.length, "no field is listed twice");
+    for (const f of FIELDS) assert.ok(["account", "flag", "flagOn", "choice"].includes(f.kind), f.name);
+  });
+
+  it("stores every changed field for a signed-in save and reads each one back", async () => {
+    const env = makeEnv({ CONFIGS: makeKv() });
+    const body = { ...(await accountProof(env)), entries: [ROW] };
+    for (const f of FIELDS) body[f.name] = nonDefault(f);
+    const r = await call(env, "/api/save", { method: "POST", json: body });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    const stored = JSON.parse(env.CONFIGS._store.get("cfg:" + r.body.id));
+    const resolved = await sb.resolveConfig(r.body.id, env);
+    for (const f of FIELDS) {
+      assert.deepEqual(stored[f.name], body[f.name], `${f.name} was not stored`);
+      assert.deepEqual(resolved[f.name], body[f.name], `${f.name} did not read back`);
+    }
+  });
+
+  it("stores nothing for a field left at its default, and still reads every one back", async () => {
+    const env = makeEnv({ CONFIGS: makeKv() });
+    const r = await call(env, "/api/save", { method: "POST", json: { ...(await accountProof(env)), entries: [ROW] } });
+    const stored = JSON.parse(env.CONFIGS._store.get("cfg:" + r.body.id));
+    const resolved = await sb.resolveConfig(r.body.id, env);
+    for (const f of FIELDS) {
+      assert.equal(f.name in stored, false, `${f.name} was stored at its default`);
+      assert.ok(f.name in resolved, `${f.name} is missing from the resolved config`);
+    }
+  });
+
+  it("stores no account field for a signed-out save, and the rest as usual", async () => {
+    const env = makeEnv({ CONFIGS: makeKv() });
+    const body = { entries: [ROW] };
+    for (const f of FIELDS) body[f.name] = nonDefault(f);
+    const r = await call(env, "/api/save", { method: "POST", json: body });
+    const stored = JSON.parse(env.CONFIGS._store.get("cfg:" + r.body.id));
+    for (const f of FIELDS) {
+      if (f.kind === "account") assert.equal(f.name in stored, false, `${f.name} was stored signed out`);
+      else assert.deepEqual(stored[f.name], body[f.name], `${f.name} was not stored`);
+    }
+  });
+
+  it("refuses a Better Posters option outside its list, and every style option while Better Posters is off", async () => {
+    const env = makeEnv({ CONFIGS: makeKv() });
+    const bad = await call(env, "/api/save", { method: "POST", json: {
+      entries: [ROW], betterPosters: true, betterPostersLang: "../evil", betterPostersRatingSource: "zz",
+    }});
+    const badStored = JSON.parse(env.CONFIGS._store.get("cfg:" + bad.body.id));
+    assert.equal("betterPostersLang" in badStored, false);
+    assert.equal("betterPostersRatingSource" in badStored, false);
+    const off = await call(env, "/api/save", { method: "POST", json: {
+      entries: [ROW], betterPosters: false, betterPostersGenre: false, betterPostersQuality: true,
+    }});
+    const offStored = JSON.parse(env.CONFIGS._store.get("cfg:" + off.body.id));
+    assert.equal("betterPostersGenre" in offStored, false);
+    assert.equal("betterPostersQuality" in offStored, false);
+  });
+
+  it("reads an old base64 link, and an old bare-array link, with every default", () => {
+    const b64 = (v) => Buffer.from(JSON.stringify(v), "utf8").toString("base64");
+    const withSettings = sb.decodeConfig(b64({ entries: [], region: "DE", showBadgesStremio: false, simklUsername: "s1" }));
+    assert.equal(withSettings.region, "DE");
+    assert.equal(withSettings.showBadgesStremio, false);
+    assert.equal(withSettings.simklUsername, "s1", "simklUsername was never read back before");
+    const bare = sb.decodeConfig(b64([ROW]));
+    const garbage = sb.decodeConfig("!!!not-a-config");
+    for (const decoded of [bare, garbage]) {
+      for (const f of FIELDS) assert.ok(f.name in decoded, `${f.name} missing`);
+      assert.equal(decoded.showBadgesStremioCatalogs, true, "a badge toggle defaults on");
+      assert.equal(decoded.betterPosters, false);
+      assert.equal(decoded.region, "US");
+    }
+  });
+
+  it("shows the configure page an install's Better Posters setting, and never its keys", async () => {
+    const env = makeEnv({ CONFIGS: makeKv() });
+    const r = await call(env, "/api/save", { method: "POST", json: {
+      ...(await accountProof(env)), entries: [ROW], betterPosters: true, betterPostersQuality: true,
+      traktAccessToken: "TRAKT-SECRET-TOKEN",
+    }});
+    const page = await call(env, `/${r.body.id}/configure`);
+    assert.equal(page.status, 200);
+    assert.ok(page.text.includes('id="betterPostersCheckbox" checked'), "Better Posters showed as off for an install that has it on");
+    assert.ok(!page.text.includes("TRAKT-SECRET-TOKEN"));
+  });
+});
+
 describe("My Channels does not quietly adopt a storyline or Explore row", () => {
   it("skips catalogOnly rows and still adopts a channel someone built", () => {
     let saved = null;
@@ -11309,7 +11413,8 @@ describe("Anime Unpacking: restoring multi-season division for compressed anime 
 });
 
 describe("worker: adult content filter & safe poster generator", () => {
-  const httpUtils = loadSourceFunctions("02_http-and-creator-utils.js");
+  // decodeConfig reads its fields through INSTALL_CONFIG_FIELDS (00_constants.js).
+  const httpUtils = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js");
   const configFns = loadSourceFunctions("04_config-resolution.js");
   const catalogFns = loadSourceFunctions("05_catalog-core.js");
 

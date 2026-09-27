@@ -519,7 +519,10 @@ function deterministicDailyShuffle(array, salt = "") {
 // with no CONFIGS KV binding, and without KV there are no Creator Profiles for
 // a personal shelf to belong to.
 function decodeConfig(config) {
-  const empty = { entries: [], tmdbKey: "", mdblistKey: "", mdblistAccessToken: "", traktKey: "", traktUsername: "", traktAccessToken: "", simklKey: "", simklAccessToken: "", track: false, trackCreatorName: "", trackCreatorKey: "", trackOwner: "", shuffleShelves: false, shuffleItems: false, region: "US", hideNonDigitalReleases: false, adultContentFilter: false, dedupeAcrossLists: false, betterPosters: false };
+  // An old self-contained base64 install link. Its settings are read through
+  // the one install-config schema (INSTALL_CONFIG_FIELDS, 00_constants.js), so
+  // a field and its default are defined once for every kind of link.
+  const noAccount = { track: false, trackCreatorName: "", trackCreatorKey: "", trackOwner: "" };
   try {
     const b64 = config.replace(/-/g, "+").replace(/_/g, "/");
     const padded = b64 + "===".slice((b64.length + 3) % 4);
@@ -529,68 +532,25 @@ function decodeConfig(config) {
     const jsonStr = new TextDecoder().decode(bytes);
     const parsed = JSON.parse(jsonStr);
 
+    // The oldest links are a bare array of rows, with no settings at all.
     const rawEntries = Array.isArray(parsed) ? parsed : parsed.entries;
     const entries = Array.isArray(rawEntries)
       ? rawEntries
           .filter((e) => e && e.id && e.url && e.type)
           .map((e) => ({ ...e, enabled: e.enabled !== false }))
       : [];
+    const settings = Array.isArray(parsed) ? {} : parsed;
 
     return {
       entries,
-      tmdbKey: (!Array.isArray(parsed) && parsed.tmdbKey) || "",
-      mdblistKey: (!Array.isArray(parsed) && parsed.mdblistKey) || "",
-      mdblistAccessToken: (!Array.isArray(parsed) && parsed.mdblistAccessToken) || "",
-      traktKey: (!Array.isArray(parsed) && parsed.traktKey) || "",
-      traktUsername: (!Array.isArray(parsed) && parsed.traktUsername) || "",
-      traktAccessToken: (!Array.isArray(parsed) && parsed.traktAccessToken) || "",
-      simklKey: (!Array.isArray(parsed) && parsed.simklKey) || "",
-      simklAccessToken: (!Array.isArray(parsed) && parsed.simklAccessToken) || "",
-      track: !!(!Array.isArray(parsed) && parsed.track),
-      trackCreatorName: (!Array.isArray(parsed) && parsed.trackCreatorName) || "",
-      trackCreatorKey: (!Array.isArray(parsed) && parsed.trackCreatorKey) || "",
+      ...readInstallConfigFields(settings),
+      track: !!settings.track,
+      trackCreatorName: settings.trackCreatorName || "",
+      trackCreatorKey: settings.trackCreatorKey || "",
       trackOwner: "",
-      shuffleShelves: !!(!Array.isArray(parsed) && parsed.shuffleShelves),
-      shuffleItems: !!(!Array.isArray(parsed) && parsed.shuffleItems),
-      // Two-letter watch_region for streaming-availability catalogs
-      // (provider charts, Stream Releases) and content ratings -- see
-      // 07_source-fetchers-tmdb-simkl.js's tmdbProviderChartPaths and
-      // fetchTmdbItemDetailsUncached for where this actually gets used.
-      // Defaults to US so every install predating this feature keeps
-      // behaving exactly as it always did.
-      region: (!Array.isArray(parsed) && parsed.region) || "US",
-      // Filters items with no known digital release (movie charts only,
-      // see fetchTmdbChart's own comment for why) out of TMDB Trending/
-      // Popular movie catalogs. Defaults to false so every install
-      // predating this feature keeps showing everything, same reasoning
-      // as region's own default above.
-      hideNonDigitalReleases: !!(!Array.isArray(parsed) && parsed.hideNonDigitalReleases),
-      adultContentFilter: !!(!Array.isArray(parsed) && parsed.adultContentFilter),
-      // Keeps the first list of a given type in a config untouched and
-      // strips whatever a later list of the same type shares with an
-      // earlier one -- see dedupeAcrossListEntries (05_catalog-core.js) for
-      // where this is actually applied. Defaults to false, same reasoning
-      // as region/hideNonDigitalReleases above.
-      dedupeAcrossLists: !!(!Array.isArray(parsed) && parsed.dedupeAcrossLists),
-      // Badge toggles default ON when absent, the way the others here do, so
-      // an install predating this one keeps showing them.
-      showBadgesStremioWatchlist: Array.isArray(parsed) || parsed.showBadgesStremioWatchlist !== false,
-      // BetterPosters (btttr.cc) replacement artwork -- see
-      // applyBetterPostersToMetas (05_catalog-core.js). Opt-in, so it
-      // defaults to false and every install predating it is untouched. The
-      // style keys below only matter when betterPosters itself is on, and
-      // each one defaults to btttr.cc's own default for that option.
-      betterPosters: !!(!Array.isArray(parsed) && parsed.betterPosters),
-      betterPostersGenre: Array.isArray(parsed) || parsed.betterPostersGenre !== false,
-      betterPostersRating: Array.isArray(parsed) || parsed.betterPostersRating !== false,
-      betterPostersQuality: !!(!Array.isArray(parsed) && parsed.betterPostersQuality),
-      betterPostersAge: !!(!Array.isArray(parsed) && parsed.betterPostersAge),
-      betterPostersTrendTags: Array.isArray(parsed) || parsed.betterPostersTrendTags !== false,
-      betterPostersLang: (!Array.isArray(parsed) && parsed.betterPostersLang) || "en",
-      betterPostersRatingSource: (!Array.isArray(parsed) && parsed.betterPostersRatingSource) || "avg",
     };
   } catch {
-    return empty;
+    return { entries: [], ...readInstallConfigFields({}), ...noAccount };
   }
 }
 
