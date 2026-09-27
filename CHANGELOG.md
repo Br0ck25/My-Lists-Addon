@@ -18,7 +18,15 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 The new secrets `TOKEN_ENCRYPTION_KEY` and `LOOKUP_PEPPER` are **not needed yet**: nothing in this release uses them. They will be needed when the Phase 3a sign-in and account-storage code ships, and the release notes will say so then.
 
-### 🔒 Phase 3a: accounts, sessions, and authentication (P3a-1, P3a-2, P3a-3, P3a-4, P3a-5)
+### 🔒 Phase 3a: accounts, sessions, and authentication (P3a-1, P3a-2, P3a-3, P3a-4, P3a-5, P3a-6)
+
+- **Creator Routes Dual Authentication Compatibility (P3a-6)**:
+  - Behind feature flag `FF_SESSIONS` (`1` / `true`), every `/api/creator/*` route now supports dual authentication: accepting either an authenticated session (cookie or Bearer) without `creatorKey` in the body, or the legacy `creatorName` / `creatorKey` in the request body.
+  - Successful key-in-body authentication on creator routes automatically establishes a session row in D1 `sessions` and sets the `mla_session` cookie (`HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=30d`), enabling seamless transition from key-in-body to session auth.
+  - If a creator account has not yet been migrated to D1 `accounts`, creator route authentication lazily backfills the account record directly into D1 `accounts`.
+  - When authenticated via session, creator endpoints (`/api/creator/lists`, `/api/creator/sync/load`, `/api/creator/sync/meta`) safely tolerate empty request payloads `{}`.
+  - `/api/creator/delete-account` revokes all active account sessions in D1 and clears the `mla_session` cookie (`Max-Age=0`).
+  - When `FF_SESSIONS` is disabled (the default), legacy client behavior is 100% preserved and no session cookies or session records are created.
 
 - **CSRF Protection Middleware (P3a-5)**:
   - Enforces same-origin validation (`Origin` header matching Worker origin or `Sec-Fetch-Site: same-origin`) and `Content-Type: application/json` on all state-changing requests (`POST`, `PUT`, `PATCH`, `DELETE`).

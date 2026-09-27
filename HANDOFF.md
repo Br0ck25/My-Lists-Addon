@@ -7,8 +7,8 @@
 ## Current Status
 - **Last Updated**: 2026-09-27
 - **Last Active AI**: Antigravity (Gemini 3.8 Flash)
-- **Active Task**: Phase 3a in progress. P3a-1 through P3a-5 are complete, verified and tested. Next: P3a-6 (compatibility: session or key-in-body on `/api/creator/*` routes behind `FF_SESSIONS`).
-- **Task State**: P3a-5 verified with comprehensive tests. All tests passing (1,318 passed, 0 failed, 1 skipped: the opt-in network test).
+- **Active Task**: Phase 3a in progress. P3a-1 through P3a-6 are complete, verified and tested. Next: P3a-7 (blind index v2: write accounts.key_lookup_hmac and check in forgot-username).
+- **Task State**: P3a-6 verified with comprehensive tests. All tests passing (1,331 passed, 0 failed, 1 skipped: the opt-in network test).
 - **Git State**: Ready to commit on `main`. Commit when work is verified; push only when the owner asks.
 - **The owner is not a programmer.** Explain in plain words, do the git work for them, and ask before anything that changes stored user data or needs a dashboard change.
 
@@ -107,6 +107,7 @@ Last run (2026-09-27): all of the above pass, 1,288 tests passed, 0 failed, 1 sk
   - **P3a-3:** Accounts backfill job implemented (`backfillAccounts`, `reconcileAccounts` in `02_http-and-creator-utils.js`, `/admin/api/migrate-accounts` route in `26_api-creator-and-admin-routes.js`, Admin maintenance panel in `03_admin.js`). Copies data from D1 `creators` and KV `creator:*` into `accounts` (newest `keyHash` wins; D1 wins ties), verifies `count(accounts) = |creators ∪ creator:*|`, leaves existing records intact.
   - **P3a-4:** Sessions API and authentication implemented (`createSession`, `resolveSession`, `revokeSession`, `revokeAccountSessions` in `02_http-and-creator-utils.js`, middleware in `25_api-catalog-routes.js`, routes in `26_api-creator-and-admin-routes.js`). Features 256-bit crypto tokens, SHA-256 in D1 `sessions`, `mla_session` cookie (`HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=30d`), 60s isolate cache, PBKDF2 iterations rehash upgrade, lazy backfill on login, and device management (`/api/me/sessions`).
   - **P3a-5:** CSRF protection middleware implemented (`verifyCsrf` in `02_http-and-creator-utils.js`, wired into `handleFetch` in `25_api-catalog-routes.js`). Enforces same-origin validation (`Origin` or `Sec-Fetch-Site: same-origin`) and `Content-Type: application/json` on state-changing requests (`POST`, `PUT`, `PATCH`, `DELETE`). Exempts webhooks (`/api/scrobble*`), OAuth callbacks, and admin login forms.
+  - **P3a-6:** Creator routes dual authentication compatibility implemented behind `FF_SESSIONS` (`authenticateCreator` dual auth, `isSessionsEnabled`, `getOrBackfillAccount`, `withSecurityHeaders`). Every `/api/creator/*` route accepts either an active session or `creatorName`/`creatorKey` in the request body. Key-in-body auth automatically issues an `mla_session` cookie and creates a D1 session row (with lazy backfill of legacy accounts). Empty request bodies are tolerated when authenticated via session.
 
 ---
 
@@ -126,10 +127,10 @@ Last run (2026-09-27): all of the above pass, 1,288 tests passed, 0 failed, 1 sk
 ---
 
 ## Next Steps for Incoming AI
-1. **Phase 3a continues** (`NEXT_VERSION_TASKS.md`; the reasoning is in `MIGRATION_PLAN.md` Phase 3a). P3a-1 through P3a-5 are done and verified. Next:
-   - **P3a-6**: Compatibility: every `/api/creator/*` route accepts either a session **or** `creatorName`/`creatorKey` in the body. A successful key-in-body auth also sets a session cookie. Behind `FF_SESSIONS`.
-     - Old client flows pass unchanged and the new cookie is issued.
+1. **Phase 3a continues** (`NEXT_VERSION_TASKS.md`; the reasoning is in `MIGRATION_PLAN.md` Phase 3a). P3a-1 through P3a-6 are done and verified. Next:
    - **P3a-7**: Blind index v2: on a successful login or key reset, write `accounts.key_lookup_hmac = HMAC(LOOKUP_PEPPER, normalizedKey)`. `forgot-username` checks the HMAC first, then the legacy SHA-256.
+   - **P3a-8**: Installs: legacy resolver, transient base64 installs, new routes (`/i/{token}/manifest.json`, etc.), management API, snapshot cache.
+
 2. **Ask the owner first, every time, before anything that:**
    - **rewrites or deletes stored user data.** In particular, P3a-8 strips tokens out of existing install links (KV `cfg:` records). Get explicit approval, make sure a D1 backup and a KV export exist first, and do it gradually;
    - **needs a dashboard change.** Before shipping the first code that uses `TOKEN_ENCRYPTION_KEY` or `LOOKUP_PEPPER`, tell the owner, generate the values for them, and add the step to the release notes. The code must keep working if a secret is missing (fail closed for the new feature, never break existing sign-in);

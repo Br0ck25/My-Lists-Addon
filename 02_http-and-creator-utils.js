@@ -119,11 +119,14 @@ function securityHeaders() {
 // like Content-Type/Cache-Control/CORS) -- see securityHeaders' own
 // comment for why this is applied here, once, rather than at each call
 // site.
-function withSecurityHeaders(response, privatePath = false) {
+function withSecurityHeaders(response, privatePath = false, extraSetCookie = null) {
   const headers = new Headers(response.headers);
   const extra = securityHeaders();
   for (const key in extra) {
     if (!headers.has(key)) headers.set(key, extra[key]);
+  }
+  if (extraSetCookie && !headers.has("Set-Cookie")) {
+    headers.set("Set-Cookie", extraSetCookie);
   }
   // Deliberately set rather than defaulted -- see isPrivateApiPath.
   if (privatePath) headers.set("Cache-Control", "no-store");
@@ -829,6 +832,44 @@ function buildSessionCookieHeader(token) {
 
 function buildClearSessionCookieHeader() {
   return `${SESSION_COOKIE_NAME}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+}
+
+function isSessionsEnabled(env) {
+  if (!env) return false;
+  return env.FF_SESSIONS === "1" || env.FF_SESSIONS === "true" || env.FF_SESSIONS === true;
+}
+
+async function getOrBackfillAccount(env, username) {
+  if (!env || !env.DB) return null;
+  const norm = String(username || "").trim().toLowerCase();
+  if (!norm) return null;
+  try {
+    const { results } = await env.DB.prepare(
+      "SELECT id, username, display_name, key_hash, recovery_answer_hash, key_lookup_hmac, created_at, last_active_at, version, status, deleted_at " +
+      "FROM accounts WHERE username = ? COLLATE NOCASE AND deleted_at IS NULL"
+    ).bind(norm).all();
+    if (results && results.length > 0) {
+      return results[0];
+    }
+  } catch (e) {
+    console.error("D1 accounts lookup failed:", e);
+  }
+
+  // If not found in accounts, lazy-backfill if in creators or KV
+  try {
+    const rawCreator = await getCreator(env, norm);
+    if (rawCreator) {
+      await backfillAccounts(env).catch(() => {});
+      const { results } = await env.DB.prepare(
+        "SELECT id, username, display_name, key_hash, recovery_answer_hash, key_lookup_hmac, created_at, last_active_at, version, status, deleted_at " +
+        "FROM accounts WHERE username = ? COLLATE NOCASE AND deleted_at IS NULL"
+      ).bind(norm).all();
+      if (results && results.length > 0) {
+        return results[0];
+      }
+    }
+  } catch {}
+  return null;
 }
 
 async function createSession(env, accountId, userAgent = null) {

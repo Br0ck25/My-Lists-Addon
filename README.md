@@ -221,6 +221,7 @@ The add-on works out-of-the-box with public MDBList and TMDB links. Adding API k
 | `MDBLIST_CLIENT_SECRET` | MDBList OAuth token exchange (required alongside `MDBLIST_CLIENT_ID` for MDBList account login) | Same MDBList preferences as above |
 | `TOKEN_ENCRYPTION_KEY` | 32-byte AES-GCM encryption key (`k1:<base64>`) for server-side encrypted provider tokens and credentials. Not needed until the Phase 3a account-storage code ships. | Generate with `openssl rand -base64 32` |
 | `LOOKUP_PEPPER` | HMAC-SHA256 pepper for blind-indexing creator keys in `forgot-username` queries. Not needed until Phase 3a sign-in ships. | Random 32+ character secret string |
+| `FF_SESSIONS` | Optional feature flag (`1` or `true`). Enables session authentication and automatic session cookie issuance on creator routes. | Set as Worker Variable (`1`) |
 
 #### OAuth Redirect URIs
 If you configure OAuth authentication for Trakt, Simkl, MDBList, or TMDB, set the OAuth callback URLs in their respective developer portals to:

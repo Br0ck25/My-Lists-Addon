@@ -54,6 +54,8 @@ dataset = "mylists_events"
 [vars]
 # Optional. "justwatch" (default, no key needed) or "rapidapi".
 # NEW_ON_STREAMING_ENGINE = "justwatch"
+# Optional feature flag for Phase 3a: session auth and dual-auth compatibility
+# FF_SESSIONS = "1"
 
 # --- Cron trigger (REQUIRED for Continue Watching) ---------------------------
 # Drives the scheduled() export at the bottom of

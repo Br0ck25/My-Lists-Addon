@@ -11,6 +11,35 @@
     // or revoke separately from the key itself.
     async function authenticateCreator(creatorNameRaw, creatorKey) {
       if (!env || !env.CONFIGS) return { ok: false, error: "no-kv" };
+
+      const sessionsEnabled = isSessionsEnabled(env);
+
+      // Behind FF_SESSIONS: if a session is present and creatorKey was not provided,
+      // authenticate via the session (request.account).
+      if (sessionsEnabled && request && request.account && !creatorKey) {
+        if (creatorNameRaw !== undefined && creatorNameRaw !== null && String(creatorNameRaw).trim() !== "") {
+          const v = validateCreatorUsername(creatorNameRaw);
+          if (!v.ok || v.normalized !== request.account.username.toLowerCase()) {
+            return { ok: false, error: "Username or Key is incorrect." };
+          }
+        }
+        if (request.account.deletedAt || request.account.status === "deleted") {
+          return { ok: false, error: "Username or Key is incorrect." };
+        }
+        const tombstoned = await isCreatorTombstoned(env, request.account.username.toLowerCase());
+        if (tombstoned) {
+          return { ok: false, error: "Username or Key is incorrect." };
+        }
+        touchCreatorLastSeen(env, request.account.username.toLowerCase());
+        return {
+          ok: true,
+          username: request.account.username,
+          displayName: request.account.displayName || request.account.username,
+          hasRecoveryAnswer: Boolean(request.account.recoveryAnswerHash),
+          sessionAuth: true,
+        };
+      }
+
       const v = validateCreatorUsername(creatorNameRaw);
       if (!v.ok) return { ok: false, error: "Username or Key is incorrect." };
       // A username being deleted right now stops authenticating, whatever the
@@ -80,6 +109,40 @@
       // Fire-and-forget, not awaited -- see touchCreatorLastSeen's own
       // comment for why this is throttled and safe to never wait on.
       touchCreatorLastSeen(env, v.normalized);
+
+      // Behind FF_SESSIONS: a successful key-in-body auth also sets a session cookie (P3a-6).
+      if (sessionsEnabled && env.DB && request) {
+        if (!request._sessionCookie && (!request.account || request.account.username.toLowerCase() !== v.normalized || path === "/api/creator/restore")) {
+          try {
+            const accountRow = await getOrBackfillAccount(env, v.normalized);
+            if (accountRow) {
+              const userAgent = request.headers ? (request.headers.get("user-agent") || null) : null;
+              const session = await createSession(env, accountRow.id, userAgent);
+              request._sessionCookie = buildSessionCookieHeader(session.token);
+              if (!request.account) {
+                request.account = {
+                  id: accountRow.id,
+                  username: accountRow.username,
+                  displayName: profile.displayName || accountRow.username,
+                  keyHash: profile.keyHash,
+                  recoveryAnswerHash: profile.recoveryAnswerHash,
+                  keyLookupHmac: accountRow.key_lookup_hmac,
+                  createdAt: accountRow.created_at,
+                  lastActiveAt: accountRow.last_active_at,
+                  version: accountRow.version || 0,
+                  status: accountRow.status || "active",
+                };
+              }
+              if (!request.session) {
+                request.session = session;
+              }
+            }
+          } catch (sessionErr) {
+            console.error("Failed to issue session cookie on creator auth:", sessionErr);
+          }
+        }
+      }
+
       return {
         ok: true,
         username: profile.username || v.normalized,
@@ -1156,34 +1219,8 @@
         return json({ ok: false, error: "Incorrect username or Account Key." }, 401);
       }
 
-      // Look up account in accounts table
-      let accountRow = null;
-      try {
-        const { results } = await env.DB.prepare(
-          "SELECT * FROM accounts WHERE username = ? COLLATE NOCASE AND deleted_at IS NULL"
-        ).bind(v.normalized).all();
-        if (results && results.length > 0) {
-          accountRow = results[0];
-        }
-      } catch (e) {
-        console.error("D1 accounts lookup failed:", e);
-      }
-
-      // If not in accounts, check legacy creators / KV and lazy-backfill
-      if (!accountRow) {
-        const rawCreator = await getCreator(env, v.normalized);
-        if (rawCreator) {
-          await backfillAccounts(env).catch(() => {});
-          try {
-            const { results } = await env.DB.prepare(
-              "SELECT * FROM accounts WHERE username = ? COLLATE NOCASE AND deleted_at IS NULL"
-            ).bind(v.normalized).all();
-            if (results && results.length > 0) {
-              accountRow = results[0];
-            }
-          } catch {}
-        }
-      }
+      // Look up account in accounts table (lazy backfilling if needed)
+      let accountRow = await getOrBackfillAccount(env, v.normalized);
 
       if (!accountRow || !accountRow.key_hash) {
         return json({ ok: false, error: "Incorrect username or Account Key." }, 401);
@@ -1769,6 +1806,11 @@
           console.error("D1 write error (update recovery answer):", dbErr);
           return json({ ok: false, error: "Failed to update recovery answer. Please try again." }, 500);
         }
+        try {
+          await env.DB.prepare(
+            "UPDATE accounts SET recovery_answer_hash = ? WHERE username = ? COLLATE NOCASE"
+          ).bind(recoveryAnswerHash, auth.username).run();
+        } catch (accErr) {}
       }
 
       const raw = await getCreator(env, auth.username);
@@ -1782,7 +1824,9 @@
         }
       }
 
-      await storeCreatorKeyLookup(env, body.creatorKey, auth.username);
+      if (body.creatorKey) {
+        await storeCreatorKeyLookup(env, body.creatorKey, auth.username);
+      }
 
       return jsonPrivate({ ok: true, hasRecoveryAnswer: true });
     }
@@ -1936,17 +1980,23 @@
       try {
         body = await request.json();
       } catch {
-        return json({ ok: false, error: "Invalid JSON body." }, 400);
+        if (request.account && isSessionsEnabled(env)) {
+          body = {};
+        } else {
+          return json({ ok: false, error: "Invalid JSON body." }, 400);
+        }
       }
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) {
         if (auth.error !== "no-kv") await noteAuthFailure(env, restoreFailScope, restoreFailDay);
         return authFailureResponse(auth);
       }
-      if (ctx && typeof ctx.waitUntil === "function") {
-        ctx.waitUntil(storeCreatorKeyLookup(env, body.creatorKey, auth.username).catch(() => {}));
-      } else {
-        await storeCreatorKeyLookup(env, body.creatorKey, auth.username).catch(() => {});
+      if (body.creatorKey) {
+        if (ctx && typeof ctx.waitUntil === "function") {
+          ctx.waitUntil(storeCreatorKeyLookup(env, body.creatorKey, auth.username).catch(() => {}));
+        } else {
+          await storeCreatorKeyLookup(env, body.creatorKey, auth.username).catch(() => {});
+        }
       }
       return jsonPrivate({
         ok: true,
@@ -1965,7 +2015,11 @@
       try {
         body = await request.json();
       } catch {
-        return json({ ok: false, error: "Invalid JSON body." }, 400);
+        if (request.account && isSessionsEnabled(env)) {
+          body = {};
+        } else {
+          return json({ ok: false, error: "Invalid JSON body." }, 400);
+        }
       }
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) return authFailureResponse(auth);
@@ -3186,6 +3240,15 @@
           cleared: { lists: purged.listsCleared, keys: purged.keysCleared },
         }, 500);
       }
+      if (request.account || request._sessionCookie) {
+        request._sessionCookie = buildClearSessionCookieHeader();
+      }
+      if (env.DB) {
+        try {
+          const acc = await getOrBackfillAccount(env, auth.username);
+          if (acc) await revokeAccountSessions(env, acc.id);
+        } catch {}
+      }
       return json({ ok: true, cleared: { lists: purged.listsCleared, keys: purged.keysCleared } });
     }
 
@@ -3966,7 +4029,11 @@
       try {
         body = await request.json();
       } catch {
-        return json({ ok: false, error: "Invalid JSON body." }, 400);
+        if (request.account && isSessionsEnabled(env)) {
+          body = {};
+        } else {
+          return json({ ok: false, error: "Invalid JSON body." }, 400);
+        }
       }
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) return authFailureResponse(auth);
@@ -4062,7 +4129,11 @@
       try {
         body = await request.json();
       } catch {
-        return json({ ok: false, error: "Invalid JSON body." }, 400);
+        if (request.account && isSessionsEnabled(env)) {
+          body = {};
+        } else {
+          return json({ ok: false, error: "Invalid JSON body." }, 400);
+        }
       }
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) return authFailureResponse(auth);
@@ -7535,7 +7606,7 @@ export default {
       // An unparseable URL cannot have reached a private route anyway.
     }
     if (counters) writeRequestMetrics(env, request, response, startedAt, counters);
-    return withSecurityHeaders(response, privatePath);
+    return withSecurityHeaders(response, privatePath, request ? request._sessionCookie : null);
   },
 
   // Runs on whatever schedule this Worker's owner configured under

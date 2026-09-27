@@ -15169,6 +15169,452 @@ describe("P3a-5: CSRF middleware", () => {
   });
 });
 
+describe("P3a-6: creator routes dual auth (session or key-in-body)", () => {
+  const {
+    isSessionsEnabled,
+    hashCreatorKey,
+    createSession,
+    buildSessionCookieHeader,
+    clearSessionCache,
+  } = loadSourceFunctions(
+    "00_constants.js",
+    "02_http-and-creator-utils.js"
+  );
+
+  beforeEach(() => {
+    clearSessionCache();
+  });
+
+  function getTokenFromSetCookie(setCookie) {
+    if (!setCookie) return null;
+    const match = setCookie.match(/mla_session=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : null;
+  }
+
+  it("isSessionsEnabled helper detects FF_SESSIONS variants", () => {
+    assert.equal(isSessionsEnabled(null), false);
+    assert.equal(isSessionsEnabled({}), false);
+    assert.equal(isSessionsEnabled({ FF_SESSIONS: "0" }), false);
+    assert.equal(isSessionsEnabled({ FF_SESSIONS: "false" }), false);
+    assert.equal(isSessionsEnabled({ FF_SESSIONS: false }), false);
+    assert.equal(isSessionsEnabled({ FF_SESSIONS: "1" }), true);
+    assert.equal(isSessionsEnabled({ FF_SESSIONS: "true" }), true);
+    assert.equal(isSessionsEnabled({ FF_SESSIONS: true }), true);
+  });
+
+  it("when FF_SESSIONS is disabled, key-in-body succeeds without issuing session cookie", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const creatorName = "legacy_user";
+    const creatorKey = "MYL-LEGACY-AUTH-KEY";
+    const keyHash = await hashCreatorKey(creatorKey);
+
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(creatorName, "Legacy User", keyHash, 1000).run();
+    await env.CONFIGS.put(`creator:${creatorName}`, JSON.stringify({ displayName: "Legacy User", keyHash }));
+
+    const res = await call(env, "/api/creator/lists", {
+      method: "POST",
+      json: { creatorName, creatorKey },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+    // Should NOT issue session cookie when FF_SESSIONS is not set
+    assert.equal(res.headers.get("set-cookie"), null);
+  });
+
+  it("when FF_SESSIONS is disabled, session auth without key is rejected", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const username = "no_flag_user";
+    const key = "MYL-NOFLAG-TEST-KEY";
+    const keyHash = await hashCreatorKey(key);
+
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "No Flag User", keyHash, 1000).run();
+
+    const session = await createSession(env, 1, "Test Agent");
+    const cookie = `mla_session=${session.token}`;
+
+    const res = await call(env, "/api/creator/lists", {
+      method: "POST",
+      cookie,
+      json: {},
+    });
+    assert.equal(res.status, 401);
+    assert.equal(res.body.ok, false);
+  });
+
+  it("when FF_SESSIONS is enabled, key-in-body auth sets session cookie and creates D1 session", async () => {
+    const env = makeEnv({ DB: makeD1(), FF_SESSIONS: "1" });
+    const creatorName = "flag_user";
+    const creatorKey = "MYL-FLAG-AUTH-KEY";
+    const keyHash = await hashCreatorKey(creatorKey);
+
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(creatorName, "Flag User", keyHash, 1000).run();
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(creatorName, "Flag User", keyHash, 1000).run();
+    await env.CONFIGS.put(`creator:${creatorName}`, JSON.stringify({ displayName: "Flag User", keyHash }));
+
+    const res = await call(env, "/api/creator/lists", {
+      method: "POST",
+      json: { creatorName, creatorKey },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+
+    const setCookie = res.headers.get("set-cookie");
+    assert.ok(setCookie);
+    assert.match(setCookie, /^mla_session=[0-9a-f]{64};/);
+    assert.match(setCookie, /HttpOnly; Secure; SameSite=Lax; Path=\//);
+
+    // Verify session row exists in D1
+    const token = getTokenFromSetCookie(setCookie);
+    assert.ok(token);
+    const { results: sessionRows } = await env.DB.prepare(
+      "SELECT * FROM sessions WHERE account_id = (SELECT id FROM accounts WHERE username = ?)"
+    ).bind(creatorName).all();
+    assert.equal(sessionRows.length, 1);
+  });
+
+  it("when FF_SESSIONS is enabled, session auth without key succeeds for /api/creator/lists", async () => {
+    const env = makeEnv({ DB: makeD1(), FF_SESSIONS: "1" });
+    const username = "session_user";
+    const key = "MYL-SESS-KEY-ONLY";
+    const keyHash = await hashCreatorKey(key);
+
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "Session User", keyHash, 1000).run();
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "Session User", keyHash, 1000).run();
+    await env.CONFIGS.put(`creator:${username}`, JSON.stringify({ displayName: "Session User", keyHash }));
+
+    const { results: accs } = await env.DB.prepare("SELECT id FROM accounts WHERE username = ?").bind(username).all();
+    const session = await createSession(env, accs[0].id, "Dual Auth Test Agent");
+
+    // 1. Authenticate via Cookie without key in body
+    const cookieRes = await call(env, "/api/creator/lists", {
+      method: "POST",
+      cookie: `mla_session=${session.token}`,
+      json: {},
+    });
+    assert.equal(cookieRes.status, 200);
+    assert.equal(cookieRes.body.ok, true);
+    assert.equal(cookieRes.body.displayName, "Session User");
+
+    // 2. Authenticate via Authorization: Bearer without key in body
+    const bearerRes = await call(env, "/api/creator/lists", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.token}` },
+      json: {},
+    });
+    assert.equal(bearerRes.status, 200);
+    assert.equal(bearerRes.body.ok, true);
+    assert.equal(bearerRes.body.displayName, "Session User");
+  });
+
+  it("when FF_SESSIONS is enabled, session auth with matching creatorName succeeds", async () => {
+    const env = makeEnv({ DB: makeD1(), FF_SESSIONS: "1" });
+    const username = "match_user";
+    const key = "MYL-MATCH-KEY";
+    const keyHash = await hashCreatorKey(key);
+
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "Match User", keyHash, 1000).run();
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "Match User", keyHash, 1000).run();
+    await env.CONFIGS.put(`creator:${username}`, JSON.stringify({ displayName: "Match User", keyHash }));
+
+    const { results: accs } = await env.DB.prepare("SELECT id FROM accounts WHERE username = ?").bind(username).all();
+    const session = await createSession(env, accs[0].id, "Match Agent");
+
+    const res = await call(env, "/api/creator/lists", {
+      method: "POST",
+      cookie: `mla_session=${session.token}`,
+      json: { creatorName: username }, // supplied creatorName matching session
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+  });
+
+  it("when FF_SESSIONS is enabled, session auth with mismatched creatorName is rejected", async () => {
+    const env = makeEnv({ DB: makeD1(), FF_SESSIONS: "1" });
+    const alice = "alice_user";
+    const bob = "bob_user";
+    const keyHash = await hashCreatorKey("DUMMY_KEY");
+
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(alice, "Alice", keyHash, 1000).run();
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(bob, "Bob", keyHash, 1000).run();
+
+    const { results: aliceAcc } = await env.DB.prepare("SELECT id FROM accounts WHERE username = ?").bind(alice).all();
+    const session = await createSession(env, aliceAcc[0].id, "Alice Agent");
+
+    // Alice tries to access Bob's lists
+    const res = await call(env, "/api/creator/lists", {
+      method: "POST",
+      cookie: `mla_session=${session.token}`,
+      json: { creatorName: bob },
+    });
+    assert.equal(res.status, 401);
+    assert.equal(res.body.ok, false);
+  });
+
+  it("dual auth works on /api/creator/lists/save, lists/items, and lists/delete", async () => {
+    const env = makeEnv({ DB: makeD1(), FF_SESSIONS: "1" });
+    const username = "list_creator";
+    const key = "MYL-LIST-KEY-123";
+    const keyHash = await hashCreatorKey(key);
+
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "List Creator", keyHash, 1000).run();
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "List Creator", keyHash, 1000).run();
+    await env.CONFIGS.put(`creator:${username}`, JSON.stringify({ displayName: "List Creator", keyHash }));
+
+    const { results: accs } = await env.DB.prepare("SELECT id FROM accounts WHERE username = ?").bind(username).all();
+    const session = await createSession(env, accs[0].id, "Lists Agent");
+    const cookie = `mla_session=${session.token}`;
+
+    // 1. Save list with session auth (no creatorName or creatorKey)
+    const saveRes = await call(env, "/api/creator/lists/save", {
+      method: "POST",
+      cookie,
+      json: {
+        name: "My Dual Auth List",
+        type: "movie",
+        visibility: "unlisted",
+        items: [{ id: "tt0111161", title: "The Shawshank Redemption" }],
+      },
+    });
+    assert.equal(saveRes.status, 200);
+    assert.equal(saveRes.body.ok, true);
+    assert.equal(saveRes.body.slug, "my-dual-auth-list");
+
+    // 2. Fetch list items with session auth
+    const itemsRes = await call(env, "/api/creator/lists/items", {
+      method: "POST",
+      cookie,
+      json: { slugs: ["my-dual-auth-list"] },
+    });
+    assert.equal(itemsRes.status, 200);
+    assert.equal(itemsRes.body.ok, true);
+    assert.equal(itemsRes.body.lists.length, 1);
+    assert.equal(itemsRes.body.lists[0].items[0].id, "tt0111161");
+
+    // 3. Delete list with session auth
+    const delRes = await call(env, "/api/creator/lists/delete", {
+      method: "POST",
+      cookie,
+      json: { slug: "my-dual-auth-list" },
+    });
+    assert.equal(delRes.status, 200);
+    assert.equal(delRes.body.ok, true);
+  });
+
+  it("dual auth works on /api/creator/sync/save, sync/load, and sync/meta", async () => {
+    const env = makeEnv({ DB: makeD1(), FF_SESSIONS: "1" });
+    const username = "sync_user";
+    const key = "MYL-SYNC-KEY-123";
+    const keyHash = await hashCreatorKey(key);
+
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "Sync User", keyHash, 1000).run();
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "Sync User", keyHash, 1000).run();
+    await env.CONFIGS.put(`creator:${username}`, JSON.stringify({ displayName: "Sync User", keyHash }));
+
+    const { results: accs } = await env.DB.prepare("SELECT id FROM accounts WHERE username = ?").bind(username).all();
+    const session = await createSession(env, accs[0].id, "Sync Agent");
+    const cookie = `mla_session=${session.token}`;
+
+    // Save sync with session auth
+    const saveRes = await call(env, "/api/creator/sync/save", {
+      method: "POST",
+      cookie,
+      json: {
+        config: [{ type: "test", name: "Row" }],
+        likedLists: ["some-user:some-slug"],
+      },
+    });
+    assert.equal(saveRes.status, 200);
+    assert.equal(saveRes.body.ok, true);
+
+    // Load sync with session auth
+    const loadRes = await call(env, "/api/creator/sync/load", {
+      method: "POST",
+      cookie,
+      json: {},
+    });
+    assert.equal(loadRes.status, 200);
+    assert.equal(loadRes.body.ok, true);
+    assert.deepEqual(loadRes.body.data.likedLists, ["some-user:some-slug"]);
+
+    // Meta check with session auth
+    const metaRes = await call(env, "/api/creator/sync/meta", {
+      method: "POST",
+      cookie,
+      json: {},
+    });
+    assert.equal(metaRes.status, 200);
+    assert.equal(metaRes.body.ok, true);
+  });
+
+  it("/api/creator/restore supports dual auth and sets session cookie", async () => {
+    const env = makeEnv({ DB: makeD1(), FF_SESSIONS: "1" });
+    const username = "restore_dual";
+    const key = "MYL-RESTORE-KEY";
+    const keyHash = await hashCreatorKey(key);
+
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "Restore User", keyHash, 1000).run();
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "Restore User", keyHash, 1000).run();
+    await env.CONFIGS.put(`creator:${username}`, JSON.stringify({ displayName: "Restore User", keyHash }));
+
+    // 1. Key-in-body restore sets session cookie
+    const keyRes = await call(env, "/api/creator/restore", {
+      method: "POST",
+      json: { creatorName: username, creatorKey: key },
+    });
+    assert.equal(keyRes.status, 200);
+    assert.equal(keyRes.body.ok, true);
+    assert.equal(keyRes.body.creatorName, username);
+    const setCookie = keyRes.headers.get("set-cookie");
+    assert.ok(setCookie);
+    assert.match(setCookie, /^mla_session=/);
+
+    // 2. Session auth restore returns profile
+    const token = getTokenFromSetCookie(setCookie);
+    const sessRes = await call(env, "/api/creator/restore", {
+      method: "POST",
+      cookie: `mla_session=${token}`,
+      json: {},
+    });
+    assert.equal(sessRes.status, 200);
+    assert.equal(sessRes.body.ok, true);
+    assert.equal(sessRes.body.creatorName, username);
+    assert.equal(sessRes.body.displayName, "Restore User");
+  });
+
+  it("/api/creator/recovery-answer works with session auth and updates D1 accounts", async () => {
+    const env = makeEnv({ DB: makeD1(), FF_SESSIONS: "1" });
+    const username = "rec_user";
+    const key = "MYL-REC-KEY-123";
+    const keyHash = await hashCreatorKey(key);
+
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "Rec User", keyHash, 1000).run();
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "Rec User", keyHash, 1000).run();
+    await env.CONFIGS.put(`creator:${username}`, JSON.stringify({ displayName: "Rec User", keyHash }));
+
+    const { results: accs } = await env.DB.prepare("SELECT id FROM accounts WHERE username = ?").bind(username).all();
+    const session = await createSession(env, accs[0].id, "Recovery Agent");
+
+    const res = await call(env, "/api/creator/recovery-answer", {
+      method: "POST",
+      cookie: `mla_session=${session.token}`,
+      json: { recoveryAnswer: "ValidRecoveryAnswer99" },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+    assert.equal(res.body.hasRecoveryAnswer, true);
+
+    // Verify accounts table in D1 is updated
+    const { results: updatedAccs } = await env.DB.prepare(
+      "SELECT recovery_answer_hash FROM accounts WHERE username = ?"
+    ).bind(username).all();
+    assert.ok(updatedAccs[0].recovery_answer_hash);
+  });
+
+  it("/api/creator/delete-account clears session cookie and revokes account sessions", async () => {
+    const env = makeEnv({ DB: makeD1(), FF_SESSIONS: "1" });
+    const username = "delete_target";
+    const key = "MYL-DEL-KEY-123";
+    const keyHash = await hashCreatorKey(key);
+
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "Delete Target", keyHash, 1000).run();
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "Delete Target", keyHash, 1000).run();
+    await env.CONFIGS.put(`creator:${username}`, JSON.stringify({ displayName: "Delete Target", keyHash }));
+
+    const { results: accs } = await env.DB.prepare("SELECT id FROM accounts WHERE username = ?").bind(username).all();
+    const session = await createSession(env, accs[0].id, "Delete Agent");
+
+    const res = await call(env, "/api/creator/delete-account", {
+      method: "POST",
+      cookie: `mla_session=${session.token}`,
+      json: { confirm: "DELETE" },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+
+    // Verify session cookie is cleared with Max-Age=0
+    const setCookie = res.headers.get("set-cookie");
+    assert.ok(setCookie);
+    assert.match(setCookie, /Max-Age=0/);
+
+    // Verify sessions revoked in D1
+    const { results: sessions } = await env.DB.prepare(
+      "SELECT revoked_at FROM sessions WHERE account_id = ?"
+    ).bind(accs[0].id).all();
+    assert.ok(sessions[0].revoked_at > 0);
+  });
+
+  it("lazy backfills account on key-in-body creator auth when account is in KV only", async () => {
+    const env = makeEnv({ DB: makeD1(), FF_SESSIONS: "1" });
+    const username = "kv_only_dual";
+    const key = "MYL-KVONLY-KEY";
+    const keyHash = await hashCreatorKey(key);
+
+    // Account exists in KV only
+    await env.CONFIGS.put(`creator:${username}`, JSON.stringify({ displayName: "KV Only", keyHash }));
+
+    // Ensure not in accounts table yet
+    const { results: preCheck } = await env.DB.prepare("SELECT * FROM accounts WHERE username = ?").bind(username).all();
+    assert.equal(preCheck.length, 0);
+
+    const res = await call(env, "/api/creator/lists", {
+      method: "POST",
+      json: { creatorName: username, creatorKey: key },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+
+    // Session cookie should have been issued
+    const setCookie = res.headers.get("set-cookie");
+    assert.ok(setCookie);
+    assert.match(setCookie, /^mla_session=/);
+
+    // Account should now be in accounts table
+    const { results: postCheck } = await env.DB.prepare("SELECT * FROM accounts WHERE username = ?").bind(username).all();
+    assert.equal(postCheck.length, 1);
+    assert.equal(postCheck[0].username, username);
+  });
+});
+
 
 
 
