@@ -2300,7 +2300,16 @@ describe("P2-6: an outbound call that sets no timeout still gets one", () => {
     globalThis.fetch = (input, init) => new Promise((resolve, reject) => {
       const signal = init && init.signal;
       if (!signal) return; // no timeout at all: hangs, and the test times out
-      signal.addEventListener("abort", () => reject(signal.reason || new Error("aborted")));
+      // AbortSignal.timeout's timer does not hold the process open (Node
+      // unrefs it). With nothing else pending, Node 22's test runner decided
+      // the file had stalled before the abort fired, and cancelled every test
+      // after this one -- CI's 652 "cancelled", while Node 24 passed. A plain
+      // timer keeps the loop alive until the abort lands.
+      const keepAlive = setTimeout(() => {}, 5000);
+      signal.addEventListener("abort", () => {
+        clearTimeout(keepAlive);
+        reject(signal.reason || new Error("aborted"));
+      });
     });
     try {
       return await run(asked);
