@@ -21,7 +21,7 @@
 
 ### 1.3 Release procedure (every release, paste-deploy compatible)
 
-1. CI: `npm run build`, then lint, then tests (workerd), then check that the rebuild matches the committed file.
+1. CI: `python build.py` and the drift check, `node --check`, the scope and render checks, then `node --test`.
 2. CI (manual approval): apply pending D1 migrations with `wrangler d1 migrations apply --remote` using a scoped API token. Each migration records itself in `schema_migrations`. *Owner alternative: paste each new `migrations/*.sql` into the D1 console in order, after checking `SELECT * FROM schema_migrations`.*
 3. The owner copies `worker_entry_combined.js` into the dashboard editor and clicks Deploy.
 4. Smoke tests (`scripts/smoke.mjs` against production): `/`, a legacy `cfg` manifest and catalog, a v2 install, the directory, login.
@@ -69,23 +69,20 @@ The Worker refuses to serve `/api/*` writes if `schema_migrations` is behind the
 
 ---
 
-### Phase 2 — Backend architecture (behavior-preserving restructure)
+### Phase 2 — Structure inside the split files (behavior-preserving)
 
-**Complexity: High · Risk: Medium.** Pure refactor; flags off.
+**Complexity: Medium · Risk: Low.** No npm, no `src/` tree, no new build (D-11). The numbered files, `python build.py` and the pasted `worker_entry_combined.js` stay.
 
-1. **Tooling:** commit `package.json` (esbuild, vitest plus `@cloudflare/vitest-pool-workers`, eslint, typescript for JSDoc type checking). Remove `package.json` from `.gitignore`.
-2. **Move server code into `src/` modules** (NEXT_VERSION_ARCHITECTURE §7.2):
-   - mechanically first (one module per current concern, named exports, no logic change);
-   - then extract `handleFetch` into a router table (`src/http/router.js`) with the same route order;
-   - hoist the request-scoped closures (`authenticateCreator`, `handleSubtitlesTrack`, `handleMediaServerScrobble`) to modules that take `(env, ctx, request)`.
-3. **Client code into `src/frontend/legacy/`**, still as one bundle, **no longer inside a template literal**. esbuild emits `app.[hash].js` and `.css`, embedded as strings. Remove `splitAppBundle` and the page memos (FT-23). Inline handlers keep working for now: they call globals exposed on `window`.
-4. **`build/build.mjs`** outputs `worker_entry_combined.js` (same file name, still one file). The CI drift check stays. `build.py` / `build.ps1` / `check_sync.py` / `gen_map.py` / `extract_html.py` are retired; `scope_check.mjs` is replaced by ESLint `no-undef`.
-5. **Cross-cutting modules:**
-   - `providerFetch` (timeouts, redaction) used by every provider call (BE-H10);
-   - `logger` with secret redaction (S-14);
-   - a single **install-config schema** module used by the save, resolve, decode and client code (removes the 6 copies);
-   - `json()` defaults to `no-store`, and public routes opt into caching (BE-M17).
-6. **Tests:** port `tests/harness.mjs` usages to the workerd pool incrementally. Keep the old suite green throughout. Replace source-text assertions (T-05) with behavior tests.
+1. **Where code goes:** new server-only areas go in new numbered files after `26_`. Client code stays in `09_`–`24_` (NEXT_VERSION_ARCHITECTURE §7.2).
+2. **Middleware at the entry point**, keeping `handleFetch` and its route order:
+   - one error boundary (`safeErrorMessage`);
+   - security headers;
+   - `json()` defaulting to `no-store`, with public routes opting in to caching (BE-M17).
+3. **Shared helpers:**
+   - `providerFetch` (timeouts, retries, redaction) for every provider call (BE-H10), in `27_provider-http.js`;
+   - log redaction (S-14);
+   - one **install-config schema** used by the save, resolve, decode and client code, which removes the six copies.
+4. **Tests** stay on `node --test` with `tests/harness.mjs` (SQLite with D1's limits enforced). Replace source-text assertions (T-05) with behavior tests where they touch code being changed.
 
 - **DB / API changes:** none.
 - **Frontend:** build pipeline only.
@@ -165,7 +162,7 @@ The Worker refuses to serve `/api/*` writes if `schema_migrations` is behind the
 
 **Complexity: Medium · Risk: Medium.**
 
-- `src/providers/*` adapters with `parseRef`, `fetchPage`, `shared`, `auth` (NEXT_VERSION_ARCHITECTURE §6.2). The registry replaces `detectSource`'s if/else, and `fetchCatalog` becomes `registry.resolve(row).fetchPage()`.
+- Provider adapters (in `06_`, `07_` and `27_provider-http.js`, D-11) with `parseRef`, `fetchPage`, `shared`, `auth` (NEXT_VERSION_ARCHITECTURE §6.2). The registry replaces `detectSource`'s if/else, and `fetchCatalog` becomes `registry.resolve(row).fetchPage()`.
 - `media-resolver`: every item emitted to Stremio carries a canonical id from `media` (fixes the id inconsistencies behind BE-H09 and the `split(':')` bugs).
 - Chart **snapshots** (`snap:chart:*`) written by the refresh logic, run synchronously on a miss until Phase 5 moves it to the queue.
 - Per-provider breaker state in KV (`pb:*`), and Analytics Engine metrics per provider.
@@ -244,7 +241,7 @@ The Worker refuses to serve `/api/*` writes if `schema_migrations` is behind the
 
 ### Phase 9 — Testing (runs alongside every phase; listed for its dedicated deliverables)
 
-- The workerd test pool as the default; the node harness retired.
+- ~~The workerd test pool as the default; the node harness retired.~~ Dropped (D-11): the node harness stays.
 - Migration test suite on anonymized fixtures.
 - Provider contract fixtures plus a nightly live check.
 - Playwright E2E and axe in CI.

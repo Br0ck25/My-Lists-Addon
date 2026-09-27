@@ -154,19 +154,18 @@ Nothing here recommends redesigning for its own sake. Each item is a concrete pr
 
 | ID | Finding | Consequence | Proposed |
 |---|---|---|---|
-| FE-1 | The client (about 44k lines in `16_`–`24_`, plus about 5.5k lines of page shell and tab HTML) is a string inside a server template literal. Backslashes and `${` must be escaped (for example `'\\\'s'`, `/^https?:\\/\\//i` in `24_:2233-2242`). | Syntax-class bugs reach production (the admin page outage is recorded in CI comments). No lint or type tooling on client code. | `src/frontend` ES modules bundled by esbuild (NEXT_VERSION_ARCHITECTURE §7) |
+| FE-1 | The client (about 44k lines in `16_`–`24_`, plus about 5.5k lines of page shell and tab HTML) is a string inside a server template literal. Backslashes and `${` must be escaped (for example `'\\\'s'`, `/^https?:\\/\\//i` in `24_:2233-2242`). | Syntax-class bugs reach production (the admin page outage is recorded in CI comments). No lint or type tooling on client code. | Keep the template literal (D-11). Rely on `render_check.js`, `html_checks.py` and `scope_check.mjs` in CI, and write client code that needs no backslashes where possible (NEXT_VERSION_ARCHITECTURE §7.1). |
 | FE-2 | About 820 global functions and about 134 top-level `let`/`var` globals across 9 files; 733 inline `on*=` handlers call globals by name. | Hidden coupling; CSP must allow `unsafe-inline`; `html_checks.py` exists just to verify that handlers resolve. | Modules plus event delegation; a strict CSP |
 | FE-3 | `localStorage` is the data store (about 650 references, about 80 keys) including credentials. | Security (S-05), resurrection bugs, slow UI on large accounts | Server-authoritative API plus an in-memory cache; preferences only in `localStorage` |
 | FE-4 | All views are rendered into the DOM at load (754 buttons). | Memory, first paint, and hidden views running logic | A router with per-view render and unmount |
-| FE-5 | 326 `innerHTML` writes with per-site escaping | XSS risk; lost focus and scroll on re-render | A templating library that escapes by default and patches the DOM |
-| FE-6 | One 2.0 MB bundle for all users | Slow first load on mobile (PERFORMANCE PF-F1) | Route-level code splitting |
+| FE-5 | 326 `innerHTML` writes with per-site escaping | XSS risk; lost focus and scroll on re-render | Escape by default: every dynamic string through `escapeHtml` / `escapeAttr`, and `textContent` for plain text |
+| FE-6 | One 2.0 MB bundle for all users | Slow first load on mobile (PERFORMANCE PF-F1) | Keep one bundle (no build step, D-11). `/app.js` is cached long-term, so the cost is paid once per release. Trim unused code as views are reworked. |
 
-**Recommended frontend stack.** It stays compatible with the single pasted Worker file:
+**Recommended frontend approach (D-11: vanilla JavaScript, no framework, no build step).** The client stays in `09_`–`24_` inside the one pasted Worker file:
 
-- **Preact + htm** (no JSX build step required, about 4 KB), or **lit-html**, for rendering. Either escapes by default.
-- A tiny router (history API).
-- A fetch-based API client with a small query cache.
-- Code-split chunks embedded as strings in the Worker build and served at `/assets/{hash}.js`.
+- Small shared pieces in vanilla JavaScript: a history-API router for the tabs, one toast system, one accessible modal, and a fetch-based API client with a small cache.
+- Escaping by default, through the existing `escapeHtml` / `escapeAttr` helpers, with `textContent` for plain text.
+- Event delegation replacing inline `on*=` handlers as each view is reworked.
 
 Migrate view by view. Start with the install bar and Settings, which are the smallest, then Lists, then Catalogs/home screen, then Channels (largest, last). The existing modules keep running beside the new ones until each view is replaced.
 

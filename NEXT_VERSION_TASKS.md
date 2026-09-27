@@ -6,6 +6,7 @@ Status marks: `[x]` done, `[~]` partly done or waiting on an operator step, `[ ]
 
 **Rules for every task:**
 
+- **No npm, no `src/` tree, no frameworks (D-11).** Where a task names a `src/<area>/<file>.js` module, it means that responsibility: put it in the numbered file that owns the area (`NEXT_VERSION_ARCHITECTURE.md` §7.2 maps them), or in a new numbered server file after `26_`. Client code stays in `09_`–`24_`, as vanilla JavaScript.
 - Keep `worker_entry_combined.js` a single pasteable ES-module file. Never hand-edit it; always regenerate it with the build.
 - Schema changes are additive until Phase 10. Every migration is recorded in `schema_migrations`.
 - Behavior changes go behind a `FF_*` Worker variable, default off, unless the task says "hotfix".
@@ -20,9 +21,9 @@ Status marks: `[x]` done, `[~]` partly done or waiting on an operator step, `[ ]
 - [x] **P0-1** Decide on anonymous likes (keep them with an HMAC voter id and a weight, or require an account). *Done when:* recorded in `docs/DECISIONS.md`. — **Status:** Decided 2026-09-25: likes need an account (docs/DECISIONS.md D-6); likes already cast signed out keep counting (D-9).
 - [x] **P0-2** Decide whether anonymous installs without an account survive, and with what limits (size, idle expiry). *Done when:* recorded. — **Status:** Decided 2026-09-25 (D-8): they survive, limited to the site's public lists. Implemented in `/api/save` and the builder. Idle expiry (P7-7) is **not** decided; nothing expires today.
 - [x] **P0-3** Decide the New on Streaming engine default: RapidAPI (licensed), or JustWatch only with permission (BE-M12). *Done when:* recorded. — **Status:** Decided 2026-09-25: keep JustWatch (D-5).
-- [ ] **P0-4** Decide on optional email recovery. *Done when:* recorded.
+- [x] **P0-4** Decide on optional email recovery. *Done when:* recorded. — **Status:** Decided 2026-09-27: no email recovery (D-12).
 - [x] **P0-5** Confirm the credentials in the historical `my-lists-full-backup1.json` were rotated or revoked (Creator Key reset; Trakt, MDBList and Simkl tokens revoked), and decide on a git-history purge (SECURITY S-21). *Done when:* confirmed in writing. — **Status:** Owner: no action (D-7).
-- [ ] **P0-6** Confirm the dashboard offers Queue, Analytics Engine and R2 bindings on this account, and that D1 read replication can be enabled. *Done when:* screenshots or notes are in `docs/OPERATIONS.md`.
+- [x] **P0-6** Confirm the dashboard offers Queue, Analytics Engine and R2 bindings on this account, and that D1 read replication can be enabled. *Done when:* screenshots or notes are in `docs/OPERATIONS.md`. — **Status:** Confirmed by the owner 2026-09-27: Queues, R2 and Analytics Engine are available (recorded in `docs/DECISIONS.md` and `docs/OPERATIONS.md`). D1 read replication not checked.
 
 ---
 
@@ -71,28 +72,28 @@ Status marks: `[x]` done, `[~]` partly done or waiting on an operator step, `[ ]
 
 ---
 
-## Phase 2 — Backend architecture (behavior-preserving)
+## Phase 2 — Structure inside the split files (behavior-preserving)
 
-- [ ] **P2-1** Commit `package.json` (esbuild, vitest, `@cloudflare/vitest-pool-workers`, eslint, typescript for JSDoc checking) and a lockfile; remove them from `.gitignore`. *Done when:* `npm ci && npm test` works in CI.
-- [ ] **P2-2** Create the `src/` tree (NEXT_VERSION_ARCHITECTURE §7.2). Move server code **mechanically**, one family per PR:
-  - `http` (from `02_:1-300`);
-  - `auth` (`02_:460-760`, `26_:1-110`);
-  - `storage` helpers;
-  - `providers/*` (`06_`, `07_`, `04_:158-537`);
-  - `catalog` / `stremio` (`05_`);
-  - `channels/engine` (`05_:2475-3980`);
-  - `activity` (`02_:4087-4895`, `26_:109-900`);
-  - `jobs` (the `07_` cron functions);
-  - `admin` (`03_`, the `26_` admin routes);
-  - `images` (the `05_` SVG and BetterPosters code, `25_:194-461`).
+No npm, no `src/` tree, no esbuild, no new test framework (D-11). Phase 2 is now a handful of shared helpers inside the numbered files, plus the fixes the old restructure would have carried.
 
-  *Done when:* each family is imported by `src/worker.js`, the old numbered file is deleted, and the tests pass.
-- [ ] **P2-3** Router: `src/http/router.js` with a declarative table `{method, pattern, handler}`, keeping today's order and matching semantics. Middleware: error boundary (`safeErrorMessage`), security headers, `no-store` default for JSON (BE-M17). *Done when:* `handleFetch` is gone and route tests pass.
-- [ ] **P2-4** Build: `build/build.mjs` bundles `src/frontend/legacy` (the current `16_`–`24_` client code, moved as ES modules, with globals exported onto `window` for the inline handlers) into hashed JS and CSS. It then bundles `src/worker.js` with those assets imported as text into **one** `worker_entry_combined.js`. Delete `splitAppBundle`, `SPLIT_PAGE_MEMO`, `APP_BUNDLE`, `APP_CSS`, `BUILDER_PAGE_MEMO` (FT-23). *Done when:* the pasted output works in staging, and `/app.js` / `/app.css` are served from build constants.
-- [ ] **P2-5** Retire `build.py`, `build.ps1`, `check_sync.py`, `gen_map.py`, `extract_html.py`, `scope_check.mjs`. Replace `render_check.js` / `html_checks.py` with (a) ESLint `no-undef`, and (b) a small test rendering the page shell with hostile input (keep the MYLXSSPROBE assertion). Update CI. *Done when:* CI runs lint, test, build and the drift check.
-- [ ] **P2-6** `src/providers/http.js` `providerFetch(provider, url, {auth, timeoutMs=10000, retries, cache})`. All provider calls go through it. It forbids `cf.cacheTtl` when `auth` is `user`, and it redacts secrets in errors and logs. *Done when:* a lint rule or grep test shows no raw `fetch(` outside `providerFetch` and `http` internals.
-- [ ] **P2-7** `src/shared/logger.js` with redaction of `api_key`, `apikey`, `access_token`, `token`, `key` query parameters and `Authorization` headers. Replace `console.*` calls. *Done when:* a test with a URL containing `api_key=SECRET` logs `api_key=[redacted]`.
-- [ ] **P2-8** `src/installs/schema.js`: a single definition of install config fields (name, type, default, validator, stored-when rule). Used by `decodeConfig`, `resolveConfig`, the `/api/save` allowlist, and the client's save body and `renderBuilder` initial keys. *Done when:* the six copies are removed and a round-trip test covers every field.
+- [x] **P2-1** ~~Commit `package.json` (esbuild, Vitest, ESLint, TypeScript) and a lockfile.~~ — **Status:** Dropped (D-11). The toolchain stays as it is: `python build.py`, `check_sync.py`, `scope_check.mjs`, `render_check.js`, `html_checks.py`, `gen_map.py` and `node --test`. CI installs its two checker packages with `npm install --no-save`, and the backup job runs Wrangler through `npx`; neither is part of the build.
+- [x] **P2-2** ~~Create the `src/` tree and move the code into it.~~ — **Status:** Replaced by a convention (D-11):
+  - the existing numbered files keep their responsibilities;
+  - a new server-only area goes in a new numbered file after `26_` (`27_…`), starting with a comment that says what it owns;
+  - top-level names stay unique across all files (`scope_check.mjs` enforces this);
+  - client code stays in `09_`–`24_`;
+  - `NEXT_VERSION_ARCHITECTURE.md` §7.2 maps each planned module to its file.
+- [ ] **P2-3** Middleware at the entry point, keeping `handleFetch` and its route order as they are. It needs:
+  - one error boundary (`safeErrorMessage`);
+  - security headers;
+  - `no-store` as the default for JSON responses, with public routes opting in to caching (BE-M17).
+
+  The declarative router table is dropped (D-11: the route chain is not rewritten). *Done when:* a test shows an uncaught error answers a generic 500, and a JSON response with no explicit cache header is `no-store`.
+- [x] **P2-4** ~~esbuild bundle with hashed JS and CSS assets.~~ — **Status:** Dropped (D-11). `/app.js` and `/app.css` keep being split from the rendered page at run time (`splitAppBundle`, memoized per isolate), so FT-23 stays.
+- [x] **P2-5** ~~Retire `build.py`, `check_sync.py`, `gen_map.py` and `scope_check.mjs`, and replace the render checks with ESLint.~~ — **Status:** Dropped (D-11). These checks are what makes the shared scope and the template-literal client safe, so they stay.
+- [ ] **P2-6** `providerFetch(provider, url, {auth, timeoutMs=10000, retries, cache})` in a new numbered file, `27_provider-http.js`. All provider calls go through it. It refuses `cf.cacheTtl` when `auth` is `user` (the fetch guard in `02_` already does this for every call), and it redacts secrets in errors and logs. *Done when:* a test that greps the sources finds no raw `fetch(` to a provider host outside `providerFetch`.
+- [ ] **P2-7** Log redaction: `redactForLog(value)` in `02_` masks `api_key`, `apikey`, `access_token`, `token` and `key` query parameters and `Authorization` headers, and the server's `console.error` / `console.warn` calls go through it. (Checked 2026-09-27: no current log line writes a key or token. This keeps it that way.) *Done when:* a test logging a URL that contains `api_key=SECRET` sees `api_key=[redacted]`.
+- [ ] **P2-8** One install-config schema: `INSTALL_CONFIG_FIELDS` in `00_constants.js` (name, type, default, validator, stored-when rule). It is written into the page with `jsonForScript` for the client, the way `PERSONAL_SHELF_URL_PREFIXES` is. It is used by `decodeConfig`, `resolveConfig`, the `/api/save` allowlist, the client's save body, and `renderBuilder`'s initial keys. *Done when:* the six copies are gone and a round-trip test covers every field.
 - [ ] **P2-9** Pass the resolved config through the catalog pipeline; remove the extra `resolveConfig` calls in `fetchAutoTrackedCatalog` / `fetchCuratedCatalog` (BE-H04, BE-M08). Stop merging the tracking blob into `resolveConfig`; personal rows read their own data. *Done when:* a catalog request for a non-personal row performs zero reads of `creatorsynctracking:`.
 - [x] **P2-10** Replace the `stats` `LIKE 'prefix%'` queries with range predicates (`kind >= ? AND kind < ?`) (BE-H11 interim). *Done when:* `EXPLAIN QUERY PLAN` on D1 shows the primary-key index being used. — **Status:** Done: every `stats` prefix read uses a `[prefix, upper)` key range (`statKindRange`, `03_admin.js`). The windowed leaderboard query now searches the primary key. The all-time reads keep using the `(day, n, kind)` covering index, which they already did.
 
@@ -172,7 +173,7 @@ Status marks: `[x]` done, `[~]` partly done or waiting on an operator step, `[ ]
 
 ## Phase 6 — Frontend
 
-- [ ] **P6-1** New shell under `src/frontend/app/`: router (real paths), install bar, toast system, accessible modal, API client (cookie auth, JSON, error mapping), minimal store. Stack: Preact + htm (or lit-html). *Done when:* `FF_NEW_UI` (cookie) serves the shell with the legacy views embedded.
+- [ ] **P6-1** New pieces of the existing page, in vanilla JavaScript inside `16_`–`24_` (no framework, D-11): real-path routing for the tabs, an install bar, one toast system, an accessible modal, an API client (cookie auth, JSON, error mapping) and a small shared state object. *Done when:* `FF_NEW_UI` (cookie) serves the shell with the legacy views embedded.
 - [ ] **P6-2** Settings (Connections, Account, Devices, Installs, Home-screen options, Tracking). *Done when:* the E2E scenarios 10, 11 and 12 pass.
 - [ ] **P6-3** Home / home-screen editor: paste-first add (single and multi-line with a review table), the Starter pack, row reorder, dedupe toggle, live preview from the materializer. *Done when:* the E2E scenarios 1, 2 and 3 pass.
 - [ ] **P6-4** Lists: list page, inline "Add titles" search, share (Private / Unlisted / Public), "Show on home screen". *Done when:* scenarios 4, 7 and 9 pass.
@@ -181,7 +182,7 @@ Status marks: `[x]` done, `[~]` partly done or waiting on an operator step, `[ ]
 - [ ] **P6-7** Channels: templates first, the advanced builder second (wrap the legacy builder until it is rewritten). *Done when:* scenario 6 passes.
 - [ ] **P6-8** Remove the `localStorage` data keys (keep `theme` and UI preferences), all `alert()` calls, and inline handlers. *Done when:* `grep` shows no `localStorage.setItem('myListAddon:creatorKey'` or token keys, and no `on[a-z]+=` in the templates.
 - [ ] **P6-9** Signed-out local mode for existing local lists ("Saved in this browser only") with "Save to an account" and "Export". *Done when:* a legacy `localStorage` fixture shows its lists and can migrate them.
-- [ ] **P6-10** Admin as a separate bundle at `/admin`. *Done when:* the admin works with no inline handlers.
+- [ ] **P6-10** The admin page (`03_admin.js`) with no inline handlers: event delegation instead. *Done when:* the admin works with no `on[a-z]+=` attributes.
 
 ## Phase 7 — Security hardening
 
@@ -203,9 +204,9 @@ Status marks: `[x]` done, `[~]` partly done or waiting on an operator step, `[ ]
 
 ## Phase 9 — Testing (deliverables)
 
-- [ ] **P9-1** The workerd test pool is the default; the node harness is retired.
+- [x] **P9-1** ~~The workerd test pool is the default; the node harness is retired.~~ — **Status:** Dropped (D-11). The node harness stays (`tests/harness.mjs`, real SQLite with D1's limits enforced).
 - [ ] **P9-2** Migration test suite with anonymized production fixtures (lists, likes, channels, activity, installs).
-- [ ] **P9-3** Playwright E2E for all 12 scenarios at 375 px and 1280 px, plus axe, in CI.
+- [ ] **P9-3** Playwright E2E for all 12 scenarios at 375 px and 1280 px, plus axe, in CI. Playwright is installed in CI only (`npm install --no-save`, like the scope checker), never as part of the build (D-11).
 - [ ] **P9-4** Security suite: CSRF, query-string credentials, cookie flags, CSP, install-token scope, session revocation, IDOR matrix.
 - [ ] **P9-5** A staging Worker with its own D1, KV, R2 and Queue (dashboard) and a deploy checklist.
 

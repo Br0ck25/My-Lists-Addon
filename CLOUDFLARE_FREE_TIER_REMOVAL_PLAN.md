@@ -184,7 +184,7 @@ Items marked D need the data described in the item before they are decided.
 - **Current problem:** it is wrong for the product direction, and several statements are now false (header.js; "D1 optional").
 - **Replacement:**
   - README becomes a user-facing product page plus a short `docs/OPERATIONS.md` for the owner: dashboard bindings, secrets, cron schedules, migrations, backups, runbooks.
-  - `header.js` becomes "GENERATED — do not edit; built from src/ by `npm run build`".
+  - `header.js` becomes "GENERATED — do not edit; built from the numbered files by `python build.py`" (done).
 - **Dependencies:** `build.py` / `build.ps1` header, CI drift check.
 - **Difficulty:** Low. **Risk:** None.
 
@@ -485,7 +485,7 @@ Items marked D need the data described in the item before they are decided.
 - **Where:** `BUILDER_PAGE_MEMO`, `BUILDER_ETAG_MEMO`, `APP_BUNDLE`, `APP_CSS`, `SPLIT_PAGE_MEMO`, `splitAppBundle`, `splitAppCss`, `pageWithExternalBundle`, `htmlPageResponse` (`02_:955-1199`).
 - **What it does:** renders a roughly 2 MB HTML string in the isolate, then slices marker-delimited script and CSS out at runtime to serve them as `/app.js?v=` and `/app.css?v=`.
 - **Why it exists:** the client lives inside a template literal, and there is no build step. The CPU and memory cost was tuned under Free constraints.
-- **Replacement:** esbuild emits hashed JS and CSS at build time, embedded as constants in the single Worker file (NEXT_VERSION_ARCHITECTURE §7.3). The page shell is small, static and cacheable.
+- **Replacement:** none — **kept (D-11).** With no build step, the runtime split stays. It is memoized per isolate and serves `/app.js` and `/app.css` with long cache lifetimes. Revisit only if its CPU cost shows up in the `ANALYTICS` request metrics.
 - **Difficulty:** Medium. **Risk:** Low.
 
 ### FT-24 — Three-tier circuit-breaker cache
@@ -708,7 +708,7 @@ Channels move to D1 plus R2 (FT-29). Keep a product cap on channel size (5,000 i
 
 **Class:** B. This one isn't Free-driven.
 
-`render_check.js`, `html_checks.py`, `scope_check.mjs` and `extract_html.py` exist because the client lives inside a template literal and 27 files share one scope. Replace them with esbuild, ESLint and typecheck under the `src/` layout. Keep a small "render the shell with hostile input" test (the XSS preamble check is valuable).
+`render_check.js`, `html_checks.py`, `scope_check.mjs` and `extract_html.py` exist because the client lives inside a template literal and 27 files share one scope. **Keep them (D-11):** they are the safety net for exactly that design, including the "render the page with hostile input" check.
 
 ---
 

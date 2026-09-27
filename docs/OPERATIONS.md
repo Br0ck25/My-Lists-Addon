@@ -41,6 +41,8 @@ Set these in the dashboard: Worker → **Settings → Bindings → Add**.
 | `BLOBS` | R2 bucket (`mylists-blobs`) | Later (Phase 3b/5) | Posters, channel pools, exports, D1 backups | Not yet |
 | `JOBS` | Queue producer (`mylists-jobs`) | Later (Phase 5) | Background jobs | Not yet. The queue **consumer** is configured on the queue: Queues → `mylists-jobs` → Settings → Add consumer → this Worker. |
 
+The owner confirmed on 2026-09-27 that this account's dashboard offers Queues, R2 and Analytics Engine bindings.
+
 Adding a binding before the code that uses it is harmless. Removing a binding the code needs breaks the features that depend on it.
 
 ## 3. Variables, secrets and triggers

@@ -2,6 +2,15 @@
 
 Decisions the owner has made. They are recorded here so the code, the plan documents and future work agree. The newest entries are at the top.
 
+## 2026-09-27 — Build and account recovery
+
+| # | Decision | Consequence in the code |
+|---|---|---|
+| D-11 | **No npm build, no `src/` tree, no frameworks.** The code stays in the numbered split files (`header.js`, `00_`–`26_`), `python build.py` builds `worker_entry_combined.js`, and that one file is pasted into the dashboard. No `package.json`, esbuild, Vitest/Miniflare, ESLint/TypeScript toolchain, or front-end framework (Preact and the like). `CLAUDE.md` and `AGENTS.md` say the same for every assistant. | Where the plan names a `src/<area>/<file>.js` module, it names a responsibility, not a file: that code goes in the numbered file that owns the area, or in a new numbered server file after `26_` (`27_…`). `NEXT_VERSION_ARCHITECTURE.md` §7.2 maps each one. The checks stay (`check_sync.py`, `scope_check.mjs`, `render_check.js`, `html_checks.py`, `gen_map.py`), and tests stay on `node --test` with `tests/harness.mjs`. Phase 2 of `NEXT_VERSION_TASKS.md` is rewritten around this. |
+| D-12 | **No email recovery.** | Accounts recover with the Creator Key or the recovery answer, and with the one-time recovery codes planned for Phase 3a. No email is collected or stored. |
+
+Also confirmed by the owner on 2026-09-27: the Cloudflare dashboard offers **Queues, R2 and Analytics Engine** bindings on this account (task P0-6). D1 read replication was not checked.
+
 ## 2026-09-25 — Next-version direction
 
 | # | Decision | Consequence in the code |

@@ -190,7 +190,7 @@ Tokens arrive in URL fragments after OAuth (`25_:3438`, `3704`, `3819`, `5212`).
 
 - Remove secrets from `localStorage` (S-01, S-04). Session cookies are `HttpOnly`.
 - Move to event delegation with no inline handlers, then a nonce-based or hash-based CSP (`script-src 'self'`).
-- Render user strings through a templating helper that escapes by default (lit-html or Preact), or enforce `textContent`.
+- Render user strings through the existing `escapeHtml` / `escapeAttr` helpers every time, or use `textContent` (vanilla JavaScript, no framework, D-11).
 - Add a Trusted Types policy (`require-trusted-types-for 'script'`) once `innerHTML` is gone.
 - Self-host `fflate`; drop jsDelivr from `script-src`.
 

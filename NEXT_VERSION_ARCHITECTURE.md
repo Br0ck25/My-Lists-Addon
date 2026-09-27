@@ -88,7 +88,7 @@ These are the twelve things we would do differently. Each one drives a section b
 | 8 | Channels, the channel directory, likes counters and install configs live only in KV, some as single read-modify-write keys. | **D1 rows** for metadata and counts; **R2** for large payloads (episode pools). | Ends lost updates on shared keys. |
 | 9 | Charts are "pre-warmed" every 6 minutes into KV and a *per-colo* edge cache, through a three-tier circuit breaker. | **Chart snapshots.** A job writes the finished page to KV, keyed by region, and the catalog path reads it. | Faster and cheaper. Correct for every region. |
 | 10 | Budgets, cursors and continuation protocols (`*_SUBREQUEST_BUDGET`, `remainingIds`, `nextIndex`, client re-post loops). | **Queues with durable job records.** Imports and refreshes run in the background with visible progress. | About 1,500 lines of free-tier machinery disappear. |
-| 11 | 27 concatenated files. The client code is a string inside a template literal (backslash-escaping bugs, 733 inline handlers). One 15,000-line `handleFetch` spans two files. | **`src/` ES modules bundled by esbuild** into the same single pasteable file. Real client modules, a router table and event delegation. | Normal tooling, lint, types and tests. The pasteable artifact stays. |
+| 11 | 27 concatenated files. The client code is a string inside a template literal (backslash-escaping bugs, 733 inline handlers). One 15,000-line `handleFetch` spans two files. | **Kept as it is (D-11):** the numbered files, `python build.py` and the one pasted file. The costs are managed: `scope_check.mjs` and the render/HTML checks in CI, shared helpers for the repeated pieces (`providerFetch`, one install-config schema, log redaction), and event delegation replacing inline handlers over time. | The paste workflow, the build and every assistant's instructions stay exactly as they are. |
 | 12 | Counters and telemetry as D1 hot rows (a pageview write per page load) plus KV fallbacks. | **Workers Analytics Engine** for events, with small D1 rollups for product features (Most Watched). | Takes write load off the single-threaded database. |
 
 **What we would keep:**
@@ -678,8 +678,8 @@ Nothing else. No counters, cursors, tombstones, ledgers or configs.
 ### 6.2 Target provider layer
 
 ```text
-src/providers/
-  http.js          providerFetch(provider, request, {auth, cache: 'none'|{ttl}, timeoutMs, retries, idempotent})
+provider layer (06_, 07_ and 27_provider-http.js -- D-11)
+  http             providerFetch(provider, request, {auth, cache: 'none'|{ttl}, timeoutMs, retries, idempotent})
                    - per-provider concurrency limit, timeout on EVERY call, jittered retry for 429/5xx on idempotent GETs
                    - NEVER edge-caches a request carrying user credentials
                    - emits metrics (latency, status) to Analytics Engine
@@ -726,56 +726,60 @@ Use `jobs` rows plus the 5-minute dispatcher cron. It claims up to N due jobs wi
 
 ## 7. Phase 13: code organization and the single-file deployable
 
-### 7.1 Is `00_`–`26_` still appropriate?
+**Decided 2026-09-27 (D-11): the numbered split files, `python build.py` and the one pasted `worker_entry_combined.js` stay.** There is no npm build, no `src/` tree and no front-end framework. This section used to propose an esbuild layout; it now records how the code is organized within the files it already has.
 
-No. The numbering encodes **concatenation order**, not ownership:
+### 7.1 The costs, and how they are managed
 
-- One function spans two files.
-- The client application lives inside a server template literal. Backslashes and `${` must be escaped by hand, which has caused real outages. Examples recorded in CI comments: the admin page `SyntaxError`, and the `isShow` / `clientId` / `listName` scope bugs.
-- 27 files share one global scope, which is why `scope_check.mjs` exists.
-- Tooling (lint, types, coverage, dead-code detection) can't see the client code as code.
+The numbering encodes **concatenation order**, not ownership, and three costs follow from that. Each is managed rather than removed:
 
-### 7.2 Proposed layout
+- **All the files share one global scope.** `scope_check.mjs` runs in CI and fails the build on any identifier that resolves to nothing, including a name declared inside a different route's block. That was the class behind the `isShow` / `clientId` / `listName` bugs.
+- **The client application lives inside a server template literal**, so backslashes and `${` must be escaped by hand. This caused the admin page `SyntaxError`. `render_check.js` and `html_checks.py` render the builder page, the admin page, a hostile-input page and the service worker in CI and syntax-check what comes out. Client code is written so it needs no backslashes where possible (`startsWith` / `split` rather than regular expressions), and assistants follow the escaping rules in `CLAUDE.md`.
+- **Lint and type tooling can't see the client code as code.** This is accepted. The tests load client functions directly (`loadOneClientFunction`) and run the whole page script in a sandbox (`tests/client-harness.mjs`).
 
-```text
-src/
-  worker.js                 export default { fetch, scheduled, queue }  (router + middleware only)
-  http/                     router.js, middleware (security headers, CORS, errors, sessions), responses.js
-  auth/                     sessions.js, creator-key.js, admin.js, csrf.js, rate-limit.js
-  accounts/                 service.js, routes.js
-  installs/                 service.js, routes.js, legacy-config.js (cfg:/base64 read-only compat)
-  stremio/                  manifest.js, catalog.js, meta.js, subtitles-ping.js, materialize.js
-  lists/                    service.js, routes.js, directory.js, search.js, likes.js
-  channels/                 engine/ (rotation, story-lock, parts — moved as-is from 05_), service.js, routes.js
-  activity/                 events.js, progress.js, shelves.js (CW/AN/history), scrobble.js
-  media/                    resolver.js, repository.js
-  providers/                (see §6.2)
-  jobs/                     dispatcher.js, consumer.js, handlers/{chart-refresh, show-refresh, import, purge, ...}.js
-  images/                   posters.js (badges, safe poster, BetterPosters via R2)
-  analytics/                ae.js, rollups.js, admin-queries.js
-  admin/                    routes.js, ui/ (separate client bundle)
-  storage/                  db.js (D1 helpers, shardFor, withSession), kv-cache.js, r2.js, migrations/
-  shared/                   ids.js, time.js, validation.js, constants.js
-  frontend/                 app entry, views/, components/, api-client.js, router.js, styles/
-build/
-  build.mjs                 esbuild: frontend -> JS/CSS strings (hashed); worker -> ONE ESM file
-worker_entry_combined.js    GENERATED. Committed so it can be pasted. Header: "DO NOT EDIT".
-```
+### 7.2 Where code goes
+
+The existing files keep their responsibilities:
+
+| File | Owns |
+|---|---|
+| `00_constants.js` | Constants, limits, shared tables (shelf prefixes, schema manifest) |
+| `01_icon-asset.js` | The app icon |
+| `02_http-and-creator-utils.js` | HTTP helpers and the fetch guard, auth and account helpers, storage helpers (KV/D1), likes, the directory, the schema gate and request metrics |
+| `03_admin.js` | The admin page and its data queries |
+| `04_config-resolution.js` | Install configs, source detection, the D-8 account rule |
+| `05_catalog-core.js` | Stremio catalog/meta building, the channel engine, posters and badges |
+| `06_`, `07_` | Provider fetchers (MDBList, Trakt, TMDB, Simkl, JustWatch, TVmaze) and the cron sweeps |
+| `08_quickadd-chart-data.js` | Quick Add chart tables |
+| `09_`–`24_` | The page shell and the client application (inside `renderBuilder`'s template literal) |
+| `25_`, `26_` | Routes (`handleFetch`), the `fetch` / `scheduled` exports |
+
+**New server-only areas go in new numbered files after `26_`**, each starting with a comment saying what it owns. They can't go between `09_` and `24_`, which are inside the page's template literal. Top-level names must be unique across every file.
+
+Where the rest of this plan names a module path, it maps to:
+
+| Plan name | Lives in |
+|---|---|
+| `http/`, `auth/`, `storage/`, `analytics/` | `02_` (with the entry-point middleware in `26_`) |
+| `accounts/`, `lists/`, `installs/` routes | `25_`, `26_` |
+| `installs/` config and the legacy resolver | `04_` |
+| `stremio/`, `channels/engine`, `images/` | `05_` |
+| `providers/` | `06_`, `07_`, plus `27_provider-http.js` for `providerFetch` |
+| `jobs/` | `07_` and the `scheduled` export in `26_`, plus a new numbered file for the queue consumer when Queues arrive |
+| `media/`, `activity/` | new numbered files after `26_` when they are built |
+| `admin/` | `03_`, and the admin routes in `26_` |
+| `frontend/` | `09_`–`24_` |
+| `shared/constants` | `00_` |
 
 ### 7.3 Keeping "copy one file into the dashboard"
 
-- `npm run build` runs esbuild in two passes:
-  1. It bundles `src/frontend` into `app.[hash].js` and `app.[hash].css`, minified.
-  2. It bundles `src/worker.js` into **one** ESM file, importing the frontend output as text (`--loader:.js=text` on a virtual module). The hashes are baked in as constants.
-- The output is written to `worker_entry_combined.js`. The file name is unchanged, so the paste workflow is unchanged.
-- The runtime `splitAppBundle` / `SPLIT_PAGE_MEMO` machinery goes away, because assets are split at build time.
-- **CI** runs build, then lint, then tests, then "rebuild matches committed file". The existing drift check is kept.
-- **A second CI job** (optional but recommended) applies D1 migrations with `wrangler d1 migrations apply --remote` using a scoped API token. The Worker itself is still deployed by pasting.
-- `worker_entry_combined.js` becomes **generated only**. `.gitattributes` already marks it `linguist-generated`. A pre-commit hook or CI rejects hand edits.
+- `python build.py` concatenates `header.js` and every `NN_*.js` file, in order, into `worker_entry_combined.js`. That file is pasted into the dashboard, exactly as today.
+- CI runs the build and the drift check, `node --check`, `scope_check.mjs`, the render and HTML checks, the `FUNCTION-MAP.md` check, and `node --test`.
+- `/app.js` and `/app.css` keep being split from the rendered page at run time (`splitAppBundle`), memoized per isolate and served with long cache lifetimes.
+- D1 migrations are applied from the D1 console, or from CI with Wrangler run through `npx`. The Worker itself is only ever deployed by pasting.
 
-### 7.4 What moves unchanged
+### 7.4 What stays where it is
 
-The channel engine (rotation, story-lock, part grouping; about 1,500 lines of pure functions in `05_`), air-time formatting, the SVG generators, `jsonForScript`, `escapeHtmlServer`, `isRemoteResolveOrigin`-style validators, and the provider mappers (as the starting point for adapters) all move as modules with their tests. They are sound code in the wrong place.
+Nothing moves. The channel engine, air-time formatting, the SVG generators, `jsonForScript`, `escapeHtmlServer` and the provider mappers stay in their current files. New shared helpers (`providerFetch`, the install-config schema, log redaction) are added beside them, not around them.
 
 ---
 
@@ -791,7 +795,7 @@ The channel engine (rotation, story-lock, part grouping; about 1,500 lines of pu
                                                 │
                                                 ▼
         ┌──────────────────────────────────────────────────────────────────────────────────┐
-        │  ONE Worker  (worker_entry_combined.js — generated by esbuild, pasted in dashboard) │
+        │  ONE Worker  (worker_entry_combined.js — built by build.py, pasted in dashboard)  │
         │   fetch():  router → middleware (security headers, session, CSRF, errors)          │
         │             ├─ /app, /assets/*        embedded, content-hashed frontend            │
         │             ├─ /api/*                 accounts · lists · channels · installs · likes│

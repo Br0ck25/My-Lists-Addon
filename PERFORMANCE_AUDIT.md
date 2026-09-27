@@ -55,7 +55,7 @@
 | PF-F4 | 60 s background poll plus focus, visibility and pageshow triggers per open tab, each a full-auth request | `22_:6470-6600` | Sessions make it cheap; better, a single `GET /api/me/changes?since=` with `ETag`/`304`, polled only while the app is visible |
 | PF-F5 | Airing Next computed in the browser: up to 60 shows through `/api/details/batch` with round loops (`DETAILS_BATCH_MAX_ROUNDS`) | `21_:3455-3480`, `3690-3725` | Server-computed shelves (improvement #2) |
 | PF-F6 | Live Preview re-fetches each row's shelf through `/api/preview`; placeholders "Click Refresh Preview above to load posters" appear on load | Seen in the running app | Preview reads the same materialized rows as Stremio; lazy per visible row |
-| PF-F7 | 326 `innerHTML` assignments that rebuild whole sections on state changes | code count | Keyed rendering (lit-html or Preact) |
+| PF-F7 | 326 `innerHTML` assignments that rebuild whole sections on state changes | code count | Update only the element that changed (vanilla JavaScript, no framework, D-11) |
 | PF-F8 | Google Fonts (three families) and jsDelivr (`fflate`) on the critical path, loaded cross-origin | `09_:3629`, `03_:1600-1602` | Self-host fonts and `fflate`, subset and preload; `fflate` only in the import view |
 | PF-F9 | Service worker precaches `/` and the bundle; with a 2.0 MB bundle, the first install downloads everything | `25_:66-161` | Keep the SW; precache only the shell plus the current route's chunk |
 
