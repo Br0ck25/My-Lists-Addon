@@ -18,7 +18,14 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 The new secrets `TOKEN_ENCRYPTION_KEY` and `LOOKUP_PEPPER` are **not needed yet**: nothing in this release uses them. They will be needed when the Phase 3a sign-in and account-storage code ships, and the release notes will say so then.
 
-### 🔒 Phase 3a: accounts, sessions, and authentication (P3a-1, P3a-2, P3a-3, P3a-4, P3a-5, P3a-6)
+### 🔒 Phase 3a: accounts, sessions, and authentication (P3a-1, P3a-2, P3a-3, P3a-4, P3a-5, P3a-6, P3a-7)
+
+- **Blind Index v2 for Account Key Lookups (P3a-7)**:
+  - On successful login (`POST /api/session` or creator route key-in-body auth) or key reset (`/api/creator/reset-key`, `/admin/api/reset-creator-key`), the Worker writes `accounts.key_lookup_hmac = HMAC(LOOKUP_PEPPER, normalizedKey)` in D1 whenever `LOOKUP_PEPPER` is configured.
+  - Key reset updates both `accounts.key_hash` and `accounts.key_lookup_hmac` alongside legacy `creators` and KV records.
+  - `/api/creator/forgot-username` checks the HMAC blind index (`accounts.key_lookup_hmac`) first before falling back to legacy unsalted SHA-256 indices (`creator_key_lookups` in D1 and `keylookup:<hash>` in KV).
+  - When an account is resolved via legacy fallback, `recordLegacyLookupHit` emits a metric data point to Cloudflare Analytics Engine (`blobs: ["legacy_lookup_hit", "forgot_username"]`, `doubles: [1]`, `indexes: ["legacy_lookup_hit"]`) and increments `stats:legacy_lookup_hits` in KV, while lazily upgrading the account's `key_lookup_hmac` so future lookups hit HMAC.
+  - Operates completely fail-closed and backwards-compatible: if `LOOKUP_PEPPER` is omitted, lookups seamlessly fall back to legacy behavior without errors.
 
 - **Creator Routes Dual Authentication Compatibility (P3a-6)**:
   - Behind feature flag `FF_SESSIONS` (`1` / `true`), every `/api/creator/*` route now supports dual authentication: accepting either an authenticated session (cookie or Bearer) without `creatorKey` in the body, or the legacy `creatorName` / `creatorKey` in the request body.

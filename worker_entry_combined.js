@@ -3852,6 +3852,18 @@ async function storeCreatorKeyLookup(env, key, username) {
     } catch (dbErr) {
       console.error("D1 write error (storeCreatorKeyLookup):", dbErr);
     }
+    if (env.LOOKUP_PEPPER) {
+      try {
+        const hmac = await hmacLookupKey(key, env);
+        if (hmac) {
+          await env.DB.prepare(
+            "UPDATE accounts SET key_lookup_hmac = ? WHERE lower(username) = lower(?)"
+          ).bind(hmac, username).run();
+        }
+      } catch (hmacErr) {
+        console.error("D1 write error (storeCreatorKeyLookup key_lookup_hmac):", hmacErr);
+      }
+    }
   }
   if (env.CONFIGS) {
     try {
@@ -3880,6 +3892,11 @@ async function deleteCreatorKeyLookup(env, username, key) {
     } catch (dbErr) {
       console.error("D1 delete error (deleteCreatorKeyLookup):", dbErr);
     }
+    if (username) {
+      try {
+        await env.DB.prepare("UPDATE accounts SET key_lookup_hmac = NULL WHERE lower(username) = lower(?)").bind(username).run();
+      } catch {}
+    }
   }
   if (env.CONFIGS) {
     try {
@@ -3898,14 +3915,37 @@ async function deleteCreatorKeyLookup(env, username, key) {
   }
 }
 
-async function usernameForCreatorKeyLookup(env, key) {
+async function usernameForCreatorKeyLookup(env, key, outMeta = null) {
   if (!env || !key) return "";
+
+  // 1. Check Blind Index v2 (HMAC) first if LOOKUP_PEPPER is available and DB is bound
+  if (env.DB && env.LOOKUP_PEPPER) {
+    try {
+      const hmac = await hmacLookupKey(key, env);
+      if (hmac) {
+        const row = await env.DB.prepare(
+          "SELECT username FROM accounts WHERE key_lookup_hmac = ? AND (status != 'deleted' AND deleted_at IS NULL)"
+        ).bind(hmac).first();
+        if (row && row.username) {
+          if (outMeta && typeof outMeta === "object") outMeta.source = "hmac";
+          return row.username;
+        }
+      }
+    } catch (hmacErr) {
+      console.error("D1 HMAC lookup error (usernameForCreatorKeyLookup):", hmacErr);
+    }
+  }
+
+  // 2. Fall back to legacy SHA-256 lookup in D1 creator_key_lookups and KV
   const lookupHash = await creatorKeyLookupHash(key);
   if (!lookupHash) return "";
   if (env.DB) {
     try {
       const row = await env.DB.prepare("SELECT username FROM creator_key_lookups WHERE lookup_hash = ?").bind(lookupHash).first();
-      if (row && row.username) return row.username;
+      if (row && row.username) {
+        if (outMeta && typeof outMeta === "object") outMeta.source = "legacy_d1";
+        return row.username;
+      }
     } catch (dbErr) {
       console.error("D1 read error (usernameForCreatorKeyLookup):", dbErr);
     }
@@ -3913,12 +3953,38 @@ async function usernameForCreatorKeyLookup(env, key) {
   if (env.CONFIGS) {
     try {
       const u = (await env.CONFIGS.get(creatorKeyLookupKey(lookupHash))) || "";
-      if (u) return u;
+      if (u) {
+        if (outMeta && typeof outMeta === "object") outMeta.source = "legacy_kv";
+        return u;
+      }
     } catch (kvErr) {
       console.error("KV read error (usernameForCreatorKeyLookup):", kvErr);
     }
   }
   return "";
+}
+
+async function recordLegacyLookupHit(env) {
+  if (!env) return;
+  try {
+    if (env.ANALYTICS && typeof env.ANALYTICS.writeDataPoint === "function") {
+      env.ANALYTICS.writeDataPoint({
+        blobs: ["legacy_lookup_hit", "forgot_username"],
+        doubles: [1],
+        indexes: ["legacy_lookup_hit"],
+      });
+    }
+  } catch {
+    // Analytics Engine errors must never affect the request
+  }
+  try {
+    if (env.CONFIGS) {
+      const current = parseInt((await env.CONFIGS.get("stats:legacy_lookup_hits")) || "0", 10);
+      await env.CONFIGS.put("stats:legacy_lookup_hits", String(current + 1));
+    }
+  } catch {
+    // KV errors must never affect the request
+  }
 }
 
 // --- Phase 3a: Token encryption & blind lookup hashing ----------------------
@@ -7111,6 +7177,13 @@ async function rotateCreatorKeyHashInD1(env, username, keyHash) {
       // Row absent (never migrated). Not an error -- the unconditional KV
       // write is the source of truth -- but worth surfacing.
       console.warn("D1 key rotation matched no row for", username, "-- KV updated");
+    }
+    try {
+      await env.DB.prepare(
+        "UPDATE accounts SET key_hash = ?, version = version + 1 WHERE lower(username) = lower(?)"
+      ).bind(keyHash, username).run();
+    } catch {
+      // accounts table may not exist in pre-0015 schemas
     }
     return { ok: true };
   } catch (dbErr) {
@@ -82196,6 +82269,20 @@ function generateSearchVariations(query) {
               if (!request.session) {
                 request.session = session;
               }
+              if (env.LOOKUP_PEPPER && accountRow && creatorKey) {
+                try {
+                  const hmac = await hmacLookupKey(creatorKey, env);
+                  if (hmac && accountRow.key_lookup_hmac !== hmac) {
+                    await env.DB.prepare(
+                      "UPDATE accounts SET key_lookup_hmac = ? WHERE id = ?"
+                    ).bind(hmac, accountRow.id).run();
+                    accountRow.key_lookup_hmac = hmac;
+                    if (request.account) request.account.keyLookupHmac = hmac;
+                  }
+                } catch (hmacErr) {
+                  console.error("Failed to write accounts.key_lookup_hmac on creator auth:", hmacErr);
+                }
+              }
             }
           } catch (sessionErr) {
             console.error("Failed to issue session cookie on creator auth:", sessionErr);
@@ -83305,6 +83392,21 @@ function generateSearchVariations(query) {
         }
       }
 
+      // Blind index v2: if LOOKUP_PEPPER is configured, write accounts.key_lookup_hmac
+      if (env.LOOKUP_PEPPER) {
+        try {
+          const hmac = await hmacLookupKey(keyRaw, env);
+          if (hmac && accountRow.key_lookup_hmac !== hmac) {
+            await env.DB.prepare(
+              "UPDATE accounts SET key_lookup_hmac = ? WHERE id = ?"
+            ).bind(hmac, accountRow.id).run();
+            accountRow.key_lookup_hmac = hmac;
+          }
+        } catch (hmacErr) {
+          console.error("Failed to write accounts.key_lookup_hmac on login:", hmacErr);
+        }
+      }
+
       // Update last active
       const now = Date.now();
       await env.DB.prepare("UPDATE accounts SET last_active_at = ? WHERE id = ?").bind(now, accountRow.id).run().catch(() => {});
@@ -83921,7 +84023,9 @@ function generateSearchVariations(query) {
         return json({ ok: false, error: genericError }, 401);
       }
 
-      let resolvedUsername = await usernameForCreatorKeyLookup(env, presentedKey);
+      const lookupMeta = {};
+      let resolvedUsername = await usernameForCreatorKeyLookup(env, presentedKey, lookupMeta);
+      let isLegacyHit = Boolean(lookupMeta.source && lookupMeta.source.startsWith("legacy"));
 
       // Fallback for pre-migration accounts in D1: scan up to 50 accounts
       if (!resolvedUsername && env.DB) {
@@ -83933,6 +84037,7 @@ function generateSearchVariations(query) {
             for (const r of rows.results) {
               if (r.key_hash && (await verifyCreatorKey(presentedKey, r.key_hash))) {
                 resolvedUsername = r.username;
+                isLegacyHit = true;
                 await storeCreatorKeyLookup(env, presentedKey, r.username);
                 break;
               }
@@ -83947,17 +84052,40 @@ function generateSearchVariations(query) {
         return json({ ok: false, error: genericError }, 401);
       }
 
+      if (isLegacyHit) {
+        await recordLegacyLookupHit(env);
+      }
+
       const v = validateCreatorUsername(resolvedUsername);
       if (!v.ok) return json({ ok: false, error: genericError }, 401);
 
-      const raw = await getCreator(env, v.normalized);
-      if (!raw) return json({ ok: false, error: genericError }, 401);
-      let profile;
-      try {
-        profile = JSON.parse(raw);
-      } catch {
-        return json({ ok: false, error: genericError }, 401);
+      let profile = null;
+      let accountRow = null;
+      if (env.DB) {
+        try {
+          accountRow = await env.DB.prepare(
+            "SELECT id, username, display_name, key_hash, recovery_answer_hash, status FROM accounts WHERE lower(username) = lower(?) AND (status != 'deleted' AND deleted_at IS NULL)"
+          ).bind(v.normalized).first();
+        } catch {}
       }
+
+      const raw = await getCreator(env, v.normalized);
+      if (raw) {
+        try {
+          profile = JSON.parse(raw);
+        } catch {}
+      }
+
+      if (!profile && accountRow) {
+        profile = {
+          username: accountRow.username,
+          displayName: accountRow.display_name,
+          keyHash: accountRow.key_hash,
+          recoveryAnswerHash: accountRow.recovery_answer_hash,
+        };
+      }
+
+      if (!profile) return json({ ok: false, error: genericError }, 401);
 
       const keyMatches = await verifyCreatorKey(presentedKey, profile.keyHash);
       if (!keyMatches) {

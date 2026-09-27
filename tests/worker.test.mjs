@@ -15615,6 +15615,418 @@ describe("P3a-6: creator routes dual auth (session or key-in-body)", () => {
   });
 });
 
+describe("P3a-7: blind index v2 (key_lookup_hmac and legacy fallback)", () => {
+  const {
+    hmacLookupKey,
+    usernameForCreatorKeyLookup,
+    storeCreatorKeyLookup,
+    deleteCreatorKeyLookup,
+    recordLegacyLookupHit,
+    hashCreatorKey,
+    createSession,
+  } = loadSourceFunctions(
+    "00_constants.js",
+    "02_http-and-creator-utils.js"
+  );
+
+  const testPepper = "test_lookup_pepper_secret_value_32_bytes";
+
+  it("recordLegacyLookupHit writes to ANALYTICS and increments stats:legacy_lookup_hits in KV", async () => {
+    const points = [];
+    const env = makeEnv({
+      CONFIGS: makeKv(),
+      ANALYTICS: { writeDataPoint: (p) => points.push(p) },
+    });
+
+    await recordLegacyLookupHit(env);
+
+    assert.equal(points.length, 1);
+    assert.equal(points[0].blobs[0], "legacy_lookup_hit");
+    assert.equal(points[0].blobs[1], "forgot_username");
+    assert.equal(points[0].doubles[0], 1);
+    assert.equal(points[0].indexes[0], "legacy_lookup_hit");
+
+    const count = await env.CONFIGS.get("stats:legacy_lookup_hits");
+    assert.equal(count, "1");
+
+    await recordLegacyLookupHit(env);
+    assert.equal(points.length, 2);
+    const count2 = await env.CONFIGS.get("stats:legacy_lookup_hits");
+    assert.equal(count2, "2");
+  });
+
+  it("recordLegacyLookupHit does not throw when ANALYTICS or CONFIGS errors occur", async () => {
+    const env = makeEnv({
+      ANALYTICS: {
+        writeDataPoint() {
+          throw new Error("Analytics down");
+        },
+      },
+    });
+    // Should not throw
+    await assert.doesNotReject(async () => {
+      await recordLegacyLookupHit(env);
+    });
+  });
+
+  it("usernameForCreatorKeyLookup checks HMAC first and returns outMeta.source = 'hmac'", async () => {
+    const env = makeEnv({ DB: makeD1(), LOOKUP_PEPPER: testPepper });
+    const key = "MYL-BLND-INDX-TEST";
+    const username = "hmac_winner";
+    const hmac = await hmacLookupKey(key, env);
+
+    // Insert into accounts with key_lookup_hmac
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, key_lookup_hmac, created_at) VALUES (?, ?, ?, ?, ?)"
+    ).bind(username, "HMAC Winner", "dummyhash", hmac, 1000).run();
+
+    // Insert creator into creators table before referencing in creator_key_lookups
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind("decoy_user", "Decoy", "dummyhash", 1000).run();
+
+    // Also insert a decoy into legacy creator_key_lookups with old SHA-256
+    await env.DB.prepare(
+      "INSERT INTO creator_key_lookups (lookup_hash, username, created_at) VALUES (?, ?, ?)"
+    ).bind("decoy_sha256", "decoy_user", 1000).run();
+
+    const meta = {};
+    const resolved = await usernameForCreatorKeyLookup(env, key, meta);
+    assert.equal(resolved, username);
+    assert.equal(meta.source, "hmac");
+  });
+
+  it("usernameForCreatorKeyLookup falls back to legacy D1 and KV lookups when HMAC misses", async () => {
+    const env = makeEnv({ DB: makeD1(), LOOKUP_PEPPER: testPepper });
+    const key = "MYL-LGCD-INDX-TEST";
+    const username = "legacy_d1_user";
+
+    // Insert creator into creators table first so foreign key succeeds
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "Legacy D1 User", "dummyhash", 1000).run();
+
+    // Store in legacy creator_key_lookups
+    await storeCreatorKeyLookup(env, key, username);
+
+    // Explicitly remove accounts row if storeCreatorKeyLookup updated accounts
+    await env.DB.prepare("DELETE FROM accounts WHERE username = ?").bind(username).run();
+
+    const meta = {};
+    const resolved = await usernameForCreatorKeyLookup(env, key, meta);
+    assert.equal(resolved, username);
+    assert.equal(meta.source, "legacy_d1");
+
+    // Clear D1 creator_key_lookups to test KV fallback
+    await env.DB.prepare("DELETE FROM creator_key_lookups").run();
+    const metaKv = {};
+    const resolvedKv = await usernameForCreatorKeyLookup(env, key, metaKv);
+    assert.equal(resolvedKv, username);
+    assert.equal(metaKv.source, "legacy_kv");
+  });
+
+  it("usernameForCreatorKeyLookup ignores soft-deleted accounts in HMAC check", async () => {
+    const env = makeEnv({ DB: makeD1(), LOOKUP_PEPPER: testPepper });
+    const key = "MYL-DELT-INDX-TEST";
+    const username = "deleted_account";
+    const hmac = await hmacLookupKey(key, env);
+
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, key_lookup_hmac, created_at, status, deleted_at) VALUES (?, ?, ?, ?, ?, 'deleted', ?)"
+    ).bind(username, "Deleted User", "hash", hmac, 1000, 2000).run();
+
+    const meta = {};
+    const resolved = await usernameForCreatorKeyLookup(env, key, meta);
+    assert.equal(resolved, "");
+    assert.equal(meta.source, undefined);
+  });
+
+  it("storeCreatorKeyLookup writes key_lookup_hmac to accounts table when LOOKUP_PEPPER is set", async () => {
+    const env = makeEnv({ DB: makeD1(), LOOKUP_PEPPER: testPepper });
+    const key = "MYL-STOR-INDX-TEST";
+    const username = "store_target";
+
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "Store Target", "dummyhash", 1000).run();
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "Store Target", "dummyhash", 1000).run();
+
+    await storeCreatorKeyLookup(env, key, username);
+
+    const expectedHmac = await hmacLookupKey(key, env);
+    const { results } = await env.DB.prepare(
+      "SELECT key_lookup_hmac FROM accounts WHERE username = ?"
+    ).bind(username).all();
+    assert.equal(results.length, 1);
+    assert.equal(results[0].key_lookup_hmac, expectedHmac);
+  });
+
+  it("deleteCreatorKeyLookup clears key_lookup_hmac from accounts table", async () => {
+    const env = makeEnv({ DB: makeD1(), LOOKUP_PEPPER: testPepper });
+    const key = "MYL-CLEA-INDX-TEST";
+    const username = "cleanup_target";
+    const hmac = await hmacLookupKey(key, env);
+
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "Cleanup Target", "dummyhash", 1000).run();
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, key_lookup_hmac, created_at) VALUES (?, ?, ?, ?, ?)"
+    ).bind(username, "Cleanup Target", "dummyhash", hmac, 1000).run();
+
+    await deleteCreatorKeyLookup(env, username, key);
+
+    const { results } = await env.DB.prepare(
+      "SELECT key_lookup_hmac FROM accounts WHERE username = ?"
+    ).bind(username).all();
+    assert.equal(results.length, 1);
+    assert.equal(results[0].key_lookup_hmac, null);
+  });
+
+  it("POST /api/session writes key_lookup_hmac to accounts on successful login", async () => {
+    const env = makeEnv({ DB: makeD1(), LOOKUP_PEPPER: testPepper });
+    const username = "session_hmac_user";
+    const key = "MYL-SESS-HMAC-1234";
+    const keyHash = await hashCreatorKey(key);
+
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "Session User", keyHash, 1000).run();
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "Session User", keyHash, 1000).run();
+    await env.CONFIGS.put(`creator:${username}`, JSON.stringify({ displayName: "Session User", keyHash }));
+
+    // Ensure key_lookup_hmac is initially null
+    const { results: preCheck } = await env.DB.prepare(
+      "SELECT key_lookup_hmac FROM accounts WHERE username = ?"
+    ).bind(username).all();
+    assert.equal(preCheck[0].key_lookup_hmac, null);
+
+    const res = await call(env, "/api/session", {
+      method: "POST",
+      json: { username, key },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+
+    const expectedHmac = await hmacLookupKey(key, env);
+    const { results: postCheck } = await env.DB.prepare(
+      "SELECT key_lookup_hmac FROM accounts WHERE username = ?"
+    ).bind(username).all();
+    assert.equal(postCheck[0].key_lookup_hmac, expectedHmac);
+  });
+
+  it("POST /api/creator/reset-key updates key_lookup_hmac and accounts.key_hash", async () => {
+    const env = makeEnv({ DB: makeD1(), LOOKUP_PEPPER: testPepper });
+    const username = "reset_hmac_user";
+    const oldKey = "MYL-OLDD-HMAC-1234";
+    const oldKeyHash = await hashCreatorKey(oldKey);
+    const oldHmac = await hmacLookupKey(oldKey, env);
+    const recoveryAnswer = "MySuperSecretRecovery123";
+    const recoveryAnswerHash = await hashCreatorKey(recoveryAnswer.toLowerCase());
+
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, recovery_answer_hash, created_at) VALUES (?, ?, ?, ?, ?)"
+    ).bind(username, "Reset User", oldKeyHash, recoveryAnswerHash, 1000).run();
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, recovery_answer_hash, key_lookup_hmac, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+    ).bind(username, "Reset User", oldKeyHash, recoveryAnswerHash, oldHmac, 1000).run();
+    await env.CONFIGS.put(
+      `creator:${username}`,
+      JSON.stringify({ displayName: "Reset User", keyHash: oldKeyHash, recoveryAnswerHash })
+    );
+
+    const res = await call(env, "/api/creator/reset-key", {
+      method: "POST",
+      json: { username, recoveryAnswer },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+    const newKey = res.body.creatorKey;
+    assert.ok(newKey);
+    assert.notEqual(newKey, oldKey);
+
+    // Verify accounts table in D1 has updated key_lookup_hmac matching new key
+    const newHmac = await hmacLookupKey(newKey, env);
+    const { results: accCheck } = await env.DB.prepare(
+      "SELECT key_lookup_hmac, key_hash FROM accounts WHERE username = ?"
+    ).bind(username).all();
+    assert.equal(accCheck[0].key_lookup_hmac, newHmac);
+    assert.notEqual(accCheck[0].key_hash, oldKeyHash);
+  });
+
+  it("/admin/api/reset-creator-key updates key_lookup_hmac and accounts.key_hash", async () => {
+    const env = makeEnv({ DB: makeD1(), LOOKUP_PEPPER: testPepper });
+    const username = "admin_reset_user";
+    const oldKey = "MYL-ADMN-HMAC-1234";
+    const oldKeyHash = await hashCreatorKey(oldKey);
+    const oldHmac = await hmacLookupKey(oldKey, env);
+
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "Admin Reset User", oldKeyHash, 1000).run();
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, key_lookup_hmac, created_at) VALUES (?, ?, ?, ?, ?)"
+    ).bind(username, "Admin Reset User", oldKeyHash, oldHmac, 1000).run();
+    await env.CONFIGS.put(`creator:${username}`, JSON.stringify({ displayName: "Admin Reset User", keyHash: oldKeyHash }));
+
+    const cookie = await adminCookie(env);
+    const res = await call(env, "/admin/api/reset-creator-key", {
+      method: "POST",
+      cookie,
+      json: { username },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+    const newKey = res.body.creatorKey;
+    assert.ok(newKey);
+
+    const newHmac = await hmacLookupKey(newKey, env);
+    const { results: accCheck } = await env.DB.prepare(
+      "SELECT key_lookup_hmac, key_hash FROM accounts WHERE username = ?"
+    ).bind(username).all();
+    assert.equal(accCheck[0].key_lookup_hmac, newHmac);
+    assert.notEqual(accCheck[0].key_hash, oldKeyHash);
+  });
+
+  it("POST /api/creator/forgot-username with HMAC hit succeeds without recording legacy metric", async () => {
+    const points = [];
+    const env = makeEnv({
+      DB: makeD1(),
+      LOOKUP_PEPPER: testPepper,
+      ANALYTICS: { writeDataPoint: (p) => points.push(p) },
+    });
+    const username = "hmac_forgot_user";
+    const key = "MYL-FORG-HMAC-1234";
+    const keyHash = await hashCreatorKey(key);
+    const hmac = await hmacLookupKey(key, env);
+
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "HMAC Forgot User", keyHash, 1000).run();
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, key_lookup_hmac, created_at) VALUES (?, ?, ?, ?, ?)"
+    ).bind(username, "HMAC Forgot User", keyHash, hmac, 1000).run();
+    await env.CONFIGS.put(`creator:${username}`, JSON.stringify({ displayName: "HMAC Forgot User", keyHash }));
+
+    const res = await call(env, "/api/creator/forgot-username", {
+      method: "POST",
+      json: { creatorKey: key },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+    assert.equal(res.body.username, username);
+
+    // No legacy lookup metrics recorded
+    const legacyPoints = points.filter((p) => p.blobs && p.blobs[0] === "legacy_lookup_hit");
+    assert.equal(legacyPoints.length, 0);
+    const kvCount = await env.CONFIGS.get("stats:legacy_lookup_hits");
+    assert.equal(kvCount, null);
+  });
+
+  it("POST /api/creator/forgot-username with legacy hit records metric and upgrades account to HMAC", async () => {
+    const points = [];
+    const env = makeEnv({
+      DB: makeD1(),
+      LOOKUP_PEPPER: testPepper,
+      ANALYTICS: { writeDataPoint: (p) => points.push(p) },
+    });
+    const username = "legacy_forgot_user";
+    const key = "MYL-LEGC-FORG-1234";
+    const keyHash = await hashCreatorKey(key);
+
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "Legacy Forgot User", keyHash, 1000).run();
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "Legacy Forgot User", keyHash, 1000).run();
+    await env.CONFIGS.put(`creator:${username}`, JSON.stringify({ displayName: "Legacy Forgot User", keyHash }));
+
+    // Store in legacy creator_key_lookups table without HMAC
+    const legacyDigest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("keylookup:" + key));
+    let hex = "";
+    for (const b of new Uint8Array(legacyDigest)) hex += b.toString(16).padStart(2, "0");
+    await env.DB.prepare(
+      "INSERT INTO creator_key_lookups (lookup_hash, username, created_at) VALUES (?, ?, ?)"
+    ).bind(hex, username, 1000).run();
+
+    const res = await call(env, "/api/creator/forgot-username", {
+      method: "POST",
+      json: { creatorKey: key },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+    assert.equal(res.body.username, username);
+
+    // Metric should be recorded for legacy hit!
+    const legacyPoints = points.filter((p) => p.blobs && p.blobs[0] === "legacy_lookup_hit");
+    assert.equal(legacyPoints.length, 1);
+    assert.equal(legacyPoints[0].blobs[0], "legacy_lookup_hit");
+    assert.equal(legacyPoints[0].blobs[1], "forgot_username");
+    assert.equal(legacyPoints[0].doubles[0], 1);
+    assert.equal(legacyPoints[0].indexes[0], "legacy_lookup_hit");
+    const kvCount = await env.CONFIGS.get("stats:legacy_lookup_hits");
+    assert.equal(kvCount, "1");
+
+    // The account should now have been upgraded with key_lookup_hmac!
+    const expectedHmac = await hmacLookupKey(key, env);
+    const { results } = await env.DB.prepare(
+      "SELECT key_lookup_hmac FROM accounts WHERE username = ?"
+    ).bind(username).all();
+    assert.equal(results[0].key_lookup_hmac, expectedHmac);
+
+    // A second forgot-username call now hits HMAC and DOES NOT increment the legacy metric!
+    const res2 = await call(env, "/api/creator/forgot-username", {
+      method: "POST",
+      json: { creatorKey: key },
+    });
+    assert.equal(res2.status, 200);
+    const legacyPoints2 = points.filter((p) => p.blobs && p.blobs[0] === "legacy_lookup_hit");
+    assert.equal(legacyPoints2.length, 1); // Still 1!
+    const kvCount2 = await env.CONFIGS.get("stats:legacy_lookup_hits");
+    assert.equal(kvCount2, "1"); // Still 1!
+  });
+
+  it("POST /api/creator/forgot-username operates seamlessly when LOOKUP_PEPPER is missing", async () => {
+    const points = [];
+    const env = makeEnv({
+      DB: makeD1(),
+      // LOOKUP_PEPPER omitted
+      ANALYTICS: { writeDataPoint: (p) => points.push(p) },
+    });
+    const username = "no_pepper_user";
+    const key = "MYL-NOPE-PPER-1234";
+    const keyHash = await hashCreatorKey(key);
+
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "No Pepper User", keyHash, 1000).run();
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, "No Pepper User", keyHash, 1000).run();
+    await env.CONFIGS.put(`creator:${username}`, JSON.stringify({ displayName: "No Pepper User", keyHash }));
+    await storeCreatorKeyLookup(env, key, username);
+
+    const res = await call(env, "/api/creator/forgot-username", {
+      method: "POST",
+      json: { creatorKey: key },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+    assert.equal(res.body.username, username);
+
+    // Legacy lookup hit recorded
+    const legacyPoints = points.filter((p) => p.blobs && p.blobs[0] === "legacy_lookup_hit");
+    assert.equal(legacyPoints.length, 1);
+    const kvCount = await env.CONFIGS.get("stats:legacy_lookup_hits");
+    assert.equal(kvCount, "1");
+  });
+});
+
 
 
 

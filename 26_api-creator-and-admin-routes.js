@@ -136,6 +136,20 @@
               if (!request.session) {
                 request.session = session;
               }
+              if (env.LOOKUP_PEPPER && accountRow && creatorKey) {
+                try {
+                  const hmac = await hmacLookupKey(creatorKey, env);
+                  if (hmac && accountRow.key_lookup_hmac !== hmac) {
+                    await env.DB.prepare(
+                      "UPDATE accounts SET key_lookup_hmac = ? WHERE id = ?"
+                    ).bind(hmac, accountRow.id).run();
+                    accountRow.key_lookup_hmac = hmac;
+                    if (request.account) request.account.keyLookupHmac = hmac;
+                  }
+                } catch (hmacErr) {
+                  console.error("Failed to write accounts.key_lookup_hmac on creator auth:", hmacErr);
+                }
+              }
             }
           } catch (sessionErr) {
             console.error("Failed to issue session cookie on creator auth:", sessionErr);
@@ -1245,6 +1259,21 @@
         }
       }
 
+      // Blind index v2: if LOOKUP_PEPPER is configured, write accounts.key_lookup_hmac
+      if (env.LOOKUP_PEPPER) {
+        try {
+          const hmac = await hmacLookupKey(keyRaw, env);
+          if (hmac && accountRow.key_lookup_hmac !== hmac) {
+            await env.DB.prepare(
+              "UPDATE accounts SET key_lookup_hmac = ? WHERE id = ?"
+            ).bind(hmac, accountRow.id).run();
+            accountRow.key_lookup_hmac = hmac;
+          }
+        } catch (hmacErr) {
+          console.error("Failed to write accounts.key_lookup_hmac on login:", hmacErr);
+        }
+      }
+
       // Update last active
       const now = Date.now();
       await env.DB.prepare("UPDATE accounts SET last_active_at = ? WHERE id = ?").bind(now, accountRow.id).run().catch(() => {});
@@ -1861,7 +1890,9 @@
         return json({ ok: false, error: genericError }, 401);
       }
 
-      let resolvedUsername = await usernameForCreatorKeyLookup(env, presentedKey);
+      const lookupMeta = {};
+      let resolvedUsername = await usernameForCreatorKeyLookup(env, presentedKey, lookupMeta);
+      let isLegacyHit = Boolean(lookupMeta.source && lookupMeta.source.startsWith("legacy"));
 
       // Fallback for pre-migration accounts in D1: scan up to 50 accounts
       if (!resolvedUsername && env.DB) {
@@ -1873,6 +1904,7 @@
             for (const r of rows.results) {
               if (r.key_hash && (await verifyCreatorKey(presentedKey, r.key_hash))) {
                 resolvedUsername = r.username;
+                isLegacyHit = true;
                 await storeCreatorKeyLookup(env, presentedKey, r.username);
                 break;
               }
@@ -1887,17 +1919,40 @@
         return json({ ok: false, error: genericError }, 401);
       }
 
+      if (isLegacyHit) {
+        await recordLegacyLookupHit(env);
+      }
+
       const v = validateCreatorUsername(resolvedUsername);
       if (!v.ok) return json({ ok: false, error: genericError }, 401);
 
-      const raw = await getCreator(env, v.normalized);
-      if (!raw) return json({ ok: false, error: genericError }, 401);
-      let profile;
-      try {
-        profile = JSON.parse(raw);
-      } catch {
-        return json({ ok: false, error: genericError }, 401);
+      let profile = null;
+      let accountRow = null;
+      if (env.DB) {
+        try {
+          accountRow = await env.DB.prepare(
+            "SELECT id, username, display_name, key_hash, recovery_answer_hash, status FROM accounts WHERE lower(username) = lower(?) AND (status != 'deleted' AND deleted_at IS NULL)"
+          ).bind(v.normalized).first();
+        } catch {}
       }
+
+      const raw = await getCreator(env, v.normalized);
+      if (raw) {
+        try {
+          profile = JSON.parse(raw);
+        } catch {}
+      }
+
+      if (!profile && accountRow) {
+        profile = {
+          username: accountRow.username,
+          displayName: accountRow.display_name,
+          keyHash: accountRow.key_hash,
+          recoveryAnswerHash: accountRow.recovery_answer_hash,
+        };
+      }
+
+      if (!profile) return json({ ok: false, error: genericError }, 401);
 
       const keyMatches = await verifyCreatorKey(presentedKey, profile.keyHash);
       if (!keyMatches) {
