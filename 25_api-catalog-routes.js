@@ -170,7 +170,10 @@ async function handleFetch(request, env, ctx) {
     applyEnvApiKeys(env);
 
     const url = new URL(request.url);
-    const path = url.pathname;
+    // A v2 install link, /i/{token}/..., is handed to the same manifest,
+    // catalog, meta, subtitles and configure routes as a legacy id, with the
+    // token as its config segment (see v2InstallPath, 27_installs.js).
+    const path = v2InstallPath(url.pathname) || url.pathname;
 
     if (request.method === "OPTIONS") {
       if (isPublicCorsPath(path)) {
@@ -189,6 +192,15 @@ async function handleFetch(request, env, ctx) {
       request.account = sessionAuth.account;
       request.session = sessionAuth.session;
     }
+
+    // /api/installs (an account's install links) and the admin status of the
+    // install move -- 27_installs.js.
+    const installsResponse = await handleInstallsApi(request, env, url, path);
+    if (installsResponse) return installsResponse;
+    // /api/connections (an account's Trakt, MDBList, Simkl and TMDB
+    // connections) -- 28_connections.js.
+    const connectionsResponse = await handleConnectionsApi(request, env, url, path);
+    if (connectionsResponse) return connectionsResponse;
 
     if (path === "/" || path === "") {
       ctx.waitUntil(bumpStat(env, "pageviews"));
@@ -765,6 +777,9 @@ async function handleFetch(request, env, ctx) {
         return Response.redirect(`${url.origin}/${m[1]}/configure`, 302);
       }
       const { entries, track, shuffleShelves } = await resolveConfig(m[1], env);
+      // Moves this link's keys and tokens out of its KV record, if they are
+      // still there and the move is switched on. After the response.
+      ctx.waitUntil(maybeMigrateLegacyInstall(env, m[1]));
       return jsonPublic(buildManifest(entries, url.origin, track, shuffleShelves, m[1]));
     }
 
@@ -1000,6 +1015,8 @@ Sitemap: ${url.origin}/sitemap.xml`;
       // Kept as a whole object as well as destructured: the betterPosters*
       // style keys are passed through wholesale rather than one at a time.
       const resolvedConfig = await resolveConfig(config, env);
+      // As in the manifest route: most installs ask for catalogs far more often.
+      ctx.waitUntil(maybeMigrateLegacyInstall(env, config));
       const { entries, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, trackCreatorName, trackOwner, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists, betterPosters, showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist } = resolvedConfig;
       const entryIndex = entries.findIndex((e) => e.id === id && e.type === type);
       const entry = entryIndex >= 0 ? entries[entryIndex] : null;
@@ -3471,6 +3488,20 @@ function generateSearchVariations(query) {
             if (meData && meData.username) traktUsername = meData.username;
           }
         } catch {}
+        // Signed in: the token is kept on the server, encrypted, and the
+        // address bar never carries it (P3a-9, 28_connections.js). The page
+        // fetches it back over the session. Anything else, as before.
+        if (await storeProviderConnection(env, request.account, "trakt", {
+          accessToken: tokenData.access_token,
+          refreshToken: tokenData.refresh_token,
+          expiresAt: tokenData.created_at && tokenData.expires_in ? (tokenData.created_at + tokenData.expires_in) * 1000 : null,
+          externalUser: { username: traktUsername },
+        })) {
+          return new Response(null, {
+            status: 302,
+            headers: { Location: `${url.origin}/?connected=trakt`, "Set-Cookie": clearStateCookie },
+          });
+        }
         return new Response(null, {
           status: 302,
           headers: {
@@ -3593,6 +3624,16 @@ function generateSearchVariations(query) {
           }
         } catch {}
 
+        // Kept on the server too when signed in (P3a-9). The token still comes
+        // back in this JSON: it never passes through an address bar here, and
+        // the page works from its own copy until Phase 6.
+        await storeProviderConnection(env, request.account, "trakt", {
+          accessToken: data.access_token,
+          refreshToken: data.refresh_token,
+          expiresAt: data.created_at && data.expires_in ? (data.created_at + data.expires_in) * 1000 : null,
+          apiKey: userKey || null,
+          externalUser: { username: traktUsername },
+        });
         return json({ ok: true, access_token: data.access_token, username: traktUsername });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err) }, 500);
@@ -3724,6 +3765,18 @@ function generateSearchVariations(query) {
             }
           } catch {}
         }
+        // Signed in: kept on the server, no token in the address bar (P3a-9).
+        if (await storeProviderConnection(env, request.account, "mdblist", {
+          accessToken: token,
+          refreshToken: tokenData.refresh_token,
+          expiresAt: tokenData.expires_in ? Date.now() + Number(tokenData.expires_in) * 1000 : null,
+          externalUser: { username: mdblistUsername },
+        })) {
+          return new Response(null, {
+            status: 302,
+            headers: { Location: `${url.origin}/?connected=mdblist`, "Set-Cookie": clearStateCookie },
+          });
+        }
         return new Response(null, {
           status: 302,
           headers: {
@@ -3839,6 +3892,16 @@ function generateSearchVariations(query) {
           }
         } catch {}
 
+        // Signed in: kept on the server, no token in the address bar (P3a-9).
+        if (await storeProviderConnection(env, request.account, "simkl", {
+          accessToken: token,
+          externalUser: { username: simklUsername },
+        })) {
+          return new Response(null, {
+            status: 302,
+            headers: { Location: `${url.origin}/?connected=simkl`, "Set-Cookie": clearStateCookie },
+          });
+        }
         return new Response(null, {
           status: 302,
           headers: {
@@ -5249,6 +5312,16 @@ function generateSearchVariations(query) {
         const accountId = accountData.id ? String(accountData.id) : "";
         const username = accountData.username || "";
 
+        // Signed in: kept on the server, no session id in the address bar (P3a-9).
+        if (await storeProviderConnection(env, request.account, "tmdb", {
+          accessToken: sessionId,
+          externalUser: { username, id: accountId },
+        })) {
+          return new Response(null, {
+            status: 302,
+            headers: { Location: `${url.origin}/?connected=tmdb`, "Set-Cookie": clearCookie },
+          });
+        }
         return new Response(null, {
           status: 302,
           headers: {

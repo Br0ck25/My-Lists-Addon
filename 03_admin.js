@@ -2411,6 +2411,16 @@ async function renderAdminDashboard(env) {
       <span id="migrateAccountsStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
     </div>
 
+    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
+      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Install links: keys moving to encrypted storage</div>
+      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">The first time an existing install link is used, its provider keys, tokens and Creator Key move out of its KV record into encrypted D1 storage, for the share of links set in <code>INSTALL_MIGRATION_PERCENT</code>. Links keep their URL and serve exactly as before. Needs <code>TOKEN_ENCRYPTION_KEY</code> and migration 0015. Read-only: this button only reports progress.</p>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="installsStatusBtn" onclick="runInstallsStatus()" ${isD1Bound ? '' : 'disabled'}>Check progress</button>
+      <span id="installsStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <p style="color:#8E8E93; margin:12px 0 8px; font-size:0.8rem;">Emergency only: puts every moved link's keys back into its KV record, exactly as they were, and empties the table. Set <code>INSTALL_MIGRATION_PERCENT</code> to <code>0</code> first. Links removed from an account stay removed.</p>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="installsRestoreBtn" onclick="runInstallsRestore()" ${isD1Bound ? '' : 'disabled'}>Undo the move</button>
+      <span id="installsRestoreStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+    </div>
+
     <div class="panel" style="margin:0; padding:14px 16px;">
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Database schema</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Migrations are applied by hand and nothing records that it happened, so this Worker can end up running ahead of its own database. It degrades quietly when that happens rather than refusing to start &mdash; which is why this check exists. Run it after any deploy that shipped a new file under <code>migrations/</code>.</p>
@@ -2771,7 +2781,7 @@ async function renderAdminDashboard(env) {
       try {
         while (safetyCounter < 500) {
           safetyCounter++;
-          const res = await fetch('/admin/api/backfill-trending', { method: 'POST' });
+          const res = await fetch('/admin/api/backfill-trending', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
           const data = await res.json();
           if (!data.ok) {
             status.textContent = 'Stopped: ' + (data.error || 'unknown error') + ' (processed ' + accountsDone + ' account' + (accountsDone === 1 ? '' : 's') + ')';
@@ -2804,7 +2814,7 @@ async function renderAdminDashboard(env) {
       try {
         while (safetyCounter < 1000) {
           safetyCounter++;
-          const res = await fetch('/admin/api/migrate-day-counts', { method: 'POST' });
+          const res = await fetch('/admin/api/migrate-day-counts', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
           const data = await res.json();
           if (!data.ok) {
             status.textContent = 'Stopped: ' + (data.error || 'unknown error') + ' (migrated ' + keysMigrated + ' day-count' + (keysMigrated === 1 ? '' : 's') + ')';
@@ -2846,7 +2856,7 @@ async function renderAdminDashboard(env) {
       try {
         while (safetyCounter < 1000) {
           safetyCounter++;
-          const res = await fetch('/admin/api/migrate-d1', { method: 'POST' });
+          const res = await fetch('/admin/api/migrate-d1', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
           const data = await res.json();
           if (!data.ok) {
             status.textContent = 'Failed: ' + (data.error || 'unknown error');
@@ -2881,7 +2891,7 @@ async function renderAdminDashboard(env) {
       btn.disabled = true;
       status.textContent = 'Working…';
       try {
-        const res = await fetch('/admin/api/migrate-accounts', { method: 'POST' });
+        const res = await fetch('/admin/api/migrate-accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         const data = await res.json();
         if (!data.ok) {
           status.textContent = 'Failed: ' + (data.error || 'unknown error');
@@ -2892,6 +2902,65 @@ async function renderAdminDashboard(env) {
         }
       } catch (e) {
         status.textContent = 'Failed: network error.';
+      }
+      btn.disabled = false;
+    }
+
+    async function runInstallsStatus() {
+      const btn = document.getElementById('installsStatusBtn');
+      const status = document.getElementById('installsStatus');
+      btn.disabled = true;
+      status.textContent = 'Checking...';
+      try {
+        const res = await fetch('/admin/api/installs/status');
+        const data = await res.json();
+        if (!data.ok) {
+          status.textContent = 'Unavailable: ' + (data.error || 'unknown error');
+        } else {
+          status.textContent = 'Moving ' + data.migrationPercent + '% of links' +
+            (data.encryptionKeyConfigured ? '' : ' (TOKEN_ENCRYPTION_KEY is missing, so nothing with a key can move)') +
+            '. Moved so far: ' + data.legacy + '. New-style links: ' + data.v2 +
+            '. Linked to an account: ' + data.owned + '. Removed: ' + data.revoked + '.';
+        }
+      } catch (e) {
+        status.textContent = 'Failed: network error.';
+      }
+      btn.disabled = false;
+    }
+
+    async function runInstallsRestore() {
+      if (!confirm('Put the keys back into every moved install link and empty the installs table? Only do this if the move has gone wrong.')) return;
+      const btn = document.getElementById('installsRestoreBtn');
+      const status = document.getElementById('installsRestoreStatus');
+      btn.disabled = true;
+      let afterId = 0;
+      let restored = 0;
+      let failed = 0;
+      let safetyCounter = 0;
+      try {
+        while (safetyCounter < 1000) {
+          safetyCounter++;
+          status.textContent = 'Working... ' + restored + ' restored';
+          const res = await fetch('/admin/api/installs/restore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ limit: 50, afterId: afterId }),
+          });
+          const data = await res.json();
+          if (data.error) {
+            status.textContent = 'Stopped: ' + data.error;
+            break;
+          }
+          restored += data.restored || 0;
+          failed += (data.failed || []).length;
+          if (data.done) {
+            status.textContent = 'Done: ' + restored + ' restored' + (failed ? ', ' + failed + ' could not be (see the Worker logs)' : '') + '.';
+            break;
+          }
+          afterId = data.nextAfterId;
+        }
+      } catch (e) {
+        status.textContent = 'Failed: network error (' + restored + ' restored so far).';
       }
       btn.disabled = false;
     }
@@ -3487,7 +3556,7 @@ async function renderAdminDashboard(env) {
       try {
         while (safetyCounter < 1000) {
           safetyCounter++;
-          const res = await fetch('/admin/api/rebuild-public-index', { method: 'POST' });
+          const res = await fetch('/admin/api/rebuild-public-index', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
           const data = await res.json();
           if (!data.ok) {
             status.textContent = 'Failed: ' + (data.error || 'unknown error');

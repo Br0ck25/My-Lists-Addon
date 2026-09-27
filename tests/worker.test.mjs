@@ -2301,7 +2301,16 @@ describe("P2-6: an outbound call that sets no timeout still gets one", () => {
     globalThis.fetch = (input, init) => new Promise((resolve, reject) => {
       const signal = init && init.signal;
       if (!signal) return; // no timeout at all: hangs, and the test times out
-      signal.addEventListener("abort", () => reject(signal.reason || new Error("aborted")));
+      // AbortSignal.timeout's timer does not hold the process open (Node
+      // unrefs it). With nothing else pending, Node 22's test runner decided
+      // the file had stalled before the abort fired, and cancelled every test
+      // after this one -- CI's 652 "cancelled", while Node 24 passed. A plain
+      // timer keeps the loop alive until the abort lands.
+      const keepAlive = setTimeout(() => {}, 5000);
+      signal.addEventListener("abort", () => {
+        clearTimeout(keepAlive);
+        reject(signal.reason || new Error("aborted"));
+      });
     });
     try {
       return await run(asked);
@@ -2336,7 +2345,7 @@ describe("P2-6: an outbound call that sets no timeout still gets one", () => {
 // builder's save body. Every field is round-tripped here, so a field added to
 // the schema is covered the moment it exists.
 describe("P2-8: every install setting survives a save, from one schema", () => {
-  const sb = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "04_config-resolution.js");
+  const sb = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "04_config-resolution.js", "27_installs.js");
   const FIELDS = vm.runInContext("INSTALL_CONFIG_FIELDS", sb).map((f) => ({ ...f }));
   const ROW = { id: "pop", name: "Pop", type: "movie", url: "tmdb:chart:popular" };
   // A value for each field that is NOT its default, so it has to be stored.
@@ -14561,6 +14570,15 @@ describe("P3a-4: sessions API and authentication", () => {
     return match ? decodeURIComponent(match[1]) : null;
   }
 
+  // A complete account: the creator profile, which is what signing in checks,
+  // in both of its stores. The accounts row is filled from it on first sign-in.
+  async function seedCreator(env, username, displayName, keyHash) {
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(username, displayName, keyHash, 1000).run();
+    await env.CONFIGS.put(`creator:${username}`, JSON.stringify({ displayName, keyHash, createdAt: 1000 }));
+  }
+
   it("cookie and token helpers format and extract tokens correctly", async () => {
     const dummyToken = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
     const cookieHeader = buildSessionCookieHeader(dummyToken);
@@ -14632,9 +14650,7 @@ describe("P3a-4: sessions API and authentication", () => {
     const env = makeEnv({ DB: makeD1() });
     const key = "MYL-TEST-PASS-WORD";
     const keyHash = await hashCreatorKey(key);
-    await env.DB.prepare(
-      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
-    ).bind("login_user", "Login User", keyHash, 1000).run();
+    await seedCreator(env, "login_user", "Login User", keyHash);
 
     const res = await call(env, "/api/session", {
       method: "POST",
@@ -14665,9 +14681,7 @@ describe("P3a-4: sessions API and authentication", () => {
     const env = makeEnv({ DB: makeD1() });
     const key = "MYL-LEGC-KEYY-TEST";
     const keyHash = await hashCreatorKey(key);
-    await env.DB.prepare(
-      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
-    ).bind("legacy_alias_user", "Alias User", keyHash, 1000).run();
+    await seedCreator(env, "legacy_alias_user", "Alias User", keyHash);
 
     const res = await call(env, "/api/session", {
       method: "POST",
@@ -14682,9 +14696,7 @@ describe("P3a-4: sessions API and authentication", () => {
     const env = makeEnv({ DB: makeD1() });
     const key = "MYL-REAL-KEYY-TEST";
     const keyHash = await hashCreatorKey(key);
-    await env.DB.prepare(
-      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
-    ).bind("valid_user", "Valid User", keyHash, 1000).run();
+    await seedCreator(env, "valid_user", "Valid User", keyHash);
 
     // Wrong password/key
     const wrongKey = await call(env, "/api/session", {
@@ -14763,9 +14775,7 @@ describe("P3a-4: sessions API and authentication", () => {
     );
     const lowIterHash = `pbkdf2:5000:${Array.from(salt, b => b.toString(16).padStart(2, "0")).join("")}:${Array.from(new Uint8Array(derivedBits), b => b.toString(16).padStart(2, "0")).join("")}`;
 
-    await env.DB.prepare(
-      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
-    ).bind("upgrade_user", "Upgrade User", lowIterHash, 1000).run();
+    await seedCreator(env, "upgrade_user", "Upgrade User", lowIterHash);
 
     const res = await call(env, "/api/session", {
       method: "POST",
@@ -14774,18 +14784,29 @@ describe("P3a-4: sessions API and authentication", () => {
     assert.equal(res.status, 200);
     assert.equal(res.body.ok, true);
 
-    // Verify accounts.key_hash has been upgraded to PBKDF2_ITERATIONS
+    // Upgraded in every store that holds the hash: the profile (D1 and KV),
+    // which is what the next sign-in checks, and the accounts mirror.
     const { results: accRows } = await env.DB.prepare("SELECT key_hash FROM accounts WHERE username = ?").bind("upgrade_user").all();
     assert.ok(accRows[0].key_hash.startsWith(`pbkdf2:${PBKDF2_ITERATIONS}:`));
+    const { results: creatorRows } = await env.DB.prepare("SELECT key_hash FROM creators WHERE username = ?").bind("upgrade_user").all();
+    assert.equal(creatorRows[0].key_hash, accRows[0].key_hash);
+    const kvProfile = JSON.parse(await env.CONFIGS.get("creator:upgrade_user"));
+    assert.equal(kvProfile.keyHash, accRows[0].key_hash);
+
+    // And the same key still signs in against the upgraded hash.
+    clearSessionCache();
+    const again = await call(env, "/api/session", {
+      method: "POST",
+      json: { username: "upgrade_user", key },
+    });
+    assert.equal(again.status, 200);
   });
 
   it("GET /api/me requires auth and returns account profile with no-store", async () => {
     const env = makeEnv({ DB: makeD1() });
     const key = "MYL-GETM-AUTH-TEST";
     const keyHash = await hashCreatorKey(key);
-    await env.DB.prepare(
-      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
-    ).bind("me_user", "Me User", keyHash, 1000).run();
+    await seedCreator(env, "me_user", "Me User", keyHash);
 
     // Unauthenticated
     const unauth = await call(env, "/api/me", { method: "GET" });
@@ -14821,9 +14842,7 @@ describe("P3a-4: sessions API and authentication", () => {
     const env = makeEnv({ DB: makeD1() });
     const key = "MYL-SESS-LIST-TEST";
     const keyHash = await hashCreatorKey(key);
-    await env.DB.prepare(
-      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
-    ).bind("device_user", "Device User", keyHash, 1000).run();
+    await seedCreator(env, "device_user", "Device User", keyHash);
 
     // Login device 1
     const d1Res = await call(env, "/api/session", {
@@ -14860,9 +14879,7 @@ describe("P3a-4: sessions API and authentication", () => {
     const env = makeEnv({ DB: makeD1() });
     const key = "MYL-LOGO-UTTT-TEST";
     const keyHash = await hashCreatorKey(key);
-    await env.DB.prepare(
-      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
-    ).bind("logout_user", "Logout User", keyHash, 1000).run();
+    await seedCreator(env, "logout_user", "Logout User", keyHash);
 
     const loginRes = await call(env, "/api/session", {
       method: "POST",
@@ -14893,9 +14910,7 @@ describe("P3a-4: sessions API and authentication", () => {
     const env = makeEnv({ DB: makeD1() });
     const key = "MYL-REVO-KEEE-TEST";
     const keyHash = await hashCreatorKey(key);
-    await env.DB.prepare(
-      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
-    ).bind("revoke_user", "Revoke User", keyHash, 1000).run();
+    await seedCreator(env, "revoke_user", "Revoke User", keyHash);
 
     // Create 3 sessions
     const r1 = await call(env, "/api/session", { method: "POST", json: { username: "revoke_user", key }, headers: { "User-Agent": "Session 1" } });
@@ -14956,9 +14971,7 @@ describe("P3a-4: sessions API and authentication", () => {
     const env = makeEnv({ DB: makeD1() });
     const key = "MYL-EXPI-REEE-TEST";
     const keyHash = await hashCreatorKey(key);
-    await env.DB.prepare(
-      "INSERT INTO accounts (username, display_name, key_hash, created_at, status) VALUES (?, ?, ?, ?, ?)"
-    ).bind("status_user", "Status User", keyHash, 1000, "active").run();
+    await seedCreator(env, "status_user", "Status User", keyHash);
 
     const loginRes = await call(env, "/api/session", {
       method: "POST",
@@ -15576,11 +15589,25 @@ describe("P3a-6: creator routes dual auth (session or key-in-body)", () => {
     assert.ok(setCookie);
     assert.match(setCookie, /Max-Age=0/);
 
-    // Verify sessions revoked in D1
+    // The accounts row and its sessions are gone with the identity.
     const { results: sessions } = await env.DB.prepare(
       "SELECT revoked_at FROM sessions WHERE account_id = ?"
     ).bind(accs[0].id).all();
-    assert.ok(sessions[0].revoked_at > 0);
+    assert.equal(sessions.length, 0);
+    const { results: accsAfter } = await env.DB.prepare("SELECT id FROM accounts WHERE username = ?").bind(username).all();
+    assert.equal(accsAfter.length, 0);
+
+    // The session that was open no longer resolves.
+    clearSessionCache();
+    const me = await call(env, "/api/me", { method: "GET", cookie: `mla_session=${session.token}` });
+    assert.equal(me.status, 401);
+
+    // And the old key cannot open a session for the deleted account.
+    const login = await call(env, "/api/session", {
+      method: "POST",
+      json: { username, key },
+    });
+    assert.equal(login.status, 401);
   });
 
   it("lazy backfills account on key-in-body creator auth when account is in KV only", async () => {
@@ -16027,7 +16054,971 @@ describe("P3a-7: blind index v2 (key_lookup_hmac and legacy fallback)", () => {
   });
 });
 
+describe("P3a review: the accounts row follows the creator profile", () => {
+  async function login(env, username, key, extra = {}) {
+    return call(env, "/api/session", { method: "POST", json: { username, key }, ...extra });
+  }
+  function sessionCookieOf(res) {
+    const sc = res.headers.get("set-cookie") || "";
+    return sc.startsWith("mla_session=") ? sc.split(";")[0] : "";
+  }
 
+  it("a deleted username registered again: the old key and old sessions reach nothing", async () => {
+    const env = makeEnv({ DB: makeD1(), FF_SESSIONS: "1" });
+    const first = await createUser(env, "reclaimed");
+    const oldLogin = await login(env, "reclaimed", first.creatorKey);
+    assert.equal(oldLogin.status, 200);
+    const oldCookie = sessionCookieOf(oldLogin);
+    assert.ok(oldCookie);
 
+    const del = await call(env, "/api/creator/delete-account", {
+      method: "POST",
+      json: { creatorName: "reclaimed", creatorKey: first.creatorKey, confirm: "DELETE" },
+    });
+    assert.equal(del.body.ok, true);
+    assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM accounts WHERE username = 'reclaimed'").first()).n, 0);
 
+    // Someone else takes the name once the hold lapses.
+    lapseCreatorTombstone(env, "reclaimed");
+    const second = await createUser(env, "reclaimed");
+    assert.notEqual(second.creatorKey, first.creatorKey);
 
+    // The previous holder's key opens nothing, through either door.
+    assert.equal((await login(env, "reclaimed", first.creatorKey)).status, 401);
+    const oldSessionMe = await call(env, "/api/me", { method: "GET", cookie: oldCookie });
+    assert.equal(oldSessionMe.status, 401);
+    const oldSessionLists = await call(env, "/api/creator/lists", { method: "POST", cookie: oldCookie, json: {} });
+    assert.equal(oldSessionLists.status, 401);
+
+    // The new holder signs in normally.
+    assert.equal((await login(env, "reclaimed", second.creatorKey)).status, 200);
+  });
+
+  it("creating an account writes its accounts row at once", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const u = await createUser(env, "brandnew", { displayName: "Brand New" });
+    const row = await env.DB.prepare("SELECT username, display_name, key_hash FROM accounts WHERE username = 'brandnew'").first();
+    assert.ok(row);
+    assert.equal(row.display_name, "Brand New");
+    const creator = await env.DB.prepare("SELECT key_hash FROM creators WHERE username = 'brandnew'").first();
+    assert.equal(row.key_hash, creator.key_hash);
+    assert.equal((await login(env, "brandnew", u.creatorKey)).status, 200);
+  });
+
+  it("a leftover accounts row with a stale key hash is corrected at sign-in, and only the profile's key works", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const u = await createUser(env, "drifted");
+    // Simulate drift: the mirror holds some other key's hash.
+    const { hashCreatorKey } = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js");
+    const staleKey = "MYL-STAL-EKEY-2222";
+    await env.DB.prepare(
+      "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES ('drifted', 'drifted', ?, 1000) " +
+      "ON CONFLICT(username) DO UPDATE SET key_hash = excluded.key_hash"
+    ).bind(await hashCreatorKey(staleKey)).run();
+
+    assert.equal((await login(env, "drifted", staleKey)).status, 401);
+    assert.equal((await login(env, "drifted", u.creatorKey)).status, 200);
+    const row = await env.DB.prepare("SELECT key_hash FROM accounts WHERE username = 'drifted'").first();
+    const creator = await env.DB.prepare("SELECT key_hash FROM creators WHERE username = 'drifted'").first();
+    assert.equal(row.key_hash, creator.key_hash);
+  });
+
+  it("a sign-in fills the accounts row for that one account, not every account", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const a = await createUser(env, "solo_a");
+    await createUser(env, "solo_b");
+    await env.DB.prepare("DELETE FROM accounts").run();
+
+    assert.equal((await login(env, "solo_a", a.creatorKey)).status, 200);
+    const { results } = await env.DB.prepare("SELECT username FROM accounts").all();
+    assert.deepEqual(results.map((r) => r.username), ["solo_a"]);
+  });
+
+  it("a suspended account is not revived by signing in", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const u = await createUser(env, "paused");
+    await env.DB.prepare("UPDATE accounts SET status = 'suspended' WHERE username = 'paused'").run();
+    assert.equal((await login(env, "paused", u.creatorKey)).status, 503);
+    const row = await env.DB.prepare("SELECT status FROM accounts WHERE username = 'paused'").first();
+    assert.equal(row.status, "suspended");
+  });
+
+  it("resetting a key with the recovery answer signs every device out", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const u = await createUser(env, "resetter", { recoveryAnswer: "a long enough answer" });
+    const cookie = sessionCookieOf(await login(env, "resetter", u.creatorKey));
+    assert.equal((await call(env, "/api/me", { method: "GET", cookie })).status, 200);
+
+    const reset = await call(env, "/api/creator/reset-key", {
+      method: "POST",
+      json: { username: "resetter", recoveryAnswer: "a long enough answer" },
+    });
+    assert.equal(reset.body.ok, true);
+
+    assert.equal((await call(env, "/api/me", { method: "GET", cookie })).status, 401);
+    assert.equal((await login(env, "resetter", u.creatorKey)).status, 401);
+    assert.equal((await login(env, "resetter", reset.body.creatorKey)).status, 200);
+  });
+
+  it("an admin key reset signs every device out", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const u = await createUser(env, "adminreset");
+    const cookie = sessionCookieOf(await login(env, "adminreset", u.creatorKey));
+    assert.equal((await call(env, "/api/me", { method: "GET", cookie })).status, 200);
+
+    const reset = await call(env, "/admin/api/reset-creator-key", {
+      method: "POST",
+      cookie: await adminCookie(env),
+      json: { username: "adminreset" },
+    });
+    assert.equal(reset.body.ok, true);
+    assert.equal((await call(env, "/api/me", { method: "GET", cookie })).status, 401);
+  });
+
+  it("key-in-body issues a session only on /api/creator/* and not again when one is already open", async () => {
+    const env = makeEnv({ DB: makeD1(), FF_SESSIONS: "1" });
+    const u = await createUser(env, "cookieonce");
+    const countSessions = async () => (await env.DB.prepare("SELECT COUNT(*) AS n FROM sessions").first()).n;
+    const before = await countSessions();
+
+    // Not a creator route: the key is still checked, and no session is minted.
+    const save = await call(env, "/api/save", {
+      method: "POST",
+      json: { sources: [], creatorName: "cookieonce", creatorKey: u.creatorKey },
+    });
+    assert.ok(!(save.headers.get("set-cookie") || "").startsWith("mla_session="));
+    assert.equal(await countSessions(), before);
+
+    // First creator call: one session.
+    const first = await call(env, "/api/creator/restore", {
+      method: "POST",
+      json: { creatorName: "cookieonce", creatorKey: u.creatorKey },
+    });
+    assert.equal(first.status, 200);
+    const cookie = sessionCookieOf(first);
+    assert.ok(cookie);
+    assert.equal(await countSessions(), before + 1);
+
+    // A page load later, carrying that cookie and the key as the old client does.
+    const again = await call(env, "/api/creator/restore", {
+      method: "POST",
+      cookie,
+      json: { creatorName: "cookieonce", creatorKey: u.creatorKey },
+    });
+    assert.equal(again.status, 200);
+    assert.equal(await countSessions(), before + 1);
+  });
+
+  it("every mutating fetch the pages make sends a JSON content type (the CSRF check requires it)", () => {
+    // tests/harness.mjs adds Content-Type: application/json to every POST it
+    // sends, so a route test cannot notice a page that leaves it out. Five
+    // admin buttons did, and the CSRF check refused them with 403.
+    const files = fs.readdirSync(REPO_ROOT).filter((f) => /^(0[0-9]|1[0-9]|2[0-4])_.*\.js$/.test(f));
+    const offenders = [];
+    for (const f of files) {
+      const lines = fs.readFileSync(path.join(REPO_ROOT, f), "utf8").split(/\r?\n/);
+      lines.forEach((line, i) => {
+        if (!/method\s*:\s*['"](POST|PUT|PATCH|DELETE)['"]/.test(line)) return;
+        const around = lines.slice(Math.max(0, i - 6), i + 10).join("\n");
+        if (!around.includes("application/json")) offenders.push(`${f}:${i + 1}`);
+      });
+    }
+    assert.deepEqual(offenders, []);
+  });
+});
+
+// P3a-8. Installs: legacy install links move their keys and tokens into
+// encrypted D1 storage on first use and keep serving exactly as before, and
+// v2 links (/i/{token}) are created, edited, rotated and revoked through
+// /api/installs.
+describe("P3a-8: installs", () => {
+  const sb = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "04_config-resolution.js", "27_installs.js");
+  const TEST_KEY = "k1:" + Buffer.from(Uint8Array.from({ length: 32 }, (_, i) => i + 7)).toString("base64");
+  const SECRET_FIELDS = vm.runInContext("INSTALL_CONFIG_FIELDS", sb).filter((f) => f.secret).map((f) => f.name);
+
+  function installEnv(extra = {}) {
+    return makeEnv({ DB: makeD1(), TOKEN_ENCRYPTION_KEY: TEST_KEY, ...extra });
+  }
+  function row(id, url, type = "movie") {
+    return { id, name: id, type, url };
+  }
+  function stubFetch() {
+    const seen = [];
+    globalThis.fetch = async (u) => {
+      seen.push(typeof u === "string" ? u : u.url);
+      return new Response("[]", { status: 200, headers: { "content-type": "application/json" } });
+    };
+    return seen;
+  }
+  function storedRecord(env, id) {
+    return JSON.parse(env.CONFIGS._store.get("cfg:" + id));
+  }
+  async function signIn(env, username, key) {
+    const r = await call(env, "/api/session", { method: "POST", json: { username, key } });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    return (r.headers.get("set-cookie") || "").split(";")[0];
+  }
+  // A fresh resolveConfig with empty isolate caches, reading the same KV and D1.
+  // Returned as plain data: each sandbox is its own realm, and a strict
+  // comparison would otherwise fail on the prototypes alone.
+  async function freshResolve(id, env, opts) {
+    const fresh = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "04_config-resolution.js", "27_installs.js");
+    return JSON.parse(JSON.stringify(await fresh.resolveConfig(id, env, opts)));
+  }
+
+  it("files every secret install setting somewhere in install_secrets", () => {
+    const columns = vm.runInContext("INSTALL_SECRET_COLUMNS", sb);
+    for (const name of SECRET_FIELDS) assert.ok(columns[name], `${name} has no install_secrets column`);
+    assert.ok(columns.trackCreatorKey, "the Creator Key a personal-shelf link carries");
+  });
+
+  it("reads INSTALL_MIGRATION_PERCENT as a percentage and buckets ids stably", async () => {
+    const pct = (v) => sb.installMigrationPercent({ INSTALL_MIGRATION_PERCENT: v });
+    assert.equal(pct(undefined), 0);
+    assert.equal(pct("0"), 0);
+    assert.equal(pct("1"), 1);
+    assert.equal(pct("10"), 10);
+    assert.equal(pct("100"), 100);
+    assert.equal(pct("250"), 100);
+    assert.equal(pct("yes"), 0);
+    const a = await sb.installMigrationBucket("abcDEF123456");
+    assert.equal(a, await sb.installMigrationBucket("abcDEF123456"));
+    assert.ok(a >= 0 && a < 100);
+    const buckets = new Set();
+    for (let i = 0; i < 200; i++) buckets.add(await sb.installMigrationBucket("id" + i));
+    assert.ok(buckets.size > 50, "ids spread across the buckets");
+  });
+
+  it("a signed-in link with provider keys serves identically after the move, and KV no longer holds them", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      const seen = stubFetch();
+      const env = installEnv();
+      const proof = await accountProof(env, "mover1");
+      const save = await call(env, "/api/save", {
+        method: "POST",
+        json: {
+          ...proof,
+          entries: [row("a", "https://mdblist.com/lists/someone/list-a"), row("b", "https://mdblist.com/lists/someone/list-b")],
+          tmdbKey: "USER-TMDB-KEY", mdblistKey: "USER-MDB-KEY", traktKey: "USER-TRAKT-ID",
+          traktAccessToken: "USER-TRAKT-TOKEN", simklAccessToken: "USER-SIMKL-TOKEN", traktUsername: "moviefan",
+          region: "GB",
+        },
+      });
+      assert.equal(save.status, 200, JSON.stringify(save.body));
+      const id = save.body.id;
+      const before = await freshResolve(id, env);
+      const manifestBefore = (await call(env, `/${id}/manifest.json`)).body;
+      await call(env, `/${id}/catalog/movie/a.json`);
+      assert.ok(seen.some((u) => u.includes("list-a") && u.includes("apikey=USER-MDB-KEY")));
+
+      // Nothing moves while INSTALL_MIGRATION_PERCENT is unset.
+      assert.equal(storedRecord(env, id).mdblistKey, "USER-MDB-KEY");
+      assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM installs").first()).n, 0);
+
+      env.INSTALL_MIGRATION_PERCENT = "100";
+      await call(env, `/${id}/manifest.json`);
+
+      const raw = env.CONFIGS._store.get("cfg:" + id);
+      assert.doesNotMatch(raw, /USER-/, "no key or token left in the KV record");
+      const stored = JSON.parse(raw);
+      assert.ok(stored._install);
+      assert.equal(stored.traktUsername, "moviefan", "non-secret settings stay");
+      assert.equal(stored.region, "GB");
+      const secretRows = (await env.DB.prepare("SELECT * FROM install_secrets").all()).results;
+      assert.ok(secretRows.length >= 4);
+      assert.doesNotMatch(JSON.stringify(secretRows), /USER-/, "stored encrypted");
+
+      assert.deepEqual(await freshResolve(id, env), before, "resolveConfig returns the same config");
+      assert.deepEqual((await call(env, `/${id}/manifest.json`)).body, manifestBefore, "same manifest");
+      await call(env, `/${id}/catalog/movie/b.json`);
+      assert.ok(seen.some((u) => u.includes("list-b") && u.includes("apikey=USER-MDB-KEY")), "the catalog still uses the link's own key");
+      assert.equal(storedRecord(env, id)._install, stored._install, "moved once");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("a personal-shelf link is bound to its owner, tracking still runs on its Creator Key, and a key reset still stops it", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      stubFetch();
+      const env = installEnv({ INSTALL_MIGRATION_PERCENT: "100" });
+      const u = await createUser(env, "tracker1", { recoveryAnswer: "a long enough answer" });
+      const save = await call(env, "/api/save", {
+        method: "POST",
+        json: {
+          creatorName: u.creatorName, creatorKey: u.creatorKey,
+          trackCreatorName: u.creatorName, trackCreatorKey: u.creatorKey, track: true,
+          entries: [row("wh", `autotrack:watch-history:series:${u.creatorName}`, "series")],
+        },
+      });
+      assert.equal(save.status, 200, JSON.stringify(save.body));
+      const id = save.body.id;
+      const before = await freshResolve(id, env, { withTracking: true });
+      assert.equal(before.trackOwner, "tracker1");
+
+      const manifest = await call(env, `/${id}/manifest.json`);
+      assert.ok(manifest.body.resources.some((r) => r && r.name === "subtitles"), "tracking link declares subtitles");
+      const stored = storedRecord(env, id);
+      assert.equal(stored.trackCreatorKey, undefined, "the Creator Key is out of KV");
+      assert.equal(stored.trackOwner, "tracker1");
+      const inst = await env.DB.prepare("SELECT i.account_id, a.username FROM installs i JOIN accounts a ON a.id = i.account_id WHERE i.legacy_cfg_id = ?").bind(id).first();
+      assert.equal(inst.username, "tracker1", "bound to its owner");
+      assert.deepEqual(await freshResolve(id, env, { withTracking: true }), before);
+
+      await call(env, `/${id}/subtitles/movie/tt0111161.json`);
+      const diag = JSON.parse(env.CONFIGS._store.get("creatortrack:tracker1") || "{}");
+      assert.ok(diag.lastPingAt, "the ping was recorded");
+      assert.doesNotMatch(String(diag.matched || ""), /no longer authenticate/);
+
+      const reset = await call(env, "/api/creator/reset-key", {
+        method: "POST",
+        json: { username: "tracker1", recoveryAnswer: "a long enough answer" },
+      });
+      assert.equal(reset.body.ok, true);
+      await call(env, `/${id}/subtitles/movie/tt0068646.json`);
+      const after = JSON.parse(env.CONFIGS._store.get("creatortrack:tracker1"));
+      assert.match(String(after.matched), /no longer authenticate/, "a key reset still stops an old link's tracking");
+      // The stamped owner keeps the shelf itself readable, as before.
+      assert.equal((await freshResolve(id, env)).trackOwner, "tracker1");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("moves nothing that has a secret when TOKEN_ENCRYPTION_KEY is missing", async () => {
+    const env = makeEnv({ DB: makeD1(), INSTALL_MIGRATION_PERCENT: "100" });
+    const proof = await accountProof(env, "nokey1");
+    const save = await call(env, "/api/save", {
+      method: "POST",
+      json: { ...proof, entries: [row("a", "tmdb:chart:popular")], tmdbKey: "USER-TMDB-KEY" },
+    });
+    const id = save.body.id;
+    await call(env, `/${id}/manifest.json`);
+    assert.equal(storedRecord(env, id).tmdbKey, "USER-TMDB-KEY");
+    assert.equal(storedRecord(env, id)._install, undefined);
+    assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM installs").first()).n, 0);
+  });
+
+  it("leaves a record with nothing secret in it exactly as it was", async () => {
+    const env = installEnv({ INSTALL_MIGRATION_PERCENT: "100" });
+    const save = await call(env, "/api/save", { method: "POST", json: { entries: [row("a", "tmdb:chart:popular")] } });
+    const id = save.body.id;
+    const raw = env.CONFIGS._store.get("cfg:" + id);
+    await call(env, `/${id}/manifest.json`);
+    assert.equal(env.CONFIGS._store.get("cfg:" + id), raw);
+    assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM installs").first()).n, 0);
+  });
+
+  it("moves a pre-prefix record at its bare id, and an old credential field the schema does not name", async () => {
+    const env = installEnv({ INSTALL_MIGRATION_PERCENT: "100" });
+    const id = "Bare_Id-0001";
+    const record = {
+      entries: [row("a", "tmdb:chart:popular")],
+      mdblistKey: "OLD-MDB-KEY",
+      someOldRefreshToken: "OLD-REFRESH",
+      region: "DE",
+    };
+    env.CONFIGS._store.set(id, JSON.stringify(record));
+    const before = await freshResolve(id, env);
+    await call(env, `/${id}/manifest.json`);
+    assert.equal(env.CONFIGS._store.has(id), false, "the bare copy (which held the secrets) is gone");
+    const stored = storedRecord(env, id);
+    assert.ok(stored._install);
+    assert.equal(stored.someOldRefreshToken, undefined);
+    assert.equal(stored.region, "DE");
+    assert.deepEqual(await freshResolve(id, env), before);
+    // And the unnamed field comes back too, for anything that reads it.
+    const snap = await sb.loadInstallSnapshot(env, "legacy:" + id);
+    const fields = await sb.decryptInstallSecretFields(env, snap.id, snap.secrets);
+    assert.equal(fields.someOldRefreshToken, "OLD-REFRESH");
+    assert.equal(fields.mdblistKey, "OLD-MDB-KEY");
+  });
+
+  it("moves only the configured share of ids", async () => {
+    const env = installEnv({ INSTALL_MIGRATION_PERCENT: "30" });
+    const proof = await accountProof(env, "share1");
+    const ids = [];
+    for (let i = 0; i < 20; i++) {
+      const save = await call(env, "/api/save", {
+        method: "POST",
+        json: { ...proof, entries: [row("a", "tmdb:chart:popular")], tmdbKey: "K" + i },
+      });
+      ids.push(save.body.id);
+    }
+    for (const id of ids) await call(env, `/${id}/manifest.json`);
+    for (const id of ids) {
+      const inBucket = (await sb.installMigrationBucket(id)) < 30;
+      assert.equal(Boolean(storedRecord(env, id)._install), inBucket, `id ${id}`);
+    }
+  });
+
+  it("deleting the account deletes its moved installs; the link then serves without their secrets or owner", async () => {
+    const env = installEnv({ INSTALL_MIGRATION_PERCENT: "100" });
+    const u = await createUser(env, "leaver1");
+    const save = await call(env, "/api/save", {
+      method: "POST",
+      json: {
+        creatorName: u.creatorName, creatorKey: u.creatorKey,
+        trackCreatorName: u.creatorName, trackCreatorKey: u.creatorKey,
+        entries: [row("wh", `autotrack:watch-history:series:${u.creatorName}`, "series")],
+        tmdbKey: "LEAVER-TMDB",
+      },
+    });
+    const id = save.body.id;
+    await call(env, `/${id}/manifest.json`);
+    assert.ok(storedRecord(env, id)._install);
+    assert.equal((await freshResolve(id, env)).tmdbKey, "LEAVER-TMDB");
+
+    const del = await call(env, "/api/creator/delete-account", {
+      method: "POST",
+      json: { creatorName: u.creatorName, creatorKey: u.creatorKey, confirm: "DELETE" },
+    });
+    assert.equal(del.body.ok, true);
+    assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM installs").first()).n, 0);
+    assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM install_secrets").first()).n, 0);
+
+    // Someone else registers the name. The old link must not read their shelves.
+    lapseCreatorTombstone(env, "leaver1");
+    await createUser(env, "leaver1");
+    const resolved = await freshResolve(id, env);
+    assert.equal(resolved.tmdbKey, "");
+    assert.equal(resolved.trackOwner, "", "no owner from a deleted account's stamp");
+    assert.equal(resolved.entries.length, 1, "the public part still serves");
+  });
+
+  it("serves a moved record without its secrets while D1 is failing, rather than not at all", async () => {
+    const env = installEnv({ INSTALL_MIGRATION_PERCENT: "100" });
+    const proof = await accountProof(env, "outage1");
+    const save = await call(env, "/api/save", {
+      method: "POST",
+      json: { ...proof, entries: [row("a", "tmdb:chart:popular")], tmdbKey: "OUTAGE-TMDB" },
+    });
+    const id = save.body.id;
+    await call(env, `/${id}/manifest.json`);
+    env.CONFIGS._store.delete("install:legacy:" + id);
+    env.DB.failWhen((sql) => sql.includes("installs"));
+    const resolved = await freshResolve(id, env);
+    env.DB.failWhen(null);
+    assert.equal(resolved.entries.length, 1);
+    assert.equal(resolved.tmdbKey, "");
+  });
+
+  describe("/api/installs", () => {
+    async function setup(name) {
+      const env = installEnv({ FF_INSTALLS: "1" });
+      const u = await createUser(env, name);
+      const cookie = await signIn(env, name, u.creatorKey);
+      return { env, u, cookie };
+    }
+
+    it("is off without FF_INSTALLS and needs a signed-in account", async () => {
+      const off = installEnv();
+      assert.equal((await call(off, "/api/installs")).status, 404);
+      const env = installEnv({ FF_INSTALLS: "1" });
+      const r = await call(env, "/api/installs");
+      assert.equal(r.status, 401);
+      assert.equal(r.body.signInRequired, true);
+    });
+
+    it("creates a v2 link that serves its rows, shows the token once, and lists it without one", async () => {
+      const realFetch = globalThis.fetch;
+      try {
+        const seen = stubFetch();
+        const { env, cookie } = await setup("v2owner");
+        const created = await call(env, "/api/installs", {
+          method: "POST",
+          cookie,
+          json: { name: "Living room", entries: [row("a", "https://mdblist.com/lists/someone/v2-list")], region: "GB", tmdbKey: "IGNORED" },
+        });
+        assert.equal(created.status, 201, JSON.stringify(created.body));
+        const { token, manifestUrl, install } = created.body;
+        assert.match(token, /^[A-Za-z0-9_-]{43}$/);
+        assert.equal(manifestUrl, `https://example.test/i/${token}/manifest.json`);
+        assert.equal(install.kind, "v2");
+        assert.equal(install.name, "Living room");
+
+        const stored = await env.DB.prepare("SELECT token_hash, config_json FROM installs WHERE id = ?").bind(install.id).first();
+        assert.notEqual(stored.token_hash, token, "only the hash is kept");
+        assert.doesNotMatch(stored.config_json, /IGNORED/, "no keys in a v2 config");
+
+        const manifest = await call(env, `/i/${token}/manifest.json`);
+        assert.deepEqual(manifest.body.catalogs.filter((c) => !c.id.startsWith("search")).map((c) => c.id), ["a"]);
+        await call(env, `/i/${token}/catalog/movie/a.json`);
+        assert.ok(seen.some((u) => u.includes("v2-list")));
+
+        const list = await call(env, "/api/installs", { cookie });
+        assert.equal(list.body.installs.length, 1);
+        assert.doesNotMatch(JSON.stringify(list.body), new RegExp(token));
+        assert.equal(list.headers.get("cache-control"), "no-store");
+
+        // A token nobody was given serves nothing.
+        const wrong = await call(env, `/i/${"A".repeat(43)}/manifest.json`);
+        assert.deepEqual(wrong.body.catalogs.filter((c) => !c.id.startsWith("search")), []);
+      } finally {
+        globalThis.fetch = realFetch;
+      }
+    });
+
+    it("edits, rotates and revokes, and another account can do none of it", async () => {
+      const { env, cookie } = await setup("editor1");
+      const created = await call(env, "/api/installs", { method: "POST", cookie, json: { entries: [row("a", "tmdb:chart:popular")] } });
+      const { token, install } = created.body;
+
+      const edited = await call(env, `/api/installs/${install.id}`, {
+        method: "PATCH", cookie,
+        json: { version: install.version, name: "Bedroom", entries: [row("a", "tmdb:chart:popular"), row("b", "tmdb:chart:top_rated")] },
+      });
+      assert.equal(edited.status, 200, JSON.stringify(edited.body));
+      assert.equal(edited.body.install.name, "Bedroom");
+      assert.equal(edited.body.install.rows, 2);
+      const m2 = await call(env, `/i/${token}/manifest.json`);
+      assert.deepEqual(m2.body.catalogs.filter((c) => !c.id.startsWith("search")).map((c) => c.id), ["a", "b"], "the edit is served at once");
+
+      const stale = await call(env, `/api/installs/${install.id}`, { method: "PATCH", cookie, json: { version: install.version, name: "Old" } });
+      assert.equal(stale.status, 409, "an edit from a stale copy is refused");
+
+      const other = await createUser(env, "intruder1");
+      const otherCookie = await signIn(env, "intruder1", other.creatorKey);
+      assert.equal((await call(env, `/api/installs/${install.id}`, { cookie: otherCookie })).status, 404);
+      assert.equal((await call(env, `/api/installs/${install.id}`, { method: "DELETE", cookie: otherCookie })).status, 404);
+
+      const rotated = await call(env, `/api/installs/${install.id}`, { method: "PATCH", cookie, json: { rotateToken: true } });
+      assert.equal(rotated.status, 200);
+      const newToken = rotated.body.token;
+      assert.notEqual(newToken, token);
+      const oldServes = await call(env, `/i/${token}/manifest.json`);
+      assert.deepEqual(oldServes.body.catalogs.filter((c) => !c.id.startsWith("search")), [], "the old token stops working");
+      const newServes = await call(env, `/i/${newToken}/manifest.json`);
+      assert.equal(newServes.body.catalogs.filter((c) => !c.id.startsWith("search")).length, 2);
+
+      const revoked = await call(env, `/api/installs/${install.id}`, { method: "DELETE", cookie });
+      assert.equal(revoked.body.revoked, true);
+      const gone = await call(env, `/i/${newToken}/manifest.json`);
+      assert.deepEqual(gone.body.catalogs.filter((c) => !c.id.startsWith("search")), []);
+      const listed = await call(env, "/api/installs", { cookie });
+      assert.ok(listed.body.installs[0].revokedAt);
+    });
+
+    it("refuses someone else's personal shelf in a v2 link", async () => {
+      const { env, cookie } = await setup("shelfowner1");
+      const r = await call(env, "/api/installs", {
+        method: "POST", cookie,
+        json: { entries: [row("wh", "autotrack:watch-history:series:somebodyelse", "series")] },
+      });
+      assert.equal(r.status, 400);
+    });
+
+    it("a v2 link with tracking records playback to its owner", async () => {
+      const realFetch = globalThis.fetch;
+      try {
+        stubFetch();
+        const { env, cookie } = await setup("v2tracker");
+        const created = await call(env, "/api/installs", {
+          method: "POST", cookie,
+          json: { track: true, entries: [row("wh", "autotrack:watch-history:series:v2tracker", "series")] },
+        });
+        const { token } = created.body;
+        const manifest = await call(env, `/i/${token}/manifest.json`);
+        assert.ok(manifest.body.resources.some((r) => r && r.name === "subtitles"));
+        await call(env, `/i/${token}/subtitles/movie/tt0111161.json`);
+        const diag = JSON.parse(env.CONFIGS._store.get("creatortrack:v2tracker") || "{}");
+        assert.ok(diag.lastPingAt);
+        assert.doesNotMatch(String(diag.matched || ""), /no longer authenticate|is off/);
+      } finally {
+        globalThis.fetch = realFetch;
+      }
+    });
+
+    it("lists the account's moved legacy links, and revoking one empties its old URL", async () => {
+      const env = installEnv({ FF_INSTALLS: "1", INSTALL_MIGRATION_PERCENT: "100" });
+      const u = await createUser(env, "legacyowner1");
+      const save = await call(env, "/api/save", {
+        method: "POST",
+        json: {
+          creatorName: u.creatorName, creatorKey: u.creatorKey,
+          trackCreatorName: u.creatorName, trackCreatorKey: u.creatorKey,
+          entries: [row("a", "tmdb:chart:popular"), row("wh", `autotrack:watch-history:series:${u.creatorName}`, "series")],
+        },
+      });
+      const id = save.body.id;
+      await call(env, `/${id}/manifest.json`);
+      const cookie = await signIn(env, "legacyowner1", u.creatorKey);
+      const list = await call(env, "/api/installs", { cookie });
+      assert.equal(list.body.installs.length, 1);
+      assert.equal(list.body.installs[0].kind, "legacy");
+      assert.equal(list.body.installs[0].manifestUrl, `https://example.test/${id}/manifest.json`);
+
+      const legacyEdit = await call(env, `/api/installs/${list.body.installs[0].id}`, { method: "PATCH", cookie, json: { entries: [] } });
+      assert.equal(legacyEdit.status, 400, "a legacy link's rows are edited from its Configure page");
+
+      await call(env, `/api/installs/${list.body.installs[0].id}`, { method: "DELETE", cookie });
+      const manifest = await call(env, `/${id}/manifest.json`);
+      assert.deepEqual(manifest.body.catalogs.filter((c) => !c.id.startsWith("search")), []);
+    });
+
+    it("reports the move's progress to the admin", async () => {
+      const env = installEnv({ INSTALL_MIGRATION_PERCENT: "100" });
+      const proof = await accountProof(env, "statusowner");
+      const save = await call(env, "/api/save", { method: "POST", json: { ...proof, entries: [row("a", "tmdb:chart:popular")], tmdbKey: "X" } });
+      await call(env, `/${save.body.id}/manifest.json`);
+      assert.equal((await call(env, "/admin/api/installs/status")).status, 401);
+      const r = await call(env, "/admin/api/installs/status", { cookie: await adminCookie(env) });
+      assert.equal(r.body.ok, true);
+      assert.equal(r.body.migrationPercent, 100);
+      assert.equal(r.body.encryptionKeyConfigured, true);
+      assert.equal(r.body.legacy, 1);
+      assert.equal(r.body.withSecrets, 1);
+    });
+  });
+});
+
+describe("P3a-8: undoing the install move", () => {
+  const TEST_KEY = "k1:" + Buffer.from(Uint8Array.from({ length: 32 }, (_, i) => i + 7)).toString("base64");
+  async function freshResolve(id, env) {
+    const fresh = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "04_config-resolution.js", "27_installs.js");
+    return JSON.parse(JSON.stringify(await fresh.resolveConfig(id, env)));
+  }
+
+  it("puts every moved record back exactly as it was, and refuses while the move is on", async () => {
+    const env = makeEnv({ DB: makeD1(), TOKEN_ENCRYPTION_KEY: TEST_KEY, INSTALL_MIGRATION_PERCENT: "100" });
+    const u = await createUser(env, "undoer1");
+    const ids = [];
+    const originals = {};
+    for (let i = 0; i < 3; i++) {
+      const save = await call(env, "/api/save", {
+        method: "POST",
+        json: {
+          creatorName: u.creatorName, creatorKey: u.creatorKey,
+          trackCreatorName: u.creatorName, trackCreatorKey: u.creatorKey, track: true,
+          entries: [{ id: "wh", name: "History", type: "series", url: `autotrack:watch-history:series:${u.creatorName}` }],
+          tmdbKey: "UNDO-TMDB-" + i, traktAccessToken: "UNDO-TRAKT-" + i,
+        },
+      });
+      ids.push(save.body.id);
+      originals[save.body.id] = JSON.parse(env.CONFIGS._store.get("cfg:" + save.body.id));
+    }
+    const before = {};
+    for (const id of ids) before[id] = await freshResolve(id, env);
+    for (const id of ids) await call(env, `/${id}/manifest.json`);
+    for (const id of ids) assert.ok(JSON.parse(env.CONFIGS._store.get("cfg:" + id))._install);
+    const admin = await adminCookie(env);
+
+    const refused = await call(env, "/admin/api/installs/restore", { method: "POST", cookie: admin, json: {} });
+    assert.equal(refused.body.ok, false);
+    assert.match(refused.body.error, /INSTALL_MIGRATION_PERCENT/);
+    assert.equal((await call(env, "/admin/api/installs/restore", { method: "POST", json: {} })).status, 401);
+
+    env.INSTALL_MIGRATION_PERCENT = "0";
+    let afterId = 0;
+    let restored = 0;
+    for (let guard = 0; guard < 10; guard++) {
+      const r = await call(env, "/admin/api/installs/restore", { method: "POST", cookie: admin, json: { limit: 2, afterId } });
+      assert.equal(r.body.ok, true, JSON.stringify(r.body));
+      restored += r.body.restored;
+      if (r.body.done) break;
+      afterId = r.body.nextAfterId;
+    }
+    assert.equal(restored, 3);
+    for (const id of ids) {
+      assert.deepEqual(JSON.parse(env.CONFIGS._store.get("cfg:" + id)), originals[id], "the record is as it was saved");
+      assert.deepEqual(await freshResolve(id, env), before[id]);
+    }
+    assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM installs").first()).n, 0);
+    assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM install_secrets").first()).n, 0);
+  });
+
+  it("leaves a record moved, not stripped, when its keys cannot be read", async () => {
+    const env = makeEnv({ DB: makeD1(), TOKEN_ENCRYPTION_KEY: TEST_KEY, INSTALL_MIGRATION_PERCENT: "100" });
+    const proof = await accountProof(env, "undoer2");
+    const save = await call(env, "/api/save", {
+      method: "POST",
+      json: { ...proof, entries: [{ id: "a", name: "a", type: "movie", url: "tmdb:chart:popular" }], tmdbKey: "KEEP-ME" },
+    });
+    const id = save.body.id;
+    await call(env, `/${id}/manifest.json`);
+    const moved = env.CONFIGS._store.get("cfg:" + id);
+    env.INSTALL_MIGRATION_PERCENT = "0";
+    // A different key: the stored ciphertext no longer decrypts.
+    env.TOKEN_ENCRYPTION_KEY = "k1:" + Buffer.from(new Uint8Array(32).fill(9)).toString("base64");
+    const r = await call(env, "/admin/api/installs/restore", { method: "POST", cookie: await adminCookie(env), json: {} });
+    assert.equal(r.body.ok, false);
+    assert.equal(r.body.failed.length, 1);
+    assert.equal(env.CONFIGS._store.get("cfg:" + id), moved, "KV untouched");
+    assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM install_secrets").first()).n, 1, "the keys are kept");
+  });
+});
+
+// P3a-9. Connections: a signed-in OAuth sign-in keeps the token on the server,
+// encrypted, and redirects with no token in the URL; the page fetches it back
+// over its session; tokens a browser already holds are imported once after a
+// check with the provider; disconnecting revokes and deletes.
+describe("P3a-9: provider connections", () => {
+  const TEST_KEY = "k1:" + Buffer.from(Uint8Array.from({ length: 32 }, (_, i) => 200 - i)).toString("base64");
+  const SITE = {
+    TOKEN_ENCRYPTION_KEY: TEST_KEY,
+    TRAKT_CLIENT_ID: "site-trakt-id", TRAKT_CLIENT_SECRET: "site-trakt-secret",
+    MDBLIST_CLIENT_ID: "site-mdb-id", MDBLIST_CLIENT_SECRET: "site-mdb-secret",
+    SIMKL_CLIENT_ID: "site-simkl-id", SIMKL_CLIENT_SECRET: "site-simkl-secret",
+    TMDB_API_KEY: "site-tmdb-key",
+  };
+
+  // Answers the provider endpoints the connection code calls. `valid` lists
+  // the tokens a provider accepts; anything else gets a 401.
+  function stubProviders({ valid = [], down = [] } = {}) {
+    const seen = [];
+    const ok = (body) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    const deny = () => new Response("{}", { status: 401, headers: { "content-type": "application/json" } });
+    globalThis.fetch = async (u, init = {}) => {
+      const href = typeof u === "string" ? u : u.url;
+      const headers = new Headers(init.headers || {});
+      const bearer = (headers.get("authorization") || "").replace(/^Bearer /, "");
+      seen.push({ href, method: init.method || "GET", body: init.body || null });
+      for (const d of down) if (href.includes(d)) return new Response("oops", { status: 502 });
+      if (href === "https://api.trakt.tv/oauth/token") {
+        return ok({ access_token: "TRAKT-ACCESS", refresh_token: "TRAKT-REFRESH", expires_in: 7776000, created_at: 1800000000 });
+      }
+      if (href === "https://api.trakt.tv/oauth/device/token") {
+        return ok({ access_token: "TRAKT-DEVICE-ACCESS", refresh_token: "TRAKT-DEVICE-REFRESH", expires_in: 100, created_at: 1800000000 });
+      }
+      if (href === "https://api.trakt.tv/users/me") return valid.includes(bearer) ? ok({ username: "traktfan" }) : deny();
+      if (href === "https://api.trakt.tv/oauth/revoke") return ok({});
+      if (href.startsWith("https://api.mdblist.com/oauth/token")) return ok({ access_token: "MDB-ACCESS", refresh_token: "MDB-REFRESH", expires_in: 3600 });
+      if (href.startsWith("https://api.mdblist.com/user")) {
+        const key = new URL(href).searchParams.get("apikey");
+        return valid.includes(key) ? ok({ username: "mdbfan" }) : deny();
+      }
+      if (href === "https://api.simkl.com/oauth/token") return ok({ access_token: "SIMKL-ACCESS" });
+      if (href === "https://api.simkl.com/users/settings") return valid.includes(bearer) ? ok({ user: { name: "simklfan" } }) : deny();
+      if (href.startsWith("https://api.themoviedb.org/3/authentication/session/new")) return ok({ success: true, session_id: "TMDB-SESSION" });
+      if (href.startsWith("https://api.themoviedb.org/3/authentication/session")) return ok({ success: true });
+      if (href.startsWith("https://api.themoviedb.org/3/account")) {
+        const sid = new URL(href).searchParams.get("session_id");
+        return valid.includes(sid) ? ok({ id: 4242, username: "tmdbfan" }) : deny();
+      }
+      return ok({});
+    };
+    return seen;
+  }
+
+  async function signedIn(name, extra = {}) {
+    const env = makeEnv({ DB: makeD1(), ...SITE, ...extra });
+    const u = await createUser(env, name);
+    const r = await call(env, "/api/session", { method: "POST", json: { username: name, key: u.creatorKey } });
+    const cookie = (r.headers.get("set-cookie") || "").split(";")[0];
+    return { env, u, cookie };
+  }
+  async function connectionRow(env, provider) {
+    return env.DB.prepare(
+      "SELECT pc.* FROM provider_connections pc JOIN accounts a ON a.id = pc.account_id WHERE pc.provider = ?"
+    ).bind(provider).first();
+  }
+
+  it("a signed-in Trakt sign-in keeps the token on the server and redirects with no token in the URL", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      stubProviders({ valid: ["TRAKT-ACCESS"] });
+      const { env, cookie } = await signedIn("conn1");
+      const r = await call(env, "/api/trakt/oauth/callback?code=CODE&state=abc123", {
+        cookie: `${cookie}; mla_trakt_state=abc123`,
+      });
+      assert.equal(r.status, 302);
+      const location = r.headers.get("location");
+      assert.equal(location, "https://example.test/?connected=trakt");
+      assert.doesNotMatch(location, /TRAKT-/);
+
+      const row = await connectionRow(env, "trakt");
+      assert.ok(row, "stored");
+      assert.doesNotMatch(JSON.stringify(row), /TRAKT-ACCESS|TRAKT-REFRESH/, "stored encrypted");
+      assert.equal(row.expires_at, (1800000000 + 7776000) * 1000);
+      assert.equal(JSON.parse(row.external_user).username, "traktfan");
+
+      // The page fetches it back over its session.
+      const reveal = await call(env, "/api/connections/trakt/token", { method: "POST", cookie, json: {} });
+      assert.equal(reveal.status, 200);
+      assert.equal(reveal.body.accessToken, "TRAKT-ACCESS");
+      assert.equal(reveal.body.username, "traktfan");
+      assert.equal(reveal.headers.get("cache-control"), "no-store");
+
+      const list = await call(env, "/api/connections", { cookie });
+      assert.deepEqual(list.body.connections.map((c) => [c.provider, c.username, c.hasToken]), [["trakt", "traktfan", true]]);
+      assert.doesNotMatch(JSON.stringify(list.body), /TRAKT-ACCESS/, "the list never carries a token");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("signed out, or with no encryption key, a sign-in behaves exactly as before", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      stubProviders({ valid: ["TRAKT-ACCESS"] });
+      const out = makeEnv({ DB: makeD1(), ...SITE });
+      const r1 = await call(out, "/api/trakt/oauth/callback?code=CODE&state=s1", { cookie: "mla_trakt_state=s1" });
+      assert.match(r1.headers.get("location"), /#trakt_token=TRAKT-ACCESS&trakt_username=traktfan$/);
+
+      const { env, cookie } = await signedIn("conn2", { TOKEN_ENCRYPTION_KEY: undefined });
+      const r2 = await call(env, "/api/trakt/oauth/callback?code=CODE&state=s2", { cookie: `${cookie}; mla_trakt_state=s2` });
+      assert.match(r2.headers.get("location"), /#trakt_token=TRAKT-ACCESS/);
+      assert.equal(await connectionRow(env, "trakt"), null);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("MDBList, Simkl and TMDB sign-ins do the same when signed in", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      stubProviders({ valid: ["MDB-ACCESS", "SIMKL-ACCESS", "TMDB-SESSION"] });
+      const { env, cookie } = await signedIn("conn3");
+
+      const mdb = await call(env, "/api/mdblist/oauth/callback?code=C&state=m1", { cookie: `${cookie}; mla_mdblist_state=m1:verifier` });
+      assert.equal(mdb.headers.get("location"), "https://example.test/?connected=mdblist");
+      const simkl = await call(env, "/api/simkl/oauth/callback?code=C&state=k1", { cookie: `${cookie}; mla_simkl_state=k1` });
+      assert.equal(simkl.headers.get("location"), "https://example.test/?connected=simkl");
+      const tmdb = await call(env, "/api/tmdb/oauth/callback?request_token=RT", { cookie: `${cookie}; mla_tmdb_token=RT` });
+      assert.equal(tmdb.headers.get("location"), "https://example.test/?connected=tmdb");
+
+      const m = await call(env, "/api/connections/mdblist/token", { method: "POST", cookie, json: {} });
+      assert.equal(m.body.accessToken, "MDB-ACCESS");
+      assert.ok((await connectionRow(env, "mdblist")).refresh_token_enc, "MDBList's refresh token is kept");
+      const s = await call(env, "/api/connections/simkl/token", { method: "POST", cookie, json: {} });
+      assert.equal(s.body.accessToken, "SIMKL-ACCESS");
+      const t = await call(env, "/api/connections/tmdb/token", { method: "POST", cookie, json: {} });
+      assert.equal(t.body.accessToken, "TMDB-SESSION");
+      assert.equal(t.body.id, "4242");
+      assert.equal(t.body.username, "tmdbfan");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("the Trakt device-code flow keeps a copy too, and still answers with the token", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      stubProviders({ valid: ["TRAKT-DEVICE-ACCESS"] });
+      const { env, cookie } = await signedIn("conn4");
+      const r = await call(env, "/api/trakt/device/token", { method: "POST", cookie, json: { code: "DEV" } });
+      assert.equal(r.body.access_token, "TRAKT-DEVICE-ACCESS");
+      const reveal = await call(env, "/api/connections/trakt/token", { method: "POST", cookie, json: {} });
+      assert.equal(reveal.body.accessToken, "TRAKT-DEVICE-ACCESS");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("imports the tokens a browser holds once, after checking each with its provider", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      const seen = stubProviders({ valid: ["LOCAL-TRAKT", "LOCAL-MDB-KEY"], down: ["api.simkl.com"] });
+      const { env, cookie } = await signedIn("conn5");
+      const keys = {
+        traktAccessToken: "LOCAL-TRAKT", traktKey: "", traktUsername: "old-name",
+        mdblistAccessToken: "", mdblistKey: "LOCAL-MDB-KEY",
+        simklAccessToken: "LOCAL-SIMKL",
+        tmdbSessionId: "STALE-TMDB", tmdbAccountId: "1",
+      };
+      const r = await call(env, "/api/connections/import-local", { method: "POST", cookie, json: { keys } });
+      assert.equal(r.status, 200, JSON.stringify(r.body));
+      assert.deepEqual(r.body.results, { trakt: "imported", mdblist: "imported", simkl: "unreachable", tmdb: "invalid" });
+      assert.ok(seen.some((s) => s.href === "https://api.trakt.tv/users/me"), "checked with Trakt");
+
+      const t = await call(env, "/api/connections/trakt/token", { method: "POST", cookie, json: {} });
+      assert.equal(t.body.accessToken, "LOCAL-TRAKT");
+      assert.equal(t.body.username, "traktfan", "the username the provider reports");
+      const m = await call(env, "/api/connections/mdblist/token", { method: "POST", cookie, json: {} });
+      assert.equal(m.body.accessToken, "LOCAL-MDB-KEY", "an API-key-only MDBList connection");
+      assert.equal((await call(env, "/api/connections/tmdb/token", { method: "POST", cookie, json: {} })).status, 404);
+
+      // Once: a connection already on the server is not replaced.
+      const again = await call(env, "/api/connections/import-local", {
+        method: "POST", cookie, json: { keys: { traktAccessToken: "LOCAL-TRAKT", mdblistKey: "LOCAL-MDB-KEY" } },
+      });
+      assert.deepEqual(again.body.results, { trakt: "exists", mdblist: "exists" });
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("disconnecting revokes the token at Trakt and deletes the server's copy", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      const seen = stubProviders({ valid: ["TRAKT-ACCESS"] });
+      const { env, cookie } = await signedIn("conn6");
+      await call(env, "/api/trakt/oauth/callback?code=CODE&state=d1", { cookie: `${cookie}; mla_trakt_state=d1` });
+      const del = await call(env, "/api/connections/trakt", { method: "DELETE", cookie });
+      assert.equal(del.body.removed, true);
+      assert.equal(del.body.revokedAtProvider, true);
+      const revoke = seen.find((s) => s.href === "https://api.trakt.tv/oauth/revoke");
+      assert.ok(revoke);
+      assert.equal(JSON.parse(revoke.body).token, "TRAKT-ACCESS");
+      assert.equal(await connectionRow(env, "trakt"), null);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("every connection route needs a signed-in session, and one account cannot read another's", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      stubProviders({ valid: ["TRAKT-ACCESS"] });
+      const { env, cookie } = await signedIn("conn7");
+      await call(env, "/api/trakt/oauth/callback?code=CODE&state=o1", { cookie: `${cookie}; mla_trakt_state=o1` });
+      for (const [p, method] of [["/api/connections", "GET"], ["/api/connections/trakt/token", "POST"], ["/api/connections/import-local", "POST"], ["/api/connections/trakt", "DELETE"]]) {
+        const r = await call(env, p, { method, json: method === "GET" ? undefined : {} });
+        assert.equal(r.status, 401, `${method} ${p}`);
+      }
+      const other = await createUser(env, "conn7other");
+      const otherLogin = await call(env, "/api/session", { method: "POST", json: { username: "conn7other", key: other.creatorKey } });
+      const otherCookie = (otherLogin.headers.get("set-cookie") || "").split(";")[0];
+      assert.equal((await call(env, "/api/connections/trakt/token", { method: "POST", cookie: otherCookie, json: {} })).status, 404);
+      // A cross-site page cannot ask for it with the victim's cookie.
+      const csrf = await call(env, "/api/connections/trakt/token", {
+        method: "POST", cookie, json: {}, headers: { Origin: "https://evil.example" },
+      });
+      assert.equal(csrf.status, 403);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("deleting the account deletes its connections", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      stubProviders({ valid: ["TRAKT-ACCESS"] });
+      const { env, u, cookie } = await signedIn("conn8");
+      await call(env, "/api/trakt/oauth/callback?code=CODE&state=x1", { cookie: `${cookie}; mla_trakt_state=x1` });
+      assert.ok(await connectionRow(env, "trakt"));
+      await call(env, "/api/creator/delete-account", {
+        method: "POST", json: { creatorName: u.creatorName, creatorKey: u.creatorKey, confirm: "DELETE" },
+      });
+      assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM provider_connections").first()).n, 0);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("restore tells the page whether it now holds a session", async () => {
+    const off = makeEnv({ DB: makeD1() });
+    const a = await createUser(off, "restoreflag1");
+    const r1 = await call(off, "/api/creator/restore", { method: "POST", json: { creatorName: "restoreflag1", creatorKey: a.creatorKey } });
+    assert.equal(r1.body.session, false);
+    const on = makeEnv({ DB: makeD1(), FF_SESSIONS: "1" });
+    const b = await createUser(on, "restoreflag2");
+    const r2 = await call(on, "/api/creator/restore", { method: "POST", json: { creatorName: "restoreflag2", creatorKey: b.creatorKey } });
+    assert.equal(r2.body.session, true);
+  });
+
+  it("the page picks up a server-kept connection, and removes the server's copy on disconnect", () => {
+    const init = fs.readFileSync(path.join(REPO_ROOT, "24_client-backup-restore-presets.js"), "utf8");
+    assert.match(init, /pickUpServerConnection\(\)/);
+    const oauth = fs.readFileSync(path.join(REPO_ROOT, "17_client-my-lists-and-trakt-oauth.js"), "utf8");
+    for (const p of ["Trakt", "Mdblist", "Simkl", "Tmdb"]) {
+      const body = oauth.slice(oauth.indexOf(`function disconnect${p}() {`)).split("\n}\n")[0];
+      assert.match(body, new RegExp(`forgetServerConnection\\('${p.toLowerCase()}'\\)`), `disconnect${p}`);
+    }
+    for (const p of ["trakt", "mdblist", "simkl", "tmdb"]) {
+      assert.match(oauth, new RegExp(`provider === '${p}'`), `pickUpServerConnection handles ${p}`);
+    }
+  });
+});

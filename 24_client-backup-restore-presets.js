@@ -2526,6 +2526,8 @@ if (typeof renderHiddenListsSettingsSection === 'function') renderHiddenListsSet
 if (typeof renderRemovedAiringNextSettingsSection === 'function') renderRemovedAiringNextSettingsSection();
 renderTrackPlaybackSection();
 renderCreatorDashboard();
+// A signed-in connect comes back as ?connected=<provider> (P3a-9).
+if (typeof pickUpServerConnection === 'function') pickUpServerConnection();
 if (typeof pickUpMdblistTokenFromUrl === 'function') pickUpMdblistTokenFromUrl();
 if (typeof renderMdblistConnectStatus === 'function') renderMdblistConnectStatus();
 pickUpTraktTokenFromUrl();

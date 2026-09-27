@@ -11,12 +11,58 @@ All notable changes to **My Lists Addon** ([mylistsaddon.com](https://mylistsadd
 Do these in order. Details are in `docs/OPERATIONS.md`.
 
 1. **Back up D1**: Time Travel, or `npx wrangler d1 export my-lists-db --remote --output=backup.sql`.
-2. **Apply `migrations/0014_add_schema_migrations.sql`, then `migrations/0015_accounts_sessions_installs.sql`**, in the D1 Console and in that order. Both only add tables and are safe to run twice. Nothing uses 0015's tables yet, but until it is applied the admin schema check lists it as missing.
+2. **Apply `migrations/0014_add_schema_migrations.sql`, then `migrations/0015_accounts_sessions_installs.sql`**, in the D1 Console and in that order. Both only add tables and are safe to run twice. The new sign-in code writes to 0015's tables when they exist and skips them when they don't, so nothing breaks in between; until it is applied the admin schema check lists it as missing.
 3. **Add the Analytics Engine binding**: Worker → Settings → Bindings → Add → Analytics Engine, name `ANALYTICS`, dataset `mylists_events`.
 4. **Paste and deploy** `worker_entry_combined.js`.
 5. **Delete the retired variables** if they are set: `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET`, `CRON_SUBREQUEST_BUDGET`. The code ignores them either way.
 
-The new secrets `TOKEN_ENCRYPTION_KEY` and `LOOKUP_PEPPER` are **not needed yet**: nothing in this release uses them. They will be needed when the Phase 3a sign-in and account-storage code ships, and the release notes will say so then.
+6. **Optional: add the secret `LOOKUP_PEPPER`** (Worker → Settings → Variables and Secrets → Add → type *Secret*). Any long random value; generate one with `openssl rand -base64 32`. With it set, "Forgot username" starts using the new key index (P3a-7). Without it, everything works as before. **Once set, never change or delete it**: every entry in the new index was computed from it.
+
+`TOKEN_ENCRYPTION_KEY` is needed only to start moving install-link keys into encrypted storage (P3a-8, below). That move stays **off** until `INSTALL_MIGRATION_PERCENT` is set, and `docs/OPERATIONS.md` §8 gives the steps. Deploying without it changes nothing.
+
+`FF_SESSIONS` and `FF_INSTALLS` stay **off** (unset). Leave them off until the new sign-in and install-link screens ship.
+
+### 🔐 Connected accounts are kept on the server when signed in (P3a-9)
+
+- **Connecting Trakt, MDBList, Simkl or TMDB while signed in (with a session) keeps the token on the server**, encrypted with `TOKEN_ENCRYPTION_KEY` in `provider_connections`, together with its refresh token and expiry where the provider gives them.
+  - The sign-in comes back as `/?connected=trakt`, with no token in the address bar, the browser history or any log.
+  - The page then fetches the token once over its session (`POST /api/connections/:provider/token`), so every screen that uses it keeps working. That bridge goes away with the Phase 6 pages.
+  - The Trakt PIN-code flow keeps a copy too.
+  - Signed out, without a session (`FF_SESSIONS` off), or without `TOKEN_ENCRYPTION_KEY`, connecting works exactly as before.
+- **`POST /api/connections/import-local`**: after a sign-in that opens a session, the page offers the tokens it already holds, once per account on that device. Each is checked with its provider before it is kept. One already on the server is not replaced, and one the provider rejects is reported and not stored. Limited to five a minute per account.
+- **`GET /api/connections`** lists an account's connections without their tokens.
+- **Disconnecting** also removes the server's copy (`DELETE /api/connections/:provider`), and revokes the token at Trakt (for tokens issued to this site) and at TMDB. MDBList and Simkl have no revoke call.
+- Deleting an account deletes its connections.
+- Catalog rows do not read from here yet: that is P3a-10.
+
+### 🔐 Install links: keys move to encrypted storage, and install links an account can manage (P3a-8)
+
+- **Existing install links keep their keys in encrypted D1 storage**, behind `INSTALL_MIGRATION_PERCENT` (off by default).
+  - When a link with a provider key, a token or a Creator Key is first used, those move from its KV `cfg:` record into `install_secrets`, encrypted with `TOKEN_ENCRYPTION_KEY`. The record is rewritten without them.
+  - When the link is read, they are decrypted and put back. Catalogs, playback tracking, and a key reset stopping that tracking behave exactly as before, and the URL never changes.
+  - The keys are checked before anything is removed: encrypted, decrypted again, and compared with the originals.
+  - A share of links can be moved first (for example `10`), chosen by a stable hash of the link.
+  - Links with nothing secret in them are never touched.
+  - A link whose owner is proven (its Creator Key verifies, or it carries the owner stamp) is tied to that account. Deleting the account deletes those rows and their keys. The link then serves its public rows only, and never the shelves of whoever registers that username next.
+  - `/admin` → Maintenance → **Install links** shows progress, and has an emergency **Undo the move** that puts every key back as it was.
+- **New install links, `/i/{token}/manifest.json`**, created by a signed-in account through `POST /api/installs`, behind `FF_INSTALLS`.
+  - Only the token's SHA-256 is stored, and the token is shown once.
+  - `GET /api/installs` lists an account's links: new ones, and old ones that have moved. `PATCH /api/installs/:id` renames, edits or rotates a link, and refuses an edit made from a stale copy. `DELETE /api/installs/:id` removes it, and its URL then serves nothing.
+  - A new link holds no keys or tokens, and may carry only its own account's personal shelves. Its playback tracking is authorised by the account that created it.
+  - A cached copy of each link (KV `install:*`, one day) is dropped on every change.
+- Old self-contained (base64) links are unchanged: read-only, served from the link itself.
+
+### 🔒 Phase 3a review fixes (sign-in, sessions, CSRF)
+
+A review of P3a-4 to P3a-7 before they reach production. Only the first item would have been visible after a deploy; the rest only matter once `FF_SESSIONS` is switched on or the new sign-in endpoint is used.
+
+- **Admin maintenance buttons work again.** Five of them (backfill trending, migrate day-counts, migrate to D1, migrate accounts, rebuild public index) sent a POST without a JSON content type, which the CSRF check refuses with 403. They now send it, and a test checks every mutating request the site's pages make.
+- **Signing in checks the real account record.** `POST /api/session` verified the key against the `accounts` copy, which nothing kept up to date. A deleted account's key still signed in, and after someone else registered that username, the old key could sign into their account. It now goes through the same check as every other route (the creator profile, the deletion hold, the guessing throttle), then brings the `accounts` row up to date from it.
+- **Deleting an account removes its `accounts` row and every session.** Creating an account clears any leftover row for that username first, then writes the new one.
+- **A key reset signs every device out**, both the self-service reset and the admin reset.
+- **A sign-in fills in only its own `accounts` row.** It used to run the whole accounts backfill (every account in D1 and KV) for any account not yet copied.
+- **Sessions are issued only where the page keeps them.** Key-in-body sign-in issues a session cookie on `/api/creator/*` routes only, and not when the request already carries a live session for that account. Before, `/api/creator/restore` made a new session row on every page load.
+- A PBKDF2 rehash on sign-in now updates the stored key hash itself (D1 and KV), not only the `accounts` copy.
 
 ### 🔒 Phase 3a: accounts, sessions, and authentication (P3a-1, P3a-2, P3a-3, P3a-4, P3a-5, P3a-6, P3a-7)
 
