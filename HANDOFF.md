@@ -9,10 +9,7 @@
 - **Last Active AI**: Claude Code (Opus 5.5)
 - **Active Task**: Phase 3a in progress. P3a-1 through P3a-9 are complete, verified and tested, and P3a-4 to P3a-7 have been reviewed and fixed. Next: P3a-10 (catalogs read tokens from `provider_connections`).
 - **Task State**: All tests passing (1,388 passed, 0 failed, 1 skipped: the opt-in network test). `verify.sh` checks pass.
-- **Git State**: Work is on branches, not on `main` (`main` = `origin/main` = `460be7c`):
-  - `feat/p3a-review-and-installs` (review fixes + P3a-8), pushed. The owner is opening its PR into `main`.
-  - `feat/p3a-9-connections` (P3a-9), stacked on it.
-  - Merge them in that order.
+- **Git State**: All of this work (review fixes, P3a-8, P3a-9) is on the branch `feat/p3a-review-and-installs`, pushed, with a pull request into `main`. `main` = `origin/main` = `460be7c` until that PR is merged.
 - **The owner is not a programmer.** Explain in plain words, do the git work for them, and ask before anything that changes stored user data or needs a dashboard change.
 
 ---
