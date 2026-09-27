@@ -72,6 +72,7 @@ Lists published anonymously before accounts existed (`/lists/user/<slug>`) **sti
   - credential-named fields in logged objects.
 
   A module-level `console` at the top of `00_constants.js` does this, the same way the `fetch` guard works, so all ~120 existing log calls and any future ones are covered. A check on 2026-09-27 found no current log line writing a secret; this keeps it that way.
+- **Every outbound call now has a timeout.** Most provider calls had none, so a provider that stopped answering held the request, or a cron sweep, until the platform gave up. The `fetch` guard in `02_` now gives any call without its own timeout a 30-second ceiling. The calls Stremio waits on keep their own 10 seconds. A test makes an upstream hang and checks the Worker still answers.
 - **API responses are no longer cacheable unless the route says so.** `json()` used to mark every success as cacheable for an hour, so personal routes had to remember to opt out, and `/api/resolve` once didn't. Success is now `no-store` by default.
   - Public lookups (title and person search, show seasons and episodes, list search, the channel directory, published-list search) opt in with `jsonCacheable`.
   - The Stremio routes opt in through `jsonPublic`.

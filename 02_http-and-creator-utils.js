@@ -1703,6 +1703,16 @@ async function fetchWithPerUserCacheUncoalesced({
 // connection open.
 const OUTBOUND_TIMEOUT_MS = 10000;
 
+// The ceiling for an outbound call that sets no timeout of its own (BE-H10,
+// task P2-6). Most provider calls had none, so a provider that stopped
+// answering held the request -- or a cron sweep -- until the platform gave up.
+// The fetch guard below applies it to every such call. It is deliberately
+// generous: it exists to end a hang, not to pace anything, and some calls are
+// legitimately slow (a large Trakt sync upload, a long MDBList list). The
+// calls a Stremio app is actively waiting on already use the tighter
+// OUTBOUND_TIMEOUT_MS through fetchWithTimeout.
+const OUTBOUND_DEFAULT_TIMEOUT_MS = 30000;
+
 // --- Outbound fetch guard: never edge-cache a request carrying a credential --
 //
 // Every `fetch(` in this Worker resolves to this module-scope function rather
@@ -1725,8 +1735,24 @@ const OUTBOUND_TIMEOUT_MS = 10000;
 // with no Authorization header is untouched. Credentials carried in the URL
 // itself (MDBList's apikey, TMDB's session_id) make the URL unique per user, so
 // they cannot be served across users and are left alone.
+//
+// It also gives every call a timeout when the caller did not set one: see
+// OUTBOUND_DEFAULT_TIMEOUT_MS, and withDefaultTimeout below. Together with
+// the log redaction at the top of 00_constants.js, this is the whole of the
+// planned `providerFetch` (task P2-6): one place every outbound call goes
+// through, instead of a wrapper each call site has to remember to use.
 function fetch(input, init) {
-  return globalThis.fetch(input, withoutEdgeCacheForCredentials(input, init));
+  return globalThis.fetch(input, withDefaultTimeout(input, withoutEdgeCacheForCredentials(input, init)));
+}
+
+// A caller's own signal always wins. A Request object is left alone too: it
+// always carries a signal, so there is no telling whether that one was meant.
+function withDefaultTimeout(input, init) {
+  if (init && init.signal) return init;
+  if (input && typeof input === "object" && typeof input.url === "string") return init;
+  const signal = timeoutSignal(OUTBOUND_DEFAULT_TIMEOUT_MS);
+  if (!signal) return init;
+  return { ...(init || {}), signal };
 }
 
 function headersCarryAuthorization(headers) {

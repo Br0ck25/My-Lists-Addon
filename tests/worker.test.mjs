@@ -2288,6 +2288,48 @@ describe("P2-3: JSON is no-store unless a route opts in to caching", () => {
   });
 });
 
+// P2-6 / BE-H10. Every outbound call gets a timeout, from the fetch guard in
+// 02_, when its caller set none. Measured by making the upstream hang: the
+// timeout the guard asks for is recorded, then shortened so the test is quick.
+describe("P2-6: an outbound call that sets no timeout still gets one", () => {
+  async function withHangingUpstream(run) {
+    const realFetch = globalThis.fetch;
+    const realTimeout = AbortSignal.timeout;
+    const asked = [];
+    AbortSignal.timeout = (ms) => { asked.push(ms); return realTimeout.call(AbortSignal, 5); };
+    globalThis.fetch = (input, init) => new Promise((resolve, reject) => {
+      const signal = init && init.signal;
+      if (!signal) return; // no timeout at all: hangs, and the test times out
+      signal.addEventListener("abort", () => reject(signal.reason || new Error("aborted")));
+    });
+    try {
+      return await run(asked);
+    } finally {
+      globalThis.fetch = realFetch;
+      AbortSignal.timeout = realTimeout;
+    }
+  }
+
+  it("ends a hung provider call that had no timeout of its own", async () => {
+    await withHangingUpstream(async (asked) => {
+      const env = makeEnv({ CONFIGS: makeKv(), TMDB_API_KEY: "k" });
+      const r = await call(env, "/api/imdb-ids", { method: "POST", json: { items: [{ id: "tmdb:550", type: "movie" }] } });
+      assert.equal(r.status, 200, "the route answered instead of hanging");
+      assert.deepEqual(r.body.map, {}, "and the hung lookup simply found nothing");
+      assert.ok(asked.includes(30000), `the guard's default was used, asked: ${asked}`);
+    });
+  });
+
+  it("keeps a caller's own, tighter timeout", async () => {
+    await withHangingUpstream(async (asked) => {
+      const env = makeEnv({ CONFIGS: makeKv(), TRAKT_CLIENT_ID: "t" });
+      await call(env, "/api/trakt-search?q=matrix");
+      assert.ok(asked.includes(10000), `fetchWithTimeout's own 10 s was used, asked: ${asked}`);
+      assert.ok(!asked.includes(30000), "and the default was not stacked on top of it");
+    });
+  });
+});
+
 describe("My Channels does not quietly adopt a storyline or Explore row", () => {
   it("skips catalogOnly rows and still adopts a channel someone built", () => {
     let saved = null;
