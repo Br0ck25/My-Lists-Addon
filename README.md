@@ -1,7 +1,7 @@
 # My Lists Addon
 
 > **Official Website & Live Web App**: [**mylistsaddon.com**](https://mylistsaddon.com)
-> **Source Code**: [**github.com/Br0ck25/My-Lists**](https://github.com/Br0ck25/My-Lists)
+> **Source Code**: [**github.com/Br0ck25/My-Lists-Addon**](https://github.com/Br0ck25/My-Lists-Addon)
 
 A powerful, full-featured add-on for [Stremio](https://stremio.com), [Wako](https://wako.app), [Nuvio](https://nuvio.to), and any other app built on the Stremio addon protocol, that transforms your **MDBList**, **Trakt**, **TMDB**, and **Simkl** lists into dynamic catalog rows on your home screen — featuring a full **Custom List Builder**, **Letterboxd CSV Import**, **Virtual TV Channels**, **Airing Next Calendars**, **Continue Watching & Watch History Sync**, **Creator Profiles**, and an **Admin Analytics Dashboard**, all running as one hosted service at [**mylistsaddon.com**](https://mylistsaddon.com) on [Cloudflare Workers](https://workers.cloudflare.com).
 
@@ -145,7 +145,7 @@ The Worker runs on Cloudflare only. Account creation, restore, key reset, feedba
 
 1. On your Worker's page, click **Edit code**.
 2. Erase any existing template code in the editor.
-3. Copy the entire contents of [`worker_entry_combined.js`](https://github.com/Br0ck25/My-Lists/blob/main/worker_entry_combined.js) from the repository and paste it into the editor.
+3. Copy the entire contents of [`worker_entry_combined.js`](https://github.com/Br0ck25/My-Lists-Addon/blob/main/worker_entry_combined.js) from the repository and paste it into the editor.
 4. Click **Deploy**.
 5. Your add-on is now immediately accessible at `https://your-worker-name.your-subdomain.workers.dev`!
 
@@ -179,8 +179,8 @@ Every step below is doable entirely from the Cloudflare Dashboard -- nothing her
 
 **2. Run `schema.sql` against it (once, on a brand-new database only)**
 1. Open the database you just created and click its **Console** tab -- a query box built right into the dashboard.
-2. Open [`schema.sql`](https://github.com/Br0ck25/My-Lists/blob/main/schema.sql) from this repo, copy its entire contents, paste them into the Console, and click **Run** / **Execute**. This creates the complete current schema, including the `schema_migrations` ledger with every migration marked as applied.
-3. `schema.sql` is **non-destructive**: every statement is `CREATE ... IF NOT EXISTS` and nothing is dropped, so running it against a live database by mistake changes nothing that exists. It is still only for a brand-new database. A database that already has data is changed only by the files under [`migrations/`](https://github.com/Br0ck25/My-Lists/tree/main/migrations) -- see "Applying a migration" below.
+2. Open [`schema.sql`](https://github.com/Br0ck25/My-Lists-Addon/blob/main/schema.sql) from this repo, copy its entire contents, paste them into the Console, and click **Run** / **Execute**. This creates the complete current schema, including the `schema_migrations` ledger with every migration marked as applied.
+3. `schema.sql` is **non-destructive**: every statement is `CREATE ... IF NOT EXISTS` and nothing is dropped, so running it against a live database by mistake changes nothing that exists. It is still only for a brand-new database. A database that already has data is changed only by the files under [`migrations/`](https://github.com/Br0ck25/My-Lists-Addon/tree/main/migrations) -- see "Applying a migration" below.
 
 **3. Bind it to your Worker**
 1. Return to **Compute** &rarr; **Workers & Pages** &rarr; click on your worker.
@@ -193,7 +193,7 @@ Every step below is doable entirely from the Cloudflare Dashboard -- nothing her
 **4. Backfill any existing KV data into it**
 If you already had Creator Profiles or Custom Lists in KV *before* adding D1 (i.e. you're enabling this on a site that's already been running), D1 starts out empty and needs a one-time copy. Log into `/admin`, open **Management & Tools &rarr; Maintenance**, and click **Migrate KV &rarr; D1**. (A brand-new site with no accounts yet can skip this -- there's nothing to copy.) This is safe to click more than once; KV stays the authoritative copy either way.
 
-**Applying a migration:** files under [`migrations/`](https://github.com/Br0ck25/My-Lists/tree/main/migrations) are small, additive changes to an already-live database (unlike `schema.sql`, they're safe to run with real data present). Open the file on GitHub, copy its `ALTER TABLE`/`CREATE INDEX`/etc. statements (skip the `--` comment lines), paste them into the same D1 Console used in step 2 above, and click **Run**. Run one statement at a time, and do skip the comment lines rather than pasting the whole file: a `--` comment runs to the end of its **line**, so if the paste arrives with its line breaks collapsed, the first comment swallows everything after it. A half-eaten `CREATE TABLE` reports `incomplete input: SQLITE_ERROR`, and a whole file that has become one comment reports nothing at all and creates nothing -- both look like the migration is broken when it is only the paste. Apply them in filename order (`0001_...`, `0002_...`, and so on) -- each one assumes the ones before it already ran.
+**Applying a migration:** files under [`migrations/`](https://github.com/Br0ck25/My-Lists-Addon/tree/main/migrations) are small, additive changes to an already-live database (unlike `schema.sql`, they're safe to run with real data present). Open the file on GitHub, copy its `ALTER TABLE`/`CREATE INDEX`/etc. statements (skip the `--` comment lines), paste them into the same D1 Console used in step 2 above, and click **Run**. Run one statement at a time, and do skip the comment lines rather than pasting the whole file: a `--` comment runs to the end of its **line**, so if the paste arrives with its line breaks collapsed, the first comment swallows everything after it. A half-eaten `CREATE TABLE` reports `incomplete input: SQLITE_ERROR`, and a whole file that has become one comment reports nothing at all and creates nothing -- both look like the migration is broken when it is only the paste. Apply them in filename order (`0001_...`, `0002_...`, and so on) -- each one assumes the ones before it already ran.
 
 **Which migrations does my deployment still need?** Run `SELECT version FROM schema_migrations ORDER BY version;` in the D1 Console (the table arrives with `migrations/0014`; if it does not exist yet, that is the next file to apply). The Admin Dashboard's **Database schema** panel also reports every migration that has not been run, and what each omission costs. A Worker that needs a newer migration than the database has refuses API writes with a "My Lists is being updated" message until it is applied, rather than failing quietly. Worth being concrete about why: deploy without `0004_add_creator_tombstones.sql` and account deletion still reports success and still refuses the deleted account on a normal request, while a colo whose KV cache predates the deletion will happily authenticate it. **Apply migrations first, then deploy the Worker.**
 
