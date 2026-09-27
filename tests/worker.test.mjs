@@ -2345,7 +2345,7 @@ describe("P2-6: an outbound call that sets no timeout still gets one", () => {
 // builder's save body. Every field is round-tripped here, so a field added to
 // the schema is covered the moment it exists.
 describe("P2-8: every install setting survives a save, from one schema", () => {
-  const sb = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "04_config-resolution.js", "27_installs.js");
+  const sb = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "04_config-resolution.js", "27_installs.js", "28_connections.js");
   const FIELDS = vm.runInContext("INSTALL_CONFIG_FIELDS", sb).map((f) => ({ ...f }));
   const ROW = { id: "pop", name: "Pop", type: "movie", url: "tmdb:chart:popular" };
   // A value for each field that is NOT its default, so it has to be stored.
@@ -16232,7 +16232,7 @@ describe("P3a review: the accounts row follows the creator profile", () => {
 // v2 links (/i/{token}) are created, edited, rotated and revoked through
 // /api/installs.
 describe("P3a-8: installs", () => {
-  const sb = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "04_config-resolution.js", "27_installs.js");
+  const sb = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "04_config-resolution.js", "27_installs.js", "28_connections.js");
   const TEST_KEY = "k1:" + Buffer.from(Uint8Array.from({ length: 32 }, (_, i) => i + 7)).toString("base64");
   const SECRET_FIELDS = vm.runInContext("INSTALL_CONFIG_FIELDS", sb).filter((f) => f.secret).map((f) => f.name);
 
@@ -16262,7 +16262,7 @@ describe("P3a-8: installs", () => {
   // Returned as plain data: each sandbox is its own realm, and a strict
   // comparison would otherwise fail on the prototypes alone.
   async function freshResolve(id, env, opts) {
-    const fresh = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "04_config-resolution.js", "27_installs.js");
+    const fresh = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "04_config-resolution.js", "27_installs.js", "28_connections.js");
     return JSON.parse(JSON.stringify(await fresh.resolveConfig(id, env, opts)));
   }
 
@@ -16677,7 +16677,7 @@ describe("P3a-8: installs", () => {
 describe("P3a-8: undoing the install move", () => {
   const TEST_KEY = "k1:" + Buffer.from(Uint8Array.from({ length: 32 }, (_, i) => i + 7)).toString("base64");
   async function freshResolve(id, env) {
-    const fresh = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "04_config-resolution.js", "27_installs.js");
+    const fresh = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "04_config-resolution.js", "27_installs.js", "28_connections.js");
     return JSON.parse(JSON.stringify(await fresh.resolveConfig(id, env)));
   }
 
@@ -17020,5 +17020,322 @@ describe("P3a-9: provider connections", () => {
     for (const p of ["trakt", "mdblist", "simkl", "tmdb"]) {
       assert.match(oauth, new RegExp(`provider === '${p}'`), `pickUpServerConnection handles ${p}`);
     }
+  });
+});
+
+// P3a-10. Personal Trakt, MDBList and Simkl rows read their tokens from the
+// install owner's own connections -- only for an owner the install PROVES --
+// and an expiring token is renewed.
+describe("P3a-10: catalogs use the owner's connections", () => {
+  const TEST_KEY = "k1:" + Buffer.from(Uint8Array.from({ length: 32 }, (_, i) => 90 + i)).toString("base64");
+  const SITE = {
+    TOKEN_ENCRYPTION_KEY: TEST_KEY,
+    TRAKT_CLIENT_ID: "site-trakt-id", TRAKT_CLIENT_SECRET: "site-trakt-secret",
+  };
+  const nowSec = () => Math.floor(Date.now() / 1000);
+
+  // A Trakt that issues `issue` on sign-in, answers refreshes per `refresh`,
+  // and records every watchlist request's bearer token.
+  function stubTrakt(state) {
+    const seen = { watchlistTokens: [], refreshes: [] };
+    globalThis.fetch = async (u, init = {}) => {
+      const href = typeof u === "string" ? u : u.url;
+      const headers = new Headers(init.headers || {});
+      const json = (b, status = 200) => new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json" } });
+      if (href === "https://api.trakt.tv/oauth/token") {
+        const body = JSON.parse(init.body || "{}");
+        if (body.grant_type === "refresh_token") {
+          seen.refreshes.push(body);
+          return state.refresh ? state.refresh(body) : json({ error: "invalid_grant" }, 400);
+        }
+        return json(state.issue);
+      }
+      if (href === "https://api.trakt.tv/users/me") return json({ username: "traktfan" });
+      if (href.startsWith("https://api.trakt.tv/users/me/watchlist")) {
+        seen.watchlistTokens.push((headers.get("authorization") || "").replace(/^Bearer /, ""));
+        seen.watchlistClientIds = (seen.watchlistClientIds || []).concat(headers.get("trakt-api-key"));
+        return json([]);
+      }
+      return json({});
+    };
+    return seen;
+  }
+
+  // Every test gets its own database, so account ids restart at 1 -- but the
+  // Worker keeps a minute's memory of each account's connections, keyed by
+  // id, across tests. A placeholder row moves each test's ids somewhere no
+  // other test uses.
+  let idBase = 5000;
+  async function signedIn(name) {
+    const env = makeEnv({ DB: makeD1(), ...SITE });
+    idBase += 1000;
+    await env.DB.prepare(
+      "INSERT INTO accounts (id, username, display_name, key_hash, created_at) VALUES (?, ?, 'placeholder', 'x', 1)"
+    ).bind(idBase, "placeholder" + idBase).run();
+    const u = await createUser(env, name);
+    const r = await call(env, "/api/session", { method: "POST", json: { username: name, key: u.creatorKey } });
+    return { env, u, cookie: (r.headers.get("set-cookie") || "").split(";")[0] };
+  }
+  async function connectTrakt(env, cookie) {
+    const st = "st" + Math.random().toString(36).slice(2, 8);
+    const r = await call(env, `/api/trakt/oauth/callback?code=C&state=${st}`, { cookie: `${cookie}; mla_trakt_state=${st}` });
+    assert.equal(r.headers.get("location"), "https://example.test/?connected=trakt");
+  }
+  async function freshResolve(id, env) {
+    const fresh = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "04_config-resolution.js", "27_installs.js", "28_connections.js");
+    return JSON.parse(JSON.stringify(await fresh.resolveConfig(id, env)));
+  }
+  const watchlistRow = { id: "tw", name: "Watchlist", type: "movie", url: "trakt:watchlist" };
+
+  it("a v2 install's Trakt watchlist uses its owner's connection", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      const seen = stubTrakt({ issue: { access_token: "CONN-TOKEN", refresh_token: "R1", expires_in: 7776000, created_at: nowSec() } });
+      const { env, cookie } = await signedIn("p10v2");
+      env.FF_INSTALLS = "1";
+      await connectTrakt(env, cookie);
+      const created = await call(env, "/api/installs", { method: "POST", cookie, json: { entries: [watchlistRow] } });
+      const r = await call(env, `/i/${created.body.token}/catalog/movie/tw.json`);
+      assert.equal(r.status, 200);
+      assert.deepEqual(seen.watchlistTokens, ["CONN-TOKEN"]);
+      assert.deepEqual(seen.watchlistClientIds, ["site-trakt-id"], "with the client id the token was issued to");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("a signed-in save leaves out what the account's connection supplies, stamps its owner, and still serves the row", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      const seen = stubTrakt({ issue: { access_token: "SAVE-CONN-TOKEN", refresh_token: "R1", expires_in: 7776000, created_at: nowSec() } });
+      const { env, u, cookie } = await signedIn("p10save");
+      await connectTrakt(env, cookie);
+      const save = await call(env, "/api/save", {
+        method: "POST",
+        json: {
+          creatorName: u.creatorName, creatorKey: u.creatorKey, entries: [watchlistRow],
+          traktAccessToken: "BROWSER-COPY", traktKey: "user-own-client", mdblistKey: "KEEP-MDB",
+        },
+      });
+      assert.equal(save.status, 200, JSON.stringify(save.body));
+      const stored = JSON.parse(env.CONFIGS._store.get("cfg:" + save.body.id));
+      assert.equal(stored.traktAccessToken, undefined, "the connection supplies it");
+      assert.equal(stored.traktKey, undefined, "and the client id that goes with it");
+      assert.equal(stored.mdblistKey, "KEEP-MDB", "a key no connection supplies stays");
+      const acct = await env.DB.prepare("SELECT id, created_at FROM accounts WHERE username = 'p10save'").first();
+      assert.equal(stored.ownerId, acct.id);
+      assert.equal(stored.ownerSince, acct.created_at);
+
+      await call(env, `/${save.body.id}/catalog/movie/tw.json`);
+      assert.deepEqual(seen.watchlistTokens, ["SAVE-CONN-TOKEN"]);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("a link's own token still wins over the connection", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      stubTrakt({ issue: { access_token: "CONN-TOKEN", refresh_token: "R1", expires_in: 7776000, created_at: nowSec() } });
+      const { env, u, cookie } = await signedIn("p10own");
+      const save = await call(env, "/api/save", {
+        method: "POST",
+        json: {
+          creatorName: u.creatorName, creatorKey: u.creatorKey, trackCreatorName: u.creatorName, trackCreatorKey: u.creatorKey,
+          entries: [watchlistRow, { id: "wh", name: "History", type: "series", url: `autotrack:watch-history:series:${u.creatorName}` }],
+          traktAccessToken: "OWN-TOKEN", traktKey: "own-client",
+        },
+      });
+      await connectTrakt(env, cookie);
+      const resolved = await freshResolve(save.body.id, env);
+      assert.equal(resolved.traktAccessToken, "OWN-TOKEN");
+      assert.equal(resolved.traktKey, "own-client");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("a link proven by its Creator Key borrows what it lacks", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      stubTrakt({ issue: { access_token: "CONN-TOKEN", refresh_token: "R1", expires_in: 7776000, created_at: nowSec() } });
+      const { env, u, cookie } = await signedIn("p10key");
+      // Saved before the account connected Trakt, so nothing was left out.
+      const save = await call(env, "/api/save", {
+        method: "POST",
+        json: {
+          creatorName: u.creatorName, creatorKey: u.creatorKey, trackCreatorName: u.creatorName, trackCreatorKey: u.creatorKey,
+          entries: [watchlistRow, { id: "wh", name: "History", type: "series", url: `autotrack:watch-history:series:${u.creatorName}` }],
+        },
+      });
+      await connectTrakt(env, cookie);
+      // Take the ownerId stamp away: the Creator Key alone is the proof here.
+      const stored = JSON.parse(env.CONFIGS._store.get("cfg:" + save.body.id));
+      delete stored.ownerId;
+      delete stored.ownerSince;
+      env.CONFIGS._store.set("cfg:" + save.body.id, JSON.stringify(stored));
+      const resolved = await freshResolve(save.body.id, env);
+      assert.equal(resolved.traktAccessToken, "CONN-TOKEN");
+      assert.equal(resolved.traktKey, "");
+      assert.equal(resolved.traktUsername, "traktfan");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("a name alone proves nothing: the older owner stamp and an unverified shelf borrow no tokens", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      stubTrakt({ issue: { access_token: "CONN-TOKEN", refresh_token: "R1", expires_in: 7776000, created_at: nowSec() } });
+      const { env, cookie } = await signedIn("p10name");
+      await connectTrakt(env, cookie);
+      env.CONFIGS._store.set("cfg:stampOnly01", JSON.stringify({
+        entries: [watchlistRow], trackCreatorName: "p10name", trackOwner: "p10name",
+      }));
+      env.CONFIGS._store.set("cfg:unverified1", JSON.stringify({
+        entries: [watchlistRow, { id: "wh", name: "History", type: "series", url: "autotrack:watch-history:series:p10name" }],
+      }));
+      for (const id of ["stampOnly01", "unverified1"]) {
+        const resolved = await freshResolve(id, env);
+        assert.equal(resolved.trackOwner, "p10name", `${id}: the shelves themselves still follow the old rules`);
+        assert.equal(resolved.traktAccessToken, "", `${id}: but no provider token is lent on a name`);
+      }
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("an owner stamp from a deleted account does not match the next holder of the username", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      stubTrakt({ issue: { access_token: "NEW-HOLDER-TOKEN", refresh_token: "R1", expires_in: 7776000, created_at: nowSec() } });
+      const first = await signedIn("p10reuse");
+      const save = await call(first.env, "/api/save", {
+        method: "POST",
+        json: { creatorName: "p10reuse", creatorKey: first.u.creatorKey, entries: [watchlistRow] },
+      });
+      const stamped = JSON.parse(first.env.CONFIGS._store.get("cfg:" + save.body.id));
+      assert.ok(stamped.ownerId && stamped.ownerSince);
+      await call(first.env, "/api/creator/delete-account", {
+        method: "POST", json: { creatorName: "p10reuse", creatorKey: first.u.creatorKey, confirm: "DELETE" },
+      });
+      lapseCreatorTombstone(first.env, "p10reuse");
+      const again = await createUser(first.env, "p10reuse");
+      // The worst case: the new row even reuses the old id (SQLite can, when the
+      // deleted row had the highest one). Only created_at tells them apart.
+      await first.env.DB.prepare("UPDATE accounts SET id = ? WHERE username = 'p10reuse'").bind(stamped.ownerId).run();
+      const reused = await first.env.DB.prepare("SELECT id, created_at FROM accounts WHERE username = 'p10reuse'").first();
+      assert.equal(reused.id, stamped.ownerId);
+      assert.notEqual(reused.created_at, stamped.ownerSince);
+      const login = await call(first.env, "/api/session", { method: "POST", json: { username: "p10reuse", key: again.creatorKey } });
+      await connectTrakt(first.env, (login.headers.get("set-cookie") || "").split(";")[0]);
+      const resolved = await freshResolve(save.body.id, first.env);
+      assert.equal(resolved.traktAccessToken, "");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("renews an expired Trakt token, stores it, and uses it", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      const state = {
+        issue: { access_token: "OLD-TOKEN", refresh_token: "OLD-REFRESH", expires_in: 60, created_at: nowSec() - 3600 },
+        refresh: (body) => new Response(JSON.stringify({
+          access_token: "NEW-TOKEN", refresh_token: "NEW-REFRESH", expires_in: 7776000, created_at: Math.floor(Date.now() / 1000),
+        }), { status: body.refresh_token === "OLD-REFRESH" ? 200 : 400, headers: { "content-type": "application/json" } }),
+      };
+      const seen = stubTrakt(state);
+      const { env, cookie } = await signedIn("p10refresh");
+      env.FF_INSTALLS = "1";
+      await connectTrakt(env, cookie);
+      const created = await call(env, "/api/installs", { method: "POST", cookie, json: { entries: [watchlistRow] } });
+      await call(env, `/i/${created.body.token}/catalog/movie/tw.json`);
+      assert.equal(seen.refreshes.length, 1);
+      assert.equal(seen.refreshes[0].client_secret, "site-trakt-secret");
+      assert.deepEqual(seen.watchlistTokens, ["NEW-TOKEN"]);
+      const reveal = await call(env, "/api/connections/trakt/token", { method: "POST", cookie, json: {} });
+      assert.equal(reveal.body.accessToken, "NEW-TOKEN", "the renewed token is stored");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("when another request already renewed it, uses that token instead of marking the connection broken", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      const sb = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "04_config-resolution.js", "27_installs.js", "28_connections.js");
+      let env;
+      let accountId;
+      const seen = stubTrakt({
+        issue: { access_token: "RACE-OLD", refresh_token: "USED-REFRESH", expires_in: 60, created_at: nowSec() - 3600 },
+        refresh: async () => {
+          // Someone else got there first: their token is in the row, and this
+          // single-use refresh token is spent.
+          await sb.storeProviderConnection(env, { id: accountId }, "trakt", {
+            accessToken: "RACE-WINNER", refreshToken: "NEXT", expiresAt: Date.now() + 86400000, externalUser: { username: "traktfan" },
+          });
+          return new Response(JSON.stringify({ error: "invalid_grant" }), { status: 400 });
+        },
+      });
+      const s = await signedIn("p10race");
+      env = s.env;
+      env.FF_INSTALLS = "1";
+      await connectTrakt(env, s.cookie);
+      accountId = (await env.DB.prepare("SELECT id FROM accounts WHERE username = 'p10race'").first()).id;
+      const created = await call(env, "/api/installs", { method: "POST", cookie: s.cookie, json: { entries: [watchlistRow] } });
+      await call(env, `/i/${created.body.token}/catalog/movie/tw.json`);
+      assert.deepEqual(seen.watchlistTokens, ["RACE-WINNER"]);
+      const row = await env.DB.prepare("SELECT status FROM provider_connections WHERE provider = 'trakt'").first();
+      assert.equal(row.status, "ok");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("an expired token the provider will not renew marks the connection expired and lends nothing", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      const seen = stubTrakt({ issue: { access_token: "DEAD-TOKEN", refresh_token: "DEAD-REFRESH", expires_in: 60, created_at: nowSec() - 3600 } });
+      const { env, cookie } = await signedIn("p10dead");
+      env.FF_INSTALLS = "1";
+      await connectTrakt(env, cookie);
+      const created = await call(env, "/api/installs", { method: "POST", cookie, json: { entries: [watchlistRow] } });
+      await call(env, `/i/${created.body.token}/catalog/movie/tw.json`);
+      assert.deepEqual(seen.watchlistTokens, [], "no request with a dead token");
+      const list = await call(env, "/api/connections", { cookie });
+      assert.equal(list.body.connections[0].status, "expired");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("after disconnecting, a link that borrowed the token has none", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      const seen = stubTrakt({ issue: { access_token: "GONE-CONN-TOKEN", refresh_token: "R1", expires_in: 7776000, created_at: nowSec() } });
+      const { env, u, cookie } = await signedIn("p10gone");
+      await connectTrakt(env, cookie);
+      const save = await call(env, "/api/save", {
+        method: "POST", json: { creatorName: u.creatorName, creatorKey: u.creatorKey, entries: [watchlistRow] },
+      });
+      await call(env, `/${save.body.id}/catalog/movie/tw.json`);
+      assert.deepEqual(seen.watchlistTokens, ["GONE-CONN-TOKEN"]);
+      await call(env, "/api/connections/trakt", { method: "DELETE", cookie });
+      assert.equal((await freshResolve(save.body.id, env)).traktAccessToken, "");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("without TOKEN_ENCRYPTION_KEY nothing is looked up and a save is stored as before", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const proof = await accountProof(env, "p10nokey");
+    const save = await call(env, "/api/save", {
+      method: "POST", json: { ...proof, entries: [watchlistRow], traktAccessToken: "BROWSER-COPY" },
+    });
+    const stored = JSON.parse(env.CONFIGS._store.get("cfg:" + save.body.id));
+    assert.equal(stored.traktAccessToken, "BROWSER-COPY");
+    assert.equal((await freshResolve(save.body.id, env)).traktAccessToken, "BROWSER-COPY");
   });
 });

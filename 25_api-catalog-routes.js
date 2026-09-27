@@ -7209,6 +7209,19 @@ function generateSearchVariations(query) {
         // moment the stored key stops matching. See resolveConfig.
         payload.trackOwner = saveVerifiedOwner;
       }
+      // A signed-in save names its account in a way a reused username cannot
+      // match: the accounts row's id and when it was created (P3a-10). With
+      // that proof the link's personal rows can use the account's own
+      // connections, so the keys and tokens those supply are not copied into
+      // it. Without a table, a key or any connection, this changes nothing.
+      if (saveAccount) {
+        const ownerRow = await getOrBackfillAccount(env, saveAccount);
+        if (ownerRow && ownerRow.created_at) {
+          payload.ownerId = ownerRow.id;
+          payload.ownerSince = ownerRow.created_at;
+          for (const field of await connectionSuppliedConfigFields(env, ownerRow.id)) delete payload[field];
+        }
+      }
 
       const savePayload = JSON.stringify(payload);
       // Row count alone is not a size bound -- a row carries a URL, a

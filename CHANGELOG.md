@@ -22,6 +22,22 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 `FF_SESSIONS` and `FF_INSTALLS` stay **off** (unset). Leave them off until the new sign-in and install-link screens ship.
 
+### 🔐 Stremio rows use the account's own connections (P3a-10)
+
+- **A personal Trakt, MDBList or Simkl row gets its token from the install owner's connection** when the install link does not carry one itself. A TMDB key is filled the same way.
+  - Only for an owner the link *proves*:
+    - a new-style `/i/{token}` link, which belongs to the account that created it;
+    - a link whose own Creator Key still verifies;
+    - a link stamped by a signed-in save with the account's id and creation time (`ownerId`, `ownerSince`).
+  - A link that only names a username (the older `trackOwner` stamp, or an unverified shelf) borrows nothing, because a username can change hands.
+  - A key or token the link carries itself always wins, so existing links serve exactly as before.
+  - A Trakt or Simkl token always goes with the client id it was issued to.
+- **Signed-in saves no longer copy what the account's connections supply.** The token (and its client id) is left out of the link and read from the connection when the link is used. Disconnecting then really disconnects every link that relied on it. Without `TOKEN_ENCRYPTION_KEY` or any connection, saves are stored exactly as before.
+- **Expiring Trakt and MDBList tokens are renewed** with their refresh token, an hour before they run out.
+  - When two requests race to renew the same token, the one refused uses what the other stored.
+  - A token the provider will not renew marks the connection `expired`, and rows stop using it.
+- Lookups are cached for a minute per Worker instance. A save always reads the connections fresh.
+
 ### 🔐 Connected accounts are kept on the server when signed in (P3a-9)
 
 - **Connecting Trakt, MDBList, Simkl or TMDB while signed in (with a session) keeps the token on the server**, encrypted with `TOKEN_ENCRYPTION_KEY` in `provider_connections`, together with its refresh token and expiry where the provider gives them.
