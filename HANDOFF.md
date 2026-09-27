@@ -6,10 +6,10 @@
 
 ## Current Status
 - **Last Updated**: 2026-09-27
-- **Last Active AI**: Antigravity (Gemini 3.8 Flash)
-- **Active Task**: Phase 3a in progress. P3a-1 (Migration 0015) and P3a-2 (Token encryption & HMAC blind index) completed and verified. Next task: P3a-3 (Account migration backfill) / P3a-4 (Sessions).
-- **Task State**: All tests passing: 1,288 passed, 0 failed, 1 skipped. Build and sync checks verified.
-- **Git State**: Ready to commit. Commit and push only when the owner asks.
+- **Last Active AI**: Claude Code (Claude Opus 5.5), reviewing and fixing Antigravity (Gemini 3.8 Flash) work
+- **Active Task**: Phase 3a in progress. P3a-1 (migration 0015) and P3a-2 (token encryption, blind index) are done, reviewed and fixed. Next: P3a-3 (accounts backfill), then P3a-4 (sessions).
+- **Task State**: All work committed and pushed. All tests passing (1,291 passed, 0 failed, 1 skipped: the opt-in network test).
+- **Git State**: Clean working tree on `main`, in sync with `origin/main` (`https://github.com/Br0ck25/My-Lists-Addon`). Commit when work is verified; push only when the owner asks.
 - **The owner is not a programmer.** Explain in plain words, do the git work for them, and ask before anything that changes stored user data or needs a dashboard change.
 
 ---
@@ -47,7 +47,7 @@ These are deliberate. Several are "one place" mechanisms that cover the whole Wo
 | `00_`, `REQUIRED_SCHEMA_VERSION`; `02_`, `schemaWriteGate` | API writes are refused (503 "being updated") while the database is behind the code. A new migration must: <br>1. end with an `INSERT` into `schema_migrations`; <br>2. be added to `schema.sql` and `D1_SCHEMA_MANIFEST`; <br>3. bump `REQUIRED_SCHEMA_VERSION` if the code depends on it. <br>See `docs/OPERATIONS.md` §4. |
 | `04_`, `resolveConfig(config, env, { withTracking })` | Reads a person's tracking record only when asked (the channel meta route and `/api/resolve`). Catalog rows must not ask. |
 | `/<id>/configure` and `/api/resolve` | Never return provider keys or tokens. The `P1-T2` test probes every route for this. |
-| `02_`, `encryptToken` / `decryptToken` / `hmacLookupKey` | AES-GCM-256 token encryption with key rotation (`TOKEN_ENCRYPTION_KEY`) and HMAC-SHA256 blind indexing (`LOOKUP_PEPPER`). |
+| `02_`, `encryptToken` / `decryptToken` / `hmacLookupKey` | AES-256-GCM token encryption with key rotation (`TOKEN_ENCRYPTION_KEY`) and an HMAC-SHA256 blind index (`LOOKUP_PEPPER`). Always pass the key ring or `env` explicitly: there is no module-level `env`. Always pass a `context` naming the row (for example `account:<id>:<provider>`), and decrypt with the same one. Use these names only; do not add generic `encrypt` / `decrypt` functions. |
 
 ---
 
@@ -110,11 +110,12 @@ Last run (2026-09-27): all of the above pass, 1,288 tests passed, 0 failed, 1 sk
 ## Owner Actions Still Open (not code)
 1. **Deploy what is on `main`:**
    1. back up D1;
-   2. run `migrations/0014_add_schema_migrations.sql` in the D1 console (and `0015_accounts_sessions_installs.sql` when releasing Phase 3a);
+   2. run `migrations/0014_add_schema_migrations.sql`, then `migrations/0015_accounts_sessions_installs.sql`, in the D1 console. Both only add tables and are safe to run twice;
    3. add the `ANALYTICS` Analytics Engine binding (dataset `mylists_events`);
-   4. add secrets `TOKEN_ENCRYPTION_KEY` and `LOOKUP_PEPPER` when releasing Phase 3a;
-   5. paste `worker_entry_combined.js` and deploy;
-   6. delete the retired variables `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET` and `CRON_SUBREQUEST_BUDGET`.
+   4. paste `worker_entry_combined.js` and deploy;
+   5. delete the retired variables `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET` and `CRON_SUBREQUEST_BUDGET`.
+
+   The secrets `TOKEN_ENCRYPTION_KEY` and `LOOKUP_PEPPER` are **not needed yet**. The assistant that ships the first code using them must tell the owner, generate the values for them, and add the step to the release notes.
 
    Full steps are in `docs/OPERATIONS.md` §1, and `CHANGELOG.md` has them at the top of `[Unreleased]`.
 2. **Turn on backups:** add the GitHub repository secrets `CLOUDFLARE_API_TOKEN` (D1 Read), `CLOUDFLARE_ACCOUNT_ID`, `D1_DATABASE_ID` and `BACKUP_PASSPHRASE`. Keep a copy of the passphrase outside GitHub.
@@ -122,14 +123,15 @@ Last run (2026-09-27): all of the above pass, 1,288 tests passed, 0 failed, 1 sk
 ---
 
 ## Next Steps for Incoming AI
-1. **Next Task: P3a-3 (Backfill job `migrate.accounts`)**
-   - For every `creators` row and every KV `creator:*` key, upsert into `accounts` table.
-   - Newest `keyHash` wins; D1 wins ties.
-   - Reconciliation report: `count(accounts) = |creators ∪ creator:*|`.
-2. **Then P3a-4 (Sessions API):**
-   - `POST /api/session`, `DELETE /api/session`, `GET /api/me`, `GET/DELETE /api/me/sessions`.
-   - `mla_session` cookie (`HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=30d`).
-   - Session resolution middleware setting `request.account`.
-3. **Always run verification before finishing:**
-   `python build.py && python check_sync.py && node --check worker_entry_combined.js && python gen_map.py && node --test tests/*.test.mjs`
-
+1. **Phase 3a continues** (`NEXT_VERSION_TASKS.md`; the reasoning is in `MIGRATION_PLAN.md` Phase 3a). On 2026-09-27 the owner had Gemini start it and then accepted that work (P3a-1, P3a-2). Next:
+   - **P3a-3**: the accounts backfill. Every `creators` row and every KV `creator:*` key is upserted into `accounts`; the newest `keyHash` wins, and D1 wins ties. The reconciliation report must show `count(accounts) = |creators ∪ creator:*|`. It only *copies* data; it must not change or delete the old records.
+   - **P3a-4**: the sessions API.
+     - Routes: `POST /api/session`, `DELETE /api/session`, `GET /api/me`, `GET/DELETE /api/me/sessions`.
+     - The `mla_session` cookie (`HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=30d`).
+     - Middleware that resolves the session.
+     - The existing Creator Key sign-in must keep working unchanged (P3a-6, behind `FF_SESSIONS`).
+2. **Ask the owner first, every time, before anything that:**
+   - **rewrites or deletes stored user data.** In particular, P3a-8 strips tokens out of existing install links (KV `cfg:` records). Get explicit approval, make sure a D1 backup and a KV export exist first, and do it gradually;
+   - **needs a dashboard change.** Before shipping the first code that uses `TOKEN_ENCRYPTION_KEY` or `LOOKUP_PEPPER`, tell the owner, generate the values for them, and add the step to the release notes. The code must keep working if a secret is missing (fail closed for the new feature, never break existing sign-in);
+   - **depends on migration 0015** being applied. If code needs its tables, raise `REQUIRED_SCHEMA_VERSION` to `0015` in the same change and say so in the release notes, or the site pauses saving until the migration runs.
+3. **When finishing:** run the verification above, commit with a clear message, update this file, and push only if the owner asks.

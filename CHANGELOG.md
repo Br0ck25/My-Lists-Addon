@@ -11,21 +11,28 @@ All notable changes to **My Lists Addon** ([mylistsaddon.com](https://mylistsadd
 Do these in order. Details are in `docs/OPERATIONS.md`.
 
 1. **Back up D1**: Time Travel, or `npx wrangler d1 export my-lists-db --remote --output=backup.sql`.
-2. **Apply `migrations/0014_add_schema_migrations.sql`** in the D1 Console. It is additive and safe to run twice.
+2. **Apply `migrations/0014_add_schema_migrations.sql`, then `migrations/0015_accounts_sessions_installs.sql`**, in the D1 Console and in that order. Both only add tables and are safe to run twice. Nothing uses 0015's tables yet, but until it is applied the admin schema check lists it as missing.
 3. **Add the Analytics Engine binding**: Worker → Settings → Bindings → Add → Analytics Engine, name `ANALYTICS`, dataset `mylists_events`.
 4. **Paste and deploy** `worker_entry_combined.js`.
 5. **Delete the retired variables** if they are set: `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET`, `CRON_SUBREQUEST_BUDGET`. The code ignores them either way.
-### 🔒 Phase 3a: Accounts Schema & Token Encryption (P3a-1, P3a-2)
 
-- **Migration 0015 (`migrations/0015_accounts_sessions_installs.sql`)**:
-  - Adds core relational tables for unified identity and sessions: `accounts`, `sessions`, `installs`, `provider_connections`, `install_secrets`, `rate_counters`, and `account_settings`.
-  - Added to `schema.sql` and registered in `D1_SCHEMA_MANIFEST` with consequence tracking.
-  - Safe and additive; backwards-compatible with existing tables.
-- **Token encryption & HMAC blind index (`02_http-and-creator-utils.js`)**:
-  - `encryptToken` / `decryptToken`: AES-GCM-256 encryption with random 12-byte IV and key rotation support under `TOKEN_ENCRYPTION_KEY` (`k1:<base64>`).
-  - `hmacLookupKey`: HMAC-SHA256 hashing under `LOOKUP_PEPPER` for blind-indexed username recovery.
-  - Tests covering round-trip, key rotation, tampered ciphertext/IV rejection, wrong key detection, and environment object parsing.
-  - Updated `README.md`, `wrangler.toml`, and `docs/OPERATIONS.md` with the new optional secrets.
+The new secrets `TOKEN_ENCRYPTION_KEY` and `LOOKUP_PEPPER` are **not needed yet**: nothing in this release uses them. They will be needed when the Phase 3a sign-in and account-storage code ships, and the release notes will say so then.
+
+### 🔒 Phase 3a groundwork: accounts tables and token encryption (P3a-1, P3a-2)
+
+Nothing in this release uses these yet; they are the foundation for sign-in sessions and for keeping provider tokens on the account instead of in install links.
+
+- **Migration 0015** (`migrations/0015_accounts_sessions_installs.sql`) adds the tables `accounts`, `sessions`, `installs`, `provider_connections`, `install_secrets`, `rate_counters` and `account_settings`.
+  - It is also in `schema.sql` and the admin schema check.
+  - The required database version stays at 0014, so deploying before running 0015 does not pause anything.
+- **Token encryption** (`encryptToken` / `decryptToken` in `02_http-and-creator-utils.js`):
+  - AES-256-GCM with a random 12-byte IV, and support for rotating keys (`TOKEN_ENCRYPTION_KEY`, as `k1:<base64>,k0:<older>`).
+  - An optional context argument binds a ciphertext to the row it belongs to (for example `account:42:trakt`), so a token copied into another row fails to decrypt.
+- **Blind index** (`hmacLookupKey`): HMAC-SHA256 under `LOOKUP_PEPPER`, with the same key normalisation as the existing forgot-username lookup.
+- Tests cover:
+  - round trip and key rotation;
+  - the wrong key, a tampered IV or ciphertext, and a missing or malformed key;
+  - context binding.
 
 ### 🔒 Signed out, an install link carries the site's public lists only
 

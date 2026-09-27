@@ -14149,7 +14149,9 @@ describe("self-service recovery: set recovery answer & forgot username", () => {
 });
 
 describe("P3a-2: token encryption and blind index HMAC", () => {
-  const { encrypt, decrypt, encryptToken, decryptToken, hmacLookupKey } =
+  // The specific names only: in a codebase where every file shares one scope,
+  // a bare top-level `encrypt` / `decrypt` is a collision waiting to happen.
+  const { encryptToken: encrypt, decryptToken: decrypt, encryptToken, decryptToken, hmacLookupKey } =
     loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js");
 
   // Deterministic 32-byte test keys (base64)
@@ -14169,7 +14171,7 @@ describe("P3a-2: token encryption and blind index HMAC", () => {
     assert.equal(pt, plaintext);
   });
 
-  it("encryptToken and decryptToken aliases work identically", async () => {
+  it("encryptToken and decryptToken round-trip under their own names", async () => {
     const secret = `k1:${key1B64}`;
     const ct = await encryptToken("secret_token_val", secret);
     const pt = await decryptToken(ct, secret);
@@ -14275,6 +14277,29 @@ describe("P3a-2: token encryption and blind index HMAC", () => {
 
     const h = await hmacLookupKey("MYL-TEST-KEY1", env);
     assert.equal(h.length, 64);
+  });
+
+  // A ciphertext is bound to the row it was written for: copied into another
+  // account's or provider's row, it fails instead of becoming that row's token.
+  it("binds a ciphertext to its context", async () => {
+    const secret = `k1:${key1B64}`;
+    const ct = await encryptToken("trakt_token", secret, "account:42:trakt");
+    assert.equal(await decryptToken(ct, secret, "account:42:trakt"), "trakt_token");
+    await assert.rejects(() => decryptToken(ct, secret, "account:43:trakt"));
+    await assert.rejects(() => decryptToken(ct, secret), "no context is a different context");
+  });
+
+  it("ignores a malformed key in the ring rather than using garbage bytes", async () => {
+    const ring = `k2:not*valid*base64!,k1:${key1B64}`;
+    const ct = await encryptToken("value", ring);
+    assert.match(ct, /^k1:/, "the malformed k2 was skipped, so k1 became the active key");
+    assert.equal(await decryptToken(ct, ring), "value");
+  });
+
+  it("has no generic top-level encrypt / decrypt names", () => {
+    const src = fs.readFileSync(path.join(REPO_ROOT, "02_http-and-creator-utils.js"), "utf8");
+    assert.ok(!/^(async )?function (encrypt|decrypt)\(/m.test(src));
+    assert.ok(!/typeof env !== "undefined"/.test(src), "no lookups of a module-level env that does not exist");
   });
 });
 

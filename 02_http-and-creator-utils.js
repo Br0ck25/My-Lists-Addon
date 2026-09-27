@@ -874,12 +874,22 @@ async function usernameForCreatorKeyLookup(env, key) {
 // "k1:<base64-32-bytes>,k0:<older-base64>". A bare base64 string defaults to "k1".
 //
 // Serialized ciphertexts are formatted as: "<keyId>:<ivHex>:<ciphertextHex>"
+//
+// Every caller passes the key ring explicitly: the TOKEN_ENCRYPTION_KEY string
+// itself, or the request's `env` (whose TOKEN_ENCRYPTION_KEY is read). There is
+// no module-level env in a Worker to fall back to.
+//
+// `context` binds a ciphertext to where it is stored, as AES-GCM additional
+// data -- for example "account:42:trakt" for a provider_connections row. A
+// token copied into a different row then fails to decrypt instead of silently
+// becoming that row's token. Decrypt with the same context it was encrypted
+// with; "" (the default) means none.
 
+// atob, not Buffer: Buffer is not in the Workers runtime, and decoding with it
+// in tests would test a different path from the one that runs in production
+// (Buffer also silently skips invalid characters where atob throws).
 function base64ToUint8(b64) {
   const clean = String(b64 || "").trim().replace(/-/g, "+").replace(/_/g, "/");
-  if (typeof Buffer !== "undefined") {
-    return new Uint8Array(Buffer.from(clean, "base64"));
-  }
   const bin = atob(clean);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
@@ -888,9 +898,6 @@ function base64ToUint8(b64) {
 
 function parseTokenEncryptionKeys(secret) {
   let raw = secret;
-  if (!raw && typeof env !== "undefined" && env && env.TOKEN_ENCRYPTION_KEY) {
-    raw = env.TOKEN_ENCRYPTION_KEY;
-  }
   if (!raw) return { activeKeyId: null, keys: new Map() };
   if (typeof raw === "object" && !(raw instanceof Uint8Array)) {
     if (raw.TOKEN_ENCRYPTION_KEY) raw = raw.TOKEN_ENCRYPTION_KEY;
@@ -928,7 +935,7 @@ function parseTokenEncryptionKeys(secret) {
   return { activeKeyId, keys };
 }
 
-async function encryptToken(plaintext, keyRing) {
+async function encryptToken(plaintext, keyRing, context = "") {
   if (plaintext == null) return "";
   const parsed = parseTokenEncryptionKeys(keyRing);
   if (!parsed.activeKeyId || !parsed.keys.has(parsed.activeKeyId)) {
@@ -941,14 +948,14 @@ async function encryptToken(plaintext, keyRing) {
   const key = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["encrypt"]);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const encrypted = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
+    aesGcmParams(iv, context),
     key,
     new TextEncoder().encode(String(plaintext))
   );
   return `${parsed.activeKeyId}:${bufferToHex(iv)}:${bufferToHex(new Uint8Array(encrypted))}`;
 }
 
-async function decryptToken(ciphertext, keyRing) {
+async function decryptToken(ciphertext, keyRing, context = "") {
   if (!ciphertext) return "";
   const parts = String(ciphertext).split(":");
   if (parts.length !== 3) {
@@ -965,26 +972,25 @@ async function decryptToken(ciphertext, keyRing) {
   }
   const key = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["decrypt"]);
   const decrypted = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: hexToBuffer(ivHex) },
+    aesGcmParams(hexToBuffer(ivHex), context),
     key,
     hexToBuffer(ctHex)
   );
   return new TextDecoder().decode(decrypted);
 }
 
-function encrypt(plaintext, keyRing) {
-  return encryptToken(plaintext, keyRing);
+// AES-GCM parameters, with `context` as additional authenticated data when
+// one is given (see the header above).
+function aesGcmParams(iv, context) {
+  const params = { name: "AES-GCM", iv };
+  if (context) params.additionalData = new TextEncoder().encode(String(context));
+  return params;
 }
 
-function decrypt(ciphertext, keyRing) {
-  return decryptToken(ciphertext, keyRing);
-}
-
+// `pepper` is the LOOKUP_PEPPER string itself, or the request's `env`.
 async function hmacLookupKey(key, pepper) {
   let pepperStr = pepper;
-  if (!pepperStr && typeof env !== "undefined" && env && env.LOOKUP_PEPPER) {
-    pepperStr = env.LOOKUP_PEPPER;
-  } else if (pepper && typeof pepper === "object") {
+  if (pepper && typeof pepper === "object") {
     pepperStr = pepper.LOOKUP_PEPPER || "";
   }
   pepperStr = String(pepperStr || "");

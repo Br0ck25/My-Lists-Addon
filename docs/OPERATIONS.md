@@ -13,7 +13,7 @@ How the hosted Worker is deployed, configured and recovered. The Worker is deplo
    node --check worker_entry_combined.js
    node --test tests/*.test.mjs
    ```
-2. **Apply database migrations first** if the release adds any (see §4). A Worker that needs a newer schema than the database has refuses writes with a maintenance message rather than failing silently. That guard only works once migration `0014` is applied.
+2. **Apply database migrations first** if the release adds any (see §4). The current release has two, `0014` then `0015`. A Worker that needs a newer schema than the database has refuses writes with a maintenance message rather than failing silently. That guard only works once migration `0014` is applied.
 3. **Back up D1** (see §5) if the release contains a migration.
 4. **Deploy.** Cloudflare dashboard → Workers & Pages → the My Lists Worker → **Edit code** → select all → paste the new `worker_entry_combined.js` → **Deploy**.
 5. **Smoke test:**
@@ -57,8 +57,8 @@ Adding a binding before the code that uses it is harmless. Removing a binding th
 | `SIMKL_CLIENT_ID`, `SIMKL_CLIENT_SECRET` | Simkl |
 | `MDBLIST_API_KEY`, `MDBLIST_POPULAR_KEY`, `MDBLIST_CLIENT_ID`, `MDBLIST_CLIENT_SECRET` | MDBList |
 | `RAPIDAPI_KEY` | New on Streaming fallback engine |
-| `TOKEN_ENCRYPTION_KEY` | 32-byte AES-GCM key (`k1:<base64>`) for server-side encrypted tokens |
-| `LOOKUP_PEPPER` | HMAC pepper for blind index username lookups |
+| `TOKEN_ENCRYPTION_KEY` | 32-byte AES-GCM key (`k1:<base64>`) for server-side encrypted tokens. **Not needed yet:** add it when the Phase 3a account-storage code ships. Once set, never delete it; rotate by putting the new key first (`k2:<new>,k1:<old>`). |
+| `LOOKUP_PEPPER` | HMAC pepper for the forgot-username lookup. **Not needed yet:** add it when Phase 3a sign-in ships. Never change it once in use. |
 
 **Plain variables:**
 

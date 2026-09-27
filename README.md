@@ -219,8 +219,8 @@ The add-on works out-of-the-box with public MDBList and TMDB links. Adding API k
 | `MDBLIST_POPULAR_KEY` | Dedicated key for MDBList Toplists / Popular Lists browser | Same MDBList preferences as above |
 | `MDBLIST_CLIENT_ID` | MDBList OAuth client ID — **`MDBLIST_CLIENT_SECRET` must be set too, or MDBList sign-in reports itself "temporarily unavailable"** | [mdblist.com/preferences](https://mdblist.com/preferences) |
 | `MDBLIST_CLIENT_SECRET` | MDBList OAuth token exchange (required alongside `MDBLIST_CLIENT_ID` for MDBList account login) | Same MDBList preferences as above |
-| `TOKEN_ENCRYPTION_KEY` | 32-byte AES-GCM encryption key (`k1:<base64>`) for server-side encrypted provider tokens and credentials | Generate with `openssl rand -base64 32` |
-| `LOOKUP_PEPPER` | HMAC-SHA256 pepper for blind-indexing creator keys in `forgot-username` queries | Random 32+ character secret string |
+| `TOKEN_ENCRYPTION_KEY` | 32-byte AES-GCM encryption key (`k1:<base64>`) for server-side encrypted provider tokens and credentials. Not needed until the Phase 3a account-storage code ships. | Generate with `openssl rand -base64 32` |
+| `LOOKUP_PEPPER` | HMAC-SHA256 pepper for blind-indexing creator keys in `forgot-username` queries. Not needed until Phase 3a sign-in ships. | Random 32+ character secret string |
 
 #### OAuth Redirect URIs
 If you configure OAuth authentication for Trakt, Simkl, MDBList, or TMDB, set the OAuth callback URLs in their respective developer portals to:
