@@ -2719,7 +2719,7 @@ describe("schema gate: a Worker ahead of its database refuses writes, not reads"
     // A fresh isolate: the ledger read is memoised per isolate for a minute.
     const w = await freshIsolate();
     const db = makeD1();
-    db._db.exec("DELETE FROM schema_migrations WHERE version = '0014'");
+    db._db.exec("DELETE FROM schema_migrations WHERE version >= '0014'");
     const env = makeEnv({ CONFIGS: makeKv(), DB: db });
     const res = await create(w, env, "gateduser");
     assert.equal(res.status, 503);
@@ -2735,7 +2735,7 @@ describe("schema gate: a Worker ahead of its database refuses writes, not reads"
 
   it("tells /admin the database's version and what this Worker needs", async () => {
     const db = makeD1();
-    db._db.exec("DELETE FROM schema_migrations WHERE version = '0014'");
+    db._db.exec("DELETE FROM schema_migrations WHERE version >= '0014'");
     const env = makeEnv({ CONFIGS: makeKv(), DB: db });
     const r = await call(env, "/admin/api/schema-status", { cookie: await adminCookie(env) });
     assert.deepEqual({ ...r.body.ledger }, { version: "0013", required: "0014", readable: true, behind: true });
@@ -8373,7 +8373,7 @@ describe("the Worker can tell an operator it is ahead of its own database", () =
     // endpoint's report IS the manifest -- and it comes through the same code
     // path an operator would use.
     const db = makeD1();
-    for (const t of ["creators", "creator_lists", "source_groups", "stats", "creator_tombstones", "published_lists", "lists_fts", "list_tombstones", "list_likes", "feedback", "scrobble_tokens", "event_meta", "watch_history", "continue_watching", "airing_next", "creator_user_lists", "creator_show_states", "creator_tracking_meta", "streaming_events", "creator_key_lookups", "schema_migrations"]) {
+    for (const t of ["install_secrets", "installs", "provider_connections", "sessions", "account_settings", "accounts", "rate_counters", "creators", "creator_lists", "source_groups", "stats", "creator_tombstones", "published_lists", "lists_fts", "list_tombstones", "list_likes", "feedback", "scrobble_tokens", "event_meta", "watch_history", "continue_watching", "airing_next", "creator_user_lists", "creator_show_states", "creator_tracking_meta", "streaming_events", "creator_key_lookups", "schema_migrations"]) {
       db._db.exec(`DROP TABLE IF EXISTS ${t};`);
     }
     const env = makeEnv({ CONFIGS: makeKv(), DB: db });
@@ -14147,4 +14147,135 @@ describe("self-service recovery: set recovery answer & forgot username", () => {
     assert.equal(throttled.status, 429);
   });
 });
+
+describe("P3a-2: token encryption and blind index HMAC", () => {
+  const { encrypt, decrypt, encryptToken, decryptToken, hmacLookupKey } =
+    loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js");
+
+  // Deterministic 32-byte test keys (base64)
+  const key1Bytes = new Uint8Array(32).fill(0x01);
+  const key2Bytes = new Uint8Array(32).fill(0x02);
+  const key1B64 = Buffer.from(key1Bytes).toString("base64");
+  const key2B64 = Buffer.from(key2Bytes).toString("base64");
+
+  it("encrypts and decrypts with AES-GCM-256 round-trip", async () => {
+    const secret = `k1:${key1B64}`;
+    const plaintext = "trakt_access_token_12345_sample";
+    const ct = await encrypt(plaintext, secret);
+
+    assert.ok(typeof ct === "string");
+    assert.match(ct, /^k1:[0-9a-f]{24}:[0-9a-f]+$/); // k1:12-byte-iv-hex:ciphertext-hex
+    const pt = await decrypt(ct, secret);
+    assert.equal(pt, plaintext);
+  });
+
+  it("encryptToken and decryptToken aliases work identically", async () => {
+    const secret = `k1:${key1B64}`;
+    const ct = await encryptToken("secret_token_val", secret);
+    const pt = await decryptToken(ct, secret);
+    assert.equal(pt, "secret_token_val");
+  });
+
+  it("defaults active key id to k1 when bare base64 is provided", async () => {
+    const ct = await encrypt("my_api_key_456", key1B64);
+    assert.match(ct, /^k1:/);
+    const pt = await decrypt(ct, key1B64);
+    assert.equal(pt, "my_api_key_456");
+  });
+
+  it("supports key rotation with multiple keys in the key ring", async () => {
+    // Ring has k2 active (first), with k1 retained for legacy decrypt
+    const ring = `k2:${key2B64},k1:${key1B64}`;
+    const oldCt = await encrypt("older_secret", `k1:${key1B64}`);
+    assert.match(oldCt, /^k1:/);
+
+    // Old token decrypts with new rotated ring
+    const oldPt = await decrypt(oldCt, ring);
+    assert.equal(oldPt, "older_secret");
+
+    // New encryption uses active key (k2)
+    const newCt = await encrypt("new_secret", ring);
+    assert.match(newCt, /^k2:/);
+    const newPt = await decrypt(newCt, ring);
+    assert.equal(newPt, "new_secret");
+  });
+
+  it("fails to decrypt when given the wrong key (authentication tag mismatch)", async () => {
+    const ct = await encrypt("secret_message", `k1:${key1B64}`);
+    const wrongRing = `k1:${key2B64}`; // same keyId, different key bytes
+    await assert.rejects(async () => {
+      await decrypt(ct, wrongRing);
+    });
+  });
+
+  it("fails to decrypt when ciphertext or IV is tampered with", async () => {
+    const secret = `k1:${key1B64}`;
+    const ct = await encrypt("sensitive_data", secret);
+    const parts = ct.split(":");
+
+    // Tamper with IV
+    const badIv = (parts[1].startsWith("ff") ? "00" : "ff") + parts[1].slice(2);
+    await assert.rejects(async () => {
+      await decrypt(`${parts[0]}:${badIv}:${parts[2]}`, secret);
+    });
+
+    // Tamper with ciphertext
+    const badCt = (parts[2].startsWith("ff") ? "00" : "ff") + parts[2].slice(2);
+    await assert.rejects(async () => {
+      await decrypt(`${parts[0]}:${parts[1]}:${badCt}`, secret);
+    });
+  });
+
+  it("fails when the ciphertext references a key id not in the key ring", async () => {
+    const secret = `k1:${key1B64}`;
+    await assert.rejects(
+      async () => {
+        await decrypt("k99:0102030405060708090a0b0c:abcdef", secret);
+      },
+      /not found in key ring/
+    );
+  });
+
+  it("fails encryption when no key is configured", async () => {
+    await assert.rejects(async () => {
+      await encrypt("token", "");
+    }, /TOKEN_ENCRYPTION_KEY is required/);
+  });
+
+  it("fails encryption when key is not 32 bytes", async () => {
+    const shortKey = Buffer.from(new Uint8Array(16)).toString("base64");
+    await assert.rejects(async () => {
+      await encrypt("token", `k1:${shortKey}`);
+    }, /must be 32 bytes/);
+  });
+
+  it("computes deterministic HMAC-SHA256 for blind index with LOOKUP_PEPPER", async () => {
+    const pepper = "prod_pepper_secret_value_32_bytes";
+    const h1 = await hmacLookupKey("MYL-CREA-TOR1-KEYX", pepper);
+    const h2 = await hmacLookupKey("myl-crea-tor1-keyx", pepper);
+    const h3 = await hmacLookupKey("  MYL-CREA-TOR1-KEYX  ", pepper);
+
+    assert.equal(typeof h1, "string");
+    assert.equal(h1.length, 64); // SHA-256 hex string
+    assert.equal(h1, h2, "case insensitive");
+    assert.equal(h1, h3, "whitespace trimmed");
+
+    const diffPepper = await hmacLookupKey("MYL-CREA-TOR1-KEYX", "different_pepper");
+    assert.notEqual(h1, diffPepper);
+  });
+
+  it("reads TOKEN_ENCRYPTION_KEY and LOOKUP_PEPPER from env object", async () => {
+    const env = {
+      TOKEN_ENCRYPTION_KEY: `k1:${key1B64}`,
+      LOOKUP_PEPPER: "env_pepper_value",
+    };
+    const ct = await encrypt("token_from_env", env);
+    const pt = await decrypt(ct, env);
+    assert.equal(pt, "token_from_env");
+
+    const h = await hmacLookupKey("MYL-TEST-KEY1", env);
+    assert.equal(h.length, 64);
+  });
+});
+
 

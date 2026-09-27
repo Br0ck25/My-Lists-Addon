@@ -1041,6 +1041,42 @@ const D1_SCHEMA_MANIFEST = [
     migration: "0014", kind: "table", name: "schema_migrations",
     consequence: "The Worker cannot tell which migrations have run, so it cannot refuse writes while it is ahead of the database. Apply migrations/0014.",
   },
+  {
+    migration: "0015", kind: "table", name: "accounts",
+    consequence: "The unified accounts system is unavailable. User profiles, authentication, and session-based identity fall back to legacy creators store.",
+  },
+  {
+    migration: "0015", kind: "table", name: "sessions",
+    consequence: "Session storage is unavailable. Browser login sessions, cookies, and multi-device authentication cannot be established.",
+  },
+  {
+    migration: "0015", kind: "index", name: "idx_sessions_account",
+    consequence: "Listing or revoking an account's active sessions scans the sessions table instead of an index. Slower, not broken.",
+  },
+  {
+    migration: "0015", kind: "table", name: "installs",
+    consequence: "Modern install links and permanent install configs cannot be stored or resolved from D1.",
+  },
+  {
+    migration: "0015", kind: "index", name: "idx_installs_account",
+    consequence: "Querying installs by account scans the installs table instead of an index. Slower, not broken.",
+  },
+  {
+    migration: "0015", kind: "table", name: "provider_connections",
+    consequence: "Server-side encrypted OAuth tokens and provider credentials cannot be stored on the account.",
+  },
+  {
+    migration: "0015", kind: "table", name: "install_secrets",
+    consequence: "Transitional encrypted provider credentials on unowned install links cannot be stored.",
+  },
+  {
+    migration: "0015", kind: "table", name: "rate_counters",
+    consequence: "Per-account and credential rate limits cannot be tracked in D1.",
+  },
+  {
+    migration: "0015", kind: "table", name: "account_settings",
+    consequence: "Account-level UI and sync preferences cannot be stored in D1.",
+  },
 ];
 
 
@@ -3614,6 +3650,143 @@ async function usernameForCreatorKeyLookup(env, key) {
     }
   }
   return "";
+}
+
+// --- Phase 3a: Token encryption & blind lookup hashing ----------------------
+//
+// provider_connections and install_secrets store third-party tokens and API
+// keys encrypted at rest using AES-GCM-256 with a 12-byte IV.
+// The secret TOKEN_ENCRYPTION_KEY holds one or more keys in rotation format:
+// "k1:<base64-32-bytes>,k0:<older-base64>". A bare base64 string defaults to "k1".
+//
+// Serialized ciphertexts are formatted as: "<keyId>:<ivHex>:<ciphertextHex>"
+
+function base64ToUint8(b64) {
+  const clean = String(b64 || "").trim().replace(/-/g, "+").replace(/_/g, "/");
+  if (typeof Buffer !== "undefined") {
+    return new Uint8Array(Buffer.from(clean, "base64"));
+  }
+  const bin = atob(clean);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+function parseTokenEncryptionKeys(secret) {
+  let raw = secret;
+  if (!raw && typeof env !== "undefined" && env && env.TOKEN_ENCRYPTION_KEY) {
+    raw = env.TOKEN_ENCRYPTION_KEY;
+  }
+  if (!raw) return { activeKeyId: null, keys: new Map() };
+  if (typeof raw === "object" && !(raw instanceof Uint8Array)) {
+    if (raw.TOKEN_ENCRYPTION_KEY) raw = raw.TOKEN_ENCRYPTION_KEY;
+    else if (raw instanceof Map) return { activeKeyId: raw.keys().next().value || null, keys: raw };
+  }
+  if (raw instanceof Uint8Array) {
+    return { activeKeyId: "k1", keys: new Map([["k1", raw]]) };
+  }
+  const str = String(raw).trim();
+  if (!str) return { activeKeyId: null, keys: new Map() };
+
+  const keys = new Map();
+  let activeKeyId = null;
+  const parts = str.split(",");
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    let id = "k1";
+    let b64 = trimmed;
+    const colonIdx = trimmed.indexOf(":");
+    if (colonIdx > 0) {
+      id = trimmed.slice(0, colonIdx).trim();
+      b64 = trimmed.slice(colonIdx + 1).trim();
+    }
+    try {
+      const bytes = base64ToUint8(b64);
+      if (bytes.length > 0) {
+        keys.set(id, bytes);
+        if (!activeKeyId) activeKeyId = id;
+      }
+    } catch {
+      // Ignore malformed key entries in rotation list
+    }
+  }
+  return { activeKeyId, keys };
+}
+
+async function encryptToken(plaintext, keyRing) {
+  if (plaintext == null) return "";
+  const parsed = parseTokenEncryptionKeys(keyRing);
+  if (!parsed.activeKeyId || !parsed.keys.has(parsed.activeKeyId)) {
+    throw new Error("TOKEN_ENCRYPTION_KEY is required for encryption");
+  }
+  const keyBytes = parsed.keys.get(parsed.activeKeyId);
+  if (keyBytes.length !== 32) {
+    throw new Error(`TOKEN_ENCRYPTION_KEY must be 32 bytes (got ${keyBytes.length})`);
+  }
+  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["encrypt"]);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encrypted = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    new TextEncoder().encode(String(plaintext))
+  );
+  return `${parsed.activeKeyId}:${bufferToHex(iv)}:${bufferToHex(new Uint8Array(encrypted))}`;
+}
+
+async function decryptToken(ciphertext, keyRing) {
+  if (!ciphertext) return "";
+  const parts = String(ciphertext).split(":");
+  if (parts.length !== 3) {
+    throw new Error("Invalid encrypted token format; expected keyId:iv:ciphertext");
+  }
+  const [keyId, ivHex, ctHex] = parts;
+  const parsed = parseTokenEncryptionKeys(keyRing);
+  const keyBytes = parsed.keys.get(keyId);
+  if (!keyBytes) {
+    throw new Error(`Encryption key '${keyId}' not found in key ring`);
+  }
+  if (keyBytes.length !== 32) {
+    throw new Error(`Encryption key '${keyId}' must be 32 bytes (got ${keyBytes.length})`);
+  }
+  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["decrypt"]);
+  const decrypted = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: hexToBuffer(ivHex) },
+    key,
+    hexToBuffer(ctHex)
+  );
+  return new TextDecoder().decode(decrypted);
+}
+
+function encrypt(plaintext, keyRing) {
+  return encryptToken(plaintext, keyRing);
+}
+
+function decrypt(ciphertext, keyRing) {
+  return decryptToken(ciphertext, keyRing);
+}
+
+async function hmacLookupKey(key, pepper) {
+  let pepperStr = pepper;
+  if (!pepperStr && typeof env !== "undefined" && env && env.LOOKUP_PEPPER) {
+    pepperStr = env.LOOKUP_PEPPER;
+  } else if (pepper && typeof pepper === "object") {
+    pepperStr = pepper.LOOKUP_PEPPER || "";
+  }
+  pepperStr = String(pepperStr || "");
+  if (!pepperStr) throw new Error("LOOKUP_PEPPER is required for HMAC lookup");
+  const normalized = String(key || "").trim().toUpperCase();
+  if (!normalized) return "";
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(pepperStr),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign("HMAC", keyMaterial, enc.encode("keylookup:" + normalized));
+  return bufferToHex(new Uint8Array(signature));
 }
 
 // "user" is reserved because that's the literal namespace anonymous

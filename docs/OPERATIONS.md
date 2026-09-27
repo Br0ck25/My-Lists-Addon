@@ -57,6 +57,8 @@ Adding a binding before the code that uses it is harmless. Removing a binding th
 | `SIMKL_CLIENT_ID`, `SIMKL_CLIENT_SECRET` | Simkl |
 | `MDBLIST_API_KEY`, `MDBLIST_POPULAR_KEY`, `MDBLIST_CLIENT_ID`, `MDBLIST_CLIENT_SECRET` | MDBList |
 | `RAPIDAPI_KEY` | New on Streaming fallback engine |
+| `TOKEN_ENCRYPTION_KEY` | 32-byte AES-GCM key (`k1:<base64>`) for server-side encrypted tokens |
+| `LOOKUP_PEPPER` | HMAC pepper for blind index username lookups |
 
 **Plain variables:**
 

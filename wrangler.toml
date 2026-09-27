@@ -102,3 +102,7 @@ crons = ["*/6 * * * *"]
 #   npx wrangler secret put MDBLIST_CLIENT_SECRET   # required with the id above; OAuth fails without it
 #   npx wrangler secret put SIMKL_CLIENT_ID         # simkl.com/settings/developer/
 #   npx wrangler secret put SIMKL_CLIENT_SECRET     # required only for Simkl OAuth
+#
+# Phase 3a encryption & blind-index secrets:
+#   npx wrangler secret put TOKEN_ENCRYPTION_KEY    # k1:<32-bytes-base64> for AES-GCM token storage
+#   npx wrangler secret put LOOKUP_PEPPER           # Pepper for HMAC blind index lookups

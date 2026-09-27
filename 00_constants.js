@@ -1018,6 +1018,42 @@ const D1_SCHEMA_MANIFEST = [
     migration: "0014", kind: "table", name: "schema_migrations",
     consequence: "The Worker cannot tell which migrations have run, so it cannot refuse writes while it is ahead of the database. Apply migrations/0014.",
   },
+  {
+    migration: "0015", kind: "table", name: "accounts",
+    consequence: "The unified accounts system is unavailable. User profiles, authentication, and session-based identity fall back to legacy creators store.",
+  },
+  {
+    migration: "0015", kind: "table", name: "sessions",
+    consequence: "Session storage is unavailable. Browser login sessions, cookies, and multi-device authentication cannot be established.",
+  },
+  {
+    migration: "0015", kind: "index", name: "idx_sessions_account",
+    consequence: "Listing or revoking an account's active sessions scans the sessions table instead of an index. Slower, not broken.",
+  },
+  {
+    migration: "0015", kind: "table", name: "installs",
+    consequence: "Modern install links and permanent install configs cannot be stored or resolved from D1.",
+  },
+  {
+    migration: "0015", kind: "index", name: "idx_installs_account",
+    consequence: "Querying installs by account scans the installs table instead of an index. Slower, not broken.",
+  },
+  {
+    migration: "0015", kind: "table", name: "provider_connections",
+    consequence: "Server-side encrypted OAuth tokens and provider credentials cannot be stored on the account.",
+  },
+  {
+    migration: "0015", kind: "table", name: "install_secrets",
+    consequence: "Transitional encrypted provider credentials on unowned install links cannot be stored.",
+  },
+  {
+    migration: "0015", kind: "table", name: "rate_counters",
+    consequence: "Per-account and credential rate limits cannot be tracked in D1.",
+  },
+  {
+    migration: "0015", kind: "table", name: "account_settings",
+    consequence: "Account-level UI and sync preferences cannot be stored in D1.",
+  },
 ];
 
 

@@ -7,9 +7,9 @@
 ## Current Status
 - **Last Updated**: 2026-09-27
 - **Last Active AI**: Antigravity (Gemini 3.8 Flash)
-- **Active Task**: None in progress. Phase 1 (code) and Phase 2 (P2-1 to P2-10) are finished and verified. Awaiting owner instructions on Phase 3a or deployment.
-- **Task State**: All tests passing: 1,277 passed, 0 failed, 1 skipped. Build and sync checks verified.
-- **Git State**: Clean working tree on `main`, in sync with `origin/main` (`https://github.com/Br0ck25/My-Lists-Addon`). Commit and push only when the owner asks.
+- **Active Task**: Phase 3a in progress. P3a-1 (Migration 0015) and P3a-2 (Token encryption & HMAC blind index) completed and verified. Next task: P3a-3 (Account migration backfill) / P3a-4 (Sessions).
+- **Task State**: All tests passing: 1,288 passed, 0 failed, 1 skipped. Build and sync checks verified.
+- **Git State**: Ready to commit. Commit and push only when the owner asks.
 - **The owner is not a programmer.** Explain in plain words, do the git work for them, and ask before anything that changes stored user data or needs a dashboard change.
 
 ---
@@ -47,6 +47,7 @@ These are deliberate. Several are "one place" mechanisms that cover the whole Wo
 | `00_`, `REQUIRED_SCHEMA_VERSION`; `02_`, `schemaWriteGate` | API writes are refused (503 "being updated") while the database is behind the code. A new migration must: <br>1. end with an `INSERT` into `schema_migrations`; <br>2. be added to `schema.sql` and `D1_SCHEMA_MANIFEST`; <br>3. bump `REQUIRED_SCHEMA_VERSION` if the code depends on it. <br>See `docs/OPERATIONS.md` §4. |
 | `04_`, `resolveConfig(config, env, { withTracking })` | Reads a person's tracking record only when asked (the channel meta route and `/api/resolve`). Catalog rows must not ask. |
 | `/<id>/configure` and `/api/resolve` | Never return provider keys or tokens. The `P1-T2` test probes every route for this. |
+| `02_`, `encryptToken` / `decryptToken` / `hmacLookupKey` | AES-GCM-256 token encryption with key rotation (`TOKEN_ENCRYPTION_KEY`) and HMAC-SHA256 blind indexing (`LOOKUP_PEPPER`). |
 
 ---
 
@@ -80,11 +81,11 @@ node scope_check.mjs worker worker_entry_combined.js
 ```
 Then delete `node_modules`.
 
-Last run (2026-09-27): all of the above pass, including the render and HTML checks (builder, admin, hostile input, service worker).
+Last run (2026-09-27): all of the above pass, 1,288 tests passed, 0 failed, 1 skipped.
 
 ---
 
-## What Was Done (all committed and pushed)
+## What Was Done
 - **Phase 1:**
   - hotfixes;
   - Free-plan code removed;
@@ -100,19 +101,20 @@ Last run (2026-09-27): all of the above pass, including the render and HTML chec
   - one install-config schema, which fixed Configure → Update switching Better Posters off;
   - catalog rows no longer read watch history they don't use;
   - `stats` key-range queries.
-
-  The plan was rewritten around the split files (D-11).
-- **Tests:** each fix has a test, and each test was checked to fail with the fix removed.
+- **Phase 3a (in progress):**
+  - **P3a-1:** Migration `0015_accounts_sessions_installs.sql` written for `accounts`, `sessions`, `installs`, `provider_connections`, `install_secrets`, `rate_counters`, `account_settings`; added to `schema.sql`, `D1_SCHEMA_MANIFEST`.
+  - **P3a-2:** AES-GCM-256 token encryption/decryption with key rotation (`TOKEN_ENCRYPTION_KEY`) and blind index HMAC (`LOOKUP_PEPPER`) implemented in `02_http-and-creator-utils.js` and verified with comprehensive unit tests. Documentation updated in `README.md`, `wrangler.toml`, and `docs/OPERATIONS.md`.
 
 ---
 
 ## Owner Actions Still Open (not code)
 1. **Deploy what is on `main`:**
    1. back up D1;
-   2. run `migrations/0014_add_schema_migrations.sql` in the D1 console;
+   2. run `migrations/0014_add_schema_migrations.sql` in the D1 console (and `0015_accounts_sessions_installs.sql` when releasing Phase 3a);
    3. add the `ANALYTICS` Analytics Engine binding (dataset `mylists_events`);
-   4. paste `worker_entry_combined.js` and deploy;
-   5. delete the retired variables `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET` and `CRON_SUBREQUEST_BUDGET`.
+   4. add secrets `TOKEN_ENCRYPTION_KEY` and `LOOKUP_PEPPER` when releasing Phase 3a;
+   5. paste `worker_entry_combined.js` and deploy;
+   6. delete the retired variables `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET` and `CRON_SUBREQUEST_BUDGET`.
 
    Full steps are in `docs/OPERATIONS.md` §1, and `CHANGELOG.md` has them at the top of `[Unreleased]`.
 2. **Turn on backups:** add the GitHub repository secrets `CLOUDFLARE_API_TOKEN` (D1 Read), `CLOUDFLARE_ACCOUNT_ID`, `D1_DATABASE_ID` and `BACKUP_PASSPHRASE`. Keep a copy of the passphrase outside GitHub.
@@ -120,15 +122,14 @@ Last run (2026-09-27): all of the above pass, including the render and HTML chec
 ---
 
 ## Next Steps for Incoming AI
-1. **Do not start Phase 3a without the owner's explicit go-ahead.**
-   - **What it is:** `NEXT_VERSION_TASKS.md` Phase 3a, with the reasoning in `MIGRATION_PLAN.md`:
-     - login sessions with a cookie;
-     - one permanent install link per install;
-     - provider tokens moved into encrypted account storage.
-   - **What it needs from the owner:**
-     - two new Cloudflare secrets (`TOKEN_ENCRYPTION_KEY`, `LOOKUP_PEPPER`);
-     - a new D1 migration (`0015`) applied before the code that uses it;
-     - explicit approval before existing install links are rewritten to remove tokens, because that changes stored user data. Do it gradually, and back up first.
-   - It was proposed to the owner on 2026-09-27; no answer yet.
-2. **If the owner asks for something else first:** keep changes small and targeted, add a test for each fix, update `CHANGELOG.md` under `[Unreleased]`, and update this file.
-3. **When finishing:** run the verification above, commit with a clear message, and update this file. Push only if the owner asks.
+1. **Next Task: P3a-3 (Backfill job `migrate.accounts`)**
+   - For every `creators` row and every KV `creator:*` key, upsert into `accounts` table.
+   - Newest `keyHash` wins; D1 wins ties.
+   - Reconciliation report: `count(accounts) = |creators ∪ creator:*|`.
+2. **Then P3a-4 (Sessions API):**
+   - `POST /api/session`, `DELETE /api/session`, `GET /api/me`, `GET/DELETE /api/me/sessions`.
+   - `mla_session` cookie (`HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=30d`).
+   - Session resolution middleware setting `request.account`.
+3. **Always run verification before finishing:**
+   `python build.py && python check_sync.py && node --check worker_entry_combined.js && python gen_map.py && node --test tests/*.test.mjs`
+

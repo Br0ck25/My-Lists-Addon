@@ -15,6 +15,17 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 3. **Add the Analytics Engine binding**: Worker → Settings → Bindings → Add → Analytics Engine, name `ANALYTICS`, dataset `mylists_events`.
 4. **Paste and deploy** `worker_entry_combined.js`.
 5. **Delete the retired variables** if they are set: `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET`, `CRON_SUBREQUEST_BUDGET`. The code ignores them either way.
+### 🔒 Phase 3a: Accounts Schema & Token Encryption (P3a-1, P3a-2)
+
+- **Migration 0015 (`migrations/0015_accounts_sessions_installs.sql`)**:
+  - Adds core relational tables for unified identity and sessions: `accounts`, `sessions`, `installs`, `provider_connections`, `install_secrets`, `rate_counters`, and `account_settings`.
+  - Added to `schema.sql` and registered in `D1_SCHEMA_MANIFEST` with consequence tracking.
+  - Safe and additive; backwards-compatible with existing tables.
+- **Token encryption & HMAC blind index (`02_http-and-creator-utils.js`)**:
+  - `encryptToken` / `decryptToken`: AES-GCM-256 encryption with random 12-byte IV and key rotation support under `TOKEN_ENCRYPTION_KEY` (`k1:<base64>`).
+  - `hmacLookupKey`: HMAC-SHA256 hashing under `LOOKUP_PEPPER` for blind-indexed username recovery.
+  - Tests covering round-trip, key rotation, tampered ciphertext/IV rejection, wrong key detection, and environment object parsing.
+  - Updated `README.md`, `wrangler.toml`, and `docs/OPERATIONS.md` with the new optional secrets.
 
 ### 🔒 Signed out, an install link carries the site's public lists only
 
