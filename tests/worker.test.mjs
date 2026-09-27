@@ -14303,4 +14303,234 @@ describe("P3a-2: token encryption and blind index HMAC", () => {
   });
 });
 
+describe("P3a-3: accounts backfill (migrate.accounts)", () => {
+  const { backfillAccounts, reconcileAccounts } = loadSourceFunctions(
+    "00_constants.js",
+    "02_http-and-creator-utils.js"
+  );
+
+  async function getAdminCookie(env) {
+    const login = await call(env, "/admin/login", { method: "POST", form: { key: "test-admin-secret" } });
+    return (login.headers.get("set-cookie") || "").split(";")[0];
+  }
+
+  it("backfills accounts from D1 creators and KV creator:*, newest keyHash wins, D1 wins ties", async () => {
+    const env = makeEnv({ DB: makeD1() });
+
+    // 1. D1 only account
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, recovery_answer_hash, created_at, last_active) VALUES (?, ?, ?, ?, ?, ?)"
+    ).bind("d1only_user", "D1 Only Display", "d1only_hash", "d1_rec_hash", 1000, 2000).run();
+
+    // 2. KV only account
+    await env.CONFIGS.put("creator:kvonly_user", JSON.stringify({
+      displayName: "KV Only Display",
+      keyHash: "kvonly_hash",
+      recoveryAnswerHash: "kv_rec_hash",
+      createdAt: 1100,
+      lastActive: 2100,
+    }));
+
+    // 3. Both exist: tie (same keyHash in both D1 and KV)
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, recovery_answer_hash, created_at, last_active) VALUES (?, ?, ?, ?, ?, ?)"
+    ).bind("both_tie_user", "Tie D1 Display", "shared_key_hash", null, 1200, 2200).run();
+    await env.CONFIGS.put("creator:both_tie_user", JSON.stringify({
+      displayName: "Tie KV Display",
+      keyHash: "shared_key_hash",
+      recoveryAnswerHash: "tie_kv_rec",
+      createdAt: 1250,
+      lastActive: 2250,
+    }));
+
+    // 4. Both exist: KV is newer (KV has updatedAt > D1 created_at)
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, recovery_answer_hash, created_at, last_active) VALUES (?, ?, ?, ?, ?, ?)"
+    ).bind("both_kv_newer_user", "KV Newer D1 Display", "older_d1_hash", null, 1000, 2000).run();
+    await env.CONFIGS.put("creator:both_kv_newer_user", JSON.stringify({
+      displayName: "KV Newer Display",
+      keyHash: "newer_kv_hash",
+      recoveryAnswerHash: "newer_rec_hash",
+      createdAt: 1000,
+      updatedAt: 5000,
+      lastActive: 3000,
+    }));
+
+    // 5. Both exist: D1 is newer (D1 creator_key_lookups created_at > KV updatedAt)
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, recovery_answer_hash, created_at, last_active) VALUES (?, ?, ?, ?, ?, ?)"
+    ).bind("both_d1_newer_user", "D1 Newer Display", "newer_d1_hash", "d1_rec", 1000, 2000).run();
+    await env.DB.prepare(
+      "INSERT INTO creator_key_lookups (lookup_hash, username, created_at) VALUES (?, ?, ?)"
+    ).bind("dummy_lookup_hash_1", "both_d1_newer_user", 6000).run();
+    await env.CONFIGS.put("creator:both_d1_newer_user", JSON.stringify({
+      displayName: "D1 Newer KV Display",
+      keyHash: "older_kv_hash",
+      recoveryAnswerHash: "kv_rec",
+      createdAt: 1000,
+      updatedAt: 4000,
+    }));
+
+    // Run backfill
+    const res = await backfillAccounts(env);
+    assert.equal(res.ok, true);
+    assert.equal(res.done, true);
+    assert.equal(res.d1Count, 4);
+    assert.equal(res.kvCount, 4);
+    assert.equal(res.unionCount, 5);
+    assert.equal(res.accountsCount, 5);
+    assert.equal(res.reconciled, true);
+    assert.equal(res.inserted, 5);
+
+    // Verify individual accounts
+    const { results: rows } = await env.DB.prepare("SELECT * FROM accounts ORDER BY username").all();
+    assert.equal(rows.length, 5);
+
+    const byUser = new Map(rows.map(r => [r.username.toLowerCase(), r]));
+
+    // 1. d1only_user
+    const d1only = byUser.get("d1only_user");
+    assert.ok(d1only);
+    assert.equal(d1only.display_name, "D1 Only Display");
+    assert.equal(d1only.key_hash, "d1only_hash");
+    assert.equal(d1only.recovery_answer_hash, "d1_rec_hash");
+    assert.equal(d1only.created_at, 1000);
+    assert.equal(d1only.last_active_at, 2000);
+    assert.equal(d1only.status, "active");
+
+    // 2. kvonly_user
+    const kvonly = byUser.get("kvonly_user");
+    assert.ok(kvonly);
+    assert.equal(kvonly.display_name, "KV Only Display");
+    assert.equal(kvonly.key_hash, "kvonly_hash");
+    assert.equal(kvonly.recovery_answer_hash, "kv_rec_hash");
+    assert.equal(kvonly.created_at, 1100);
+    assert.equal(kvonly.last_active_at, 2100);
+    assert.equal(kvonly.status, "active");
+
+    // 3. both_tie_user -> D1 wins ties
+    const bothTie = byUser.get("both_tie_user");
+    assert.ok(bothTie);
+    assert.equal(bothTie.key_hash, "shared_key_hash");
+    assert.equal(bothTie.display_name, "Tie D1 Display");
+    assert.equal(bothTie.recovery_answer_hash, "tie_kv_rec", "fallback recovery answer from secondary");
+    assert.equal(bothTie.created_at, 1200, "earliest creation time");
+    assert.equal(bothTie.last_active_at, 2250, "latest active time");
+
+    // 4. both_kv_newer_user -> KV wins
+    const bothKvNewer = byUser.get("both_kv_newer_user");
+    assert.ok(bothKvNewer);
+    assert.equal(bothKvNewer.key_hash, "newer_kv_hash");
+    assert.equal(bothKvNewer.display_name, "KV Newer Display");
+    assert.equal(bothKvNewer.recovery_answer_hash, "newer_rec_hash");
+
+    // 5. both_d1_newer_user -> D1 wins
+    const bothD1Newer = byUser.get("both_d1_newer_user");
+    assert.ok(bothD1Newer);
+    assert.equal(bothD1Newer.key_hash, "newer_d1_hash");
+    assert.equal(bothD1Newer.display_name, "D1 Newer Display");
+    assert.equal(bothD1Newer.recovery_answer_hash, "d1_rec");
+
+    // Verify source records were NOT modified or deleted (copies only)
+    const { results: creatorsStill } = await env.DB.prepare("SELECT * FROM creators").all();
+    assert.equal(creatorsStill.length, 4);
+    assert.ok(await env.CONFIGS.get("creator:kvonly_user"));
+    assert.ok(await env.CONFIGS.get("creator:both_tie_user"));
+    assert.ok(await env.CONFIGS.get("creator:both_kv_newer_user"));
+    assert.ok(await env.CONFIGS.get("creator:both_d1_newer_user"));
+  });
+
+  it("is idempotent: safe to re-run and preserves account IDs", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind("user_alpha", "Alpha", "hash_alpha", 1000).run();
+    await env.CONFIGS.put("creator:user_beta", JSON.stringify({ displayName: "Beta", keyHash: "hash_beta", createdAt: 1000 }));
+
+    const run1 = await backfillAccounts(env);
+    assert.equal(run1.reconciled, true);
+    assert.equal(run1.inserted, 2);
+    assert.equal(run1.updated, 0);
+
+    const { results: rows1 } = await env.DB.prepare("SELECT id, username FROM accounts ORDER BY username").all();
+    assert.equal(rows1.length, 2);
+    const alphaId = rows1[0].id;
+    const betaId = rows1[1].id;
+
+    // Run again
+    const run2 = await backfillAccounts(env);
+    assert.equal(run2.reconciled, true);
+    assert.equal(run2.inserted, 0);
+    assert.equal(run2.updated, 2);
+
+    const { results: rows2 } = await env.DB.prepare("SELECT id, username FROM accounts ORDER BY username").all();
+    assert.equal(rows2[0].id, alphaId, "alpha id preserved");
+    assert.equal(rows2[1].id, betaId, "beta id preserved");
+  });
+
+  it("reconcileAccounts / dryRun calculates counts without modifying accounts table", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind("dry_user1", "Dry 1", "hash1", 1000).run();
+    await env.CONFIGS.put("creator:dry_user2", JSON.stringify({ displayName: "Dry 2", keyHash: "hash2", createdAt: 1000 }));
+
+    const report = await reconcileAccounts(env);
+    assert.equal(report.dryRun, true);
+    assert.equal(report.unionCount, 2);
+    assert.equal(report.accountsCount, 0);
+    assert.equal(report.reconciled, false);
+    assert.equal(report.inserted, 0);
+
+    // Table accounts remains empty
+    const { results: rows } = await env.DB.prepare("SELECT * FROM accounts").all();
+    assert.equal(rows.length, 0);
+  });
+
+  it("/admin/api/migrate-accounts requires admin and handles POST and GET", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    await env.DB.prepare(
+      "INSERT INTO creators (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
+    ).bind("route_user", "Route User", "route_hash", 1000).run();
+
+    // 1. Unauthenticated request rejected
+    const unauth = await call(env, "/admin/api/migrate-accounts", { method: "POST" });
+    assert.equal(unauth.status, 401);
+
+    const cookie = await getAdminCookie(env);
+
+    // 2. GET runs dry-run reconciliation report
+    const getRes = await call(env, "/admin/api/migrate-accounts", { method: "GET", cookie });
+    assert.equal(getRes.status, 200);
+    assert.equal(getRes.body.dryRun, true);
+    assert.equal(getRes.body.unionCount, 1);
+    assert.equal(getRes.body.accountsCount, 0);
+
+    // 3. POST runs the backfill
+    const postRes = await call(env, "/admin/api/migrate-accounts", { method: "POST", cookie });
+    assert.equal(postRes.status, 200);
+    assert.equal(postRes.body.ok, true);
+    assert.equal(postRes.body.reconciled, true);
+    assert.equal(postRes.body.accountsCount, 1);
+    assert.equal(postRes.body.unionCount, 1);
+
+    // 4. Subsequent GET confirms reconciled state
+    const checkRes = await call(env, "/admin/api/migrate-accounts", { method: "GET", cookie });
+    assert.equal(checkRes.status, 200);
+    assert.equal(checkRes.body.reconciled, true);
+    assert.equal(checkRes.body.accountsCount, 1);
+  });
+
+  it("handles database errors gracefully if accounts table does not exist", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    // Drop accounts table to simulate pre-0015 schema
+    await env.DB.prepare("DROP TABLE accounts").run();
+
+    const report = await backfillAccounts(env);
+    assert.equal(report.ok, false);
+    assert.match(report.error, /apply migration 0015/i);
+  });
+});
+
+
 

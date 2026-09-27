@@ -6,10 +6,10 @@
 
 ## Current Status
 - **Last Updated**: 2026-09-27
-- **Last Active AI**: Claude Code (Claude Opus 5.5), reviewing and fixing Antigravity (Gemini 3.8 Flash) work
-- **Active Task**: Phase 3a in progress. P3a-1 (migration 0015) and P3a-2 (token encryption, blind index) are done, reviewed and fixed. Next: P3a-3 (accounts backfill), then P3a-4 (sessions).
-- **Task State**: All work committed and pushed. All tests passing (1,291 passed, 0 failed, 1 skipped: the opt-in network test).
-- **Git State**: Clean working tree on `main`, in sync with `origin/main` (`https://github.com/Br0ck25/My-Lists-Addon`). Commit when work is verified; push only when the owner asks.
+- **Last Active AI**: Antigravity (Gemini 3.8 Flash)
+- **Active Task**: Phase 3a in progress. P3a-1 (migration 0015), P3a-2 (token encryption, blind index), and P3a-3 (accounts backfill) are complete, verified and tested. Next: P3a-4 (sessions).
+- **Task State**: P3a-3 verified with comprehensive tests. All tests passing (1,296 passed, 0 failed, 1 skipped: the opt-in network test).
+- **Git State**: Ready to commit on `main`. Commit when work is verified; push only when the owner asks.
 - **The owner is not a programmer.** Explain in plain words, do the git work for them, and ask before anything that changes stored user data or needs a dashboard change.
 
 ---
@@ -104,6 +104,7 @@ Last run (2026-09-27): all of the above pass, 1,288 tests passed, 0 failed, 1 sk
 - **Phase 3a (in progress):**
   - **P3a-1:** Migration `0015_accounts_sessions_installs.sql` written for `accounts`, `sessions`, `installs`, `provider_connections`, `install_secrets`, `rate_counters`, `account_settings`; added to `schema.sql`, `D1_SCHEMA_MANIFEST`.
   - **P3a-2:** AES-GCM-256 token encryption/decryption with key rotation (`TOKEN_ENCRYPTION_KEY`) and blind index HMAC (`LOOKUP_PEPPER`) implemented in `02_http-and-creator-utils.js` and verified with comprehensive unit tests. Documentation updated in `README.md`, `wrangler.toml`, and `docs/OPERATIONS.md`.
+  - **P3a-3:** Accounts backfill job implemented (`backfillAccounts`, `reconcileAccounts` in `02_http-and-creator-utils.js`, `/admin/api/migrate-accounts` route in `26_api-creator-and-admin-routes.js`, Admin maintenance panel in `03_admin.js`). Copies data from D1 `creators` and KV `creator:*` into `accounts` (newest `keyHash` wins; D1 wins ties), verifies `count(accounts) = |creators ∪ creator:*|`, leaves existing records intact.
 
 ---
 
@@ -123,8 +124,7 @@ Last run (2026-09-27): all of the above pass, 1,288 tests passed, 0 failed, 1 sk
 ---
 
 ## Next Steps for Incoming AI
-1. **Phase 3a continues** (`NEXT_VERSION_TASKS.md`; the reasoning is in `MIGRATION_PLAN.md` Phase 3a). On 2026-09-27 the owner had Gemini start it and then accepted that work (P3a-1, P3a-2). Next:
-   - **P3a-3**: the accounts backfill. Every `creators` row and every KV `creator:*` key is upserted into `accounts`; the newest `keyHash` wins, and D1 wins ties. The reconciliation report must show `count(accounts) = |creators ∪ creator:*|`. It only *copies* data; it must not change or delete the old records.
+1. **Phase 3a continues** (`NEXT_VERSION_TASKS.md`; the reasoning is in `MIGRATION_PLAN.md` Phase 3a). P3a-1, P3a-2, and P3a-3 are done and verified. Next:
    - **P3a-4**: the sessions API.
      - Routes: `POST /api/session`, `DELETE /api/session`, `GET /api/me`, `GET/DELETE /api/me/sessions`.
      - The `mla_session` cookie (`HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=30d`).

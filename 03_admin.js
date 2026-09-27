@@ -2404,6 +2404,13 @@ async function renderAdminDashboard(env) {
       <p style="color:#8E8E93; margin:10px 0 0; font-size:0.8rem;">Copies existing Creator Profiles, Custom Lists, likes, feedback, and tracking records from KV into D1. Safe to run more than once.</p>
     </div>
 
+    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
+      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Unified accounts table (v2 identity)</div>
+      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Backfills existing creator identities from D1 <code>creators</code> and KV <code>creator:*</code> into the unified <code>accounts</code> table. Newest key hash wins; D1 wins ties. Copies data only &mdash; safe to run more than once.</p>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="migrateAccountsBtn" onclick="runMigrateAccounts()" ${isD1Bound ? '' : 'disabled'}>Migrate Accounts</button>
+      <span id="migrateAccountsStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+    </div>
+
     <div class="panel" style="margin:0; padding:14px 16px;">
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Database schema</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Migrations are applied by hand and nothing records that it happened, so this Worker can end up running ahead of its own database. It degrades quietly when that happens rather than refusing to start &mdash; which is why this check exists. Run it after any deploy that shipped a new file under <code>migrations/</code>.</p>
@@ -2861,6 +2868,27 @@ async function renderAdminDashboard(env) {
             (errCount ? (', ' + errCount + ' error' + (errCount === 1 ? '' : 's') + ' (see console)') : '') + '.';
           if (errCount) console.error('migrate-d1 errors:', r.errors);
           break;
+        }
+      } catch (e) {
+        status.textContent = 'Failed: network error.';
+      }
+      btn.disabled = false;
+    }
+
+    async function runMigrateAccounts() {
+      const btn = document.getElementById('migrateAccountsBtn');
+      const status = document.getElementById('migrateAccountsStatus');
+      btn.disabled = true;
+      status.textContent = 'Working…';
+      try {
+        const res = await fetch('/admin/api/migrate-accounts', { method: 'POST' });
+        const data = await res.json();
+        if (!data.ok) {
+          status.textContent = 'Failed: ' + (data.error || 'unknown error');
+        } else {
+          status.textContent = 'Done — ' + (data.accountsCount || 0) + ' accounts in table (' +
+            (data.d1Count || 0) + ' D1, ' + (data.kvCount || 0) + ' KV, union ' + (data.unionCount || 0) + '). ' +
+            (data.reconciled ? 'Reconciled ✓' : 'Mismatch!');
         }
       } catch (e) {
         status.textContent = 'Failed: network error.';

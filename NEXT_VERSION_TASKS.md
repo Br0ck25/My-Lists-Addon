@@ -121,7 +121,7 @@ No npm, no `src/` tree, no esbuild, no new test framework (D-11). Phase 2 is now
   - The generic `encrypt` / `decrypt` names were dropped: every file shares one scope.
   - An optional `context` binds a ciphertext to its row (AES-GCM additional data), so callers should pass one, for example `account:<id>:<provider>`.
   - Tested for round-trip, key rotation, wrong key, tampering, malformed keys, context binding and HMAC hashing.
-- [ ] **P3a-3** Backfill job `migrate.accounts`: for every `creators` row and every KV `creator:*` key, upsert `accounts` (newest `keyHash` wins; D1 wins ties). *Done when:* the reconciliation report shows `count(accounts) = |creators ∪ creator:*|`.
+- [x] **P3a-3** Backfill job `migrate.accounts`: for every `creators` row and every KV `creator:*` key, upsert `accounts` (newest `keyHash` wins; D1 wins ties). *Done when:* the reconciliation report shows `count(accounts) = |creators ∪ creator:*|`. — **Status:** Implemented (`backfillAccounts`, `reconcileAccounts` in `02_http-and-creator-utils.js`, `/admin/api/migrate-accounts` route in `26_api-creator-and-admin-routes.js`, Admin maintenance panel in `03_admin.js`), verified with comprehensive unit and route tests.
 - [ ] **P3a-4** Sessions:
   - `POST /api/session` {username, key}: PBKDF2 verify, rehash if the iteration count is below the target, create a 256-bit token, store its SHA-256 in `sessions`, and set the `mla_session` cookie (`HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=30d`).
   - `DELETE /api/session`.

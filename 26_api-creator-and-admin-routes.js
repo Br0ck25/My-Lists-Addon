@@ -5481,6 +5481,31 @@
       return json({ ok: true, done, results, thisCall, scanned: state.scanned });
     }
 
+    // /admin/api/migrate-accounts  (POST / GET)
+    // Phase 3a (P3a-3): Backfills creators and KV creator:* records into accounts.
+    // Newest keyHash wins; D1 wins ties.
+    // Returns reconciliation report showing count(accounts) = |creators ∪ creator:*|.
+    // POST runs the backfill (or dryRun if requested in body/query); GET runs dryRun reconciliation check only.
+    if (path === "/admin/api/migrate-accounts" && (request.method === "POST" || request.method === "GET")) {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      if (!env || !env.DB) return json({ ok: false, error: "No D1 database binding 'DB'." }, 500);
+
+      let body = {};
+      if (request.method === "POST") {
+        try {
+          body = await request.json();
+        } catch {
+          body = {};
+        }
+      }
+      const url = new URL(request.url);
+      const dryRun = request.method === "GET" || !!body.dryRun || (url.searchParams.get("dry_run") === "1");
+
+      const report = await backfillAccounts(env, { dryRun });
+      return json(report, report.ok ? 200 : 500);
+    }
+
     // /admin/api/rebuild-search-index (and alias /admin/api/rebuild-public-index) (POST) -> { ok, done, count, scanned, ms }
     // Rebuilds lists_fts from creator_lists and published_lists in D1.
     // Also serves as the post-export recreation procedure.

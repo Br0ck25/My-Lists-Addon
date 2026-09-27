@@ -6856,6 +6856,330 @@ async function rotateCreatorKeyHashInD1(env, username, keyHash) {
   }
 }
 
+// Phase 3a: P3a-3 Accounts Backfill (migrate.accounts)
+// Backfills creators from D1 creators table and KV creator:* keys into the unified accounts table.
+// Invariants:
+// - Newest keyHash wins; D1 wins ties.
+// - count(accounts) = |creators ∪ creator:*|
+// - Copies data only; does not mutate or delete existing creators or creator:* records.
+// - Idempotent and safe to run multiple times.
+async function backfillAccounts(env, options = {}) {
+  if (!env || !env.DB) {
+    return { ok: false, error: "D1 database binding 'DB' is required for accounts backfill." };
+  }
+
+  // Verify accounts table exists (migration 0015 applied)
+  try {
+    await env.DB.prepare("SELECT 1 FROM accounts LIMIT 1").all();
+  } catch (e) {
+    const msg = safeErrorMessage(e);
+    if (msg.includes("no such table") || (e && e.message && e.message.includes("no such table"))) {
+      return { ok: false, error: "Table 'accounts' does not exist. Please apply migration 0015 first." };
+    }
+    return { ok: false, error: "Database check failed: " + msg };
+  }
+
+  // 1. Gather all creators from D1
+  const d1Creators = new Map();
+  try {
+    const { results } = await env.DB.prepare(
+      "SELECT username, display_name, key_hash, recovery_answer_hash, created_at, last_active FROM creators"
+    ).all();
+    for (const r of (results || [])) {
+      const rawUser = String(r.username || "").trim();
+      const norm = rawUser.toLowerCase();
+      if (!norm) continue;
+      d1Creators.set(norm, {
+        username: rawUser,
+        displayName: r.display_name || rawUser,
+        keyHash: typeof r.key_hash === "string" ? r.key_hash : "",
+        recoveryAnswerHash: r.recovery_answer_hash || null,
+        createdAt: typeof r.created_at === "number" ? r.created_at : 0,
+        lastActive: typeof r.last_active === "number" ? r.last_active : null,
+        lookupCreatedAt: 0,
+      });
+    }
+  } catch (e) {
+    return { ok: false, error: "Failed to read creators from D1: " + safeErrorMessage(e) };
+  }
+
+  // Optional: check key lookup timestamps in D1
+  try {
+    const { results: lookupRows } = await env.DB.prepare(
+      "SELECT username, created_at FROM creator_key_lookups"
+    ).all();
+    for (const lr of (lookupRows || [])) {
+      const norm = String(lr.username || "").trim().toLowerCase();
+      const rec = d1Creators.get(norm);
+      if (rec && typeof lr.created_at === "number") {
+        rec.lookupCreatedAt = Math.max(rec.lookupCreatedAt || 0, lr.created_at);
+      }
+    }
+  } catch {}
+
+  // 2. Gather all creator:* records from KV
+  const kvCreators = new Map();
+  if (env.CONFIGS) {
+    try {
+      const listResult = await listAllKeys(env.CONFIGS, "creator:");
+      const keys = (listResult && listResult.keys) || [];
+      for (const k of keys) {
+        if (!k.name.startsWith("creator:")) continue;
+        const rawUser = k.name.slice("creator:".length).trim();
+        const norm = rawUser.toLowerCase();
+        if (!norm) continue;
+
+        let data = null;
+        try {
+          const raw = await env.CONFIGS.get(k.name);
+          if (raw) data = JSON.parse(raw);
+        } catch {}
+        if (!data || typeof data !== "object") continue;
+
+        let resetAt = 0;
+        try {
+          const resetRaw = await env.CONFIGS.get(creatorResetKey(norm));
+          resetAt = resetRaw ? parseInt(resetRaw, 10) || 0 : 0;
+        } catch {}
+
+        let lastSeen = null;
+        try {
+          const lastSeenRaw = await env.CONFIGS.get("creatorlastseen:" + norm);
+          lastSeen = lastSeenRaw ? parseInt(lastSeenRaw, 10) || null : null;
+        } catch {}
+
+        kvCreators.set(norm, {
+          username: rawUser,
+          displayName: data.displayName || rawUser,
+          keyHash: typeof data.keyHash === "string" ? data.keyHash : "",
+          recoveryAnswerHash: data.recoveryAnswerHash || null,
+          createdAt: typeof data.createdAt === "number" ? data.createdAt : 0,
+          updatedAt: typeof data.updatedAt === "number" ? data.updatedAt : 0,
+          lastActive: (typeof data.lastActive === "number" ? data.lastActive : null) || lastSeen,
+          resetAt,
+        });
+      }
+    } catch (e) {
+      return { ok: false, error: "Failed to read KV creator records: " + safeErrorMessage(e) };
+    }
+  }
+
+  // 3. Compute distinct union of normalized usernames: |creators ∪ creator:*|
+  const allNormUsernames = Array.from(new Set([...d1Creators.keys(), ...kvCreators.keys()]));
+  const unionCount = allNormUsernames.length;
+  const d1Count = d1Creators.size;
+  const kvCount = kvCreators.size;
+
+  let d1Wins = 0;
+  let kvWins = 0;
+  let ties = 0;
+  let d1Only = 0;
+  let kvOnly = 0;
+  let inBoth = 0;
+
+  const resolvedAccounts = [];
+
+  for (const norm of allNormUsernames) {
+    const d1Rec = d1Creators.get(norm);
+    const kvRec = kvCreators.get(norm);
+
+    if (d1Rec && !kvRec) {
+      d1Only++;
+      d1Wins++;
+      resolvedAccounts.push({
+        username: d1Rec.username,
+        displayName: d1Rec.displayName,
+        keyHash: d1Rec.keyHash,
+        recoveryAnswerHash: d1Rec.recoveryAnswerHash,
+        createdAt: d1Rec.createdAt > 0 ? d1Rec.createdAt : Date.now(),
+        lastActiveAt: d1Rec.lastActive,
+      });
+    } else if (!d1Rec && kvRec) {
+      kvOnly++;
+      kvWins++;
+      resolvedAccounts.push({
+        username: kvRec.username,
+        displayName: kvRec.displayName,
+        keyHash: kvRec.keyHash,
+        recoveryAnswerHash: kvRec.recoveryAnswerHash,
+        createdAt: kvRec.createdAt > 0 ? kvRec.createdAt : Date.now(),
+        lastActiveAt: kvRec.lastActive,
+      });
+    } else {
+      inBoth++;
+      let win = "d1";
+      if (d1Rec.keyHash === kvRec.keyHash) {
+        win = "d1"; // tie
+        ties++;
+        d1Wins++;
+      } else {
+        const d1Time = d1Rec.lookupCreatedAt || d1Rec.createdAt || 0;
+        const kvTime = Math.max(kvRec.updatedAt || 0, kvRec.resetAt || 0, kvRec.createdAt || 0);
+        if (kvTime > d1Time) {
+          win = "kv";
+          kvWins++;
+        } else {
+          win = "d1";
+          if (d1Time === kvTime) ties++;
+          d1Wins++;
+        }
+      }
+
+      const primary = win === "d1" ? d1Rec : kvRec;
+      const secondary = win === "d1" ? kvRec : d1Rec;
+
+      let createdAt = 0;
+      if (d1Rec.createdAt > 0 && kvRec.createdAt > 0) {
+        createdAt = Math.min(d1Rec.createdAt, kvRec.createdAt);
+      } else {
+        createdAt = d1Rec.createdAt || kvRec.createdAt || Date.now();
+      }
+
+      const lastActiveAt = (d1Rec.lastActive && kvRec.lastActive)
+        ? Math.max(d1Rec.lastActive, kvRec.lastActive)
+        : (d1Rec.lastActive || kvRec.lastActive || null);
+
+      resolvedAccounts.push({
+        username: primary.username || secondary.username,
+        displayName: primary.displayName || secondary.displayName || primary.username,
+        keyHash: primary.keyHash || secondary.keyHash,
+        recoveryAnswerHash: primary.recoveryAnswerHash || secondary.recoveryAnswerHash || null,
+        createdAt,
+        lastActiveAt,
+      });
+    }
+  }
+
+  // If dry-run requested, report without modifying database
+  if (options && options.dryRun) {
+    let currentAccountsCount = 0;
+    try {
+      const countRes = await env.DB.prepare("SELECT COUNT(*) AS n FROM accounts").all();
+      currentAccountsCount = countRes.results && countRes.results[0] ? Number(countRes.results[0].n) || 0 : 0;
+    } catch {}
+
+    return {
+      ok: true,
+      done: true,
+      dryRun: true,
+      d1Count,
+      kvCount,
+      unionCount,
+      accountsCount: currentAccountsCount,
+      reconciled: currentAccountsCount === unionCount,
+      d1Only,
+      kvOnly,
+      inBoth,
+      d1Wins,
+      kvWins,
+      ties,
+      inserted: 0,
+      updated: 0,
+      errors: [],
+    };
+  }
+
+  // 4. Track existing rows to accurately measure inserts vs updates
+  const existingAccounts = new Set();
+  try {
+    const { results } = await env.DB.prepare("SELECT username FROM accounts").all();
+    for (const r of (results || [])) {
+      existingAccounts.add(String(r.username || "").trim().toLowerCase());
+    }
+  } catch {}
+
+  let inserted = 0;
+  let updated = 0;
+  const errors = [];
+
+  const upsertStmt = env.DB.prepare(
+    "INSERT INTO accounts (" +
+    "  username, display_name, key_hash, recovery_answer_hash," +
+    "  key_lookup_hmac, created_at, last_active_at, version, deleted_at, status" +
+    ") VALUES (?, ?, ?, ?, NULL, ?, ?, 0, NULL, 'active') " +
+    "ON CONFLICT(username) DO UPDATE SET " +
+    "  display_name = excluded.display_name," +
+    "  key_hash = excluded.key_hash," +
+    "  recovery_answer_hash = COALESCE(excluded.recovery_answer_hash, accounts.recovery_answer_hash)," +
+    "  created_at = CASE " +
+    "    WHEN accounts.created_at > 0 AND excluded.created_at > 0 THEN MIN(accounts.created_at, excluded.created_at) " +
+    "    ELSE COALESCE(NULLIF(accounts.created_at, 0), excluded.created_at) " +
+    "  END," +
+    "  last_active_at = CASE " +
+    "    WHEN COALESCE(accounts.last_active_at, 0) > 0 OR COALESCE(excluded.last_active_at, 0) > 0 " +
+    "    THEN MAX(COALESCE(accounts.last_active_at, 0), COALESCE(excluded.last_active_at, 0)) " +
+    "    ELSE NULL " +
+    "  END," +
+    "  status = 'active'"
+  );
+
+  const BATCH_SIZE = 25;
+  for (let i = 0; i < resolvedAccounts.length; i += BATCH_SIZE) {
+    const chunk = resolvedAccounts.slice(i, i + BATCH_SIZE);
+    const batchStmts = chunk.map((acc) => {
+      const isExisting = existingAccounts.has(acc.username.toLowerCase());
+      if (isExisting) updated++;
+      else inserted++;
+      return upsertStmt.bind(
+        acc.username,
+        acc.displayName,
+        acc.keyHash,
+        acc.recoveryAnswerHash,
+        acc.createdAt,
+        acc.lastActiveAt != null ? acc.lastActiveAt : null
+      );
+    });
+
+    try {
+      if (typeof env.DB.batch === "function") {
+        await env.DB.batch(batchStmts);
+      } else {
+        for (const st of batchStmts) {
+          await st.run();
+        }
+      }
+    } catch (batchErr) {
+      console.error("Batch upsert error in backfillAccounts:", batchErr);
+      errors.push(safeErrorMessage(batchErr));
+    }
+  }
+
+  // 5. Query final accounts count and verify reconciliation
+  let finalAccountsCount = 0;
+  try {
+    const finalCountRes = await env.DB.prepare("SELECT COUNT(*) AS n FROM accounts").all();
+    finalAccountsCount = finalCountRes.results && finalCountRes.results[0] ? Number(finalCountRes.results[0].n) || 0 : 0;
+  } catch (e) {
+    errors.push("Failed to count final accounts: " + safeErrorMessage(e));
+  }
+
+  const reconciled = (errors.length === 0 && finalAccountsCount === unionCount);
+
+  return {
+    ok: errors.length === 0,
+    done: true,
+    dryRun: false,
+    d1Count,
+    kvCount,
+    unionCount,
+    accountsCount: finalAccountsCount,
+    reconciled,
+    d1Only,
+    kvOnly,
+    inBoth,
+    d1Wins,
+    kvWins,
+    ties,
+    inserted,
+    updated,
+    errors,
+  };
+}
+
+async function reconcileAccounts(env) {
+  return backfillAccounts(env, { dryRun: true });
+}
+
 // D1 is the authoritative store for creator lists when bound.
 // KV serves as a read-through cache and fallback for unmigrated lists.
 //
@@ -10451,6 +10775,13 @@ async function renderAdminDashboard(env) {
       <p style="color:#8E8E93; margin:10px 0 0; font-size:0.8rem;">Copies existing Creator Profiles, Custom Lists, likes, feedback, and tracking records from KV into D1. Safe to run more than once.</p>
     </div>
 
+    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
+      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Unified accounts table (v2 identity)</div>
+      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Backfills existing creator identities from D1 <code>creators</code> and KV <code>creator:*</code> into the unified <code>accounts</code> table. Newest key hash wins; D1 wins ties. Copies data only &mdash; safe to run more than once.</p>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="migrateAccountsBtn" onclick="runMigrateAccounts()" ${isD1Bound ? '' : 'disabled'}>Migrate Accounts</button>
+      <span id="migrateAccountsStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+    </div>
+
     <div class="panel" style="margin:0; padding:14px 16px;">
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Database schema</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Migrations are applied by hand and nothing records that it happened, so this Worker can end up running ahead of its own database. It degrades quietly when that happens rather than refusing to start &mdash; which is why this check exists. Run it after any deploy that shipped a new file under <code>migrations/</code>.</p>
@@ -10908,6 +11239,27 @@ async function renderAdminDashboard(env) {
             (errCount ? (', ' + errCount + ' error' + (errCount === 1 ? '' : 's') + ' (see console)') : '') + '.';
           if (errCount) console.error('migrate-d1 errors:', r.errors);
           break;
+        }
+      } catch (e) {
+        status.textContent = 'Failed: network error.';
+      }
+      btn.disabled = false;
+    }
+
+    async function runMigrateAccounts() {
+      const btn = document.getElementById('migrateAccountsBtn');
+      const status = document.getElementById('migrateAccountsStatus');
+      btn.disabled = true;
+      status.textContent = 'Working…';
+      try {
+        const res = await fetch('/admin/api/migrate-accounts', { method: 'POST' });
+        const data = await res.json();
+        if (!data.ok) {
+          status.textContent = 'Failed: ' + (data.error || 'unknown error');
+        } else {
+          status.textContent = 'Done — ' + (data.accountsCount || 0) + ' accounts in table (' +
+            (data.d1Count || 0) + ' D1, ' + (data.kvCount || 0) + ' KV, union ' + (data.unionCount || 0) + '). ' +
+            (data.reconciled ? 'Reconciled ✓' : 'Mismatch!');
         }
       } catch (e) {
         status.textContent = 'Failed: network error.';
@@ -86907,6 +87259,31 @@ function generateSearchVariations(query) {
       }
 
       return json({ ok: true, done, results, thisCall, scanned: state.scanned });
+    }
+
+    // /admin/api/migrate-accounts  (POST / GET)
+    // Phase 3a (P3a-3): Backfills creators and KV creator:* records into accounts.
+    // Newest keyHash wins; D1 wins ties.
+    // Returns reconciliation report showing count(accounts) = |creators ∪ creator:*|.
+    // POST runs the backfill (or dryRun if requested in body/query); GET runs dryRun reconciliation check only.
+    if (path === "/admin/api/migrate-accounts" && (request.method === "POST" || request.method === "GET")) {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      if (!env || !env.DB) return json({ ok: false, error: "No D1 database binding 'DB'." }, 500);
+
+      let body = {};
+      if (request.method === "POST") {
+        try {
+          body = await request.json();
+        } catch {
+          body = {};
+        }
+      }
+      const url = new URL(request.url);
+      const dryRun = request.method === "GET" || !!body.dryRun || (url.searchParams.get("dry_run") === "1");
+
+      const report = await backfillAccounts(env, { dryRun });
+      return json(report, report.ok ? 200 : 500);
     }
 
     // /admin/api/rebuild-search-index (and alias /admin/api/rebuild-public-index) (POST) -> { ok, done, count, scanned, ms }

@@ -18,9 +18,18 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 The new secrets `TOKEN_ENCRYPTION_KEY` and `LOOKUP_PEPPER` are **not needed yet**: nothing in this release uses them. They will be needed when the Phase 3a sign-in and account-storage code ships, and the release notes will say so then.
 
-### 🔒 Phase 3a groundwork: accounts tables and token encryption (P3a-1, P3a-2)
+### 🔒 Phase 3a groundwork: accounts tables, token encryption, and accounts backfill (P3a-1, P3a-2, P3a-3)
 
-Nothing in this release uses these yet; they are the foundation for sign-in sessions and for keeping provider tokens on the account instead of in install links.
+Nothing in this release uses these for user sign-in yet; they are the foundation for sign-in sessions and for keeping provider tokens on the account instead of in install links.
+
+- **Accounts backfill job** (`backfillAccounts`, `reconcileAccounts` in `02_http-and-creator-utils.js`, `/admin/api/migrate-accounts` in `26_api-creator-and-admin-routes.js`):
+  - Copies all identities from D1 `creators` and KV `creator:*` into the `accounts` table created in migration 0015.
+  - Conflict resolution: newest `keyHash` wins; D1 wins ties.
+  - Reconciliation check: verifies `count(accounts) = |creators ∪ creator:*|`.
+  - Non-destructive: copies data only, never mutates or deletes old `creators` or `creator:*` records.
+  - Safe and idempotent to run multiple times, preserving existing account `id`s.
+  - Supports dry-run inspection via `reconcileAccounts` or `GET /admin/api/migrate-accounts`.
+  - Admin maintenance tab adds a panel and button to run the accounts migration and display live reconciliation status.
 
 - **Migration 0015** (`migrations/0015_accounts_sessions_installs.sql`) adds the tables `accounts`, `sessions`, `installs`, `provider_connections`, `install_secrets`, `rate_counters` and `account_settings`.
   - It is also in `schema.sql` and the admin schema check.
