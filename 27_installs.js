@@ -386,6 +386,16 @@ async function resolveV2InstallConfig(param, env, { withTracking = false } = {})
     } catch {}
   }
   const secrets = snap.secrets && snap.secrets.length ? await decryptInstallSecretFields(env, snap.id, snap.secrets) : {};
+  // A v2 install carries no keys: its personal rows use the owner's own
+  // connections (P3a-10, 28_connections.js).
+  let fromConnections = {};
+  if (snap.accountId != null) {
+    try {
+      fromConnections = await connectionFieldsForConfig(env, snap.accountId, readInstallConfigFields({ ...cfg, ...secrets }));
+    } catch (e) {
+      console.error("Could not read the install owner's connections:", e);
+    }
+  }
   const track = Boolean(cfg.track) && canTrack;
   return {
     entries: Array.isArray(cfg.entries) ? cfg.entries : [],
@@ -393,7 +403,7 @@ async function resolveV2InstallConfig(param, env, { withTracking = false } = {})
     continueWatching,
     watchlist,
     airingNext,
-    ...readInstallConfigFields({ ...cfg, ...secrets }),
+    ...readInstallConfigFields({ ...cfg, ...secrets, ...fromConnections }),
     track,
     trackCreatorName: owner,
     trackCreatorKey: "",

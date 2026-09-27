@@ -7,9 +7,11 @@
 ## Current Status
 - **Last Updated**: 2026-09-27
 - **Last Active AI**: Claude Code (Opus 5.5)
-- **Active Task**: Phase 3a in progress. P3a-1 through P3a-9 are complete, verified and tested, and P3a-4 to P3a-7 have been reviewed and fixed. Next: P3a-10 (catalogs read tokens from `provider_connections`).
-- **Task State**: All tests passing (1,388 passed, 0 failed, 1 skipped: the opt-in network test). `verify.sh` checks pass.
-- **Git State**: All of this work (review fixes, P3a-8, P3a-9) is on the branch `feat/p3a-review-and-installs`, pushed, with a pull request into `main`. `main` = `origin/main` = `460be7c` until that PR is merged.
+- **Active Task**: Phase 3a is complete: P3a-1 through P3a-10 are done, verified and tested. Next: Phase 3b (lists, likes, channels), starting with P3b-1.
+- **Task State**: All tests passing (1,399 passed, 0 failed, 1 skipped: the opt-in network test). `verify.sh` checks pass. CI on GitHub runs the same suite on Node 22.
+- **Git State**:
+  - The review fixes, P3a-8 and P3a-9 were merged into `main` as PR #1.
+  - P3a-10 is on the branch `feat/p3a-10-provider-tokens`, with its own PR into `main`.
 - **The owner is not a programmer.** Explain in plain words, do the git work for them, and ask before anything that changes stored user data or needs a dashboard change.
 
 ---
@@ -129,6 +131,7 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
     - A KV snapshot `install:{tokenHash}` (1 day) plus a 30 s isolate cache.
     - The admin Maintenance tab has a progress panel and an emergency undo (`/admin/api/installs/restore`).
     - Deviations from the plan, with reasons, are listed under P3a-8 in `NEXT_VERSION_TASKS.md`.
+  - **P3a-10 (Claude):** catalogs use the install owner's connections, only for a proven owner (v2 `account_id`, a verifying Creator Key, or the new `ownerId` + `ownerSince` stamp). The config's own tokens win. Signed-in saves leave out what connections supply. Trakt and MDBList tokens are renewed before expiry. Details under P3a-10 in `NEXT_VERSION_TASKS.md`.
   - **P3a-9 (Claude):** connections, in `28_connections.js`.
     - Signed in (with a session), the Trakt, MDBList, Simkl and TMDB callbacks store the token (plus refresh token and expiry) encrypted in `provider_connections`, and redirect to `/?connected=<provider>` with no token in the URL.
     - The page fetches it once over its session (`POST /api/connections/:provider/token`), as a bridge until Phase 6.
@@ -158,10 +161,9 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
 ---
 
 ## Next Steps for Incoming AI
-1. **Phase 3a continues** (`NEXT_VERSION_TASKS.md`; the reasoning is in `MIGRATION_PLAN.md` Phase 3a). P3a-1 through P3a-8 are done and verified. Next:
-   - **P3a-10**: Provider calls for personal rows read tokens from `provider_connections`.
-     - `loadProviderConnection(env, accountId, provider)` (`28_`) returns them decrypted.
-     - Use the refresh token when `expires_at` has passed (Trakt, MDBList), and set `status`/`last_error` when a provider rejects one.
+1. **Phase 3a is done** (`NEXT_VERSION_TASKS.md`; the reasoning is in `MIGRATION_PLAN.md`). Next:
+   - **Phase 3b** (lists, likes, channels): P3b-1, migration `0016_lists_v2.sql`, comes first. Read `MIGRATION_PLAN.md` §3b before starting.
+     - It rewrites how lists are stored, so it will need the owner's approval before any backfill touches stored data.
      - Decide which wins when an install has its own keys in `install_secrets` and its owner also has a connection. Today `install_secrets` is the only source.
      - v2 installs (`/i/{token}`) have no keys of their own, so their personal Trakt/MDBList/Simkl rows only work once this lands.
    - A v2 link's `/i/{token}/configure` page renders, but its **Update** still saves a new legacy link through `/api/save`. The UI for v2 links (Phase 6) should `PATCH /api/installs/:id` instead.

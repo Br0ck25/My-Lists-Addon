@@ -164,7 +164,21 @@ No npm, no `src/` tree, no esbuild, no new test framework (D-11). Phase 2 is now
     - "Signed in" means the browser has a session, so this starts working when `FF_SESSIONS` is on. Without `TOKEN_ENCRYPTION_KEY` the callbacks fall back to today's behaviour rather than fail.
     - Also added: `GET /api/connections` (no tokens), the Trakt device flow storing a copy, `session` in the `/api/creator/restore` answer (the page imports only when it is true), and a rate limit on import.
     - The page still pushes its tokens into account sync (`creatorsync:{u}`, plain KV) as before. Stopping that is Phase 6, once nothing in the page needs them.
-- [ ] **P3a-10** Provider calls for personal rows read tokens from `provider_connections` (install owner) instead of the config. *Done when:* personal Trakt, MDBList and Simkl rows work with configs stripped of tokens.
+- [x] **P3a-10** Provider calls for personal rows read tokens from `provider_connections` (install owner) instead of the config. *Done when:* personal Trakt, MDBList and Simkl rows work with configs stripped of tokens. — **Status:** Done, in `28_connections.js` (`connectionFieldsForConfig`, `connectionOwnerForConfig`, `refreshProviderConnectionIfDue`), called from `resolveConfig` (`04_`) and `resolveV2InstallConfig` (`27_`). Tests: "P3a-10" in `tests/worker.test.mjs`.
+  - **Decisions made here:**
+    - **Only for a proven owner:**
+      - a v2 install's `account_id`;
+      - a verifying `trackCreatorKey`;
+      - the new `ownerId` + `ownerSince` stamp (accounts id and `created_at`) that `/api/save` writes for every signed-in save.
+
+      The older `trackOwner` stamp and the unverified-shelf fallback are names only and lend nothing. That keeps the re-registered-username problem (spawned as its own task) from reaching provider tokens.
+    - **Precedence:** the config's own key or token wins, and connections fill only what is missing, so legacy links serve identically. A token and its client id are filled together (paired) for Trakt and Simkl.
+    - **Saves:** a signed-in `/api/save` leaves out the fields the account's working connections supply (read fresh, never from the isolate cache), and stamps the owner.
+    - **Refresh:**
+      - Trakt (site-issued tokens only; tried under the web and device redirect URIs) and MDBList, an hour before expiry.
+      - A refused refresh re-reads the row, so the loser of a race uses the winner's token.
+      - Otherwise the connection is marked `expired`.
+    - Website API routes that take a token in the request body (Trakt export, private lists and the like) are unchanged. Moving them to connections belongs with the Phase 6 pages.
 
 ## Phase 3b — Lists, likes, channels
 

@@ -17,7 +17,8 @@
 // The page still works from its own copy of each token (about 430 places read
 // one), so after a signed-in connect it asks for it once, over the session:
 // POST /api/connections/:provider/token. That bridge goes when the Phase 6
-// pages stop holding tokens. P3a-10 is what makes catalogs read from here.
+// pages stop holding tokens. Catalogs read from here too: see "Catalogs read
+// an account's connections (P3a-10)" below.
 
 const CONNECTION_PROVIDERS = ["trakt", "mdblist", "simkl", "tmdb"];
 
@@ -68,6 +69,7 @@ async function storeProviderConnection(env, account, provider, conn) {
       "  api_key_enc = COALESCE(excluded.api_key_enc, provider_connections.api_key_enc)," +
       "  status = 'ok', last_error = NULL, updated_at = excluded.updated_at"
     ).bind(account.id, provider, externalUser, accessEnc, refreshEnc, expiresAt, apiKeyEnc, Date.now()).run();
+    forgetAccountConnectionsCache(account.id);
     return true;
   } catch (e) {
     console.error(`Could not store a ${provider} connection:`, e);
@@ -322,8 +324,337 @@ async function handleConnectionsApiRoutes(request, env, url, path) {
     const conn = await loadProviderConnection(env, accountId, provider);
     const revoked = conn ? await revokeAtProvider(env, provider, conn) : false;
     await env.DB.prepare("DELETE FROM provider_connections WHERE account_id = ? AND provider = ?").bind(accountId, provider).run();
+    forgetAccountConnectionsCache(accountId);
     return json({ ok: true, removed: Boolean(conn), revokedAtProvider: revoked });
   }
 
   return json({ ok: false, error: "Method not allowed." }, 405);
+}
+
+// --- Catalogs read an account's connections (P3a-10) --------------------------
+//
+// A personal Trakt, MDBList or Simkl row (and every row, for a TMDB key) can
+// get its keys and tokens from the account's own connections instead of from
+// the install config. resolveConfig asks for them only for an install whose
+// owner is PROVEN, never for one that merely names a user:
+//   * a v2 install: its installs.account_id, set by the signed-in account that
+//     created it, and deleted with that account;
+//   * a stored config whose Creator Key still verifies (a re-registered
+//     username has a new key, so it cannot);
+//   * a stored config /api/save stamped with ownerId + ownerSince, the
+//     accounts row's id and created_at -- a username deleted and registered
+//     again gets a new row with a new created_at, so the stamp stops matching.
+// The older trackOwner stamp and the unverified-shelf fallback are NOT enough:
+// both are names, and a name can change hands.
+//
+// A key or token the config carries itself always wins, so an existing link
+// serves exactly as before; connections fill only what it lacks. A token and
+// the client id it was issued to travel together (Trakt and Simkl reject a
+// token presented with another app's id).
+//
+// Nothing here runs without TOKEN_ENCRYPTION_KEY: no connection can exist.
+
+const CONNECTION_ROWS_CACHE = new Map();
+const CONNECTION_ROWS_CACHE_TTL_MS = 60 * 1000;
+const CONNECTION_ROWS_CACHE_MAX = 500;
+const CONNECTION_OWNER_CACHE = new Map();
+// A token is renewed when it has less than this left, so a request never
+// carries one that expires on the way.
+const CONNECTION_REFRESH_MARGIN_MS = 60 * 60 * 1000;
+// The site is hosted only at mylistsaddon.com (docs/DECISIONS.md D-1), and a
+// refresh has to name the redirect URI the token was issued under.
+const TRAKT_OAUTH_REDIRECT_URI = "https://mylistsaddon.com/api/trakt/oauth/callback";
+
+// The config fields each provider's connection supplies. `paired`: the token is
+// only good with the client id it was issued to, so both come from the
+// connection or neither does.
+const CONNECTION_CONFIG_FIELDS = {
+  trakt: { token: "traktAccessToken", apiKey: "traktKey", user: "traktUsername", paired: true },
+  simkl: { token: "simklAccessToken", apiKey: "simklKey", user: "simklUsername", paired: true },
+  mdblist: { token: "mdblistAccessToken", apiKey: "mdblistKey" },
+  // A TMDB session is a website feature; catalogs use only the API key.
+  tmdb: { apiKey: "tmdbKey" },
+};
+
+function forgetAccountConnectionsCache(accountId) {
+  if (accountId != null) CONNECTION_ROWS_CACHE.delete(String(accountId));
+}
+
+function connectionCacheSet(map, key, value) {
+  if (map.size >= CONNECTION_ROWS_CACHE_MAX) {
+    const oldest = map.keys().next().value;
+    if (oldest !== undefined) map.delete(oldest);
+  }
+  map.set(key, { value, at: Date.now() });
+}
+
+function connectionCacheGet(map, key) {
+  const hit = map.get(key);
+  if (hit && Date.now() - hit.at < CONNECTION_ROWS_CACHE_TTL_MS) return hit;
+  if (hit) map.delete(key);
+  return null;
+}
+
+// `fresh` skips the isolate copy. A save decides from it what to leave out of
+// a link for good, so it must not act on a connection another isolate has
+// just removed.
+async function accountConnectionRows(env, accountId, { fresh = false } = {}) {
+  const key = String(accountId);
+  const cached = fresh ? null : connectionCacheGet(CONNECTION_ROWS_CACHE, key);
+  if (cached) return cached.value;
+  let rows = [];
+  try {
+    const { results } = await env.DB.prepare(
+      "SELECT provider, external_user, access_token_enc, refresh_token_enc, expires_at, api_key_enc, status, updated_at " +
+      "FROM provider_connections WHERE account_id = ?"
+    ).bind(accountId).all();
+    rows = results || [];
+  } catch {
+    // No table yet: no connections.
+    rows = [];
+  }
+  connectionCacheSet(CONNECTION_ROWS_CACHE, key, rows);
+  return rows;
+}
+
+async function decryptConnectionRow(env, accountId, row) {
+  const context = connectionContext(accountId, row.provider);
+  try {
+    const user = parseConnectionUser(row.external_user);
+    return {
+      provider: row.provider,
+      accessToken: row.access_token_enc ? await decryptToken(row.access_token_enc, env, context) : "",
+      refreshToken: row.refresh_token_enc ? await decryptToken(row.refresh_token_enc, env, context) : "",
+      apiKey: row.api_key_enc ? await decryptToken(row.api_key_enc, env, context) : "",
+      expiresAt: row.expires_at,
+      username: user.username,
+      id: user.id,
+      status: row.status,
+      updatedAt: row.updated_at,
+    };
+  } catch (e) {
+    console.error(`Could not read a ${row.provider} connection:`, e);
+    return null;
+  }
+}
+
+async function markConnectionStatus(env, accountId, provider, status, error) {
+  try {
+    await env.DB.prepare(
+      "UPDATE provider_connections SET status = ?, last_error = ?, updated_at = ? WHERE account_id = ? AND provider = ?"
+    ).bind(status, error ? String(error).slice(0, 300) : null, Date.now(), accountId, provider).run();
+  } catch {}
+  forgetAccountConnectionsCache(accountId);
+}
+
+// Asks the provider for a new token. { accessToken, refreshToken, expiresAt },
+// or { rejected: true } when the provider refused the refresh token, or null
+// when it could not be asked (not configured, network) -- a transient failure
+// must not mark a connection broken.
+async function exchangeRefreshToken(env, provider, conn) {
+  const ua = `my-list-addon/${ADDON_VERSION}`;
+  if (provider === "trakt") {
+    // Only a token issued to this site's own client: renewing one issued to a
+    // person's own Trakt app needs that app's secret, which we never had.
+    if (conn.apiKey || !TRAKT_CLIENT_ID || !env || !env.TRAKT_CLIENT_SECRET) return null;
+    let rejected = false;
+    // The web sign-in's redirect URI, then the device flow's out-of-band one:
+    // a token from either flow is renewed under the URI it was issued with.
+    for (const redirectUri of [TRAKT_OAUTH_REDIRECT_URI, "urn:ietf:wg:oauth:2.0:oob"]) {
+      try {
+        const res = await fetch("https://api.trakt.tv/oauth/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "trakt-api-version": "2", "trakt-api-key": TRAKT_CLIENT_ID, "User-Agent": ua },
+          body: JSON.stringify({
+            refresh_token: conn.refreshToken,
+            client_id: TRAKT_CLIENT_ID,
+            client_secret: env.TRAKT_CLIENT_SECRET,
+            redirect_uri: redirectUri,
+            grant_type: "refresh_token",
+          }),
+          signal: AbortSignal.timeout(10000),
+        });
+        if (res.ok) {
+          const d = await res.json().catch(() => ({}));
+          if (!d.access_token) return null;
+          return {
+            accessToken: d.access_token,
+            refreshToken: d.refresh_token || conn.refreshToken,
+            expiresAt: d.created_at && d.expires_in ? (d.created_at + d.expires_in) * 1000 : null,
+          };
+        }
+        if (res.status === 400 || res.status === 401 || res.status === 403) rejected = true;
+        else return null;
+      } catch {
+        return null;
+      }
+    }
+    return rejected ? { rejected: true } : null;
+  }
+  if (provider === "mdblist") {
+    const clientId = MDBLIST_CLIENT_ID || (env && env.MDBLIST_CLIENT_ID) || "";
+    const clientSecret = (env && env.MDBLIST_CLIENT_SECRET) || "";
+    if (!clientId || !clientSecret) return null;
+    try {
+      const form = new URLSearchParams();
+      form.set("grant_type", "refresh_token");
+      form.set("refresh_token", conn.refreshToken);
+      form.set("client_id", clientId);
+      form.set("client_secret", clientSecret);
+      const res = await fetch("https://api.mdblist.com/oauth/token/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+          "Authorization": `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
+          "User-Agent": ua,
+          "Accept": "application/json",
+        },
+        body: form.toString(),
+        signal: AbortSignal.timeout(10000),
+      });
+      if (res.ok) {
+        const d = await res.json().catch(() => ({}));
+        const token = d.access_token || d.token;
+        if (!token) return null;
+        return {
+          accessToken: token,
+          refreshToken: d.refresh_token || conn.refreshToken,
+          expiresAt: d.expires_in ? Date.now() + Number(d.expires_in) * 1000 : null,
+        };
+      }
+      if (res.status === 400 || res.status === 401 || res.status === 403) return { rejected: true };
+    } catch {}
+    return null;
+  }
+  return null;
+}
+
+// The connection, renewed first if its token is expired or about to be. Null
+// when there is no usable token.
+//
+// Refresh tokens are single-use, and two isolates can reach an expiring token
+// at once: the one whose refresh is refused re-reads the row, and uses what the
+// other one stored rather than marking a working connection broken.
+async function refreshProviderConnectionIfDue(env, accountId, provider, conn) {
+  const now = Date.now();
+  if (!conn.expiresAt || conn.expiresAt - now > CONNECTION_REFRESH_MARGIN_MS) return conn;
+  const stillValid = conn.expiresAt > now ? conn : null;
+  if (!conn.refreshToken) return stillValid;
+  const fresh = await exchangeRefreshToken(env, provider, conn);
+  if (fresh && fresh.accessToken) {
+    await storeProviderConnection(env, { id: accountId }, provider, {
+      accessToken: fresh.accessToken,
+      refreshToken: fresh.refreshToken,
+      expiresAt: fresh.expiresAt,
+      externalUser: { username: conn.username, id: conn.id },
+    });
+    return { ...conn, ...fresh };
+  }
+  if (fresh && fresh.rejected) {
+    const again = await loadProviderConnection(env, accountId, provider);
+    if (again && again.accessToken && again.accessToken !== conn.accessToken) {
+      forgetAccountConnectionsCache(accountId);
+      return again;
+    }
+    if (!stillValid) await markConnectionStatus(env, accountId, provider, "expired", "The provider refused to renew this sign-in.");
+  }
+  return stillValid;
+}
+
+// The config fields an account's connections supply that `current` (the
+// config's own values, from readInstallConfigFields) lacks.
+async function connectionFieldsForConfig(env, accountId, current) {
+  if (!env || !env.DB || accountId == null || !hasTokenEncryptionKey(env)) return {};
+  const rows = await accountConnectionRows(env, accountId);
+  const out = {};
+  for (const row of rows) {
+    const map = CONNECTION_CONFIG_FIELDS[row.provider];
+    if (!map || row.status !== "ok") continue;
+    const tokenMissing = Boolean(map.token && !current[map.token] && row.access_token_enc);
+    const keyMissing = Boolean(map.apiKey && !current[map.apiKey] && row.api_key_enc);
+    if (!tokenMissing && !keyMissing) continue;
+    let conn = await decryptConnectionRow(env, accountId, row);
+    if (!conn) continue;
+    if (tokenMissing) {
+      conn = await refreshProviderConnectionIfDue(env, accountId, row.provider, conn);
+      if (!conn || !conn.accessToken) continue;
+      // An MDBList connection made from an API key alone stores the key as its
+      // token too (import-local). It is a key, not a bearer token.
+      if (row.provider === "mdblist" && conn.apiKey && conn.accessToken === conn.apiKey) {
+        if (!current.mdblistKey) out.mdblistKey = conn.apiKey;
+        continue;
+      }
+      out[map.token] = conn.accessToken;
+      // "" means this site's own client id, the one the token was issued to.
+      if (map.paired) out[map.apiKey] = conn.apiKey || "";
+      else if (keyMissing && conn.apiKey) out[map.apiKey] = conn.apiKey;
+      if (map.user && !current[map.user] && conn.username) out[map.user] = conn.username;
+      continue;
+    }
+    // Only a key is missing. A paired key is never borrowed on its own: the
+    // config's token was issued to some other client id.
+    if (!map.paired && conn.apiKey) out[map.apiKey] = conn.apiKey;
+  }
+  return out;
+}
+
+// The accounts row a stored config's provider keys may come from, or null. See
+// the header above for what counts as proof. `keyVerifiedOwner` is the username
+// resolveConfig just proved with the config's own Creator Key, or "".
+async function connectionOwnerForConfig(env, parsed, keyVerifiedOwner) {
+  if (!env || !env.DB || !hasTokenEncryptionKey(env)) return null;
+  if (keyVerifiedOwner) {
+    const key = "u:" + keyVerifiedOwner;
+    const cached = connectionCacheGet(CONNECTION_OWNER_CACHE, key);
+    if (cached) return cached.value;
+    const row = await getOrBackfillAccount(env, keyVerifiedOwner);
+    const id = row ? row.id : null;
+    connectionCacheSet(CONNECTION_OWNER_CACHE, key, id);
+    return id;
+  }
+  const ownerId = Number(parsed && parsed.ownerId);
+  const ownerSince = Number(parsed && parsed.ownerSince);
+  if (!Number.isFinite(ownerId) || !Number.isFinite(ownerSince) || !ownerId || !ownerSince) return null;
+  const key = `i:${ownerId}:${ownerSince}`;
+  const cached = connectionCacheGet(CONNECTION_OWNER_CACHE, key);
+  if (cached) return cached.value;
+  let id = null;
+  try {
+    const row = await env.DB.prepare(
+      "SELECT id, created_at, status, deleted_at FROM accounts WHERE id = ?"
+    ).bind(ownerId).first();
+    if (row && Number(row.created_at) === ownerSince && row.deleted_at == null && (!row.status || row.status === "active")) id = row.id;
+  } catch {
+    id = null;
+  }
+  connectionCacheSet(CONNECTION_OWNER_CACHE, key, id);
+  return id;
+}
+
+// For /api/save: the config fields a signed-in save can leave out, because the
+// account's connections supply them when the link is read. Only connections
+// that work now; paired fields go together.
+async function connectionSuppliedConfigFields(env, accountId) {
+  if (!env || !env.DB || accountId == null || !hasTokenEncryptionKey(env)) return [];
+  const rows = await accountConnectionRows(env, accountId, { fresh: true });
+  const fields = [];
+  for (const row of rows) {
+    const map = CONNECTION_CONFIG_FIELDS[row.provider];
+    if (!map || row.status !== "ok") continue;
+    if (row.provider === "mdblist") {
+      const conn = await decryptConnectionRow(env, accountId, row);
+      if (!conn) continue;
+      const keyOnly = conn.apiKey && conn.accessToken === conn.apiKey;
+      if (!keyOnly && conn.accessToken) fields.push(map.token);
+      if (conn.apiKey) fields.push(map.apiKey);
+      continue;
+    }
+    if (map.token && row.access_token_enc) {
+      fields.push(map.token);
+      if (map.paired) fields.push(map.apiKey);
+    } else if (!map.token && row.api_key_enc) {
+      fields.push(map.apiKey);
+    }
+  }
+  return fields;
 }

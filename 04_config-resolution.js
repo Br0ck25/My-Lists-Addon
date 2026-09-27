@@ -82,9 +82,13 @@ async function resolveConfig(configParam, env, { withTracking = false } = {}) {
         //   * it predates both, and LEGACY_UNVERIFIED_CONFIG_SHELVES says to
         //     honour those -- see that constant for exactly what it costs.
         let trackOwner = "";
+        // Proven by the config's own Creator Key, the strongest of the three.
+        // P3a-10 lends provider connections only to this or an ownerId stamp.
+        let keyVerifiedOwner = "";
         if (creatorName) {
           if (parsed.trackCreatorKey) {
             trackOwner = await verifyShelfOwner(env, creatorName, parsed.trackCreatorKey);
+            keyVerifiedOwner = trackOwner;
           }
           if (!trackOwner && typeof parsed.trackOwner === "string" && parsed.trackOwner) {
             const stamped = String(parsed.trackOwner).toLowerCase();
@@ -93,6 +97,19 @@ async function resolveConfig(configParam, env, { withTracking = false } = {}) {
           if (!trackOwner && LEGACY_UNVERIFIED_CONFIG_SHELVES && !parsed.trackCreatorKey && !parsed.trackOwner && !parsed._legacyShelfRuleOff) {
             trackOwner = String(creatorName).toLowerCase();
           }
+        }
+        // The keys and tokens this config does not carry itself, from its
+        // proven owner's own connections (P3a-10, 28_connections.js). Its own
+        // always win, so a link that has them serves exactly as before.
+        // Guarded: a failure here must leave the link serving as it would
+        // without connections, not fall through to the base64 decode below.
+        try {
+          const connectionOwnerId = await connectionOwnerForConfig(env, parsed, keyVerifiedOwner);
+          if (connectionOwnerId != null) {
+            parsed = { ...parsed, ...(await connectionFieldsForConfig(env, connectionOwnerId, readInstallConfigFields(parsed))) };
+          }
+        } catch (e) {
+          console.error("Could not read the install owner's connections:", e);
         }
         if (withTracking && trackOwner && env.CONFIGS) {
           const trackingRaw = await env.CONFIGS.get(`creatorsynctracking:${trackOwner}`);
