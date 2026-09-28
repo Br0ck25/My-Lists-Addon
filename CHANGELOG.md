@@ -25,6 +25,14 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 `FF_PROVIDER_BREAKER` (P4-4), `FF_CHART_SNAPSHOTS` (P4-3) and `FF_CANONICAL_IDS` (P4-2), all below, are optional and can be turned on or off at any time (`docs/OPERATIONS.md` §14, §15, §17; read §17 before the last one).
 
+8. **Recommended: set up the background jobs queue** (Phase 5, `docs/OPERATIONS.md` §18): create the queues `mylists-jobs` and `mylists-jobs-dlq`, make this Worker the consumer of `mylists-jobs` (batch size 25, 5 retries, dead-letter queue `mylists-jobs-dlq`), bind `mylists-jobs` to the Worker as `JOBS`, then press **Send a test job** in `/admin` → Maintenance. Without it everything works as before.
+
+### 📬 A queue for background work (P5-1)
+
+- **Nothing changes for visitors yet.** The Worker can now put jobs on a Cloudflare Queue (`mylists-jobs`) and run them itself, one after another, outside any web request. A job that fails is tried again after 30 seconds, then 1, 2, 4 and 8 minutes; after that it is kept in a second queue (`mylists-jobs-dlq`) to be looked at, not lost. A job of a kind this version does not know is kept too, so rolling back a release does not throw work away.
+- It is the groundwork for Phase 5: the next steps move the cron's work (Continue Watching and Airing Next sweeps, chart and poster warming, New on Streaming) onto the queue, so each piece gets its own retries and its own time limit instead of sharing one cron tick.
+- `/admin` → Maintenance has a new **Background jobs queue** panel: it says whether the queue is bound, and **Send a test job** proves the whole round trip works. Setup steps are in `docs/OPERATIONS.md` §18.
+
 ### 🪪 Every title in a Stremio catalog opens (P4-2)
 
 - **A new switch, `FF_CANONICAL_IDS` (off).** With it on, every title a Stremio, Nuvio or wako catalog serves carries an id the apps can open: its IMDb id where the site knows it, otherwise its TMDB id.

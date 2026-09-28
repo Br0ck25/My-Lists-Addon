@@ -62,6 +62,27 @@ dataset = "mylists_events"
 binding = "BLOBS"
 bucket_name = "mylists-blobs"
 
+# --- Queues (recommended from Phase 5) -----------------------------------------
+# Background jobs (44_jobs-queue.js). JOBS is the producer: the Worker puts
+# jobs on mylists-jobs. The same Worker is the queue's consumer (the `queue`
+# export), in batches of 25; a job that fails is retried 5 times and then
+# moved to mylists-jobs-dlq, where it can be read. Without JOBS nothing is
+# sent, and the work that has not moved to jobs yet runs as before.
+# Dashboard: Queues -> Create mylists-jobs and mylists-jobs-dlq; mylists-jobs
+# -> Settings -> Consumers -> Add -> this Worker (batch size 25, retries 5,
+# dead letter queue mylists-jobs-dlq); then Worker -> Settings -> Bindings ->
+# Add -> Queue, name JOBS, queue mylists-jobs. See docs/OPERATIONS.md section 18.
+[[queues.producers]]
+binding = "JOBS"
+queue = "mylists-jobs"
+
+[[queues.consumers]]
+queue = "mylists-jobs"
+max_batch_size = 25
+max_batch_timeout = 5
+max_retries = 5
+dead_letter_queue = "mylists-jobs-dlq"
+
 # --- Plan ---------------------------------------------------------------------
 # The hosted Worker runs on Workers Paid (10,000 outbound fetches and 30 s CPU
 # per invocation). The old per-invocation budgets that let it fit the Free

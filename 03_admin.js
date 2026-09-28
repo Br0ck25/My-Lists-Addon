@@ -1738,6 +1738,7 @@ async function renderAdminDashboard(env) {
   // makes sense once this is true.
   const isD1Bound = !!(env && env.DB);
   const isActivityBound = !!(env && env.DB && env.DB_ACTIVITY);
+  const isJobsBound = !!(env && env.JOBS && typeof env.JOBS.send === "function");
   const today = statsToday();
   const [
     totalPV, todayPV, totalIN, todayIN, totalPP, todayPP,
@@ -2442,6 +2443,15 @@ async function renderAdminDashboard(env) {
       <div id="activityBackfillResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
     </div>
 
+    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
+      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Background jobs queue: ${isJobsBound
+        ? '<span style="color:#30d158;">bound</span>'
+        : '<span style="color:#8E8E93;">not bound yet</span>'}</div>
+      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Background work moves onto the Cloudflare Queue <code>mylists-jobs</code>, which this Worker also reads (Phase 5). Setting it up: create the queues <code>mylists-jobs</code> and <code>mylists-jobs-dlq</code>, add this Worker as the consumer of <code>mylists-jobs</code> (batch size 25, 5 retries, dead-letter queue <code>mylists-jobs-dlq</code>), and bind <code>mylists-jobs</code> to this Worker as <code>JOBS</code>. See docs/OPERATIONS.md section 18. <strong>Send a test job</strong> puts one job on the queue and waits for this Worker to pick it up, which proves all three steps worked.</p>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="jobsPingBtn" onclick="runJobsPing()" ${isJobsBound ? '' : 'disabled'}>Send a test job</button>
+      <span id="jobsPingStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;">${isJobsBound ? '' : 'JOBS is not bound.'}</span>
+    </div>
+
     <div class="panel" style="margin:0; padding:14px 16px;">
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Database schema</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Migrations are applied by hand and nothing records that it happened, so this Worker can end up running ahead of its own database. It degrades quietly when that happens rather than refusing to start &mdash; which is why this check exists. Run it after any deploy that shipped a new file under <code>migrations/</code>.</p>
@@ -3142,6 +3152,41 @@ async function renderAdminDashboard(env) {
       } catch (e) {
         status.textContent = 'Failed: network error.';
       }
+    }
+
+    // Background jobs queue (P5-1): send one test job, then ask every two
+    // seconds whether the consumer has picked it up, for up to a minute.
+    async function runJobsPing() {
+      const btn = document.getElementById('jobsPingBtn');
+      const status = document.getElementById('jobsPingStatus');
+      btn.disabled = true;
+      status.textContent = 'Sending...';
+      try {
+        const res = await fetch('/admin/api/jobs/ping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        const sent = await res.json();
+        if (!sent.ok) {
+          status.textContent = 'Failed: ' + (sent.error || 'unknown error');
+          btn.disabled = false;
+          return;
+        }
+        const startedAt = Date.now();
+        let answered = false;
+        while (Date.now() - startedAt < 60000) {
+          status.textContent = 'Sent. Waiting for the Worker to pick it up (' + Math.round((Date.now() - startedAt) / 1000) + ' s)...';
+          await new Promise(function (r) { setTimeout(r, 2000); });
+          const check = await fetch('/admin/api/jobs/ping?nonce=' + encodeURIComponent(sent.nonce));
+          const d = await check.json();
+          if (d.ok && d.received) {
+            answered = true;
+            status.textContent = 'Round trip works: picked up after ' + (d.roundTripMs != null ? (d.roundTripMs / 1000).toFixed(1) + ' s' : 'a moment') + (d.attempts > 1 ? ' (on delivery ' + d.attempts + ')' : '') + '.';
+            break;
+          }
+        }
+        if (!answered) status.textContent = 'Sent, but not picked up within a minute. Check that this Worker is the consumer of mylists-jobs (Queues, mylists-jobs, Settings, Consumers), then try again.';
+      } catch (e) {
+        status.textContent = 'Failed: network error.';
+      }
+      btn.disabled = false;
     }
 
     // Browsing one creator's stored list records.

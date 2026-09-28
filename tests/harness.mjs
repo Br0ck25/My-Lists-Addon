@@ -328,6 +328,106 @@ export function makeR2() {
   };
 }
 
+// A Cloudflare Queue (Phase 5): the producer side the Worker sees as a
+// binding (send, sendBatch), holding what was sent until drainQueue delivers
+// it. Bodies go through JSON, as a "json" message does. Queues' own limits
+// are enforced: 128 KB per message, 100 messages and 256 KB per sendBatch.
+// `_hooks.beforeSend` throws to make a send fail.
+export const QUEUE_MAX_MESSAGE_BYTES = 128 * 1024;
+export function makeQueue(name = "mylists-jobs") {
+  const pending = [];
+  const hooks = { beforeSend: null };
+  let seq = 0;
+  const enqueue = async (body, opts = {}) => {
+    if (hooks.beforeSend) await hooks.beforeSend(body);
+    const text = JSON.stringify(body);
+    if (Buffer.byteLength(text) > QUEUE_MAX_MESSAGE_BYTES) throw new Error(`Queue send failed: message too large (${Buffer.byteLength(text)} bytes)`);
+    const msg = { id: `msg-${name}-${++seq}`, body: JSON.parse(text), attempts: 1, delaySeconds: Number(opts.delaySeconds) || 0, timestamp: new Date() };
+    pending.push(msg);
+    return msg;
+  };
+  return {
+    _name: name,
+    _pending: pending,
+    _dlq: [],
+    _sent: [],
+    _hooks: hooks,
+    async send(body, opts = {}) {
+      const msg = await enqueue(body, opts);
+      this._sent.push(msg.body);
+    },
+    async sendBatch(messages) {
+      if (messages.length > 100) throw new Error(`Queue sendBatch failed: ${messages.length} messages (at most 100)`);
+      const bytes = messages.reduce((n, m) => n + Buffer.byteLength(JSON.stringify(m.body)), 0);
+      if (bytes > 256 * 1024) throw new Error(`Queue sendBatch failed: ${bytes} bytes (at most 256 KB)`);
+      for (const m of messages) {
+        const msg = await enqueue(m.body, m);
+        this._sent.push(msg.body);
+      }
+    },
+  };
+}
+
+// Delivers a makeQueue's messages to the Worker's queue() handler the way the
+// consumer configured in docs/OPERATIONS.md section 18 does: batches of up to
+// `batchSize`; a message the handler acks is gone; one it retries comes back
+// with `attempts` + 1 (the delay it asked for is recorded, not waited out);
+// after `maxRetries` retries it goes to the dead-letter queue (`queue._dlq`).
+// A message the handler neither acks nor retries is acknowledged when queue()
+// returns and retried when it throws, as Cloudflare does. Returns a log of
+// every delivery.
+export async function drainQueue(env, { queue = env.JOBS, w = worker, batchSize = 25, maxRetries = 5, rounds = 50 } = {}) {
+  const log = { batches: 0, deliveries: [], retries: [], dlq: [] };
+  for (let round = 0; round < rounds && queue._pending.length; round++) {
+    const taken = queue._pending.splice(0, batchSize);
+    const outcome = new Map();
+    const settle = (m, what, delaySeconds) => {
+      if (!outcome.has(m.id)) outcome.set(m.id, { what, delaySeconds: Number(delaySeconds) || 0 });
+    };
+    const messages = taken.map((m) => ({
+      id: m.id,
+      timestamp: m.timestamp,
+      body: JSON.parse(JSON.stringify(m.body)),
+      attempts: m.attempts,
+      ack() { settle(m, "ack"); },
+      retry(opts = {}) { settle(m, "retry", opts.delaySeconds); },
+    }));
+    const batch = {
+      queue: queue._name,
+      messages,
+      ackAll() { for (const m of taken) settle(m, "ack"); },
+      retryAll(opts = {}) { for (const m of taken) settle(m, "retry", opts.delaySeconds); },
+    };
+    let pending = [];
+    const ctx = { waitUntil: (p) => pending.push(Promise.resolve(p).catch(() => {})) };
+    let threw = null;
+    try {
+      await w.queue(batch, env, ctx);
+    } catch (err) {
+      threw = err;
+    }
+    for (let i = 0; i < 20 && pending.length; i++) {
+      const p = pending;
+      pending = [];
+      await Promise.all(p);
+    }
+    log.batches++;
+    for (const m of taken) {
+      const o = outcome.get(m.id) || { what: threw ? "retry" : "ack", delaySeconds: 0 };
+      log.deliveries.push({ id: m.id, type: m.body && m.body.type, attempts: m.attempts, outcome: o.what });
+      if (o.what !== "retry") continue;
+      log.retries.push({ id: m.id, type: m.body && m.body.type, attempts: m.attempts, delaySeconds: o.delaySeconds });
+      if (m.attempts > maxRetries) {
+        queue._dlq.push(m);
+        log.dlq.push(m);
+      } else {
+        queue._pending.push({ ...m, attempts: m.attempts + 1, delaySeconds: o.delaySeconds });
+      }
+    }
+  }
+  return log;
+}
+
 export async function call(env, path, opts = {}) {
   const {
     method = "GET",

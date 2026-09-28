@@ -39,7 +39,7 @@ Set these in the dashboard: Worker → **Settings → Bindings → Add**.
 | `ANALYTICS` | Analytics Engine dataset (`mylists_events`) | Recommended | Per-request route, status and storage-operation counts, used to measure the next phases | **Add now.** The code writes to it when present and skips it otherwise. |
 | `DB_ACTIVITY` | D1 database (`mylists-activity`) | Later (Phase 3c) | Watch events and progress | Can be added now; nothing uses it yet. Create the database (D1 → Create → `mylists-activity`), run `migrations/activity/A0001_activity.sql` in **its** Console (not the main database's), then bind it. See §4. |
 | `BLOBS` | R2 bucket (`mylists-blobs`) | Recommended (Phase 3b) | Shared channels' episode lists (P3b-8); later posters, exports and D1 backups | **Add with Phase 3b.** Create the bucket (R2 → Create bucket → `mylists-blobs`), then bind it. Without it, shared channels still get their rows and their episodes are read from KV. |
-| `JOBS` | Queue producer (`mylists-jobs`) | Later (Phase 5) | Background jobs | Not yet. The queue **consumer** is configured on the queue: Queues → `mylists-jobs` → Settings → Add consumer → this Worker. |
+| `JOBS` | Queue producer (`mylists-jobs`) | Recommended (Phase 5) | Background jobs: work that nobody is waiting on runs from a queue instead of inside a request or a cron tick | **Add with Phase 5**, with the queue's consumer and dead-letter queue: the steps are in §18. Without it nothing is sent to a queue, and the cron keeps doing its work itself, as before. |
 
 The owner confirmed on 2026-09-27 that this account's dashboard offers Queues, R2 and Analytics Engine bindings.
 
@@ -347,3 +347,30 @@ The website's previews are not affected. They still show a storyline list's epis
 
 **Turning it on:** Worker → Settings → Variables and Secrets → Add → type *Text*, name `FF_CANONICAL_IDS`, value `1`. Deploy. **Turning it off:** delete the variable and deploy; rows go back to the ids they had. Neither stores anything.
 
+## 18. The background jobs queue (P5-1)
+
+From Phase 5, background work (refreshing charts and show schedules, imports, clean-ups) runs as **jobs** on a Cloudflare Queue, `mylists-jobs`, instead of inside a web request or a cron tick. This Worker both puts jobs on the queue and takes them off. A job that fails is tried again a little later (after 30 seconds, then 1, 2, 4 and 8 minutes); after five retries it is moved to a second queue, `mylists-jobs-dlq` (the "dead-letter queue"), where it waits to be looked at instead of being lost.
+
+**Setting it up** (once, in the Cloudflare dashboard):
+
+1. **Storage & Databases → Queues → Create queue**, name `mylists-jobs`.
+2. Create a second queue the same way, name `mylists-jobs-dlq`.
+3. Open `mylists-jobs` → **Settings** → **Consumers** → **Add consumer**:
+   - consumer: this Worker (the My Lists Worker);
+   - batch size `25`;
+   - max retries `5`;
+   - max wait time (batch timeout) `5` seconds;
+   - dead letter queue: `mylists-jobs-dlq`.
+   Leave `mylists-jobs-dlq` without a consumer.
+4. **Workers & Pages** → the My Lists Worker → **Settings → Bindings → Add → Queue**, variable name `JOBS`, queue `mylists-jobs`. Deploy.
+5. **Check it:** `/admin` → Maintenance → **Background jobs queue** should say *bound*. Press **Send a test job**. Within a few seconds it should say *Round trip works*. If it says the job was not picked up, step 3 is missing or names another Worker.
+
+**Order does not matter**, and nothing breaks before it is done: without `JOBS` nothing is sent to a queue, and every piece of work that has not moved to jobs yet runs exactly as before.
+
+**Watching it:**
+
+- **Queues → `mylists-jobs` → Metrics** shows how many jobs are waiting and how old the oldest is. A backlog that keeps growing means jobs arrive faster than they finish; the Worker's *Logs* say which job type is failing (`[Jobs] <type> failed`).
+- **Queues → `mylists-jobs-dlq` → Messages** lists the jobs that failed six times (Cloudflare keeps them for 4 days). Each shows its `type` and its `payload` (what it was for). Scheduled work is simply made again by its next run once the cause is fixed; the handover notes of each job type say what to do about one that is not.
+- With the `ANALYTICS` binding, each batch writes one point per job type, index `job`: blobs `["job", <type>, <queue>]` and doubles `[jobs, done, tried again, dropped, milliseconds spent]`.
+
+**Turning it off:** delete the `JOBS` binding and deploy. Jobs already waiting stay on the queue and run when it is bound again (or expire after 4 days). Removing the consumer (step 3) while `JOBS` is still bound makes jobs pile up unrun, so remove the binding first.

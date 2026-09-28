@@ -8090,4 +8090,12 @@ export default {
       console.error("[Cron] scheduled() failed before its tasks were queued:", err);
     }
   },
+
+  // Background jobs (Phase 5): the consumer of the mylists-jobs queue. It is
+  // set up on the queue in the dashboard (Queues -> mylists-jobs -> Settings
+  // -> Consumers -> this Worker; docs/OPERATIONS.md section 18). Each message
+  // names its job type, and runJobsQueue (44_jobs-queue.js) runs its handler.
+  async queue(batch, env, ctx) {
+    await runJobsQueue(batch, env, ctx);
+  },
 };
