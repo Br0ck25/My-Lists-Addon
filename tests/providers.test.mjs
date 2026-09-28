@@ -599,3 +599,236 @@ describe("P4-4: the provider breaker", () => {
     }
   });
 });
+
+// --- P4-3: chart snapshots ------------------------------------------------------
+
+describe("P4-3: chart snapshots", () => {
+  // 42_ on its own is a whole isolate's worth of snapshot state; each test
+  // loads its own. Its clock is the sandbox's Date, moved by the test.
+  function loadSnapshots() {
+    const sb = loadSourceFunctions("42_chart-snapshots.js");
+    sb.__clock = 1_800_000_000_000;
+    vm.runInContext("Date.now = () => globalThis.__clock;", sb);
+    return sb;
+  }
+  function recordingKv() {
+    const kv = makeKv();
+    const put = kv.put.bind(kv);
+    const get = kv.get.bind(kv);
+    kv._puts = [];
+    kv._gets = 0;
+    kv.put = async (key, value, opts) => { kv._puts.push({ key, opts }); return put(key, value, opts); };
+    kv.get = async (key, type) => { kv._gets++; return get(key, type); };
+    return kv;
+  }
+  // A chart source like the registry's, with a fetcher the test controls.
+  function chartSource(answers, rule = {}) {
+    const src = {
+      name: "tmdb-chart", provider: "tmdb", kind: "chart", snapshot: rule, calls: 0,
+      fetchPage: async () => {
+        src.calls++;
+        const next = answers.length > 1 ? answers.shift() : answers[0];
+        if (next instanceof Error) throw next;
+        const out = next.map((id) => ({ id, type: "movie", name: id }));
+        out.totalItems = 303;
+        return out;
+      },
+    };
+    return src;
+  }
+  const ref = { source: "tmdb-chart", provider: "tmdb", kind: "chart", url: "tmdb:chart:popular", arg: "popular" };
+  function page(env, extra = {}) {
+    const pending = [];
+    const ctx = { waitUntil: (p) => pending.push(p) };
+    return { page: { entry: { id: "r", type: "movie", url: ref.url }, skip: 0, keys: { env, ctx, ...extra } }, settle: () => Promise.all(pending) };
+  }
+  const ids = (metas) => Array.from(metas, (m) => m.id);
+  const KEY = "snap:chart:tmdb-chart:popular:movie:-:0";
+
+  it("is off without FF_CHART_SNAPSHOTS: the fetcher every time, nothing stored", async () => {
+    const sb = loadSnapshots();
+    const env = { CONFIGS: recordingKv() };
+    const src = chartSource([["tt1"]]);
+    await sb.fetchSourcePageWithSnapshot(src, ref, page(env).page);
+    await sb.fetchSourcePageWithSnapshot(src, ref, page(env).page);
+    assert.equal(src.calls, 2);
+    assert.equal(env.CONFIGS._puts.length, 0);
+  });
+
+  it("builds a missing snapshot, stores it for a week, and serves it with its total", async () => {
+    const sb = loadSnapshots();
+    const env = { FF_CHART_SNAPSHOTS: "1", CONFIGS: recordingKv() };
+    const src = chartSource([["tt1", "tt2"]]);
+    const first = await sb.fetchSourcePageWithSnapshot(src, ref, page(env).page);
+    assert.deepEqual(ids(first), ["tt1", "tt2"]);
+    assert.equal(first.totalItems, 303);
+    assert.deepEqual(env.CONFIGS._puts.map((p) => [p.key, p.opts.expirationTtl]), [[KEY, 7 * 24 * 3600]]);
+
+    // Another isolate reads it from KV and never calls the fetcher.
+    const other = loadSnapshots();
+    const again = await other.fetchSourcePageWithSnapshot(src, ref, page(env).page);
+    assert.equal(src.calls, 1);
+    assert.deepEqual(ids(again), ["tt1", "tt2"]);
+    assert.equal(again.totalItems, 303, "the total survives KV");
+  });
+
+  it("serves a fresh snapshot as it is, and reads KV at most once a minute", async () => {
+    const sb = loadSnapshots();
+    const env = { FF_CHART_SNAPSHOTS: "1", CONFIGS: recordingKv() };
+    const src = chartSource([["tt1"]]);
+    await sb.fetchSourcePageWithSnapshot(src, ref, page(env).page);
+    const reads = env.CONFIGS._gets;
+    for (let i = 0; i < 5; i++) await sb.fetchSourcePageWithSnapshot(src, ref, page(env).page);
+    assert.equal(src.calls, 1);
+    assert.equal(env.CONFIGS._gets, reads, "memory within the minute");
+    sb.__clock += 61 * 1000;
+    await sb.fetchSourcePageWithSnapshot(src, ref, page(env).page);
+    assert.equal(env.CONFIGS._gets, reads + 1);
+    assert.equal(src.calls, 1, "still fresh: no rebuild");
+  });
+
+  it("serves a stale snapshot straight away and rebuilds it in the background", async () => {
+    const sb = loadSnapshots();
+    const env = { FF_CHART_SNAPSHOTS: "1", CONFIGS: recordingKv() };
+    const src = chartSource([["tt1"], ["tt9"]]);
+    await sb.fetchSourcePageWithSnapshot(src, ref, page(env).page);
+    sb.__clock += 2 * 3600 * 1000 + 1;
+    const p = page(env);
+    const served = await sb.fetchSourcePageWithSnapshot(src, ref, p.page);
+    assert.deepEqual(ids(served), ["tt1"], "the stale copy, without waiting");
+    await p.settle();
+    assert.equal(src.calls, 2);
+    assert.deepEqual(JSON.parse(env.CONFIGS._store.get(KEY)).items.map((m) => m.id), ["tt9"]);
+    const next = await sb.fetchSourcePageWithSnapshot(src, ref, page(env).page);
+    assert.deepEqual(ids(next), ["tt9"]);
+  });
+
+  // The acceptance test for the rule: an empty result never replaces a
+  // non-empty one.
+  it("never replaces a snapshot with an empty result, and waits before trying again", async () => {
+    const sb = loadSnapshots();
+    const env = { FF_CHART_SNAPSHOTS: "1", CONFIGS: recordingKv() };
+    const src = chartSource([["tt1", "tt2"], [], [], ["tt3"]]);
+    await sb.fetchSourcePageWithSnapshot(src, ref, page(env).page);
+    const stored = env.CONFIGS._store.get(KEY);
+    sb.__clock += 2 * 3600 * 1000 + 1;
+
+    let p = page(env);
+    assert.deepEqual(ids(await sb.fetchSourcePageWithSnapshot(src, ref, p.page)), ["tt1", "tt2"]);
+    await p.settle();
+    assert.equal(src.calls, 2, "the rebuild ran and came back empty");
+    assert.equal(env.CONFIGS._store.get(KEY), stored, "the snapshot was not touched");
+    assert.equal(env.CONFIGS._puts.length, 1);
+
+    // Within five minutes, no second attempt; the good copy is served.
+    sb.__clock += 4 * 60 * 1000;
+    p = page(env);
+    assert.deepEqual(ids(await sb.fetchSourcePageWithSnapshot(src, ref, p.page)), ["tt1", "tt2"]);
+    await p.settle();
+    assert.equal(src.calls, 2);
+
+    // Then it is tried again (empty again: still kept), and again later.
+    sb.__clock += 2 * 60 * 1000;
+    p = page(env);
+    await sb.fetchSourcePageWithSnapshot(src, ref, p.page);
+    await p.settle();
+    assert.equal(src.calls, 3);
+    assert.equal(env.CONFIGS._store.get(KEY), stored);
+    sb.__clock += 6 * 60 * 1000;
+    p = page(env);
+    await sb.fetchSourcePageWithSnapshot(src, ref, p.page);
+    await p.settle();
+    assert.deepEqual(JSON.parse(env.CONFIGS._store.get(KEY)).items.map((m) => m.id), ["tt3"], "a real answer replaces it");
+  });
+
+  it("an empty first answer is passed on as it came, and not stored", async () => {
+    const sb = loadSnapshots();
+    const env = { FF_CHART_SNAPSHOTS: "1", CONFIGS: recordingKv() };
+    const src = chartSource([[]]);
+    const out = await sb.fetchSourcePageWithSnapshot(src, ref, page(env).page);
+    assert.equal(out.length, 0);
+    assert.equal(out.totalItems, 303);
+    assert.equal(env.CONFIGS._puts.length, 0);
+  });
+
+  it("a failing rebuild keeps the stale copy; a failing first build fails as before", async () => {
+    const sb = loadSnapshots();
+    const env = { FF_CHART_SNAPSHOTS: "1", CONFIGS: recordingKv() };
+    const src = chartSource([["tt1"], new Error("TMDB request failed (HTTP 503).")]);
+    await sb.fetchSourcePageWithSnapshot(src, ref, page(env).page);
+    sb.__clock += 3 * 3600 * 1000;
+    const p = page(env);
+    assert.deepEqual(ids(await sb.fetchSourcePageWithSnapshot(src, ref, p.page)), ["tt1"]);
+    await p.settle();
+    assert.deepEqual(JSON.parse(env.CONFIGS._store.get(KEY)).items.map((m) => m.id), ["tt1"]);
+
+    const cold = loadSnapshots();
+    const failing = chartSource([new Error("TMDB request failed (HTTP 503).")]);
+    await assert.rejects(cold.fetchSourcePageWithSnapshot(failing, ref, page({ FF_CHART_SNAPSHOTS: "1", CONFIGS: recordingKv() }).page), /HTTP 503/);
+  });
+
+  it("concurrent requests for a missing page build it once", async () => {
+    const sb = loadSnapshots();
+    const env = { FF_CHART_SNAPSHOTS: "1", CONFIGS: recordingKv() };
+    const src = chartSource([["tt1"]]);
+    const all = await Promise.all([1, 2, 3, 4].map(() => sb.fetchSourcePageWithSnapshot(src, ref, page(env).page)));
+    assert.equal(src.calls, 1);
+    for (const out of all) assert.deepEqual(ids(out), ["tt1"]);
+  });
+
+  it("keys a page by what changes its rows, and leaves every other row alone", () => {
+    const sb = loadSnapshots();
+    const regional = { name: "tmdb-genre", kind: "chart", snapshot: { region: true } };
+    const plain = { name: "trakt-chart", kind: "chart", snapshot: {} };
+    const pg = (type, skip, keys) => ({ entry: { type }, skip, keys });
+    assert.equal(sb.chartSnapshotKey(regional, { arg: "horror" }, pg("series", 100, { region: "GB" })), "snap:chart:tmdb-genre:horror:series:GB:100");
+    assert.equal(sb.chartSnapshotKey(plain, { arg: "trending" }, pg("movie", 0, { region: "GB" })), "snap:chart:trakt-chart:trending:movie:-:0", "region ignored where it changes nothing");
+    const withVariant = { name: "x", kind: "chart", snapshot: { variant: (r, { keys }) => (keys.d ? "digital" : "") } };
+    assert.equal(sb.chartSnapshotKey(withVariant, { arg: "a" }, pg("movie", 0, { d: true })), "snap:chart:x:a:movie:-:0:digital");
+    assert.equal(sb.chartSnapshotKey(withVariant, { arg: "a:b/c" }, pg("movie", 0, {})), "snap:chart:x:a%3Ab%2Fc:movie:-:0", "the parts cannot run into each other");
+    assert.equal(sb.chartSnapshotKey({ name: "trakt-watchlist", kind: "personal", snapshot: {} }, { arg: "" }, pg("movie", 0, {})), null);
+    assert.equal(sb.chartSnapshotKey({ name: "mdblist", kind: "list" }, { arg: "" }, pg("movie", 0, {})), null);
+  });
+
+  it("only provider charts carry a snapshot rule in the registry", () => {
+    const reg = loadSourceFunctions("00_constants.js", "04_config-resolution.js");
+    const sources = vm.runInContext("CATALOG_SOURCES", reg);
+    const withRule = [...sources.filter((s) => s.snapshot).map((s) => s.name)].sort();
+    assert.deepEqual(withRule, ["simkl-chart", "tmdb-chart", "tmdb-genre", "tmdb-hidden-gems", "tmdb-holiday", "tmdb-kids", "tmdb-top10", "trakt-chart"]);
+    for (const s of sources) {
+      if (s.snapshot) assert.ok(s.kind === "chart" && s.provider !== "mylists", `${s.name} may not be snapshotted`);
+    }
+  });
+
+  // Through the real Worker: once a chart page is in its snapshot, a cold
+  // isolate serves it with TMDB down and the fetcher's own caches gone.
+  it("catalog chart reads hit the snapshot", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      const mode = { status: 0 };
+      const tmdb = makeFakeTmdb(mode);
+      globalThis.fetch = tmdb.handler;
+      const env = makeEnv({ FF_CHART_SNAPSHOTS: "1", TMDB_API_KEY: "k" });
+      const first = await callIsolate(await freshIsolate(), env, "/api/preview?url=tmdb:chart:popular&type=movie&region=GB");
+      assert.equal(first.body.ok, true);
+      const key = "snap:chart:tmdb-chart:popular:movie:GB:0";
+      assert.ok(env.CONFIGS._store.has(key), "the page was stored");
+      for (const k of [...env.CONFIGS._store.keys()]) if (k.startsWith("cache:") || k.startsWith("tmdbdetail_v2:")) env.CONFIGS._store.delete(k);
+
+      mode.status = 503;
+      const calls = tmdb.calls.tmdb;
+      const again = await callIsolate(await freshIsolate(), env, "/api/preview?url=tmdb:chart:popular&type=movie&region=GB");
+      assert.equal(again.body.ok, true);
+      assert.equal(again.body.count, first.body.count);
+      assert.equal(tmdb.calls.tmdb, calls, "no TMDB call");
+
+      // Without the switch the same cold read goes to TMDB, and fails.
+      const off = makeEnv({ TMDB_API_KEY: "k", CONFIGS: env.CONFIGS });
+      const without = await callIsolate(await freshIsolate(), off, "/api/preview?url=tmdb:chart:popular&type=movie&region=GB");
+      assert.ok(tmdb.calls.tmdb > calls);
+      assert.equal(without.body.ok, false);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+});

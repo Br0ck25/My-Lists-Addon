@@ -295,6 +295,11 @@ function parseTmdbWebChartUrl(rawUrl) {
 //   fetchPage(ref, { entry, skip, keys })
 //              The fetcher, called with exactly the arguments fetchCatalog
 //              used to pass it.
+//   snapshot   Charts only, optional: the page may be served from a chart
+//              snapshot (P4-3, 42_chart-snapshots.js). { region: true } when
+//              the install's region changes the rows; variant(ref, page) for
+//              anything else that does (a setting, the day). The chart key,
+//              the row's type and the page are always part of the snapshot.
 //
 // The fetchers live in 05_, 06_ and 07_. They are only named inside the
 // closures, so this file still loads on its own (the tests load it that way to
@@ -368,6 +373,7 @@ const CATALOG_SOURCES = [
   },
   {
     name: "tmdb-chart", provider: "tmdb", kind: "chart", apiUse: "tmdb",
+    snapshot: { region: true, variant: (ref, { keys }) => (keys.hideNonDigitalReleases ? "digital" : "") },
     match: (s) => s.startsWith("tmdb:chart:") || !!parseTmdbWebChartUrl(s),
     arg: (s) => {
       const webChart = parseTmdbWebChartUrl(s);
@@ -377,29 +383,35 @@ const CATALOG_SOURCES = [
   },
   {
     name: "tmdb-top10", provider: "tmdb", kind: "chart", apiUse: "tmdb",
+    snapshot: { region: true },
     match: (s) => s.startsWith("tmdb:top10:"),
     arg: sourceArgAfter("tmdb:top10:"),
     fetchPage: (ref, { entry, skip, keys }) => fetchTmdbProviderTop10(entry, skip, TMDB_API_KEY, ref.arg, keys.region),
   },
   {
     name: "tmdb-hidden-gems", provider: "tmdb", kind: "chart", apiUse: "tmdb",
+    // A different slice each UTC day (fetchTmdbHiddenGems), so the day is part of the snapshot.
+    snapshot: { variant: () => "day" + Math.floor(Date.now() / 86400000) },
     match: (s) => s === "tmdb:hidden-gems",
     fetchPage: (ref, { entry, skip }) => fetchTmdbHiddenGems(entry, skip, TMDB_API_KEY),
   },
   {
     name: "tmdb-kids", provider: "tmdb", kind: "chart", apiUse: "tmdb",
+    snapshot: {},
     match: (s) => s.startsWith("tmdb:kids:"),
     arg: sourceArgAfter("tmdb:kids:"),
     fetchPage: (ref, { entry, skip }) => fetchTmdbKids(entry, skip, TMDB_API_KEY, ref.arg),
   },
   {
     name: "tmdb-holiday", provider: "tmdb", kind: "chart", apiUse: "tmdb",
+    snapshot: {},
     match: (s) => s.startsWith("tmdb:holiday:"),
     arg: sourceArgAfter("tmdb:holiday:"),
     fetchPage: (ref, { entry, skip }) => fetchTmdbHoliday(entry, skip, TMDB_API_KEY, ref.arg),
   },
   {
     name: "tmdb-genre", provider: "tmdb", kind: "chart", apiUse: "tmdb",
+    snapshot: { region: true },
     match: (s) => s.startsWith("tmdb:genre:"),
     arg: sourceArgAfter("tmdb:genre:"),
     fetchPage: (ref, { entry, skip, keys }) => fetchTmdbGenre(entry, skip, TMDB_API_KEY, ref.arg, keys.region),
@@ -425,12 +437,14 @@ const CATALOG_SOURCES = [
   },
   {
     name: "trakt-chart", provider: "trakt", kind: "chart", apiUse: "trakt",
+    snapshot: {},
     match: (s) => s.startsWith("trakt:chart:"),
     arg: sourceArgAfter("trakt:chart:"),
     fetchPage: (ref, { entry, skip, keys }) => fetchTraktChart(entry, skip, catalogTraktKey(keys), ref.arg, keys.env, keys.ctx),
   },
   {
     name: "simkl-chart", provider: "simkl", kind: "chart", apiUse: "simkl",
+    snapshot: {},
     match: (s) => s.startsWith("simkl:chart:"),
     arg: sourceArgAfter("simkl:chart:"),
     fetchPage: (ref, { entry, skip, keys }) => fetchSimklChart(entry, skip, SIMKL_CLIENT_ID, ref.arg, keys.env, keys.ctx),

@@ -23,7 +23,13 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 `FF_SESSIONS`, `FF_INSTALLS`, `FF_V2_LISTS_API`, `FF_V2_LISTS_READ` and `FF_V2_LISTS_ONLY` stay **off** (unset). Leave the first three off until the new sign-in, install-link and list screens ship. `FF_V2_LISTS_READ` stays off until the list copy (`docs/OPERATIONS.md` §9) has finished and its report has been checked; §10 then gives the steps, and turning it off again is always safe. `FF_V2_LISTS_ONLY` comes last and is **one-way**: only after reads have been on the new tables for a while (§11).
 
-`FF_PROVIDER_BREAKER` (P4-4, below) is optional and safe to turn on or off at any time (`docs/OPERATIONS.md` §14).
+`FF_PROVIDER_BREAKER` (P4-4) and `FF_CHART_SNAPSHOTS` (P4-3), both below, are optional and safe to turn on or off at any time (`docs/OPERATIONS.md` §14, §15).
+
+### 📸 Charts from one shared copy (P4-3)
+
+- **A new switch, `FF_CHART_SNAPSHOTS` (off).** With it on, TMDB, Trakt and Simkl charts (Popular, Trending, Top 10, genres, kids, holidays, Hidden Gems) are served from one shared copy per page, kept in KV. Everyone with the same chart and region reads the same copy, and each chart page is asked of the provider about once every two hours rather than about every ten minutes.
+- A copy is refreshed in the background after two hours, without anyone waiting for it. If the provider answers with an empty chart or an error, the last good copy stays: a chart never goes blank because a provider had a bad moment.
+- Safe to turn on and off at any time (`docs/OPERATIONS.md` §15).
 
 ### 🛡️ A provider that is down no longer holds up every row (P4-4)
 

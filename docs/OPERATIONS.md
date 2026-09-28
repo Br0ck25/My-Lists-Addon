@@ -303,3 +303,13 @@ Each Worker copy keeps its own count. The first one to find a provider down writ
 **Turning it on:** Worker → Settings → Variables and Secrets → Add → type *Text*, name `FF_PROVIDER_BREAKER`, value `1`. Deploy. **Turning it off:** delete the variable and deploy. Both are safe at any time; nothing is stored except the short-lived `pb:` keys.
 
 **Watching it:** with the `ANALYTICS` binding, each Worker copy writes one point per provider at most once a minute, with index `provider`: blobs `["provider", <id>, "open" | "closed"]` and doubles `[calls, failures, calls refused, total wait in ms, times opened]`. The Worker's logs also say `[ProviderBreaker] <provider>: 5 failures in a row` each time one opens.
+
+## 15. Chart snapshots (P4-3)
+
+`FF_CHART_SNAPSHOTS` makes every TMDB, Trakt and Simkl chart row (Popular, Trending, Top 10, genres, kids, holidays, Hidden Gems) come from one shared copy per page, kept in KV under `snap:chart:...`. Everyone with the same chart, region and settings reads the same copy.
+
+**How it behaves:** a copy is fresh for two hours. After that it is still served straight away, and a new one is built in the background. If the provider answers with an empty chart, or fails, the old copy stays (a chart is never really empty), and that copy is not rebuilt again for five minutes. Copies are kept for a week, so an outage makes charts older, not empty. Your own charts (Most Watched, New on Streaming) are copies already and are not affected.
+
+**Turning it on:** Worker → Settings → Variables and Secrets → Add → type *Text*, name `FF_CHART_SNAPSHOTS`, value `1`. Deploy. **Turning it off:** delete the variable and deploy. Both are safe at any time. The `snap:chart:` keys expire by themselves after a week; they can also be deleted by hand, and are rebuilt when next asked for.
+
+**Cost:** one KV read per chart row per Worker copy per minute at most (each copy remembers what it read for a minute), and one KV write per chart page every two hours while someone is asking for it.

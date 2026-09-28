@@ -762,6 +762,7 @@ The existing files keep their responsibilities:
 | `34_lists-v2-bridge.js` | The legacy list routes over v2: mirroring every legacy list write into v2, and the rest of the read switch (P3b-7) |
 | `35_channels-v2.js` | Shared channels as `channels` rows plus R2 pools: the mirror of every legacy channel write, the reads, Explore Channels as a query, and the copy's channels phase (P3b-8) |
 | `41_provider-breaker.js` | The per-provider breaker behind the fetch guard, its `pb:` KV sharing and provider metrics (P4-4) |
+| `42_chart-snapshots.js` | Chart snapshots: one shared copy per chart page in KV, served stale-while-revalidate (P4-3) |
 
 **New server-only areas go in new numbered files after `26_`**, each starting with a comment saying what it owns. They can't go between `09_` and `24_`, which are inside the page's template literal. Top-level names must be unique across every file.
 

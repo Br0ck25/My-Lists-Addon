@@ -7,8 +7,8 @@
 ## Current Status
 - **Last Updated**: 2026-09-28
 - **Last Active AI**: Claude Code (Opus 5.5)
-- **Active Task**: Phase 4 (providers). Phase 3c is merged into `main` (PR #4); its rollout (create and bind `DB_ACTIVITY`, run the history copy, `FF_EVENT_TRACKING`) is the owner's (OPERATIONS §2, §4, §12, §13). **P4-1** (the provider registry, `CATALOG_SOURCES` and `PROVIDER_ADAPTERS` in `04_config-resolution.js`) is done: `detectSource` and `fetchCatalog` dispatch through it, with no change anyone can see. **P4-4** (the provider breaker, `41_provider-breaker.js`, behind `FF_PROVIDER_BREAKER`, off) is done.
-- **Task State**: 1,560 tests pass, 0 fail, 1 skipped, both as they are and with `MLA_TEST_V2_LISTS_READ=1`. Build, sync, syntax, scope, render and HTML checks pass.
+- **Active Task**: Phase 4 (providers). Phase 3c is merged into `main` (PR #4); its rollout (create and bind `DB_ACTIVITY`, run the history copy, `FF_EVENT_TRACKING`) is the owner's (OPERATIONS §2, §4, §12, §13). **P4-1** (the provider registry, `CATALOG_SOURCES` and `PROVIDER_ADAPTERS` in `04_config-resolution.js`) is done: `detectSource` and `fetchCatalog` dispatch through it, with no change anyone can see. **P4-4** (the provider breaker, `41_provider-breaker.js`, behind `FF_PROVIDER_BREAKER`, off) is done. **P4-3** (chart snapshots, `42_chart-snapshots.js`, behind `FF_CHART_SNAPSHOTS`, off) is done.
+- **Task State**: 1,571 tests pass, 0 fail, 1 skipped, both as they are and with `MLA_TEST_V2_LISTS_READ=1`. Build, sync, syntax, scope, render and HTML checks pass.
 - **Git State**:
   - Phases 3a, 3b and 3c are merged into `main` (PRs #1 to #4).
   - **Phase 4 goes on the branch `claude/hopeful-davinci-dx55ds`**, in one draft PR into `main`, one commit per P4 task.
@@ -91,7 +91,7 @@ node scope_check.mjs worker worker_entry_combined.js
 ```
 Then delete `node_modules`.
 
-Last run (2026-09-28, P4-4): all of the above pass, plus every CI step (scope, render and HTML checks). 1,560 tests passed, 0 failed, 1 skipped, both ways.
+Last run (2026-09-28, P4-3): all of the above pass, plus every CI step (scope, render and HTML checks). 1,571 tests passed, 0 failed, 1 skipped, both ways.
 
 The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/json` to every POST, so a route test cannot notice a page that forgets them. A static test ("every mutating fetch the pages make sends a JSON content type") covers that instead.
 
@@ -206,6 +206,9 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
     - It works **inside the fetch guard** (`02_`): a call to an adapter's host is refused at once while that provider is open. A new provider host must be added to its adapter's `hosts` (`04_`) to be covered.
     - Its state is **module-level memory** (like `PER_USER_CACHE_MAP`), switched per request by `configureProviderBreaker(env)` in the fetch and scheduled handlers. Tests that need a clean breaker use `freshIsolate()`.
     - `providerBreakerRefresh` (a `pb:` KV read) runs in `fetchCatalog`; `providerBreakerFlush` (the `pb:` write and the metrics) at the end of every request and cron tick.
+  - **P4-3 (Claude):** chart snapshots, `42_chart-snapshots.js`, behind `FF_CHART_SNAPSHOTS` (off; OPERATIONS §15). Details under P4-3 in `NEXT_VERSION_TASKS.md`.
+    - A chart source is snapshotted when its registry entry has a `snapshot` rule. **The rule must name everything besides the chart key, type and page that changes the rows** (the region, a setting, the day), or two installs would share a page that should differ.
+    - `fetchCatalog` goes through `fetchSourcePageWithSnapshot`; with the flag off (or for any other source) it is exactly `fetchPage`.
 
 ## Owner Actions Still Open (not code)
 1. **Deploy what is on `main`:**
@@ -229,7 +232,7 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
 ---
 
 ## Next Steps for Incoming AI
-1. **Phase 4 is under way** on `claude/hopeful-davinci-dx55ds` (draft PR into `main`). P4-1 and P4-4 are done; next are P4-2 (every catalog id canonical), P4-3 (chart snapshots) and P4-5 (provider contract fixtures and a nightly live check), in `NEXT_VERSION_TASKS.md`. The next server file is `41_...`. Phase 3c is merged (PR #4); its rollout (create and bind the activity database, run the copy, then `FF_EVENT_TRACKING`, one-way) is the owner's, and `FF_SHOW_SCHEDULE` needs the schedule job (P5-3). Phase 3b's rollout (deploy, copy, `FF_V2_LISTS_READ`, later `FF_V2_LISTS_ONLY`, OPERATIONS §9 to §11) is still the owner's.
+1. **Phase 4 is under way** on `claude/hopeful-davinci-dx55ds` (draft PR into `main`). P4-1, P4-3 and P4-4 are done; next are P4-5 (provider contract fixtures and a nightly live check) and P4-2 (every catalog id canonical), in `NEXT_VERSION_TASKS.md`. The next server file is `43_...`. Phase 3c is merged (PR #4); its rollout (create and bind the activity database, run the copy, then `FF_EVENT_TRACKING`, one-way) is the owner's, and `FF_SHOW_SCHEDULE` needs the schedule job (P5-3). Phase 3b's rollout (deploy, copy, `FF_V2_LISTS_READ`, later `FF_V2_LISTS_ONLY`, OPERATIONS §9 to §11) is still the owner's.
      - `FF_V2_LISTS_API` (the v2 list and likes APIs) must stay off until P3b-9: what they write is not in the legacy store, so a flag-off rollback or a copy re-run would lose it.
      - Phase 3b rewrites how lists are stored, so it needs the owner's approval before any backfill (P3b-3) touches stored data.
      - Decide which wins when an install has its own keys in `install_secrets` and its owner also has a connection. Today `install_secrets` is the only source.

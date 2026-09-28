@@ -148,7 +148,11 @@ async function fetchCatalog(entry, skip = 0, keys = {}) {
     // down (41_provider-breaker.js; typeof-guarded, the tests load this file
     // without it).
     if (typeof providerBreakerRefresh === "function") await providerBreakerRefresh(keys.env, source.apiUse || ref.provider);
-    result = await source.fetchPage(ref, { entry, skip, keys });
+    // FF_CHART_SNAPSHOTS: a chart page is served from its snapshot
+    // (42_chart-snapshots.js), otherwise the fetcher is called as before.
+    result = typeof fetchSourcePageWithSnapshot === "function"
+      ? await fetchSourcePageWithSnapshot(source, ref, { entry, skip, keys })
+      : await source.fetchPage(ref, { entry, skip, keys });
   }
 
   if (keys.shuffleItems && Array.isArray(result) && result.length > 1) {

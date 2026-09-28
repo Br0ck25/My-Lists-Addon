@@ -101,6 +101,10 @@ bucket_name = "mylists-blobs"
 # provider for a minute and serve its last good copies straight away. Safe to
 # turn on and off at any time (docs/OPERATIONS.md section 14).
 # FF_PROVIDER_BREAKER = "1"
+# Optional, Phase 4 (P4-3): serve charts (TMDB, Trakt, Simkl) from a shared
+# snapshot per page in KV, rebuilt every two hours; an empty answer never
+# replaces a good copy. Safe to turn on and off (docs/OPERATIONS.md section 15).
+# FF_CHART_SNAPSHOTS = "1"
 # Optional, 0-100: share of existing install links whose keys and tokens are
 # moved into encrypted D1 storage on first use (needs TOKEN_ENCRYPTION_KEY)
 # INSTALL_MIGRATION_PERCENT = "0"
