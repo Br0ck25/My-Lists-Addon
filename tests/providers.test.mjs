@@ -14,7 +14,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
-import { freshIsolate, makeEnv, makeKv, nextIp } from "./harness.mjs";
+import { accountProof, call, freshIsolate, makeD1, makeEnv, makeKv, nextIp } from "./harness.mjs";
 
 const REPO_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -829,6 +829,141 @@ describe("P4-3: chart snapshots", () => {
       assert.equal(without.body.ok, false);
     } finally {
       globalThis.fetch = realFetch;
+    }
+  });
+});
+
+// --- P4-2: canonical catalog ids -------------------------------------------------
+
+describe("P4-2: canonical catalog ids", () => {
+  const on = (extra = {}) => ({ FF_CANONICAL_IDS: "1", ...extra });
+  const load = () => loadSourceFunctions("29_media.js", "43_catalog-ids.js");
+  const ids = (metas) => Array.from(metas, (m) => m.id);
+  const now = 1_790_000_000_000;
+  async function mediaDb(rows) {
+    const db = makeD1();
+    for (const r of rows) {
+      await db.prepare("INSERT INTO media (kind, tmdb_id, imdb_id, alt_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .bind(r.kind, r.tmdb || null, r.imdb || null, r.alt || null, r.title || null, now, now).run();
+    }
+    let queries = 0;
+    const counted = Object.create(db);
+    counted.prepare = (...a) => { queries++; return db.prepare(...a); };
+    return { db: counted, queries: () => queries };
+  }
+
+  it("is off without FF_CANONICAL_IDS: the page comes back as it was", async () => {
+    const sb = load();
+    const metas = [{ id: "junk" }, { id: "tt1:1:2" }];
+    assert.equal(await sb.canonicalizeCatalogMetas({}, metas, { kind: "series" }), metas);
+  });
+
+  it("applies the rules without a media table", async () => {
+    const sb = load();
+    const page = [
+      { id: "tt0944947", type: "series", name: "a" },
+      { id: "tt0903747:1:2", type: "series", name: "episode suffix" },
+      { id: "63056", type: "series", seasonNum: 1, episodeNum: 1, showId: "tt0460649", name: "storyline episode" },
+      { id: "63057", type: "series", seasonNum: 1, episodeNum: 2, showId: "tmdb:1418", name: "storyline episode, TMDB show" },
+      { id: "tmdb:tv:1399", type: "series", name: "prefixed" },
+      { id: "tmdb:95396:1:3", type: "series", name: "TMDB episode suffix" },
+      { id: "1396", type: "series", name: "bare number" },
+      { id: "tmdb:100", imdbId: "tt0106179", type: "series", name: "carries its IMDb id" },
+      { id: "kitsu:1", type: "series", name: "anime" },
+      { id: "channel_ab12", type: "series", name: "a channel" },
+      { id: "simkl:55", type: "series", name: "a scheme no add-on reads" },
+      { id: "not an id", type: "series", name: "junk" },
+      { id: "", type: "series", name: "empty" },
+      { id: "99999", type: "series", seasonNum: 2, name: "an episode id with no show" },
+      { id: "tt0944947", type: "series", name: "duplicate" },
+    ];
+    page.totalItems = 250;
+    const out = await sb.canonicalizeCatalogMetas(on(), page, { kind: "series" });
+    assert.deepEqual(ids(out), [
+      "tt0944947", "tt0903747", "tt0460649", "tmdb:1418", "tmdb:1399", "tmdb:95396", "tmdb:1396", "tt0106179", "kitsu:1", "channel_ab12",
+    ]);
+    assert.equal(out.totalItems, 250 - 5, "the page lost five, and so does the total");
+    assert.equal(out[0], page[0], "a row whose id was already right is the same object");
+    assert.equal(page[1].id, "tt0903747:1:2", "the input is not changed");
+    assert.equal(out[2].showId, "tt0460649", "everything else on the row stays");
+  });
+
+  it("takes a movie's bare number as its TMDB id, and leaves a list with no kind alone", async () => {
+    const sb = load();
+    const out = await sb.canonicalizeCatalogMetas(on(), [{ id: "550", name: "x" }, { id: "551", type: "movie", name: "y" }], { kind: "movie" });
+    assert.deepEqual(ids(out), ["tmdb:550", "tmdb:551"]);
+  });
+
+  it("upgrades TMDB and other schemes' ids from the media table, reading only what it needs", async () => {
+    const sb = load();
+    const { db, queries } = await mediaDb([
+      { kind: "series", tmdb: 1399, imdb: "tt0944947", title: "Game of Thrones" },
+      { kind: "series", alt: "kitsu:1", tmdb: 30991, title: "Cowboy Bebop" },
+      { kind: "series", alt: "simkl:55", imdb: "tt0213338", title: "Cowboy Bebop (Simkl)" },
+      { kind: "movie", tmdb: 1399, imdb: "tt9999999", title: "same number, other kind" },
+    ]);
+    const env = on({ DB: db });
+    const out = await sb.canonicalizeCatalogMetas(env, [
+      { id: "tmdb:1399", type: "series" }, { id: "kitsu:1", type: "series" }, { id: "simkl:55", type: "series" }, { id: "tmdb:1400", type: "series" },
+    ], { kind: "series" });
+    assert.deepEqual(ids(out), ["tt0944947", "tmdb:30991", "tt0213338", "tmdb:1400"]);
+    assert.ok(queries() <= 3, `${queries()} queries`);
+
+    const before = queries();
+    const allImdb = Array.from({ length: 100 }, (_, i) => ({ id: "tt" + (1000000 + i), type: "movie" }));
+    await sb.canonicalizeCatalogMetas(env, allImdb, { kind: "movie" });
+    assert.equal(queries(), before, "a page of IMDb ids needs no query");
+  });
+
+  it("serves without upgrades when the media table is missing, and does not ask again for a while", async () => {
+    const sb = load();
+    let asked = 0;
+    const db = { prepare: () => ({ bind: () => ({ all: async () => { asked++; throw new Error("D1_ERROR: no such table: media"); } }) }) };
+    const env = on({ DB: db });
+    const out = await sb.canonicalizeCatalogMetas(env, [{ id: "tmdb:1", type: "movie" }, { id: "kitsu:9", type: "series" }], {});
+    assert.deepEqual(ids(out), ["tmdb:1", "kitsu:9"]);
+    await sb.canonicalizeCatalogMetas(env, [{ id: "tmdb:2", type: "movie" }], {});
+    assert.equal(asked, 1);
+  });
+
+  // Through the real Worker's Stremio catalog route: a custom list holding
+  // every awkward kind of id, and a channel.
+  it("a Stremio catalog serves only canonical ids, and the website preview is unchanged", async () => {
+    const custom = "customlist:v1:" + JSON.stringify({
+      listSlug: "odd-ids",
+      items: [
+        { id: "tt0944947:1:2", title: "Episode suffix", type: "series" },
+        { id: "63056", seasonNum: 1, episodeNum: 1, showId: "tt0903747", title: "Storyline episode", type: "series" },
+        { id: "tmdb:tv:1399", title: "Prefixed", type: "series" },
+        { id: "kitsu:1", title: "Anime", type: "series" },
+        { id: "simkl:55", title: "Unknown scheme", type: "series" },
+        { id: "tt0944947", title: "Duplicate", type: "series" },
+      ],
+    });
+    const channel = "channel:v1:" + JSON.stringify({ channelId: "odd", name: "Odd", items: [{ kind: "episode", imdbId: "tt0944947", season: 1, episode: 1, showName: "GoT", title: "Winter Is Coming", released: "2011-04-17" }] });
+    for (const flag of [false, true]) {
+      const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1(), ...(flag ? { FF_CANONICAL_IDS: "1" } : {}) });
+      const saved = await call(env, "/api/save", { method: "POST", json: {
+        ...(await accountProof(env)),
+        entries: [{ id: "odd", type: "series", name: "Odd", url: custom }, { id: "ch", type: "series", name: "Channel", url: channel }],
+        showBadgesStremio: false,
+      } });
+      assert.equal(saved.body.ok, true, JSON.stringify(saved.body));
+      const row = await call(env, `/${saved.body.id}/catalog/series/odd.json`);
+      const chan = await call(env, `/${saved.body.id}/catalog/series/ch.json`);
+      const got = [...ids(row.body.metas), ...ids(chan.body.metas)];
+      if (flag) {
+        assert.deepEqual(got, ["tt0944947", "tt0903747", "tmdb:1399", "kitsu:1", "channel_odd"]);
+        for (const id of got) assert.match(id, /^(tt\d+|tmdb:\d+|channel_.+|kitsu:\d+)$/);
+      } else {
+        // Off, as before -- including the bug this fixes: the storyline
+        // episode goes out under TMDB's id for the EPISODE, which no add-on
+        // can open.
+        assert.deepEqual(ids(row.body.metas), ["tt0944947:1:2", "63056", "tmdb:tv:1399", "kitsu:1", "simkl:55", "tt0944947"]);
+      }
+      // The website's preview shows the list's items one by one, either way.
+      const preview = await call(env, "/api/preview", { method: "POST", json: { url: custom, type: "series", sample: 100 } });
+      assert.equal(preview.body.count, 6);
     }
   });
 });

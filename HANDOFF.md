@@ -7,8 +7,8 @@
 ## Current Status
 - **Last Updated**: 2026-09-28
 - **Last Active AI**: Claude Code (Opus 5.5)
-- **Active Task**: Phase 4 (providers). Phase 3c is merged into `main` (PR #4); its rollout (create and bind `DB_ACTIVITY`, run the history copy, `FF_EVENT_TRACKING`) is the owner's (OPERATIONS §2, §4, §12, §13). **P4-1** (the provider registry, `CATALOG_SOURCES` and `PROVIDER_ADAPTERS` in `04_config-resolution.js`) is done: `detectSource` and `fetchCatalog` dispatch through it, with no change anyone can see. **P4-4** (the provider breaker, `41_provider-breaker.js`, behind `FF_PROVIDER_BREAKER`, off) is done. **P4-3** (chart snapshots, `42_chart-snapshots.js`, behind `FF_CHART_SNAPSHOTS`, off) is done. **P4-5** (provider contract fixtures in `tests/fixtures/providers/`, `provider_live_check.mjs`, and the nightly workflow) is done.
-- **Task State**: 1,583 tests pass, 0 fail, 1 skipped, both as they are and with `MLA_TEST_V2_LISTS_READ=1`. Build, sync, syntax, scope, render and HTML checks pass.
+- **Active Task**: Phase 4 (providers). Phase 3c is merged into `main` (PR #4); its rollout (create and bind `DB_ACTIVITY`, run the history copy, `FF_EVENT_TRACKING`) is the owner's (OPERATIONS §2, §4, §12, §13). **P4-1** (the provider registry, `CATALOG_SOURCES` and `PROVIDER_ADAPTERS` in `04_config-resolution.js`) is done: `detectSource` and `fetchCatalog` dispatch through it, with no change anyone can see. **P4-4** (the provider breaker, `41_provider-breaker.js`, behind `FF_PROVIDER_BREAKER`, off) is done. **P4-3** (chart snapshots, `42_chart-snapshots.js`, behind `FF_CHART_SNAPSHOTS`, off) is done. **P4-5** (provider contract fixtures in `tests/fixtures/providers/`, `provider_live_check.mjs`, and the nightly workflow) is done. **P4-2** (canonical catalog ids, `43_catalog-ids.js`, behind `FF_CANONICAL_IDS`, off) is done for the ids; rebuilding metas from `media` is left to P5-11. **All of Phase 4 is written**; the PR waits for the owner's review.
+- **Task State**: 1,590 tests pass, 0 fail, 1 skipped, both as they are and with `MLA_TEST_V2_LISTS_READ=1`. Build, sync, syntax, scope, render and HTML checks pass.
 - **Git State**:
   - Phases 3a, 3b and 3c are merged into `main` (PRs #1 to #4).
   - **Phase 4 goes on the branch `claude/hopeful-davinci-dx55ds`**, in one draft PR into `main`, one commit per P4 task.
@@ -91,7 +91,7 @@ node scope_check.mjs worker worker_entry_combined.js
 ```
 Then delete `node_modules`.
 
-Last run (2026-09-28, P4-5): all of the above pass, plus every CI step (scope, render and HTML checks). 1,583 tests passed, 0 failed, 1 skipped, both ways.
+Last run (2026-09-28, P4-2): all of the above pass, plus every CI step (scope, render and HTML checks). 1,590 tests passed, 0 failed, 1 skipped, both ways.
 
 The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/json` to every POST, so a route test cannot notice a page that forgets them. A static test ("every mutating fetch the pages make sends a JSON content type") covers that instead.
 
@@ -212,6 +212,9 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
   - **P4-5 (Claude):** provider contract fixtures and the nightly live check. Details under P4-5 in `NEXT_VERSION_TASKS.md`; the owner's part (optional GitHub secrets) is OPERATIONS §16.
     - **When a fetcher starts reading a new provider field, add it to that fixture's `required` list** (and to its `response`), so the nightly check watches it. When a fetcher calls a new endpoint, add a fixture for it, and route it in `fixtureRouter` (`tests/provider-contracts.test.mjs`).
     - `provider_live_check.mjs` sits at the repo root like `scope_check.mjs`; the tests import its `checkRequired`, so the fixture check and the live check cannot drift apart.
+  - **P4-2 (Claude):** canonical catalog ids, `43_catalog-ids.js`, behind `FF_CANONICAL_IDS` (off; OPERATIONS §17). Details, and what is left, under P4-2 in `NEXT_VERSION_TASKS.md`.
+    - It applies where a caller passes `keys.canonicalIds: true` to `fetchCatalog` (only the Stremio catalog route does) and in the search catalog. **Never pass it from `/api/preview`**: the website shows a storyline list's episodes one by one by their own ids.
+    - The media table is read, never written, on this path. An unmapped anime id (`CATALOG_ALT_ID_SCHEMES`) is kept; any other unusable id drops the row.
 
 ## Owner Actions Still Open (not code)
 1. **Deploy what is on `main`:**
@@ -236,7 +239,7 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
 ---
 
 ## Next Steps for Incoming AI
-1. **Phase 4 is under way** on `claude/hopeful-davinci-dx55ds` (draft PR into `main`). P4-1, P4-3, P4-4 and P4-5 are done; next is P4-2 (every catalog id canonical), in `NEXT_VERSION_TASKS.md`. The next server file is `43_...`. Phase 3c is merged (PR #4); its rollout (create and bind the activity database, run the copy, then `FF_EVENT_TRACKING`, one-way) is the owner's, and `FF_SHOW_SCHEDULE` needs the schedule job (P5-3). Phase 3b's rollout (deploy, copy, `FF_V2_LISTS_READ`, later `FF_V2_LISTS_ONLY`, OPERATIONS §9 to §11) is still the owner's.
+1. **Phase 4 is written** on `claude/hopeful-davinci-dx55ds` (PR #5, draft, into `main`): P4-1 to P4-5, one commit each. What is left is the owner's: review, deploy, then the optional switches `FF_PROVIDER_BREAKER`, `FF_CHART_SNAPSHOTS` and `FF_CANONICAL_IDS` (OPERATIONS §14, §15, §17) and the nightly check's GitHub secrets (§16). Next in the plan is **Phase 5** (jobs and caching: the queue, `show.refresh`, `chart.refresh`, which replaces P4-3's in-request builds, and the materializer, which finishes P4-2). The next server file is `44_...`. Phase 3c is merged (PR #4); its rollout (create and bind the activity database, run the copy, then `FF_EVENT_TRACKING`, one-way) is the owner's, and `FF_SHOW_SCHEDULE` needs the schedule job (P5-3). Phase 3b's rollout (deploy, copy, `FF_V2_LISTS_READ`, later `FF_V2_LISTS_ONLY`, OPERATIONS §9 to §11) is still the owner's.
      - `FF_V2_LISTS_API` (the v2 list and likes APIs) must stay off until P3b-9: what they write is not in the legacy store, so a flag-off rollback or a copy re-run would lose it.
      - Phase 3b rewrites how lists are stored, so it needs the owner's approval before any backfill (P3b-3) touches stored data.
      - Decide which wins when an install has its own keys in `install_secrets` and its owner also has a connection. Today `install_secrets` is the only source.

@@ -23,7 +23,14 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 `FF_SESSIONS`, `FF_INSTALLS`, `FF_V2_LISTS_API`, `FF_V2_LISTS_READ` and `FF_V2_LISTS_ONLY` stay **off** (unset). Leave the first three off until the new sign-in, install-link and list screens ship. `FF_V2_LISTS_READ` stays off until the list copy (`docs/OPERATIONS.md` §9) has finished and its report has been checked; §10 then gives the steps, and turning it off again is always safe. `FF_V2_LISTS_ONLY` comes last and is **one-way**: only after reads have been on the new tables for a while (§11).
 
-`FF_PROVIDER_BREAKER` (P4-4) and `FF_CHART_SNAPSHOTS` (P4-3), both below, are optional and safe to turn on or off at any time (`docs/OPERATIONS.md` §14, §15).
+`FF_PROVIDER_BREAKER` (P4-4), `FF_CHART_SNAPSHOTS` (P4-3) and `FF_CANONICAL_IDS` (P4-2), all below, are optional and can be turned on or off at any time (`docs/OPERATIONS.md` §14, §15, §17; read §17 before the last one).
+
+### 🪪 Every title in a Stremio catalog opens (P4-2)
+
+- **A new switch, `FF_CANONICAL_IDS` (off).** With it on, every title a Stremio, Nuvio or wako catalog serves carries an id the apps can open: its IMDb id where the site knows it, otherwise its TMDB id.
+- **Fixed with it:** an episode in a storyline list (a custom list of episodes) was sent under TMDB's number for the episode, which no add-on recognizes, so its tile opened to "not found". It now opens its show. A title that appears twice in one row is shown once, and a row whose id nothing can open is left out.
+- Anime ids (Kitsu, MyAnimeList, AniList, AniDB) are kept, because anime add-ons read them. The website's own previews are unchanged.
+- One thing to know before turning it on (`docs/OPERATIONS.md` §17): a title served until now by its TMDB id is served by its IMDb id once the site knows it, and Stremio's own library keeps anything saved under the old id separately.
 
 ### 🔭 A nightly check that every provider still answers the way the site expects (P4-5)
 

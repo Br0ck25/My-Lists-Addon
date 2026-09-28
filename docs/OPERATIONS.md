@@ -331,3 +331,19 @@ The keyless providers (MDBList public lists, Simkl's charts, TVmaze, Cinemeta, J
 
 **When it fails:** open the run and read its summary. *HTTP 401/403* means a key is wrong or expired. *HTTP 404* on a sample means the sample itself went away, and the fixture's `live` request needs a new one. A named field (for example `results[].title is missing`) means the provider changed its answer: the fetcher that reads it (the fixture's `usedBy`) needs updating, along with the fixture.
 
+## 17. Canonical ids in Stremio catalogs (P4-2)
+
+`FF_CANONICAL_IDS` makes every title a Stremio (or Nuvio, wako) catalog serves carry an id the apps and other add-ons can open:
+
+- an IMDb id (`tt...`) wherever one is known: on the row itself, or in the site's `media` table (migration 0016);
+- otherwise `tmdb:<number>`;
+- a channel keeps its own id.
+
+Before, some rows passed on whatever id they had, and the app showed a tile that opened to "not found". The main case is an episode in a storyline list, which was sent under TMDB's number for the episode; it now opens its show. Anime ids from Kitsu, MyAnimeList, AniList and AniDB are kept when the site doesn't know the title's IMDb or TMDB id, because anime add-ons read them. A row with an id nothing can open is left out, and a title that appears twice in one row is shown once.
+
+The website's previews are not affected. They still show a storyline list's episodes one by one.
+
+**One thing to know before turning it on:** where the site knows a title's IMDb id, a title that was served as `tmdb:<number>` is now served under its IMDb id. Stremio treats that as a different title, so anything someone saved in Stremio itself under the old id (its own library or Continue Watching) stays under the old id. The site's own shelves are not affected.
+
+**Turning it on:** Worker → Settings → Variables and Secrets → Add → type *Text*, name `FF_CANONICAL_IDS`, value `1`. Deploy. **Turning it off:** delete the variable and deploy; rows go back to the ids they had. Neither stores anything.
+

@@ -153,6 +153,12 @@ async function fetchCatalog(entry, skip = 0, keys = {}) {
     result = typeof fetchSourcePageWithSnapshot === "function"
       ? await fetchSourcePageWithSnapshot(source, ref, { entry, skip, keys })
       : await source.fetchPage(ref, { entry, skip, keys });
+    // FF_CANONICAL_IDS: a Stremio catalog's ids made canonical
+    // (43_catalog-ids.js). A merged row's sources each come through here, so
+    // the merge above de-duplicates canonical ids.
+    if (keys.canonicalIds === true && typeof canonicalizeCatalogMetas === "function") {
+      result = await canonicalizeCatalogMetas(keys.env, result, { kind: entry.type });
+    }
   }
 
   if (keys.shuffleItems && Array.isArray(result) && result.length > 1) {

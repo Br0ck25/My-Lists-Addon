@@ -105,6 +105,10 @@ bucket_name = "mylists-blobs"
 # snapshot per page in KV, rebuilt every two hours; an empty answer never
 # replaces a good copy. Safe to turn on and off (docs/OPERATIONS.md section 15).
 # FF_CHART_SNAPSHOTS = "1"
+# Optional, Phase 4 (P4-2): every title in a Stremio catalog gets an id other
+# add-ons can open (an IMDb id, "tmdb:N" or a channel); rows that cannot are
+# left out, and duplicates removed. See docs/OPERATIONS.md section 17.
+# FF_CANONICAL_IDS = "1"
 # Optional, 0-100: share of existing install links whose keys and tokens are
 # moved into encrypted D1 storage on first use (needs TOKEN_ENCRYPTION_KEY)
 # INSTALL_MIGRATION_PERCENT = "0"

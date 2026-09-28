@@ -16,7 +16,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
-import { freshIsolate, makeEnv, nextIp } from "./harness.mjs";
+import { call, freshIsolate, makeEnv, nextIp } from "./harness.mjs";
 import { checkRequired, loadFixtures, LIVE_SECRETS, pickPath, runLiveCheck } from "../provider_live_check.mjs";
 
 const REPO_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -248,6 +248,35 @@ describe("P4-5: provider contract fixtures", () => {
         "tmdb/list-v4.json", "trakt/movies-trending.json", "trakt/shows-popular.json", "trakt/list-items.json", "mdblist/list-json.json",
         "simkl/trending-movies.json", "simkl/trending-tv.json"]) {
         assert.ok(router.used.has(file), `${file} was never read by a catalog fetcher`);
+      }
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  // P4-2's acceptance test: with FF_CANONICAL_IDS on, no Stremio catalog row
+  // emits an id outside tt... / tmdb:... / channel_... (the anime schemes aside,
+  // see CATALOG_ALT_ID_SCHEMES; none of these providers sends one).
+  it("every provider row in a Stremio catalog serves canonical ids", async () => {
+    const realFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = fixtureRouter().handler;
+      const env = makeEnv({ FF_CANONICAL_IDS: "1", TMDB_API_KEY: "k", TRAKT_CLIENT_ID: "t", SIMKL_CLIENT_ID: "s", MDBLIST_API_KEY: "m" });
+      const rows = [
+        ["tmdb:chart:trending", "movie"], ["tmdb:chart:popular", "series"], ["tmdb:genre:horror", "series"], ["tmdb:collection:10", "movie"],
+        ["https://www.themoviedb.org/list/28", "movie"], ["trakt:chart:trending", "movie"], ["trakt:chart:popular", "series"],
+        ["https://trakt.tv/users/alice/lists/favourites", "movie"], ["https://mdblist.com/lists/linaspurinis/top-watched-movies-of-the-week", "movie"],
+        ["simkl:chart:today", "movie"], ["simkl:chart:week", "series"],
+      ];
+      const entries = rows.map(([url, type], i) => ({ id: "r" + i, type, name: "Row " + i, url }));
+      const saved = await call(env, "/api/save", { method: "POST", json: { entries, showBadgesStremio: false } });
+      assert.equal(saved.body.ok, true, JSON.stringify(saved.body));
+      for (const e of entries) {
+        const res = await call(env, `/${saved.body.id}/catalog/${e.type}/${e.id}.json`);
+        const metas = res.body.metas || [];
+        assert.ok(metas.length > 0, `${e.url} served nothing`);
+        for (const m of metas) assert.match(m.id, /^(tt\d+|tmdb:\d+|channel_.+)$/, `${e.url}: ${m.id}`);
+        assert.equal(new Set(metas.map((m) => m.id)).size, metas.length, `${e.url}: no id twice`);
       }
     } finally {
       globalThis.fetch = realFetch;
