@@ -7962,6 +7962,8 @@ export default {
     // FF_EVENT_TRACKING: tracking records of accounts served from the
     // activity database are read and written there (40_event-tracking.js).
     const runEnv = eventTrackingEnv(counters ? instrumentEnv(env, counters) : env);
+    // FF_PROVIDER_BREAKER (41_provider-breaker.js).
+    configureProviderBreaker(env);
     try {
       response = await schemaWriteGate(request, env);
       if (!response) response = await handleFetch(request, runEnv, ctx);
@@ -7993,6 +7995,13 @@ export default {
       // An unparseable URL cannot have reached a private route anyway.
     }
     if (counters) writeRequestMetrics(env, request, response, startedAt, counters);
+    // A breaker this request opened is shared with other isolates, and the
+    // provider metrics are written when due. No I/O when there is nothing to do.
+    try {
+      if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(providerBreakerFlush(env).catch(() => {}));
+    } catch {
+      // Never affects the response.
+    }
     return withSecurityHeaders(response, privatePath, request ? request._sessionCookie : null);
   },
 
@@ -8019,6 +8028,7 @@ export default {
     // empty API key just because this isolate's first event happened to be a
     // cron tick rather than a request. See applyEnvApiKeys.
     applyEnvApiKeys(env);
+    configureProviderBreaker(env);
     // FF_EVENT_TRACKING, as in the fetch handler above.
     env = eventTrackingEnv(env);
     // No outbound-fetch budget is divided between the tasks any more. That
@@ -8072,7 +8082,7 @@ export default {
           }
         })()),
         guard("pruneTombstones", pruneTombstones(env)),
-      ])
+      ]).then(() => guard("providerBreakerFlush", providerBreakerFlush(env)))
     );
     } catch (err) {
       // Anything thrown synchronously before waitUntil was even reached --

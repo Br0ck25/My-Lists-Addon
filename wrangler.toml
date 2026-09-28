@@ -97,6 +97,10 @@ bucket_name = "mylists-blobs"
 # Optional, Phase 5: Continue Watching and Airing Next worked out from the show
 # schedule instead of served as last computed. Needs the schedule job first.
 # FF_SHOW_SCHEDULE = "1"
+# Optional, Phase 4 (P4-4): after five failures in a row, stop calling a
+# provider for a minute and serve its last good copies straight away. Safe to
+# turn on and off at any time (docs/OPERATIONS.md section 14).
+# FF_PROVIDER_BREAKER = "1"
 # Optional, 0-100: share of existing install links whose keys and tokens are
 # moved into encrypted D1 storage on first use (needs TOKEN_ENCRYPTION_KEY)
 # INSTALL_MIGRATION_PERCENT = "0"

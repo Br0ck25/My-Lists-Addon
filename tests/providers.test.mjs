@@ -14,6 +14,8 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
+import { freshIsolate, makeEnv, makeKv, nextIp } from "./harness.mjs";
+
 const REPO_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 // The files share one sandbox, as they share one scope in the built Worker.
@@ -326,5 +328,274 @@ describe("P4-1: the provider registry", () => {
       }
     }
     assert.equal(compared, SOURCE_CORPUS.length * keySets.length * 2);
+  });
+});
+
+// --- P4-4: the provider breaker ----------------------------------------------
+//
+// Fault injection through the real Worker: a fake TMDB that can be switched
+// off, fresh isolates (the breaker's state is per isolate, shared through KV),
+// and a clock the test moves. Hidden Gems asks TMDB for five pages at once
+// and has no cache of its own, so one request is exactly five calls.
+
+async function callIsolate(w, env, path) {
+  const pending = [];
+  const ctx = { waitUntil(p) { pending.push(Promise.resolve(p).catch(() => {})); } };
+  const req = new Request("https://example.test" + path, { headers: { "CF-Connecting-IP": nextIp(), Origin: "https://example.test" } });
+  const res = await w.fetch(req, env, ctx);
+  await Promise.all(pending);
+  const text = await res.text();
+  let body = text;
+  try { body = JSON.parse(text); } catch { /* not JSON */ }
+  return { status: res.status, body };
+}
+
+// TMDB, answering discover/chart pages with three titles and details with an
+// IMDb id. `mode.status` set makes every TMDB call answer with it instead;
+// `mode.timeout` makes them fail the way a call cut off by its timeout
+// signal does.
+function makeFakeTmdb(mode) {
+  const calls = { tmdb: 0 };
+  const handler = async (input, init) => {
+    const url = new URL(typeof input === "string" ? input : input.url);
+    if (url.hostname !== "api.themoviedb.org") return new Response("not here", { status: 404 });
+    calls.tmdb++;
+    if (mode.timeout) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+    }
+    if (mode.status) return new Response("{}", { status: mode.status });
+    const detail = /^\/3\/(movie|tv)\/(\d+)$/.exec(url.pathname);
+    if (detail) {
+      const id = Number(detail[2]);
+      return Response.json({ id, title: "Title " + id, external_ids: { imdb_id: "tt" + String(9000000 + id) }, vote_average: 7 });
+    }
+    return Response.json({
+      page: 1, total_results: 3, total_pages: 1,
+      results: [1, 2, 3].map((id) => ({ id, title: "Title " + id, poster_path: "/p" + id + ".jpg", release_date: "2020-01-01" })),
+    });
+  };
+  return { calls, handler };
+}
+
+describe("P4-4: the provider breaker", () => {
+  const realFetch = globalThis.fetch;
+  const realNow = Date.now;
+  let clock = 0;
+  const useClock = () => {
+    clock = realNow.call(Date);
+    Date.now = () => clock;
+  };
+  const restore = () => {
+    globalThis.fetch = realFetch;
+    Date.now = realNow;
+  };
+
+  // A KV that remembers the options each key was last written with.
+  function kvWithOptions() {
+    const kv = makeKv();
+    const put = kv.put.bind(kv);
+    kv._opts = new Map();
+    kv.put = async (key, value, opts) => {
+      kv._opts.set(key, opts || null);
+      return put(key, value, opts);
+    };
+    return kv;
+  }
+
+  const GEMS = "/api/preview?url=tmdb:hidden-gems&type=movie";
+  const CHART = "/api/preview?url=tmdb:chart:popular&type=movie";
+
+  it("opens after five failures in a row, then refuses calls at once", async () => {
+    useClock();
+    try {
+      const mode = { status: 503 };
+      const tmdb = makeFakeTmdb(mode);
+      globalThis.fetch = tmdb.handler;
+      const kv = kvWithOptions();
+      const env = makeEnv({ FF_PROVIDER_BREAKER: "1", TMDB_API_KEY: "k", CONFIGS: kv });
+      const w = await freshIsolate();
+
+      await callIsolate(w, env, GEMS);
+      assert.equal(tmdb.calls.tmdb, 5, "the first request makes its five calls");
+      const shared = JSON.parse(kv._store.get("pb:tmdb"));
+      assert.ok(shared.openUntil > clock, "the opening is shared through KV");
+      assert.equal(kv._opts.get("pb:tmdb").expirationTtl, 60);
+
+      const second = await callIsolate(w, env, GEMS);
+      assert.equal(tmdb.calls.tmdb, 5, "open: no call reaches TMDB");
+      assert.equal(second.body.ok, false);
+
+      // After a minute one call is let through, and one success closes it.
+      clock += 61 * 1000;
+      mode.status = 0;
+      const third = await callIsolate(w, env, GEMS);
+      assert.ok(tmdb.calls.tmdb > 5, "the trial call goes through");
+      assert.equal(third.body.ok, true);
+      const before = tmdb.calls.tmdb;
+      await callIsolate(w, env, GEMS);
+      assert.ok(tmdb.calls.tmdb > before, "closed again");
+    } finally {
+      restore();
+    }
+  });
+
+  it("opens again on the first failure after it was let through", async () => {
+    useClock();
+    try {
+      const mode = { status: 502 };
+      const tmdb = makeFakeTmdb(mode);
+      globalThis.fetch = tmdb.handler;
+      const env = makeEnv({ FF_PROVIDER_BREAKER: "1", TMDB_API_KEY: "k" });
+      const w = await freshIsolate();
+      await callIsolate(w, env, GEMS);
+      clock += 61 * 1000;
+      await callIsolate(w, env, GEMS);
+      const afterTrial = tmdb.calls.tmdb;
+      assert.ok(afterTrial > 5 && afterTrial <= 10, "the trial request's calls went out");
+      await callIsolate(w, env, GEMS);
+      assert.equal(tmdb.calls.tmdb, afterTrial, "still down: open again straight away");
+    } finally {
+      restore();
+    }
+  });
+
+  it("another isolate takes up the opening from KV without calling the provider", async () => {
+    useClock();
+    try {
+      const tmdb = makeFakeTmdb({ status: 503 });
+      globalThis.fetch = tmdb.handler;
+      const env = makeEnv({ FF_PROVIDER_BREAKER: "1", TMDB_API_KEY: "k" });
+      await callIsolate(await freshIsolate(), env, GEMS);
+      assert.equal(tmdb.calls.tmdb, 5);
+      await callIsolate(await freshIsolate(), env, GEMS);
+      assert.equal(tmdb.calls.tmdb, 5, "a cold isolate reads pb:tmdb and fails fast");
+    } finally {
+      restore();
+    }
+  });
+
+  it("serves the last good copy straight away while open", async () => {
+    useClock();
+    try {
+      const mode = { status: 0 };
+      const tmdb = makeFakeTmdb(mode);
+      globalThis.fetch = tmdb.handler;
+      const env = makeEnv({ FF_PROVIDER_BREAKER: "1", TMDB_API_KEY: "k" });
+      const w = await freshIsolate();
+      const good = await callIsolate(w, env, CHART);
+      assert.equal(good.body.ok, true);
+      assert.ok(good.body.count > 0);
+
+      // The copy goes stale, TMDB goes down, and the breaker opens.
+      clock += 20 * 60 * 1000;
+      mode.status = 503;
+      await callIsolate(w, env, GEMS);
+      const calls = tmdb.calls.tmdb;
+      const served = await callIsolate(w, env, CHART);
+      assert.equal(tmdb.calls.tmdb, calls, "no call while open");
+      assert.equal(served.body.ok, true, "the stale chart is served");
+      assert.equal(served.body.count, good.body.count);
+    } finally {
+      restore();
+    }
+  });
+
+  it("a timeout counts as a failure", async () => {
+    try {
+      const tmdb = makeFakeTmdb({ timeout: true });
+      globalThis.fetch = tmdb.handler;
+      const env = makeEnv({ FF_PROVIDER_BREAKER: "1", TMDB_API_KEY: "k" });
+      const w = await freshIsolate();
+      await callIsolate(w, env, GEMS);
+      assert.equal(tmdb.calls.tmdb, 5);
+      // The request answers at the first page that fails; let the other four
+      // time out too, as they would while the next request came in.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      await callIsolate(w, env, GEMS);
+      assert.equal(tmdb.calls.tmdb, 5, "five timeouts opened it");
+    } finally {
+      restore();
+    }
+  });
+
+  it("a 401 or 404 is an answer, not a failure", async () => {
+    try {
+      const mode = { status: 401 };
+      const tmdb = makeFakeTmdb(mode);
+      globalThis.fetch = tmdb.handler;
+      const env = makeEnv({ FF_PROVIDER_BREAKER: "1", TMDB_API_KEY: "k" });
+      const w = await freshIsolate();
+      for (let i = 0; i < 3; i++) await callIsolate(w, env, GEMS);
+      mode.status = 404;
+      for (let i = 0; i < 3; i++) await callIsolate(w, env, GEMS);
+      assert.equal(tmdb.calls.tmdb, 30, "every request still reaches TMDB");
+      assert.equal(env.CONFIGS._store.has("pb:tmdb"), false);
+    } finally {
+      restore();
+    }
+  });
+
+  it("is off without FF_PROVIDER_BREAKER: every request still calls the provider", async () => {
+    try {
+      const tmdb = makeFakeTmdb({ status: 503 });
+      globalThis.fetch = tmdb.handler;
+      const env = makeEnv({ TMDB_API_KEY: "k" });
+      const w = await freshIsolate();
+      for (let i = 0; i < 3; i++) await callIsolate(w, env, GEMS);
+      assert.equal(tmdb.calls.tmdb, 15);
+      assert.equal(env.CONFIGS._store.has("pb:tmdb"), false);
+    } finally {
+      restore();
+    }
+  });
+
+  it("an opening in one provider leaves the others alone", async () => {
+    try {
+      const tmdb = makeFakeTmdb({ status: 503 });
+      const other = { calls: 0 };
+      globalThis.fetch = async (input, init) => {
+        const url = new URL(typeof input === "string" ? input : input.url);
+        if (url.hostname === "api.trakt.tv") {
+          other.calls++;
+          return Response.json([]);
+        }
+        return tmdb.handler(input, init);
+      };
+      const env = makeEnv({ FF_PROVIDER_BREAKER: "1", TMDB_API_KEY: "k", TRAKT_CLIENT_ID: "t" });
+      const w = await freshIsolate();
+      await callIsolate(w, env, GEMS);
+      await callIsolate(w, env, "/api/preview?url=trakt:chart:trending&type=movie");
+      assert.ok(other.calls > 0, "Trakt is still called");
+    } finally {
+      restore();
+    }
+  });
+
+  it("writes one metrics point per provider, at most once a minute", async () => {
+    useClock();
+    try {
+      const tmdb = makeFakeTmdb({ status: 503 });
+      globalThis.fetch = tmdb.handler;
+      const points = [];
+      const env = makeEnv({ FF_PROVIDER_BREAKER: "1", TMDB_API_KEY: "k", ANALYTICS: { writeDataPoint: (p) => points.push(p) } });
+      const w = await freshIsolate();
+      await callIsolate(w, env, GEMS);
+      const first = points.filter((p) => p.indexes[0] === "provider");
+      assert.equal(first.length, 1);
+      assert.deepEqual(first[0].blobs, ["provider", "tmdb", "open"]);
+      const [calls, failed, refused, , opened] = first[0].doubles;
+      assert.deepEqual([calls, failed, refused, opened], [5, 5, 0, 1]);
+
+      await callIsolate(w, env, GEMS);
+      assert.equal(points.filter((p) => p.indexes[0] === "provider").length, 1, "not again within the minute");
+      clock += 61 * 1000;
+      await callIsolate(w, env, "/api/health-nothing-here");
+      const later = points.filter((p) => p.indexes[0] === "provider");
+      assert.equal(later.length, 2);
+      assert.equal(later[1].doubles[2], 5, "the refused calls of the second request are counted");
+    } finally {
+      restore();
+    }
   });
 });

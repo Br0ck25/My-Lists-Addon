@@ -429,7 +429,16 @@ No npm, no `src/` tree, no esbuild, no new test framework (D-11). Phase 2 is now
   - **Found on the way (unchanged, noted):** `simkl:watchlist`, `simkl:history…` and `simkl:airing-next` are in `PERSONAL_SHELF_URL_PREFIXES` but no source claims them, so a row with one falls to the MDBList default. The builder writes Simkl rows as `simkl:user:…`, so this only matters for a hand-made row.
 - [ ] **P4-2** Normalize every adapter output to `MediaRef` with `media_id` from the resolver. Stremio metas are built from `MediaRef` plus `media`. *Done when:* no catalog emits an id outside `tt…` / `tmdb:…` / `channel_…`.
 - [ ] **P4-3** Chart snapshots: `snap:chart:{source}:{chart}:{type}:{region}:{page}` (KV, 2 h TTL, stale-while-revalidate); an empty result never replaces a non-empty one. *Done when:* catalog chart reads hit the snapshot; there is a test for the empty-refusal rule.
-- [ ] **P4-4** Provider breaker in KV `pb:{provider}` (60 s TTL): open after 5 consecutive failures; fail fast; metrics. *Done when:* the fault-injection tests pass.
+- [x] **P4-4** Provider breaker in KV `pb:{provider}` (60 s TTL): open after 5 consecutive failures; fail fast; metrics. *Done when:* the fault-injection tests pass.
+  - **Done (Claude, 2026-09-28)** in `41_provider-breaker.js`, behind `FF_PROVIDER_BREAKER` (off). Turning it on is the owner's, and safe either way (`docs/OPERATIONS.md` §14). Tests: "P4-4" in `tests/providers.test.mjs`.
+    - **Where it bites: the fetch guard** (`fetch`, `02_`), which every outbound call goes through. A call to one of an adapter's `hosts` goes through `providerBreakerFetch`: refused at once (a `ProviderUnavailable` error) while that provider's breaker is open, counted otherwise. So the existing cache tiers (`fetchWithPerUserCacheAndCircuitBreaker`) serve their last good copy straight away instead of after the 10 to 30 s timeout, and every provider call is covered, not only catalog rows.
+    - **A failure** is no answer (network error, timeout), a 5xx or a 429. A 401, 403 or 404 closes the count. After `PROVIDER_BREAKER_THRESHOLD` (5) in a row it opens for 60 s; then one call is let through, and one more failure opens it again.
+    - **State is per isolate, shared through KV:** the isolate that opens a breaker writes `pb:{provider}` (`{ openUntil }`, expirationTtl 60) at the end of the request or cron tick (`providerBreakerFlush`, from the handlers in `26_`). `fetchCatalog` reads the row's provider key before calling (`providerBreakerRefresh`), at most once a minute per provider per isolate.
+    - **Metrics:** one Analytics Engine point per provider per isolate per minute, index `provider`, doubles `[calls, failures, refused, latency ms, opened]`.
+  - **Where it differs from the plan, and why:**
+    - **The count is in memory, not in KV.** The fetch guard has no `env`, and a KV write per failure would hit KV's one-write-per-second-per-key limit in exactly the outage it is for. KV carries only the openings (one write each), which is what the other isolates need.
+    - **Other isolates read `pb:` on the catalog path only.** Elsewhere (details, crons) an isolate relies on its own count, which opens after its own five failures.
+
 - [ ] **P4-5** Provider contract fixtures (`tests/fixtures/providers/*`) plus a nightly live-check workflow. *Done when:* both are in CI.
 
 ## Phase 5 — Jobs and caching

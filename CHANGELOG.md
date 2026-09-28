@@ -23,6 +23,16 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 `FF_SESSIONS`, `FF_INSTALLS`, `FF_V2_LISTS_API`, `FF_V2_LISTS_READ` and `FF_V2_LISTS_ONLY` stay **off** (unset). Leave the first three off until the new sign-in, install-link and list screens ship. `FF_V2_LISTS_READ` stays off until the list copy (`docs/OPERATIONS.md` §9) has finished and its report has been checked; §10 then gives the steps, and turning it off again is always safe. `FF_V2_LISTS_ONLY` comes last and is **one-way**: only after reads have been on the new tables for a while (§11).
 
+`FF_PROVIDER_BREAKER` (P4-4, below) is optional and safe to turn on or off at any time (`docs/OPERATIONS.md` §14).
+
+### 🛡️ A provider that is down no longer holds up every row (P4-4)
+
+- **A new switch, `FF_PROVIDER_BREAKER` (off).** With it on, when TMDB, Trakt, MDBList, Simkl or another provider fails five times in a row, the site stops calling it for a minute and shows the last good copy of each row straight away. Before, every row waited up to 10 to 30 seconds for the provider to time out, on every home screen, for as long as the outage lasted.
+- After the minute, one call is let through, and the provider is used again as soon as it answers. A wrong key or a missing title does not count as a failure.
+- One copy of the Worker that finds a provider down tells the others through a short-lived KV key (`pb:<provider>`, gone after a minute).
+- The request metrics gain one point per provider each minute: calls, failures, calls refused, and time spent waiting. `docs/OPERATIONS.md` §14 has the details.
+- Safe to turn on and off at any time.
+
 ### 🧭 One table for every kind of catalog row (P4-1)
 
 - **Nothing changes for visitors.** Every kind of row the add-on can serve (a TMDB or Trakt chart, an MDBList or Trakt list, a watchlist, a channel, a custom list, and so on, 28 in all) is now described once, in one table, together with the provider it comes from and the code that fetches it. Before, the add-on worked out what a row was in one long chain of checks and fetched it in a second chain that had to be kept in step with the first by hand.

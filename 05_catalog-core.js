@@ -144,6 +144,10 @@ async function fetchCatalog(entry, skip = 0, keys = {}) {
     const ref = resolveSourceRef(entry.url);
     const source = catalogSourceByName(ref.source);
     if (source.apiUse) trackSharedApiUse(keys, PROVIDER_ADAPTERS[source.apiUse].usesSharedKey(keys), source.apiUse);
+    // FF_PROVIDER_BREAKER: learn whether another isolate found this provider
+    // down (41_provider-breaker.js; typeof-guarded, the tests load this file
+    // without it).
+    if (typeof providerBreakerRefresh === "function") await providerBreakerRefresh(keys.env, source.apiUse || ref.provider);
     result = await source.fetchPage(ref, { entry, skip, keys });
   }
 
