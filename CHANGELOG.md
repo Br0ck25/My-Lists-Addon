@@ -11,7 +11,7 @@ All notable changes to **My Lists Addon** ([mylistsaddon.com](https://mylistsadd
 Do these in order. Details are in `docs/OPERATIONS.md`.
 
 1. **Back up D1**: Time Travel, or `npx wrangler d1 export my-lists-db --remote --output=backup.sql`.
-2. **Apply `migrations/0014_add_schema_migrations.sql`, then `migrations/0015_accounts_sessions_installs.sql`**, in the D1 Console and in that order. Both only add tables and are safe to run twice. The new sign-in code writes to 0015's tables when they exist and skips them when they don't, so nothing breaks in between; until it is applied the admin schema check lists it as missing.
+2. **Apply `migrations/0014_add_schema_migrations.sql`, then `migrations/0015_accounts_sessions_installs.sql`, then `migrations/0016_lists_v2.sql`**, in the D1 Console and in that order. All three only add tables and are safe to run twice. The new sign-in code writes to 0015's tables when they exist and skips them when they don't, so nothing breaks in between; until it is applied the admin schema check lists it as missing. Nothing uses 0016's tables yet (see P3b-1 below).
 3. **Add the Analytics Engine binding**: Worker → Settings → Bindings → Add → Analytics Engine, name `ANALYTICS`, dataset `mylists_events`.
 4. **Paste and deploy** `worker_entry_combined.js`.
 5. **Delete the retired variables** if they are set: `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET`, `CRON_SUBREQUEST_BUDGET`. The code ignores them either way.
@@ -21,6 +21,13 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 `TOKEN_ENCRYPTION_KEY` is needed only to start moving install-link keys into encrypted storage (P3a-8, below). That move stays **off** until `INSTALL_MIGRATION_PERCENT` is set, and `docs/OPERATIONS.md` §8 gives the steps. Deploying without it changes nothing.
 
 `FF_SESSIONS` and `FF_INSTALLS` stay **off** (unset). Leave them off until the new sign-in and install-link screens ship.
+
+### 🗂️ New tables for lists, likes and channels (P3b-1)
+
+- **Migration 0016** (`migrations/0016_lists_v2.sql`) adds the tables Phase 3b moves lists onto: `media`, `lists`, `list_items`, `list_slug_history`, `likes`, `channels`, `account_list_prefs`, `presets`, the search table `lists_fts2`, and `jobs` (for the list backfill's progress).
+  - Nothing reads or writes them yet. No existing table or row is touched, and nothing a visitor sees changes.
+  - The required database version stays at 0014, so deploying before running 0016 does not pause anything. Until it is applied, the admin schema check lists it as missing.
+  - A list entry can be a single episode as well as a whole title, because storyline and crossover lists hold episodes. Item details with no column of their own (companion notes, air dates) are kept with the entry, so copying lists across loses nothing.
 
 ### 🔐 Stremio rows use the account's own connections (P3a-10)
 

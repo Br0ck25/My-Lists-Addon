@@ -8368,7 +8368,9 @@ describe("the Worker can tell an operator it is ahead of its own database", () =
       for (const m of sql.matchAll(/CREATE\s+(?:VIRTUAL\s+)?TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+([A-Za-z_][\w]*)/gi)) {
         found.push(`${migration}:table:${m[1]}`);
       }
-      for (const m of sql.matchAll(/CREATE\s+INDEX(?:\s+IF\s+NOT\s+EXISTS)?\s+([A-Za-z_][\w]*)/gi)) {
+      // UNIQUE included: 0016 is the first migration with unique indexes, and
+      // without it they would slip past this check unnoticed.
+      for (const m of sql.matchAll(/CREATE\s+(?:UNIQUE\s+)?INDEX(?:\s+IF\s+NOT\s+EXISTS)?\s+([A-Za-z_][\w]*)/gi)) {
         found.push(`${migration}:index:${m[1]}`);
       }
       for (const m of sql.matchAll(/ALTER\s+TABLE\s+([A-Za-z_][\w]*)\s+ADD\s+COLUMN\s+([A-Za-z_][\w]*)/gi)) {
@@ -8383,7 +8385,8 @@ describe("the Worker can tell an operator it is ahead of its own database", () =
     // endpoint's report IS the manifest -- and it comes through the same code
     // path an operator would use.
     const db = makeD1();
-    for (const t of ["install_secrets", "installs", "provider_connections", "sessions", "account_settings", "accounts", "rate_counters", "creators", "creator_lists", "source_groups", "stats", "creator_tombstones", "published_lists", "lists_fts", "list_tombstones", "list_likes", "feedback", "scrobble_tokens", "event_meta", "watch_history", "continue_watching", "airing_next", "creator_user_lists", "creator_show_states", "creator_tracking_meta", "streaming_events", "creator_key_lookups", "schema_migrations"]) {
+    for (const t of ["list_items", "list_slug_history", "lists_fts2", "likes", "channels", "account_list_prefs", "presets", "jobs", "lists", "media",
+      "install_secrets", "installs", "provider_connections", "sessions", "account_settings", "accounts", "rate_counters", "creators", "creator_lists", "source_groups", "stats", "creator_tombstones", "published_lists", "lists_fts", "list_tombstones", "list_likes", "feedback", "scrobble_tokens", "event_meta", "watch_history", "continue_watching", "airing_next", "creator_user_lists", "creator_show_states", "creator_tracking_meta", "streaming_events", "creator_key_lookups", "schema_migrations"]) {
       db._db.exec(`DROP TABLE IF EXISTS ${t};`);
     }
     const env = makeEnv({ CONFIGS: makeKv(), DB: db });

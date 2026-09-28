@@ -353,6 +353,161 @@ CREATE TABLE IF NOT EXISTS account_settings (
     updated_at    INTEGER NOT NULL
 );
 
+-- Phase 3b: lists, likes, channels, presets and jobs (migrations/0016).
+-- The migration file explains each table.
+CREATE TABLE IF NOT EXISTS media (
+    id            INTEGER PRIMARY KEY,
+    kind          TEXT NOT NULL CHECK (kind IN ('movie', 'series')),
+    tmdb_id       INTEGER,
+    imdb_id       TEXT,
+    tvdb_id       INTEGER,
+    alt_id        TEXT,
+    title         TEXT,
+    year          INTEGER,
+    poster_path   TEXT,
+    backdrop_path TEXT,
+    resolved_at   INTEGER,
+    created_at    INTEGER NOT NULL,
+    updated_at    INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_media_tmdb ON media(kind, tmdb_id) WHERE tmdb_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_media_imdb ON media(imdb_id) WHERE imdb_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_media_alt ON media(kind, alt_id) WHERE alt_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_media_unresolved ON media(updated_at) WHERE resolved_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS lists (
+    id               INTEGER PRIMARY KEY,
+    public_id        TEXT NOT NULL UNIQUE,
+    owner_account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
+    slug             TEXT NOT NULL,
+    name             TEXT NOT NULL,
+    description      TEXT,
+    kind             TEXT NOT NULL DEFAULT 'custom',
+    media_type       TEXT NOT NULL CHECK (media_type IN ('movie', 'series', 'mixed')),
+    visibility       TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('private', 'unlisted', 'public')),
+    legacy_id        TEXT UNIQUE,
+    source_provider  TEXT,
+    source_ref       TEXT,
+    source_json      TEXT,
+    synced_at        INTEGER,
+    item_count       INTEGER NOT NULL DEFAULT 0,
+    like_count       INTEGER NOT NULL DEFAULT 0,
+    add_count        INTEGER NOT NULL DEFAULT 0,
+    position         REAL NOT NULL DEFAULT 0,
+    version          INTEGER NOT NULL DEFAULT 1,
+    created_at       INTEGER NOT NULL,
+    updated_at       INTEGER NOT NULL,
+    deleted_at       INTEGER
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_lists_owner_slug ON lists(owner_account_id, slug) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_lists_owner ON lists(owner_account_id, position) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_lists_dir_popular ON lists(like_count DESC, updated_at DESC, id DESC) WHERE visibility = 'public' AND deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_lists_dir_new ON lists(created_at DESC, id DESC) WHERE visibility = 'public' AND deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_lists_dir_added ON lists(add_count DESC, like_count DESC, id DESC) WHERE visibility = 'public' AND deleted_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS list_items (
+    id         INTEGER PRIMARY KEY,
+    list_id    INTEGER NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
+    media_id   INTEGER NOT NULL REFERENCES media(id),
+    season     INTEGER,
+    episode    INTEGER,
+    position   REAL NOT NULL,
+    added_at   INTEGER NOT NULL,
+    note       TEXT,
+    extra_json TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_list_items_entry ON list_items(list_id, media_id, ifnull(season, -1), ifnull(episode, -1));
+CREATE INDEX IF NOT EXISTS idx_list_items_order ON list_items(list_id, position);
+CREATE INDEX IF NOT EXISTS idx_list_items_media ON list_items(media_id);
+
+CREATE TABLE IF NOT EXISTS list_slug_history (
+    owner_account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    old_slug         TEXT NOT NULL,
+    list_id          INTEGER NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
+    created_at       INTEGER NOT NULL,
+    PRIMARY KEY (owner_account_id, old_slug)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_list_slug_history_list ON list_slug_history(list_id);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS lists_fts2 USING fts5(
+    name,
+    description,
+    owner_name,
+    tokenize = 'unicode61 remove_diacritics 2'
+);
+
+CREATE TABLE IF NOT EXISTS likes (
+    target_type TEXT NOT NULL,
+    target_id   TEXT NOT NULL,
+    voter       TEXT NOT NULL,
+    created_at  INTEGER NOT NULL,
+    PRIMARY KEY (target_type, target_id, voter)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_likes_voter ON likes(voter);
+
+CREATE TABLE IF NOT EXISTS channels (
+    id               INTEGER PRIMARY KEY,
+    public_code      TEXT NOT NULL UNIQUE,
+    owner_account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
+    client_id        TEXT,
+    slug             TEXT,
+    name             TEXT NOT NULL,
+    description      TEXT,
+    visibility       TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('private', 'unlisted', 'public')),
+    definition_json  TEXT NOT NULL DEFAULT '{}',
+    pool_r2_key      TEXT,
+    pool_version     INTEGER NOT NULL DEFAULT 0,
+    item_count       INTEGER NOT NULL DEFAULT 0,
+    show_count       INTEGER NOT NULL DEFAULT 0,
+    like_count       INTEGER NOT NULL DEFAULT 0,
+    add_count        INTEGER NOT NULL DEFAULT 0,
+    published_at     INTEGER,
+    created_at       INTEGER NOT NULL,
+    updated_at       INTEGER NOT NULL,
+    deleted_at       INTEGER
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_channels_owner_client ON channels(owner_account_id, client_id) WHERE client_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_channels_owner_slug ON channels(owner_account_id, slug) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_channels_dir_new ON channels(published_at DESC, id DESC) WHERE visibility = 'public' AND deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_channels_dir_liked ON channels(like_count DESC, add_count DESC, id DESC) WHERE visibility = 'public' AND deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_channels_dir_added ON channels(add_count DESC, like_count DESC, id DESC) WHERE visibility = 'public' AND deleted_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS account_list_prefs (
+    account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    pref       TEXT NOT NULL,
+    target     TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (account_id, pref, target)
+) WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS presets (
+    id          INTEGER PRIMARY KEY,
+    account_id  INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    name        TEXT NOT NULL,
+    config_json TEXT NOT NULL,
+    position    REAL NOT NULL DEFAULT 0,
+    created_at  INTEGER NOT NULL,
+    updated_at  INTEGER NOT NULL,
+    UNIQUE (account_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS jobs (
+    id            INTEGER PRIMARY KEY,
+    type          TEXT NOT NULL,
+    dedupe_key    TEXT UNIQUE,
+    account_id    INTEGER,
+    status        TEXT NOT NULL DEFAULT 'queued',
+    attempts      INTEGER NOT NULL DEFAULT 0,
+    run_after     INTEGER NOT NULL,
+    payload_json  TEXT,
+    progress_json TEXT,
+    last_error    TEXT,
+    created_at    INTEGER NOT NULL,
+    updated_at    INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_jobs_due ON jobs(status, run_after);
+CREATE INDEX IF NOT EXISTS idx_jobs_account ON jobs(account_id, type) WHERE account_id IS NOT NULL;
+
 -- Migration ledger (migrations/0014). A fresh database starts at the latest version.
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version    TEXT PRIMARY KEY,
@@ -374,4 +529,5 @@ INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES
   ('0012', 0),
   ('0013', 0),
   ('0014', 0),
-  ('0015', 0);
+  ('0015', 0),
+  ('0016', 0);

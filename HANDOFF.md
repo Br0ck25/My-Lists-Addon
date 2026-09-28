@@ -5,13 +5,13 @@
 ---
 
 ## Current Status
-- **Last Updated**: 2026-09-27
+- **Last Updated**: 2026-09-28
 - **Last Active AI**: Claude Code (Opus 5.5)
-- **Active Task**: Phase 3a is complete: P3a-1 through P3a-10 are done, verified and tested. Next: Phase 3b (lists, likes, channels), starting with P3b-1.
-- **Task State**: All tests passing (1,399 passed, 0 failed, 1 skipped: the opt-in network test). `verify.sh` checks pass. CI on GitHub runs the same suite on Node 22.
+- **Active Task**: Phase 3b (lists, likes, channels). P3b-1 (migration `0016_lists_v2.sql`) is written and tested, waiting for the owner to apply it. Next: P3b-2, the media resolver.
+- **Task State**: All tests passing (1,412 passed, 0 failed, 1 skipped: the opt-in network test). `verify.sh` checks pass. CI on GitHub runs the same suite on Node 22.
 - **Git State**:
-  - The review fixes, P3a-8 and P3a-9 were merged into `main` as PR #1.
-  - P3a-10 is on the branch `feat/p3a-10-provider-tokens`, with its own PR into `main`.
+  - Phase 3a is merged into `main` (PR #1 and PR #2).
+  - **All of Phase 3b goes on the branch `claude/beautiful-lamport-kx261g`**, in one draft PR into `main`. The owner deploys Phase 3b from that PR when it is done. Keep adding each P3b task to this branch as its own commit.
 - **The owner is not a programmer.** Explain in plain words, do the git work for them, and ask before anything that changes stored user data or needs a dashboard change.
 
 ---
@@ -88,7 +88,7 @@ node scope_check.mjs worker worker_entry_combined.js
 ```
 Then delete `node_modules`.
 
-Last run (2026-09-27): all of the above pass, 1,372 tests passed, 0 failed, 1 skipped.
+Last run (2026-09-28): all of the above pass, including the scope check. 1,412 tests passed, 0 failed, 1 skipped.
 
 The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/json` to every POST, so a route test cannot notice a page that forgets them. A static test ("every mutating fetch the pages make sends a JSON content type") covers that instead.
 
@@ -110,7 +110,7 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
   - one install-config schema, which fixed Configure → Update switching Better Posters off;
   - catalog rows no longer read watch history they don't use;
   - `stats` key-range queries.
-- **Phase 3a (in progress):**
+- **Phase 3a (done):**
   - **P3a-1:** Migration `0015_accounts_sessions_installs.sql` written for `accounts`, `sessions`, `installs`, `provider_connections`, `install_secrets`, `rate_counters`, `account_settings`; added to `schema.sql`, `D1_SCHEMA_MANIFEST`.
   - **P3a-2:** AES-GCM-256 token encryption/decryption with key rotation (`TOKEN_ENCRYPTION_KEY`) and blind index HMAC (`LOOKUP_PEPPER`) implemented in `02_http-and-creator-utils.js` and verified with comprehensive unit tests. Documentation updated in `README.md`, `wrangler.toml`, and `docs/OPERATIONS.md`.
   - **P3a-3:** Accounts backfill job implemented (`backfillAccounts`, `reconcileAccounts` in `02_http-and-creator-utils.js`, `/admin/api/migrate-accounts` route in `26_api-creator-and-admin-routes.js`, Admin maintenance panel in `03_admin.js`). Copies data from D1 `creators` and KV `creator:*` into `accounts` (newest `keyHash` wins; D1 wins ties), verifies `count(accounts) = |creators ∪ creator:*|`, leaves existing records intact.
@@ -138,12 +138,22 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
     - `POST /api/connections/import-local` (checked with each provider, once, rate-limited), `GET /api/connections`, and `DELETE /api/connections/:provider` (which revokes at Trakt and TMDB).
     - Page changes: the `apply*Connection` helpers, `pickUpServerConnection`, `forgetServerConnection` and `importLocalConnectionsOnce` in `17_`, with hooks in `22_` and `24_`.
 
+- **Phase 3b (in progress, branch `claude/beautiful-lamport-kx261g`):**
+  - **P3b-1 (Claude):** migration `migrations/0016_lists_v2.sql` adds `media`, `lists`, `list_items`, `list_slug_history`, `likes`, `channels`, `account_list_prefs`, `presets`, `lists_fts2` and `jobs`. Also in `schema.sql` and `D1_SCHEMA_MANIFEST`. Tests in `tests/lists-v2.test.mjs`; the manifest drift test in `tests/worker.test.mjs` now also catches `UNIQUE` indexes. Nothing reads or writes the tables yet, and `REQUIRED_SCHEMA_VERSION` stays `0014`.
+    - Where it differs from the architecture sketch, and why, is listed under P3b-1 in `NEXT_VERSION_TASKS.md`. The ones the next tasks must know:
+      - a list entry is `(list, media, season, episode)`: storyline lists hold single episodes. `extra_json` keeps item fields with no column;
+      - `media.kind` is `movie`/`series`; a title TMDB can't resolve is a stub with `title` NULL and `resolved_at` NULL;
+      - `lists_fts2` keeps its own copy of the text and is maintained **by rowid in code** (no triggers). Only public, non-deleted lists go in it;
+      - an account's vote is `acct:<accounts.id>` (legacy signed-out votes keep `a:<hash>`, D-9); `channel_add` rows are channel adds;
+      - `lists.legacy_id` is the backfill's idempotency key;
+      - a deleted account's shared channels stay (owner NULL); its private channels must be deleted by code.
+
 ---
 
 ## Owner Actions Still Open (not code)
 1. **Deploy what is on `main`:**
    1. back up D1;
-   2. run `migrations/0014_add_schema_migrations.sql`, then `migrations/0015_accounts_sessions_installs.sql`, in the D1 console. Both only add tables and are safe to run twice;
+   2. run `migrations/0014_add_schema_migrations.sql`, then `migrations/0015_accounts_sessions_installs.sql`, in the D1 console. Both only add tables and are safe to run twice. When Phase 3b is deployed, `migrations/0016_lists_v2.sql` follows them (same: only adds tables, safe to run twice);
    3. add the `ANALYTICS` Analytics Engine binding (dataset `mylists_events`);
    4. paste `worker_entry_combined.js` and deploy;
    5. delete the retired variables `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET` and `CRON_SUBREQUEST_BUDGET`.
@@ -157,13 +167,13 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
    Full steps are in `docs/OPERATIONS.md` §1, and `CHANGELOG.md` has them at the top of `[Unreleased]`.
 2. **When ready, move install-link keys to encrypted storage:** follow `docs/OPERATIONS.md` §8 (apply 0015, back up D1, add `TOKEN_ENCRYPTION_KEY` and keep a copy of it, set `INSTALL_MIGRATION_PERCENT` to `10`, check progress, then raise it).
 3. **Turn on backups:** add the GitHub repository secrets `CLOUDFLARE_API_TOKEN` (D1 Read), `CLOUDFLARE_ACCOUNT_ID`, `D1_DATABASE_ID` and `BACKUP_PASSPHRASE`. Keep a copy of the passphrase outside GitHub.
+   - **Check the first run.** `migrations/0007` notes that `wrangler d1 export` refuses a database that has virtual (full-text search) tables. `lists_fts` (0007) is one, and `lists_fts2` (0016) is another. If the daily export fails for that reason, the workflow needs to export around them (for example table by table), and the search tables are rebuilt afterwards. Not changed yet.
 
 ---
 
 ## Next Steps for Incoming AI
-1. **Phase 3a is done** (`NEXT_VERSION_TASKS.md`; the reasoning is in `MIGRATION_PLAN.md`). Next:
-   - **Phase 3b** (lists, likes, channels): P3b-1, migration `0016_lists_v2.sql`, comes first. Read `MIGRATION_PLAN.md` §3b before starting.
-     - It rewrites how lists are stored, so it will need the owner's approval before any backfill touches stored data.
+1. **Phase 3b** (lists, likes, channels) is under way on `claude/beautiful-lamport-kx261g`. P3b-1 is written. Next is **P3b-2**, the media resolver (a new server file after `28_`, so `29_...`). Read `MIGRATION_PLAN.md` §3b and the P3b-1 notes in `NEXT_VERSION_TASKS.md` before starting.
+     - Phase 3b rewrites how lists are stored, so it needs the owner's approval before any backfill (P3b-3) touches stored data.
      - Decide which wins when an install has its own keys in `install_secrets` and its owner also has a connection. Today `install_secrets` is the only source.
      - v2 installs (`/i/{token}`) have no keys of their own, so their personal Trakt/MDBList/Simkl rows only work once this lands.
    - A v2 link's `/i/{token}/configure` page renders, but its **Update** still saves a new legacy link through `/api/save`. The UI for v2 links (Phase 6) should `PATCH /api/installs/:id` instead.

@@ -13,7 +13,7 @@ How the hosted Worker is deployed, configured and recovered. The Worker is deplo
    node --check worker_entry_combined.js
    node --test tests/*.test.mjs
    ```
-2. **Apply database migrations first** if the release adds any (see §4). The current release has two, `0014` then `0015`. A Worker that needs a newer schema than the database has refuses writes with a maintenance message rather than failing silently. That guard only works once migration `0014` is applied.
+2. **Apply database migrations first** if the release adds any (see §4). The current release has three, `0014`, `0015`, then `0016`. A Worker that needs a newer schema than the database has refuses writes with a maintenance message rather than failing silently. That guard only works once migration `0014` is applied.
 3. **Back up D1** (see §5) if the release contains a migration.
 4. **Deploy.** Cloudflare dashboard → Workers & Pages → the My Lists Worker → **Edit code** → select all → paste the new `worker_entry_combined.js` → **Deploy**.
 5. **Smoke test:**
