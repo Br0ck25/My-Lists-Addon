@@ -746,7 +746,7 @@ The existing files keep their responsibilities:
 | `01_icon-asset.js` | The app icon |
 | `02_http-and-creator-utils.js` | HTTP helpers and the fetch guard, auth and account helpers, storage helpers (KV/D1), likes, the directory, the schema gate and request metrics |
 | `03_admin.js` | The admin page and its data queries |
-| `04_config-resolution.js` | Install configs, source detection, the D-8 account rule |
+| `04_config-resolution.js` | Install configs, source detection and the provider registry (`CATALOG_SOURCES`, `PROVIDER_ADAPTERS`, P4-1), the D-8 account rule |
 | `05_catalog-core.js` | Stremio catalog/meta building, the channel engine, posters and badges |
 | `06_`, `07_` | Provider fetchers (MDBList, Trakt, TMDB, Simkl, JustWatch, TVmaze) and the cron sweeps |
 | `08_quickadd-chart-data.js` | Quick Add chart tables |

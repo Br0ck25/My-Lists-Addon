@@ -23,6 +23,12 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 `FF_SESSIONS`, `FF_INSTALLS`, `FF_V2_LISTS_API`, `FF_V2_LISTS_READ` and `FF_V2_LISTS_ONLY` stay **off** (unset). Leave the first three off until the new sign-in, install-link and list screens ship. `FF_V2_LISTS_READ` stays off until the list copy (`docs/OPERATIONS.md` §9) has finished and its report has been checked; §10 then gives the steps, and turning it off again is always safe. `FF_V2_LISTS_ONLY` comes last and is **one-way**: only after reads have been on the new tables for a while (§11).
 
+### 🧭 One table for every kind of catalog row (P4-1)
+
+- **Nothing changes for visitors.** Every kind of row the add-on can serve (a TMDB or Trakt chart, an MDBList or Trakt list, a watchlist, a channel, a custom list, and so on, 28 in all) is now described once, in one table, together with the provider it comes from and the code that fetches it. Before, the add-on worked out what a row was in one long chain of checks and fetched it in a second chain that had to be kept in step with the first by hand.
+- It is the groundwork for the rest of Phase 4: one place to add protections per provider (a provider that is down is skipped quickly instead of making every row wait) and to keep a copy of each chart.
+- Tests hold the new table to the old chains word for word: every kind of row gets the same name, is fetched by the same code with the same keys, and counts the same way in the admin API Usage tab.
+
 ### 📺 A database for watch history (P3c-1)
 
 - **Groundwork only, nothing changes for visitors.** Watch history and show progress will move into their own D1 database, `mylists-activity` (binding `DB_ACTIVITY`), so the biggest data the site keeps does not crowd out lists and accounts. Its tables are in `migrations/activity/A0001_activity.sql`. Nothing uses them yet, so there is no need to create it with this release; `docs/OPERATIONS.md` §2 and §4 have the steps for when it is wanted.

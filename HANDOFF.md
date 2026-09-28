@@ -7,11 +7,11 @@
 ## Current Status
 - **Last Updated**: 2026-09-28
 - **Last Active AI**: Claude Code (Opus 5.5)
-- **Active Task**: Phase 3c (activity). Phase 3b is merged into `main` (PR #3). **P3c-1** (the activity database: `migrations/activity/A0001_activity.sql`, `schema_activity.sql`, `36_activity-db.js`) is written and tested; creating and binding `DB_ACTIVITY` is the owner's (OPERATIONS §2, §4). **P3c-2** (`migrations/0017_show_schedule.sql` in the main database: `show_schedule`, `account_recommendations`, `title_daily_stats`) is written and tested. **P3c-3** (the history copy, `37_activity-backfill.js`, run from `/admin`) is written and tested; running it is the owner's (OPERATIONS §12). **P3c-4** (recording plays, `38_activity-scrobble.js`, from the ping and the webhook) is done. **P3c-5** (the shelves, `39_activity-shelves.js`) is done; 0017 gained `season_finale_season` and `season_episode_counts` (applied nowhere yet). **P3c-6** (`40_event-tracking.js`, behind `FF_EVENT_TRACKING`, off) is written: **all of Phase 3c is written**. The PR waits for the owner's review and deploy; turning the flags on is the owner's (OPERATIONS §12, §13).
-- **Task State**: 1,544 tests pass, 0 fail, 1 skipped, both as they are and with `MLA_TEST_V2_LISTS_READ=1`. Build, sync, syntax, scope, render and HTML checks pass.
+- **Active Task**: Phase 4 (providers). Phase 3c is merged into `main` (PR #4); its rollout (create and bind `DB_ACTIVITY`, run the history copy, `FF_EVENT_TRACKING`) is the owner's (OPERATIONS §2, §4, §12, §13). **P4-1** (the provider registry, `CATALOG_SOURCES` and `PROVIDER_ADAPTERS` in `04_config-resolution.js`) is done: `detectSource` and `fetchCatalog` dispatch through it, with no change anyone can see.
+- **Task State**: 1,551 tests pass, 0 fail, 1 skipped, both as they are and with `MLA_TEST_V2_LISTS_READ=1`. Build, sync, syntax, scope, render and HTML checks pass.
 - **Git State**:
-  - Phases 3a and 3b are merged into `main` (PRs #1, #2, #3).
-  - **Phase 3c goes on the branch `claude/wizardly-faraday-3ptdw1`**, in one draft PR into `main`, one commit per P3c task.
+  - Phases 3a, 3b and 3c are merged into `main` (PRs #1 to #4).
+  - **Phase 4 goes on the branch `claude/hopeful-davinci-dx55ds`**, in one draft PR into `main`, one commit per P4 task.
 - **The owner is not a programmer.** Explain in plain words, do the git work for them, and ask before anything that changes stored user data or needs a dashboard change.
 
 ---
@@ -91,7 +91,7 @@ node scope_check.mjs worker worker_entry_combined.js
 ```
 Then delete `node_modules`.
 
-Last run (2026-09-28): all of the above pass, plus every CI step (scope, render and HTML checks). 1,459 tests passed, 0 failed, 1 skipped.
+Last run (2026-09-28, P4-1): all of the above pass, plus every CI step (scope, render and HTML checks). 1,551 tests passed, 0 failed, 1 skipped, both ways.
 
 The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/json` to every POST, so a route test cannot notice a page that forgets them. A static test ("every mutating fetch the pages make sends a JSON content type") covers that instead.
 
@@ -197,6 +197,12 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
     - `show_progress` `(S, 0)` means "nothing of season S yet" (a Continue Watching show with no history). P3c-5's shelves must read it so.
     - A fresh account copy deletes that account's `source = 'migrated'` events and rebuilds `show_progress` and `user_media_state` from all its events. When P3c-4 starts writing live plays, they must use `activityDedupeKey` and the ten-minute window (`36_`), so a play in both stores is one row.
 
+- **Phase 4 (in progress, branch `claude/hopeful-davinci-dx55ds`):**
+  - **P4-1 (Claude):** the provider registry, in `04_config-resolution.js` (it owns source detection, and the tests load it on its own). Details and deviations under P4-1 in `NEXT_VERSION_TASKS.md`.
+    - **`CATALOG_SOURCES` is the one ordered list of catalog sources.** A new kind of row is one new entry there: its `name`, `provider`, `kind`, `match`, optional `arg`, `apiUse` and `fetchPage`. **Order matters** (first match wins) and the MDBList entry must stay last (it takes anything). Never rename a source: `STREMIO_LIVE_ROW_SOURCES` and the catalog route key off the names.
+    - A `personal` source must also go in `STREMIO_LIVE_ROW_SOURCES` (`00_`), or its row is cached for a day; a test fails until both agree.
+    - `tests/providers.test.mjs` keeps a frozen copy of the old `detectSource` and `fetchCatalog` chains as the oracle. When a source is **added on purpose**, add it to the frozen copies too (they describe the intended behavior), and add its strings to `SOURCE_CORPUS`.
+
 ## Owner Actions Still Open (not code)
 1. **Deploy what is on `main`:**
    1. back up D1;
@@ -219,7 +225,7 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
 ---
 
 ## Next Steps for Incoming AI
-1. **Phase 3c is written** (P3c-1 to P3c-6, PR #4). What is left is the owner's: review, deploy, create and bind the activity database, run the copy, then `FF_EVENT_TRACKING` (one-way). Next in the plan is **Phase 4** (providers); `FF_SHOW_SCHEDULE` needs the schedule job (P5-3). The next server file is `41_...`. Phase 3b's rollout (deploy, copy, `FF_V2_LISTS_READ`, later `FF_V2_LISTS_ONLY`, OPERATIONS §9 to §11) is still the owner's.
+1. **Phase 4 is under way** on `claude/hopeful-davinci-dx55ds` (draft PR into `main`). P4-1 is done; next are P4-2 (every catalog id canonical), P4-3 (chart snapshots), P4-4 (a per-provider breaker) and P4-5 (provider contract fixtures and a nightly live check), in `NEXT_VERSION_TASKS.md`. The next server file is `41_...`. Phase 3c is merged (PR #4); its rollout (create and bind the activity database, run the copy, then `FF_EVENT_TRACKING`, one-way) is the owner's, and `FF_SHOW_SCHEDULE` needs the schedule job (P5-3). Phase 3b's rollout (deploy, copy, `FF_V2_LISTS_READ`, later `FF_V2_LISTS_ONLY`, OPERATIONS §9 to §11) is still the owner's.
      - `FF_V2_LISTS_API` (the v2 list and likes APIs) must stay off until P3b-9: what they write is not in the legacy store, so a flag-off rollback or a copy re-run would lose it.
      - Phase 3b rewrites how lists are stored, so it needs the owner's approval before any backfill (P3b-3) touches stored data.
      - Decide which wins when an install has its own keys in `install_secrets` and its owner also has a connection. Today `install_secrets` is the only source.
