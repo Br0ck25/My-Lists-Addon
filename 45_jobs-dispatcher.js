@@ -60,7 +60,7 @@ const JOBS_DISPATCH_GRACE_MS = 10 * 60 * 1000;
 // `running` after it has died.
 const JOBS_DEFAULT_LEASE_MS = 15 * 60 * 1000;
 const JOBS_DISPATCH_LIMIT = 100;
-const JOBS_INLINE_LIMIT = 10;
+const JOBS_INLINE_LIMIT = 20;
 const JOBS_DURABLE_MAX_ATTEMPTS = JOBS_MAX_RETRIES + 1;
 // A periodic job is next due this much before a whole period has passed since
 // it started, so a job meant for every tick is due at the next tick whether

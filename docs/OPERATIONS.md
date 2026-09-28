@@ -312,6 +312,8 @@ Each Worker copy keeps its own count. The first one to find a provider down writ
 
 **Turning it on:** Worker → Settings → Variables and Secrets → Add → type *Text*, name `FF_CHART_SNAPSHOTS`, value `1`. Deploy. **Turning it off:** delete the variable and deploy. Both are safe at any time. The `snap:chart:` keys expire by themselves after a week; they can also be deleted by hand, and are rebuilt when next asked for.
 
+**Refreshed in the background (P5-5):** with the queue (§18) running, the hourly `chart.refresh` job rebuilds every chart page used in the last three days, for each region asked for, so visitors are never the ones waiting for a rebuild. It notes what is in use in small `snap:chartuse:` keys (they expire after three days). While the switch is on, the old chart warm-up leaves these charts to it.
+
 **Cost:** one KV read per chart row per Worker copy per minute at most (each copy remembers what it read for a minute), and one KV write per chart page every two hours while someone is asking for it.
 
 ## 16. The nightly provider check (P4-5)

@@ -46,6 +46,15 @@ const CHART_SNAPSHOT_MEMO_MAX = 500;
 // A rebuild that failed or came back empty is not tried again sooner than this.
 const CHART_SNAPSHOT_RETRY_MS = 5 * 60 * 1000;
 
+// Which snapshots are in use (P5-5): serving or building one notes it in
+// `snap:chartuse:{same tail}`, lasting three days, with what the refresh job
+// (48_chart-refresh.js) needs to rebuild it (the recipe) as KV metadata. At
+// most once per key per isolate every 12 hours, so this is a handful of KV
+// writes a day per chart, not one per request.
+const CHART_SNAPSHOT_USE_PREFIX = "snap:chartuse:";
+const CHART_SNAPSHOT_USE_TTL_SEC = 3 * 24 * 60 * 60;
+const CHART_SNAPSHOT_USE_EVERY_MS = 12 * 60 * 60 * 1000;
+const CHART_SNAPSHOT_USED = new Map(); // key -> when this isolate last noted it
 const CHART_SNAPSHOT_MEMO = new Map();     // key -> { snap, checkedAt, triedAt }
 const CHART_SNAPSHOT_BUILDING = new Map(); // key -> promise of the build
 
@@ -145,6 +154,36 @@ function buildChartSnapshot(source, ref, page, key, previous) {
   return job;
 }
 
+// Everything that makes this page, besides provider keys: enough to build it
+// again off the request (48_chart-refresh.js).
+function chartSnapshotRecipe(source, ref, { entry, skip, keys }) {
+  return {
+    s: source.name,
+    u: ref.url,
+    t: (entry && entry.type) || null,
+    k: Number(skip) || 0,
+    r: (keys && keys.region) || null,
+    d: keys && keys.hideNonDigitalReleases ? 1 : 0,
+  };
+}
+
+function noteChartSnapshotUse(env, key, source, ref, page) {
+  const now = Date.now();
+  const last = CHART_SNAPSHOT_USED.get(key);
+  if (last && now - last < CHART_SNAPSHOT_USE_EVERY_MS) return;
+  if (CHART_SNAPSHOT_USED.size >= CHART_SNAPSHOT_MEMO_MAX) CHART_SNAPSHOT_USED.clear();
+  CHART_SNAPSHOT_USED.set(key, now);
+  const metadata = { key, recipe: chartSnapshotRecipe(source, ref, page) };
+  // KV metadata holds at most 1024 bytes: a recipe that big is not recorded.
+  if (JSON.stringify(metadata).length > 1000) return;
+  const write = env.CONFIGS.put(CHART_SNAPSHOT_USE_PREFIX + key.slice(CHART_SNAPSHOT_PREFIX.length), "1", {
+    expirationTtl: CHART_SNAPSHOT_USE_TTL_SEC,
+    metadata,
+  }).catch(() => {});
+  const ctx = page.keys && page.keys.ctx;
+  if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(write);
+}
+
 // fetchCatalog's call for one source. Serves the chart snapshot when there is
 // one, and otherwise calls the fetcher exactly as before.
 async function fetchSourcePageWithSnapshot(source, ref, page) {
@@ -152,6 +191,7 @@ async function fetchSourcePageWithSnapshot(source, ref, page) {
   const env = keys.env;
   const key = env && env.CONFIGS && isChartSnapshotsEnabled(env) ? chartSnapshotKey(source, ref, page) : null;
   if (!key) return source.fetchPage(ref, page);
+  noteChartSnapshotUse(env, key, source, ref, page);
 
   const now = Date.now();
   const snap = await readChartSnapshot(env, key, now);

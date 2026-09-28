@@ -25526,9 +25526,13 @@ async function prewarmSharedCatalogs(env, ctx) {
   // One flat list, in the order the four blocks used to run in, so a rotating
   // cursor can walk it. Each entry warms exactly one chart.
   const warmTasks = [];
+  // With chart snapshots on, the hourly chart.refresh job (48_chart-refresh.js)
+  // keeps the TMDB, Trakt and Simkl charts fresh for every region in use, so
+  // only the MDBList block below is left to this warm-up.
+  const chartsBySnapshot = typeof isChartSnapshotsEnabled === "function" && isChartSnapshotsEnabled(env);
 
   // 1. Trakt Official Charts
-  if (traktKey) {
+  if (traktKey && !chartsBySnapshot) {
     const traktCharts = [
       { chartKey: "trending", type: "movie" },
       { chartKey: "trending", type: "series" },
@@ -25550,7 +25554,7 @@ async function prewarmSharedCatalogs(env, ctx) {
   }
 
   // 2. TMDB Official Charts & Streaming Services
-  if (tmdbKey) {
+  if (tmdbKey && !chartsBySnapshot) {
     const tmdbCharts = [
       { chartKey: "trending", type: "movie" },
       { chartKey: "trending", type: "series" },
@@ -25587,7 +25591,7 @@ async function prewarmSharedCatalogs(env, ctx) {
   }
 
   // 3. Simkl Trending Charts
-  if (simklKey) {
+  if (simklKey && !chartsBySnapshot) {
     const simklCharts = [
       { chartKey: "today", type: "movie" },
       { chartKey: "today", type: "series" },
@@ -99207,6 +99211,15 @@ const CHART_SNAPSHOT_MEMO_MAX = 500;
 // A rebuild that failed or came back empty is not tried again sooner than this.
 const CHART_SNAPSHOT_RETRY_MS = 5 * 60 * 1000;
 
+// Which snapshots are in use (P5-5): serving or building one notes it in
+// `snap:chartuse:{same tail}`, lasting three days, with what the refresh job
+// (48_chart-refresh.js) needs to rebuild it (the recipe) as KV metadata. At
+// most once per key per isolate every 12 hours, so this is a handful of KV
+// writes a day per chart, not one per request.
+const CHART_SNAPSHOT_USE_PREFIX = "snap:chartuse:";
+const CHART_SNAPSHOT_USE_TTL_SEC = 3 * 24 * 60 * 60;
+const CHART_SNAPSHOT_USE_EVERY_MS = 12 * 60 * 60 * 1000;
+const CHART_SNAPSHOT_USED = new Map(); // key -> when this isolate last noted it
 const CHART_SNAPSHOT_MEMO = new Map();     // key -> { snap, checkedAt, triedAt }
 const CHART_SNAPSHOT_BUILDING = new Map(); // key -> promise of the build
 
@@ -99306,6 +99319,36 @@ function buildChartSnapshot(source, ref, page, key, previous) {
   return job;
 }
 
+// Everything that makes this page, besides provider keys: enough to build it
+// again off the request (48_chart-refresh.js).
+function chartSnapshotRecipe(source, ref, { entry, skip, keys }) {
+  return {
+    s: source.name,
+    u: ref.url,
+    t: (entry && entry.type) || null,
+    k: Number(skip) || 0,
+    r: (keys && keys.region) || null,
+    d: keys && keys.hideNonDigitalReleases ? 1 : 0,
+  };
+}
+
+function noteChartSnapshotUse(env, key, source, ref, page) {
+  const now = Date.now();
+  const last = CHART_SNAPSHOT_USED.get(key);
+  if (last && now - last < CHART_SNAPSHOT_USE_EVERY_MS) return;
+  if (CHART_SNAPSHOT_USED.size >= CHART_SNAPSHOT_MEMO_MAX) CHART_SNAPSHOT_USED.clear();
+  CHART_SNAPSHOT_USED.set(key, now);
+  const metadata = { key, recipe: chartSnapshotRecipe(source, ref, page) };
+  // KV metadata holds at most 1024 bytes: a recipe that big is not recorded.
+  if (JSON.stringify(metadata).length > 1000) return;
+  const write = env.CONFIGS.put(CHART_SNAPSHOT_USE_PREFIX + key.slice(CHART_SNAPSHOT_PREFIX.length), "1", {
+    expirationTtl: CHART_SNAPSHOT_USE_TTL_SEC,
+    metadata,
+  }).catch(() => {});
+  const ctx = page.keys && page.keys.ctx;
+  if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(write);
+}
+
 // fetchCatalog's call for one source. Serves the chart snapshot when there is
 // one, and otherwise calls the fetcher exactly as before.
 async function fetchSourcePageWithSnapshot(source, ref, page) {
@@ -99313,6 +99356,7 @@ async function fetchSourcePageWithSnapshot(source, ref, page) {
   const env = keys.env;
   const key = env && env.CONFIGS && isChartSnapshotsEnabled(env) ? chartSnapshotKey(source, ref, page) : null;
   if (!key) return source.fetchPage(ref, page);
+  noteChartSnapshotUse(env, key, source, ref, page);
 
   const now = Date.now();
   const snap = await readChartSnapshot(env, key, now);
@@ -99948,7 +99992,7 @@ const JOBS_DISPATCH_GRACE_MS = 10 * 60 * 1000;
 // `running` after it has died.
 const JOBS_DEFAULT_LEASE_MS = 15 * 60 * 1000;
 const JOBS_DISPATCH_LIMIT = 100;
-const JOBS_INLINE_LIMIT = 10;
+const JOBS_INLINE_LIMIT = 20;
 const JOBS_DURABLE_MAX_ATTEMPTS = JOBS_MAX_RETRIES + 1;
 // A periodic job is next due this much before a whole period has passed since
 // it started, so a job meant for every tick is due at the next tick whether
@@ -100978,4 +101022,129 @@ async function runShelfShadow(env, job = {}) {
 definePeriodicJob("shelf.shadow", {
   everyMs: 60 * 60 * 1000,
   run: (env, payload, job) => runShelfShadow(env, job),
+});
+
+// --- Chart snapshots refreshed by a job (Phase 5, P5-5) -------------------------
+//
+// P4-3 (42_chart-snapshots.js) serves chart rows from shared snapshots, rebuilt
+// on a request once they are two hours old. This keeps them fresh off the
+// request instead, so a visitor is never the one who waits:
+//
+//   chart.refresh (periodic, hourly): lists the snapshots in use
+//   (`snap:chartuse:*`, noted by 42_ when one is served, with its recipe as
+//   KV metadata) and hands them out CHART_REFRESH_PER_JOB at a time as
+//   `chart.refresh-pages` jobs, or rebuilds them itself without the queue.
+//   "In use" is exactly the charts, types, regions and settings someone asked
+//   for in the last three days: every region an install uses, and no other.
+//
+//   chart.refresh-pages (plain job): rebuilds each page through its source's
+//   fetcher with the shared keys (buildChartSnapshot, so an empty answer never
+//   replaces a good copy). A page rebuilt less than CHART_REFRESH_MIN_AGE_MS
+//   ago is left alone; one whose key no longer comes out the same (Hidden
+//   Gems rotates daily) is skipped and expires by itself. The titles on the
+//   first pages are passed to the BetterPosters warm-up, as the old chart
+//   warm-up did.
+//
+// While FF_CHART_SNAPSHOTS is on, the old warm-up (prewarmSharedCatalogs, the
+// cron.charts job) leaves these charts to this job and only warms MDBList.
+// With it off nothing is noted as in use, this job does nothing, and the old
+// warm-up does everything as before.
+//
+// Module level, after the Worker's exports, like 27_ onward.
+
+const CHART_REFRESH_PER_JOB = 10;
+const CHART_REFRESH_MAX_PAGES = 5000;
+const CHART_REFRESH_MIN_AGE_MS = 45 * 60 * 1000;
+
+async function listChartSnapshotUses(env) {
+  const out = [];
+  let cursor;
+  do {
+    const page = await env.CONFIGS.list({ prefix: CHART_SNAPSHOT_USE_PREFIX, cursor });
+    for (const k of page.keys || []) {
+      const m = k.metadata;
+      if (m && typeof m.key === "string" && m.key.startsWith(CHART_SNAPSHOT_PREFIX) && m.recipe && typeof m.recipe === "object") {
+        out.push({ key: m.key, recipe: m.recipe });
+      }
+    }
+    cursor = page.list_complete ? null : page.cursor;
+  } while (cursor && out.length < CHART_REFRESH_MAX_PAGES);
+  return out.slice(0, CHART_REFRESH_MAX_PAGES);
+}
+
+// Rebuilds one page. Resolves to "built", "kept" (came back empty: the last
+// copy stays), "fresh", "moved" or "unknown". Throws when the fetcher does.
+async function refreshChartSnapshotPage(env, key, recipe, ctx, posterIds) {
+  const source = typeof catalogSourceByName === "function" ? catalogSourceByName(recipe.s) : null;
+  if (!source || source.kind !== "chart" || !source.snapshot || typeof recipe.u !== "string") return "unknown";
+  const ref = resolveSourceRef(recipe.u);
+  if (!ref || ref.source !== source.name) return "unknown";
+  const page = {
+    entry: { type: recipe.t || "movie" },
+    skip: Number(recipe.k) || 0,
+    keys: { env, ctx, region: recipe.r || undefined, hideNonDigitalReleases: !!recipe.d },
+  };
+  if (chartSnapshotKey(source, ref, page) !== key) return "moved";
+  let previous = null;
+  try {
+    const raw = await env.CONFIGS.get(key, "json");
+    if (raw && Array.isArray(raw.items) && Number.isFinite(raw.builtAt)) previous = raw;
+  } catch {
+    previous = null;
+  }
+  if (previous && Date.now() - previous.builtAt < CHART_REFRESH_MIN_AGE_MS) return "fresh";
+  const built = await buildChartSnapshot(source, ref, page, key, previous);
+  const fresh = built.snap && built.snap !== previous;
+  if (fresh && !page.skip && Array.isArray(posterIds) && typeof betterPostersImdbId === "function") {
+    for (const m of built.snap.items) {
+      const id = betterPostersImdbId(m);
+      if (id) posterIds.push(id);
+    }
+  }
+  return fresh ? "built" : "kept";
+}
+
+async function refreshChartSnapshotPages(env, entries, ctx) {
+  const out = { pages: 0, built: 0, kept: 0, fresh: 0, moved: 0, unknown: 0, failed: 0 };
+  const posterIds = [];
+  for (const e of entries || []) {
+    if (!e || typeof e.key !== "string" || !e.recipe) continue;
+    out.pages++;
+    try {
+      out[await refreshChartSnapshotPage(env, e.key, e.recipe, ctx, posterIds)]++;
+    } catch (err) {
+      out.failed++;
+      console.warn(`[Jobs] chart.refresh: ${e.key}: ${jobErrorText(err)}`);
+    }
+  }
+  if (posterIds.length && typeof rememberSharedPosterIds === "function") {
+    try {
+      await rememberSharedPosterIds(env, posterIds);
+    } catch {
+      // Poster warming is a nicety.
+    }
+  }
+  return out;
+}
+
+async function runChartRefresh(env, job = {}) {
+  if (!env || !env.CONFIGS || !isChartSnapshotsEnabled(env)) return { pages: 0 };
+  const uses = await listChartSnapshotUses(env);
+  const chunks = [];
+  for (let i = 0; i < uses.length; i += CHART_REFRESH_PER_JOB) chunks.push(uses.slice(i, i + CHART_REFRESH_PER_JOB));
+  if (chunks.length && jobsQueueBound(env)) {
+    const sent = await enqueueJobs(env, chunks.map((c) => ({ type: "chart.refresh-pages", payload: { entries: c } })));
+    if (sent.ok) return { pages: uses.length, jobs: chunks.length, queued: true };
+    console.warn(`[Jobs] chart.refresh: ${sent.failed} jobs not sent (${sent.reason}); refreshing here.`);
+  }
+  return refreshChartSnapshotPages(env, uses, job.ctx);
+}
+
+definePeriodicJob("chart.refresh", {
+  everyMs: 60 * 60 * 1000,
+  run: (env, payload, job) => runChartRefresh(env, job),
+});
+
+defineJobType("chart.refresh-pages", {
+  run: (env, payload, job) => refreshChartSnapshotPages(env, Array.isArray(payload.entries) ? payload.entries : [], job.ctx),
 });

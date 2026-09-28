@@ -5174,9 +5174,13 @@ async function prewarmSharedCatalogs(env, ctx) {
   // One flat list, in the order the four blocks used to run in, so a rotating
   // cursor can walk it. Each entry warms exactly one chart.
   const warmTasks = [];
+  // With chart snapshots on, the hourly chart.refresh job (48_chart-refresh.js)
+  // keeps the TMDB, Trakt and Simkl charts fresh for every region in use, so
+  // only the MDBList block below is left to this warm-up.
+  const chartsBySnapshot = typeof isChartSnapshotsEnabled === "function" && isChartSnapshotsEnabled(env);
 
   // 1. Trakt Official Charts
-  if (traktKey) {
+  if (traktKey && !chartsBySnapshot) {
     const traktCharts = [
       { chartKey: "trending", type: "movie" },
       { chartKey: "trending", type: "series" },
@@ -5198,7 +5202,7 @@ async function prewarmSharedCatalogs(env, ctx) {
   }
 
   // 2. TMDB Official Charts & Streaming Services
-  if (tmdbKey) {
+  if (tmdbKey && !chartsBySnapshot) {
     const tmdbCharts = [
       { chartKey: "trending", type: "movie" },
       { chartKey: "trending", type: "series" },
@@ -5235,7 +5239,7 @@ async function prewarmSharedCatalogs(env, ctx) {
   }
 
   // 3. Simkl Trending Charts
-  if (simklKey) {
+  if (simklKey && !chartsBySnapshot) {
     const simklCharts = [
       { chartKey: "today", type: "movie" },
       { chartKey: "today", type: "series" },

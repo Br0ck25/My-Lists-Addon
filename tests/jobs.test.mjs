@@ -321,7 +321,7 @@ const PERIODIC_EVERY = {
   "cron.episodes": 4 * 60000, "cron.airing-next": 4 * 60000, "cron.new-on-streaming": 4 * 60000, "cron.charts": 4 * 60000,
   "cron.better-posters": 4 * 60000, "cron.channel-presets": 4 * 60000, "cron.housekeeping": 4 * 60000,
   "show.watchers": 24 * 3600000, "show.refresh": 3600000,
-  "shelf.shadow": 3600000,
+  "shelf.shadow": 3600000, "chart.refresh": 3600000,
 };
 const CRON_JOBS = Object.keys(PERIODIC_EVERY);
 

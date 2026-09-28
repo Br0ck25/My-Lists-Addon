@@ -116,7 +116,8 @@ export function makeKv(initial = {}) {
       const slice = keys.slice(start, start + limit);
       const complete = start + slice.length >= keys.length;
       return {
-        keys: slice.map((name) => ({ name })),
+        // Real KV returns each key's metadata with it (P5-5 reads it).
+        keys: slice.map((name) => (metadata.has(name) ? { name, metadata: metadata.get(name) } : { name })),
         list_complete: complete,
         cursor: complete ? undefined : Buffer.from(slice[slice.length - 1]).toString("base64"),
       };

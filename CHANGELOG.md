@@ -27,6 +27,11 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 8. **Recommended: set up the background jobs queue** (Phase 5, `docs/OPERATIONS.md` §18): create the queues `mylists-jobs` and `mylists-jobs-dlq`, make this Worker the consumer of `mylists-jobs` (batch size 25, 5 retries, dead-letter queue `mylists-jobs-dlq`), bind `mylists-jobs` to the Worker as `JOBS`, then press **Send a test job** in `/admin` → Maintenance. Without it everything works as before.
 
+### 🔄 Charts refreshed in the background (P5-5)
+
+- **With `FF_CHART_SNAPSHOTS` on**, every chart someone uses (in every region their install asks for) is rebuilt once an hour by a background job, so no visitor waits for a chart to be rebuilt. An empty or failed answer still never replaces a good copy. The old every-few-minutes chart warm-up then leaves those charts alone.
+- With the switch off, nothing changes.
+
 ### ⚖️ Checking the new Continue Watching and Airing Next against the old (P5-4, first half)
 
 - **Nothing changes for visitors.** Every hour, for 50 accounts at a time, the site works out Continue Watching and Airing Next the new way (from the shared show schedules) and compares them with what the old sweeps stored. `/admin` → Maintenance → **Check jobs** shows how different they are, with examples.
