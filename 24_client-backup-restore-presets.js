@@ -2528,6 +2528,8 @@ renderTrackPlaybackSection();
 renderCreatorDashboard();
 // A signed-in connect comes back as ?connected=<provider> (P3a-9).
 if (typeof pickUpServerConnection === 'function') pickUpServerConnection();
+// A connection that needs signing in again (P5-7).
+if (typeof warnAboutLapsedConnections === 'function') warnAboutLapsedConnections();
 if (typeof pickUpMdblistTokenFromUrl === 'function') pickUpMdblistTokenFromUrl();
 if (typeof renderMdblistConnectStatus === 'function') renderMdblistConnectStatus();
 pickUpTraktTokenFromUrl();

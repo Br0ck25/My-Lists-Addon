@@ -27,6 +27,11 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 8. **Recommended: set up the background jobs queue** (Phase 5, `docs/OPERATIONS.md` §18): create the queues `mylists-jobs` and `mylists-jobs-dlq`, make this Worker the consumer of `mylists-jobs` (batch size 25, 5 retries, dead-letter queue `mylists-jobs-dlq`), bind `mylists-jobs` to the Worker as `JOBS`, then press **Send a test job** in `/admin` → Maintenance. Without it everything works as before.
 
+### 🔑 Connected accounts renewed before they expire (P5-7)
+
+- Once a day, Trakt and MDBList sign-ins kept on the server that expire within a week are renewed, instead of only when a row happened to need them in their last hour.
+- If Trakt or MDBList refuses the renewal, the account's personal rows in Stremio show one **"Reconnect Trakt at mylistsaddon.com"** tile instead of going silently empty, and the website shows a message asking to reconnect. Connecting again fixes both.
+
 ### 📥 Imports that finish on their own (P5-6, server side)
 
 - **Not used by the website yet** (its import screen moves over in Phase 6). A signed-in account can hand over up to 5,000 titles (a Letterboxd export or a CSV) in one go, and the site works through them in the background: closing the tab no longer stops an import. Progress can be checked at any time.

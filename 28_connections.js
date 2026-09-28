@@ -569,7 +569,13 @@ async function connectionFieldsForConfig(env, accountId, current) {
   const out = {};
   for (const row of rows) {
     const map = CONNECTION_CONFIG_FIELDS[row.provider];
-    if (!map || row.status !== "ok") continue;
+    if (!map) continue;
+    if (row.status !== "ok") {
+      // The provider refused to renew this sign-in (P5-7): the rows that
+      // needed it show a "Reconnect" tile instead of going quietly empty.
+      if (map.token && !current[map.token]) (out._reconnect = out._reconnect || []).push(row.provider);
+      continue;
+    }
     const tokenMissing = Boolean(map.token && !current[map.token] && row.access_token_enc);
     const keyMissing = Boolean(map.apiKey && !current[map.apiKey] && row.api_key_enc);
     if (!tokenMissing && !keyMissing) continue;

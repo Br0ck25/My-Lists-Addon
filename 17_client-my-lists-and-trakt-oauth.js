@@ -1894,6 +1894,26 @@ async function pickUpServerConnection() {
   else if (provider === 'tmdb') applyTmdbConnection(data.accessToken, data.id || '', data.username || '');
 }
 
+// A connection the server could not renew (token.refresh, P5-7) asks to be
+// connected again. Once per page load, and only signed in.
+async function warnAboutLapsedConnections() {
+  if (typeof isSignedIn === 'function' && !isSignedIn()) return;
+  let data = null;
+  try {
+    const res = await fetch(ORIGIN + '/api/connections');
+    if (!res.ok) return;
+    data = await res.json();
+  } catch (e) {
+    return;
+  }
+  const names = { trakt: 'Trakt', mdblist: 'MDBList', simkl: 'Simkl', tmdb: 'TMDB' };
+  const lapsed = ((data && data.connections) || [])
+    .filter(function (c) { return c && c.status && c.status !== 'ok'; })
+    .map(function (c) { return names[c.provider] || c.provider; });
+  if (!lapsed.length) return;
+  showToast(lapsed.join(' and ') + ' asked to be signed in again. Reconnect it in Settings to keep those rows filled.', 'error', { duration: 15000 });
+}
+
 // Disconnecting removes the server's copy too. Harmless when there is none, or
 // when this browser has no session (the server answers 401).
 function forgetServerConnection(provider) {

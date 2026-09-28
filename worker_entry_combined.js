@@ -14114,6 +14114,8 @@ async function resolveConfig(configParam, env, { withTracking = false } = {}) {
           track: !!parsed.track,
           trackCreatorName: parsed.trackCreatorName || "",
           trackCreatorKey: parsed.trackCreatorKey || "",
+          // Providers whose connection needs signing in again (P5-7).
+          reconnect: Array.isArray(parsed._reconnect) ? parsed._reconnect : [],
           // The verified username, or "". Every personal-shelf read downstream
           // is gated on this rather than on trackCreatorName -- see the block
           // above and mayReadTrackedShelf (02_http-and-creator-utils.js).
@@ -37003,6 +37005,26 @@ async function pickUpServerConnection() {
   else if (provider === 'mdblist') applyMdblistConnection(data.accessToken, data.username || '');
   else if (provider === 'simkl') applySimklConnection(data.accessToken, data.username || '');
   else if (provider === 'tmdb') applyTmdbConnection(data.accessToken, data.id || '', data.username || '');
+}
+
+// A connection the server could not renew (token.refresh, P5-7) asks to be
+// connected again. Once per page load, and only signed in.
+async function warnAboutLapsedConnections() {
+  if (typeof isSignedIn === 'function' && !isSignedIn()) return;
+  let data = null;
+  try {
+    const res = await fetch(ORIGIN + '/api/connections');
+    if (!res.ok) return;
+    data = await res.json();
+  } catch (e) {
+    return;
+  }
+  const names = { trakt: 'Trakt', mdblist: 'MDBList', simkl: 'Simkl', tmdb: 'TMDB' };
+  const lapsed = ((data && data.connections) || [])
+    .filter(function (c) { return c && c.status && c.status !== 'ok'; })
+    .map(function (c) { return names[c.provider] || c.provider; });
+  if (!lapsed.length) return;
+  showToast(lapsed.join(' and ') + ' asked to be signed in again. Reconnect it in Settings to keep those rows filled.', 'error', { duration: 15000 });
 }
 
 // Disconnecting removes the server's copy too. Harmless when there is none, or
@@ -74603,6 +74625,8 @@ renderTrackPlaybackSection();
 renderCreatorDashboard();
 // A signed-in connect comes back as ?connected=<provider> (P3a-9).
 if (typeof pickUpServerConnection === 'function') pickUpServerConnection();
+// A connection that needs signing in again (P5-7).
+if (typeof warnAboutLapsedConnections === 'function') warnAboutLapsedConnections();
 if (typeof pickUpMdblistTokenFromUrl === 'function') pickUpMdblistTokenFromUrl();
 if (typeof renderMdblistConnectStatus === 'function') renderMdblistConnectStatus();
 pickUpTraktTokenFromUrl();
@@ -76145,6 +76169,29 @@ async function handleFetch(request, env, ctx) {
       });
     }
 
+    // The "Reconnect" tile's poster (P5-7): a personal row whose provider
+    // connection needs signing in again.
+    if (path === "/reconnect-poster.svg") {
+      const provider = String(url.searchParams.get("provider") || "");
+      const adapter = isConnectionProvider(provider) ? providerAdapter(provider) : null;
+      const label = adapter ? adapter.label : "your account";
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450">
+        <rect width="300" height="450" fill="#161a2e"/>
+        <rect x="0.5" y="0.5" width="299" height="449" fill="none" stroke="#2a2f4a"/>
+        <text x="150" y="195" text-anchor="middle" font-family="sans-serif" font-size="42" fill="#5865a8">\u21bb</text>
+        <text x="150" y="245" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#c7cde6">Reconnect</text>
+        <text x="150" y="270" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#c7cde6">${escapeXml(label)}</text>
+        <text x="150" y="300" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#8a91b4">at mylistsaddon.com</text>
+      </svg>`;
+      return new Response(svg, {
+        headers: {
+          "Content-Type": "image/svg+xml",
+          "Cache-Control": "public, max-age=86400",
+          ...corsHeaders(),
+        },
+      });
+    }
+
     // /api/safe-poster -> Dynamic age-appropriate vector SVG poster for Adult Content Filter
     if (path === "/api/safe-poster") {
       const title = url.searchParams.get("title") || "Untitled";
@@ -76941,6 +76988,25 @@ Sitemap: ${url.origin}/sitemap.xml`;
       // is watched. All of them used to fall through to the 24-hour public
       // cache below, which let Stremio and Nuvio keep a day-old copy.
       const isUserPersonal = rowSources.some((src) => STREMIO_LIVE_ROW_SOURCES.has(src));
+
+      // A personal row whose provider connection needs signing in again
+      // (token.refresh, P5-7): one tile saying so, instead of an empty row.
+      if (isUserPersonal && Array.isArray(resolvedConfig.reconnect) && resolvedConfig.reconnect.length) {
+        const rowProviders = String(entry.url || "").split("\n").map((u) => u.trim()).filter(Boolean).map((u) => resolveSourceRef(u).provider);
+        const reconnectProvider = rowProviders.find((p) => resolvedConfig.reconnect.includes(p));
+        if (reconnectProvider) {
+          const label = (providerAdapter(reconnectProvider) || {}).label || reconnectProvider;
+          return jsonPublic({
+            metas: skip === 0 ? [{
+              id: "tt0000000",
+              type: entry.type,
+              name: `Reconnect ${label} at mylistsaddon.com`,
+              description: `${label} asked to be signed in again. Open mylistsaddon.com, sign in, and reconnect ${label} in Settings; this row then fills again.`,
+              poster: `${url.origin}/reconnect-poster.svg?provider=${encodeURIComponent(reconnectProvider)}`,
+            }] : [],
+          }, 200, { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" });
+        }
+      }
 
       // Graceful degradation only applies to the first page (skip === 0):
       // that's the case that makes a whole shelf silently vanish from the
@@ -91932,6 +91998,8 @@ async function resolveV2InstallConfig(param, env, { withTracking = false } = {})
     trackCreatorName: owner,
     trackCreatorKey: "",
     trackOwner: owner,
+    // Providers whose connection needs signing in again (P5-7).
+    reconnect: Array.isArray(fromConnections._reconnect) ? fromConnections._reconnect : [],
     // Playback pings from this link record to this account. A legacy link
     // proves that with the Creator Key it carries; a v2 link has no key, and
     // its "track" scope, granted to a signed-in owner, is the proof instead.
@@ -93002,7 +93070,13 @@ async function connectionFieldsForConfig(env, accountId, current) {
   const out = {};
   for (const row of rows) {
     const map = CONNECTION_CONFIG_FIELDS[row.provider];
-    if (!map || row.status !== "ok") continue;
+    if (!map) continue;
+    if (row.status !== "ok") {
+      // The provider refused to renew this sign-in (P5-7): the rows that
+      // needed it show a "Reconnect" tile instead of going quietly empty.
+      if (map.token && !current[map.token]) (out._reconnect = out._reconnect || []).push(row.provider);
+      continue;
+    }
     const tokenMissing = Boolean(map.token && !current[map.token] && row.access_token_enc);
     const keyMissing = Boolean(map.apiKey && !current[map.apiKey] && row.api_key_enc);
     if (!tokenMissing && !keyMissing) continue;
@@ -101461,3 +101535,83 @@ async function handleImportsApi(request, env, url, path) {
     return json({ ok: false, error: "Imports aren't available right now." }, 503);
   }
 }
+
+// --- Connections: token.refresh (Phase 5, P5-7) ---------------------------------
+//
+// A connected Trakt or MDBList account (28_connections.js) holds a token that
+// expires. Until now it was renewed only when a catalog row happened to need
+// it within the hour before it expired (refreshProviderConnectionIfDue), so a
+// connection nobody's Stremio asked for in that hour lapsed, and the rows went
+// quietly empty.
+//
+//   token.refresh (periodic, daily): every connection whose token expires
+//   within TOKEN_REFRESH_WINDOW_MS and that has a refresh token is renewed
+//   (exchangeRefreshToken, the same call as on the request path). When the
+//   provider refuses the refresh token (and no other isolate renewed it
+//   meanwhile), the connection is marked `reauth_required`: its token is no
+//   longer used, the person's personal rows show a "Reconnect" tile in Stremio
+//   (the catalog route, 25_), and the website shows a banner (17_). A provider
+//   that could not be asked (network, not configured) is left for the next day.
+//   Connecting again (storeProviderConnection) sets it back to `ok`.
+//
+// Module level, after the Worker's exports, like 27_ onward.
+
+const TOKEN_REFRESH_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const TOKEN_REFRESH_LIMIT = 500;
+
+async function runTokenRefresh(env, { now = Date.now() } = {}) {
+  const out = { due: 0, renewed: 0, reauth: 0, skipped: 0, unreadable: 0 };
+  if (!env || !env.DB || !hasTokenEncryptionKey(env)) return out;
+  let rows;
+  try {
+    ({ results: rows } = await env.DB.prepare(
+      `SELECT account_id, provider, external_user, access_token_enc, refresh_token_enc, expires_at, api_key_enc, status, updated_at
+       FROM provider_connections
+       WHERE status = 'ok' AND refresh_token_enc IS NOT NULL AND expires_at IS NOT NULL AND expires_at < ?
+       ORDER BY expires_at LIMIT ?`
+    ).bind(now + TOKEN_REFRESH_WINDOW_MS, TOKEN_REFRESH_LIMIT).all());
+  } catch (err) {
+    if (/no such table/i.test(jobErrorText(err))) return out;
+    throw err;
+  }
+  for (const row of rows || []) {
+    out.due++;
+    const conn = await decryptConnectionRow(env, row.account_id, row);
+    if (!conn || !conn.refreshToken) {
+      out.unreadable++;
+      continue;
+    }
+    const fresh = await exchangeRefreshToken(env, row.provider, conn);
+    if (fresh && fresh.accessToken) {
+      const stored = await storeProviderConnection(env, { id: row.account_id }, row.provider, {
+        accessToken: fresh.accessToken,
+        refreshToken: fresh.refreshToken,
+        expiresAt: fresh.expiresAt,
+        externalUser: { username: conn.username, id: conn.id },
+      });
+      if (stored) out.renewed++;
+      else out.skipped++;
+      continue;
+    }
+    if (fresh && fresh.rejected) {
+      // Refresh tokens are single use: a request may have renewed it a moment
+      // ago, in which case the row now holds a different token.
+      const again = await loadProviderConnection(env, row.account_id, row.provider);
+      if (again && again.accessToken && again.accessToken !== conn.accessToken) {
+        out.renewed++;
+        continue;
+      }
+      await markConnectionStatus(env, row.account_id, row.provider, "reauth_required", "The provider refused to renew this sign-in. Connect it again.");
+      out.reauth++;
+      continue;
+    }
+    out.skipped++;
+  }
+  if (out.reauth || out.renewed) console.log(`[Jobs] token.refresh: ${out.renewed} renewed, ${out.reauth} need signing in again, ${out.skipped} left for tomorrow.`);
+  return out;
+}
+
+definePeriodicJob("token.refresh", {
+  everyMs: 24 * 60 * 60 * 1000,
+  run: (env) => runTokenRefresh(env),
+});

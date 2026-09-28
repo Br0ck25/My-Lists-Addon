@@ -273,6 +273,29 @@ async function handleFetch(request, env, ctx) {
       });
     }
 
+    // The "Reconnect" tile's poster (P5-7): a personal row whose provider
+    // connection needs signing in again.
+    if (path === "/reconnect-poster.svg") {
+      const provider = String(url.searchParams.get("provider") || "");
+      const adapter = isConnectionProvider(provider) ? providerAdapter(provider) : null;
+      const label = adapter ? adapter.label : "your account";
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450">
+        <rect width="300" height="450" fill="#161a2e"/>
+        <rect x="0.5" y="0.5" width="299" height="449" fill="none" stroke="#2a2f4a"/>
+        <text x="150" y="195" text-anchor="middle" font-family="sans-serif" font-size="42" fill="#5865a8">\u21bb</text>
+        <text x="150" y="245" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#c7cde6">Reconnect</text>
+        <text x="150" y="270" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#c7cde6">${escapeXml(label)}</text>
+        <text x="150" y="300" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#8a91b4">at mylistsaddon.com</text>
+      </svg>`;
+      return new Response(svg, {
+        headers: {
+          "Content-Type": "image/svg+xml",
+          "Cache-Control": "public, max-age=86400",
+          ...corsHeaders(),
+        },
+      });
+    }
+
     // /api/safe-poster -> Dynamic age-appropriate vector SVG poster for Adult Content Filter
     if (path === "/api/safe-poster") {
       const title = url.searchParams.get("title") || "Untitled";
@@ -1069,6 +1092,25 @@ Sitemap: ${url.origin}/sitemap.xml`;
       // is watched. All of them used to fall through to the 24-hour public
       // cache below, which let Stremio and Nuvio keep a day-old copy.
       const isUserPersonal = rowSources.some((src) => STREMIO_LIVE_ROW_SOURCES.has(src));
+
+      // A personal row whose provider connection needs signing in again
+      // (token.refresh, P5-7): one tile saying so, instead of an empty row.
+      if (isUserPersonal && Array.isArray(resolvedConfig.reconnect) && resolvedConfig.reconnect.length) {
+        const rowProviders = String(entry.url || "").split("\n").map((u) => u.trim()).filter(Boolean).map((u) => resolveSourceRef(u).provider);
+        const reconnectProvider = rowProviders.find((p) => resolvedConfig.reconnect.includes(p));
+        if (reconnectProvider) {
+          const label = (providerAdapter(reconnectProvider) || {}).label || reconnectProvider;
+          return jsonPublic({
+            metas: skip === 0 ? [{
+              id: "tt0000000",
+              type: entry.type,
+              name: `Reconnect ${label} at mylistsaddon.com`,
+              description: `${label} asked to be signed in again. Open mylistsaddon.com, sign in, and reconnect ${label} in Settings; this row then fills again.`,
+              poster: `${url.origin}/reconnect-poster.svg?provider=${encodeURIComponent(reconnectProvider)}`,
+            }] : [],
+          }, 200, { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" });
+        }
+      }
 
       // Graceful degradation only applies to the first page (skip === 0):
       // that's the case that makes a whole shelf silently vanish from the
