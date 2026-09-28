@@ -1103,3 +1103,133 @@ describe("P3b-4: the list API", () => {
     assert.equal((await call(env, "/api/lists/anonpublic01/visibility", { method: "PUT", json: { visibility: "public" } })).status, 401);
   });
 });
+
+// --- P3b-5: the likes API (32_likes-api.js) ------------------------------------
+
+describe("P3b-5: the likes API", () => {
+  async function likesSetup() {
+    const s = await listsApiSetup();
+    const pub = await createApiListFor(s.env, s.annCookie, { name: "Liked One", mediaType: "movie", visibility: "public" });
+    // As the backfill leaves a list: a legacy signed-out vote on record, and
+    // a legacy total higher than the votes on record.
+    s.db.prepare("INSERT INTO likes (target_type, target_id, voter, created_at) VALUES ('list', ?, 'a:legacyvote', 1)").run(pub.list.publicId);
+    s.db.prepare("UPDATE lists SET like_count = 5 WHERE public_id = ?").run(pub.list.publicId);
+    return { ...s, pub, likePath: `/api/likes/list/${pub.list.publicId}` };
+  }
+
+  it("is off without the flag, reads signed out, and needs an account to like (D-6)", async () => {
+    const off = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
+    assert.equal((await call(off, "/api/likes/list/abc")).status, 404);
+    const { env, likePath } = await likesSetup();
+    const read = await call(env, likePath);
+    assert.deepEqual({ ok: read.body.ok, liked: read.body.liked, likes: read.body.likes }, { ok: true, liked: false, likes: 5 });
+    for (const method of ["PUT", "DELETE"]) {
+      const r = await call(env, likePath, { method });
+      assert.equal(r.status, 401);
+      assert.equal(r.body.signInRequired, true);
+    }
+  });
+
+  it("likes and unlikes once each however many times it is asked, and leaves legacy votes alone (D-9)", async () => {
+    const { env, db, annCookie, benCookie, likePath, pub, accountVersion } = await likesSetup();
+    const v0 = accountVersion();
+    const first = await call(env, likePath, { method: "PUT", cookie: annCookie });
+    assert.deepEqual({ liked: first.body.liked, likes: first.body.likes }, { liked: true, likes: 6 }, "the kept legacy total moves by one");
+    const v1 = accountVersion();
+    assert.ok(v1 > v0, "the account's likes changed, so its version moves");
+    const again = await call(env, likePath, { method: "PUT", cookie: annCookie });
+    assert.equal(again.body.likes, 6);
+    assert.equal(accountVersion(), v1, "a repeat changes nothing, so bumps nothing");
+    assert.equal((await call(env, likePath, { cookie: annCookie })).body.liked, true);
+    assert.equal((await call(env, likePath, { cookie: benCookie })).body.liked, false, "likes are per account");
+
+    const ben = await call(env, likePath, { method: "PUT", cookie: benCookie });
+    assert.equal(ben.body.likes, 7);
+    const off = await call(env, likePath, { method: "DELETE", cookie: annCookie });
+    assert.deepEqual({ liked: off.body.liked, likes: off.body.likes }, { liked: false, likes: 6 });
+    assert.equal((await call(env, likePath, { method: "DELETE", cookie: annCookie })).body.likes, 6);
+    const voters = db.prepare("SELECT voter FROM likes WHERE target_type = 'list' AND target_id = ? ORDER BY voter").all(pub.list.publicId).map((r) => r.voter);
+    assert.equal(voters.length, 2);
+    assert.ok(voters.includes("a:legacyvote"), "the legacy signed-out vote still counts");
+  });
+
+  it("moves the count by one when the same account likes from two places at once", async () => {
+    // Both requests pass the "already liked?" check, so both batches run. The
+    // harness cannot interleave two requests that finely, so the batch the
+    // route sends is run twice directly.
+    const sandbox = { console, URL, TextEncoder, crypto: globalThis.crypto };
+    sandbox.globalThis = sandbox;
+    vm.createContext(sandbox);
+    for (const rel of ["00_constants.js", "29_media.js", "30_lists-backfill.js", "31_lists-api.js", "32_likes-api.js"]) {
+      vm.runInContext(fs.readFileSync(path.join(REPO_ROOT, rel), "utf8"), sandbox, { filename: rel });
+    }
+    const env = { DB: makeD1() };
+    env.DB._db.exec(`INSERT INTO accounts (id, username, display_name, key_hash, created_at) VALUES (1, 'ann', 'Ann', 'h', 0);
+      INSERT INTO lists (id, public_id, owner_account_id, slug, name, media_type, visibility, like_count, created_at, updated_at)
+        VALUES (10, 'p10', 1, 'x', 'X', 'movie', 'public', 5, 0, 0);`);
+    const target = { type: "list", targetId: "p10", table: "lists", key: "public_id" };
+    const likes = () => env.DB._db.prepare("SELECT like_count AS n FROM lists WHERE id = 10").get().n;
+    await env.DB.batch(sandbox.likeWriteStatements(env, target, "acct:1", true, 1));
+    await env.DB.batch(sandbox.likeWriteStatements(env, target, "acct:1", true, 1));
+    assert.equal(likes(), 6);
+    await env.DB.batch(sandbox.likeWriteStatements(env, target, "acct:1", false, 1));
+    await env.DB.batch(sandbox.likeWriteStatements(env, target, "acct:1", false, 1));
+    assert.equal(likes(), 5);
+  });
+
+  it("has no cap", async () => {
+    const { env, db, annCookie, likePath, pub } = await likesSetup();
+    db.prepare(`WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 6000)
+                INSERT INTO likes (target_type, target_id, voter, created_at) SELECT 'list', ?, 'a:' || i, 1 FROM n`).run(pub.list.publicId);
+    db.prepare("UPDATE lists SET like_count = 6001 WHERE public_id = ?").run(pub.list.publicId);
+    const r = await call(env, likePath, { method: "PUT", cookie: annCookie });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.likes, 6002, "past the legacy ledger's 5,000-voter cap");
+  });
+
+  it("likes only lists people can see: not private, deleted or legacy anonymous ones", async () => {
+    const { env, db, annCookie, benCookie } = await likesSetup();
+    const priv = await createApiListFor(env, annCookie, { name: "Mine Only", mediaType: "movie", visibility: "private" });
+    const unl = await createApiListFor(env, annCookie, { name: "By Link", mediaType: "movie", visibility: "unlisted" });
+    assert.equal((await call(env, `/api/likes/list/${priv.list.publicId}`, { method: "PUT", cookie: benCookie })).status, 404);
+    assert.equal((await call(env, `/api/likes/list/${priv.list.publicId}`, { method: "PUT", cookie: annCookie })).status, 404, "not even by its owner");
+    assert.equal((await call(env, `/api/likes/list/${unl.list.publicId}`, { method: "PUT", cookie: benCookie })).body.likes, 1);
+    db.prepare(`INSERT INTO lists (public_id, owner_account_id, slug, name, kind, media_type, visibility, legacy_id, created_at, updated_at)
+                VALUES ('anonpublic02', NULL, 'old', 'Old', 'legacy_anonymous', 'movie', 'unlisted', 'a:old', 1, 1)`).run();
+    assert.equal((await call(env, "/api/likes/list/anonpublic02", { method: "PUT", cookie: benCookie })).status, 404);
+    db.prepare("UPDATE lists SET deleted_at = 1 WHERE public_id = ?").run(unl.list.publicId);
+    assert.equal((await call(env, `/api/likes/list/${unl.list.publicId}`, { method: "PUT", cookie: benCookie })).status, 404);
+    assert.equal((await call(env, "/api/likes/list/nosuchlist12", { method: "PUT", cookie: benCookie })).status, 404);
+    assert.equal((await call(env, "/api/likes/playlist/x", { method: "PUT", cookie: benCookie })).status, 404);
+  });
+
+  it("likes a channel listed in Explore Channels, and no other", async () => {
+    const { env, db, benCookie } = await likesSetup();
+    db.prepare(`INSERT INTO channels (public_code, owner_account_id, name, visibility, like_count, created_at, updated_at)
+                VALUES ('chanpub', NULL, 'Saturday Mornings', 'public', 3, 1, 1), ('chanunl', NULL, 'Shared', 'unlisted', 0, 1, 1)`).run();
+    const r = await call(env, "/api/likes/channel/chanpub", { method: "PUT", cookie: benCookie });
+    assert.deepEqual({ liked: r.body.liked, likes: r.body.likes }, { liked: true, likes: 4 });
+    assert.equal(db.prepare("SELECT like_count AS n FROM channels WHERE public_code = 'chanpub'").get().n, 4);
+    assert.equal((await call(env, "/api/likes/channel/chanunl", { method: "PUT", cookie: benCookie })).status, 404);
+    assert.equal((await call(env, "/api/likes/channel/nope", { method: "PUT", cookie: benCookie })).status, 404);
+  });
+
+  it("likes an outside list by its URL, under the same key the legacy route uses", async () => {
+    const { env, db, ben, benCookie, annCookie } = await likesSetup();
+    const url = "https://mdblist.com/lists/someone/good-shows";
+    const legacy = await call(env, "/api/lists/like-external", { method: "POST", json: { url, creatorName: ben.creatorName, creatorKey: ben.creatorKey } });
+    assert.equal(legacy.body.ok, true);
+    const legacyKey = [...env.CONFIGS._store.keys()].find((k) => k.startsWith("externallike:")).slice("externallike:".length);
+    db.prepare("INSERT INTO likes (target_type, target_id, voter, created_at) VALUES ('external', ?, 'a:oldvote', 1)").run(legacyKey);
+
+    const p = `/api/likes/external/${encodeURIComponent(url)}`;
+    const r = await call(env, p, { method: "PUT", cookie: annCookie });
+    assert.deepEqual({ liked: r.body.liked, likes: r.body.likes }, { liked: true, likes: 2 }, "an outside list's count is its votes");
+    const rows = db.prepare("SELECT target_id FROM likes WHERE target_type = 'external' AND voter LIKE 'acct:%'").all();
+    assert.deepEqual(rows.map((x) => x.target_id), [legacyKey]);
+    assert.equal((await call(env, p, { cookie: benCookie })).body.likes, 2);
+    const bad = await call(env, `/api/likes/external/${encodeURIComponent("https://example.com/whatever")}`, { method: "PUT", cookie: annCookie });
+    assert.equal(bad.status, 400);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM likes WHERE target_type = 'external'").get().n, 2, "nothing stored for a URL that isn't a list");
+  });
+});

@@ -7,8 +7,8 @@
 ## Current Status
 - **Last Updated**: 2026-09-28
 - **Last Active AI**: Claude Code (Opus 5.5)
-- **Active Task**: Phase 3b (lists, likes, channels). P3b-1 (migration `0016_lists_v2.sql`) is written and tested, waiting for the owner to apply it. P3b-2 (the media resolver, `29_media.js`) is done. P3b-3 (the list backfill, `30_lists-backfill.js`) is written and tested; the owner runs it from `/admin` after deploying. P3b-4 (the list API, `31_lists-api.js`, behind `FF_V2_LISTS_API`) is done. Next: P3b-5, the likes API. Separately, hotfix P1-C5 is on the task list for its own small PR into `main`.
-- **Task State**: All tests passing (1,445 passed, 0 failed, 1 skipped: the opt-in network test). `verify.sh` checks pass. CI on GitHub runs the same suite on Node 22.
+- **Active Task**: Phase 3b (lists, likes, channels). P3b-1 (migration `0016_lists_v2.sql`) is written and tested, waiting for the owner to apply it. P3b-2 (the media resolver, `29_media.js`) is done. P3b-3 (the list backfill, `30_lists-backfill.js`) is written and tested; the owner runs it from `/admin` after deploying. P3b-4 (the list API, `31_lists-api.js`) and P3b-5 (the likes API, `32_likes-api.js`), both behind `FF_V2_LISTS_API`, are done. Next: P3b-6, the directory and search on v2. Separately, hotfix P1-C5 is on the task list for its own small PR into `main`.
+- **Task State**: All tests passing (1,452 passed, 0 failed, 1 skipped: the opt-in network test). `verify.sh` checks pass. CI on GitHub runs the same suite on Node 22.
 - **Git State**:
   - Phase 3a is merged into `main` (PR #1 and PR #2).
   - **All of Phase 3b goes on the branch `claude/beautiful-lamport-kx261g`**, in one draft PR into `main`. The owner deploys Phase 3b from that PR when it is done. Keep adding each P3b task to this branch as its own commit.
@@ -89,7 +89,7 @@ node scope_check.mjs worker worker_entry_combined.js
 ```
 Then delete `node_modules`.
 
-Last run (2026-09-28): all of the above pass, plus every CI step (scope, render and HTML checks). 1,445 tests passed, 0 failed, 1 skipped.
+Last run (2026-09-28): all of the above pass, plus every CI step (scope, render and HTML checks). 1,452 tests passed, 0 failed, 1 skipped.
 
 The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/json` to every POST, so a route test cannot notice a page that forgets them. A static test ("every mutating fetch the pages make sends a JSON content type") covers that instead.
 
@@ -159,6 +159,9 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
     - Every write is one batch: the change, `item_count` from the rows, the list's version, the account's version, and `lists_fts2`. Keep that shape in P3b-5 onwards.
     - `listOwnerSearchName` (`30_`) is what `lists_fts2.owner_name` holds, for both the backfill and the API.
     - The list item insert names the list by `public_id` through a `VALUES` join, so a new list and its first items go in one batch.
+  - **P3b-5 (Claude):** the likes API, `/api/likes/{list|channel|external}/{id}`, in `32_likes-api.js` (dispatched from `25_` after the list API), behind the same flag. Details under P3b-5 in `NEXT_VERSION_TASKS.md`.
+    - `likeWriteStatements` must keep the `like_count ± changes()` statement straight after the like itself: `changes()` is the previous statement's row count.
+    - Channel likes answer 404 until P3b-8 fills `channels`.
     - **Legacy bug found (not fixed):** `getCreatorList` (`02_`) rewrites a list's KV record from its D1 row on every dashboard read, without `sourceUrl`, `synced`, `lastSyncedAt` or `baseItemIds`, so imported and synced lists lose that bookkeeping on D1-bound deployments. It is live today, independent of Phase 3b. The owner asked for it to go on the task list: it is **P1-C5** in `NEXT_VERSION_TASKS.md`, to ship as its own small PR into `main` ahead of Phase 3b (and before the backfill is run).
 
 ---
@@ -185,7 +188,7 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
 ---
 
 ## Next Steps for Incoming AI
-1. **Phase 3b** (lists, likes, channels) is under way on `claude/beautiful-lamport-kx261g`. P3b-1 to P3b-4 are written. Next is **P3b-5**, the likes API (`PUT`/`DELETE /api/likes/{type}/{id}`; the next server file is `32_...`). Read `MIGRATION_PLAN.md` §3b and the P3b-1 to P3b-4 notes in `NEXT_VERSION_TASKS.md` before starting.
+1. **Phase 3b** (lists, likes, channels) is under way on `claude/beautiful-lamport-kx261g`. P3b-1 to P3b-5 are written. Next is **P3b-6**, the directory and search on v2 (keyset pagination, sort `popular|new|added`, FTS over `lists_fts2`; `/lists/public.json` keeps its shape; the next server file is `33_...`). Read `MIGRATION_PLAN.md` §3b and the P3b-1 to P3b-5 notes in `NEXT_VERSION_TASKS.md` before starting.
    - **Hotfix P1-C5** (`getCreatorList` dropping an imported list's sync settings) is on the task list. It goes in its own small PR into `main`, not this branch, so it can deploy before Phase 3b.
      - Nothing may write v2 lists for real users until the read switch (P3b-7) is designed: until then the backfill treats the legacy store as the truth and would overwrite v2-side edits on a re-run.
      - Phase 3b rewrites how lists are stored, so it needs the owner's approval before any backfill (P3b-3) touches stored data.

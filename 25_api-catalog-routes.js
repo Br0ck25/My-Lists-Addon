@@ -210,6 +210,10 @@ async function handleFetch(request, env, ctx) {
     // /api/lists/like-external routes below are left to answer as they do.
     const listsApiResponse = await handleListsApi(request, env, url, path);
     if (listsApiResponse) return listsApiResponse;
+    // /api/likes/{list|channel|external}/{id} (likes over the v2 tables, behind
+    // the same flag) -- 32_likes-api.js.
+    const likesApiResponse = await handleLikesApi(request, env, url, path);
+    if (likesApiResponse) return likesApiResponse;
 
     if (path === "/" || path === "") {
       ctx.waitUntil(bumpStat(env, "pageviews"));

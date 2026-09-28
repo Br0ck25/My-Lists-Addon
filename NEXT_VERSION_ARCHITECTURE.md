@@ -757,6 +757,7 @@ The existing files keep their responsibilities:
 | `29_media.js` | The media resolver: any list item's id to one `media` row (P3b-2) |
 | `30_lists-backfill.js` | Copying the legacy lists, likes and anonymous lists into the v2 tables (P3b-3) |
 | `31_lists-api.js` | The item-level list API, `/api/lists` (P3b-4) |
+| `32_likes-api.js` | The likes API, `/api/likes` (P3b-5) |
 
 **New server-only areas go in new numbered files after `26_`**, each starting with a comment saying what it owns. They can't go between `09_` and `24_`, which are inside the page's template literal. Top-level names must be unique across every file.
 

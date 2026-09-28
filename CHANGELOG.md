@@ -22,6 +22,14 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 `FF_SESSIONS`, `FF_INSTALLS` and `FF_V2_LISTS_API` stay **off** (unset). Leave them off until the new sign-in, install-link and list screens ship.
 
+### ❤️ A likes API over the new tables (P3b-5)
+
+- **`/api/likes/{list|channel|external}/{id}`**, behind the same switch as the list API (off): `PUT` likes, `DELETE` takes the like back, `GET` says whether you have liked it and how many likes it has.
+- A like belongs to a signed-in account (D-6). Liking twice counts once; there is no cap (the old ledgers stopped at 5,000 voters).
+- Likes cast signed out before D-6 keep counting (D-9), and like totals carried over from the old storage are kept.
+- An outside list (MDBList, Trakt and the like) is liked by its URL, under the same key the current site uses, so its old likes and new ones add up.
+- Nothing changes on the site: the switch stays off until reads move to the new tables.
+
 ### 🧩 A list API over the new tables (P3b-4)
 
 - **`/api/lists`**, behind `FF_V2_LISTS_API` (off): a signed-in account can list, create, rename, describe, reorder, hide or share (private, unlisted, public) and delete its lists, and add, remove and move single entries, up to 500 at a time. Built for the new list screens (Phase 6).

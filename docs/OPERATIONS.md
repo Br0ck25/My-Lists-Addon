@@ -65,7 +65,7 @@ Adding a binding before the code that uses it is harmless. Removing a binding th
 - `NEW_ON_STREAMING_ENGINE` (optional; default `justwatch`).
 - `FF_SESSIONS` (optional): `1` turns on session sign-in for the `/api/creator/*` routes (P3a-6). **Leave unset** until the new sign-in screens ship.
 - `FF_INSTALLS` (optional): `1` turns on `/api/installs`, where a signed-in account creates, renames, rotates and removes `/i/{token}` install links (P3a-8). **Leave unset** until the screens for it ship. Links that already exist are served either way.
-- `FF_V2_LISTS_API` (optional): `1` turns on `/api/lists`, the item-level list API over the new list tables (P3b-4). **Leave unset.** Until a later release moves reads to those tables (P3b-7), the lists people use are still the old ones, and edits made through this API would be overwritten the next time the copy (§9) runs.
+- `FF_V2_LISTS_API` (optional): `1` turns on `/api/lists`, the item-level list API, and `/api/likes`, the likes API, over the new list tables (P3b-4, P3b-5). **Leave unset.** Until a later release moves reads to those tables (P3b-7), the lists and likes people use are still the old ones, and changes made through these APIs would be overwritten the next time the copy (§9) runs.
 - `INSTALL_MIGRATION_PERCENT` (optional, `0` to `100`): the share of existing install links whose keys and tokens move into encrypted D1 storage the first time they are used. See §8 before setting it.
 - **Delete** these retired variables if they are still set: `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET`, `CRON_SUBREQUEST_BUDGET`. The code ignores them.
 

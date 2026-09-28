@@ -58,7 +58,7 @@ dataset = "mylists_events"
 # FF_SESSIONS = "1"
 # Optional feature flag for Phase 3a: the /api/installs management API
 # FF_INSTALLS = "1"
-# Optional feature flag for Phase 3b: the /api/lists item-level list API.
+# Optional feature flag for Phase 3b: the /api/lists list API and /api/likes.
 # Leave unset in production until reads move to the v2 tables (P3b-7).
 # FF_V2_LISTS_API = "1"
 # Optional, 0-100: share of existing install links whose keys and tokens are
