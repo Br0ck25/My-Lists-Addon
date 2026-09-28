@@ -7,8 +7,8 @@
 ## Current Status
 - **Last Updated**: 2026-09-28
 - **Last Active AI**: Claude Code (Opus 5.5)
-- **Active Task**: Phase 3c (activity). Phase 3b is merged into `main` (PR #3). **P3c-1** (the activity database: `migrations/activity/A0001_activity.sql`, `schema_activity.sql`, `36_activity-db.js`) is written and tested; creating and binding `DB_ACTIVITY` is the owner's (OPERATIONS §2, §4). Next is **P3c-2** (`0017_show_schedule.sql` in the main database).
-- **Task State**: 1,507 tests pass, 0 fail, 1 skipped, both as they are and with `MLA_TEST_V2_LISTS_READ=1`. Build, sync, syntax and scope checks pass.
+- **Active Task**: Phase 3c (activity). Phase 3b is merged into `main` (PR #3). **P3c-1** (the activity database: `migrations/activity/A0001_activity.sql`, `schema_activity.sql`, `36_activity-db.js`) is written and tested; creating and binding `DB_ACTIVITY` is the owner's (OPERATIONS §2, §4). **P3c-2** (`migrations/0017_show_schedule.sql` in the main database: `show_schedule`, `account_recommendations`, `title_daily_stats`) is written and tested. Next is **P3c-3** (the history copy, `migrate.activity`).
+- **Task State**: 1,514 tests pass, 0 fail, 1 skipped, both as they are and with `MLA_TEST_V2_LISTS_READ=1`. Build, sync, syntax and scope checks pass.
 - **Git State**:
   - Phases 3a and 3b are merged into `main` (PRs #1, #2, #3).
   - **Phase 3c goes on the branch `claude/wizardly-faraday-3ptdw1`**, in one draft PR into `main`, one commit per P3c task.
@@ -190,11 +190,12 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
 
 - **Phase 3c (in progress, branch `claude/wizardly-faraday-3ptdw1`):**
   - **P3c-1 (Claude):** the activity database. Its migrations live in `migrations/activity/` with an `A` prefix and its own ledger (never put one in `migrations/`: the main drift test would apply it to `DB`). `schema_activity.sql` must stay identical to running them (a test checks). Always reach the database through `activityDb(env, accountId)` (`36_`), which returns null without the binding. Details under P3c-1 in `NEXT_VERSION_TASKS.md`.
+  - **P3c-2 (Claude):** `migrations/0017_show_schedule.sql` in `DB`. Nothing uses it yet, so `REQUIRED_SCHEMA_VERSION` stays `0014`; raise it to `0017` in the change that first depends on it. The schema-status drift test in `worker.test.mjs` drops every table by name, so add new tables to its list (children before parents: foreign keys are on).
 
 ## Owner Actions Still Open (not code)
 1. **Deploy what is on `main`:**
    1. back up D1;
-   2. run `migrations/0014_add_schema_migrations.sql`, then `migrations/0015_accounts_sessions_installs.sql`, in the D1 console. Both only add tables and are safe to run twice. When Phase 3b is deployed, `migrations/0016_lists_v2.sql` follows them (same: only adds tables, safe to run twice);
+   2. run `migrations/0014_add_schema_migrations.sql`, then `migrations/0015_accounts_sessions_installs.sql`, in the D1 console. Both only add tables and are safe to run twice. When Phase 3b is deployed, `migrations/0016_lists_v2.sql` follows them, and `0017_show_schedule.sql` after it (same: only add tables, safe to run twice);
    3. add the `ANALYTICS` Analytics Engine binding (dataset `mylists_events`);
    4. paste `worker_entry_combined.js` and deploy;
    5. delete the retired variables `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET` and `CRON_SUBREQUEST_BUDGET`.
@@ -213,7 +214,7 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
 ---
 
 ## Next Steps for Incoming AI
-1. **Phase 3c**: P3c-1 is done; continue with **P3c-2** (`migrations/0017_show_schedule.sql` in `DB`: `show_schedule`, `account_recommendations`, `title_daily_stats`; add to `schema.sql` and `D1_SCHEMA_MANIFEST`), then P3c-3 onward. The next server file is `37_...`. Phase 3b's rollout (deploy, copy, `FF_V2_LISTS_READ`, later `FF_V2_LISTS_ONLY`, OPERATIONS §9 to §11) is still the owner's.
+1. **Phase 3c**: P3c-1 and P3c-2 are done; continue with **P3c-3** (the per-account history copy `migrate.activity` into `DB_ACTIVITY`, MIGRATION_PLAN §3c), then P3c-4 onward. The next server file is `37_...`. Phase 3b's rollout (deploy, copy, `FF_V2_LISTS_READ`, later `FF_V2_LISTS_ONLY`, OPERATIONS §9 to §11) is still the owner's.
      - `FF_V2_LISTS_API` (the v2 list and likes APIs) must stay off until P3b-9: what they write is not in the legacy store, so a flag-off rollback or a copy re-run would lose it.
      - Phase 3b rewrites how lists are stored, so it needs the owner's approval before any backfill (P3b-3) touches stored data.
      - Decide which wins when an install has its own keys in `install_secrets` and its owner also has a connection. Today `install_secrets` is the only source.

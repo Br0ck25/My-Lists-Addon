@@ -11,7 +11,7 @@ All notable changes to **My Lists Addon** ([mylistsaddon.com](https://mylistsadd
 Do these in order. Details are in `docs/OPERATIONS.md`.
 
 1. **Back up D1**: Time Travel, or `npx wrangler d1 export my-lists-db --remote --output=backup.sql`.
-2. **Apply `migrations/0014_add_schema_migrations.sql`, then `migrations/0015_accounts_sessions_installs.sql`, then `migrations/0016_lists_v2.sql`**, in the D1 Console and in that order. All three only add tables and are safe to run twice. The new sign-in code writes to 0015's tables when they exist and skips them when they don't, so nothing breaks in between; until it is applied the admin schema check lists it as missing. Once 0016 is applied, every change to a list or a shared channel is also written to its tables as it happens (P3b-7 and P3b-8 below); nothing reads them until `FF_V2_LISTS_READ` is on.
+2. **Apply `migrations/0014_add_schema_migrations.sql`, then `migrations/0015_accounts_sessions_installs.sql`, then `migrations/0016_lists_v2.sql`, then `migrations/0017_show_schedule.sql`**, in the D1 Console and in that order. All four only add tables and are safe to run twice. The new sign-in code writes to 0015's tables when they exist and skips them when they don't, so nothing breaks in between; until it is applied the admin schema check lists it as missing. Once 0016 is applied, every change to a list or a shared channel is also written to its tables as it happens (P3b-7 and P3b-8 below); nothing reads them until `FF_V2_LISTS_READ` is on.
 3. **Add the Analytics Engine binding**: Worker → Settings → Bindings → Add → Analytics Engine, name `ANALYTICS`, dataset `mylists_events`.
 4. **Add the R2 bucket** (recommended, for Phase 3b): R2 → Create bucket → `mylists-blobs`; then Worker → Settings → Bindings → Add → R2 bucket, name `BLOBS`, bucket `mylists-blobs`. Shared channels' episode lists go there. Without it, everything works and they stay in KV.
 5. **Paste and deploy** `worker_entry_combined.js`.
@@ -26,6 +26,7 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 ### 📺 A database for watch history (P3c-1)
 
 - **Groundwork only, nothing changes for visitors.** Watch history and show progress will move into their own D1 database, `mylists-activity` (binding `DB_ACTIVITY`), so the biggest data the site keeps does not crowd out lists and accounts. Its tables are in `migrations/activity/A0001_activity.sql`. Nothing uses them yet, so there is no need to create it with this release; `docs/OPERATIONS.md` §2 and §4 have the steps for when it is wanted.
+- **Migration `0017_show_schedule.sql` (main database, P3c-2)** adds three tables that go with it: one schedule per show (last and next episode, finale), each account's recommendation shelves, and a per-title daily count for Most Watched. Nothing reads or writes them yet.
 
 ### 🏁 The old list storage can be switched off (P3b-9)
 

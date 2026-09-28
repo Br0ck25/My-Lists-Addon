@@ -511,6 +511,48 @@ CREATE TABLE IF NOT EXISTS jobs (
 CREATE INDEX IF NOT EXISTS idx_jobs_due ON jobs(status, run_after);
 CREATE INDEX IF NOT EXISTS idx_jobs_account ON jobs(account_id, type) WHERE account_id IS NOT NULL;
 
+-- Phase 3c (migrations/0017): the show schedule, recommendations and
+-- daily title counts. Watch history itself is in the activity database
+-- (schema_activity.sql).
+CREATE TABLE IF NOT EXISTS show_schedule (
+    media_id              INTEGER PRIMARY KEY REFERENCES media(id) ON DELETE CASCADE,
+    status                TEXT,
+    last_aired_season     INTEGER,
+    last_aired_episode    INTEGER,
+    last_aired_date       TEXT,
+    next_season           INTEGER,
+    next_episode          INTEGER,
+    next_air_date         TEXT,
+    next_air_time         TEXT,
+    air_tz                TEXT,
+    season_finale_date    TEXT,
+    season_finale_episode INTEGER,
+    watcher_count         INTEGER NOT NULL DEFAULT 0,
+    checked_at            INTEGER,
+    next_check_at         INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_show_schedule_due ON show_schedule(next_check_at) WHERE watcher_count > 0;
+
+CREATE TABLE IF NOT EXISTS account_recommendations (
+    account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    kind       TEXT NOT NULL CHECK (kind IN ('movie', 'series')),
+    rank       INTEGER NOT NULL,
+    media_id   INTEGER NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+    built_at   INTEGER NOT NULL,
+    PRIMARY KEY (account_id, kind, rank)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_account_recs_media ON account_recommendations(media_id);
+
+CREATE TABLE IF NOT EXISTS title_daily_stats (
+    day        TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    media_id   INTEGER NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+    n          INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (day, event_type, media_id)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_title_daily_stats_top ON title_daily_stats(event_type, day, n DESC);
+CREATE INDEX IF NOT EXISTS idx_title_daily_stats_media ON title_daily_stats(media_id);
+
 -- Migration ledger (migrations/0014). A fresh database starts at the latest version.
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version    TEXT PRIMARY KEY,
@@ -533,4 +575,5 @@ INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES
   ('0013', 0),
   ('0014', 0),
   ('0015', 0),
-  ('0016', 0);
+  ('0016', 0),
+  ('0017', 0);
