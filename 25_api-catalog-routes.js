@@ -577,6 +577,10 @@ async function handleFetch(request, env, ctx) {
     // just lands on the normal default builder page rather than a hard
     // /lists/public.json or /api/public-lists.json -> JSON directory of all published public lists
     if (path === "/lists/public.json" || path === "/api/public-lists.json") {
+      // From the v2 tables when FF_V2_LISTS_READ is on (P3b-6,
+      // 33_lists-directory.js); null means use the legacy path below.
+      const v2Directory = await v2PublicListsResponse(env, url);
+      if (v2Directory) return v2Directory;
       if (!env || !env.CONFIGS) {
         return json({ ok: true, lists: [] }, 200, { "Cache-Control": "public, max-age=60", ...corsHeaders() });
       }

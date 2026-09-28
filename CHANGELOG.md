@@ -20,7 +20,15 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 `TOKEN_ENCRYPTION_KEY` is needed only to start moving install-link keys into encrypted storage (P3a-8, below). That move stays **off** until `INSTALL_MIGRATION_PERCENT` is set, and `docs/OPERATIONS.md` §8 gives the steps. Deploying without it changes nothing.
 
-`FF_SESSIONS`, `FF_INSTALLS` and `FF_V2_LISTS_API` stay **off** (unset). Leave them off until the new sign-in, install-link and list screens ship.
+`FF_SESSIONS`, `FF_INSTALLS`, `FF_V2_LISTS_API` and `FF_V2_LISTS_READ` stay **off** (unset). Leave them off until the new sign-in, install-link and list screens and the list read switch ship.
+
+### 🔎 The list directory and search, read from the new tables (P3b-6)
+
+- **`/lists/public.json` and list search can read from the new list tables**, behind `FF_V2_LISTS_READ` (off). They answer in exactly the same shape and order as today: on a 130-list test fixture the top 100 match the current directory list for list.
+- The directory gains `?sort=popular` (today's order), `new` and `added`, and a `cursor` for the next page; `?offset=` keeps working.
+- Search covers list names, descriptions, and creators' display names and usernames.
+- If the new tables can't answer, both fall back to today's storage by themselves.
+- Nothing changes on the site: the switch stays off until the rest of the read switch (P3b-7) ships.
 
 ### ❤️ A likes API over the new tables (P3b-5)
 

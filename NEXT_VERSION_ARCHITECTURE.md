@@ -758,6 +758,7 @@ The existing files keep their responsibilities:
 | `30_lists-backfill.js` | Copying the legacy lists, likes and anonymous lists into the v2 tables (P3b-3) |
 | `31_lists-api.js` | The item-level list API, `/api/lists` (P3b-4) |
 | `32_likes-api.js` | The likes API, `/api/likes` (P3b-5) |
+| `33_lists-directory.js` | The public list directory and search read from v2 (P3b-6) |
 
 **New server-only areas go in new numbered files after `26_`**, each starting with a comment saying what it owns. They can't go between `09_` and `24_`, which are inside the page's template literal. Top-level names must be unique across every file.
 

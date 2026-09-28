@@ -1233,3 +1233,167 @@ describe("P3b-5: the likes API", () => {
     assert.equal(db.prepare("SELECT count(*) AS n FROM likes WHERE target_type = 'external'").get().n, 2, "nothing stored for a URL that isn't a list");
   });
 });
+
+// --- P3b-6: the directory and search on v2 (33_lists-directory.js) -------------
+//
+// One fixture, read twice: through the legacy paths (flag off) and through v2
+// after the backfill has copied it (flag on). The answers must agree. 130
+// lists, 118 of them public, so "the top 100" is a real cut.
+
+function seedLegacyList(env, username, slug, rec) {
+  const record = { name: rec.name, slug, type: rec.type, items: rec.items, visibility: rec.visibility, likes: rec.likes, createdAt: rec.createdAt, updatedAt: rec.updatedAt };
+  env.CONFIGS._store.set(`creatorlist:${username}:${slug}`, JSON.stringify(record));
+  env.DB._db.prepare(
+    "INSERT INTO creator_lists (id, username, name, type, visibility, items_json, created_at, updated_at, likes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  ).run(`${username}:${slug}`, username, rec.name, rec.type, rec.visibility, JSON.stringify(rec.items), rec.createdAt, rec.updatedAt, rec.likes);
+}
+
+async function directoryFixture() {
+  const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
+  const owners = [];
+  for (let o = 0; o < 5; o++) {
+    const name = `dirowner${o}`;
+    await createUser(env, name, { displayName: o % 2 ? `Curator ${o}` : undefined });
+    owners.push(name);
+  }
+  const words = ["Drama", "Comedy", "Space", "Noir", "Heist", "Western", "Anime", "Horror"];
+  const types = ["movie", "series", "mixed"];
+  for (let i = 0; i < 130; i++) {
+    const owner = owners[i % owners.length];
+    const count = i % 5; // some public lists are empty: the directory shows them, search does not
+    seedLegacyList(env, owner, `list-${i}`, {
+      name: `${words[i % words.length]} ${words[(i * 3) % words.length]} ${i}`,
+      type: types[i % 3],
+      visibility: i % 11 === 0 ? "private" : "public",
+      items: Array.from({ length: count }, (_, k) => ({ id: `tt${String(5000000 + i * 10 + k)}`, type: "movie" })),
+      likes: (i * 7) % 23,                       // plenty of ties on likes
+      createdAt: 1700000000000 + ((i * 37) % 131) * 1000,
+      updatedAt: 1750000000000 + ((i * 53) % 131) * 1000, // unique, so today's order is fully defined
+    });
+  }
+  seedAnonPublishedList(env, "anon-drama", { name: "Anonymous Drama", items: [{ id: "tt0000001" }], likes: 99 });
+  const cookie = await adminCookie(env);
+  await runBackfill(env, cookie);
+  const rebuilt = await call(env, "/admin/api/rebuild-search-index", { method: "POST", cookie });
+  assert.equal(rebuilt.status, 200, JSON.stringify(rebuilt.body));
+  return env;
+}
+
+async function readBoth(env, p) {
+  delete env.FF_V2_LISTS_READ;
+  const legacy = await call(env, p);
+  env.FF_V2_LISTS_READ = "1";
+  const v2 = await call(env, p);
+  delete env.FF_V2_LISTS_READ;
+  return { legacy, v2 };
+}
+
+describe("P3b-6: the directory and search on v2", () => {
+  let env;
+  it("builds the fixture", async () => {
+    env = await directoryFixture();
+  });
+
+  it("lists the same top 100, in the same order, with the same fields", async () => {
+    const { legacy, v2 } = await readBoth(env, "/lists/public.json?limit=100");
+    assert.equal(legacy.body.lists.length, 100);
+    assert.deepEqual(v2.body.lists, legacy.body.lists);
+    assert.equal(v2.body.total, legacy.body.total);
+    assert.equal(v2.body.count, 100);
+    assert.ok(v2.body.cursor, "and a cursor for the next page");
+    assert.equal(legacy.body.cursor, undefined, "the legacy answer is unchanged");
+    assert.equal(v2.headers.get("cache-control"), legacy.headers.get("cache-control"));
+    assert.ok(!v2.body.lists.some((l) => l.name === "Anonymous Drama"), "legacy anonymous lists stay out (D-6)");
+  });
+
+  it("pages by cursor and by offset to the same sequence", async () => {
+    env.FF_V2_LISTS_READ = "1";
+    try {
+      const all = (await call(env, "/lists/public.json?limit=500")).body;
+      const walked = [];
+      let cursor = "";
+      for (let page = 0; page < 20; page++) {
+        const r = await call(env, `/lists/public.json?limit=17${cursor ? `&cursor=${cursor}` : ""}`);
+        walked.push(...r.body.lists);
+        if (!r.body.cursor) break;
+        cursor = r.body.cursor;
+      }
+      assert.deepEqual(walked.map((l) => l.url), all.lists.map((l) => l.url));
+      assert.equal(new Set(walked.map((l) => l.url)).size, walked.length, "no list twice");
+      assert.equal(walked.length, all.total);
+      const byOffset = (await call(env, "/lists/public.json?limit=17&offset=34")).body.lists;
+      assert.deepEqual(byOffset, all.lists.slice(34, 51));
+      assert.equal((await call(env, "/lists/public.json?cursor=garbage")).status, 400);
+      // "added" and "popular" cursors have the same shape (three numbers), so
+      // only the order's own mark tells them apart.
+      const addedCursor = (await call(env, "/lists/public.json?sort=added&limit=5")).body.cursor;
+      assert.equal((await call(env, `/lists/public.json?cursor=${addedCursor}`)).status, 400, "a cursor from another order is refused");
+    } finally {
+      delete env.FF_V2_LISTS_READ;
+    }
+  });
+
+  it("orders by newest and by most added", async () => {
+    env.FF_V2_LISTS_READ = "1";
+    try {
+      const rows = env.DB._db.prepare("SELECT slug, created_at, add_count, like_count, id FROM lists WHERE visibility = 'public' AND owner_account_id IS NOT NULL AND deleted_at IS NULL").all();
+      const byNew = rows.slice().sort((a, b) => b.created_at - a.created_at || b.id - a.id).map((r) => r.slug);
+      const byAdded = rows.slice().sort((a, b) => b.add_count - a.add_count || b.like_count - a.like_count || b.id - a.id).map((r) => r.slug);
+      assert.deepEqual((await call(env, "/lists/public.json?sort=new&limit=500")).body.lists.map((l) => l.slug), byNew);
+      const added = await call(env, "/lists/public.json?sort=added&limit=500");
+      assert.deepEqual(added.body.lists.map((l) => l.slug), byAdded);
+      assert.equal(added.body.sort, "added");
+      assert.equal((await call(env, "/lists/public.json?sort=nonsense&limit=1")).body.sort, "popular");
+    } finally {
+      delete env.FF_V2_LISTS_READ;
+    }
+  });
+
+  it("finds the same lists as the legacy search, in its order", async () => {
+    const key = (l) => `${l.likes}:${l.items}`;
+    for (const q of ["drama", "comedy noir", "dirowner3", "curator", "spa", "my lists", "", "zzznothing"]) {
+      const { legacy, v2 } = await readBoth(env, `/api/search-published-lists?q=${encodeURIComponent(q)}`);
+      assert.equal(v2.body.ok, true);
+      const sorted = (arr) => arr.slice().sort((a, b) => a.url.localeCompare(b.url));
+      assert.deepEqual(sorted(v2.body.lists), sorted(legacy.body.lists), `the same lists for "${q}"`);
+      // Legacy orders by likes then items and leaves ties in no set order;
+      // v2 gives the same order with ties broken by most recently updated.
+      assert.deepEqual(v2.body.lists.map(key), legacy.body.lists.map(key), `the same order for "${q}"`);
+      assert.ok(v2.body.lists.every((l) => l.items > 0), "only lists with items");
+      if (q !== "zzznothing") assert.ok(legacy.body.lists.length > 0, `"${q}" finds something, so the comparison means something`);
+    }
+  });
+
+  it("falls back to the legacy paths if v2 cannot answer", async () => {
+    const { legacy } = await readBoth(env, "/lists/public.json?limit=10");
+    env.FF_V2_LISTS_READ = "1";
+    env.DB.failWhen((sql) => /FROM lists l JOIN accounts|FROM lists_fts2 f/.test(sql));
+    try {
+      const r = await call(env, "/lists/public.json?limit=10");
+      assert.deepEqual(r.body.lists, legacy.body.lists);
+      const s = await call(env, "/api/search-published-lists?q=drama");
+      assert.equal(s.body.ok, true);
+      assert.ok(s.body.lists.length > 0);
+    } finally {
+      env.DB.failWhen(null);
+      delete env.FF_V2_LISTS_READ;
+    }
+  });
+
+  it("walks the directory's indexes, with no sort step, for every order and every page", () => {
+    const plan = (sql) => env.DB._db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all().map((r) => r.detail).join(" | ");
+    const base = "SELECT l.id FROM lists l JOIN accounts a ON a.id = l.owner_account_id WHERE l.visibility = 'public' AND l.deleted_at IS NULL AND l.owner_account_id IS NOT NULL";
+    for (const [cols, index] of [
+      [["like_count", "updated_at", "id"], "idx_lists_dir_popular"],
+      [["created_at", "id"], "idx_lists_dir_new"],
+      [["add_count", "like_count", "id"], "idx_lists_dir_added"],
+    ]) {
+      const order = `ORDER BY ${cols.map((c) => `l.${c} DESC`).join(", ")} LIMIT 101`;
+      for (const sql of [`${base} ${order}`, `${base} AND (${cols.map((c) => "l." + c).join(", ")}) < (${cols.map(() => "1").join(", ")}) ${order}`]) {
+        const p = plan(sql);
+        assert.match(p, new RegExp(`INDEX ${index}\\b`), p);
+        assert.doesNotMatch(p, /TEMP B-TREE/, p);
+      }
+    }
+  });
+});

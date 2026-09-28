@@ -4710,6 +4710,12 @@
 
       const isMyListsSearch = isMyListsSentinel || !userTerm;
 
+      // From the v2 tables when FF_V2_LISTS_READ is on (P3b-6,
+      // 33_lists-directory.js), with the same query handling; null means use
+      // the legacy search below.
+      const v2Search = await v2SearchListsResponse(env, url, (userTerm || (isMyListsSentinel ? "" : q)).replace(/@+/g, "").trim(), isMyListsSearch);
+      if (v2Search) return v2Search;
+
       try {
         if (env.DB) {
           const targetFilterIdx = (userTerm || (isMyListsSentinel ? "" : q)).replace(/@+/g, "").trim();
