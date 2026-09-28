@@ -35,6 +35,9 @@ const LISTS_SEARCH_LIMIT = 50;
 let listsDirectoryCopyCache = { db: null, at: 0, finished: false };
 
 function isV2ListsReadEnabled(env) {
+  // FF_V2_LISTS_ONLY (P3b-9) implies it: with nothing else written, v2 is
+  // the only thing worth reading.
+  if (isV2ListsOnly(env)) return true;
   const v = env ? env.FF_V2_LISTS_READ : undefined;
   return v === "1" || v === "true" || v === true;
 }
@@ -42,6 +45,7 @@ function isV2ListsReadEnabled(env) {
 // Has the copy of every account's lists finished? A yes is kept a minute per
 // isolate; a no is asked again, so the switch happens as the copy finishes.
 async function v2ListsCopyFinished(env) {
+  if (isV2ListsOnly(env)) return true;
   const c = listsDirectoryCopyCache;
   if (c.finished && c.db === env.DB && Date.now() - c.at < 60000) return true;
   const row = await env.DB.prepare("SELECT status FROM jobs WHERE dedupe_key = ?").bind(LISTS_BACKFILL_RUN_KEY).first();
@@ -157,7 +161,9 @@ async function v2PublicListsResponse(env, url) {
     if (!(await v2ListsCopyFinished(env))) return null;
     page = await v2PublicListPage(env, { sort, limit, offset, cursor });
   } catch (e) {
-    console.error("v2 directory failed, using the legacy directory:", e);
+    console.error("v2 directory failed:", e);
+    // With FF_V2_LISTS_ONLY the legacy directory is behind: say so instead.
+    if (isV2ListsOnly(env)) return json({ ok: false, error: "The list directory isn't available right now." }, 503);
     return null;
   }
   if (page.error) return json({ ok: false, error: page.error }, 400);
@@ -178,7 +184,8 @@ async function v2SearchListsResponse(env, url, target, uncapped) {
     const rows = await v2SearchPublicLists(env, target, uncapped ? PUBLIC_INDEX_MAX_ROWS : LISTS_SEARCH_LIMIT);
     return json({ ok: true, lists: rows.map((r) => v2SearchEntry(r, url.origin)) }, 200, { "Cache-Control": "public, max-age=60" });
   } catch (e) {
-    console.error("v2 list search failed, using the legacy search:", e);
+    console.error("v2 list search failed:", e);
+    if (isV2ListsOnly(env)) return json({ ok: false, error: "List search isn't available right now." }, 503);
     return null;
   }
 }

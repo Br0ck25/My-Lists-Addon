@@ -74,6 +74,10 @@ bucket_name = "mylists-blobs"
 # Optional feature flag for Phase 3b: the /api/lists list API and /api/likes.
 # Leave unset in production until the legacy list writes stop (P3b-9).
 # FF_V2_LISTS_API = "1"
+# Optional, Phase 3b (P3b-9): stop writing the old list and channel storage;
+# the new tables become the only store. ONE-WAY -- see docs/OPERATIONS.md
+# section 11 before setting it.
+# FF_V2_LISTS_ONLY = "1"
 # Optional, 0-100: share of existing install links whose keys and tokens are
 # moved into encrypted D1 storage on first use (needs TOKEN_ENCRYPTION_KEY)
 # INSTALL_MIGRATION_PERCENT = "0"

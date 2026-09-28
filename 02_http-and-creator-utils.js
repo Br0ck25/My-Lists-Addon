@@ -283,7 +283,11 @@ function instrumentEnv(env, counters) {
   const kvProxy = kv ? {
     get: (...a) => { counters.kvReads++; return kv.get(...a); },
     getWithMetadata: (...a) => { counters.kvReads++; return kv.getWithMetadata(...a); },
-    put: (...a) => { counters.kvWrites++; return kv.put(...a); },
+    put: (...a) => {
+      counters.kvWrites++;
+      if (isLegacyListKvKey(a[0])) counters.kvLegacyListPuts = (counters.kvLegacyListPuts || 0) + 1;
+      return kv.put(...a);
+    },
     delete: (...a) => { counters.kvWrites++; return kv.delete(...a); },
     list: (...a) => { counters.kvLists++; return kv.list(...a); },
   } : kv;
@@ -312,7 +316,9 @@ function writeRequestMetrics(env, request, response, startedAt, counters) {
     const status = response ? response.status : 0;
     env.ANALYTICS.writeDataPoint({
       blobs: [family, request.method, String(status)],
-      doubles: [status, Date.now() - startedAt, counters.kvReads, counters.kvWrites, counters.kvLists, counters.d1Statements, counters.d1Batches],
+      // The last one: puts to the legacy list keys (P3b-9's measure; 0 once
+      // FF_V2_LISTS_ONLY is on).
+      doubles: [status, Date.now() - startedAt, counters.kvReads, counters.kvWrites, counters.kvLists, counters.d1Statements, counters.d1Batches, counters.kvLegacyListPuts || 0],
       indexes: [family.slice(0, 96)],
     });
   } catch {
@@ -1564,7 +1570,7 @@ async function stampListVisibilityIfNeeded(env, key, data) {
   if (!data || typeof data !== "object") return false;
   if (!needsListVisibilityBackfill(data.visibility)) return false;
   data.visibility = backfillListVisibilityValue(data.visibility);
-  if (env && env.CONFIGS && key) {
+  if (env && env.CONFIGS && key && !(isV2ListsOnly(env) && isLegacyListKvKey(key))) {
     try {
       await env.CONFIGS.put(key, JSON.stringify(data));
     } catch {
@@ -2905,6 +2911,29 @@ async function usernameForScrobbleToken(env, token) {
 const CREATOR_LIST_TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const CREATOR_LIST_TOMBSTONE_MAX = 300;
 
+// FF_V2_LISTS_ONLY (P3b-9): the v2 tables (migration 0016) are the only list
+// and channel store. The legacy KV keys -- creatorlist:, creatorlistorder:,
+// creatorliststamp:, creatorlistdeleted:, the like ledgers, externallike:,
+// channelshare:, index:publicchannels -- and the legacy D1 list tables are no
+// longer written, and nothing reads them: the routes read and write v2
+// (34_lists-v2-bridge.js, 35_channels-v2.js). One-way: once changes have
+// gone only to v2, the legacy store is behind, so turning this off again
+// would read stale lists. It implies FF_V2_LISTS_READ.
+function isV2ListsOnly(env) {
+  const v = env ? env.FF_V2_LISTS_ONLY : undefined;
+  return v === "1" || v === "true" || v === true;
+}
+
+// The legacy list keys FF_V2_LISTS_ONLY stops writing, for the storage
+// counters (instrumentEnv): a put to one of them with the flag on is a bug.
+const LEGACY_LIST_KV_PREFIXES = ["creatorlist:", "creatorlistorder:", "creatorliststamp:", "creatorlistdeleted:", "listlikevoters:",
+  "extlikevoters:", "externallike:", "index:publicchannels", "channelshare:", "channellikevoters:"];
+
+function isLegacyListKvKey(key) {
+  const k = String(key || "");
+  return LEGACY_LIST_KV_PREFIXES.some((p) => k.startsWith(p));
+}
+
 function creatorListTombstoneKey(username) {
   return `creatorlistdeleted:${username}`;
 }
@@ -2985,6 +3014,8 @@ async function writeCreatorListDeletions(env, username, slugs) {
 
 async function recordCreatorListDeletions(env, username, slugs) {
   if (!env || !username || !slugs || !slugs.length) return;
+  // With FF_V2_LISTS_ONLY a deleted list's v2 row is its tombstone.
+  if (isV2ListsOnly(env)) return;
   const now = Date.now();
   const until = now + CREATOR_LIST_TOMBSTONE_TTL_MS;
   if (env.DB) {
@@ -3015,6 +3046,7 @@ async function recordCreatorListDeletions(env, username, slugs) {
 // device to throw the new list away. Called by /api/creator/lists/save.
 async function clearCreatorListDeletion(env, username, slug) {
   if (!env || !username || !slug) return;
+  if (isV2ListsOnly(env)) return;
   if (env.DB) {
     try {
       await env.DB.prepare("DELETE FROM list_tombstones WHERE username = ? AND slug = ?").bind(username, String(slug)).run();
@@ -3082,6 +3114,17 @@ async function pruneTombstones(env) {
 async function deleteCreatorLists(env, username, slugs) {
   const out = { deleted: [], missing: [], ok: true };
   if (!env || (!env.CONFIGS && !env.DB) || !username || !slugs || !slugs.length) return out;
+
+  // With FF_V2_LISTS_ONLY the lists are deleted in v2, where the row is also
+  // the tombstone every other device reads (34_lists-v2-bridge.js). What the
+  // legacy store still holds of them is removed, as a delete should, and
+  // nothing is written there.
+  if (isV2ListsOnly(env) && typeof listsV2DeleteRecords === "function") {
+    const v2 = await listsV2DeleteRecords(env, username, slugs);
+    await removeLegacyListLeftovers(env, username, slugs);
+    await bumpCreatorListsStamp(env, username);
+    return v2;
+  }
 
   for (const slug of slugs) {
     const key = `creatorlist:${username}:${slug}`;
@@ -3168,6 +3211,28 @@ async function deleteCreatorLists(env, username, slugs) {
   if (typeof listsV2MirrorLists === "function") await listsV2MirrorLists(env, username, slugs);
 
   return out;
+}
+
+// What the legacy store holds of these lists, removed. Best effort: with
+// FF_V2_LISTS_ONLY nothing reads it, so this is tidying, not the delete.
+async function removeLegacyListLeftovers(env, username, slugs) {
+  for (const slug of slugs) {
+    try {
+      if (env.CONFIGS) {
+        await env.CONFIGS.delete(`creatorlist:${username}:${slug}`);
+        await env.CONFIGS.delete(`listlikevoters:${username}:${slug}`);
+      }
+      if (env.DB) {
+        await env.DB.batch([
+          env.DB.prepare("DELETE FROM creator_lists WHERE id = ?").bind(`${username}:${slug}`),
+          env.DB.prepare("DELETE FROM lists_fts WHERE list_id = ?").bind(`c:${username}:${slug}`),
+          env.DB.prepare("DELETE FROM list_likes WHERE list_id = ?").bind(`c:${username}:${slug}`),
+        ]);
+      }
+    } catch (e) {
+      console.error("removeLegacyListLeftovers:", e);
+    }
+  }
 }
 
 // The same thing for an ANONYMOUS published list -- the ones /api/publish-list
@@ -3623,7 +3688,8 @@ async function bumpCreatorListsStamp(env, username, notBefore) {
         console.error("D1 read error (bumpCreatorListsStamp):", dbErr);
       }
     }
-    if (prev === (Number(notBefore) || 0) && env.CONFIGS) {
+    const only = isV2ListsOnly(env);
+    if (prev === (Number(notBefore) || 0) && env.CONFIGS && !only) {
       try {
         const raw = await env.CONFIGS.get(`creatorliststamp:${username}`);
         if (raw) {
@@ -3644,7 +3710,9 @@ async function bumpCreatorListsStamp(env, username, notBefore) {
         console.error("D1 write error (bumpCreatorListsStamp):", dbErr);
       }
     }
-    if (env.CONFIGS) {
+    // With FF_V2_LISTS_ONLY the D1 stamp above is the only one; /sync/meta
+    // reads it first.
+    if (env.CONFIGS && !only) {
       await env.CONFIGS.put(
         `creatorliststamp:${username}`,
         JSON.stringify({ updatedAt: nextStamp })
@@ -4169,7 +4237,9 @@ async function purgeCreatorData(env, username, options = {}) {
 
   // The account's v2 lists go with it (34_lists-v2-bridge.js; guarded, since
   // this file is also loaded on its own).
-  if (typeof listsV2PurgeAccount === "function") await listsV2PurgeAccount(env, u);
+  if (typeof listsV2PurgeAccount === "function") {
+    await listsV2PurgeAccount(env, u, { keepTombstones: isV2ListsOnly(env) && options.recordReset === true && !deleteIdentity });
+  }
 
   // `ok` is the whole point: it is false when this call left something
   // behind, and both callers turn that into an error rather than a 200.
@@ -4914,7 +4984,7 @@ async function getCreatorList(env, username, slug) {
           updatedAt = row.updated_at > 0 ? row.updated_at : (kvData && kvData.updatedAt ? kvData.updatedAt : undefined);
         }
 
-        if (kvIsFresher) {
+        if (kvIsFresher && !isV2ListsOnly(env)) {
           try {
             env.DB.prepare(
               "UPDATE creator_lists SET name = ?, type = ?, visibility = ?, items_json = ?, updated_at = ? WHERE id = ?"
@@ -4950,7 +5020,7 @@ async function getCreatorList(env, username, slug) {
         }
         const raw = JSON.stringify(payload);
         try {
-          if (env.CONFIGS && !kvIsFresher) await env.CONFIGS.put(`creatorlist:${username}:${slug}`, raw);
+          if (env.CONFIGS && !kvIsFresher && !isV2ListsOnly(env)) await env.CONFIGS.put(`creatorlist:${username}:${slug}`, raw);
         } catch (kvErr) {
           console.error("KV cache write error (getCreatorList):", kvErr);
         }
@@ -5657,6 +5727,23 @@ async function writeCreatorTrackingD1(env, username, trackingData, isIntentional
 // write per call -- not something a catalog request should spend.
 async function readAccountWatchlist(env, username, trackingBlob) {
   if (!env || !username) return null;
+  // With FF_V2_LISTS_ONLY (P3b-9) the Watchlist list lives in v2 only; its
+  // legacy record and row are behind. The tracking blob's copy still counts.
+  if (isV2ListsOnly(env) && typeof listsV2Record === "function") {
+    const candidates = [];
+    try {
+      const rec = await listsV2Record(env, username, "watchlist");
+      if (rec && Array.isArray(rec.items)) candidates.push({ items: rec.items, updatedAt: Number(rec.updatedAt) || 0 });
+    } catch (e) {
+      console.error("readAccountWatchlist: v2 read failed", e);
+    }
+    if (trackingBlob && Array.isArray(trackingBlob.watchlist)) {
+      candidates.push({ items: trackingBlob.watchlist, updatedAt: Number(trackingBlob.watchlistUpdatedAt) || 0 });
+    }
+    let newest = null;
+    for (const c of candidates) if (!newest || c.updatedAt > newest.updatedAt) newest = c;
+    return newest;
+  }
   const [row, kvRaw] = await Promise.all([
     env.DB
       ? env.DB.prepare("SELECT items_json, updated_at FROM creator_lists WHERE id = ?")

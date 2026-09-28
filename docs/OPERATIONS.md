@@ -67,6 +67,7 @@ Adding a binding before the code that uses it is harmless. Removing a binding th
 - `FF_INSTALLS` (optional): `1` turns on `/api/installs`, where a signed-in account creates, renames, rotates and removes `/i/{token}` install links (P3a-8). **Leave unset** until the screens for it ship. Links that already exist are served either way.
 - `FF_V2_LISTS_READ` (optional): `1` makes the site read lists and shared channels from the new tables: the dashboard, list pages, catalogs, the directory and search, shared channels and Explore Channels (P3b-6 to P3b-8). **Leave unset** until the copy (§9) has finished; §10 has the steps. Turning it off again is always safe, because every change is still written to the old storage.
 - `FF_V2_LISTS_API` (optional): `1` turns on `/api/lists`, the item-level list API, and `/api/likes`, the likes API, over the new list tables (P3b-4, P3b-5). **Leave unset.** What these APIs write goes to the new tables only. Until a later release stops writing the old storage (P3b-9), turning `FF_V2_LISTS_READ` off, or running the copy again, would lose it.
+- `FF_V2_LISTS_ONLY` (optional, P3b-9): `1` stops writing the old list and channel storage; the new tables become the only store, and everything reads from them. **One-way.** Leave unset until §11 says it is time, and once set, leave it set.
 - `INSTALL_MIGRATION_PERCENT` (optional, `0` to `100`): the share of existing install links whose keys and tokens move into encrypted D1 storage the first time they are used. See §8 before setting it.
 - **Delete** these retired variables if they are still set: `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET`, `CRON_SUBREQUEST_BUDGET`. The code ignores them.
 
@@ -206,7 +207,29 @@ What it copies: every account's lists (with their order, items and likes), the o
 - An account is read from the new tables once its copy has finished; the directory, search and Explore Channels, once the whole copy has. Opening the dashboard finishes an account's copy on the spot if it has not finished.
 - A shared channel is read from the new tables while its copy there is current and its episode list is in R2; otherwise from the old storage.
 - Every change is still written to the old storage first, then to the new tables. If writing the new tables fails for an account, that account is read from the old storage again until its copy is refreshed (the next time its owner opens the dashboard, or the next *Copy lists*).
-- A list over 1,500 items is copied by the bounded copy rather than on save, so its account is read from the old storage until that catches up.
 - *Start over* on the copy leaves finished accounts alone while this flag is on: the new tables are what people see, and saves keep them current.
 
-**Turning it off:** delete the variable and deploy. The site reads the old storage again, which never stopped being written, so nothing is lost.
+**Turning it off:** delete the variable and deploy. The site reads the old storage again, which never stopped being written, so nothing is lost. (Not once `FF_V2_LISTS_ONLY` is on: see §11.)
+
+## 11. Stopping the old list storage (P3b-9)
+
+`FF_V2_LISTS_ONLY` makes the new tables the only list and channel store. The old keys (`creatorlist:`, the order, stamp and deletion keys, the like ledgers, `externallike:`, `channelshare:`, `index:publicchannels`) and the old D1 list tables stop being written, and nothing reads them any more. Every answer stays the same; the tests run the same requests both ways and compare them.
+
+**This is one-way.** From the moment it is on, changes go only to the new tables, so the old storage falls behind. Turning it off again, or turning `FF_V2_LISTS_READ` off while it is on, would show everyone out-of-date lists. Once set, leave it set.
+
+**Before turning it on:**
+
+1. `FF_V2_LISTS_READ` has been on for a while (a week or two) with nothing wrong reported.
+2. The `BLOBS` bucket is bound (§2): shared channels' episode lists have nowhere else to go.
+3. `/admin` → **Lists v2** → *Check results* says every account is copied: none in progress, none waiting to be copied again, none failed. If some are waiting, press *Copy lists* first.
+4. Back up D1 (§5).
+
+**Turning it on:** Worker → Settings → Variables and Secrets → Add → type *Text*, name `FF_V2_LISTS_ONLY`, value `1`. Deploy.
+
+**What happens then:**
+
+- Saving, deleting and reordering lists, the Watchlist, likes and shared channels all go straight to the new tables. A save that cannot be stored says so (the website keeps its copy and tries again) rather than landing in the old storage.
+- The list copy in `/admin` stops: there is nothing current to copy from. So does *Migrate D1*.
+- Deleting a list or an account still removes what the old storage held of it.
+- **How to check it worked:** in the Analytics Engine dataset `mylists_events`, the eighth number of each data point (`double8`) counts writes to the old list keys. It should stay at 0.
+- The old keys and tables stay where they are, unused, until a later cleanup removes them. The old anonymous lists (from before accounts) are still served from the old storage.

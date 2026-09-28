@@ -708,7 +708,7 @@ describe("P3b-3: copying the legacy lists into v2", () => {
 
       const status = await call(env, "/admin/api/lists-backfill/status", { cookie });
       assert.equal(status.body.run.phase, "done");
-      assert.deepEqual(status.body.accounts, { done: 3, running: 0, failed: 0 });
+      assert.deepEqual(status.body.accounts, { done: 3, running: 0, failed: 0, queued: 0 });
       const t = status.body.totals;
       assert.deepEqual({ lists: t.lists.legacy, copied: t.lists.copied, items: t.items.legacy, itemsCopied: t.items.copied, unusable: t.items.unusable, dup: t.items.duplicates },
         { lists: 4, copied: 4, items: 9, itemsCopied: 7, unusable: 1, dup: 1 });
@@ -810,7 +810,7 @@ describe("P3b-3: copying the legacy lists into v2", () => {
     await runBackfill(env, cookie);
     env.DB.failWhen(null);
     const status = await call(env, "/admin/api/lists-backfill/status", { cookie });
-    assert.deepEqual(status.body.accounts, { done: 1, running: 0, failed: 1 });
+    assert.deepEqual(status.body.accounts, { done: 1, running: 0, failed: 1, queued: 0 });
     assert.match(status.body.failed[0].error, /injected failure/);
     assert.equal(env.DB._db.prepare("SELECT count(*) AS n FROM lists WHERE slug = 'good'").get().n, 1);
   });
@@ -1840,20 +1840,34 @@ describe("P3b-7: the legacy routes over v2", () => {
     for (let i = 1; i < after.length; i++) assert.ok(after[i].position - after[i - 1].position >= 1e-7, JSON.stringify(after));
   });
 
-  it("a list too big to copy on save leaves the account on the legacy store until the copy catches up", async () => {
+  it("copies a list of 10,000 titles on save, in one request, well inside D1's limits", async () => {
     const { env, db, ann, job } = await bridgeSetup();
     await saveList(env, ann, { name: "Small", type: "movie", visibility: "private", items: [] });
     await dashboard(env, ann);
     assert.equal(job().status, "done");
-    const items = Array.from({ length: 1501 }, (_, i) => ({ id: `tt${2000000 + i}`, type: "movie" }));
+    const items = Array.from({ length: 10000 }, (_, i) => ({ id: `tt${2000000 + i}`, type: "movie", name: `Title ${i}`, note: i % 7 ? undefined : `note ${i}` }));
+    let queries = 0;
+    env.DB.failWhen(() => { queries++; return false; });
     const slug = await saveList(env, ann, { name: "Huge", type: "movie", visibility: "private", items });
-    assert.equal(job().status, "queued");
-    assert.equal(db.prepare("SELECT count(*) AS n FROM lists WHERE legacy_id = ?").get(`c:annbridge:${slug}`).n, 0);
-    const { legacy, v2 } = await legacyThenV2(env, () => dashboard(env, ann, { includeItems: false }));
+    env.DB.failWhen(null);
+    assert.ok(queries < 200, `the save and its copy took ${queries} D1 queries (D1 allows about 1,000)`);
+    assert.equal(job().status, "done", "copied on save, so the account stays on v2");
+    assert.equal(db.prepare("SELECT item_count FROM lists WHERE legacy_id = ?").get(`c:annbridge:${slug}`).item_count, 10000);
+    const { legacy, v2 } = await legacyThenV2(env, () => call(env, "/api/creator/lists/items", {
+      method: "POST", json: { creatorName: ann.creatorName, creatorKey: ann.creatorKey, slugs: [slug] },
+    }));
     assert.deepEqual(v2.body, legacy.body);
-    await runBackfill(env, await adminCookie(env));
-    assert.equal(job().status, "done");
-    assert.equal(db.prepare("SELECT item_count FROM lists WHERE legacy_id = ?").get(`c:annbridge:${slug}`).item_count, 1501);
+
+    // Most of it moved at once (reversed): still a few statements.
+    queries = 0;
+    env.DB.failWhen(() => { queries++; return false; });
+    await saveList(env, ann, { slug, name: "Huge", type: "movie", visibility: "private", items: items.slice().reverse() });
+    env.DB.failWhen(null);
+    assert.ok(queries < 200, `reversing it took ${queries} D1 queries`);
+    const order = db.prepare(
+      "SELECT m.imdb_id FROM list_items li JOIN lists l ON l.id = li.list_id JOIN media m ON m.id = li.media_id WHERE l.legacy_id = ? ORDER BY li.position, li.id LIMIT 3"
+    ).all(`c:annbridge:${slug}`).map((r) => r.imdb_id);
+    assert.deepEqual(order, ["tt2009999", "tt2009998", "tt2009997"]);
   });
 
   it("saves and reads carry on as before when migration 0016 is not applied", async () => {
@@ -2221,5 +2235,340 @@ describe("P3b-8: shared channels on v2", () => {
     assert.throws(() => menv.BLOBS.delete("backups/d1.sql"), /refusing/);
     assert.equal(typeof menv.BLOBS.list, "undefined");
     assert.doesNotThrow(() => menv.BLOBS.put("channels/ABC/1.json", "[]"));
+  });
+});
+
+// --- P3b-9: v2 as the only store (FF_V2_LISTS_ONLY) --------------------------
+
+const LEGACY_LIST_PREFIXES = ["creatorlist:", "creatorlistorder:", "creatorliststamp:", "creatorlistdeleted:", "listlikevoters:",
+  "extlikevoters:", "externallike:", "index:publicchannels", "channelshare:", "channellikevoters:", "creatorchannel:", "channeladdvoters:"];
+
+// Everything written to the legacy store from here on: KV puts under the
+// legacy list keys, and D1 inserts or updates on the legacy list tables.
+// (Removing a deleted list's leftovers is allowed: that writes nothing.)
+function watchLegacyWrites(env) {
+  const writes = [];
+  env.CONFIGS._hooks.beforePut = async (k) => {
+    if (LEGACY_LIST_PREFIXES.some((p) => String(k).startsWith(p))) writes.push("kv " + k);
+  };
+  env.DB.failWhen((sql) => {
+    if (/^\s*(INSERT|UPDATE|REPLACE)/i.test(sql) && /\b(creator_lists|list_likes|lists_fts|list_tombstones)\b/.test(sql)) writes.push("d1 " + sql.trim().slice(0, 70));
+    return false;
+  });
+  return writes;
+}
+
+// A clock that moves only when told: both runs of the script below see the
+// same times, so their answers can be compared exactly.
+function frozenClock(start = 1780000000000) {
+  const real = Date.now;
+  let t = start;
+  Date.now = () => t;
+  return { tick: (ms = 1000) => { t += ms; }, restore: () => { Date.now = real; } };
+}
+
+async function onlyModeSetup(flags) {
+  const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1(), FF_V2_LISTS_READ: "1" });
+  const users = {
+    ann: await createUser(env, "annonly"),
+    ben: await createUser(env, "benonly"),
+    cat: await createUser(env, "catonly"),
+  };
+  // The copy has run, as it must before either switch.
+  await runBackfill(env, await adminCookie(env));
+  const custom = "customlist:v1:" + JSON.stringify({ creatorOwner: "annonly", creatorSlug: "alpha", items: [] });
+  env.CONFIGS._store.set("cfg:onlycat0001", JSON.stringify({ entries: [{ id: "mine", name: "Mine", type: "movie", url: custom }] }));
+  Object.assign(env, flags);
+  return { env, db: env.DB._db, ...users };
+}
+
+const ONLY_ALPHA = [
+  { id: "tt0137523", type: "movie", name: "Fight Club", year: "1999" },
+  { id: "62085", type: "episode", showId: "1396", showTitle: "Breaking Bad", name: "Pilot", seasonNum: 1, episodeNum: 1 },
+  { id: "tt0903747", type: "series", name: "Breaking Bad" },
+];
+
+// The same requests, in the same order, against one env; every answer.
+async function onlyModeScript(env, { ann, ben, cat }, clock) {
+  const out = [];
+  const step = async (label, fn) => {
+    clock.tick();
+    const r = await fn();
+    out.push([label, r.status, r.body]);
+    return r;
+  };
+  const post = (p, json) => call(env, p, { method: "POST", json });
+  const save = (u, body) => post("/api/creator/lists/save", { ...creds(u), ...body });
+  const read = async (label) => {
+    await step(`${label}: dashboard`, () => dashboard(env, ann));
+    await step(`${label}: items`, () => post("/api/creator/lists/items", { ...creds(ann), slugs: ["alpha", "beta", "gamma", "watchlist"] }));
+    await step(`${label}: page`, () => call(env, "/lists/annonly/alpha.json"));
+    await step(`${label}: directory`, () => call(env, "/lists/public.json"));
+    await step(`${label}: search`, () => call(env, "/api/search-published-lists?q=alpha"));
+    await step(`${label}: catalog`, () => call(env, "/onlycat0001/catalog/movie/mine.json"));
+    await step(`${label}: meta`, () => post("/api/creator/sync/meta", creds(ann)));
+    await step(`${label}: sync load`, () => post("/api/creator/sync/load", creds(ann)));
+  };
+
+  const first = await step("save alpha", () => save(ann, { name: "Alpha", type: "mixed", visibility: "public", items: ONLY_ALPHA }));
+  await step("save beta", () => save(ann, {
+    name: "Beta", type: "series", visibility: "private", items: [{ id: "tt0903747", type: "series" }],
+    sourceUrl: "https://mdblist.com/lists/someone/good-shows", synced: true, lastSyncedAt: 1700000000000, baseItemIds: ["tt0903747"],
+  }));
+  await step("save gamma", () => save(ann, { name: "Gamma", type: "movie", visibility: "public", items: [{ id: "tt0068646", type: "movie" }] }));
+  await read("after saves");
+
+  await step("edit alpha", () => save(ann, {
+    slug: "alpha", name: "Alpha Prime", type: "mixed", visibility: "public", expectedUpdatedAt: first.body.updatedAt,
+    items: [ONLY_ALPHA[2], ONLY_ALPHA[0], { id: "tt0111161", type: "movie", name: "Shawshank" }],
+  }));
+  await step("stale edit", () => save(ann, { slug: "alpha", name: "Old", type: "mixed", visibility: "public", expectedUpdatedAt: first.body.updatedAt, items: [] }));
+  await step("reorder", () => post("/api/creator/lists/reorder", { ...creds(ann), order: ["gamma", "continue-watching", "alpha", "beta"] }));
+  const like = (u, slug, action) => post("/api/lists/like", { ...creds(u), username: "annonly", slug, ...(action ? { action } : {}) });
+  await step("like gamma (ben)", () => like(ben, "gamma"));
+  await step("like gamma (cat)", () => like(cat, "gamma"));
+  await step("like alpha (ben)", () => like(ben, "alpha"));
+  await step("unlike alpha (ben)", () => like(ben, "alpha", "unlike"));
+  await step("like beta, private (ben)", () => like(ben, "beta"));
+  const ext = (u, action) => post("/api/lists/like-external", { ...creds(u), url: "https://mdblist.com/lists/someone/good-shows", ...(action ? { action } : {}) });
+  await step("external like (ben)", () => ext(ben));
+  await step("external like (cat)", () => ext(cat));
+  await step("external unlike (ben)", () => ext(ben, "unlike"));
+  await read("after edits");
+
+  await step("delete gamma", () => post("/api/creator/lists/delete", { ...creds(ann), slug: "gamma" }));
+  await step("gamma again", () => save(ann, { name: "Gamma", type: "movie", visibility: "public", items: [{ id: "tt0068646", type: "movie" }] }));
+  const track = (watchlist) => post("/api/creator/sync/save-tracking", { ...creds(ann), watchlist });
+  await step("watchlist", () => track([{ id: "tt0000071", type: "movie" }, { id: "tt0000072", type: "movie" }]));
+  await step("watchlist again", () => track([{ id: "tt0000071", type: "movie" }, { id: "tt0000072", type: "movie" }, { id: "tt0000073", type: "movie" }]));
+  const config = Buffer.from(JSON.stringify({ entries: [], track: true, trackCreatorName: ann.creatorName, trackCreatorKey: ann.creatorKey })).toString("base64url");
+  await step("watched one on the Watchlist", () => call(env, `/${config}/subtitles/movie/tt0000072.json`));
+  await read("after deletes and the Watchlist");
+
+  const shared = await step("share a channel", () => post("/api/channel/share", { ...creds(ann), channel: CH_FIXTURES.rotating, publish: true }));
+  const code = shared.body.code;
+  await step("like the channel (ben)", () => post("/api/channel/like", { ...creds(ben), code }));
+  await step("add the channel (ben)", () => post("/api/channel/added", { ...creds(ben), code }));
+  await step("add the channel again (ben)", () => post("/api/channel/added", { ...creds(ben), code }));
+  await step("open the channel", () => call(env, `/api/channel/share?code=${code}`));
+  await step("open it by address", () => call(env, "/channels/annonly/night-shift.json"));
+  await step("explore channels", () => call(env, "/api/channel/directory?sort=liked"));
+  await step("my channels", () => post("/api/channel/mine", creds(ann)));
+  await step("unpublish", () => post("/api/channel/unpublish", { ...creds(ann), code }));
+  await step("explore channels after", () => call(env, "/api/channel/directory"));
+  await read("at the end");
+  // Codes are random: compare them by their place.
+  return JSON.parse(JSON.stringify(out).split(code).join("CHANNEL-CODE"));
+}
+
+describe("P3b-9: v2 as the only store (FF_V2_LISTS_ONLY)", () => {
+  it("answers every list, like and channel request as before, and writes nothing to the legacy store", async () => {
+    let clock = frozenClock();
+    let dual;
+    let dualWrites;
+    try {
+      const base = await onlyModeSetup({});
+      dualWrites = watchLegacyWrites(base.env);
+      dual = await onlyModeScript(base.env, base, clock);
+    } finally {
+      clock.restore();
+    }
+    clock = frozenClock();
+    let only;
+    let onlyWrites;
+    let onlyEnv;
+    try {
+      const o = await onlyModeSetup({ FF_V2_LISTS_ONLY: "1" });
+      onlyEnv = o;
+      onlyWrites = watchLegacyWrites(o.env);
+      only = await onlyModeScript(o.env, o, clock);
+    } finally {
+      clock.restore();
+    }
+    assert.ok(dualWrites.length > 20, "the watcher sees the legacy writes the routes make without the flag");
+    assert.deepEqual(onlyWrites, [], "with the flag, nothing is written to the legacy store");
+    for (let i = 0; i < dual.length; i++) {
+      assert.deepEqual(only[i], dual[i], `step "${dual[i][0]}"`);
+    }
+    assert.equal(only.length, dual.length);
+    // And the answers are the real thing, not two empty ones.
+    const byLabel = new Map(only.map(([label, status, body]) => [label, { status, body }]));
+    assert.equal(byLabel.get("stale edit").status, 409);
+    assert.equal(byLabel.get("like beta, private (ben)").status, 404);
+    assert.equal(byLabel.get("like gamma (cat)").body.likes, 2);
+    assert.equal(byLabel.get("external unlike (ben)").body.likes, 1);
+    assert.equal(byLabel.get("add the channel again (ben)").body.counted, false);
+    const end = byLabel.get("at the end: dashboard").body;
+    assert.deepEqual(end.lists.map((l) => [l.slug, l.likes]), [["watchlist", 0], ["alpha", 0], ["beta", 0], ["gamma", 0]], "a new Watchlist goes first; gamma, made again, starts with no likes");
+    assert.deepEqual(end.lists.find((l) => l.slug === "watchlist").items.map((i) => i.id), ["tt0000071", "tt0000073"]);
+    assert.equal(end.lists.find((l) => l.slug === "beta").sourceUrl, "https://mdblist.com/lists/someone/good-shows");
+    assert.equal(byLabel.get("at the end: catalog").body.metas.length, 2);
+    assert.deepEqual(byLabel.get("at the end: sync load").body.data.watchlist.map((i) => i.id), ["tt0000071", "tt0000073"],
+      "a browser loading the account sees the title the ping took off");
+    assert.ok(onlyEnv.db.prepare("SELECT count(*) AS n FROM lists").get().n >= 4);
+  });
+
+  it("an account reset leaves the other browsers a tombstone, and deleting the account removes everything", async () => {
+    const { env, db, ann } = await onlyModeSetup({});
+    const annId = db.prepare("SELECT id FROM accounts WHERE username = 'annonly'").get().id;
+    // One list from before the switch (so the legacy store has it too), one after.
+    await saveList(env, ann, { name: "Alpha", type: "movie", visibility: "public", items: [{ id: "tt0068646", type: "movie" }] });
+    await dashboard(env, ann);
+    env.FF_V2_LISTS_ONLY = "1";
+    await saveList(env, ann, { name: "Beta", type: "movie", visibility: "public", items: [{ id: "tt0068646", type: "movie" }] });
+    const writes = watchLegacyWrites(env);
+    const reset = await call(env, "/api/creator/account/reset", { method: "POST", json: { ...creds(ann), confirm: "RESET" } });
+    assert.equal(reset.body.ok, true, JSON.stringify(reset.body));
+    assert.deepEqual(writes, [], "nothing written to the legacy store");
+    const after = await dashboard(env, ann);
+    assert.deepEqual(after.body.lists, []);
+    assert.deepEqual(after.body.deletedSlugs.slice().sort(), ["alpha", "beta"], "every browser learns to drop them");
+    assert.equal(db.prepare("SELECT count(*) AS n FROM list_items li JOIN lists l ON l.id = li.list_id WHERE l.owner_account_id = ?").get(annId).n, 0, "and their items are gone");
+    await saveList(env, ann, { name: "Alpha", type: "movie", visibility: "private", items: [] });
+    assert.deepEqual((await dashboard(env, ann)).body.deletedSlugs, ["beta"], "a list made again is no longer deleted");
+
+    const gone = await call(env, "/api/creator/delete-account", { method: "POST", json: { ...creds(ann), confirm: "DELETE" } });
+    assert.equal(gone.body.ok, true, JSON.stringify(gone.body));
+    assert.equal(db.prepare("SELECT count(*) AS n FROM lists WHERE owner_account_id = ?").get(annId).n, 0);
+  });
+
+  it("works for an account made after the switch, and on its own without FF_V2_LISTS_READ", async () => {
+    const { env } = await onlyModeSetup({ FF_V2_LISTS_ONLY: "1" });
+    delete env.FF_V2_LISTS_READ;
+    const dan = await createUser(env, "danonly");
+    const slug = await saveList(env, dan, { name: "Fresh", type: "movie", visibility: "public", items: [{ id: "tt0068646", type: "movie" }] });
+    const writes = watchLegacyWrites(env);
+    const dash = await dashboard(env, dan);
+    assert.deepEqual(dash.body.lists.map((l) => l.slug), [slug], "read from v2, and not copied over from the empty legacy store");
+    assert.equal((await call(env, `/lists/danonly/${slug}.json`)).status, 200);
+    assert.equal((await call(env, "/lists/public.json")).body.lists.length, 1);
+    assert.deepEqual(writes, []);
+  });
+
+  it("stops the copy, and points the admin tools at v2", async () => {
+    const { env, db, ann, ben } = await onlyModeSetup({ FF_V2_LISTS_ONLY: "1" });
+    const cookie = await adminCookie(env);
+    await saveList(env, ann, { name: "Alpha", type: "movie", visibility: "public", items: [{ id: "tt0068646", type: "movie" }] });
+    await saveList(env, ann, { name: "Beta", type: "movie", visibility: "private", items: [] });
+    const code = (await shareChannel(env, ben, CH_FIXTURES.aired, { publish: true })).code;
+
+    const step = await call(env, "/admin/api/lists-backfill/step", { method: "POST", cookie, json: {} });
+    assert.equal(step.status, 409);
+    assert.match(step.body.error, /FF_V2_LISTS_ONLY/);
+    assert.equal((await call(env, "/admin/api/lists-backfill/status", { cookie })).body.listsOnly, true);
+    assert.equal((await call(env, "/admin/api/migrate-d1", { method: "POST", cookie, json: {} })).status, 409);
+
+    const browse = await call(env, "/admin/api/creator-lists?username=annonly", { cookie });
+    assert.deepEqual(browse.body.lists.map((l) => [l.slug, l.visibility]), [["alpha", "public"], ["beta", "private"]]);
+    const removed = await call(env, "/admin/api/delete-creator-list", { method: "POST", cookie, json: { username: "annonly", slugs: ["beta"] } });
+    assert.deepEqual([removed.body.deleted, removed.body.remaining], [["beta"], 1]);
+
+    db.prepare("DELETE FROM lists_fts2").run();
+    const rebuilt = await call(env, "/admin/api/rebuild-search-index", { method: "POST", cookie });
+    assert.equal(rebuilt.body.v2Count, 1);
+    assert.equal((await call(env, "/api/search-published-lists?q=alpha")).body.lists.length, 1, "search works again");
+
+    const all = await call(env, "/admin/api/published-channels?scope=all", { cookie });
+    assert.deepEqual(all.body.channels.map((c) => [c.code, c.listed]), [[code, true]]);
+    const other = (await shareChannel(env, ben, CH_FIXTURES.shuffled, { publish: true })).code;
+    assert.equal((await call(env, "/admin/api/channel-moderate", { method: "POST", cookie, json: { code: other, action: "unlist" } })).body.ok, true);
+    assert.equal(channelRow(db, other).visibility, "unlisted");
+    assert.equal((await call(env, "/admin/api/channel-moderate", { method: "POST", cookie, json: { code, action: "delete" } })).body.ok, true);
+    assert.ok(channelRow(db, code).deleted_at > 0);
+  });
+
+  it("answers an error when v2 cannot, and never falls back to the stale legacy store", async () => {
+    const { env, ann } = await onlyModeSetup({ FF_V2_LISTS_ONLY: "1" });
+    // What the legacy store still holds from before: it must not reappear.
+    env.CONFIGS._store.set("creatorlist:annonly:ghost", JSON.stringify({ name: "Ghost", slug: "ghost", type: "movie", visibility: "public", items: [{ id: "tt1" }] }));
+    assert.equal((await call(env, "/lists/annonly/ghost.json")).status, 404, "a list only the legacy store has is gone");
+    const ghostRows = [
+      { id: "g1", name: "Ghost", type: "movie", url: "customlist:v1:" + JSON.stringify({ creatorOwner: "annonly", creatorSlug: "ghost", items: [] }) },
+      { id: "g2", name: "Ghost", type: "movie", url: "https://mylistsaddon.com/lists/annonly/ghost" },
+    ];
+    env.CONFIGS._store.set("cfg:onlyghost01", JSON.stringify({ entries: ghostRows }));
+    for (const row of ["g1", "g2"]) {
+      const cat = await call(env, `/onlyghost01/catalog/movie/${row}.json`);
+      assert.deepEqual(cat.body.metas || [], [], `catalog row ${row} does not read the legacy record`);
+    }
+    env.DB.failWhen((sql) => /FROM lists l JOIN accounts/.test(sql));
+    const dir = await call(env, "/lists/public.json");
+    env.DB.failWhen(null);
+    assert.equal(dir.status, 503, "the directory says it is down rather than serving the legacy one");
+    assert.deepEqual((await dashboard(env, ann)).body.lists, []);
+
+    env.DB.failWhen((sql) => /FROM lists WHERE owner_account_id/.test(sql));
+    const down = await dashboard(env, ann);
+    env.DB.failWhen(null);
+    assert.equal(down.status, 503);
+
+    env.DB.failWhen((sql) => /INSERT INTO lists \(/.test(sql));
+    const failed = await call(env, "/api/creator/lists/save", { method: "POST", json: { ...creds(ann), name: "Nope", type: "movie", visibility: "private", items: [] } });
+    env.DB.failWhen(null);
+    assert.equal(failed.status, 503, "a save that did not land says so");
+    assert.equal(env.CONFIGS._store.has("creatorlist:annonly:nope"), false);
+    await saveList(env, ann, { name: "Nope", type: "movie", visibility: "private", items: [] });
+
+    const bare = await onlyModeSetup({ FF_V2_LISTS_ONLY: "1", BLOBS: null });
+    const share = await call(bare.env, "/api/channel/share", { method: "POST", json: { ...creds(bare.ann), channel: CH_FIXTURES.aired } });
+    assert.equal(share.status, 503, "a channel's episodes need the R2 bucket");
+  });
+
+  it("counts puts to the legacy list keys, and there are none with the flag", async () => {
+    const run = async (flags) => {
+      const points = [];
+      const { env, ann } = await onlyModeSetup({ ...flags, ANALYTICS: { writeDataPoint: (p) => points.push(p) } });
+      await saveList(env, ann, { name: "Counted", type: "movie", visibility: "public", items: [{ id: "tt0068646", type: "movie" }] });
+      return points[points.length - 1].doubles[7];
+    };
+    assert.ok((await run({})) > 0, "a save without the flag puts legacy keys, and they are counted");
+    assert.equal(await run({ FF_V2_LISTS_ONLY: "1" }), 0);
+  });
+
+  it("saves a list of 10,000 titles in one request", async () => {
+    const { env, db, ann } = await onlyModeSetup({ FF_V2_LISTS_ONLY: "1" });
+    const writes = watchLegacyWrites(env);
+    const items = Array.from({ length: 10000 }, (_, i) => ({ id: `tt${3000000 + i}`, type: "movie" }));
+    let queries = 0;
+    env.DB.failWhen((sql) => {
+      queries++;
+      if (/^\s*(INSERT|UPDATE|REPLACE)/i.test(sql) && /\b(creator_lists|list_likes|lists_fts|list_tombstones)\b/.test(sql)) writes.push("d1 " + sql);
+      return false;
+    });
+    const slug = await saveList(env, ann, { name: "Everything", type: "movie", visibility: "private", items });
+    env.DB.failWhen(null);
+    assert.ok(queries < 200, `${queries} D1 queries`);
+    assert.deepEqual(writes, []);
+    assert.equal(db.prepare("SELECT item_count FROM lists WHERE slug = ?").get(slug).item_count, 10000);
+  });
+});
+
+describe("P3b-9: fixes to the P3b-7 mirror found on the way", () => {
+  it("a list made again at a deleted list's address starts with no likes", async () => {
+    const { env, db, ann, ben } = await bridgeSetup();
+    const slug = await saveList(env, ann, { name: "Again", type: "movie", visibility: "public", items: [{ id: "tt0068646", type: "movie" }] });
+    await dashboard(env, ann);
+    await call(env, "/api/lists/like", { method: "POST", json: { ...creds(ben), username: "annbridge", slug } });
+    await call(env, "/api/creator/lists/delete", { method: "POST", json: { ...creds(ann), slug } });
+    await saveList(env, ann, { name: "Again", type: "movie", visibility: "public", items: [] });
+    const row = db.prepare("SELECT public_id, like_count FROM lists WHERE legacy_id = ?").get(`c:annbridge:${slug}`);
+    assert.equal(row.like_count, 0);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM likes WHERE target_id = ?").get(row.public_id).n, 0);
+    const { legacy, v2 } = await legacyThenV2(env, () => dashboard(env, ann));
+    assert.deepEqual(v2.body, legacy.body);
+  });
+
+  it("a playback ping that takes a title off the Watchlist reaches v2, and a new Watchlist goes first", async () => {
+    const { env, db, ann } = await bridgeSetup();
+    await saveList(env, ann, { name: "Other", type: "movie", visibility: "private", items: [] });
+    await dashboard(env, ann); // the account is on v2 from here
+    await call(env, "/api/creator/sync/save-tracking", { method: "POST", json: { ...creds(ann), watchlist: [{ id: "tt0000071", type: "movie" }, { id: "tt0000072", type: "movie" }] } });
+    const config = Buffer.from(JSON.stringify({ entries: [], track: true, trackCreatorName: ann.creatorName, trackCreatorKey: ann.creatorKey })).toString("base64url");
+    await call(env, `/${config}/subtitles/movie/tt0000071.json`);
+    assert.equal(db.prepare("SELECT item_count FROM lists WHERE legacy_id = 'c:annbridge:watchlist'").get().item_count, 1);
+    const { legacy, v2 } = await legacyThenV2(env, () => dashboard(env, ann));
+    assert.deepEqual(v2.body.order, legacy.body.order);
+    assert.equal(v2.body.order[0], "watchlist");
+    assert.deepEqual(v2.body, legacy.body);
   });
 });

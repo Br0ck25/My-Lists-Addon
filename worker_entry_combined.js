@@ -3195,7 +3195,11 @@ function instrumentEnv(env, counters) {
   const kvProxy = kv ? {
     get: (...a) => { counters.kvReads++; return kv.get(...a); },
     getWithMetadata: (...a) => { counters.kvReads++; return kv.getWithMetadata(...a); },
-    put: (...a) => { counters.kvWrites++; return kv.put(...a); },
+    put: (...a) => {
+      counters.kvWrites++;
+      if (isLegacyListKvKey(a[0])) counters.kvLegacyListPuts = (counters.kvLegacyListPuts || 0) + 1;
+      return kv.put(...a);
+    },
     delete: (...a) => { counters.kvWrites++; return kv.delete(...a); },
     list: (...a) => { counters.kvLists++; return kv.list(...a); },
   } : kv;
@@ -3224,7 +3228,9 @@ function writeRequestMetrics(env, request, response, startedAt, counters) {
     const status = response ? response.status : 0;
     env.ANALYTICS.writeDataPoint({
       blobs: [family, request.method, String(status)],
-      doubles: [status, Date.now() - startedAt, counters.kvReads, counters.kvWrites, counters.kvLists, counters.d1Statements, counters.d1Batches],
+      // The last one: puts to the legacy list keys (P3b-9's measure; 0 once
+      // FF_V2_LISTS_ONLY is on).
+      doubles: [status, Date.now() - startedAt, counters.kvReads, counters.kvWrites, counters.kvLists, counters.d1Statements, counters.d1Batches, counters.kvLegacyListPuts || 0],
       indexes: [family.slice(0, 96)],
     });
   } catch {
@@ -4476,7 +4482,7 @@ async function stampListVisibilityIfNeeded(env, key, data) {
   if (!data || typeof data !== "object") return false;
   if (!needsListVisibilityBackfill(data.visibility)) return false;
   data.visibility = backfillListVisibilityValue(data.visibility);
-  if (env && env.CONFIGS && key) {
+  if (env && env.CONFIGS && key && !(isV2ListsOnly(env) && isLegacyListKvKey(key))) {
     try {
       await env.CONFIGS.put(key, JSON.stringify(data));
     } catch {
@@ -5817,6 +5823,29 @@ async function usernameForScrobbleToken(env, token) {
 const CREATOR_LIST_TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const CREATOR_LIST_TOMBSTONE_MAX = 300;
 
+// FF_V2_LISTS_ONLY (P3b-9): the v2 tables (migration 0016) are the only list
+// and channel store. The legacy KV keys -- creatorlist:, creatorlistorder:,
+// creatorliststamp:, creatorlistdeleted:, the like ledgers, externallike:,
+// channelshare:, index:publicchannels -- and the legacy D1 list tables are no
+// longer written, and nothing reads them: the routes read and write v2
+// (34_lists-v2-bridge.js, 35_channels-v2.js). One-way: once changes have
+// gone only to v2, the legacy store is behind, so turning this off again
+// would read stale lists. It implies FF_V2_LISTS_READ.
+function isV2ListsOnly(env) {
+  const v = env ? env.FF_V2_LISTS_ONLY : undefined;
+  return v === "1" || v === "true" || v === true;
+}
+
+// The legacy list keys FF_V2_LISTS_ONLY stops writing, for the storage
+// counters (instrumentEnv): a put to one of them with the flag on is a bug.
+const LEGACY_LIST_KV_PREFIXES = ["creatorlist:", "creatorlistorder:", "creatorliststamp:", "creatorlistdeleted:", "listlikevoters:",
+  "extlikevoters:", "externallike:", "index:publicchannels", "channelshare:", "channellikevoters:"];
+
+function isLegacyListKvKey(key) {
+  const k = String(key || "");
+  return LEGACY_LIST_KV_PREFIXES.some((p) => k.startsWith(p));
+}
+
 function creatorListTombstoneKey(username) {
   return `creatorlistdeleted:${username}`;
 }
@@ -5897,6 +5926,8 @@ async function writeCreatorListDeletions(env, username, slugs) {
 
 async function recordCreatorListDeletions(env, username, slugs) {
   if (!env || !username || !slugs || !slugs.length) return;
+  // With FF_V2_LISTS_ONLY a deleted list's v2 row is its tombstone.
+  if (isV2ListsOnly(env)) return;
   const now = Date.now();
   const until = now + CREATOR_LIST_TOMBSTONE_TTL_MS;
   if (env.DB) {
@@ -5927,6 +5958,7 @@ async function recordCreatorListDeletions(env, username, slugs) {
 // device to throw the new list away. Called by /api/creator/lists/save.
 async function clearCreatorListDeletion(env, username, slug) {
   if (!env || !username || !slug) return;
+  if (isV2ListsOnly(env)) return;
   if (env.DB) {
     try {
       await env.DB.prepare("DELETE FROM list_tombstones WHERE username = ? AND slug = ?").bind(username, String(slug)).run();
@@ -5994,6 +6026,17 @@ async function pruneTombstones(env) {
 async function deleteCreatorLists(env, username, slugs) {
   const out = { deleted: [], missing: [], ok: true };
   if (!env || (!env.CONFIGS && !env.DB) || !username || !slugs || !slugs.length) return out;
+
+  // With FF_V2_LISTS_ONLY the lists are deleted in v2, where the row is also
+  // the tombstone every other device reads (34_lists-v2-bridge.js). What the
+  // legacy store still holds of them is removed, as a delete should, and
+  // nothing is written there.
+  if (isV2ListsOnly(env) && typeof listsV2DeleteRecords === "function") {
+    const v2 = await listsV2DeleteRecords(env, username, slugs);
+    await removeLegacyListLeftovers(env, username, slugs);
+    await bumpCreatorListsStamp(env, username);
+    return v2;
+  }
 
   for (const slug of slugs) {
     const key = `creatorlist:${username}:${slug}`;
@@ -6080,6 +6123,28 @@ async function deleteCreatorLists(env, username, slugs) {
   if (typeof listsV2MirrorLists === "function") await listsV2MirrorLists(env, username, slugs);
 
   return out;
+}
+
+// What the legacy store holds of these lists, removed. Best effort: with
+// FF_V2_LISTS_ONLY nothing reads it, so this is tidying, not the delete.
+async function removeLegacyListLeftovers(env, username, slugs) {
+  for (const slug of slugs) {
+    try {
+      if (env.CONFIGS) {
+        await env.CONFIGS.delete(`creatorlist:${username}:${slug}`);
+        await env.CONFIGS.delete(`listlikevoters:${username}:${slug}`);
+      }
+      if (env.DB) {
+        await env.DB.batch([
+          env.DB.prepare("DELETE FROM creator_lists WHERE id = ?").bind(`${username}:${slug}`),
+          env.DB.prepare("DELETE FROM lists_fts WHERE list_id = ?").bind(`c:${username}:${slug}`),
+          env.DB.prepare("DELETE FROM list_likes WHERE list_id = ?").bind(`c:${username}:${slug}`),
+        ]);
+      }
+    } catch (e) {
+      console.error("removeLegacyListLeftovers:", e);
+    }
+  }
 }
 
 // The same thing for an ANONYMOUS published list -- the ones /api/publish-list
@@ -6535,7 +6600,8 @@ async function bumpCreatorListsStamp(env, username, notBefore) {
         console.error("D1 read error (bumpCreatorListsStamp):", dbErr);
       }
     }
-    if (prev === (Number(notBefore) || 0) && env.CONFIGS) {
+    const only = isV2ListsOnly(env);
+    if (prev === (Number(notBefore) || 0) && env.CONFIGS && !only) {
       try {
         const raw = await env.CONFIGS.get(`creatorliststamp:${username}`);
         if (raw) {
@@ -6556,7 +6622,9 @@ async function bumpCreatorListsStamp(env, username, notBefore) {
         console.error("D1 write error (bumpCreatorListsStamp):", dbErr);
       }
     }
-    if (env.CONFIGS) {
+    // With FF_V2_LISTS_ONLY the D1 stamp above is the only one; /sync/meta
+    // reads it first.
+    if (env.CONFIGS && !only) {
       await env.CONFIGS.put(
         `creatorliststamp:${username}`,
         JSON.stringify({ updatedAt: nextStamp })
@@ -7081,7 +7149,9 @@ async function purgeCreatorData(env, username, options = {}) {
 
   // The account's v2 lists go with it (34_lists-v2-bridge.js; guarded, since
   // this file is also loaded on its own).
-  if (typeof listsV2PurgeAccount === "function") await listsV2PurgeAccount(env, u);
+  if (typeof listsV2PurgeAccount === "function") {
+    await listsV2PurgeAccount(env, u, { keepTombstones: isV2ListsOnly(env) && options.recordReset === true && !deleteIdentity });
+  }
 
   // `ok` is the whole point: it is false when this call left something
   // behind, and both callers turn that into an error rather than a 200.
@@ -7826,7 +7896,7 @@ async function getCreatorList(env, username, slug) {
           updatedAt = row.updated_at > 0 ? row.updated_at : (kvData && kvData.updatedAt ? kvData.updatedAt : undefined);
         }
 
-        if (kvIsFresher) {
+        if (kvIsFresher && !isV2ListsOnly(env)) {
           try {
             env.DB.prepare(
               "UPDATE creator_lists SET name = ?, type = ?, visibility = ?, items_json = ?, updated_at = ? WHERE id = ?"
@@ -7862,7 +7932,7 @@ async function getCreatorList(env, username, slug) {
         }
         const raw = JSON.stringify(payload);
         try {
-          if (env.CONFIGS && !kvIsFresher) await env.CONFIGS.put(`creatorlist:${username}:${slug}`, raw);
+          if (env.CONFIGS && !kvIsFresher && !isV2ListsOnly(env)) await env.CONFIGS.put(`creatorlist:${username}:${slug}`, raw);
         } catch (kvErr) {
           console.error("KV cache write error (getCreatorList):", kvErr);
         }
@@ -8569,6 +8639,23 @@ async function writeCreatorTrackingD1(env, username, trackingData, isIntentional
 // write per call -- not something a catalog request should spend.
 async function readAccountWatchlist(env, username, trackingBlob) {
   if (!env || !username) return null;
+  // With FF_V2_LISTS_ONLY (P3b-9) the Watchlist list lives in v2 only; its
+  // legacy record and row are behind. The tracking blob's copy still counts.
+  if (isV2ListsOnly(env) && typeof listsV2Record === "function") {
+    const candidates = [];
+    try {
+      const rec = await listsV2Record(env, username, "watchlist");
+      if (rec && Array.isArray(rec.items)) candidates.push({ items: rec.items, updatedAt: Number(rec.updatedAt) || 0 });
+    } catch (e) {
+      console.error("readAccountWatchlist: v2 read failed", e);
+    }
+    if (trackingBlob && Array.isArray(trackingBlob.watchlist)) {
+      candidates.push({ items: trackingBlob.watchlist, updatedAt: Number(trackingBlob.watchlistUpdatedAt) || 0 });
+    }
+    let newest = null;
+    for (const c of candidates) if (!newest || c.updatedAt > newest.updatedAt) newest = c;
+    return newest;
+  }
   const [row, kvRaw] = await Promise.all([
     env.DB
       ? env.DB.prepare("SELECT items_json, updated_at FROM creator_lists WHERE id = ?")
@@ -12021,11 +12108,13 @@ async function renderAdminDashboard(env) {
         status.textContent = 'Phase: ' + d.run.phase + (d.run.lastError ? ' (last error: ' + d.run.lastError + ')' : '') + '.';
         const t = d.totals;
         const lines = [
-          'Accounts: ' + (d.accounts.done || 0) + ' done, ' + (d.accounts.running || 0) + ' in progress, ' + (d.accounts.failed || 0) + ' failed.',
+          'Accounts: ' + (d.accounts.done || 0) + ' done, ' + (d.accounts.running || 0) + ' in progress, ' + (d.accounts.queued || 0) + ' waiting to be copied again, ' + (d.accounts.failed || 0) + ' failed.',
           'Lists: ' + t.lists.legacy + ' found, ' + t.lists.copied + ' copied, ' + t.lists.unchanged + ' unchanged since the last run, ' + t.lists.removed + ' copies of deleted lists retired, ' + t.lists.missing + ' order entries with no list behind them.',
           'Items: ' + t.items.legacy + ' in the old lists, ' + t.items.copied + ' copied, ' + (d.mismatchRate * 100).toFixed(3) + '% not carried: ' + t.items.unusable + ' with no usable id (no catalog could show them), ' + t.items.duplicates + ' listed twice' + (t.items.carried ? ', ' + t.items.carried + ' on lists copied in an earlier run' : '') + '. ' + t.items.stubs + ' titles TMDB could not place yet (kept, tried again later).',
           'Likes: ' + t.likes.legacy + ' shown before, ' + t.likes.voters + ' voters copied, ' + t.likes.keptFromCount + ' kept from the old totals with no voter on record.',
         ];
+        if (d.listsOnly) lines.unshift('FF_V2_LISTS_ONLY is on: the new tables are the only store, so there is nothing left to copy.');
+        else if (d.run.phase === 'done' && !(d.accounts.running || d.accounts.queued || d.accounts.failed)) lines.push('Every account is copied. FF_V2_LISTS_ONLY can be considered once reads have been on the new tables for a while (docs/OPERATIONS.md section 11).');
         if (d.anonymous) lines.push('Anonymous lists: ' + d.anonymous.lists.legacy + ' found, ' + d.anonymous.items.copied + ' of ' + d.anonymous.items.legacy + ' items copied.');
         if (d.external) lines.push('Likes on outside lists: ' + d.external.targets + ' lists, ' + d.external.voters + ' voters copied.');
         if (d.channels) {
@@ -15831,6 +15920,9 @@ async function fetchLiveCreatorListItems(owner, slug, env) {
   // typeof-guarded: this file is also loaded on its own (tests, the page).
   const v2Items = typeof listsV2LiveListItems === "function" ? await listsV2LiveListItems(env, owner, slug) : null;
   if (v2Items) return v2Items;
+  // With FF_V2_LISTS_ONLY (P3b-9) the legacy keys are behind: not public in
+  // v2 means not public.
+  if (typeof isV2ListsOnly === "function" && isV2ListsOnly(env)) return null;
   if (!owner || !slug || !env || !env.CONFIGS) return null;
   const ownerLower = String(owner).toLowerCase();
   const slugLower = String(slug).toLowerCase();
@@ -16680,9 +16772,14 @@ async function fetchPublishedListCatalog(entry, env) {
   if (!parsed) return [];
 
   let payload = null;
+  // A creator's list from v2 when reads are there (P3b-7) -- and only from
+  // there with FF_V2_LISTS_ONLY (P3b-9). The legacy anonymous lists
+  // (publishedlist:) are read where they have always been.
+  const v2Items = typeof listsV2LiveListItems === "function" ? await listsV2LiveListItems(env, parsed.username, parsed.listName) : null;
+  if (v2Items) payload = { items: v2Items, visibility: "public" };
+  const listsOnly = typeof isV2ListsOnly === "function" && isV2ListsOnly(env);
   const keysToTry = [
-    `creatorlist:${parsed.username}:${parsed.listName}`,
-    `creatorlist:${parsed.rawUsername}:${parsed.rawListName}`,
+    ...(listsOnly ? [] : [`creatorlist:${parsed.username}:${parsed.listName}`, `creatorlist:${parsed.rawUsername}:${parsed.rawListName}`]),
     `publishedlist:${parsed.username}:${parsed.listName}`,
     `publishedlist:${parsed.rawUsername}:${parsed.rawListName}`,
   ];
@@ -76000,7 +76097,7 @@ async function handleFetch(request, env, ctx) {
         const s = decodeURIComponent(parts[2]).toLowerCase();
         // From v2 when reads are there (P3b-8), else the legacy map and index.
         let code = (await channelsV2CodeBySlug(env, u, s)) || "";
-        if (!code && env && env.CONFIGS) {
+        if (!code && env && env.CONFIGS && !isV2ListsOnly(env)) {
           try {
             code = (await env.CONFIGS.get(`creatorchannel:${u}:${s}`)) || "";
           } catch {}
@@ -76016,7 +76113,7 @@ async function handleFetch(request, env, ctx) {
           if (wantsJson) {
             try {
               let record = await channelsV2Record(env, code, { items: true });
-              if (!record) {
+              if (!record && !isV2ListsOnly(env)) {
                 const raw = await env.CONFIGS.get(`channelshare:${code}`);
                 record = raw ? JSON.parse(raw) : null;
               }
@@ -82443,7 +82540,7 @@ function generateSearchVariations(query) {
           if (!listed.has(code)) {
             // From v2 when its copy of the channel is current (P3b-8).
             let record = await channelsV2Record(env, code, { items: true });
-            if (!record) {
+            if (!record && !isV2ListsOnly(env)) {
               try {
                 const raw = await env.CONFIGS.get(`channelshare:${code}`);
                 record = raw ? JSON.parse(raw) : null;
@@ -82564,6 +82661,13 @@ function generateSearchVariations(query) {
         return json({ ok: false, error: "Sign in to like lists.", signInRequired: true }, 401);
       }
       const likeVoterName = likeAuth.username;
+
+      // FF_V2_LISTS_ONLY (P3b-9): the like is v2's alone.
+      if (isV2ListsOnly(env)) {
+        const v2 = await listsV2LikeList(env, likeUser, likeSlug, likeVoterName, !likeUnlike);
+        if (v2.error) return json({ ok: false, error: v2.error }, v2.status);
+        return json({ ok: true, likes: v2.likes, liked: !likeUnlike });
+      }
 
       // The list must actually exist before any vote is recorded --
       // otherwise a ledger (and a permanent KV key) could be created for
@@ -82692,6 +82796,10 @@ function generateSearchVariations(query) {
       const extVoterName = extAuth.username;
 
       const hash = await hashStringForKey(normalizedUrl);
+      // FF_V2_LISTS_ONLY (P3b-9): the like is v2's alone, under the same hash.
+      if (isV2ListsOnly(env)) {
+        return json({ ok: true, likes: await listsV2LikeExternal(env, hash, extVoterName, !unlike), liked: !unlike });
+      }
       const key = `externallike:${hash}`;
       const voterId = await likeVoterId(request, env, extVoterName, hash);
       if (!voterId) return json({ ok: false, error: "Could not process this request." }, 400);
@@ -83441,6 +83549,8 @@ function generateSearchVariations(query) {
             if (l.items.length !== initLen) {
               l.updatedAt = Date.now();
               await env.CONFIGS.put(key, JSON.stringify(l));
+              // And its v2 copy (P3b-7), which this write used to miss.
+              await listsV2MirrorLists(env, auth.username, [key.split(":").slice(2).join(":")]);
               // Auto-Track Playback silently takes what you just watched off
               // the Watchlist. That is a list change made by one device that
               // every other device is showing, which is exactly what the
@@ -83450,9 +83560,25 @@ function generateSearchVariations(query) {
             }
           };
 
+          // FF_V2_LISTS_ONLY (P3b-9): the Watchlist lives in v2 only.
+          const wlOnlyAccount = isV2ListsOnly(env) ? await listsV2Account(env, auth.username) : null;
           const canonicalKey = `creatorlist:${auth.username}:watchlist`;
-          const canonicalRaw = await env.CONFIGS.get(canonicalKey);
-          if (canonicalRaw) {
+          const canonicalRaw = isV2ListsOnly(env) ? null : await env.CONFIGS.get(canonicalKey);
+          if (wlOnlyAccount) {
+            const raw = await listsV2GetRecordRaw(env, wlOnlyAccount, "watchlist");
+            const l = raw ? JSON.parse(raw) : null;
+            const before = l && Array.isArray(l.items) ? l.items.length : 0;
+            if (before) {
+              l.items = l.items.filter((it) => it && String(it.id || it.imdbId) !== imdbId && String(it.showId || '') !== imdbId);
+              if (l.items.length !== before) {
+                l.updatedAt = Date.now();
+                await listsV2WriteRecord(env, wlOnlyAccount, "watchlist", l);
+                await bumpCreatorListsStamp(env, auth.username);
+              }
+            }
+          } else if (isV2ListsOnly(env)) {
+            // No account row: nothing in v2 to take it off.
+          } else if (canonicalRaw) {
             await removeWatchedFrom(canonicalKey, canonicalRaw);
           } else {
             const listKeys = await listAllKeys(env.CONFIGS, `creatorlist:${auth.username}:`, 200);
@@ -84979,6 +85105,7 @@ function generateSearchVariations(query) {
       // store below, as before.
       const v2Dashboard = await listsV2DashboardResponse(env, url, auth, body);
       if (v2Dashboard) return v2Dashboard;
+      if (isV2ListsOnly(env)) return jsonPrivate({ ok: false, error: "Your lists can't be loaded right now. Please try again in a moment." }, 503);
       // Paging. The route used to issue one KV get per list with no cap, so
       // an account at 990 lists spent 1,001 KV operations and Cloudflare
       // terminated the invocation -- the dashboard 500s forever, and since
@@ -85303,6 +85430,7 @@ function generateSearchVariations(query) {
       // From v2 when FF_V2_LISTS_READ is on (P3b-7); null means the legacy store.
       const v2Items = await listsV2ItemsResponse(env, auth, slugs);
       if (v2Items) return v2Items;
+      if (isV2ListsOnly(env)) return jsonPrivate({ ok: false, error: "Your lists can't be loaded right now. Please try again in a moment." }, 503);
 
       const out = (
         await Promise.all(
@@ -85387,10 +85515,17 @@ function generateSearchVariations(query) {
         return json({ ok: false, error: `That list is too large to save (limit ${PUBLISHED_LIST_ITEMS_MAX} items).` }, 413);
       }
 
-      const orderRaw = await env.CONFIGS.get(`creatorlistorder:${auth.username}`);
+      // With FF_V2_LISTS_ONLY (P3b-9) the list is read and written in v2
+      // only: the same request and answer, a different store underneath.
+      const listsOnly = isV2ListsOnly(env);
+      const onlyAccount = listsOnly ? await listsV2Account(env, auth.username) : null;
+      if (listsOnly && !onlyAccount) {
+        return json({ ok: false, error: "Your account isn't ready to save lists yet. Please try again later." }, 503);
+      }
+      const orderRaw = listsOnly ? null : await env.CONFIGS.get(`creatorlistorder:${auth.username}`);
       let order = [];
       try {
-        order = orderRaw ? JSON.parse(orderRaw).order || [] : [];
+        order = listsOnly ? await listsV2OrderSlugs(env, onlyAccount) : (orderRaw ? JSON.parse(orderRaw).order || [] : []);
       } catch {
         order = [];
       }
@@ -85449,7 +85584,9 @@ function generateSearchVariations(query) {
         // a slug absent from it may still have a live record behind it, and
         // allocating it would write straight over that list.
         slug = await pickFreeSlug(baseSlug, async (candidate) =>
-          order.includes(candidate) || !!(await env.CONFIGS.get(`creatorlist:${auth.username}:${candidate}`))
+          order.includes(candidate) || (listsOnly
+            ? await listsV2SlugTaken(env, onlyAccount, candidate)
+            : !!(await env.CONFIGS.get(`creatorlist:${auth.username}:${candidate}`)))
         );
         if (!slug) {
           return json(
@@ -85501,7 +85638,8 @@ function generateSearchVariations(query) {
         ? body.baseItemIds.filter((id) => typeof id === "string" || typeof id === "number").map(String)
         : null;
 
-      const existingRaw = editingSlug ? await getCreatorList(env, auth.username, slug) : null;
+      const existingRaw = !editingSlug ? null
+        : (listsOnly ? await listsV2GetRecordRaw(env, onlyAccount, slug) : await getCreatorList(env, auth.username, slug));
       let createdAt = now;
       let likes = 0;
       let storedUpdatedAt = 0;
@@ -85545,7 +85683,7 @@ function generateSearchVariations(query) {
       // write from a current one and the stale one wins. Same reasoning, and
       // the same helper, as the sync blobs: see nextSyncVersion.
       const updatedAt = nextSyncVersion(storedUpdatedAt);
-      if (env.DB) {
+      if (env.DB && !listsOnly) {
         try {
           const listId = `${auth.username}:${slug}`;
           await env.DB.prepare(
@@ -85588,6 +85726,31 @@ function generateSearchVariations(query) {
       if (finalSynced) kvPayload.synced = true;
       if (finalLastSyncedAt) kvPayload.lastSyncedAt = finalLastSyncedAt;
       if (finalBaseItemIds) kvPayload.baseItemIds = finalBaseItemIds;
+      const savedAnswer = {
+        ok: true,
+        slug,
+        updatedAt,
+        sourceUrl: finalSourceUrl || undefined,
+        synced: finalSynced || undefined,
+        lastSyncedAt: finalLastSyncedAt || undefined,
+        baseItemIds: finalBaseItemIds || undefined,
+        url: `${url.origin}/lists/${auth.username}/${slug}`,
+      };
+
+      // FF_V2_LISTS_ONLY: this record into v2 (its details, items by diff,
+      // its place at the end of the order when it is new), and nothing into
+      // the legacy store. A save that did not land says so, so the browser
+      // keeps its copy and tries again.
+      if (listsOnly) {
+        try {
+          await listsV2WriteRecord(env, onlyAccount, slug, kvPayload);
+        } catch (e) {
+          console.error("lists v2: save failed", e);
+          return json({ ok: false, error: "Couldn't save that list right now. Please try again in a moment." }, 503);
+        }
+        await bumpCreatorListsStamp(env, auth.username);
+        return json(savedAnswer);
+      }
 
       await env.CONFIGS.put(
         `creatorlist:${auth.username}:${slug}`,
@@ -85682,16 +85845,7 @@ function generateSearchVariations(query) {
       // never fails the save: a mirror that cannot finish marks the
       // account's v2 copy stale, and reads fall back to what was just saved.
       await listsV2MirrorLists(env, auth.username, [slug]);
-      return json({
-        ok: true,
-        slug,
-        updatedAt,
-        sourceUrl: finalSourceUrl || undefined,
-        synced: finalSynced || undefined,
-        lastSyncedAt: finalLastSyncedAt || undefined,
-        baseItemIds: finalBaseItemIds || undefined,
-        url: `${url.origin}/lists/${auth.username}/${slug}`,
-      });
+      return json(savedAnswer);
     }
 
     // --- Sharing a channel, and the Explore Channels directory -----------
@@ -85742,10 +85896,16 @@ function generateSearchVariations(query) {
       let code = String(body.code || "").trim().slice(0, 64);
       if (code && !/^[A-Za-z0-9_-]+$/.test(code)) code = "";
       let existing = null;
+      // FF_V2_LISTS_ONLY (P3b-9): shared channels live in v2 only.
+      const channelsOnly = isV2ListsOnly(env);
       if (code) {
         try {
-          const raw = await env.CONFIGS.get(`channelshare:${code}`);
-          existing = raw ? JSON.parse(raw) : null;
+          if (channelsOnly) {
+            existing = await channelsV2Record(env, code);
+          } else {
+            const raw = await env.CONFIGS.get(`channelshare:${code}`);
+            existing = raw ? JSON.parse(raw) : null;
+          }
         } catch {
           existing = null;
         }
@@ -85771,24 +85931,35 @@ function generateSearchVariations(query) {
           error: "That channel is too large to share. Trim it down and try again.",
         }, 413);
       }
-      try {
-        await env.CONFIGS.put(`channelshare:${code}`, serialized);
-      } catch {
-        return json({ ok: false, error: "Couldn't save that share link. Please try again." }, 500);
-      }
       const channelSlug = typeof slugifyServer === 'function' ? slugifyServer(channel.name || "channel") : "channel";
-      if (record.published && owner) {
+      if (channelsOnly) {
+        let stored;
         try {
-          await env.CONFIGS.put(`creatorchannel:${owner.toLowerCase()}:${channelSlug}`, code);
-        } catch {}
+          stored = await channelsV2Share(env, code, record);
+        } catch (e) {
+          console.error("channels v2: share failed", e);
+          stored = { error: "Couldn't save that share link. Please try again.", status: 500 };
+        }
+        if (stored.error) return json({ ok: false, error: stored.error }, stored.status);
+      } else {
+        try {
+          await env.CONFIGS.put(`channelshare:${code}`, serialized);
+        } catch {
+          return json({ ok: false, error: "Couldn't save that share link. Please try again." }, 500);
+        }
+        if (record.published && owner) {
+          try {
+            await env.CONFIGS.put(`creatorchannel:${owner.toLowerCase()}:${channelSlug}`, code);
+          } catch {}
+        }
+        if (record.published) {
+          await upsertPublicChannelIndex(env, code, record).catch(() => {});
+        }
+        // The same share into v2 (P3b-8, 35_channels-v2.js). It never fails
+        // the share: a mirror that cannot finish marks the v2 row stale, and
+        // reads of it go back to what was just stored here.
+        await channelsV2SyncShare(env, code, record);
       }
-      if (record.published) {
-        await upsertPublicChannelIndex(env, code, record).catch(() => {});
-      }
-      // The same share into v2 (P3b-8, 35_channels-v2.js). It never fails the
-      // share: a mirror that cannot finish marks the v2 row stale, and reads
-      // of it go back to what was just stored here.
-      await channelsV2SyncShare(env, code, record);
       ctx.waitUntil(bumpStat(env, publish ? "channels:published" : "channels:shared"));
       return json({
         ok: true,
@@ -85812,12 +85983,14 @@ function generateSearchVariations(query) {
         const parts = code.split(":");
         const u = parts[1] || "";
         const s = parts[2] || "";
-        const resolved = (await channelsV2CodeBySlug(env, u, s)) || await env.CONFIGS.get(`creatorchannel:${u.toLowerCase()}:${s.toLowerCase()}`);
+        const resolved = (await channelsV2CodeBySlug(env, u, s))
+          || (isV2ListsOnly(env) ? null : await env.CONFIGS.get(`creatorchannel:${u.toLowerCase()}:${s.toLowerCase()}`));
         if (resolved) code = resolved;
       } else if (!code && url.searchParams.get("username") && url.searchParams.get("slug")) {
         const u = url.searchParams.get("username").trim();
         const s = url.searchParams.get("slug").trim();
-        const resolved = (await channelsV2CodeBySlug(env, u, s)) || await env.CONFIGS.get(`creatorchannel:${u.toLowerCase()}:${s.toLowerCase()}`);
+        const resolved = (await channelsV2CodeBySlug(env, u, s))
+          || (isV2ListsOnly(env) ? null : await env.CONFIGS.get(`creatorchannel:${u.toLowerCase()}:${s.toLowerCase()}`));
         if (resolved) code = resolved;
       }
       if (!code || !/^[A-Za-z0-9_-]{1,64}$/.test(code)) {
@@ -85826,7 +85999,7 @@ function generateSearchVariations(query) {
       // From v2 when FF_V2_LISTS_READ is on and its copy of this channel is
       // current, episodes and all (P3b-8); otherwise the legacy record.
       let record = await channelsV2Record(env, code, { items: true });
-      if (!record) {
+      if (!record && !isV2ListsOnly(env)) {
         try {
           const raw = await env.CONFIGS.get(`channelshare:${code}`);
           record = raw ? JSON.parse(raw) : null;
@@ -85863,6 +86036,7 @@ function generateSearchVariations(query) {
       // finished (P3b-8); the legacy index until then.
       const v2Directory = await channelsV2DirectoryResponse(env, url);
       if (v2Directory) return v2Directory;
+      if (isV2ListsOnly(env)) return json({ ok: false, error: "Explore Channels isn't available right now." }, 503);
       if (!env || !env.CONFIGS) return jsonCacheable({ ok: true, channels: [] });
       const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "60", 10) || 60, 1), PUBLIC_CHANNEL_INDEX_MAX);
       const sort = String(url.searchParams.get("sort") || "newest");
@@ -85897,6 +86071,21 @@ function generateSearchVariations(query) {
       }
       const code = String(body.code || "").trim();
       if (!/^[A-Za-z0-9_-]{1,64}$/.test(code)) return json({ ok: false, error: "Channel not found." }, 404);
+      // FF_V2_LISTS_ONLY (P3b-9): the like is v2's alone. The same answers, in
+      // the same order: not listed (404) before signed out (401).
+      if (isV2ListsOnly(env)) {
+        const row = await channelsV2LiveRow(env, code);
+        if (!row || row.visibility !== "public") return json({ ok: false, error: "Channel not found." }, 404);
+        const onlyAuth = await authenticateCreator(body.creatorName, body.creatorKey);
+        if (!onlyAuth.ok) {
+          if (onlyAuth.throttled) return authFailureResponse(onlyAuth);
+          return json({ ok: false, error: "Sign in to like channels.", signInRequired: true }, 401);
+        }
+        const liking = body.action !== "unlike";
+        const v2 = await channelsV2Like(env, code, onlyAuth.username, liking);
+        if (v2.error) return json({ ok: false, error: v2.error }, v2.status);
+        return json({ ok: true, likes: v2.likes, liked: liking }, 200, { "Cache-Control": "no-store" });
+      }
       let record = null;
       try {
         const raw = await env.CONFIGS.get(`channelshare:${code}`);
@@ -85974,6 +86163,10 @@ function generateSearchVariations(query) {
       if (!body.creatorName || !body.creatorKey) return json({ ok: true, counted: false });
       const addAuth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!addAuth.ok) return json({ ok: true, counted: false });
+      // FF_V2_LISTS_ONLY (P3b-9): counted in v2 alone.
+      if (isV2ListsOnly(env)) {
+        return json({ ok: true, counted: await channelsV2Added(env, code, addAuth.username) }, 200, { "Cache-Control": "no-store" });
+      }
       const entries = await readPublicChannelIndex(env);
       const row = entries.find((e) => e && e.code === code);
       if (!row) return json({ ok: true, counted: false });
@@ -86010,6 +86203,7 @@ function generateSearchVariations(query) {
       // From the channels rows once the directory is (P3b-8).
       const v2Mine = await channelsV2Listings(env, auth.username);
       if (v2Mine) return json({ ok: true, channels: v2Mine }, 200, { "Cache-Control": "no-store" });
+      if (isV2ListsOnly(env)) return json({ ok: false, error: "Your channels can't be loaded right now." }, 503);
       const entries = await readPublicChannelIndex(env);
       const mine = entries.filter((e) => e && e.owner === auth.username);
       return json({ ok: true, channels: mine }, 200, { "Cache-Control": "no-store" });
@@ -86032,6 +86226,11 @@ function generateSearchVariations(query) {
       if (!auth.ok) return authFailureResponse(auth);
       const code = String(body.code || "").trim();
       if (!code || !/^[A-Za-z0-9_-]{1,64}$/.test(code)) return json({ ok: false, error: "Missing code." }, 400);
+      // FF_V2_LISTS_ONLY (P3b-9): in v2 alone.
+      if (isV2ListsOnly(env)) {
+        const v2 = await channelsV2Unlist(env, code, auth.username);
+        return v2.error ? json({ ok: false, error: v2.error }, v2.status) : json({ ok: true });
+      }
       let record = null;
       try {
         const raw = await env.CONFIGS.get(`channelshare:${code}`);
@@ -86107,6 +86306,17 @@ function generateSearchVariations(query) {
             .filter((s) => s.length <= 60 && /^[a-zA-Z0-9._-]+$/.test(s))
             .slice(0, CREATOR_LIST_ORDER_MAX)
         : [];
+      // FF_V2_LISTS_ONLY (P3b-9): the order is kept in v2 only.
+      if (isV2ListsOnly(env)) {
+        try {
+          await listsV2WriteOrder(env, auth.username, newOrder);
+        } catch (e) {
+          console.error("lists v2: reorder failed", e);
+          return json({ ok: false, error: "Couldn't save the new order right now. Please try again in a moment." }, 503);
+        }
+        await bumpCreatorListsStamp(env, auth.username);
+        return json({ ok: true, order: newOrder });
+      }
       if (env.DB) {
         try {
           const stmts = newOrder.map((slug, idx) =>
@@ -86800,7 +87010,12 @@ function generateSearchVariations(query) {
       }
       try {
         if (Array.isArray(body.watchlist)) {
-          const wlRaw = await getCreatorList(env, auth.username, "watchlist");
+          // With FF_V2_LISTS_ONLY (P3b-9) the Watchlist is read and written in
+          // v2, like every other list.
+          const wlOnly = isV2ListsOnly(env);
+          const wlAccount = wlOnly ? await listsV2Account(env, auth.username) : null;
+          if (wlOnly && !wlAccount) throw new Error("lists v2: no account for " + auth.username);
+          const wlRaw = wlOnly ? await listsV2GetRecordRaw(env, wlAccount, "watchlist") : await getCreatorList(env, auth.username, "watchlist");
           let wlObj = null;
           if (wlRaw) {
             try {
@@ -86826,38 +87041,45 @@ function generateSearchVariations(query) {
           if (utf8ByteLength(JSON.stringify(wlObj.items || [])) > CREATOR_LIST_BYTES_MAX) {
             return json({ ok: false, error: "Your Watchlist is too large to store. Try removing some items." }, 413);
           }
-          
-          if (env.DB) {
-            try {
-              const listId = `${auth.username}:watchlist`;
-              const itemsJson = JSON.stringify(wlObj.items || []);
-              // Carries `likes` on the INSERT for the same reason the
-              // creator-list save above does -- a Watchlist is private by
-              // default but nothing stops one being shared and liked.
-              await env.DB.prepare(
-                "INSERT INTO creator_lists (id, username, name, type, visibility, items_json, likes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, type=excluded.type, visibility=excluded.visibility, items_json=excluded.items_json, updated_at=excluded.updated_at"
-              ).bind(listId, auth.username, wlObj.name, wlObj.type, wlObj.visibility, itemsJson, wlObj.likes || 0, wlObj.createdAt, wlObj.updatedAt).run();
-            } catch (dbErr) {
-              console.error("D1 write error (creatorlist watchlist):", dbErr);
-            }
-          }
-          
-          // Unconditional -- see the creatorlist put above.
-          await env.CONFIGS.put(`creatorlist:${auth.username}:watchlist`, JSON.stringify(wlObj));
 
-          const orderRaw = await env.CONFIGS.get(`creatorlistorder:${auth.username}`);
-          let order = [];
-          try { order = orderRaw ? JSON.parse(orderRaw).order || [] : []; } catch {}
-          if (!order.includes("watchlist")) {
-            order.unshift("watchlist");
-            await env.CONFIGS.put(`creatorlistorder:${auth.username}`, JSON.stringify({ order }));
+          if (wlOnly) {
+            // A new one goes first, as the legacy order put it. A failure
+            // answers 500 below, so the browser keeps its copy and retries.
+            await listsV2WriteRecord(env, wlAccount, "watchlist", wlObj);
+            await bumpCreatorListsStamp(env, auth.username);
+          } else {
+            if (env.DB) {
+              try {
+                const listId = `${auth.username}:watchlist`;
+                const itemsJson = JSON.stringify(wlObj.items || []);
+                // Carries `likes` on the INSERT for the same reason the
+                // creator-list save above does -- a Watchlist is private by
+                // default but nothing stops one being shared and liked.
+                await env.DB.prepare(
+                  "INSERT INTO creator_lists (id, username, name, type, visibility, items_json, likes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, type=excluded.type, visibility=excluded.visibility, items_json=excluded.items_json, updated_at=excluded.updated_at"
+                ).bind(listId, auth.username, wlObj.name, wlObj.type, wlObj.visibility, itemsJson, wlObj.likes || 0, wlObj.createdAt, wlObj.updatedAt).run();
+              } catch (dbErr) {
+                console.error("D1 write error (creatorlist watchlist):", dbErr);
+              }
+            }
+          
+            // Unconditional -- see the creatorlist put above.
+            await env.CONFIGS.put(`creatorlist:${auth.username}:watchlist`, JSON.stringify(wlObj));
+
+            const orderRaw = await env.CONFIGS.get(`creatorlistorder:${auth.username}`);
+            let order = [];
+            try { order = orderRaw ? JSON.parse(orderRaw).order || [] : []; } catch {}
+            if (!order.includes("watchlist")) {
+              order.unshift("watchlist");
+              await env.CONFIGS.put(`creatorlistorder:${auth.username}`, JSON.stringify({ order }));
+            }
+            // The Watchlist is a creatorlist: record like any other and shows on
+            // the same dashboard, so adding to it here counts as a list change.
+            await bumpCreatorListsStamp(env, auth.username);
+            // Its v2 copy too (34_lists-v2-bridge.js): reads of the Watchlist
+            // stay on the legacy store, but a shared one is in the directory.
+            await listsV2MirrorLists(env, auth.username, ["watchlist"]);
           }
-          // The Watchlist is a creatorlist: record like any other and shows on
-          // the same dashboard, so adding to it here counts as a list change.
-          await bumpCreatorListsStamp(env, auth.username);
-          // Its v2 copy too (34_lists-v2-bridge.js): reads of the Watchlist
-          // stay on the legacy store, but a shared one is in the directory.
-          await listsV2MirrorLists(env, auth.username, ["watchlist"]);
         }
       } catch (e) {
         return json({ ok: false, error: "Could not save to storage right now. Please try again in a moment." }, 500);
@@ -87398,7 +87620,19 @@ function generateSearchVariations(query) {
           }
         }
       } catch {}
-      const orderRaw = orderRawInit;
+      let orderRaw = orderRawInit;
+      // FF_V2_LISTS_ONLY (P3b-9): the order is kept in v2, not in the
+      // legacy key. An account with no lists has none, as before.
+      if (isV2ListsOnly(env)) {
+        orderRaw = null;
+        try {
+          const orderAccount = await listsV2Account(env, auth.username);
+          const v2Order = orderAccount ? await listsV2OrderSlugs(env, orderAccount) : [];
+          if (v2Order.length) orderRaw = JSON.stringify({ order: v2Order });
+        } catch (e) {
+          console.error("lists v2: sync/load order failed", e);
+        }
+      }
       if (orderRaw) {
         try {
           const orderBlob = JSON.parse(orderRaw);
@@ -87935,9 +88169,10 @@ function generateSearchVariations(query) {
         listData = v2List;
         isCreatorList = true;
       }
+      // With FF_V2_LISTS_ONLY (P3b-9) a creator's list is v2's or nobody's;
+      // the legacy anonymous lists (publishedlist:) stay where they are.
       const keysToTry = [
-        `creatorlist:${username}:${listName}`,
-        `creatorlist:${rawUser}:${rawList}`,
+        ...(isV2ListsOnly(env) ? [] : [`creatorlist:${username}:${listName}`, `creatorlist:${rawUser}:${rawList}`]),
         `publishedlist:${username}:${listName}`,
         `publishedlist:${rawUser}:${rawList}`,
       ];
@@ -88325,6 +88560,11 @@ function generateSearchVariations(query) {
       const authed = await isAdminRequest(request, env);
       if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
       if (!env || !env.DB || !env.CONFIGS) return json({ ok: false, error: "No D1 or KV binding." }, 500);
+      // It copies the legacy KV lists into the legacy D1 tables; with
+      // FF_V2_LISTS_ONLY (P3b-9) neither is written or read any more.
+      if (isV2ListsOnly(env)) {
+        return json({ ok: false, error: "FF_V2_LISTS_ONLY is on: the old list storage is no longer used, so there is nothing to migrate." }, 409);
+      }
 
       // Every KV read/write and every D1 statement goes through these, so the
       // budget reflects what was actually spent rather than a guess.
@@ -88810,6 +89050,13 @@ function generateSearchVariations(query) {
       if (!env || !env.DB) {
         return json({ ok: true, done: true, count: 0, scanned: 0, ms: Date.now() - started });
       }
+      // The v2 search table too (P3b-9), and with FF_V2_LISTS_ONLY only that:
+      // the legacy one is built from tables that are no longer written.
+      const v2Count = await rebuildListsFts2(env);
+      if (isV2ListsOnly(env)) {
+        if (v2Count == null) return json({ ok: false, error: "Rebuild failed: the v2 list tables are not there." }, 500);
+        return json({ ok: true, done: true, count: v2Count, scanned: v2Count, v2Count, ms: Date.now() - started });
+      }
       try {
         await env.DB.prepare(`
           CREATE VIRTUAL TABLE IF NOT EXISTS lists_fts USING fts5(
@@ -88840,6 +89087,7 @@ function generateSearchVariations(query) {
           done: true,
           count,
           scanned: count,
+          v2Count: v2Count == null ? undefined : v2Count,
           ms: Date.now() - started,
         });
       } catch (e) {
@@ -88917,6 +89165,24 @@ function generateSearchVariations(query) {
         } catch (dbErr) {
           console.error("D1 username resolution error in creator-lists:", dbErr);
         }
+      }
+
+      // FF_V2_LISTS_ONLY (P3b-9): the lists are v2's; the legacy records are
+      // behind.
+      if (isV2ListsOnly(env)) {
+        let v2Lists;
+        try {
+          v2Lists = await listsV2AdminLists(env, targetUsername, url.origin);
+        } catch (e) {
+          return json({ ok: false, error: "Could not read this creator's lists right now." }, 500, { "Cache-Control": "no-store" });
+        }
+        const v2Offset = /^\d+$/.test(cursor) ? parseInt(cursor, 10) : 0;
+        const v2Page = v2Lists.slice(v2Offset, v2Offset + limit);
+        const v2Next = v2Offset + limit < v2Lists.length ? String(v2Offset + limit) : null;
+        return json({
+          ok: true, username: targetUsername, count: v2Page.length, lists: v2Page, orderCount: v2Lists.length,
+          cursor: v2Next, done: v2Next === null,
+        }, 200, { "Cache-Control": "no-store" });
       }
 
       let order = [];
@@ -89100,7 +89366,9 @@ function generateSearchVariations(query) {
       // multi-batch cleanup is finished without guessing.
       let remaining = null;
       try {
-        if (env.DB) {
+        if (env.DB && isV2ListsOnly(env)) {
+          remaining = await listsV2CountLists(env, v.normalized);
+        } else if (env.DB) {
           const countRow = await env.DB.prepare(
             "SELECT COUNT(*) AS n FROM creator_lists WHERE username = ?"
           ).bind(v.normalized).first();
@@ -89288,7 +89556,7 @@ function generateSearchVariations(query) {
       if (scope === "listed") {
         // What the public sees: the channels rows once Explore Channels reads
         // them (P3b-8), the legacy index until then.
-        const index = (await channelsV2Listings(env, null)) || await readPublicChannelIndex(env);
+        const index = (await channelsV2Listings(env, null)) || (isV2ListsOnly(env) ? [] : await readPublicChannelIndex(env));
         return json({
           ok: true,
           scope,
@@ -89303,6 +89571,31 @@ function generateSearchVariations(query) {
       }
 
       const cursor = url.searchParams.get("cursor") || "";
+      // FF_V2_LISTS_ONLY (P3b-9): every stored channel is a row.
+      if (isV2ListsOnly(env)) {
+        const offset = Math.max(0, parseInt(cursor, 10) || 0);
+        const rows = await channelsV2AllRows(env, limit, offset);
+        const page = rows.slice(0, limit);
+        return json({
+          ok: true,
+          scope,
+          count: page.length,
+          channels: page.map((r) => ({
+            code: r.public_code,
+            name: r.name || "(untitled)",
+            description: r.description || channelsV2Definition(r).description || "",
+            owner: channelsV2OwnerName(r),
+            listed: r.visibility === "public",
+            itemCount: r.item_count || 0,
+            likes: r.like_count || 0,
+            publishedAt: r.created_at || null,
+            updatedAt: r.updated_at || null,
+            url: `${url.origin}/channel/${r.public_code}`,
+          })),
+          cursor: rows.length > limit ? String(offset + limit) : null,
+          done: rows.length <= limit,
+        }, 200, { "Cache-Control": "no-store" });
+      }
       let listed;
       try {
         listed = await env.CONFIGS.list({ prefix: "channelshare:", limit, ...(cursor ? { cursor } : {}) });
@@ -89371,6 +89664,25 @@ function generateSearchVariations(query) {
       const code = String(body.code || "").trim();
       if (!/^[A-Za-z0-9_-]{1,64}$/.test(code)) return json({ ok: false, error: "Missing code." }, 400);
       const action = body.action === "delete" ? "delete" : "unlist";
+
+      // FF_V2_LISTS_ONLY (P3b-9): in v2 alone, and checked the same way.
+      if (isV2ListsOnly(env)) {
+        let done = false;
+        try {
+          if (action === "delete") {
+            done = await channelsV2Delete(env, code);
+          } else {
+            const v2 = await channelsV2Unlist(env, code, null);
+            done = !v2.error || v2.status === 404;
+          }
+        } catch (e) {
+          console.error("channels v2: takedown failed", e);
+        }
+        if (!done) {
+          return json({ ok: false, error: "Couldn't finish that takedown. It may still be reachable -- please try again." }, 500, { "Cache-Control": "no-store" });
+        }
+        return json({ ok: true, action, code }, 200, { "Cache-Control": "no-store" });
+      }
 
       // The directory row goes either way, and its removal is checked
       // rather than assumed: reporting success on a takedown that left the
@@ -90589,7 +90901,7 @@ export default {
     let response;
     const startedAt = Date.now();
     const counters = (env && env.ANALYTICS)
-      ? { kvReads: 0, kvWrites: 0, kvLists: 0, d1Statements: 0, d1Batches: 0 }
+      ? { kvReads: 0, kvWrites: 0, kvLists: 0, d1Statements: 0, d1Batches: 0, kvLegacyListPuts: 0 }
       : null;
     const runEnv = counters ? instrumentEnv(env, counters) : env;
     try {
@@ -92311,6 +92623,8 @@ const MEDIA_WRITE_CHUNK = 50;       // statements per D1 batch
 const MEDIA_INSERT_ROWS = 8;        // rows per INSERT: 12 parameters each, under D1's 100
 const MEDIA_TMDB_CONCURRENCY = 6;   // a Worker keeps at most six outbound connections open at once
 const MEDIA_TMDB_LOOKUP_MAX = 200;  // titles looked up at TMDB per call, unless the caller sets maxLookups
+const MEDIA_BULK_MIN = 32;          // rows from which one statement takes them all as JSON (d1JsonChunks)
+const MEDIA_JSON_CHUNK_CHARS = 600000; // JSON per statement: under D1's 2 MB per row even at 3 bytes a character
 const MEDIA_ROW_COLUMNS = "id, kind, tmdb_id, imdb_id, tvdb_id, alt_id, title, year, resolved_at";
 
 function mediaKindOf(raw) {
@@ -92413,6 +92727,28 @@ function matchMediaRow(index, ref) {
 
 // Every media row any of these refs could be, in chunks the 100-parameter
 // limit allows. Each query walks one of 0016's unique indexes.
+// Rows for one statement to read with json_each(?), as few JSON arrays as fit
+// D1's size limits. This is how a 10,000-item list is written in a few dozen
+// queries rather than thousands: D1 allows about 1,000 per invocation, and 100
+// bound parameters per statement, but one parameter may carry a large array.
+function d1JsonChunks(rows, maxChars = MEDIA_JSON_CHUNK_CHARS) {
+  const out = [];
+  let cur = [];
+  let size = 2;
+  for (const r of rows) {
+    const text = JSON.stringify(r);
+    if (cur.length && size + text.length + 1 > maxChars) {
+      out.push("[" + cur.join(",") + "]");
+      cur = [];
+      size = 2;
+    }
+    cur.push(text);
+    size += text.length + 1;
+  }
+  if (cur.length) out.push("[" + cur.join(",") + "]");
+  return out;
+}
+
 async function lookupMediaRows(env, refs) {
   const imdb = new Set();
   const tmdbByKind = { movie: new Set(), series: new Set() };
@@ -92424,18 +92760,25 @@ async function lookupMediaRows(env, refs) {
     if (ref.altId && altByKind[ref.kind]) altByKind[ref.kind].add(ref.altId);
   }
   const queries = [];
-  const chunked = (values, fn) => {
-    const all = [...values];
-    for (let i = 0; i < all.length; i += MEDIA_LOOKUP_CHUNK) fn(all.slice(i, i + MEDIA_LOOKUP_CHUNK));
-  };
   const marks = (n) => new Array(n).fill("?").join(", ");
-  chunked(imdb, (ids) => queries.push(env.DB.prepare(
-    `SELECT ${MEDIA_ROW_COLUMNS} FROM media WHERE imdb_id IN (${marks(ids.length)})`).bind(...ids)));
+  // A few ids go in IN (...); many go in as one JSON array each statement.
+  const lookup = (values, where, lead) => {
+    const all = [...values];
+    if (all.length > MEDIA_LOOKUP_CHUNK) {
+      for (const chunk of d1JsonChunks(all)) {
+        queries.push(env.DB.prepare(`SELECT ${MEDIA_ROW_COLUMNS} FROM media WHERE ${where} IN (SELECT value FROM json_each(?))`).bind(...lead, chunk));
+      }
+      return;
+    }
+    for (let i = 0; i < all.length; i += MEDIA_LOOKUP_CHUNK) {
+      const ids = all.slice(i, i + MEDIA_LOOKUP_CHUNK);
+      queries.push(env.DB.prepare(`SELECT ${MEDIA_ROW_COLUMNS} FROM media WHERE ${where} IN (${marks(ids.length)})`).bind(...lead, ...ids));
+    }
+  };
+  lookup(imdb, "imdb_id", []);
   for (const kind of ["movie", "series"]) {
-    chunked(tmdbByKind[kind], (ids) => queries.push(env.DB.prepare(
-      `SELECT ${MEDIA_ROW_COLUMNS} FROM media WHERE kind = ? AND tmdb_id IN (${marks(ids.length)})`).bind(kind, ...ids)));
-    chunked(altByKind[kind], (ids) => queries.push(env.DB.prepare(
-      `SELECT ${MEDIA_ROW_COLUMNS} FROM media WHERE kind = ? AND alt_id IN (${marks(ids.length)})`).bind(kind, ...ids)));
+    lookup(tmdbByKind[kind], "kind = ? AND tmdb_id", [kind]);
+    lookup(altByKind[kind], "kind = ? AND alt_id", [kind]);
   }
   const byId = new Map();
   for (const q of queries) {
@@ -92623,17 +92966,29 @@ async function resolveMediaBatch(env, inputs, opts = {}) {
   // Several rows per statement: D1 allows about 1,000 queries per
   // invocation, and a large list brings hundreds of new titles at once.
   inserted.sort((a, b) => Number(b.resolved) - Number(a.resolved));
-  for (let i = 0; i < inserted.length; i += MEDIA_INSERT_ROWS) {
-    const rows = inserted.slice(i, i + MEDIA_INSERT_ROWS);
-    const args = [];
-    for (const c of rows) {
-      args.push(c.kind, c.tmdbId || null, c.imdbId || null, c.tvdbId || null, c.altId || null, c.title || null, c.year || null,
-        c.posterPath, c.backdropPath, c.resolved ? now : null, now, now);
+  const insertRow = (c) => [c.kind, c.tmdbId || null, c.imdbId || null, c.tvdbId || null, c.altId || null, c.title || null, c.year || null,
+    c.posterPath || null, c.backdropPath || null, c.resolved ? now : null, now, now];
+  if (inserted.length >= MEDIA_BULK_MIN) {
+    // Many new titles (a big list's first save): as JSON, a few statements.
+    for (const chunk of d1JsonChunks(inserted.map(insertRow))) {
+      writes.push(env.DB.prepare(
+        `INSERT INTO media (kind, tmdb_id, imdb_id, tvdb_id, alt_id, title, year, poster_path, backdrop_path, resolved_at, created_at, updated_at)
+         SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'), json_extract(value, '$[3]'),
+           json_extract(value, '$[4]'), json_extract(value, '$[5]'), json_extract(value, '$[6]'), json_extract(value, '$[7]'),
+           json_extract(value, '$[8]'), json_extract(value, '$[9]'), json_extract(value, '$[10]'), json_extract(value, '$[11]')
+         FROM json_each(?) WHERE true ON CONFLICT DO NOTHING`
+      ).bind(chunk));
     }
-    writes.push(env.DB.prepare(
-      `INSERT INTO media (kind, tmdb_id, imdb_id, tvdb_id, alt_id, title, year, poster_path, backdrop_path, resolved_at, created_at, updated_at)
-       VALUES ${rows.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ")} ON CONFLICT DO NOTHING`
-    ).bind(...args));
+  } else {
+    for (let i = 0; i < inserted.length; i += MEDIA_INSERT_ROWS) {
+      const rows = inserted.slice(i, i + MEDIA_INSERT_ROWS);
+      const args = [];
+      for (const c of rows) args.push(...insertRow(c));
+      writes.push(env.DB.prepare(
+        `INSERT INTO media (kind, tmdb_id, imdb_id, tvdb_id, alt_id, title, year, poster_path, backdrop_path, resolved_at, created_at, updated_at)
+         VALUES ${rows.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ")} ON CONFLICT DO NOTHING`
+      ).bind(...args));
+    }
   }
   for (let i = 0; i < writes.length; i += MEDIA_WRITE_CHUNK) {
     await env.DB.batch(writes.slice(i, i + MEDIA_WRITE_CHUNK));
@@ -93484,14 +93839,17 @@ async function replaceListSections(env, accountId, sections) {
 // ownerId null: the legacy anonymous lists.
 async function retireDeletedListCopies(env, ownerId, aliveIds, recon) {
   const { results } = await env.DB.prepare(
-    "SELECT id, legacy_id FROM lists WHERE owner_account_id IS ? AND legacy_id IS NOT NULL AND deleted_at IS NULL"
+    "SELECT id, public_id, legacy_id FROM lists WHERE owner_account_id IS ? AND legacy_id IS NOT NULL AND deleted_at IS NULL"
   ).bind(ownerId).all();
   const now = Date.now();
   for (const r of results || []) {
     if (aliveIds.has(r.legacy_id)) continue;
+    // Its likes go too: a list made again at the same address must not
+    // inherit them (the legacy delete drops the like ledger).
     await env.DB.batch([
-      env.DB.prepare("UPDATE lists SET deleted_at = ?, legacy_hash = NULL WHERE id = ?").bind(now, r.id),
+      env.DB.prepare("UPDATE lists SET deleted_at = ?, legacy_hash = NULL, like_count = 0 WHERE id = ?").bind(now, r.id),
       env.DB.prepare("DELETE FROM lists_fts2 WHERE rowid = ?").bind(r.id),
+      env.DB.prepare("DELETE FROM likes WHERE target_type = 'list' AND target_id = ?").bind(r.public_id),
     ]);
     recon.lists.removed++;
   }
@@ -93501,6 +93859,9 @@ async function retireDeletedListCopies(env, ownerId, aliveIds, recon) {
 // account's job row holds where to resume. A failure is recorded on the
 // account's row and the run moves on, so one bad record cannot stop the rest.
 async function backfillAccountLists(env, account, budget) {
+  // With FF_V2_LISTS_ONLY the legacy store is behind v2: copying from it
+  // would undo changes, and retire lists it never had. Never.
+  if (isV2ListsOnly(env)) return { finished: true, failed: false, skipped: true };
   const key = `${LISTS_BACKFILL_TYPE}:acct:${account.id}`;
   // Once reads are on v2 an account whose copy has finished is never copied
   // again: v2 is what people see, and writes keep it in step (34_). One whose
@@ -93640,6 +94001,11 @@ function listsBackfillLimit(value, min, max) {
 // account again; maxOps / maxItems / maxLookups -- a smaller step (tests use
 // these to force a copy across many steps).
 async function runListsBackfillStep(env, opts = {}) {
+  // With FF_V2_LISTS_ONLY the legacy store is no longer written, so it is
+  // behind v2 and there is nothing left to copy from it.
+  if (isV2ListsOnly(env)) {
+    return { ok: false, error: "FF_V2_LISTS_ONLY is on: the old storage is no longer written, so there is nothing to copy from it." };
+  }
   const now = Date.now();
   await env.DB.prepare(
     "INSERT INTO jobs (type, dedupe_key, status, run_after, progress_json, created_at, updated_at) VALUES (?, ?, 'queued', 0, '{}', ?, ?) ON CONFLICT(dedupe_key) DO NOTHING"
@@ -93734,7 +94100,7 @@ async function listsBackfillStatus(env) {
        ${sum("likes.legacy")} AS likes_legacy, ${sum("likes.voters")} AS likes_voters, ${sum("likes.keptFromCount")} AS likes_kept
      FROM jobs WHERE type = ? AND account_id IS NOT NULL GROUP BY status`
   ).bind(LISTS_BACKFILL_TYPE).all();
-  const accounts = { done: 0, running: 0, failed: 0 };
+  const accounts = { done: 0, running: 0, failed: 0, queued: 0 };
   const totals = {
     lists: { legacy: 0, copied: 0, unchanged: 0, missing: 0, removed: 0 },
     items: { legacy: 0, copied: 0, unusable: 0, duplicates: 0, carried: 0, stubs: 0 },
@@ -93761,6 +94127,7 @@ async function listsBackfillStatus(env) {
   const progress = run ? run.progress || {} : {};
   return {
     ok: true,
+    listsOnly: isV2ListsOnly(env),
     run: run ? {
       phase: progress.phase || "not started", accountsTotal: progress.accountsTotal || 0, accountsDone: progress.accountsDone || 0,
       startedAt: progress.startedAt || null, updatedAt: progress.updatedAt || null, finishedAt: progress.finishedAt || null,
@@ -94573,6 +94940,9 @@ const LISTS_SEARCH_LIMIT = 50;
 let listsDirectoryCopyCache = { db: null, at: 0, finished: false };
 
 function isV2ListsReadEnabled(env) {
+  // FF_V2_LISTS_ONLY (P3b-9) implies it: with nothing else written, v2 is
+  // the only thing worth reading.
+  if (isV2ListsOnly(env)) return true;
   const v = env ? env.FF_V2_LISTS_READ : undefined;
   return v === "1" || v === "true" || v === true;
 }
@@ -94580,6 +94950,7 @@ function isV2ListsReadEnabled(env) {
 // Has the copy of every account's lists finished? A yes is kept a minute per
 // isolate; a no is asked again, so the switch happens as the copy finishes.
 async function v2ListsCopyFinished(env) {
+  if (isV2ListsOnly(env)) return true;
   const c = listsDirectoryCopyCache;
   if (c.finished && c.db === env.DB && Date.now() - c.at < 60000) return true;
   const row = await env.DB.prepare("SELECT status FROM jobs WHERE dedupe_key = ?").bind(LISTS_BACKFILL_RUN_KEY).first();
@@ -94695,7 +95066,9 @@ async function v2PublicListsResponse(env, url) {
     if (!(await v2ListsCopyFinished(env))) return null;
     page = await v2PublicListPage(env, { sort, limit, offset, cursor });
   } catch (e) {
-    console.error("v2 directory failed, using the legacy directory:", e);
+    console.error("v2 directory failed:", e);
+    // With FF_V2_LISTS_ONLY the legacy directory is behind: say so instead.
+    if (isV2ListsOnly(env)) return json({ ok: false, error: "The list directory isn't available right now." }, 503);
     return null;
   }
   if (page.error) return json({ ok: false, error: page.error }, 400);
@@ -94716,7 +95089,8 @@ async function v2SearchListsResponse(env, url, target, uncapped) {
     const rows = await v2SearchPublicLists(env, target, uncapped ? PUBLIC_INDEX_MAX_ROWS : LISTS_SEARCH_LIMIT);
     return json({ ok: true, lists: rows.map((r) => v2SearchEntry(r, url.origin)) }, 200, { "Cache-Control": "public, max-age=60" });
   } catch (e) {
-    console.error("v2 list search failed, using the legacy search:", e);
+    console.error("v2 list search failed:", e);
+    if (isV2ListsOnly(env)) return json({ ok: false, error: "List search isn't available right now." }, 503);
     return null;
   }
 }
@@ -94746,8 +95120,8 @@ async function v2SearchListsResponse(env, url, target, uncapped) {
 
 const LISTS_V2_READY_TTL_MS = 60000;
 const LISTS_V2_CATALOG_TTL_MS = 300000;
-const LISTS_V2_MIRROR_ITEMS_MAX = 1500;       // bigger lists are left to the bounded backfill
-const LISTS_V2_MIRROR_STATEMENTS_MAX = 600;   // row changes one mirror may write in its one batch
+const LISTS_V2_MIRROR_ITEMS_MAX = PUBLISHED_LIST_ITEMS_MAX; // the most a list can hold: the bulk statements carry it
+const LISTS_V2_MIRROR_STATEMENTS_MAX = 600;   // statements one save may write in its one batch
 const LISTS_V2_MIRROR_LOOKUPS = 25;           // TMDB lookups a save may spend; the rest become stubs
 const LISTS_V2_UPDATE_ROWS = 19;              // rows per CASE UPDATE: 5 parameters each
 const LISTS_V2_LIST_COLUMNS = "id, public_id, slug, name, kind, media_type, visibility, item_count, like_count, source_ref, source_json, synced_at, position, version, created_at, updated_at, deleted_at";
@@ -94797,7 +95171,10 @@ async function listsV2Ready(env, username) {
   try {
     const account = await listsV2Account(env, username);
     let ready = false;
-    if (account) {
+    if (account && isV2ListsOnly(env)) {
+      // v2 is the only store: there is nothing else to read.
+      ready = true;
+    } else if (account) {
       const job = await env.DB.prepare("SELECT status FROM jobs WHERE dedupe_key = ?").bind(listsV2JobKey(account.id)).first();
       ready = Boolean(job && job.status === "done");
     }
@@ -94837,6 +95214,7 @@ async function listsV2MigrateOnRead(env, username) {
 // under way -- marks the job dirty, so that copy goes round again rather than
 // finishing without this change, and a finished copy goes back to 'queued'.
 async function markListsV2Dirty(env, account) {
+  if (isV2ListsOnly(env)) return;
   forgetListsV2Ready(account.username);
   try {
     await env.DB.prepare(
@@ -94849,6 +95227,7 @@ async function markListsV2Dirty(env, account) {
 }
 
 async function markListsV2Stale(env, account) {
+  if (isV2ListsOnly(env)) return;
   forgetListsV2Ready(account.username);
   try {
     await env.DB.prepare("UPDATE jobs SET status = 'queued', updated_at = ? WHERE dedupe_key = ? AND status = 'done'")
@@ -94934,7 +95313,9 @@ function listsV2DashboardEntry(slug, data, includeItems, origin, username) {
 // The Watchlist, which stays on the legacy store (see the top of this file):
 // its list record, or the tracking blob's copy when it was never saved as one.
 async function listsV2LegacyWatchlist(env, username) {
-  const record = await readLegacyCreatorList(env, username, "watchlist");
+  // With FF_V2_LISTS_ONLY the Watchlist is written to v2 like any list (see
+  // listsV2WriteRecord), so it is read from there too.
+  const record = isV2ListsOnly(env) ? await listsV2Record(env, username, "watchlist") : await readLegacyCreatorList(env, username, "watchlist");
   if (record) return { record, fromTracking: false };
   const trackingRaw = env.CONFIGS ? await env.CONFIGS.get(`creatorsynctracking:${username}`) : null;
   if (!trackingRaw) return null;
@@ -94945,6 +95326,18 @@ async function listsV2LegacyWatchlist(env, username) {
     }
   } catch {}
   return null;
+}
+
+// The dashboard order: the lists by position, with the sections (shelves)
+// placed among them.
+function listsV2OrderOf(rows, sections) {
+  const seq = [
+    ...(rows || []).map((r) => ({ slug: r.slug, position: r.position, list: 0 })),
+    ...(sections || []).map((s) => ({ slug: s.target, position: s.position, list: 1 })),
+  ].sort((a, b) => a.position - b.position || a.list - b.list);
+  const order = [];
+  for (const e of seq) if (!order.includes(e.slug)) order.push(e.slug);
+  return order;
 }
 
 // /api/creator/lists from v2: the same payload, paging, version and
@@ -94966,12 +95359,7 @@ async function listsV2DashboardResponse(env, url, auth, body) {
       "SELECT target, position FROM account_list_prefs WHERE account_id = ? AND pref = 'section'"
     ).bind(account.id).all();
     const byslug = new Map((rows || []).map((r) => [r.slug, r]));
-    const seq = [
-      ...(rows || []).map((r) => ({ slug: r.slug, position: r.position, list: 0 })),
-      ...(sections || []).map((s) => ({ slug: s.target, position: s.position, list: 1 })),
-    ].sort((a, b) => a.position - b.position || a.list - b.list);
-    const order = [];
-    for (const e of seq) if (!order.includes(e.slug)) order.push(e.slug);
+    const order = listsV2OrderOf(rows, sections);
 
     // The Watchlist from the legacy store. Saved as a list, it is a list; one
     // the copy has not seen yet goes at the end, where the legacy route's
@@ -95073,7 +95461,7 @@ async function listsV2ItemsResponse(env, auth, slugs) {
 }
 
 async function listsV2PublicRow(env, username, slug) {
-  if (String(slug || "").toLowerCase() === "watchlist") return null;
+  if (String(slug || "").toLowerCase() === "watchlist" && !isV2ListsOnly(env)) return null;
   const r = await listsV2Ready(env, username);
   if (!r || !r.ready || !r.account) return null;
   const row = await env.DB.prepare(
@@ -95202,34 +95590,72 @@ function listsV2RenumberStatement(env, listId) {
   ).bind(listId, listId);
 }
 
+// The statements for a plan. A few rows go as bound values; many go as JSON
+// in a few statements each (d1JsonChunks), so replacing most of a 10,000-item
+// list is a few dozen statements, not thousands.
 function listsV2DiffStatements(env, listId, plan) {
   const stmts = [];
-  for (let i = 0; i < plan.deletes.length; i += MEDIA_LOOKUP_CHUNK) {
-    const part = plan.deletes.slice(i, i + MEDIA_LOOKUP_CHUNK);
-    stmts.push(env.DB.prepare(`DELETE FROM list_items WHERE id IN (${part.map(() => "?").join(", ")})`).bind(...part));
+  if (plan.deletes.length > MEDIA_LOOKUP_CHUNK) {
+    for (const chunk of d1JsonChunks(plan.deletes)) {
+      stmts.push(env.DB.prepare("DELETE FROM list_items WHERE id IN (SELECT value FROM json_each(?))").bind(chunk));
+    }
+  } else if (plan.deletes.length) {
+    stmts.push(env.DB.prepare(`DELETE FROM list_items WHERE id IN (${plan.deletes.map(() => "?").join(", ")})`).bind(...plan.deletes));
   }
-  for (let i = 0; i < plan.inserts.length; i += LISTS_BACKFILL_ITEM_ROWS) {
-    const part = plan.inserts.slice(i, i + LISTS_BACKFILL_ITEM_ROWS);
-    const args = [];
-    for (const r of part) args.push(listId, r.mediaId, r.season, r.episode, r.position, r.addedAt, null, r.extra);
-    stmts.push(env.DB.prepare(
-      `INSERT OR IGNORE INTO list_items (list_id, media_id, season, episode, position, added_at, note, extra_json)
-       VALUES ${part.map(() => "(?, ?, ?, ?, ?, ?, ?, ?)").join(", ")}`
-    ).bind(...args));
+
+  if (plan.inserts.length >= MEDIA_BULK_MIN) {
+    for (const chunk of d1JsonChunks(plan.inserts.map((r) => [r.mediaId, r.season, r.episode, r.position, r.addedAt, r.extra]))) {
+      stmts.push(env.DB.prepare(
+        `INSERT OR IGNORE INTO list_items (list_id, media_id, season, episode, position, added_at, note, extra_json)
+         SELECT ?, json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'), json_extract(value, '$[3]'),
+           json_extract(value, '$[4]'), NULL, json_extract(value, '$[5]')
+         FROM json_each(?)`
+      ).bind(listId, chunk));
+    }
+  } else {
+    for (let i = 0; i < plan.inserts.length; i += LISTS_BACKFILL_ITEM_ROWS) {
+      const part = plan.inserts.slice(i, i + LISTS_BACKFILL_ITEM_ROWS);
+      const args = [];
+      for (const r of part) args.push(listId, r.mediaId, r.season, r.episode, r.position, r.addedAt, null, r.extra);
+      stmts.push(env.DB.prepare(
+        `INSERT OR IGNORE INTO list_items (list_id, media_id, season, episode, position, added_at, note, extra_json)
+         VALUES ${part.map(() => "(?, ?, ?, ?, ?, ?, ?, ?)").join(", ")}`
+      ).bind(...args));
+    }
   }
-  for (let i = 0; i < plan.updates.length; i += LISTS_V2_UPDATE_ROWS) {
-    const part = plan.updates.slice(i, i + LISTS_V2_UPDATE_ROWS);
-    const args = [];
-    for (const u of part) args.push(u.id, u.position);
-    for (const u of part) args.push(u.id, u.extra);
-    for (const u of part) args.push(u.id);
-    stmts.push(env.DB.prepare(
-      `UPDATE list_items SET position = CASE id ${part.map(() => "WHEN ? THEN ?").join(" ")} END,
-         extra_json = CASE id ${part.map(() => "WHEN ? THEN ?").join(" ")} END
-       WHERE id IN (${part.map(() => "?").join(", ")})`
-    ).bind(...args));
+
+  if (plan.updates.length >= MEDIA_BULK_MIN) {
+    for (const chunk of d1JsonChunks(plan.updates.map((u) => [u.id, u.position, u.extra]))) {
+      stmts.push(env.DB.prepare(
+        `UPDATE list_items SET position = j.position, extra_json = j.extra
+         FROM (SELECT json_extract(value, '$[0]') AS id, json_extract(value, '$[1]') AS position, json_extract(value, '$[2]') AS extra FROM json_each(?)) AS j
+         WHERE list_items.id = j.id`
+      ).bind(chunk));
+    }
+  } else {
+    for (let i = 0; i < plan.updates.length; i += LISTS_V2_UPDATE_ROWS) {
+      const part = plan.updates.slice(i, i + LISTS_V2_UPDATE_ROWS);
+      const args = [];
+      for (const u of part) args.push(u.id, u.position);
+      for (const u of part) args.push(u.id, u.extra);
+      for (const u of part) args.push(u.id);
+      stmts.push(env.DB.prepare(
+        `UPDATE list_items SET position = CASE id ${part.map(() => "WHEN ? THEN ?").join(" ")} END,
+           extra_json = CASE id ${part.map(() => "WHEN ? THEN ?").join(" ")} END
+         WHERE id IN (${part.map(() => "?").join(", ")})`
+      ).bind(...args));
+    }
   }
   return stmts;
+}
+
+async function listsV2FrontPosition(env, accountId) {
+  const row = await env.DB.prepare(
+    `SELECT min(p) AS p FROM (
+       SELECT min(position) AS p FROM lists WHERE owner_account_id = ? AND deleted_at IS NULL
+       UNION ALL SELECT min(position) FROM account_list_prefs WHERE account_id = ? AND pref = 'section')`
+  ).bind(accountId, accountId).first();
+  return row && row.p != null ? Math.floor(row.p) - 1 : 0;
 }
 
 async function listsV2NextPosition(env, accountId) {
@@ -95242,28 +95668,40 @@ async function listsV2NextPosition(env, accountId) {
 }
 
 // Brings one list's v2 copy in line with its legacy record, which the route
-// has just written: its details, and its items by diff. A list that is gone
-// from the legacy store is marked deleted. The list's items and its
-// legacy_hash change in one batch, so v2 never shows half a save.
+// has just written.
 async function syncLegacyListIntoV2(env, account, slug) {
-  const legacy = await readLegacyCreatorList(env, account.username, slug);
+  return applyLegacyRecordToV2(env, account, slug, await readLegacyCreatorList(env, account.username, slug));
+}
+
+// A deleted list's row: out of search, and its likes gone with it, as the
+// legacy delete drops the list's like ledger -- a list made again at the same
+// address later must not inherit them.
+function listsV2RetireStatements(env, account, row) {
+  return [
+    env.DB.prepare("UPDATE lists SET deleted_at = ?, legacy_hash = NULL, like_count = 0, version = version + 1 WHERE id = ?").bind(Date.now(), row.id),
+    env.DB.prepare("DELETE FROM lists_fts2 WHERE rowid = ?").bind(row.id),
+    env.DB.prepare("DELETE FROM likes WHERE target_type = 'list' AND target_id = ?").bind(row.public_id),
+    accountVersionStatement(env, account.id),
+  ];
+}
+
+// Brings one list's v2 copy in line with a legacy-shaped record: its details,
+// and its items by diff. No record: the list is marked deleted. The list's
+// items and its legacy_hash change in one batch, so v2 never shows half a
+// save. With FF_V2_LISTS_ONLY the record is the one the route has just built
+// (34_: listsV2WriteRecord), and nothing else holds it.
+async function applyLegacyRecordToV2(env, account, slug, legacy) {
   const target = creatorListTarget(account, slug, 0);
   const existing = await env.DB.prepare(
-    "SELECT id, legacy_hash, position, deleted_at FROM lists WHERE legacy_id = ?"
+    "SELECT id, public_id, legacy_hash, position, deleted_at FROM lists WHERE legacy_id = ?"
   ).bind(target.legacyId).first();
   const live = existing && existing.deleted_at == null;
   if (!legacy) {
-    if (live) {
-      await env.DB.batch([
-        env.DB.prepare("UPDATE lists SET deleted_at = ?, legacy_hash = NULL, version = version + 1 WHERE id = ?").bind(Date.now(), existing.id),
-        env.DB.prepare("DELETE FROM lists_fts2 WHERE rowid = ?").bind(existing.id),
-        accountVersionStatement(env, account.id),
-      ]);
-    }
-    return;
+    if (live) await env.DB.batch(listsV2RetireStatements(env, account, existing));
+    return { deleted: !!live };
   }
   const hash = await legacyListHash(legacy);
-  if (live && existing.legacy_hash === hash) return;
+  if (live && existing.legacy_hash === hash) return { unchanged: true };
   if (legacy.items.length > LISTS_V2_MIRROR_ITEMS_MAX) throw new ListsV2TooLarge(`${slug}: ${legacy.items.length} items`);
 
   const name = String(legacy.name || "").trim() || slug;
@@ -95273,7 +95711,9 @@ async function syncLegacyListIntoV2(env, account, slug) {
   if (live) {
     listId = existing.id;
   } else {
-    target.position = await listsV2NextPosition(env, account.id);
+    // A new Watchlist goes first (save-tracking puts it at the front of the
+    // legacy order), any other new list last (as the legacy save appends it).
+    target.position = slug === "watchlist" ? await listsV2FrontPosition(env, account.id) : await listsV2NextPosition(env, account.id);
     await upsertLegacyListRow(env, target, legacy, { name, mediaType, visibility, position: target.position });
     listId = (await env.DB.prepare("SELECT id FROM lists WHERE legacy_id = ?").bind(target.legacyId).first()).id;
   }
@@ -95281,11 +95721,10 @@ async function syncLegacyListIntoV2(env, account, slug) {
   const { ids } = await resolveMediaBatch(env, legacy.items, { kind: mediaKindForList(mediaType), maxLookups: LISTS_V2_MIRROR_LOOKUPS });
   const mediaIds = [...new Set(ids.filter((id) => id != null))];
   const media = new Map();
-  for (let i = 0; i < mediaIds.length; i += MEDIA_LOOKUP_CHUNK) {
-    const part = mediaIds.slice(i, i + MEDIA_LOOKUP_CHUNK);
+  for (const chunk of d1JsonChunks(mediaIds)) {
     const { results } = await env.DB.prepare(
-      `SELECT id, kind, imdb_id, tmdb_id, alt_id, title, year, poster_path FROM media WHERE id IN (${part.map(() => "?").join(", ")})`
-    ).bind(...part).all();
+      "SELECT id, kind, imdb_id, tmdb_id, alt_id, title, year, poster_path FROM media WHERE id IN (SELECT value FROM json_each(?))"
+    ).bind(chunk).all();
     for (const r of results || []) media.set(r.id, r);
   }
   const fallbackAdded = legacy.createdAt || legacy.updatedAt || Date.now();
@@ -95332,6 +95771,7 @@ async function syncLegacyListIntoV2(env, account, slug) {
     accountVersionStatement(env, account.id),
   );
   await env.DB.batch(stmts);
+  return { written: true };
 }
 
 // Does this list's v2 copy already match its legacy record (a save that
@@ -95348,7 +95788,7 @@ async function listsV2CopyMatches(env, account, slug) {
 // After a legacy route has written these lists: mirror each into v2, under
 // the account's lease (see claimListsAccountLease).
 async function listsV2MirrorLists(env, username, slugs) {
-  if (!listsV2Usable(env) || !Array.isArray(slugs) || !slugs.length) return;
+  if (!listsV2Usable(env) || isV2ListsOnly(env) || !Array.isArray(slugs) || !slugs.length) return;
   let account = null;
   let leased = false;
   try {
@@ -95371,11 +95811,46 @@ async function listsV2MirrorLists(env, username, slugs) {
   }
 }
 
-// After /api/creator/lists/reorder: the lists take their places in the new
-// order, and every other entry (the shelves) is kept as a section. Lists the
-// order leaves out go after it, in the order they had.
+// The lists take their places in a new dashboard order, and every other
+// entry (the shelves) is kept as a section. Lists the order leaves out go
+// after it, in the order they had. The caller holds the account's lease.
+async function listsV2ApplyOrder(env, account, order) {
+  const { results } = await env.DB.prepare(
+    "SELECT id, slug FROM lists WHERE owner_account_id = ? AND deleted_at IS NULL ORDER BY position, id"
+  ).bind(account.id).all();
+  const bySlug = new Map((results || []).map((r) => [r.slug, r.id]));
+  const places = [];
+  const sections = [];
+  const placed = new Set();
+  order.forEach((slug, i) => {
+    const id = bySlug.get(slug);
+    if (id != null && !placed.has(id)) {
+      places.push([id, i]);
+      placed.add(id);
+    } else if (id == null) {
+      sections.push([slug, i]);
+    }
+  });
+  let next = order.length;
+  for (const r of results || []) if (!placed.has(r.id)) places.push([r.id, next++]);
+  const stmts = [];
+  for (let i = 0; i < places.length; i += 30) {
+    const part = places.slice(i, i + 30);
+    const args = [];
+    for (const [id, p] of part) args.push(id, p);
+    for (const [id] of part) args.push(id);
+    stmts.push(env.DB.prepare(
+      `UPDATE lists SET position = CASE id ${part.map(() => "WHEN ? THEN ?").join(" ")} END WHERE id IN (${part.map(() => "?").join(", ")})`
+    ).bind(...args));
+  }
+  stmts.push(accountVersionStatement(env, account.id));
+  for (let i = 0; i < stmts.length; i += MEDIA_WRITE_CHUNK) await env.DB.batch(stmts.slice(i, i + MEDIA_WRITE_CHUNK));
+  await replaceListSections(env, account.id, sections);
+}
+
+// After /api/creator/lists/reorder wrote the legacy order: the same in v2.
 async function listsV2MirrorOrder(env, username, order) {
-  if (!listsV2Usable(env) || !Array.isArray(order)) return;
+  if (!listsV2Usable(env) || isV2ListsOnly(env) || !Array.isArray(order)) return;
   let account = null;
   let leased = false;
   try {
@@ -95386,37 +95861,7 @@ async function listsV2MirrorOrder(env, username, order) {
       await markListsV2Dirty(env, account);
       return;
     }
-    const { results } = await env.DB.prepare(
-      "SELECT id, slug FROM lists WHERE owner_account_id = ? AND deleted_at IS NULL ORDER BY position, id"
-    ).bind(account.id).all();
-    const bySlug = new Map((results || []).map((r) => [r.slug, r.id]));
-    const places = [];
-    const sections = [];
-    const placed = new Set();
-    order.forEach((slug, i) => {
-      const id = bySlug.get(slug);
-      if (id != null && !placed.has(id)) {
-        places.push([id, i]);
-        placed.add(id);
-      } else if (id == null) {
-        sections.push([slug, i]);
-      }
-    });
-    let next = order.length;
-    for (const r of results || []) if (!placed.has(r.id)) places.push([r.id, next++]);
-    const stmts = [];
-    for (let i = 0; i < places.length; i += 30) {
-      const part = places.slice(i, i + 30);
-      const args = [];
-      for (const [id, p] of part) args.push(id, p);
-      for (const [id] of part) args.push(id);
-      stmts.push(env.DB.prepare(
-        `UPDATE lists SET position = CASE id ${part.map(() => "WHEN ? THEN ?").join(" ")} END WHERE id IN (${part.map(() => "?").join(", ")})`
-      ).bind(...args));
-    }
-    stmts.push(accountVersionStatement(env, account.id));
-    for (let i = 0; i < stmts.length; i += MEDIA_WRITE_CHUNK) await env.DB.batch(stmts.slice(i, i + MEDIA_WRITE_CHUNK));
-    await replaceListSections(env, account.id, sections);
+    await listsV2ApplyOrder(env, account, order);
   } catch (e) {
     noteListsV2Error(env, e, "order mirror");
     if (account) await markListsV2Stale(env, account);
@@ -95428,7 +95873,7 @@ async function listsV2MirrorOrder(env, username, order) {
 // After /api/lists/like changed the legacy ledger: the same like in v2.
 // Returns the list's v2 like count, or null when v2 has no such list.
 async function listsV2MirrorLike(env, ownerUsername, slug, voterUsername, liking) {
-  if (!listsV2Usable(env)) return null;
+  if (!listsV2Usable(env) || isV2ListsOnly(env)) return null;
   try {
     const list = await env.DB.prepare("SELECT public_id FROM lists WHERE legacy_id = ? AND deleted_at IS NULL")
       .bind(`c:${ownerUsername}:${slug}`).first();
@@ -95448,7 +95893,7 @@ async function listsV2MirrorLike(env, ownerUsername, slug, voterUsername, liking
 
 // After /api/lists/like-external: the same like in v2, under the same hash.
 async function listsV2MirrorExternalLike(env, hash, voterUsername, liking) {
-  if (!listsV2Usable(env)) return;
+  if (!listsV2Usable(env) || isV2ListsOnly(env)) return;
   try {
     const voterAccount = await listsV2Account(env, voterUsername);
     if (!voterAccount) return;
@@ -95463,21 +95908,243 @@ async function listsV2MirrorExternalLike(env, hash, voterUsername, liking) {
 // After purgeCreatorData (account reset, deletion, the pre-create sweep):
 // the account's v2 lists go too, with their likes, search rows and sections.
 // Its copy starts again from nothing the next time it is read.
-async function listsV2PurgeAccount(env, username) {
+//
+// opts.keepTombstones (an account reset with FF_V2_LISTS_ONLY): the lists'
+// rows stay, marked deleted and emptied, because with no legacy tombstones
+// written they are how the account's other browsers learn to drop their
+// copies (the dashboard's deletedSlugs).
+async function listsV2PurgeAccount(env, username, opts = {}) {
   if (!listsV2Usable(env)) return;
   try {
     const account = await listsV2Account(env, username);
     if (!account) return;
-    await env.DB.batch([
+    const owned = "SELECT id FROM lists WHERE owner_account_id = ?";
+    const stmts = [
       env.DB.prepare("DELETE FROM likes WHERE target_type = 'list' AND target_id IN (SELECT public_id FROM lists WHERE owner_account_id = ?)").bind(account.id),
-      env.DB.prepare("DELETE FROM lists_fts2 WHERE rowid IN (SELECT id FROM lists WHERE owner_account_id = ?)").bind(account.id),
-      env.DB.prepare("DELETE FROM lists WHERE owner_account_id = ?").bind(account.id),
+      env.DB.prepare(`DELETE FROM lists_fts2 WHERE rowid IN (${owned})`).bind(account.id),
+    ];
+    if (opts.keepTombstones) {
+      stmts.push(
+        env.DB.prepare(`DELETE FROM list_items WHERE list_id IN (${owned})`).bind(account.id),
+        env.DB.prepare(
+          "UPDATE lists SET deleted_at = ?, legacy_hash = NULL, like_count = 0, item_count = 0, version = version + 1 WHERE owner_account_id = ? AND deleted_at IS NULL"
+        ).bind(Date.now(), account.id),
+        accountVersionStatement(env, account.id),
+      );
+    } else {
+      stmts.push(env.DB.prepare("DELETE FROM lists WHERE owner_account_id = ?").bind(account.id));
+    }
+    stmts.push(
       env.DB.prepare("DELETE FROM account_list_prefs WHERE account_id = ? AND pref = 'section'").bind(account.id),
       env.DB.prepare("DELETE FROM jobs WHERE dedupe_key = ?").bind(listsV2JobKey(account.id)),
-    ]);
+    );
+    await env.DB.batch(stmts);
     forgetListsV2Ready(username);
   } catch (e) {
     noteListsV2Error(env, e, "account purge");
+  }
+}
+
+// --- FF_V2_LISTS_ONLY (P3b-9): v2 as the only list store ------------------------
+//
+// With the flag on, the legacy list routes keep their request and response
+// shapes but read and write only v2: /api/creator/lists/save builds its record
+// as before and hands it to listsV2WriteRecord instead of writing KV and
+// creator_lists; a delete, a reorder, a Watchlist change on a tracking save or
+// a playback ping, likewise. A write that cannot finish fails the request, so
+// the browser keeps its copy and tries again: there is no copy job to catch up
+// any more.
+
+// One of an account's lists as the legacy record (readLegacyCreatorList's
+// shape), from v2. null: no such live list.
+async function listsV2RecordFor(env, account, slug) {
+  const row = await env.DB.prepare(
+    `SELECT ${LISTS_V2_LIST_COLUMNS} FROM lists WHERE owner_account_id = ? AND slug = ? AND deleted_at IS NULL`
+  ).bind(account.id, String(slug || "").toLowerCase()).first();
+  if (!row) return null;
+  const entries = await listsV2EntryRows(env, [row.id]);
+  return listsV2LegacyRecord(row, (entries.get(row.id) || []).map(legacyItemFromEntryRow));
+}
+
+async function listsV2Record(env, username, slug) {
+  const account = await listsV2Account(env, username);
+  return account ? listsV2RecordFor(env, account, slug) : null;
+}
+
+// What getCreatorList returns (the record as JSON, with its slug), from v2.
+async function listsV2GetRecordRaw(env, account, slug) {
+  const rec = await listsV2RecordFor(env, account, slug);
+  return rec ? JSON.stringify({ slug, ...rec }) : null;
+}
+
+// The dashboard order, for the save route's slug checks.
+async function listsV2OrderSlugs(env, account) {
+  const { results: rows } = await env.DB.prepare(
+    "SELECT slug, position FROM lists WHERE owner_account_id = ? AND deleted_at IS NULL ORDER BY position, id"
+  ).bind(account.id).all();
+  const { results: sections } = await env.DB.prepare(
+    "SELECT target, position FROM account_list_prefs WHERE account_id = ? AND pref = 'section'"
+  ).bind(account.id).all();
+  return listsV2OrderOf(rows, sections);
+}
+
+async function listsV2SlugTaken(env, account, slug) {
+  const row = await env.DB.prepare("SELECT 1 AS yes FROM lists WHERE owner_account_id = ? AND slug = ? AND deleted_at IS NULL")
+    .bind(account.id, String(slug || "").toLowerCase()).first();
+  return Boolean(row);
+}
+
+// Runs fn holding the account's lease (claimListsAccountLease), waiting a
+// little for another save of the same account to finish.
+async function listsV2WithLease(env, account, fn) {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    if (await claimListsAccountLease(env, account.id, 30000)) {
+      try {
+        return await fn();
+      } finally {
+        await releaseListsAccountLease(env, account.id).catch(() => {});
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  throw new Error("lists v2: another save of these lists is still running");
+}
+
+// A record as readLegacyCreatorList returns one: nulls, not missing keys, so
+// every field binds and the hash matches the one a mirror would compute.
+function listsV2NormalRecord(rec) {
+  return {
+    name: rec.name,
+    type: rec.type,
+    visibility: rec.visibility,
+    items: Array.isArray(rec.items) ? rec.items : [],
+    createdAt: Number(rec.createdAt) || 0,
+    updatedAt: Number.isFinite(rec.updatedAt) ? rec.updatedAt : null,
+    likes: Number(rec.likes) || 0,
+    sourceUrl: typeof rec.sourceUrl === "string" && rec.sourceUrl ? rec.sourceUrl : null,
+    synced: !!rec.synced,
+    lastSyncedAt: Number.isFinite(rec.lastSyncedAt) ? rec.lastSyncedAt : null,
+    baseItemIds: Array.isArray(rec.baseItemIds) ? rec.baseItemIds : null,
+  };
+}
+
+// Saves one list, as the route built it. Throws when it could not.
+async function listsV2WriteRecord(env, account, slug, record) {
+  return listsV2WithLease(env, account, () => applyLegacyRecordToV2(env, account, slug, listsV2NormalRecord(record)));
+}
+
+// deleteCreatorLists with FF_V2_LISTS_ONLY: { deleted, missing, ok }, as the
+// legacy one answers.
+async function listsV2DeleteRecords(env, username, slugs) {
+  const out = { deleted: [], missing: [], ok: true };
+  try {
+    const account = await listsV2Account(env, username);
+    if (!account) {
+      out.missing.push(...slugs);
+      return out;
+    }
+    await listsV2WithLease(env, account, async () => {
+      for (const slug of slugs) {
+        const r = await applyLegacyRecordToV2(env, account, slug, null);
+        (r.deleted ? out.deleted : out.missing).push(slug);
+      }
+    });
+  } catch (e) {
+    console.error("lists v2: delete failed", e);
+    out.ok = false;
+  }
+  return out;
+}
+
+// /api/creator/lists/reorder with FF_V2_LISTS_ONLY. Throws when it could not.
+async function listsV2WriteOrder(env, username, order) {
+  const account = await listsV2Account(env, username);
+  if (!account) throw new Error("lists v2: no account for " + username);
+  await listsV2WithLease(env, account, () => listsV2ApplyOrder(env, account, order));
+}
+
+// /api/lists/like with FF_V2_LISTS_ONLY: { likes } or { error, status }. A
+// private list answers exactly as a missing one does, as the legacy route
+// does (it must not tell anyone which private slugs exist).
+async function listsV2LikeList(env, ownerUsername, slug, voterUsername, liking) {
+  const owner = await listsV2Account(env, ownerUsername);
+  const row = owner ? await env.DB.prepare(
+    "SELECT public_id, visibility FROM lists WHERE owner_account_id = ? AND slug = ? AND deleted_at IS NULL"
+  ).bind(owner.id, String(slug || "").toLowerCase()).first() : null;
+  if (!row || row.visibility !== "public") return { error: "List not found.", status: 404 };
+  const voterAccount = await listsV2Account(env, voterUsername);
+  if (!voterAccount) return { error: "Could not process this request.", status: 400 };
+  const target = { type: "list", targetId: row.public_id, table: "lists", key: "public_id" };
+  const voter = `acct:${voterAccount.id}`;
+  if ((await hasLiked(env, target, voter)) !== liking) await env.DB.batch(likeWriteStatements(env, target, voter, liking, voterAccount.id));
+  return { likes: await likeTargetCount(env, target) };
+}
+
+// /api/lists/like-external with FF_V2_LISTS_ONLY: the count, under the hash
+// the legacy route used.
+async function listsV2LikeExternal(env, hash, voterUsername, liking) {
+  const voterAccount = await listsV2Account(env, voterUsername);
+  if (!voterAccount) throw new Error("lists v2: no account for " + voterUsername);
+  const target = { type: "external", targetId: hash, table: null, key: null };
+  const voter = `acct:${voterAccount.id}`;
+  if ((await hasLiked(env, target, voter)) !== liking) await env.DB.batch(likeWriteStatements(env, target, voter, liking, voterAccount.id));
+  return likeTargetCount(env, target);
+}
+
+// /admin/api/creator-lists with FF_V2_LISTS_ONLY: an account's lists as the
+// panel lists them, from v2, in dashboard order.
+async function listsV2AdminLists(env, username, origin) {
+  const account = await listsV2Account(env, username);
+  if (!account) return [];
+  const { results } = await env.DB.prepare(
+    `SELECT slug, name, media_type, item_count, like_count, visibility, updated_at, source_json FROM lists
+     WHERE owner_account_id = ? AND deleted_at IS NULL ORDER BY position, id`
+  ).bind(account.id).all();
+  return (results || []).map((r) => ({
+    slug: r.slug,
+    name: r.name || "(untitled)",
+    type: r.media_type || "mixed",
+    itemCount: r.item_count || 0,
+    likes: r.like_count || 0,
+    visibility: effectiveListVisibility(r.visibility),
+    updatedAt: listsV2UpdatedAt(r) || null,
+    inOrder: true,
+    url: `${origin}/lists/${username}/${r.slug}`,
+  }));
+}
+
+async function listsV2CountLists(env, username) {
+  const row = await env.DB.prepare(
+    "SELECT count(*) AS n FROM lists l JOIN accounts a ON a.id = l.owner_account_id WHERE a.username = ? COLLATE NOCASE AND l.deleted_at IS NULL"
+  ).bind(String(username || "")).first();
+  return Number(row && row.n) || 0;
+}
+
+// /admin/api/rebuild-search-index: lists_fts2 rebuilt from the lists, owner
+// names as listOwnerSearchName writes them. It is the recreation step after a
+// D1 export too (the export leaves full-text tables out). Returns the rows
+// indexed, or null before migration 0016.
+async function rebuildListsFts2(env) {
+  try {
+    await env.DB.prepare(
+      "CREATE VIRTUAL TABLE IF NOT EXISTS lists_fts2 USING fts5(name, description, owner_name, tokenize = 'unicode61 remove_diacritics 2')"
+    ).run();
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM lists_fts2"),
+      env.DB.prepare(
+        `INSERT INTO lists_fts2 (rowid, name, description, owner_name)
+         SELECT l.id, l.name, l.description,
+           CASE WHEN trim(coalesce(a.display_name, '')) != '' AND lower(trim(a.display_name)) != lower(a.username)
+             THEN trim(a.display_name) || ' ' || a.username ELSE a.username END
+         FROM lists l JOIN accounts a ON a.id = l.owner_account_id
+         WHERE l.visibility = 'public' AND l.deleted_at IS NULL`
+      ),
+    ]);
+    const row = await env.DB.prepare("SELECT count(*) AS n FROM lists_fts2").first();
+    return Number(row && row.n) || 0;
+  } catch (e) {
+    noteListsV2Error(env, e, "search rebuild");
+    return null;
   }
 }
 
@@ -95959,4 +96626,76 @@ async function backfillSharedChannels(env, run, budget) {
     st.next++;
   }
   return true;
+}
+
+// --- FF_V2_LISTS_ONLY (P3b-9): v2 as the only channel store ---------------------
+//
+// With the flag on, the /api/channel/* routes keep their shapes but read and
+// write only here: nothing goes to channelshare:, index:publicchannels,
+// creatorchannel: or the ledgers. Storing a shared channel's episodes needs
+// BLOBS then.
+
+// A share, stored. { ok } or { error, status }.
+async function channelsV2Share(env, code, record) {
+  if (!channelsV2Blobs(env)) return { error: "Sharing isn't available right now.", status: 503 };
+  const out = await writeChannelFromLegacy(env, code, record, null, null, null);
+  if (out.status === "unreadable") return { error: "That channel has nothing playable in it to share.", status: 400 };
+  return { ok: true };
+}
+
+async function channelsV2LiveRow(env, code) {
+  const row = await channelsV2Row(env, code);
+  return row && row.deleted_at == null ? row : null;
+}
+
+function channelsV2OwnerName(row) {
+  return row.owner_name || channelsV2Definition(row)["~owner"] || "";
+}
+
+// /api/channel/like: { likes } or { error, status }. Only a listed channel,
+// and the same answer for one that is not as for one that does not exist.
+async function channelsV2Like(env, code, voterUsername, liking) {
+  const row = await channelsV2LiveRow(env, code);
+  if (!row || row.visibility !== "public") return { error: "Channel not found.", status: 404 };
+  const voterAccount = await listsV2Account(env, voterUsername);
+  if (!voterAccount) return { error: "Could not process this request.", status: 400 };
+  const target = { type: "channel", targetId: code, table: "channels", key: "public_code" };
+  const voter = `acct:${voterAccount.id}`;
+  if ((await hasLiked(env, target, voter)) !== liking) await env.DB.batch(likeWriteStatements(env, target, voter, liking, voterAccount.id));
+  return { likes: await likeTargetCount(env, target) };
+}
+
+// /api/channel/added: counted once per account, for a listed channel.
+async function channelsV2Added(env, code, adderUsername) {
+  const row = await channelsV2LiveRow(env, code);
+  if (!row || row.visibility !== "public") return false;
+  const adder = await listsV2Account(env, adderUsername);
+  if (!adder) return false;
+  const res = await env.DB.batch([
+    env.DB.prepare("INSERT OR IGNORE INTO likes (target_type, target_id, voter, created_at) VALUES ('channel_add', ?, ?, ?)")
+      .bind(code, `acct:${adder.id}`, Date.now()),
+    env.DB.prepare("UPDATE channels SET add_count = add_count + changes() WHERE public_code = ?").bind(code),
+  ]);
+  return Number(res && res[0] && res[0].meta && res[0].meta.changes) > 0;
+}
+
+// Out of Explore Channels, its link still working: /api/channel/unpublish
+// (with the owner's name, checked as the legacy route checks it) and the
+// admin "unlist" (no name). { ok } or { error, status }.
+async function channelsV2Unlist(env, code, username) {
+  const row = await channelsV2LiveRow(env, code);
+  if (!row) return { error: "No such channel.", status: 404 };
+  const owner = channelsV2OwnerName(row);
+  if (username != null && owner && owner !== username) return { error: "That channel belongs to someone else.", status: 403 };
+  await env.DB.prepare("UPDATE channels SET visibility = 'unlisted', updated_at = ? WHERE id = ?").bind(Date.now(), row.id).run();
+  return { ok: true };
+}
+
+// The admin view of every stored channel, listed or not (?scope=all).
+async function channelsV2AllRows(env, limit, offset) {
+  const { results } = await env.DB.prepare(
+    `SELECT ${CHANNELS_V2_ROW_COLUMNS} FROM channels c LEFT JOIN accounts a ON a.id = c.owner_account_id
+     WHERE c.deleted_at IS NULL ORDER BY c.id LIMIT ? OFFSET ?`
+  ).bind(limit + 1, offset).all();
+  return results || [];
 }

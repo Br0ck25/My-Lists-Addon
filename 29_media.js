@@ -31,6 +31,8 @@ const MEDIA_WRITE_CHUNK = 50;       // statements per D1 batch
 const MEDIA_INSERT_ROWS = 8;        // rows per INSERT: 12 parameters each, under D1's 100
 const MEDIA_TMDB_CONCURRENCY = 6;   // a Worker keeps at most six outbound connections open at once
 const MEDIA_TMDB_LOOKUP_MAX = 200;  // titles looked up at TMDB per call, unless the caller sets maxLookups
+const MEDIA_BULK_MIN = 32;          // rows from which one statement takes them all as JSON (d1JsonChunks)
+const MEDIA_JSON_CHUNK_CHARS = 600000; // JSON per statement: under D1's 2 MB per row even at 3 bytes a character
 const MEDIA_ROW_COLUMNS = "id, kind, tmdb_id, imdb_id, tvdb_id, alt_id, title, year, resolved_at";
 
 function mediaKindOf(raw) {
@@ -133,6 +135,28 @@ function matchMediaRow(index, ref) {
 
 // Every media row any of these refs could be, in chunks the 100-parameter
 // limit allows. Each query walks one of 0016's unique indexes.
+// Rows for one statement to read with json_each(?), as few JSON arrays as fit
+// D1's size limits. This is how a 10,000-item list is written in a few dozen
+// queries rather than thousands: D1 allows about 1,000 per invocation, and 100
+// bound parameters per statement, but one parameter may carry a large array.
+function d1JsonChunks(rows, maxChars = MEDIA_JSON_CHUNK_CHARS) {
+  const out = [];
+  let cur = [];
+  let size = 2;
+  for (const r of rows) {
+    const text = JSON.stringify(r);
+    if (cur.length && size + text.length + 1 > maxChars) {
+      out.push("[" + cur.join(",") + "]");
+      cur = [];
+      size = 2;
+    }
+    cur.push(text);
+    size += text.length + 1;
+  }
+  if (cur.length) out.push("[" + cur.join(",") + "]");
+  return out;
+}
+
 async function lookupMediaRows(env, refs) {
   const imdb = new Set();
   const tmdbByKind = { movie: new Set(), series: new Set() };
@@ -144,18 +168,25 @@ async function lookupMediaRows(env, refs) {
     if (ref.altId && altByKind[ref.kind]) altByKind[ref.kind].add(ref.altId);
   }
   const queries = [];
-  const chunked = (values, fn) => {
-    const all = [...values];
-    for (let i = 0; i < all.length; i += MEDIA_LOOKUP_CHUNK) fn(all.slice(i, i + MEDIA_LOOKUP_CHUNK));
-  };
   const marks = (n) => new Array(n).fill("?").join(", ");
-  chunked(imdb, (ids) => queries.push(env.DB.prepare(
-    `SELECT ${MEDIA_ROW_COLUMNS} FROM media WHERE imdb_id IN (${marks(ids.length)})`).bind(...ids)));
+  // A few ids go in IN (...); many go in as one JSON array each statement.
+  const lookup = (values, where, lead) => {
+    const all = [...values];
+    if (all.length > MEDIA_LOOKUP_CHUNK) {
+      for (const chunk of d1JsonChunks(all)) {
+        queries.push(env.DB.prepare(`SELECT ${MEDIA_ROW_COLUMNS} FROM media WHERE ${where} IN (SELECT value FROM json_each(?))`).bind(...lead, chunk));
+      }
+      return;
+    }
+    for (let i = 0; i < all.length; i += MEDIA_LOOKUP_CHUNK) {
+      const ids = all.slice(i, i + MEDIA_LOOKUP_CHUNK);
+      queries.push(env.DB.prepare(`SELECT ${MEDIA_ROW_COLUMNS} FROM media WHERE ${where} IN (${marks(ids.length)})`).bind(...lead, ...ids));
+    }
+  };
+  lookup(imdb, "imdb_id", []);
   for (const kind of ["movie", "series"]) {
-    chunked(tmdbByKind[kind], (ids) => queries.push(env.DB.prepare(
-      `SELECT ${MEDIA_ROW_COLUMNS} FROM media WHERE kind = ? AND tmdb_id IN (${marks(ids.length)})`).bind(kind, ...ids)));
-    chunked(altByKind[kind], (ids) => queries.push(env.DB.prepare(
-      `SELECT ${MEDIA_ROW_COLUMNS} FROM media WHERE kind = ? AND alt_id IN (${marks(ids.length)})`).bind(kind, ...ids)));
+    lookup(tmdbByKind[kind], "kind = ? AND tmdb_id", [kind]);
+    lookup(altByKind[kind], "kind = ? AND alt_id", [kind]);
   }
   const byId = new Map();
   for (const q of queries) {
@@ -343,17 +374,29 @@ async function resolveMediaBatch(env, inputs, opts = {}) {
   // Several rows per statement: D1 allows about 1,000 queries per
   // invocation, and a large list brings hundreds of new titles at once.
   inserted.sort((a, b) => Number(b.resolved) - Number(a.resolved));
-  for (let i = 0; i < inserted.length; i += MEDIA_INSERT_ROWS) {
-    const rows = inserted.slice(i, i + MEDIA_INSERT_ROWS);
-    const args = [];
-    for (const c of rows) {
-      args.push(c.kind, c.tmdbId || null, c.imdbId || null, c.tvdbId || null, c.altId || null, c.title || null, c.year || null,
-        c.posterPath, c.backdropPath, c.resolved ? now : null, now, now);
+  const insertRow = (c) => [c.kind, c.tmdbId || null, c.imdbId || null, c.tvdbId || null, c.altId || null, c.title || null, c.year || null,
+    c.posterPath || null, c.backdropPath || null, c.resolved ? now : null, now, now];
+  if (inserted.length >= MEDIA_BULK_MIN) {
+    // Many new titles (a big list's first save): as JSON, a few statements.
+    for (const chunk of d1JsonChunks(inserted.map(insertRow))) {
+      writes.push(env.DB.prepare(
+        `INSERT INTO media (kind, tmdb_id, imdb_id, tvdb_id, alt_id, title, year, poster_path, backdrop_path, resolved_at, created_at, updated_at)
+         SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'), json_extract(value, '$[3]'),
+           json_extract(value, '$[4]'), json_extract(value, '$[5]'), json_extract(value, '$[6]'), json_extract(value, '$[7]'),
+           json_extract(value, '$[8]'), json_extract(value, '$[9]'), json_extract(value, '$[10]'), json_extract(value, '$[11]')
+         FROM json_each(?) WHERE true ON CONFLICT DO NOTHING`
+      ).bind(chunk));
     }
-    writes.push(env.DB.prepare(
-      `INSERT INTO media (kind, tmdb_id, imdb_id, tvdb_id, alt_id, title, year, poster_path, backdrop_path, resolved_at, created_at, updated_at)
-       VALUES ${rows.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ")} ON CONFLICT DO NOTHING`
-    ).bind(...args));
+  } else {
+    for (let i = 0; i < inserted.length; i += MEDIA_INSERT_ROWS) {
+      const rows = inserted.slice(i, i + MEDIA_INSERT_ROWS);
+      const args = [];
+      for (const c of rows) args.push(...insertRow(c));
+      writes.push(env.DB.prepare(
+        `INSERT INTO media (kind, tmdb_id, imdb_id, tvdb_id, alt_id, title, year, poster_path, backdrop_path, resolved_at, created_at, updated_at)
+         VALUES ${rows.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ")} ON CONFLICT DO NOTHING`
+      ).bind(...args));
+    }
   }
   for (let i = 0; i < writes.length; i += MEDIA_WRITE_CHUNK) {
     await env.DB.batch(writes.slice(i, i + MEDIA_WRITE_CHUNK));

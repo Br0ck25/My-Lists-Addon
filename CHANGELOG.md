@@ -21,7 +21,15 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 `TOKEN_ENCRYPTION_KEY` is needed only to start moving install-link keys into encrypted storage (P3a-8, below). That move stays **off** until `INSTALL_MIGRATION_PERCENT` is set, and `docs/OPERATIONS.md` §8 gives the steps. Deploying without it changes nothing.
 
-`FF_SESSIONS`, `FF_INSTALLS`, `FF_V2_LISTS_API` and `FF_V2_LISTS_READ` stay **off** (unset). Leave the first three off until the new sign-in, install-link and list screens ship. `FF_V2_LISTS_READ` stays off until the list copy (`docs/OPERATIONS.md` §9) has finished and its report has been checked; §10 then gives the steps, and turning it off again is always safe.
+`FF_SESSIONS`, `FF_INSTALLS`, `FF_V2_LISTS_API`, `FF_V2_LISTS_READ` and `FF_V2_LISTS_ONLY` stay **off** (unset). Leave the first three off until the new sign-in, install-link and list screens ship. `FF_V2_LISTS_READ` stays off until the list copy (`docs/OPERATIONS.md` §9) has finished and its report has been checked; §10 then gives the steps, and turning it off again is always safe. `FF_V2_LISTS_ONLY` comes last and is **one-way**: only after reads have been on the new tables for a while (§11).
+
+### 🏁 The old list storage can be switched off (P3b-9)
+
+- **A new switch, `FF_V2_LISTS_ONLY` (off), makes the new tables the only store** for lists, likes and shared channels. The old storage stops being written, and everything reads from the new tables. Every answer stays the same: the tests run the same 60-odd requests with and without it and compare every answer.
+- **It is one-way**, so it comes last: after reads have been on the new tables for a while and the copy shows nothing left (`docs/OPERATIONS.md` §11).
+- **Big lists save in one go:** a list of up to 10,000 titles is written to the new tables in one request (a few dozen database queries rather than thousands).
+- **Fixed on the way:** a list made again after being deleted no longer inherits the old one's likes in the new tables; titles a playback ping takes off the Watchlist now reach them; a new Watchlist is placed first, as before; and a catalog row pointing at a creator's list page reads the new tables when the read switch is on.
+- A new number in the request metrics counts writes to the old list storage, so switching it off can be checked: it should stay at 0.
 
 ### 📺 Shared channels move to the new tables (P3b-8)
 

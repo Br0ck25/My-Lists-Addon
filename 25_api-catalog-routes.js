@@ -738,7 +738,7 @@ async function handleFetch(request, env, ctx) {
         const s = decodeURIComponent(parts[2]).toLowerCase();
         // From v2 when reads are there (P3b-8), else the legacy map and index.
         let code = (await channelsV2CodeBySlug(env, u, s)) || "";
-        if (!code && env && env.CONFIGS) {
+        if (!code && env && env.CONFIGS && !isV2ListsOnly(env)) {
           try {
             code = (await env.CONFIGS.get(`creatorchannel:${u}:${s}`)) || "";
           } catch {}
@@ -754,7 +754,7 @@ async function handleFetch(request, env, ctx) {
           if (wantsJson) {
             try {
               let record = await channelsV2Record(env, code, { items: true });
-              if (!record) {
+              if (!record && !isV2ListsOnly(env)) {
                 const raw = await env.CONFIGS.get(`channelshare:${code}`);
                 record = raw ? JSON.parse(raw) : null;
               }
@@ -7181,7 +7181,7 @@ function generateSearchVariations(query) {
           if (!listed.has(code)) {
             // From v2 when its copy of the channel is current (P3b-8).
             let record = await channelsV2Record(env, code, { items: true });
-            if (!record) {
+            if (!record && !isV2ListsOnly(env)) {
               try {
                 const raw = await env.CONFIGS.get(`channelshare:${code}`);
                 record = raw ? JSON.parse(raw) : null;
@@ -7302,6 +7302,13 @@ function generateSearchVariations(query) {
         return json({ ok: false, error: "Sign in to like lists.", signInRequired: true }, 401);
       }
       const likeVoterName = likeAuth.username;
+
+      // FF_V2_LISTS_ONLY (P3b-9): the like is v2's alone.
+      if (isV2ListsOnly(env)) {
+        const v2 = await listsV2LikeList(env, likeUser, likeSlug, likeVoterName, !likeUnlike);
+        if (v2.error) return json({ ok: false, error: v2.error }, v2.status);
+        return json({ ok: true, likes: v2.likes, liked: !likeUnlike });
+      }
 
       // The list must actually exist before any vote is recorded --
       // otherwise a ledger (and a permanent KV key) could be created for
@@ -7430,6 +7437,10 @@ function generateSearchVariations(query) {
       const extVoterName = extAuth.username;
 
       const hash = await hashStringForKey(normalizedUrl);
+      // FF_V2_LISTS_ONLY (P3b-9): the like is v2's alone, under the same hash.
+      if (isV2ListsOnly(env)) {
+        return json({ ok: true, likes: await listsV2LikeExternal(env, hash, extVoterName, !unlike), liked: !unlike });
+      }
       const key = `externallike:${hash}`;
       const voterId = await likeVoterId(request, env, extVoterName, hash);
       if (!voterId) return json({ ok: false, error: "Could not process this request." }, 400);

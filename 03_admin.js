@@ -3031,11 +3031,13 @@ async function renderAdminDashboard(env) {
         status.textContent = 'Phase: ' + d.run.phase + (d.run.lastError ? ' (last error: ' + d.run.lastError + ')' : '') + '.';
         const t = d.totals;
         const lines = [
-          'Accounts: ' + (d.accounts.done || 0) + ' done, ' + (d.accounts.running || 0) + ' in progress, ' + (d.accounts.failed || 0) + ' failed.',
+          'Accounts: ' + (d.accounts.done || 0) + ' done, ' + (d.accounts.running || 0) + ' in progress, ' + (d.accounts.queued || 0) + ' waiting to be copied again, ' + (d.accounts.failed || 0) + ' failed.',
           'Lists: ' + t.lists.legacy + ' found, ' + t.lists.copied + ' copied, ' + t.lists.unchanged + ' unchanged since the last run, ' + t.lists.removed + ' copies of deleted lists retired, ' + t.lists.missing + ' order entries with no list behind them.',
           'Items: ' + t.items.legacy + ' in the old lists, ' + t.items.copied + ' copied, ' + (d.mismatchRate * 100).toFixed(3) + '% not carried: ' + t.items.unusable + ' with no usable id (no catalog could show them), ' + t.items.duplicates + ' listed twice' + (t.items.carried ? ', ' + t.items.carried + ' on lists copied in an earlier run' : '') + '. ' + t.items.stubs + ' titles TMDB could not place yet (kept, tried again later).',
           'Likes: ' + t.likes.legacy + ' shown before, ' + t.likes.voters + ' voters copied, ' + t.likes.keptFromCount + ' kept from the old totals with no voter on record.',
         ];
+        if (d.listsOnly) lines.unshift('FF_V2_LISTS_ONLY is on: the new tables are the only store, so there is nothing left to copy.');
+        else if (d.run.phase === 'done' && !(d.accounts.running || d.accounts.queued || d.accounts.failed)) lines.push('Every account is copied. FF_V2_LISTS_ONLY can be considered once reads have been on the new tables for a while (docs/OPERATIONS.md section 11).');
         if (d.anonymous) lines.push('Anonymous lists: ' + d.anonymous.lists.legacy + ' found, ' + d.anonymous.items.copied + ' of ' + d.anonymous.items.legacy + ' items copied.');
         if (d.external) lines.push('Likes on outside lists: ' + d.external.targets + ' lists, ' + d.external.voters + ' voters copied.');
         if (d.channels) {

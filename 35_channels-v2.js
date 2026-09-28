@@ -478,3 +478,75 @@ async function backfillSharedChannels(env, run, budget) {
   }
   return true;
 }
+
+// --- FF_V2_LISTS_ONLY (P3b-9): v2 as the only channel store ---------------------
+//
+// With the flag on, the /api/channel/* routes keep their shapes but read and
+// write only here: nothing goes to channelshare:, index:publicchannels,
+// creatorchannel: or the ledgers. Storing a shared channel's episodes needs
+// BLOBS then.
+
+// A share, stored. { ok } or { error, status }.
+async function channelsV2Share(env, code, record) {
+  if (!channelsV2Blobs(env)) return { error: "Sharing isn't available right now.", status: 503 };
+  const out = await writeChannelFromLegacy(env, code, record, null, null, null);
+  if (out.status === "unreadable") return { error: "That channel has nothing playable in it to share.", status: 400 };
+  return { ok: true };
+}
+
+async function channelsV2LiveRow(env, code) {
+  const row = await channelsV2Row(env, code);
+  return row && row.deleted_at == null ? row : null;
+}
+
+function channelsV2OwnerName(row) {
+  return row.owner_name || channelsV2Definition(row)["~owner"] || "";
+}
+
+// /api/channel/like: { likes } or { error, status }. Only a listed channel,
+// and the same answer for one that is not as for one that does not exist.
+async function channelsV2Like(env, code, voterUsername, liking) {
+  const row = await channelsV2LiveRow(env, code);
+  if (!row || row.visibility !== "public") return { error: "Channel not found.", status: 404 };
+  const voterAccount = await listsV2Account(env, voterUsername);
+  if (!voterAccount) return { error: "Could not process this request.", status: 400 };
+  const target = { type: "channel", targetId: code, table: "channels", key: "public_code" };
+  const voter = `acct:${voterAccount.id}`;
+  if ((await hasLiked(env, target, voter)) !== liking) await env.DB.batch(likeWriteStatements(env, target, voter, liking, voterAccount.id));
+  return { likes: await likeTargetCount(env, target) };
+}
+
+// /api/channel/added: counted once per account, for a listed channel.
+async function channelsV2Added(env, code, adderUsername) {
+  const row = await channelsV2LiveRow(env, code);
+  if (!row || row.visibility !== "public") return false;
+  const adder = await listsV2Account(env, adderUsername);
+  if (!adder) return false;
+  const res = await env.DB.batch([
+    env.DB.prepare("INSERT OR IGNORE INTO likes (target_type, target_id, voter, created_at) VALUES ('channel_add', ?, ?, ?)")
+      .bind(code, `acct:${adder.id}`, Date.now()),
+    env.DB.prepare("UPDATE channels SET add_count = add_count + changes() WHERE public_code = ?").bind(code),
+  ]);
+  return Number(res && res[0] && res[0].meta && res[0].meta.changes) > 0;
+}
+
+// Out of Explore Channels, its link still working: /api/channel/unpublish
+// (with the owner's name, checked as the legacy route checks it) and the
+// admin "unlist" (no name). { ok } or { error, status }.
+async function channelsV2Unlist(env, code, username) {
+  const row = await channelsV2LiveRow(env, code);
+  if (!row) return { error: "No such channel.", status: 404 };
+  const owner = channelsV2OwnerName(row);
+  if (username != null && owner && owner !== username) return { error: "That channel belongs to someone else.", status: 403 };
+  await env.DB.prepare("UPDATE channels SET visibility = 'unlisted', updated_at = ? WHERE id = ?").bind(Date.now(), row.id).run();
+  return { ok: true };
+}
+
+// The admin view of every stored channel, listed or not (?scope=all).
+async function channelsV2AllRows(env, limit, offset) {
+  const { results } = await env.DB.prepare(
+    `SELECT ${CHANNELS_V2_ROW_COLUMNS} FROM channels c LEFT JOIN accounts a ON a.id = c.owner_account_id
+     WHERE c.deleted_at IS NULL ORDER BY c.id LIMIT ? OFFSET ?`
+  ).bind(limit + 1, offset).all();
+  return results || [];
+}

@@ -280,7 +280,7 @@ No npm, no `src/` tree, no esbuild, no new test framework (D-11). Phase 2 is now
       - getCreatorList's self-repair of D1: a legacy read path v2 does not need, and a new test covers the failure it guards against;
       - the P3b-3 re-run test: a finished account is not re-copied with reads on v2, by design.
   - **Known limits, for P3b-9:**
-    - A list over 1,500 items is not mirrored on save. Its account reads the legacy store until the copy catches up: 300 items per dashboard read, 500 per admin step. P3b-9 needs a bounded path for these before the legacy writes stop.
+    - ~~A list over 1,500 items is not mirrored on save.~~ Fixed in P3b-9: large writes go as JSON in a few statements (`d1JsonChunks`), so a list of up to 10,000 items is mirrored on save in one request (tested: under 200 D1 queries).
     - Whether an account is ready is kept a minute per Worker instance. After a failed mirror, another instance may serve the older v2 copy for up to a minute. A save that met a copy under way is in the legacy store at once, but not in the directory's v2 copy until the account's next dashboard read or admin step.
     - Legacy anonymous lists (`/api/publish-list`) are not mirrored. Nothing reads their v2 copies yet; P3b-9 must copy them again first.
     - Entries with no id at all, and a title listed twice in one list, are not in v2 (the copy's report counts them), so they stop showing once reads switch. Check the report before turning the flag on.
@@ -322,7 +322,33 @@ No npm, no `src/` tree, no esbuild, no new test framework (D-11). Phase 2 is now
     - A renamed channel's old slugs resolve through the legacy map only: v2 keeps the current slug.
     - A directory row written by an older build may differ in small ways from the card v2 builds, which always comes from the current record.
     - A published channel whose directory row was lost to a race is listed by v2 but not by the legacy directory (v2 is right).
-- [ ] **P3b-9** Stop writing the legacy KV keys (`creatorlist:`, `creatorlistorder:`, `creatorliststamp:`, `creatorlistdeleted:`, `listlikevoters:`, `extlikevoters:`, `externallike:`, `index:publicchannels`, `channelshare:`, `channellikevoters:`) once reads are on v2. *Done when:* the Analytics Engine KV-write counter for these prefixes is 0.
+- [x] **P3b-9** Stop writing the legacy KV keys (`creatorlist:`, `creatorlistorder:`, `creatorliststamp:`, `creatorlistdeleted:`, `listlikevoters:`, `extlikevoters:`, `externallike:`, `index:publicchannels`, `channelshare:`, `channellikevoters:`) once reads are on v2. *Done when:* the Analytics Engine KV-write counter for these prefixes is 0. — **Status:** Done in code, behind a new flag, **`FF_V2_LISTS_ONLY`** (off). Turning it on is the owner's step, one-way, once reads have been on v2 for a while (`docs/OPERATIONS.md` §11); the production counter is read after that. Tests: "P3b-9" in `tests/lists-v2.test.mjs` (9 tests, plus 2 for the fixes below). Of the 41 faults tried, all were caught except two defensive guards no route can reach; a third survivor showed a duplicated check, which was removed. 1,495 tests pass with `FF_V2_LISTS_READ` off and on.
+  - **How it works:**
+    - **With `FF_V2_LISTS_ONLY` on, the legacy list and channel routes keep their requests and answers but read and write only v2.** The save route builds its record as before and hands it to `listsV2WriteRecord` instead of KV and `creator_lists`. The same goes for delete, reorder, the Watchlist on tracking saves and playback pings, likes (lists, outside lists, channels), channel share, like, added, unpublish and the admin takedown.
+    - **Nothing is put under the ten legacy prefixes**, nor under `creatorchannel:` and `channeladdvoters:`. Nothing is inserted or updated in `creator_lists`, `list_likes`, `lists_fts` or `list_tombstones`. Removing a deleted list's leftover legacy record is allowed: it writes nothing. The lists stamp other devices poll is kept in D1 (`creators.lists_stamp`) only.
+    - **Reads come only from v2**, with no fallback to the legacy store, which would be stale. That covers every account (no copy needed), the Watchlist, the dashboard order in `/sync/load`, catalog rows and the Explore Channels directory. A v2 read or write that fails answers 503, so the browser keeps its copy and retries; before, it would have been served out-of-date data.
+    - **Writes to one account are serialised** by the same lease the copy used; a save waits up to about 3 s for another save of that account to finish.
+    - **Large lists:** writes of many rows go as one JSON value per statement (`d1JsonChunks`, `json_each`). A 10,000-item save takes under 200 D1 queries, where it took thousands. This also removed P3b-7's 1,500-item mirror limit.
+    - **Account reset** keeps the lists' rows as deleted markers (items gone), since no legacy tombstones are written; deleting the account removes them.
+    - **The copy refuses to run** (there is nothing current to copy from), and so do `/admin/api/migrate-d1` and the per-account copy (a guard, even though no route reaches it).
+    - **The admin tools read v2:** the creator list browser, the delete tool's "remaining" count, and the channel views, listed and all.
+    - **The search index rebuild** now rebuilds `lists_fts2` too, in both modes; it is the recreation step after a D1 export. With the flag on, it rebuilds only `lists_fts2`.
+    - **The measure:** the Analytics Engine data point gains an eighth number, puts to the legacy list prefixes. It is tested to be 0 with the flag on for every list, like and channel route, and above 0 without it.
+    - **The flag implies `FF_V2_LISTS_READ`.**
+  - **Done-when, as far as it can be met in code:** the same script of about 60 requests runs against two copies of the site, one dual-written (P3b-7/8) and one with the flag. It covers saves (with sync settings), edits with a version check (and a stale one refused), reorder with a shelf, likes and unlikes, outside-list likes, delete and re-create, the Watchlist from tracking saves and a playback ping, and a shared channel's whole life. It also reads the dashboard, list contents, page, directory, search, catalog row, `/sync/meta` and `/sync/load` after each stage. Every answer is identical, and the flagged copy made no legacy write at all.
+  - **Found and fixed on the way (dual mode, P3b-7):**
+    - A list made again at a deleted list's address inherited the old list's likes in v2. A deleted copy now drops its likes (as the legacy delete drops its ledger).
+    - A playback ping that took a title off the Watchlist was not mirrored.
+    - A Watchlist made by a tracking save went last in v2 but first in the legacy order.
+    - A catalog row pointing at a creator's list page link still read the legacy store with `FF_V2_LISTS_READ` on.
+  - **Where it differs from the task, and why:**
+    - **Behind a flag, not unconditional.** Stopping the legacy writes is one-way: after it, turning `FF_V2_LISTS_READ` off would read stale lists. So it ships off, and the owner turns it on only after the copy is complete and reads have been on v2 for a while (OPERATIONS §11).
+    - **The legacy D1 list tables stop too**, not only the KV keys, for the same reason. The per-list delete and account purge still remove what the legacy store holds of a user's lists.
+  - **Left after P3b-9:**
+    - The legacy keys and tables are not deleted; Phase 7 removes them. The old anonymous lists (`publishedlist:`, not on the list) are still served from the legacy store, as are their ledgers.
+    - With the flag on, a renamed channel's old address stops resolving; its current one works (the legacy slug map is no longer read).
+    - `/admin/api/backfill-trending` still reads the legacy lists (a one-off tool); with the flag on, what it reads is out of date.
+    - Channels an account syncs between its own browsers stay in their sync blob (P3b-8).
 
 ## Phase 3c — Activity
 

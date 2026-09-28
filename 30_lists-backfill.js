@@ -784,14 +784,17 @@ async function replaceListSections(env, accountId, sections) {
 // ownerId null: the legacy anonymous lists.
 async function retireDeletedListCopies(env, ownerId, aliveIds, recon) {
   const { results } = await env.DB.prepare(
-    "SELECT id, legacy_id FROM lists WHERE owner_account_id IS ? AND legacy_id IS NOT NULL AND deleted_at IS NULL"
+    "SELECT id, public_id, legacy_id FROM lists WHERE owner_account_id IS ? AND legacy_id IS NOT NULL AND deleted_at IS NULL"
   ).bind(ownerId).all();
   const now = Date.now();
   for (const r of results || []) {
     if (aliveIds.has(r.legacy_id)) continue;
+    // Its likes go too: a list made again at the same address must not
+    // inherit them (the legacy delete drops the like ledger).
     await env.DB.batch([
-      env.DB.prepare("UPDATE lists SET deleted_at = ?, legacy_hash = NULL WHERE id = ?").bind(now, r.id),
+      env.DB.prepare("UPDATE lists SET deleted_at = ?, legacy_hash = NULL, like_count = 0 WHERE id = ?").bind(now, r.id),
       env.DB.prepare("DELETE FROM lists_fts2 WHERE rowid = ?").bind(r.id),
+      env.DB.prepare("DELETE FROM likes WHERE target_type = 'list' AND target_id = ?").bind(r.public_id),
     ]);
     recon.lists.removed++;
   }
@@ -801,6 +804,9 @@ async function retireDeletedListCopies(env, ownerId, aliveIds, recon) {
 // account's job row holds where to resume. A failure is recorded on the
 // account's row and the run moves on, so one bad record cannot stop the rest.
 async function backfillAccountLists(env, account, budget) {
+  // With FF_V2_LISTS_ONLY the legacy store is behind v2: copying from it
+  // would undo changes, and retire lists it never had. Never.
+  if (isV2ListsOnly(env)) return { finished: true, failed: false, skipped: true };
   const key = `${LISTS_BACKFILL_TYPE}:acct:${account.id}`;
   // Once reads are on v2 an account whose copy has finished is never copied
   // again: v2 is what people see, and writes keep it in step (34_). One whose
@@ -940,6 +946,11 @@ function listsBackfillLimit(value, min, max) {
 // account again; maxOps / maxItems / maxLookups -- a smaller step (tests use
 // these to force a copy across many steps).
 async function runListsBackfillStep(env, opts = {}) {
+  // With FF_V2_LISTS_ONLY the legacy store is no longer written, so it is
+  // behind v2 and there is nothing left to copy from it.
+  if (isV2ListsOnly(env)) {
+    return { ok: false, error: "FF_V2_LISTS_ONLY is on: the old storage is no longer written, so there is nothing to copy from it." };
+  }
   const now = Date.now();
   await env.DB.prepare(
     "INSERT INTO jobs (type, dedupe_key, status, run_after, progress_json, created_at, updated_at) VALUES (?, ?, 'queued', 0, '{}', ?, ?) ON CONFLICT(dedupe_key) DO NOTHING"
@@ -1034,7 +1045,7 @@ async function listsBackfillStatus(env) {
        ${sum("likes.legacy")} AS likes_legacy, ${sum("likes.voters")} AS likes_voters, ${sum("likes.keptFromCount")} AS likes_kept
      FROM jobs WHERE type = ? AND account_id IS NOT NULL GROUP BY status`
   ).bind(LISTS_BACKFILL_TYPE).all();
-  const accounts = { done: 0, running: 0, failed: 0 };
+  const accounts = { done: 0, running: 0, failed: 0, queued: 0 };
   const totals = {
     lists: { legacy: 0, copied: 0, unchanged: 0, missing: 0, removed: 0 },
     items: { legacy: 0, copied: 0, unusable: 0, duplicates: 0, carried: 0, stubs: 0 },
@@ -1061,6 +1072,7 @@ async function listsBackfillStatus(env) {
   const progress = run ? run.progress || {} : {};
   return {
     ok: true,
+    listsOnly: isV2ListsOnly(env),
     run: run ? {
       phase: progress.phase || "not started", accountsTotal: progress.accountsTotal || 0, accountsDone: progress.accountsDone || 0,
       startedAt: progress.startedAt || null, updatedAt: progress.updatedAt || null, finishedAt: progress.finishedAt || null,
