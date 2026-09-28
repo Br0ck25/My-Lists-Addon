@@ -9,8 +9,10 @@
 //   2. the legacy anonymous lists (publishedlist:user:*, published_lists),
 //      ownerless and unlisted: D-6 keeps their links working and keeps them
 //      out of the directory;
-//   3. likes on outside lists (externallike:*, extlikevoters:*, list_likes).
-// Channels are copied with P3b-8, which designs their R2 pools.
+//   3. likes on outside lists (externallike:*, extlikevoters:*, list_likes);
+//   4. shared and published channels (channelshare:*, the Explore Channels
+//      index, their like and add ledgers), with their episodes in R2 when
+//      BLOBS is bound (35_channels-v2.js, P3b-8).
 //
 // It COPIES. The legacy keys and tables are only read: the env it works
 // through (listsBackfillEnv) cannot write KV at all, and refuses any D1 write
@@ -18,8 +20,8 @@
 // P3b-7) the legacy store is the truth, so this can be run again at any time:
 // a re-run copies only the lists whose content changed (lists.legacy_hash),
 // refreshes order and likes, and marks as deleted the copies of lists that
-// have since been deleted. Once reads move to v2 it must never refresh an
-// account whose copy has finished -- P3b-7 adds that check with the flag.
+// have since been deleted. Once reads move to v2 it never refreshes an
+// account whose copy has finished (P3b-7).
 //
 // It runs only when an operator asks, from /admin -> Maintenance, one bounded
 // step per request; the page keeps asking until it is done. A step stays well
@@ -40,7 +42,7 @@ const LISTS_BACKFILL_ITEM_ROWS = 12;      // rows per INSERT into list_items: 8 
 const LISTS_BACKFILL_LIKE_ROWS = 24;      // rows per INSERT into likes: 4 parameters each
 const LISTS_BACKFILL_SAMPLES = 5;         // examples kept of each kind of mismatch
 const LISTS_BACKFILL_LEASE_MS = 90000;    // one step at a time
-const LISTS_BACKFILL_V2_TABLES = new Set(["media", "lists", "list_items", "likes", "lists_fts2", "jobs", "account_list_prefs"]);
+const LISTS_BACKFILL_V2_TABLES = new Set(["media", "lists", "list_items", "likes", "lists_fts2", "jobs", "account_list_prefs", "channels"]);
 // Entries the dashboard's order can hold that are shelves, not list records.
 // The Watchlist can be either, so it is read like any list.
 const LISTS_BACKFILL_SHELF_SLUGS = new Set(["continue-watching", "watch-history", "airing-next"]);
@@ -50,13 +52,19 @@ const LISTS_BACKFILL_SHELF_SLUGS = new Set(["continue-watching", "watch-history"
 const LEGACY_ITEM_DEFAULT_KEYS = ["id", "type", "name", "year", "poster", "seasonNum", "episodeNum"];
 const LEGACY_ITEM_POSTER_BASE = "https://image.tmdb.org/t/p/w500";
 
-// The env every backfill step works through: counts each D1 statement and
-// KV read against the step's budget, has no KV write methods at all, and
-// refuses any D1 write that is not to a v2 table. This is what makes "it only
-// copies" a property of the code rather than a promise about it.
+// The env every backfill step works through: counts each D1 statement, KV
+// read and R2 call against the step's budget, has no KV write methods at all,
+// refuses any D1 write that is not to a v2 table, and lets R2 be used only
+// under channels/ (the channel pools). This is what makes "it only copies" a
+// property of the code rather than a promise about it.
 function listsBackfillEnv(env, meter) {
   const db = env.DB;
   const kv = env.CONFIGS;
+  const blobs = env.BLOBS && typeof env.BLOBS.put === "function" ? env.BLOBS : null;
+  const blobGuard = (key) => {
+    if (!String(key).startsWith("channels/")) throw new Error("lists backfill: refusing to touch R2 key " + key);
+    meter.ops++;
+  };
   const guard = (sql) => {
     const s = String(sql);
     if (/^\s*(?:DROP|ALTER|CREATE)\b/i.test(s)) throw new Error("lists backfill: refusing a schema change");
@@ -79,6 +87,11 @@ function listsBackfillEnv(env, meter) {
     CONFIGS: kv ? {
       get: (...args) => { meter.ops++; return kv.get(...args); },
       list: (...args) => { meter.ops++; return kv.list(...args); },
+    } : undefined,
+    BLOBS: blobs ? {
+      get: (key, ...args) => { blobGuard(key); return blobs.get(key, ...args); },
+      put: (key, ...args) => { blobGuard(key); return blobs.put(key, ...args); },
+      delete: (key) => { blobGuard(key); return blobs.delete(key); },
     } : undefined,
   };
 }
@@ -985,6 +998,10 @@ async function runListsBackfillStep(env, opts = {}) {
         run.phase = "external";
       } else if (run.phase === "external") {
         if (!(await backfillExternalLikes(menv, run, budget))) break;
+        run.phase = "channels";
+      } else if (run.phase === "channels") {
+        // Shared and published channels (35_channels-v2.js), P3b-8.
+        if (!(await backfillSharedChannels(menv, run, budget))) break;
         run.phase = "done";
         run.finishedAt = Date.now();
       }
@@ -1054,6 +1071,7 @@ async function listsBackfillStatus(env) {
     mismatchRate: totals.items.legacy > 0 ? lost / totals.items.legacy : 0,
     anonymous: progress.anon ? finishListsRecon(progress.anon.recon) : null,
     external: progress.ext ? progress.ext.recon : null,
+    channels: progress.chan ? progress.chan.recon : null,
     failed: (failed || []).map((r) => ({ accountId: r.account_id, error: r.last_error })),
     worst: (worst || []).map((r) => {
       let samples = null;

@@ -41,6 +41,16 @@ database_id = "YOUR_DATABASE_ID"
 binding = "ANALYTICS"
 dataset = "mylists_events"
 
+# --- R2 (recommended from Phase 3b) ----------------------------------------------
+# Shared channels' episode lists, one object per version
+# (channels/{code}/{version}.json, P3b-8). Without it the channel rows are
+# still written and episodes are read from KV.
+# Dashboard: R2 -> Create bucket mylists-blobs, then Worker -> Settings ->
+# Bindings -> Add -> R2 bucket, name BLOBS, bucket mylists-blobs.
+[[r2_buckets]]
+binding = "BLOBS"
+bucket_name = "mylists-blobs"
+
 # --- Plan ---------------------------------------------------------------------
 # The hosted Worker runs on Workers Paid (10,000 outbound fetches and 30 s CPU
 # per invocation). The old per-invocation budgets that let it fit the Free

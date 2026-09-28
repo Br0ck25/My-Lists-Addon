@@ -38,7 +38,7 @@ Set these in the dashboard: Worker → **Settings → Bindings → Add**.
 | `DB` | D1 database (`my-lists-db`) | **Yes** | Accounts, lists, likes, tracking, directory, search, counters | In use |
 | `ANALYTICS` | Analytics Engine dataset (`mylists_events`) | Recommended | Per-request route, status and storage-operation counts, used to measure the next phases | **Add now.** The code writes to it when present and skips it otherwise. |
 | `DB_ACTIVITY` | D1 database (`mylists-activity`) | Later (Phase 3c) | Watch events and progress | Not yet |
-| `BLOBS` | R2 bucket (`mylists-blobs`) | Later (Phase 3b/5) | Posters, channel pools, exports, D1 backups | Not yet |
+| `BLOBS` | R2 bucket (`mylists-blobs`) | Recommended (Phase 3b) | Shared channels' episode lists (P3b-8); later posters, exports and D1 backups | **Add with Phase 3b.** Create the bucket (R2 → Create bucket → `mylists-blobs`), then bind it. Without it, shared channels still get their rows and their episodes are read from KV. |
 | `JOBS` | Queue producer (`mylists-jobs`) | Later (Phase 5) | Background jobs | Not yet. The queue **consumer** is configured on the queue: Queues → `mylists-jobs` → Settings → Add consumer → this Worker. |
 
 The owner confirmed on 2026-09-27 that this account's dashboard offers Queues, R2 and Analytics Engine bindings.
@@ -65,7 +65,7 @@ Adding a binding before the code that uses it is harmless. Removing a binding th
 - `NEW_ON_STREAMING_ENGINE` (optional; default `justwatch`).
 - `FF_SESSIONS` (optional): `1` turns on session sign-in for the `/api/creator/*` routes (P3a-6). **Leave unset** until the new sign-in screens ship.
 - `FF_INSTALLS` (optional): `1` turns on `/api/installs`, where a signed-in account creates, renames, rotates and removes `/i/{token}` install links (P3a-8). **Leave unset** until the screens for it ship. Links that already exist are served either way.
-- `FF_V2_LISTS_READ` (optional): `1` makes the site read lists from the new list tables: the dashboard, list pages, catalogs, the directory and search (P3b-6, P3b-7). **Leave unset** until the copy (§9) has finished; §10 has the steps. Turning it off again is always safe, because every change is still written to the old storage.
+- `FF_V2_LISTS_READ` (optional): `1` makes the site read lists and shared channels from the new tables: the dashboard, list pages, catalogs, the directory and search, shared channels and Explore Channels (P3b-6 to P3b-8). **Leave unset** until the copy (§9) has finished; §10 has the steps. Turning it off again is always safe, because every change is still written to the old storage.
 - `FF_V2_LISTS_API` (optional): `1` turns on `/api/lists`, the item-level list API, and `/api/likes`, the likes API, over the new list tables (P3b-4, P3b-5). **Leave unset.** What these APIs write goes to the new tables only. Until a later release stops writing the old storage (P3b-9), turning `FF_V2_LISTS_READ` off, or running the copy again, would lose it.
 - `INSTALL_MIGRATION_PERCENT` (optional, `0` to `100`): the share of existing install links whose keys and tokens move into encrypted D1 storage the first time they are used. See §8 before setting it.
 - **Delete** these retired variables if they are still set: `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET`, `CRON_SUBREQUEST_BUDGET`. The code ignores them.
@@ -167,9 +167,9 @@ Undo needs the same `TOKEN_ENCRYPTION_KEY`. Without that key the moved keys cann
 
 Phase 3b moves lists, likes and channels into proper D1 tables. The first part copies every existing list into them. **It only copies.** The lists people use today are not changed, and nothing on the site reads the copies until `FF_V2_LISTS_READ` is turned on (§10). So running it changes nothing a visitor sees.
 
-From the moment migration `0016` is applied, every change to a list (a save, a delete, a new order, a like) is also written to the new tables as it happens, a few extra D1 writes each. So once the copy has finished, the new tables stay current by themselves.
+From the moment migration `0016` is applied, every change to a list or a shared channel (a save, a delete, a new order, a like, a share) is also written to the new tables as it happens, a few extra D1 writes each (and one R2 write when a shared channel's episodes change). So once the copy has finished, the new tables stay current by themselves.
 
-What it copies: every account's lists (with their order, items and likes), the old anonymous lists (kept unlisted, as D-6 decided), and likes on outside lists (MDBList, Trakt and the like). Channels come later (P3b-8).
+What it copies: every account's lists (with their order, items and likes), the old anonymous lists (kept unlisted, as D-6 decided), likes on outside lists (MDBList, Trakt and the like), and shared and published channels with their likes and adds (P3b-8). A channel's episode list goes to the `BLOBS` R2 bucket (§2); bind it before running the copy, or the episode lists stay in KV and a later *Start over* moves them.
 
 **Running it:**
 
@@ -192,18 +192,19 @@ What it copies: every account's lists (with their order, items and likes), the o
 
 ## 10. Reading lists from the new tables (P3b-7)
 
-`FF_V2_LISTS_READ` switches list reading to the new tables: the dashboard, list pages, Custom List catalog rows, the public directory and search. Every answer is meant to be the same as before; the tests compare the two. The Watchlist is still read from the old storage.
+`FF_V2_LISTS_READ` switches reading to the new tables: the dashboard, list pages, Custom List catalog rows, the public directory and search, shared channels and Explore Channels. Every answer is meant to be the same as before; the tests compare the two. The Watchlist, and the channels an account syncs between its own browsers, are still read from the old storage.
 
 **Before turning it on:**
 
-1. Migration `0016` is applied (§4), and the copy (§9) says *Done*.
+1. Migration `0016` is applied (§4), the `BLOBS` bucket is bound (§2), and the copy (§9) says *Done*.
 2. *Check results* looks right: few items not carried, and no failed accounts you have not looked at. Entries with no id at all and titles listed twice in one list are **not** in the new tables, so they stop showing when reads switch.
 
 **Turning it on:** Worker → Settings → Variables and Secrets → Add → type *Text*, name `FF_V2_LISTS_READ`, value `1`. Deploy.
 
 **What happens then:**
 
-- An account is read from the new tables once its copy has finished; the directory and search, once every account's has. Opening the dashboard finishes an account's copy on the spot if it has not finished.
+- An account is read from the new tables once its copy has finished; the directory, search and Explore Channels, once the whole copy has. Opening the dashboard finishes an account's copy on the spot if it has not finished.
+- A shared channel is read from the new tables while its copy there is current and its episode list is in R2; otherwise from the old storage.
 - Every change is still written to the old storage first, then to the new tables. If writing the new tables fails for an account, that account is read from the old storage again until its copy is refreshed (the next time its owner opens the dashboard, or the next *Copy lists*).
 - A list over 1,500 items is copied by the bounded copy rather than on save, so its account is read from the old storage until that catches up.
 - *Start over* on the copy leaves finished accounts alone while this flag is on: the new tables are what people see, and saves keep them current.

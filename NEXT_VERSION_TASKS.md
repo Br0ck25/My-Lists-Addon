@@ -214,7 +214,7 @@ No npm, no `src/` tree, no esbuild, no new test framework (D-11). Phase 2 is now
     - Re-runnable while the legacy store is the truth: `lists.legacy_hash` (added to 0016, which is not applied anywhere yet) skips unchanged lists; order and likes are refreshed; copies of lists deleted since are marked deleted and leave search.
     - Per-account reconciliation in `jobs.progress_json`: lists found, copied, unchanged, missing (an order entry with no record), retired; items in the legacy lists and copied, and why the rest were not (no usable id, listed twice), with up to five examples of each; likes before and after. `GET …/status` adds them up.
   - **Where it differs from the plan, and why:**
-    - **Channels (step 6) are left to P3b-8**, which designs where their pools live (R2) and how the directory reads them.
+    - **Channels (step 6) came with P3b-8**, as the copy's "channels" phase.
     - **`like_count` is the higher of the legacy total and the voters on record**, not the voter count alone, so no total people see goes down (D-9). The difference is reported as "kept from the old totals".
     - **Voters:** `u:<username>` becomes `acct:<id>`. A voter whose account no longer exists keeps its `u:` id, and signed-out `a:` votes are carried as they are; both still count, as today.
     - **Legacy anonymous lists are `unlisted`** (`private` if they were private): their links keep working and the directory does not show them (D-6).
@@ -245,7 +245,7 @@ No npm, no `src/` tree, no esbuild, no new test framework (D-11). Phase 2 is now
     - A request that is already as asked writes nothing. Otherwise one batch: the `INSERT OR IGNORE` or `DELETE`, then `like_count ± changes()` on the list or channel (never below 0), then the voter account's `version` (their liked set changed). Two devices liking at once move the count once (tested by running the batch twice).
     - An outside list has no row, so its count is its `likes` rows; a list's or channel's is `like_count`, which may sit above its rows (the backfill keeps higher legacy totals).
   - **Also added:** `GET /api/likes/{type}/{id}` (`{ liked, likes }`), which the pages need to draw a heart.
-  - **Since P3b-7** `/api/lists/like` and `/like-external` write the same rows (`likeWriteStatements`). **Left for P3b-8:** channel likes need the `channels` rows, which that task creates.
+  - **Since P3b-7** `/api/lists/like` and `/like-external` write the same rows (`likeWriteStatements`). Since P3b-8 the `channels` rows exist, so channel likes work here too.
 - [x] **P3b-6** Directory and search on v2: keyset pagination `?cursor=`, sort `popular|new|added`, FTS over `name`, `description` and `owner_name`. `/lists/public.json` keeps its response shape (with a cursor added). *Done when:* the top-100 order equals the legacy query on the fixture. — **Status:** Done, in `33_lists-directory.js`, behind `FF_V2_LISTS_READ` (off). Tests: "P3b-6" in `tests/lists-v2.test.mjs`: on a 130-list fixture (118 public, ties on likes), read through the legacy routes and, after the backfill, through v2, the top 100 are identical, entry for entry.
   - **How it works:**
     - `FF_V2_LISTS_READ` is the read switch, which P3b-7 completes; this task introduced it for the directory and search. Since P3b-7 both also wait for the copy (P3b-3) to have finished, since until then the directory would be missing lists.
@@ -284,7 +284,44 @@ No npm, no `src/` tree, no esbuild, no new test framework (D-11). Phase 2 is now
     - Whether an account is ready is kept a minute per Worker instance. After a failed mirror, another instance may serve the older v2 copy for up to a minute. A save that met a copy under way is in the legacy store at once, but not in the directory's v2 copy until the account's next dashboard read or admin step.
     - Legacy anonymous lists (`/api/publish-list`) are not mirrored. Nothing reads their v2 copies yet; P3b-9 must copy them again first.
     - Entries with no id at all, and a title listed twice in one list, are not in v2 (the copy's report counts them), so they stop showing once reads switch. Check the report before turning the flag on.
-- [ ] **P3b-8** Channels: `channels` rows plus R2 pools (`channels/{code}/{version}.json`); `/api/channel/*` reimplemented over them; the directory as a SQL query; likes and adds through `likes` / `add_count`. `/channel/:code` and `/channels/:user/:slug` resolve. *Done when:* shared-channel fixtures produce the same lineup for the same day seed.
+- [x] **P3b-8** Channels: `channels` rows plus R2 pools (`channels/{code}/{version}.json`); `/api/channel/*` reimplemented over them; the directory as a SQL query; likes and adds through `likes` / `add_count`. `/channel/:code` and `/channels/:user/:slug` resolve. *Done when:* shared-channel fixtures produce the same lineup for the same day seed. — **Status:** Done, in `35_channels-v2.js`, with hooks in `25_` and `26_` and a new "channels" phase in the copy (`30_`). Reads are behind `FF_V2_LISTS_READ` (off). Episode lists need the new R2 binding `BLOBS` (bucket `mylists-blobs`); without it everything else still works. Tests: "P3b-8" in `tests/lists-v2.test.mjs` (8 tests; all 24 deliberate faults tried were caught). The whole suite passes with the flag off and on: 1,486 tests, one skipped.
+  - **How it works:**
+    - **One row per share code** (`public_code`): the settings in `definition_json`, the listing's description, the counts. The episodes are one R2 object per version, `channels/{code}/{version}.json`. A new version is written only when the episodes change, and the old object is then removed.
+    - **Writes go to both stores**, as in P3b-7. Share, unpublish, like, added and the admin takedown write the legacy KV store first, exactly as before, then mirror into v2.
+      - The mirror applies only if the row is not already newer (`updated_at`), so of two saves racing each other the later one wins; a pool written for the loser is removed.
+      - A mirror that cannot finish clears the row's `legacy_hash`, and a row without one is never read.
+      - An admin takedown (unlist or delete) that cannot update v2 is reported as not finished, as it already is when the directory row cannot be removed.
+    - **Likes** go to `likes` (`target_type` `channel`, voter `acct:<id>`), with `like_count` moved by `likeWriteStatements`, so the P3b-5 likes API now works for channels. **Adds** go to `likes` with `target_type` `channel_add`, once per account, and `add_count`.
+    - **The copy** gains a "channels" phase after outside-list likes, before *Done*. It copies every `channelshare:` record with its directory row and its like and add ledgers.
+      - Like and add counts never go below the legacy totals (D-9).
+      - Unreadable records are counted and named in *Check results*.
+      - It still writes nothing to the legacy store; its env allows R2 only under `channels/` (tested).
+      - A re-run rewrites nothing that has not changed.
+    - **Reads, with `FF_V2_LISTS_READ`:**
+      - a channel opened by code or address (`GET /api/channel/share`, `/channels/{user}/{slug}.json`), and the signed-out install save that stores a listed channel's lineup, read v2 when the row is current and its episodes are in R2;
+      - Explore Channels (every order), `/api/channel/mine` and the admin directory view read v2 once the copy has finished, like the list directory;
+      - otherwise, the legacy store.
+    - **Done-when met.** The rotation code is unchanged, and a channel read back from v2 is the same object the legacy store holds. The test fixtures are:
+      - a rotating channel with Story Lock;
+      - a shuffled one with paired parts and a movie;
+      - one sorted by air date;
+      - shares from before accounts, and one whose owner is gone.
+
+      For each, the channel from v2 equals the legacy one and plays the same lineup on each of three days (`/api/channel-lineup` with a fixed `now`). Explore Channels, `mine`, the admin view and the address routes answer the same as the legacy ones in every order, ties included.
+    - `/channel/{code}` is a redirect to the builder and needs nothing from storage.
+  - **Where it differs from the task, and why:**
+    - **The legacy routes are not reimplemented; they write both stores** (as in P3b-7). Turning the flag off goes back to the legacy store with nothing lost.
+    - **Channels an account syncs between its own browsers** (`creatorsyncchannels:`, the builder's private copies) **stay in their sync blob.** It is an opaque client blob synced whole with a version check, like presets. Moving it to rows belongs with the channel builder's rebuild (Phase 6), and `channels.client_id` is there for it.
+    - **Explore Channels has no 500-listing cap any more**, and a listing can no longer be lost to two publishes at the same moment (the legacy index is one KV key, rewritten whole).
+    - **Newest:** `published_at` is when a listing last went to the top (a publish, or an update while listed), which is the legacy index's order. `created_at` is when it was first shared: the card's `publishedAt`.
+    - **The "name" order is sorted in the Worker** with the legacy comparator, over at most 5,000 public channels.
+    - **0016 was edited again:** `channels.legacy_hash`, and the Most liked and Most added indexes break ties by `published_at`, as the legacy index does.
+    - **Without `BLOBS`**, rows are still written (the directory, likes and adds need nothing else) and episodes are read from KV. *Check results* counts the episode lists it left there.
+  - **Known limits, for P3b-9:**
+    - `BLOBS` must be bound, and the copy re-run, before `channelshare:` stops being written.
+    - A renamed channel's old slugs resolve through the legacy map only: v2 keeps the current slug.
+    - A directory row written by an older build may differ in small ways from the card v2 builds, which always comes from the current record.
+    - A published channel whose directory row was lost to a race is listed by v2 but not by the legacy directory (v2 is right).
 - [ ] **P3b-9** Stop writing the legacy KV keys (`creatorlist:`, `creatorlistorder:`, `creatorliststamp:`, `creatorlistdeleted:`, `listlikevoters:`, `extlikevoters:`, `externallike:`, `index:publicchannels`, `channelshare:`, `channellikevoters:`) once reads are on v2. *Done when:* the Analytics Engine KV-write counter for these prefixes is 0.
 
 ## Phase 3c — Activity

@@ -160,6 +160,12 @@ CREATE INDEX IF NOT EXISTS idx_likes_voter ON likes(voter);
 --                    code), public (listed in Explore Channels)
 --   definition_json  the channel settings without its episodes
 --   pool_r2_key      where the episode pool lives in R2, by version
+--   legacy_hash      which legacy channelshare record the row was copied
+--                    from, while that store is still written (NULL: the row
+--                    is behind it and reads use the legacy store)
+--   published_at     when it last went to the top of Explore Channels (a
+--                    publish, or an update while published), the Newest order
+--   created_at       when it was first shared
 -- A deleted account leaves its shared channels in place for the people who
 -- added them (owner becomes NULL). Its private channels are removed by the
 -- account deletion code, not by the database.
@@ -175,6 +181,7 @@ CREATE TABLE IF NOT EXISTS channels (
     definition_json  TEXT NOT NULL DEFAULT '{}',
     pool_r2_key      TEXT,
     pool_version     INTEGER NOT NULL DEFAULT 0,
+    legacy_hash      TEXT,
     item_count       INTEGER NOT NULL DEFAULT 0,
     show_count       INTEGER NOT NULL DEFAULT 0,
     like_count       INTEGER NOT NULL DEFAULT 0,
@@ -188,8 +195,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_channels_owner_client ON channels(owner_ac
 CREATE INDEX IF NOT EXISTS idx_channels_owner_slug ON channels(owner_account_id, slug) WHERE deleted_at IS NULL;
 -- The Explore Channels directory orders: Newest, Most liked, Most added.
 CREATE INDEX IF NOT EXISTS idx_channels_dir_new ON channels(published_at DESC, id DESC) WHERE visibility = 'public' AND deleted_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_channels_dir_liked ON channels(like_count DESC, add_count DESC, id DESC) WHERE visibility = 'public' AND deleted_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_channels_dir_added ON channels(add_count DESC, like_count DESC, id DESC) WHERE visibility = 'public' AND deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_channels_dir_liked ON channels(like_count DESC, add_count DESC, published_at DESC, id DESC) WHERE visibility = 'public' AND deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_channels_dir_added ON channels(add_count DESC, like_count DESC, published_at DESC, id DESC) WHERE visibility = 'public' AND deleted_at IS NULL;
 
 -- Liked lists, hidden lists and hidden My Lists sections, per account.
 -- Replaces creator_user_lists and the copies in the creatorsync blob.

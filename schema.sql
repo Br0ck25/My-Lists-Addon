@@ -458,6 +458,7 @@ CREATE TABLE IF NOT EXISTS channels (
     definition_json  TEXT NOT NULL DEFAULT '{}',
     pool_r2_key      TEXT,
     pool_version     INTEGER NOT NULL DEFAULT 0,
+    legacy_hash      TEXT,
     item_count       INTEGER NOT NULL DEFAULT 0,
     show_count       INTEGER NOT NULL DEFAULT 0,
     like_count       INTEGER NOT NULL DEFAULT 0,
@@ -470,8 +471,8 @@ CREATE TABLE IF NOT EXISTS channels (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_channels_owner_client ON channels(owner_account_id, client_id) WHERE client_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_channels_owner_slug ON channels(owner_account_id, slug) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_channels_dir_new ON channels(published_at DESC, id DESC) WHERE visibility = 'public' AND deleted_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_channels_dir_liked ON channels(like_count DESC, add_count DESC, id DESC) WHERE visibility = 'public' AND deleted_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_channels_dir_added ON channels(add_count DESC, like_count DESC, id DESC) WHERE visibility = 'public' AND deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_channels_dir_liked ON channels(like_count DESC, add_count DESC, published_at DESC, id DESC) WHERE visibility = 'public' AND deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_channels_dir_added ON channels(add_count DESC, like_count DESC, published_at DESC, id DESC) WHERE visibility = 'public' AND deleted_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS account_list_prefs (
     account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,

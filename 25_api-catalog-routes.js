@@ -736,8 +736,9 @@ async function handleFetch(request, env, ctx) {
       if (parts.length >= 3) {
         const u = decodeURIComponent(parts[1]).toLowerCase();
         const s = decodeURIComponent(parts[2]).toLowerCase();
-        let code = "";
-        if (env && env.CONFIGS) {
+        // From v2 when reads are there (P3b-8), else the legacy map and index.
+        let code = (await channelsV2CodeBySlug(env, u, s)) || "";
+        if (!code && env && env.CONFIGS) {
           try {
             code = (await env.CONFIGS.get(`creatorchannel:${u}:${s}`)) || "";
           } catch {}
@@ -752,8 +753,11 @@ async function handleFetch(request, env, ctx) {
         if (code) {
           if (wantsJson) {
             try {
-              const raw = await env.CONFIGS.get(`channelshare:${code}`);
-              const record = raw ? JSON.parse(raw) : null;
+              let record = await channelsV2Record(env, code, { items: true });
+              if (!record) {
+                const raw = await env.CONFIGS.get(`channelshare:${code}`);
+                record = raw ? JSON.parse(raw) : null;
+              }
               if (record && record.channel) {
                 const ch = sanitizeSharedChannel(record.channel);
                 if (ch) {
@@ -7175,12 +7179,15 @@ function generateSearchVariations(query) {
             continue;
           }
           if (!listed.has(code)) {
-            let record = null;
-            try {
-              const raw = await env.CONFIGS.get(`channelshare:${code}`);
-              record = raw ? JSON.parse(raw) : null;
-            } catch {
-              record = null;
+            // From v2 when its copy of the channel is current (P3b-8).
+            let record = await channelsV2Record(env, code, { items: true });
+            if (!record) {
+              try {
+                const raw = await env.CONFIGS.get(`channelshare:${code}`);
+                record = raw ? JSON.parse(raw) : null;
+              } catch {
+                record = null;
+              }
             }
             listed.set(code, record && record.published && record.channel ? record : null);
           }

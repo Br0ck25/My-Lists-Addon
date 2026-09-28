@@ -4,7 +4,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { call, createUser, makeD1, makeEnv, makeKv, seedAnonPublishedList } from "./harness.mjs";
+import { call, createUser, makeD1, makeEnv, makeKv, makeR2, seedAnonPublishedList } from "./harness.mjs";
 
 // Phase 3b: lists, likes and channels as rows (migrations/0016_lists_v2.sql).
 //
@@ -215,7 +215,9 @@ describe("P3b-1: the lists v2 schema", () => {
     expectIndex("SELECT id FROM lists WHERE owner_account_id = 1 AND slug = 'x' AND deleted_at IS NULL", "idx_lists_owner_slug");
     expectIndex("SELECT media_id FROM list_items WHERE list_id = 10 ORDER BY position LIMIT 100 OFFSET 100", "idx_list_items_order");
     expectIndex("SELECT id FROM channels WHERE visibility = 'public' AND deleted_at IS NULL ORDER BY published_at DESC, id DESC LIMIT 60", "idx_channels_dir_new");
-    expectIndex("SELECT id FROM channels WHERE visibility = 'public' AND deleted_at IS NULL ORDER BY add_count DESC, like_count DESC, id DESC LIMIT 60", "idx_channels_dir_added");
+    // Explore Channels' orders, ties broken as the legacy index breaks them (newest listing first).
+    expectIndex("SELECT id FROM channels WHERE visibility = 'public' AND deleted_at IS NULL ORDER BY like_count DESC, add_count DESC, published_at DESC, id DESC LIMIT 60", "idx_channels_dir_liked");
+    expectIndex("SELECT id FROM channels WHERE visibility = 'public' AND deleted_at IS NULL ORDER BY add_count DESC, like_count DESC, published_at DESC, id DESC LIMIT 60", "idx_channels_dir_added");
     expectIndex("SELECT id FROM jobs WHERE status = 'queued' AND run_after <= 5 ORDER BY run_after LIMIT 10", "idx_jobs_due");
   });
 });
@@ -495,7 +497,8 @@ describe("P3b-2: the media resolver", () => {
 // which is what it copies in production -- the fixture's v2 rows are cleared.
 function forgetV2(env) {
   env.DB._db.exec(`DELETE FROM lists_fts2; DELETE FROM likes; DELETE FROM account_list_prefs; DELETE FROM jobs;
-    DELETE FROM list_items; DELETE FROM list_slug_history; DELETE FROM lists; DELETE FROM media;`);
+    DELETE FROM list_items; DELETE FROM list_slug_history; DELETE FROM lists; DELETE FROM media; DELETE FROM channels;`);
+  if (env.BLOBS && env.BLOBS._store) env.BLOBS._store.clear();
 }
 
 function loadBackfillFns() {
@@ -1862,5 +1865,361 @@ describe("P3b-7: the legacy routes over v2", () => {
     assert.deepEqual(v2.body, legacy.body);
     assert.equal((await call(env, `/lists/annold/${slug}.json`)).status, 200);
     assert.equal((await call(env, "/lists/public.json")).body.lists.length, 1);
+  });
+});
+
+// --- P3b-8: shared channels on v2 --------------------------------------------
+
+const CH_SHOWS = [
+  { id: "tt0903747", name: "Breaking Bad" },
+  { id: "tt0141842", name: "The Sopranos" },
+  { id: "tt0098904", name: "Seinfeld" },
+  { id: "tt0108778", name: "Friends" },
+];
+
+function channelItems(shows) {
+  const items = [];
+  shows.forEach((show, s) => {
+    for (let season = 1; season <= 2; season++) {
+      for (let ep = 1; ep <= 4; ep++) {
+        items.push({
+          kind: "episode", imdbId: show.id, season, episode: ep, showName: show.name, epName: `${show.name} ${season}x${ep}`,
+          released: `20${10 + s}-0${season}-${String(ep * 3).padStart(2, "0")}`, runtime: 30 + s,
+          thumbnail: `https://img.example.com/${show.id}/${season}/${ep}.jpg`,
+        });
+      }
+    }
+  });
+  return items;
+}
+
+function channelPayload(name, shows, extra = {}) {
+  return { name, description: `${name}, described`, items: channelItems(shows), ...extra };
+}
+
+const CH_FIXTURES = {
+  rotating: channelPayload("Night Shift", CH_SHOWS, {
+    dailyRotate: true, rotateShows: 2, rotateEpisodes: 2, storyLocked: ["tt0903747"], poster: "https://img.example.com/night.jpg",
+  }),
+  shuffled: {
+    name: "Mixed Bag", shuffle: true, pairParts: true, pairedGroups: [["tt0903747:1:1", "tt0903747:1:2"]],
+    items: [...channelItems(CH_SHOWS.slice(0, 2)), { kind: "movie", imdbId: "tt0137523", title: "Fight Club", released: "1999-10-15", runtime: 139 }],
+  },
+  aired: channelPayload("Oldies", CH_SHOWS.slice(2), { sortByAired: true, autoSort: "interleave" }),
+};
+
+async function channelsSetup(opts = {}) {
+  const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1(), FF_V2_LISTS_READ: "1", ...opts });
+  const ann = await createUser(env, "annchan");
+  const ben = await createUser(env, "benchan");
+  const cat = await createUser(env, "catchan");
+  const db = env.DB._db;
+  const idOf = (name) => db.prepare("SELECT id FROM accounts WHERE username = ?").get(name).id;
+  return { env, db, ann, ben, cat, annId: idOf("annchan"), benId: idOf("benchan"), catId: idOf("catchan") };
+}
+
+const creds = (u) => ({ creatorName: u.creatorName, creatorKey: u.creatorKey });
+
+async function shareChannel(env, u, channel, extra = {}) {
+  const r = await call(env, "/api/channel/share", { method: "POST", json: { ...creds(u), channel, ...extra } });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  return r.body;
+}
+
+const channelRow = (db, code) => db.prepare("SELECT * FROM channels WHERE public_code = ?").get(code);
+
+async function channelLineup(env, channel, now) {
+  const r = await call(env, "/api/channel-lineup", { method: "POST", json: { url: "channel:v1:" + JSON.stringify(channel), now } });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  return r.body.items;
+}
+
+const LINEUP_DAYS = [1767225600000, 1767312000000, 1769904000000 + 3600000 * 5];
+
+describe("P3b-8: shared channels on v2", () => {
+  it("copies every shared channel, likes and adds included, and each plays the same lineup for the same day", async () => {
+    const { env, db, ann, ben, cat, benId, catId } = await channelsSetup();
+    const rotating = await shareChannel(env, ann, CH_FIXTURES.rotating, { publish: true });
+    const shuffled = await shareChannel(env, ann, CH_FIXTURES.shuffled, { publish: true });
+    const aired = await shareChannel(env, ben, CH_FIXTURES.aired);
+    for (const u of [ben, cat]) {
+      const r = await call(env, "/api/channel/like", { method: "POST", json: { ...creds(u), code: rotating.code } });
+      assert.equal(r.body.ok, true, JSON.stringify(r.body));
+    }
+    const added = await call(env, "/api/channel/added", { method: "POST", json: { ...creds(ben), code: rotating.code } });
+    assert.equal(added.body.counted, true);
+    // What only the legacy store remembers: a signed-out vote from before
+    // D-6, a total above its voters, shares from before accounts, one whose
+    // owner has gone, and a record nothing can read.
+    const kv = env.CONFIGS._store;
+    kv.set(`channellikevoters:${shuffled.code}`, JSON.stringify(["a:deadbeef"]));
+    const index = JSON.parse(kv.get("index:publicchannels"));
+    index.entries.find((e) => e.code === shuffled.code).likes = 7;
+    kv.set("index:publicchannels", JSON.stringify(index));
+    const oldShare = (code, owner) => JSON.stringify({ code, channel: CH_FIXTURES.aired, description: "", owner, published: false, publishedAt: 1600000000000, updatedAt: 1600000000000 });
+    kv.set("channelshare:OLDANON1", oldShare("OLDANON1", ""));
+    kv.set("channelshare:GHOSTOWN", oldShare("GHOSTOWN", "ghostuser"));
+    kv.set("channelshare:BROKEN01", "{not json");
+    forgetV2(env); // shared before the v2 tables existed
+
+    const cookie = await adminCookie(env);
+    const before = legacySnapshot(env);
+    const steps = await runBackfill(env, cookie, { maxOps: 30 });
+    assert.ok(steps.length > 2, "in several steps");
+    assert.equal(legacySnapshot(env), before, "the copy wrote nothing to the legacy store");
+
+    for (const code of [rotating.code, shuffled.code, aired.code, "OLDANON1", "GHOSTOWN"]) {
+      const row = channelRow(db, code);
+      assert.ok(row && row.legacy_hash && env.BLOBS._store.has(row.pool_r2_key), `${code} has its row and its pool`);
+      const { legacy, v2 } = await legacyThenV2(env, () => call(env, `/api/channel/share?code=${code}`));
+      assert.equal(v2.status, 200);
+      assert.deepEqual(v2.body, legacy.body, code);
+      for (const day of LINEUP_DAYS) {
+        assert.deepEqual(await channelLineup(env, v2.body.channel, day), await channelLineup(env, legacy.body.channel, day), `${code} on ${day}`);
+      }
+    }
+    const days = await Promise.all(LINEUP_DAYS.slice(0, 2).map((d) => channelLineup(env, CH_FIXTURES.rotating, d)));
+    assert.notDeepEqual(days[0], days[1], "the rotating fixture really does rotate");
+
+    assert.equal(channelRow(db, rotating.code).like_count, 2);
+    assert.equal(channelRow(db, rotating.code).add_count, 1);
+    assert.equal(channelRow(db, shuffled.code).like_count, 7, "a legacy total above its voters is kept (D-9)");
+    const voters = (code, type = "channel") => db.prepare("SELECT voter FROM likes WHERE target_type = ? AND target_id = ? ORDER BY voter").all(type, code).map((r) => r.voter);
+    assert.deepEqual(voters(rotating.code), [`acct:${benId}`, `acct:${catId}`].sort());
+    assert.deepEqual(voters(shuffled.code), ["a:deadbeef"]);
+    assert.deepEqual(voters(rotating.code, "channel_add"), [`acct:${benId}`]);
+    assert.equal(channelRow(db, "GHOSTOWN").owner_account_id, null);
+    assert.equal(channelRow(db, aired.code).visibility, "unlisted");
+    assert.equal(channelRow(db, "BROKEN01"), undefined);
+
+    const ch = (await call(env, "/admin/api/lists-backfill/status", { cookie })).body.channels;
+    assert.deepEqual(ch.channels, { legacy: 6, copied: 5, unchanged: 0, unreadable: 1, listed: 2 });
+    assert.deepEqual(ch.samples.unreadable, ["BROKEN01"]);
+    assert.equal(ch.pools.written, 5);
+    assert.equal(ch.likes.keptFromCount, 6);
+    assert.equal(ch.adds.adders, 1);
+
+    // Again: nothing changed, so no row or pool is written.
+    const pools = new Map([...env.BLOBS._store.entries()]);
+    await runBackfill(env, cookie, { restart: true });
+    const again = (await call(env, "/admin/api/lists-backfill/status", { cookie })).body.channels;
+    assert.equal(again.channels.unchanged, 5);
+    assert.equal(again.pools.written, 0);
+    assert.deepEqual(new Map([...env.BLOBS._store.entries()]), pools);
+  });
+
+  it("reads Explore Channels from the rows once the copy has finished, in every order", async () => {
+    const { env, ann, ben, cat } = await channelsSetup();
+    const owners = [ann, ben, cat];
+    const names = ["Zeta TV", "alpha TV", "Mu TV", "beta TV", "Éclair TV", "gamma TV", "Delta TV", "eta TV", "Omega TV", "Quiet TV"];
+    const codes = [];
+    for (let i = 0; i < names.length; i++) {
+      const out = await shareChannel(env, owners[i % 3], channelPayload(names[i], CH_SHOWS.slice(i % 3, (i % 3) + 2)), { publish: i < 8 });
+      codes.push(out.code);
+    }
+    // Ties on likes and on adds, so the tie-break is tested too.
+    const like = (u, code) => call(env, "/api/channel/like", { method: "POST", json: { ...creds(u), code } });
+    const add = (u, code) => call(env, "/api/channel/added", { method: "POST", json: { ...creds(u), code } });
+    for (const [u, i] of [[ann, 1], [ben, 1], [cat, 2], [ann, 3], [ben, 5], [cat, 5]]) assert.equal((await like(u, codes[i])).body.ok, true);
+    for (const [u, i] of [[ann, 2], [ben, 2], [cat, 3], [ann, 6], [ben, 7]]) assert.equal((await add(u, codes[i])).body.counted, true);
+    // Updated while listed: it goes back to the top of Newest, and wins its
+    // tie on likes with a channel listed after it.
+    await shareChannel(env, ben, channelPayload(names[1], CH_SHOWS.slice(0, 1)), { code: codes[1] });
+    // One shared before the v2 tables existed: until the copy has run, the
+    // directory is read from the legacy index, which has it.
+    await shareChannel(env, cat, channelPayload("Early TV", CH_SHOWS.slice(3)), { publish: true });
+    env.DB._db.prepare("DELETE FROM channels WHERE name = 'Early TV'").run();
+    const early = await legacyThenV2(env, () => call(env, "/api/channel/directory"));
+    assert.equal(early.v2.body.channels.length, 9);
+    assert.deepEqual(early.v2.body, early.legacy.body);
+
+    const paths = ["/api/channel/directory", "/api/channel/directory?sort=newest&limit=3"];
+    for (const sort of ["liked", "added", "name", "bogus"]) paths.push(`/api/channel/directory?sort=${sort}`);
+    const cookie = await adminCookie(env);
+    const reads = async () => {
+      const out = [];
+      for (const p of paths) out.push((await call(env, p)).body);
+      out.push((await call(env, "/api/channel/mine", { method: "POST", json: creds(ben) })).body);
+      out.push((await call(env, "/admin/api/published-channels?scope=listed", { cookie })).body);
+      out.push((await call(env, "/channels/annchan/zeta-tv.json")).body);
+      out.push((await call(env, "/api/channel/share?code=channels:benchan:alpha-tv")).body);
+      return out;
+    };
+    await runBackfill(env, cookie);
+    const { legacy, v2 } = await legacyThenV2(env, reads);
+    assert.equal(legacy[0].channels.length, 9, "the nine listed channels");
+    assert.deepEqual(v2, legacy);
+    assert.equal(v2[0].channels[1].name, "alpha TV", "moved to the top by its update (Early TV came after)");
+    assert.deepEqual(v2[2].channels.slice(0, 2).map((c) => c.name), ["alpha TV", "gamma TV"], "a tie on likes goes to the newer listing");
+    assert.deepEqual(v2[4].channels.map((c) => c.name), [...names.slice(0, 8), "Early TV"].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())));
+
+    // From the rows now: with the legacy index emptied, v2 still lists them.
+    const kv = env.CONFIGS._store;
+    const saved = kv.get("index:publicchannels");
+    kv.set("index:publicchannels", JSON.stringify({ entries: [] }));
+    const after = await legacyThenV2(env, () => call(env, "/api/channel/directory"));
+    assert.equal(after.legacy.body.channels.length, 0);
+    assert.equal(after.v2.body.channels.length, 9);
+    const mine = await legacyThenV2(env, () => call(env, "/api/channel/mine", { method: "POST", json: creds(ben) }));
+    assert.equal(mine.legacy.body.channels.length, 0);
+    assert.deepEqual(mine.v2.body.channels.map((c) => c.name), ["alpha TV", "eta TV", "Éclair TV"]);
+    kv.set("index:publicchannels", saved);
+
+    // An unpublish leaves both directories the same way.
+    await call(env, "/api/channel/unpublish", { method: "POST", json: { ...creds(ann), code: codes[0] } });
+    const unpublished = await legacyThenV2(env, () => call(env, "/api/channel/directory"));
+    assert.equal(unpublished.v2.body.channels.length, 8);
+    assert.deepEqual(unpublished.v2.body, unpublished.legacy.body);
+  });
+
+  it("mirrors each share, edit, unpublish, like and add as it happens", async () => {
+    const { env, db, ann, ben, annId, benId } = await channelsSetup();
+    const first = await shareChannel(env, ann, CH_FIXTURES.rotating, { publish: true });
+    const row1 = channelRow(db, first.code);
+    assert.deepEqual(
+      { vis: row1.visibility, owner: row1.owner_account_id, slug: row1.slug, items: row1.item_count, shows: row1.show_count, pool: row1.pool_version },
+      { vis: "public", owner: annId, slug: "night-shift", items: 32, shows: 4, pool: 1 });
+    assert.equal(JSON.parse(env.BLOBS._store.get(row1.pool_r2_key)).length, 32);
+
+    // Edited and shared again under its code: a new pool, the old one gone.
+    const edited = { ...CH_FIXTURES.rotating, items: CH_FIXTURES.rotating.items.slice(0, 10) };
+    assert.equal((await shareChannel(env, ann, edited, { code: first.code })).code, first.code);
+    const row2 = channelRow(db, first.code);
+    assert.equal(row2.pool_version, 2);
+    assert.ok(!env.BLOBS._store.has(row1.pool_r2_key), "the old pool is removed");
+    assert.equal(JSON.parse(env.BLOBS._store.get(row2.pool_r2_key)).length, 10);
+    assert.ok(row2.published_at >= row1.published_at);
+    // Shared again with the same episodes: the pool stays as it is.
+    await shareChannel(env, ann, edited, { code: first.code });
+    assert.equal(channelRow(db, first.code).pool_version, 2);
+    const read = await legacyThenV2(env, () => call(env, `/api/channel/share?code=${first.code}`));
+    assert.deepEqual(read.v2.body, read.legacy.body);
+    // A row already newer than the record being mirrored (a later save got
+    // there first) is left alone, and the pool written for it is removed.
+    db.prepare("UPDATE channels SET updated_at = ? WHERE public_code = ?").run(Date.now() + 3600000, first.code);
+    const poolsBefore = [...env.BLOBS._store.keys()].sort();
+    await shareChannel(env, ann, { ...edited, items: edited.items.slice(0, 4) }, { code: first.code });
+    assert.equal(channelRow(db, first.code).pool_version, 2);
+    assert.deepEqual([...env.BLOBS._store.keys()].sort(), poolsBefore, "no pool left behind");
+    db.prepare("UPDATE channels SET updated_at = 0, legacy_hash = NULL WHERE public_code = ?").run(first.code);
+    await shareChannel(env, ann, edited, { code: first.code });
+
+    const like = (action) => call(env, "/api/channel/like", { method: "POST", json: { ...creds(ben), code: first.code, ...(action ? { action } : {}) } });
+    assert.equal((await like()).body.likes, 1);
+    assert.equal(channelRow(db, first.code).like_count, 1);
+    assert.deepEqual(db.prepare("SELECT voter FROM likes WHERE target_type = 'channel'").all().map((r) => r.voter), [`acct:${benId}`]);
+    assert.equal((await like("unlike")).body.likes, 0);
+    assert.equal(channelRow(db, first.code).like_count, 0);
+    const add = () => call(env, "/api/channel/added", { method: "POST", json: { ...creds(ben), code: first.code } });
+    assert.equal((await add()).body.counted, true);
+    assert.equal((await add()).body.counted, false);
+    assert.equal(channelRow(db, first.code).add_count, 1, "once per account");
+
+    await call(env, "/api/channel/unpublish", { method: "POST", json: { ...creds(ann), code: first.code } });
+    assert.equal(channelRow(db, first.code).visibility, "unlisted");
+    const unlisted = await legacyThenV2(env, () => call(env, `/api/channel/share?code=${first.code}`));
+    assert.equal(unlisted.v2.body.published, false);
+    assert.deepEqual(unlisted.v2.body, unlisted.legacy.body);
+  });
+
+  it("reads the legacy store for a channel whose row is behind it or whose episodes are not in R2", async () => {
+    const { env, db, ann } = await channelsSetup();
+    const shared = await shareChannel(env, ann, CH_FIXTURES.aired, { publish: true });
+    env.BLOBS._hooks.beforePut = () => { throw new Error("R2 unavailable"); };
+    const edited = { ...CH_FIXTURES.aired, name: "Oldies Edited", items: CH_FIXTURES.aired.items.slice(0, 5) };
+    await shareChannel(env, ann, edited, { code: shared.code });
+    env.BLOBS._hooks.beforePut = null;
+    assert.equal(channelRow(db, shared.code).legacy_hash, null, "the row is marked behind");
+    const got = await call(env, `/api/channel/share?code=${shared.code}`);
+    assert.equal(got.body.channel.name, "Oldies Edited", "and the channel is read from the legacy store");
+    assert.equal(got.body.channel.items.length, 5);
+    await runBackfill(env, await adminCookie(env));
+    assert.ok(channelRow(db, shared.code).legacy_hash, "the copy brings it up to date");
+    assert.equal((await call(env, "/api/channel/directory")).body.channels[0].name, "Oldies Edited");
+
+    // The pool object gone from R2: the legacy store answers.
+    env.BLOBS._store.delete(channelRow(db, shared.code).pool_r2_key);
+    const noPool = await legacyThenV2(env, () => call(env, `/api/channel/share?code=${shared.code}`));
+    assert.deepEqual(noPool.v2.body, noPool.legacy.body);
+
+    // No R2 bucket at all: rows are written, episodes are read from KV.
+    const bare = await channelsSetup({ BLOBS: null });
+    const code = (await shareChannel(bare.env, bare.ann, CH_FIXTURES.shuffled, { publish: true })).code;
+    const row = channelRow(bare.db, code);
+    assert.equal(row.pool_r2_key, null);
+    assert.ok(row.legacy_hash);
+    const read = await legacyThenV2(bare.env, () => call(bare.env, `/api/channel/share?code=${code}`));
+    assert.deepEqual(read.v2.body, read.legacy.body);
+    const bareCookie = await adminCookie(bare.env);
+    await runBackfill(bare.env, bareCookie);
+    assert.equal((await call(bare.env, "/admin/api/lists-backfill/status", { cookie: bareCookie })).body.channels.pools.skipped, 1);
+    const dir = await legacyThenV2(bare.env, () => call(bare.env, "/api/channel/directory"));
+    assert.deepEqual(dir.v2.body, dir.legacy.body);
+  });
+
+  it("an admin takedown reaches the rows, and says so when it cannot", async () => {
+    const { env, db, ann, ben } = await channelsSetup();
+    const cookie = await adminCookie(env);
+    const a = await shareChannel(env, ann, CH_FIXTURES.aired, { publish: true });
+    const b = await shareChannel(env, ann, CH_FIXTURES.rotating, { publish: true });
+    await call(env, "/api/channel/like", { method: "POST", json: { ...creds(ben), code: b.code } });
+    const moderate = (code, action) => call(env, "/admin/api/channel-moderate", { method: "POST", cookie, json: { code, action } });
+
+    assert.equal((await moderate(a.code, "unlist")).body.ok, true);
+    assert.equal(channelRow(db, a.code).visibility, "unlisted");
+
+    const pool = channelRow(db, b.code).pool_r2_key;
+    assert.equal((await moderate(b.code, "delete")).body.ok, true);
+    const gone = channelRow(db, b.code);
+    assert.ok(gone.deleted_at > 0);
+    assert.equal(env.BLOBS._store.has(pool), false, "its pool is removed");
+    assert.equal(db.prepare("SELECT count(*) AS n FROM likes WHERE target_id = ?").get(b.code).n, 0);
+    assert.equal((await call(env, `/api/channel/share?code=${b.code}`)).status, 404);
+
+    const c = await shareChannel(env, ann, CH_FIXTURES.shuffled, { publish: true });
+    env.DB.failWhen((sql) => /UPDATE channels SET deleted_at/.test(sql));
+    const failed = await moderate(c.code, "delete");
+    env.DB.failWhen(null);
+    assert.equal(failed.status, 500);
+    assert.match(failed.body.error, /new tables/);
+  });
+
+  it("a signed-out install save stores a listed channel's lineup from v2", async () => {
+    const { env, ann } = await channelsSetup();
+    const shared = await shareChannel(env, ann, CH_FIXTURES.aired, { publish: true });
+    // Behind every route's back, so the two stores differ: the legacy record
+    // loses all but one episode, v2 keeps the lineup it was given.
+    const key = `channelshare:${shared.code}`;
+    const rec = JSON.parse(env.CONFIGS._store.get(key));
+    env.CONFIGS._store.set(key, JSON.stringify({ ...rec, channel: { ...rec.channel, items: rec.channel.items.slice(0, 1) } }));
+    const row = "channel:v1:" + JSON.stringify({ channelId: "ch-local-9", shareCode: shared.code, catalogOnly: true, name: "Oldies", items: [] });
+    const saveOnce = async () => {
+      const r = await call(env, "/api/save", { method: "POST", json: { entries: [{ id: "r0", name: "Oldies", type: "series", url: row }] } });
+      assert.equal(r.status, 200, JSON.stringify(r.body));
+      return JSON.parse(JSON.parse(env.CONFIGS._store.get("cfg:" + r.body.id)).entries[0].url.slice("channel:v1:".length));
+    };
+    const { legacy, v2 } = await legacyThenV2(env, saveOnce);
+    assert.equal(legacy.items.length, 1);
+    assert.equal(v2.items.length, CH_FIXTURES.aired.items.length);
+    assert.equal(v2.shareCode, shared.code);
+  });
+
+  it("shares, reads and likes carry on as before when migration 0016 is not applied", async () => {
+    const { env, ann, ben } = await channelsSetup();
+    env.DB._db.exec("DROP TABLE channels;");
+    const shared = await shareChannel(env, ann, CH_FIXTURES.aired, { publish: true });
+    assert.equal((await call(env, `/api/channel/share?code=${shared.code}`)).status, 200);
+    assert.equal((await call(env, "/api/channel/like", { method: "POST", json: { ...creds(ben), code: shared.code } })).body.likes, 1);
+    assert.equal((await call(env, "/api/channel/directory")).body.channels.length, 1);
+  });
+
+  it("lets the copy use R2 only for channel pools", () => {
+    const sb = loadBackfillFns();
+    const r2 = makeR2();
+    const menv = sb.listsBackfillEnv({ DB: makeD1(), CONFIGS: makeKv(), BLOBS: r2 }, { ops: 0 });
+    assert.throws(() => menv.BLOBS.put("img/bp/tt1.jpg", "x"), /refusing/);
+    assert.throws(() => menv.BLOBS.delete("backups/d1.sql"), /refusing/);
+    assert.equal(typeof menv.BLOBS.list, "undefined");
+    assert.doesNotThrow(() => menv.BLOBS.put("channels/ABC/1.json", "[]"));
   });
 });

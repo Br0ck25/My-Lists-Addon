@@ -2423,7 +2423,7 @@ async function renderAdminDashboard(env) {
 
     <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Lists v2: copy existing lists</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Copies every account&rsquo;s lists, the old anonymous lists, and their likes into the new list tables (migration 0016). It only copies: the lists people use today are not changed, and nothing reads the copies yet. Run <strong>Migrate Accounts</strong> first, and back up D1 before the first run. It works in small steps and can be stopped and carried on; <strong>Start over</strong> runs it again from the first account, copying only what changed.</p>
+      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Copies every account&rsquo;s lists, the old anonymous lists, shared and published channels (their episode lists go to the <code>BLOBS</code> R2 bucket when it is bound), and their likes into the new tables (migration 0016). It only copies: the lists and channels people use today are not changed, and nothing reads the copies until <code>FF_V2_LISTS_READ</code> is on. Run <strong>Migrate Accounts</strong> first, and back up D1 before the first run. It works in small steps and can be stopped and carried on; <strong>Start over</strong> runs it again from the first account, copying only what changed.</p>
       <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillBtn" onclick="runListsBackfill(false)" ${isD1Bound ? '' : 'disabled'}>Copy lists</button>
       <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillRestartBtn" onclick="runListsBackfill(true)" ${isD1Bound ? '' : 'disabled'}>Start over</button>
       <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillStatusBtn" onclick="runListsBackfillStatus()" ${isD1Bound ? '' : 'disabled'}>Check results</button>
@@ -3038,6 +3038,10 @@ async function renderAdminDashboard(env) {
         ];
         if (d.anonymous) lines.push('Anonymous lists: ' + d.anonymous.lists.legacy + ' found, ' + d.anonymous.items.copied + ' of ' + d.anonymous.items.legacy + ' items copied.');
         if (d.external) lines.push('Likes on outside lists: ' + d.external.targets + ' lists, ' + d.external.voters + ' voters copied.');
+        if (d.channels) {
+          const c = d.channels;
+          lines.push('Shared channels: ' + c.channels.legacy + ' found (' + c.channels.listed + ' listed in Explore Channels), ' + c.channels.copied + ' copied, ' + c.channels.unchanged + ' unchanged since the last run, ' + c.channels.unreadable + ' unreadable' + (c.samples.unreadable.length ? ' (' + c.samples.unreadable.join(', ') + ')' : '') + '. Episode lists: ' + c.pools.written + ' written to R2' + (c.pools.skipped ? ', ' + c.pools.skipped + ' left in KV because the BLOBS bucket is not bound' : '') + '. Likes: ' + c.likes.voters + ' voters copied, ' + c.likes.keptFromCount + ' kept from the old totals. Adds: ' + c.adds.adders + ' accounts copied, ' + c.adds.keptFromCount + ' kept from the old totals.');
+        }
         if (d.failed.length) lines.push('Failed accounts: ' + d.failed.map(function (f) { return '#' + f.accountId + ' (' + f.error + ')'; }).join('; '));
         if (d.worst.length) lines.push('Most items not carried: ' + d.worst.map(function (w) { return '#' + w.accountId + ' ' + (w.mismatchRate * 100).toFixed(2) + '%'; }).join(', ') + '. Examples from the first: ' + JSON.stringify(d.worst[0].samples));
         out.innerHTML = '';

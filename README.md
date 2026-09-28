@@ -118,7 +118,7 @@ The deployment sections further down are for the operator of mylistsaddon.com; t
 ## Requirements
 
 - A Cloudflare account on the **Workers Paid** plan. The code assumes Paid limits (10,000 outbound fetches and 30 s of CPU per invocation) and no longer splits its work to fit the Free plan: an import, an Airing Next refresh and a cron tick each finish in one invocation.
-- Bindings: KV (`CONFIGS`) and D1 (`DB`) are required; an Analytics Engine dataset (`ANALYTICS`) is recommended. The full table is in [docs/OPERATIONS.md](docs/OPERATIONS.md#2-bindings).
+- Bindings: KV (`CONFIGS`) and D1 (`DB`) are required; an Analytics Engine dataset (`ANALYTICS`) and an R2 bucket (`BLOBS`, for shared channels' episode lists) are recommended. The full table is in [docs/OPERATIONS.md](docs/OPERATIONS.md#2-bindings).
 - **Optional**: API keys and OAuth apps from TMDB, Trakt, Simkl or MDBList to unlock each provider.
 - **Zero build dependencies**: the whole add-on is `worker_entry_combined.js`, pasted into the dashboard.
 
@@ -223,7 +223,7 @@ The add-on works out-of-the-box with public MDBList and TMDB links. Adding API k
 | `LOOKUP_PEPPER` | HMAC-SHA256 pepper for blind-indexing creator keys in `forgot-username` queries. Optional: without it the old lookup is used. Never change it once set. | Random 32+ character secret string (`openssl rand -base64 32`) |
 | `FF_SESSIONS` | Optional feature flag (`1` or `true`). Enables session authentication and automatic session cookie issuance on creator routes. | Set as Worker Variable (`1`) |
 | `FF_INSTALLS` | Optional feature flag (`1` or `true`). Enables the `/api/installs` API for signed-in accounts to create, rename, rotate and revoke `/i/{token}` install links. Existing links are served either way. | Set as Worker Variable (`1`) |
-| `FF_V2_LISTS_READ` | Optional feature flag (`1` or `true`). Reads lists from the new list tables: the dashboard, list pages, catalogs, the directory and search (P3b-6, P3b-7). **Leave unset** until the list copy has finished (`docs/OPERATIONS.md` §9, §10). Turning it off again is always safe. | Leave unset |
+| `FF_V2_LISTS_READ` | Optional feature flag (`1` or `true`). Reads lists and shared channels from the new tables: the dashboard, list pages, catalogs, the directory and search, shared channels and Explore Channels (P3b-6 to P3b-8). **Leave unset** until the list copy has finished (`docs/OPERATIONS.md` §9, §10). Turning it off again is always safe. | Leave unset |
 | `FF_V2_LISTS_API` | Optional feature flag (`1` or `true`). Enables the item-level list API (`/api/lists`, P3b-4) and the likes API (`/api/likes`, P3b-5) over the new list tables. **Leave unset in production** until the old list storage stops being written (P3b-9): what these APIs write is not in it. | Leave unset |
 | `INSTALL_MIGRATION_PERCENT` | Optional, `0`-`100`. The share of existing install links whose stored provider keys, tokens and Creator Key are moved, on first use, into encrypted D1 storage (`install_secrets`). Needs `TOKEN_ENCRYPTION_KEY` and migration 0015. `0` or unset moves nothing. | Set as Worker Variable, e.g. `10`, then `100` |
 

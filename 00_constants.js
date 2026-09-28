@@ -1138,7 +1138,7 @@ const D1_SCHEMA_MANIFEST = [
   },
   {
     migration: "0016", kind: "table", name: "channels",
-    consequence: "Channels cannot move to D1 rows, so the channel directory stays on its single KV key. Nothing uses it yet.",
+    consequence: "Shared channels are not copied into D1 rows, so Explore Channels and channel likes stay on their KV keys. Nothing is lost: those keys are still written.",
   },
   {
     migration: "0016", kind: "index", name: "idx_channels_owner_client",

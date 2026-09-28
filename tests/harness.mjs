@@ -271,6 +271,8 @@ export function nextIp() {
 // A test that sets the flag itself still decides.
 const V2_LISTS_READ_DEFAULT = process.env.MLA_TEST_V2_LISTS_READ ? { FF_V2_LISTS_READ: "1" } : {};
 
+// BLOBS (the R2 bucket, channel pools since P3b-8) is bound by default, as the
+// deploy notes ask; pass BLOBS: null for a deployment without it.
 export function makeEnv(opts = {}) {
   return {
     ...V2_LISTS_READ_DEFAULT,
@@ -278,6 +280,48 @@ export function makeEnv(opts = {}) {
     CONFIGS: opts.CONFIGS || makeKv(),
     ADMIN_KEY: opts.ADMIN_KEY === undefined ? "test-admin-secret" : opts.ADMIN_KEY,
     DB: opts.DB,
+    BLOBS: opts.BLOBS === undefined ? makeR2() : opts.BLOBS,
+  };
+}
+
+// An R2 bucket: the calls the Worker makes (put, get -> { text, json,
+// arrayBuffer }, delete of one key or several, head, list by prefix), in
+// memory. `_hooks.beforePut/beforeGet/beforeDelete` throw to make a call fail.
+export function makeR2() {
+  const store = new Map();
+  const hooks = { beforePut: null, beforeGet: null, beforeDelete: null };
+  const body = (key, text) => ({
+    key,
+    size: text.length,
+    text: async () => text,
+    json: async () => JSON.parse(text),
+    arrayBuffer: async () => new TextEncoder().encode(text).buffer,
+  });
+  return {
+    _store: store,
+    _hooks: hooks,
+    async put(key, value) {
+      if (hooks.beforePut) await hooks.beforePut(key);
+      const text = typeof value === "string" ? value : new TextDecoder().decode(value);
+      store.set(String(key), text);
+      return { key: String(key), size: text.length };
+    },
+    async get(key) {
+      if (hooks.beforeGet) await hooks.beforeGet(key);
+      return store.has(String(key)) ? body(String(key), store.get(String(key))) : null;
+    },
+    async head(key) {
+      return store.has(String(key)) ? { key: String(key), size: store.get(String(key)).length } : null;
+    },
+    async delete(keys) {
+      for (const k of [].concat(keys)) {
+        if (hooks.beforeDelete) await hooks.beforeDelete(k);
+        store.delete(String(k));
+      }
+    },
+    async list({ prefix = "" } = {}) {
+      return { objects: [...store.keys()].filter((k) => k.startsWith(prefix)).sort().map((k) => ({ key: k })), truncated: false };
+    },
   };
 }
 

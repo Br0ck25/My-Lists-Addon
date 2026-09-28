@@ -7,8 +7,8 @@
 ## Current Status
 - **Last Updated**: 2026-09-28
 - **Last Active AI**: Claude Code (Opus 5.5)
-- **Active Task**: Phase 3b (lists, likes, channels). P3b-1 (migration `0016_lists_v2.sql`) is written and tested, waiting for the owner to apply it. P3b-2 (the media resolver, `29_media.js`) is done. P3b-3 (the list backfill, `30_lists-backfill.js`) is written and tested; the owner runs it from `/admin` after deploying. P3b-4 (the list API, `31_lists-api.js`) and P3b-5 (the likes API, `32_likes-api.js`), both behind `FF_V2_LISTS_API`, are done. P3b-6 (the directory and search on v2, `33_lists-directory.js`, behind `FF_V2_LISTS_READ`) is done. P3b-7 (the legacy list routes over v2 and the rest of the read switch, `34_lists-v2-bridge.js`) is done. P1-C5 (imported lists losing their sync settings) is fixed in this PR, at the owner's request. Next: P3b-8, channels.
-- **Task State**: All tests passing (1,477 passed, 0 failed, 1 skipped: the opt-in network test), both as they are and with `MLA_TEST_V2_LISTS_READ=1` (every test with lists read from v2). `verify.sh` checks pass. CI on GitHub runs the suite both ways on Node 22.
+- **Active Task**: Phase 3b (lists, likes, channels). P3b-1 (migration `0016_lists_v2.sql`) is written and tested, waiting for the owner to apply it. P3b-2 (the media resolver, `29_media.js`) is done. P3b-3 (the list backfill, `30_lists-backfill.js`) is written and tested; the owner runs it from `/admin` after deploying. P3b-4 (the list API, `31_lists-api.js`) and P3b-5 (the likes API, `32_likes-api.js`), both behind `FF_V2_LISTS_API`, are done. P3b-6 (the directory and search on v2, `33_lists-directory.js`, behind `FF_V2_LISTS_READ`) is done. P3b-7 (the legacy list routes over v2 and the rest of the read switch, `34_lists-v2-bridge.js`) is done. P1-C5 (imported lists losing their sync settings) is fixed in this PR, at the owner's request. P3b-8 (shared channels as rows plus R2 pools, `35_channels-v2.js`) is done. Next: P3b-9, stopping the legacy writes.
+- **Task State**: All tests passing (1,486 passed, 0 failed, 1 skipped: the opt-in network test), both as they are and with `MLA_TEST_V2_LISTS_READ=1` (every test with lists read from v2). `verify.sh` checks pass. CI on GitHub runs the suite both ways on Node 22.
 - **Git State**:
   - Phase 3a is merged into `main` (PR #1 and PR #2).
   - **All of Phase 3b goes on the branch `claude/beautiful-lamport-kx261g`**, in one draft PR into `main`. The owner deploys Phase 3b from that PR when it is done. Keep adding each P3b task to this branch as its own commit.
@@ -64,7 +64,7 @@ These are deliberate. Several are "one place" mechanisms that cover the whole Wo
    - `\n` in client code must be written `\\n`.
 3. **All numbered files share one scope.**
    - Top-level names must be unique across files.
-   - New server-only code goes in a new numbered file **after `26_`** (the next is `35_...`), never between `09_` and `24_`.
+   - New server-only code goes in a new numbered file **after `26_`** (the next is `36_...`), never between `09_` and `24_`.
    - `25_` and `26_` are the **inside** of `handleFetch` (they share `request`, `env`, `path`, `authenticateCreator`). `27_installs.js` and `28_connections.js` come after the `export default` block, at module level, so they cannot see those; pass what they need. `tests/client-harness.mjs` renders the page from the code **before** `export default`, so page rendering must never depend on `27_`+.
    - Tests that load source files into a sandbox (`loadSourceFunctions`) and call `resolveConfig` must include `27_installs.js`.
 4. **In `27_` onward, never write the words `export default` together, even in a comment.** Those files come after the Worker's real export, and `render_check.js` (a CI step) cuts the combined file at the *last* place the words appear, so the page checks break.
@@ -156,14 +156,14 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
     - A test sandbox that loads `02_` must not call `fetch`: `02_`'s module-level `fetch` guard becomes the sandbox's global and calls itself. Load `00_` and `29_` only, and set `sandbox.fetch`.
   - **P3b-3 (Claude):** the backfill `migrate.lists`, in `30_lists-backfill.js`, run from `/admin` → Maintenance → **Lists v2** (routes `/admin/api/lists-backfill/step` and `/status`, dispatched from `25_` next to installs and connections). The owner approved writing it; running it on production is theirs to do (`docs/OPERATIONS.md` §9). Details and deviations under P3b-3 in `NEXT_VERSION_TASKS.md`.
     - **It must never write the legacy store.** Everything goes through `listsBackfillEnv`, which has no KV writes and refuses D1 writes outside the v2 tables. Keep it that way; a test enforces it.
-    - Channels are not copied yet (P3b-8). `lists.legacy_hash` was added to 0016.
+    - `lists.legacy_hash` was added to 0016. Channels are copied since P3b-8 (the "channels" phase).
   - **P3b-4 (Claude):** the list API, `/api/lists`, in `31_lists-api.js` (dispatched from `25_` after the backfill routes; the legacy `/api/lists/like` and `/like-external` are passed through). Behind `FF_V2_LISTS_API`, which must stay off in production until P3b-7. Session auth only. Details under P3b-4 in `NEXT_VERSION_TASKS.md`.
     - Every write is one batch: the change, `item_count` from the rows, the list's version, the account's version, and `lists_fts2`. Keep that shape in P3b-5 onwards.
     - `listOwnerSearchName` (`30_`) is what `lists_fts2.owner_name` holds, for both the backfill and the API.
     - The list item insert names the list by `public_id` through a `VALUES` join, so a new list and its first items go in one batch.
   - **P3b-5 (Claude):** the likes API, `/api/likes/{list|channel|external}/{id}`, in `32_likes-api.js` (dispatched from `25_` after the list API), behind the same flag. Details under P3b-5 in `NEXT_VERSION_TASKS.md`.
     - `likeWriteStatements` must keep the `like_count ± changes()` statement straight after the like itself: `changes()` is the previous statement's row count.
-    - Channel likes answer 404 until P3b-8 fills `channels`.
+    - Channel likes work since P3b-8 filled `channels`.
   - **P3b-6 (Claude):** `/lists/public.json` and `/api/search-published-lists` read from v2 when `FF_V2_LISTS_READ` is on (`33_lists-directory.js`, called at the top of each route in `25_` and `26_`; either falls back to its legacy path when v2 fails). Details under P3b-6 in `NEXT_VERSION_TASKS.md`.
     - `FF_V2_LISTS_READ` is **the** read switch; P3b-7 extended it to the list pages, catalogs and the legacy list routes. Since P3b-7 the directory and search also wait for the whole copy to have finished.
     - Test fixtures for search need lists that have items: an empty list is left out of search, and an early fixture passed vacuously because every "Drama" list was empty. The test now asserts each query finds something.
@@ -175,6 +175,11 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
     - With the flag on, `backfillAccountLists` skips accounts that are `done`. That is on purpose: v2 is then what people see.
     - Items come back exact through `legacyItemFromEntryRow`; the list-level legacy fields that have no column (`baseItemIds`, `noVersion`) live in `lists.source_json` (`legacyListSourceJson`).
     - Before P3b-9 stops the legacy writes, it has to deal with the known limits listed under P3b-7: lists over 1,500 items are not mirrored on save, and legacy anonymous lists are not mirrored.
+  - **P3b-8 (Claude):** shared channels (`channelshare:`, `index:publicchannels`, the channel like and add ledgers) as `channels` rows plus R2 pools, in `35_channels-v2.js` (module level). Hooks in the `/api/channel/*` routes and the admin channel routes (`26_`), and in `/channels/{user}/{slug}` and the signed-out `/api/save` (`25_`); the copy has a new "channels" phase (`30_`). Details, deviations and known limits under P3b-8 in `NEXT_VERSION_TASKS.md`.
+    - **Same strangler as P3b-7:** legacy KV first, then `channelsV2SyncShare` / `channelsV2MirrorLike` / `channelsV2MirrorAdd` / `channelsV2Delete`. A row with `legacy_hash` NULL is behind and never read.
+    - Episodes live in R2 at `channels/{code}/{version}.json` under the new binding **`BLOBS`** (bucket `mylists-blobs`; OPERATIONS §2). The code works without it (episodes then come from KV). `tests/harness.mjs` binds an in-memory one by default (`makeR2`); pass `BLOBS: null` for a deployment without it.
+    - Adds are rows in `likes` with `target_type` `channel_add`.
+    - Channels an account syncs between its own browsers (`creatorsyncchannels:`) are **not** moved: they stay a sync blob until the Phase 6 channel builder.
 
 ---
 
@@ -200,7 +205,7 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
 ---
 
 ## Next Steps for Incoming AI
-1. **Phase 3b** (lists, likes, channels) is under way on `claude/beautiful-lamport-kx261g`. P3b-1 to P3b-7 are written. Next is **P3b-8**: channels as rows plus R2 pools, `/api/channel/*` over them, the channel directory as a query, channel likes and adds, and copying the existing channels (step 6 of the copy, left from P3b-3). The next server file is `35_...`. Read `MIGRATION_PLAN.md` §3b and the P3b notes in `NEXT_VERSION_TASKS.md` before starting. After it, P3b-9 stops the legacy list writes; read the P3b-7 known limits first.
+1. **Phase 3b** (lists, likes, channels) is under way on `claude/beautiful-lamport-kx261g`. P3b-1 to P3b-8 are written. Next is **P3b-9**: stop writing the legacy list and channel keys once reads are on v2. Read the known limits under P3b-7 and P3b-8 in `NEXT_VERSION_TASKS.md` first; each must be closed before its legacy writes stop. P3b-9 also changes the rollback story (`FF_V2_LISTS_READ` off would then lose changes), so the deploy notes and OPERATIONS §10 need updating with it, and the owner should decide when that step ships. The next server file is `36_...`.
      - `FF_V2_LISTS_API` (the v2 list and likes APIs) must stay off until P3b-9: what they write is not in the legacy store, so a flag-off rollback or a copy re-run would lose it.
      - Phase 3b rewrites how lists are stored, so it needs the owner's approval before any backfill (P3b-3) touches stored data.
      - Decide which wins when an install has its own keys in `install_secrets` and its owner also has a connection. Today `install_secrets` is the only source.

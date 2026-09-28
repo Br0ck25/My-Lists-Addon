@@ -2939,6 +2939,10 @@
       if (record.published) {
         await upsertPublicChannelIndex(env, code, record).catch(() => {});
       }
+      // The same share into v2 (P3b-8, 35_channels-v2.js). It never fails the
+      // share: a mirror that cannot finish marks the v2 row stale, and reads
+      // of it go back to what was just stored here.
+      await channelsV2SyncShare(env, code, record);
       ctx.waitUntil(bumpStat(env, publish ? "channels:published" : "channels:shared"));
       return json({
         ok: true,
@@ -2955,27 +2959,34 @@
     if (path === "/api/channel/share" && request.method === "GET") {
       if (!env || !env.CONFIGS) return json({ ok: false, error: "Sharing isn't available on this add-on." }, 503);
       let code = String(url.searchParams.get("code") || "").trim();
+      // A creator's address names a code: from v2 when reads are there
+      // (P3b-8), else the legacy map, which also keeps a renamed channel's
+      // old slugs.
       if (code.startsWith("channels:")) {
         const parts = code.split(":");
         const u = parts[1] || "";
         const s = parts[2] || "";
-        const resolved = await env.CONFIGS.get(`creatorchannel:${u.toLowerCase()}:${s.toLowerCase()}`);
+        const resolved = (await channelsV2CodeBySlug(env, u, s)) || await env.CONFIGS.get(`creatorchannel:${u.toLowerCase()}:${s.toLowerCase()}`);
         if (resolved) code = resolved;
       } else if (!code && url.searchParams.get("username") && url.searchParams.get("slug")) {
         const u = url.searchParams.get("username").trim();
         const s = url.searchParams.get("slug").trim();
-        const resolved = await env.CONFIGS.get(`creatorchannel:${u.toLowerCase()}:${s.toLowerCase()}`);
+        const resolved = (await channelsV2CodeBySlug(env, u, s)) || await env.CONFIGS.get(`creatorchannel:${u.toLowerCase()}:${s.toLowerCase()}`);
         if (resolved) code = resolved;
       }
       if (!code || !/^[A-Za-z0-9_-]{1,64}$/.test(code)) {
         return json({ ok: false, error: "That doesn't look like a channel share link." }, 400);
       }
-      let record = null;
-      try {
-        const raw = await env.CONFIGS.get(`channelshare:${code}`);
-        record = raw ? JSON.parse(raw) : null;
-      } catch {
-        record = null;
+      // From v2 when FF_V2_LISTS_READ is on and its copy of this channel is
+      // current, episodes and all (P3b-8); otherwise the legacy record.
+      let record = await channelsV2Record(env, code, { items: true });
+      if (!record) {
+        try {
+          const raw = await env.CONFIGS.get(`channelshare:${code}`);
+          record = raw ? JSON.parse(raw) : null;
+        } catch {
+          record = null;
+        }
       }
       if (!record || !record.channel) {
         return json({ ok: false, error: "That channel link has expired or was removed." }, 404);
@@ -3002,6 +3013,10 @@
     // is read on every visit to the tab and a prefix scan plus one GET per
     // entry would be dozens of round trips for a page of cards.
     if (path === "/api/channel/directory" && request.method === "GET") {
+      // A query over the channels rows once reads are on v2 and the copy has
+      // finished (P3b-8); the legacy index until then.
+      const v2Directory = await channelsV2DirectoryResponse(env, url);
+      if (v2Directory) return v2Directory;
       if (!env || !env.CONFIGS) return jsonCacheable({ ok: true, channels: [] });
       const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "60", 10) || 60, 1), PUBLIC_CHANNEL_INDEX_MAX);
       const sort = String(url.searchParams.get("sort") || "newest");
@@ -3080,7 +3095,11 @@
         // up on the next one rather than this failing the request.
       }
       await updatePublicChannelIndexEntry(env, code, { likes: count }).catch(() => {});
-      return json({ ok: true, likes: count, liked, capped: capped || undefined }, 200, { "Cache-Control": "no-store" });
+      // The same like in v2 (P3b-8). With reads on v2 the count people see is
+      // v2's, which keeps any higher legacy total the copy carried over.
+      const v2Likes = await channelsV2MirrorLike(env, code, voterName, liked);
+      const shownLikes = isV2ListsReadEnabled(env) && v2Likes != null ? v2Likes : count;
+      return json({ ok: true, likes: shownLikes, liked, capped: capped || undefined }, 200, { "Cache-Control": "no-store" });
     }
 
     // /api/channel/added  (POST)  { code }
@@ -3118,6 +3137,7 @@
       if (already) return json({ ok: true, counted: false }, 200, { "Cache-Control": "no-store" });
       await applyLikeVote(env, addKey, adderId, true);
       await updatePublicChannelIndexEntry(env, code, { adds: (Number(row.adds) || 0) + 1 }).catch(() => {});
+      await channelsV2MirrorAdd(env, code, addAuth.username);
       return json({ ok: true, counted: true }, 200, { "Cache-Control": "no-store" });
     }
 
@@ -3141,6 +3161,9 @@
       }
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) return authFailureResponse(auth);
+      // From the channels rows once the directory is (P3b-8).
+      const v2Mine = await channelsV2Listings(env, auth.username);
+      if (v2Mine) return json({ ok: true, channels: v2Mine }, 200, { "Cache-Control": "no-store" });
       const entries = await readPublicChannelIndex(env);
       const mine = entries.filter((e) => e && e.owner === auth.username);
       return json({ ok: true, channels: mine }, 200, { "Cache-Control": "no-store" });
@@ -3180,6 +3203,7 @@
         await env.CONFIGS.put(`channelshare:${code}`, JSON.stringify(record));
       } catch {}
       await removePublicChannelIndex(env, code).catch(() => {});
+      await channelsV2SyncShare(env, code, record);
       return json({ ok: true });
     }
 
@@ -6416,7 +6440,9 @@
       const scope = url.searchParams.get("scope") === "all" ? "all" : "listed";
 
       if (scope === "listed") {
-        const index = await readPublicChannelIndex(env);
+        // What the public sees: the channels rows once Explore Channels reads
+        // them (P3b-8), the legacy index until then.
+        const index = (await channelsV2Listings(env, null)) || await readPublicChannelIndex(env);
         return json({
           ok: true,
           scope,
@@ -6526,9 +6552,17 @@
             error: "The channel was deleted but its directory listing could not be removed. Please try again.",
           }, 500, { "Cache-Control": "no-store" });
         }
+        // And its v2 copy (P3b-8), checked for the same reason.
+        if (!(await channelsV2Delete(env, code))) {
+          return json({
+            ok: false,
+            error: "The channel was deleted but its copy in the new tables could not be removed. Please try again.",
+          }, 500, { "Cache-Control": "no-store" });
+        }
         return json({ ok: true, action, code }, 200, { "Cache-Control": "no-store" });
       }
 
+      let unlisted = null;
       try {
         const raw = await env.CONFIGS.get(`channelshare:${code}`);
         if (raw) {
@@ -6536,6 +6570,7 @@
           record.published = false;
           record.updatedAt = Date.now();
           await env.CONFIGS.put(`channelshare:${code}`, JSON.stringify(record));
+          unlisted = record;
         }
       } catch {
         return json({
@@ -6545,6 +6580,11 @@
       }
       if (!removedFromIndex) {
         return json({ ok: false, error: "That channel is still listed. Please try again." }, 500, { "Cache-Control": "no-store" });
+      }
+      // The v2 listing goes too (P3b-8), and a failure is reported: a
+      // takedown that left the channel listed there is not finished.
+      if (unlisted && !(await channelsV2SyncShare(env, code, unlisted))) {
+        return json({ ok: false, error: "That channel is still listed in the new tables. Please try again." }, 500, { "Cache-Control": "no-store" });
       }
       return json({ ok: true, action, code }, 200, { "Cache-Control": "no-store" });
     }
