@@ -49,6 +49,8 @@ CREATE INDEX IF NOT EXISTS idx_media_unresolved ON media(updated_at) WHERE resol
 --   legacy_id    the record it was copied from (a creator_lists id, or an
 --                anonymous published list), so the backfill can run again
 --                without making copies. NULL for a list made on v2.
+--   legacy_hash  a hash of that record as last copied, so a re-run copies
+--                only the lists that changed. NULL until a copy completes.
 --   source_ref   where an imported or synced list came from (its URL), and
 --   source_json  the sync bookkeeping (baseItemIds) the importer keeps.
 --   owner_account_id is NULL only for legacy anonymous lists (D-6), which are
@@ -64,6 +66,7 @@ CREATE TABLE IF NOT EXISTS lists (
     media_type       TEXT NOT NULL CHECK (media_type IN ('movie', 'series', 'mixed')),
     visibility       TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('private', 'unlisted', 'public')),
     legacy_id        TEXT UNIQUE,
+    legacy_hash      TEXT,
     source_provider  TEXT,
     source_ref       TEXT,
     source_json      TEXT,

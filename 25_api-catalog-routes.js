@@ -201,6 +201,10 @@ async function handleFetch(request, env, ctx) {
     // connections) -- 28_connections.js.
     const connectionsResponse = await handleConnectionsApi(request, env, url, path);
     if (connectionsResponse) return connectionsResponse;
+    // /admin/api/lists-backfill/* (copying lists into the v2 tables, run from
+    // /admin) -- 30_lists-backfill.js.
+    const listsBackfillResponse = await handleListsBackfillApi(request, env, url, path);
+    if (listsBackfillResponse) return listsBackfillResponse;
 
     if (path === "/" || path === "") {
       ctx.waitUntil(bumpStat(env, "pageviews"));

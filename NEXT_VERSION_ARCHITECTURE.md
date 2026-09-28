@@ -755,6 +755,7 @@ The existing files keep their responsibilities:
 | `27_installs.js` | Install links: the encrypted-secrets move and `/api/installs` (P3a-8) |
 | `28_connections.js` | Provider connections, and catalogs reading them (P3a-9, P3a-10) |
 | `29_media.js` | The media resolver: any list item's id to one `media` row (P3b-2) |
+| `30_lists-backfill.js` | Copying the legacy lists, likes and anonymous lists into the v2 tables (P3b-3) |
 
 **New server-only areas go in new numbered files after `26_`**, each starting with a comment saying what it owns. They can't go between `09_` and `24_`, which are inside the page's template literal. Top-level names must be unique across every file.
 

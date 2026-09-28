@@ -160,3 +160,28 @@ Every install link saved by a signed-in person keeps its provider keys and token
 2. `/admin` → Maintenance → **Install links** → *Undo the move*. It puts every moved link's keys back into its KV record, exactly as they were saved, and empties the table. Links an account removed stay removed.
 
 Undo needs the same `TOKEN_ENCRYPTION_KEY`. Without that key the moved keys cannot be read by anyone, which is why step 3 keeps a copy.
+
+## 9. Copying lists into the new list tables (P3b-3)
+
+Phase 3b moves lists, likes and channels into proper D1 tables. The first part copies every existing list into them. **It only copies.** The lists people use today are not changed, and nothing on the site reads the copies until a later release switches over (`FF_V2_LISTS_READ`, P3b-7). So running it changes nothing a visitor sees.
+
+What it copies: every account's lists (with their order, items and likes), the old anonymous lists (kept unlisted, as D-6 decided), and likes on outside lists (MDBList, Trakt and the like). Channels come later (P3b-8).
+
+**Running it:**
+
+1. Apply migration `0016` (§4).
+2. Back up D1 (§5).
+3. `/admin` → Maintenance → **Unified accounts table** → *Migrate Accounts*, if it has not been run since the last deploy. Lists are copied account by account from that table.
+4. `/admin` → Maintenance → **Lists v2** → *Copy lists*. It works in small steps and keeps going by itself while the page is open. Closing the page pauses it; *Copy lists* carries on where it stopped.
+5. When it says *Done*, press *Check results*.
+
+**Reading the results:**
+
+- *Items … % not carried* is the share of list entries the copy could not carry. Each has a reason, with examples:
+  - *no usable id*: an entry with no IMDb or TMDB id. No catalog can show it today either.
+  - *listed twice*: the same title (or the same episode) twice in one list. The copy keeps it once.
+- *Titles TMDB could not place yet* are **kept**, with the id and name they had, and tried again later. They are not lost.
+- *Kept from the old totals*: likes counted before voters were recorded. The copy keeps the higher total, so no count people see goes down (D-9).
+- *Failed accounts* names each account the copy could not finish and why. The rest carry on.
+
+**Running it again:** *Start over* goes through every account again. It copies only the lists that changed since the last run, refreshes order and likes, and marks as deleted the copies of lists deleted since. Do this shortly before the release that switches reads to the new tables.

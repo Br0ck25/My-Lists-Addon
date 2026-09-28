@@ -7,8 +7,8 @@
 ## Current Status
 - **Last Updated**: 2026-09-28
 - **Last Active AI**: Claude Code (Opus 5.5)
-- **Active Task**: Phase 3b (lists, likes, channels). P3b-1 (migration `0016_lists_v2.sql`) is written and tested, waiting for the owner to apply it. P3b-2 (the media resolver, `29_media.js`) is done. Next: P3b-3, the list backfill, which needs the owner's approval before it touches stored data.
-- **Task State**: All tests passing (1,428 passed, 0 failed, 1 skipped: the opt-in network test). `verify.sh` checks pass. CI on GitHub runs the same suite on Node 22.
+- **Active Task**: Phase 3b (lists, likes, channels). P3b-1 (migration `0016_lists_v2.sql`) is written and tested, waiting for the owner to apply it. P3b-2 (the media resolver, `29_media.js`) is done. P3b-3 (the list backfill, `30_lists-backfill.js`) is written and tested; the owner runs it from `/admin` after deploying. Next: P3b-4, the list API.
+- **Task State**: All tests passing (1,435 passed, 0 failed, 1 skipped: the opt-in network test). `verify.sh` checks pass. CI on GitHub runs the same suite on Node 22.
 - **Git State**:
   - Phase 3a is merged into `main` (PR #1 and PR #2).
   - **All of Phase 3b goes on the branch `claude/beautiful-lamport-kx261g`**, in one draft PR into `main`. The owner deploys Phase 3b from that PR when it is done. Keep adding each P3b task to this branch as its own commit.
@@ -89,7 +89,7 @@ node scope_check.mjs worker worker_entry_combined.js
 ```
 Then delete `node_modules`.
 
-Last run (2026-09-28): all of the above pass, plus every CI step (scope, render and HTML checks). 1,428 tests passed, 0 failed, 1 skipped.
+Last run (2026-09-28): all of the above pass, plus every CI step (scope, render and HTML checks). 1,435 tests passed, 0 failed, 1 skipped.
 
 The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/json` to every POST, so a route test cannot notice a page that forgets them. A static test ("every mutating fetch the pages make sends a JSON content type") covers that instead.
 
@@ -152,6 +152,10 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
     - `stats` is counted per input (`found`, `resolved`, `stubs`, `unusable`), ready for P3b-3's reconciliation record.
     - D1 allows about 1,000 queries per invocation and each new title is one write, so P3b-3 must feed it about 1,000 items per invocation at most.
     - A test sandbox that loads `02_` must not call `fetch`: `02_`'s module-level `fetch` guard becomes the sandbox's global and calls itself. Load `00_` and `29_` only, and set `sandbox.fetch`.
+  - **P3b-3 (Claude):** the backfill `migrate.lists`, in `30_lists-backfill.js`, run from `/admin` → Maintenance → **Lists v2** (routes `/admin/api/lists-backfill/step` and `/status`, dispatched from `25_` next to installs and connections). The owner approved writing it; running it on production is theirs to do (`docs/OPERATIONS.md` §9). Details and deviations under P3b-3 in `NEXT_VERSION_TASKS.md`.
+    - **It must never write the legacy store.** Everything goes through `listsBackfillEnv`, which has no KV writes and refuses D1 writes outside the v2 tables. Keep it that way; a test enforces it.
+    - Channels are not copied yet (P3b-8). `lists.legacy_hash` was added to 0016.
+    - **Legacy bug found (not fixed):** `getCreatorList` (`02_`) rewrites a list's KV record from its D1 row on every dashboard read, without `sourceUrl`, `synced`, `lastSyncedAt` or `baseItemIds`, so imported and synced lists lose that bookkeeping on D1-bound deployments. It is live today, independent of Phase 3b. The owner has been told; fixing it is a small separate change (carry those four fields over from the KV record).
 
 ---
 
@@ -177,8 +181,8 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
 ---
 
 ## Next Steps for Incoming AI
-1. **Phase 3b** (lists, likes, channels) is under way on `claude/beautiful-lamport-kx261g`. P3b-1 and P3b-2 are written. Next is **P3b-3**, the backfill job `migrate.lists` (the next server file is `30_...`). Read `MIGRATION_PLAN.md` §3b and the P3b-1 and P3b-2 notes in `NEXT_VERSION_TASKS.md` before starting.
-     - **Ask the owner before building anything that runs the backfill against production data.** Writing and testing the job is fine; running it is their call, after a D1 backup and a KV export.
+1. **Phase 3b** (lists, likes, channels) is under way on `claude/beautiful-lamport-kx261g`. P3b-1 to P3b-3 are written. Next is **P3b-4**, the list API (`/api/lists/...`, behind a flag; the next server file is `31_...`). Read `MIGRATION_PLAN.md` §3b and the P3b-1 to P3b-3 notes in `NEXT_VERSION_TASKS.md` before starting.
+     - Nothing may write v2 lists for real users until the read switch (P3b-7) is designed: until then the backfill treats the legacy store as the truth and would overwrite v2-side edits on a re-run.
      - Phase 3b rewrites how lists are stored, so it needs the owner's approval before any backfill (P3b-3) touches stored data.
      - Decide which wins when an install has its own keys in `install_secrets` and its owner also has a connection. Today `install_secrets` is the only source.
      - v2 installs (`/i/{token}`) have no keys of their own, so their personal Trakt/MDBList/Simkl rows only work once this lands.

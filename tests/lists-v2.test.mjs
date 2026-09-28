@@ -4,7 +4,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { makeD1 } from "./harness.mjs";
+import { call, createUser, makeD1, makeEnv, makeKv, seedAnonPublishedList } from "./harness.mjs";
 
 // Phase 3b: lists, likes and channels as rows (migrations/0016_lists_v2.sql).
 //
@@ -480,5 +480,342 @@ describe("P3b-2: the media resolver", () => {
     assert.match(plan("SELECT id FROM media WHERE kind = 'movie' AND tmdb_id IN (1, 2)"), /INDEX idx_media_tmdb/);
     assert.match(plan("SELECT id FROM media WHERE kind = 'series' AND alt_id IN ('kitsu:1')"), /INDEX idx_media_alt/);
     assert.match(plan("SELECT id FROM media WHERE resolved_at IS NULL ORDER BY updated_at LIMIT 90"), /INDEX idx_media_unresolved/);
+  });
+});
+
+// --- P3b-3: copying the legacy lists into v2 (30_lists-backfill.js) -----------
+//
+// Through the real Worker: the fixture is built with the site's own routes
+// (so the legacy records have exactly the shape production writes), copied by
+// the admin backfill in deliberately tiny steps, and compared field by field.
+// TMDB is faked through globalThis.fetch, which the Worker's fetch guard calls.
+
+async function adminCookie(env) {
+  const r = await call(env, "/admin/login", { method: "POST", form: { key: env.ADMIN_KEY } });
+  const m = (r.headers.get("set-cookie") || "").match(/^([^=]+=[^;]+)/);
+  return m ? m[1] : "";
+}
+
+function withFakeTmdb({ finds = {}, shows = {}, movies = {} } = {}) {
+  const real = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const u = new URL(typeof input === "string" ? input : input.url);
+    if (u.hostname !== "api.themoviedb.org") return new Response("{}", { status: 404 });
+    const [, , kind, id] = u.pathname.split("/");
+    const body = kind === "find" ? (finds[id] || { movie_results: [], tv_results: [] })
+      : kind === "tv" ? shows[id] : kind === "movie" ? movies[id] : null;
+    return body ? new Response(JSON.stringify(body), { status: 200 }) : new Response("{}", { status: 404 });
+  };
+  return () => { globalThis.fetch = real; };
+}
+
+const TMDB_FIXTURE = {
+  finds: {
+    tt0137523: { movie_results: [FIGHT_CLUB], tv_results: [] },
+    tt0903747: { movie_results: [], tv_results: [BREAKING_BAD] },
+  },
+  shows: { 1396: { ...BREAKING_BAD, external_ids: { imdb_id: "tt0903747" } } },
+  movies: { 550: { ...FIGHT_CLUB, external_ids: { imdb_id: "tt0137523" } } },
+};
+
+async function saveList(env, user, body) {
+  const r = await call(env, "/api/creator/lists/save", {
+    method: "POST", json: { creatorName: user.creatorName, creatorKey: user.creatorKey, ...body },
+  });
+  assert.equal(r.body && r.body.ok, true, `save ${body.name}: ${JSON.stringify(r.body)}`);
+  return r.body.slug;
+}
+
+async function runBackfill(env, cookie, opts = {}) {
+  const responses = [];
+  for (let i = 0; i < 500; i++) {
+    const r = await call(env, "/admin/api/lists-backfill/step", { method: "POST", cookie, json: { ...opts, restart: i === 0 && !!opts.restart } });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    responses.push(r.body);
+    if (r.body.done) return responses;
+  }
+  throw new Error("backfill did not finish");
+}
+
+// Everything the legacy store holds, to prove the copy leaves it alone.
+function legacySnapshot(env) {
+  const kv = [...env.CONFIGS._store.entries()].sort();
+  const tables = {};
+  for (const t of ["creators", "creator_lists", "published_lists", "list_likes"]) {
+    tables[t] = env.DB._db.prepare(`SELECT * FROM ${t} ORDER BY 1, 2`).all();
+  }
+  return JSON.stringify({ kv, tables });
+}
+
+async function buildLegacyFixture(env) {
+  const ann = await createUser(env, "annlists");
+  const ben = await createUser(env, "benlikes");
+  const cat = await createUser(env, "catmixes");
+
+  const top = await saveList(env, ann, {
+    name: "Top Films", type: "movie", visibility: "public",
+    items: [
+      { id: "tt0137523", type: "movie", name: "Fight Club", year: "1999", poster: "https://image.tmdb.org/t/p/w500/fc.jpg" },
+      { name: "No id at all", type: "movie" },
+      { id: "tmdb:550", type: "movie", name: "Fight Club again" },
+      { id: "tt9999999", type: "movie", name: "Lost Film", year: "1931" },
+    ],
+  });
+  const crossover = await saveList(env, ann, {
+    name: "Crossover", type: "series", visibility: "private",
+    items: [
+      { id: "62085", type: "episode", showId: "1396", showTitle: "Breaking Bad", name: "Pilot", seasonNum: 1, episodeNum: 1 },
+      { id: "62086", type: "episode", showId: "1396", showTitle: "Breaking Bad", name: "Cat's in the Bag", seasonNum: 1, episodeNum: 2 },
+      { id: "tt0137523", type: "movie", name: "Fight Club", isCompanion: true, companionType: "bridge_movie", companionNote: "Canon Bridge Movie" },
+    ],
+  });
+  const imported = await saveList(env, ann, {
+    name: "Imported", type: "series", visibility: "private",
+    sourceUrl: "https://mdblist.com/lists/someone/good-shows", synced: true, lastSyncedAt: 1700000000000, baseItemIds: ["tt0903747"],
+    items: [{ id: "tt0903747", type: "series", name: "Breaking Bad" }],
+  });
+  const reorder = await call(env, "/api/creator/lists/reorder", {
+    method: "POST", json: { creatorName: ann.creatorName, creatorKey: ann.creatorKey, order: [crossover, top, imported] },
+  });
+  assert.equal(reorder.body.ok, true);
+
+  // Likes: one through the route, plus voters only the KV ledger remembers --
+  // a signed-out vote from before D-6, and an account that no longer exists --
+  // and a legacy total higher than every voter on record.
+  const like = await call(env, "/api/lists/like", {
+    method: "POST", json: { username: "annlists", slug: top, creatorName: ben.creatorName, creatorKey: ben.creatorKey },
+  });
+  assert.equal(like.body.ok, true, JSON.stringify(like.body));
+  const ledgerKey = `listlikevoters:annlists:${top}`;
+  const ledger = JSON.parse(env.CONFIGS._store.get(ledgerKey) || "[]");
+  env.CONFIGS._store.set(ledgerKey, JSON.stringify([...ledger, "a:deadbeef", "u:ghost"]));
+  env.DB._db.prepare("UPDATE creator_lists SET likes = 10 WHERE id = ?").run(`annlists:${top}`);
+
+  // A list whose KV copy is fresher than its D1 row (a dropped D1 write).
+  const catSlug = await saveList(env, cat, { name: "Mixed Bag", type: "mixed", visibility: "public", items: [{ id: "tt0903747", type: "series" }] });
+  const catKey = `creatorlist:catmixes:${catSlug}`;
+  const catRecord = JSON.parse(env.CONFIGS._store.get(catKey));
+  env.CONFIGS._store.set(catKey, JSON.stringify({ ...catRecord, name: "Mixed Bag (edited)", updatedAt: catRecord.updatedAt + 60000 }));
+
+  // A legacy anonymous list with legacy votes, and a like on an outside list.
+  seedAnonPublishedList(env, "cozy-picks", { name: "Cozy Picks", items: [{ id: "tt0903747", type: "series" }], likes: 2 });
+  env.CONFIGS._store.set("listlikevoters:user:cozy-picks", JSON.stringify(["a:111", "a:222"]));
+  const ext = await call(env, "/api/lists/like-external", {
+    method: "POST", json: { url: "https://mdblist.com/lists/someone/good-shows", creatorName: ben.creatorName, creatorKey: ben.creatorKey },
+  });
+  assert.equal(ext.body.ok, true, JSON.stringify(ext.body));
+
+  return { ann, ben, cat, slugs: { top, crossover, imported, catSlug } };
+}
+
+describe("P3b-3: copying the legacy lists into v2", () => {
+  it("copies every list, item and like, in the dashboard's order, and leaves the legacy store untouched", async () => {
+    const restore = withFakeTmdb(TMDB_FIXTURE);
+    try {
+      const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1(), TMDB_API_KEY: "test-key" });
+      const fx = await buildLegacyFixture(env);
+      const cookie = await adminCookie(env);
+      // Not read through the dashboard route here: that route rewrites its KV
+      // cache copies (getCreatorList), and in doing so drops an imported list's
+      // sourceUrl, synced and baseItemIds -- a legacy bug, recorded in
+      // HANDOFF.md. The order check against the route is its own test below.
+      const before = legacySnapshot(env);
+
+      // Tiny steps, so every list and the long one are resumed mid-way.
+      const steps = await runBackfill(env, cookie, { maxOps: 25, maxItems: 2 });
+      assert.ok(steps.length > 5, `expected many steps, got ${steps.length}`);
+      assert.equal(legacySnapshot(env), before, "the legacy KV keys and tables are exactly as they were");
+
+      const db = env.DB._db;
+      const annId = db.prepare("SELECT id FROM accounts WHERE username = 'annlists'").get().id;
+      const benId = db.prepare("SELECT id FROM accounts WHERE username = 'benlikes'").get().id;
+      const lists = db.prepare("SELECT * FROM lists WHERE owner_account_id = ? AND deleted_at IS NULL ORDER BY position").all(annId);
+      assert.deepEqual(lists.map((l) => l.slug), [fx.slugs.crossover, fx.slugs.top, fx.slugs.imported], "the order set on the dashboard");
+      const bySlug = Object.fromEntries(lists.map((l) => [l.slug, l]));
+
+      const top = bySlug[fx.slugs.top];
+      assert.deepEqual({ name: top.name, kind: top.kind, type: top.media_type, vis: top.visibility, legacy: top.legacy_id },
+        { name: "Top Films", kind: "custom", type: "movie", vis: "public", legacy: `c:annlists:${fx.slugs.top}` });
+      const topItems = db.prepare(
+        "SELECT li.position, m.imdb_id, m.title, m.resolved_at, li.extra_json FROM list_items li JOIN media m ON m.id = li.media_id WHERE li.list_id = ? ORDER BY li.position"
+      ).all(top.id);
+      assert.deepEqual(topItems.map((r) => [r.position, r.imdb_id]), [[0, "tt0137523"], [3, "tt9999999"]],
+        "Fight Club once (its tmdb:550 duplicate is the same title), the item with no id left out, the unknown title kept as a stub");
+      assert.equal(topItems[0].extra_json, null, "nothing beyond what the media row says");
+      assert.equal(topItems[1].resolved_at, null);
+      assert.equal(top.item_count, 2);
+
+      const crossItems = db.prepare(
+        "SELECT li.season, li.episode, m.kind, m.tmdb_id, li.extra_json FROM list_items li JOIN media m ON m.id = li.media_id WHERE li.list_id = ? ORDER BY li.position"
+      ).all(bySlug[fx.slugs.crossover].id);
+      assert.deepEqual(crossItems.map((r) => [r.kind, r.tmdb_id, r.season, r.episode]),
+        [["series", 1396, 1, 1], ["series", 1396, 1, 2], ["movie", 550, null, null]]);
+      assert.deepEqual(JSON.parse(crossItems[0].extra_json), { id: "62085", name: "Pilot" }, "an episode keeps its own id and name");
+      assert.deepEqual(JSON.parse(crossItems[2].extra_json), { isCompanion: true, companionType: "bridge_movie", companionNote: "Canon Bridge Movie" });
+
+      const imported = bySlug[fx.slugs.imported];
+      assert.deepEqual({ kind: imported.kind, provider: imported.source_provider, ref: imported.source_ref, synced: imported.synced_at, src: JSON.parse(imported.source_json) },
+        { kind: "synced", provider: "mdblist", ref: "https://mdblist.com/lists/someone/good-shows", synced: 1700000000000, src: { baseItemIds: ["tt0903747"] } });
+
+      const voters = db.prepare("SELECT voter FROM likes WHERE target_type = 'list' AND target_id = ? ORDER BY voter").all(top.public_id).map((r) => r.voter);
+      assert.deepEqual(voters, ["a:deadbeef", `acct:${benId}`, "u:ghost"].sort());
+      assert.equal(top.like_count, 10, "the higher legacy total is kept (D-9)");
+
+      const search = db.prepare("SELECT rowid FROM lists_fts2 WHERE lists_fts2 MATCH ?").all("films").map((r) => r.rowid);
+      assert.deepEqual(search, [top.id], "public lists are searchable, private ones are not");
+
+      const cat = db.prepare("SELECT l.name FROM lists l JOIN accounts a ON a.id = l.owner_account_id WHERE a.username = 'catmixes'").get();
+      assert.equal(cat.name, "Mixed Bag (edited)", "the fresher KV copy wins, as getCreatorList decides");
+
+      const cozy = db.prepare("SELECT * FROM lists WHERE legacy_id = 'a:cozy-picks'").get();
+      assert.deepEqual({ owner: cozy.owner_account_id, kind: cozy.kind, vis: cozy.visibility, likes: cozy.like_count, items: cozy.item_count },
+        { owner: null, kind: "legacy_anonymous", vis: "unlisted", likes: 2, items: 1 });
+
+      const ext = db.prepare("SELECT target_id, voter FROM likes WHERE target_type = 'external'").all();
+      assert.equal(ext.length, 1);
+      assert.equal(ext[0].voter, `acct:${benId}`);
+      assert.ok(env.CONFIGS._store.has(`externallike:${ext[0].target_id}`), "keyed by the same URL hash as the legacy count");
+
+      const status = await call(env, "/admin/api/lists-backfill/status", { cookie });
+      assert.equal(status.body.run.phase, "done");
+      assert.deepEqual(status.body.accounts, { done: 3, running: 0, failed: 0 });
+      const t = status.body.totals;
+      assert.deepEqual({ lists: t.lists.legacy, copied: t.lists.copied, items: t.items.legacy, itemsCopied: t.items.copied, unusable: t.items.unusable, dup: t.items.duplicates },
+        { lists: 4, copied: 4, items: 9, itemsCopied: 7, unusable: 1, dup: 1 });
+      assert.equal(t.likes.keptFromCount, 7);
+      assert.ok(Math.abs(status.body.mismatchRate - 2 / 9) < 1e-9);
+      const samples = status.body.worst[0].samples;
+      assert.equal(samples.unusable[0].name, "No id at all", "every difference comes with an example");
+      assert.equal(samples.duplicates.length, 1);
+    } finally {
+      restore();
+    }
+  });
+
+  it("puts lists in the order /api/creator/lists shows them, including records its order key lost", async () => {
+    const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
+    const u = await createUser(env, "orderly");
+    const slugs = [];
+    for (const name of ["Alpha", "Bravo", "Charlie", "Delta"]) {
+      slugs.push(await saveList(env, u, { name, type: "movie", visibility: "private", items: [{ id: "tt0000001" }] }));
+    }
+    await call(env, "/api/creator/lists/reorder", { method: "POST", json: { creatorName: u.creatorName, creatorKey: u.creatorKey, order: [slugs[2], slugs[0], "watchlist", slugs[3]] } });
+    // D1 holds no order at all (rows written before sort_order existed), so
+    // the KV order key decides; Bravo is in neither, so it comes last.
+    env.DB._db.prepare("UPDATE creator_lists SET sort_order = NULL WHERE username = 'orderly'").run();
+    const dashboard = await call(env, "/api/creator/lists", { method: "POST", json: { creatorName: u.creatorName, creatorKey: u.creatorKey } });
+    await runBackfill(env, await adminCookie(env));
+    const copied = env.DB._db.prepare("SELECT slug FROM lists WHERE owner_account_id IS NOT NULL ORDER BY position").all().map((r) => r.slug);
+    assert.deepEqual(copied, dashboard.body.order.filter((s) => slugs.includes(s)));
+    assert.deepEqual(copied, [slugs[2], slugs[0], slugs[3], slugs[1]]);
+  });
+
+  it("copies only what changed on a second run, and retires copies of deleted lists", async () => {
+    const restore = withFakeTmdb(TMDB_FIXTURE);
+    try {
+      const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1(), TMDB_API_KEY: "test-key" });
+      const fx = await buildLegacyFixture(env);
+      const cookie = await adminCookie(env);
+      await runBackfill(env, cookie);
+      const db = env.DB._db;
+      const idsBefore = db.prepare("SELECT legacy_id, id, public_id FROM lists ORDER BY legacy_id").all();
+
+      await saveList(env, fx.ann, { slug: fx.slugs.imported, name: "Imported", type: "series", visibility: "private",
+        items: [{ id: "tt0903747", type: "series" }, { id: "tt0137523", type: "movie" }] });
+      const del = await call(env, "/api/creator/lists/delete", { method: "POST", json: { creatorName: fx.ann.creatorName, creatorKey: fx.ann.creatorKey, slug: fx.slugs.top } });
+      assert.equal(del.body.ok, true);
+
+      await runBackfill(env, cookie, { restart: true });
+      const idsAfter = db.prepare("SELECT legacy_id, id, public_id FROM lists ORDER BY legacy_id").all();
+      assert.deepEqual(idsAfter, idsBefore, "the same rows and public ids: nothing copied twice");
+      const imported = db.prepare("SELECT id, item_count FROM lists WHERE legacy_id = ?").get(`c:annlists:${fx.slugs.imported}`);
+      assert.equal(imported.item_count, 2, "the edited list was copied again");
+      const top = db.prepare("SELECT id, deleted_at FROM lists WHERE legacy_id = ?").get(`c:annlists:${fx.slugs.top}`);
+      assert.ok(top.deleted_at > 0, "the deleted list's copy is marked deleted");
+      assert.deepEqual(db.prepare("SELECT rowid FROM lists_fts2 WHERE rowid = ?").all(top.id), [], "and taken out of search");
+
+      const status = await call(env, "/admin/api/lists-backfill/status", { cookie });
+      assert.equal(status.body.totals.lists.copied, 1, "only the edited list");
+      assert.equal(status.body.totals.lists.removed, 1);
+      assert.ok(status.body.totals.lists.unchanged >= 2);
+    } finally {
+      restore();
+    }
+  });
+
+  it("works through a long list in bounded steps", async () => {
+    const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() }); // no TMDB key: every title is a stub, nothing is fetched
+    const u = await createUser(env, "longlists");
+    const items = Array.from({ length: 1200 }, (_, i) => ({ id: `tt${3000000 + i}`, type: "movie" }));
+    await saveList(env, u, { name: "Everything", type: "movie", visibility: "private", items });
+    const steps = await runBackfill(env, await adminCookie(env));
+    assert.ok(steps.length >= 3, "500 items a step at most");
+    for (const s of steps) assert.ok(s.ops < 700, `a step used ${s.ops} D1 and KV operations`);
+    const row = env.DB._db.prepare("SELECT item_count FROM lists WHERE owner_account_id IS NOT NULL").get();
+    assert.equal(row.item_count, 1200);
+    const order = env.DB._db.prepare("SELECT position FROM list_items ORDER BY position").all().map((r) => r.position);
+    assert.deepEqual(order, items.map((_, i) => i));
+  });
+
+  it("records a failed account and carries on with the rest", async () => {
+    const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
+    const a = await createUser(env, "breaksalot");
+    const b = await createUser(env, "worksfine");
+    await saveList(env, a, { name: "Bad", type: "movie", visibility: "private", items: [{ id: "tt0000001" }] });
+    await saveList(env, b, { name: "Good", type: "movie", visibility: "private", items: [{ id: "tt0000002" }] });
+    env.DB.failWhen((sql, args) => /^\s*INSERT INTO lists\b/i.test(sql) && args.includes("bad"));
+    const cookie = await adminCookie(env);
+    await runBackfill(env, cookie);
+    env.DB.failWhen(null);
+    const status = await call(env, "/admin/api/lists-backfill/status", { cookie });
+    assert.deepEqual(status.body.accounts, { done: 1, running: 0, failed: 1 });
+    assert.match(status.body.failed[0].error, /injected failure/);
+    assert.equal(env.DB._db.prepare("SELECT count(*) AS n FROM lists WHERE slug = 'good'").get().n, 1);
+  });
+
+  it("asks for the accounts table first, takes one step at a time, and is admin only", async () => {
+    const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
+    const cookie = await adminCookie(env);
+    const empty = await call(env, "/admin/api/lists-backfill/step", { method: "POST", cookie, json: {} });
+    assert.equal(empty.status, 409);
+    assert.match(empty.body.error, /Migrate Accounts/);
+
+    await createUser(env, "someoneelse");
+    env.DB._db.prepare("UPDATE jobs SET run_after = ? WHERE dedupe_key = 'migrate.lists:run'").run(Date.now() + 60000);
+    const busy = await call(env, "/admin/api/lists-backfill/step", { method: "POST", cookie, json: {} });
+    assert.equal(busy.body.busy, true, "a step already holds the lease");
+
+    const anon = await call(env, "/admin/api/lists-backfill/step", { method: "POST", json: {} });
+    assert.equal(anon.status, 401);
+    const anonStatus = await call(env, "/admin/api/lists-backfill/status");
+    assert.equal(anonStatus.status, 401);
+  });
+
+  it("can only write to the v2 tables, and cannot write KV at all", () => {
+    const sandbox = { console, URL, TextEncoder, crypto: globalThis.crypto };
+    sandbox.globalThis = sandbox;
+    vm.createContext(sandbox);
+    for (const rel of ["00_constants.js", "29_media.js", "30_lists-backfill.js"]) {
+      vm.runInContext(fs.readFileSync(path.join(REPO_ROOT, rel), "utf8"), sandbox, { filename: rel });
+    }
+    const meter = { ops: 0 };
+    const guarded = sandbox.listsBackfillEnv({ DB: makeD1(), CONFIGS: makeKv(), TMDB_API_KEY: "k" }, meter);
+    for (const sql of [
+      "UPDATE creator_lists SET likes = 0",
+      "DELETE FROM list_likes WHERE list_id = 'x'",
+      "INSERT INTO published_lists (slug) VALUES ('x')",
+      "INSERT OR REPLACE INTO creators (username) VALUES ('x')",
+      "update accounts set version = 1",
+      "DROP TABLE lists",
+      "CREATE TABLE sneaky (x)",
+    ]) {
+      assert.throws(() => guarded.DB.prepare(sql), /refusing/, sql);
+    }
+    for (const sql of ["INSERT INTO lists (public_id) VALUES ('x')", "UPDATE OR IGNORE media SET title = 'x'", "DELETE FROM list_items WHERE list_id = 1", "SELECT * FROM creator_lists"]) {
+      assert.doesNotThrow(() => guarded.DB.prepare(sql), sql);
+    }
+    assert.equal(guarded.CONFIGS.put, undefined);
+    assert.equal(guarded.CONFIGS.delete, undefined);
+    assert.equal(guarded.TMDB_API_KEY, "k", "everything else passes through");
   });
 });

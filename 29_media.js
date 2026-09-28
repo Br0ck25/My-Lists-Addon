@@ -28,6 +28,7 @@
 
 const MEDIA_LOOKUP_CHUNK = 90;      // ids per IN (...): D1 allows 100 bound parameters, and one more is the kind
 const MEDIA_WRITE_CHUNK = 50;       // statements per D1 batch
+const MEDIA_INSERT_ROWS = 8;        // rows per INSERT: 12 parameters each, under D1's 100
 const MEDIA_TMDB_CONCURRENCY = 6;   // a Worker keeps at most six outbound connections open at once
 const MEDIA_TMDB_LOOKUP_MAX = 200;  // titles looked up at TMDB per call, unless the caller sets maxLookups
 const MEDIA_ROW_COLUMNS = "id, kind, tmdb_id, imdb_id, tvdb_id, alt_id, title, year, resolved_at";
@@ -337,13 +338,20 @@ async function resolveMediaBatch(env, inputs, opts = {}) {
   // lands on the resolved row rather than the other way round. ON CONFLICT
   // DO NOTHING covers two inputs naming one title, and a concurrent call
   // inserting it first: either way the read below finds the row that won.
+  // Several rows per statement: D1 allows about 1,000 queries per
+  // invocation, and a large list brings hundreds of new titles at once.
   inserted.sort((a, b) => Number(b.resolved) - Number(a.resolved));
-  for (const c of inserted) {
+  for (let i = 0; i < inserted.length; i += MEDIA_INSERT_ROWS) {
+    const rows = inserted.slice(i, i + MEDIA_INSERT_ROWS);
+    const args = [];
+    for (const c of rows) {
+      args.push(c.kind, c.tmdbId || null, c.imdbId || null, c.tvdbId || null, c.altId || null, c.title || null, c.year || null,
+        c.posterPath, c.backdropPath, c.resolved ? now : null, now, now);
+    }
     writes.push(env.DB.prepare(
       `INSERT INTO media (kind, tmdb_id, imdb_id, tvdb_id, alt_id, title, year, poster_path, backdrop_path, resolved_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`
-    ).bind(c.kind, c.tmdbId || null, c.imdbId || null, c.tvdbId || null, c.altId || null, c.title || null, c.year || null,
-      c.posterPath, c.backdropPath, c.resolved ? now : null, now, now));
+       VALUES ${rows.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ")} ON CONFLICT DO NOTHING`
+    ).bind(...args));
   }
   for (let i = 0; i < writes.length; i += MEDIA_WRITE_CHUNK) {
     await env.DB.batch(writes.slice(i, i + MEDIA_WRITE_CHUNK));

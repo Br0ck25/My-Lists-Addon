@@ -386,6 +386,7 @@ CREATE TABLE IF NOT EXISTS lists (
     media_type       TEXT NOT NULL CHECK (media_type IN ('movie', 'series', 'mixed')),
     visibility       TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('private', 'unlisted', 'public')),
     legacy_id        TEXT UNIQUE,
+    legacy_hash      TEXT,
     source_provider  TEXT,
     source_ref       TEXT,
     source_json      TEXT,

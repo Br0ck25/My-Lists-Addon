@@ -22,6 +22,15 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 `FF_SESSIONS` and `FF_INSTALLS` stay **off** (unset). Leave them off until the new sign-in and install-link screens ship.
 
+### 📋 Copying existing lists into the new tables (P3b-3)
+
+- **A new `/admin` button copies every list into the new list tables**: each account's lists in their dashboard order, their items (each matched to its movie or show record), their likes, the old anonymous lists (unlisted, as D-6 decided), and likes on outside lists. Channels follow in a later step.
+- **It only copies.** It cannot write to the old storage at all, the lists people use today are not changed, and nothing on the site reads the copies yet.
+- It runs in small steps, can be paused and carried on, and can be run again (only lists that changed are copied again).
+- *Check results* shows the reconciliation: how many lists and items were found and copied, and why any item was not (no usable id, or listed twice), with examples. No like total goes down.
+- Run it after deploying and applying migration 0016: see `docs/OPERATIONS.md` §9.
+- Migration 0016 gains one column (`lists.legacy_hash`) before anyone has applied it.
+
 ### 🎬 One record per movie or show (P3b-2)
 
 - **`29_media.js` turns any list item's id into one `media` row**, the record lists v2 entries point at. It checks the database first, then asks TMDB, then stores the answer, so each title is looked up once for the whole site.

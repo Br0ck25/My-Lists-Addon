@@ -2421,6 +2421,16 @@ async function renderAdminDashboard(env) {
       <span id="installsRestoreStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
     </div>
 
+    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
+      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Lists v2: copy existing lists</div>
+      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Copies every account&rsquo;s lists, the old anonymous lists, and their likes into the new list tables (migration 0016). It only copies: the lists people use today are not changed, and nothing reads the copies yet. Run <strong>Migrate Accounts</strong> first, and back up D1 before the first run. It works in small steps and can be stopped and carried on; <strong>Start over</strong> runs it again from the first account, copying only what changed.</p>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillBtn" onclick="runListsBackfill(false)" ${isD1Bound ? '' : 'disabled'}>Copy lists</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillRestartBtn" onclick="runListsBackfill(true)" ${isD1Bound ? '' : 'disabled'}>Start over</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillStatusBtn" onclick="runListsBackfillStatus()" ${isD1Bound ? '' : 'disabled'}>Check results</button>
+      <span id="listsBackfillStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <div id="listsBackfillResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
+    </div>
+
     <div class="panel" style="margin:0; padding:14px 16px;">
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Database schema</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Migrations are applied by hand and nothing records that it happened, so this Worker can end up running ahead of its own database. It degrades quietly when that happens rather than refusing to start &mdash; which is why this check exists. Run it after any deploy that shipped a new file under <code>migrations/</code>.</p>
@@ -2963,6 +2973,83 @@ async function renderAdminDashboard(env) {
         status.textContent = 'Failed: network error (' + restored + ' restored so far).';
       }
       btn.disabled = false;
+    }
+
+    // Lists v2 backfill (P3b-3). One bounded step per request; this keeps
+    // asking until the server says it is done, so closing the page just
+    // pauses it and Copy lists carries on from where it stopped.
+    async function runListsBackfill(restart) {
+      if (restart && !confirm('Run the copy again from the first account? Copies already made are kept; only lists that changed are copied again.')) return;
+      const btns = [document.getElementById('listsBackfillBtn'), document.getElementById('listsBackfillRestartBtn')];
+      const status = document.getElementById('listsBackfillStatus');
+      btns.forEach(function (b) { b.disabled = true; });
+      let pendingRestart = !!restart;
+      let steps = 0;
+      try {
+        while (steps < 20000) {
+          steps++;
+          const res = await fetch('/admin/api/lists-backfill/step', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ restart: pendingRestart }),
+          });
+          const data = await res.json();
+          if (data.busy) {
+            status.textContent = 'Another step is running. Waiting...';
+            await new Promise(function (r) { setTimeout(r, 5000); });
+            continue;
+          }
+          pendingRestart = false;
+          if (!data.ok) {
+            status.textContent = 'Stopped: ' + (data.error || 'unknown error');
+            break;
+          }
+          const failedNote = data.accountsFailed ? ' (' + data.accountsFailed + ' failed)' : '';
+          if (data.done) {
+            status.textContent = 'Done: ' + data.accountsDone + ' accounts' + failedNote + '. Press Check results.';
+            break;
+          }
+          status.textContent = 'Copying (' + data.phase + '): ' + data.accountsDone + ' of ' + data.accountsTotal + ' accounts' + failedNote + '...';
+        }
+      } catch (e) {
+        status.textContent = 'Stopped: network error. Press Copy lists to carry on.';
+      }
+      btns.forEach(function (b) { b.disabled = false; });
+    }
+
+    async function runListsBackfillStatus() {
+      const status = document.getElementById('listsBackfillStatus');
+      const out = document.getElementById('listsBackfillResult');
+      status.textContent = 'Checking...';
+      try {
+        const res = await fetch('/admin/api/lists-backfill/status');
+        const d = await res.json();
+        if (!d.ok) {
+          status.textContent = 'Unavailable: ' + (d.error || 'unknown error');
+          return;
+        }
+        status.textContent = 'Phase: ' + d.run.phase + (d.run.lastError ? ' (last error: ' + d.run.lastError + ')' : '') + '.';
+        const t = d.totals;
+        const lines = [
+          'Accounts: ' + (d.accounts.done || 0) + ' done, ' + (d.accounts.running || 0) + ' in progress, ' + (d.accounts.failed || 0) + ' failed.',
+          'Lists: ' + t.lists.legacy + ' found, ' + t.lists.copied + ' copied, ' + t.lists.unchanged + ' unchanged since the last run, ' + t.lists.removed + ' copies of deleted lists retired, ' + t.lists.missing + ' order entries with no list behind them.',
+          'Items: ' + t.items.legacy + ' in the old lists, ' + t.items.copied + ' copied, ' + (d.mismatchRate * 100).toFixed(3) + '% not carried: ' + t.items.unusable + ' with no usable id (no catalog could show them), ' + t.items.duplicates + ' listed twice' + (t.items.carried ? ', ' + t.items.carried + ' on lists copied in an earlier run' : '') + '. ' + t.items.stubs + ' titles TMDB could not place yet (kept, tried again later).',
+          'Likes: ' + t.likes.legacy + ' shown before, ' + t.likes.voters + ' voters copied, ' + t.likes.keptFromCount + ' kept from the old totals with no voter on record.',
+        ];
+        if (d.anonymous) lines.push('Anonymous lists: ' + d.anonymous.lists.legacy + ' found, ' + d.anonymous.items.copied + ' of ' + d.anonymous.items.legacy + ' items copied.');
+        if (d.external) lines.push('Likes on outside lists: ' + d.external.targets + ' lists, ' + d.external.voters + ' voters copied.');
+        if (d.failed.length) lines.push('Failed accounts: ' + d.failed.map(function (f) { return '#' + f.accountId + ' (' + f.error + ')'; }).join('; '));
+        if (d.worst.length) lines.push('Most items not carried: ' + d.worst.map(function (w) { return '#' + w.accountId + ' ' + (w.mismatchRate * 100).toFixed(2) + '%'; }).join(', ') + '. Examples from the first: ' + JSON.stringify(d.worst[0].samples));
+        out.innerHTML = '';
+        lines.forEach(function (line) {
+          const div = document.createElement('div');
+          div.style.margin = '0 0 4px';
+          div.textContent = line;
+          out.appendChild(div);
+        });
+      } catch (e) {
+        status.textContent = 'Failed: network error.';
+      }
     }
 
     // Browsing one creator's stored list records.
