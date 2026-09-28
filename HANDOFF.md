@@ -6,13 +6,13 @@
 
 ## Current Status
 - **Last Updated**: 2026-09-28
-- **Last Active AI**: Claude Code (Opus 5.5)
-- **Active Task**: none in progress. **Phase 5 (jobs and caching) is merged into `main` (PR #6)**: P5-1 to P5-11, one commit each (`44_` to `54_`). What is left of Phase 5 waits on the owner's rollout (see "What is left of Phase 5" under Phase 5 below). Next in the plan is **Phase 6** (the frontend). Phases 3a to 4 are merged (PRs #1 to #5); their rollouts (deploy, migrations, the copies, the optional switches) are the owner's.
-- **Task State**: 1,661 tests pass, 0 fail, 1 skipped, both ways (after P5-11). Before Phase 5: 1,590 tests pass, 0 fail, 1 skipped, both as they are and with `MLA_TEST_V2_LISTS_READ=1`. Build, sync, syntax, scope, render and HTML checks pass.
+- **Last Active AI**: Arena Agent Mode (Phase 6)
+- **Active Task**: **Phase 6 (the frontend) is in progress on `arena/01a0e9c1-my-lists-addon`, draft PR #7.** **P6-1 is done** (the new UI shell, behind the `FF_NEW_UI` cookie; see "Phase 6" below). P6-2 to P6-10 follow in later commits on the same branch. **Phase 5 (jobs and caching) is merged into `main` (PR #6)**: P5-1 to P5-11, one commit each (`44_` to `54_`). What is left of Phase 5 waits on the owner's rollout (see "What is left of Phase 5" under Phase 5 below). Phases 3a to 4 are merged (PRs #1 to #5); their rollouts (deploy, migrations, the copies, the optional switches) are the owner's.
+- **Task State**: 1,685 tests pass, 0 fail, 1 skipped, both ways (after P6-1). Before Phase 6: 1,661 tests pass, 0 fail, 1 skipped, both ways (after P5-11). Build, sync, syntax, scope, render and HTML checks pass, and the checks now include the new UI shell page as a fourth render.
 - **Git State**:
   - Phases 3a, 3b, 3c and 4 are merged into `main` (PRs #1 to #5). Phase 4 was built on `claude/hopeful-davinci-dx55ds`, one commit per P4 task.
   - Phases 3a to 5 are merged into `main` (PRs #1 to #6). Phase 5 was built on `claude/dazzling-hamilton-okg8t8`.
-  - **Phase 6 starts on a fresh branch from `main`**, in one draft PR, one commit per task, as before.
+  - **Phase 6 is being built on `arena/01a0e9c1-my-lists-addon`** (branched from `main` at `be96c22`), in one draft PR (**#7**), one commit per task, as before. P6-1 is committed (`3320fc8`).
 - **The owner is not a programmer.** Explain in plain words, do the git work for them, and ask before anything that changes stored user data or needs a dashboard change.
 
 ---
@@ -231,6 +231,16 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
   - **P5-11 (Claude):** `54_materializer.js` behind `FF_MATERIALIZER`: one build per install per hour for dedupe installs. `dedupeAcrossListEntries` stays until the flag is on for good.
   - **What is left of Phase 5 (all waits on the owner's rollout):** P5-4's second half (after a week of `shelf.shadow` results: `FF_SHOW_SCHEDULE`, then delete the legacy sweeps and client shelf builders); P5-6's `/api/bulk-resolve` removal (after P6-6); and the deletions deferred behind switches: `prewarmSharedCatalogs`' chart blocks (`FF_CHART_SNAPSHOTS`), the BetterPosters KV keys and `prewarmBetterPosters` (`BLOBS` + `JOBS`), `dedupeAcrossListEntries` (`FF_MATERIALIZER`). Next in the plan is Phase 6 (the frontend).
 
+- **Phase 6 (in progress, draft PR #7):**
+  - **P6-1 (Arena):** the new UI shell, **behind the `FF_NEW_UI` cookie, off for everyone by default**. `docs/OPERATIONS.md` §20 has the two links; `NEXT_VERSION_TASKS.md` has the detail.
+    - `00_`: `NEW_UI_COOKIE`, `APP_SHELL_TABS` (the **one** table of views, paths and sub-tabs; nav, head script and client router all read it) and `APP_SHELL_PATHS`.
+    - `02_`: `isNewUiRequest`, `appShellCookieHeader`, `appShellSwitchResponse` (`?ff_new_ui=1|0` → 302 + `Set-Cookie`) and `newUiPageOpts`; `renderBuilderCached` renders and memoizes the shell variant separately.
+    - `09_`: the shell's chrome — nav as real links (keeping the legacy `tab-desktop-*` ids so the panels' `aria-labelledby` still resolves), the install bar and the stylesheet. `16_`/`20_`: the legacy switchers route through `appShellHandleNav` and skip their own `history` writes while the shell owns the address bar. `24_`: the shell module (router, `appShellState`, `appShellApiFetch`, `appShellDialog`, install bar, `initAppShell`). `25_`/`26_`: the switch and the paths, `404` without the cookie.
+    - **Add a view by adding one entry to `APP_SHELL_TABS`**, not by editing the nav, the head script and the router separately; a test keeps the three agreeing.
+    - The bundle and the stylesheet are **shared by both variants** and content-hashed, so shell behaviour lives in the bundle and branches on `NEW_UI` — never emit a second bundle for the shell.
+    - **Checked as its own render** from now on: `node render_check.js x.html --shell` (also in `verify.sh` and CI). The legacy-page-only checks cannot see a name the shell page declares and the legacy one does not, which is how `APP_SHELL_HEAD_ROUTES` got its `ReferenceError`.
+    - **Left for the tasks that own them:** the views are still the legacy panels inside the new frame (P6-2 to P6-7), the legacy nav markup is still emitted for the non-shell page, and P6-8 removes the inline handlers and `alert()`s.
+
 ## Owner Actions Still Open (not code)
 1. **Deploy what is on `main`:**
    1. back up D1;
@@ -255,7 +265,7 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
 ---
 
 ## Next Steps for Incoming AI
-1. **Phase 5 is merged** into `main` (PR #6). What is left is the owner's: set up the job queue (OPERATIONS §18: queues `mylists-jobs` and `mylists-jobs-dlq`, this Worker as consumer, bind `JOBS`, cron `*/5 * * * *`, then *Send a test job*), and later the switches `FF_CHART_SNAPSHOTS`, `FF_MATERIALIZER` (§19) and the `BLOBS` bucket for posters. After about a week of `shelf.shadow` results (Check jobs), P5-4's second half: `FF_SHOW_SCHEDULE`, then delete the legacy sweeps. Next in the plan is **Phase 6** (the frontend, in `16_`-`24_`, D-11); P6-6 moves imports to `/api/imports`, and P6-2's Settings should use `DELETE /api/me` and show connection status. The next server file is `55_...`. Phase 4's switches (`FF_PROVIDER_BREAKER`, `FF_CHART_SNAPSHOTS`, `FF_CANONICAL_IDS`, OPERATIONS §14, §15, §17), Phase 3c's rollout (activity database, copy, `FF_EVENT_TRACKING`) and Phase 3b's (copy, `FF_V2_LISTS_READ`, later `FF_V2_LISTS_ONLY`, §9 to §11) are still the owner's.
+1. **Phase 6 is in progress** on `arena/01a0e9c1-my-lists-addon` (draft PR #7); **P6-1 is done and needs no dashboard change** — it is tried with `/?ff_new_ui=1` and undone with `/?ff_new_ui=0` (OPERATIONS §20). Next in it: P6-2 Settings, P6-3 the home editor, P6-4 Lists, P6-5 Explore, P6-6 imports (`/api/imports`), P6-7 channels, P6-8 to P6-10. **Phase 5 is merged** into `main` (PR #6). What is left of Phase 5 is the owner's: set up the job queue (OPERATIONS §18: queues `mylists-jobs` and `mylists-jobs-dlq`, this Worker as consumer, bind `JOBS`, cron `*/5 * * * *`, then *Send a test job*), and later the switches `FF_CHART_SNAPSHOTS`, `FF_MATERIALIZER` (§19) and the `BLOBS` bucket for posters. After about a week of `shelf.shadow` results (Check jobs), P5-4's second half: `FF_SHOW_SCHEDULE`, then delete the legacy sweeps. Next in the plan is **Phase 6** (the frontend, in `16_`-`24_`, D-11); P6-6 moves imports to `/api/imports`, and P6-2's Settings should use `DELETE /api/me` and show connection status. The next server file is `55_...`. Phase 4's switches (`FF_PROVIDER_BREAKER`, `FF_CHART_SNAPSHOTS`, `FF_CANONICAL_IDS`, OPERATIONS §14, §15, §17), Phase 3c's rollout (activity database, copy, `FF_EVENT_TRACKING`) and Phase 3b's (copy, `FF_V2_LISTS_READ`, later `FF_V2_LISTS_ONLY`, §9 to §11) are still the owner's.
      - `FF_V2_LISTS_API` (the v2 list and likes APIs) must stay off until P3b-9: what they write is not in the legacy store, so a flag-off rollback or a copy re-run would lose it.
      - Phase 3b rewrites how lists are stored, so it needs the owner's approval before any backfill (P3b-3) touches stored data.
      - Decide which wins when an install has its own keys in `install_secrets` and its owner also has a connection. Today `install_secrets` is the only source.
