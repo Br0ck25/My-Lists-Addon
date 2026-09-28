@@ -382,3 +382,5 @@ From Phase 5, background work (refreshing charts and show schedules, imports, cl
 **Show schedules (P5-3):** `show.watchers` (daily) counts who watches each show, and `show.refresh` (hourly) checks those shows with TMDB and TVmaze. They need migration 0017, the activity database (`DB_ACTIVITY`, with the history copied, §12) and `TMDB_API_KEY`. Without them they do nothing. **Check jobs** shows both.
 
 **Comparing the shelves (P5-4):** `shelf.shadow` (hourly) compares each copied account's stored Continue Watching and Airing Next with the ones worked out from the show schedules. It only reads. After the queue, the activity database and the history copy are running, leave it for a week, then look at **Check jobs**: the line under `shelf.shadow` gives the difference. Under 1% means the new shelves can be switched on (`FF_SHOW_SCHEDULE`, in a later release).
+
+**Better Posters (P5-9):** with both `BLOBS` (§2) and the queue bound, Better Posters are stored in R2 (`img/bp/...`) and fetched from btttr.cc by `poster.fetch` jobs, so no page or Stremio row waits on btttr.cc. Posters already stored in KV keep being served and move to R2 as they are used.

@@ -375,6 +375,8 @@ async function handleFetch(request, env, ctx) {
           const { bp, sent } = wanted[cursor++];
           if (await readStoredBetterPoster(env, ctx, bp)) { stored++; ready.push(sent); continue; }
           if (await betterPosterRecentlyMissed(url.origin, bp)) continue;
+          // P5-9: handed to the poster.fetch job instead of waited on.
+          if (typeof betterPostersInR2 === "function" && betterPostersInR2(env)) { await sendBetterPosterFetch(env, bp); continue; }
           if (await fetchBetterPosterForPage(env, ctx, bp, url.origin, BETTER_POSTER_UPSTREAM_TIMEOUT_MS)) { fetched++; ready.push(sent); }
         }
       }));

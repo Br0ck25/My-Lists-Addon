@@ -27,6 +27,11 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 8. **Recommended: set up the background jobs queue** (Phase 5, `docs/OPERATIONS.md` §18): create the queues `mylists-jobs` and `mylists-jobs-dlq`, make this Worker the consumer of `mylists-jobs` (batch size 25, 5 retries, dead-letter queue `mylists-jobs-dlq`), bind `mylists-jobs` to the Worker as `JOBS`, then press **Send a test job** in `/admin` → Maintenance. Without it everything works as before.
 
+### 🖼️ Better Posters without the wait (P5-9)
+
+- **Once the R2 bucket and the job queue are both set up**, Better Posters are kept in R2, and a poster the site doesn't have yet no longer makes anyone wait (btttr.cc can take close to a minute to draw one). Stremio gets the title's ordinary poster straight away, the website its usual stand-in, and the real one is fetched in the background for next time.
+- Without both, posters work exactly as before.
+
 ### 🗑️ Deleting an account in the background, and a hole closed (P5-8)
 
 - A new way to delete an account (`DELETE /api/me`, for the new settings screen): it takes effect at once (signed out everywhere, install links stop, the username can't be taken) and the data is removed in the background, retried until it is all gone.

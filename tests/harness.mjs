@@ -292,35 +292,48 @@ export function makeEnv(opts = {}) {
 // arrayBuffer }, delete of one key or several, head, list by prefix), in
 // memory. `_hooks.beforePut/beforeGet/beforeDelete` throw to make a call fail.
 export function makeR2() {
+  // Text values are kept as text (the channel pools); binary ones (poster
+  // images, P5-9) as bytes, with the object's metadata, as R2 does.
   const store = new Map();
+  const meta = new Map();
   const hooks = { beforePut: null, beforeGet: null, beforeDelete: null };
-  const body = (key, text) => ({
-    key,
-    size: text.length,
-    text: async () => text,
-    json: async () => JSON.parse(text),
-    arrayBuffer: async () => new TextEncoder().encode(text).buffer,
-  });
+  const toBytes = (v) => (typeof v === "string" ? new TextEncoder().encode(v) : v instanceof ArrayBuffer ? new Uint8Array(v) : new Uint8Array(v.buffer, v.byteOffset, v.byteLength));
+  const body = (key, value) => {
+    const m = meta.get(key) || {};
+    return {
+      key,
+      size: typeof value === "string" ? value.length : value.byteLength,
+      customMetadata: m.customMetadata || {},
+      httpMetadata: m.httpMetadata || {},
+      uploaded: m.uploaded,
+      text: async () => (typeof value === "string" ? value : new TextDecoder().decode(value)),
+      json: async () => JSON.parse(typeof value === "string" ? value : new TextDecoder().decode(value)),
+      arrayBuffer: async () => { const b = toBytes(value); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength); },
+    };
+  };
   return {
     _store: store,
+    _meta: meta,
     _hooks: hooks,
-    async put(key, value) {
+    async put(key, value, opts = {}) {
       if (hooks.beforePut) await hooks.beforePut(key);
-      const text = typeof value === "string" ? value : new TextDecoder().decode(value);
-      store.set(String(key), text);
-      return { key: String(key), size: text.length };
+      const v = typeof value === "string" ? value : toBytes(value).slice();
+      store.set(String(key), v);
+      meta.set(String(key), { customMetadata: opts.customMetadata || {}, httpMetadata: opts.httpMetadata || {}, uploaded: new Date() });
+      return { key: String(key), size: typeof v === "string" ? v.length : v.byteLength };
     },
     async get(key) {
       if (hooks.beforeGet) await hooks.beforeGet(key);
       return store.has(String(key)) ? body(String(key), store.get(String(key))) : null;
     },
     async head(key) {
-      return store.has(String(key)) ? { key: String(key), size: store.get(String(key)).length } : null;
+      return store.has(String(key)) ? body(String(key), store.get(String(key))) : null;
     },
     async delete(keys) {
       for (const k of [].concat(keys)) {
         if (hooks.beforeDelete) await hooks.beforeDelete(k);
         store.delete(String(k));
+        meta.delete(String(k));
       }
     },
     async list({ prefix = "" } = {}) {
