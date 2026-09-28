@@ -23,6 +23,11 @@
 <script>
 const ORIGIN = (typeof location !== 'undefined' && location.origin) ? location.origin : ${jsonForScript(origin)};
 const IS_CONFIGURE = ${isConfigureMode};
+// Whether this page was served as the new UI shell (Phase 6, P6-1). It is a
+// cookie, so it differs per browser rather than per deploy -- everything that
+// depends on it lives in the bundle and reads this flag, because the bundle
+// itself is one shared, content-hashed file (splitAppBundle, 02_).
+const NEW_UI = ${newUi ? "true" : "false"};
 // Populated by the /lists/<slug> route (25_api-catalog-routes.js) when this
 // exact page load resolved a known chart slug -- e.g. loading
 // /lists/TMDB-Trending directly (a bookmark, a shared link, a refresh)
@@ -63,6 +68,11 @@ const CHART_SLUG_ENTRIES = ${jsonForScript(CHART_SLUG_ENTRIES)};
 // route had nothing to look a slug up in and guessed the name and type
 // instead -- and guessed wrong for "true-crime-mystery", which is a series.
 const CURATED_LIST_ENTRIES = ${jsonForScript(CURATED_LIST_ENTRIES)};
+// The site's views, as the Worker's one table describes them (APP_SHELL_TABS,
+// 00_constants.js). The shell's router (24_client-backup-restore-presets.js)
+// builds its paths from this and the Worker rendered the nav from the same
+// table, so the two cannot drift.
+const APP_SHELL_TAB_LIST = ${jsonForScript(APP_SHELL_TABS)};
 
 // The Lists tab remembers which sub-tab you were last on, in localStorage, and
 // that value outlives the release that wrote it -- so it can name a panel this
@@ -565,7 +575,7 @@ function navigateBackFromDetail() {
   } else {
     const targetTab = window._originTab || window._previousTab || localStorage.getItem('myListAddon:activeTab') || 'discover';
     const cleanTab = (targetTab === 'list-details' || targetTab === 'item-details') ? 'discover' : targetTab;
-    if (location.pathname.startsWith('/lists/') || location.pathname.startsWith('/channels/')) {
+    if (!appShellActive && (location.pathname.startsWith('/lists/') || location.pathname.startsWith('/channels/'))) {
       try {
         history.replaceState({ view: 'tab', tab: cleanTab }, '', '/');
       } catch (e) {}
@@ -593,6 +603,13 @@ function navigateBackFromDetail() {
 
 // Global state variables
 var suppressSave = false;
+// True once initAppShell (24_client-backup-restore-presets.js) has taken over
+// navigation on a shell page. While it is true the shell's router owns the
+// address bar: the legacy tab and sub-tab switchers still do all their DOM
+// work, but they route through the shell (appShellHandleNav) and skip their own
+// history writes, which all point at "/". Declared here because 16_ is the
+// first file whose functions read it.
+var appShellActive = false;
 var activeCreator = (function() {
   try {
     const name = localStorage.getItem('myListAddon:creatorName');
@@ -676,6 +693,11 @@ if (typeof document !== 'undefined') {
 }
 
 function switchTab(name) {
+  // On a shell page the router owns navigation, including the aliases below
+  // (see appShellRouteForName, 24_client-backup-restore-presets.js). A name it
+  // does not know -- list-details, item-details -- comes back false and takes
+  // the legacy path untouched.
+  if (appShellHandleNav('tab', name)) return;
   if (name === 'backup') {
     switchTab('settings');
     switchSettingsSubmenu('backup', document.querySelector('#settingsSubnavBar button:nth-child(4)'));
@@ -725,6 +747,14 @@ function switchTab(name) {
     const b = tabBtns[i];
     const on = b.getAttribute('data-tab') === name;
     b.classList.toggle('active', on);
+    // A shell nav item is a link, not a tab: it keeps its place in the tab
+    // order (every view is reachable by keyboard) and says which page it is
+    // with aria-current, instead of taking the roving tabindex a tablist
+    // would give it.
+    if (b.tagName === 'A') {
+      if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+      continue;
+    }
     b.setAttribute('aria-selected', on ? 'true' : 'false');
     b.setAttribute('tabindex', on ? '0' : '-1');
   }
@@ -733,6 +763,10 @@ function switchTab(name) {
     const b = navItems[i];
     const on = b.getAttribute('data-tab') === name;
     b.classList.toggle('active', on);
+    if (b.tagName === 'A') {
+      if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+      continue;
+    }
     b.setAttribute('aria-selected', on ? 'true' : 'false');
     b.setAttribute('tabindex', on ? '0' : '-1');
   }
@@ -743,15 +777,19 @@ function switchTab(name) {
     try {
       localStorage.setItem('myListAddon:activeTab', name);
     } catch (e) {}
-    const hash = location.hash || '';
-    const isDetailUrl = hash.startsWith('#/item?') || hash.startsWith('#/list?') || (location.pathname.startsWith('/lists/') && location.pathname !== '/lists');
-    try {
-      if (isDetailUrl) {
-        history.pushState({ view: 'tab', tab: name, fromCatalogsSubmenu: window._currentCatalogsSubmenu }, '', '/');
-      } else {
-        history.replaceState({ view: 'tab', tab: name, fromCatalogsSubmenu: window._currentCatalogsSubmenu }, '', '/');
-      }
-    } catch (e) {}
+    // On a shell page the router wrote the URL (a real path per view) before
+    // calling this, so rewriting it to "/" here would undo that.
+    if (!appShellActive) {
+      const hash = location.hash || '';
+      const isDetailUrl = hash.startsWith('#/item?') || hash.startsWith('#/list?') || (location.pathname.startsWith('/lists/') && location.pathname !== '/lists');
+      try {
+        if (isDetailUrl) {
+          history.pushState({ view: 'tab', tab: name, fromCatalogsSubmenu: window._currentCatalogsSubmenu }, '', '/');
+        } else {
+          history.replaceState({ view: 'tab', tab: name, fromCatalogsSubmenu: window._currentCatalogsSubmenu }, '', '/');
+        }
+      } catch (e) {}
+    }
   }
 
   if (name === 'catalogs') {
@@ -1678,6 +1716,15 @@ function closeModal() {
   existing.remove();
   document.removeEventListener('keydown', handleModalKeydown, true);
   lockBackgroundScroll(false);
+  // An appShellDialog (24_client-backup-restore-presets.js) that was dismissed
+  // rather than answered -- Escape, or a click on the backdrop -- resolves as
+  // false here, so its promise never hangs. That marker is a var for exactly
+  // this check: typeof on a let in the temporal dead zone would throw.
+  if (typeof appShellDialogClose === 'function') {
+    const settle = appShellDialogClose;
+    appShellDialogClose = null;
+    settle(false);
+  }
   if (_modalReturnFocus && typeof _modalReturnFocus.focus === 'function') {
     try { _modalReturnFocus.focus(); } catch (e) {}
   }
@@ -1994,6 +2041,7 @@ function restoreActiveTab() {
 }
 
 function switchListsSubmenu(name, btn) {
+  if (appShellHandleNav('sub', 'lists', name)) return;
   try {
     document.documentElement.removeAttribute('data-initial-lists-sub');
     localStorage.setItem('myListAddon:listsSubmenu', name);
@@ -2071,6 +2119,7 @@ function switchListsSubmenu(name, btn) {
 }
 
 function switchSettingsSubmenu(name, btn) {
+  if (appShellHandleNav('sub', 'settings', name)) return;
   try {
     document.documentElement.removeAttribute('data-initial-settings-sub');
     localStorage.setItem('myListAddon:settingsSubmenu', name);
@@ -2413,6 +2462,7 @@ function trackEventsBatch(eventType, items) {
 }
 
 function filterDiscoverShelves(filter, btn) {
+  if (appShellHandleNav('sub', 'discover', filter)) return;
   try {
     document.documentElement.removeAttribute('data-initial-discover-sub');
   } catch (e) {}
@@ -2653,6 +2703,7 @@ function switchCatalogsSubmenu(filter, btn) {
     switchTab('channels');
     return;
   }
+  if (appShellHandleNav('sub', 'catalogs', filter)) return;
   try {
     document.documentElement.removeAttribute('data-initial-catalogs-sub');
   } catch (e) {}
@@ -2662,7 +2713,7 @@ function switchCatalogsSubmenu(filter, btn) {
   } catch (e) {}
   const hash = location.hash || '';
   const isDetailUrl = hash.startsWith('#/item?') || hash.startsWith('#/list?') || (location.pathname.startsWith('/lists/') && location.pathname !== '/lists');
-  if (!isDetailUrl) {
+  if (!isDetailUrl && !appShellActive) {
     try {
       history.replaceState({ view: 'tab', tab: 'catalogs', fromCatalogsSubmenu: filter || 'all' }, '', '/');
     } catch (e) {}

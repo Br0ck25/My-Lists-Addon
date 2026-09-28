@@ -10110,6 +10110,7 @@ async function loadStorylineToDraft(eventId, btn) {
 }
 
 function switchChannelsSubmenu(name, btn) {
+  if (appShellHandleNav('sub', 'channels', name)) return;
   try {
     document.documentElement.removeAttribute('data-initial-channels-sub');
   } catch (e) {}

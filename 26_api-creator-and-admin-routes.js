@@ -5106,7 +5106,7 @@
       // 304 can only happen when the browser already holds this list.
       return await htmlPageResponse(
         request,
-        renderBuilder(url.origin, {
+        renderPage(request, url.origin, {
           deepLinkList: {
             name: deslugifyServer(mdblistSlug),
             type: "movie",
@@ -5133,7 +5133,7 @@
       // 304 can only happen when the browser already holds this list.
       return await htmlPageResponse(
         request,
-        renderBuilder(url.origin, {
+        renderPage(request, url.origin, {
           deepLinkList: {
             name: deslugifyServer(traktSlug),
             type: "movie",
@@ -5160,7 +5160,7 @@
       // 304 can only happen when the browser already holds this list.
       return await htmlPageResponse(
         request,
-        renderBuilder(url.origin, {
+        renderPage(request, url.origin, {
           deepLinkList: {
             name,
             type: "movie",
@@ -5187,7 +5187,7 @@
       // 304 can only happen when the browser already holds this list.
       return await htmlPageResponse(
         request,
-        renderBuilder(url.origin, {
+        renderPage(request, url.origin, {
           deepLinkList: {
             name,
             type: "movie",
@@ -5418,7 +5418,7 @@
       // 304 can only happen when the browser already holds this list.
       return await htmlPageResponse(
         request,
-        renderBuilder(url.origin, {
+        renderPage(request, url.origin, {
           deepLinkList: {
             name: listData.name,
             type: listData.type,

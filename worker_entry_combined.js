@@ -1550,6 +1550,42 @@ const BETTER_POSTER_WARM_IDS_PER_MINUTE = 800;
 // wall-clock time: 8 at 4 at a time is two waits, not eight.
 const BETTER_POSTER_PREWARM_CHECKS_PER_TICK = 60;
 const BETTER_POSTER_PREWARM_FETCHES_PER_TICK = 8;
+
+// --- The new UI shell (Phase 6, P6-1) ----------------------------------------
+//
+// The frontend rebuild is opt-in per browser while it is being built, through a
+// cookie rather than a Worker variable: the owner can try it on their own
+// device without changing anything for anyone else, and turning it off again is
+// one cookie rather than a deploy. The Worker reads the cookie once per request
+// (isNewUiRequest, 02_http-and-creator-utils.js) and renders the same page with
+// the shell's chrome around the existing views.
+//
+// This table is the ONE list of the site's top-level views. The Worker renders
+// the shell's navigation from it (buildAppShellNavHtml, 09_page-shell.js) and
+// writes it into the client bundle (16_client-row-core.js), where the router
+// (24_client-backup-restore-presets.js) builds the same paths back from it.
+// Adding a view is one entry here, not three edits.
+//
+// `subs` are the sub-tab ids the view's own switcher already knows: the shell
+// routes /catalogs/quickadd to switchCatalogsSubmenu('quickadd') rather than
+// inventing a second set of names. The first sub is that view's default.
+// A route whose sub is not in this list falls back to the view itself, so a
+// stale URL can never open a panel that does not exist.
+const NEW_UI_COOKIE = "FF_NEW_UI";
+
+const APP_SHELL_TABS = [
+  { id: "catalogs", label: "Catalogs", path: "/catalogs", subs: ["all", "quickadd", "bulk"] },
+  { id: "lists", label: "Lists", path: "/lists", subs: ["my-lists", "liked", "create-list", "import"] },
+  { id: "channels", label: "Channels", path: "/channels", subs: ["my-channels", "storylines", "quickadd", "explore", "import", "build"] },
+  { id: "discover", label: "Discover", path: "/discover", subs: ["movie", "all", "series", "popular", "curated", "gems", "kids", "holidays", "genres"] },
+  { id: "search", label: "Search", path: "/search", subs: [] },
+  { id: "settings", label: "Settings", path: "/settings", subs: ["account", "external", "backup", "feedback"] },
+];
+
+// The paths the shell answers on. Exact matches only: /lists/<slug> and
+// /channels/<user>/<slug> are share links with their own routes, and must keep
+// working exactly as they do.
+const APP_SHELL_PATHS = new Set(APP_SHELL_TABS.map((t) => t.path));
 // --- icon (placeholder, replace via /mnt/project source if needed) --------
 const ICON_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAAEAAElEQVR42rz9d9xt11Eejs/MWvu0" +
@@ -4659,15 +4695,97 @@ async function hashStringForKey(s) {
 // sent when the browser already holds a byte-identical copy.
 const BUILDER_PAGE_MEMO = new Map();
 
+// --- The new UI shell's cookie (Phase 6, P6-1) -------------------------------
+//
+// The shell (see APP_SHELL_TABS, 00_constants.js) is opt-in per BROWSER, not
+// per deployment: the Worker reads NEW_UI_COOKIE from the page request's own
+// headers. That is what lets the owner walk the new interface on their device
+// while everyone else keeps the page they know, and lets a rollback be a
+// cookie rather than a deploy.
+//
+// `?ff_new_ui=1` on any link sets it and `?ff_new_ui=0` clears it
+// (appShellSwitchResponse below), so nobody has to open developer tools.
+function readCookieValue(cookieHeader, name) {
+  const m = String(cookieHeader || "").match(new RegExp("(?:^|;\\s*)" + name + "=([^;]*)"));
+  if (!m) return "";
+  try {
+    return decodeURIComponent(m[1]);
+  } catch {
+    return m[1];
+  }
+}
+
+function isNewUiRequest(request) {
+  try {
+    const raw = readCookieValue(request && request.headers ? request.headers.get("Cookie") : "", NEW_UI_COOKIE).trim().toLowerCase();
+    return raw === "1" || raw === "on" || raw === "true";
+  } catch {
+    return false;
+  }
+}
+
+function appShellCookieHeader(on) {
+  return on
+    ? `${NEW_UI_COOKIE}=1; Path=/; Max-Age=31536000; SameSite=Lax`
+    : `${NEW_UI_COOKIE}=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+}
+
+// The one place the cookie is written. Returns null for every request that is
+// not asking to switch, so the caller can fall through to its normal routing.
+// The redirect drops the parameter, so the address people see and share never
+// carries it.
+function appShellSwitchResponse(url) {
+  const raw = url.searchParams.get("ff_new_ui");
+  if (raw === null) return null;
+  const on = !(raw === "0" || raw === "off" || raw === "false" || raw === "");
+  const clean = new URL(url.href);
+  clean.searchParams.delete("ff_new_ui");
+  const qs = clean.searchParams.toString();
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: clean.pathname + (qs ? "?" + qs : "") + (clean.hash || ""),
+      "Set-Cookie": appShellCookieHeader(on),
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
+// Every render of the page goes through this, so the shell and the page it
+// wraps can never disagree about which variant was asked for. A false
+// `newUi` is dropped rather than passed on, so the flag-off variants stay
+// exactly the renders they were before this existed (same memo key, same
+// bytes).
+function newUiPageOpts(request, opts) {
+  const out = Object.assign({}, opts || {});
+  if (isNewUiRequest(request)) out.newUi = true;
+  return out;
+}
+
+// Every page route renders through these two instead of calling renderBuilder
+// itself, so the variant is decided in exactly one place: the request.
+function renderPage(request, origin, opts) {
+  return renderBuilder(origin, newUiPageOpts(request, opts));
+}
+
+function renderPageCached(request, origin, opts) {
+  return renderBuilderCached(origin, newUiPageOpts(request, opts));
+}
+
 function renderBuilderCached(origin, opts) {
   // Only the argument-free variants are stable enough to memoize; anything
-  // carrying entries, keys or a deep link is rendered fresh.
-  const isDefault = !opts || Object.keys(opts).length === 0;
-  const isBareConfigure = !!(opts && opts.isConfigureMode === true && Object.keys(opts).length === 1);
+  // carrying entries, keys or a deep link is rendered fresh. The shell is a
+  // variant of the same two: same arguments otherwise, different chrome, so
+  // it is memoized under its own key rather than re-rendering 1.6MB a load.
+  const shellOpts = Object.assign({}, opts || {});
+  const isShell = shellOpts.newUi === true;
+  if (!isShell) delete shellOpts.newUi;
+  const isDefault = Object.keys(shellOpts).length === 0;
+  const isBareConfigure = !!(shellOpts.isConfigureMode === true && Object.keys(shellOpts).length === 1);
   if (!isDefault && !isBareConfigure) {
     return renderBuilder(origin, opts || {});
   }
-  const memoKey = `${origin}::${isBareConfigure ? "configure" : "default"}`;
+  const memoKey = `${origin}::${isBareConfigure ? "configure" : "default"}${isShell ? ":shell" : ""}`;
   const hit = BUILDER_PAGE_MEMO.get(memoKey);
   if (hit) return hit;
   const html = renderBuilder(origin, opts || {});
@@ -26308,9 +26426,91 @@ function resolveCuratedSlug(slug) {
   return CURATED_LIST_REGISTRY[String(slug || "").toLowerCase()] || null;
 }
 
+// --- The new UI shell's chrome (Phase 6, P6-1) ------------------------------
+//
+// Everything here is emitted only for a browser carrying the FF_NEW_UI cookie
+// (isNewUiRequest, 02_http-and-creator-utils.js), so the page every other
+// visitor gets is byte-for-byte the page they got before. The client bundle is
+// shared by both variants -- it is one content-hashed file (splitAppBundle,
+// 02_) -- so the shell's behaviour is not emitted from here: it lives in
+// 24_client-backup-restore-presets.js and keys off the NEW_UI flag in the
+// per-request preamble.
+//
+// The tabs are real links. Middle-click, copy-link, open-in-a-new-tab and the
+// back button all work with no JavaScript at all; the client intercepts a
+// plain left click and routes in-page. The class names are the legacy ones on
+// purpose: every existing rule -- the desktop pills, the mobile bottom bar,
+// the dark theme, the safe-area padding -- then applies to them unchanged.
+const APP_SHELL_TAB_ICONS = {
+  catalogs: '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>',
+  lists: '<line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line>',
+  channels: '<rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect><polyline points="17 2 12 7 7 2"></polyline>',
+  discover: '<rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect>',
+  search: '<circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>',
+  settings: '<circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>',
+};
+
+// Which view the page opens on when it is served at a shell path. The shell's
+// own routing (24_) reads the same table, written into the bundle.
+function appShellTabForPath(pathname) {
+  const p = String(pathname || "");
+  for (const t of APP_SHELL_TABS) {
+    if (p === t.path) return t;
+    if (p.startsWith(t.path + "/")) {
+      const rest = p.slice(t.path.length + 1).replace(/\/+$/, "");
+      if (rest && t.subs.indexOf(rest) !== -1) return t;
+    }
+  }
+  return null;
+}
+
+function buildAppShellNavHtml(style) {
+  const isDesktop = style === "desktop";
+  const items = APP_SHELL_TABS.map((t) => {
+    const active = t.id === "discover";
+    const cls = (isDesktop ? "tab-btn" : "bottom-nav-item") + (active ? " active" : "");
+    // The id and aria-controls keep the panels' own aria-labelledby="tab-..."
+    // pointing at a real element: the legacy buttons carry these ids and the
+    // panels were never changed, so a nav without them leaves six references
+    // dangling (html_checks.py fails the build for exactly that).
+    const attrs = `class="${cls}" id="tab-${isDesktop ? "desktop" : "mobile"}-${t.id}" aria-controls="content-${t.id}"` +
+      ` data-tab="${t.id}" data-app-route href="${t.path}" title="${t.label}"` +
+      (active ? ' aria-current="page"' : "");
+    if (isDesktop) return `<a ${attrs}>${t.label}</a>`;
+    return `<a ${attrs}>\n      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">\n        ${APP_SHELL_TAB_ICONS[t.id] || ""}\n      </svg>\n      ${t.label}\n    </a>`;
+  }).join("\n    ");
+  if (isDesktop) {
+    return `<div class="tab-bar" id="appShellDesktopNav">\n    <nav aria-label="Main navigation" style="display:flex; gap:8px; overflow-x:auto; width:100%;">\n    ${items}\n    </nav>\n  </div>`;
+  }
+  return `<nav class="bottom-nav" id="appShellMobileNav" aria-label="Main navigation">\n    ${items}\n  </nav>`;
+}
+
+// Path -> { tab, sub } for the head script, which runs before the body exists
+// and so cannot use the client bundle's router. The bundle builds the same
+// routes from APP_SHELL_TAB_LIST (16_client-row-core.js); a test keeps the two
+// agreeing with this one table.
+function buildAppShellHeadRoutes() {
+  const out = {};
+  for (const t of APP_SHELL_TABS) {
+    out[t.path] = { tab: t.id, sub: "" };
+    for (const sub of t.subs) out[t.path + "/" + sub] = { tab: t.id, sub: sub };
+  }
+  return out;
+}
+
+// The install bar. Its first paint is server-rendered so it is there before any
+// script runs, and its state (none / unsaved / live) is then kept by the client
+// -- the last install link this browser generated is browser state, so the
+// Worker cannot know it. See appShellRefreshInstallBar (24_).
+const APP_SHELL_INSTALL_BAR_HTML = `<div id="appShellInstallBar" class="app-shell-install-bar" data-state="none">
+    <span class="app-shell-install-dot" aria-hidden="true"></span>
+    <span class="app-shell-install-text" id="appShellInstallText">Not installed yet</span>
+    <button type="button" class="app-shell-install-action" id="appShellInstallBtn" data-action="install">Get install link</button>
+  </div>`;
+
 function renderBuilder(
   origin,
-  { initialEntries = [], initialKeys = {}, isConfigureMode = false, deepLinkList = null } = {}
+  { initialEntries = [], initialKeys = {}, isConfigureMode = false, deepLinkList = null, newUi = false } = {}
 ) {
   const initialTmdbKey = initialKeys.tmdbKey || "";
   const initialMdblistKey = initialKeys.mdblistKey || "";
@@ -26426,8 +26626,15 @@ function renderBuilder(
       ]
   );
 
+  // The shell variant of the chrome. Both navs keep the legacy wrappers
+  // (`.tab-bar`, `.bottom-nav`) so the existing CSS -- including the mobile
+  // bottom bar -- applies to them unchanged; only the items differ, from
+  // buttons to links.
+  const appShellDesktopNavHtml = newUi ? buildAppShellNavHtml("desktop") : "";
+  const appShellMobileNavHtml = newUi ? buildAppShellNavHtml("mobile") : "";
+
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en"${newUi ? ' data-app-shell="1"' : ''}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -26442,6 +26649,7 @@ ${seoHeadHtml}
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script>
+  ${newUi ? `var APP_SHELL_HEAD_ROUTES = ${jsonForScript(buildAppShellHeadRoutes())};` : ""}
   if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
     document.documentElement.classList.add('dark-theme');
     try {
@@ -26462,8 +26670,20 @@ ${seoHeadHtml}
     var h = location.hash || '';
     var isDeep = (p.startsWith('/lists/') && p !== '/lists') || p.startsWith('/channels/') || h.startsWith('#/list?') || h.startsWith('#/item?');
     var tab = 'discover';
+    // The new UI shell routes on real paths (/catalogs, /settings, ...), so
+    // there the path -- not the last tab this browser used -- decides which
+    // view opens. Same table the Worker rendered the nav from.
+    // APP_SHELL_HEAD_ROUTES is declared just above only on a shell page; this
+    // script is shared by both variants, so it must not name it unconditionally
+    // -- scope_check.mjs catches exactly that, and a legacy page would throw.
+    var shellRoute = null;
+    if (document.documentElement.getAttribute('data-app-shell') === '1' && typeof APP_SHELL_HEAD_ROUTES !== 'undefined') {
+      shellRoute = APP_SHELL_HEAD_ROUTES[p] || null;
+    }
     if (isDeep) {
       tab = h.startsWith('#/item?') ? 'item-details' : 'list-details';
+    } else if (shellRoute) {
+      tab = shellRoute.tab;
     } else {
       try {
         var s = localStorage.getItem('myListAddon:activeTab');
@@ -26471,22 +26691,23 @@ ${seoHeadHtml}
       } catch (e) {}
     }
     document.documentElement.setAttribute('data-initial-tab', tab);
+    var shellSub = (shellRoute && shellRoute.sub) || '';
 
     try {
-      var catSub = localStorage.getItem('myListAddon:catalogsSubmenu') || 'all';
+      var catSub = shellSub || localStorage.getItem('myListAddon:catalogsSubmenu') || 'all';
       document.documentElement.setAttribute('data-initial-catalogs-sub', catSub);
-      var listSub = localStorage.getItem('myListAddon:listsSubmenu') || 'my-lists';
+      var listSub = (shellRoute && shellRoute.tab === 'lists' && shellSub) || localStorage.getItem('myListAddon:listsSubmenu') || 'my-lists';
       // Must agree with normalizeListsSubmenu (16_client-row-core.js): the rule
       // above hides every Lists panel and then un-hides the one this attribute
       // names, so a stale value naming a panel that no longer exists leaves the
       // tab blank from first paint.
       if (['my-lists', 'liked', 'import', 'create-list'].indexOf(listSub) === -1) listSub = 'my-lists';
       document.documentElement.setAttribute('data-initial-lists-sub', listSub);
-      var chSub = localStorage.getItem('myListAddon:channelsSubmenu') || 'my-channels';
+      var chSub = (shellRoute && shellRoute.tab === 'channels' && shellSub) || localStorage.getItem('myListAddon:channelsSubmenu') || 'my-channels';
       document.documentElement.setAttribute('data-initial-channels-sub', chSub);
-      var setSub = localStorage.getItem('myListAddon:settingsSubmenu') || 'account';
+      var setSub = (shellRoute && shellRoute.tab === 'settings' && shellSub) || localStorage.getItem('myListAddon:settingsSubmenu') || 'account';
       document.documentElement.setAttribute('data-initial-settings-sub', setSub);
-      var discSub = localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
+      var discSub = (shellRoute && shellRoute.tab === 'discover' && shellSub) || localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
       if (discSub === 'all') discSub = 'movie';
       document.documentElement.setAttribute('data-initial-discover-sub', discSub);
     } catch (e) {}
@@ -29835,6 +30056,62 @@ ${seoHeadHtml}
     animation: spin 0.9s linear infinite;
   }
 
+  /* --- The new UI shell's install bar (Phase 6, P6-1) --------------------- */
+  /* Emitted for every visitor and inert without <html data-app-shell="1">.
+     That is deliberate: /app.css is one shared, content-hashed file
+     (splitAppCss, 02_http-and-creator-utils.js), so a variant-dependent
+     stylesheet would cost every visitor the shared cache. */
+  .app-shell-install-bar { display: none; }
+  html[data-app-shell="1"] .app-shell-install-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 10px;
+    padding: 10px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-2);
+    /* Sticky rather than fixed: on a phone the bottom of the screen belongs
+       to the tab bar, and the bar must not sit over the poster grid while a
+       list is being built. */
+    position: sticky;
+    top: 0;
+    z-index: 900;
+  }
+  html[data-app-shell="1"] .app-shell-install-dot {
+    width: 9px; height: 9px; flex: none; border-radius: 50%;
+    background: var(--muted);
+  }
+  html[data-app-shell="1"] .app-shell-install-bar[data-state="none"] .app-shell-install-dot { background: var(--muted); }
+  html[data-app-shell="1"] .app-shell-install-bar[data-state="unsaved"] .app-shell-install-dot { background: var(--warn); }
+  html[data-app-shell="1"] .app-shell-install-bar[data-state="live"] .app-shell-install-dot { background: var(--success); }
+  html[data-app-shell="1"] .app-shell-install-text {
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  html[data-app-shell="1"] .app-shell-install-action {
+    flex: none;
+    background: var(--accent); color: #fff; border: none;
+    border-radius: var(--radius-pill);
+    padding: 7px 14px; font-size: 0.82rem; font-weight: 700;
+    min-height: unset; cursor: pointer;
+  }
+  html[data-app-shell="1"] .app-shell-install-action:hover { background: var(--accent-hover); }
+  html[data-app-shell="1"] .app-shell-install-bar[data-state="live"] .app-shell-install-action {
+    background: var(--surface); color: var(--accent);
+    border: 1.5px solid var(--border-strong);
+  }
+  html[data-app-shell="1"] .app-shell-install-bar[data-state="live"] .app-shell-install-action:hover {
+    border-color: var(--accent); color: var(--accent);
+  }
+  /* The floating "Unsaved changes to install link" banner and the install
+     bar say the same thing; showing both would be the duplication this shell
+     exists to remove. */
+  html[data-app-shell="1"] #unsavedInstallBanner { display: none !important; }
+
   /* --- Floating Unsaved Changes to Install Link Banner -------------------- */
   .unsaved-install-banner {
     position: fixed;
@@ -29971,15 +30248,19 @@ ${seoHeadHtml}
     </div>
   </header>
 
+  <!-- The install bar (new UI shell only): what the current configuration is
+       installed as, and the one action that changes it. -->
+${newUi ? "  " + APP_SHELL_INSTALL_BAR_HTML : ""}
+
   <!-- Top Tab Bar (Desktop View) -->
-  <div class="tab-bar" role="tablist" aria-label="Main navigation">
+${newUi ? appShellDesktopNavHtml : `  <div class="tab-bar" role="tablist" aria-label="Main navigation">
     <button type="button" class="tab-btn" role="tab" id="tab-desktop-catalogs" aria-controls="content-catalogs" aria-selected="false" tabindex="-1" data-tab="catalogs" onclick="switchTab('catalogs')">Catalogs</button>
     <button type="button" class="tab-btn" role="tab" id="tab-desktop-lists" aria-controls="content-lists" aria-selected="false" tabindex="-1" data-tab="lists" onclick="switchTab('lists')">Lists</button>
     <button type="button" class="tab-btn" role="tab" id="tab-desktop-channels" aria-controls="content-channels" aria-selected="false" tabindex="-1" data-tab="channels" onclick="switchTab('channels')">Channels</button>
     <button type="button" class="tab-btn active" role="tab" id="tab-desktop-discover" aria-controls="content-discover" aria-selected="true" tabindex="0" data-tab="discover" onclick="switchTab('discover')">Discover</button>
     <button type="button" class="tab-btn" role="tab" id="tab-desktop-search" aria-controls="content-search" aria-selected="false" tabindex="-1" data-tab="search" onclick="switchTab('search')">Search</button>
     <button type="button" class="tab-btn" role="tab" id="tab-desktop-settings" aria-controls="content-settings" aria-selected="false" tabindex="-1" data-tab="settings" onclick="switchTab('settings')">Settings</button>
-  </div>
+  </div>`}
 
   <!-- Unsaved Changes Floating Banner -->
   <div id="unsavedInstallBanner" class="unsaved-install-banner">
@@ -29988,7 +30269,7 @@ ${seoHeadHtml}
   </div>
 
   <!-- Bottom Nav Bar (Mobile View - Persistent Glassmorphism) -->
-  <nav class="bottom-nav" role="tablist" aria-label="Main navigation">
+${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria-label="Main navigation">
     <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-catalogs" aria-controls="content-catalogs" aria-selected="false" tabindex="-1" data-tab="catalogs" onclick="switchTab('catalogs')" title="Catalogs">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
@@ -30030,7 +30311,7 @@ ${seoHeadHtml}
       </svg>
       Settings
     </button>
-  </nav>
+  </nav>`}
 
   <script>
     (function() {
@@ -31787,6 +32068,11 @@ if ('serviceWorker' in navigator) {
 <script>
 const ORIGIN = (typeof location !== 'undefined' && location.origin) ? location.origin : ${jsonForScript(origin)};
 const IS_CONFIGURE = ${isConfigureMode};
+// Whether this page was served as the new UI shell (Phase 6, P6-1). It is a
+// cookie, so it differs per browser rather than per deploy -- everything that
+// depends on it lives in the bundle and reads this flag, because the bundle
+// itself is one shared, content-hashed file (splitAppBundle, 02_).
+const NEW_UI = ${newUi ? "true" : "false"};
 // Populated by the /lists/<slug> route (25_api-catalog-routes.js) when this
 // exact page load resolved a known chart slug -- e.g. loading
 // /lists/TMDB-Trending directly (a bookmark, a shared link, a refresh)
@@ -31827,6 +32113,11 @@ const CHART_SLUG_ENTRIES = ${jsonForScript(CHART_SLUG_ENTRIES)};
 // route had nothing to look a slug up in and guessed the name and type
 // instead -- and guessed wrong for "true-crime-mystery", which is a series.
 const CURATED_LIST_ENTRIES = ${jsonForScript(CURATED_LIST_ENTRIES)};
+// The site's views, as the Worker's one table describes them (APP_SHELL_TABS,
+// 00_constants.js). The shell's router (24_client-backup-restore-presets.js)
+// builds its paths from this and the Worker rendered the nav from the same
+// table, so the two cannot drift.
+const APP_SHELL_TAB_LIST = ${jsonForScript(APP_SHELL_TABS)};
 
 // The Lists tab remembers which sub-tab you were last on, in localStorage, and
 // that value outlives the release that wrote it -- so it can name a panel this
@@ -32329,7 +32620,7 @@ function navigateBackFromDetail() {
   } else {
     const targetTab = window._originTab || window._previousTab || localStorage.getItem('myListAddon:activeTab') || 'discover';
     const cleanTab = (targetTab === 'list-details' || targetTab === 'item-details') ? 'discover' : targetTab;
-    if (location.pathname.startsWith('/lists/') || location.pathname.startsWith('/channels/')) {
+    if (!appShellActive && (location.pathname.startsWith('/lists/') || location.pathname.startsWith('/channels/'))) {
       try {
         history.replaceState({ view: 'tab', tab: cleanTab }, '', '/');
       } catch (e) {}
@@ -32357,6 +32648,13 @@ function navigateBackFromDetail() {
 
 // Global state variables
 var suppressSave = false;
+// True once initAppShell (24_client-backup-restore-presets.js) has taken over
+// navigation on a shell page. While it is true the shell's router owns the
+// address bar: the legacy tab and sub-tab switchers still do all their DOM
+// work, but they route through the shell (appShellHandleNav) and skip their own
+// history writes, which all point at "/". Declared here because 16_ is the
+// first file whose functions read it.
+var appShellActive = false;
 var activeCreator = (function() {
   try {
     const name = localStorage.getItem('myListAddon:creatorName');
@@ -32440,6 +32738,11 @@ if (typeof document !== 'undefined') {
 }
 
 function switchTab(name) {
+  // On a shell page the router owns navigation, including the aliases below
+  // (see appShellRouteForName, 24_client-backup-restore-presets.js). A name it
+  // does not know -- list-details, item-details -- comes back false and takes
+  // the legacy path untouched.
+  if (appShellHandleNav('tab', name)) return;
   if (name === 'backup') {
     switchTab('settings');
     switchSettingsSubmenu('backup', document.querySelector('#settingsSubnavBar button:nth-child(4)'));
@@ -32489,6 +32792,14 @@ function switchTab(name) {
     const b = tabBtns[i];
     const on = b.getAttribute('data-tab') === name;
     b.classList.toggle('active', on);
+    // A shell nav item is a link, not a tab: it keeps its place in the tab
+    // order (every view is reachable by keyboard) and says which page it is
+    // with aria-current, instead of taking the roving tabindex a tablist
+    // would give it.
+    if (b.tagName === 'A') {
+      if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+      continue;
+    }
     b.setAttribute('aria-selected', on ? 'true' : 'false');
     b.setAttribute('tabindex', on ? '0' : '-1');
   }
@@ -32497,6 +32808,10 @@ function switchTab(name) {
     const b = navItems[i];
     const on = b.getAttribute('data-tab') === name;
     b.classList.toggle('active', on);
+    if (b.tagName === 'A') {
+      if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+      continue;
+    }
     b.setAttribute('aria-selected', on ? 'true' : 'false');
     b.setAttribute('tabindex', on ? '0' : '-1');
   }
@@ -32507,15 +32822,19 @@ function switchTab(name) {
     try {
       localStorage.setItem('myListAddon:activeTab', name);
     } catch (e) {}
-    const hash = location.hash || '';
-    const isDetailUrl = hash.startsWith('#/item?') || hash.startsWith('#/list?') || (location.pathname.startsWith('/lists/') && location.pathname !== '/lists');
-    try {
-      if (isDetailUrl) {
-        history.pushState({ view: 'tab', tab: name, fromCatalogsSubmenu: window._currentCatalogsSubmenu }, '', '/');
-      } else {
-        history.replaceState({ view: 'tab', tab: name, fromCatalogsSubmenu: window._currentCatalogsSubmenu }, '', '/');
-      }
-    } catch (e) {}
+    // On a shell page the router wrote the URL (a real path per view) before
+    // calling this, so rewriting it to "/" here would undo that.
+    if (!appShellActive) {
+      const hash = location.hash || '';
+      const isDetailUrl = hash.startsWith('#/item?') || hash.startsWith('#/list?') || (location.pathname.startsWith('/lists/') && location.pathname !== '/lists');
+      try {
+        if (isDetailUrl) {
+          history.pushState({ view: 'tab', tab: name, fromCatalogsSubmenu: window._currentCatalogsSubmenu }, '', '/');
+        } else {
+          history.replaceState({ view: 'tab', tab: name, fromCatalogsSubmenu: window._currentCatalogsSubmenu }, '', '/');
+        }
+      } catch (e) {}
+    }
   }
 
   if (name === 'catalogs') {
@@ -33442,6 +33761,15 @@ function closeModal() {
   existing.remove();
   document.removeEventListener('keydown', handleModalKeydown, true);
   lockBackgroundScroll(false);
+  // An appShellDialog (24_client-backup-restore-presets.js) that was dismissed
+  // rather than answered -- Escape, or a click on the backdrop -- resolves as
+  // false here, so its promise never hangs. That marker is a var for exactly
+  // this check: typeof on a let in the temporal dead zone would throw.
+  if (typeof appShellDialogClose === 'function') {
+    const settle = appShellDialogClose;
+    appShellDialogClose = null;
+    settle(false);
+  }
   if (_modalReturnFocus && typeof _modalReturnFocus.focus === 'function') {
     try { _modalReturnFocus.focus(); } catch (e) {}
   }
@@ -33758,6 +34086,7 @@ function restoreActiveTab() {
 }
 
 function switchListsSubmenu(name, btn) {
+  if (appShellHandleNav('sub', 'lists', name)) return;
   try {
     document.documentElement.removeAttribute('data-initial-lists-sub');
     localStorage.setItem('myListAddon:listsSubmenu', name);
@@ -33835,6 +34164,7 @@ function switchListsSubmenu(name, btn) {
 }
 
 function switchSettingsSubmenu(name, btn) {
+  if (appShellHandleNav('sub', 'settings', name)) return;
   try {
     document.documentElement.removeAttribute('data-initial-settings-sub');
     localStorage.setItem('myListAddon:settingsSubmenu', name);
@@ -34177,6 +34507,7 @@ function trackEventsBatch(eventType, items) {
 }
 
 function filterDiscoverShelves(filter, btn) {
+  if (appShellHandleNav('sub', 'discover', filter)) return;
   try {
     document.documentElement.removeAttribute('data-initial-discover-sub');
   } catch (e) {}
@@ -34417,6 +34748,7 @@ function switchCatalogsSubmenu(filter, btn) {
     switchTab('channels');
     return;
   }
+  if (appShellHandleNav('sub', 'catalogs', filter)) return;
   try {
     document.documentElement.removeAttribute('data-initial-catalogs-sub');
   } catch (e) {}
@@ -34426,7 +34758,7 @@ function switchCatalogsSubmenu(filter, btn) {
   } catch (e) {}
   const hash = location.hash || '';
   const isDetailUrl = hash.startsWith('#/item?') || hash.startsWith('#/list?') || (location.pathname.startsWith('/lists/') && location.pathname !== '/lists');
-  if (!isDetailUrl) {
+  if (!isDetailUrl && !appShellActive) {
     try {
       history.replaceState({ view: 'tab', tab: 'catalogs', fromCatalogsSubmenu: filter || 'all' }, '', '/');
     } catch (e) {}
@@ -54480,6 +54812,7 @@ async function loadStorylineToDraft(eventId, btn) {
 }
 
 function switchChannelsSubmenu(name, btn) {
+  if (appShellHandleNav('sub', 'channels', name)) return;
   try {
     document.documentElement.removeAttribute('data-initial-channels-sub');
   } catch (e) {}
@@ -74174,9 +74507,17 @@ function computeConfigStateHash() {
   }
 }
 
-function checkUnsavedInstallLink() {}
+// Called by saveState() after every change to the rows or the settings. On a
+// shell page this is what keeps the install bar honest; on the legacy page the
+// call stays the no-op it has been (the shell replaces the floating banner).
+function checkUnsavedInstallLink() {
+  if (typeof appShellActive !== 'undefined' && appShellActive) appShellRefreshInstallBar();
+}
 
-function updateInstallLinkFromBanner() {}
+// The legacy banner's Update Link button. The shell's bar uses the same work.
+function updateInstallLinkFromBanner() {
+  if (typeof appShellActive !== 'undefined' && appShellActive) appShellInstallBarAction();
+}
 
 function saveState() {
   if (suppressSave) return;
@@ -74914,6 +75255,13 @@ window.addEventListener('popstate', (e) => {
     const itemType = (state && state.type) || (new URLSearchParams(hash.slice('#/item?'.length)).get('type')) || 'movie';
     openItemDetailsModal(itemId, itemType, { skipPushState: true });
   } else {
+    // On a shell page the address bar is a real path and the shell's own
+    // popstate listener (appShellOnPopState) opens the view it names. This
+    // branch's own rewrite of the URL to "/" would undo that.
+    if (typeof appShellActive !== 'undefined' && appShellActive) {
+      if (typeof appShellRenderFromLocation === 'function') appShellRenderFromLocation();
+      return;
+    }
     const targetTab = (state && (state.fromTab || (state.view === 'tab' && state.tab))) || window._originTab || window._previousTab || localStorage.getItem('myListAddon:activeTab') || 'discover';
     const cleanTab = (targetTab === 'list-details' || targetTab === 'item-details') ? 'discover' : targetTab;
     if (location.pathname.startsWith('/lists/')) {
@@ -74939,6 +75287,545 @@ window.addEventListener('popstate', (e) => {
     }
   }
 });
+// --- The new UI shell (Phase 6, P6-1) ----------------------------------------
+//
+// The pieces the frontend rebuild is built out of, all of them here so the
+// route table, the state object and the API client stay in one place:
+//
+//   * real-path routing for the six views (APP_SHELL_TAB_LIST, injected from
+//     APP_SHELL_TABS in 00_constants.js): /catalogs, /catalogs/quickadd,
+//     /settings/connections and so on. The server renders the same table into
+//     the nav (buildAppShellNavHtml, 09_page-shell.js), so the two cannot
+//     drift;
+//   * appShellState, one small observable object instead of the globals the
+//     legacy views pass around;
+//   * appShellApiFetch, one way to talk to the API: same-origin cookies, JSON
+//     in and out, and one place that turns a status into a sentence;
+//   * appShellDialog, one accessible dialog for new code (it rides on
+//     showModal, which owns Escape, the focus trap and focus restore);
+//   * the install bar: what this browser's install link currently is, and the
+//     one action that changes it.
+//
+// Everything here is inert unless NEW_UI (the per-request preamble flag) is
+// true, so a browser without the cookie runs the legacy page exactly as it did.
+// The bundle itself is shared and content-hashed (splitAppBundle, 02_), which
+// is why this lives in the bundle and branches on NEW_UI rather than being
+// emitted from the server.
+
+// The last install link this browser generated, and the configuration it was
+// generated from. Browser state, not account state: the Worker cannot know it,
+// which is why the bar's first paint says "not installed yet" and this refines
+// it as soon as the bundle runs.
+const APP_SHELL_INSTALL_KEY = 'myListAddon:installLink';
+
+// The sub-tab bars, by view, and the pill that names a sub-tab inside one.
+// These are the legacy bars' own ids; the shell routes to them rather than
+// rendering a second set of controls.
+const APP_SHELL_SUB_BARS = {
+  catalogs: 'catalogsFilterBar',
+  lists: 'listsSubnavBar',
+  channels: 'channelsSubnavBar',
+  discover: 'discoverSubnavBar',
+  settings: 'settingsSubnavBar',
+};
+
+// The names the legacy switchers accept that are not view ids (see switchTab,
+// 16_client-row-core.js). They mean a view plus a sub-tab, so the shell routes
+// them as one path rather than two history entries.
+const APP_SHELL_TAB_ALIASES = {
+  'backup': { tab: 'settings', sub: 'backup' },
+  'keys': { tab: 'settings', sub: 'account' },
+  'account': { tab: 'settings', sub: 'account' },
+  'quick-add': { tab: 'catalogs', sub: 'quickadd' },
+  'toplists': { tab: 'catalogs', sub: 'quickadd' },
+};
+
+// True while the router is applying a route. The legacy switchers it calls
+// check this (through appShellHandleNav) so they do their DOM work without
+// asking the router to route again.
+let appShellApplyingRoute = false;
+// Set while one appShellDialog is open, so Escape or a backdrop click resolves
+// its promise instead of leaving it hanging. A var, not a let: closeModal
+// (16_client-row-core.js) reads it with typeof, and a let in the temporal dead
+// zone would throw there rather than read as undefined.
+var appShellDialogClose = null;
+
+function appShellTab(id) {
+  const want = String(id || '');
+  for (let i = 0; i < APP_SHELL_TAB_LIST.length; i++) {
+    if (APP_SHELL_TAB_LIST[i].id === want) return APP_SHELL_TAB_LIST[i];
+  }
+  return null;
+}
+
+function appShellTrimSlashes(s) {
+  let out = String(s || '');
+  while (out.length > 1 && out.charAt(out.length - 1) === '/') out = out.slice(0, -1);
+  return out;
+}
+
+// '/lists/liked' -> { tab: 'lists', sub: 'liked' }. A path the shell does not
+// own (a shared list, a channel, a configure link) comes back null, so those
+// keep their own routes and handlers.
+function appShellRouteFromPath(pathname) {
+  const p = appShellTrimSlashes(pathname);
+  for (let i = 0; i < APP_SHELL_TAB_LIST.length; i++) {
+    const t = APP_SHELL_TAB_LIST[i];
+    if (p === t.path) return { tab: t.id, sub: '' };
+    if (p.indexOf(t.path + '/') === 0) {
+      const rest = p.slice(t.path.length + 1);
+      if (rest && t.subs.indexOf(rest) !== -1) return { tab: t.id, sub: rest };
+    }
+  }
+  return null;
+}
+
+function appShellPathFor(tabId, subId) {
+  const t = appShellTab(tabId) || APP_SHELL_TAB_LIST[0];
+  if (!t) return '/';
+  const sub = (subId && t.subs.indexOf(subId) !== -1) ? String(subId) : '';
+  return sub ? t.path + '/' + sub : t.path;
+}
+
+// A tab name, including the legacy aliases, as a route.
+function appShellRouteForName(name) {
+  const id = String(name || '');
+  const alias = APP_SHELL_TAB_ALIASES[id];
+  if (alias) return { tab: alias.tab, sub: alias.sub };
+  const t = appShellTab(id);
+  if (!t) return null;
+  return { tab: t.id, sub: '' };
+}
+
+// --- shared state ------------------------------------------------------------
+//
+// One small observable object for the facts the shell itself owns: the current
+// route, the account it has confirmed over its session cookie, and the install
+// bar's state. Views subscribe instead of polling, and an update only notifies
+// when something really changed, so a view can re-render on every notification
+// without ever re-rendering for nothing.
+const appShellState = (function () {
+  const listeners = new Set();
+  const state = { ready: false, route: null, account: null, install: { state: 'none', link: '' } };
+
+  function get(key) {
+    if (key === undefined) return Object.assign({}, state);
+    return state[key];
+  }
+
+  function set(patch) {
+    let changed = false;
+    Object.keys(patch || {}).forEach(function (k) {
+      const next = patch[k];
+      if (JSON.stringify(state[k]) !== JSON.stringify(next)) {
+        state[k] = next;
+        changed = true;
+      }
+    });
+    if (!changed) return Object.assign({}, state);
+    const snapshot = Object.assign({}, state);
+    listeners.forEach(function (fn) {
+      try { fn(snapshot); } catch (e) {}
+    });
+    return snapshot;
+  }
+
+  function subscribe(fn) {
+    listeners.add(fn);
+    return function () { listeners.delete(fn); };
+  }
+
+  return { get: get, set: set, subscribe: subscribe };
+})();
+
+// --- the API client ----------------------------------------------------------
+//
+// Same-origin cookies (the mla_session cookie the session routes set), JSON in
+// and out, and never a throw: every failure comes back as { ok: false, error }
+// with a sentence a person can read. A caller that wants to branch on the
+// status still has it.
+async function appShellApiFetch(path, options) {
+  const o = options || {};
+  const method = String(o.method || 'GET').toUpperCase();
+  const init = {
+    method: method,
+    // Cookies, not a token in the body: this is what lets the same call work
+    // from any signed-in device.
+    credentials: 'same-origin',
+    cache: 'no-store',
+    headers: Object.assign({ 'Accept': 'application/json' }, o.headers || {}),
+  };
+  if (o.body !== undefined && o.body !== null && method !== 'GET' && method !== 'HEAD') {
+    init.headers['Content-Type'] = 'application/json';
+    init.body = (typeof o.body === 'string') ? o.body : JSON.stringify(o.body);
+  }
+  if (o.signal) init.signal = o.signal;
+
+  let res;
+  try {
+    res = await fetch(ORIGIN + path, init);
+  } catch (e) {
+    return { ok: false, status: 0, error: appShellApiMessage(0), data: null, signInRequired: false };
+  }
+
+  let data = null;
+  try { data = await res.json(); } catch (e) { data = null; }
+  if (res.ok && (!data || data.ok !== false)) {
+    return { ok: true, status: res.status, data: data || { ok: true }, signInRequired: false };
+  }
+  const message = (data && (data.error || data.message)) || appShellApiMessage(res.status);
+  return {
+    ok: false,
+    status: res.status,
+    error: String(message),
+    data: data,
+    signInRequired: !!(data && data.signInRequired) || res.status === 401,
+  };
+}
+
+// A status, as something worth showing somebody.
+function appShellApiMessage(status) {
+  const s = Number(status) || 0;
+  if (s === 0) return 'You appear to be offline. Check your connection and try again.';
+  if (s === 400) return 'That request was not understood.';
+  if (s === 401) return 'Please sign in to continue.';
+  if (s === 403) return 'That is not allowed here.';
+  if (s === 404) return 'Not found.';
+  if (s === 409) return 'This changed somewhere else. Reload and try again.';
+  if (s === 413) return 'That is too large to send.';
+  if (s === 429) return 'Too many requests just now. Please wait a moment.';
+  if (s >= 500) return 'Something went wrong on our side. Please try again.';
+  return 'Something went wrong. Please try again.';
+}
+
+// --- one accessible dialog ---------------------------------------------------
+//
+// For new code: a title, a message and buttons that resolve. It rides on
+// showModal/closeModal (16_client-row-core.js), which already move focus in,
+// trap Tab, close on Escape, restore focus and lock the page behind it.
+function appShellDialog(options) {
+  const o = options || {};
+  const confirmLabel = o.confirmLabel || 'OK';
+  const cancelLabel = o.cancelLabel;
+  let html = '';
+  if (o.title) html += '<h3 style="margin:0 0 10px; font-size:1.08rem;">' + escapeHtml(o.title) + '</h3>';
+  if (o.message) html += '<p style="margin:0 0 16px; color:var(--muted); font-size:0.9rem; line-height:1.45; white-space:pre-wrap;">' + escapeHtml(o.message) + '</p>';
+  html += '<div style="display:flex; justify-content:flex-end; gap:8px;">';
+  if (cancelLabel) html += '<button type="button" class="secondary" id="appShellDialogCancel" style="min-width:80px; padding:8px 16px;">' + escapeHtml(cancelLabel) + '</button>';
+  html += '<button type="button" class="primary" id="appShellDialogConfirm" style="min-width:80px; padding:8px 16px;">' + escapeHtml(confirmLabel) + '</button>';
+  html += '</div>';
+
+  return new Promise(function (resolve) {
+    let settled = false;
+    const settle = function (value) {
+      if (settled) return;
+      settled = true;
+      appShellDialogClose = null;
+      resolve(value);
+    };
+    // After showModal, not before: showModal opens by calling closeModal,
+    // which resolves whatever dialog was open -- and that would be this one,
+    // as dismissed, before it had been seen.
+    showModal(html);
+    appShellDialogClose = settle;
+    const confirmBtn = document.getElementById('appShellDialogConfirm');
+    if (confirmBtn) {
+      // The marker is cleared before closeModal: that is what tells closeModal
+      // this dialog is being answered rather than dismissed, so it does not
+      // resolve it as false on the way out.
+      confirmBtn.addEventListener('click', function () {
+        appShellDialogClose = null;
+        closeModal();
+        settle(true);
+      });
+    }
+    const cancelBtn = document.getElementById('appShellDialogCancel');
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', function () {
+        appShellDialogClose = null;
+        closeModal();
+        settle(false);
+      });
+    }
+  });
+}
+
+// --- the install bar ---------------------------------------------------------
+//
+// Three states, all of them about this browser's own install link:
+//   none    -- nothing generated here yet
+//   unsaved -- a link exists, and the rows/settings have changed since
+//   live    -- the link matches what the builder currently holds
+function appShellReadInstallLink() {
+  try {
+    const raw = localStorage.getItem(APP_SHELL_INSTALL_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || !parsed.url) return null;
+    return { url: String(parsed.url), hash: String(parsed.hash || '') };
+  } catch (e) {
+    return null;
+  }
+}
+
+function appShellInstallLinkState() {
+  const saved = appShellReadInstallLink();
+  if (!saved) return { state: 'none', link: '' };
+  let current = '';
+  try {
+    if (typeof computeConfigStateHash === 'function') current = computeConfigStateHash();
+  } catch (e) {
+    current = '';
+  }
+  // No hash stored (an older link, or a stubbed environment): treat it as
+  // current rather than telling somebody their up-to-date link is stale.
+  const live = !saved.hash || !current || saved.hash === current;
+  return { state: live ? 'live' : 'unsaved', link: saved.url };
+}
+
+function appShellRecordInstallLink(url) {
+  const link = String(url || '').trim();
+  if (!link) return;
+  let hash = '';
+  try {
+    if (typeof computeConfigStateHash === 'function') hash = computeConfigStateHash();
+  } catch (e) {
+    hash = '';
+  }
+  try {
+    localStorage.setItem(APP_SHELL_INSTALL_KEY, JSON.stringify({ url: link, hash: hash }));
+  } catch (e) {}
+}
+
+function appShellRefreshInstallBar() {
+  const bar = document.getElementById('appShellInstallBar');
+  if (!bar) return;
+  const info = appShellInstallLinkState();
+  bar.setAttribute('data-state', info.state);
+  const text = document.getElementById('appShellInstallText');
+  const btn = document.getElementById('appShellInstallBtn');
+  const words = {
+    none: 'Not installed yet',
+    unsaved: 'Unsaved changes to your install link',
+    live: 'Install link up to date',
+  };
+  const actions = {
+    none: { action: 'install', label: 'Get install link' },
+    unsaved: { action: 'update', label: 'Update link' },
+    live: { action: 'copy', label: 'Copy link' },
+  };
+  const a = actions[info.state] || actions.none;
+  if (text) text.textContent = words[info.state] || words.none;
+  if (btn) {
+    btn.setAttribute('data-action', a.action);
+    btn.textContent = a.label;
+  }
+  appShellState.set({ install: { state: info.state, link: info.link } });
+}
+
+// Builds the install link through the builder's own generate() (which renders
+// the result card), then remembers it here. The link is read back out of the
+// card rather than duplicated from generate(), so there is still one place that
+// knows how a link is made.
+async function appShellGenerateInstallLink() {
+  if (typeof collectEntries === 'function' && !collectEntries().length) {
+    showToast('Add at least one list first.', 'info');
+    appShellGo(appShellPathFor('catalogs', ''));
+    return false;
+  }
+  try {
+    if (typeof generate === 'function') await generate();
+  } catch (e) {
+    showToast('Could not make the install link. Please try again.', 'error');
+    return false;
+  }
+  const display = document.getElementById('manifestLinkDisplay');
+  const link = display ? String(display.textContent || '').trim() : '';
+  if (!link) return false;   // generate() showed its own reason (for example: sign in)
+  appShellRecordInstallLink(link);
+  appShellRefreshInstallBar();
+  showToast('Install link ready.', 'success');
+  return true;
+}
+
+async function appShellInstallBarAction() {
+  const info = appShellInstallLinkState();
+  if (info.state === 'live' && info.link) {
+    try {
+      if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(info.link);
+        showToast('Install link copied.', 'success');
+        return;
+      }
+    } catch (e) {}
+  }
+  await appShellGenerateInstallLink();
+}
+
+// The signed-in account, over the session cookie (GET /api/me). Kept in
+// appShellState so the Settings views can read it without asking twice.
+async function appShellRefreshAccount() {
+  const res = await appShellApiFetch('/api/me');
+  const account = (res.ok && res.data && res.data.account) ? res.data.account : null;
+  appShellState.set({
+    account: account ? { username: account.username, displayName: account.displayName || account.username } : null,
+  });
+  return account;
+}
+
+// --- routing -----------------------------------------------------------------
+
+function appShellFindSubPill(tabId, sub) {
+  const barId = APP_SHELL_SUB_BARS[tabId];
+  if (!barId) return null;
+  const bar = document.getElementById(barId);
+  if (!bar || !bar.querySelectorAll) return null;
+  const pills = bar.querySelectorAll('.subnav-pill');
+  for (let i = 0; i < pills.length; i++) {
+    const p = pills[i];
+    if (p.getAttribute && p.getAttribute('data-sub') === sub) return p;
+    const oc = (p.getAttribute && p.getAttribute('onclick')) || '';
+    if (oc.indexOf("'" + sub + "'") !== -1 || oc.indexOf('"' + sub + '"') !== -1) return p;
+  }
+  return null;
+}
+
+// Opens a view (and sub-tab) using the legacy switchers for everything inside
+// it. appShellApplyingRoute stops those switchers from routing again: this
+// function is the only thing that writes the URL.
+function appShellApplyRoute(route) {
+  if (!route) return false;
+  const tab = appShellTab(route.tab);
+  if (!tab) return false;
+  const sub = (route.sub && tab.subs.indexOf(route.sub) !== -1) ? String(route.sub) : '';
+  appShellApplyingRoute = true;
+  try {
+    if (typeof switchTab === 'function') switchTab(tab.id);
+    if (sub) {
+      const pill = appShellFindSubPill(tab.id, sub);
+      if (tab.id === 'catalogs' && typeof switchCatalogsSubmenu === 'function') switchCatalogsSubmenu(sub, pill);
+      else if (tab.id === 'lists' && typeof switchListsSubmenu === 'function') switchListsSubmenu(sub, pill);
+      else if (tab.id === 'channels' && typeof switchChannelsSubmenu === 'function') switchChannelsSubmenu(sub, pill);
+      else if (tab.id === 'settings' && typeof switchSettingsSubmenu === 'function') switchSettingsSubmenu(sub, pill);
+      else if (tab.id === 'discover' && typeof filterDiscoverShelves === 'function') filterDiscoverShelves(sub, pill);
+    }
+  } finally {
+    appShellApplyingRoute = false;
+  }
+  appShellState.set({ route: { tab: tab.id, sub: sub } });
+  return true;
+}
+
+// The one way the shell moves between views: the URL first, then the view, so
+// a reload (or a shared link) opens the same thing.
+function appShellGo(path, options) {
+  const o = options || {};
+  const target = String(path || '');
+  const route = appShellRouteFromPath(target);
+  if (!route) return false;
+  const here = appShellTrimSlashes(location.pathname);
+  try {
+    if (o.replace || here === target) {
+      history.replaceState({ appShell: true }, '', target);
+    } else {
+      history.pushState({ appShell: true }, '', target);
+    }
+  } catch (e) {}
+  appShellApplyRoute(route);
+  if (!o.keepScroll) {
+    try { window.scrollTo({ top: 0, behavior: 'instant' }); } catch (e) {
+      try { window.scrollTo(0, 0); } catch (e2) {}
+    }
+  }
+  return true;
+}
+
+// Called by the legacy tab and sub-tab switchers (16_ and 20_). Returns true
+// when the shell has taken the navigation, false to leave both the switcher and
+// the address bar exactly as they were.
+function appShellHandleNav(kind, a, b) {
+  if (!appShellActive || appShellApplyingRoute || !NEW_UI) return false;
+  if (kind === 'tab') {
+    const route = appShellRouteForName(a);
+    if (!route) return false;   // list-details, item-details: not shell views
+    return appShellGo(appShellPathFor(route.tab, route.sub));
+  }
+  if (kind === 'sub') {
+    const tabId = String(a || '');
+    const sub = String(b || '');
+    if (!appShellTab(tabId)) return false;
+    if (!sub) return false;
+    return appShellGo(appShellPathFor(tabId, sub));
+  }
+  return false;
+}
+
+function appShellOnClick(e) {
+  if (!appShellActive) return;
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const target = e.target;
+  if (!target || !target.closest) return;
+  const link = target.closest('a[data-app-route]');
+  if (!link) return;
+  if (link.target && link.target !== '_self') return;
+  const href = link.getAttribute('href') || '';
+  if (!href || href.charAt(0) !== '/') return;
+  if (!appShellRouteFromPath(href)) return;
+  e.preventDefault();
+  appShellGo(href);
+}
+
+// A popstate the shell owns: the legacy handler in this file steps aside for
+// shell paths (see the guard at the top of its final branch).
+function appShellOnPopState() {
+  if (!appShellActive) return;
+  const route = appShellRouteFromPath(location.pathname);
+  if (route) appShellApplyRoute(route);
+}
+
+function appShellRenderFromLocation() {
+  const route = appShellRouteFromPath(location.pathname);
+  if (route) appShellApplyRoute(route);
+}
+
+// --- boot --------------------------------------------------------------------
+
+function initAppShell() {
+  if (!NEW_UI) return;
+  appShellActive = true;
+  document.addEventListener('click', appShellOnClick);
+  window.addEventListener('popstate', appShellOnPopState);
+
+  const bar = document.getElementById('appShellInstallBar');
+  if (bar) {
+    bar.addEventListener('click', function (e) {
+      const target = e.target;
+      if (!target || !target.closest) return;
+      if (!target.closest('#appShellInstallBtn')) return;
+      e.preventDefault();
+      appShellInstallBarAction();
+    });
+  }
+
+  // The server already opened the right view (data-initial-tab in the head
+  // script). This only settles the address bar: a real path for the view, and
+  // "/" becomes the Discover path so every view has one.
+  const route = appShellRouteFromPath(location.pathname);
+  if (route) {
+    appShellApplyRoute(route);
+  } else if (appShellTrimSlashes(location.pathname) === '/') {
+    try { history.replaceState({ appShell: true }, '', appShellPathFor('discover', '')); } catch (e) {}
+  }
+
+  appShellRefreshInstallBar();
+  if (typeof isSignedIn === 'function' && isSignedIn()) appShellRefreshAccount();
+  appShellState.set({ ready: true });
+}
+
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initAppShell);
+  else initAppShell();
+}
 /*MYLISTS_APP_BUNDLE_END*/</script>
 
 </body>
@@ -76101,6 +76988,14 @@ async function handleFetch(request, env, ctx) {
     // token as its config segment (see v2InstallPath, 27_installs.js).
     const path = v2InstallPath(url.pathname) || url.pathname;
 
+    // ?ff_new_ui=1 (or 0) turns the new UI shell on or off for this browser,
+    // then bounces to the same address without the parameter (P6-1). Handled
+    // before anything else so it works from any page of the site.
+    if (request.method === "GET" || request.method === "HEAD") {
+      const shellSwitch = appShellSwitchResponse(url);
+      if (shellSwitch) return shellSwitch;
+    }
+
     if (request.method === "OPTIONS") {
       if (isPublicCorsPath(path)) {
         return new Response(null, { headers: corsHeaders() });
@@ -76165,7 +77060,30 @@ async function handleFetch(request, env, ctx) {
       // rebuilt and resent ~1.6MB on every navigation, with no validator at
       // all, which also left the browser free to heuristically cache a copy
       // it had no way to check.
-      return await htmlPageResponse(request, renderBuilderCached(url.origin, {}));
+      return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
+    }
+
+    // The new UI shell's own paths (Phase 6, P6-1): /catalogs, /lists,
+    // /channels, /discover, /search, /settings and a sub-tab below any of them
+    // (/settings/connections, /catalogs/quickadd). Served only to a browser
+    // that carries the FF_NEW_UI cookie; without it these addresses keep
+    // 404ing exactly as they do today, so nothing changes for anyone else, and
+    // turning the shell off again is one cookie rather than a deploy.
+    //
+    // Exact paths only: /lists/<slug> and /channels/<user>/<slug> are share
+    // links and keep their own routes below.
+    if (APP_SHELL_PATHS.has(path) && isNewUiRequest(request)) {
+      ctx.waitUntil(bumpStat(env, "pageviews"));
+      return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
+    }
+    if (isNewUiRequest(request)) {
+      for (const shellTab of APP_SHELL_TABS) {
+        if (path.indexOf(shellTab.path + "/") !== 0) continue;
+        const shellSub = path.slice(shellTab.path.length + 1);
+        if (shellTab.subs.indexOf(shellSub) === -1) continue;
+        ctx.waitUntil(bumpStat(env, "pageviews"));
+        return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
+      }
     }
 
     // add-on icon, served straight from this Worker
@@ -76484,7 +77402,7 @@ async function handleFetch(request, env, ctx) {
       // keys stays uncacheable, while the bundle it references is the same
       // shared, immutable /app.js everyone else already has.
       return new Response(
-        await pageWithExternalBundle(renderBuilder(url.origin, {
+        await pageWithExternalBundle(renderPage(request, url.origin, {
           initialEntries: resolvedForPage.entries,
           // Every setting the link carries except its keys and tokens. This
           // used to name seven fields by hand and left Better Posters out, so
@@ -76529,7 +77447,7 @@ async function handleFetch(request, env, ctx) {
       ctx.waitUntil(bumpStat(env, "pageviews"));
       return await htmlPageResponse(
         request,
-        renderBuilderCached(url.origin, { isConfigureMode: true })
+        renderPageCached(request, url.origin, { isConfigureMode: true })
       );
     }
 
@@ -76663,8 +77581,8 @@ async function handleFetch(request, env, ctx) {
       return await htmlPageResponse(
         request,
         curated
-          ? renderBuilder(url.origin, { deepLinkList: { name: curated.name, type: curated.type, url: "custom:curated:" + curated.slug } })
-          : renderBuilderCached(url.origin, {})
+          ? renderPage(request, url.origin, { deepLinkList: { name: curated.name, type: curated.type, url: "custom:curated:" + curated.slug } })
+          : renderPageCached(request, url.origin, {})
       );
     }
 
@@ -76683,8 +77601,8 @@ async function handleFetch(request, env, ctx) {
       return await htmlPageResponse(
         request,
         chart
-          ? renderBuilder(url.origin, { deepLinkList: { name: chart.name, type: chart.type || ((chart.showUrl && chart.showUrl.includes('shows')) ? "series" : "movie"), url: chart.movieUrl } })
-          : renderBuilderCached(url.origin, {})
+          ? renderPage(request, url.origin, { deepLinkList: { name: chart.name, type: chart.type || ((chart.showUrl && chart.showUrl.includes('shows')) ? "series" : "movie"), url: chart.movieUrl } })
+          : renderPageCached(request, url.origin, {})
       );
     }
 
@@ -76692,7 +77610,7 @@ async function handleFetch(request, env, ctx) {
     // Note: Creator/user public lists (/lists/:user/:slug) and .json endpoints pass through to creator routes.
     if (path.startsWith("/lists/") && !path.endsWith(".json") && (path.startsWith("/lists/mdblist/") || path.startsWith("/lists/trakt/") || path.startsWith("/lists/tmdb/") || path.startsWith("/lists/simkl/") || path.startsWith("/lists/custom/") || path.startsWith("/lists/curated/"))) {
       ctx.waitUntil(bumpStat(env, "pageviews"));
-      return await htmlPageResponse(request, renderBuilderCached(url.origin, {}));
+      return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
     }
 
     // /channels/:username/:channelSlug -- public shareable URL for a creator's published channel
@@ -76752,7 +77670,7 @@ async function handleFetch(request, env, ctx) {
         }
       }
       ctx.waitUntil(bumpStat(env, "pageviews"));
-      return await htmlPageResponse(request, renderBuilderCached(url.origin, {}));
+      return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
     }
 
     // /:config/manifest.json
@@ -88698,7 +89616,7 @@ function generateSearchVariations(query) {
       // 304 can only happen when the browser already holds this list.
       return await htmlPageResponse(
         request,
-        renderBuilder(url.origin, {
+        renderPage(request, url.origin, {
           deepLinkList: {
             name: deslugifyServer(mdblistSlug),
             type: "movie",
@@ -88725,7 +89643,7 @@ function generateSearchVariations(query) {
       // 304 can only happen when the browser already holds this list.
       return await htmlPageResponse(
         request,
-        renderBuilder(url.origin, {
+        renderPage(request, url.origin, {
           deepLinkList: {
             name: deslugifyServer(traktSlug),
             type: "movie",
@@ -88752,7 +89670,7 @@ function generateSearchVariations(query) {
       // 304 can only happen when the browser already holds this list.
       return await htmlPageResponse(
         request,
-        renderBuilder(url.origin, {
+        renderPage(request, url.origin, {
           deepLinkList: {
             name,
             type: "movie",
@@ -88779,7 +89697,7 @@ function generateSearchVariations(query) {
       // 304 can only happen when the browser already holds this list.
       return await htmlPageResponse(
         request,
-        renderBuilder(url.origin, {
+        renderPage(request, url.origin, {
           deepLinkList: {
             name,
             type: "movie",
@@ -89010,7 +89928,7 @@ function generateSearchVariations(query) {
       // 304 can only happen when the browser already holds this list.
       return await htmlPageResponse(
         request,
-        renderBuilder(url.origin, {
+        renderPage(request, url.origin, {
           deepLinkList: {
             name: listData.name,
             type: listData.type,

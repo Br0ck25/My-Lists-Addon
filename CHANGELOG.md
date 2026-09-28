@@ -27,6 +27,13 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 8. **Recommended: set up the background jobs queue** (Phase 5, `docs/OPERATIONS.md` §18): create the queues `mylists-jobs` and `mylists-jobs-dlq`, make this Worker the consumer of `mylists-jobs` (batch size 25, 5 retries, dead-letter queue `mylists-jobs-dlq`), bind `mylists-jobs` to the Worker as `JOBS`, then press **Send a test job** in `/admin` → Maintenance. Without it everything works as before.
 
+### 🧭 The new frontend, opt-in per browser (P6-1)
+
+- **Nothing changes for anyone who does not ask for it.** The frontend rebuild starts here, and it is switched on per browser rather than per deploy: open `mylistsaddon.com/?ff_new_ui=1` and that browser gets the new shell, `?ff_new_ui=0` puts it back. `docs/OPERATIONS.md` §20 has the two links.
+- In the new shell the six views have real addresses (`/catalogs`, `/lists/liked`, `/channels/explore`, `/settings/account`, ...), the tabs are ordinary links, so middle-click, "open in a new tab", bookmarking and sharing a view all work, and the back button moves between views.
+- An **install bar** above the tabs says whether this browser's install link still matches what has been built since (`Not installed yet` / `Unsaved changes to your install link` / `Install link up to date`), with the one action that fixes it, instead of the old floating "Update Link" banner.
+- Every panel is the one that exists today: the shell is the frame, the routing, and the shared pieces the rest of Phase 6 will be built from (one toast system, one accessible dialog, one way to call the API with the session cookie). Nothing is stored on the server, so switching back is instant and lossless, and the shell's addresses 404 for everyone else exactly as they did before.
+
 ### 🏠 Home screens with "remove duplicates" built once (P5-11)
 
 - **A new switch, `FF_MATERIALIZER` (off).** For installs with "Remove duplicate items across lists", each Stremio row used to rebuild every row above it; a 20-row home screen did about 210 row builds. With the switch on, the whole home screen is built once per hour (at most 20 builds) and served from there. The rows are the same.

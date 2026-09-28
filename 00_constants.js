@@ -1527,3 +1527,39 @@ const BETTER_POSTER_WARM_IDS_PER_MINUTE = 800;
 // wall-clock time: 8 at 4 at a time is two waits, not eight.
 const BETTER_POSTER_PREWARM_CHECKS_PER_TICK = 60;
 const BETTER_POSTER_PREWARM_FETCHES_PER_TICK = 8;
+
+// --- The new UI shell (Phase 6, P6-1) ----------------------------------------
+//
+// The frontend rebuild is opt-in per browser while it is being built, through a
+// cookie rather than a Worker variable: the owner can try it on their own
+// device without changing anything for anyone else, and turning it off again is
+// one cookie rather than a deploy. The Worker reads the cookie once per request
+// (isNewUiRequest, 02_http-and-creator-utils.js) and renders the same page with
+// the shell's chrome around the existing views.
+//
+// This table is the ONE list of the site's top-level views. The Worker renders
+// the shell's navigation from it (buildAppShellNavHtml, 09_page-shell.js) and
+// writes it into the client bundle (16_client-row-core.js), where the router
+// (24_client-backup-restore-presets.js) builds the same paths back from it.
+// Adding a view is one entry here, not three edits.
+//
+// `subs` are the sub-tab ids the view's own switcher already knows: the shell
+// routes /catalogs/quickadd to switchCatalogsSubmenu('quickadd') rather than
+// inventing a second set of names. The first sub is that view's default.
+// A route whose sub is not in this list falls back to the view itself, so a
+// stale URL can never open a panel that does not exist.
+const NEW_UI_COOKIE = "FF_NEW_UI";
+
+const APP_SHELL_TABS = [
+  { id: "catalogs", label: "Catalogs", path: "/catalogs", subs: ["all", "quickadd", "bulk"] },
+  { id: "lists", label: "Lists", path: "/lists", subs: ["my-lists", "liked", "create-list", "import"] },
+  { id: "channels", label: "Channels", path: "/channels", subs: ["my-channels", "storylines", "quickadd", "explore", "import", "build"] },
+  { id: "discover", label: "Discover", path: "/discover", subs: ["movie", "all", "series", "popular", "curated", "gems", "kids", "holidays", "genres"] },
+  { id: "search", label: "Search", path: "/search", subs: [] },
+  { id: "settings", label: "Settings", path: "/settings", subs: ["account", "external", "backup", "feedback"] },
+];
+
+// The paths the shell answers on. Exact matches only: /lists/<slug> and
+// /channels/<user>/<slug> are share links with their own routes, and must keep
+// working exactly as they do.
+const APP_SHELL_PATHS = new Set(APP_SHELL_TABS.map((t) => t.path));

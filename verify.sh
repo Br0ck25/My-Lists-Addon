@@ -49,6 +49,17 @@ python3 html_checks.py rendered.html local
 rm -f rendered.html inner_local.js
 
 echo
+echo "=== 4a2. render + validate the new UI shell page ==="
+# The shell variant (P6-1) is a different render: extra head script, anchor nav,
+# install bar, and the same client bundle. The three checks above only ever see
+# the legacy page, and the shell's head script is exactly where a bug hid once
+# already (an identifier the legacy page never declares).
+node render_check.js rendered-shell.html --shell
+python3 html_checks.py rendered-shell.html local-shell
+node scope_check.mjs page rendered-shell.html
+rm -f rendered-shell.html
+
+echo
 echo "=== 4b. render + validate the admin dashboard ==="
 # The same treatment for /admin, which used to get none. It is a template
 # literal too, and a single backslash inside one never reaches the browser:

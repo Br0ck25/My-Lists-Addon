@@ -1,6 +1,88 @@
+// --- The new UI shell's chrome (Phase 6, P6-1) ------------------------------
+//
+// Everything here is emitted only for a browser carrying the FF_NEW_UI cookie
+// (isNewUiRequest, 02_http-and-creator-utils.js), so the page every other
+// visitor gets is byte-for-byte the page they got before. The client bundle is
+// shared by both variants -- it is one content-hashed file (splitAppBundle,
+// 02_) -- so the shell's behaviour is not emitted from here: it lives in
+// 24_client-backup-restore-presets.js and keys off the NEW_UI flag in the
+// per-request preamble.
+//
+// The tabs are real links. Middle-click, copy-link, open-in-a-new-tab and the
+// back button all work with no JavaScript at all; the client intercepts a
+// plain left click and routes in-page. The class names are the legacy ones on
+// purpose: every existing rule -- the desktop pills, the mobile bottom bar,
+// the dark theme, the safe-area padding -- then applies to them unchanged.
+const APP_SHELL_TAB_ICONS = {
+  catalogs: '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>',
+  lists: '<line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line>',
+  channels: '<rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect><polyline points="17 2 12 7 7 2"></polyline>',
+  discover: '<rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect>',
+  search: '<circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>',
+  settings: '<circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>',
+};
+
+// Which view the page opens on when it is served at a shell path. The shell's
+// own routing (24_) reads the same table, written into the bundle.
+function appShellTabForPath(pathname) {
+  const p = String(pathname || "");
+  for (const t of APP_SHELL_TABS) {
+    if (p === t.path) return t;
+    if (p.startsWith(t.path + "/")) {
+      const rest = p.slice(t.path.length + 1).replace(/\/+$/, "");
+      if (rest && t.subs.indexOf(rest) !== -1) return t;
+    }
+  }
+  return null;
+}
+
+function buildAppShellNavHtml(style) {
+  const isDesktop = style === "desktop";
+  const items = APP_SHELL_TABS.map((t) => {
+    const active = t.id === "discover";
+    const cls = (isDesktop ? "tab-btn" : "bottom-nav-item") + (active ? " active" : "");
+    // The id and aria-controls keep the panels' own aria-labelledby="tab-..."
+    // pointing at a real element: the legacy buttons carry these ids and the
+    // panels were never changed, so a nav without them leaves six references
+    // dangling (html_checks.py fails the build for exactly that).
+    const attrs = `class="${cls}" id="tab-${isDesktop ? "desktop" : "mobile"}-${t.id}" aria-controls="content-${t.id}"` +
+      ` data-tab="${t.id}" data-app-route href="${t.path}" title="${t.label}"` +
+      (active ? ' aria-current="page"' : "");
+    if (isDesktop) return `<a ${attrs}>${t.label}</a>`;
+    return `<a ${attrs}>\n      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">\n        ${APP_SHELL_TAB_ICONS[t.id] || ""}\n      </svg>\n      ${t.label}\n    </a>`;
+  }).join("\n    ");
+  if (isDesktop) {
+    return `<div class="tab-bar" id="appShellDesktopNav">\n    <nav aria-label="Main navigation" style="display:flex; gap:8px; overflow-x:auto; width:100%;">\n    ${items}\n    </nav>\n  </div>`;
+  }
+  return `<nav class="bottom-nav" id="appShellMobileNav" aria-label="Main navigation">\n    ${items}\n  </nav>`;
+}
+
+// Path -> { tab, sub } for the head script, which runs before the body exists
+// and so cannot use the client bundle's router. The bundle builds the same
+// routes from APP_SHELL_TAB_LIST (16_client-row-core.js); a test keeps the two
+// agreeing with this one table.
+function buildAppShellHeadRoutes() {
+  const out = {};
+  for (const t of APP_SHELL_TABS) {
+    out[t.path] = { tab: t.id, sub: "" };
+    for (const sub of t.subs) out[t.path + "/" + sub] = { tab: t.id, sub: sub };
+  }
+  return out;
+}
+
+// The install bar. Its first paint is server-rendered so it is there before any
+// script runs, and its state (none / unsaved / live) is then kept by the client
+// -- the last install link this browser generated is browser state, so the
+// Worker cannot know it. See appShellRefreshInstallBar (24_).
+const APP_SHELL_INSTALL_BAR_HTML = `<div id="appShellInstallBar" class="app-shell-install-bar" data-state="none">
+    <span class="app-shell-install-dot" aria-hidden="true"></span>
+    <span class="app-shell-install-text" id="appShellInstallText">Not installed yet</span>
+    <button type="button" class="app-shell-install-action" id="appShellInstallBtn" data-action="install">Get install link</button>
+  </div>`;
+
 function renderBuilder(
   origin,
-  { initialEntries = [], initialKeys = {}, isConfigureMode = false, deepLinkList = null } = {}
+  { initialEntries = [], initialKeys = {}, isConfigureMode = false, deepLinkList = null, newUi = false } = {}
 ) {
   const initialTmdbKey = initialKeys.tmdbKey || "";
   const initialMdblistKey = initialKeys.mdblistKey || "";
@@ -116,8 +198,15 @@ function renderBuilder(
       ]
   );
 
+  // The shell variant of the chrome. Both navs keep the legacy wrappers
+  // (`.tab-bar`, `.bottom-nav`) so the existing CSS -- including the mobile
+  // bottom bar -- applies to them unchanged; only the items differ, from
+  // buttons to links.
+  const appShellDesktopNavHtml = newUi ? buildAppShellNavHtml("desktop") : "";
+  const appShellMobileNavHtml = newUi ? buildAppShellNavHtml("mobile") : "";
+
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en"${newUi ? ' data-app-shell="1"' : ''}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -132,6 +221,7 @@ ${seoHeadHtml}
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script>
+  ${newUi ? `var APP_SHELL_HEAD_ROUTES = ${jsonForScript(buildAppShellHeadRoutes())};` : ""}
   if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
     document.documentElement.classList.add('dark-theme');
     try {
@@ -152,8 +242,20 @@ ${seoHeadHtml}
     var h = location.hash || '';
     var isDeep = (p.startsWith('/lists/') && p !== '/lists') || p.startsWith('/channels/') || h.startsWith('#/list?') || h.startsWith('#/item?');
     var tab = 'discover';
+    // The new UI shell routes on real paths (/catalogs, /settings, ...), so
+    // there the path -- not the last tab this browser used -- decides which
+    // view opens. Same table the Worker rendered the nav from.
+    // APP_SHELL_HEAD_ROUTES is declared just above only on a shell page; this
+    // script is shared by both variants, so it must not name it unconditionally
+    // -- scope_check.mjs catches exactly that, and a legacy page would throw.
+    var shellRoute = null;
+    if (document.documentElement.getAttribute('data-app-shell') === '1' && typeof APP_SHELL_HEAD_ROUTES !== 'undefined') {
+      shellRoute = APP_SHELL_HEAD_ROUTES[p] || null;
+    }
     if (isDeep) {
       tab = h.startsWith('#/item?') ? 'item-details' : 'list-details';
+    } else if (shellRoute) {
+      tab = shellRoute.tab;
     } else {
       try {
         var s = localStorage.getItem('myListAddon:activeTab');
@@ -161,22 +263,23 @@ ${seoHeadHtml}
       } catch (e) {}
     }
     document.documentElement.setAttribute('data-initial-tab', tab);
+    var shellSub = (shellRoute && shellRoute.sub) || '';
 
     try {
-      var catSub = localStorage.getItem('myListAddon:catalogsSubmenu') || 'all';
+      var catSub = shellSub || localStorage.getItem('myListAddon:catalogsSubmenu') || 'all';
       document.documentElement.setAttribute('data-initial-catalogs-sub', catSub);
-      var listSub = localStorage.getItem('myListAddon:listsSubmenu') || 'my-lists';
+      var listSub = (shellRoute && shellRoute.tab === 'lists' && shellSub) || localStorage.getItem('myListAddon:listsSubmenu') || 'my-lists';
       // Must agree with normalizeListsSubmenu (16_client-row-core.js): the rule
       // above hides every Lists panel and then un-hides the one this attribute
       // names, so a stale value naming a panel that no longer exists leaves the
       // tab blank from first paint.
       if (['my-lists', 'liked', 'import', 'create-list'].indexOf(listSub) === -1) listSub = 'my-lists';
       document.documentElement.setAttribute('data-initial-lists-sub', listSub);
-      var chSub = localStorage.getItem('myListAddon:channelsSubmenu') || 'my-channels';
+      var chSub = (shellRoute && shellRoute.tab === 'channels' && shellSub) || localStorage.getItem('myListAddon:channelsSubmenu') || 'my-channels';
       document.documentElement.setAttribute('data-initial-channels-sub', chSub);
-      var setSub = localStorage.getItem('myListAddon:settingsSubmenu') || 'account';
+      var setSub = (shellRoute && shellRoute.tab === 'settings' && shellSub) || localStorage.getItem('myListAddon:settingsSubmenu') || 'account';
       document.documentElement.setAttribute('data-initial-settings-sub', setSub);
-      var discSub = localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
+      var discSub = (shellRoute && shellRoute.tab === 'discover' && shellSub) || localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
       if (discSub === 'all') discSub = 'movie';
       document.documentElement.setAttribute('data-initial-discover-sub', discSub);
     } catch (e) {}
@@ -3525,6 +3628,62 @@ ${seoHeadHtml}
     animation: spin 0.9s linear infinite;
   }
 
+  /* --- The new UI shell's install bar (Phase 6, P6-1) --------------------- */
+  /* Emitted for every visitor and inert without <html data-app-shell="1">.
+     That is deliberate: /app.css is one shared, content-hashed file
+     (splitAppCss, 02_http-and-creator-utils.js), so a variant-dependent
+     stylesheet would cost every visitor the shared cache. */
+  .app-shell-install-bar { display: none; }
+  html[data-app-shell="1"] .app-shell-install-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 10px;
+    padding: 10px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-2);
+    /* Sticky rather than fixed: on a phone the bottom of the screen belongs
+       to the tab bar, and the bar must not sit over the poster grid while a
+       list is being built. */
+    position: sticky;
+    top: 0;
+    z-index: 900;
+  }
+  html[data-app-shell="1"] .app-shell-install-dot {
+    width: 9px; height: 9px; flex: none; border-radius: 50%;
+    background: var(--muted);
+  }
+  html[data-app-shell="1"] .app-shell-install-bar[data-state="none"] .app-shell-install-dot { background: var(--muted); }
+  html[data-app-shell="1"] .app-shell-install-bar[data-state="unsaved"] .app-shell-install-dot { background: var(--warn); }
+  html[data-app-shell="1"] .app-shell-install-bar[data-state="live"] .app-shell-install-dot { background: var(--success); }
+  html[data-app-shell="1"] .app-shell-install-text {
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  html[data-app-shell="1"] .app-shell-install-action {
+    flex: none;
+    background: var(--accent); color: #fff; border: none;
+    border-radius: var(--radius-pill);
+    padding: 7px 14px; font-size: 0.82rem; font-weight: 700;
+    min-height: unset; cursor: pointer;
+  }
+  html[data-app-shell="1"] .app-shell-install-action:hover { background: var(--accent-hover); }
+  html[data-app-shell="1"] .app-shell-install-bar[data-state="live"] .app-shell-install-action {
+    background: var(--surface); color: var(--accent);
+    border: 1.5px solid var(--border-strong);
+  }
+  html[data-app-shell="1"] .app-shell-install-bar[data-state="live"] .app-shell-install-action:hover {
+    border-color: var(--accent); color: var(--accent);
+  }
+  /* The floating "Unsaved changes to install link" banner and the install
+     bar say the same thing; showing both would be the duplication this shell
+     exists to remove. */
+  html[data-app-shell="1"] #unsavedInstallBanner { display: none !important; }
+
   /* --- Floating Unsaved Changes to Install Link Banner -------------------- */
   .unsaved-install-banner {
     position: fixed;
@@ -3661,15 +3820,19 @@ ${seoHeadHtml}
     </div>
   </header>
 
+  <!-- The install bar (new UI shell only): what the current configuration is
+       installed as, and the one action that changes it. -->
+${newUi ? "  " + APP_SHELL_INSTALL_BAR_HTML : ""}
+
   <!-- Top Tab Bar (Desktop View) -->
-  <div class="tab-bar" role="tablist" aria-label="Main navigation">
+${newUi ? appShellDesktopNavHtml : `  <div class="tab-bar" role="tablist" aria-label="Main navigation">
     <button type="button" class="tab-btn" role="tab" id="tab-desktop-catalogs" aria-controls="content-catalogs" aria-selected="false" tabindex="-1" data-tab="catalogs" onclick="switchTab('catalogs')">Catalogs</button>
     <button type="button" class="tab-btn" role="tab" id="tab-desktop-lists" aria-controls="content-lists" aria-selected="false" tabindex="-1" data-tab="lists" onclick="switchTab('lists')">Lists</button>
     <button type="button" class="tab-btn" role="tab" id="tab-desktop-channels" aria-controls="content-channels" aria-selected="false" tabindex="-1" data-tab="channels" onclick="switchTab('channels')">Channels</button>
     <button type="button" class="tab-btn active" role="tab" id="tab-desktop-discover" aria-controls="content-discover" aria-selected="true" tabindex="0" data-tab="discover" onclick="switchTab('discover')">Discover</button>
     <button type="button" class="tab-btn" role="tab" id="tab-desktop-search" aria-controls="content-search" aria-selected="false" tabindex="-1" data-tab="search" onclick="switchTab('search')">Search</button>
     <button type="button" class="tab-btn" role="tab" id="tab-desktop-settings" aria-controls="content-settings" aria-selected="false" tabindex="-1" data-tab="settings" onclick="switchTab('settings')">Settings</button>
-  </div>
+  </div>`}
 
   <!-- Unsaved Changes Floating Banner -->
   <div id="unsavedInstallBanner" class="unsaved-install-banner">
@@ -3678,7 +3841,7 @@ ${seoHeadHtml}
   </div>
 
   <!-- Bottom Nav Bar (Mobile View - Persistent Glassmorphism) -->
-  <nav class="bottom-nav" role="tablist" aria-label="Main navigation">
+${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria-label="Main navigation">
     <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-catalogs" aria-controls="content-catalogs" aria-selected="false" tabindex="-1" data-tab="catalogs" onclick="switchTab('catalogs')" title="Catalogs">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
@@ -3720,7 +3883,7 @@ ${seoHeadHtml}
       </svg>
       Settings
     </button>
-  </nav>
+  </nav>`}
 
   <script>
     (function() {

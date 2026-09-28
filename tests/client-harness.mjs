@@ -33,9 +33,11 @@ const REPO_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 // Rendering the page and concatenating 1.4MB of script is the slow part, so it
 // happens once per process and every loadClient() re-evaluates the same text.
-let CACHED_SCRIPT = null;
+// Two variants are cached: the legacy page and the new UI shell page (P6-1),
+// which is the same bundle with `const NEW_UI = true` in its preamble.
+const CACHED_SCRIPT = new Map();
 
-export function renderPage() {
+export function renderPage(opts = {}) {
   let src = fs.readFileSync(path.join(REPO_ROOT, "worker_entry_combined.js"), "utf8");
   const idx = src.lastIndexOf("export default");
   if (idx === -1) throw new Error("no `export default` in the combined Worker");
@@ -54,12 +56,13 @@ export function renderPage() {
   vm.createContext(sandbox);
   vm.runInContext(src, sandbox, { filename: "worker_entry_combined.js" });
   if (typeof sandbox.renderBuilder !== "function") throw new Error("renderBuilder is not defined");
-  return sandbox.renderBuilder("https://example.com", {});
+  return sandbox.renderBuilder("https://example.com", opts);
 }
 
-function clientScript() {
-  if (CACHED_SCRIPT) return CACHED_SCRIPT;
-  const html = renderPage();
+function clientScript(opts = {}) {
+  const cacheKey = opts.newUi ? "shell" : "legacy";
+  if (CACHED_SCRIPT.has(cacheKey)) return CACHED_SCRIPT.get(cacheKey);
+  const html = renderPage(opts);
   const blocks = [...html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/g)];
   // Every inline block, in document order. Not just the largest one: the
   // per-request preamble is its own small block and declares ORIGIN,
@@ -86,8 +89,9 @@ function clientScript() {
 globalThis.__scopeSet = function (name, value) { eval(name + " = value"); };
 globalThis.__scopeCall = function (name, args) { return eval(name).apply(null, args || []); };
 `;
-  CACHED_SCRIPT = inline.join("\n;\n") + bridge;
-  return CACHED_SCRIPT;
+  const script = inline.join("\n;\n") + bridge;
+  CACHED_SCRIPT.set(cacheKey, script);
+  return script;
 }
 
 function makeElement() {
@@ -102,8 +106,33 @@ function makeElement() {
       contains: (c) => classes.has(c),
     },
     appendChild() {}, removeChild() {}, remove() {}, insertAdjacentHTML() {},
-    setAttribute() {}, getAttribute: () => null, removeAttribute() {}, hasAttribute: () => false,
-    addEventListener() {}, removeEventListener() {}, dispatchEvent: () => true,
+    // Attributes are remembered: the shell's install bar is driven by them
+    // (data-state), and a test needs to read back what the code set.
+    _attributes: {},
+    setAttribute(k, v) { this._attributes[String(k)] = String(v); },
+    getAttribute(k) { const v = this._attributes[String(k)]; return v === undefined ? null : v; },
+    removeAttribute(k) { delete this._attributes[String(k)]; },
+    hasAttribute(k) { return Object.prototype.hasOwnProperty.call(this._attributes, String(k)); },
+    // Listeners are kept, not dropped, so a test can fire one: __fire("click").
+    // The shell's dialog and install bar are wired from JS (no inline
+    // handlers), and this is what lets a test drive them.
+    _listeners: {},
+    addEventListener(type, fn) {
+      if (!this._listeners[type]) this._listeners[type] = [];
+      this._listeners[type].push(fn);
+    },
+    removeEventListener(type, fn) {
+      const list = this._listeners[type];
+      if (!list) return;
+      const i = list.indexOf(fn);
+      if (i !== -1) list.splice(i, 1);
+    },
+    dispatchEvent: () => true,
+    __fire(type, event) {
+      const e = Object.assign({ type, preventDefault() {}, stopPropagation() {}, target: node, defaultPrevented: false }, event || {});
+      (this._listeners[type] || []).slice().forEach((fn) => fn(e));
+      return true;
+    },
     querySelector: () => null, querySelectorAll: () => [], closest: () => null,
     focus() {}, blur() {}, click() {}, scrollIntoView() {}, select() {},
     getBoundingClientRect: () => ({ top: 0, left: 0, width: 0, height: 0, bottom: 0, right: 0 }),
@@ -140,6 +169,7 @@ function makeStorage(seed = {}) {
  */
 export function loadClient(opts = {}) {
   const requests = [];
+  const historyCalls = [];
   const routes = opts.routes || {};
   const signedInAs = opts.signedIn === true ? "alice" : (opts.signedIn || "");
   const localStorageStub = makeStorage(signedInAs
@@ -183,7 +213,11 @@ export function loadClient(opts = {}) {
       host: "example.com", hostname: "example.com", pathname: "/", search: "", hash: "",
       assign() {}, replace() {}, reload() {},
     },
-    history: { pushState() {}, replaceState() {}, back() {}, go() {} },
+    history: {
+      pushState(...args) { historyCalls.push({ kind: "push", args }); },
+      replaceState(...args) { historyCalls.push({ kind: "replace", args }); },
+      back() {}, go() {},
+    },
     alert() {}, confirm: () => true, prompt: () => null,
     atob: (s) => Buffer.from(s, "base64").toString("binary"),
     btoa: (s) => Buffer.from(s, "binary").toString("base64"),
@@ -207,7 +241,10 @@ export function loadClient(opts = {}) {
       const { pathname } = new URL(url, "https://example.com");
       let body = null;
       if (init.body) { try { body = JSON.parse(init.body); } catch { body = init.body; } }
-      const record = { url, pathname, method: (init.method || "GET").toUpperCase(), body, headers: init.headers || {} };
+      const record = {
+        url, pathname, method: (init.method || "GET").toUpperCase(), body,
+        headers: init.headers || {}, credentials: init.credentials || "", cache: init.cache || "",
+      };
       requests.push(record);
       const handler = routes[pathname];
       if (!handler) {
@@ -226,9 +263,10 @@ export function loadClient(opts = {}) {
   sandbox.globalThis = sandbox;
   sandbox.self = sandbox;
   vm.createContext(sandbox);
-  vm.runInContext(clientScript(), sandbox, { filename: "client-bundle.js" });
+  vm.runInContext(clientScript(opts), sandbox, { filename: "client-bundle.js" });
 
   sandbox.requests = requests;
+  sandbox.historyCalls = historyCalls;
   sandbox.__byId = byId;
   // Read, write and call inside the bundle's script scope -- see the bridge.
   sandbox.get = (expr) => sandbox.__scopeGet(expr);

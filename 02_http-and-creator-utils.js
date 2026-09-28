@@ -1714,15 +1714,97 @@ async function hashStringForKey(s) {
 // sent when the browser already holds a byte-identical copy.
 const BUILDER_PAGE_MEMO = new Map();
 
+// --- The new UI shell's cookie (Phase 6, P6-1) -------------------------------
+//
+// The shell (see APP_SHELL_TABS, 00_constants.js) is opt-in per BROWSER, not
+// per deployment: the Worker reads NEW_UI_COOKIE from the page request's own
+// headers. That is what lets the owner walk the new interface on their device
+// while everyone else keeps the page they know, and lets a rollback be a
+// cookie rather than a deploy.
+//
+// `?ff_new_ui=1` on any link sets it and `?ff_new_ui=0` clears it
+// (appShellSwitchResponse below), so nobody has to open developer tools.
+function readCookieValue(cookieHeader, name) {
+  const m = String(cookieHeader || "").match(new RegExp("(?:^|;\\s*)" + name + "=([^;]*)"));
+  if (!m) return "";
+  try {
+    return decodeURIComponent(m[1]);
+  } catch {
+    return m[1];
+  }
+}
+
+function isNewUiRequest(request) {
+  try {
+    const raw = readCookieValue(request && request.headers ? request.headers.get("Cookie") : "", NEW_UI_COOKIE).trim().toLowerCase();
+    return raw === "1" || raw === "on" || raw === "true";
+  } catch {
+    return false;
+  }
+}
+
+function appShellCookieHeader(on) {
+  return on
+    ? `${NEW_UI_COOKIE}=1; Path=/; Max-Age=31536000; SameSite=Lax`
+    : `${NEW_UI_COOKIE}=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+}
+
+// The one place the cookie is written. Returns null for every request that is
+// not asking to switch, so the caller can fall through to its normal routing.
+// The redirect drops the parameter, so the address people see and share never
+// carries it.
+function appShellSwitchResponse(url) {
+  const raw = url.searchParams.get("ff_new_ui");
+  if (raw === null) return null;
+  const on = !(raw === "0" || raw === "off" || raw === "false" || raw === "");
+  const clean = new URL(url.href);
+  clean.searchParams.delete("ff_new_ui");
+  const qs = clean.searchParams.toString();
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: clean.pathname + (qs ? "?" + qs : "") + (clean.hash || ""),
+      "Set-Cookie": appShellCookieHeader(on),
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
+// Every render of the page goes through this, so the shell and the page it
+// wraps can never disagree about which variant was asked for. A false
+// `newUi` is dropped rather than passed on, so the flag-off variants stay
+// exactly the renders they were before this existed (same memo key, same
+// bytes).
+function newUiPageOpts(request, opts) {
+  const out = Object.assign({}, opts || {});
+  if (isNewUiRequest(request)) out.newUi = true;
+  return out;
+}
+
+// Every page route renders through these two instead of calling renderBuilder
+// itself, so the variant is decided in exactly one place: the request.
+function renderPage(request, origin, opts) {
+  return renderBuilder(origin, newUiPageOpts(request, opts));
+}
+
+function renderPageCached(request, origin, opts) {
+  return renderBuilderCached(origin, newUiPageOpts(request, opts));
+}
+
 function renderBuilderCached(origin, opts) {
   // Only the argument-free variants are stable enough to memoize; anything
-  // carrying entries, keys or a deep link is rendered fresh.
-  const isDefault = !opts || Object.keys(opts).length === 0;
-  const isBareConfigure = !!(opts && opts.isConfigureMode === true && Object.keys(opts).length === 1);
+  // carrying entries, keys or a deep link is rendered fresh. The shell is a
+  // variant of the same two: same arguments otherwise, different chrome, so
+  // it is memoized under its own key rather than re-rendering 1.6MB a load.
+  const shellOpts = Object.assign({}, opts || {});
+  const isShell = shellOpts.newUi === true;
+  if (!isShell) delete shellOpts.newUi;
+  const isDefault = Object.keys(shellOpts).length === 0;
+  const isBareConfigure = !!(shellOpts.isConfigureMode === true && Object.keys(shellOpts).length === 1);
   if (!isDefault && !isBareConfigure) {
     return renderBuilder(origin, opts || {});
   }
-  const memoKey = `${origin}::${isBareConfigure ? "configure" : "default"}`;
+  const memoKey = `${origin}::${isBareConfigure ? "configure" : "default"}${isShell ? ":shell" : ""}`;
   const hit = BUILDER_PAGE_MEMO.get(memoKey);
   if (hit) return hit;
   const html = renderBuilder(origin, opts || {});
