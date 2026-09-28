@@ -7,8 +7,8 @@
 ## Current Status
 - **Last Updated**: 2026-09-28
 - **Last Active AI**: Claude Code (Opus 5.5)
-- **Active Task**: Phase 3c (activity). Phase 3b is merged into `main` (PR #3). **P3c-1** (the activity database: `migrations/activity/A0001_activity.sql`, `schema_activity.sql`, `36_activity-db.js`) is written and tested; creating and binding `DB_ACTIVITY` is the owner's (OPERATIONS §2, §4). **P3c-2** (`migrations/0017_show_schedule.sql` in the main database: `show_schedule`, `account_recommendations`, `title_daily_stats`) is written and tested. Next is **P3c-3** (the history copy, `migrate.activity`).
-- **Task State**: 1,514 tests pass, 0 fail, 1 skipped, both as they are and with `MLA_TEST_V2_LISTS_READ=1`. Build, sync, syntax and scope checks pass.
+- **Active Task**: Phase 3c (activity). Phase 3b is merged into `main` (PR #3). **P3c-1** (the activity database: `migrations/activity/A0001_activity.sql`, `schema_activity.sql`, `36_activity-db.js`) is written and tested; creating and binding `DB_ACTIVITY` is the owner's (OPERATIONS §2, §4). **P3c-2** (`migrations/0017_show_schedule.sql` in the main database: `show_schedule`, `account_recommendations`, `title_daily_stats`) is written and tested. **P3c-3** (the history copy, `37_activity-backfill.js`, run from `/admin`) is written and tested; running it is the owner's (OPERATIONS §12). Next is **P3c-4** (scrobble ingestion).
+- **Task State**: 1,524 tests pass, 0 fail, 1 skipped, both as they are and with `MLA_TEST_V2_LISTS_READ=1`. Build, sync, syntax, scope, render and HTML checks pass.
 - **Git State**:
   - Phases 3a and 3b are merged into `main` (PRs #1, #2, #3).
   - **Phase 3c goes on the branch `claude/wizardly-faraday-3ptdw1`**, in one draft PR into `main`, one commit per P3c task.
@@ -64,7 +64,7 @@ These are deliberate. Several are "one place" mechanisms that cover the whole Wo
    - `\n` in client code must be written `\\n`.
 3. **All numbered files share one scope.**
    - Top-level names must be unique across files.
-   - New server-only code goes in a new numbered file **after `26_`** (the next is `36_...`), never between `09_` and `24_`.
+   - New server-only code goes in a new numbered file **after `26_`** (the next is `38_...`), never between `09_` and `24_`.
    - `25_` and `26_` are the **inside** of `handleFetch` (they share `request`, `env`, `path`, `authenticateCreator`). `27_installs.js` and `28_connections.js` come after the `export default` block, at module level, so they cannot see those; pass what they need. `tests/client-harness.mjs` renders the page from the code **before** `export default`, so page rendering must never depend on `27_`+.
    - Tests that load source files into a sandbox (`loadSourceFunctions`) and call `resolveConfig` must include `27_installs.js`.
 4. **In `27_` onward, never write the words `export default` together, even in a comment.** Those files come after the Worker's real export, and `render_check.js` (a CI step) cuts the combined file at the *last* place the words appear, so the page checks break.
@@ -191,6 +191,10 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
 - **Phase 3c (in progress, branch `claude/wizardly-faraday-3ptdw1`):**
   - **P3c-1 (Claude):** the activity database. Its migrations live in `migrations/activity/` with an `A` prefix and its own ledger (never put one in `migrations/`: the main drift test would apply it to `DB`). `schema_activity.sql` must stay identical to running them (a test checks). Always reach the database through `activityDb(env, accountId)` (`36_`), which returns null without the binding. Details under P3c-1 in `NEXT_VERSION_TASKS.md`.
   - **P3c-2 (Claude):** `migrations/0017_show_schedule.sql` in `DB`. Nothing uses it yet, so `REQUIRED_SCHEMA_VERSION` stays `0014`; raise it to `0017` in the change that first depends on it. The schema-status drift test in `worker.test.mjs` drops every table by name, so add new tables to its list (children before parents: foreign keys are on).
+  - **P3c-3 (Claude):** the history copy `migrate.activity`, in `37_activity-backfill.js` (module level). Same shape as P3b-3. Details and deviations under P3c-3 in `NEXT_VERSION_TASKS.md`.
+    - **It must never write the legacy store.** Everything goes through `activityBackfillEnv`; a test enforces it.
+    - `show_progress` `(S, 0)` means "nothing of season S yet" (a Continue Watching show with no history). P3c-5's shelves must read it so.
+    - A fresh account copy deletes that account's `source = 'migrated'` events and rebuilds `show_progress` and `user_media_state` from all its events. When P3c-4 starts writing live plays, they must use `activityDedupeKey` and the ten-minute window (`36_`), so a play in both stores is one row.
 
 ## Owner Actions Still Open (not code)
 1. **Deploy what is on `main`:**
@@ -214,7 +218,7 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
 ---
 
 ## Next Steps for Incoming AI
-1. **Phase 3c**: P3c-1 and P3c-2 are done; continue with **P3c-3** (the per-account history copy `migrate.activity` into `DB_ACTIVITY`, MIGRATION_PLAN §3c), then P3c-4 onward. The next server file is `37_...`. Phase 3b's rollout (deploy, copy, `FF_V2_LISTS_READ`, later `FF_V2_LISTS_ONLY`, OPERATIONS §9 to §11) is still the owner's.
+1. **Phase 3c**: P3c-1 to P3c-3 are done; continue with **P3c-4** (scrobble ingestion into `DB_ACTIVITY`: the subtitles ping, the webhook and the web "mark watched"), then P3c-5 and P3c-6. The next server file is `38_...`. Phase 3b's rollout (deploy, copy, `FF_V2_LISTS_READ`, later `FF_V2_LISTS_ONLY`, OPERATIONS §9 to §11) is still the owner's.
      - `FF_V2_LISTS_API` (the v2 list and likes APIs) must stay off until P3b-9: what they write is not in the legacy store, so a flag-off rollback or a copy re-run would lose it.
      - Phase 3b rewrites how lists are stored, so it needs the owner's approval before any backfill (P3b-3) touches stored data.
      - Decide which wins when an install has its own keys in `install_secrets` and its owner also has a connection. Today `install_secrets` is the only source.

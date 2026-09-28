@@ -205,6 +205,10 @@ async function handleFetch(request, env, ctx) {
     // /admin) -- 30_lists-backfill.js.
     const listsBackfillResponse = await handleListsBackfillApi(request, env, url, path);
     if (listsBackfillResponse) return listsBackfillResponse;
+    // /admin/api/activity-backfill/* (copying watch history into the
+    // activity database, run from /admin) -- 37_activity-backfill.js.
+    const activityBackfillResponse = await handleActivityBackfillApi(request, env, url, path);
+    if (activityBackfillResponse) return activityBackfillResponse;
     // /api/lists (the item-level list API over the v2 tables, behind
     // FF_V2_LISTS_API) -- 31_lists-api.js. The legacy /api/lists/like and
     // /api/lists/like-external routes below are left to answer as they do.

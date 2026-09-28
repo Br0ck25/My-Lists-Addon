@@ -26,6 +26,7 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 ### 📺 A database for watch history (P3c-1)
 
 - **Groundwork only, nothing changes for visitors.** Watch history and show progress will move into their own D1 database, `mylists-activity` (binding `DB_ACTIVITY`), so the biggest data the site keeps does not crowd out lists and accounts. Its tables are in `migrations/activity/A0001_activity.sql`. Nothing uses them yet, so there is no need to create it with this release; `docs/OPERATIONS.md` §2 and §4 have the steps for when it is wanted.
+- **Copying watch history (P3c-3):** `/admin` → Maintenance → **Activity: copy watch history** copies every account's Watch History, and where each show is up to, into the activity database. It only copies, and nothing reads the copy yet. It needs the activity database, so it waits until that is created; `docs/OPERATIONS.md` §12 has the steps and how to read the results.
 - **Migration `0017_show_schedule.sql` (main database, P3c-2)** adds three tables that go with it: one schedule per show (last and next episode, finale), each account's recommendation shelves, and a per-title daily count for Most Watched. Nothing reads or writes them yet.
 
 ### 🏁 The old list storage can be switched off (P3b-9)

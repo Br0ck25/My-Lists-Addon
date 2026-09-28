@@ -80,3 +80,16 @@ async function activitySchemaReady(db) {
     return false;
   }
 }
+
+// The same play reported twice (the subtitles ping and the webhook, a retry,
+// or two copies of one history entry) is one row: watch_events.dedupe_key
+// is the account, the title, the episode and the watch time rounded down to
+// ten minutes. Writers also skip a play within ten minutes either side of one
+// already stored (a pair either side of a boundary has different keys).
+const ACTIVITY_DEDUPE_WINDOW_MS = 10 * 60 * 1000;
+
+function activityDedupeKey(accountId, mediaId, season, episode, watchedAt) {
+  const s = season == null ? "" : String(season);
+  const e = episode == null ? "" : String(episode);
+  return `${accountId}:${mediaId}:${s}:${e}:${Math.floor(Number(watchedAt) / ACTIVITY_DEDUPE_WINDOW_MS)}`;
+}

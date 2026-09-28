@@ -239,3 +239,32 @@ What it copies: every account's lists (with their order, items and likes), the o
 - Deleting a list or an account still removes what the old storage held of it.
 - **How to check it worked:** in the Analytics Engine dataset `mylists_events`, the eighth number of each data point (`double8`) counts writes to the old list keys. It should stay at 0.
 - The old keys and tables stay where they are, unused, until a later cleanup removes them. The old anonymous lists (from before accounts) are still served from the old storage.
+
+## 12. Copying watch history into the activity database (P3c-3)
+
+Phase 3c moves watch history and show progress into their own database, `mylists-activity` (binding `DB_ACTIVITY`, §2 and §4). The first part copies what every account has. **It only copies.** The history people see today is not changed, and nothing on the site reads the copy yet, so running it changes nothing a visitor sees.
+
+What it copies, for each account:
+
+- **Watch History**, from all three places it is kept today: the account's tracking record in KV, the D1 `watch_history` table, and the small scrobble queue. Where one entry is in more than one, the newest copy counts. This is also what the website shows today.
+- **Where each show is up to**: the furthest episode watched, and when. On top of that: finished shows, shows hidden from Continue Watching or Airing Next (and at which episode), and storyline suggestions (the next movie or spin-off). A show that is in Continue Watching with no history behind it keeps its place.
+- **Movies watched**: how many times each, and when last.
+
+It does not copy Airing Next or the recommendations. Both are worked out rather than kept, and later jobs rebuild them (Phase 5). The Watchlist is a list: the list copy (§9) takes it.
+
+**Running it:**
+
+1. Create the activity database and bind it (§2), and run `migrations/activity/A0001_activity.sql` in **its** Console (§4).
+2. Migration `0016` is applied in the main database (the copy records each title in its `media` table), and **Migrate Accounts** has been run (§9, step 3).
+3. Back up D1 (§5).
+4. `/admin` → Maintenance → **Activity: copy watch history** → *Copy history*. It works in small steps and keeps going by itself while the page is open. Closing the page pauses it; *Copy history* carries on where it stopped.
+5. When it says *Done*, press *Check results*.
+
+**Reading the results:**
+
+- *Plays copied* against the old history. The same play recorded twice within ten minutes (the same episode under two ids, or a retried scrobble) is kept once; an entry with no id at all cannot be copied (nothing can show it today either). Both are counted, with examples.
+- *Accounts with fewer plays than their old history* should be 0, or explained by those two reasons. The examples say which.
+- *Titles TMDB could not place yet* are **kept**, with the id they had, and tried again later.
+- *Failed accounts* names each account the copy could not finish and why. The rest carry on.
+
+**Running it again:** *Copy history* does nothing once the copy is done. *Start over* copies every account again from the start: what an earlier copy made is replaced, so the copy matches the old storage as it is now. Plays recorded some other way (once scrobbles go to the new database, P3c-4) are kept.

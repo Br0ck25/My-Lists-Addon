@@ -1737,6 +1737,7 @@ async function renderAdminDashboard(env) {
   // entirely optional, and every D1-specific action in that tab only
   // makes sense once this is true.
   const isD1Bound = !!(env && env.DB);
+  const isActivityBound = !!(env && env.DB && env.DB_ACTIVITY);
   const today = statsToday();
   const [
     totalPV, todayPV, totalIN, todayIN, totalPP, todayPP,
@@ -2431,6 +2432,16 @@ async function renderAdminDashboard(env) {
       <div id="listsBackfillResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
     </div>
 
+    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
+      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Activity: copy watch history</div>
+      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Copies every account&rsquo;s Watch History, and where each show is up to (finished, hidden from Continue Watching or Airing Next, storyline suggestions), into the activity database (<code>DB_ACTIVITY</code>, migration A0001). It only copies: the history people see today is not changed, and nothing reads the copy yet. Needs <code>DB_ACTIVITY</code> bound, and <strong>Migrate Accounts</strong> and migration 0016 first. It works in small steps and can be stopped and carried on; <strong>Start over</strong> copies every account again from the start.</p>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillBtn" onclick="runActivityBackfill(false)" ${isActivityBound ? '' : 'disabled'}>Copy history</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillRestartBtn" onclick="runActivityBackfill(true)" ${isActivityBound ? '' : 'disabled'}>Start over</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillStatusBtn" onclick="runActivityBackfillStatus()" ${isActivityBound ? '' : 'disabled'}>Check results</button>
+      <span id="activityBackfillStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;">${isActivityBound ? '' : 'DB_ACTIVITY is not bound.'}</span>
+      <div id="activityBackfillResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
+    </div>
+
     <div class="panel" style="margin:0; padding:14px 16px;">
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Database schema</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Migrations are applied by hand and nothing records that it happened, so this Worker can end up running ahead of its own database. It degrades quietly when that happens rather than refusing to start &mdash; which is why this check exists. Run it after any deploy that shipped a new file under <code>migrations/</code>.</p>
@@ -3046,6 +3057,81 @@ async function renderAdminDashboard(env) {
         }
         if (d.failed.length) lines.push('Failed accounts: ' + d.failed.map(function (f) { return '#' + f.accountId + ' (' + f.error + ')'; }).join('; '));
         if (d.worst.length) lines.push('Most items not carried: ' + d.worst.map(function (w) { return '#' + w.accountId + ' ' + (w.mismatchRate * 100).toFixed(2) + '%'; }).join(', ') + '. Examples from the first: ' + JSON.stringify(d.worst[0].samples));
+        out.innerHTML = '';
+        lines.forEach(function (line) {
+          const div = document.createElement('div');
+          div.style.margin = '0 0 4px';
+          div.textContent = line;
+          out.appendChild(div);
+        });
+      } catch (e) {
+        status.textContent = 'Failed: network error.';
+      }
+    }
+
+    // Activity backfill (P3c-3): the same loop as the list copy above.
+    async function runActivityBackfill(restart) {
+      if (restart && !confirm('Copy every account again from the start? What an earlier copy made is replaced; the history people use today is not touched.')) return;
+      const btns = [document.getElementById('activityBackfillBtn'), document.getElementById('activityBackfillRestartBtn')];
+      const status = document.getElementById('activityBackfillStatus');
+      btns.forEach(function (b) { b.disabled = true; });
+      let pendingRestart = !!restart;
+      let steps = 0;
+      try {
+        while (steps < 20000) {
+          steps++;
+          const res = await fetch('/admin/api/activity-backfill/step', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ restart: pendingRestart }),
+          });
+          const data = await res.json();
+          if (data.busy) {
+            status.textContent = 'Another step is running. Waiting...';
+            await new Promise(function (r) { setTimeout(r, 5000); });
+            continue;
+          }
+          pendingRestart = false;
+          if (!data.ok) {
+            status.textContent = 'Stopped: ' + (data.error || 'unknown error');
+            break;
+          }
+          const failedNote = data.accountsFailed ? ' (' + data.accountsFailed + ' failed)' : '';
+          if (data.done) {
+            status.textContent = 'Done: ' + data.accountsDone + ' accounts' + failedNote + '. Press Check results.';
+            break;
+          }
+          status.textContent = 'Copying: ' + data.accountsDone + ' of ' + data.accountsTotal + ' accounts' + failedNote + '...';
+        }
+      } catch (e) {
+        status.textContent = 'Stopped: network error. Press Copy history to carry on.';
+      }
+      btns.forEach(function (b) { b.disabled = false; });
+    }
+
+    async function runActivityBackfillStatus() {
+      const status = document.getElementById('activityBackfillStatus');
+      const out = document.getElementById('activityBackfillResult');
+      status.textContent = 'Checking...';
+      try {
+        const res = await fetch('/admin/api/activity-backfill/status');
+        const d = await res.json();
+        if (!d.ok) {
+          status.textContent = 'Unavailable: ' + (d.error || 'unknown error');
+          return;
+        }
+        status.textContent = 'Phase: ' + d.run.phase + (d.run.lastError ? ' (last error: ' + d.run.lastError + ')' : '') + '.';
+        const h = d.totals.history;
+        const sh = d.totals.shows;
+        const lines = [
+          'Accounts: ' + (d.accounts.done || 0) + ' done, ' + (d.accounts.running || 0) + ' in progress, ' + (d.accounts.queued || 0) + ' waiting, ' + (d.accounts.failed || 0) + ' failed.',
+          'History: ' + h.kv + ' entries in KV, ' + h.d1 + ' in D1, ' + h.queue + ' in the scrobble queue, ' + h.union + ' different entries in all. ' + h.copied + ' plays copied; ' + h.duplicates + ' were the same play twice (within ten minutes), ' + h.unusable + ' had no usable id' + (h.undated ? ', ' + h.undated + ' had no date (given the record date)' : '') + '. ' + h.stubs + ' titles TMDB could not place yet (kept, tried again later).',
+          'Shows: ' + sh.progress + ' with progress, ' + sh.completed + ' finished, ' + sh.dismissed + ' hidden from Continue Watching, ' + sh.airingHidden + ' hidden from Airing Next, ' + sh.kept + ' storyline or movie suggestions kept, ' + sh.cwOnly + ' in Continue Watching with no history' + (sh.unusable ? ', ' + sh.unusable + ' with no usable id' : '') + '. Movies watched: ' + d.totals.movies + '.',
+          'Plays now in the activity database: ' + d.totals.events + ' (the larger of the KV and D1 histories added up: ' + d.totals.legacyMax + '). Accounts with fewer plays than their old history: ' + d.totals.shortAccounts + '.',
+        ];
+        if (d.run.phase === 'done' && !(d.accounts.running || d.accounts.queued || d.accounts.failed) && !d.totals.shortAccounts) lines.push('Every account is copied, none with fewer plays than before.');
+        if (d.failed.length) lines.push('Failed accounts: ' + d.failed.map(function (f) { return '#' + f.accountId + ' (' + f.error + ')'; }).join('; '));
+        if (d.short.length) lines.push('Fewest plays against their old history: ' + d.short.map(function (s) { return '#' + s.accountId + ' ' + s.short + ' of ' + s.legacy; }).join(', ') + '. Examples from the first: ' + JSON.stringify(d.short[0].samples));
         out.innerHTML = '';
         lines.forEach(function (line) {
           const div = document.createElement('div');
