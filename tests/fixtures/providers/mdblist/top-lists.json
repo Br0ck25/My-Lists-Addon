@@ -1,0 +1,53 @@
+{
+  "provider": "mdblist",
+  "endpoint": "api.mdblist.com/lists/top (Popular Lists)",
+  "origin": "Written from the provider's API reference (it needs a key); the nightly live check compares it with the real thing.",
+  "usedBy": [
+    "fetchTopLists"
+  ],
+  "live": {
+    "needs": [
+      "MDBLIST_API_KEY"
+    ],
+    "request": {
+      "url": "https://api.mdblist.com/lists/top?apikey={MDBLIST_API_KEY}"
+    }
+  },
+  "required": [
+    "[]",
+    "[].name:string",
+    "[].slug:string",
+    "[].user_name:string",
+    "[].mediatype:string",
+    "[*].items:number",
+    "[*].likes:number"
+  ],
+  "response": [
+    {
+      "id": 3,
+      "user_id": 1,
+      "user_name": "linaspurinis",
+      "name": "Top Watched Movies of the Week",
+      "slug": "top-watched-movies-of-the-week",
+      "description": "",
+      "mediatype": "movie",
+      "items": 44,
+      "likes": 1200,
+      "dynamic": true,
+      "private": false
+    },
+    {
+      "id": 14,
+      "user_id": 1,
+      "user_name": "linaspurinis",
+      "name": "Top Watched Shows of the Week",
+      "slug": "top-watched-shows-of-the-week",
+      "description": "",
+      "mediatype": "show",
+      "items": 40,
+      "likes": 900,
+      "dynamic": true,
+      "private": false
+    }
+  ]
+}

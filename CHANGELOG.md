@@ -25,6 +25,11 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 `FF_PROVIDER_BREAKER` (P4-4) and `FF_CHART_SNAPSHOTS` (P4-3), both below, are optional and safe to turn on or off at any time (`docs/OPERATIONS.md` §14, §15).
 
+### 🔭 A nightly check that every provider still answers the way the site expects (P4-5)
+
+- **For maintainers; nothing changes for visitors.** Example answers from every provider the site reads (TMDB, Trakt, MDBList, Simkl, TVmaze, Cinemeta, JustWatch, RapidAPI) are now kept with the tests, each listing the fields the site depends on. The test suite runs the real code over them.
+- A new GitHub workflow asks each provider the same questions every night and checks the real answers against the same lists. When a provider renames or drops a field, it fails and names the field, instead of a catalog quietly going empty. Adding the provider keys as GitHub secrets turns on the checks that need them (`docs/OPERATIONS.md` §16); the keyless providers are checked without them.
+
 ### 📸 Charts from one shared copy (P4-3)
 
 - **A new switch, `FF_CHART_SNAPSHOTS` (off).** With it on, TMDB, Trakt and Simkl charts (Popular, Trending, Top 10, genres, kids, holidays, Hidden Gems) are served from one shared copy per page, kept in KV. Everyone with the same chart and region reads the same copy, and each chart page is asked of the provider about once every two hours rather than about every ten minutes.

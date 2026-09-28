@@ -1,0 +1,116 @@
+{
+  "provider": "cinemeta",
+  "endpoint": "v3-cinemeta.strem.io/meta/series/{imdb id}.json",
+  "origin": "Captured 2026-09-28 from the live API, trimmed to a few items.",
+  "usedBy": [
+    "fetchCinemetaSeriesUnpacked"
+  ],
+  "live": {
+    "needs": [],
+    "request": {
+      "url": "https://v3-cinemeta.strem.io/meta/series/tt0944947.json"
+    }
+  },
+  "required": [
+    "meta.id:string",
+    "meta.name:string",
+    "meta.videos[]",
+    "meta.videos[].season:number",
+    "meta.videos[].episode:number",
+    "meta.videos[*].released:string",
+    "meta.videos[*].tvdb_id:number"
+  ],
+  "response": {
+    "meta": {
+      "id": "tt0944947",
+      "imdb_id": "tt0944947",
+      "type": "series",
+      "name": "Game of Thrones",
+      "poster": "https://images.metahub.space/poster/small/tt0944947/img",
+      "background": "https://images.metahub.space/background/medium/tt0944947/img",
+      "logo": "https://images.metahub.space/logo/medium/tt0944947/img",
+      "releaseInfo": "2011–2019",
+      "year": "2011–2019",
+      "moviedb_id": 1399,
+      "tvdb_id": 121361,
+      "genres": [
+        "Action",
+        "Adventure",
+        "Drama"
+      ],
+      "status": "Ended",
+      "videos": [
+        {
+          "name": "Inside Game of Thrones",
+          "season": 0,
+          "number": 1,
+          "firstAired": "2010-12-06T05:00:00.000Z",
+          "tvdb_id": 3226241,
+          "rating": "0",
+          "overview": "A short look into the film-making process for the production Game of Thrones",
+          "thumbnail": "https://episodes.metahub.space/tt0944947/0/1/w780.jpg",
+          "id": "tt0944947:0:1",
+          "released": "2010-12-06T05:00:00.000Z",
+          "episode": 1,
+          "description": "A short look into the film-making process for the production Game of Thrones"
+        },
+        {
+          "name": "Winter Is Coming",
+          "season": 1,
+          "number": 1,
+          "firstAired": "2011-04-18T05:00:00.000Z",
+          "tvdb_id": 3254641,
+          "rating": "0",
+          "overview": "Lord Ned Stark is troubled by disturbing reports form a Night's Watch deserter; King Robert arrives at Winterfell.",
+          "thumbnail": "https://episodes.metahub.space/tt0944947/1/1/w780.jpg",
+          "id": "tt0944947:1:1",
+          "released": "2011-04-18T05:00:00.000Z",
+          "episode": 1,
+          "description": "Lord Ned Stark is troubled by disturbing reports form a Night's Watch deserter; King Robert arrives at Winterfell."
+        },
+        {
+          "name": "The Kingsroad",
+          "season": 1,
+          "number": 2,
+          "firstAired": "2011-04-25T05:00:00.000Z",
+          "tvdb_id": 3436411,
+          "rating": "0",
+          "overview": "The Lannisters plot to ensure Bran's silence; Jon and Tyrion head to the Wall; Ned faces a family crisis en route to King's Landing.",
+          "thumbnail": "https://episodes.metahub.space/tt0944947/1/2/w780.jpg",
+          "id": "tt0944947:1:2",
+          "released": "2011-04-25T05:00:00.000Z",
+          "episode": 2,
+          "description": "The Lannisters plot to ensure Bran's silence; Jon and Tyrion head to the Wall; Ned faces a family crisis en route to King's Landing."
+        },
+        {
+          "name": "The North Remembers",
+          "season": 2,
+          "number": 1,
+          "firstAired": "2012-04-02T05:00:00.000Z",
+          "tvdb_id": 4161693,
+          "rating": "0",
+          "overview": "Tyrion arrives to save Joffrey's crown from threats old and new; Daenerys searches for allies and water in the Red Waste.",
+          "thumbnail": "https://episodes.metahub.space/tt0944947/2/1/w780.jpg",
+          "id": "tt0944947:2:1",
+          "released": "2012-04-02T05:00:00.000Z",
+          "episode": 1,
+          "description": "Tyrion arrives to save Joffrey's crown from threats old and new; Daenerys searches for allies and water in the Red Waste."
+        },
+        {
+          "name": "The Night Lands",
+          "season": 2,
+          "number": 2,
+          "firstAired": "2012-04-09T05:00:00.000Z",
+          "tvdb_id": 4245771,
+          "rating": "0",
+          "overview": "Arya shares a secret with a familiar recruit; a scout returns to Dany with disturbing news; Theon comes home to the Iron Islands.",
+          "thumbnail": "https://episodes.metahub.space/tt0944947/2/2/w780.jpg",
+          "id": "tt0944947:2:2",
+          "released": "2012-04-09T05:00:00.000Z",
+          "episode": 2,
+          "description": "Arya shares a secret with a familiar recruit; a scout returns to Dany with disturbing news; Theon comes home to the Iron Islands."
+        }
+      ]
+    }
+  }
+}

@@ -7,8 +7,8 @@
 ## Current Status
 - **Last Updated**: 2026-09-28
 - **Last Active AI**: Claude Code (Opus 5.5)
-- **Active Task**: Phase 4 (providers). Phase 3c is merged into `main` (PR #4); its rollout (create and bind `DB_ACTIVITY`, run the history copy, `FF_EVENT_TRACKING`) is the owner's (OPERATIONS §2, §4, §12, §13). **P4-1** (the provider registry, `CATALOG_SOURCES` and `PROVIDER_ADAPTERS` in `04_config-resolution.js`) is done: `detectSource` and `fetchCatalog` dispatch through it, with no change anyone can see. **P4-4** (the provider breaker, `41_provider-breaker.js`, behind `FF_PROVIDER_BREAKER`, off) is done. **P4-3** (chart snapshots, `42_chart-snapshots.js`, behind `FF_CHART_SNAPSHOTS`, off) is done.
-- **Task State**: 1,571 tests pass, 0 fail, 1 skipped, both as they are and with `MLA_TEST_V2_LISTS_READ=1`. Build, sync, syntax, scope, render and HTML checks pass.
+- **Active Task**: Phase 4 (providers). Phase 3c is merged into `main` (PR #4); its rollout (create and bind `DB_ACTIVITY`, run the history copy, `FF_EVENT_TRACKING`) is the owner's (OPERATIONS §2, §4, §12, §13). **P4-1** (the provider registry, `CATALOG_SOURCES` and `PROVIDER_ADAPTERS` in `04_config-resolution.js`) is done: `detectSource` and `fetchCatalog` dispatch through it, with no change anyone can see. **P4-4** (the provider breaker, `41_provider-breaker.js`, behind `FF_PROVIDER_BREAKER`, off) is done. **P4-3** (chart snapshots, `42_chart-snapshots.js`, behind `FF_CHART_SNAPSHOTS`, off) is done. **P4-5** (provider contract fixtures in `tests/fixtures/providers/`, `provider_live_check.mjs`, and the nightly workflow) is done.
+- **Task State**: 1,583 tests pass, 0 fail, 1 skipped, both as they are and with `MLA_TEST_V2_LISTS_READ=1`. Build, sync, syntax, scope, render and HTML checks pass.
 - **Git State**:
   - Phases 3a, 3b and 3c are merged into `main` (PRs #1 to #4).
   - **Phase 4 goes on the branch `claude/hopeful-davinci-dx55ds`**, in one draft PR into `main`, one commit per P4 task.
@@ -91,7 +91,7 @@ node scope_check.mjs worker worker_entry_combined.js
 ```
 Then delete `node_modules`.
 
-Last run (2026-09-28, P4-3): all of the above pass, plus every CI step (scope, render and HTML checks). 1,571 tests passed, 0 failed, 1 skipped, both ways.
+Last run (2026-09-28, P4-5): all of the above pass, plus every CI step (scope, render and HTML checks). 1,583 tests passed, 0 failed, 1 skipped, both ways.
 
 The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/json` to every POST, so a route test cannot notice a page that forgets them. A static test ("every mutating fetch the pages make sends a JSON content type") covers that instead.
 
@@ -209,6 +209,9 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
   - **P4-3 (Claude):** chart snapshots, `42_chart-snapshots.js`, behind `FF_CHART_SNAPSHOTS` (off; OPERATIONS §15). Details under P4-3 in `NEXT_VERSION_TASKS.md`.
     - A chart source is snapshotted when its registry entry has a `snapshot` rule. **The rule must name everything besides the chart key, type and page that changes the rows** (the region, a setting, the day), or two installs would share a page that should differ.
     - `fetchCatalog` goes through `fetchSourcePageWithSnapshot`; with the flag off (or for any other source) it is exactly `fetchPage`.
+  - **P4-5 (Claude):** provider contract fixtures and the nightly live check. Details under P4-5 in `NEXT_VERSION_TASKS.md`; the owner's part (optional GitHub secrets) is OPERATIONS §16.
+    - **When a fetcher starts reading a new provider field, add it to that fixture's `required` list** (and to its `response`), so the nightly check watches it. When a fetcher calls a new endpoint, add a fixture for it, and route it in `fixtureRouter` (`tests/provider-contracts.test.mjs`).
+    - `provider_live_check.mjs` sits at the repo root like `scope_check.mjs`; the tests import its `checkRequired`, so the fixture check and the live check cannot drift apart.
 
 ## Owner Actions Still Open (not code)
 1. **Deploy what is on `main`:**
@@ -228,11 +231,12 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
 2. **When ready, move install-link keys to encrypted storage:** follow `docs/OPERATIONS.md` §8 (apply 0015, back up D1, add `TOKEN_ENCRYPTION_KEY` and keep a copy of it, set `INSTALL_MIGRATION_PERCENT` to `10`, check progress, then raise it).
 3. **Turn on backups:** add the GitHub repository secrets `CLOUDFLARE_API_TOKEN` (D1 Read), `CLOUDFLARE_ACCOUNT_ID`, `D1_DATABASE_ID` and `BACKUP_PASSPHRASE`. Keep a copy of the passphrase outside GitHub.
    - **Check the first run.** `migrations/0007` notes that `wrangler d1 export` refuses a database that has virtual (full-text search) tables. `lists_fts` (0007) is one, and `lists_fts2` (0016) is another. If the daily export fails for that reason, the workflow needs to export around them (for example table by table), and the search tables are rebuilt afterwards. Not changed yet.
+4. **Optional: turn on the rest of the nightly provider check** by adding the GitHub secrets `TMDB_API_KEY`, `TRAKT_CLIENT_ID`, `MDBLIST_API_KEY` (and `RAPIDAPI_KEY` only if the RapidAPI engine is used) with the Worker's values (`docs/OPERATIONS.md` §16). Without them the keyless providers are still checked every night.
 
 ---
 
 ## Next Steps for Incoming AI
-1. **Phase 4 is under way** on `claude/hopeful-davinci-dx55ds` (draft PR into `main`). P4-1, P4-3 and P4-4 are done; next are P4-5 (provider contract fixtures and a nightly live check) and P4-2 (every catalog id canonical), in `NEXT_VERSION_TASKS.md`. The next server file is `43_...`. Phase 3c is merged (PR #4); its rollout (create and bind the activity database, run the copy, then `FF_EVENT_TRACKING`, one-way) is the owner's, and `FF_SHOW_SCHEDULE` needs the schedule job (P5-3). Phase 3b's rollout (deploy, copy, `FF_V2_LISTS_READ`, later `FF_V2_LISTS_ONLY`, OPERATIONS §9 to §11) is still the owner's.
+1. **Phase 4 is under way** on `claude/hopeful-davinci-dx55ds` (draft PR into `main`). P4-1, P4-3, P4-4 and P4-5 are done; next is P4-2 (every catalog id canonical), in `NEXT_VERSION_TASKS.md`. The next server file is `43_...`. Phase 3c is merged (PR #4); its rollout (create and bind the activity database, run the copy, then `FF_EVENT_TRACKING`, one-way) is the owner's, and `FF_SHOW_SCHEDULE` needs the schedule job (P5-3). Phase 3b's rollout (deploy, copy, `FF_V2_LISTS_READ`, later `FF_V2_LISTS_ONLY`, OPERATIONS §9 to §11) is still the owner's.
      - `FF_V2_LISTS_API` (the v2 list and likes APIs) must stay off until P3b-9: what they write is not in the legacy store, so a flag-off rollback or a copy re-run would lose it.
      - Phase 3b rewrites how lists are stored, so it needs the owner's approval before any backfill (P3b-3) touches stored data.
      - Decide which wins when an install has its own keys in `install_secrets` and its owner also has a connection. Today `install_secrets` is the only source.

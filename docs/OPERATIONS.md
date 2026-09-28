@@ -313,3 +313,21 @@ Each Worker copy keeps its own count. The first one to find a provider down writ
 **Turning it on:** Worker → Settings → Variables and Secrets → Add → type *Text*, name `FF_CHART_SNAPSHOTS`, value `1`. Deploy. **Turning it off:** delete the variable and deploy. Both are safe at any time. The `snap:chart:` keys expire by themselves after a week; they can also be deleted by hand, and are rebuilt when next asked for.
 
 **Cost:** one KV read per chart row per Worker copy per minute at most (each copy remembers what it read for a minute), and one KV write per chart page every two hours while someone is asking for it.
+
+## 16. The nightly provider check (P4-5)
+
+`.github/workflows/provider-live-check.yml` runs every night (and from Actions → *Provider live check* → *Run workflow*). It asks each provider the site reads one real question and checks that the answer still has every field the site depends on. When a provider changes something, the run fails and its summary names the provider and the field, so it can be fixed before catalogs go empty. It never writes anything.
+
+The keyless providers (MDBList public lists, Simkl's charts, TVmaze, Cinemeta, JustWatch) are checked with no setup. To check the others, add these repository secrets (Settings → Secrets and variables → Actions), with the same values the Worker uses. Each is optional; a provider without its key shows as *skipped*.
+
+| Secret | Checks |
+|---|---|
+| `TMDB_API_KEY` | TMDB charts, details, lookups, collections and lists |
+| `TRAKT_CLIENT_ID` | Trakt charts and list items |
+| `MDBLIST_API_KEY` | MDBList Popular Lists |
+| `RAPIDAPI_KEY` | RapidAPI's changes feed. Only if the RapidAPI engine is in use: each run spends one request of its monthly quota. |
+
+`SIMKL_CLIENT_ID` can be added too, but nothing needs it today: Simkl's chart files are public.
+
+**When it fails:** open the run and read its summary. *HTTP 401/403* means a key is wrong or expired. *HTTP 404* on a sample means the sample itself went away, and the fixture's `live` request needs a new one. A named field (for example `results[].title is missing`) means the provider changed its answer: the fetcher that reads it (the fixture's `usedBy`) needs updating, along with the fixture.
+

@@ -1,0 +1,174 @@
+{
+  "provider": "justwatch",
+  "endpoint": "POST apis.justwatch.com/graphql, operation NewTitles (JUSTWATCH_NEW_TITLES_QUERY, 07_)",
+  "origin": "Captured 2026-09-28 from the live API, trimmed to a few items.",
+  "usedBy": [
+    "fetchJustWatchNewTitles",
+    "processJustWatchNewTitles",
+    "justWatchEdgeTmdbKey",
+    "justWatchPosterUrl"
+  ],
+  "live": {
+    "needs": [],
+    "request": {
+      "method": "POST",
+      "url": "https://apis.justwatch.com/graphql",
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "operationName": "NewTitles",
+        "query": "{JUSTWATCH_NEW_TITLES_QUERY}",
+        "variables": {
+          "country": "US",
+          "date": "{YESTERDAY}",
+          "after": "",
+          "first": 10,
+          "filter": {
+            "packages": [
+              "nfx",
+              "amp",
+              "dnp",
+              "hlu",
+              "mxx",
+              "atp",
+              "pmp",
+              "pcp"
+            ],
+            "monetizationTypes": [
+              "FLATRATE"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "data.newTitles.totalCount:number",
+    "data.newTitles.pageInfo.hasNextPage:boolean",
+    "data.newTitles.edges[]",
+    "data.newTitles.edges[].node.__typename:string",
+    "data.newTitles.edges[].node.objectId:number",
+    "data.newTitles.edges[].newOffer.monetizationType:string",
+    "data.newTitles.edges[].newOffer.package.shortName:string",
+    "data.newTitles.edges[*].node.content.externalIds.tmdbId:string || data.newTitles.edges[*].node.show.content.externalIds.tmdbId:string",
+    "data.newTitles.edges[*].node.content.title:string || data.newTitles.edges[*].node.show.content.title:string"
+  ],
+  "response": {
+    "data": {
+      "newTitles": {
+        "totalCount": 9,
+        "pageInfo": {
+          "hasNextPage": true,
+          "endCursor": "NA=="
+        },
+        "edges": [
+          {
+            "newOffer": {
+              "monetizationType": "FLATRATE",
+              "newElementCount": 1,
+              "dateCreated": "2026-09-27",
+              "package": {
+                "shortName": "nfx"
+              }
+            },
+            "node": {
+              "__typename": "Season",
+              "objectId": 463254,
+              "content": {
+                "seasonNumber": 1
+              },
+              "show": {
+                "objectId": 444422,
+                "content": {
+                  "title": "Daemons of the Shadow Realm",
+                  "originalReleaseYear": 2026,
+                  "posterUrl": "/poster/354197036/{profile}/daemons-of-the-shadow-realm.{format}",
+                  "externalIds": {
+                    "imdbId": "tt37532356",
+                    "tmdbId": "260463"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "newOffer": {
+              "monetizationType": "FLATRATE",
+              "newElementCount": 2,
+              "dateCreated": "2026-09-27",
+              "package": {
+                "shortName": "nfx"
+              }
+            },
+            "node": {
+              "__typename": "Season",
+              "objectId": 536427,
+              "content": {
+                "seasonNumber": 1
+              },
+              "show": {
+                "objectId": 506364,
+                "content": {
+                  "title": "Four Hands, Two Sonatas",
+                  "originalReleaseYear": 2026,
+                  "posterUrl": "/poster/348920823/{profile}/four-hands.{format}",
+                  "externalIds": {
+                    "imdbId": "tt39368345",
+                    "tmdbId": "305644"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "newOffer": {
+              "monetizationType": "FLATRATE",
+              "newElementCount": 0,
+              "dateCreated": "2026-09-27",
+              "package": {
+                "shortName": "amp"
+              }
+            },
+            "node": {
+              "__typename": "Movie",
+              "objectId": 874253,
+              "content": {
+                "title": "Delicate State",
+                "originalReleaseYear": 2022,
+                "posterUrl": "/poster/258704740/{profile}/delicate-state.{format}",
+                "externalIds": {
+                  "imdbId": "tt11534218",
+                  "tmdbId": "912446"
+                }
+              }
+            }
+          },
+          {
+            "newOffer": {
+              "monetizationType": "FLATRATE",
+              "newElementCount": 0,
+              "dateCreated": "2026-09-27",
+              "package": {
+                "shortName": "amp"
+              }
+            },
+            "node": {
+              "__typename": "Movie",
+              "objectId": 811012,
+              "content": {
+                "title": "Jawaani Jaaneman",
+                "originalReleaseYear": 2020,
+                "posterUrl": "/poster/141462998/{profile}/jawaani-jaaneman.{format}",
+                "externalIds": {
+                  "imdbId": "tt9248952",
+                  "tmdbId": "607297"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
