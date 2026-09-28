@@ -27,6 +27,15 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 8. **Recommended: set up the background jobs queue** (Phase 5, `docs/OPERATIONS.md` §18): create the queues `mylists-jobs` and `mylists-jobs-dlq`, make this Worker the consumer of `mylists-jobs` (batch size 25, 5 retries, dead-letter queue `mylists-jobs-dlq`), bind `mylists-jobs` to the Worker as `JOBS`, then press **Send a test job** in `/admin` → Maintenance. Without it everything works as before.
 
+### 📺 A paste-first home screen in the new UI (P6-3)
+
+- **Only for a browser on the new interface** (`?ff_new_ui=1`). The Catalogs view (the home screen) now opens with an editor above the rows:
+  - **Paste, then look.** Paste one list link per line -- MDBList, Trakt, TMDB, Simkl, an IMDb list, one of your own lists or a shared channel -- and press **Check links**. Every line is read before anything is added, and the review table says what each one is: the detected name, where the link comes from, Movies or Shows, how many titles, and **Ready** or **Skipped** with the reason. **Add 2 lists** adds the ready ones; anything skipped stays in the list, with its reason, so a typo is one line to fix rather than a fresh start.
+  - **Nothing you did not ask for.** The eight demo rows a first-time visitor used to be handed silently are now a button -- **Add a starter pack (8 rows)** -- and it is offered only while the screen has none of your own rows.
+  - **"Hide titles already shown in rows above"** now sits directly above the rows it applies to, with the rule spelled out: the top row keeps everything, each row below drops what an earlier row already showed, and row order is what decides. In the new UI the Settings copy of that toggle is hidden; both write the same setting, so the two cannot disagree.
+  - **The live preview follows the rows.** Adding, removing, renaming or dragging a row refreshes the poster preview a moment later instead of waiting for **Refresh Preview**.
+- The rows themselves, the drag handles and the up/down buttons are unchanged, and the old page keeps its own screens exactly as they are.
+
 ### ⚙️ Settings in the new UI: account, devices, connections, install links (P6-2)
 
 - **Only for a browser on the new interface** (`?ff_new_ui=1`). Settings → Account & Sync now opens with four cards above the panels that were there before:

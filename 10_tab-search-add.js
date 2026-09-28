@@ -26,6 +26,12 @@
       </select>
     </div>
 
+    <!-- The shell's paste-first home-screen editor (P6-3): add lists, the
+         duplicate toggle, the starter pack. Emitted only for a browser with the
+         FF_NEW_UI cookie; the reorderable rows below it are the same ones the
+         old page uses. -->
+${newUi ? '    <div id="appShellHomeEditor"></div>' : ''}
+
     <!-- Reorderable Catalog Shelves -->
     <div id="lists"></div>
 

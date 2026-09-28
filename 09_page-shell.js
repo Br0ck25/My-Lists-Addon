@@ -173,29 +173,13 @@ function renderBuilder(
   // apart (see the "pre-fill" block's own comment on why that distinction
   // matters for when to trust localStorage over what the server sent).
   const usingDefaultEntries = !hasInitial;
+  // A first-time visitor on the OLD page still gets the demo rows it always
+  // got. On a shell page the same rows are offered as a button in the
+  // home-screen editor instead (P6-3): nothing is added that was not asked
+  // for, and both read STARTER_PACK_ENTRIES (00_constants.js) so they cannot
+  // drift.
   const initialEntriesJson = jsonForScript(
-    hasInitial
-      ? initialEntries
-      : [
-          { name: "Popular", url: "https://mdblist.com/lists/official/movies/popular\ntmdb:chart:popular\ntrakt:chart:popular", type: "movie", enabled: true, group: "Combined Charts" },
-          { name: "Popular", url: "https://mdblist.com/lists/official/shows/popular\ntmdb:chart:popular\ntrakt:chart:popular", type: "series", enabled: true, group: "Combined Charts" },
-          { name: "Trending", url: "tmdb:chart:trending\ntrakt:chart:trending\nsimkl:chart:today\nsimkl:chart:week\nsimkl:chart:month", type: "movie", enabled: true, group: "Combined Charts" },
-          { name: "Trending", url: "tmdb:chart:trending\ntrakt:chart:trending\nsimkl:chart:today\nsimkl:chart:week\nsimkl:chart:month", type: "series", enabled: true, group: "Combined Charts" },
-          // Both the Top 10 and full Streaming Catalogs merged rows below
-          // use the exact same joined url string for their movie row and
-          // series row now -- unlike the old per-provider mdblist.com
-          // urls they replaced, a tmdb:chart:X source doesn't encode
-          // movie/series in the url itself; fetchCatalog picks the right
-          // side of TMDB_CHART_PATHS[chartKey] from entry.type at fetch
-          // time (see 07_source-fetchers-tmdb-simkl.js), the same way the
-          // standalone per-provider rows in 08_quickadd-chart-data.js
-          // already reuse one url for both their +Movies and +Shows
-          // buttons.
-          { name: "Streaming Top 10 (All Services)", url: "https://mdblist.com/lists/ahmed2250/apple-tv-top-10-movies-today\nhttps://mdblist.com/lists/andykai/disney-top-10-no-hulu\nhttps://mdblist.com/lists/harmes7/hbo-max-top-10-movies-m77r6mc20q\nhttps://mdblist.com/lists/hulupiv/hulu-top-10-movies\nhttps://mdblist.com/lists/hdlists/netflix-top-10-trending-movies\nhttps://mdblist.com/lists/ahmed2250/paramount-top-10-movies-today\nhttps://mdblist.com/lists/diimaan/amazon-prime-top-10-movies\nhttps://mdblist.com/lists/diimaan/peacock-top-10-movies", type: "movie", enabled: true, group: "Combined Charts" },
-          { name: "Streaming Top 10 (All Services)", url: "https://mdblist.com/lists/ahmed2250/apple-tv-top-10-tv-shows-today\nhttps://mdblist.com/lists/andykai/disney-trending-no-hulu\nhttps://mdblist.com/lists/harmes7/hbo-max-top-10-series-cp45l27nhd\nhttps://mdblist.com/lists/hulupiv/hulu-top-10-shows\nhttps://mdblist.com/lists/hdlists/netflix-top-10-trending-shows\nhttps://mdblist.com/lists/ahmed2250/paramount-top-10-tv-shows-today\nhttps://mdblist.com/lists/diimaan/amazon-prime-top-10-tv-shows\nhttps://mdblist.com/lists/peacockpiv/peacock-top-10-shows", type: "series", enabled: true, group: "Combined Charts" },
-          { name: "Streaming (All Services)", url: "tmdb:chart:appletv\ntmdb:chart:disney\ntmdb:chart:discovery\ntmdb:chart:hbomax\ntmdb:chart:hulu\ntmdb:chart:netflix\ntmdb:chart:netflixkids\ntmdb:chart:paramount\ntmdb:chart:primevideo\ntmdb:chart:peacock", type: "movie", enabled: true, group: "Combined Charts" },
-          { name: "Streaming (All Services)", url: "tmdb:chart:appletv\ntmdb:chart:disney\ntmdb:chart:discovery\ntmdb:chart:hbomax\ntmdb:chart:hulu\ntmdb:chart:netflix\ntmdb:chart:netflixkids\ntmdb:chart:paramount\ntmdb:chart:primevideo\ntmdb:chart:peacock", type: "series", enabled: true, group: "Combined Charts" }
-      ]
+    hasInitial ? initialEntries : (newUi ? [] : STARTER_PACK_ENTRIES)
   );
 
   // The shell variant of the chrome. Both navs keep the legacy wrappers
@@ -3708,6 +3692,36 @@ ${seoHeadHtml}
   html[data-app-shell="1"] .app-shell-danger { color: var(--danger); border-color: rgba(255, 59, 48, 0.35); }
   html[data-app-shell="1"] .app-shell-details { margin-top: 10px; font-size: 0.88rem; }
   html[data-app-shell="1"] .app-shell-details summary { cursor: pointer; color: var(--text); }
+
+  /* The home-screen editor (P6-3): the paste box, the review table and the
+     duplicate toggle that now sits directly above the rows it applies to. The
+     toggle used to live in Settings; on a shell page that copy is hidden, so
+     the same setting is described in one place (see #legacyDedupePanel). */
+  html[data-app-shell="1"] #legacyDedupePanel { display: none; }
+  html[data-app-shell="1"] .app-shell-add-box {
+    width: 100%; min-height: 92px; padding: 10px 12px; margin: 0 0 8px;
+    border: 1px solid var(--border); border-radius: 10px;
+    background: var(--bg); color: var(--text);
+    font-family: var(--font-mono, monospace); font-size: 0.86rem; line-height: 1.45;
+    resize: vertical;
+  }
+  html[data-app-shell="1"] .app-shell-review { margin-top: 12px; }
+  html[data-app-shell="1"] .app-shell-review-row {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); font-size: 0.88rem;
+  }
+  html[data-app-shell="1"] .app-shell-review-url {
+    color: var(--muted); font-size: 0.78rem;
+    word-break: break-all; overflow-wrap: anywhere;
+  }
+  html[data-app-shell="1"] .app-shell-review-bad { color: var(--danger); }
+  html[data-app-shell="1"] .app-shell-dedupe {
+    display: flex; align-items: flex-start; gap: 10px; cursor: pointer;
+    font-size: 0.92rem; user-select: none; margin: 14px 0 4px;
+    padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--surface);
+  }
+  html[data-app-shell="1"] .app-shell-dedupe input { margin-top: 2px; cursor: pointer; width: 16px; height: 16px; }
 
   /* --- Floating Unsaved Changes to Install Link Banner -------------------- */
   .unsaved-install-banner {

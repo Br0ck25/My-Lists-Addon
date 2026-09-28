@@ -55,6 +55,15 @@ const serverEntries = (${initialEntriesJson});
 const serverEntriesAreDefaults = ${usingDefaultEntries ? 'true' : 'false'};
 const serverShuffleShelves = ${initialShuffleShelves ? 'true' : 'false'};
 const serverShuffleItems = ${initialShuffleItems ? 'true' : 'false'};
+
+// The rows the home-screen editor offers as a starter pack (P6-3), and nothing
+// else: a shell page is not pre-filled the way the old page is (FRONTEND_UX_AUDIT
+// §7, scenario 1), it is offered the same rows as a button. STARTER_PACK_ENTRIES
+// (00_constants.js) is what the old page's own fallback uses, so the two cannot
+// drift -- and this has to be declared HERE, in the per-request block, not down
+// in the bundle: /app.js is one shared, cached file built once (splitAppBundle,
+// 02_), so a value that differs between the two variants cannot live in it.
+const APP_SHELL_STARTER_PACK = ${newUi ? jsonForScript(STARTER_PACK_ENTRIES) : "[]"};
 </script>
 <script>/*MYLISTS_APP_BUNDLE_START*/
 // Every native/official chart's (slug, name, movieUrl, showUrl) -- lets

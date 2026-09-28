@@ -135,6 +135,40 @@ describe("the new UI shell is opt-in through a cookie", () => {
     assert.match(onAlias.headers.get("set-cookie") || "", /^FF_NEW_UI=1;/);
   });
 
+  it("hands the home editor its rows instead of pre-filling them (P6-3)", async () => {
+    const env = makeEnv();
+    const legacy = await call(env, "/");
+    const shell = await call(env, "/", { cookie: SHELL_COOKIE });
+    // The editor's container exists only on a shell page, and the Settings copy
+    // of the duplicate toggle (which the editor now owns, directly above the
+    // rows it applies to) is hidden there rather than removed, so the legacy
+    // page keeps working.
+    assert.equal(legacy.text.includes('id="appShellHomeEditor"'), false);
+    assert.ok(shell.text.includes('id="appShellHomeEditor"'));
+    assert.ok(legacy.text.includes('id="legacyDedupePanel"'));
+    assert.ok(shell.text.includes('id="legacyDedupePanel"'));
+    // The CSS that hides it is in the shared stylesheet (/app.css is lifted
+    // out of the page -- 25_api-catalog-routes.js), not inline in the HTML.
+    const css = await call(env, "/app.css");
+    assert.ok(css.text.includes('#legacyDedupePanel { display: none; }'));
+    // A first-time visitor on the old page is still given the demo rows, the
+    // way that page has always worked; the shell is given none, and is offered
+    // the same eight rows as a button instead.
+    const demo = JSON.parse((legacy.text.match(/const serverEntries = \(?(\[[\s\S]*?\])\)?;/) || [])[1]);
+    assert.equal(demo.length, 8, "the old page still pre-fills its demo rows");
+    const shellEntries = JSON.parse((shell.text.match(/const serverEntries = \(?(\[[\s\S]*?\])\)?;/) || [])[1]);
+    assert.equal(shellEntries.length, 0, "the shell adds nothing you did not ask for");
+    // ...and both pages carry the starter pack where the shell's editor can
+    // read it: empty on the old page (which pre-fills instead) and the same
+    // eight rows on the shell page. It has to be in the per-request block --
+    // /app.js is one shared cached file, so a variant-specific value cannot
+    // live in the bundle.
+    const legacyPack = JSON.parse((legacy.text.match(/const APP_SHELL_STARTER_PACK = (\[[\s\S]*?\]);/) || [])[1]);
+    assert.equal(legacyPack.length, 0);
+    const pack = JSON.parse((shell.text.match(/const APP_SHELL_STARTER_PACK = (\[[\s\S]*?\]);/) || [])[1]);
+    assert.equal(JSON.stringify(pack), JSON.stringify(demo), "the pack is the same eight rows");
+  });
+
   it("ships one bundle and one stylesheet for both variants", async () => {
     // A shell-only line inside either of them would make one cached,
     // publicly-hashed file depend on a cookie. Each isolate's hash describes

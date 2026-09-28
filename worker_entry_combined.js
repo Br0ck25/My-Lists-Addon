@@ -1586,6 +1586,23 @@ const APP_SHELL_TABS = [
 // /channels/<user>/<slug> are share links with their own routes, and must keep
 // working exactly as they do.
 const APP_SHELL_PATHS = new Set(APP_SHELL_TABS.map((t) => t.path));
+
+// The rows a first-time visitor used to be given silently (the page fell back
+// to these when there was no saved configuration). The new UI does not pre-fill
+// them -- "see 8 catalogs you did not add" is one of the things the frontend
+// rebuild sets out to remove (FRONTEND_UX_AUDIT §7, scenario 1) -- and offers
+// them instead, as one button in the home-screen editor (P6-3). Both the old
+// page's fallback and that button read this one list, so they cannot drift.
+const STARTER_PACK_ENTRIES = [
+  { name: "Popular", url: "https://mdblist.com/lists/official/movies/popular\ntmdb:chart:popular\ntrakt:chart:popular", type: "movie", enabled: true, group: "Combined Charts" },
+  { name: "Popular", url: "https://mdblist.com/lists/official/shows/popular\ntmdb:chart:popular\ntrakt:chart:popular", type: "series", enabled: true, group: "Combined Charts" },
+  { name: "Trending", url: "tmdb:chart:trending\ntrakt:chart:trending\nsimkl:chart:today\nsimkl:chart:week\nsimkl:chart:month", type: "movie", enabled: true, group: "Combined Charts" },
+  { name: "Trending", url: "tmdb:chart:trending\ntrakt:chart:trending\nsimkl:chart:today\nsimkl:chart:week\nsimkl:chart:month", type: "series", enabled: true, group: "Combined Charts" },
+  { name: "Streaming Top 10 (All Services)", url: "https://mdblist.com/lists/ahmed2250/apple-tv-top-10-movies-today\nhttps://mdblist.com/lists/andykai/disney-top-10-no-hulu\nhttps://mdblist.com/lists/harmes7/hbo-max-top-10-movies-m77r6mc20q\nhttps://mdblist.com/lists/hulupiv/hulu-top-10-movies\nhttps://mdblist.com/lists/hdlists/netflix-top-10-trending-movies\nhttps://mdblist.com/lists/ahmed2250/paramount-top-10-movies-today\nhttps://mdblist.com/lists/diimaan/amazon-prime-top-10-movies\nhttps://mdblist.com/lists/diimaan/peacock-top-10-movies", type: "movie", enabled: true, group: "Combined Charts" },
+  { name: "Streaming Top 10 (All Services)", url: "https://mdblist.com/lists/ahmed2250/apple-tv-top-10-tv-shows-today\nhttps://mdblist.com/lists/andykai/disney-trending-no-hulu\nhttps://mdblist.com/lists/harmes7/hbo-max-top-10-series-cp45l27nhd\nhttps://mdblist.com/lists/hulupiv/hulu-top-10-shows\nhttps://mdblist.com/lists/hdlists/netflix-top-10-trending-shows\nhttps://mdblist.com/lists/ahmed2250/paramount-top-10-tv-shows-today\nhttps://mdblist.com/lists/diimaan/amazon-prime-top-10-tv-shows\nhttps://mdblist.com/lists/peacockpiv/peacock-top-10-shows", type: "series", enabled: true, group: "Combined Charts" },
+  { name: "Streaming (All Services)", url: "tmdb:chart:appletv\ntmdb:chart:disney\ntmdb:chart:discovery\ntmdb:chart:hbomax\ntmdb:chart:hulu\ntmdb:chart:netflix\ntmdb:chart:netflixkids\ntmdb:chart:paramount\ntmdb:chart:primevideo\ntmdb:chart:peacock", type: "movie", enabled: true, group: "Combined Charts" },
+  { name: "Streaming (All Services)", url: "tmdb:chart:appletv\ntmdb:chart:disney\ntmdb:chart:discovery\ntmdb:chart:hbomax\ntmdb:chart:hulu\ntmdb:chart:netflix\ntmdb:chart:netflixkids\ntmdb:chart:paramount\ntmdb:chart:primevideo\ntmdb:chart:peacock", type: "series", enabled: true, group: "Combined Charts" }
+];
 // --- icon (placeholder, replace via /mnt/project source if needed) --------
 const ICON_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAAEAAElEQVR42rz9d9xt11Eejs/MWvu0" +
@@ -26601,29 +26618,13 @@ function renderBuilder(
   // apart (see the "pre-fill" block's own comment on why that distinction
   // matters for when to trust localStorage over what the server sent).
   const usingDefaultEntries = !hasInitial;
+  // A first-time visitor on the OLD page still gets the demo rows it always
+  // got. On a shell page the same rows are offered as a button in the
+  // home-screen editor instead (P6-3): nothing is added that was not asked
+  // for, and both read STARTER_PACK_ENTRIES (00_constants.js) so they cannot
+  // drift.
   const initialEntriesJson = jsonForScript(
-    hasInitial
-      ? initialEntries
-      : [
-          { name: "Popular", url: "https://mdblist.com/lists/official/movies/popular\ntmdb:chart:popular\ntrakt:chart:popular", type: "movie", enabled: true, group: "Combined Charts" },
-          { name: "Popular", url: "https://mdblist.com/lists/official/shows/popular\ntmdb:chart:popular\ntrakt:chart:popular", type: "series", enabled: true, group: "Combined Charts" },
-          { name: "Trending", url: "tmdb:chart:trending\ntrakt:chart:trending\nsimkl:chart:today\nsimkl:chart:week\nsimkl:chart:month", type: "movie", enabled: true, group: "Combined Charts" },
-          { name: "Trending", url: "tmdb:chart:trending\ntrakt:chart:trending\nsimkl:chart:today\nsimkl:chart:week\nsimkl:chart:month", type: "series", enabled: true, group: "Combined Charts" },
-          // Both the Top 10 and full Streaming Catalogs merged rows below
-          // use the exact same joined url string for their movie row and
-          // series row now -- unlike the old per-provider mdblist.com
-          // urls they replaced, a tmdb:chart:X source doesn't encode
-          // movie/series in the url itself; fetchCatalog picks the right
-          // side of TMDB_CHART_PATHS[chartKey] from entry.type at fetch
-          // time (see 07_source-fetchers-tmdb-simkl.js), the same way the
-          // standalone per-provider rows in 08_quickadd-chart-data.js
-          // already reuse one url for both their +Movies and +Shows
-          // buttons.
-          { name: "Streaming Top 10 (All Services)", url: "https://mdblist.com/lists/ahmed2250/apple-tv-top-10-movies-today\nhttps://mdblist.com/lists/andykai/disney-top-10-no-hulu\nhttps://mdblist.com/lists/harmes7/hbo-max-top-10-movies-m77r6mc20q\nhttps://mdblist.com/lists/hulupiv/hulu-top-10-movies\nhttps://mdblist.com/lists/hdlists/netflix-top-10-trending-movies\nhttps://mdblist.com/lists/ahmed2250/paramount-top-10-movies-today\nhttps://mdblist.com/lists/diimaan/amazon-prime-top-10-movies\nhttps://mdblist.com/lists/diimaan/peacock-top-10-movies", type: "movie", enabled: true, group: "Combined Charts" },
-          { name: "Streaming Top 10 (All Services)", url: "https://mdblist.com/lists/ahmed2250/apple-tv-top-10-tv-shows-today\nhttps://mdblist.com/lists/andykai/disney-trending-no-hulu\nhttps://mdblist.com/lists/harmes7/hbo-max-top-10-series-cp45l27nhd\nhttps://mdblist.com/lists/hulupiv/hulu-top-10-shows\nhttps://mdblist.com/lists/hdlists/netflix-top-10-trending-shows\nhttps://mdblist.com/lists/ahmed2250/paramount-top-10-tv-shows-today\nhttps://mdblist.com/lists/diimaan/amazon-prime-top-10-tv-shows\nhttps://mdblist.com/lists/peacockpiv/peacock-top-10-shows", type: "series", enabled: true, group: "Combined Charts" },
-          { name: "Streaming (All Services)", url: "tmdb:chart:appletv\ntmdb:chart:disney\ntmdb:chart:discovery\ntmdb:chart:hbomax\ntmdb:chart:hulu\ntmdb:chart:netflix\ntmdb:chart:netflixkids\ntmdb:chart:paramount\ntmdb:chart:primevideo\ntmdb:chart:peacock", type: "movie", enabled: true, group: "Combined Charts" },
-          { name: "Streaming (All Services)", url: "tmdb:chart:appletv\ntmdb:chart:disney\ntmdb:chart:discovery\ntmdb:chart:hbomax\ntmdb:chart:hulu\ntmdb:chart:netflix\ntmdb:chart:netflixkids\ntmdb:chart:paramount\ntmdb:chart:primevideo\ntmdb:chart:peacock", type: "series", enabled: true, group: "Combined Charts" }
-      ]
+    hasInitial ? initialEntries : (newUi ? [] : STARTER_PACK_ENTRIES)
   );
 
   // The shell variant of the chrome. Both navs keep the legacy wrappers
@@ -30137,6 +30138,36 @@ ${seoHeadHtml}
   html[data-app-shell="1"] .app-shell-details { margin-top: 10px; font-size: 0.88rem; }
   html[data-app-shell="1"] .app-shell-details summary { cursor: pointer; color: var(--text); }
 
+  /* The home-screen editor (P6-3): the paste box, the review table and the
+     duplicate toggle that now sits directly above the rows it applies to. The
+     toggle used to live in Settings; on a shell page that copy is hidden, so
+     the same setting is described in one place (see #legacyDedupePanel). */
+  html[data-app-shell="1"] #legacyDedupePanel { display: none; }
+  html[data-app-shell="1"] .app-shell-add-box {
+    width: 100%; min-height: 92px; padding: 10px 12px; margin: 0 0 8px;
+    border: 1px solid var(--border); border-radius: 10px;
+    background: var(--bg); color: var(--text);
+    font-family: var(--font-mono, monospace); font-size: 0.86rem; line-height: 1.45;
+    resize: vertical;
+  }
+  html[data-app-shell="1"] .app-shell-review { margin-top: 12px; }
+  html[data-app-shell="1"] .app-shell-review-row {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); font-size: 0.88rem;
+  }
+  html[data-app-shell="1"] .app-shell-review-url {
+    color: var(--muted); font-size: 0.78rem;
+    word-break: break-all; overflow-wrap: anywhere;
+  }
+  html[data-app-shell="1"] .app-shell-review-bad { color: var(--danger); }
+  html[data-app-shell="1"] .app-shell-dedupe {
+    display: flex; align-items: flex-start; gap: 10px; cursor: pointer;
+    font-size: 0.92rem; user-select: none; margin: 14px 0 4px;
+    padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--surface);
+  }
+  html[data-app-shell="1"] .app-shell-dedupe input { margin-top: 2px; cursor: pointer; width: 16px; height: 16px; }
+
   /* --- Floating Unsaved Changes to Install Link Banner -------------------- */
   .unsaved-install-banner {
     position: fixed;
@@ -30615,6 +30646,12 @@ if ('serviceWorker' in navigator) {
         <option value="">All groups</option>
       </select>
     </div>
+
+    <!-- The shell's paste-first home-screen editor (P6-3): add lists, the
+         duplicate toggle, the starter pack. Emitted only for a browser with the
+         FF_NEW_UI cookie; the reorderable rows below it are the same ones the
+         old page uses. -->
+${newUi ? '    <div id="appShellHomeEditor"></div>' : ''}
 
     <!-- Reorderable Catalog Shelves -->
     <div id="lists"></div>
@@ -31595,7 +31632,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       </label>
     </div>
 
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel" style="margin-top:12px;" id="legacyDedupePanel">
       <h2 class="panel-title">Duplicate Items Across Lists</h2>
       <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">
         <input type="checkbox" id="dedupeAcrossListsCheckbox" ${initialDedupeAcrossLists ? 'checked' : ''} onchange="localStorage.setItem('myListAddon:dedupeAcrossLists', this.checked ? '1' : '0'); saveState()" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
@@ -32136,6 +32173,15 @@ const serverEntries = (${initialEntriesJson});
 const serverEntriesAreDefaults = ${usingDefaultEntries ? 'true' : 'false'};
 const serverShuffleShelves = ${initialShuffleShelves ? 'true' : 'false'};
 const serverShuffleItems = ${initialShuffleItems ? 'true' : 'false'};
+
+// The rows the home-screen editor offers as a starter pack (P6-3), and nothing
+// else: a shell page is not pre-filled the way the old page is (FRONTEND_UX_AUDIT
+// §7, scenario 1), it is offered the same rows as a button. STARTER_PACK_ENTRIES
+// (00_constants.js) is what the old page's own fallback uses, so the two cannot
+// drift -- and this has to be declared HERE, in the per-request block, not down
+// in the bundle: /app.js is one shared, cached file built once (splitAppBundle,
+// 02_), so a value that differs between the two variants cannot live in it.
+const APP_SHELL_STARTER_PACK = ${newUi ? jsonForScript(STARTER_PACK_ENTRIES) : "[]"};
 </script>
 <script>/*MYLISTS_APP_BUNDLE_START*/
 // Every native/official chart's (slug, name, movieUrl, showUrl) -- lets
@@ -74571,6 +74617,11 @@ function saveState() {
   if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
   scheduleCreatorSyncSave();
   checkUnsavedInstallLink();
+  // The new UI's live preview follows the rows (see appShellSchedulePreview,
+  // spliced in below). Guarded because saveState also runs from the legacy
+  // page, where the shell's module is not loaded... it is the same script, so
+  // this is a plain typeof check against a definition further down.
+  if (typeof appShellSchedulePreview === 'function') appShellSchedulePreview();
 }
 
 function loadSavedState() {
@@ -76174,7 +76225,323 @@ async function appShellSettingsAction(action, id) {
     const state = appShellInstallLinkStateSafe();
     return appShellCopyText(state.link, 'Install link copied.');
   }
+  if (what === 'home-check') return appShellHomeCheck();
+  if (what === 'home-add') return appShellHomeAddChecked();
+  if (what === 'home-clear') {
+    appShellHomeReview = null;
+    const box = document.getElementById('appShellAddBox');
+    if (box) box.value = '';
+    appShellRenderHomeEditor();
+    return true;
+  }
+  if (what === 'home-starter') return appShellAddStarterPack();
   return false;
+}
+
+// --- the home-screen editor (P6-3) -------------------------------------------
+//
+// Paste first: a box that takes one list link per line, a review table that says
+// what each line is before anything is added, and the duplicate toggle directly
+// above the rows it applies to. The rows themselves are the page's own (#lists,
+// with its drag handles, Edit and Remove) -- this is the way in, not a second
+// copy of them.
+//
+// Everything here exists only on a shell page: the container comes from the
+// server (10_tab-search-add.js), and the starter rows it offers come from the
+// per-request preamble (APP_SHELL_STARTER_PACK, 16_client-row-core.js), which is
+// empty on a legacy page. The old page keeps pre-filling those rows for a
+// first-time visitor, exactly as it did.
+
+// How many lines one paste will check. Each line costs two /api/preview calls
+// (one per type), so this is what keeps a pasted bookmarks file from turning
+// into a hundred requests.
+const APP_SHELL_ADD_LINES_MAX = 50;
+// How many lines are checked at once. Each check is two requests, so six lines
+// in flight is twelve requests -- the same order as the page's other fan-outs.
+const APP_SHELL_ADD_CONCURRENCY = 6;
+
+let appShellHomeReview = null;
+
+function appShellHomeEscape(value) {
+  return escapeHtml(String(value === null || value === undefined ? '' : value));
+}
+
+// One line of the paste box. People paste real newlines, and a stored merged row
+// carries its sources joined by the two characters backslash + n (this page's
+// own convention -- see collectEntries, 23_client-list-management.js), so both
+// are treated as separators. Built with String.fromCharCode rather than written
+// out, because this file lives inside the page's template literal, where a
+// backslash is eaten before the browser ever sees it.
+function appShellSplitLines(text) {
+  const newline = String.fromCharCode(10);
+  const slash = String.fromCharCode(92);
+  const out = [];
+  const rows = String(text || '').split(newline);
+  for (let i = 0; i < rows.length; i++) {
+    const pieces = rows[i].split(slash + 'n');
+    for (let j = 0; j < pieces.length; j++) {
+      const line = pieces[j].trim();
+      if (line) out.push(line);
+    }
+  }
+  return out;
+}
+
+// Where a pasted line comes from, as a short label for the review table.
+function appShellSourceLabel(u) {
+  const s = String(u || '').trim().toLowerCase();
+  if (!s) return 'Empty';
+  if (s.indexOf('mdblist:') === 0 || s.indexOf('mdblist.com') !== -1) return 'MDBList';
+  if (s.indexOf('trakt:') === 0 || s.indexOf('trakt.tv') !== -1) return 'Trakt';
+  if (s.indexOf('tmdb:') === 0 || s.indexOf('themoviedb.org') !== -1) return 'TMDB';
+  if (s.indexOf('simkl:') === 0 || s.indexOf('simkl.com') !== -1) return 'Simkl';
+  if (s.indexOf('imdb.com') !== -1) return 'IMDb';
+  if (s.indexOf('customlist:') === 0 || s.indexOf('channel:') === 0 || s.indexOf('custom:') === 0) return 'My Lists';
+  if (s.indexOf('autotrack:') === 0) return 'My Lists';
+  if (s.indexOf('mylistsaddon.com') !== -1) return 'My Lists';
+  return 'List';
+}
+
+function appShellHomeRowCount() {
+  if (typeof document.querySelectorAll !== 'function') return 0;
+  const rows = document.querySelectorAll('#lists .entry');
+  return rows && rows.length ? rows.length : 0;
+}
+
+function appShellDedupeOn() {
+  try {
+    return localStorage.getItem('myListAddon:dedupeAcrossLists') === '1';
+  } catch (e) {
+    return false;
+  }
+}
+
+// A tiny pool, so a 20-line paste is 6 lines in flight rather than 20 or 1.
+async function appShellMapWithConcurrency(items, limit, run) {
+  const list = items || [];
+  const out = new Array(list.length);
+  let next = 0;
+  const workers = [];
+  const size = Math.max(1, Math.min(limit || 1, list.length || 1));
+  for (let w = 0; w < size; w++) {
+    workers.push((async function () {
+      for (;;) {
+        const i = next;
+        next += 1;
+        if (i >= list.length) return;
+        out[i] = await run(list[i], i);
+      }
+    })());
+  }
+  await Promise.all(workers);
+  return out;
+}
+
+// One pasted line, asked about as both a movie list and a show list. Whichever
+// answers with more items decides the type, which is how the old page's bulk add
+// told them apart; a line that fails on both sides carries its error instead.
+async function appShellCheckOneLine(line) {
+  const url = String(line || '').trim();
+  const name = (typeof guessNameFromUrl === 'function') ? guessNameFromUrl(url) : url;
+  const auth = (typeof previewCreatorAuth === 'function') ? previewCreatorAuth() : {};
+  const askType = async function (type) {
+    // One line on purpose: the worker's CSRF scanner (tests/worker.test.mjs)
+    // looks for a mutating method and the JSON content type on the same call,
+    // and appShellApiFetch supplies the header.
+    const body = Object.assign({ url: url, type: type, sample: 1 }, auth);
+    const res = await appShellApiFetch('/api/preview', { method: 'POST', body: body });
+    const data = res.data || {};
+    const count = Number(data.totalItems) || Number(data.count) || 0;
+    return { ok: !!res.ok, type: type, count: count, error: res.ok ? '' : (res.error || 'Could not read that list.') };
+  };
+  const both = await Promise.all([askType('movie'), askType('series')]);
+  const movie = both[0];
+  const series = both[1];
+  const wanted = (series.ok && series.count > movie.count) ? series : movie;
+  const anyOk = movie.ok || series.ok;
+  return {
+    line: url,
+    name: name,
+    source: appShellSourceLabel(url),
+    type: wanted.type,
+    count: Math.max(movie.count, series.count),
+    ok: anyOk,
+    error: anyOk ? '' : (movie.error || series.error || 'Could not read that list.'),
+  };
+}
+
+function appShellReviewRowHtml(row) {
+  const mark = row.ok ? '<span class="app-shell-chip app-shell-chip-ok">Ready</span>' : '<span class="app-shell-chip app-shell-chip-warn">Skipped</span>';
+  const shape = row.ok
+    ? appShellHomeEscape(row.type === 'series' ? 'Shows' : 'Movies') + ' &middot; ' + row.count + (row.count === 1 ? ' title' : ' titles')
+    : appShellHomeEscape(row.error || 'Could not read that list.');
+  return '<div class="app-shell-review-row">' +
+    '<div class="app-shell-row-main"><strong' + (row.ok ? '' : ' class="app-shell-review-bad"') + '>' + appShellHomeEscape(row.name) + '</strong>' +
+    '<br><span class="app-shell-muted">' + appShellHomeEscape(row.source) + ' &middot; ' + shape + '</span>' +
+    '<br><span class="app-shell-muted app-shell-review-url">' + appShellHomeEscape(row.line) + '</span></div>' +
+    '<div class="app-shell-row-controls">' + mark + '</div></div>';
+}
+
+function appShellReviewHtml() {
+  const review = appShellHomeReview;
+  if (!review || !review.results || !review.results.length) return '';
+  const good = review.results.filter(function (r) { return r.ok; }).length;
+  const bad = review.results.length - good;
+  let html = '<div class="app-shell-review">' +
+    '<p class="app-shell-muted">' + review.results.length + (review.results.length === 1 ? ' line checked: ' : ' lines checked: ') +
+    good + ' ready' + (bad ? ', ' + bad + ' to look at' : '') + '.' +
+    (review.truncated ? ' (' + review.truncated + ' more line(s) were not checked.)' : '') + '</p>';
+  html += review.results.map(appShellReviewRowHtml).join('');
+  html += '<div class="app-shell-actions">' +
+    '<button type="button" class="primary lc-btn" data-app-shell-action="home-add"' + (good ? '' : ' disabled') + '>' +
+    (good === 1 ? 'Add 1 list' : 'Add ' + good + ' lists') + '</button>' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="home-clear">Clear</button>' +
+    '</div></div>';
+  return html;
+}
+
+function appShellRenderHomeEditor() {
+  const host = document.getElementById('appShellHomeEditor');
+  if (!host || !NEW_UI) return false;
+  // Whatever has been typed so far survives a re-render (the box is re-created
+  // every time, and losing a pasted list on an unrelated refresh would be worse
+  // than the few lines this costs).
+  const box = document.getElementById('appShellAddBox');
+  const typed = (box && box.value) ? box.value : '';
+  const dedupe = appShellDedupeOn();
+  const rows = appShellHomeRowCount();
+  const starter = (typeof APP_SHELL_STARTER_PACK !== 'undefined' && APP_SHELL_STARTER_PACK) ? APP_SHELL_STARTER_PACK : [];
+
+  let html = '<div class="panel" style="margin-top:12px;">' +
+    '<h2 class="panel-title">Add to your home screen</h2>' +
+    '<p class="app-shell-muted">Paste one list link per line -- MDBList, Trakt, TMDB, Simkl, an IMDb list, one of your own lists or a shared channel. Each line is checked first, so nothing is added that you did not see.</p>' +
+    '<label class="app-shell-muted" for="appShellAddBox" style="display:block; margin:0 0 4px;">List links, one per line</label>' +
+    '<textarea id="appShellAddBox" class="app-shell-add-box" rows="3" spellcheck="false" placeholder="https://mdblist.com/lists/you/top-horror-2026"></textarea>' +
+    '<div class="app-shell-actions">' +
+    '<button type="button" class="primary lc-btn" data-app-shell-action="home-check">Check links</button>' +
+    (starter.length && !rows ? '<button type="button" class="secondary lc-btn" data-app-shell-action="home-starter">Add a starter pack (' + starter.length + ' rows)</button>' : '') +
+    '</div>' +
+    appShellReviewHtml() +
+    '<label class="app-shell-dedupe" for="appShellDedupeToggle">' +
+    '<input type="checkbox" id="appShellDedupeToggle"' + (dedupe ? ' checked' : '') + '>' +
+    '<span><strong>Hide titles already shown in rows above</strong>' +
+    '<br><span class="app-shell-muted">The top row keeps everything; every row below it drops anything an earlier row already showed. Row order is what decides, so drag a row to change it. The preview below updates now, and Stremio follows once you update your install link (the install bar above does that).</span></span>' +
+    '</label>' +
+    (rows ? '<p class="app-shell-muted" style="margin-top:10px;">Your ' + rows + (rows === 1 ? ' row is' : ' rows are') + ' below: drag to reorder, Edit to change one, or Remove to take it out.</p>' : '') +
+    '</div>';
+
+  host.innerHTML = html;
+  const newBox = document.getElementById('appShellAddBox');
+  if (newBox && typed) newBox.value = typed;
+  const toggle = document.getElementById('appShellDedupeToggle');
+  if (toggle && toggle.addEventListener) {
+    toggle.addEventListener('change', function (e) {
+      appShellSetDedupe(!!(e && e.target ? e.target.checked : toggle.checked));
+    });
+  }
+  return true;
+}
+
+// The duplicate setting, in the place it now belongs -- directly above the rows
+// it applies to. One value, one key: the Settings checkbox (hidden on a shell
+// page, see 09_page-shell.css) is kept in step so nothing can disagree.
+function appShellSetDedupe(on) {
+  const value = on ? '1' : '0';
+  try { localStorage.setItem('myListAddon:dedupeAcrossLists', value); } catch (e) {}
+  const legacy = document.getElementById('dedupeAcrossListsCheckbox');
+  if (legacy) legacy.checked = !!on;
+  if (typeof saveState === 'function') saveState();
+  if (typeof renderLivePreview === 'function') renderLivePreview();
+  appShellRenderHomeEditor();
+  return true;
+}
+
+async function appShellHomeCheck() {
+  const box = document.getElementById('appShellAddBox');
+  const lines = appShellSplitLines(box ? box.value : '');
+  if (!lines.length) {
+    showToast('Paste at least one list link first.', 'info');
+    return [];
+  }
+  const checked = lines.slice(0, APP_SHELL_ADD_LINES_MAX);
+  const results = await appShellMapWithConcurrency(checked, APP_SHELL_ADD_CONCURRENCY, appShellCheckOneLine);
+  appShellHomeReview = { results: results, truncated: lines.length - checked.length };
+  appShellRenderHomeEditor();
+  const good = results.filter(function (r) { return r.ok; }).length;
+  if (!good) showToast('None of those lines could be read. Check the links and try again.', 'error');
+  return results;
+}
+
+function appShellHomeAddChecked() {
+  const review = appShellHomeReview;
+  const good = review && review.results ? review.results.filter(function (r) { return r.ok; }) : [];
+  if (!good.length) {
+    showToast('Check the links first, then add the ones that are ready.', 'info');
+    return 0;
+  }
+  // addRow is the one door every add comes through, and it refuses a row that
+  // needs an account when nobody is signed in (D-8) -- returning null. Whatever
+  // it refuses stays in the review, so pressing the button again after signing
+  // in adds those and only those.
+  const left = [];
+  let made = 0;
+  good.forEach(function (r) {
+    if (addRow(r.name, r.line, r.type, true, 'Custom')) made += 1; else left.push(r);
+  });
+  if (!made) {
+    appShellRenderHomeEditor();
+    return 0;
+  }
+  appShellHomeReview = left.length ? { results: left, truncated: 0 } : null;
+  const box = document.getElementById('appShellAddBox');
+  if (box && !left.length) box.value = '';
+  const said = made === 1 ? 'Added to your home screen.' : made + ' lists added to your home screen.';
+  appShellAfterHomeChange(left.length ? said + ' ' + left.length + ' need an account.' : said);
+  return made;
+}
+
+function appShellAddStarterPack() {
+  const pack = (typeof APP_SHELL_STARTER_PACK !== 'undefined' && APP_SHELL_STARTER_PACK) ? APP_SHELL_STARTER_PACK : [];
+  if (!pack.length) return 0;
+  let made = 0;
+  pack.forEach(function (row) {
+    if (addRow(row.name, row.url, row.type, row.enabled !== false, row.group || 'Combined Charts')) made += 1;
+  });
+  if (!made) return 0;
+  appShellAfterHomeChange(made + ' starter rows added. Reorder them to change what keeps a shared title.');
+  return made;
+}
+
+// The preview has to follow the rows -- that is the point of it. Every change
+// to them (typing a name, pasting a url, dragging a row, removing one) already
+// runs through saveState, which fires on every keystroke, so the refresh is
+// scheduled here with a short delay rather than run on each one. New UI only:
+// the old page has its own Refresh Preview button and does not want 40 poster
+// requests after a rename.
+// Declared with var, not let, on purpose: this module sits after the code that
+// runs at boot, and a shell page's first saveState (the pre-fill) reaches here
+// before a let would have been initialised -- "Cannot access before
+// initialization". Same trap, same fix, as appShellDialogClose.
+var appShellPreviewTimer = null;
+function appShellSchedulePreview() {
+  if (!NEW_UI) return false;
+  if (typeof renderLivePreview !== 'function') return false;
+  if (appShellPreviewTimer) clearTimeout(appShellPreviewTimer);
+  appShellPreviewTimer = setTimeout(function () {
+    appShellPreviewTimer = null;
+    renderLivePreview();
+  }, 700);
+  return true;
+}
+
+// After anything that changes the rows: persist, refresh the preview, and put
+// the editor back in step with them.
+function appShellAfterHomeChange(message) {
+  if (typeof saveState === 'function') saveState();
+  if (typeof renderLivePreview === 'function') renderLivePreview();
+  appShellRenderHomeEditor();
+  if (message) showToast(message, 'success');
+  return true;
 }
 
 // --- routing -----------------------------------------------------------------
@@ -76220,6 +76587,7 @@ function appShellApplyRoute(route) {
   // Settings is rendered by the shell itself (P6-2): the legacy panels below
   // it stay, and these cards sit above them.
   if (tab.id === 'settings') appShellRenderSettingsHome();
+  if (tab.id === 'catalogs') appShellRenderHomeEditor();
   return true;
 }
 
@@ -76333,6 +76701,7 @@ function initAppShell() {
   }
 
   appShellRefreshInstallBar();
+  appShellRenderHomeEditor();
   if (typeof isSignedIn === 'function' && isSignedIn()) appShellRefreshAccount();
   appShellState.set({ ready: true });
 }

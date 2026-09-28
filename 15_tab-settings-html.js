@@ -41,7 +41,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       </label>
     </div>
 
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel" style="margin-top:12px;" id="legacyDedupePanel">
       <h2 class="panel-title">Duplicate Items Across Lists</h2>
       <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">
         <input type="checkbox" id="dedupeAcrossListsCheckbox" ${initialDedupeAcrossLists ? 'checked' : ''} onchange="localStorage.setItem('myListAddon:dedupeAcrossLists', this.checked ? '1' : '0'); saveState()" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">

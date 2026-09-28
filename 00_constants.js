@@ -1563,3 +1563,20 @@ const APP_SHELL_TABS = [
 // /channels/<user>/<slug> are share links with their own routes, and must keep
 // working exactly as they do.
 const APP_SHELL_PATHS = new Set(APP_SHELL_TABS.map((t) => t.path));
+
+// The rows a first-time visitor used to be given silently (the page fell back
+// to these when there was no saved configuration). The new UI does not pre-fill
+// them -- "see 8 catalogs you did not add" is one of the things the frontend
+// rebuild sets out to remove (FRONTEND_UX_AUDIT §7, scenario 1) -- and offers
+// them instead, as one button in the home-screen editor (P6-3). Both the old
+// page's fallback and that button read this one list, so they cannot drift.
+const STARTER_PACK_ENTRIES = [
+  { name: "Popular", url: "https://mdblist.com/lists/official/movies/popular\ntmdb:chart:popular\ntrakt:chart:popular", type: "movie", enabled: true, group: "Combined Charts" },
+  { name: "Popular", url: "https://mdblist.com/lists/official/shows/popular\ntmdb:chart:popular\ntrakt:chart:popular", type: "series", enabled: true, group: "Combined Charts" },
+  { name: "Trending", url: "tmdb:chart:trending\ntrakt:chart:trending\nsimkl:chart:today\nsimkl:chart:week\nsimkl:chart:month", type: "movie", enabled: true, group: "Combined Charts" },
+  { name: "Trending", url: "tmdb:chart:trending\ntrakt:chart:trending\nsimkl:chart:today\nsimkl:chart:week\nsimkl:chart:month", type: "series", enabled: true, group: "Combined Charts" },
+  { name: "Streaming Top 10 (All Services)", url: "https://mdblist.com/lists/ahmed2250/apple-tv-top-10-movies-today\nhttps://mdblist.com/lists/andykai/disney-top-10-no-hulu\nhttps://mdblist.com/lists/harmes7/hbo-max-top-10-movies-m77r6mc20q\nhttps://mdblist.com/lists/hulupiv/hulu-top-10-movies\nhttps://mdblist.com/lists/hdlists/netflix-top-10-trending-movies\nhttps://mdblist.com/lists/ahmed2250/paramount-top-10-movies-today\nhttps://mdblist.com/lists/diimaan/amazon-prime-top-10-movies\nhttps://mdblist.com/lists/diimaan/peacock-top-10-movies", type: "movie", enabled: true, group: "Combined Charts" },
+  { name: "Streaming Top 10 (All Services)", url: "https://mdblist.com/lists/ahmed2250/apple-tv-top-10-tv-shows-today\nhttps://mdblist.com/lists/andykai/disney-trending-no-hulu\nhttps://mdblist.com/lists/harmes7/hbo-max-top-10-series-cp45l27nhd\nhttps://mdblist.com/lists/hulupiv/hulu-top-10-shows\nhttps://mdblist.com/lists/hdlists/netflix-top-10-trending-shows\nhttps://mdblist.com/lists/ahmed2250/paramount-top-10-tv-shows-today\nhttps://mdblist.com/lists/diimaan/amazon-prime-top-10-tv-shows\nhttps://mdblist.com/lists/peacockpiv/peacock-top-10-shows", type: "series", enabled: true, group: "Combined Charts" },
+  { name: "Streaming (All Services)", url: "tmdb:chart:appletv\ntmdb:chart:disney\ntmdb:chart:discovery\ntmdb:chart:hbomax\ntmdb:chart:hulu\ntmdb:chart:netflix\ntmdb:chart:netflixkids\ntmdb:chart:paramount\ntmdb:chart:primevideo\ntmdb:chart:peacock", type: "movie", enabled: true, group: "Combined Charts" },
+  { name: "Streaming (All Services)", url: "tmdb:chart:appletv\ntmdb:chart:disney\ntmdb:chart:discovery\ntmdb:chart:hbomax\ntmdb:chart:hulu\ntmdb:chart:netflix\ntmdb:chart:netflixkids\ntmdb:chart:paramount\ntmdb:chart:primevideo\ntmdb:chart:peacock", type: "series", enabled: true, group: "Combined Charts" }
+];
