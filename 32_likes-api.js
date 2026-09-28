@@ -28,9 +28,12 @@
 // is why it is adjusted rather than recounted. An external list has no row of
 // its own, so its count is the rows.
 //
-// Behind FF_V2_LISTS_API with the list API, and off until reads move to v2
-// (P3b-7): until then a backfill re-run replaces each target's likes with the
-// legacy ones. P3b-7 maps /api/lists/like and /like-external onto this.
+// Behind FF_V2_LISTS_API with the list API, and off until legacy writes stop
+// (P3b-9): a like made here is not in the legacy ledgers, and a copy re-run
+// (30_) replaces a target's likes with the legacy ones -- with reads on v2 it
+// leaves a copied account's lists alone, but not outside lists. The legacy
+// routes /api/lists/like and /like-external write the same rows through
+// likeWriteStatements as well as their ledgers (34_lists-v2-bridge.js).
 
 const LIKES_API_TYPES = new Set(["list", "channel", "external"]);
 

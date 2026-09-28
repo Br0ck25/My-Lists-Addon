@@ -193,13 +193,17 @@ CREATE INDEX IF NOT EXISTS idx_channels_dir_added ON channels(add_count DESC, li
 
 -- Liked lists, hidden lists and hidden My Lists sections, per account.
 -- Replaces creator_user_lists and the copies in the creatorsync blob.
---   pref    liked | hidden | hidden_section
---   target  the list or section id as the page names it
+--   pref      liked | hidden | hidden_section | section
+--   target    the list or section id as the page names it
+--   position  for section: where an entry of the dashboard order that is
+--             not a list (Continue Watching and the other shelves) sits
+--             among the lists, which keep their place in lists.position
 CREATE TABLE IF NOT EXISTS account_list_prefs (
     account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
     pref       TEXT NOT NULL,
     target     TEXT NOT NULL,
     created_at INTEGER NOT NULL,
+    position   REAL NOT NULL DEFAULT 0,
     PRIMARY KEY (account_id, pref, target)
 ) WITHOUT ROWID;
 

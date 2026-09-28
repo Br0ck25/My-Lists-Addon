@@ -65,8 +65,8 @@ Adding a binding before the code that uses it is harmless. Removing a binding th
 - `NEW_ON_STREAMING_ENGINE` (optional; default `justwatch`).
 - `FF_SESSIONS` (optional): `1` turns on session sign-in for the `/api/creator/*` routes (P3a-6). **Leave unset** until the new sign-in screens ship.
 - `FF_INSTALLS` (optional): `1` turns on `/api/installs`, where a signed-in account creates, renames, rotates and removes `/i/{token}` install links (P3a-8). **Leave unset** until the screens for it ship. Links that already exist are served either way.
-- `FF_V2_LISTS_READ` (optional): `1` makes the site read lists from the new list tables. So far that covers the public list directory (`/lists/public.json`) and list search (P3b-6); a later task (P3b-7) adds list pages, catalogs and the rest. **Leave unset** until that task ships and the copy (§9) has run. If the new tables cannot answer, the directory and search fall back to the old storage by themselves.
-- `FF_V2_LISTS_API` (optional): `1` turns on `/api/lists`, the item-level list API, and `/api/likes`, the likes API, over the new list tables (P3b-4, P3b-5). **Leave unset.** Until a later release moves reads to those tables (P3b-7), the lists and likes people use are still the old ones, and changes made through these APIs would be overwritten the next time the copy (§9) runs.
+- `FF_V2_LISTS_READ` (optional): `1` makes the site read lists from the new list tables: the dashboard, list pages, catalogs, the directory and search (P3b-6, P3b-7). **Leave unset** until the copy (§9) has finished; §10 has the steps. Turning it off again is always safe, because every change is still written to the old storage.
+- `FF_V2_LISTS_API` (optional): `1` turns on `/api/lists`, the item-level list API, and `/api/likes`, the likes API, over the new list tables (P3b-4, P3b-5). **Leave unset.** What these APIs write goes to the new tables only. Until a later release stops writing the old storage (P3b-9), turning `FF_V2_LISTS_READ` off, or running the copy again, would lose it.
 - `INSTALL_MIGRATION_PERCENT` (optional, `0` to `100`): the share of existing install links whose keys and tokens move into encrypted D1 storage the first time they are used. See §8 before setting it.
 - **Delete** these retired variables if they are still set: `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET`, `CRON_SUBREQUEST_BUDGET`. The code ignores them.
 
@@ -165,7 +165,9 @@ Undo needs the same `TOKEN_ENCRYPTION_KEY`. Without that key the moved keys cann
 
 ## 9. Copying lists into the new list tables (P3b-3)
 
-Phase 3b moves lists, likes and channels into proper D1 tables. The first part copies every existing list into them. **It only copies.** The lists people use today are not changed, and nothing on the site reads the copies until a later release switches over (`FF_V2_LISTS_READ`, P3b-7). So running it changes nothing a visitor sees.
+Phase 3b moves lists, likes and channels into proper D1 tables. The first part copies every existing list into them. **It only copies.** The lists people use today are not changed, and nothing on the site reads the copies until `FF_V2_LISTS_READ` is turned on (§10). So running it changes nothing a visitor sees.
+
+From the moment migration `0016` is applied, every change to a list (a save, a delete, a new order, a like) is also written to the new tables as it happens, a few extra D1 writes each. So once the copy has finished, the new tables stay current by themselves.
 
 What it copies: every account's lists (with their order, items and likes), the old anonymous lists (kept unlisted, as D-6 decided), and likes on outside lists (MDBList, Trakt and the like). Channels come later (P3b-8).
 
@@ -180,10 +182,30 @@ What it copies: every account's lists (with their order, items and likes), the o
 **Reading the results:**
 
 - *Items … % not carried* is the share of list entries the copy could not carry. Each has a reason, with examples:
-  - *no usable id*: an entry with no IMDb or TMDB id. No catalog can show it today either.
+  - *no usable id*: an entry with no id at all. No catalog can show it today either.
   - *listed twice*: the same title (or the same episode) twice in one list. The copy keeps it once.
 - *Titles TMDB could not place yet* are **kept**, with the id and name they had, and tried again later. They are not lost.
 - *Kept from the old totals*: likes counted before voters were recorded. The copy keeps the higher total, so no count people see goes down (D-9).
 - *Failed accounts* names each account the copy could not finish and why. The rest carry on.
 
 **Running it again:** *Start over* goes through every account again. It copies only the lists that changed since the last run, refreshes order and likes, and marks as deleted the copies of lists deleted since. Do this shortly before the release that switches reads to the new tables.
+
+## 10. Reading lists from the new tables (P3b-7)
+
+`FF_V2_LISTS_READ` switches list reading to the new tables: the dashboard, list pages, Custom List catalog rows, the public directory and search. Every answer is meant to be the same as before; the tests compare the two. The Watchlist is still read from the old storage.
+
+**Before turning it on:**
+
+1. Migration `0016` is applied (§4), and the copy (§9) says *Done*.
+2. *Check results* looks right: few items not carried, and no failed accounts you have not looked at. Entries with no id at all and titles listed twice in one list are **not** in the new tables, so they stop showing when reads switch.
+
+**Turning it on:** Worker → Settings → Variables and Secrets → Add → type *Text*, name `FF_V2_LISTS_READ`, value `1`. Deploy.
+
+**What happens then:**
+
+- An account is read from the new tables once its copy has finished; the directory and search, once every account's has. Opening the dashboard finishes an account's copy on the spot if it has not finished.
+- Every change is still written to the old storage first, then to the new tables. If writing the new tables fails for an account, that account is read from the old storage again until its copy is refreshed (the next time its owner opens the dashboard, or the next *Copy lists*).
+- A list over 1,500 items is copied by the bounded copy rather than on save, so its account is read from the old storage until that catches up.
+- *Start over* on the copy leaves finished accounts alone while this flag is on: the new tables are what people see, and saves keep them current.
+
+**Turning it off:** delete the variable and deploy. The site reads the old storage again, which never stopped being written, so nothing is lost.

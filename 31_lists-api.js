@@ -73,6 +73,10 @@ function listEntryView(r) {
   } catch {
     extra = null;
   }
+  if (extra && extra["~k"]) {
+    const { "~k": _keys, ...rest } = extra;
+    extra = Object.keys(rest).length ? rest : null;
+  }
   const poster = r.poster_path ? (r.poster_path.startsWith("/") ? "https://image.tmdb.org/t/p/w500" + r.poster_path : r.poster_path) : null;
   return {
     mediaId: r.media_id,
@@ -174,7 +178,7 @@ async function prepareListEntries(env, listId, items, mediaKind) {
   for (let i = 0; i < mediaIds.length; i += MEDIA_LOOKUP_CHUNK) {
     const part = mediaIds.slice(i, i + MEDIA_LOOKUP_CHUNK);
     const marks = part.map(() => "?").join(", ");
-    const { results } = await env.DB.prepare(`SELECT id, title, year, poster_path FROM media WHERE id IN (${marks})`).bind(...part).all();
+    const { results } = await env.DB.prepare(`SELECT id, kind, imdb_id, tmdb_id, alt_id, title, year, poster_path FROM media WHERE id IN (${marks})`).bind(...part).all();
     for (const r of results || []) media.set(r.id, r);
     if (listId != null) {
       const existing = await env.DB.prepare(
@@ -198,7 +202,7 @@ async function prepareListEntries(env, listId, items, mediaKind) {
       return;
     }
     taken.add(key);
-    rows.push({ mediaId: id, season: ep.season, episode: ep.episode, note: c.note, extra: legacyItemExtra(c.item, media.get(id), ep.isEpisode) });
+    rows.push({ mediaId: id, season: ep.season, episode: ep.episode, note: c.note, extra: legacyItemExtra(c.item, media.get(id), ep.season, ep.episode) });
     results.push({ mediaId: id, season: ep.season, episode: ep.episode, status: "added" });
   });
   return { rows, results };

@@ -3163,6 +3163,10 @@ async function deleteCreatorLists(env, username, slugs) {
   // bumpCreatorListsStamp.
   await bumpCreatorListsStamp(env, username);
 
+  // The v2 copies are marked deleted too (34_lists-v2-bridge.js; guarded,
+  // since this file is also loaded on its own).
+  if (typeof listsV2MirrorLists === "function") await listsV2MirrorLists(env, username, slugs);
+
   return out;
 }
 
@@ -4162,6 +4166,10 @@ async function purgeCreatorData(env, username, options = {}) {
       console.error("purgeCreatorData: could not record the account reset", e);
     }
   }
+
+  // The account's v2 lists go with it (34_lists-v2-bridge.js; guarded, since
+  // this file is also loaded on its own).
+  if (typeof listsV2PurgeAccount === "function") await listsV2PurgeAccount(env, u);
 
   // `ok` is the whole point: it is false when this call left something
   // behind, and both callers turn that into an error rather than a 200.

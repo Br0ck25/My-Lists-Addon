@@ -490,6 +490,24 @@ describe("P3b-2: the media resolver", () => {
 // the admin backfill in deliberately tiny steps, and compared field by field.
 // TMDB is faked through globalThis.fetch, which the Worker's fetch guard calls.
 
+// Every legacy route now mirrors its change into v2 as it saves (34_). To
+// test the backfill on lists that were saved before the v2 tables existed --
+// which is what it copies in production -- the fixture's v2 rows are cleared.
+function forgetV2(env) {
+  env.DB._db.exec(`DELETE FROM lists_fts2; DELETE FROM likes; DELETE FROM account_list_prefs; DELETE FROM jobs;
+    DELETE FROM list_items; DELETE FROM list_slug_history; DELETE FROM lists; DELETE FROM media;`);
+}
+
+function loadBackfillFns() {
+  const sandbox = { console, URL, TextEncoder, crypto: globalThis.crypto };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  for (const rel of ["00_constants.js", "29_media.js", "30_lists-backfill.js"]) {
+    vm.runInContext(fs.readFileSync(path.join(REPO_ROOT, rel), "utf8"), sandbox, { filename: rel });
+  }
+  return sandbox;
+}
+
 async function adminCookie(env) {
   const r = await call(env, "/admin/login", { method: "POST", form: { key: env.ADMIN_KEY } });
   const m = (r.headers.get("set-cookie") || "").match(/^([^=]+=[^;]+)/);
@@ -605,6 +623,7 @@ async function buildLegacyFixture(env) {
   });
   assert.equal(ext.body.ok, true, JSON.stringify(ext.body));
 
+  forgetV2(env);
   return { ann, ben, cat, slugs: { top, crossover, imported, catSlug } };
 }
 
@@ -646,12 +665,21 @@ describe("P3b-3: copying the legacy lists into v2", () => {
       assert.equal(top.item_count, 2);
 
       const crossItems = db.prepare(
-        "SELECT li.season, li.episode, m.kind, m.tmdb_id, li.extra_json FROM list_items li JOIN media m ON m.id = li.media_id WHERE li.list_id = ? ORDER BY li.position"
+        `SELECT li.season, li.episode, li.extra_json, m.kind, m.imdb_id, m.tmdb_id, m.alt_id, m.title, m.year, m.poster_path
+         FROM list_items li JOIN media m ON m.id = li.media_id WHERE li.list_id = ? ORDER BY li.position`
       ).all(bySlug[fx.slugs.crossover].id);
       assert.deepEqual(crossItems.map((r) => [r.kind, r.tmdb_id, r.season, r.episode]),
         [["series", 1396, 1, 1], ["series", 1396, 1, 2], ["movie", 550, null, null]]);
-      assert.deepEqual(JSON.parse(crossItems[0].extra_json), { id: "62085", name: "Pilot" }, "an episode keeps its own id and name");
-      assert.deepEqual(JSON.parse(crossItems[2].extra_json), { isCompanion: true, companionType: "bridge_movie", companionNote: "Canon Bridge Movie" });
+      // Every entry rebuilds into exactly the item that was saved: an
+      // episode keeps its own id and name, a companion its notes.
+      const bf = loadBackfillFns();
+      const savedCrossover = JSON.parse(env.CONFIGS._store.get(`creatorlist:annlists:${fx.slugs.crossover}`)).items;
+      assert.deepEqual(crossItems.map((r) => plain(bf.legacyItemFromEntryRow(r))), savedCrossover);
+      // Only what the media row cannot say; "~k" records that this item had
+      // no year or poster, though the media row has both.
+      const { "~k": companionKeys, ...companionExtra } = JSON.parse(crossItems[2].extra_json);
+      assert.deepEqual(companionExtra, { isCompanion: true, companionType: "bridge_movie", companionNote: "Canon Bridge Movie" });
+      assert.deepEqual(companionKeys, ["id", "type", "name", "isCompanion", "companionType", "companionNote"]);
 
       const imported = bySlug[fx.slugs.imported];
       assert.deepEqual({ kind: imported.kind, provider: imported.source_provider, ref: imported.source_ref, synced: imported.synced_at, src: JSON.parse(imported.source_json) },
@@ -704,6 +732,7 @@ describe("P3b-3: copying the legacy lists into v2", () => {
     // the KV order key decides; Bravo is in neither, so it comes last.
     env.DB._db.prepare("UPDATE creator_lists SET sort_order = NULL WHERE username = 'orderly'").run();
     const dashboard = await call(env, "/api/creator/lists", { method: "POST", json: { creatorName: u.creatorName, creatorKey: u.creatorKey } });
+    forgetV2(env);
     await runBackfill(env, await adminCookie(env));
     const copied = env.DB._db.prepare("SELECT slug FROM lists WHERE owner_account_id IS NOT NULL ORDER BY position").all().map((r) => r.slug);
     assert.deepEqual(copied, dashboard.body.order.filter((s) => slugs.includes(s)));
@@ -714,16 +743,25 @@ describe("P3b-3: copying the legacy lists into v2", () => {
     const restore = withFakeTmdb(TMDB_FIXTURE);
     try {
       const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1(), TMDB_API_KEY: "test-key" });
+      // Reads still on the legacy store: once they are on v2 a finished
+      // account is never copied again (P3b-7 has its own test of that).
+      delete env.FF_V2_LISTS_READ;
       const fx = await buildLegacyFixture(env);
       const cookie = await adminCookie(env);
       await runBackfill(env, cookie);
       const db = env.DB._db;
       const idsBefore = db.prepare("SELECT legacy_id, id, public_id FROM lists ORDER BY legacy_id").all();
 
-      await saveList(env, fx.ann, { slug: fx.slugs.imported, name: "Imported", type: "series", visibility: "private",
-        items: [{ id: "tt0903747", type: "series" }, { id: "tt0137523", type: "movie" }] });
-      const del = await call(env, "/api/creator/lists/delete", { method: "POST", json: { creatorName: fx.ann.creatorName, creatorKey: fx.ann.creatorKey, slug: fx.slugs.top } });
-      assert.equal(del.body.ok, true);
+      // Changed in the legacy store without a mirror (as before the v2 tables
+      // existed, or a mirror that could not finish): one list edited, one deleted.
+      const importedKey = `creatorlist:annlists:${fx.slugs.imported}`;
+      const importedRecord = JSON.parse(env.CONFIGS._store.get(importedKey));
+      importedRecord.items = [{ id: "tt0903747", type: "series" }, { id: "tt0137523", type: "movie" }];
+      importedRecord.updatedAt += 1000;
+      env.CONFIGS._store.set(importedKey, JSON.stringify(importedRecord));
+      db.prepare("UPDATE creator_lists SET items_json = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(importedRecord.items), importedRecord.updatedAt, `annlists:${fx.slugs.imported}`);
+      env.CONFIGS._store.delete(`creatorlist:annlists:${fx.slugs.top}`);
+      db.prepare("DELETE FROM creator_lists WHERE id = ?").run(`annlists:${fx.slugs.top}`);
 
       await runBackfill(env, cookie, { restart: true });
       const idsAfter = db.prepare("SELECT legacy_id, id, public_id FROM lists ORDER BY legacy_id").all();
@@ -748,6 +786,7 @@ describe("P3b-3: copying the legacy lists into v2", () => {
     const u = await createUser(env, "longlists");
     const items = Array.from({ length: 1200 }, (_, i) => ({ id: `tt${3000000 + i}`, type: "movie" }));
     await saveList(env, u, { name: "Everything", type: "movie", visibility: "private", items });
+    forgetV2(env);
     const steps = await runBackfill(env, await adminCookie(env));
     assert.ok(steps.length >= 3, "500 items a step at most");
     for (const s of steps) assert.ok(s.ops < 700, `a step used ${s.ops} D1 and KV operations`);
@@ -763,6 +802,7 @@ describe("P3b-3: copying the legacy lists into v2", () => {
     const b = await createUser(env, "worksfine");
     await saveList(env, a, { name: "Bad", type: "movie", visibility: "private", items: [{ id: "tt0000001" }] });
     await saveList(env, b, { name: "Good", type: "movie", visibility: "private", items: [{ id: "tt0000002" }] });
+    forgetV2(env);
     env.DB.failWhen((sql, args) => /^\s*INSERT INTO lists\b/i.test(sql) && args.includes("bad"));
     const cookie = await adminCookie(env);
     await runBackfill(env, cookie);
@@ -896,7 +936,8 @@ describe("P3b-4: the list API", () => {
     assert.equal(tooMany.status, 400);
 
     const mine = await call(env, "/api/lists", { cookie: annCookie });
-    assert.deepEqual(mine.body.lists.map((l) => l.slug), ["top-films-2", "top-films-3"], "in their order");
+    assert.deepEqual(mine.body.lists.map((l) => l.slug), ["top-films", "top-films-2", "top-films-3"],
+      "in their order, starting with the legacy list the save mirrored into v2");
     assert.equal(mine.body.accountVersion, accountVersion());
     assert.equal(mine.headers.get("cache-control"), "no-store");
   });
@@ -1224,13 +1265,14 @@ describe("P3b-5: the likes API", () => {
 
     const p = `/api/likes/external/${encodeURIComponent(url)}`;
     const r = await call(env, p, { method: "PUT", cookie: annCookie });
-    assert.deepEqual({ liked: r.body.liked, likes: r.body.likes }, { liked: true, likes: 2 }, "an outside list's count is its votes");
-    const rows = db.prepare("SELECT target_id FROM likes WHERE target_type = 'external' AND voter LIKE 'acct:%'").all();
+    // Ben's like through the legacy route was mirrored into v2 as it was cast.
+    assert.deepEqual({ liked: r.body.liked, likes: r.body.likes }, { liked: true, likes: 3 }, "an outside list's count is its votes");
+    const rows = db.prepare("SELECT DISTINCT target_id FROM likes WHERE target_type = 'external' AND voter LIKE 'acct:%'").all();
     assert.deepEqual(rows.map((x) => x.target_id), [legacyKey]);
-    assert.equal((await call(env, p, { cookie: benCookie })).body.likes, 2);
+    assert.equal((await call(env, p, { cookie: benCookie })).body.likes, 3);
     const bad = await call(env, `/api/likes/external/${encodeURIComponent("https://example.com/whatever")}`, { method: "PUT", cookie: annCookie });
     assert.equal(bad.status, 400);
-    assert.equal(db.prepare("SELECT count(*) AS n FROM likes WHERE target_type = 'external'").get().n, 2, "nothing stored for a URL that isn't a list");
+    assert.equal(db.prepare("SELECT count(*) AS n FROM likes WHERE target_type = 'external'").get().n, 3, "nothing stored for a URL that isn't a list");
   });
 });
 
@@ -1395,5 +1437,431 @@ describe("P3b-6: the directory and search on v2", () => {
         assert.doesNotMatch(p, /TEMP B-TREE/, p);
       }
     }
+  });
+});
+
+// --- P3b-7: the legacy routes over v2, and the read switch -------------------
+
+function loadBridgeFns() {
+  const sandbox = { console, URL, TextEncoder, crypto: globalThis.crypto };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  for (const rel of ["00_constants.js", "29_media.js", "30_lists-backfill.js", "33_lists-directory.js", "34_lists-v2-bridge.js"]) {
+    vm.runInContext(fs.readFileSync(path.join(REPO_ROOT, rel), "utf8"), sandbox, { filename: rel });
+  }
+  return sandbox;
+}
+
+async function bridgeSetup() {
+  const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1(), FF_V2_LISTS_READ: "1" });
+  const ann = await createUser(env, "annbridge");
+  const ben = await createUser(env, "benbridge");
+  const db = env.DB._db;
+  const annId = db.prepare("SELECT id FROM accounts WHERE username = 'annbridge'").get().id;
+  const benId = db.prepare("SELECT id FROM accounts WHERE username = 'benbridge'").get().id;
+  const job = () => db.prepare("SELECT status, run_after, payload_json FROM jobs WHERE dedupe_key = ?").get(`migrate.lists:acct:${annId}`);
+  return { env, db, ann, ben, annId, benId, job };
+}
+
+function dashboard(env, u, extra = {}) {
+  return call(env, "/api/creator/lists", { method: "POST", json: { creatorName: u.creatorName, creatorKey: u.creatorKey, includeItems: true, ...extra } });
+}
+
+// The same request with reads on the legacy store, then on v2. The flag is
+// left on.
+async function legacyThenV2(env, fn) {
+  delete env.FF_V2_LISTS_READ;
+  const legacy = await fn();
+  env.FF_V2_LISTS_READ = "1";
+  const v2 = await fn();
+  return { legacy, v2 };
+}
+
+function v2Items(db, legacyId) {
+  return db.prepare(
+    "SELECT li.id, li.position, m.imdb_id, m.alt_id FROM list_items li JOIN lists l ON l.id = li.list_id JOIN media m ON m.id = li.media_id WHERE l.legacy_id = ? ORDER BY li.position"
+  ).all(legacyId);
+}
+
+const RICH_ITEMS = [
+  { id: "tt0137523", type: "movie", name: "Fight Club", year: "1999", poster: "https://image.tmdb.org/t/p/w500/custom.jpg", addedAt: 1700000000000 },
+  { id: "tt0903747", type: "series", name: "Breaking Bad" },
+  { id: "62085", type: "episode", showId: "1396", showTitle: "Breaking Bad", name: "Pilot", seasonNum: 1, episodeNum: 1, airDate: "2008-01-20" },
+  { id: "tt0111161", type: "movie", name: "Shawshank", isCompanion: true, companionType: "bridge_movie", companionNote: "Canon", later: { nested: [1, 2] } },
+  { id: "tmdb:550", type: "movie" },
+  { id: "tt0000001", type: "movie", name: null, year: 1931 },
+  { year: "2001", id: "tt0172495", name: "Gladiator", type: "movie" },
+  { id: "kitsu:1376", type: "series", name: "An anime by another id" },
+];
+
+describe("P3b-7: the legacy routes over v2", () => {
+  it("plans the smallest change to a list's items", () => {
+    const sb = loadBridgeFns();
+    // Through JSON: the sandbox's arrays are not this realm's.
+    const plan = (c, d) => JSON.parse(JSON.stringify(sb.planListEntryDiff(c, d)));
+    const cur = Array.from({ length: 10 }, (_, i) => ({ id: 100 + i, key: `k${i}`, position: i, extra: null }));
+    const want = (keys, extra = {}) => keys.map((key) => ({ key, extra: extra[key] || null }));
+    const keys = cur.map((c) => c.key);
+    const none = plan(cur, want(keys));
+    assert.deepEqual([none.deletes.length, none.inserts.length, none.updates.length, none.renumber], [0, 0, 0, false]);
+
+    const moved = plan(cur, want(["k9", ...keys.slice(0, 9)]));
+    assert.deepEqual(moved.updates.map((u) => u.id), [109], "moving one item rewrites that item only");
+    assert.ok(moved.updates[0].position < 0);
+    assert.deepEqual([moved.deletes.length, moved.inserts.length], [0, 0]);
+
+    const added = plan(cur, want([...keys.slice(0, 5), "new", ...keys.slice(5)]));
+    assert.deepEqual([added.inserts.length, added.updates.length, added.deletes.length], [1, 0, 0]);
+    assert.ok(added.inserts[0].position > 4 && added.inserts[0].position < 5, "placed between its neighbours");
+
+    const removed = plan(cur, want(keys.filter((k) => k !== "k3")));
+    assert.deepEqual([removed.deletes, removed.updates.length, removed.inserts.length], [[103], 0, 0]);
+
+    const edited = plan(cur, want(keys, { k2: '{"note":1}' }));
+    assert.deepEqual(edited.updates.map((u) => [u.id, u.position, u.extra]), [[102, 2, '{"note":1}']]);
+
+    const reversed = plan(cur, want(keys.slice().reverse()));
+    assert.equal(reversed.updates.length, 9, "all but one item has to move");
+    const byId = new Map(cur.map((c) => [c.id, c.position]));
+    for (const u of reversed.updates) byId.set(u.id, u.position);
+    const order = [...byId.entries()].sort((a, b) => a[1] - b[1]).map(([id]) => id);
+    assert.deepEqual(order, cur.map((c) => c.id).reverse());
+
+    const tight = plan([{ id: 1, key: "a", position: 0, extra: null }, { id: 2, key: "b", position: 1e-8, extra: null }], want(["a", "x", "b"]));
+    assert.equal(tight.renumber, true, "no room left between two items: space the list out first");
+  });
+
+  it("gives back every item exactly as it was saved, on every read path", async () => {
+    const { env, ann } = await bridgeSetup();
+    const slug = await saveList(env, ann, { name: "Rich", type: "mixed", visibility: "public", items: RICH_ITEMS });
+    await saveList(env, ann, { name: "Plain", type: "movie", visibility: "private", items: [{ id: "tt0068646", type: "movie" }] });
+    await dashboard(env, ann); // the account's first v2 read finishes its copy
+
+    const dash = await legacyThenV2(env, () => dashboard(env, ann));
+    assert.deepEqual(dash.v2.body.lists, dash.legacy.body.lists);
+    assert.deepEqual(dash.v2.body.order, dash.legacy.body.order);
+    assert.deepEqual(dash.v2.body.lists.find((l) => l.slug === slug).items, RICH_ITEMS);
+    const items = await legacyThenV2(env, () => call(env, "/api/creator/lists/items", {
+      method: "POST", json: { creatorName: ann.creatorName, creatorKey: ann.creatorKey, slugs: [slug, "plain", "nope"] },
+    }));
+    assert.deepEqual(items.v2.body, items.legacy.body);
+    const page = await legacyThenV2(env, () => call(env, `/lists/annbridge/${slug}.json`));
+    assert.equal(page.v2.status, 200);
+    assert.deepEqual(page.v2.body, page.legacy.body);
+    const priv = await legacyThenV2(env, () => call(env, "/lists/annbridge/plain.json"));
+    assert.equal(priv.v2.status, priv.legacy.status, "a private list stays private");
+  });
+
+  it("copies each save as a diff, keeping the rows that did not change", async () => {
+    const { env, db, ann } = await bridgeSetup();
+    const items = ["tt0000011", "tt0000012", "tt0000013", "tt0000014", "tt0000015"].map((id) => ({ id, type: "movie" }));
+    const slug = await saveList(env, ann, { name: "Diffed", type: "movie", visibility: "private", items });
+    const before = v2Items(db, `c:annbridge:${slug}`);
+    assert.deepEqual(before.map((r) => r.imdb_id), items.map((i) => i.id));
+
+    // Last to first, one out, one in.
+    const next = [items[4], items[0], items[1], { id: "tt0000016", type: "movie" }, items[3]];
+    await saveList(env, ann, { slug, name: "Diffed", type: "movie", visibility: "private", items: next });
+    const after = v2Items(db, `c:annbridge:${slug}`);
+    assert.deepEqual(after.map((r) => r.imdb_id), next.map((i) => i.id));
+    const rowId = (rows, imdb) => rows.find((r) => r.imdb_id === imdb).id;
+    for (const id of ["tt0000011", "tt0000012", "tt0000014", "tt0000015"]) {
+      assert.equal(rowId(after, id), rowId(before, id), `${id} kept its row`);
+    }
+    const unmoved = ["tt0000011", "tt0000012", "tt0000014"];
+    for (const id of unmoved) {
+      assert.equal(after.find((r) => r.imdb_id === id).position, before.find((r) => r.imdb_id === id).position, `${id} kept its place`);
+    }
+    const list = db.prepare("SELECT item_count, legacy_hash FROM lists WHERE legacy_id = ?").get(`c:annbridge:${slug}`);
+    assert.equal(list.item_count, 5);
+    assert.ok(list.legacy_hash, "and the copy knows which legacy record it matches");
+
+    // Saved again as it is: the list's version moves, its items are not
+    // touched.
+    const writes = [];
+    env.DB.failWhen((sql) => {
+      if (/^\s*(INSERT|UPDATE|DELETE)/i.test(sql) && /\blist_items\b/.test(sql) && !/SELECT count/.test(sql)) writes.push(sql);
+      return false;
+    });
+    await saveList(env, ann, { slug, name: "Diffed", type: "movie", visibility: "private", items: next });
+    env.DB.failWhen(null);
+    assert.deepEqual(writes, []);
+    assert.deepEqual(v2Items(db, `c:annbridge:${slug}`), after);
+
+    // Mirrored again with nothing new (a Watchlist sync that left it alone):
+    // nothing is written at all, not even the lease.
+    const all = [];
+    env.DB.failWhen((sql) => {
+      if (/^\s*(INSERT|UPDATE|DELETE)/i.test(sql)) all.push(sql);
+      return false;
+    });
+    await call(env, "/api/creator/lists/delete", { method: "POST", json: { creatorName: ann.creatorName, creatorKey: ann.creatorKey, slug: "no-such-list" } });
+    env.DB.failWhen(null);
+    assert.ok(!all.some((q) => /\b(lists|list_items|jobs|lists_fts2)\b/.test(q)), all.join("\n"));
+  });
+
+  it("copies an account on its first read, and until then reads the legacy store", async () => {
+    const { env, db, ann, job } = await bridgeSetup();
+    const slug = await saveList(env, ann, { name: "Old Faves", type: "movie", visibility: "public", items: [{ id: "tt0068646", type: "movie" }] });
+    forgetV2(env); // saved before the v2 tables existed
+    const page = await call(env, `/lists/annbridge/${slug}.json`);
+    assert.equal(page.status, 200, "a public page reads the legacy store for an account not copied yet");
+    assert.equal(db.prepare("SELECT count(*) AS n FROM lists").get().n, 0, "and does not copy it");
+
+    const { legacy, v2 } = await legacyThenV2(env, () => dashboard(env, ann));
+    assert.deepEqual(v2.body, legacy.body);
+    assert.equal(job().status, "done", "the dashboard read copied the account");
+    assert.equal(db.prepare("SELECT count(*) AS n FROM lists WHERE owner_account_id IS NOT NULL").get().n, 1);
+  });
+
+  it("reads from v2 once an account is copied, the catalogs included", async () => {
+    const { env, ann } = await bridgeSetup();
+    const slug = await saveList(env, ann, { name: "Catalogued", type: "movie", visibility: "public", items: [{ id: "tt0068646", type: "movie", name: "The Godfather" }] });
+    await dashboard(env, ann);
+    const custom = "customlist:v1:" + JSON.stringify({ creatorOwner: "annbridge", creatorSlug: slug, items: [] });
+    env.CONFIGS._store.set("cfg:bridgecat01", JSON.stringify({ entries: [{ id: "mine", name: "Mine", type: "movie", url: custom }] }));
+    const cat = await legacyThenV2(env, () => call(env, "/bridgecat01/catalog/movie/mine.json"));
+    assert.equal(cat.v2.body.metas.length, 1);
+    assert.deepEqual(cat.v2.body, cat.legacy.body);
+
+    // Changed behind every route's back: the legacy reads see it, v2 does not.
+    const key = `creatorlist:annbridge:${slug}`;
+    const rec = JSON.parse(env.CONFIGS._store.get(key));
+    env.CONFIGS._store.set(key, JSON.stringify({ ...rec, name: "Changed Underneath", items: [] }));
+    env.DB._db.prepare("UPDATE creator_lists SET name = 'Changed Underneath', items_json = '[]' WHERE id = ?").run(`annbridge:${slug}`);
+    const after = await legacyThenV2(env, () => call(env, `/lists/annbridge/${slug}.json`));
+    assert.deepEqual(after.legacy.body, []);
+    assert.equal(after.v2.body.length, 1);
+    assert.equal(after.v2.body[0].title, "The Godfather");
+    const cat2 = await legacyThenV2(env, () => call(env, "/bridgecat01/catalog/movie/mine.json"));
+    assert.equal(cat2.legacy.body.metas.length, 0);
+    assert.equal(cat2.v2.body.metas.length, 1);
+    const dash = await dashboard(env, ann);
+    assert.equal(dash.body.lists.find((l) => l.slug === slug).name, "Catalogued");
+
+    // A save is seen on the catalog's next request, not when its cache lapses.
+    await saveList(env, ann, { slug, name: "Catalogued", type: "movie", visibility: "public", items: [{ id: "tt0068646", type: "movie" }, { id: "tt0071562", type: "movie" }] });
+    assert.equal((await call(env, "/bridgecat01/catalog/movie/mine.json")).body.metas.length, 2);
+  });
+
+  it("a mirror that fails sends the account back to the legacy store until it is copied again", async () => {
+    const { env, db, ann, job } = await bridgeSetup();
+    const slug = await saveList(env, ann, { name: "Flaky", type: "movie", visibility: "private", items: [{ id: "tt0000021", type: "movie" }] });
+    await dashboard(env, ann);
+    assert.equal(job().status, "done");
+
+    env.DB.failWhen((sql) => /INSERT OR IGNORE INTO list_items/.test(sql));
+    const items = [{ id: "tt0000021", type: "movie" }, { id: "tt0000022", type: "movie" }];
+    await saveList(env, ann, { slug, name: "Flaky", type: "movie", visibility: "private", items });
+    assert.notEqual(job().status, "done", "the copy is marked stale");
+    const during = await dashboard(env, ann);
+    assert.deepEqual(during.body.lists[0].items, items, "and reads fall back to the legacy store, which has the save");
+    env.DB.failWhen(null);
+
+    const { legacy, v2 } = await legacyThenV2(env, () => dashboard(env, ann));
+    assert.deepEqual(v2.body, legacy.body);
+    assert.equal(job().status, "done", "the next read copied it again");
+    assert.deepEqual(v2Items(db, `c:annbridge:${slug}`).map((r) => r.imdb_id), ["tt0000021", "tt0000022"]);
+  });
+
+  it("a D1 write that failed during a save still reaches v2", async () => {
+    const { env, ann, job } = await bridgeSetup();
+    const slug = await saveList(env, ann, { name: "Before", type: "movie", visibility: "private", items: [] });
+    await dashboard(env, ann);
+    env.DB.failWhen((sql) => /INTO creator_lists/.test(sql));
+    await saveList(env, ann, { slug, name: "After", type: "movie", visibility: "private", items: [{ id: "tt0000031", type: "movie" }] });
+    env.DB.failWhen(null);
+    assert.equal(job().status, "done", "the mirror read the newer KV copy and finished");
+    const dash = await dashboard(env, ann);
+    assert.equal(dash.body.lists[0].name, "After");
+    assert.deepEqual(dash.body.lists[0].items, [{ id: "tt0000031", type: "movie" }]);
+  });
+
+  it("a save during a copy marks it dirty, and the copy goes round again", async () => {
+    const { env, db, ann, annId, job } = await bridgeSetup();
+    const slug = await saveList(env, ann, { name: "Busy", type: "movie", visibility: "private", items: [] });
+    await dashboard(env, ann);
+    const key = `migrate.lists:acct:${annId}`;
+    db.prepare("UPDATE jobs SET run_after = ? WHERE dedupe_key = ?").run(Date.now() + 60000, key); // a copy holds the lease
+
+    await saveList(env, ann, { slug, name: "Busy", type: "movie", visibility: "private", items: [{ id: "tt0000041", type: "movie" }] });
+    assert.equal(job().status, "queued");
+    assert.match(job().payload_json, /"dirty":true/);
+    const during = await dashboard(env, ann);
+    assert.deepEqual(during.body.lists[0].items, [{ id: "tt0000041", type: "movie" }], "the legacy store answers meanwhile");
+
+    db.prepare("UPDATE jobs SET run_after = 0 WHERE dedupe_key = ?").run(key);
+    const cookie = await adminCookie(env);
+    await runBackfill(env, cookie);
+    assert.equal(job().status, "done");
+    assert.equal(job().payload_json, null, "the dirty mark is cleared by the copy that took it in");
+    assert.deepEqual(v2Items(db, `c:annbridge:${slug}`).map((r) => r.imdb_id), ["tt0000041"]);
+  });
+
+  it("keeps a finished account as it is when the copy runs again with reads on v2", async () => {
+    const { env, db, ann } = await bridgeSetup();
+    const slug = await saveList(env, ann, { name: "Settled", type: "movie", visibility: "private", items: [] });
+    await dashboard(env, ann);
+    const key = `creatorlist:annbridge:${slug}`;
+    env.CONFIGS._store.set(key, JSON.stringify({ ...JSON.parse(env.CONFIGS._store.get(key)), name: "Changed Underneath", updatedAt: Date.now() + 1000 }));
+    const cookie = await adminCookie(env);
+    await runBackfill(env, cookie, { restart: true });
+    const name = () => db.prepare("SELECT name FROM lists WHERE legacy_id = ?").get(`c:annbridge:${slug}`).name;
+    assert.equal(name(), "Settled", "v2 is what people see, and saves keep it current");
+    delete env.FF_V2_LISTS_READ;
+    await runBackfill(env, cookie, { restart: true });
+    assert.equal(name(), "Changed Underneath", "with reads on the legacy store the copy is refreshed");
+  });
+
+  it("likes through the legacy routes move the v2 counts", async () => {
+    const { env, db, ann, ben, benId } = await bridgeSetup();
+    const slug = await saveList(env, ann, { name: "Likeable", type: "movie", visibility: "public", items: [{ id: "tt0000051", type: "movie" }] });
+    await dashboard(env, ann);
+    const like = (action) => call(env, "/api/lists/like", {
+      method: "POST", json: { username: "annbridge", slug, creatorName: ben.creatorName, creatorKey: ben.creatorKey, ...(action ? { action } : {}) },
+    });
+    const count = () => db.prepare("SELECT like_count FROM lists WHERE legacy_id = ?").get(`c:annbridge:${slug}`).like_count;
+    const liked = await like();
+    assert.equal(liked.body.ok, true, JSON.stringify(liked.body));
+    assert.equal(count(), 1);
+    assert.equal(liked.body.likes, 1);
+    assert.deepEqual(db.prepare("SELECT voter FROM likes WHERE target_type = 'list'").all().map((r) => r.voter), [`acct:${benId}`]);
+    const unliked = await like("unlike");
+    assert.equal(unliked.body.ok, true);
+    assert.equal(count(), 0);
+    assert.equal(unliked.body.likes, 0);
+
+    const ext = (action) => call(env, "/api/lists/like-external", {
+      method: "POST", json: { url: "https://mdblist.com/lists/someone/good-shows", creatorName: ben.creatorName, creatorKey: ben.creatorKey, ...(action ? { action } : {}) },
+    });
+    assert.equal((await ext()).body.ok, true);
+    const extRows = db.prepare("SELECT target_id, voter FROM likes WHERE target_type = 'external'").all();
+    assert.equal(extRows.length, 1);
+    assert.equal(extRows[0].voter, `acct:${benId}`);
+    assert.ok(env.CONFIGS._store.has(`externallike:${extRows[0].target_id}`), "under the hash the legacy route uses");
+    assert.equal((await ext("unlike")).body.ok, true);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM likes WHERE target_type = 'external'").get().n, 0);
+  });
+
+  it("a reorder keeps the shelves in their places", async () => {
+    const { env, db, ann, annId } = await bridgeSetup();
+    for (const name of ["Alpha", "Beta", "Gamma"]) await saveList(env, ann, { name, type: "movie", visibility: "private", items: [] });
+    await dashboard(env, ann);
+    const r = await call(env, "/api/creator/lists/reorder", {
+      method: "POST", json: { creatorName: ann.creatorName, creatorKey: ann.creatorKey, order: ["gamma", "continue-watching", "alpha", "beta"] },
+    });
+    assert.equal(r.body.ok, true, JSON.stringify(r.body));
+    const { legacy, v2 } = await legacyThenV2(env, () => dashboard(env, ann));
+    assert.deepEqual(v2.body.order, legacy.body.order);
+    assert.deepEqual(v2.body.lists.map((l) => l.slug), legacy.body.lists.map((l) => l.slug));
+    assert.deepEqual(db.prepare("SELECT target FROM account_list_prefs WHERE account_id = ? AND pref = 'section'").all(annId).map((x) => x.target), ["continue-watching"]);
+  });
+
+  it("an account reset takes its v2 copy with it", async () => {
+    const { env, db, ann, ben, annId } = await bridgeSetup();
+    const slug = await saveList(env, ann, { name: "Doomed", type: "movie", visibility: "public", items: [{ id: "tt0000061", type: "movie" }] });
+    await call(env, "/api/creator/lists/reorder", { method: "POST", json: { creatorName: ann.creatorName, creatorKey: ann.creatorKey, order: ["continue-watching", slug] } });
+    await call(env, "/api/lists/like", { method: "POST", json: { username: "annbridge", slug, creatorName: ben.creatorName, creatorKey: ben.creatorKey } });
+    await dashboard(env, ann);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM likes WHERE target_type = 'list'").get().n, 1);
+    const r = await call(env, "/api/creator/account/reset", { method: "POST", json: { creatorName: ann.creatorName, creatorKey: ann.creatorKey, confirm: "RESET" } });
+    assert.equal(r.body.ok, true, JSON.stringify(r.body));
+    assert.equal(db.prepare("SELECT count(*) AS n FROM lists WHERE owner_account_id = ?").get(annId).n, 0);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM likes WHERE target_type = 'list'").get().n, 0);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM account_list_prefs WHERE account_id = ?").get(annId).n, 0);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM jobs WHERE dedupe_key = ?").get(`migrate.lists:acct:${annId}`).n, 0);
+    const { legacy, v2 } = await legacyThenV2(env, () => dashboard(env, ann));
+    assert.deepEqual(v2.body, legacy.body);
+  });
+
+  it("a list saved before lists had a version reports none from v2 either", async () => {
+    const { env, ann } = await bridgeSetup();
+    const slug = await saveList(env, ann, { name: "Ancient", type: "movie", visibility: "private", items: [] });
+    const key = `creatorlist:annbridge:${slug}`;
+    const rec = JSON.parse(env.CONFIGS._store.get(key));
+    delete rec.updatedAt;
+    env.CONFIGS._store.set(key, JSON.stringify(rec));
+    const dash = await legacyThenV2(env, () => dashboard(env, ann));
+    assert.ok(!("updatedAt" in dash.v2.body.lists[0]), JSON.stringify(dash.v2.body.lists[0]));
+    assert.deepEqual(dash.v2.body, dash.legacy.body);
+    const items = await call(env, "/api/creator/lists/items", { method: "POST", json: { creatorName: ann.creatorName, creatorKey: ann.creatorKey, slugs: [slug] } });
+    assert.ok(!("updatedAt" in items.body.lists[0]));
+  });
+
+  it("the Watchlist is read from the legacy store, and its v2 copy kept current", async () => {
+    const { env, db, ann } = await bridgeSetup();
+    const track = (watchlist) => call(env, "/api/creator/sync/save-tracking", {
+      method: "POST", json: { creatorName: ann.creatorName, creatorKey: ann.creatorKey, watchlist },
+    });
+    await saveList(env, ann, { name: "Other", type: "movie", visibility: "private", items: [] });
+    assert.equal((await track([{ id: "tt0000071", type: "movie" }, { id: "tt0000072", type: "movie" }])).body.ok, true);
+    await dashboard(env, ann);
+    const count = () => db.prepare("SELECT item_count, kind FROM lists WHERE legacy_id = 'c:annbridge:watchlist'").get();
+    assert.deepEqual({ ...count() }, { item_count: 2, kind: "watchlist" });
+    await track([{ id: "tt0000071", type: "movie" }, { id: "tt0000072", type: "movie" }, { id: "tt0000073", type: "movie" }]);
+    assert.equal(count().item_count, 3);
+    const { legacy, v2 } = await legacyThenV2(env, () => dashboard(env, ann));
+    assert.deepEqual(v2.body, legacy.body);
+  });
+
+  it("the directory and search wait for the copy to finish", async () => {
+    const { env, ann } = await bridgeSetup();
+    await saveList(env, ann, { name: "Shared Early", type: "movie", visibility: "public", items: [{ id: "tt0000081", type: "movie" }] });
+    const before = await call(env, "/lists/public.json");
+    assert.ok(!("cursor" in before.body), "the legacy directory answers while the copy has not run");
+    assert.equal(before.body.lists.length, 1);
+    // A name only the v2 copy has, to tell the two searches apart.
+    const db = env.DB._db;
+    const row = db.prepare("SELECT id FROM lists WHERE legacy_id = 'c:annbridge:shared-early'").get();
+    db.prepare("UPDATE lists_fts2 SET name = 'Zanzibar' WHERE rowid = ?").run(row.id);
+    assert.deepEqual((await call(env, "/api/search-published-lists?q=zanzibar")).body.lists, [], "search too");
+    await runBackfill(env, await adminCookie(env));
+    const after = await call(env, "/lists/public.json");
+    assert.ok("cursor" in after.body, "and v2 once it has");
+    assert.deepEqual(after.body.lists, before.body.lists);
+    db.prepare("UPDATE lists_fts2 SET name = 'Zanzibar' WHERE rowid = ?").run(row.id);
+    assert.equal((await call(env, "/api/search-published-lists?q=zanzibar")).body.lists.length, 1);
+  });
+
+  it("spaces a list's positions out again when moves have used up the room", async () => {
+    const { env, db, ann } = await bridgeSetup();
+    const a = { id: "tt0000101", type: "movie" };
+    const b = { id: "tt0000102", type: "movie" };
+    const slug = await saveList(env, ann, { name: "Crowded", type: "movie", visibility: "private", items: [a, b] });
+    const rows = v2Items(db, `c:annbridge:${slug}`);
+    // Two neighbours with no double left between them.
+    db.prepare("UPDATE list_items SET position = ? WHERE id = ?").run(1 + 2 ** -52, rows[0].id);
+    db.prepare("UPDATE list_items SET position = ? WHERE id = ?").run(1 + 2 ** -51, rows[1].id);
+    await saveList(env, ann, { slug, name: "Crowded", type: "movie", visibility: "private", items: [a, { id: "tt0000103", type: "movie" }, b] });
+    const after = v2Items(db, `c:annbridge:${slug}`);
+    assert.deepEqual(after.map((r) => r.imdb_id), ["tt0000101", "tt0000103", "tt0000102"]);
+    for (let i = 1; i < after.length; i++) assert.ok(after[i].position - after[i - 1].position >= 1e-7, JSON.stringify(after));
+  });
+
+  it("a list too big to copy on save leaves the account on the legacy store until the copy catches up", async () => {
+    const { env, db, ann, job } = await bridgeSetup();
+    await saveList(env, ann, { name: "Small", type: "movie", visibility: "private", items: [] });
+    await dashboard(env, ann);
+    assert.equal(job().status, "done");
+    const items = Array.from({ length: 1501 }, (_, i) => ({ id: `tt${2000000 + i}`, type: "movie" }));
+    const slug = await saveList(env, ann, { name: "Huge", type: "movie", visibility: "private", items });
+    assert.equal(job().status, "queued");
+    assert.equal(db.prepare("SELECT count(*) AS n FROM lists WHERE legacy_id = ?").get(`c:annbridge:${slug}`).n, 0);
+    const { legacy, v2 } = await legacyThenV2(env, () => dashboard(env, ann, { includeItems: false }));
+    assert.deepEqual(v2.body, legacy.body);
+    await runBackfill(env, await adminCookie(env));
+    assert.equal(job().status, "done");
+    assert.equal(db.prepare("SELECT item_count FROM lists WHERE legacy_id = ?").get(`c:annbridge:${slug}`).item_count, 1501);
+  });
+
+  it("saves and reads carry on as before when migration 0016 is not applied", async () => {
+    const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1(), FF_V2_LISTS_READ: "1" });
+    env.DB._db.exec("DROP TABLE list_items; DROP TABLE list_slug_history; DROP TABLE lists_fts2; DROP TABLE lists; DROP TABLE jobs;");
+    const ann = await createUser(env, "annold");
+    const slug = await saveList(env, ann, { name: "Still Works", type: "movie", visibility: "public", items: [{ id: "tt0000091", type: "movie" }] });
+    const { legacy, v2 } = await legacyThenV2(env, () => dashboard(env, ann));
+    assert.deepEqual(v2.body, legacy.body);
+    assert.equal((await call(env, `/lists/annold/${slug}.json`)).status, 200);
+    assert.equal((await call(env, "/lists/public.json")).body.lists.length, 1);
   });
 });

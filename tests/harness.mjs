@@ -266,8 +266,14 @@ export function nextIp() {
 // set what a deployment's dashboard would (TMDB_API_KEY, an ANALYTICS dataset).
 // Without the spread those keys were silently dropped and a test asserting on
 // one passed for the wrong reason.
+// MLA_TEST_V2_LISTS_READ=1 runs every test with lists read from the v2
+// tables (FF_V2_LISTS_READ, P3b-7): the whole suite has to pass both ways.
+// A test that sets the flag itself still decides.
+const V2_LISTS_READ_DEFAULT = process.env.MLA_TEST_V2_LISTS_READ ? { FF_V2_LISTS_READ: "1" } : {};
+
 export function makeEnv(opts = {}) {
   return {
+    ...V2_LISTS_READ_DEFAULT,
     ...opts,
     CONFIGS: opts.CONFIGS || makeKv(),
     ADMIN_KEY: opts.ADMIN_KEY === undefined ? "test-admin-secret" : opts.ADMIN_KEY,

@@ -48,18 +48,20 @@ function mediaYearOf(raw) {
 // One id string, in any of the forms list items use:
 //   "tt0903747" (an episode suffix such as ":1:2" is dropped),
 //   "tmdb:1396", "tmdb:tv:1396", "tmdb:movie:550", or a bare "1396" (TMDB),
-//   "kitsu:1" and the like (kept verbatim as an alternative id).
+//   "kitsu:1" and the like (kept verbatim as an alternative id),
+//   and anything else, kept verbatim as an alternative id too: the legacy
+//   lists serve whatever id they were given, so a copy must not drop one.
 function parseMediaIdString(raw) {
   const s = String(raw == null ? "" : raw).trim();
-  if (!s) return null;
-  const imdb = /^(tt\d{3,})(?::|$)/i.exec(s);
+  if (!s || s.length > 200) return null;
+  const imdb = /^(tt\d+)(?::|$)/i.exec(s);
   if (imdb) return { imdbId: imdb[1].toLowerCase() };
   const tmdb = /^tmdb:(?:(movie|tv|series|show):)?(\d+)$/i.exec(s);
   if (tmdb) return { tmdbId: Number(tmdb[2]), kind: tmdb[1] ? mediaKindOf(tmdb[1]) : null };
   if (/^\d+$/.test(s)) return { tmdbId: Number(s) };
   const alt = /^([a-z][a-z0-9_-]*):(\S+)$/i.exec(s);
   if (alt) return { altId: alt[1].toLowerCase() + ":" + alt[2] };
-  return null;
+  return { altId: s };
 }
 
 // A legacy list item (or a plain { imdbId, tmdbId, kind, title, year }) as

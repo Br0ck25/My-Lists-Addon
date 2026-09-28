@@ -1553,6 +1553,11 @@ function parseCustomListPayload(rawUrl) {
 // so callers can tell "list has zero items right now" apart from "couldn't
 // resolve this live, fall back to the snapshot".
 async function fetchLiveCreatorListItems(owner, slug, env) {
+  // From v2 when FF_V2_LISTS_READ is on and the owner's copy is finished
+  // (P3b-7, 34_lists-v2-bridge.js); null means the legacy keys below.
+  // typeof-guarded: this file is also loaded on its own (tests, the page).
+  const v2Items = typeof listsV2LiveListItems === "function" ? await listsV2LiveListItems(env, owner, slug) : null;
+  if (v2Items) return v2Items;
   if (!owner || !slug || !env || !env.CONFIGS) return null;
   const ownerLower = String(owner).toLowerCase();
   const slugLower = String(slug).toLowerCase();

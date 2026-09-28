@@ -11,7 +11,7 @@ All notable changes to **My Lists Addon** ([mylistsaddon.com](https://mylistsadd
 Do these in order. Details are in `docs/OPERATIONS.md`.
 
 1. **Back up D1**: Time Travel, or `npx wrangler d1 export my-lists-db --remote --output=backup.sql`.
-2. **Apply `migrations/0014_add_schema_migrations.sql`, then `migrations/0015_accounts_sessions_installs.sql`, then `migrations/0016_lists_v2.sql`**, in the D1 Console and in that order. All three only add tables and are safe to run twice. The new sign-in code writes to 0015's tables when they exist and skips them when they don't, so nothing breaks in between; until it is applied the admin schema check lists it as missing. Nothing uses 0016's tables yet (see P3b-1 below).
+2. **Apply `migrations/0014_add_schema_migrations.sql`, then `migrations/0015_accounts_sessions_installs.sql`, then `migrations/0016_lists_v2.sql`**, in the D1 Console and in that order. All three only add tables and are safe to run twice. The new sign-in code writes to 0015's tables when they exist and skips them when they don't, so nothing breaks in between; until it is applied the admin schema check lists it as missing. Once 0016 is applied, every change to a list is also written to its tables as it happens (P3b-7 below); nothing reads them until `FF_V2_LISTS_READ` is on.
 3. **Add the Analytics Engine binding**: Worker → Settings → Bindings → Add → Analytics Engine, name `ANALYTICS`, dataset `mylists_events`.
 4. **Paste and deploy** `worker_entry_combined.js`.
 5. **Delete the retired variables** if they are set: `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET`, `CRON_SUBREQUEST_BUDGET`. The code ignores them either way.
@@ -20,7 +20,15 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 `TOKEN_ENCRYPTION_KEY` is needed only to start moving install-link keys into encrypted storage (P3a-8, below). That move stays **off** until `INSTALL_MIGRATION_PERCENT` is set, and `docs/OPERATIONS.md` §8 gives the steps. Deploying without it changes nothing.
 
-`FF_SESSIONS`, `FF_INSTALLS`, `FF_V2_LISTS_API` and `FF_V2_LISTS_READ` stay **off** (unset). Leave them off until the new sign-in, install-link and list screens and the list read switch ship.
+`FF_SESSIONS`, `FF_INSTALLS`, `FF_V2_LISTS_API` and `FF_V2_LISTS_READ` stay **off** (unset). Leave the first three off until the new sign-in, install-link and list screens ship. `FF_V2_LISTS_READ` stays off until the list copy (`docs/OPERATIONS.md` §9) has finished and its report has been checked; §10 then gives the steps, and turning it off again is always safe.
+
+### 🔀 Lists read from the new tables, behind one switch (P3b-7)
+
+- **With `FF_V2_LISTS_READ` on, lists are read from the new tables**: the dashboard, list contents, public list pages and Custom List catalog rows, as well as the directory and search (P3b-6). Every answer is the same as today's, item for item. Tests compare the two, and the whole test suite now runs twice in CI, once with the switch on.
+- **Every change to a list still goes to today's storage first**, and is then copied into the new tables as it happens: saves, deletes, reordering, likes, account resets and deletions, and the Watchlist. Only what changed is written: adding one title to a list writes one row. So turning the switch off again at any time loses nothing.
+- An account is read from the new tables once its copy has finished. Opening the dashboard finishes it on the spot; until then, and whenever a copy falls behind, the account is read from today's storage. The directory waits until every account is copied.
+- The Watchlist is still read from today's storage (it moves with watch history in a later phase).
+- Nothing changes on the site: the switch stays off (see the deploy notes).
 
 ### 🔎 The list directory and search, read from the new tables (P3b-6)
 
@@ -28,7 +36,7 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 - The directory gains `?sort=popular` (today's order), `new` and `added`, and a `cursor` for the next page; `?offset=` keeps working.
 - Search covers list names, descriptions, and creators' display names and usernames.
 - If the new tables can't answer, both fall back to today's storage by themselves.
-- Nothing changes on the site: the switch stays off until the rest of the read switch (P3b-7) ships.
+- Nothing changes on the site while the switch is off. Since P3b-7 both also wait for the list copy to finish before reading the new tables.
 
 ### ❤️ A likes API over the new tables (P3b-5)
 

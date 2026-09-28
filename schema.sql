@@ -478,6 +478,7 @@ CREATE TABLE IF NOT EXISTS account_list_prefs (
     pref       TEXT NOT NULL,
     target     TEXT NOT NULL,
     created_at INTEGER NOT NULL,
+    position   REAL NOT NULL DEFAULT 0,
     PRIMARY KEY (account_id, pref, target)
 ) WITHOUT ROWID;
 

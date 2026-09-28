@@ -9700,6 +9700,10 @@ describe("Phase 2: Identity and lists become D1-authoritative", () => {
     const kv = makeKv();
     const db = makeD1();
     const env = makeEnv({ CONFIGS: kv, DB: db });
+    // The repair is getCreatorList's, which only the legacy reads run. With
+    // reads on v2 the dashboard never calls it: the save's mirror already
+    // took the newer copy (lists-v2.test.mjs, P3b-7, "a D1 write that failed").
+    delete env.FF_V2_LISTS_READ;
     const u = await createUser(env, "p2heal");
     const K = { creatorName: "p2heal", creatorKey: u.creatorKey };
 

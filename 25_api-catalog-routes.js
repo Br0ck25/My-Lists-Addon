@@ -7386,7 +7386,11 @@ function generateSearchVariations(query) {
         }
       }
 
-      return json({ ok: true, likes: count, liked: !likeUnlike, capped: capped || undefined });
+      // The same like in v2 (P3b-7). With reads on v2 the count people see
+      // is v2's, which keeps any higher legacy total the copy carried over.
+      const v2Likes = await listsV2MirrorLike(env, likeUser, likeSlug, likeVoterName, !likeUnlike);
+      const shownLikes = isV2ListsReadEnabled(env) && v2Likes != null ? v2Likes : count;
+      return json({ ok: true, likes: shownLikes, liked: !likeUnlike, capped: capped || undefined });
     }
 
     if (path === "/api/lists/like-external" && request.method === "POST") {
@@ -7439,6 +7443,8 @@ function generateSearchVariations(query) {
         data.updatedAt = Date.now();
         await env.CONFIGS.put(key, JSON.stringify(data));
       }
+      // The same like in v2, under the same hash (P3b-7).
+      await listsV2MirrorExternalLike(env, hash, extVoterName, !unlike);
       return json({ ok: true, likes: count, liked: !unlike, capped: capped || undefined });
     }
 

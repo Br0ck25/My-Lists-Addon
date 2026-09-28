@@ -7,8 +7,8 @@
 ## Current Status
 - **Last Updated**: 2026-09-28
 - **Last Active AI**: Claude Code (Opus 5.5)
-- **Active Task**: Phase 3b (lists, likes, channels). P3b-1 (migration `0016_lists_v2.sql`) is written and tested, waiting for the owner to apply it. P3b-2 (the media resolver, `29_media.js`) is done. P3b-3 (the list backfill, `30_lists-backfill.js`) is written and tested; the owner runs it from `/admin` after deploying. P3b-4 (the list API, `31_lists-api.js`) and P3b-5 (the likes API, `32_likes-api.js`), both behind `FF_V2_LISTS_API`, are done. P3b-6 (the directory and search on v2, `33_lists-directory.js`, behind `FF_V2_LISTS_READ`) is done. Next: P3b-7, the compatibility shims and the rest of the read switch. Separately, hotfix P1-C5 is on the task list for its own small PR into `main`.
-- **Task State**: All tests passing (1,459 passed, 0 failed, 1 skipped: the opt-in network test). `verify.sh` checks pass. CI on GitHub runs the same suite on Node 22.
+- **Active Task**: Phase 3b (lists, likes, channels). P3b-1 (migration `0016_lists_v2.sql`) is written and tested, waiting for the owner to apply it. P3b-2 (the media resolver, `29_media.js`) is done. P3b-3 (the list backfill, `30_lists-backfill.js`) is written and tested; the owner runs it from `/admin` after deploying. P3b-4 (the list API, `31_lists-api.js`) and P3b-5 (the likes API, `32_likes-api.js`), both behind `FF_V2_LISTS_API`, are done. P3b-6 (the directory and search on v2, `33_lists-directory.js`, behind `FF_V2_LISTS_READ`) is done. P3b-7 (the legacy list routes over v2 and the rest of the read switch, `34_lists-v2-bridge.js`) is done. Next: P3b-8, channels. Separately, hotfix P1-C5 is on the task list for its own small PR into `main`.
+- **Task State**: All tests passing (1,477 passed, 0 failed, 1 skipped: the opt-in network test), both as they are and with `MLA_TEST_V2_LISTS_READ=1` (every test with lists read from v2). `verify.sh` checks pass. CI on GitHub runs the suite both ways on Node 22.
 - **Git State**:
   - Phase 3a is merged into `main` (PR #1 and PR #2).
   - **All of Phase 3b goes on the branch `claude/beautiful-lamport-kx261g`**, in one draft PR into `main`. The owner deploys Phase 3b from that PR when it is done. Keep adding each P3b task to this branch as its own commit.
@@ -64,13 +64,15 @@ These are deliberate. Several are "one place" mechanisms that cover the whole Wo
    - `\n` in client code must be written `\\n`.
 3. **All numbered files share one scope.**
    - Top-level names must be unique across files.
-   - New server-only code goes in a new numbered file **after `26_`** (the next is `29_...`), never between `09_` and `24_`.
+   - New server-only code goes in a new numbered file **after `26_`** (the next is `35_...`), never between `09_` and `24_`.
    - `25_` and `26_` are the **inside** of `handleFetch` (they share `request`, `env`, `path`, `authenticateCreator`). `27_installs.js` and `28_connections.js` come after the `export default` block, at module level, so they cannot see those; pass what they need. `tests/client-harness.mjs` renders the page from the code **before** `export default`, so page rendering must never depend on `27_`+.
    - Tests that load source files into a sandbox (`loadSourceFunctions`) and call `resolveConfig` must include `27_installs.js`.
 4. **In `27_` onward, never write the words `export default` together, even in a comment.** Those files come after the Worker's real export, and `render_check.js` (a CI step) cuts the combined file at the *last* place the words appear, so the page checks break.
 5. **Shell heredocs in this environment mangle `\\` sequences.** Write patch scripts to a file and run them, or use the file-editing tool.
 6. **The test D1** (`tests/harness.mjs`, real SQLite) enforces D1's limits: 100 bound parameters, 2 MB per row, 100,000-byte statements. A query that trips these would fail in production too.
 7. The preview harness (`.claude/launch.json` → `mylists-harness`, port 8787) loads the built Worker once at startup. **Restart it after every rebuild.**
+8. **Run the suite both ways:** `node --test tests/*.test.mjs`, then `MLA_TEST_V2_LISTS_READ=1 node --test tests/*.test.mjs` (CI does both). With the variable set, `makeEnv` turns `FF_V2_LISTS_READ` on for every test; a test that sets the flag itself still decides. A test that edits the legacy store directly (KV or `creator_lists`) goes around the v2 mirror. If it is testing the legacy store's own internals, pin it with `delete env.FF_V2_LISTS_READ` and a comment saying why; otherwise make v2 behave the same.
+9. **Per-instance caches in `33_`/`34_` remember which database they came from** (`db === env.DB`), because each test has its own. Keep that for any new cache of database state.
 
 ---
 
@@ -163,9 +165,16 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
     - `likeWriteStatements` must keep the `like_count ± changes()` statement straight after the like itself: `changes()` is the previous statement's row count.
     - Channel likes answer 404 until P3b-8 fills `channels`.
   - **P3b-6 (Claude):** `/lists/public.json` and `/api/search-published-lists` read from v2 when `FF_V2_LISTS_READ` is on (`33_lists-directory.js`, called at the top of each route in `25_` and `26_`; either falls back to its legacy path when v2 fails). Details under P3b-6 in `NEXT_VERSION_TASKS.md`.
-    - `FF_V2_LISTS_READ` is **the** read switch. P3b-7 extends it to the list pages, catalogs and the legacy list routes; only then can it be turned on.
+    - `FF_V2_LISTS_READ` is **the** read switch; P3b-7 extended it to the list pages, catalogs and the legacy list routes. Since P3b-7 the directory and search also wait for the whole copy to have finished.
     - Test fixtures for search need lists that have items: an empty list is left out of search, and an early fixture passed vacuously because every "Drama" list was empty. The test now asserts each query finds something.
     - **Legacy bug found (not fixed):** `getCreatorList` (`02_`) rewrites a list's KV record from its D1 row on every dashboard read, without `sourceUrl`, `synced`, `lastSyncedAt` or `baseItemIds`, so imported and synced lists lose that bookkeeping on D1-bound deployments. It is live today, independent of Phase 3b. The owner asked for it to go on the task list: it is **P1-C5** in `NEXT_VERSION_TASKS.md`, to ship as its own small PR into `main` ahead of Phase 3b (and before the backfill is run).
+  - **P3b-7 (Claude):** the legacy list routes over v2, in `34_lists-v2-bridge.js` (module level; hooks in `02_` `deleteCreatorLists`/`purgeCreatorData` and `05_` `fetchLiveCreatorListItems`, both `typeof`-guarded because those files are also loaded alone, and in the `25_`/`26_` routes). Details, deviations and known limits under P3b-7 in `NEXT_VERSION_TASKS.md`.
+    - **Writes go to both stores.** The legacy routes write the legacy store first, as before, then mirror into v2 (`listsV2MirrorLists`, `listsV2MirrorOrder`, `listsV2MirrorLike`, `listsV2MirrorExternalLike`, `listsV2PurgeAccount`). This happens whenever the 0016 tables exist, **whatever the flag says**. A list's items are mirrored as a diff (`planListEntryDiff`), never replaced.
+    - Mirror and copy share a per-account lease (`claimListsAccountLease`, `run_after` on the account's `migrate.lists` job). A mirror that cannot take it marks the job dirty; one that fails marks the copy stale (`queued`).
+    - **Reads, with the flag,** come from v2 only for an account whose job is `done` (`listsV2Ready`); the dashboard and list contents copy an unfinished account first (`listsV2MigrateOnRead`). The Watchlist is always read from the legacy store; its v2 copy is kept current for the directory.
+    - With the flag on, `backfillAccountLists` skips accounts that are `done`. That is on purpose: v2 is then what people see.
+    - Items come back exact through `legacyItemFromEntryRow`; the list-level legacy fields that have no column (`baseItemIds`, `noVersion`) live in `lists.source_json` (`legacyListSourceJson`).
+    - Before P3b-9 stops the legacy writes, it has to deal with the known limits listed under P3b-7: lists over 1,500 items are not mirrored on save, and legacy anonymous lists are not mirrored.
 
 ---
 
@@ -191,9 +200,9 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
 ---
 
 ## Next Steps for Incoming AI
-1. **Phase 3b** (lists, likes, channels) is under way on `claude/beautiful-lamport-kx261g`. P3b-1 to P3b-6 are written. Next is **P3b-7**: the legacy list routes (`/api/creator/lists`, `/lists/items`, `/lists/save`, `/lists/delete`, `/lists/reorder`, `/api/lists/like`, `/like-external`) over v2, plus list pages and catalogs, all behind `FF_V2_LISTS_READ`, with "migrate on read" and the rule that a finished account is never refreshed by the backfill once reads are on v2. The next server file is `34_...`. Read `MIGRATION_PLAN.md` §3b and the P3b-1 to P3b-6 notes in `NEXT_VERSION_TASKS.md` before starting.
+1. **Phase 3b** (lists, likes, channels) is under way on `claude/beautiful-lamport-kx261g`. P3b-1 to P3b-7 are written. Next is **P3b-8**: channels as rows plus R2 pools, `/api/channel/*` over them, the channel directory as a query, channel likes and adds, and copying the existing channels (step 6 of the copy, left from P3b-3). The next server file is `35_...`. Read `MIGRATION_PLAN.md` §3b and the P3b notes in `NEXT_VERSION_TASKS.md` before starting. After it, P3b-9 stops the legacy list writes; read the P3b-7 known limits first.
    - **Hotfix P1-C5** (`getCreatorList` dropping an imported list's sync settings) is on the task list. It goes in its own small PR into `main`, not this branch, so it can deploy before Phase 3b.
-     - Nothing may write v2 lists for real users until the read switch (P3b-7) is designed: until then the backfill treats the legacy store as the truth and would overwrite v2-side edits on a re-run.
+     - `FF_V2_LISTS_API` (the v2 list and likes APIs) must stay off until P3b-9: what they write is not in the legacy store, so a flag-off rollback or a copy re-run would lose it.
      - Phase 3b rewrites how lists are stored, so it needs the owner's approval before any backfill (P3b-3) touches stored data.
      - Decide which wins when an install has its own keys in `install_secrets` and its owner also has a connection. Today `install_secrets` is the only source.
      - v2 installs (`/i/{token}`) have no keys of their own, so their personal Trakt/MDBList/Simkl rows only work once this lands.

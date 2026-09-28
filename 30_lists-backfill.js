@@ -40,13 +40,15 @@ const LISTS_BACKFILL_ITEM_ROWS = 12;      // rows per INSERT into list_items: 8 
 const LISTS_BACKFILL_LIKE_ROWS = 24;      // rows per INSERT into likes: 4 parameters each
 const LISTS_BACKFILL_SAMPLES = 5;         // examples kept of each kind of mismatch
 const LISTS_BACKFILL_LEASE_MS = 90000;    // one step at a time
-const LISTS_BACKFILL_V2_TABLES = new Set(["media", "lists", "list_items", "likes", "lists_fts2", "jobs"]);
+const LISTS_BACKFILL_V2_TABLES = new Set(["media", "lists", "list_items", "likes", "lists_fts2", "jobs", "account_list_prefs"]);
 // Entries the dashboard's order can hold that are shelves, not list records.
 // The Watchlist can be either, so it is read like any list.
 const LISTS_BACKFILL_SHELF_SLUGS = new Set(["continue-watching", "watch-history", "airing-next"]);
-// Item fields that are the title's identity, which the media row (and the
-// entry's season and episode) now carry. Everything else stays in extra_json.
-const LISTS_BACKFILL_ID_FIELDS = new Set(["id", "imdbId", "tmdbId", "canonicalTmdbId", "showId", "type", "kind", "mediatype", "seasonNum", "episodeNum", "season", "episode"]);
+// The item fields a list entry is rebuilt from when nothing says otherwise,
+// in this order, each taken from the media row (or the entry's season and
+// episode) where it has one. See legacyItemExtra.
+const LEGACY_ITEM_DEFAULT_KEYS = ["id", "type", "name", "year", "poster", "seasonNum", "episodeNum"];
+const LEGACY_ITEM_POSTER_BASE = "https://image.tmdb.org/t/p/w500";
 
 // The env every backfill step works through: counts each D1 statement and
 // KV read against the step's budget, has no KV write methods at all, and
@@ -427,28 +429,74 @@ function legacyItemEpisode(item) {
   };
 }
 
-// The item fields the media row does not already carry, so a legacy item can
-// be put back together from the two. An episode entry keeps its own id and
-// name: those are the episode's, not the show's.
-function legacyItemExtra(item, media, isEpisode) {
-  const extra = {};
-  for (const [k, v] of Object.entries(item)) {
-    if (v === undefined || v === null || v === "") continue;
-    if (LISTS_BACKFILL_ID_FIELDS.has(k) && !(isEpisode && (k === "id" || k === "imdbId"))) continue;
-    extra[k] = v;
-  }
+// What a legacy item's fields would be if they were all taken from its media
+// row and its entry's season and episode.
+function legacyItemDerived(media, season, episode) {
+  const d = {};
   if (media) {
-    if (!isEpisode) {
-      if (extra.name === media.title) delete extra.name;
-      if (extra.title === media.title) delete extra.title;
-      if (extra.year != null && media.year != null && Number(String(extra.year).slice(0, 4)) === media.year) delete extra.year;
-    }
-    if (extra.showTitle === media.title) delete extra.showTitle;
-    for (const k of ["poster", "showPoster"]) {
-      if (media.poster_path && typeof extra[k] === "string" && extra[k].endsWith(media.poster_path)) delete extra[k];
-    }
+    const id = media.imdb_id || (media.tmdb_id ? "tmdb:" + media.tmdb_id : media.alt_id);
+    if (id) d.id = id;
+    if (media.kind) d.type = media.kind;
+    if (media.title) d.name = media.title;
+    if (media.year) d.year = String(media.year);
+    if (media.poster_path) d.poster = media.poster_path.startsWith("/") ? LEGACY_ITEM_POSTER_BASE + media.poster_path : media.poster_path;
+    if (media.imdb_id) d.imdbId = media.imdb_id;
+    if (media.tmdb_id) d.tmdbId = media.tmdb_id;
   }
+  if (season != null) d.seasonNum = season;
+  if (episode != null) d.episodeNum = episode;
+  return d;
+}
+
+function legacyItemSame(a, b) {
+  return a === b || (a !== null && b !== null && typeof a === "object" && typeof b === "object" && JSON.stringify(a) === JSON.stringify(b));
+}
+
+// A legacy item from its entry's extra_json and what the media row says.
+// "~k" (when present) is the item's own list of fields; otherwise it is the
+// default fields that have a value, then whatever else extra_json holds.
+function rebuildLegacyItem(extra, derived) {
+  const x = extra && typeof extra === "object" ? extra : {};
+  const keys = Array.isArray(x["~k"])
+    ? x["~k"]
+    : [...LEGACY_ITEM_DEFAULT_KEYS.filter((k) => derived[k] !== undefined && !(k in x)), ...Object.keys(x).filter((k) => k !== "~k")];
+  const out = {};
+  for (const k of keys) {
+    const v = Object.prototype.hasOwnProperty.call(x, k) ? x[k] : derived[k];
+    if (v !== undefined) out[k] = v;
+  }
+  return out;
+}
+
+// What an entry keeps in extra_json: the item's fields the media row cannot
+// give back exactly, so rebuildLegacyItem returns the item as it was saved --
+// same fields, same values. A field equal to what the media row says is left
+// out; when leaving fields out would change which fields come back, the
+// item's own field list goes in as "~k". Most items need nothing at all.
+function legacyItemExtra(item, media, season, episode) {
+  const derived = legacyItemDerived(media, season, episode);
+  const clean = {};
+  for (const [k, v] of Object.entries(item || {})) if (v !== undefined && k !== "~k") clean[k] = v;
+  const extra = {};
+  for (const [k, v] of Object.entries(clean)) {
+    if (!Object.prototype.hasOwnProperty.call(derived, k) || !legacyItemSame(v, derived[k])) extra[k] = v;
+  }
+  const rebuilt = rebuildLegacyItem(extra, derived);
+  const keys = Object.keys(clean);
+  const exact = Object.keys(rebuilt).length === keys.length && keys.every((k) => legacyItemSame(rebuilt[k], clean[k]));
+  if (!exact) extra["~k"] = keys;
   return Object.keys(extra).length ? JSON.stringify(extra) : null;
+}
+
+// A list entry row (list_items joined with media) as the legacy item it was.
+function legacyItemFromEntryRow(row) {
+  let extra = null;
+  try {
+    extra = row.extra_json ? JSON.parse(row.extra_json) : null;
+  } catch {
+    extra = null;
+  }
+  return rebuildLegacyItem(extra, legacyItemDerived(row, row.season, row.episode));
 }
 
 function legacyItemLabel(item) {
@@ -472,7 +520,7 @@ async function copyLegacyItems(env, cursor, chunk, legacy, mediaKind, budget) {
   for (let i = 0; i < mediaIds.length; i += MEDIA_LOOKUP_CHUNK) {
     const part = mediaIds.slice(i, i + MEDIA_LOOKUP_CHUNK);
     const { results } = await env.DB.prepare(
-      `SELECT id, title, year, poster_path FROM media WHERE id IN (${part.map(() => "?").join(", ")})`
+      `SELECT id, kind, imdb_id, tmdb_id, alt_id, title, year, poster_path FROM media WHERE id IN (${part.map(() => "?").join(", ")})`
     ).bind(...part).all();
     for (const r of results || []) media.set(r.id, r);
   }
@@ -508,7 +556,7 @@ async function copyLegacyItems(env, cursor, chunk, legacy, mediaKind, budget) {
     taken.add(key);
     const added = Number(item.addedAt);
     rows.push([cursor.listId, id, ep.season, ep.episode, cursor.offset + i,
-      Number.isFinite(added) && added > 0 ? added : fallbackAdded, null, legacyItemExtra(item, media.get(id), ep.isEpisode)]);
+      Number.isFinite(added) && added > 0 ? added : fallbackAdded, null, legacyItemExtra(item, media.get(id), ep.season, ep.episode)]);
   });
   const stmts = [];
   for (let i = 0; i < rows.length; i += LISTS_BACKFILL_ITEM_ROWS) {
@@ -578,21 +626,7 @@ async function backfillLegacyList(env, target, cursor, budget, recon) {
       return { done: true, alive: true };
     }
     if (legacy.items.length > 0 && budget.items <= 0) return { done: false, cursor: null };
-    const now = Date.now();
-    const createdAt = legacy.createdAt || legacy.updatedAt || now;
-    await env.DB.prepare(
-      `INSERT INTO lists (public_id, owner_account_id, slug, name, description, kind, media_type, visibility, legacy_id, legacy_hash,
-         source_provider, source_ref, source_json, synced_at, item_count, like_count, position, version, created_at, updated_at)
-       VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 0, 0, ?, 1, ?, ?)
-       ON CONFLICT(legacy_id) DO UPDATE SET owner_account_id = excluded.owner_account_id, slug = excluded.slug, name = excluded.name,
-         kind = excluded.kind, media_type = excluded.media_type, visibility = excluded.visibility, legacy_hash = NULL,
-         source_provider = excluded.source_provider, source_ref = excluded.source_ref, source_json = excluded.source_json,
-         synced_at = excluded.synced_at, position = excluded.position, created_at = excluded.created_at,
-         updated_at = excluded.updated_at, deleted_at = NULL, version = lists.version + 1`
-    ).bind(generateShortId(), target.ownerId, target.slug, name, legacyListKind(target.slug, legacy, target.anonymous), mediaType,
-      visibility, target.legacyId, legacySourceProvider(legacy.sourceUrl), legacy.sourceUrl,
-      legacy.baseItemIds ? JSON.stringify({ baseItemIds: legacy.baseItemIds }) : null, legacy.lastSyncedAt,
-      target.position, createdAt, legacy.updatedAt || createdAt).run();
+    await upsertLegacyListRow(env, target, legacy, { name, mediaType, visibility, position: target.position });
     const row = await env.DB.prepare("SELECT id, public_id FROM lists WHERE legacy_id = ?").bind(target.legacyId).first();
     await env.DB.prepare("DELETE FROM list_items WHERE list_id = ?").bind(row.id).run();
     cursor = {
@@ -629,6 +663,38 @@ async function backfillLegacyList(env, target, cursor, budget, recon) {
   for (const s of cursor.samples.unusable) listsBackfillSample(recon.samples.unusable, { list: target.slug, ...s });
   for (const s of cursor.samples.duplicates) listsBackfillSample(recon.samples.duplicates, { list: target.slug, ...s });
   return { done: true, alive: true };
+}
+
+// Creates or updates the v2 row for a legacy list, from the legacy record.
+// Its legacy_hash is cleared: whoever writes the items sets it once they
+// are all in, so an interrupted copy is never taken for a finished one.
+// Shared by the backfill and the write mirror (34_lists-v2-bridge.js).
+// What the legacy record holds that the list's columns cannot: an import's
+// baseItemIds, and noVersion for a record saved before lists had an
+// updatedAt. updated_at needs a value, but such a list must still report no
+// version, or the next save would be refused as built on a stale one.
+function legacyListSourceJson(legacy) {
+  const src = {};
+  if (legacy.baseItemIds) src.baseItemIds = legacy.baseItemIds;
+  if (legacy.updatedAt == null) src.noVersion = true;
+  return Object.keys(src).length ? JSON.stringify(src) : null;
+}
+
+async function upsertLegacyListRow(env, target, legacy, fields) {
+  const createdAt = legacy.createdAt || legacy.updatedAt || Date.now();
+  await env.DB.prepare(
+    `INSERT INTO lists (public_id, owner_account_id, slug, name, description, kind, media_type, visibility, legacy_id, legacy_hash,
+       source_provider, source_ref, source_json, synced_at, item_count, like_count, position, version, created_at, updated_at)
+     VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 0, 0, ?, 1, ?, ?)
+     ON CONFLICT(legacy_id) DO UPDATE SET owner_account_id = excluded.owner_account_id, slug = excluded.slug, name = excluded.name,
+       kind = excluded.kind, media_type = excluded.media_type, visibility = excluded.visibility, legacy_hash = NULL,
+       source_provider = excluded.source_provider, source_ref = excluded.source_ref, source_json = excluded.source_json,
+       synced_at = excluded.synced_at, position = excluded.position, created_at = excluded.created_at,
+       updated_at = excluded.updated_at, deleted_at = NULL, version = lists.version + 1`
+  ).bind(generateShortId(), target.ownerId, target.slug, fields.name, legacyListKind(target.slug, legacy, target.anonymous), fields.mediaType,
+    fields.visibility, target.legacyId, legacySourceProvider(legacy.sourceUrl), legacy.sourceUrl,
+    legacyListSourceJson(legacy), legacy.lastSyncedAt,
+    fields.position, createdAt, legacy.updatedAt || createdAt).run();
 }
 
 // A list's like_count keeps the legacy total when that is higher than the
@@ -668,6 +734,39 @@ function creatorListTarget(account, slug, position) {
   };
 }
 
+// The per-account lease both the backfill and the write mirror take, so they
+// never write one account's lists at the same time. It lives in the account
+// job's run_after (the row is made if need be); saving the job releases it.
+async function claimListsAccountLease(env, accountId, ms) {
+  const key = `${LISTS_BACKFILL_TYPE}:acct:${accountId}`;
+  const now = Date.now();
+  await env.DB.prepare(
+    "INSERT INTO jobs (type, dedupe_key, account_id, status, run_after, progress_json, created_at, updated_at) VALUES (?, ?, ?, 'queued', 0, '{}', ?, ?) ON CONFLICT(dedupe_key) DO NOTHING"
+  ).bind(LISTS_BACKFILL_TYPE, key, accountId, now, now).run();
+  const claim = await env.DB.prepare("UPDATE jobs SET run_after = ? WHERE dedupe_key = ? AND run_after <= ?").bind(now + ms, key, now).run();
+  return Number(claim && claim.meta && claim.meta.changes) === 1;
+}
+
+async function releaseListsAccountLease(env, accountId) {
+  await env.DB.prepare("UPDATE jobs SET run_after = 0 WHERE dedupe_key = ?").bind(`${LISTS_BACKFILL_TYPE}:acct:${accountId}`).run();
+}
+
+// The account's non-list order entries (see account_list_prefs in 0016),
+// replaced as one set.
+async function replaceListSections(env, accountId, sections) {
+  const now = Date.now();
+  const stmts = [env.DB.prepare("DELETE FROM account_list_prefs WHERE account_id = ? AND pref = 'section'").bind(accountId)];
+  for (let i = 0; i < sections.length; i += 20) {
+    const part = sections.slice(i, i + 20);
+    const args = [];
+    for (const [slug, position] of part) args.push(accountId, "section", slug, now, position);
+    stmts.push(env.DB.prepare(
+      `INSERT OR REPLACE INTO account_list_prefs (account_id, pref, target, created_at, position) VALUES ${part.map(() => "(?, ?, ?, ?, ?)").join(", ")}`
+    ).bind(...args));
+  }
+  for (let i = 0; i < stmts.length; i += MEDIA_WRITE_CHUNK) await env.DB.batch(stmts.slice(i, i + MEDIA_WRITE_CHUNK));
+}
+
 // Copies of lists that are no longer in the legacy store are marked deleted.
 // ownerId null: the legacy anonymous lists.
 async function retireDeletedListCopies(env, ownerId, aliveIds, recon) {
@@ -690,11 +789,19 @@ async function retireDeletedListCopies(env, ownerId, aliveIds, recon) {
 // account's row and the run moves on, so one bad record cannot stop the rest.
 async function backfillAccountLists(env, account, budget) {
   const key = `${LISTS_BACKFILL_TYPE}:acct:${account.id}`;
+  // Once reads are on v2 an account whose copy has finished is never copied
+  // again: v2 is what people see, and writes keep it in step (34_). One whose
+  // v2 copy was marked stale is back to 'queued' and is copied again.
+  const before = await loadListsBackfillJob(env, key);
+  if (isV2ListsReadEnabled(env) && before && before.status === "done") return { finished: true, failed: false, skipped: true };
+  // One copy of an account at a time, and never while a save is mirroring
+  // into it (the write mirror takes the same lease).
+  if (!(await claimListsAccountLease(env, account.id, 60000))) return { finished: false, busy: true };
   const job = await loadListsBackfillJob(env, key);
   let p = job && job.status === "running" && Array.isArray(job.progress.slugs) ? job.progress : null;
   try {
     if (!p) {
-      p = { slugs: await legacyListSlugs(env, account.username), next: 0, alive: [], list: null, recon: emptyListsRecon(), startedAt: Date.now() };
+      p = { slugs: await legacyListSlugs(env, account.username), next: 0, alive: [], sections: [], list: null, recon: emptyListsRecon(), startedAt: Date.now() };
     }
     while (p.next < p.slugs.length) {
       if (!listsBackfillOpsLeft(budget)) {
@@ -703,6 +810,7 @@ async function backfillAccountLists(env, account, budget) {
       }
       const slug = p.slugs[p.next];
       if (LISTS_BACKFILL_SHELF_SLUGS.has(slug)) {
+        (p.sections = p.sections || []).push([slug, p.next]);
         p.next++;
         continue;
       }
@@ -714,14 +822,27 @@ async function backfillAccountLists(env, account, budget) {
         return { finished: false };
       }
       if (r.alive) p.alive.push(target.legacyId);
+      // An order entry with no list behind it (a shelf, or the Watchlist
+      // before it was ever saved as a list) keeps its place as a section.
+      else (p.sections = p.sections || []).push([slug, p.next]);
       p.next++;
       p.list = null;
     }
     await retireDeletedListCopies(env, account.id, new Set(p.alive), p.recon);
-    await saveListsBackfillJob(env, key, account.id, {
-      status: "done", attempts: job ? job.attempts : 0,
-      progress: { recon: finishListsRecon(p.recon), slugs: p.slugs.length, startedAt: p.startedAt, finishedAt: Date.now() },
-    });
+    await replaceListSections(env, account.id, p.sections || []);
+    // Done -- unless a save changed a list while this copy was under way and
+    // could not mirror it (it marks the job dirty). Then the account is
+    // queued to be copied again, which is quick: unchanged lists are skipped.
+    const progress = { recon: finishListsRecon(p.recon), slugs: p.slugs.length, startedAt: p.startedAt, finishedAt: Date.now() };
+    const done = await env.DB.prepare(
+      `UPDATE jobs SET status = 'done', attempts = ?, run_after = 0, progress_json = ?, last_error = NULL, updated_at = ?
+       WHERE dedupe_key = ? AND (payload_json IS NULL OR payload_json NOT LIKE '%"dirty":true%')`
+    ).bind(job ? job.attempts : 0, JSON.stringify(progress), Date.now(), key).run();
+    if (!(Number(done && done.meta && done.meta.changes) > 0)) {
+      await env.DB.prepare("UPDATE jobs SET status = 'queued', payload_json = NULL, run_after = 0, progress_json = '{}', updated_at = ? WHERE dedupe_key = ?")
+        .bind(Date.now(), key).run();
+      return { finished: true, failed: false, requeued: true };
+    }
     return { finished: true, failed: false };
   } catch (e) {
     console.error("lists backfill: account " + account.id + " failed", e);
@@ -853,6 +974,9 @@ async function runListsBackfillStep(env, opts = {}) {
         }
         const r = await backfillAccountLists(menv, account, budget);
         if (!r.finished) break;
+        // A save it could not wait for changed a list: copy the account again
+        // now (unchanged lists are skipped), rather than leave it for a read.
+        if (r.requeued) continue;
         run.afterAccountId = account.id;
         run.accountsDone++;
         if (r.failed) run.accountsFailed++;

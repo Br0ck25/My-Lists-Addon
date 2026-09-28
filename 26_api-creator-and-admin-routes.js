@@ -2128,6 +2128,11 @@
       }
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) return authFailureResponse(auth);
+      // From v2 when FF_V2_LISTS_READ is on and this account's copy is
+      // finished (P3b-7, 34_lists-v2-bridge.js); null means read the legacy
+      // store below, as before.
+      const v2Dashboard = await listsV2DashboardResponse(env, url, auth, body);
+      if (v2Dashboard) return v2Dashboard;
       // Paging. The route used to issue one KV get per list with no cap, so
       // an account at 990 lists spent 1,001 KV operations and Cloudflare
       // terminated the invocation -- the dashboard 500s forever, and since
@@ -2449,6 +2454,9 @@
           error: `Too many lists in one request (max ${CREATOR_LIST_ITEMS_BATCH_MAX}).`,
         }, 400);
       }
+      // From v2 when FF_V2_LISTS_READ is on (P3b-7); null means the legacy store.
+      const v2Items = await listsV2ItemsResponse(env, auth, slugs);
+      if (v2Items) return v2Items;
 
       const out = (
         await Promise.all(
@@ -2824,6 +2832,10 @@
           console.error("D1 write error (lists_fts save):", dbErr);
         }
       }
+      // The same change into v2, by diff (P3b-7, 34_lists-v2-bridge.js). It
+      // never fails the save: a mirror that cannot finish marks the
+      // account's v2 copy stale, and reads fall back to what was just saved.
+      await listsV2MirrorLists(env, auth.username, [slug]);
       return json({
         ok: true,
         slug,
@@ -3242,6 +3254,7 @@
       // a visible change on every other one -- and it touches only the order
       // key, which is why the stamp cannot be derived from the list records.
       await bumpCreatorListsStamp(env, auth.username);
+      await listsV2MirrorOrder(env, auth.username, newOrder);
       return json({ ok: true, order: newOrder });
     }
 
@@ -3972,6 +3985,9 @@
           // The Watchlist is a creatorlist: record like any other and shows on
           // the same dashboard, so adding to it here counts as a list change.
           await bumpCreatorListsStamp(env, auth.username);
+          // Its v2 copy too (34_lists-v2-bridge.js): reads of the Watchlist
+          // stay on the legacy store, but a shared one is in the directory.
+          await listsV2MirrorLists(env, auth.username, ["watchlist"]);
         }
       } catch (e) {
         return json({ ok: false, error: "Could not save to storage right now. Please try again in a moment." }, 500);
@@ -5041,6 +5057,14 @@
       }
       let listData = null;
       let isCreatorList = false;
+      // From v2 when FF_V2_LISTS_READ is on and the owner's copy is finished
+      // (P3b-7); otherwise, or when v2 has no public list here, the legacy
+      // keys below.
+      const v2List = await listsV2PublicListRecord(env, username, listName);
+      if (v2List) {
+        listData = v2List;
+        isCreatorList = true;
+      }
       const keysToTry = [
         `creatorlist:${username}:${listName}`,
         `creatorlist:${rawUser}:${rawList}`,
