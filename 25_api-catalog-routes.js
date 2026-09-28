@@ -205,6 +205,11 @@ async function handleFetch(request, env, ctx) {
     // /admin) -- 30_lists-backfill.js.
     const listsBackfillResponse = await handleListsBackfillApi(request, env, url, path);
     if (listsBackfillResponse) return listsBackfillResponse;
+    // /api/lists (the item-level list API over the v2 tables, behind
+    // FF_V2_LISTS_API) -- 31_lists-api.js. The legacy /api/lists/like and
+    // /api/lists/like-external routes below are left to answer as they do.
+    const listsApiResponse = await handleListsApi(request, env, url, path);
+    if (listsApiResponse) return listsApiResponse;
 
     if (path === "/" || path === "") {
       ctx.waitUntil(bumpStat(env, "pageviews"));

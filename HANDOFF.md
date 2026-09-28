@@ -7,8 +7,8 @@
 ## Current Status
 - **Last Updated**: 2026-09-28
 - **Last Active AI**: Claude Code (Opus 5.5)
-- **Active Task**: Phase 3b (lists, likes, channels). P3b-1 (migration `0016_lists_v2.sql`) is written and tested, waiting for the owner to apply it. P3b-2 (the media resolver, `29_media.js`) is done. P3b-3 (the list backfill, `30_lists-backfill.js`) is written and tested; the owner runs it from `/admin` after deploying. Next: P3b-4, the list API.
-- **Task State**: All tests passing (1,435 passed, 0 failed, 1 skipped: the opt-in network test). `verify.sh` checks pass. CI on GitHub runs the same suite on Node 22.
+- **Active Task**: Phase 3b (lists, likes, channels). P3b-1 (migration `0016_lists_v2.sql`) is written and tested, waiting for the owner to apply it. P3b-2 (the media resolver, `29_media.js`) is done. P3b-3 (the list backfill, `30_lists-backfill.js`) is written and tested; the owner runs it from `/admin` after deploying. P3b-4 (the list API, `31_lists-api.js`, behind `FF_V2_LISTS_API`) is done. Next: P3b-5, the likes API. Separately, hotfix P1-C5 is on the task list for its own small PR into `main`.
+- **Task State**: All tests passing (1,445 passed, 0 failed, 1 skipped: the opt-in network test). `verify.sh` checks pass. CI on GitHub runs the same suite on Node 22.
 - **Git State**:
   - Phase 3a is merged into `main` (PR #1 and PR #2).
   - **All of Phase 3b goes on the branch `claude/beautiful-lamport-kx261g`**, in one draft PR into `main`. The owner deploys Phase 3b from that PR when it is done. Keep adding each P3b task to this branch as its own commit.
@@ -89,7 +89,7 @@ node scope_check.mjs worker worker_entry_combined.js
 ```
 Then delete `node_modules`.
 
-Last run (2026-09-28): all of the above pass, plus every CI step (scope, render and HTML checks). 1,435 tests passed, 0 failed, 1 skipped.
+Last run (2026-09-28): all of the above pass, plus every CI step (scope, render and HTML checks). 1,445 tests passed, 0 failed, 1 skipped.
 
 The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/json` to every POST, so a route test cannot notice a page that forgets them. A static test ("every mutating fetch the pages make sends a JSON content type") covers that instead.
 
@@ -155,7 +155,11 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
   - **P3b-3 (Claude):** the backfill `migrate.lists`, in `30_lists-backfill.js`, run from `/admin` → Maintenance → **Lists v2** (routes `/admin/api/lists-backfill/step` and `/status`, dispatched from `25_` next to installs and connections). The owner approved writing it; running it on production is theirs to do (`docs/OPERATIONS.md` §9). Details and deviations under P3b-3 in `NEXT_VERSION_TASKS.md`.
     - **It must never write the legacy store.** Everything goes through `listsBackfillEnv`, which has no KV writes and refuses D1 writes outside the v2 tables. Keep it that way; a test enforces it.
     - Channels are not copied yet (P3b-8). `lists.legacy_hash` was added to 0016.
-    - **Legacy bug found (not fixed):** `getCreatorList` (`02_`) rewrites a list's KV record from its D1 row on every dashboard read, without `sourceUrl`, `synced`, `lastSyncedAt` or `baseItemIds`, so imported and synced lists lose that bookkeeping on D1-bound deployments. It is live today, independent of Phase 3b. The owner has been told; fixing it is a small separate change (carry those four fields over from the KV record).
+  - **P3b-4 (Claude):** the list API, `/api/lists`, in `31_lists-api.js` (dispatched from `25_` after the backfill routes; the legacy `/api/lists/like` and `/like-external` are passed through). Behind `FF_V2_LISTS_API`, which must stay off in production until P3b-7. Session auth only. Details under P3b-4 in `NEXT_VERSION_TASKS.md`.
+    - Every write is one batch: the change, `item_count` from the rows, the list's version, the account's version, and `lists_fts2`. Keep that shape in P3b-5 onwards.
+    - `listOwnerSearchName` (`30_`) is what `lists_fts2.owner_name` holds, for both the backfill and the API.
+    - The list item insert names the list by `public_id` through a `VALUES` join, so a new list and its first items go in one batch.
+    - **Legacy bug found (not fixed):** `getCreatorList` (`02_`) rewrites a list's KV record from its D1 row on every dashboard read, without `sourceUrl`, `synced`, `lastSyncedAt` or `baseItemIds`, so imported and synced lists lose that bookkeeping on D1-bound deployments. It is live today, independent of Phase 3b. The owner asked for it to go on the task list: it is **P1-C5** in `NEXT_VERSION_TASKS.md`, to ship as its own small PR into `main` ahead of Phase 3b (and before the backfill is run).
 
 ---
 
@@ -181,7 +185,8 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
 ---
 
 ## Next Steps for Incoming AI
-1. **Phase 3b** (lists, likes, channels) is under way on `claude/beautiful-lamport-kx261g`. P3b-1 to P3b-3 are written. Next is **P3b-4**, the list API (`/api/lists/...`, behind a flag; the next server file is `31_...`). Read `MIGRATION_PLAN.md` §3b and the P3b-1 to P3b-3 notes in `NEXT_VERSION_TASKS.md` before starting.
+1. **Phase 3b** (lists, likes, channels) is under way on `claude/beautiful-lamport-kx261g`. P3b-1 to P3b-4 are written. Next is **P3b-5**, the likes API (`PUT`/`DELETE /api/likes/{type}/{id}`; the next server file is `32_...`). Read `MIGRATION_PLAN.md` §3b and the P3b-1 to P3b-4 notes in `NEXT_VERSION_TASKS.md` before starting.
+   - **Hotfix P1-C5** (`getCreatorList` dropping an imported list's sync settings) is on the task list. It goes in its own small PR into `main`, not this branch, so it can deploy before Phase 3b.
      - Nothing may write v2 lists for real users until the read switch (P3b-7) is designed: until then the backfill treats the legacy store as the truth and would overwrite v2-side edits on a re-run.
      - Phase 3b rewrites how lists are stored, so it needs the owner's approval before any backfill (P3b-3) touches stored data.
      - Decide which wins when an install has its own keys in `install_secrets` and its owner also has a connection. Today `install_secrets` is the only source.

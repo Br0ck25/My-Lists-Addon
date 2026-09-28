@@ -20,7 +20,15 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 `TOKEN_ENCRYPTION_KEY` is needed only to start moving install-link keys into encrypted storage (P3a-8, below). That move stays **off** until `INSTALL_MIGRATION_PERCENT` is set, and `docs/OPERATIONS.md` §8 gives the steps. Deploying without it changes nothing.
 
-`FF_SESSIONS` and `FF_INSTALLS` stay **off** (unset). Leave them off until the new sign-in and install-link screens ship.
+`FF_SESSIONS`, `FF_INSTALLS` and `FF_V2_LISTS_API` stay **off** (unset). Leave them off until the new sign-in, install-link and list screens ship.
+
+### 🧩 A list API over the new tables (P3b-4)
+
+- **`/api/lists`**, behind `FF_V2_LISTS_API` (off): a signed-in account can list, create, rename, describe, reorder, hide or share (private, unlisted, public) and delete its lists, and add, remove and move single entries, up to 500 at a time. Built for the new list screens (Phase 6).
+- Anyone can read a public or unlisted list; a private list answers "not found" to everyone but its owner.
+- Adding one title writes one small row instead of resending the whole list. Every change also updates the list's item count and version, and the account's version, in the same step.
+- Renaming or deleting needs the version the page last saw (`If-Match`), so a change made on another device is never silently overwritten. A renamed list keeps answering at its old address.
+- Nothing changes on the site: the switch stays off until reads move to the new tables.
 
 ### 📋 Copying existing lists into the new tables (P3b-3)
 

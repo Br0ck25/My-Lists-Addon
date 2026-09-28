@@ -649,10 +649,18 @@ async function finishLegacyListLikes(env, target, legacy, listId, publicId, budg
 
 // --- One account --------------------------------------------------------------
 
+// What search matches an owner by: the display name, and the username too
+// when it differs, so people can be found by either. Shared with the list
+// API (31_lists-api.js), which keeps lists_fts2 in step on every write.
+function listOwnerSearchName(username, displayName) {
+  const u = String(username || "");
+  const d = String(displayName || "").trim();
+  return d && d.toLowerCase() !== u.toLowerCase() ? `${d} ${u}` : u;
+}
+
 function creatorListTarget(account, slug, position) {
   const username = account.username;
-  const ownerName = account.display_name && account.display_name.toLowerCase() !== username.toLowerCase()
-    ? `${account.display_name} ${username}` : username;
+  const ownerName = listOwnerSearchName(username, account.display_name);
   return {
     legacyId: `c:${username}:${slug}`, slug, position, ownerId: account.id, ownerName, anonymous: false,
     likeListId: `c:${username}:${slug}`, likeLedgerKey: `listlikevoters:${username}:${slug}`,

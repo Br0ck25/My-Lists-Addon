@@ -819,3 +819,287 @@ describe("P3b-3: copying the legacy lists into v2", () => {
     assert.equal(guarded.TMDB_API_KEY, "k", "everything else passes through");
   });
 });
+
+// --- P3b-4: the list API (31_lists-api.js) -------------------------------------
+//
+// Owner, someone else, and nobody, for every route. Sessions come from
+// POST /api/session, as the Phase 6 pages will get them.
+
+async function signInSession(env, username, key) {
+  const r = await call(env, "/api/session", { method: "POST", json: { username, key } });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  return (r.headers.get("set-cookie") || "").split(";")[0];
+}
+
+async function listsApiSetup() {
+  const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1(), FF_V2_LISTS_API: "1" });
+  const ann = await createUser(env, "annapi");
+  const ben = await createUser(env, "benapi");
+  const annCookie = await signInSession(env, "annapi", ann.creatorKey);
+  const benCookie = await signInSession(env, "benapi", ben.creatorKey);
+  const db = env.DB._db;
+  const annId = db.prepare("SELECT id FROM accounts WHERE username = 'annapi'").get().id;
+  const accountVersion = () => db.prepare("SELECT version FROM accounts WHERE id = ?").get(annId).version;
+  return { env, db, ann, ben, annCookie, benCookie, annId, accountVersion };
+}
+
+async function createApiListFor(env, cookie, body) {
+  const r = await call(env, "/api/lists", { method: "POST", cookie, json: body });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  return r.body;
+}
+
+const ifMatch = (v) => ({ "If-Match": `"${v}"` });
+
+describe("P3b-4: the list API", () => {
+  it("is off without FF_V2_LISTS_API, needs a session to list or create, and leaves the legacy like routes alone", async () => {
+    const off = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
+    assert.equal((await call(off, "/api/lists")).status, 404);
+    const { env, benCookie, ben } = await listsApiSetup();
+    const anonList = await call(env, "/api/lists");
+    assert.equal(anonList.status, 401);
+    assert.equal(anonList.body.signInRequired, true);
+    assert.equal((await call(env, "/api/lists", { method: "POST", json: { name: "x", mediaType: "movie" } })).status, 401);
+    // /api/lists/like is still the legacy route, flag or no flag.
+    const like = await call(env, "/api/lists/like", { method: "POST", cookie: benCookie, json: { username: "nobody", slug: "nothing", creatorName: ben.creatorName, creatorKey: ben.creatorKey } });
+    assert.equal(like.status, 404);
+    assert.equal(like.body.error, "List not found.");
+  });
+
+  it("creates a list with its first items, finds it a free address, and keeps search and versions in step", async () => {
+    const { env, db, ann, annCookie, accountVersion } = await listsApiSetup();
+    // A legacy list the backfill has not copied yet holds its address.
+    await saveList(env, ann, { name: "Top Films", type: "movie", visibility: "private", items: [{ id: "tt0000001" }] });
+    const v0 = accountVersion();
+    const created = await createApiListFor(env, annCookie, {
+      name: "Top Films", mediaType: "movie", visibility: "public", description: "The best",
+      items: [{ id: "tt0137523", name: "Fight Club" }, { id: "tt0137523" }, { name: "no id" }, { id: "tt0903747", note: "  watch first  " }],
+    });
+    assert.equal(created.list.slug, "top-films-2", "not the legacy list's address");
+    assert.deepEqual(created.results.map((r) => r.status), ["added", "duplicate", "unusable", "added"]);
+    assert.equal(created.list.itemCount, 2);
+    assert.equal(created.list.version, 1);
+    assert.equal(created.list.owner.username, "annapi");
+    assert.ok(accountVersion() > v0, "the account's version moves with every write");
+    const row = db.prepare("SELECT id FROM lists WHERE public_id = ?").get(created.list.publicId);
+    assert.deepEqual(db.prepare("SELECT rowid FROM lists_fts2 WHERE lists_fts2 MATCH 'best'").all().map((r) => r.rowid), [row.id]);
+    const note = db.prepare("SELECT note FROM list_items WHERE list_id = ? AND note IS NOT NULL").get(row.id);
+    assert.equal(note.note, "watch first");
+
+    const again = await createApiListFor(env, annCookie, { name: "Top Films", mediaType: "movie" });
+    assert.equal(again.list.slug, "top-films-3");
+    assert.equal(again.list.visibility, "private", "private unless asked");
+
+    const bad = await call(env, "/api/lists", { method: "POST", cookie: annCookie, json: { name: "x", mediaType: "anime" } });
+    assert.equal(bad.status, 400);
+    const tooMany = await call(env, "/api/lists", { method: "POST", cookie: annCookie, json: { name: "x", mediaType: "movie", items: new Array(501).fill({ id: "tt0000001" }) } });
+    assert.equal(tooMany.status, 400);
+
+    const mine = await call(env, "/api/lists", { cookie: annCookie });
+    assert.deepEqual(mine.body.lists.map((l) => l.slug), ["top-films-2", "top-films-3"], "in their order");
+    assert.equal(mine.body.accountVersion, accountVersion());
+    assert.equal(mine.headers.get("cache-control"), "no-store");
+  });
+
+  it("shows a public or unlisted list to anyone, a private one only to its owner, and pages through items", async () => {
+    const { env, annCookie, benCookie } = await listsApiSetup();
+    const items = [1, 2, 3, 4, 5].map((i) => ({ id: `tt000000${i}` }));
+    const pub = await createApiListFor(env, annCookie, { name: "Pub", mediaType: "movie", visibility: "public", items });
+    const unl = await createApiListFor(env, annCookie, { name: "Unl", mediaType: "movie", visibility: "unlisted" });
+    const priv = await createApiListFor(env, annCookie, { name: "Priv", mediaType: "movie", visibility: "private" });
+
+    for (const cookie of [undefined, benCookie, annCookie]) {
+      assert.equal((await call(env, `/api/lists/${pub.list.publicId}`, { cookie })).status, 200);
+      assert.equal((await call(env, `/api/lists/${unl.list.publicId}`, { cookie })).status, 200);
+    }
+    assert.equal((await call(env, `/api/lists/${priv.list.publicId}`)).status, 404);
+    assert.equal((await call(env, `/api/lists/${priv.list.publicId}`, { cookie: benCookie })).status, 404, "not 403: a private list is not given away");
+    assert.equal((await call(env, `/api/lists/${priv.list.publicId}`, { cookie: annCookie })).status, 200);
+    assert.equal((await call(env, "/api/lists/nosuchlist12")).status, 404);
+
+    const page1 = await call(env, `/api/lists/${pub.list.publicId}?limit=2`);
+    assert.equal(page1.headers.get("etag"), '"1"');
+    assert.deepEqual(page1.body.items.map((i) => i.id), ["tt0000001", "tt0000002"]);
+    assert.equal(page1.body.items[0].kind, "movie");
+    assert.ok(page1.body.nextCursor);
+    const page2 = await call(env, `/api/lists/${pub.list.publicId}?limit=2&cursor=${page1.body.nextCursor}`);
+    const page3 = await call(env, `/api/lists/${pub.list.publicId}?limit=2&cursor=${page2.body.nextCursor}`);
+    assert.deepEqual([...page2.body.items, ...page3.body.items].map((i) => i.id), ["tt0000003", "tt0000004", "tt0000005"]);
+    assert.equal(page3.body.nextCursor, null);
+  });
+
+  it("lets only the owner change a list: someone else gets 403, nobody gets 401", async () => {
+    const { env, annCookie, benCookie } = await listsApiSetup();
+    const pub = await createApiListFor(env, annCookie, { name: "Mine", mediaType: "movie", visibility: "public", items: [{ id: "tt0000001" }] });
+    const id = pub.list.publicId;
+    const mediaId = (await call(env, `/api/lists/${id}`)).body.items[0].mediaId;
+    const attempts = [
+      ["PATCH", `/api/lists/${id}`, { name: "Theirs" }],
+      ["DELETE", `/api/lists/${id}`, undefined],
+      ["PUT", `/api/lists/${id}/visibility`, { visibility: "private" }],
+      ["POST", `/api/lists/${id}/items`, { items: [{ id: "tt0000002" }] }],
+      ["DELETE", `/api/lists/${id}/items/${mediaId}`, undefined],
+      ["POST", `/api/lists/${id}/items/move`, { mediaId, after: null }],
+    ];
+    for (const [method, p, body] of attempts) {
+      const other = await call(env, p, { method, cookie: benCookie, json: body, headers: ifMatch(1) });
+      assert.equal(other.status, 403, `${method} ${p} as someone else`);
+      const nobody = await call(env, p, { method, json: body, headers: ifMatch(1) });
+      assert.equal(nobody.status, 401, `${method} ${p} signed out`);
+    }
+    const after = await call(env, `/api/lists/${id}`);
+    assert.equal(after.body.list.version, 1, "nothing changed");
+    assert.equal(after.body.list.name, "Mine");
+  });
+
+  it("needs If-Match to rename or delete, refuses a stale one, and keeps the old address answering", async () => {
+    const { env, db, annCookie } = await listsApiSetup();
+    const created = await createApiListFor(env, annCookie, { name: "Old Name", mediaType: "series", visibility: "public" });
+    await createApiListFor(env, annCookie, { name: "Taken", mediaType: "movie" });
+    const id = created.list.publicId;
+    const path = `/api/lists/${id}`;
+
+    assert.equal((await call(env, path, { method: "PATCH", cookie: annCookie, json: { name: "New" } })).status, 428);
+    const stale = await call(env, path, { method: "PATCH", cookie: annCookie, json: { name: "New" }, headers: ifMatch(7) });
+    assert.equal(stale.status, 412);
+    assert.equal(stale.body.version, 1);
+    assert.equal((await call(env, path, { method: "PATCH", cookie: annCookie, json: { slug: "taken" }, headers: ifMatch(1) })).status, 409);
+
+    const renamed = await call(env, path, { method: "PATCH", cookie: annCookie, json: { name: "Fresh Name", slug: "fresh-name", description: "Now described" }, headers: ifMatch(1) });
+    assert.equal(renamed.status, 200, JSON.stringify(renamed.body));
+    assert.equal(renamed.body.list.version, 2);
+    assert.equal(renamed.body.list.slug, "fresh-name");
+    const listRow = db.prepare("SELECT id FROM lists WHERE public_id = ?").get(id);
+    assert.deepEqual(db.prepare("SELECT old_slug, list_id FROM list_slug_history").all().map((r) => [r.old_slug, r.list_id]), [["old-name", listRow.id]]);
+    assert.deepEqual(db.prepare("SELECT rowid FROM lists_fts2 WHERE lists_fts2 MATCH 'fresh'").all().map((r) => r.rowid), [listRow.id], "search follows the new name");
+    assert.deepEqual(db.prepare("SELECT rowid FROM lists_fts2 WHERE lists_fts2 MATCH 'old'").all(), []);
+
+    // The same stale version a second writer might still hold.
+    assert.equal((await call(env, path, { method: "PATCH", cookie: annCookie, json: { name: "Lost" }, headers: ifMatch(1) })).status, 412);
+
+    assert.equal((await call(env, path, { method: "DELETE", cookie: annCookie })).status, 428);
+    assert.equal((await call(env, path, { method: "DELETE", cookie: annCookie, headers: ifMatch(1) })).status, 412);
+    const del = await call(env, path, { method: "DELETE", cookie: annCookie, headers: ifMatch(2) });
+    assert.equal(del.status, 200);
+    assert.equal((await call(env, path, { cookie: annCookie })).status, 404);
+    assert.deepEqual(db.prepare("SELECT rowid FROM lists_fts2 WHERE rowid = ?").all(listRow.id), []);
+    const mine = await call(env, "/api/lists", { cookie: annCookie });
+    assert.deepEqual(mine.body.lists.map((l) => l.slug), ["taken"]);
+  });
+
+  it("changes visibility, and search follows", async () => {
+    const { env, db, annCookie } = await listsApiSetup();
+    const created = await createApiListFor(env, annCookie, { name: "Hidden Gems", mediaType: "movie", visibility: "public" });
+    const id = created.list.publicId;
+    const row = db.prepare("SELECT id FROM lists WHERE public_id = ?").get(id);
+    const unl = await call(env, `/api/lists/${id}/visibility`, { method: "PUT", cookie: annCookie, json: { visibility: "unlisted" } });
+    assert.equal(unl.body.list.visibility, "unlisted");
+    assert.equal(unl.body.list.version, 2);
+    assert.deepEqual(db.prepare("SELECT rowid FROM lists_fts2 WHERE rowid = ?").all(row.id), [], "unlisted is not searchable");
+    assert.equal((await call(env, `/api/lists/${id}`)).status, 200, "but anyone with the link can open it");
+    await call(env, `/api/lists/${id}/visibility`, { method: "PUT", cookie: annCookie, json: { visibility: "private" } });
+    assert.equal((await call(env, `/api/lists/${id}`)).status, 404);
+    await call(env, `/api/lists/${id}/visibility`, { method: "PUT", cookie: annCookie, json: { visibility: "public" } });
+    assert.equal(db.prepare("SELECT count(*) AS n FROM lists_fts2 WHERE lists_fts2 MATCH 'gems'").get().n, 1);
+    const bad = await call(env, `/api/lists/${id}/visibility`, { method: "PUT", cookie: annCookie, json: { visibility: "friends" } });
+    assert.equal(bad.status, 400);
+  });
+
+  it("adds, removes and moves entries, updating the count and both versions in the same batch", async () => {
+    const { env, db, annCookie, accountVersion } = await listsApiSetup();
+    const created = await createApiListFor(env, annCookie, { name: "Queue", mediaType: "mixed", items: [{ id: "tt0000001" }] });
+    const id = created.list.publicId;
+    const ids = async () => (await call(env, `/api/lists/${id}`, { cookie: annCookie })).body.items.map((i) => i.id + (i.season != null ? `:${i.season}:${i.episode}` : ""));
+
+    let v = accountVersion();
+    const add = await call(env, `/api/lists/${id}/items`, { method: "POST", cookie: annCookie, json: {
+      items: [{ id: "tt0000001" }, { id: "tt0000002" }, { showId: "tt0903747", type: "episode", seasonNum: 1, episodeNum: 1 }, { showId: "tt0903747", type: "episode", seasonNum: 1, episodeNum: 2 }],
+    } });
+    assert.deepEqual({ added: add.body.added, dup: add.body.duplicates, count: add.body.list.itemCount, version: add.body.list.version },
+      { added: 3, dup: 1, count: 4, version: 2 });
+    assert.ok(accountVersion() > v);
+    assert.deepEqual(await ids(), ["tt0000001", "tt0000002", "tt0903747:1:1", "tt0903747:1:2"]);
+
+    const front = await call(env, `/api/lists/${id}/items`, { method: "POST", cookie: annCookie, json: { items: [{ id: "tt0000009" }], at: "start" } });
+    assert.equal(front.body.list.version, 3);
+    assert.deepEqual((await ids())[0], "tt0000009");
+
+    // Adding only what is already there changes nothing, so bumps nothing.
+    const nothing = await call(env, `/api/lists/${id}/items`, { method: "POST", cookie: annCookie, json: { items: [{ id: "tt0000002" }] } });
+    assert.equal(nothing.body.list.version, 3);
+
+    const entries = (await call(env, `/api/lists/${id}`, { cookie: annCookie })).body.items;
+    const show = entries.find((e) => e.season === 1 && e.episode === 2);
+    const removeEp = await call(env, `/api/lists/${id}/items/${show.mediaId}?season=1&episode=2`, { method: "DELETE", cookie: annCookie });
+    assert.equal(removeEp.body.list.itemCount, 4);
+    assert.equal(removeEp.body.list.version, 4);
+    assert.equal((await call(env, `/api/lists/${id}/items/${show.mediaId}?season=1&episode=2`, { method: "DELETE", cookie: annCookie })).status, 404);
+    assert.equal((await call(env, `/api/lists/${id}/items/${show.mediaId}`, { method: "DELETE", cookie: annCookie })).status, 404,
+      "the whole show was never in the list, only its episodes");
+    assert.deepEqual(await ids(), ["tt0000009", "tt0000001", "tt0000002", "tt0903747:1:1"]);
+
+    const first = entries.find((e) => e.id === "tt0000001");
+    const last = entries.find((e) => e.season === 1 && e.episode === 1);
+    const moved = await call(env, `/api/lists/${id}/items/move`, { method: "POST", cookie: annCookie, json: { mediaId: last.mediaId, season: 1, episode: 1, after: null } });
+    assert.equal(moved.status, 200, JSON.stringify(moved.body));
+    assert.deepEqual(await ids(), ["tt0903747:1:1", "tt0000009", "tt0000001", "tt0000002"]);
+    await call(env, `/api/lists/${id}/items/move`, { method: "POST", cookie: annCookie, json: { mediaId: last.mediaId, season: 1, episode: 1, after: { mediaId: first.mediaId } } });
+    assert.deepEqual(await ids(), ["tt0000009", "tt0000001", "tt0903747:1:1", "tt0000002"]);
+
+    // No room left between two neighbours: the list is renumbered first.
+    const listRow = db.prepare("SELECT id FROM lists WHERE public_id = ?").get(id);
+    db.prepare("UPDATE list_items SET position = 1 WHERE list_id = ? AND media_id = ?").run(listRow.id, first.mediaId);
+    db.prepare("UPDATE list_items SET position = 1 WHERE list_id = ? AND season = 1").run(listRow.id);
+    const two = entries.find((e) => e.id === "tt0000002");
+    db.prepare("UPDATE list_items SET position = 5 WHERE list_id = ? AND media_id = ?").run(listRow.id, two.mediaId);
+    const nine = entries.find((e) => e.id === "tt0000009");
+    const squeezed = await call(env, `/api/lists/${id}/items/move`, { method: "POST", cookie: annCookie, json: { mediaId: nine.mediaId, after: { mediaId: first.mediaId } } });
+    assert.equal(squeezed.status, 200);
+    assert.deepEqual(await ids(), ["tt0000001", "tt0000009", "tt0903747:1:1", "tt0000002"]);
+
+    assert.equal((await call(env, `/api/lists/${id}/items/move`, { method: "POST", cookie: annCookie, json: { mediaId: 999999, after: null } })).status, 404);
+  });
+
+  it("bumps a list's version only when its item count really moved (an add that lost a race to the same title)", async () => {
+    // Two adds of one title at the same moment both pass the duplicate check;
+    // the second INSERT OR IGNORE then inserts nothing. Its batch must not
+    // bump the version for a change it did not make. The harness cannot
+    // interleave two requests that finely, so the statement is run directly.
+    const sandbox = { console, URL, TextEncoder, crypto: globalThis.crypto };
+    sandbox.globalThis = sandbox;
+    vm.createContext(sandbox);
+    for (const rel of ["00_constants.js", "29_media.js", "30_lists-backfill.js", "31_lists-api.js"]) {
+      vm.runInContext(fs.readFileSync(path.join(REPO_ROOT, rel), "utf8"), sandbox, { filename: rel });
+    }
+    const env = { DB: makeD1() };
+    env.DB._db.exec(`INSERT INTO accounts (id, username, display_name, key_hash, created_at) VALUES (1, 'ann', 'Ann', 'h', 0);
+      INSERT INTO media (id, kind, imdb_id, created_at, updated_at) VALUES (1, 'movie', 'tt1', 0, 0), (2, 'movie', 'tt2', 0, 0);
+      INSERT INTO lists (id, public_id, owner_account_id, slug, name, media_type, item_count, version, created_at, updated_at) VALUES (10, 'p10', 1, 'x', 'X', 'movie', 1, 5, 0, 0);
+      INSERT INTO list_items (list_id, media_id, position, added_at) VALUES (10, 1, 0, 0);`);
+    const version = () => env.DB._db.prepare("SELECT version, item_count FROM lists WHERE id = 10").get();
+    await sandbox.listCountStatement(env, 10, 99).run();
+    assert.deepEqual({ ...version() }, { version: 5, item_count: 1 }, "nothing inserted: no bump");
+    env.DB._db.exec("INSERT INTO list_items (list_id, media_id, position, added_at) VALUES (10, 2, 1, 0)");
+    await sandbox.listCountStatement(env, 10, 99).run();
+    assert.deepEqual({ ...version() }, { version: 6, item_count: 2 });
+  });
+
+  it("refuses to grow a list past the item limit", async () => {
+    const { env, db, annCookie } = await listsApiSetup();
+    const created = await createApiListFor(env, annCookie, { name: "Huge", mediaType: "movie" });
+    db.prepare("UPDATE lists SET item_count = ? WHERE public_id = ?").run(9999, created.list.publicId);
+    const r = await call(env, `/api/lists/${created.list.publicId}/items`, { method: "POST", cookie: annCookie, json: { items: [{ id: "tt0000001" }, { id: "tt0000002" }] } });
+    assert.equal(r.status, 413);
+  });
+
+  it("serves a legacy anonymous copy read-only", async () => {
+    const { env, db, annCookie } = await listsApiSetup();
+    db.prepare(`INSERT INTO lists (public_id, owner_account_id, slug, name, kind, media_type, visibility, legacy_id, created_at, updated_at)
+                VALUES ('anonpublic01', NULL, 'cozy', 'Cozy', 'legacy_anonymous', 'movie', 'unlisted', 'a:cozy', 1, 1)`).run();
+    const r = await call(env, "/api/lists/anonpublic01");
+    assert.equal(r.status, 200);
+    assert.equal(r.body.list.owner, null);
+    assert.equal((await call(env, "/api/lists/anonpublic01/visibility", { method: "PUT", cookie: annCookie, json: { visibility: "public" } })).status, 403);
+    assert.equal((await call(env, "/api/lists/anonpublic01/visibility", { method: "PUT", json: { visibility: "public" } })).status, 401);
+  });
+});
