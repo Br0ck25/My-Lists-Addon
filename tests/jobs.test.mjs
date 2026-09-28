@@ -315,10 +315,14 @@ describe("makeQueue", () => {
 
 // --- P5-2: the dispatcher (45_jobs-dispatcher.js) ------------------------------
 
-const CRON_JOBS = [
-  "cron.episodes", "cron.airing-next", "cron.new-on-streaming", "cron.charts",
-  "cron.better-posters", "cron.channel-presets", "cron.housekeeping",
-];
+// Every periodic job, in the order they are defined (and first sent), with
+// its period: the cron's own work every tick, then the show schedule (P5-3).
+const PERIODIC_EVERY = {
+  "cron.episodes": 4 * 60000, "cron.airing-next": 4 * 60000, "cron.new-on-streaming": 4 * 60000, "cron.charts": 4 * 60000,
+  "cron.better-posters": 4 * 60000, "cron.channel-presets": 4 * 60000, "cron.housekeeping": 4 * 60000,
+  "show.watchers": 24 * 3600000, "show.refresh": 3600000,
+};
+const CRON_JOBS = Object.keys(PERIODIC_EVERY);
 
 // Every outbound call fails at once and is counted: nothing here is testing a
 // provider, and a tick that only dispatches must make none.
@@ -406,9 +410,11 @@ describe("P5-2: the cron tick only dispatches", () => {
         assert.equal(row.attempts, 0, `${type}: ${row.last_error}`);
         assert.equal(row.q.runs, 1);
         assert.ok(row.q.lastOkAt >= beforeDrain);
-        // Due again at the next tick (every 4 minutes, less 90 s of slack).
+        // Due again after its period, less 90 s of slack (the cron's work:
+        // at the next tick).
         const wait = row.run_after - row.q.lastStartedAt;
-        assert.ok(wait >= 150000 && wait <= 150000 + 1000, `${type} next due in ${wait} ms`);
+        const expected = PERIODIC_EVERY[type] - 90000;
+        assert.ok(wait >= expected && wait <= expected + 1000, `${type} next due in ${wait} ms`);
       }
       // Straight away, nothing is due.
       await runScheduledTick(env);

@@ -27,6 +27,11 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 8. **Recommended: set up the background jobs queue** (Phase 5, `docs/OPERATIONS.md` §18): create the queues `mylists-jobs` and `mylists-jobs-dlq`, make this Worker the consumer of `mylists-jobs` (batch size 25, 5 retries, dead-letter queue `mylists-jobs-dlq`), bind `mylists-jobs` to the Worker as `JOBS`, then press **Send a test job** in `/admin` → Maintenance. Without it everything works as before.
 
+### 📅 One shared schedule per show (P5-3)
+
+- **Nothing changes for visitors yet.** Once an hour, the shows people watch are checked with TMDB (and TVmaze for the air time): the last episode out, the next one and when, the season finale, how many episodes each season has. Each show is checked once for everybody, not once per person. A show airing within a day is checked every hour, one between episodes every 6 hours, and an ended show every two weeks.
+- This is what Continue Watching and Airing Next will be worked out from when `FF_SHOW_SCHEDULE` is turned on (after P5-4's comparison). It needs the activity database and migration 0017, and runs from the job queue (or from the cron without it).
+
 ### ⏱️ The cron hands its work to the queue (P5-2)
 
 - **Nothing changes for visitors.** With the queue bound, each cron tick now only hands out the work that is due (Continue Watching and Airing Next sweeps, New on Streaming, chart and poster warming, channel presets, housekeeping), and the queue does each piece separately, with its own retries. The same piece never runs twice at once.
