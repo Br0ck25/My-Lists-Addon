@@ -635,9 +635,8 @@ describe("P3b-3: copying the legacy lists into v2", () => {
       const fx = await buildLegacyFixture(env);
       const cookie = await adminCookie(env);
       // Not read through the dashboard route here: that route rewrites its KV
-      // cache copies (getCreatorList), and in doing so drops an imported list's
-      // sourceUrl, synced and baseItemIds -- a legacy bug, recorded in
-      // HANDOFF.md. The order check against the route is its own test below.
+      // cache copies (getCreatorList), which would change the snapshot. The
+      // order check against the route is its own test below.
       const before = legacySnapshot(env);
 
       // Tiny steps, so every list and the long one are resumed mid-way.

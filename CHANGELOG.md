@@ -22,6 +22,11 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 `FF_SESSIONS`, `FF_INSTALLS`, `FF_V2_LISTS_API` and `FF_V2_LISTS_READ` stay **off** (unset). Leave the first three off until the new sign-in, install-link and list screens ship. `FF_V2_LISTS_READ` stays off until the list copy (`docs/OPERATIONS.md` §9) has finished and its report has been checked; §10 then gives the steps, and turning it off again is always safe.
 
+### 🩹 Imported lists keep their sync settings (P1-C5)
+
+- **Fixed:** an imported list set to stay in sync (from MDBList, for example) lost its source link, its "keep synced" setting and its last sync time whenever the dashboard loaded it, and again when it was edited. They are now kept.
+- Lists that already lost them are not repaired: link or import them again to restore the settings.
+
 ### 🔀 Lists read from the new tables, behind one switch (P3b-7)
 
 - **With `FF_V2_LISTS_READ` on, lists are read from the new tables**: the dashboard, list contents, public list pages and Custom List catalog rows, as well as the directory and search (P3b-6). Every answer is the same as today's, item for item. Tests compare the two, and the whole test suite now runs twice in CI, once with the switch on.

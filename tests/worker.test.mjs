@@ -9732,6 +9732,42 @@ describe("Phase 2: Identity and lists become D1-authoritative", () => {
     assert.ok(d1Row.items_json.includes("tt2"));
   });
 
+  // P1-C5. Reading the dashboard rebuilt each list's KV record from its D1
+  // row and wrote it back whole, without the four fields only KV holds, so an
+  // imported list lost its source link, "keep synced" and sync bookkeeping on
+  // the first read -- and an edit that read it back lost them too.
+  it("keeps an imported list's sync settings through dashboard reads and edits", async () => {
+    const kv = makeKv();
+    const env = makeEnv({ CONFIGS: kv, DB: makeD1() });
+    const u = await createUser(env, "p1c5sync");
+    const K = { creatorName: "p1c5sync", creatorKey: u.creatorKey };
+    const sync = { sourceUrl: "https://mdblist.com/lists/someone/good-shows", synced: true, lastSyncedAt: 1700000000000, baseItemIds: ["tt0903747"] };
+    const saved = await call(env, "/api/creator/lists/save", { method: "POST", json: {
+      ...K, name: "Imported", type: "series", visibility: "private", items: [{ id: "tt0903747", type: "series" }], ...sync,
+    }});
+    assert.equal(saved.body.ok, true);
+    const slug = saved.body.slug;
+    const pick = (o) => ({ sourceUrl: o.sourceUrl, synced: o.synced, lastSyncedAt: o.lastSyncedAt, baseItemIds: o.baseItemIds });
+    const stored = () => pick(JSON.parse(kv._store.get(`creatorlist:p1c5sync:${slug}`)));
+    for (const read of [1, 2]) {
+      const listed = await call(env, "/api/creator/lists", { method: "POST", json: { ...K, includeItems: true } });
+      assert.deepEqual(pick(listed.body.lists.find((l) => l.slug === slug)), sync, `the dashboard, read ${read}`);
+      assert.deepEqual(stored(), sync, `the KV record after read ${read}`);
+    }
+    const items = await call(env, "/api/creator/lists/items", { method: "POST", json: { ...K, slugs: [slug] } });
+    assert.deepEqual(items.body.lists[0].baseItemIds, sync.baseItemIds);
+
+    // An edit that does not send them again (adding a title) keeps them.
+    const edited = await call(env, "/api/creator/lists/save", { method: "POST", json: {
+      ...K, slug, name: "Imported", type: "series", visibility: "private",
+      items: [{ id: "tt0903747", type: "series" }, { id: "tt0141842", type: "series" }],
+    }});
+    assert.equal(edited.body.ok, true);
+    assert.deepEqual(stored(), sync, "after an edit");
+    const again = await call(env, "/api/creator/lists", { method: "POST", json: K });
+    assert.deepEqual(pick(again.body.lists.find((l) => l.slug === slug)), sync, "and the dashboard after it");
+  });
+
   it("creator_lists.sort_order drives ordering and survives missing creatorlistorder KV key", async () => {
     const kv = makeKv();
     const db = makeD1();

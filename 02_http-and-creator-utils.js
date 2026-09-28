@@ -4933,6 +4933,21 @@ async function getCreatorList(env, username, slug) {
           likes,
           sortOrder: row.sort_order != null ? row.sort_order : undefined,
         };
+        // What only the KV record holds: an imported list's bookkeeping (its
+        // source link, "keep synced", when it last synced, the items it
+        // came with), and the Watchlist's marker. creator_lists has no
+        // columns for them, so a payload rebuilt from the row has to carry
+        // them over. It used to leave them out, and because the put below
+        // replaces the whole record, every dashboard read erased them -- and
+        // so did the next edit, which reads the existing record back through
+        // here (P1-C5). Written the way /api/creator/lists/save writes them.
+        if (kvData) {
+          if (typeof kvData.sourceUrl === "string" && kvData.sourceUrl) payload.sourceUrl = kvData.sourceUrl;
+          if (kvData.synced) payload.synced = true;
+          if (Number.isFinite(kvData.lastSyncedAt) && kvData.lastSyncedAt) payload.lastSyncedAt = kvData.lastSyncedAt;
+          if (Array.isArray(kvData.baseItemIds)) payload.baseItemIds = kvData.baseItemIds;
+          if (kvData.isWatchlist) payload.isWatchlist = true;
+        }
         const raw = JSON.stringify(payload);
         try {
           if (env.CONFIGS && !kvIsFresher) await env.CONFIGS.put(`creatorlist:${username}:${slug}`, raw);
