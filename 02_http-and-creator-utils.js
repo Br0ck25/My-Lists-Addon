@@ -959,6 +959,14 @@ async function deleteAccountRow(env, username) {
     await revokeAccountSessions(env, id);
     // Before the rows go: a snapshot would keep serving them for up to a day.
     await forgetAccountInstallSnapshots(env, id);
+    // Everything else filed under this id (watch history, likes cast,
+    // recommendations, private channels...; P5-8, 51_account-purge.js). The id
+    // can be handed to the next account created, so none of it may outlive
+    // the row. Guarded: this file is also loaded on its own.
+    if (typeof purgeAccountRowsById === "function") {
+      const rows = await purgeAccountRowsById(env, id);
+      if (!rows.ok) return { ok: false };
+    }
     try {
       await env.DB.batch([
         env.DB.prepare("DELETE FROM sessions WHERE account_id = ?").bind(id),

@@ -408,6 +408,8 @@ async function resolveV2InstallConfig(param, env, { withTracking = false } = {})
     trackCreatorName: owner,
     trackCreatorKey: "",
     trackOwner: owner,
+    // Providers whose connection needs signing in again (P5-7).
+    reconnect: Array.isArray(fromConnections._reconnect) ? fromConnections._reconnect : [],
     // Playback pings from this link record to this account. A legacy link
     // proves that with the Creator Key it carries; a v2 link has no key, and
     // its "track" scope, granted to a signed-in owner, is the proof instead.

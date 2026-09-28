@@ -3904,6 +3904,14 @@ async function deleteAccountRow(env, username) {
     await revokeAccountSessions(env, id);
     // Before the rows go: a snapshot would keep serving them for up to a day.
     await forgetAccountInstallSnapshots(env, id);
+    // Everything else filed under this id (watch history, likes cast,
+    // recommendations, private channels...; P5-8, 51_account-purge.js). The id
+    // can be handed to the next account created, so none of it may outlive
+    // the row. Guarded: this file is also loaded on its own.
+    if (typeof purgeAccountRowsById === "function") {
+      const rows = await purgeAccountRowsById(env, id);
+      if (!rows.ok) return { ok: false };
+    }
     try {
       await env.DB.batch([
         env.DB.prepare("DELETE FROM sessions WHERE account_id = ?").bind(id),
@@ -10864,6 +10872,7 @@ async function renderAdminDashboard(env) {
   // makes sense once this is true.
   const isD1Bound = !!(env && env.DB);
   const isActivityBound = !!(env && env.DB && env.DB_ACTIVITY);
+  const isJobsBound = !!(env && env.JOBS && typeof env.JOBS.send === "function");
   const today = statsToday();
   const [
     totalPV, todayPV, totalIN, todayIN, totalPP, todayPP,
@@ -11568,6 +11577,19 @@ async function renderAdminDashboard(env) {
       <div id="activityBackfillResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
     </div>
 
+    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
+      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Background jobs queue: ${isJobsBound
+        ? '<span style="color:#30d158;">bound</span>'
+        : '<span style="color:#8E8E93;">not bound yet</span>'}</div>
+      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Background work moves onto the Cloudflare Queue <code>mylists-jobs</code>, which this Worker also reads (Phase 5). Setting it up: create the queues <code>mylists-jobs</code> and <code>mylists-jobs-dlq</code>, add this Worker as the consumer of <code>mylists-jobs</code> (batch size 25, 5 retries, dead-letter queue <code>mylists-jobs-dlq</code>), and bind <code>mylists-jobs</code> to this Worker as <code>JOBS</code>. See docs/OPERATIONS.md section 18. <strong>Send a test job</strong> puts one job on the queue and waits for this Worker to pick it up, which proves all three steps worked.</p>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="jobsPingBtn" onclick="runJobsPing()" ${isJobsBound ? '' : 'disabled'}>Send a test job</button>
+      <span id="jobsPingStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;">${isJobsBound ? '' : 'JOBS is not bound.'}</span>
+      <p style="color:#8E8E93; margin:12px 0 8px; font-size:0.8rem;">Once the queue is bound, every cron tick only hands out the work that is due (the Continue Watching and Airing Next sweeps, New on Streaming, chart and poster warming, channel presets, housekeeping), and the queue does it. Without it, the tick does the work itself, as before. <strong>Check jobs</strong> shows when each one last ran. Needs migration 0016.</p>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="jobsStatusBtn" onclick="runJobsStatus()" ${isD1Bound ? '' : 'disabled'}>Check jobs</button>
+      <span id="jobsStatusStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <div id="jobsStatusResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
+    </div>
+
     <div class="panel" style="margin:0; padding:14px 16px;">
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Database schema</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Migrations are applied by hand and nothing records that it happened, so this Worker can end up running ahead of its own database. It degrades quietly when that happens rather than refusing to start &mdash; which is why this check exists. Run it after any deploy that shipped a new file under <code>migrations/</code>.</p>
@@ -12258,6 +12280,99 @@ async function renderAdminDashboard(env) {
         if (d.run.phase === 'done' && !(d.accounts.running || d.accounts.queued || d.accounts.failed) && !d.totals.shortAccounts) lines.push('Every account is copied, none with fewer plays than before.');
         if (d.failed.length) lines.push('Failed accounts: ' + d.failed.map(function (f) { return '#' + f.accountId + ' (' + f.error + ')'; }).join('; '));
         if (d.short.length) lines.push('Fewest plays against their old history: ' + d.short.map(function (s) { return '#' + s.accountId + ' ' + s.short + ' of ' + s.legacy; }).join(', ') + '. Examples from the first: ' + JSON.stringify(d.short[0].samples));
+        out.innerHTML = '';
+        lines.forEach(function (line) {
+          const div = document.createElement('div');
+          div.style.margin = '0 0 4px';
+          div.textContent = line;
+          out.appendChild(div);
+        });
+      } catch (e) {
+        status.textContent = 'Failed: network error.';
+      }
+    }
+
+    // Background jobs queue (P5-1): send one test job, then ask every two
+    // seconds whether the consumer has picked it up, for up to a minute.
+    async function runJobsPing() {
+      const btn = document.getElementById('jobsPingBtn');
+      const status = document.getElementById('jobsPingStatus');
+      btn.disabled = true;
+      status.textContent = 'Sending...';
+      try {
+        const res = await fetch('/admin/api/jobs/ping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        const sent = await res.json();
+        if (!sent.ok) {
+          status.textContent = 'Failed: ' + (sent.error || 'unknown error');
+          btn.disabled = false;
+          return;
+        }
+        const startedAt = Date.now();
+        let answered = false;
+        while (Date.now() - startedAt < 60000) {
+          status.textContent = 'Sent. Waiting for the Worker to pick it up (' + Math.round((Date.now() - startedAt) / 1000) + ' s)...';
+          await new Promise(function (r) { setTimeout(r, 2000); });
+          const check = await fetch('/admin/api/jobs/ping?nonce=' + encodeURIComponent(sent.nonce));
+          const d = await check.json();
+          if (d.ok && d.received) {
+            answered = true;
+            status.textContent = 'Round trip works: picked up after ' + (d.roundTripMs != null ? (d.roundTripMs / 1000).toFixed(1) + ' s' : 'a moment') + (d.attempts > 1 ? ' (on delivery ' + d.attempts + ')' : '') + '.';
+            break;
+          }
+        }
+        if (!answered) status.textContent = 'Sent, but not picked up within a minute. Check that this Worker is the consumer of mylists-jobs (Queues, mylists-jobs, Settings, Consumers), then try again.';
+      } catch (e) {
+        status.textContent = 'Failed: network error.';
+      }
+      btn.disabled = false;
+    }
+
+    function jobsAgo(ms) {
+      const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+      if (s < 90) return s + ' s ago';
+      if (s < 5400) return Math.round(s / 60) + ' min ago';
+      return Math.round(s / 3600) + ' h ago';
+    }
+
+    // The jobs table's view (P5-2): each periodic job's last run, and one-off
+    // jobs by state.
+    async function runJobsStatus() {
+      const status = document.getElementById('jobsStatusStatus');
+      const out = document.getElementById('jobsStatusResult');
+      status.textContent = 'Checking...';
+      try {
+        const res = await fetch('/admin/api/jobs/status');
+        const d = await res.json();
+        if (!d.ok) {
+          status.textContent = 'Unavailable: ' + (d.error || 'unknown error');
+          return;
+        }
+        status.textContent = d.bound ? 'The queue does the work.' : 'No queue: each cron tick does the work itself.';
+        const lines = [];
+        if (!d.jobs) {
+          lines.push('No jobs table yet (apply migration 0016).');
+        } else {
+          if (!d.jobs.periodic.length) lines.push(d.bound ? 'No cron tick has run since the queue was bound.' : 'Jobs are recorded here once the queue is bound.');
+          d.jobs.periodic.forEach(function (j) {
+            let line = j.type + ': ';
+            if (j.status === 'running') line += 'running now';
+            else if (j.status === 'sent') line += 'sent to the queue ' + jobsAgo(j.sentAt) + ', waiting to be picked up';
+            else if (!j.runs) line += 'not run yet';
+            else line += 'last ran ' + jobsAgo(j.lastStartedAt) + (j.lastMs != null ? ' (took ' + (j.lastMs / 1000).toFixed(1) + ' s)' : '');
+            if (j.runs) line += ', ' + j.runs + ' runs';
+            if (j.failuresInARow) line += '. FAILING, ' + j.failuresInARow + ' in a row: ' + (j.lastError || 'unknown error');
+            else if (j.lastOkAt) line += ', last success ' + jobsAgo(j.lastOkAt);
+            lines.push(line + '.');
+            if (j.type === 'shelf.shadow' && j.last) {
+              const t = j.last;
+              lines.push('  Last full comparison (' + t.accounts + ' accounts, finished ' + jobsAgo(t.finishedAt) + '): ' + (t.rate * 100).toFixed(2) + '% different. Continue Watching: ' + t.cw.both + ' the same, ' + t.cw.legacyOnly + ' only in the old, ' + t.cw.v2Only + ' only in the new, ' + t.cw.unknown + ' shows not known yet. Airing Next: ' + t.an.both + ' the same, ' + t.an.legacyOnly + ' only in the old, ' + t.an.v2Only + ' only in the new, ' + t.an.unknown + ' not known yet.' + (t.examples && t.examples.length ? ' Examples: ' + JSON.stringify(t.examples.slice(0, 3)) : ''));
+            }
+          });
+          Object.keys(d.jobs.durable || {}).forEach(function (type) {
+            const c = d.jobs.durable[type];
+            lines.push(type + ': ' + Object.keys(c).map(function (k) { return c[k] + ' ' + k; }).join(', ') + '.');
+          });
+        }
         out.innerHTML = '';
         lines.forEach(function (line) {
           const div = document.createElement('div');
@@ -14007,6 +14122,8 @@ async function resolveConfig(configParam, env, { withTracking = false } = {}) {
           track: !!parsed.track,
           trackCreatorName: parsed.trackCreatorName || "",
           trackCreatorKey: parsed.trackCreatorKey || "",
+          // Providers whose connection needs signing in again (P5-7).
+          reconnect: Array.isArray(parsed._reconnect) ? parsed._reconnect : [],
           // The verified username, or "". Every personal-shelf read downstream
           // is gated on this rather than on trackCreatorName -- see the block
           // above and mayReadTrackedShelf (02_http-and-creator-utils.js).
@@ -15830,7 +15947,10 @@ async function fetchBetterPosterUpstream(env, bp, timeoutMs) {
       if (!res.ok || !contentType.startsWith("image/")) return null;
       const bytes = await res.arrayBuffer();
       if (!bytes.byteLength || bytes.byteLength > BETTER_POSTER_MAX_BYTES) return null;
-      if (env && env.CONFIGS) {
+      if (typeof betterPostersInR2 === "function" && betterPostersInR2(env)) {
+        // P5-9 (52_poster-fetch.js): the copy lives in R2.
+        await storeBetterPosterR2(env, bp, bytes, contentType).catch(() => {});
+      } else if (env && env.CONFIGS) {
         await env.CONFIGS.put(bp.kvKey, bytes, {
           expirationTtl: BETTER_POSTER_KEEP_SECONDS,
           metadata: { ct: contentType, at: Date.now() },
@@ -15852,6 +15972,7 @@ async function fetchBetterPosterUpstream(env, bp, timeoutMs) {
 // The stored copy, if there is one -- and a background refresh when it is
 // more than a day old.
 async function readStoredBetterPoster(env, ctx, bp) {
+  if (typeof betterPostersInR2 === "function" && betterPostersInR2(env)) return readBetterPosterR2(env, ctx, bp);
   if (!env || !env.CONFIGS) return null;
   try {
     const got = await env.CONFIGS.getWithMetadata(bp.kvKey, { type: "arrayBuffer" });
@@ -16000,6 +16121,12 @@ async function getBetterPoster(env, ctx, bp, origin, opts) {
     return stored;
   }
   if (await betterPosterRecentlyMissed(origin, bp)) return null;
+  // P5-9: with R2 and the queue, no request waits on btttr.cc. A job fetches
+  // it, and this answers at once (serveBetterPoster's stand-in).
+  if (typeof betterPostersInR2 === "function" && betterPostersInR2(env)) {
+    background(sendBetterPosterFetch(env, bp));
+    return null;
+  }
   const pending = fetchBetterPosterForPage(env, ctx, bp, origin, waitMs ? BETTER_POSTER_BACKGROUND_TIMEOUT_MS : BETTER_POSTER_UPSTREAM_TIMEOUT_MS)
     .then(async (found) => {
       if (!found) await flushBetterPosterRetries(env, false);
@@ -21568,6 +21695,12 @@ async function getRapidApiMonthlyUsage(env) {
     limit: RAPIDAPI_MONTHLY_LIMIT,
     safetyCap: RAPIDAPI_MONTHLY_SAFETY_CAP,
   };
+  // The ledger is a D1 row since P5-10 (rapidApiLedgerD1, 53_more-jobs.js),
+  // seeded from this KV key the first time. KV is the fallback without D1.
+  if (typeof rapidApiLedgerD1 === "function") {
+    const d1 = await rapidApiLedgerD1(env, 0);
+    if (d1) return { ...d1, limit: RAPIDAPI_MONTHLY_LIMIT, safetyCap: RAPIDAPI_MONTHLY_SAFETY_CAP };
+  }
   if (!env || !env.CONFIGS) return defaultUsage;
   try {
     const raw = await env.CONFIGS.get("cron:rapidapi:usage");
@@ -21589,6 +21722,12 @@ async function getRapidApiMonthlyUsage(env) {
 
 async function recordRapidApiUsage(env, addCount = 1) {
   const currentMonth = new Date().toISOString().slice(0, 7);
+  // One atomic statement in D1 (P5-10); the KV read-and-write below only
+  // without it.
+  if (typeof rapidApiLedgerD1 === "function") {
+    const d1 = await rapidApiLedgerD1(env, Math.max(0, Math.floor(addCount)));
+    if (d1) return { ...d1, limit: RAPIDAPI_MONTHLY_LIMIT, safetyCap: RAPIDAPI_MONTHLY_SAFETY_CAP };
+  }
   const usage = await getRapidApiMonthlyUsage(env);
   usage.count += Math.max(0, Math.floor(addCount));
   usage.lastAt = Math.floor(Date.now() / 1000);
@@ -25419,9 +25558,13 @@ async function prewarmSharedCatalogs(env, ctx) {
   // One flat list, in the order the four blocks used to run in, so a rotating
   // cursor can walk it. Each entry warms exactly one chart.
   const warmTasks = [];
+  // With chart snapshots on, the hourly chart.refresh job (48_chart-refresh.js)
+  // keeps the TMDB, Trakt and Simkl charts fresh for every region in use, so
+  // only the MDBList block below is left to this warm-up.
+  const chartsBySnapshot = typeof isChartSnapshotsEnabled === "function" && isChartSnapshotsEnabled(env);
 
   // 1. Trakt Official Charts
-  if (traktKey) {
+  if (traktKey && !chartsBySnapshot) {
     const traktCharts = [
       { chartKey: "trending", type: "movie" },
       { chartKey: "trending", type: "series" },
@@ -25443,7 +25586,7 @@ async function prewarmSharedCatalogs(env, ctx) {
   }
 
   // 2. TMDB Official Charts & Streaming Services
-  if (tmdbKey) {
+  if (tmdbKey && !chartsBySnapshot) {
     const tmdbCharts = [
       { chartKey: "trending", type: "movie" },
       { chartKey: "trending", type: "series" },
@@ -25480,7 +25623,7 @@ async function prewarmSharedCatalogs(env, ctx) {
   }
 
   // 3. Simkl Trending Charts
-  if (simklKey) {
+  if (simklKey && !chartsBySnapshot) {
     const simklCharts = [
       { chartKey: "today", type: "movie" },
       { chartKey: "today", type: "series" },
@@ -36892,6 +37035,26 @@ async function pickUpServerConnection() {
   else if (provider === 'mdblist') applyMdblistConnection(data.accessToken, data.username || '');
   else if (provider === 'simkl') applySimklConnection(data.accessToken, data.username || '');
   else if (provider === 'tmdb') applyTmdbConnection(data.accessToken, data.id || '', data.username || '');
+}
+
+// A connection the server could not renew (token.refresh, P5-7) asks to be
+// connected again. Once per page load, and only signed in.
+async function warnAboutLapsedConnections() {
+  if (typeof isSignedIn === 'function' && !isSignedIn()) return;
+  let data = null;
+  try {
+    const res = await fetch(ORIGIN + '/api/connections');
+    if (!res.ok) return;
+    data = await res.json();
+  } catch (e) {
+    return;
+  }
+  const names = { trakt: 'Trakt', mdblist: 'MDBList', simkl: 'Simkl', tmdb: 'TMDB' };
+  const lapsed = ((data && data.connections) || [])
+    .filter(function (c) { return c && c.status && c.status !== 'ok'; })
+    .map(function (c) { return names[c.provider] || c.provider; });
+  if (!lapsed.length) return;
+  showToast(lapsed.join(' and ') + ' asked to be signed in again. Reconnect it in Settings to keep those rows filled.', 'error', { duration: 15000 });
 }
 
 // Disconnecting removes the server's copy too. Harmless when there is none, or
@@ -74492,6 +74655,8 @@ renderTrackPlaybackSection();
 renderCreatorDashboard();
 // A signed-in connect comes back as ?connected=<provider> (P3a-9).
 if (typeof pickUpServerConnection === 'function') pickUpServerConnection();
+// A connection that needs signing in again (P5-7).
+if (typeof warnAboutLapsedConnections === 'function') warnAboutLapsedConnections();
 if (typeof pickUpMdblistTokenFromUrl === 'function') pickUpMdblistTokenFromUrl();
 if (typeof renderMdblistConnectStatus === 'function') renderMdblistConnectStatus();
 pickUpTraktTokenFromUrl();
@@ -75970,6 +76135,10 @@ async function handleFetch(request, env, ctx) {
     // activity database, run from /admin) -- 37_activity-backfill.js.
     const activityBackfillResponse = await handleActivityBackfillApi(request, env, url, path);
     if (activityBackfillResponse) return activityBackfillResponse;
+    // /admin/api/jobs/* (the background job queue: is it bound, and a test
+    // job's round trip) -- 44_jobs-queue.js.
+    const jobsAdminResponse = await handleJobsAdminApi(request, env, url, path);
+    if (jobsAdminResponse) return jobsAdminResponse;
     // /api/lists (the item-level list API over the v2 tables, behind
     // FF_V2_LISTS_API) -- 31_lists-api.js. The legacy /api/lists/like and
     // /api/lists/like-external routes below are left to answer as they do.
@@ -75979,6 +76148,14 @@ async function handleFetch(request, env, ctx) {
     // the same flag) -- 32_likes-api.js.
     const likesApiResponse = await handleLikesApi(request, env, url, path);
     if (likesApiResponse) return likesApiResponse;
+    // /api/imports (imports resolved by a background job, P5-6) --
+    // 49_imports.js.
+    const importsResponse = await handleImportsApi(request, env, url, path);
+    if (importsResponse) return importsResponse;
+    // DELETE /api/me (deleting an account in the background, P5-8) --
+    // 51_account-purge.js.
+    const accountDeleteResponse = await handleAccountDeleteApi(request, env, url, path);
+    if (accountDeleteResponse) return accountDeleteResponse;
 
     if (path === "/" || path === "") {
       ctx.waitUntil(bumpStat(env, "pageviews"));
@@ -76016,6 +76193,29 @@ async function handleFetch(request, env, ctx) {
         <text x="150" y="205" text-anchor="middle" font-family="sans-serif" font-size="42" fill="#5865a8">\u26a0</text>
         <text x="150" y="250" text-anchor="middle" font-family="sans-serif" font-size="17" fill="#c7cde6">Temporarily</text>
         <text x="150" y="274" text-anchor="middle" font-family="sans-serif" font-size="17" fill="#c7cde6">unavailable</text>
+      </svg>`;
+      return new Response(svg, {
+        headers: {
+          "Content-Type": "image/svg+xml",
+          "Cache-Control": "public, max-age=86400",
+          ...corsHeaders(),
+        },
+      });
+    }
+
+    // The "Reconnect" tile's poster (P5-7): a personal row whose provider
+    // connection needs signing in again.
+    if (path === "/reconnect-poster.svg") {
+      const provider = String(url.searchParams.get("provider") || "");
+      const adapter = isConnectionProvider(provider) ? providerAdapter(provider) : null;
+      const label = adapter ? adapter.label : "your account";
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450">
+        <rect width="300" height="450" fill="#161a2e"/>
+        <rect x="0.5" y="0.5" width="299" height="449" fill="none" stroke="#2a2f4a"/>
+        <text x="150" y="195" text-anchor="middle" font-family="sans-serif" font-size="42" fill="#5865a8">\u21bb</text>
+        <text x="150" y="245" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#c7cde6">Reconnect</text>
+        <text x="150" y="270" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#c7cde6">${escapeXml(label)}</text>
+        <text x="150" y="300" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#8a91b4">at mylistsaddon.com</text>
       </svg>`;
       return new Response(svg, {
         headers: {
@@ -76101,6 +76301,8 @@ async function handleFetch(request, env, ctx) {
           const { bp, sent } = wanted[cursor++];
           if (await readStoredBetterPoster(env, ctx, bp)) { stored++; ready.push(sent); continue; }
           if (await betterPosterRecentlyMissed(url.origin, bp)) continue;
+          // P5-9: handed to the poster.fetch job instead of waited on.
+          if (typeof betterPostersInR2 === "function" && betterPostersInR2(env)) { await sendBetterPosterFetch(env, bp); continue; }
           if (await fetchBetterPosterForPage(env, ctx, bp, url.origin, BETTER_POSTER_UPSTREAM_TIMEOUT_MS)) { fetched++; ready.push(sent); }
         }
       }));
@@ -76823,6 +77025,25 @@ Sitemap: ${url.origin}/sitemap.xml`;
       // cache below, which let Stremio and Nuvio keep a day-old copy.
       const isUserPersonal = rowSources.some((src) => STREMIO_LIVE_ROW_SOURCES.has(src));
 
+      // A personal row whose provider connection needs signing in again
+      // (token.refresh, P5-7): one tile saying so, instead of an empty row.
+      if (isUserPersonal && Array.isArray(resolvedConfig.reconnect) && resolvedConfig.reconnect.length) {
+        const rowProviders = String(entry.url || "").split("\n").map((u) => u.trim()).filter(Boolean).map((u) => resolveSourceRef(u).provider);
+        const reconnectProvider = rowProviders.find((p) => resolvedConfig.reconnect.includes(p));
+        if (reconnectProvider) {
+          const label = (providerAdapter(reconnectProvider) || {}).label || reconnectProvider;
+          return jsonPublic({
+            metas: skip === 0 ? [{
+              id: "tt0000000",
+              type: entry.type,
+              name: `Reconnect ${label} at mylistsaddon.com`,
+              description: `${label} asked to be signed in again. Open mylistsaddon.com, sign in, and reconnect ${label} in Settings; this row then fills again.`,
+              poster: `${url.origin}/reconnect-poster.svg?provider=${encodeURIComponent(reconnectProvider)}`,
+            }] : [],
+          }, 200, { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" });
+        }
+      }
+
       // Graceful degradation only applies to the first page (skip === 0):
       // that's the case that makes a whole shelf silently vanish from the
       // home screen, whereas a failure deeper into pagination (scrolling
@@ -76844,8 +77065,17 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // to a config that PROVED it belongs to that account. See resolveConfig
         // (04_config-resolution.js) for how that is established and
         // mayReadTrackedShelf (02_http-and-creator-utils.js) for what it gates.
-        let metas = await fetchCatalog(entry, skip, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, adultContentFilter, isStremioCatalog: true, canonicalIds: true, betterPosters, betterPostersOptions: betterPostersOptionsFrom(resolvedConfig, url.origin), showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, env, ctx, origin: url.origin });
-        if (dedupeAcrossLists) {
+        const catalogKeys = { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, adultContentFilter, isStremioCatalog: true, canonicalIds: true, betterPosters, betterPostersOptions: betterPostersOptionsFrom(resolvedConfig, url.origin), showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, env, ctx, origin: url.origin };
+        // FF_MATERIALIZER (P5-11, 54_materializer.js): with de-duplication, the
+        // first page of every non-personal row is built once per install and
+        // de-duplicated in one pass, instead of each row rebuilding the rows
+        // above it. Null means the usual path below.
+        let metas = dedupeAcrossLists && skip === 0 && !searchQuery && !isUserPersonal && isMaterializerEnabled(env)
+          ? await materializedRowPage(env, ctx, { config, entries, entryIndex, keys: catalogKeys })
+          : null;
+        const materialized = !!metas;
+        if (!metas) metas = await fetchCatalog(entry, skip, catalogKeys);
+        if (dedupeAcrossLists && !materialized) {
           metas = await dedupeAcrossListEntries(entries, entryIndex, skip, metas, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, canonicalIds: true, env, ctx });
         }
         if (searchQuery && Array.isArray(metas) && metas.length > 0) {
@@ -91369,88 +91599,38 @@ export default {
 
   // Runs on whatever schedule this Worker's owner configured under
   // Triggers -> Cron Triggers in the Cloudflare dashboard (recommended:
-  // every 6 minutes with "*/6 * * * *") -- refreshes and pre-warms shared
-  // Trakt, TMDB, Simkl, and MDBList charts into KV storage and sweeps newly-aired episodes for Continue Watching.
+  // every 5 minutes, "*/5 * * * *"; the older "*/6 * * * *" works the same).
+  //
+  // Since Phase 5 (P5-2) a tick is a dispatcher: with the JOBS queue bound it
+  // only sends the jobs that are due to the queue (the Continue Watching and
+  // Airing Next sweeps, New on Streaming, chart and poster warming, channel
+  // presets, housekeeping, and later one-off jobs), and the `queue` export
+  // below runs them. Without the queue it does that work itself, exactly as
+  // before. runCronTick (45_jobs-dispatcher.js) decides.
   async scheduled(event, env, ctx) {
-    // The boundary the fetch handler above has, which this did not.
-    //
-    // `ctx.waitUntil(Promise.all([...]))` rejects the moment any one task
-    // does, and there was no try -- so a failure in one task escaped the
-    // handler and Cloudflare recorded the whole invocation as failed, hiding
-    // which task actually broke. The tasks are independent, so each one gets
-    // its own catch and the tick is judged on whether it ran, not on whether
-    // everything inside it succeeded. Same argument as the fetch handler's:
-    // one boundary here is worth more than remembering to do this at every
-    // future call site.
-    const guard = (label, p) => Promise.resolve(p).catch((err) => {
-      console.error(`[Cron] ${label} failed:`, err);
-    });
+    // The boundary the fetch handler above has: nothing thrown here may escape
+    // the handler, or Cloudflare records the whole invocation as failed and
+    // hides which part broke.
     try {
-    // Same as the fetch handler above: nothing that runs below may see an
-    // empty API key just because this isolate's first event happened to be a
-    // cron tick rather than a request. See applyEnvApiKeys.
-    applyEnvApiKeys(env);
-    configureProviderBreaker(env);
-    // FF_EVENT_TRACKING, as in the fetch handler above.
-    env = eventTrackingEnv(env);
-    // No outbound-fetch budget is divided between the tasks any more. That
-    // arithmetic (CRON_SUBREQUEST_BUDGET and its shares) existed to fit a tick
-    // inside the Workers Free plan's 50 subrequests; the hosted Worker runs on
-    // Workers Paid (10,000 per invocation), and each task below keeps its own
-    // per-tick limit for its own reasons (TMDB politeness, RapidAPI's monthly
-    // quota, the per-account sweep size). These tasks move to queue jobs in a
-    // later phase -- see NEXT_VERSION_ARCHITECTURE.md section 5.
-    //
-    // The ordering is kept: the Continue Watching sweep writes first, because
-    // it is the part a person is waiting on, and everything that spends
-    // provider calls runs after it.
-    const episodeSweep = guard("checkForNewEpisodes", checkForNewEpisodes(env));
-    const streamingSweep = guard(
-      "sweepNewOnStreaming",
-      episodeSweep.then(() => sweepNewOnStreaming(env, ctx))
-    );
-    const airingNextSweep = guard(
-      "refreshAiringNextSweep",
-      episodeSweep.then(() => refreshAiringNextSweep(env, ctx))
-    );
-    const betterPosterWarm = guard(
-      "prewarmBetterPosters",
-      episodeSweep.then(() => prewarmBetterPosters(env, ctx))
-    );
-    ctx.waitUntil(
-      Promise.all([
-        episodeSweep,
-        streamingSweep,
-        airingNextSweep,
-        betterPosterWarm,
-        guard("bumpNewOnStreamingEpisodes", streamingSweep.then(() => bumpNewOnStreamingEpisodes(env, ctx))),
-        guard("prewarmSharedCatalogs", streamingSweep.then(() => prewarmSharedCatalogs(env, ctx))),
-        // One Quick Add network per tick (see prewarmChannelPresets,
-        // 07_source-fetchers-tmdb-simkl.js) -- independent of the streaming
-        // sweep chain above since it spends TMDB requests, not RapidAPI's
-        // capped quota, and has nothing to wait on.
-        guard("prewarmChannelPresets", prewarmChannelPresets(env, ctx)),
-        // Cheap (one sqlite_master read per tick) and the only thing that puts
-        // "you have not run migration N" somewhere an operator will see it
-        // without going looking. The admin panel shows the same thing on
-        // demand; this is for the case where nobody thought to look.
-        guard("d1SchemaCheck", (async () => {
-          const status = await checkD1Schema(env);
-          if (status.bound && status.checked && !status.ok) {
-            console.warn(
-              `[Cron] This Worker is running ahead of its D1 schema. Unapplied migration(s): ${status.pendingMigrations.join(", ")}. ` +
-              status.missing.map((m) => `${m.name}: ${m.consequence}`).join(" | ")
-            );
-          }
-        })()),
-        guard("pruneTombstones", pruneTombstones(env)),
-      ]).then(() => guard("providerBreakerFlush", providerBreakerFlush(env)))
-    );
+      // Same as the fetch handler above: nothing that runs below may see an
+      // empty API key just because this isolate's first event happened to be
+      // a cron tick rather than a request. See applyEnvApiKeys.
+      applyEnvApiKeys(env);
+      configureProviderBreaker(env);
+      // FF_EVENT_TRACKING, as in the fetch handler above.
+      env = eventTrackingEnv(env);
+      await runCronTick(event, env, ctx);
     } catch (err) {
-      // Anything thrown synchronously before waitUntil was even reached --
-      // applyEnvApiKeys, or a task that threw rather than rejecting.
-      console.error("[Cron] scheduled() failed before its tasks were queued:", err);
+      console.error("[Cron] scheduled() failed:", err);
     }
+  },
+
+  // Background jobs (Phase 5): the consumer of the mylists-jobs queue. It is
+  // set up on the queue in the dashboard (Queues -> mylists-jobs -> Settings
+  // -> Consumers -> this Worker; docs/OPERATIONS.md section 18). Each message
+  // names its job type, and runJobsQueue (44_jobs-queue.js) runs its handler.
+  async queue(batch, env, ctx) {
+    await runJobsQueue(batch, env, ctx);
   },
 };
 
@@ -91863,6 +92043,8 @@ async function resolveV2InstallConfig(param, env, { withTracking = false } = {})
     trackCreatorName: owner,
     trackCreatorKey: "",
     trackOwner: owner,
+    // Providers whose connection needs signing in again (P5-7).
+    reconnect: Array.isArray(fromConnections._reconnect) ? fromConnections._reconnect : [],
     // Playback pings from this link record to this account. A legacy link
     // proves that with the Creator Key it carries; a v2 link has no key, and
     // its "track" scope, granted to a signed-in owner, is the proof instead.
@@ -92933,7 +93115,13 @@ async function connectionFieldsForConfig(env, accountId, current) {
   const out = {};
   for (const row of rows) {
     const map = CONNECTION_CONFIG_FIELDS[row.provider];
-    if (!map || row.status !== "ok") continue;
+    if (!map) continue;
+    if (row.status !== "ok") {
+      // The provider refused to renew this sign-in (P5-7): the rows that
+      // needed it show a "Reconnect" tile instead of going quietly empty.
+      if (map.token && !current[map.token]) (out._reconnect = out._reconnect || []).push(row.provider);
+      continue;
+    }
     const tokenMissing = Boolean(map.token && !current[map.token] && row.access_token_enc);
     const keyMissing = Boolean(map.apiKey && !current[map.apiKey] && row.api_key_enc);
     if (!tokenMissing && !keyMissing) continue;
@@ -98413,7 +98601,7 @@ async function shelfTitles(env, mediaIds) {
         `SELECT m.id, m.kind, m.imdb_id, m.tmdb_id, m.alt_id, m.title, m.year, m.poster_path,
                 s.media_id AS s_media, s.status AS s_status, s.last_aired_season, s.last_aired_episode, s.last_aired_date,
                 s.next_season, s.next_episode, s.next_air_date, s.next_air_time, s.air_tz,
-                s.season_finale_season, s.season_finale_date, s.season_finale_episode, s.season_episode_counts
+                s.season_finale_season, s.season_finale_date, s.season_finale_episode, s.season_episode_counts, s.checked_at
          FROM media m LEFT JOIN show_schedule s ON s.media_id = m.id WHERE m.id IN (${marks})`
       ).bind(...part).all());
     } catch (e) {
@@ -98422,7 +98610,9 @@ async function shelfTitles(env, mediaIds) {
         `SELECT id, kind, imdb_id, tmdb_id, alt_id, title, year, poster_path FROM media WHERE id IN (${marks})`
       ).bind(...part).all());
     }
-    for (const r of rows || []) out.set(r.id, { media: r, sched: r.s_media != null ? r : null });
+    // A row made when the show was first watched (38_) and never refreshed
+    // (P5-3) holds no schedule yet: "not known", not "nothing new".
+    for (const r of rows || []) out.set(r.id, { media: r, sched: r.s_media != null && (r.checked_at != null || r.s_status != null) ? r : null });
   }
   return out;
 }
@@ -99144,6 +99334,15 @@ const CHART_SNAPSHOT_MEMO_MAX = 500;
 // A rebuild that failed or came back empty is not tried again sooner than this.
 const CHART_SNAPSHOT_RETRY_MS = 5 * 60 * 1000;
 
+// Which snapshots are in use (P5-5): serving or building one notes it in
+// `snap:chartuse:{same tail}`, lasting three days, with what the refresh job
+// (48_chart-refresh.js) needs to rebuild it (the recipe) as KV metadata. At
+// most once per key per isolate every 12 hours, so this is a handful of KV
+// writes a day per chart, not one per request.
+const CHART_SNAPSHOT_USE_PREFIX = "snap:chartuse:";
+const CHART_SNAPSHOT_USE_TTL_SEC = 3 * 24 * 60 * 60;
+const CHART_SNAPSHOT_USE_EVERY_MS = 12 * 60 * 60 * 1000;
+const CHART_SNAPSHOT_USED = new Map(); // key -> when this isolate last noted it
 const CHART_SNAPSHOT_MEMO = new Map();     // key -> { snap, checkedAt, triedAt }
 const CHART_SNAPSHOT_BUILDING = new Map(); // key -> promise of the build
 
@@ -99243,6 +99442,36 @@ function buildChartSnapshot(source, ref, page, key, previous) {
   return job;
 }
 
+// Everything that makes this page, besides provider keys: enough to build it
+// again off the request (48_chart-refresh.js).
+function chartSnapshotRecipe(source, ref, { entry, skip, keys }) {
+  return {
+    s: source.name,
+    u: ref.url,
+    t: (entry && entry.type) || null,
+    k: Number(skip) || 0,
+    r: (keys && keys.region) || null,
+    d: keys && keys.hideNonDigitalReleases ? 1 : 0,
+  };
+}
+
+function noteChartSnapshotUse(env, key, source, ref, page) {
+  const now = Date.now();
+  const last = CHART_SNAPSHOT_USED.get(key);
+  if (last && now - last < CHART_SNAPSHOT_USE_EVERY_MS) return;
+  if (CHART_SNAPSHOT_USED.size >= CHART_SNAPSHOT_MEMO_MAX) CHART_SNAPSHOT_USED.clear();
+  CHART_SNAPSHOT_USED.set(key, now);
+  const metadata = { key, recipe: chartSnapshotRecipe(source, ref, page) };
+  // KV metadata holds at most 1024 bytes: a recipe that big is not recorded.
+  if (JSON.stringify(metadata).length > 1000) return;
+  const write = env.CONFIGS.put(CHART_SNAPSHOT_USE_PREFIX + key.slice(CHART_SNAPSHOT_PREFIX.length), "1", {
+    expirationTtl: CHART_SNAPSHOT_USE_TTL_SEC,
+    metadata,
+  }).catch(() => {});
+  const ctx = page.keys && page.keys.ctx;
+  if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(write);
+}
+
 // fetchCatalog's call for one source. Serves the chart snapshot when there is
 // one, and otherwise calls the fetcher exactly as before.
 async function fetchSourcePageWithSnapshot(source, ref, page) {
@@ -99250,6 +99479,7 @@ async function fetchSourcePageWithSnapshot(source, ref, page) {
   const env = keys.env;
   const key = env && env.CONFIGS && isChartSnapshotsEnabled(env) ? chartSnapshotKey(source, ref, page) : null;
   if (!key) return source.fetchPage(ref, page);
+  noteChartSnapshotUse(env, key, source, ref, page);
 
   const now = Date.now();
   const snap = await readChartSnapshot(env, key, now);
@@ -99437,4 +99667,2817 @@ async function canonicalizeCatalogMetas(env, metas, { kind } = {}) {
   const total = metas.totalItems;
   if (typeof total === "number") out.totalItems = Math.max(out.length, total - (metas.length - out.length));
   return out;
+}
+
+// --- Background jobs: the queue (Phase 5, P5-1) --------------------------------
+//
+// Work that nobody is waiting on moves off requests and cron ticks onto a
+// Cloudflare Queue, `mylists-jobs`, which this same Worker consumes. A message
+// is one job: `{ v, type, payload, enqueuedAt }`. The consumer (the `queue`
+// export in 26_api-creator-and-admin-routes.js) runs the job type's handler for
+// each message, acknowledges it when the handler returns, and asks the queue to
+// deliver it again later when the handler throws. After JOBS_MAX_RETRIES failed
+// retries the queue moves the message to the dead-letter queue,
+// `mylists-jobs-dlq`, where it can be read in the dashboard. Both queues and
+// the consumer are set up in the dashboard (docs/OPERATIONS.md section 18).
+//
+//   Producer: `enqueueJob(env, type, payload, { delaySeconds })`, or
+//   `enqueueJobs(env, jobs)` for many at once. Both need the `JOBS` binding
+//   (a Queue producer) and say so rather than throw when it is missing, so a
+//   caller can fall back to doing the work itself.
+//
+//   Job types: `defineJobType(type, { run, retryDelaySec })` at module level.
+//   `run(env, payload, job)` gets the invocation's env (with the same wrapping
+//   the fetch handler applies) and `job = { id, type, attempts, enqueuedAt,
+//   ctx }`. It returns normally when done, throws to be retried, or returns
+//   `{ retryAfterSeconds }` to be delivered again later without counting as a
+//   failure in the logs (a lease held elsewhere, a provider that asked us to
+//   wait). A handler must be safe to run twice with the same payload: a queue
+//   delivers at least once, and a message can arrive again after it succeeded.
+//
+//   Messages are processed one after another within a batch. A batch (up to 25
+//   messages) is one invocation and shares its limits: 30 s CPU by default, 15
+//   minutes of wall time, about 1,000 D1 queries.
+//
+// `jobs.ping` is the one job type here: the admin's "Send a test job" button
+// (Maintenance tab) enqueues it and waits for it to come back, which proves the
+// producer binding, the queue and the consumer are all set up.
+//
+// Metrics: one Analytics Engine point per job type per batch, index `job`:
+// blobs ["job", type, queue], doubles [messages, done, retried, dropped,
+// milliseconds spent].
+//
+// Module level, after the Worker's exports, like 27_ onward.
+
+const JOBS_QUEUE_NAME = "mylists-jobs";
+const JOBS_DLQ_NAME = "mylists-jobs-dlq";
+const JOB_MESSAGE_VERSION = 1;
+// What the consumer is configured with in the dashboard (batch size 25, 5
+// retries). The code does not enforce them; they are here so the tests and the
+// admin panel say the same thing as docs/OPERATIONS.md.
+const JOBS_BATCH_SIZE = 25;
+const JOBS_MAX_RETRIES = 5;
+// Retry delays: 30 s, 1 min, 2 min, 4 min, 8 min... capped at an hour.
+const JOB_RETRY_BASE_SEC = 30;
+const JOB_RETRY_MAX_SEC = 60 * 60;
+// A message of a type this Worker does not know (sent by a newer deployment
+// that was rolled back) is kept, not dropped: it is retried slowly, so a
+// redeploy picks it up, and reaches the dead-letter queue otherwise.
+const JOB_UNKNOWN_TYPE_RETRY_SEC = 10 * 60;
+// Queues refuses a message over 128 KB and a sendBatch over 256 KB or 100
+// messages. Payloads are ids and small settings, so these are far away; the
+// checks turn a mistake into a clear error instead of a failed send.
+const JOB_MESSAGE_MAX_BYTES = 120 * 1024;
+const JOB_SEND_BATCH_MAX_MESSAGES = 100;
+const JOB_SEND_BATCH_MAX_BYTES = 240 * 1024;
+const JOB_PING_KV_PREFIX = "jobs:ping:";
+const JOB_PING_TTL_SEC = 60 * 60;
+
+const JOB_HANDLERS = new Map(); // type -> { type, run, retryDelaySec }
+
+function defineJobType(type, spec) {
+  if (typeof type !== "string" || !/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/.test(type)) {
+    throw new Error(`Job type "${type}" must be dotted lowercase words, like "show.refresh".`);
+  }
+  if (!spec || typeof spec.run !== "function") throw new Error(`Job type "${type}" needs a run function.`);
+  if (JOB_HANDLERS.has(type)) throw new Error(`Job type "${type}" is defined twice.`);
+  JOB_HANDLERS.set(type, { type, run: spec.run, retryDelaySec: spec.retryDelaySec || null });
+}
+
+function jobsQueueBound(env) {
+  return !!(env && env.JOBS && typeof env.JOBS.send === "function");
+}
+
+function jobMessage(type, payload, now = Date.now()) {
+  return { v: JOB_MESSAGE_VERSION, type, payload: payload == null ? {} : payload, enqueuedAt: now };
+}
+
+// Checks one job before it is sent. Returns the message and its size, or the
+// reason it cannot go.
+function prepareJobMessage(type, payload, now) {
+  if (!JOB_HANDLERS.has(type)) return { error: "unknownType" };
+  const body = jobMessage(type, payload, now);
+  let bytes;
+  try {
+    bytes = new TextEncoder().encode(JSON.stringify(body)).length;
+  } catch {
+    return { error: "unserializable" };
+  }
+  if (bytes > JOB_MESSAGE_MAX_BYTES) return { error: "tooLarge" };
+  return { body, bytes };
+}
+
+function jobDelaySeconds(delaySeconds) {
+  const n = Math.floor(Number(delaySeconds) || 0);
+  return n > 0 ? Math.min(n, JOB_RETRY_MAX_SEC * 12) : 0;
+}
+
+// Sends one job. Resolves to { ok: true } or { ok: false, reason } with reason
+// "unbound" (no JOBS binding), "unknownType", "tooLarge", "unserializable" or
+// "sendFailed". Never throws.
+async function enqueueJob(env, type, payload = {}, opts = {}) {
+  if (!jobsQueueBound(env)) return { ok: false, reason: "unbound" };
+  const prepared = prepareJobMessage(type, payload, Date.now());
+  if (prepared.error) {
+    console.error(`[Jobs] not sending ${type}: ${prepared.error}`);
+    return { ok: false, reason: prepared.error };
+  }
+  const delaySeconds = jobDelaySeconds(opts.delaySeconds);
+  try {
+    await env.JOBS.send(prepared.body, delaySeconds ? { contentType: "json", delaySeconds } : { contentType: "json" });
+    return { ok: true };
+  } catch (err) {
+    console.error(`[Jobs] sending ${type} failed:`, err);
+    return { ok: false, reason: "sendFailed" };
+  }
+}
+
+// Sends many jobs, `[{ type, payload, delaySeconds }]`, in as few sendBatch
+// calls as the limits allow. Resolves to { ok, sent, failed, reason }: `ok` is
+// true only when every job went. Never throws.
+async function enqueueJobs(env, jobs) {
+  const list = Array.isArray(jobs) ? jobs : [];
+  if (!list.length) return { ok: true, sent: 0, failed: 0 };
+  if (!jobsQueueBound(env)) return { ok: false, sent: 0, failed: list.length, reason: "unbound" };
+  const now = Date.now();
+  const chunks = [];
+  let chunk = [];
+  let chunkBytes = 0;
+  let failed = 0;
+  let reason = null;
+  for (const job of list) {
+    const prepared = prepareJobMessage(job && job.type, job && job.payload, now);
+    if (prepared.error) {
+      console.error(`[Jobs] not sending ${job && job.type}: ${prepared.error}`);
+      failed++;
+      reason = reason || prepared.error;
+      continue;
+    }
+    if (chunk.length && (chunk.length >= JOB_SEND_BATCH_MAX_MESSAGES || chunkBytes + prepared.bytes > JOB_SEND_BATCH_MAX_BYTES)) {
+      chunks.push(chunk);
+      chunk = [];
+      chunkBytes = 0;
+    }
+    const delaySeconds = jobDelaySeconds(job.delaySeconds);
+    chunk.push(delaySeconds ? { body: prepared.body, contentType: "json", delaySeconds } : { body: prepared.body, contentType: "json" });
+    chunkBytes += prepared.bytes;
+  }
+  if (chunk.length) chunks.push(chunk);
+  let sent = 0;
+  for (const messages of chunks) {
+    try {
+      if (typeof env.JOBS.sendBatch === "function") {
+        await env.JOBS.sendBatch(messages);
+      } else {
+        for (const m of messages) await env.JOBS.send(m.body, m.delaySeconds ? { contentType: "json", delaySeconds: m.delaySeconds } : { contentType: "json" });
+      }
+      sent += messages.length;
+    } catch (err) {
+      console.error("[Jobs] sendBatch failed:", err);
+      failed += messages.length;
+      reason = reason || "sendFailed";
+    }
+  }
+  return { ok: failed === 0, sent, failed, reason };
+}
+
+// How long before a failed job is delivered again. `attempts` is the queue's
+// count of deliveries so far, 1 on the first.
+function jobRetryDelaySec(attempts, spec) {
+  const base = (spec && spec.retryDelaySec) || JOB_RETRY_BASE_SEC;
+  const n = Math.max(1, Math.floor(Number(attempts) || 1));
+  return Math.min(JOB_RETRY_MAX_SEC, base * Math.pow(2, Math.min(n - 1, 16)));
+}
+
+function jobRetry(msg, delaySeconds) {
+  try {
+    msg.retry({ delaySeconds: Math.max(0, Math.min(JOB_RETRY_MAX_SEC * 12, Math.floor(delaySeconds) || 0)) });
+  } catch {
+    // Already acknowledged or retried: the first call wins.
+  }
+}
+
+function jobAck(msg) {
+  try {
+    msg.ack();
+  } catch {
+    // Already acknowledged or retried: the first call wins.
+  }
+}
+
+// Runs one batch. Every message is acknowledged or retried explicitly, so one
+// job failing never makes the others run again. Never throws.
+async function handleJobsBatch(batch, env, ctx) {
+  const messages = batch && Array.isArray(batch.messages) ? batch.messages : [];
+  const queue = (batch && batch.queue) || JOBS_QUEUE_NAME;
+  const stats = new Map(); // type -> { n, done, retried, dropped, ms }
+  const stat = (type) => {
+    let s = stats.get(type);
+    if (!s) {
+      s = { n: 0, done: 0, retried: 0, dropped: 0, ms: 0 };
+      stats.set(type, s);
+    }
+    return s;
+  };
+  for (const msg of messages) {
+    const body = msg && msg.body;
+    if (!body || typeof body !== "object" || Array.isArray(body) || typeof body.type !== "string" || !body.type) {
+      // Nothing can ever run this: acknowledged, so it does not sit in the
+      // dead-letter queue as if it were a job that failed.
+      console.error(`[Jobs] dropping a message that is not a job (${msg && msg.id}).`);
+      const s = stat("invalid");
+      s.n++;
+      s.dropped++;
+      jobAck(msg);
+      continue;
+    }
+    const s = stat(body.type);
+    s.n++;
+    const spec = JOB_HANDLERS.get(body.type);
+    if (!spec) {
+      console.warn(`[Jobs] no handler for job type "${body.type}" in this deployment; trying again later.`);
+      s.retried++;
+      jobRetry(msg, JOB_UNKNOWN_TYPE_RETRY_SEC);
+      continue;
+    }
+    const startedAt = Date.now();
+    const attempts = Math.max(1, Math.floor(Number(msg.attempts) || 1));
+    try {
+      const out = await spec.run(env, body.payload && typeof body.payload === "object" ? body.payload : {}, {
+        id: msg.id,
+        type: body.type,
+        attempts,
+        enqueuedAt: Number(body.enqueuedAt) || null,
+        queue,
+        ctx,
+      });
+      if (out && Number(out.retryAfterSeconds) > 0) {
+        s.retried++;
+        jobRetry(msg, Number(out.retryAfterSeconds));
+      } else {
+        s.done++;
+        jobAck(msg);
+      }
+    } catch (err) {
+      const delay = jobRetryDelaySec(attempts, spec);
+      console.error(`[Jobs] ${body.type} failed (delivery ${attempts} of ${JOBS_MAX_RETRIES + 1}); ${attempts > JOBS_MAX_RETRIES ? "moving to the dead-letter queue" : `trying again in ${delay} s`}:`, err);
+      s.retried++;
+      jobRetry(msg, delay);
+    }
+    s.ms += Date.now() - startedAt;
+  }
+  const analytics = env && env.ANALYTICS && typeof env.ANALYTICS.writeDataPoint === "function" ? env.ANALYTICS : null;
+  if (analytics) {
+    for (const [type, s] of stats) {
+      try {
+        analytics.writeDataPoint({
+          blobs: ["job", type, queue],
+          doubles: [s.n, s.done, s.retried, s.dropped, s.ms],
+          indexes: ["job"],
+        });
+      } catch {
+        // Metrics must never affect a job.
+      }
+    }
+  }
+  return Object.fromEntries(stats);
+}
+
+// The consumer: called by the `queue` export (26_) with the invocation's own
+// env. It gets the same setup as a request or a cron tick.
+async function runJobsQueue(batch, env, ctx) {
+  try {
+    applyEnvApiKeys(env);
+    configureProviderBreaker(env);
+    // FF_EVENT_TRACKING, as in the fetch and scheduled handlers.
+    const runEnv = eventTrackingEnv(env);
+    return await handleJobsBatch(batch, runEnv, ctx);
+  } catch (err) {
+    // Only the setup above can get here (handleJobsBatch does not throw). A
+    // message already acknowledged or retried keeps that answer; the rest run
+    // again.
+    console.error("[Jobs] queue() failed before its jobs ran:", err);
+    try {
+      if (batch && typeof batch.retryAll === "function") batch.retryAll({ delaySeconds: JOB_RETRY_BASE_SEC });
+    } catch {
+      // Nothing more to do; the queue retries un-answered messages anyway.
+    }
+    return null;
+  } finally {
+    try {
+      const flush = providerBreakerFlush(env).catch(() => {});
+      if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(flush);
+    } catch {
+      // Never affects the batch.
+    }
+  }
+}
+
+// --- jobs.ping: the round trip the admin's "Send a test job" button makes ------
+
+defineJobType("jobs.ping", {
+  async run(env, payload, job) {
+    const nonce = typeof payload.nonce === "string" ? payload.nonce : "";
+    if (!/^[A-Za-z0-9-]{8,64}$/.test(nonce) || !env || !env.CONFIGS) return;
+    const key = JOB_PING_KV_PREFIX + nonce;
+    // Delivered twice: the first answer stands.
+    if (await env.CONFIGS.get(key)) return;
+    await env.CONFIGS.put(key, JSON.stringify({
+      receivedAt: Date.now(),
+      sentAt: Number(payload.sentAt) || job.enqueuedAt || null,
+      attempts: job.attempts,
+      queue: job.queue,
+    }), { expirationTtl: JOB_PING_TTL_SEC });
+  },
+});
+
+function newJobPingNonce() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// /admin/api/jobs/* -- the Maintenance tab's queue panel.
+//   GET  /admin/api/jobs/status          is JOBS bound; the job types known
+//   POST /admin/api/jobs/ping            send a test job -> { nonce }
+//   GET  /admin/api/jobs/ping?nonce=...  has it come back yet
+async function handleJobsAdminApi(request, env, url, path) {
+  if (!path.startsWith("/admin/api/jobs/")) return null;
+  if (!(await isAdminRequest(request, env))) return json({ ok: false, error: "Not authorized." }, 401);
+  try {
+    if (path === "/admin/api/jobs/status" && request.method === "GET") {
+      return json({
+        ok: true,
+        bound: jobsQueueBound(env),
+        queue: JOBS_QUEUE_NAME,
+        deadLetterQueue: JOBS_DLQ_NAME,
+        batchSize: JOBS_BATCH_SIZE,
+        maxRetries: JOBS_MAX_RETRIES,
+        types: [...JOB_HANDLERS.keys()].sort(),
+        // The jobs table's view (45_jobs-dispatcher.js): periodic jobs' last
+        // runs, and one-off jobs by state. Null without migration 0016.
+        jobs: typeof jobsTableStatus === "function" ? await jobsTableStatus(env) : null,
+      });
+    }
+    if (path === "/admin/api/jobs/ping" && request.method === "POST") {
+      if (!jobsQueueBound(env)) {
+        return json({ ok: false, error: `No queue bound as JOBS. Create the ${JOBS_QUEUE_NAME} queue and bind it (docs/OPERATIONS.md section 18).` }, 503);
+      }
+      if (!env.CONFIGS) return json({ ok: false, error: "No CONFIGS KV binding." }, 503);
+      const nonce = newJobPingNonce();
+      const sent = await enqueueJob(env, "jobs.ping", { nonce, sentAt: Date.now() });
+      if (!sent.ok) return json({ ok: false, error: `Could not send to the queue (${sent.reason}). See the Worker's logs.` }, 502);
+      return json({ ok: true, nonce });
+    }
+    if (path === "/admin/api/jobs/ping" && request.method === "GET") {
+      const nonce = url.searchParams.get("nonce") || "";
+      if (!/^[A-Za-z0-9-]{8,64}$/.test(nonce)) return json({ ok: false, error: "Missing or malformed nonce." }, 400);
+      const raw = env.CONFIGS ? await env.CONFIGS.get(JOB_PING_KV_PREFIX + nonce) : null;
+      if (!raw) return json({ ok: true, received: false });
+      let rec = {};
+      try {
+        rec = JSON.parse(raw) || {};
+      } catch {
+        rec = {};
+      }
+      return json({
+        ok: true,
+        received: true,
+        attempts: rec.attempts || 1,
+        roundTripMs: rec.sentAt && rec.receivedAt ? Math.max(0, rec.receivedAt - rec.sentAt) : null,
+      });
+    }
+    return json({ ok: false, error: "Not found." }, 404);
+  } catch (e) {
+    return json({ ok: false, error: safeErrorMessage(e) }, 500);
+  }
+}
+
+// --- Background jobs: the dispatcher (Phase 5, P5-2) ---------------------------
+//
+// The cron tick stops doing work and hands it to the queue (44_jobs-queue.js).
+// What it hands over is kept in the `jobs` table (migration 0016), one row per
+// job, so nothing is lost when a message is, and a job that died half way is
+// noticed and run again.
+//
+// Two kinds of row-backed job, both defined at module level in the file that
+// owns the work:
+//
+//   definePeriodicJob(type, { everyMs, leaseMs, legacy, run })
+//     Runs every `everyMs`. Its row (`dedupe_key` "periodic:{type}") is made by
+//     the dispatcher and never finishes: after each run it waits for its next
+//     turn. A run that fails is tried again sooner (the retry delays of
+//     44_, capped at everyMs). The cron's own work (the Continue Watching and
+//     Airing Next sweeps, New on Streaming, chart and poster warming, channel
+//     presets, housekeeping) is periodic jobs marked `legacy`: see below.
+//
+//   defineDurableJob(type, { leaseMs, maxAttempts, run })
+//     One-off work somebody asked for (an import, an account purge), started
+//     with createJob(env, type, { dedupeKey, accountId, payload }). `run`
+//     returns nothing when done, `{ progress, again: true }` to carry on in a
+//     new run straight away (long work in bounded steps), or `{ progress,
+//     waitMs }` to carry on later. It throws to be tried again after a delay;
+//     after `maxAttempts` failed runs the row is `failed`. `progress` is kept in
+//     `progress_json`, where a page can read it.
+//
+// A row's life: `queued` (waiting until `run_after`) -> sent to the queue
+// (`run_after` becomes a token, now + JOBS_DISPATCH_GRACE_MS) -> `running`
+// (`run_after` is the lease expiry) -> back to `queued` (periodic, or a
+// durable job carrying on or waiting), `done` or `failed`. Every change is a
+// compare-and-set on (status, run_after), so a message delivered twice, two
+// overlapping ticks, or a dispatcher and a consumer racing, run a job once.
+//
+// The dispatcher (every cron tick, dispatchJobs):
+//   - makes sure every periodic job has its row (one statement);
+//   - finds the rows that are due: waiting and past `run_after`, or `running`
+//     past their lease (their run stopped: counted as a failed attempt);
+//   - sends each to the queue with its token.
+//   A row that was sent and not picked up within JOBS_DISPATCH_GRACE_MS (the
+//   message was lost, or the queue has no consumer) is run by the tick itself
+//   instead, at most JOBS_INLINE_LIMIT a tick, so a queue that is not
+//   delivering slows the work down but never stops it.
+//
+// Without the JOBS binding, or without the `jobs` table (migration 0016 not
+// applied yet), or if dispatching fails, the tick does the cron's work itself
+// exactly as before this change (runLegacyCronTasks), and runs other due jobs
+// itself (the fallback of NEXT_VERSION_ARCHITECTURE.md section 6.4).
+//
+// Rows of other types (the list and history copies' `migrate.*` rows) are
+// never touched: every query names the job types defined here.
+//
+// Module level, after the Worker's exports, like 27_ onward.
+
+// How long a row sent to the queue waits to be picked up before the tick runs
+// it itself. Well above a healthy queue's delay (seconds), well below an hour.
+const JOBS_DISPATCH_GRACE_MS = 10 * 60 * 1000;
+// A running job's lease: the queue consumer's wall-time limit. A row still
+// `running` after it has died.
+const JOBS_DEFAULT_LEASE_MS = 15 * 60 * 1000;
+const JOBS_DISPATCH_LIMIT = 100;
+const JOBS_INLINE_LIMIT = 20;
+const JOBS_DURABLE_MAX_ATTEMPTS = JOBS_MAX_RETRIES + 1;
+// A periodic job is next due this much before a whole period has passed since
+// it started, so a job meant for every tick is due at the next tick whether
+// the trigger fires every 5 or every 6 minutes, and an hourly job is not
+// pushed a whole tick later every hour.
+const JOBS_PERIODIC_SLACK_MS = 90 * 1000;
+// The cron's own work runs every tick.
+const LEGACY_CRON_EVERY_MS = 4 * 60 * 1000;
+const PERIODIC_JOB_KEY_PREFIX = "periodic:";
+
+const ROW_JOB_TYPES = new Map(); // type -> spec
+
+function defineRowJobType(type, spec) {
+  defineJobType(type, {
+    run: (env, payload, job) => runRowJob(env, spec, payload, job),
+  });
+  ROW_JOB_TYPES.set(type, spec);
+}
+
+function definePeriodicJob(type, { everyMs, leaseMs, legacy = false, run }) {
+  if (!(Number(everyMs) > 0)) throw new Error(`Periodic job "${type}" needs everyMs.`);
+  defineRowJobType(type, {
+    type,
+    periodic: true,
+    legacy: !!legacy,
+    everyMs: Number(everyMs),
+    leaseMs: Number(leaseMs) || JOBS_DEFAULT_LEASE_MS,
+    maxAttempts: Infinity,
+    run,
+  });
+}
+
+function defineDurableJob(type, { leaseMs, maxAttempts, run }) {
+  defineRowJobType(type, {
+    type,
+    periodic: false,
+    legacy: false,
+    everyMs: 0,
+    leaseMs: Number(leaseMs) || JOBS_DEFAULT_LEASE_MS,
+    maxAttempts: Math.max(1, Number(maxAttempts) || JOBS_DURABLE_MAX_ATTEMPTS),
+    run,
+  });
+}
+
+function parseJobProgress(raw) {
+  if (!raw) return {};
+  try {
+    const v = typeof raw === "string" ? JSON.parse(raw) : raw;
+    return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+  } catch {
+    return {};
+  }
+}
+
+// The job's own progress, without the dispatcher's bookkeeping (`_q`).
+function jobUserProgress(progress) {
+  const out = { ...progress };
+  delete out._q;
+  return out;
+}
+
+function jobErrorText(err) {
+  let msg = "";
+  try {
+    msg = err && typeof err.message === "string" ? err.message : String(err);
+  } catch {
+    msg = "error";
+  }
+  return (typeof redactForLog === "function" ? redactForLog(msg) : msg).slice(0, 500);
+}
+
+function jobRowRetryMs(spec, failures) {
+  const ms = jobRetryDelaySec(failures, spec) * 1000;
+  return spec.periodic ? Math.min(ms, spec.everyMs) : ms;
+}
+
+// Runs one row-backed job: claims its row with the token it was sent with,
+// runs it, and writes what happened. Called by the queue consumer (through the
+// job type's handler) and by the tick for a job it runs itself. Returns
+// { skipped } when the row is not this token's to run (a duplicate or late
+// message, or the job was cancelled). Throws only when D1 does, so the queue
+// delivers the message again; the row then stays `running` until its lease
+// runs out and the dispatcher picks it up.
+async function runRowJob(env, spec, payload, job = {}) {
+  const jobId = Math.floor(Number(payload && payload.jobId));
+  const token = Math.floor(Number(payload && payload.token));
+  if (!(jobId > 0) || !(token > 0) || !env || !env.DB) return { skipped: "malformed" };
+  const row = await env.DB.prepare(
+    "SELECT id, type, status, attempts, run_after, payload_json, progress_json FROM jobs WHERE id = ?"
+  ).bind(jobId).first();
+  if (!row || row.type !== spec.type || row.status !== "queued" || Number(row.run_after) !== token) return { skipped: "stale" };
+
+  const startedAt = Date.now();
+  const leaseUntil = startedAt + spec.leaseMs;
+  const progress = parseJobProgress(row.progress_json);
+  const q = { ...(progress._q || {}), claimedAt: startedAt };
+  const claim = await env.DB.prepare(
+    "UPDATE jobs SET status = 'running', run_after = ?, progress_json = ?, updated_at = ? WHERE id = ? AND status = 'queued' AND run_after = ?"
+  ).bind(leaseUntil, JSON.stringify({ ...progress, _q: q }), startedAt, jobId, token).run();
+  if (!claim || !claim.meta || claim.meta.changes !== 1) return { skipped: "stale" };
+
+  const attempts = (Number(row.attempts) || 0) + 1;
+  let out = null;
+  let error = null;
+  try {
+    out = await spec.run(env, parseJobProgress(row.payload_json), {
+      ...job,
+      jobId,
+      attempts,
+      progress: jobUserProgress(progress),
+    });
+  } catch (err) {
+    error = err;
+  }
+  const finishedAt = Date.now();
+  const tookMs = finishedAt - startedAt;
+  const nextQ = { ...q, lastStartedAt: startedAt, lastFinishedAt: finishedAt, lastMs: tookMs, runs: (Number(q.runs) || 0) + 1 };
+  const userProgress = out && out.progress && typeof out.progress === "object" ? out.progress : jobUserProgress(progress);
+
+  let status;
+  let runAfter;
+  let newAttempts;
+  let lastError = null;
+  let sendToken = 0;
+  if (error) {
+    console.error(`[Jobs] ${spec.type} #${jobId} failed (run ${attempts}):`, error);
+    newAttempts = attempts;
+    lastError = jobErrorText(error);
+    nextQ.failures = (Number(q.failures) || 0) + 1;
+    if (!spec.periodic && newAttempts >= spec.maxAttempts) {
+      status = "failed";
+      runAfter = 0;
+    } else {
+      status = "queued";
+      runAfter = finishedAt + jobRowRetryMs(spec, newAttempts);
+    }
+  } else if (spec.periodic) {
+    status = "queued";
+    newAttempts = 0;
+    nextQ.lastOkAt = finishedAt;
+    runAfter = Math.max(finishedAt, startedAt + spec.everyMs - JOBS_PERIODIC_SLACK_MS);
+  } else if (out && out.again) {
+    // Carry on straight away, in a new run: through the queue when there is
+    // one, otherwise at the next tick.
+    status = "queued";
+    newAttempts = 0;
+    if (jobsQueueBound(env)) {
+      sendToken = finishedAt + JOBS_DISPATCH_GRACE_MS;
+      runAfter = sendToken;
+      nextQ.dispatchedAt = finishedAt;
+    } else {
+      runAfter = finishedAt;
+    }
+  } else if (out && Number(out.waitMs) > 0) {
+    status = "queued";
+    newAttempts = 0;
+    runAfter = finishedAt + Number(out.waitMs);
+  } else {
+    status = "done";
+    newAttempts = 0;
+    runAfter = 0;
+  }
+  const saved = await env.DB.prepare(
+    "UPDATE jobs SET status = ?, attempts = ?, run_after = ?, progress_json = ?, last_error = ?, updated_at = ? WHERE id = ? AND status = 'running' AND run_after = ?"
+  ).bind(status, newAttempts, runAfter, JSON.stringify({ ...userProgress, _q: nextQ }), lastError, finishedAt, jobId, leaseUntil).run();
+  if (!saved || !saved.meta || saved.meta.changes !== 1) {
+    // The lease ran out and the dispatcher took the row back: its next run
+    // repeats this one, which every job must allow for.
+    console.warn(`[Jobs] ${spec.type} #${jobId} finished after its lease; its next run will repeat it.`);
+    return { ran: true, late: true };
+  }
+  if (sendToken) {
+    const sent = await enqueueJob(env, spec.type, { jobId, token: sendToken });
+    if (!sent.ok) console.warn(`[Jobs] ${spec.type} #${jobId}: could not send its next step (${sent.reason}); the next tick will run it.`);
+  }
+  return { ran: true, status, failed: !!error };
+}
+
+// Starts a one-off job. A job with the same dedupe key that is still waiting
+// or running is the same job (nothing new is made); one that is done or
+// failed is started again with the new payload. Resolves to { ok, id, created,
+// sent } or { ok: false, reason }. Throws only for a type that is not a
+// durable job (a mistake in the code).
+async function createJob(env, type, { dedupeKey = null, accountId = null, payload = {} } = {}) {
+  const spec = ROW_JOB_TYPES.get(type);
+  if (!spec || spec.periodic) throw new Error(`"${type}" is not a job type that can be created.`);
+  if (!env || !env.DB) return { ok: false, reason: "noDatabase" };
+  let payloadJson;
+  try {
+    payloadJson = JSON.stringify(payload == null ? {} : payload);
+  } catch {
+    return { ok: false, reason: "unserializable" };
+  }
+  const now = Date.now();
+  const viaQueue = jobsQueueBound(env);
+  const runAfter = viaQueue ? now + JOBS_DISPATCH_GRACE_MS : now;
+  const progressJson = JSON.stringify(viaQueue ? { _q: { dispatchedAt: now } } : {});
+  let id = null;
+  let changed = false;
+  try {
+    const res = await env.DB.prepare(
+      `INSERT INTO jobs (type, dedupe_key, account_id, status, attempts, run_after, payload_json, progress_json, last_error, created_at, updated_at)
+       VALUES (?, ?, ?, 'queued', 0, ?, ?, ?, NULL, ?, ?)
+       ON CONFLICT(dedupe_key) DO UPDATE SET
+         status = 'queued', attempts = 0, run_after = excluded.run_after, payload_json = excluded.payload_json,
+         progress_json = excluded.progress_json, last_error = NULL, account_id = excluded.account_id, updated_at = excluded.updated_at
+       WHERE jobs.status IN ('done', 'failed') AND jobs.type = excluded.type`
+    ).bind(type, dedupeKey, accountId, runAfter, payloadJson, progressJson, now, now).run();
+    changed = !!(res && res.meta && res.meta.changes === 1);
+    if (dedupeKey != null) {
+      const row = await env.DB.prepare("SELECT id, type FROM jobs WHERE dedupe_key = ?").bind(dedupeKey).first();
+      if (!row) return { ok: false, reason: "notSaved" };
+      if (row.type !== type) return { ok: false, reason: "dedupeKeyTaken" };
+      id = row.id;
+    } else {
+      id = res && res.meta ? res.meta.last_row_id : null;
+    }
+  } catch (err) {
+    console.error(`[Jobs] could not create ${type}:`, err);
+    return { ok: false, reason: /no such table/i.test(jobErrorText(err)) ? "noJobsTable" : "databaseError" };
+  }
+  if (!changed) return { ok: true, id, created: false, sent: false };
+  let sent = false;
+  if (viaQueue) {
+    const r = await enqueueJob(env, type, { jobId: id, token: runAfter });
+    sent = r.ok;
+    // Not sent: the tick runs it once JOBS_DISPATCH_GRACE_MS has passed.
+  }
+  return { ok: true, id, created: true, sent };
+}
+
+function rowJobTypes({ includeLegacy = true } = {}) {
+  const out = [];
+  for (const [type, spec] of ROW_JOB_TYPES) {
+    if (!includeLegacy && spec.legacy) continue;
+    out.push(type);
+  }
+  return out;
+}
+
+// Takes the due rows of `types` for this tick: each is set to a fresh token
+// (a compare-and-set, so an overlapping tick or a consumer cannot take the
+// same row) and returned with what to do with it: "send" to the queue, or
+// "inline" (run here). `inline: true` runs everything here (no queue).
+async function takeDueJobs(env, types, now, { inline = false } = {}) {
+  if (!types.length) return [];
+  const { results } = await env.DB.prepare(
+    `SELECT id, type, status, attempts, run_after, progress_json FROM jobs
+     WHERE status IN ('queued', 'running') AND run_after <= ? AND type IN (SELECT value FROM json_each(?))
+     ORDER BY run_after, id LIMIT ?`
+  ).bind(now, JSON.stringify(types), JOBS_DISPATCH_LIMIT).all();
+  const plans = [];
+  let inlineCount = 0;
+  for (const row of results || []) {
+    const spec = ROW_JOB_TYPES.get(row.type);
+    if (!spec) continue;
+    const progress = parseJobProgress(row.progress_json);
+    const q = { ...(progress._q || {}) };
+    let attempts = Number(row.attempts) || 0;
+    let lastError = null;
+    let status = "queued";
+    if (row.status === "running") {
+      attempts++;
+      lastError = "Did not finish: its run stopped, or took longer than its lease.";
+      q.failures = (Number(q.failures) || 0) + 1;
+      if (!spec.periodic && attempts >= spec.maxAttempts) status = "failed";
+    }
+    const undelivered = row.status === "queued" && Number(q.dispatchedAt) > 0 && !(Number(q.claimedAt) >= Number(q.dispatchedAt));
+    const action = status === "failed" ? "fail" : inline || undelivered ? "inline" : "send";
+    if (action === "inline") {
+      if (inlineCount >= JOBS_INLINE_LIMIT) continue;
+      inlineCount++;
+    }
+    const token = action === "fail" ? 0 : now + JOBS_DISPATCH_GRACE_MS;
+    if (action === "send") q.dispatchedAt = now;
+    else if (action === "inline") delete q.dispatchedAt;
+    plans.push({
+      row,
+      spec,
+      action,
+      token,
+      undelivered,
+      stmt: env.DB.prepare(
+        `UPDATE jobs SET status = ?, attempts = ?, run_after = ?, progress_json = ?, last_error = COALESCE(?, last_error), updated_at = ?
+         WHERE id = ? AND status = ? AND run_after = ?`
+      ).bind(status, attempts, token, JSON.stringify({ ...progress, _q: q }), lastError, now, row.id, row.status, row.run_after),
+    });
+  }
+  if (!plans.length) return [];
+  const outcomes = await env.DB.batch(plans.map((p) => p.stmt));
+  return plans.filter((p, i) => outcomes[i] && outcomes[i].meta && outcomes[i].meta.changes === 1);
+}
+
+function runTakenJobsInline(env, ctx, plans) {
+  return Promise.all(plans.map((p) =>
+    runRowJob(env, p.spec, { jobId: p.row.id, token: p.token }, { id: `tick-${p.row.id}`, type: p.spec.type, attempts: 1, queue: "cron", ctx })
+      .catch((err) => console.error(`[Jobs] ${p.spec.type} #${p.row.id} could not be run here:`, err))
+  ));
+}
+
+// One tick with the queue: dispatch only. Resolves to a summary; throws when
+// the jobs table cannot be used (the caller then does the work itself).
+async function dispatchJobs(env, ctx, { now = Date.now() } = {}) {
+  const startedAt = Date.now();
+  const periodic = [];
+  for (const [type, spec] of ROW_JOB_TYPES) if (spec.periodic) periodic.push(type);
+  if (periodic.length) {
+    await env.DB.prepare(
+      `INSERT INTO jobs (type, dedupe_key, status, attempts, run_after, progress_json, created_at, updated_at)
+       SELECT value, ? || value, 'queued', 0, 0, '{}', ?, ? FROM json_each(?) WHERE true
+       ON CONFLICT(dedupe_key) DO NOTHING`
+    ).bind(PERIODIC_JOB_KEY_PREFIX, now, now, JSON.stringify(periodic)).run();
+  }
+  const taken = await takeDueJobs(env, rowJobTypes(), now);
+  const toSend = taken.filter((p) => p.action === "send");
+  const toRun = taken.filter((p) => p.action === "inline");
+  const failed = taken.filter((p) => p.action === "fail");
+  for (const p of failed) console.error(`[Jobs] ${p.spec.type} #${p.row.id} failed for good: it stopped part way ${p.spec.maxAttempts} times.`);
+  let sent = { ok: true, sent: 0, failed: 0 };
+  if (toSend.length) {
+    sent = await enqueueJobs(env, toSend.map((p) => ({ type: p.spec.type, payload: { jobId: p.row.id, token: p.token } })));
+    // Not sent: those rows are run here once JOBS_DISPATCH_GRACE_MS has passed.
+    if (!sent.ok) console.error(`[Jobs] ${sent.failed} of ${toSend.length} jobs could not be sent to the queue (${sent.reason}).`);
+  }
+  if (toRun.length) {
+    for (const p of toRun) {
+      console.warn(`[Jobs] ${p.spec.type} #${p.row.id} was sent to the queue and not picked up within ${Math.round(JOBS_DISPATCH_GRACE_MS / 60000)} minutes; running it here. Check the queue's consumer (docs/OPERATIONS.md section 18).`);
+    }
+    const running = runTakenJobsInline(env, ctx, toRun);
+    if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(running);
+    else await running;
+  }
+  const summary = { ok: true, mode: "queue", due: taken.length, sent: sent.sent, sendFailed: sent.failed, inline: toRun.length, failed: failed.length, ms: Date.now() - startedAt };
+  writeJobsDispatchMetric(env, summary);
+  return summary;
+}
+
+// No queue: the tick runs due jobs itself (other than the cron's own work,
+// which runLegacyCronTasks does), a few per tick, one after another.
+async function runDueJobsInline(env, ctx, { now = Date.now() } = {}) {
+  const types = rowJobTypes({ includeLegacy: false });
+  if (!types.length || !env || !env.DB) return { ok: true, ran: 0 };
+  let taken;
+  try {
+    taken = await takeDueJobs(env, types, now, { inline: true });
+  } catch (err) {
+    if (!/no such table/i.test(jobErrorText(err))) console.error("[Jobs] could not read due jobs:", err);
+    return { ok: false, ran: 0 };
+  }
+  for (const p of taken.filter((t) => t.action === "inline")) {
+    await runTakenJobsInline(env, ctx, [p]);
+  }
+  return { ok: true, ran: taken.length };
+}
+
+function writeJobsDispatchMetric(env, s) {
+  const analytics = env && env.ANALYTICS && typeof env.ANALYTICS.writeDataPoint === "function" ? env.ANALYTICS : null;
+  if (!analytics) return;
+  try {
+    analytics.writeDataPoint({
+      blobs: ["jobs-dispatch", s.mode],
+      doubles: [s.due || 0, s.sent || 0, s.sendFailed || 0, s.inline || 0, s.failed || 0, s.ms || 0],
+      indexes: ["jobs-dispatch"],
+    });
+  } catch {
+    // Metrics must never affect a tick.
+  }
+}
+
+// The cron tick (the `scheduled` export, 26_). With the queue: dispatch, and
+// nothing else. Otherwise, or if dispatching fails: the work, here, as before.
+async function runCronTick(event, env, ctx) {
+  if (jobsQueueBound(env) && env.DB) {
+    try {
+      const summary = await dispatchJobs(env, ctx);
+      if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(providerBreakerFlush(env).catch(() => {}));
+      return summary;
+    } catch (err) {
+      const msg = jobErrorText(err);
+      if (/no such table/i.test(msg)) {
+        console.warn("[Jobs] JOBS is bound but the jobs table is missing (apply migration 0016); this tick does the work itself.");
+      } else {
+        console.error("[Jobs] dispatching failed; this tick does the work itself:", err);
+      }
+    }
+  }
+  runLegacyCronTasks(env, ctx);
+  if (env && env.DB) {
+    ctx.waitUntil(runDueJobsInline(env, ctx).catch((err) => console.error("[Jobs] running due jobs failed:", err)));
+  }
+  return { ok: true, mode: "inline" };
+}
+
+// The cron's work as it ran before the queue, unchanged: used when there is no
+// queue (or no jobs table).
+function runLegacyCronTasks(env, ctx) {
+  // `ctx.waitUntil(Promise.all([...]))` rejects the moment any one task
+  // does, so each task gets its own catch and the tick is judged on whether it
+  // ran, not on whether everything inside it succeeded.
+  const guard = (label, p) => Promise.resolve(p).catch((err) => {
+    console.error(`[Cron] ${label} failed:`, err);
+  });
+  // No outbound-fetch budget is divided between the tasks any more. That
+  // arithmetic (CRON_SUBREQUEST_BUDGET and its shares) existed to fit a tick
+  // inside the Workers Free plan's 50 subrequests; the hosted Worker runs on
+  // Workers Paid (10,000 per invocation), and each task below keeps its own
+  // per-tick limit for its own reasons (TMDB politeness, RapidAPI's monthly
+  // quota, the per-account sweep size).
+  //
+  // The ordering is kept: the Continue Watching sweep writes first, because
+  // it is the part a person is waiting on, and everything that spends
+  // provider calls runs after it.
+  const episodeSweep = guard("checkForNewEpisodes", checkForNewEpisodes(env));
+  const streamingSweep = guard(
+    "sweepNewOnStreaming",
+    episodeSweep.then(() => sweepNewOnStreaming(env, ctx))
+  );
+  const airingNextSweep = guard(
+    "refreshAiringNextSweep",
+    episodeSweep.then(() => refreshAiringNextSweep(env, ctx))
+  );
+  const betterPosterWarm = guard(
+    "prewarmBetterPosters",
+    episodeSweep.then(() => prewarmBetterPosters(env, ctx))
+  );
+  ctx.waitUntil(
+    Promise.all([
+      episodeSweep,
+      streamingSweep,
+      airingNextSweep,
+      betterPosterWarm,
+      guard("bumpNewOnStreamingEpisodes", streamingSweep.then(() => bumpNewOnStreamingEpisodes(env, ctx))),
+      guard("prewarmSharedCatalogs", streamingSweep.then(() => prewarmSharedCatalogs(env, ctx))),
+      // One Quick Add network per tick (see prewarmChannelPresets,
+      // 07_source-fetchers-tmdb-simkl.js) -- independent of the streaming
+      // sweep chain above since it spends TMDB requests, not RapidAPI's
+      // capped quota, and has nothing to wait on.
+      guard("prewarmChannelPresets", prewarmChannelPresets(env, ctx)),
+      guard("d1SchemaCheck", runD1SchemaCheckTask(env)),
+      guard("pruneTombstones", pruneTombstones(env)),
+    ]).then(() => guard("providerBreakerFlush", providerBreakerFlush(env)))
+  );
+}
+
+// Cheap (one sqlite_master read) and the only thing that puts "you have not
+// run migration N" somewhere an operator will see it without going looking.
+// The admin panel shows the same thing on demand; this is for the case where
+// nobody thought to look.
+async function runD1SchemaCheckTask(env) {
+  const status = await checkD1Schema(env);
+  if (status.bound && status.checked && !status.ok) {
+    console.warn(
+      `[Cron] This Worker is running ahead of its D1 schema. Unapplied migration(s): ${status.pendingMigrations.join(", ")}. ` +
+      status.missing.map((m) => `${m.name}: ${m.consequence}`).join(" | ")
+    );
+  }
+  return status;
+}
+
+// Runs each of `tasks` ([label, () => promise]) whatever the others do, then
+// throws the first failure, so the job's row records it.
+async function runJobSteps(tasks) {
+  let first = null;
+  for (const [label, fn] of tasks) {
+    try {
+      await fn();
+    } catch (err) {
+      console.error(`[Jobs] ${label} failed:`, err);
+      if (!first) first = err;
+    }
+  }
+  if (first) throw first;
+}
+
+// --- The cron's work as periodic jobs -------------------------------------------
+// With the queue, each piece of what runLegacyCronTasks does is its own job:
+// its own retries, its own time limit, and never two runs of it at once (the
+// row's lease). Same functions, same arguments. P5-3 onward replace them one
+// by one.
+
+definePeriodicJob("cron.episodes", {
+  everyMs: LEGACY_CRON_EVERY_MS,
+  legacy: true,
+  run: (env) => checkForNewEpisodes(env),
+});
+
+definePeriodicJob("cron.airing-next", {
+  everyMs: LEGACY_CRON_EVERY_MS,
+  legacy: true,
+  run: (env, payload, job) => refreshAiringNextSweep(env, job.ctx),
+});
+
+// New on Streaming (P5-10 names it nos.sweep; its quota ledger is in D1).
+definePeriodicJob("nos.sweep", {
+  everyMs: LEGACY_CRON_EVERY_MS,
+  legacy: true,
+  run: (env, payload, job) => runJobSteps([
+    ["sweepNewOnStreaming", () => sweepNewOnStreaming(env, job.ctx)],
+    ["bumpNewOnStreamingEpisodes", () => bumpNewOnStreamingEpisodes(env, job.ctx)],
+  ]),
+});
+
+definePeriodicJob("cron.charts", {
+  everyMs: LEGACY_CRON_EVERY_MS,
+  legacy: true,
+  run: (env, payload, job) => prewarmSharedCatalogs(env, job.ctx),
+});
+
+definePeriodicJob("cron.better-posters", {
+  everyMs: LEGACY_CRON_EVERY_MS,
+  legacy: true,
+  run: (env, payload, job) => prewarmBetterPosters(env, job.ctx),
+});
+
+// The channel presets are the daily channel.presets job (53_more-jobs.js).
+
+definePeriodicJob("cron.housekeeping", {
+  everyMs: LEGACY_CRON_EVERY_MS,
+  legacy: true,
+  run: (env) => runJobSteps([
+    ["d1SchemaCheck", () => runD1SchemaCheckTask(env)],
+    ["pruneTombstones", () => pruneTombstones(env)],
+  ]),
+});
+
+// For the admin's queue panel (44_): the periodic jobs' last runs, and how
+// many one-off jobs of each type are in each state. Null without the table.
+async function jobsTableStatus(env) {
+  if (!env || !env.DB) return null;
+  try {
+    const now = Date.now();
+    const { results } = await env.DB.prepare(
+      `SELECT type, status, attempts, run_after, last_error, progress_json FROM jobs
+       WHERE dedupe_key IN (SELECT ? || value FROM json_each(?)) ORDER BY id`
+    ).bind(PERIODIC_JOB_KEY_PREFIX, JSON.stringify(rowJobTypes().filter((t) => ROW_JOB_TYPES.get(t).periodic))).all();
+    const periodic = (results || []).map((r) => {
+      const all = parseJobProgress(r.progress_json);
+      const q = all._q || {};
+      // Sent to the queue and not picked up yet.
+      const inQueue = r.status === "queued" && Number(q.dispatchedAt) > 0 && !(Number(q.claimedAt) >= Number(q.dispatchedAt));
+      return {
+        type: r.type,
+        status: inQueue ? "sent" : r.status,
+        failuresInARow: Number(r.attempts) || 0,
+        lastError: r.last_error || null,
+        runs: Number(q.runs) || 0,
+        lastStartedAt: q.lastStartedAt || null,
+        lastOkAt: q.lastOkAt || null,
+        lastMs: q.lastMs == null ? null : q.lastMs,
+        sentAt: inQueue ? q.dispatchedAt : null,
+        nextAt: r.status === "queued" && !inQueue ? Math.max(now, Number(r.run_after) || 0) : null,
+        // A job's own report of its last full pass, when it keeps one
+        // (shelf.shadow, 47_).
+        last: all.last && typeof all.last === "object" ? all.last : null,
+      };
+    });
+    const durableTypes = rowJobTypes().filter((t) => !ROW_JOB_TYPES.get(t).periodic);
+    const durable = {};
+    if (durableTypes.length) {
+      const counts = await env.DB.prepare(
+        "SELECT type, status, count(*) AS n FROM jobs WHERE type IN (SELECT value FROM json_each(?)) GROUP BY type, status"
+      ).bind(JSON.stringify(durableTypes)).all();
+      for (const c of counts.results || []) {
+        durable[c.type] = durable[c.type] || {};
+        durable[c.type][c.status] = Number(c.n) || 0;
+      }
+    }
+    return { periodic, durable };
+  } catch (err) {
+    if (!/no such table/i.test(jobErrorText(err))) console.error("[Jobs] reading job status failed:", err);
+    return null;
+  }
+}
+
+// --- Show schedules: show.refresh (Phase 5, P5-3) -------------------------------
+//
+// Continue Watching and Airing Next are worked out when read (39_activity-
+// shelves.js) from each account's show_progress and one shared show_schedule
+// row per show (migration 0017). This file keeps those rows current.
+//
+//   show.watchers (periodic, daily): counts, over every activity database,
+//   how many accounts have each show in show_progress, and writes
+//   show_schedule.watcher_count (making the row the first time, due at once).
+//   recordActivityPlay (38_) adds one as plays arrive; this recount is what
+//   fills the table after the history copy (P3c-3) and corrects any drift.
+//
+//   show.refresh (periodic, hourly): takes the shows that are due
+//   (`next_check_at <= now AND watcher_count > 0`, at most
+//   SHOW_REFRESH_SELECT_LIMIT, soonest first), holds them for
+//   SHOW_REFRESH_HOLD_MS so the next run does not take them again, and hands
+//   them out SHOW_REFRESH_BATCH at a time as `show.refresh-batch` jobs, or
+//   refreshes them itself without the queue.
+//
+//   show.refresh-batch (plain job): one TMDB details call per show (plus a
+//   `/find` when only its IMDb id is known), and TVmaze for the air time when
+//   an episode is coming. It sets the row, and when to look again:
+//     ended or cancelled                       14 days
+//     an episode airs within a day             1 hour
+//     otherwise                                6 hours
+//     TMDB failed                              1 hour (404: 14 days)
+//   It is safe to run twice: it only writes what TMDB said.
+//
+// Module level, after the Worker's exports, like 27_ onward.
+
+const SHOW_REFRESH_SELECT_LIMIT = 500;
+const SHOW_REFRESH_BATCH = 50;
+const SHOW_REFRESH_HOLD_MS = 30 * 60 * 1000;
+const SHOW_CHECK_ENDED_MS = 14 * 24 * 60 * 60 * 1000;
+const SHOW_CHECK_AIR_DAY_MS = 60 * 60 * 1000;
+const SHOW_CHECK_RETURNING_MS = 6 * 60 * 60 * 1000;
+const SHOW_CHECK_RETRY_MS = 60 * 60 * 1000;
+const SHOW_WATCHERS_CHUNK = 2000;
+
+function showScheduleTmdbKey(env) {
+  return (env && env.TMDB_API_KEY) || (typeof TMDB_API_KEY === "string" ? TMDB_API_KEY : "");
+}
+
+async function showTmdbGet(path, key) {
+  const sep = path.includes("?") ? "&" : "?";
+  const res = await fetch(`https://api.themoviedb.org/3${path}${sep}api_key=${encodeURIComponent(key)}`, {
+    headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` },
+  });
+  if (res.status === 404) return { notFound: true };
+  if (!res.ok) throw new Error(`TMDB answered ${res.status}`);
+  return { data: await res.json() };
+}
+
+function showDayOffset(date, now) {
+  if (!date) return null;
+  const t = Date.parse(String(date).slice(0, 10) + "T00:00:00Z");
+  if (!Number.isFinite(t)) return null;
+  return (t - Date.parse(new Date(now).toISOString().slice(0, 10) + "T00:00:00Z")) / 86400000;
+}
+
+// TMDB's /tv/{id} answer (and TVmaze's air time) as a show_schedule row.
+// Pure, so the tests can hold it to the shelves' reading of the columns.
+function showScheduleFromTmdb(tv, airTime, now) {
+  const last = tv && tv.last_episode_to_air;
+  const next = tv && tv.next_episode_to_air;
+  const counts = {};
+  for (const s of (tv && Array.isArray(tv.seasons) ? tv.seasons : [])) {
+    const n = Number(s && s.season_number);
+    const c = Number(s && s.episode_count);
+    if (Number.isInteger(n) && Number.isFinite(c) && c > 0) counts[n] = c;
+  }
+  const row = {
+    status: (tv && tv.status) || "Unknown",
+    last_aired_season: last ? Number(last.season_number) : null,
+    last_aired_episode: last ? Number(last.episode_number) : null,
+    last_aired_date: last && last.air_date ? String(last.air_date).slice(0, 10) : null,
+    next_season: next ? Number(next.season_number) : null,
+    next_episode: next ? Number(next.episode_number) : null,
+    next_air_date: next && next.air_date ? String(next.air_date).slice(0, 10) : null,
+    next_air_time: null,
+    air_tz: null,
+    season_finale_season: null,
+    season_finale_date: null,
+    season_finale_episode: null,
+    season_episode_counts: Object.keys(counts).length ? JSON.stringify(counts) : null,
+  };
+  // The finale of the season now airing (or last aired): its last episode.
+  const finaleSeason = row.next_season != null ? row.next_season : row.last_aired_season;
+  if (finaleSeason != null && counts[finaleSeason]) {
+    const fin = counts[finaleSeason];
+    row.season_finale_season = finaleSeason;
+    row.season_finale_episode = fin;
+    if (row.next_season === finaleSeason && row.next_episode === fin) row.season_finale_date = row.next_air_date;
+    else if (row.last_aired_season === finaleSeason && row.last_aired_episode === fin) row.season_finale_date = row.last_aired_date;
+  }
+  if (next && airTime) {
+    const own = airTime.next && Number(airTime.next.season) === row.next_season && Number(airTime.next.number) === row.next_episode;
+    row.next_air_time = (own && airTime.next.time) || airTime.time || null;
+    row.air_tz = airTime.timezone || null;
+  }
+  const status = String(row.status).toLowerCase();
+  const soon = showDayOffset(row.next_air_date, now);
+  let wait;
+  if (status === "ended" || status === "canceled" || status === "cancelled") wait = SHOW_CHECK_ENDED_MS;
+  else if (soon != null && soon <= 1) wait = SHOW_CHECK_AIR_DAY_MS;
+  else wait = SHOW_CHECK_RETURNING_MS;
+  row.checked_at = now;
+  row.next_check_at = now + wait;
+  return row;
+}
+
+const SHOW_SCHEDULE_COLUMNS = [
+  "status", "last_aired_season", "last_aired_episode", "last_aired_date", "next_season", "next_episode",
+  "next_air_date", "next_air_time", "air_tz", "season_finale_season", "season_finale_date",
+  "season_finale_episode", "season_episode_counts", "checked_at", "next_check_at",
+];
+
+// Refreshes the schedule rows of `mediaIds`. Returns counts. Throws only when
+// D1 does (the job is then tried again).
+async function refreshShowSchedules(env, mediaIds, { now = Date.now(), ctx = null } = {}) {
+  const ids = [...new Set((mediaIds || []).map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+  const out = { shows: ids.length, refreshed: 0, failed: 0, notFound: 0 };
+  if (!ids.length || !env || !env.DB) return out;
+  const key = showScheduleTmdbKey(env);
+  const { results } = await env.DB.prepare(
+    "SELECT id, kind, tmdb_id, imdb_id FROM media WHERE id IN (SELECT value FROM json_each(?))"
+  ).bind(JSON.stringify(ids)).all();
+  const writes = [];
+  for (const m of results || []) {
+    let row;
+    try {
+      if (!key) throw new Error("TMDB_API_KEY is not set");
+      let tmdbId = m.tmdb_id;
+      if (!tmdbId && m.imdb_id) {
+        const found = await showTmdbGet(`/find/${encodeURIComponent(m.imdb_id)}?external_source=imdb_id`, key);
+        const tv = found.data && Array.isArray(found.data.tv_results) ? found.data.tv_results[0] : null;
+        tmdbId = tv ? tv.id : null;
+      }
+      const got = tmdbId ? await showTmdbGet(`/tv/${Number(tmdbId)}`, key) : { notFound: true };
+      if (got.notFound) {
+        out.notFound++;
+        writes.push(env.DB.prepare("UPDATE show_schedule SET status = COALESCE(status, 'Unknown'), checked_at = ?, next_check_at = ? WHERE media_id = ?")
+          .bind(now, now + SHOW_CHECK_ENDED_MS, m.id));
+        continue;
+      }
+      const tv = got.data;
+      let airTime = null;
+      if (tv && tv.next_episode_to_air && m.imdb_id && typeof fetchShowAirTime === "function") {
+        try {
+          airTime = await fetchShowAirTime(m.imdb_id, env, ctx);
+        } catch {
+          airTime = null;
+        }
+      }
+      row = showScheduleFromTmdb(tv, airTime, now);
+    } catch (err) {
+      out.failed++;
+      console.warn(`[Jobs] show.refresh: media ${m.id}: ${jobErrorText(err)}`);
+      writes.push(env.DB.prepare("UPDATE show_schedule SET next_check_at = ? WHERE media_id = ?").bind(now + SHOW_CHECK_RETRY_MS, m.id));
+      continue;
+    }
+    out.refreshed++;
+    writes.push(env.DB.prepare(
+      `UPDATE show_schedule SET ${SHOW_SCHEDULE_COLUMNS.map((c) => `${c} = ?`).join(", ")} WHERE media_id = ?`
+    ).bind(...SHOW_SCHEDULE_COLUMNS.map((c) => row[c]), m.id));
+  }
+  for (let i = 0; i < writes.length; i += 50) await env.DB.batch(writes.slice(i, i + 50));
+  return out;
+}
+
+// Takes the due shows and holds them. Returns their ids.
+async function takeDueShows(env, now) {
+  const { results } = await env.DB.prepare(
+    "SELECT media_id FROM show_schedule WHERE next_check_at <= ? AND watcher_count > 0 ORDER BY next_check_at LIMIT ?"
+  ).bind(now, SHOW_REFRESH_SELECT_LIMIT).all();
+  const ids = (results || []).map((r) => r.media_id);
+  if (ids.length) {
+    await env.DB.prepare(
+      "UPDATE show_schedule SET next_check_at = ? WHERE media_id IN (SELECT value FROM json_each(?)) AND next_check_at <= ?"
+    ).bind(now + SHOW_REFRESH_HOLD_MS, JSON.stringify(ids), now).run();
+  }
+  return ids;
+}
+
+async function runShowRefresh(env, job = {}, { now = Date.now() } = {}) {
+  if (!env || !env.DB) return { shows: 0 };
+  let ids;
+  try {
+    ids = await takeDueShows(env, now);
+  } catch (err) {
+    if (/no such table/i.test(jobErrorText(err))) return { shows: 0, reason: "no 0017" };
+    throw err;
+  }
+  const batches = [];
+  for (let i = 0; i < ids.length; i += SHOW_REFRESH_BATCH) batches.push(ids.slice(i, i + SHOW_REFRESH_BATCH));
+  if (batches.length && jobsQueueBound(env)) {
+    const sent = await enqueueJobs(env, batches.map((b) => ({ type: "show.refresh-batch", payload: { mediaIds: b } })));
+    if (sent.ok) return { shows: ids.length, batches: batches.length, queued: true };
+    console.warn(`[Jobs] show.refresh: ${sent.failed} batches not sent (${sent.reason}); refreshing here.`);
+  }
+  const total = { shows: ids.length, batches: batches.length, refreshed: 0, failed: 0, notFound: 0 };
+  for (const b of batches) {
+    const r = await refreshShowSchedules(env, b, { now, ctx: job.ctx });
+    total.refreshed += r.refreshed;
+    total.failed += r.failed;
+    total.notFound += r.notFound;
+  }
+  return total;
+}
+
+// Recounts show watchers over every activity database.
+async function recountShowWatchers(env, { now = Date.now() } = {}) {
+  const dbs = typeof activityDbs === "function" ? activityDbs(env) : [];
+  if (!env || !env.DB || !dbs.length) return { shows: 0, reason: "no activity database" };
+  const counts = new Map();
+  for (const db of dbs) {
+    if (!db) continue;
+    const { results } = await db.prepare(
+      "SELECT media_id, count(*) AS n FROM show_progress WHERE last_season IS NOT NULL OR status = 'completed' GROUP BY media_id"
+    ).all();
+    for (const r of results || []) counts.set(r.media_id, (counts.get(r.media_id) || 0) + Number(r.n));
+  }
+  const entries = [...counts.entries()];
+  const writes = [];
+  for (let i = 0; i < entries.length; i += SHOW_WATCHERS_CHUNK) {
+    const part = entries.slice(i, i + SHOW_WATCHERS_CHUNK).map(([id, n]) => ({ id, n }));
+    // Series only, and only titles the main database has (a stale id would
+    // break the foreign key).
+    writes.push(env.DB.prepare(
+      `INSERT INTO show_schedule (media_id, watcher_count, next_check_at)
+       SELECT m.id, json_extract(j.value, '$.n'), 0 FROM json_each(?) j JOIN media m ON m.id = json_extract(j.value, '$.id') AND m.kind = 'series'
+       WHERE true
+       ON CONFLICT (media_id) DO UPDATE SET watcher_count = excluded.watcher_count`
+    ).bind(JSON.stringify(part)));
+  }
+  writes.push(env.DB.prepare(
+    "UPDATE show_schedule SET watcher_count = 0 WHERE watcher_count > 0 AND media_id NOT IN (SELECT value FROM json_each(?))"
+  ).bind(JSON.stringify(entries.map(([id]) => id))));
+  await env.DB.batch(writes);
+  return { shows: entries.length, at: now };
+}
+
+definePeriodicJob("show.watchers", {
+  everyMs: 24 * 60 * 60 * 1000,
+  run: async (env) => {
+    try {
+      return await recountShowWatchers(env);
+    } catch (err) {
+      if (/no such table/i.test(jobErrorText(err))) return { shows: 0, reason: "no 0017 or A0001" };
+      throw err;
+    }
+  },
+});
+
+definePeriodicJob("show.refresh", {
+  everyMs: 60 * 60 * 1000,
+  run: (env, payload, job) => runShowRefresh(env, job),
+});
+
+defineJobType("show.refresh-batch", {
+  run: (env, payload, job) => refreshShowSchedules(env, Array.isArray(payload.mediaIds) ? payload.mediaIds : [], { ctx: job.ctx }),
+});
+
+// --- Shelf shadow comparison (Phase 5, P5-4, first half) ------------------------
+//
+// Before FF_SHOW_SCHEDULE lets Continue Watching and Airing Next be worked out
+// from show_schedule (39_activity-shelves.js), the two answers are compared
+// with what the legacy sweeps stored, account by account, for about a week
+// (MIGRATION_PLAN.md Phase 5). Nothing a visitor sees changes: this only reads.
+//
+//   shelf.shadow (periodic, hourly): the next SHELF_SHADOW_ACCOUNTS accounts
+//   whose history copy is done (P3c-3), after a cursor kept in the job's
+//   progress. For each, the stored shelves (the tracking record, read through
+//   env.CONFIGS so FF_EVENT_TRACKING's assembled record is what is compared)
+//   against continueWatching() / airingNext().
+//
+// Items are compared by title, not by id text: a show's id is mapped to its
+// `media` row, so "tt…" and "tmdb:…" for the same show agree. Continue
+// Watching compares (show, season, episode); a storyline suggestion or a
+// movie compares its own id. Airing Next compares the show.
+//
+// A round is one pass over every copied account. The finished round's totals
+// (`progress.last`) are what the admin's Check jobs shows: the difference
+// rate, (legacy only + new only) / everything, with a few examples. Shows the
+// schedule does not know yet (missingSchedule) are counted apart, not as
+// differences: they mean show.refresh (P5-3) has not reached them.
+//
+// Each account also writes one Analytics Engine point per shelf, index
+// `shelf-shadow`: blobs ["shelf-shadow", "cw" | "an"], doubles [legacy, new,
+// both, legacy only, new only, not known yet].
+//
+// Module level, after the Worker's exports, like 27_ onward.
+
+const SHELF_SHADOW_ACCOUNTS = 50;
+const SHELF_SHADOW_EXAMPLES = 10;
+
+function shelfShadowEmpty() {
+  return {
+    accounts: 0,
+    cw: { legacy: 0, v2: 0, both: 0, legacyOnly: 0, v2Only: 0, unknown: 0 },
+    an: { legacy: 0, v2: 0, both: 0, legacyOnly: 0, v2Only: 0, unknown: 0 },
+    examples: [],
+  };
+}
+
+function shelfShadowRate(t) {
+  const diff = t.cw.legacyOnly + t.cw.v2Only + t.an.legacyOnly + t.an.v2Only;
+  const all = t.cw.both + t.an.both + diff;
+  return all ? diff / all : 0;
+}
+
+// Media ids for legacy show ids ("tt…", "tmdb:N", "tmdb:tv:N").
+async function shelfShadowMediaIds(env, showIds) {
+  const imdb = [];
+  const tmdb = [];
+  for (const raw of showIds) {
+    const id = String(raw || "");
+    if (id.startsWith("tt")) imdb.push(id.split(":")[0]);
+    else if (id.startsWith("tmdb:")) {
+      const n = Number(id.split(":").filter((p) => /^\d+$/.test(p))[0]);
+      if (n) tmdb.push(n);
+    }
+  }
+  const out = new Map();
+  if (!imdb.length && !tmdb.length) return out;
+  const { results } = await env.DB.prepare(
+    `SELECT id, imdb_id, tmdb_id FROM media WHERE kind = 'series' AND (imdb_id IN (SELECT value FROM json_each(?)) OR tmdb_id IN (SELECT value FROM json_each(?)))`
+  ).bind(JSON.stringify(imdb), JSON.stringify(tmdb)).all();
+  for (const r of results || []) {
+    if (r.imdb_id) out.set(r.imdb_id, r.id);
+    if (r.tmdb_id) {
+      out.set(`tmdb:${r.tmdb_id}`, r.id);
+      out.set(`tmdb:tv:${r.tmdb_id}`, r.id);
+    }
+  }
+  return out;
+}
+
+function shelfShadowShowKey(showId, ids) {
+  const id = String(showId || "");
+  const m = ids.get(id.startsWith("tt") ? id.split(":")[0] : id);
+  return m != null ? `m${m}` : `id:${id}`;
+}
+
+function shelfShadowCwKey(item, ids) {
+  if (!item || typeof item !== "object") return null;
+  if (item.isCompanion || item.type === "movie" || item.kind === "movie" || item.seasonNum == null) return `c:${item.id}`;
+  return `${item.mediaId != null ? `m${item.mediaId}` : shelfShadowShowKey(item.showId, ids)}:${Number(item.seasonNum)}:${Number(item.episodeNum)}`;
+}
+
+function shelfShadowAnKey(item, ids) {
+  if (!item || typeof item !== "object") return null;
+  return item.mediaId != null ? `m${item.mediaId}` : shelfShadowShowKey(item.showId || item.id, ids);
+}
+
+function shelfShadowDiff(legacyKeys, v2Keys) {
+  const a = new Set(legacyKeys.filter(Boolean));
+  const b = new Set(v2Keys.filter(Boolean));
+  const legacyOnly = [...a].filter((k) => !b.has(k));
+  const v2Only = [...b].filter((k) => !a.has(k));
+  return { legacy: a.size, v2: b.size, both: a.size - legacyOnly.length, legacyOnly, v2Only };
+}
+
+// Compares one account. Returns { cw, an } diffs, or null when it has no
+// stored record to compare with.
+async function compareAccountShelves(env, account, { now = Date.now() } = {}) {
+  const raw = env.CONFIGS ? await env.CONFIGS.get(`creatorsynctracking:${account.username}`) : null;
+  let legacy = null;
+  try {
+    legacy = raw ? JSON.parse(raw) : null;
+  } catch {
+    legacy = null;
+  }
+  if (!legacy || typeof legacy !== "object") return null;
+  const legacyCw = Array.isArray(legacy.continueWatching) ? legacy.continueWatching : [];
+  const legacyAn = Array.isArray(legacy.airingNext) ? legacy.airingNext : [];
+  const [cw, an] = await Promise.all([continueWatching(env, account.id, { now }), airingNext(env, account.id, { now })]);
+  const ids = await shelfShadowMediaIds(env, [...legacyCw, ...legacyAn].map((i) => i && (i.showId || i.id)));
+  // A show the schedule does not know yet is left out of both sides.
+  const unknown = new Set([...(cw.missingSchedule || []), ...(an.missingSchedule || [])].map((m) => `m${m}`));
+  const known = (k) => k && !unknown.has(k.split(":")[0]);
+  const cwDiff = shelfShadowDiff(legacyCw.map((i) => shelfShadowCwKey(i, ids)).filter(known), cw.items.map((i) => shelfShadowCwKey(i, ids)));
+  const anDiff = shelfShadowDiff(legacyAn.map((i) => shelfShadowAnKey(i, ids)).filter(known), an.items.map((i) => shelfShadowAnKey(i, ids)));
+  cwDiff.unknown = (cw.missingSchedule || []).length;
+  anDiff.unknown = (an.missingSchedule || []).length;
+  return { cw: cwDiff, an: anDiff };
+}
+
+async function runShelfShadow(env, job = {}) {
+  if (!env || !env.DB || typeof activityDbs !== "function" || !activityDbs(env).length) return { progress: job.progress || {}, skipped: "no activity database" };
+  const progress = { ...(job.progress || {}) };
+  const round = progress.round || shelfShadowEmpty();
+  const afterId = Number(progress.afterId) || 0;
+  let accounts;
+  try {
+    ({ results: accounts } = await env.DB.prepare(
+      `SELECT a.id, a.username FROM jobs j JOIN accounts a ON a.id = j.account_id
+       WHERE j.type = ? AND j.status = 'done' AND j.account_id > ? ORDER BY j.account_id LIMIT ?`
+    ).bind(ACTIVITY_BACKFILL_TYPE, afterId, SHELF_SHADOW_ACCOUNTS).all());
+  } catch (err) {
+    if (/no such table/i.test(jobErrorText(err))) return { progress, skipped: "no 0016" };
+    throw err;
+  }
+  const analytics = env.ANALYTICS && typeof env.ANALYTICS.writeDataPoint === "function" ? env.ANALYTICS : null;
+  let lastId = afterId;
+  for (const account of accounts || []) {
+    lastId = account.id;
+    let diff;
+    try {
+      diff = await compareAccountShelves(env, account);
+    } catch (err) {
+      if (/no such table|no such column/i.test(jobErrorText(err))) return { progress, skipped: "no 0017 or A0001" };
+      console.warn(`[Jobs] shelf.shadow: account ${account.id}: ${jobErrorText(err)}`);
+      continue;
+    }
+    if (!diff) continue;
+    round.accounts++;
+    for (const shelf of ["cw", "an"]) {
+      const d = diff[shelf];
+      const t = round[shelf];
+      t.legacy += d.legacy;
+      t.v2 += d.v2;
+      t.both += d.both;
+      t.legacyOnly += d.legacyOnly.length;
+      t.v2Only += d.v2Only.length;
+      t.unknown += d.unknown;
+      if ((d.legacyOnly.length || d.v2Only.length) && round.examples.length < SHELF_SHADOW_EXAMPLES) {
+        round.examples.push({ accountId: account.id, shelf, legacyOnly: d.legacyOnly.slice(0, 5), v2Only: d.v2Only.slice(0, 5) });
+      }
+      if (analytics) {
+        try {
+          analytics.writeDataPoint({
+            blobs: ["shelf-shadow", shelf],
+            doubles: [d.legacy, d.v2, d.both, d.legacyOnly.length, d.v2Only.length, d.unknown],
+            indexes: ["shelf-shadow"],
+          });
+        } catch {
+          // Metrics must never affect a job.
+        }
+      }
+    }
+  }
+  if (!accounts || accounts.length < SHELF_SHADOW_ACCOUNTS) {
+    // The round is over: keep its totals, start the next one.
+    return { progress: { afterId: 0, round: shelfShadowEmpty(), last: { ...round, rate: shelfShadowRate(round), finishedAt: Date.now() } } };
+  }
+  return { progress: { ...progress, afterId: lastId, round } };
+}
+
+definePeriodicJob("shelf.shadow", {
+  everyMs: 60 * 60 * 1000,
+  run: (env, payload, job) => runShelfShadow(env, job),
+});
+
+// --- Chart snapshots refreshed by a job (Phase 5, P5-5) -------------------------
+//
+// P4-3 (42_chart-snapshots.js) serves chart rows from shared snapshots, rebuilt
+// on a request once they are two hours old. This keeps them fresh off the
+// request instead, so a visitor is never the one who waits:
+//
+//   chart.refresh (periodic, hourly): lists the snapshots in use
+//   (`snap:chartuse:*`, noted by 42_ when one is served, with its recipe as
+//   KV metadata) and hands them out CHART_REFRESH_PER_JOB at a time as
+//   `chart.refresh-pages` jobs, or rebuilds them itself without the queue.
+//   "In use" is exactly the charts, types, regions and settings someone asked
+//   for in the last three days: every region an install uses, and no other.
+//
+//   chart.refresh-pages (plain job): rebuilds each page through its source's
+//   fetcher with the shared keys (buildChartSnapshot, so an empty answer never
+//   replaces a good copy). A page rebuilt less than CHART_REFRESH_MIN_AGE_MS
+//   ago is left alone; one whose key no longer comes out the same (Hidden
+//   Gems rotates daily) is skipped and expires by itself. The titles on the
+//   first pages are passed to the BetterPosters warm-up, as the old chart
+//   warm-up did.
+//
+// While FF_CHART_SNAPSHOTS is on, the old warm-up (prewarmSharedCatalogs, the
+// cron.charts job) leaves these charts to this job and only warms MDBList.
+// With it off nothing is noted as in use, this job does nothing, and the old
+// warm-up does everything as before.
+//
+// Module level, after the Worker's exports, like 27_ onward.
+
+const CHART_REFRESH_PER_JOB = 10;
+const CHART_REFRESH_MAX_PAGES = 5000;
+const CHART_REFRESH_MIN_AGE_MS = 45 * 60 * 1000;
+
+async function listChartSnapshotUses(env) {
+  const out = [];
+  let cursor;
+  do {
+    const page = await env.CONFIGS.list({ prefix: CHART_SNAPSHOT_USE_PREFIX, cursor });
+    for (const k of page.keys || []) {
+      const m = k.metadata;
+      if (m && typeof m.key === "string" && m.key.startsWith(CHART_SNAPSHOT_PREFIX) && m.recipe && typeof m.recipe === "object") {
+        out.push({ key: m.key, recipe: m.recipe });
+      }
+    }
+    cursor = page.list_complete ? null : page.cursor;
+  } while (cursor && out.length < CHART_REFRESH_MAX_PAGES);
+  return out.slice(0, CHART_REFRESH_MAX_PAGES);
+}
+
+// Rebuilds one page. Resolves to "built", "kept" (came back empty: the last
+// copy stays), "fresh", "moved" or "unknown". Throws when the fetcher does.
+async function refreshChartSnapshotPage(env, key, recipe, ctx, posterIds) {
+  const source = typeof catalogSourceByName === "function" ? catalogSourceByName(recipe.s) : null;
+  if (!source || source.kind !== "chart" || !source.snapshot || typeof recipe.u !== "string") return "unknown";
+  const ref = resolveSourceRef(recipe.u);
+  if (!ref || ref.source !== source.name) return "unknown";
+  const page = {
+    entry: { type: recipe.t || "movie" },
+    skip: Number(recipe.k) || 0,
+    keys: { env, ctx, region: recipe.r || undefined, hideNonDigitalReleases: !!recipe.d },
+  };
+  if (chartSnapshotKey(source, ref, page) !== key) return "moved";
+  let previous = null;
+  try {
+    const raw = await env.CONFIGS.get(key, "json");
+    if (raw && Array.isArray(raw.items) && Number.isFinite(raw.builtAt)) previous = raw;
+  } catch {
+    previous = null;
+  }
+  if (previous && Date.now() - previous.builtAt < CHART_REFRESH_MIN_AGE_MS) return "fresh";
+  const built = await buildChartSnapshot(source, ref, page, key, previous);
+  const fresh = built.snap && built.snap !== previous;
+  if (fresh && !page.skip && Array.isArray(posterIds) && typeof betterPostersImdbId === "function") {
+    for (const m of built.snap.items) {
+      const id = betterPostersImdbId(m);
+      if (id) posterIds.push(id);
+    }
+  }
+  return fresh ? "built" : "kept";
+}
+
+async function refreshChartSnapshotPages(env, entries, ctx) {
+  const out = { pages: 0, built: 0, kept: 0, fresh: 0, moved: 0, unknown: 0, failed: 0 };
+  const posterIds = [];
+  for (const e of entries || []) {
+    if (!e || typeof e.key !== "string" || !e.recipe) continue;
+    out.pages++;
+    try {
+      out[await refreshChartSnapshotPage(env, e.key, e.recipe, ctx, posterIds)]++;
+    } catch (err) {
+      out.failed++;
+      console.warn(`[Jobs] chart.refresh: ${e.key}: ${jobErrorText(err)}`);
+    }
+  }
+  if (posterIds.length && typeof rememberSharedPosterIds === "function") {
+    try {
+      await rememberSharedPosterIds(env, posterIds);
+    } catch {
+      // Poster warming is a nicety.
+    }
+  }
+  return out;
+}
+
+async function runChartRefresh(env, job = {}) {
+  if (!env || !env.CONFIGS || !isChartSnapshotsEnabled(env)) return { pages: 0 };
+  const uses = await listChartSnapshotUses(env);
+  const chunks = [];
+  for (let i = 0; i < uses.length; i += CHART_REFRESH_PER_JOB) chunks.push(uses.slice(i, i + CHART_REFRESH_PER_JOB));
+  if (chunks.length && jobsQueueBound(env)) {
+    const sent = await enqueueJobs(env, chunks.map((c) => ({ type: "chart.refresh-pages", payload: { entries: c } })));
+    if (sent.ok) return { pages: uses.length, jobs: chunks.length, queued: true };
+    console.warn(`[Jobs] chart.refresh: ${sent.failed} jobs not sent (${sent.reason}); refreshing here.`);
+  }
+  return refreshChartSnapshotPages(env, uses, job.ctx);
+}
+
+definePeriodicJob("chart.refresh", {
+  everyMs: 60 * 60 * 1000,
+  run: (env, payload, job) => runChartRefresh(env, job),
+});
+
+defineJobType("chart.refresh-pages", {
+  run: (env, payload, job) => refreshChartSnapshotPages(env, Array.isArray(payload.entries) ? payload.entries : [], job.ctx),
+});
+
+// --- Imports: import.resolve (Phase 5, P5-6) -----------------------------------
+//
+// A Letterboxd or CSV import used to be resolved by the browser: it posted the
+// titles to /api/bulk-resolve 200 at a time and waited, so closing the tab
+// stopped the import, and a title TMDB could not place with its first search
+// result was simply dropped. Here the rows are handed over once and resolved
+// by a job (45_jobs-dispatcher.js), with progress the page can poll:
+//
+//   POST /api/imports              { rows: [{ title, year?, imdbId?, tmdbId? }],
+//                                    kind?: "movie" | "series", source?, name? }
+//                                  -> 202 { id }   (a signed-in account; one
+//                                  import at a time; at most IMPORT_ROWS_MAX rows)
+//   GET  /api/imports/:id          progress: { status, total, done, matched,
+//                                  ambiguous, unmatched }
+//   GET  /api/imports/:id/review   the ambiguous rows, each with up to three
+//                                  candidates
+//   POST /api/imports/:id/review   { choices: [{ row, tmdbId | null }] }: pick a
+//                                  candidate (or none) for ambiguous rows
+//   GET  /api/imports/:id/result   the matched titles as list items, in the
+//                                  import's order, ready for the existing list
+//                                  routes to save
+//
+// The job (`import.resolve`, a one-off job) resolves IMPORT_CHUNK rows per run
+// and carries on in a new run until every row is done; the results live in
+// the job's progress_json. A row with an IMDb or TMDB id is matched as given.
+// Otherwise TMDB is searched (with the year when there is one):
+//   - one candidate whose title matches, or the top result when its title and
+//     year both match: matched (its IMDb id fetched);
+//   - several candidates that could be it: ambiguous, kept for review;
+//   - nothing: unmatched.
+//
+// /api/bulk-resolve stays until the page's import screen moves to this (P6-6);
+// it is then kept one more release as a shim.
+//
+// Module level, after the Worker's exports, like 27_ onward.
+
+const IMPORT_JOB_TYPE = "import.resolve";
+const IMPORT_ROWS_MAX = 5000;
+const IMPORT_CHUNK = 100;
+const IMPORT_CANDIDATES_MAX = 3;
+const IMPORT_TITLE_MAX = 300;
+
+function importTitleKey(s) {
+  return String(s || "")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/^(the|a|an) /, "")
+    .trim();
+}
+
+function importCleanRows(rows) {
+  const out = [];
+  for (const r of rows) {
+    if (!r || typeof r !== "object") continue;
+    const title = String(r.title || r.name || "").trim().slice(0, IMPORT_TITLE_MAX);
+    const imdbId = /^tt\d{1,10}$/.test(String(r.imdbId || "")) ? String(r.imdbId) : null;
+    const tmdbId = Number(r.tmdbId) > 0 ? Math.floor(Number(r.tmdbId)) : null;
+    const year = /^\d{4}$/.test(String(r.year || "").trim()) ? Number(String(r.year).trim()) : null;
+    if (!title && !imdbId && !tmdbId) continue;
+    out.push({ title, year, imdbId, tmdbId });
+  }
+  return out;
+}
+
+async function importTmdb(path, key) {
+  const sep = path.includes("?") ? "&" : "?";
+  const res = await fetch(`https://api.themoviedb.org/3${path}${sep}api_key=${encodeURIComponent(key)}`, {
+    headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` },
+    cf: { cacheTtl: 86400, cacheEverything: true },
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`TMDB answered ${res.status}`);
+  return res.json();
+}
+
+function importCandidate(r, kind) {
+  const date = kind === "series" ? r.first_air_date : r.release_date;
+  return {
+    tmdbId: r.id,
+    title: (kind === "series" ? r.name || r.original_name : r.title || r.original_title) || "",
+    year: date && /^\d{4}/.test(date) ? Number(date.slice(0, 4)) : null,
+    poster: r.poster_path || null,
+  };
+}
+
+// Decides a searched row from TMDB's results. Pure.
+function importDecide(row, results, kind) {
+  const want = importTitleKey(row.title);
+  const cands = (results || []).slice(0, 10).map((r) => importCandidate(r, kind));
+  if (!cands.length) return { status: "unmatched" };
+  const sameTitle = cands.filter((c) => importTitleKey(c.title) === want);
+  if (row.year) {
+    const exact = sameTitle.filter((c) => c.year === row.year);
+    if (exact.length === 1) return { status: "matched", pick: exact[0] };
+    // A year off by one is common (festival and release years differ).
+    const near = sameTitle.filter((c) => c.year && Math.abs(c.year - row.year) <= 1);
+    if (!exact.length && near.length === 1) return { status: "matched", pick: near[0] };
+    const pool = exact.length ? exact : near.length ? near : sameTitle;
+    if (pool.length) return { status: "ambiguous", candidates: pool.slice(0, IMPORT_CANDIDATES_MAX) };
+    return { status: "ambiguous", candidates: cands.slice(0, IMPORT_CANDIDATES_MAX) };
+  }
+  if (sameTitle.length === 1) return { status: "matched", pick: sameTitle[0] };
+  if (sameTitle.length > 1) return { status: "ambiguous", candidates: sameTitle.slice(0, IMPORT_CANDIDATES_MAX) };
+  if (cands.length === 1) return { status: "matched", pick: cands[0] };
+  return { status: "ambiguous", candidates: cands.slice(0, IMPORT_CANDIDATES_MAX) };
+}
+
+async function importImdbFor(kind, tmdbId, key) {
+  const ext = await importTmdb(`/${kind === "series" ? "tv" : "movie"}/${Number(tmdbId)}/external_ids`, key);
+  return ext && /^tt\d+$/.test(String(ext.imdb_id || "")) ? ext.imdb_id : null;
+}
+
+// Resolves one row: { status, imdbId?, tmdbId?, title?, year?, candidates? }.
+async function importResolveRow(row, kind, key) {
+  if (row.imdbId) return { status: "matched", imdbId: row.imdbId, tmdbId: row.tmdbId, title: row.title, year: row.year };
+  if (row.tmdbId) {
+    const imdbId = await importImdbFor(kind, row.tmdbId, key);
+    return { status: "matched", imdbId, tmdbId: row.tmdbId, title: row.title, year: row.year };
+  }
+  const yearParam = row.year ? (kind === "series" ? `&first_air_date_year=${row.year}` : `&primary_release_year=${row.year}`) : "";
+  const path = `/search/${kind === "series" ? "tv" : "movie"}?query=${encodeURIComponent(row.title)}&include_adult=false${yearParam}`;
+  let data = await importTmdb(path, key);
+  // A year filter that finds nothing: the year may be wrong; search without it.
+  if (row.year && (!data || !Array.isArray(data.results) || !data.results.length)) {
+    data = await importTmdb(`/search/${kind === "series" ? "tv" : "movie"}?query=${encodeURIComponent(row.title)}&include_adult=false`, key);
+  }
+  const d = importDecide(row, data && data.results, kind);
+  if (d.status !== "matched") return d;
+  return { status: "matched", tmdbId: d.pick.tmdbId, imdbId: await importImdbFor(kind, d.pick.tmdbId, key), title: d.pick.title, year: d.pick.year };
+}
+
+function importCounts(results, total) {
+  const c = { total, done: results.length, matched: 0, ambiguous: 0, unmatched: 0 };
+  for (const r of results) {
+    if (r.status === "matched" || r.status === "chosen") c.matched++;
+    else if (r.status === "ambiguous") c.ambiguous++;
+    else c.unmatched++;
+  }
+  return c;
+}
+
+defineDurableJob(IMPORT_JOB_TYPE, {
+  // A chunk is 100 rows at up to three TMDB calls each.
+  leaseMs: 10 * 60 * 1000,
+  async run(env, payload, job) {
+    const key = showScheduleTmdbKey(env);
+    if (!key) throw new Error("TMDB_API_KEY is not set");
+    const rows = Array.isArray(payload.rows) ? payload.rows : [];
+    const kind = payload.kind === "series" ? "series" : "movie";
+    const results = Array.isArray(job.progress.results) ? job.progress.results.slice() : [];
+    const end = Math.min(rows.length, results.length + IMPORT_CHUNK);
+    for (let i = results.length; i < end; i += 10) {
+      const part = rows.slice(i, Math.min(end, i + 10));
+      // Ten at a time, as /api/bulk-resolve does. A row whose lookup fails is
+      // tried again with the chunk (the job's retry), not dropped.
+      const done = await Promise.all(part.map((r) => importResolveRow(r, kind, key)));
+      results.push(...done);
+    }
+    const progress = { results, ...importCounts(results, rows.length) };
+    return results.length < rows.length ? { progress, again: true } : { progress };
+  },
+});
+
+function importPublicStatus(row) {
+  const progress = parseJobProgress(row.progress_json);
+  const payload = parseJobProgress(row.payload_json);
+  const total = Array.isArray(payload.rows) ? payload.rows.length : 0;
+  const counts = importCounts(Array.isArray(progress.results) ? progress.results : [], total);
+  const status = row.status === "done" ? "done" : row.status === "failed" ? "failed" : row.status === "running" ? "running" : "queued";
+  return {
+    ok: true,
+    id: row.id,
+    status,
+    kind: payload.kind === "series" ? "series" : "movie",
+    name: payload.name || null,
+    source: payload.source || null,
+    ...counts,
+    error: row.status === "failed" ? "The import stopped after several tries. Please try again later." : null,
+  };
+}
+
+async function loadAccountImport(env, account, id) {
+  if (!/^\d{1,15}$/.test(String(id))) return null;
+  const row = await env.DB.prepare(
+    "SELECT id, account_id, status, payload_json, progress_json FROM jobs WHERE id = ? AND type = ?"
+  ).bind(Number(id), IMPORT_JOB_TYPE).first();
+  return row && row.account_id === account.id ? row : null;
+}
+
+async function handleImportsApi(request, env, url, path) {
+  if (path !== "/api/imports" && !path.startsWith("/api/imports/")) return null;
+  const account = request.account || null;
+  if (!account) return json({ ok: false, error: "Sign in to import titles.", signInRequired: true }, 401);
+  if (!env || !env.DB) return json({ ok: false, error: "Imports aren't available right now." }, 503);
+  try {
+    const parts = path.split("/").filter(Boolean); // ["api", "imports", id?, sub?]
+    if (parts.length === 2) {
+      if (request.method !== "POST") return json({ ok: false, error: "Not found." }, 404);
+      let body;
+      try {
+        body = await request.json();
+      } catch {
+        return json({ ok: false, error: "Invalid JSON body." }, 400);
+      }
+      if (!body || !Array.isArray(body.rows)) {
+        if (body && body.url) return json({ ok: false, error: "Importing from a link isn't supported yet: add the list as a row instead, or upload the file." }, 400);
+        return json({ ok: false, error: "Expected a `rows` array." }, 400);
+      }
+      if (body.rows.length > IMPORT_ROWS_MAX) return json({ ok: false, error: `Too many titles in one import (limit ${IMPORT_ROWS_MAX}).` }, 413);
+      const rows = importCleanRows(body.rows);
+      if (!rows.length) return json({ ok: false, error: "No titles found in that file." }, 400);
+      const busy = await env.DB.prepare(
+        "SELECT id FROM jobs WHERE type = ? AND account_id = ? AND status IN ('queued', 'running') LIMIT 1"
+      ).bind(IMPORT_JOB_TYPE, account.id).first();
+      if (busy) return json({ ok: false, error: "An import is already running. Wait for it to finish.", id: busy.id }, 409);
+      const created = await createJob(env, IMPORT_JOB_TYPE, {
+        accountId: account.id,
+        payload: {
+          rows,
+          kind: body.kind === "series" ? "series" : "movie",
+          source: typeof body.source === "string" ? body.source.slice(0, 30) : null,
+          name: typeof body.name === "string" ? body.name.slice(0, 120) : null,
+        },
+      });
+      if (!created.ok) return json({ ok: false, error: "Imports aren't available right now." }, 503);
+      return json({ ok: true, id: created.id, total: rows.length }, 202);
+    }
+
+    const row = await loadAccountImport(env, account, parts[2]);
+    if (!row) return json({ ok: false, error: "Not found." }, 404);
+    const sub = parts[3] || "";
+    const progress = parseJobProgress(row.progress_json);
+    const results = Array.isArray(progress.results) ? progress.results : [];
+
+    if (!sub && request.method === "GET" && parts.length === 3) return json(importPublicStatus(row));
+
+    if (sub === "review" && parts.length === 4 && request.method === "GET") {
+      const payload = parseJobProgress(row.payload_json);
+      const rows = Array.isArray(payload.rows) ? payload.rows : [];
+      const review = [];
+      results.forEach((r, i) => {
+        if (r.status === "ambiguous") review.push({ row: i, title: rows[i] && rows[i].title, year: rows[i] && rows[i].year, candidates: r.candidates || [] });
+      });
+      return json({ ok: true, id: row.id, review });
+    }
+
+    if (sub === "review" && parts.length === 4 && request.method === "POST") {
+      if (row.status !== "done") return json({ ok: false, error: "The import is still running." }, 409);
+      let body;
+      try {
+        body = await request.json();
+      } catch {
+        return json({ ok: false, error: "Invalid JSON body." }, 400);
+      }
+      const choices = body && Array.isArray(body.choices) ? body.choices.slice(0, IMPORT_ROWS_MAX) : null;
+      if (!choices) return json({ ok: false, error: "Expected a `choices` array." }, 400);
+      const payload = parseJobProgress(row.payload_json);
+      const kind = payload.kind === "series" ? "series" : "movie";
+      const key = showScheduleTmdbKey(env);
+      const next = results.slice();
+      let lookups = 0;
+      for (const c of choices) {
+        const i = Number(c && c.row);
+        const r = Number.isInteger(i) ? next[i] : null;
+        if (!r || r.status !== "ambiguous") continue;
+        const pick = c.tmdbId == null ? null : (r.candidates || []).find((cand) => cand.tmdbId === Number(c.tmdbId));
+        if (!pick) {
+          next[i] = { status: "skipped" };
+          continue;
+        }
+        // One IMDb lookup per choice, at most 50 per request.
+        if (lookups >= 50) break;
+        lookups++;
+        const imdbId = key ? await importImdbFor(kind, pick.tmdbId, key) : null;
+        next[i] = { status: "chosen", tmdbId: pick.tmdbId, imdbId, title: pick.title, year: pick.year };
+      }
+      const counts = importCounts(next, Array.isArray(payload.rows) ? payload.rows.length : next.length);
+      const saved = await env.DB.prepare(
+        "UPDATE jobs SET progress_json = ?, updated_at = ? WHERE id = ? AND status = 'done' AND progress_json = ?"
+      ).bind(JSON.stringify({ ...progress, results: next, ...counts }), Date.now(), row.id, row.progress_json).run();
+      if (!saved.meta || saved.meta.changes !== 1) return json({ ok: false, error: "The import changed meanwhile; try again." }, 409);
+      return json({ ok: true, ...counts });
+    }
+
+    if (sub === "result" && parts.length === 4 && request.method === "GET") {
+      const payload = parseJobProgress(row.payload_json);
+      const type = payload.kind === "series" ? "series" : "movie";
+      const items = [];
+      const seen = new Set();
+      for (const r of results) {
+        if (r.status !== "matched" && r.status !== "chosen") continue;
+        const id = r.imdbId || (r.tmdbId ? `tmdb:${r.tmdbId}` : null);
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        items.push({ id, type, name: r.title || undefined, year: r.year || undefined });
+      }
+      return json({ ok: true, id: row.id, done: row.status === "done", items });
+    }
+
+    return json({ ok: false, error: "Not found." }, 404);
+  } catch (e) {
+    console.error("Imports API failed:", e);
+    return json({ ok: false, error: "Imports aren't available right now." }, 503);
+  }
+}
+
+// --- Connections: token.refresh (Phase 5, P5-7) ---------------------------------
+//
+// A connected Trakt or MDBList account (28_connections.js) holds a token that
+// expires. Until now it was renewed only when a catalog row happened to need
+// it within the hour before it expired (refreshProviderConnectionIfDue), so a
+// connection nobody's Stremio asked for in that hour lapsed, and the rows went
+// quietly empty.
+//
+//   token.refresh (periodic, daily): every connection whose token expires
+//   within TOKEN_REFRESH_WINDOW_MS and that has a refresh token is renewed
+//   (exchangeRefreshToken, the same call as on the request path). When the
+//   provider refuses the refresh token (and no other isolate renewed it
+//   meanwhile), the connection is marked `reauth_required`: its token is no
+//   longer used, the person's personal rows show a "Reconnect" tile in Stremio
+//   (the catalog route, 25_), and the website shows a banner (17_). A provider
+//   that could not be asked (network, not configured) is left for the next day.
+//   Connecting again (storeProviderConnection) sets it back to `ok`.
+//
+// Module level, after the Worker's exports, like 27_ onward.
+
+const TOKEN_REFRESH_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const TOKEN_REFRESH_LIMIT = 500;
+
+async function runTokenRefresh(env, { now = Date.now() } = {}) {
+  const out = { due: 0, renewed: 0, reauth: 0, skipped: 0, unreadable: 0 };
+  if (!env || !env.DB || !hasTokenEncryptionKey(env)) return out;
+  let rows;
+  try {
+    ({ results: rows } = await env.DB.prepare(
+      `SELECT account_id, provider, external_user, access_token_enc, refresh_token_enc, expires_at, api_key_enc, status, updated_at
+       FROM provider_connections
+       WHERE status = 'ok' AND refresh_token_enc IS NOT NULL AND expires_at IS NOT NULL AND expires_at < ?
+       ORDER BY expires_at LIMIT ?`
+    ).bind(now + TOKEN_REFRESH_WINDOW_MS, TOKEN_REFRESH_LIMIT).all());
+  } catch (err) {
+    if (/no such table/i.test(jobErrorText(err))) return out;
+    throw err;
+  }
+  for (const row of rows || []) {
+    out.due++;
+    const conn = await decryptConnectionRow(env, row.account_id, row);
+    if (!conn || !conn.refreshToken) {
+      out.unreadable++;
+      continue;
+    }
+    const fresh = await exchangeRefreshToken(env, row.provider, conn);
+    if (fresh && fresh.accessToken) {
+      const stored = await storeProviderConnection(env, { id: row.account_id }, row.provider, {
+        accessToken: fresh.accessToken,
+        refreshToken: fresh.refreshToken,
+        expiresAt: fresh.expiresAt,
+        externalUser: { username: conn.username, id: conn.id },
+      });
+      if (stored) out.renewed++;
+      else out.skipped++;
+      continue;
+    }
+    if (fresh && fresh.rejected) {
+      // Refresh tokens are single use: a request may have renewed it a moment
+      // ago, in which case the row now holds a different token.
+      const again = await loadProviderConnection(env, row.account_id, row.provider);
+      if (again && again.accessToken && again.accessToken !== conn.accessToken) {
+        out.renewed++;
+        continue;
+      }
+      await markConnectionStatus(env, row.account_id, row.provider, "reauth_required", "The provider refused to renew this sign-in. Connect it again.");
+      out.reauth++;
+      continue;
+    }
+    out.skipped++;
+  }
+  if (out.reauth || out.renewed) console.log(`[Jobs] token.refresh: ${out.renewed} renewed, ${out.reauth} need signing in again, ${out.skipped} left for tomorrow.`);
+  return out;
+}
+
+definePeriodicJob("token.refresh", {
+  everyMs: 24 * 60 * 60 * 1000,
+  run: (env) => runTokenRefresh(env),
+});
+
+// --- Account deletion: account.purge (Phase 5, P5-8) ----------------------------
+//
+// Deleting an account used to be one long request (/api/creator/delete-account,
+// purgeCreatorData): every KV key, every D1 table, then the identity. A person
+// waited on it, and a failure part way left them to retry by hand.
+//
+//   DELETE /api/me  { confirm: "DELETE" }  (signed in with a session)
+//     At once: the username is tombstoned (it stops authenticating and cannot
+//     be registered again while the purge runs), `accounts.deleted_at` is set,
+//     every session is revoked, every install link is revoked (and its
+//     snapshot forgotten), and an `account.purge` job is started. 202.
+//
+//   account.purge (one-off job, dedupe key account.purge:{id})
+//     The same complete sweep as before, purgeCreatorData with the identity,
+//     which now also clears the account's rows in the v2 and activity tables
+//     (purgeAccountRowsById, below, through deleteAccountRow). A sweep that
+//     did not finish throws, and the job tries again; the tombstone keeps the
+//     username out of reach meanwhile. The legacy KV sweep stays inside
+//     purgeCreatorData until Phase 10 retires those keys.
+//
+// purgeAccountRowsById is what makes a deleted account's id safe to reuse.
+// `accounts.id` is an INTEGER PRIMARY KEY without AUTOINCREMENT, so SQLite
+// hands the highest deleted id to the next account created, and everything
+// filed under the number (watch history in the activity database above all)
+// would otherwise belong to whoever registers next. deleteAccountRow calls it
+// before the accounts row goes, on every path that removes one: this job, the
+// old delete-account route, and the clean-up before a username is registered
+// again (which stays, as the last line of defence).
+//
+// Module level, after the Worker's exports, like 27_ onward.
+
+const ACCOUNT_PURGE_JOB_TYPE = "account.purge";
+
+// Every row filed under an account id outside the tables deleteAccountRow and
+// listsV2PurgeAccount already clear: the activity database, likes it cast (the
+// counts they added are taken back), recommendations, list preferences,
+// presets, its private channels (and their R2 pools; shared ones stay, with no
+// owner), and its other jobs. { ok }. Missing tables are skipped.
+async function purgeAccountRowsById(env, accountId) {
+  const id = Number(accountId);
+  if (!env || !env.DB || !Number.isInteger(id) || id <= 0) return { ok: true };
+  let ok = true;
+  const run = async (label, fn) => {
+    try {
+      await fn();
+    } catch (err) {
+      const msg = String((err && err.message) || err);
+      if (/no such table/i.test(msg)) return;
+      console.error(`[AccountPurge] ${label} failed for account ${id}:`, err);
+      ok = false;
+    }
+  };
+
+  // Watch history and progress, in the account's activity database.
+  const actDb = typeof activityDb === "function" ? activityDb(env, id) : null;
+  if (actDb) {
+    await run("activity", () => actDb.batch([
+      actDb.prepare("DELETE FROM watch_events WHERE account_id = ?").bind(id),
+      actDb.prepare("DELETE FROM show_progress WHERE account_id = ?").bind(id),
+      actDb.prepare("DELETE FROM user_media_state WHERE account_id = ?").bind(id),
+    ]));
+  }
+
+  const voter = `acct:${id}`;
+  await run("likes", () => env.DB.batch([
+    env.DB.prepare(
+      "UPDATE lists SET like_count = max(0, like_count - 1) WHERE public_id IN (SELECT target_id FROM likes WHERE voter = ? AND target_type = 'list')"
+    ).bind(voter),
+    env.DB.prepare(
+      "UPDATE channels SET like_count = max(0, like_count - 1) WHERE public_code IN (SELECT target_id FROM likes WHERE voter = ? AND target_type = 'channel')"
+    ).bind(voter),
+    env.DB.prepare(
+      "UPDATE channels SET add_count = max(0, add_count - 1) WHERE public_code IN (SELECT target_id FROM likes WHERE voter = ? AND target_type = 'channel_add')"
+    ).bind(voter),
+    env.DB.prepare("DELETE FROM likes WHERE voter = ?").bind(voter),
+  ]));
+
+  await run("recommendations", () => env.DB.prepare("DELETE FROM account_recommendations WHERE account_id = ?").bind(id).run());
+  await run("preferences", () => env.DB.batch([
+    env.DB.prepare("DELETE FROM account_list_prefs WHERE account_id = ?").bind(id),
+    env.DB.prepare("DELETE FROM presets WHERE account_id = ?").bind(id),
+  ]));
+
+  await run("channels", async () => {
+    const { results } = await env.DB.prepare(
+      "SELECT id, public_code FROM channels WHERE owner_account_id = ? AND visibility = 'private'"
+    ).bind(id).all();
+    for (const ch of results || []) {
+      if (env.BLOBS && typeof env.BLOBS.list === "function") {
+        const listed = await env.BLOBS.list({ prefix: `channels/${ch.public_code}/` });
+        const keys = ((listed && listed.objects) || []).map((o) => o.key);
+        if (keys.length) await env.BLOBS.delete(keys);
+      }
+      await env.DB.batch([
+        env.DB.prepare("DELETE FROM likes WHERE target_type IN ('channel', 'channel_add') AND target_id = ?").bind(ch.public_code),
+        env.DB.prepare("DELETE FROM channels WHERE id = ?").bind(ch.id),
+      ]);
+    }
+    // Shared and published channels stay for the people who added them.
+    await env.DB.prepare("UPDATE channels SET owner_account_id = NULL WHERE owner_account_id = ?").bind(id).run();
+  });
+
+  await run("jobs", () => env.DB.prepare(
+    "DELETE FROM jobs WHERE account_id = ? AND type != ?"
+  ).bind(id, ACCOUNT_PURGE_JOB_TYPE).run());
+
+  return { ok };
+}
+
+async function writeDeletionTombstone(env, username) {
+  try {
+    await env.CONFIGS.put(creatorTombstoneKey(username), "1", { expirationTtl: CREATOR_TOMBSTONE_TTL_SEC });
+  } catch (e) {
+    console.error("[AccountPurge] could not write the KV tombstone:", e);
+  }
+  if (env.DB) {
+    try {
+      await env.DB.prepare(
+        "INSERT INTO creator_tombstones (username, until) VALUES (?, ?) ON CONFLICT(username) DO UPDATE SET until = excluded.until"
+      ).bind(username, Date.now() + CREATOR_TOMBSTONE_TTL_SEC * 1000).run();
+    } catch (e) {
+      console.error("[AccountPurge] could not write the D1 tombstone:", e);
+    }
+  }
+}
+
+async function runAccountPurge(env, payload) {
+  const username = String(payload.username || "").trim().toLowerCase();
+  if (!username) return;
+  // The username stays out of reach while this runs, however many tries it
+  // takes.
+  await writeDeletionTombstone(env, username);
+  const purged = await purgeCreatorData(env, username, { deleteIdentity: true });
+  if (!purged.ok) throw new Error("The account's data could not all be removed yet.");
+  // deleteAccountRow (inside the purge) removed the accounts row by name. An
+  // account renamed or already gone is still cleared by its id.
+  const leftover = await purgeAccountRowsById(env, payload.accountId);
+  if (!leftover.ok) throw new Error("Some of the account's rows could not be removed yet.");
+  console.log(`[AccountPurge] account ${payload.accountId} removed (${purged.listsCleared} lists, ${purged.keysCleared} keys).`);
+}
+
+defineDurableJob(ACCOUNT_PURGE_JOB_TYPE, {
+  // Tried for about a day before it gives up and the admin has to look.
+  maxAttempts: 12,
+  run: (env, payload) => runAccountPurge(env, payload),
+});
+
+// DELETE /api/me
+async function handleAccountDeleteApi(request, env, url, path) {
+  if (path !== "/api/me" || request.method !== "DELETE") return null;
+  const account = request.account || null;
+  if (!account) return json({ ok: false, error: "Sign in to delete your account.", signInRequired: true }, 401);
+  if (!env || !env.DB || !env.CONFIGS) return json({ ok: false, error: "Accounts aren't available right now." }, 503);
+  let body = {};
+  try {
+    body = await request.json();
+  } catch {
+    body = {};
+  }
+  if (String((body && body.confirm) || "") !== "DELETE") return json({ ok: false, error: "Missing confirmation." }, 400);
+  const username = String(account.username || "").toLowerCase();
+  const now = Date.now();
+
+  await writeDeletionTombstone(env, username);
+  try {
+    await env.DB.prepare("UPDATE accounts SET deleted_at = ? WHERE id = ?").bind(now, account.id).run();
+  } catch (e) {
+    console.error("[AccountPurge] could not mark the account deleted:", e);
+  }
+  await revokeAccountSessions(env, account.id);
+  // Revoked first, then their snapshots forgotten, so a request in between
+  // cannot put a live copy back.
+  try {
+    await env.DB.prepare("UPDATE installs SET revoked_at = ?, version = version + 1, updated_at = ? WHERE account_id = ? AND revoked_at IS NULL").bind(now, now, account.id).run();
+  } catch (e) {
+    if (!/no such table/i.test(String((e && e.message) || e))) console.error("[AccountPurge] could not revoke install links:", e);
+  }
+  if (typeof forgetAccountInstallSnapshots === "function") await forgetAccountInstallSnapshots(env, account.id);
+
+  const payload = { accountId: account.id, username };
+  const created = await createJob(env, ACCOUNT_PURGE_JOB_TYPE, { dedupeKey: `${ACCOUNT_PURGE_JOB_TYPE}:${account.id}`, accountId: account.id, payload });
+  request._sessionCookie = buildClearSessionCookieHeader();
+  if (created.ok) return json({ ok: true, deleting: true, id: created.id }, 202);
+
+  // No jobs table (migration 0016 not applied): the purge runs now, as the
+  // old route did.
+  try {
+    await runAccountPurge(env, payload);
+    return json({ ok: true, deleting: false });
+  } catch (e) {
+    console.error("[AccountPurge] inline purge failed:", e);
+    return json({ ok: false, error: "Couldn't finish deleting this account. Some of it is still being removed; nothing more is needed from you." }, 500);
+  }
+}
+
+// --- BetterPosters in R2, fetched by a job (Phase 5, P5-9) ----------------------
+//
+// Better Posters are drawn by btttr.cc, which can take 40 to 55 seconds for a
+// poster it has not drawn lately. Until now this Worker kept its copies in KV
+// (`bpimg:v1:`), and a poster it did not have yet was fetched while the tile
+// (or the website's warm-up call) waited, up to BETTER_POSTER_PAGE_WAIT_MS.
+//
+// With both the BLOBS bucket and the JOBS queue bound, no request waits on
+// btttr.cc any more (betterPostersInR2):
+//   - copies live in R2, at img/bp/{style}/{imdb}/{tag}.{lang}.{rs}.jpg, with
+//     their content type and fetch time as custom metadata. A copy still in KV
+//     is served, and copied to R2 in the background;
+//   - a poster with no copy is answered at once (an app gets the title's
+//     ordinary poster from the same URL, the website its own stand-in, as
+//     before) and a `poster.fetch` job is sent for it. A copy more than a day
+//     old is served and refreshed the same way;
+//   - the website's warm-up call (/api/bp/warm) reports what is stored and
+//     sends the rest to the job.
+// A poster is sent at most once per isolate every POSTER_FETCH_RESEND_MS, and
+// btttr.cc's recent misses (the edge-cache note) are not sent again.
+//
+// Without either binding nothing changes: KV copies, fetched on the request,
+// as before. The KV keys (bpimg:v1:, bp:retry:v1, bp:variants:v1,
+// bp:sharedids:v1) and the cron's warm-up (prewarmBetterPosters, which now
+// stores into R2 when this is on) are deleted once the owner has turned this
+// on for good.
+//
+// Module level, after the Worker's exports, like 27_ onward.
+
+const POSTER_FETCH_JOB_TYPE = "poster.fetch";
+const POSTER_FETCH_PER_JOB = 10;
+const POSTER_FETCH_RESEND_MS = 10 * 60 * 1000;
+const POSTER_FETCH_SENT = new Map(); // bp.path -> when this isolate last sent it
+
+function betterPostersInR2(env) {
+  return !!(env && env.BLOBS && typeof env.BLOBS.put === "function" && jobsQueueBound(env));
+}
+
+function betterPosterR2Key(bp) {
+  return `img/bp/${bp.style}/${bp.imdbId}/${bp.tag || "-"}.${bp.lang || "-"}.${bp.rs || "-"}.jpg`;
+}
+
+async function storeBetterPosterR2(env, bp, bytes, contentType) {
+  await env.BLOBS.put(betterPosterR2Key(bp), bytes, {
+    httpMetadata: { contentType: contentType || "image/jpeg" },
+    customMetadata: { ct: contentType || "image/jpeg", at: String(Date.now()) },
+  });
+}
+
+// The stored copy: R2, else a KV copy from before (copied over in the
+// background). A copy more than a day old is refreshed by a job.
+async function readBetterPosterR2(env, ctx, bp) {
+  const background = (p) => { if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(p); };
+  try {
+    const obj = await env.BLOBS.get(betterPosterR2Key(bp));
+    if (obj) {
+      const m = obj.customMetadata || {};
+      const at = Number(m.at) || 0;
+      if (Date.now() - at > BETTER_POSTER_REFRESH_MS) background(sendBetterPosterFetch(env, bp));
+      return { bytes: await obj.arrayBuffer(), contentType: m.ct || (obj.httpMetadata && obj.httpMetadata.contentType) || "image/jpeg", at };
+    }
+  } catch {
+    // R2 unavailable: try the KV copy.
+  }
+  if (!env.CONFIGS) return null;
+  try {
+    const got = await env.CONFIGS.getWithMetadata(bp.kvKey, { type: "arrayBuffer" });
+    if (!got || !got.value) return null;
+    const meta = got.metadata || {};
+    const at = Number(meta.at) || 0;
+    background(storeBetterPosterR2(env, bp, got.value, meta.ct).catch(() => {}));
+    if (Date.now() - at > BETTER_POSTER_REFRESH_MS) background(sendBetterPosterFetch(env, bp));
+    return { bytes: got.value, contentType: meta.ct || "image/jpeg", at };
+  } catch {
+    return null;
+  }
+}
+
+// Sends a poster.fetch job for one poster, unless this isolate sent it
+// lately. Never throws.
+async function sendBetterPosterFetch(env, bp) {
+  const now = Date.now();
+  const last = POSTER_FETCH_SENT.get(bp.path);
+  if (last && now - last < POSTER_FETCH_RESEND_MS) return false;
+  if (POSTER_FETCH_SENT.size > 5000) POSTER_FETCH_SENT.clear();
+  POSTER_FETCH_SENT.set(bp.path, now);
+  const sent = await enqueueJob(env, POSTER_FETCH_JOB_TYPE, { paths: [bp.path] });
+  return sent.ok;
+}
+
+// The job: fetches each poster from btttr.cc (with its own long timeout) into
+// R2, a few at a time. A poster stored less than a day ago is skipped; one
+// btttr.cc could not supply is noted as a miss, as on the request path.
+async function runPosterFetch(env, payload) {
+  const out = { posters: 0, fetched: 0, fresh: 0, failed: 0 };
+  const bps = [];
+  for (const raw of (Array.isArray(payload.paths) ? payload.paths : []).slice(0, POSTER_FETCH_PER_JOB)) {
+    let u;
+    try {
+      u = new URL(String(raw), "https://x.invalid");
+    } catch {
+      continue;
+    }
+    const bp = parseBetterPosterPath(u.pathname, u.searchParams);
+    if (bp) bps.push(bp);
+  }
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(4, bps.length) }, async () => {
+    while (next < bps.length) {
+      const bp = bps[next++];
+      out.posters++;
+      try {
+        const head = await env.BLOBS.head(betterPosterR2Key(bp));
+        const at = head && head.customMetadata ? Number(head.customMetadata.at) || 0 : 0;
+        if (head && Date.now() - at <= BETTER_POSTER_REFRESH_MS) {
+          out.fresh++;
+          continue;
+        }
+      } catch {
+        // Fetch it anyway.
+      }
+      if (await fetchBetterPosterUpstream(env, bp, BETTER_POSTER_UPSTREAM_TIMEOUT_MS)) out.fetched++;
+      else out.failed++;
+    }
+  }));
+  return out;
+}
+
+defineJobType(POSTER_FETCH_JOB_TYPE, {
+  run: (env, payload) => runPosterFetch(env, payload),
+});
+
+// --- More background jobs (Phase 5, P5-10) ---------------------------------------
+//
+//   channel.presets (periodic, daily; with the queue) sends one
+//   `channel.pool.build` job per Quick Add network, which rebuilds that
+//   network's preset (buildNetworkChannelPreset). It replaces the cron's
+//   one-network-per-tick rotation (cron.channel-presets), which rebuilt every
+//   network about every three hours. Without the queue the cron keeps doing
+//   that, as before.
+//
+//   nos.sweep is the New on Streaming sweep (sweepNewOnStreaming, then
+//   bumpNewOnStreamingEpisodes), every tick as before (the old
+//   cron.new-on-streaming). Its RapidAPI monthly quota ledger moved from the
+//   KV key cron:rapidapi:usage to a `jobs` row (rapidApiLedgerD1, below), where
+//   adding to it is one atomic statement rather than a read and a write two
+//   overlapping sweeps could both base on the same count.
+//
+//   recs.build (periodic, hourly) finds accounts that watched something since
+//   their recommendations were last built (50 a run) and sends a
+//   `recs.build-account` job for each: seeds from the account's latest shows
+//   and movies (activity database), buildTmdbRecommendations (the same code as
+//   the website's Discover shelves), titles recorded in `media`, and the
+//   account's `account_recommendations` rows replaced.
+//
+//   rollup.daily (periodic, daily) fills `title_daily_stats` (event_type
+//   'play') for each day since the last one rolled up, up to a week at a
+//   time: plays per title from watch_events over every activity database, the
+//   top TITLE_DAILY_TOP titles a day. Days older than TITLE_DAILY_KEEP_DAYS go.
+//
+// recs.build and rollup.daily only write: the Recommended rows and Most
+// Watched keep reading what they read today until the reads move to the
+// activity database.
+//
+// Module level, after the Worker's exports, like 27_ onward.
+
+const RECS_BUILD_ACCOUNTS = 50;
+const RECS_SEEDS = 12;
+const TITLE_DAILY_TOP = 2000;
+const TITLE_DAILY_KEEP_DAYS = 400;
+const ROLLUP_DAYS_PER_RUN = 7;
+const DAY_MS = 86400000;
+
+// --- channel.presets / channel.pool.build -----------------------------------------
+
+async function runChannelPresets(env, job = {}) {
+  const networks = CHANNEL_PRESET_NETWORKS || [];
+  if (!networks.length) return { networks: 0 };
+  if (jobsQueueBound(env)) {
+    const sent = await enqueueJobs(env, networks.map((n) => ({ type: "channel.pool.build", payload: { networkId: n.id } })));
+    if (sent.ok) return { networks: networks.length, queued: true };
+  }
+  let built = 0;
+  for (const n of networks) {
+    const r = await buildNetworkChannelPreset(n.id, n.name, CHANNEL_PRESET_PREWARM_ORIGIN, { env, ctx: job.ctx, forceRebuild: true });
+    if (r && r.ok) built++;
+  }
+  return { networks: networks.length, built };
+}
+
+async function runChannelPoolBuild(env, payload, job) {
+  const net = (CHANNEL_PRESET_NETWORKS || []).find((n) => String(n.id) === String(payload.networkId));
+  if (!net) return { skipped: "unknown network" };
+  const r = await buildNetworkChannelPreset(net.id, net.name, CHANNEL_PRESET_PREWARM_ORIGIN, { env, ctx: job.ctx, forceRebuild: true });
+  if (!r || !r.ok) throw new Error(`Could not build the ${net.name} preset${r && r.error ? `: ${r.error}` : ""}`);
+  return { built: net.name };
+}
+
+definePeriodicJob("channel.presets", {
+  everyMs: DAY_MS,
+  // With the queue only; without it the cron's rotation does this.
+  legacy: true,
+  run: (env, payload, job) => runChannelPresets(env, job),
+});
+
+defineJobType("channel.pool.build", {
+  retryDelaySec: 300,
+  run: (env, payload, job) => runChannelPoolBuild(env, payload, job),
+});
+
+// --- The RapidAPI quota ledger, in D1 ---------------------------------------------
+
+const RAPIDAPI_LEDGER_KEY = "ledger:rapidapi";
+
+// { month, count, lastAt } from D1, adding `add` first when given. Null when
+// D1 cannot be used (the caller keeps the KV ledger). The first read seeds
+// the row from the KV ledger, so switching over never forgets this month's
+// spending.
+async function rapidApiLedgerD1(env, add = 0) {
+  if (!env || !env.DB) return null;
+  const month = new Date().toISOString().slice(0, 7);
+  const now = Date.now();
+  try {
+    let row = await env.DB.prepare("SELECT progress_json FROM jobs WHERE dedupe_key = ?").bind(RAPIDAPI_LEDGER_KEY).first();
+    if (!row) {
+      let seed = { month, count: 0, lastAt: null };
+      if (env.CONFIGS) {
+        try {
+          const kv = JSON.parse((await env.CONFIGS.get("cron:rapidapi:usage")) || "null");
+          if (kv && kv.month === month && Number.isFinite(kv.count)) seed = { month, count: Math.max(0, Math.floor(kv.count)), lastAt: kv.lastAt || null };
+        } catch {}
+      }
+      await env.DB.prepare(
+        "INSERT INTO jobs (type, dedupe_key, status, run_after, progress_json, created_at, updated_at) VALUES ('ledger.rapidapi', ?, 'done', 0, ?, ?, ?) ON CONFLICT(dedupe_key) DO NOTHING"
+      ).bind(RAPIDAPI_LEDGER_KEY, JSON.stringify(seed), now, now).run();
+    }
+    if (add > 0) {
+      await env.DB.prepare(
+        `UPDATE jobs SET progress_json = json_object(
+           'month', ?,
+           'count', (CASE WHEN json_extract(progress_json, '$.month') = ? THEN COALESCE(json_extract(progress_json, '$.count'), 0) ELSE 0 END) + ?,
+           'lastAt', ?), updated_at = ?
+         WHERE dedupe_key = ?`
+      ).bind(month, month, Math.floor(add), Math.floor(now / 1000), now, RAPIDAPI_LEDGER_KEY).run();
+    }
+    row = await env.DB.prepare("SELECT progress_json FROM jobs WHERE dedupe_key = ?").bind(RAPIDAPI_LEDGER_KEY).first();
+    const p = parseJobProgress(row && row.progress_json);
+    return { month, count: p.month === month ? Math.max(0, Math.floor(Number(p.count) || 0)) : 0, lastAt: p.month === month ? p.lastAt || null : null };
+  } catch (err) {
+    if (!/no such table/i.test(jobErrorText(err))) console.warn("[Jobs] RapidAPI ledger in D1 unavailable; using KV:", jobErrorText(err));
+    return null;
+  }
+}
+
+// --- recs.build ----------------------------------------------------------------------
+
+// Accounts with activity since their recommendations were built. { accountId }[].
+async function accountsDueForRecs(env, limit) {
+  const built = new Map();
+  try {
+    const { results } = await env.DB.prepare("SELECT account_id, max(built_at) AS at FROM account_recommendations GROUP BY account_id").all();
+    for (const r of results || []) built.set(r.account_id, Number(r.at) || 0);
+  } catch (err) {
+    if (/no such table/i.test(jobErrorText(err))) return [];
+    throw err;
+  }
+  const latest = new Map();
+  for (const db of activityDbs(env)) {
+    if (!db) continue;
+    const { results } = await db.prepare(
+      `SELECT account_id, max(t) AS at FROM (
+         SELECT account_id, max(last_watched_at) AS t FROM show_progress GROUP BY account_id
+         UNION ALL SELECT account_id, max(last_watched_at) AS t FROM user_media_state GROUP BY account_id
+       ) GROUP BY account_id`
+    ).all();
+    for (const r of results || []) latest.set(r.account_id, Math.max(latest.get(r.account_id) || 0, Number(r.at) || 0));
+  }
+  const due = [];
+  for (const [accountId, at] of latest) {
+    if (at > (built.get(accountId) || 0)) due.push({ accountId, at });
+  }
+  due.sort((a, b) => b.at - a.at);
+  return due.slice(0, limit);
+}
+
+async function runRecsBuild(env, job = {}) {
+  if (!env || !env.DB || !activityDbs(env).length) return { accounts: 0 };
+  const due = await accountsDueForRecs(env, RECS_BUILD_ACCOUNTS);
+  if (due.length && jobsQueueBound(env)) {
+    const sent = await enqueueJobs(env, due.map((d) => ({ type: "recs.build-account", payload: { accountId: d.accountId } })));
+    if (sent.ok) return { accounts: due.length, queued: true };
+  }
+  let built = 0;
+  for (const d of due) {
+    const r = await buildAccountRecommendations(env, d.accountId);
+    if (r.built) built++;
+  }
+  return { accounts: due.length, built };
+}
+
+// Records titles in `media` (by TMDB id) and returns kind:tmdbId -> media id.
+async function recordRecommendedMedia(env, items, now) {
+  const rows = items.map((it) => ({ kind: it.type === "series" ? "series" : "movie", tmdb: Number(it.tmdbId), title: it.name || null, year: Number(String(it.year || "").slice(0, 4)) || null }))
+    .filter((r) => r.tmdb > 0);
+  const out = new Map();
+  for (let i = 0; i < rows.length; i += 200) {
+    const part = rows.slice(i, i + 200);
+    await env.DB.prepare(
+      `INSERT INTO media (kind, tmdb_id, title, year, created_at, updated_at)
+       SELECT json_extract(value, '$.kind'), json_extract(value, '$.tmdb'), json_extract(value, '$.title'), json_extract(value, '$.year'), ?, ?
+       FROM json_each(?) WHERE true
+       ON CONFLICT(kind, tmdb_id) WHERE tmdb_id IS NOT NULL DO NOTHING`
+    ).bind(now, now, JSON.stringify(part)).run();
+    const { results } = await env.DB.prepare(
+      "SELECT id, kind, tmdb_id FROM media WHERE tmdb_id IN (SELECT json_extract(value, '$.tmdb') FROM json_each(?))"
+    ).bind(JSON.stringify(part)).all();
+    for (const r of results || []) out.set(`${r.kind}:${r.tmdb_id}`, r.id);
+  }
+  return out;
+}
+
+async function buildAccountRecommendations(env, accountId) {
+  const key = showScheduleTmdbKey(env);
+  const actDb = activityDb(env, accountId);
+  if (!key || !actDb) return { built: false, reason: key ? "no activity database" : "no TMDB key" };
+  const [shows, movies] = await Promise.all([
+    actDb.prepare("SELECT media_id FROM show_progress WHERE account_id = ? AND last_watched_at IS NOT NULL ORDER BY last_watched_at DESC LIMIT ?").bind(accountId, RECS_SEEDS).all(),
+    actDb.prepare("SELECT media_id FROM user_media_state WHERE account_id = ? AND last_watched_at IS NOT NULL ORDER BY last_watched_at DESC LIMIT ?").bind(accountId, RECS_SEEDS).all(),
+  ]);
+  const seedIds = [...(shows.results || []), ...(movies.results || [])].map((r) => r.media_id);
+  if (!seedIds.length) return { built: false, reason: "nothing watched" };
+  const { results: seedMedia } = await env.DB.prepare(
+    "SELECT id, kind, tmdb_id, imdb_id FROM media WHERE id IN (SELECT value FROM json_each(?))"
+  ).bind(JSON.stringify(seedIds)).all();
+  const seed = (kind) => (seedMedia || []).filter((m) => m.kind === kind).map((m) => (m.tmdb_id ? String(m.tmdb_id) : m.imdb_id)).filter(Boolean);
+  const recs = await buildTmdbRecommendations(seed("movie"), seed("series"), key);
+  const now = Date.now();
+  const all = [...recs.movies, ...recs.shows];
+  const ids = await recordRecommendedMedia(env, all, now);
+  const stmts = [env.DB.prepare("DELETE FROM account_recommendations WHERE account_id = ?").bind(accountId)];
+  for (const [kind, list] of [["movie", recs.movies], ["series", recs.shows]]) {
+    let rank = 0;
+    for (const it of list) {
+      const mediaId = ids.get(`${kind}:${Number(it.tmdbId)}`);
+      if (mediaId == null) continue;
+      stmts.push(env.DB.prepare(
+        "INSERT OR IGNORE INTO account_recommendations (account_id, kind, rank, media_id, built_at) VALUES (?, ?, ?, ?, ?)"
+      ).bind(accountId, kind, ++rank, mediaId, now));
+    }
+  }
+  for (let i = 0; i < stmts.length; i += 90) await env.DB.batch(stmts.slice(i, i + 90));
+  return { built: true, movies: recs.movies.length, shows: recs.shows.length };
+}
+
+definePeriodicJob("recs.build", {
+  everyMs: 60 * 60 * 1000,
+  run: (env, payload, job) => runRecsBuild(env, job),
+});
+
+defineJobType("recs.build-account", {
+  run: async (env, payload) => {
+    try {
+      return await buildAccountRecommendations(env, Number(payload.accountId));
+    } catch (err) {
+      if (/no such table/i.test(jobErrorText(err))) return { built: false, reason: "no 0017" };
+      throw err;
+    }
+  },
+});
+
+// --- rollup.daily --------------------------------------------------------------------
+
+function utcDay(ms) {
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+// Plays per title on one UTC day, over every activity database, top first.
+async function rollupDay(env, day) {
+  const start = Date.parse(day + "T00:00:00Z");
+  const end = start + DAY_MS;
+  const counts = new Map();
+  for (const db of activityDbs(env)) {
+    if (!db) continue;
+    const { results } = await db.prepare(
+      "SELECT media_id, count(*) AS n FROM watch_events WHERE watched_at >= ? AND watched_at < ? GROUP BY media_id ORDER BY n DESC LIMIT ?"
+    ).bind(start, end, TITLE_DAILY_TOP).all();
+    for (const r of results || []) counts.set(r.media_id, (counts.get(r.media_id) || 0) + Number(r.n));
+  }
+  const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, TITLE_DAILY_TOP).map(([id, n]) => ({ id, n }));
+  const stmts = [env.DB.prepare("DELETE FROM title_daily_stats WHERE day = ? AND event_type = 'play'").bind(day)];
+  for (let i = 0; i < top.length; i += 500) {
+    stmts.push(env.DB.prepare(
+      `INSERT INTO title_daily_stats (day, event_type, media_id, n)
+       SELECT ?, 'play', m.id, json_extract(j.value, '$.n') FROM json_each(?) j JOIN media m ON m.id = json_extract(j.value, '$.id') WHERE true
+       ON CONFLICT(day, event_type, media_id) DO UPDATE SET n = excluded.n`
+    ).bind(day, JSON.stringify(top.slice(i, i + 500))));
+  }
+  await env.DB.batch(stmts);
+  return top.length;
+}
+
+async function runRollupDaily(env, job = {}, { now = Date.now() } = {}) {
+  const progress = { ...(job.progress || {}) };
+  if (!env || !env.DB || !activityDbs(env).length) return { progress };
+  const yesterday = utcDay(now - DAY_MS);
+  // From the day after the last one done, or yesterday on the first run.
+  let day = progress.lastDay ? utcDay(Date.parse(progress.lastDay + "T00:00:00Z") + DAY_MS) : yesterday;
+  const days = [];
+  while (day <= yesterday && days.length < ROLLUP_DAYS_PER_RUN) {
+    try {
+      days.push({ day, titles: await rollupDay(env, day) });
+    } catch (err) {
+      if (/no such table/i.test(jobErrorText(err))) return { progress };
+      throw err;
+    }
+    progress.lastDay = day;
+    day = utcDay(Date.parse(day + "T00:00:00Z") + DAY_MS);
+  }
+  await env.DB.prepare("DELETE FROM title_daily_stats WHERE day < ?").bind(utcDay(now - TITLE_DAILY_KEEP_DAYS * DAY_MS)).run();
+  return { progress: { ...progress, lastRun: days } };
+}
+
+definePeriodicJob("rollup.daily", {
+  everyMs: DAY_MS,
+  run: (env, payload, job) => runRollupDaily(env, job),
+});
+
+// --- The materializer (Phase 5, P5-11) ------------------------------------------
+//
+// "Remove duplicate items across lists" (dedupeAcrossLists) used to cost a
+// whole home screen's worth of rows per row: dedupeAcrossListEntries rebuilt
+// every earlier row of the same type to know what to strip, so a 20-row
+// install did 1 + 2 + ... + 20 = 210 row builds for one home screen.
+//
+// With FF_MATERIALIZER on, the first page of every non-personal row of an
+// install is built once (MATERIALIZER_CONCURRENCY at a time), de-duplicated in
+// one pass in the rows' order, and kept for an hour: in this isolate's memory
+// and in KV as one value per install, `snap:mat:{hash}` (the hash of the
+// install's id and its rows, so an edited install is a new key). Each row's
+// first page is then read from there; concurrent requests of one isolate
+// share one build. At most one build per row per install per hour.
+//
+// It also finishes P4-2's metas: each materialized meta carries its `media_id`
+// where the media table knows the title (read only), and a title or poster the
+// row left empty is taken from there.
+//
+// Pages after the first, search, and personal shelves (which are never
+// de-duplicated) take the usual path, as does everything with the flag off.
+// dedupeAcrossListEntries is deleted once the flag is on for good.
+//
+// Metrics: one Analytics Engine point per build, index `materializer`,
+// doubles [rows built, milliseconds].
+//
+// Module level, after the Worker's exports, like 27_ onward.
+
+const MATERIALIZER_KV_PREFIX = "snap:mat:";
+const MATERIALIZER_TTL_SEC = 60 * 60;
+const MATERIALIZER_MEMO_MS = 60 * 1000;
+const MATERIALIZER_MEMO_MAX = 200;
+const MATERIALIZER_CONCURRENCY = 6;
+const MATERIALIZER_MEMO = new Map();     // key -> { at, value }
+const MATERIALIZER_BUILDING = new Map(); // key -> promise
+
+function isMaterializerEnabled(env) {
+  const v = env && env.FF_MATERIALIZER;
+  return v === "1" || v === "true" || v === true;
+}
+
+function materializerRowKey(entry) {
+  return `${entry.type}:${entry.id}`;
+}
+
+async function materializerKey(config, entries) {
+  const shape = JSON.stringify(entries.map((e) => [e.id, e.type, e.url, e.enabled !== false]));
+  const bytes = new TextEncoder().encode(String(config) + "\n" + shape);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return MATERIALIZER_KV_PREFIX + Array.from(new Uint8Array(digest).slice(0, 16), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function materializerRows(entries) {
+  return entries.filter((e) => e && e.enabled !== false && !isPersonalShelfUrl(e.url));
+}
+
+// P4-2's remainder: media_id (and a missing title or poster) from `media`.
+async function attachMaterializedMedia(env, pages) {
+  if (!env || !env.DB) return;
+  const imdb = new Set();
+  const tmdb = new Set();
+  for (const page of pages) {
+    for (const m of page) {
+      const id = String((m && m.id) || "");
+      if (id.startsWith("tt")) imdb.add(id.split(":")[0]);
+      else if (/^tmdb:\d+$/.test(id)) tmdb.add(Number(id.slice(5)));
+    }
+  }
+  if (!imdb.size && !tmdb.size) return;
+  let rows = [];
+  try {
+    ({ results: rows } = await env.DB.prepare(
+      `SELECT id, kind, imdb_id, tmdb_id, title, poster_path FROM media
+       WHERE imdb_id IN (SELECT value FROM json_each(?)) OR tmdb_id IN (SELECT value FROM json_each(?))`
+    ).bind(JSON.stringify([...imdb]), JSON.stringify([...tmdb])).all());
+  } catch {
+    return; // No media table: the metas are served as built.
+  }
+  const byImdb = new Map();
+  const byTmdb = new Map();
+  for (const r of rows || []) {
+    if (r.imdb_id) byImdb.set(r.imdb_id, r);
+    if (r.tmdb_id) byTmdb.set(`${r.kind}:${r.tmdb_id}`, r);
+  }
+  for (const page of pages) {
+    for (let i = 0; i < page.length; i++) {
+      const m = page[i];
+      if (!m || !m.id) continue;
+      const id = String(m.id);
+      const kind = m.type === "series" ? "series" : "movie";
+      const row = id.startsWith("tt") ? byImdb.get(id.split(":")[0]) : /^tmdb:\d+$/.test(id) ? byTmdb.get(`${kind}:${id.slice(5)}`) : null;
+      if (!row) continue;
+      const patch = { media_id: row.id };
+      if (!m.name && row.title) patch.name = row.title;
+      if (!m.poster && row.poster_path) patch.poster = String(row.poster_path).startsWith("http") ? row.poster_path : `https://image.tmdb.org/t/p/w500${row.poster_path}`;
+      page[i] = { ...m, ...patch };
+    }
+  }
+}
+
+// Builds page 0 of every row, de-duplicated. { builtAt, rows: { rowKey: { items, totalItems } } }.
+async function buildMaterializedInstall(env, entries, keys) {
+  const startedAt = Date.now();
+  const rows = materializerRows(entries);
+  const pages = new Array(rows.length).fill(null);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(MATERIALIZER_CONCURRENCY, rows.length) }, async () => {
+    while (next < rows.length) {
+      const i = next++;
+      try {
+        const metas = await fetchCatalog(rows[i], 0, keys);
+        pages[i] = Array.isArray(metas) ? metas : null;
+      } catch {
+        pages[i] = null; // This row takes the usual path; it strips nothing.
+      }
+    }
+  }));
+  const seenByType = new Map();
+  const out = {};
+  const deduped = [];
+  rows.forEach((row, i) => {
+    const page = pages[i];
+    if (!page) return;
+    const seen = seenByType.get(row.type) || new Set();
+    seenByType.set(row.type, seen);
+    const kept = page.filter((m) => !m || !m.id || !seen.has(m.id));
+    for (const m of page) if (m && m.id) seen.add(m.id);
+    const tot = page.totalItems;
+    const totalItems = typeof tot === "number" ? Math.max(kept.length, tot - (page.length - kept.length)) : null;
+    deduped.push(kept);
+    out[materializerRowKey(row)] = { items: kept, totalItems };
+  });
+  await attachMaterializedMedia(env, deduped);
+  // attachMaterializedMedia replaced items in place in each `kept` array.
+  const analytics = env && env.ANALYTICS && typeof env.ANALYTICS.writeDataPoint === "function" ? env.ANALYTICS : null;
+  if (analytics) {
+    try {
+      analytics.writeDataPoint({ blobs: ["materializer"], doubles: [rows.length, Date.now() - startedAt], indexes: ["materializer"] });
+    } catch {}
+  }
+  return { builtAt: Date.now(), rows: out };
+}
+
+async function readMaterializedInstall(env, key) {
+  const now = Date.now();
+  const memo = MATERIALIZER_MEMO.get(key);
+  if (memo && now - memo.at < MATERIALIZER_MEMO_MS) return memo.value;
+  let value = null;
+  try {
+    const raw = env.CONFIGS ? await env.CONFIGS.get(key, "json") : null;
+    if (raw && raw.rows && now - (Number(raw.builtAt) || 0) < MATERIALIZER_TTL_SEC * 1000) value = raw;
+  } catch {
+    value = null;
+  }
+  if (value) rememberMaterialized(key, value);
+  return value;
+}
+
+function rememberMaterialized(key, value) {
+  if (MATERIALIZER_MEMO.size >= MATERIALIZER_MEMO_MAX) {
+    const oldest = MATERIALIZER_MEMO.keys().next().value;
+    if (oldest !== undefined) MATERIALIZER_MEMO.delete(oldest);
+  }
+  MATERIALIZER_MEMO.set(key, { at: Date.now(), value });
+}
+
+// The catalog route's call: this row's de-duplicated first page, or null for
+// the usual path (the row is not materialized, or its build failed).
+async function materializedRowPage(env, ctx, { config, entries, entryIndex, keys }) {
+  const entry = entries[entryIndex];
+  if (!entry || isPersonalShelfUrl(entry.url)) return null;
+  const key = await materializerKey(config, entries);
+  let value = await readMaterializedInstall(env, key);
+  if (!value) {
+    let building = MATERIALIZER_BUILDING.get(key);
+    if (!building) {
+      building = (async () => {
+        const built = await buildMaterializedInstall(env, entries, keys);
+        rememberMaterialized(key, built);
+        if (env.CONFIGS) {
+          const write = env.CONFIGS.put(key, JSON.stringify(built), { expirationTtl: MATERIALIZER_TTL_SEC }).catch(() => {});
+          if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(write);
+          else await write;
+        }
+        return built;
+      })();
+      MATERIALIZER_BUILDING.set(key, building);
+      building.then(() => MATERIALIZER_BUILDING.delete(key), () => MATERIALIZER_BUILDING.delete(key));
+    }
+    try {
+      value = await building;
+    } catch {
+      return null;
+    }
+  }
+  const row = value && value.rows ? value.rows[materializerRowKey(entry)] : null;
+  if (!row || !Array.isArray(row.items)) return null;
+  const items = row.items.slice();
+  if (typeof row.totalItems === "number") items.totalItems = row.totalItems;
+  return items;
 }

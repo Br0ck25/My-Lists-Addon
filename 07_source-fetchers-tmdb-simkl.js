@@ -1323,6 +1323,12 @@ async function getRapidApiMonthlyUsage(env) {
     limit: RAPIDAPI_MONTHLY_LIMIT,
     safetyCap: RAPIDAPI_MONTHLY_SAFETY_CAP,
   };
+  // The ledger is a D1 row since P5-10 (rapidApiLedgerD1, 53_more-jobs.js),
+  // seeded from this KV key the first time. KV is the fallback without D1.
+  if (typeof rapidApiLedgerD1 === "function") {
+    const d1 = await rapidApiLedgerD1(env, 0);
+    if (d1) return { ...d1, limit: RAPIDAPI_MONTHLY_LIMIT, safetyCap: RAPIDAPI_MONTHLY_SAFETY_CAP };
+  }
   if (!env || !env.CONFIGS) return defaultUsage;
   try {
     const raw = await env.CONFIGS.get("cron:rapidapi:usage");
@@ -1344,6 +1350,12 @@ async function getRapidApiMonthlyUsage(env) {
 
 async function recordRapidApiUsage(env, addCount = 1) {
   const currentMonth = new Date().toISOString().slice(0, 7);
+  // One atomic statement in D1 (P5-10); the KV read-and-write below only
+  // without it.
+  if (typeof rapidApiLedgerD1 === "function") {
+    const d1 = await rapidApiLedgerD1(env, Math.max(0, Math.floor(addCount)));
+    if (d1) return { ...d1, limit: RAPIDAPI_MONTHLY_LIMIT, safetyCap: RAPIDAPI_MONTHLY_SAFETY_CAP };
+  }
   const usage = await getRapidApiMonthlyUsage(env);
   usage.count += Math.max(0, Math.floor(addCount));
   usage.lastAt = Math.floor(Date.now() / 1000);
@@ -5174,9 +5186,13 @@ async function prewarmSharedCatalogs(env, ctx) {
   // One flat list, in the order the four blocks used to run in, so a rotating
   // cursor can walk it. Each entry warms exactly one chart.
   const warmTasks = [];
+  // With chart snapshots on, the hourly chart.refresh job (48_chart-refresh.js)
+  // keeps the TMDB, Trakt and Simkl charts fresh for every region in use, so
+  // only the MDBList block below is left to this warm-up.
+  const chartsBySnapshot = typeof isChartSnapshotsEnabled === "function" && isChartSnapshotsEnabled(env);
 
   // 1. Trakt Official Charts
-  if (traktKey) {
+  if (traktKey && !chartsBySnapshot) {
     const traktCharts = [
       { chartKey: "trending", type: "movie" },
       { chartKey: "trending", type: "series" },
@@ -5198,7 +5214,7 @@ async function prewarmSharedCatalogs(env, ctx) {
   }
 
   // 2. TMDB Official Charts & Streaming Services
-  if (tmdbKey) {
+  if (tmdbKey && !chartsBySnapshot) {
     const tmdbCharts = [
       { chartKey: "trending", type: "movie" },
       { chartKey: "trending", type: "series" },
@@ -5235,7 +5251,7 @@ async function prewarmSharedCatalogs(env, ctx) {
   }
 
   // 3. Simkl Trending Charts
-  if (simklKey) {
+  if (simklKey && !chartsBySnapshot) {
     const simklCharts = [
       { chartKey: "today", type: "movie" },
       { chartKey: "today", type: "series" },

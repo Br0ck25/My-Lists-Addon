@@ -616,8 +616,14 @@ describe("P4-3: chart snapshots", () => {
     const put = kv.put.bind(kv);
     const get = kv.get.bind(kv);
     kv._puts = [];
+    kv._uses = [];
     kv._gets = 0;
-    kv.put = async (key, value, opts) => { kv._puts.push({ key, opts }); return put(key, value, opts); };
+    // The "in use" notes (snap:chartuse:, P5-5) are kept apart: these tests
+    // are about the snapshots themselves.
+    kv.put = async (key, value, opts) => {
+      (String(key).startsWith("snap:chartuse:") ? kv._uses : kv._puts).push({ key, opts });
+      return put(key, value, opts);
+    };
     kv.get = async (key, type) => { kv._gets++; return get(key, type); };
     return kv;
   }

@@ -8007,87 +8007,37 @@ export default {
 
   // Runs on whatever schedule this Worker's owner configured under
   // Triggers -> Cron Triggers in the Cloudflare dashboard (recommended:
-  // every 6 minutes with "*/6 * * * *") -- refreshes and pre-warms shared
-  // Trakt, TMDB, Simkl, and MDBList charts into KV storage and sweeps newly-aired episodes for Continue Watching.
+  // every 5 minutes, "*/5 * * * *"; the older "*/6 * * * *" works the same).
+  //
+  // Since Phase 5 (P5-2) a tick is a dispatcher: with the JOBS queue bound it
+  // only sends the jobs that are due to the queue (the Continue Watching and
+  // Airing Next sweeps, New on Streaming, chart and poster warming, channel
+  // presets, housekeeping, and later one-off jobs), and the `queue` export
+  // below runs them. Without the queue it does that work itself, exactly as
+  // before. runCronTick (45_jobs-dispatcher.js) decides.
   async scheduled(event, env, ctx) {
-    // The boundary the fetch handler above has, which this did not.
-    //
-    // `ctx.waitUntil(Promise.all([...]))` rejects the moment any one task
-    // does, and there was no try -- so a failure in one task escaped the
-    // handler and Cloudflare recorded the whole invocation as failed, hiding
-    // which task actually broke. The tasks are independent, so each one gets
-    // its own catch and the tick is judged on whether it ran, not on whether
-    // everything inside it succeeded. Same argument as the fetch handler's:
-    // one boundary here is worth more than remembering to do this at every
-    // future call site.
-    const guard = (label, p) => Promise.resolve(p).catch((err) => {
-      console.error(`[Cron] ${label} failed:`, err);
-    });
+    // The boundary the fetch handler above has: nothing thrown here may escape
+    // the handler, or Cloudflare records the whole invocation as failed and
+    // hides which part broke.
     try {
-    // Same as the fetch handler above: nothing that runs below may see an
-    // empty API key just because this isolate's first event happened to be a
-    // cron tick rather than a request. See applyEnvApiKeys.
-    applyEnvApiKeys(env);
-    configureProviderBreaker(env);
-    // FF_EVENT_TRACKING, as in the fetch handler above.
-    env = eventTrackingEnv(env);
-    // No outbound-fetch budget is divided between the tasks any more. That
-    // arithmetic (CRON_SUBREQUEST_BUDGET and its shares) existed to fit a tick
-    // inside the Workers Free plan's 50 subrequests; the hosted Worker runs on
-    // Workers Paid (10,000 per invocation), and each task below keeps its own
-    // per-tick limit for its own reasons (TMDB politeness, RapidAPI's monthly
-    // quota, the per-account sweep size). These tasks move to queue jobs in a
-    // later phase -- see NEXT_VERSION_ARCHITECTURE.md section 5.
-    //
-    // The ordering is kept: the Continue Watching sweep writes first, because
-    // it is the part a person is waiting on, and everything that spends
-    // provider calls runs after it.
-    const episodeSweep = guard("checkForNewEpisodes", checkForNewEpisodes(env));
-    const streamingSweep = guard(
-      "sweepNewOnStreaming",
-      episodeSweep.then(() => sweepNewOnStreaming(env, ctx))
-    );
-    const airingNextSweep = guard(
-      "refreshAiringNextSweep",
-      episodeSweep.then(() => refreshAiringNextSweep(env, ctx))
-    );
-    const betterPosterWarm = guard(
-      "prewarmBetterPosters",
-      episodeSweep.then(() => prewarmBetterPosters(env, ctx))
-    );
-    ctx.waitUntil(
-      Promise.all([
-        episodeSweep,
-        streamingSweep,
-        airingNextSweep,
-        betterPosterWarm,
-        guard("bumpNewOnStreamingEpisodes", streamingSweep.then(() => bumpNewOnStreamingEpisodes(env, ctx))),
-        guard("prewarmSharedCatalogs", streamingSweep.then(() => prewarmSharedCatalogs(env, ctx))),
-        // One Quick Add network per tick (see prewarmChannelPresets,
-        // 07_source-fetchers-tmdb-simkl.js) -- independent of the streaming
-        // sweep chain above since it spends TMDB requests, not RapidAPI's
-        // capped quota, and has nothing to wait on.
-        guard("prewarmChannelPresets", prewarmChannelPresets(env, ctx)),
-        // Cheap (one sqlite_master read per tick) and the only thing that puts
-        // "you have not run migration N" somewhere an operator will see it
-        // without going looking. The admin panel shows the same thing on
-        // demand; this is for the case where nobody thought to look.
-        guard("d1SchemaCheck", (async () => {
-          const status = await checkD1Schema(env);
-          if (status.bound && status.checked && !status.ok) {
-            console.warn(
-              `[Cron] This Worker is running ahead of its D1 schema. Unapplied migration(s): ${status.pendingMigrations.join(", ")}. ` +
-              status.missing.map((m) => `${m.name}: ${m.consequence}`).join(" | ")
-            );
-          }
-        })()),
-        guard("pruneTombstones", pruneTombstones(env)),
-      ]).then(() => guard("providerBreakerFlush", providerBreakerFlush(env)))
-    );
+      // Same as the fetch handler above: nothing that runs below may see an
+      // empty API key just because this isolate's first event happened to be
+      // a cron tick rather than a request. See applyEnvApiKeys.
+      applyEnvApiKeys(env);
+      configureProviderBreaker(env);
+      // FF_EVENT_TRACKING, as in the fetch handler above.
+      env = eventTrackingEnv(env);
+      await runCronTick(event, env, ctx);
     } catch (err) {
-      // Anything thrown synchronously before waitUntil was even reached --
-      // applyEnvApiKeys, or a task that threw rather than rejecting.
-      console.error("[Cron] scheduled() failed before its tasks were queued:", err);
+      console.error("[Cron] scheduled() failed:", err);
     }
+  },
+
+  // Background jobs (Phase 5): the consumer of the mylists-jobs queue. It is
+  // set up on the queue in the dashboard (Queues -> mylists-jobs -> Settings
+  // -> Consumers -> this Worker; docs/OPERATIONS.md section 18). Each message
+  // names its job type, and runJobsQueue (44_jobs-queue.js) runs its handler.
+  async queue(batch, env, ctx) {
+    await runJobsQueue(batch, env, ctx);
   },
 };

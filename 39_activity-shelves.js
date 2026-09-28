@@ -163,7 +163,7 @@ async function shelfTitles(env, mediaIds) {
         `SELECT m.id, m.kind, m.imdb_id, m.tmdb_id, m.alt_id, m.title, m.year, m.poster_path,
                 s.media_id AS s_media, s.status AS s_status, s.last_aired_season, s.last_aired_episode, s.last_aired_date,
                 s.next_season, s.next_episode, s.next_air_date, s.next_air_time, s.air_tz,
-                s.season_finale_season, s.season_finale_date, s.season_finale_episode, s.season_episode_counts
+                s.season_finale_season, s.season_finale_date, s.season_finale_episode, s.season_episode_counts, s.checked_at
          FROM media m LEFT JOIN show_schedule s ON s.media_id = m.id WHERE m.id IN (${marks})`
       ).bind(...part).all());
     } catch (e) {
@@ -172,7 +172,9 @@ async function shelfTitles(env, mediaIds) {
         `SELECT id, kind, imdb_id, tmdb_id, alt_id, title, year, poster_path FROM media WHERE id IN (${marks})`
       ).bind(...part).all());
     }
-    for (const r of rows || []) out.set(r.id, { media: r, sched: r.s_media != null ? r : null });
+    // A row made when the show was first watched (38_) and never refreshed
+    // (P5-3) holds no schedule yet: "not known", not "nothing new".
+    for (const r of rows || []) out.set(r.id, { media: r, sched: r.s_media != null && (r.checked_at != null || r.s_status != null) ? r : null });
   }
   return out;
 }

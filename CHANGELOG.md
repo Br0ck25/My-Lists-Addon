@@ -25,6 +25,66 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 `FF_PROVIDER_BREAKER` (P4-4), `FF_CHART_SNAPSHOTS` (P4-3) and `FF_CANONICAL_IDS` (P4-2), all below, are optional and can be turned on or off at any time (`docs/OPERATIONS.md` §14, §15, §17; read §17 before the last one).
 
+8. **Recommended: set up the background jobs queue** (Phase 5, `docs/OPERATIONS.md` §18): create the queues `mylists-jobs` and `mylists-jobs-dlq`, make this Worker the consumer of `mylists-jobs` (batch size 25, 5 retries, dead-letter queue `mylists-jobs-dlq`), bind `mylists-jobs` to the Worker as `JOBS`, then press **Send a test job** in `/admin` → Maintenance. Without it everything works as before.
+
+### 🏠 Home screens with "remove duplicates" built once (P5-11)
+
+- **A new switch, `FF_MATERIALIZER` (off).** For installs with "Remove duplicate items across lists", each Stremio row used to rebuild every row above it; a 20-row home screen did about 210 row builds. With the switch on, the whole home screen is built once per hour (at most 20 builds) and served from there. The rows are the same.
+- Each title in those rows also carries the site's own id for it where known, groundwork for the rows the new screens will build.
+
+### 🧰 Four more background jobs (P5-10)
+
+- **Quick Add network channels** are rebuilt once a day, one job per network, instead of one network every few minutes (with the queue; without it, as before).
+- **New on Streaming's RapidAPI allowance** is counted in D1 instead of KV, so two sweeps running at once can no longer both miss each other's requests. It carries this month's count over from KV.
+- **Recommendations** and **daily "most watched" counts** are now worked out on the server from watch history, ready for the rows that will read them. Nothing visitors see changes yet.
+
+### 🖼️ Better Posters without the wait (P5-9)
+
+- **Once the R2 bucket and the job queue are both set up**, Better Posters are kept in R2, and a poster the site doesn't have yet no longer makes anyone wait (btttr.cc can take close to a minute to draw one). Stremio gets the title's ordinary poster straight away, the website its usual stand-in, and the real one is fetched in the background for next time.
+- Without both, posters work exactly as before.
+
+### 🗑️ Deleting an account in the background, and a hole closed (P5-8)
+
+- A new way to delete an account (`DELETE /api/me`, for the new settings screen): it takes effect at once (signed out everywhere, install links stop, the username can't be taken) and the data is removed in the background, retried until it is all gone.
+- **Fixed:** deleting an account left its watch history in the activity database, its likes in the new likes table, its private channels and a few other things, filed under its account number. The database can give that number to the next account created, which would then have seen them. Every deletion now removes them, the current delete button included.
+
+### 🔑 Connected accounts renewed before they expire (P5-7)
+
+- Once a day, Trakt and MDBList sign-ins kept on the server that expire within a week are renewed, instead of only when a row happened to need them in their last hour.
+- If Trakt or MDBList refuses the renewal, the account's personal rows in Stremio show one **"Reconnect Trakt at mylistsaddon.com"** tile instead of going silently empty, and the website shows a message asking to reconnect. Connecting again fixes both.
+
+### 📥 Imports that finish on their own (P5-6, server side)
+
+- **Not used by the website yet** (its import screen moves over in Phase 6). A signed-in account can hand over up to 5,000 titles (a Letterboxd export or a CSV) in one go, and the site works through them in the background: closing the tab no longer stops an import. Progress can be checked at any time.
+- Titles TMDB can't place for certain (two films with the same name, no year) are kept for the person to choose from, instead of the first search result being taken or the title dropped.
+
+### 🔄 Charts refreshed in the background (P5-5)
+
+- **With `FF_CHART_SNAPSHOTS` on**, every chart someone uses (in every region their install asks for) is rebuilt once an hour by a background job, so no visitor waits for a chart to be rebuilt. An empty or failed answer still never replaces a good copy. The old every-few-minutes chart warm-up then leaves those charts alone.
+- With the switch off, nothing changes.
+
+### ⚖️ Checking the new Continue Watching and Airing Next against the old (P5-4, first half)
+
+- **Nothing changes for visitors.** Every hour, for 50 accounts at a time, the site works out Continue Watching and Airing Next the new way (from the shared show schedules) and compares them with what the old sweeps stored. `/admin` → Maintenance → **Check jobs** shows how different they are, with examples.
+- Once a week of this shows under 1% difference (and the differences are explained), the next step switches the site to the new way and removes the old sweeps.
+
+### 📅 One shared schedule per show (P5-3)
+
+- **Nothing changes for visitors yet.** Once an hour, the shows people watch are checked with TMDB (and TVmaze for the air time): the last episode out, the next one and when, the season finale, how many episodes each season has. Each show is checked once for everybody, not once per person. A show airing within a day is checked every hour, one between episodes every 6 hours, and an ended show every two weeks.
+- This is what Continue Watching and Airing Next will be worked out from when `FF_SHOW_SCHEDULE` is turned on (after P5-4's comparison). It needs the activity database and migration 0017, and runs from the job queue (or from the cron without it).
+
+### ⏱️ The cron hands its work to the queue (P5-2)
+
+- **Nothing changes for visitors.** With the queue bound, each cron tick now only hands out the work that is due (Continue Watching and Airing Next sweeps, New on Streaming, chart and poster warming, channel presets, housekeeping), and the queue does each piece separately, with its own retries. The same piece never runs twice at once.
+- If the queue does not pick a job up within 10 minutes, the tick does it itself. Without the queue (or before migration 0016), the tick works exactly as before.
+- `/admin` → Maintenance → **Check jobs** shows when each piece last ran and whether it is failing.
+
+### 📬 A queue for background work (P5-1)
+
+- **Nothing changes for visitors yet.** The Worker can now put jobs on a Cloudflare Queue (`mylists-jobs`) and run them itself, one after another, outside any web request. A job that fails is tried again after 30 seconds, then 1, 2, 4 and 8 minutes; after that it is kept in a second queue (`mylists-jobs-dlq`) to be looked at, not lost. A job of a kind this version does not know is kept too, so rolling back a release does not throw work away.
+- It is the groundwork for Phase 5: the next steps move the cron's work (Continue Watching and Airing Next sweeps, chart and poster warming, New on Streaming) onto the queue, so each piece gets its own retries and its own time limit instead of sharing one cron tick.
+- `/admin` → Maintenance has a new **Background jobs queue** panel: it says whether the queue is bound, and **Send a test job** proves the whole round trip works. Setup steps are in `docs/OPERATIONS.md` §18.
+
 ### 🪪 Every title in a Stremio catalog opens (P4-2)
 
 - **A new switch, `FF_CANONICAL_IDS` (off).** With it on, every title a Stremio, Nuvio or wako catalog serves carries an id the apps can open: its IMDb id where the site knows it, otherwise its TMDB id.
