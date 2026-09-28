@@ -525,8 +525,10 @@ CREATE TABLE IF NOT EXISTS show_schedule (
     next_air_date         TEXT,
     next_air_time         TEXT,
     air_tz                TEXT,
+    season_finale_season  INTEGER,
     season_finale_date    TEXT,
     season_finale_episode INTEGER,
+    season_episode_counts TEXT,
     watcher_count         INTEGER NOT NULL DEFAULT 0,
     checked_at            INTEGER,
     next_check_at         INTEGER NOT NULL

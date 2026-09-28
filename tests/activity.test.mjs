@@ -654,3 +654,184 @@ describe("P3c-4: recording a play in the activity database", () => {
     assert.match(src, /recordActivityPlay\(env, authUser, activityPlayFromLegacyEntry\(blob\.watchHistory\[0\]\), "webhook"\)/);
   });
 });
+
+// --- P3c-5: the shelves (39_activity-shelves.js) -------------------------------
+
+// Results from the sandbox, as plain data (arrays made in another realm are
+// never deepStrictEqual to ours).
+const plain = (v) => JSON.parse(JSON.stringify(v));
+
+function loadShelves() {
+  const sandbox = { console, URL, TextEncoder, TextDecoder, crypto: globalThis.crypto, Response, Headers, Request, Intl };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  for (const rel of ["00_constants.js", "02_http-and-creator-utils.js", "29_media.js", "30_lists-backfill.js", "34_lists-v2-bridge.js", "36_activity-db.js", "39_activity-shelves.js"]) {
+    vm.runInContext(read(rel), sandbox, { filename: rel });
+  }
+  return sandbox;
+}
+
+const SHELF_NOW = Date.UTC(2026, 2, 1, 12, 0, 0); // 2026-03-01
+
+// Nine titles, each showing one rule.
+function shelfFixture() {
+  const main = makeD1();
+  const act = makeD1({ schema: "activity" });
+  const db = main._db;
+  db.exec("INSERT INTO accounts (id, username, display_name, key_hash, created_at) VALUES (7, 'ann', 'Ann', 'h', 0)");
+  const media = [
+    [1, "series", "tt0903747", 1396, "Breaking Bad", "/bb.jpg"],
+    [2, "series", "tt0944947", 1399, "Game of Thrones", null],
+    [3, "series", "tt0386676", 2316, "The Office", null],
+    [4, "movie", "tt0120737", 120, "The Fellowship", null],
+    [5, "series", "tt11280740", 95396, "Severance", null],
+    [6, "series", "tt0000006", null, "Dismissed Show", null],
+    [7, "series", "tt0000007", null, "Hidden From Airing", null],
+    [8, "series", "tt0000008", null, "Not Refreshed Yet", null],
+    [9, "movie", "tt0137523", 550, "Fight Club", null],
+  ];
+  for (const [id, kind, imdb, tmdb, title, poster] of media) {
+    db.prepare("INSERT INTO media (id, kind, imdb_id, tmdb_id, title, poster_path, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 0, 0)").run(id, kind, imdb, tmdb, title, poster);
+  }
+  const sched = db.prepare(`INSERT INTO show_schedule (media_id, status, last_aired_season, last_aired_episode, last_aired_date, next_season, next_episode,
+    next_air_date, next_air_time, air_tz, season_finale_season, season_finale_date, season_finale_episode, season_episode_counts, watcher_count, next_check_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)`);
+  // Finished show: the counts say season 2 comes after S1E7.
+  sched.run(1, "Ended", 2, 13, "2013-09-29", null, null, null, null, null, 2, "2013-09-29", 13, JSON.stringify({ 1: 7, 2: 13 }));
+  // Between seasons: season 2 announced for April (its counts not in yet).
+  sched.run(2, "Returning Series", 1, 10, "2011-06-19", 2, 1, "2026-04-01", null, null, 2, "2026-06-01", 10, JSON.stringify({ 1: 10 }));
+  sched.run(3, "Ended", 9, 23, "2013-05-16", null, null, null, null, null, null, null, null, null);
+  // Airing: the finale is next, on the 20th at 9 PM Eastern.
+  sched.run(5, "Returning Series", 2, 9, "2026-02-20", 2, 10, "2026-03-20", "21:00", "America/New_York", 2, "2026-03-20", 10, null);
+  sched.run(6, "Ended", 1, 8, "2020-01-01", null, null, null, null, null, null, null, null, null);
+  sched.run(7, "Returning Series", 1, 5, "2026-02-01", 1, 6, "2026-03-08", null, null, null, null, null, null);
+
+  const p = act._db.prepare(`INSERT INTO show_progress (account_id, media_id, last_season, last_episode, last_watched_at, status,
+    dismissed_at_season, dismissed_at_episode, airing_hidden_at_season, airing_hidden_at_episode, companion_json, updated_at)
+    VALUES (7, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`);
+  p.run(1, 1, 7, 900, "watching", null, null, null, null, null);
+  p.run(2, 1, 10, 800, "completed", null, null, null, null, null);
+  p.run(3, 2, 0, 700, "watching", null, null, null, null, null);   // in Continue Watching with no history
+  p.run(4, null, null, 600, "watching", null, null, null, null, JSON.stringify({ id: "tt0120737", type: "movie", name: "The Fellowship", isCompanion: true, companionType: "sequel_movie", companionStoryline: "Middle-earth" }));
+  p.run(5, 2, 9, 1000, "watching", null, null, null, null, null);
+  p.run(6, 1, 3, 500, "watching", 1, 3, null, null, null);        // dismissed at the furthest episode watched
+  p.run(7, 1, 5, 400, "watching", null, null, 1, 5, null);         // removed from Airing Next at it
+  p.run(8, 1, 1, 300, "watching", null, null, null, null, null);   // no schedule yet
+  return { env: { DB: main, DB_ACTIVITY: act }, main, act };
+}
+
+describe("P3c-5: the shelves, worked out when read", () => {
+  it("Continue Watching: the next episode of each show, suggestions kept, dismissals honoured", async () => {
+    const sb = loadShelves();
+    const { env } = shelfFixture();
+    const cw = plain(await sb.continueWatching(env, 7, { now: SHELF_NOW }));
+    const brief = cw.items.map((i) => [i.showTitle || i.name, i.seasonNum, i.episodeNum, !!i.isUnaired, !!i.isSeasonPremiere, !!i.isSeasonFinale]);
+    assert.deepEqual(brief, [
+      ["Severance", 2, 10, true, false, true],          // the finale, not aired yet
+      ["Breaking Bad", 2, 1, false, true, false],        // across a season, from the counts
+      ["Game of Thrones", 2, 1, true, true, false],      // finished, but a new season is announced
+      ["The Office", 2, 1, false, true, false],          // (2, 0): nothing of season 2 yet
+      ["The Fellowship", undefined, undefined, false, false, false],  // the storyline suggestion, as it was
+      ["Hidden From Airing", 1, 6, true, false, false],  // only Airing Next was hidden
+    ]);
+    assert.equal(cw.items[1].id, "tt0903747:2:1");
+    assert.equal(cw.items[1].showPoster, "https://image.tmdb.org/t/p/w500/bb.jpg");
+    assert.equal(cw.items[4].companionType, "sequel_movie");
+    assert.equal(cw.items[0].seasonFinaleAirDate, "2026-03-20");
+    assert.deepEqual([...cw.missingSchedule], [8]);
+  });
+
+  it("a dismissal stops standing once a later episode is watched", async () => {
+    const sb = loadShelves();
+    const { env, act } = shelfFixture();
+    act._db.exec("UPDATE show_progress SET last_episode = 4 WHERE media_id = 6");
+    const cw = plain(await sb.continueWatching(env, 7, { now: SHELF_NOW }));
+    const d = cw.items.find((i) => i.mediaId === 6);
+    assert.deepEqual([d.seasonNum, d.episodeNum], [1, 5]);
+  });
+
+  it("Airing Next: unaired next episodes, soonest first, with finale badges and air times", async () => {
+    const sb = loadShelves();
+    const { env } = shelfFixture();
+    const an = plain(await sb.airingNext(env, 7, { now: SHELF_NOW }));
+    assert.deepEqual(an.items.map((i) => [i.showTitle, i.airDate, i.seasonNum, i.episodeNum]), [
+      ["Severance", "2026-03-20", 2, 10],
+      ["Game of Thrones", "2026-04-01", 2, 1],
+    ], "Hidden From Airing stays off; finished shows with nothing coming are not there");
+    const sev = an.items[0];
+    assert.deepEqual([sev.isSeasonFinale, sev.isSeasonPremiere, sev.seasonFinaleEpisodeNumber, sev.airTime, sev.isUnaired], [true, undefined, 10, "9 PM ET", true]);
+    const got = an.items[1];
+    assert.deepEqual([got.isSeasonPremiere, got.isSeasonFinale, got.name, got.canonicalTmdbId], [true, undefined, "Season Premiere", "1399"]);
+    assert.deepEqual([...an.missingSchedule], [8]);
+    // Once the episode has aired it leaves Airing Next.
+    const later = plain(await sb.airingNext(env, 7, { now: Date.UTC(2026, 2, 25) }));
+    assert.deepEqual(later.items.map((i) => i.showTitle), ["Game of Thrones"]);
+  });
+
+  it("an Airing Next removal stops standing once a later episode is watched", async () => {
+    const sb = loadShelves();
+    const { env, act } = shelfFixture();
+    act._db.exec("UPDATE show_progress SET last_episode = 6 WHERE media_id = 7");
+    env.DB._db.exec("UPDATE show_schedule SET last_aired_episode = 6, next_episode = 7, next_air_date = '2026-03-15' WHERE media_id = 7");
+    const an = plain(await sb.airingNext(env, 7, { now: SHELF_NOW }));
+    assert.ok(an.items.some((i) => i.mediaId === 7 && i.episodeNum === 7));
+  });
+
+  it("uses two queries and a join, whatever the number of shows (90 titles a query)", async () => {
+    const sb = loadShelves();
+    const { env, main, act } = shelfFixture();
+    for (let i = 100; i < 300; i++) {
+      main._db.prepare("INSERT INTO media (id, kind, imdb_id, title, created_at, updated_at) VALUES (?, 'series', ?, ?, 0, 0)").run(i, `tt9${i}`, `Show ${i}`);
+      act._db.prepare("INSERT INTO show_progress (account_id, media_id, last_season, last_episode, last_watched_at, updated_at) VALUES (7, ?, 1, 1, ?, 0)").run(i, i);
+    }
+    let mainQueries = 0;
+    let actQueries = 0;
+    const count = (db, bump) => ({ ...db, prepare: (sql) => { bump(); return db.prepare(sql); } });
+    const counted = { DB: count(main, () => mainQueries++), DB_ACTIVITY: count(act, () => actQueries++) };
+    const cw = plain(await sb.continueWatching(counted, 7, { now: SHELF_NOW }));
+    assert.equal(actQueries, 1);
+    assert.equal(mainQueries, 3, "200 shows: three chunks of at most 90");
+    assert.equal(cw.missingSchedule.length + cw.items.length <= 200, true);
+  });
+
+  it("Watch History pages newest first, and names episodes and movies", async () => {
+    const sb = loadShelves();
+    const { env, act } = shelfFixture();
+    const ins = act._db.prepare("INSERT INTO watch_events (account_id, media_id, season, episode, watched_at, source, dedupe_key) VALUES (7, ?, ?, ?, ?, 'ping', ?)");
+    ins.run(1, 1, 1, 100, "a");
+    ins.run(9, null, null, 300, "b");
+    ins.run(1, 1, 2, 200, "c");
+    ins.run(5, 2, 9, 300, "d");
+    const first = plain(await sb.watchHistoryPage(env, 7, { limit: 3 }));
+    assert.deepEqual(first.items.map((i) => [i.id, i.type, i.watchedAt]), [
+      ["tt11280740:2:9", "episode", 300],
+      ["tt0137523", "movie", 300],
+      ["tt0903747:1:2", "episode", 200],
+    ]);
+    assert.equal(first.items[1].name, "Fight Club");
+    assert.ok(first.cursor);
+    const second = plain(await sb.watchHistoryPage(env, 7, { limit: 3, cursor: first.cursor }));
+    assert.deepEqual(second.items.map((i) => i.id), ["tt0903747:1:1"]);
+    assert.equal(second.cursor, null);
+  });
+
+  it("the Watchlist is the account's watchlist list", async () => {
+    const sb = loadShelves();
+    const { env, main } = shelfFixture();
+    assert.equal(plain(await sb.watchlistShelf(env, 7)).items.length, 0);
+    main._db.exec(`INSERT INTO lists (id, public_id, owner_account_id, slug, name, media_type, visibility, kind, created_at, updated_at)
+      VALUES (50, 'wl7', 7, 'watchlist', 'Watchlist', 'mixed', 'private', 'watchlist', 0, 5)`);
+    main._db.exec("INSERT INTO list_items (list_id, media_id, position, added_at) VALUES (50, 9, 0, 0), (50, 1, 1, 0)");
+    const wl = plain(await sb.watchlistShelf(env, 7));
+    assert.deepEqual(wl.items.map((i) => i.id), ["tt0137523", "tt0903747"]);
+  });
+
+  it("works without migration 0017: titles only, every show named as missing a schedule", async () => {
+    const sb = loadShelves();
+    const { env } = shelfFixture();
+    env.DB._db.exec("DROP TABLE show_schedule");
+    const cw = plain(await sb.continueWatching(env, 7, { now: SHELF_NOW }));
+    assert.deepEqual(cw.items.map((i) => i.name), ["The Fellowship"]);
+    assert.equal(cw.missingSchedule.length, 6);
+  });
+});

@@ -22,6 +22,10 @@
 -- the activity database, instead of being stored per account.
 -- Dates are YYYY-MM-DD. next_air_time is HH:MM in air_tz (an IANA zone).
 -- status is the TMDB status as given (Returning Series, Ended and the like).
+-- season_finale_* is the finale of the season now airing (or last aired).
+-- season_episode_counts is a JSON object of season number to episode count,
+-- so the episode after the last one watched can be named across a season
+-- boundary without asking TMDB.
 -- watcher_count is how many accounts have the show in show_progress. A show
 -- nobody watches is not refreshed, and next_check_at says when it is due.
 CREATE TABLE IF NOT EXISTS show_schedule (
@@ -35,8 +39,10 @@ CREATE TABLE IF NOT EXISTS show_schedule (
     next_air_date         TEXT,
     next_air_time         TEXT,
     air_tz                TEXT,
+    season_finale_season  INTEGER,
     season_finale_date    TEXT,
     season_finale_episode INTEGER,
+    season_episode_counts TEXT,
     watcher_count         INTEGER NOT NULL DEFAULT 0,
     checked_at            INTEGER,
     next_check_at         INTEGER NOT NULL
