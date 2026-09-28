@@ -600,7 +600,8 @@ async function jobsTableStatus(env) {
        WHERE dedupe_key IN (SELECT ? || value FROM json_each(?)) ORDER BY id`
     ).bind(PERIODIC_JOB_KEY_PREFIX, JSON.stringify(rowJobTypes().filter((t) => ROW_JOB_TYPES.get(t).periodic))).all();
     const periodic = (results || []).map((r) => {
-      const q = parseJobProgress(r.progress_json)._q || {};
+      const all = parseJobProgress(r.progress_json);
+      const q = all._q || {};
       // Sent to the queue and not picked up yet.
       const inQueue = r.status === "queued" && Number(q.dispatchedAt) > 0 && !(Number(q.claimedAt) >= Number(q.dispatchedAt));
       return {
@@ -614,6 +615,9 @@ async function jobsTableStatus(env) {
         lastMs: q.lastMs == null ? null : q.lastMs,
         sentAt: inQueue ? q.dispatchedAt : null,
         nextAt: r.status === "queued" && !inQueue ? Math.max(now, Number(r.run_after) || 0) : null,
+        // A job's own report of its last full pass, when it keeps one
+        // (shelf.shadow, 47_).
+        last: all.last && typeof all.last === "object" ? all.last : null,
       };
     });
     const durableTypes = rowJobTypes().filter((t) => !ROW_JOB_TYPES.get(t).periodic);
