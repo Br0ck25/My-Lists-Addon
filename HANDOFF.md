@@ -7,8 +7,8 @@
 ## Current Status
 - **Last Updated**: 2026-09-28
 - **Last Active AI**: Claude Code (Opus 5.5)
-- **Active Task**: Phase 3c (activity). Phase 3b is merged into `main` (PR #3). **P3c-1** (the activity database: `migrations/activity/A0001_activity.sql`, `schema_activity.sql`, `36_activity-db.js`) is written and tested; creating and binding `DB_ACTIVITY` is the owner's (OPERATIONS §2, §4). **P3c-2** (`migrations/0017_show_schedule.sql` in the main database: `show_schedule`, `account_recommendations`, `title_daily_stats`) is written and tested. **P3c-3** (the history copy, `37_activity-backfill.js`, run from `/admin`) is written and tested; running it is the owner's (OPERATIONS §12). Next is **P3c-4** (scrobble ingestion).
-- **Task State**: 1,524 tests pass, 0 fail, 1 skipped, both as they are and with `MLA_TEST_V2_LISTS_READ=1`. Build, sync, syntax, scope, render and HTML checks pass.
+- **Active Task**: Phase 3c (activity). Phase 3b is merged into `main` (PR #3). **P3c-1** (the activity database: `migrations/activity/A0001_activity.sql`, `schema_activity.sql`, `36_activity-db.js`) is written and tested; creating and binding `DB_ACTIVITY` is the owner's (OPERATIONS §2, §4). **P3c-2** (`migrations/0017_show_schedule.sql` in the main database: `show_schedule`, `account_recommendations`, `title_daily_stats`) is written and tested. **P3c-3** (the history copy, `37_activity-backfill.js`, run from `/admin`) is written and tested; running it is the owner's (OPERATIONS §12). **P3c-4** (recording plays, `38_activity-scrobble.js`, from the ping and the webhook) is done. Next is **P3c-5** (shelves).
+- **Task State**: 1,530 tests pass, 0 fail, 1 skipped, both as they are and with `MLA_TEST_V2_LISTS_READ=1`. Build, sync, syntax, scope, render and HTML checks pass.
 - **Git State**:
   - Phases 3a and 3b are merged into `main` (PRs #1, #2, #3).
   - **Phase 3c goes on the branch `claude/wizardly-faraday-3ptdw1`**, in one draft PR into `main`, one commit per P3c task.
@@ -64,7 +64,7 @@ These are deliberate. Several are "one place" mechanisms that cover the whole Wo
    - `\n` in client code must be written `\\n`.
 3. **All numbered files share one scope.**
    - Top-level names must be unique across files.
-   - New server-only code goes in a new numbered file **after `26_`** (the next is `38_...`), never between `09_` and `24_`.
+   - New server-only code goes in a new numbered file **after `26_`** (the next is `39_...`), never between `09_` and `24_`.
    - `25_` and `26_` are the **inside** of `handleFetch` (they share `request`, `env`, `path`, `authenticateCreator`). `27_installs.js` and `28_connections.js` come after the `export default` block, at module level, so they cannot see those; pass what they need. `tests/client-harness.mjs` renders the page from the code **before** `export default`, so page rendering must never depend on `27_`+.
    - Tests that load source files into a sandbox (`loadSourceFunctions`) and call `resolveConfig` must include `27_installs.js`.
 4. **In `27_` onward, never write the words `export default` together, even in a comment.** Those files come after the Worker's real export, and `render_check.js` (a CI step) cuts the combined file at the *last* place the words appear, so the page checks break.
@@ -218,7 +218,7 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
 ---
 
 ## Next Steps for Incoming AI
-1. **Phase 3c**: P3c-1 to P3c-3 are done; continue with **P3c-4** (scrobble ingestion into `DB_ACTIVITY`: the subtitles ping, the webhook and the web "mark watched"), then P3c-5 and P3c-6. The next server file is `38_...`. Phase 3b's rollout (deploy, copy, `FF_V2_LISTS_READ`, later `FF_V2_LISTS_ONLY`, OPERATIONS §9 to §11) is still the owner's.
+1. **Phase 3c**: P3c-1 to P3c-4 are done; continue with **P3c-5** (shelves from `show_progress` + `show_schedule`; remember `(S, 0)` means "nothing of season S yet"), then P3c-6 (which also takes the web "mark watched" plays from save-tracking). The next server file is `39_...`. Phase 3b's rollout (deploy, copy, `FF_V2_LISTS_READ`, later `FF_V2_LISTS_ONLY`, OPERATIONS §9 to §11) is still the owner's.
      - `FF_V2_LISTS_API` (the v2 list and likes APIs) must stay off until P3b-9: what they write is not in the legacy store, so a flag-off rollback or a copy re-run would lose it.
      - Phase 3b rewrites how lists are stored, so it needs the owner's approval before any backfill (P3b-3) touches stored data.
      - Decide which wins when an install has its own keys in `install_secrets` and its owner also has a connection. Today `install_secrets` is the only source.

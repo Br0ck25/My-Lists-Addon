@@ -551,3 +551,106 @@ describe("P3c-3: the copy can only copy", () => {
     env.DB_ACTIVITY_1.prepare("INSERT INTO show_progress (account_id) VALUES (1)");
   });
 });
+
+// --- P3c-4: recording a play (38_activity-scrobble.js) ------------------------
+
+function loadScrobble() {
+  const sandbox = { console, URL, TextEncoder, crypto: globalThis.crypto, fetch: async () => new Response("{}", { status: 404 }) };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext("function trackingShowKey(r){const s=String(r==null?'':r);if(!s)return '';if(s.startsWith('tmdb:')){const p=s.split(':');return p.length>=2?p[0]+':'+p[1]:s;}return s.split(':')[0];}", sandbox);
+  for (const rel of ["00_constants.js", "29_media.js", "36_activity-db.js", "37_activity-backfill.js", "38_activity-scrobble.js"]) {
+    vm.runInContext(read(rel), sandbox, { filename: rel });
+  }
+  return sandbox;
+}
+
+// A D1 binding that counts writes (statements that are not SELECTs).
+function countingDb(db) {
+  const counter = { writes: 0 };
+  const isWrite = (sql) => !/^\s*SELECT\b/i.test(sql);
+  const wrapped = {
+    _db: db._db,
+    prepare: (sql) => {
+      const st = db.prepare(sql);
+      const w = (s) => ({ _inner: s, bind: (...a) => w(s.bind(...a)), run: () => { if (isWrite(sql)) counter.writes++; return s.run(); }, all: () => s.all(), first: (c) => s.first(c), _sql: sql });
+      return w(st);
+    },
+    batch: (stmts) => { for (const s of stmts) if (isWrite(s._sql)) counter.writes++; return db.batch(stmts.map((s) => s._inner)); },
+  };
+  return { db: wrapped, counter };
+}
+
+async function playEnv({ copied = true } = {}) {
+  const main = countingDb(makeD1());
+  const act = countingDb(makeD1({ schema: "activity" }));
+  main.db._db.exec("INSERT INTO accounts (id, username, display_name, key_hash, created_at) VALUES (7, 'ann', 'Ann', 'h', 0)");
+  if (copied) main.db._db.exec("INSERT INTO jobs (type, dedupe_key, account_id, status, run_after, created_at, updated_at) VALUES ('migrate.activity', 'migrate.activity:acct:7', 7, 'done', 0, 0, 0)");
+  return { env: { DB: main.db, DB_ACTIVITY: act.db }, main, act };
+}
+
+const episodeEntry = (s, e, at) => ({ id: `ep${s}${e}`, type: "episode", showId: "tt0903747", showTitle: "Breaking Bad", seasonNum: s, episodeNum: e, watchedAt: at });
+
+describe("P3c-4: recording a play in the activity database", () => {
+  it("an episode: one event and the show's progress, at most four writes, nothing to KV", async () => {
+    const sb = loadScrobble();
+    const { env, main, act } = await playEnv();
+    // The title is known already, as it is after the history copy.
+    await sb.resolveMediaBatch(env, [{ id: "tt0903747", type: "series" }], { maxLookups: 0 });
+    main.counter.writes = 0;
+    const r = await sb.recordActivityPlay(env, "ann", sb.activityPlayFromLegacyEntry(episodeEntry(1, 2, T0)), "ping");
+    assert.equal(r.recorded, true, JSON.stringify(r));
+    assert.ok(main.counter.writes + act.counter.writes <= 4, `${main.counter.writes} + ${act.counter.writes} writes`);
+    const p = act.db._db.prepare("SELECT last_season, last_episode, last_watched_at FROM show_progress WHERE account_id = 7").get();
+    assert.deepEqual([p.last_season, p.last_episode, p.last_watched_at], [1, 2, T0]);
+    const sched = main.db._db.prepare("SELECT watcher_count FROM show_schedule WHERE media_id = ?").get(r.mediaId);
+    assert.equal(sched.watcher_count, 1, "a new watcher of the show");
+  });
+
+  it("an earlier episode later does not move progress back, and the watcher is counted once", async () => {
+    const sb = loadScrobble();
+    const { env, main, act } = await playEnv();
+    await sb.recordActivityPlay(env, "ann", sb.activityPlayFromLegacyEntry(episodeEntry(2, 5, T0)), "ping");
+    const r = await sb.recordActivityPlay(env, "ann", sb.activityPlayFromLegacyEntry(episodeEntry(1, 3, T0 + H)), "webhook");
+    const p = act.db._db.prepare("SELECT last_season, last_episode, last_watched_at FROM show_progress WHERE account_id = 7").get();
+    assert.deepEqual([p.last_season, p.last_episode, p.last_watched_at], [2, 5, T0 + H]);
+    assert.equal(main.db._db.prepare("SELECT watcher_count FROM show_schedule WHERE media_id = ?").get(r.mediaId).watcher_count, 1);
+    assert.equal(act.db._db.prepare("SELECT count(*) AS n FROM watch_events").get().n, 2);
+  });
+
+  it("the same play from the ping and the webhook is one play", async () => {
+    const sb = loadScrobble();
+    const { env, act } = await playEnv();
+    const a = await sb.recordActivityPlay(env, "ann", sb.activityPlayFromLegacyEntry({ id: "tt0137523", type: "movie", watchedAt: T0 }), "ping");
+    const b = await sb.recordActivityPlay(env, "ann", sb.activityPlayFromLegacyEntry({ id: "tt0137523", type: "movie", watchedAt: T0 + 4 * 60 * 1000 }), "webhook");
+    assert.deepEqual([a.recorded, b.recorded, b.reason], [true, false, "duplicate"]);
+    const m = act.db._db.prepare("SELECT watched_count, last_watched_at FROM user_media_state").get();
+    assert.deepEqual([m.watched_count, m.last_watched_at], [1, T0], "a duplicate is not another play");
+    await sb.recordActivityPlay(env, "ann", sb.activityPlayFromLegacyEntry({ id: "tt0137523", type: "movie", watchedAt: T0 + 5 * H }), "ping");
+    assert.equal(act.db._db.prepare("SELECT watched_count FROM user_media_state").get().watched_count, 2, "a rewatch is");
+  });
+
+  it("does nothing before the account's history is copied, without the database, or for a stranger", async () => {
+    const sb = loadScrobble();
+    const { env, act } = await playEnv({ copied: false });
+    const play = sb.activityPlayFromLegacyEntry(episodeEntry(1, 1, T0));
+    assert.equal((await sb.recordActivityPlay(env, "ann", play, "ping")).reason, "not copied yet");
+    assert.equal((await sb.recordActivityPlay({ DB: env.DB }, "ann", play, "ping")).reason, "unbound");
+    assert.equal((await sb.recordActivityPlay(env, "nobody", play, "ping")).reason, "no account");
+    assert.equal(act.db._db.prepare("SELECT count(*) AS n FROM watch_events").get().n, 0);
+  });
+
+  it("never throws: a failing database is logged and the legacy write goes on", async () => {
+    const sb = loadScrobble();
+    const { env } = await playEnv();
+    env.DB_ACTIVITY.batch = async () => { throw new Error("down"); };
+    const r = await sb.recordActivityPlay(env, "ann", sb.activityPlayFromLegacyEntry(episodeEntry(1, 1, T0)), "ping");
+    assert.deepEqual([r.recorded, r.reason], [false, "error"]);
+  });
+
+  it("the ping and the webhook routes call it after their legacy write", () => {
+    const src = read("26_api-creator-and-admin-routes.js");
+    assert.match(src, /saveCreatorTrackingD1\(env, auth\.username, blob, false\);\s*\}\s*\/\/[^\n]*\n[^\n]*\n\s*await recordActivityPlay\(env, auth\.username, activityPlayFromLegacyEntry\(blob\.watchHistory\[0\]\), "ping"\)/);
+    assert.match(src, /recordActivityPlay\(env, authUser, activityPlayFromLegacyEntry\(blob\.watchHistory\[0\]\), "webhook"\)/);
+  });
+});

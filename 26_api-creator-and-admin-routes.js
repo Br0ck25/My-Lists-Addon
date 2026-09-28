@@ -514,6 +514,9 @@
             if (env.DB) {
               await saveCreatorTrackingD1(env, auth.username, blob, false);
             }
+            // And the activity database (P3c-4, 38_activity-scrobble.js):
+            // the entry just put first in Watch History is this play.
+            await recordActivityPlay(env, auth.username, activityPlayFromLegacyEntry(blob.watchHistory[0]), "ping");
 
             // Also write a tiny dedicated scrobble-queue key.
             // Cloudflare KV is eventually consistent -- a write from one edge
@@ -1190,6 +1193,10 @@
         await env.CONFIGS.put(syncKey, JSON.stringify(blob));
         if (env.DB) {
           await saveCreatorTrackingD1(env, authUser, blob, false);
+        }
+        // And the activity database (P3c-4, 38_activity-scrobble.js).
+        if (matched.startsWith("yes")) {
+          await recordActivityPlay(env, authUser, activityPlayFromLegacyEntry(blob.watchHistory[0]), "webhook");
         }
 
         // Also write to creatorscrobblequeue to protect against KV propagation lag
