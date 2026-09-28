@@ -22,6 +22,14 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 `FF_SESSIONS` and `FF_INSTALLS` stay **off** (unset). Leave them off until the new sign-in and install-link screens ship.
 
+### 🎬 One record per movie or show (P3b-2)
+
+- **`29_media.js` turns any list item's id into one `media` row**, the record lists v2 entries point at. It checks the database first, then asks TMDB, then stores the answer, so each title is looked up once for the whole site.
+  - It understands every id form list items carry today (`tt…`, `tmdb:…`, bare TMDB numbers, other schemes such as `kitsu:`). An episode entry is filed under its show.
+  - A title TMDB can't place still gets a record with the ids and name the item had, and is tried again later. No list entry is dropped for want of a title.
+  - At most six TMDB requests at a time, and a limit per call, so a large list can't run away with the Worker's time.
+- Nothing calls it yet. The list backfill (P3b-3) and the new list API (P3b-4) will. Nothing a visitor sees changes.
+
 ### 🗂️ New tables for lists, likes and channels (P3b-1)
 
 - **Migration 0016** (`migrations/0016_lists_v2.sql`) adds the tables Phase 3b moves lists onto: `media`, `lists`, `list_items`, `list_slug_history`, `likes`, `channels`, `account_list_prefs`, `presets`, the search table `lists_fts2`, and `jobs` (for the list backfill's progress).

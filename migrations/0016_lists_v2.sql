@@ -18,10 +18,11 @@
 -- file can be pasted into the D1 dashboard Console as it is.
 
 -- One row per movie or show, shared by every list that holds it.
--- title is NULL for a stub: an item whose id TMDB could not resolve keeps its
--- row with only the id it came with (P3b-2), and resolved_at stays NULL so a
--- later pass can try again. alt_id holds any other id an item arrived with
--- (kitsu:1, mal:5 and the like) when it has no TMDB or IMDb id.
+-- A stub is a title TMDB could not place (P3b-2, 29_media.js). It keeps its
+-- row with only the ids it came with, and the title the list item gave as a
+-- hint (or NULL). resolved_at stays NULL so a later pass can try again.
+-- alt_id holds any other id an item arrived with (kitsu:1, mal:5 and the
+-- like) when it has no TMDB or IMDb id.
 CREATE TABLE IF NOT EXISTS media (
     id            INTEGER PRIMARY KEY,
     kind          TEXT NOT NULL CHECK (kind IN ('movie', 'series')),

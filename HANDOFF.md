@@ -7,8 +7,8 @@
 ## Current Status
 - **Last Updated**: 2026-09-28
 - **Last Active AI**: Claude Code (Opus 5.5)
-- **Active Task**: Phase 3b (lists, likes, channels). P3b-1 (migration `0016_lists_v2.sql`) is written and tested, waiting for the owner to apply it. Next: P3b-2, the media resolver.
-- **Task State**: All tests passing (1,412 passed, 0 failed, 1 skipped: the opt-in network test). `verify.sh` checks pass. CI on GitHub runs the same suite on Node 22.
+- **Active Task**: Phase 3b (lists, likes, channels). P3b-1 (migration `0016_lists_v2.sql`) is written and tested, waiting for the owner to apply it. P3b-2 (the media resolver, `29_media.js`) is done. Next: P3b-3, the list backfill, which needs the owner's approval before it touches stored data.
+- **Task State**: All tests passing (1,428 passed, 0 failed, 1 skipped: the opt-in network test). `verify.sh` checks pass. CI on GitHub runs the same suite on Node 22.
 - **Git State**:
   - Phase 3a is merged into `main` (PR #1 and PR #2).
   - **All of Phase 3b goes on the branch `claude/beautiful-lamport-kx261g`**, in one draft PR into `main`. The owner deploys Phase 3b from that PR when it is done. Keep adding each P3b task to this branch as its own commit.
@@ -67,9 +67,10 @@ These are deliberate. Several are "one place" mechanisms that cover the whole Wo
    - New server-only code goes in a new numbered file **after `26_`** (the next is `29_...`), never between `09_` and `24_`.
    - `25_` and `26_` are the **inside** of `handleFetch` (they share `request`, `env`, `path`, `authenticateCreator`). `27_installs.js` and `28_connections.js` come after the `export default` block, at module level, so they cannot see those; pass what they need. `tests/client-harness.mjs` renders the page from the code **before** `export default`, so page rendering must never depend on `27_`+.
    - Tests that load source files into a sandbox (`loadSourceFunctions`) and call `resolveConfig` must include `27_installs.js`.
-4. **Shell heredocs in this environment mangle `\\` sequences.** Write patch scripts to a file and run them, or use the file-editing tool.
-5. **The test D1** (`tests/harness.mjs`, real SQLite) enforces D1's limits: 100 bound parameters, 2 MB per row, 100,000-byte statements. A query that trips these would fail in production too.
-6. The preview harness (`.claude/launch.json` → `mylists-harness`, port 8787) loads the built Worker once at startup. **Restart it after every rebuild.**
+4. **In `27_` onward, never write the words `export default` together, even in a comment.** Those files come after the Worker's real export, and `render_check.js` (a CI step) cuts the combined file at the *last* place the words appear, so the page checks break.
+5. **Shell heredocs in this environment mangle `\\` sequences.** Write patch scripts to a file and run them, or use the file-editing tool.
+6. **The test D1** (`tests/harness.mjs`, real SQLite) enforces D1's limits: 100 bound parameters, 2 MB per row, 100,000-byte statements. A query that trips these would fail in production too.
+7. The preview harness (`.claude/launch.json` → `mylists-harness`, port 8787) loads the built Worker once at startup. **Restart it after every rebuild.**
 
 ---
 
@@ -88,7 +89,7 @@ node scope_check.mjs worker worker_entry_combined.js
 ```
 Then delete `node_modules`.
 
-Last run (2026-09-28): all of the above pass, including the scope check. 1,412 tests passed, 0 failed, 1 skipped.
+Last run (2026-09-28): all of the above pass, plus every CI step (scope, render and HTML checks). 1,428 tests passed, 0 failed, 1 skipped.
 
 The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/json` to every POST, so a route test cannot notice a page that forgets them. A static test ("every mutating fetch the pages make sends a JSON content type") covers that instead.
 
@@ -147,6 +148,10 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
       - an account's vote is `acct:<accounts.id>` (legacy signed-out votes keep `a:<hash>`, D-9); `channel_add` rows are channel adds;
       - `lists.legacy_id` is the backfill's idempotency key;
       - a deleted account's shared channels stay (owner NULL); its private channels must be deleted by code.
+  - **P3b-2 (Claude):** the media resolver, in `29_media.js` (module level, after `export default`, so pass `env`). `resolveMediaBatch(env, items, { kind, maxLookups, tmdbKey, retryStubs }) → { ids, stats }` takes legacy list items as they are; `resolveMedia` does one; `retryUnresolvedMedia` retries stubs. Tests: "P3b-2" in `tests/lists-v2.test.mjs`, loaded into a vm sandbox with a fake TMDB. Details and what is left (merging a stub into a row that already has its TMDB id) under P3b-2 in `NEXT_VERSION_TASKS.md`.
+    - `stats` is counted per input (`found`, `resolved`, `stubs`, `unusable`), ready for P3b-3's reconciliation record.
+    - D1 allows about 1,000 queries per invocation and each new title is one write, so P3b-3 must feed it about 1,000 items per invocation at most.
+    - A test sandbox that loads `02_` must not call `fetch`: `02_`'s module-level `fetch` guard becomes the sandbox's global and calls itself. Load `00_` and `29_` only, and set `sandbox.fetch`.
 
 ---
 
@@ -172,7 +177,8 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
 ---
 
 ## Next Steps for Incoming AI
-1. **Phase 3b** (lists, likes, channels) is under way on `claude/beautiful-lamport-kx261g`. P3b-1 is written. Next is **P3b-2**, the media resolver (a new server file after `28_`, so `29_...`). Read `MIGRATION_PLAN.md` §3b and the P3b-1 notes in `NEXT_VERSION_TASKS.md` before starting.
+1. **Phase 3b** (lists, likes, channels) is under way on `claude/beautiful-lamport-kx261g`. P3b-1 and P3b-2 are written. Next is **P3b-3**, the backfill job `migrate.lists` (the next server file is `30_...`). Read `MIGRATION_PLAN.md` §3b and the P3b-1 and P3b-2 notes in `NEXT_VERSION_TASKS.md` before starting.
+     - **Ask the owner before building anything that runs the backfill against production data.** Writing and testing the job is fine; running it is their call, after a D1 backup and a KV export.
      - Phase 3b rewrites how lists are stored, so it needs the owner's approval before any backfill (P3b-3) touches stored data.
      - Decide which wins when an install has its own keys in `install_secrets` and its owner also has a connection. Today `install_secrets` is the only source.
      - v2 installs (`/i/{token}`) have no keys of their own, so their personal Trakt/MDBList/Simkl rows only work once this lands.
