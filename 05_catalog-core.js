@@ -1553,6 +1553,14 @@ function parseCustomListPayload(rawUrl) {
 // so callers can tell "list has zero items right now" apart from "couldn't
 // resolve this live, fall back to the snapshot".
 async function fetchLiveCreatorListItems(owner, slug, env) {
+  // From v2 when FF_V2_LISTS_READ is on and the owner's copy is finished
+  // (P3b-7, 34_lists-v2-bridge.js); null means the legacy keys below.
+  // typeof-guarded: this file is also loaded on its own (tests, the page).
+  const v2Items = typeof listsV2LiveListItems === "function" ? await listsV2LiveListItems(env, owner, slug) : null;
+  if (v2Items) return v2Items;
+  // With FF_V2_LISTS_ONLY (P3b-9) the legacy keys are behind: not public in
+  // v2 means not public.
+  if (typeof isV2ListsOnly === "function" && isV2ListsOnly(env)) return null;
   if (!owner || !slug || !env || !env.CONFIGS) return null;
   const ownerLower = String(owner).toLowerCase();
   const slugLower = String(slug).toLowerCase();
@@ -2402,9 +2410,14 @@ async function fetchPublishedListCatalog(entry, env) {
   if (!parsed) return [];
 
   let payload = null;
+  // A creator's list from v2 when reads are there (P3b-7) -- and only from
+  // there with FF_V2_LISTS_ONLY (P3b-9). The legacy anonymous lists
+  // (publishedlist:) are read where they have always been.
+  const v2Items = typeof listsV2LiveListItems === "function" ? await listsV2LiveListItems(env, parsed.username, parsed.listName) : null;
+  if (v2Items) payload = { items: v2Items, visibility: "public" };
+  const listsOnly = typeof isV2ListsOnly === "function" && isV2ListsOnly(env);
   const keysToTry = [
-    `creatorlist:${parsed.username}:${parsed.listName}`,
-    `creatorlist:${parsed.rawUsername}:${parsed.rawListName}`,
+    ...(listsOnly ? [] : [`creatorlist:${parsed.username}:${parsed.listName}`, `creatorlist:${parsed.rawUsername}:${parsed.rawListName}`]),
     `publishedlist:${parsed.username}:${parsed.listName}`,
     `publishedlist:${parsed.rawUsername}:${parsed.rawListName}`,
   ];

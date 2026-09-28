@@ -595,6 +595,8 @@
             if (l.items.length !== initLen) {
               l.updatedAt = Date.now();
               await env.CONFIGS.put(key, JSON.stringify(l));
+              // And its v2 copy (P3b-7), which this write used to miss.
+              await listsV2MirrorLists(env, auth.username, [key.split(":").slice(2).join(":")]);
               // Auto-Track Playback silently takes what you just watched off
               // the Watchlist. That is a list change made by one device that
               // every other device is showing, which is exactly what the
@@ -604,9 +606,25 @@
             }
           };
 
+          // FF_V2_LISTS_ONLY (P3b-9): the Watchlist lives in v2 only.
+          const wlOnlyAccount = isV2ListsOnly(env) ? await listsV2Account(env, auth.username) : null;
           const canonicalKey = `creatorlist:${auth.username}:watchlist`;
-          const canonicalRaw = await env.CONFIGS.get(canonicalKey);
-          if (canonicalRaw) {
+          const canonicalRaw = isV2ListsOnly(env) ? null : await env.CONFIGS.get(canonicalKey);
+          if (wlOnlyAccount) {
+            const raw = await listsV2GetRecordRaw(env, wlOnlyAccount, "watchlist");
+            const l = raw ? JSON.parse(raw) : null;
+            const before = l && Array.isArray(l.items) ? l.items.length : 0;
+            if (before) {
+              l.items = l.items.filter((it) => it && String(it.id || it.imdbId) !== imdbId && String(it.showId || '') !== imdbId);
+              if (l.items.length !== before) {
+                l.updatedAt = Date.now();
+                await listsV2WriteRecord(env, wlOnlyAccount, "watchlist", l);
+                await bumpCreatorListsStamp(env, auth.username);
+              }
+            }
+          } else if (isV2ListsOnly(env)) {
+            // No account row: nothing in v2 to take it off.
+          } else if (canonicalRaw) {
             await removeWatchedFrom(canonicalKey, canonicalRaw);
           } else {
             const listKeys = await listAllKeys(env.CONFIGS, `creatorlist:${auth.username}:`, 200);
@@ -2128,6 +2146,12 @@
       }
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) return authFailureResponse(auth);
+      // From v2 when FF_V2_LISTS_READ is on and this account's copy is
+      // finished (P3b-7, 34_lists-v2-bridge.js); null means read the legacy
+      // store below, as before.
+      const v2Dashboard = await listsV2DashboardResponse(env, url, auth, body);
+      if (v2Dashboard) return v2Dashboard;
+      if (isV2ListsOnly(env)) return jsonPrivate({ ok: false, error: "Your lists can't be loaded right now. Please try again in a moment." }, 503);
       // Paging. The route used to issue one KV get per list with no cap, so
       // an account at 990 lists spent 1,001 KV operations and Cloudflare
       // terminated the invocation -- the dashboard 500s forever, and since
@@ -2449,6 +2473,10 @@
           error: `Too many lists in one request (max ${CREATOR_LIST_ITEMS_BATCH_MAX}).`,
         }, 400);
       }
+      // From v2 when FF_V2_LISTS_READ is on (P3b-7); null means the legacy store.
+      const v2Items = await listsV2ItemsResponse(env, auth, slugs);
+      if (v2Items) return v2Items;
+      if (isV2ListsOnly(env)) return jsonPrivate({ ok: false, error: "Your lists can't be loaded right now. Please try again in a moment." }, 503);
 
       const out = (
         await Promise.all(
@@ -2533,10 +2561,17 @@
         return json({ ok: false, error: `That list is too large to save (limit ${PUBLISHED_LIST_ITEMS_MAX} items).` }, 413);
       }
 
-      const orderRaw = await env.CONFIGS.get(`creatorlistorder:${auth.username}`);
+      // With FF_V2_LISTS_ONLY (P3b-9) the list is read and written in v2
+      // only: the same request and answer, a different store underneath.
+      const listsOnly = isV2ListsOnly(env);
+      const onlyAccount = listsOnly ? await listsV2Account(env, auth.username) : null;
+      if (listsOnly && !onlyAccount) {
+        return json({ ok: false, error: "Your account isn't ready to save lists yet. Please try again later." }, 503);
+      }
+      const orderRaw = listsOnly ? null : await env.CONFIGS.get(`creatorlistorder:${auth.username}`);
       let order = [];
       try {
-        order = orderRaw ? JSON.parse(orderRaw).order || [] : [];
+        order = listsOnly ? await listsV2OrderSlugs(env, onlyAccount) : (orderRaw ? JSON.parse(orderRaw).order || [] : []);
       } catch {
         order = [];
       }
@@ -2595,7 +2630,9 @@
         // a slug absent from it may still have a live record behind it, and
         // allocating it would write straight over that list.
         slug = await pickFreeSlug(baseSlug, async (candidate) =>
-          order.includes(candidate) || !!(await env.CONFIGS.get(`creatorlist:${auth.username}:${candidate}`))
+          order.includes(candidate) || (listsOnly
+            ? await listsV2SlugTaken(env, onlyAccount, candidate)
+            : !!(await env.CONFIGS.get(`creatorlist:${auth.username}:${candidate}`)))
         );
         if (!slug) {
           return json(
@@ -2647,7 +2684,8 @@
         ? body.baseItemIds.filter((id) => typeof id === "string" || typeof id === "number").map(String)
         : null;
 
-      const existingRaw = editingSlug ? await getCreatorList(env, auth.username, slug) : null;
+      const existingRaw = !editingSlug ? null
+        : (listsOnly ? await listsV2GetRecordRaw(env, onlyAccount, slug) : await getCreatorList(env, auth.username, slug));
       let createdAt = now;
       let likes = 0;
       let storedUpdatedAt = 0;
@@ -2691,7 +2729,7 @@
       // write from a current one and the stale one wins. Same reasoning, and
       // the same helper, as the sync blobs: see nextSyncVersion.
       const updatedAt = nextSyncVersion(storedUpdatedAt);
-      if (env.DB) {
+      if (env.DB && !listsOnly) {
         try {
           const listId = `${auth.username}:${slug}`;
           await env.DB.prepare(
@@ -2734,6 +2772,31 @@
       if (finalSynced) kvPayload.synced = true;
       if (finalLastSyncedAt) kvPayload.lastSyncedAt = finalLastSyncedAt;
       if (finalBaseItemIds) kvPayload.baseItemIds = finalBaseItemIds;
+      const savedAnswer = {
+        ok: true,
+        slug,
+        updatedAt,
+        sourceUrl: finalSourceUrl || undefined,
+        synced: finalSynced || undefined,
+        lastSyncedAt: finalLastSyncedAt || undefined,
+        baseItemIds: finalBaseItemIds || undefined,
+        url: `${url.origin}/lists/${auth.username}/${slug}`,
+      };
+
+      // FF_V2_LISTS_ONLY: this record into v2 (its details, items by diff,
+      // its place at the end of the order when it is new), and nothing into
+      // the legacy store. A save that did not land says so, so the browser
+      // keeps its copy and tries again.
+      if (listsOnly) {
+        try {
+          await listsV2WriteRecord(env, onlyAccount, slug, kvPayload);
+        } catch (e) {
+          console.error("lists v2: save failed", e);
+          return json({ ok: false, error: "Couldn't save that list right now. Please try again in a moment." }, 503);
+        }
+        await bumpCreatorListsStamp(env, auth.username);
+        return json(savedAnswer);
+      }
 
       await env.CONFIGS.put(
         `creatorlist:${auth.username}:${slug}`,
@@ -2824,16 +2887,11 @@
           console.error("D1 write error (lists_fts save):", dbErr);
         }
       }
-      return json({
-        ok: true,
-        slug,
-        updatedAt,
-        sourceUrl: finalSourceUrl || undefined,
-        synced: finalSynced || undefined,
-        lastSyncedAt: finalLastSyncedAt || undefined,
-        baseItemIds: finalBaseItemIds || undefined,
-        url: `${url.origin}/lists/${auth.username}/${slug}`,
-      });
+      // The same change into v2, by diff (P3b-7, 34_lists-v2-bridge.js). It
+      // never fails the save: a mirror that cannot finish marks the
+      // account's v2 copy stale, and reads fall back to what was just saved.
+      await listsV2MirrorLists(env, auth.username, [slug]);
+      return json(savedAnswer);
     }
 
     // --- Sharing a channel, and the Explore Channels directory -----------
@@ -2884,10 +2942,16 @@
       let code = String(body.code || "").trim().slice(0, 64);
       if (code && !/^[A-Za-z0-9_-]+$/.test(code)) code = "";
       let existing = null;
+      // FF_V2_LISTS_ONLY (P3b-9): shared channels live in v2 only.
+      const channelsOnly = isV2ListsOnly(env);
       if (code) {
         try {
-          const raw = await env.CONFIGS.get(`channelshare:${code}`);
-          existing = raw ? JSON.parse(raw) : null;
+          if (channelsOnly) {
+            existing = await channelsV2Record(env, code);
+          } else {
+            const raw = await env.CONFIGS.get(`channelshare:${code}`);
+            existing = raw ? JSON.parse(raw) : null;
+          }
         } catch {
           existing = null;
         }
@@ -2913,19 +2977,34 @@
           error: "That channel is too large to share. Trim it down and try again.",
         }, 413);
       }
-      try {
-        await env.CONFIGS.put(`channelshare:${code}`, serialized);
-      } catch {
-        return json({ ok: false, error: "Couldn't save that share link. Please try again." }, 500);
-      }
       const channelSlug = typeof slugifyServer === 'function' ? slugifyServer(channel.name || "channel") : "channel";
-      if (record.published && owner) {
+      if (channelsOnly) {
+        let stored;
         try {
-          await env.CONFIGS.put(`creatorchannel:${owner.toLowerCase()}:${channelSlug}`, code);
-        } catch {}
-      }
-      if (record.published) {
-        await upsertPublicChannelIndex(env, code, record).catch(() => {});
+          stored = await channelsV2Share(env, code, record);
+        } catch (e) {
+          console.error("channels v2: share failed", e);
+          stored = { error: "Couldn't save that share link. Please try again.", status: 500 };
+        }
+        if (stored.error) return json({ ok: false, error: stored.error }, stored.status);
+      } else {
+        try {
+          await env.CONFIGS.put(`channelshare:${code}`, serialized);
+        } catch {
+          return json({ ok: false, error: "Couldn't save that share link. Please try again." }, 500);
+        }
+        if (record.published && owner) {
+          try {
+            await env.CONFIGS.put(`creatorchannel:${owner.toLowerCase()}:${channelSlug}`, code);
+          } catch {}
+        }
+        if (record.published) {
+          await upsertPublicChannelIndex(env, code, record).catch(() => {});
+        }
+        // The same share into v2 (P3b-8, 35_channels-v2.js). It never fails
+        // the share: a mirror that cannot finish marks the v2 row stale, and
+        // reads of it go back to what was just stored here.
+        await channelsV2SyncShare(env, code, record);
       }
       ctx.waitUntil(bumpStat(env, publish ? "channels:published" : "channels:shared"));
       return json({
@@ -2943,27 +3022,36 @@
     if (path === "/api/channel/share" && request.method === "GET") {
       if (!env || !env.CONFIGS) return json({ ok: false, error: "Sharing isn't available on this add-on." }, 503);
       let code = String(url.searchParams.get("code") || "").trim();
+      // A creator's address names a code: from v2 when reads are there
+      // (P3b-8), else the legacy map, which also keeps a renamed channel's
+      // old slugs.
       if (code.startsWith("channels:")) {
         const parts = code.split(":");
         const u = parts[1] || "";
         const s = parts[2] || "";
-        const resolved = await env.CONFIGS.get(`creatorchannel:${u.toLowerCase()}:${s.toLowerCase()}`);
+        const resolved = (await channelsV2CodeBySlug(env, u, s))
+          || (isV2ListsOnly(env) ? null : await env.CONFIGS.get(`creatorchannel:${u.toLowerCase()}:${s.toLowerCase()}`));
         if (resolved) code = resolved;
       } else if (!code && url.searchParams.get("username") && url.searchParams.get("slug")) {
         const u = url.searchParams.get("username").trim();
         const s = url.searchParams.get("slug").trim();
-        const resolved = await env.CONFIGS.get(`creatorchannel:${u.toLowerCase()}:${s.toLowerCase()}`);
+        const resolved = (await channelsV2CodeBySlug(env, u, s))
+          || (isV2ListsOnly(env) ? null : await env.CONFIGS.get(`creatorchannel:${u.toLowerCase()}:${s.toLowerCase()}`));
         if (resolved) code = resolved;
       }
       if (!code || !/^[A-Za-z0-9_-]{1,64}$/.test(code)) {
         return json({ ok: false, error: "That doesn't look like a channel share link." }, 400);
       }
-      let record = null;
-      try {
-        const raw = await env.CONFIGS.get(`channelshare:${code}`);
-        record = raw ? JSON.parse(raw) : null;
-      } catch {
-        record = null;
+      // From v2 when FF_V2_LISTS_READ is on and its copy of this channel is
+      // current, episodes and all (P3b-8); otherwise the legacy record.
+      let record = await channelsV2Record(env, code, { items: true });
+      if (!record && !isV2ListsOnly(env)) {
+        try {
+          const raw = await env.CONFIGS.get(`channelshare:${code}`);
+          record = raw ? JSON.parse(raw) : null;
+        } catch {
+          record = null;
+        }
       }
       if (!record || !record.channel) {
         return json({ ok: false, error: "That channel link has expired or was removed." }, 404);
@@ -2990,6 +3078,11 @@
     // is read on every visit to the tab and a prefix scan plus one GET per
     // entry would be dozens of round trips for a page of cards.
     if (path === "/api/channel/directory" && request.method === "GET") {
+      // A query over the channels rows once reads are on v2 and the copy has
+      // finished (P3b-8); the legacy index until then.
+      const v2Directory = await channelsV2DirectoryResponse(env, url);
+      if (v2Directory) return v2Directory;
+      if (isV2ListsOnly(env)) return json({ ok: false, error: "Explore Channels isn't available right now." }, 503);
       if (!env || !env.CONFIGS) return jsonCacheable({ ok: true, channels: [] });
       const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "60", 10) || 60, 1), PUBLIC_CHANNEL_INDEX_MAX);
       const sort = String(url.searchParams.get("sort") || "newest");
@@ -3024,6 +3117,21 @@
       }
       const code = String(body.code || "").trim();
       if (!/^[A-Za-z0-9_-]{1,64}$/.test(code)) return json({ ok: false, error: "Channel not found." }, 404);
+      // FF_V2_LISTS_ONLY (P3b-9): the like is v2's alone. The same answers, in
+      // the same order: not listed (404) before signed out (401).
+      if (isV2ListsOnly(env)) {
+        const row = await channelsV2LiveRow(env, code);
+        if (!row || row.visibility !== "public") return json({ ok: false, error: "Channel not found." }, 404);
+        const onlyAuth = await authenticateCreator(body.creatorName, body.creatorKey);
+        if (!onlyAuth.ok) {
+          if (onlyAuth.throttled) return authFailureResponse(onlyAuth);
+          return json({ ok: false, error: "Sign in to like channels.", signInRequired: true }, 401);
+        }
+        const liking = body.action !== "unlike";
+        const v2 = await channelsV2Like(env, code, onlyAuth.username, liking);
+        if (v2.error) return json({ ok: false, error: v2.error }, v2.status);
+        return json({ ok: true, likes: v2.likes, liked: liking }, 200, { "Cache-Control": "no-store" });
+      }
       let record = null;
       try {
         const raw = await env.CONFIGS.get(`channelshare:${code}`);
@@ -3068,7 +3176,11 @@
         // up on the next one rather than this failing the request.
       }
       await updatePublicChannelIndexEntry(env, code, { likes: count }).catch(() => {});
-      return json({ ok: true, likes: count, liked, capped: capped || undefined }, 200, { "Cache-Control": "no-store" });
+      // The same like in v2 (P3b-8). With reads on v2 the count people see is
+      // v2's, which keeps any higher legacy total the copy carried over.
+      const v2Likes = await channelsV2MirrorLike(env, code, voterName, liked);
+      const shownLikes = isV2ListsReadEnabled(env) && v2Likes != null ? v2Likes : count;
+      return json({ ok: true, likes: shownLikes, liked, capped: capped || undefined }, 200, { "Cache-Control": "no-store" });
     }
 
     // /api/channel/added  (POST)  { code }
@@ -3097,6 +3209,10 @@
       if (!body.creatorName || !body.creatorKey) return json({ ok: true, counted: false });
       const addAuth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!addAuth.ok) return json({ ok: true, counted: false });
+      // FF_V2_LISTS_ONLY (P3b-9): counted in v2 alone.
+      if (isV2ListsOnly(env)) {
+        return json({ ok: true, counted: await channelsV2Added(env, code, addAuth.username) }, 200, { "Cache-Control": "no-store" });
+      }
       const entries = await readPublicChannelIndex(env);
       const row = entries.find((e) => e && e.code === code);
       if (!row) return json({ ok: true, counted: false });
@@ -3106,6 +3222,7 @@
       if (already) return json({ ok: true, counted: false }, 200, { "Cache-Control": "no-store" });
       await applyLikeVote(env, addKey, adderId, true);
       await updatePublicChannelIndexEntry(env, code, { adds: (Number(row.adds) || 0) + 1 }).catch(() => {});
+      await channelsV2MirrorAdd(env, code, addAuth.username);
       return json({ ok: true, counted: true }, 200, { "Cache-Control": "no-store" });
     }
 
@@ -3129,6 +3246,10 @@
       }
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) return authFailureResponse(auth);
+      // From the channels rows once the directory is (P3b-8).
+      const v2Mine = await channelsV2Listings(env, auth.username);
+      if (v2Mine) return json({ ok: true, channels: v2Mine }, 200, { "Cache-Control": "no-store" });
+      if (isV2ListsOnly(env)) return json({ ok: false, error: "Your channels can't be loaded right now." }, 503);
       const entries = await readPublicChannelIndex(env);
       const mine = entries.filter((e) => e && e.owner === auth.username);
       return json({ ok: true, channels: mine }, 200, { "Cache-Control": "no-store" });
@@ -3151,6 +3272,11 @@
       if (!auth.ok) return authFailureResponse(auth);
       const code = String(body.code || "").trim();
       if (!code || !/^[A-Za-z0-9_-]{1,64}$/.test(code)) return json({ ok: false, error: "Missing code." }, 400);
+      // FF_V2_LISTS_ONLY (P3b-9): in v2 alone.
+      if (isV2ListsOnly(env)) {
+        const v2 = await channelsV2Unlist(env, code, auth.username);
+        return v2.error ? json({ ok: false, error: v2.error }, v2.status) : json({ ok: true });
+      }
       let record = null;
       try {
         const raw = await env.CONFIGS.get(`channelshare:${code}`);
@@ -3168,6 +3294,7 @@
         await env.CONFIGS.put(`channelshare:${code}`, JSON.stringify(record));
       } catch {}
       await removePublicChannelIndex(env, code).catch(() => {});
+      await channelsV2SyncShare(env, code, record);
       return json({ ok: true });
     }
 
@@ -3225,6 +3352,17 @@
             .filter((s) => s.length <= 60 && /^[a-zA-Z0-9._-]+$/.test(s))
             .slice(0, CREATOR_LIST_ORDER_MAX)
         : [];
+      // FF_V2_LISTS_ONLY (P3b-9): the order is kept in v2 only.
+      if (isV2ListsOnly(env)) {
+        try {
+          await listsV2WriteOrder(env, auth.username, newOrder);
+        } catch (e) {
+          console.error("lists v2: reorder failed", e);
+          return json({ ok: false, error: "Couldn't save the new order right now. Please try again in a moment." }, 503);
+        }
+        await bumpCreatorListsStamp(env, auth.username);
+        return json({ ok: true, order: newOrder });
+      }
       if (env.DB) {
         try {
           const stmts = newOrder.map((slug, idx) =>
@@ -3242,6 +3380,7 @@
       // a visible change on every other one -- and it touches only the order
       // key, which is why the stamp cannot be derived from the list records.
       await bumpCreatorListsStamp(env, auth.username);
+      await listsV2MirrorOrder(env, auth.username, newOrder);
       return json({ ok: true, order: newOrder });
     }
 
@@ -3917,7 +4056,12 @@
       }
       try {
         if (Array.isArray(body.watchlist)) {
-          const wlRaw = await getCreatorList(env, auth.username, "watchlist");
+          // With FF_V2_LISTS_ONLY (P3b-9) the Watchlist is read and written in
+          // v2, like every other list.
+          const wlOnly = isV2ListsOnly(env);
+          const wlAccount = wlOnly ? await listsV2Account(env, auth.username) : null;
+          if (wlOnly && !wlAccount) throw new Error("lists v2: no account for " + auth.username);
+          const wlRaw = wlOnly ? await listsV2GetRecordRaw(env, wlAccount, "watchlist") : await getCreatorList(env, auth.username, "watchlist");
           let wlObj = null;
           if (wlRaw) {
             try {
@@ -3943,35 +4087,45 @@
           if (utf8ByteLength(JSON.stringify(wlObj.items || [])) > CREATOR_LIST_BYTES_MAX) {
             return json({ ok: false, error: "Your Watchlist is too large to store. Try removing some items." }, 413);
           }
-          
-          if (env.DB) {
-            try {
-              const listId = `${auth.username}:watchlist`;
-              const itemsJson = JSON.stringify(wlObj.items || []);
-              // Carries `likes` on the INSERT for the same reason the
-              // creator-list save above does -- a Watchlist is private by
-              // default but nothing stops one being shared and liked.
-              await env.DB.prepare(
-                "INSERT INTO creator_lists (id, username, name, type, visibility, items_json, likes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, type=excluded.type, visibility=excluded.visibility, items_json=excluded.items_json, updated_at=excluded.updated_at"
-              ).bind(listId, auth.username, wlObj.name, wlObj.type, wlObj.visibility, itemsJson, wlObj.likes || 0, wlObj.createdAt, wlObj.updatedAt).run();
-            } catch (dbErr) {
-              console.error("D1 write error (creatorlist watchlist):", dbErr);
-            }
-          }
-          
-          // Unconditional -- see the creatorlist put above.
-          await env.CONFIGS.put(`creatorlist:${auth.username}:watchlist`, JSON.stringify(wlObj));
 
-          const orderRaw = await env.CONFIGS.get(`creatorlistorder:${auth.username}`);
-          let order = [];
-          try { order = orderRaw ? JSON.parse(orderRaw).order || [] : []; } catch {}
-          if (!order.includes("watchlist")) {
-            order.unshift("watchlist");
-            await env.CONFIGS.put(`creatorlistorder:${auth.username}`, JSON.stringify({ order }));
+          if (wlOnly) {
+            // A new one goes first, as the legacy order put it. A failure
+            // answers 500 below, so the browser keeps its copy and retries.
+            await listsV2WriteRecord(env, wlAccount, "watchlist", wlObj);
+            await bumpCreatorListsStamp(env, auth.username);
+          } else {
+            if (env.DB) {
+              try {
+                const listId = `${auth.username}:watchlist`;
+                const itemsJson = JSON.stringify(wlObj.items || []);
+                // Carries `likes` on the INSERT for the same reason the
+                // creator-list save above does -- a Watchlist is private by
+                // default but nothing stops one being shared and liked.
+                await env.DB.prepare(
+                  "INSERT INTO creator_lists (id, username, name, type, visibility, items_json, likes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, type=excluded.type, visibility=excluded.visibility, items_json=excluded.items_json, updated_at=excluded.updated_at"
+                ).bind(listId, auth.username, wlObj.name, wlObj.type, wlObj.visibility, itemsJson, wlObj.likes || 0, wlObj.createdAt, wlObj.updatedAt).run();
+              } catch (dbErr) {
+                console.error("D1 write error (creatorlist watchlist):", dbErr);
+              }
+            }
+          
+            // Unconditional -- see the creatorlist put above.
+            await env.CONFIGS.put(`creatorlist:${auth.username}:watchlist`, JSON.stringify(wlObj));
+
+            const orderRaw = await env.CONFIGS.get(`creatorlistorder:${auth.username}`);
+            let order = [];
+            try { order = orderRaw ? JSON.parse(orderRaw).order || [] : []; } catch {}
+            if (!order.includes("watchlist")) {
+              order.unshift("watchlist");
+              await env.CONFIGS.put(`creatorlistorder:${auth.username}`, JSON.stringify({ order }));
+            }
+            // The Watchlist is a creatorlist: record like any other and shows on
+            // the same dashboard, so adding to it here counts as a list change.
+            await bumpCreatorListsStamp(env, auth.username);
+            // Its v2 copy too (34_lists-v2-bridge.js): reads of the Watchlist
+            // stay on the legacy store, but a shared one is in the directory.
+            await listsV2MirrorLists(env, auth.username, ["watchlist"]);
           }
-          // The Watchlist is a creatorlist: record like any other and shows on
-          // the same dashboard, so adding to it here counts as a list change.
-          await bumpCreatorListsStamp(env, auth.username);
         }
       } catch (e) {
         return json({ ok: false, error: "Could not save to storage right now. Please try again in a moment." }, 500);
@@ -4512,7 +4666,19 @@
           }
         }
       } catch {}
-      const orderRaw = orderRawInit;
+      let orderRaw = orderRawInit;
+      // FF_V2_LISTS_ONLY (P3b-9): the order is kept in v2, not in the
+      // legacy key. An account with no lists has none, as before.
+      if (isV2ListsOnly(env)) {
+        orderRaw = null;
+        try {
+          const orderAccount = await listsV2Account(env, auth.username);
+          const v2Order = orderAccount ? await listsV2OrderSlugs(env, orderAccount) : [];
+          if (v2Order.length) orderRaw = JSON.stringify({ order: v2Order });
+        } catch (e) {
+          console.error("lists v2: sync/load order failed", e);
+        }
+      }
       if (orderRaw) {
         try {
           const orderBlob = JSON.parse(orderRaw);
@@ -4709,6 +4875,12 @@
         .trim();
 
       const isMyListsSearch = isMyListsSentinel || !userTerm;
+
+      // From the v2 tables when FF_V2_LISTS_READ is on (P3b-6,
+      // 33_lists-directory.js), with the same query handling; null means use
+      // the legacy search below.
+      const v2Search = await v2SearchListsResponse(env, url, (userTerm || (isMyListsSentinel ? "" : q)).replace(/@+/g, "").trim(), isMyListsSearch);
+      if (v2Search) return v2Search;
 
       try {
         if (env.DB) {
@@ -5035,9 +5207,18 @@
       }
       let listData = null;
       let isCreatorList = false;
+      // From v2 when FF_V2_LISTS_READ is on and the owner's copy is finished
+      // (P3b-7); otherwise, or when v2 has no public list here, the legacy
+      // keys below.
+      const v2List = await listsV2PublicListRecord(env, username, listName);
+      if (v2List) {
+        listData = v2List;
+        isCreatorList = true;
+      }
+      // With FF_V2_LISTS_ONLY (P3b-9) a creator's list is v2's or nobody's;
+      // the legacy anonymous lists (publishedlist:) stay where they are.
       const keysToTry = [
-        `creatorlist:${username}:${listName}`,
-        `creatorlist:${rawUser}:${rawList}`,
+        ...(isV2ListsOnly(env) ? [] : [`creatorlist:${username}:${listName}`, `creatorlist:${rawUser}:${rawList}`]),
         `publishedlist:${username}:${listName}`,
         `publishedlist:${rawUser}:${rawList}`,
       ];
@@ -5425,6 +5606,11 @@
       const authed = await isAdminRequest(request, env);
       if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
       if (!env || !env.DB || !env.CONFIGS) return json({ ok: false, error: "No D1 or KV binding." }, 500);
+      // It copies the legacy KV lists into the legacy D1 tables; with
+      // FF_V2_LISTS_ONLY (P3b-9) neither is written or read any more.
+      if (isV2ListsOnly(env)) {
+        return json({ ok: false, error: "FF_V2_LISTS_ONLY is on: the old list storage is no longer used, so there is nothing to migrate." }, 409);
+      }
 
       // Every KV read/write and every D1 statement goes through these, so the
       // budget reflects what was actually spent rather than a guess.
@@ -5910,6 +6096,13 @@
       if (!env || !env.DB) {
         return json({ ok: true, done: true, count: 0, scanned: 0, ms: Date.now() - started });
       }
+      // The v2 search table too (P3b-9), and with FF_V2_LISTS_ONLY only that:
+      // the legacy one is built from tables that are no longer written.
+      const v2Count = await rebuildListsFts2(env);
+      if (isV2ListsOnly(env)) {
+        if (v2Count == null) return json({ ok: false, error: "Rebuild failed: the v2 list tables are not there." }, 500);
+        return json({ ok: true, done: true, count: v2Count, scanned: v2Count, v2Count, ms: Date.now() - started });
+      }
       try {
         await env.DB.prepare(`
           CREATE VIRTUAL TABLE IF NOT EXISTS lists_fts USING fts5(
@@ -5940,6 +6133,7 @@
           done: true,
           count,
           scanned: count,
+          v2Count: v2Count == null ? undefined : v2Count,
           ms: Date.now() - started,
         });
       } catch (e) {
@@ -6017,6 +6211,24 @@
         } catch (dbErr) {
           console.error("D1 username resolution error in creator-lists:", dbErr);
         }
+      }
+
+      // FF_V2_LISTS_ONLY (P3b-9): the lists are v2's; the legacy records are
+      // behind.
+      if (isV2ListsOnly(env)) {
+        let v2Lists;
+        try {
+          v2Lists = await listsV2AdminLists(env, targetUsername, url.origin);
+        } catch (e) {
+          return json({ ok: false, error: "Could not read this creator's lists right now." }, 500, { "Cache-Control": "no-store" });
+        }
+        const v2Offset = /^\d+$/.test(cursor) ? parseInt(cursor, 10) : 0;
+        const v2Page = v2Lists.slice(v2Offset, v2Offset + limit);
+        const v2Next = v2Offset + limit < v2Lists.length ? String(v2Offset + limit) : null;
+        return json({
+          ok: true, username: targetUsername, count: v2Page.length, lists: v2Page, orderCount: v2Lists.length,
+          cursor: v2Next, done: v2Next === null,
+        }, 200, { "Cache-Control": "no-store" });
       }
 
       let order = [];
@@ -6200,7 +6412,9 @@
       // multi-batch cleanup is finished without guessing.
       let remaining = null;
       try {
-        if (env.DB) {
+        if (env.DB && isV2ListsOnly(env)) {
+          remaining = await listsV2CountLists(env, v.normalized);
+        } else if (env.DB) {
           const countRow = await env.DB.prepare(
             "SELECT COUNT(*) AS n FROM creator_lists WHERE username = ?"
           ).bind(v.normalized).first();
@@ -6386,7 +6600,9 @@
       const scope = url.searchParams.get("scope") === "all" ? "all" : "listed";
 
       if (scope === "listed") {
-        const index = await readPublicChannelIndex(env);
+        // What the public sees: the channels rows once Explore Channels reads
+        // them (P3b-8), the legacy index until then.
+        const index = (await channelsV2Listings(env, null)) || (isV2ListsOnly(env) ? [] : await readPublicChannelIndex(env));
         return json({
           ok: true,
           scope,
@@ -6401,6 +6617,31 @@
       }
 
       const cursor = url.searchParams.get("cursor") || "";
+      // FF_V2_LISTS_ONLY (P3b-9): every stored channel is a row.
+      if (isV2ListsOnly(env)) {
+        const offset = Math.max(0, parseInt(cursor, 10) || 0);
+        const rows = await channelsV2AllRows(env, limit, offset);
+        const page = rows.slice(0, limit);
+        return json({
+          ok: true,
+          scope,
+          count: page.length,
+          channels: page.map((r) => ({
+            code: r.public_code,
+            name: r.name || "(untitled)",
+            description: r.description || channelsV2Definition(r).description || "",
+            owner: channelsV2OwnerName(r),
+            listed: r.visibility === "public",
+            itemCount: r.item_count || 0,
+            likes: r.like_count || 0,
+            publishedAt: r.created_at || null,
+            updatedAt: r.updated_at || null,
+            url: `${url.origin}/channel/${r.public_code}`,
+          })),
+          cursor: rows.length > limit ? String(offset + limit) : null,
+          done: rows.length <= limit,
+        }, 200, { "Cache-Control": "no-store" });
+      }
       let listed;
       try {
         listed = await env.CONFIGS.list({ prefix: "channelshare:", limit, ...(cursor ? { cursor } : {}) });
@@ -6470,6 +6711,25 @@
       if (!/^[A-Za-z0-9_-]{1,64}$/.test(code)) return json({ ok: false, error: "Missing code." }, 400);
       const action = body.action === "delete" ? "delete" : "unlist";
 
+      // FF_V2_LISTS_ONLY (P3b-9): in v2 alone, and checked the same way.
+      if (isV2ListsOnly(env)) {
+        let done = false;
+        try {
+          if (action === "delete") {
+            done = await channelsV2Delete(env, code);
+          } else {
+            const v2 = await channelsV2Unlist(env, code, null);
+            done = !v2.error || v2.status === 404;
+          }
+        } catch (e) {
+          console.error("channels v2: takedown failed", e);
+        }
+        if (!done) {
+          return json({ ok: false, error: "Couldn't finish that takedown. It may still be reachable -- please try again." }, 500, { "Cache-Control": "no-store" });
+        }
+        return json({ ok: true, action, code }, 200, { "Cache-Control": "no-store" });
+      }
+
       // The directory row goes either way, and its removal is checked
       // rather than assumed: reporting success on a takedown that left the
       // channel advertised is the failure mode worth designing against.
@@ -6496,9 +6756,17 @@
             error: "The channel was deleted but its directory listing could not be removed. Please try again.",
           }, 500, { "Cache-Control": "no-store" });
         }
+        // And its v2 copy (P3b-8), checked for the same reason.
+        if (!(await channelsV2Delete(env, code))) {
+          return json({
+            ok: false,
+            error: "The channel was deleted but its copy in the new tables could not be removed. Please try again.",
+          }, 500, { "Cache-Control": "no-store" });
+        }
         return json({ ok: true, action, code }, 200, { "Cache-Control": "no-store" });
       }
 
+      let unlisted = null;
       try {
         const raw = await env.CONFIGS.get(`channelshare:${code}`);
         if (raw) {
@@ -6506,6 +6774,7 @@
           record.published = false;
           record.updatedAt = Date.now();
           await env.CONFIGS.put(`channelshare:${code}`, JSON.stringify(record));
+          unlisted = record;
         }
       } catch {
         return json({
@@ -6515,6 +6784,11 @@
       }
       if (!removedFromIndex) {
         return json({ ok: false, error: "That channel is still listed. Please try again." }, 500, { "Cache-Control": "no-store" });
+      }
+      // The v2 listing goes too (P3b-8), and a failure is reported: a
+      // takedown that left the channel listed there is not finished.
+      if (unlisted && !(await channelsV2SyncShare(env, code, unlisted))) {
+        return json({ ok: false, error: "That channel is still listed in the new tables. Please try again." }, 500, { "Cache-Control": "no-store" });
       }
       return json({ ok: true, action, code }, 200, { "Cache-Control": "no-store" });
     }
@@ -7673,7 +7947,7 @@ export default {
     let response;
     const startedAt = Date.now();
     const counters = (env && env.ANALYTICS)
-      ? { kvReads: 0, kvWrites: 0, kvLists: 0, d1Statements: 0, d1Batches: 0 }
+      ? { kvReads: 0, kvWrites: 0, kvLists: 0, d1Statements: 0, d1Batches: 0, kvLegacyListPuts: 0 }
       : null;
     const runEnv = counters ? instrumentEnv(env, counters) : env;
     try {

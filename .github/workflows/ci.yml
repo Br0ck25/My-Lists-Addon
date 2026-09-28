@@ -124,3 +124,12 @@ jobs:
 
       - name: Test suite
         run: node --test tests/*.test.mjs
+
+      # The same suite with lists read from the v2 tables (FF_V2_LISTS_READ,
+      # Phase 3b P3b-7). The legacy list routes run over v2 while the flag is
+      # on, and every test written against them has to hold either way: that
+      # is what makes switching reads over (and back) safe.
+      - name: Test suite, with lists read from v2
+        run: node --test tests/*.test.mjs
+        env:
+          MLA_TEST_V2_LISTS_READ: "1"

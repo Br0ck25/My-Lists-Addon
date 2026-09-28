@@ -201,6 +201,19 @@ async function handleFetch(request, env, ctx) {
     // connections) -- 28_connections.js.
     const connectionsResponse = await handleConnectionsApi(request, env, url, path);
     if (connectionsResponse) return connectionsResponse;
+    // /admin/api/lists-backfill/* (copying lists into the v2 tables, run from
+    // /admin) -- 30_lists-backfill.js.
+    const listsBackfillResponse = await handleListsBackfillApi(request, env, url, path);
+    if (listsBackfillResponse) return listsBackfillResponse;
+    // /api/lists (the item-level list API over the v2 tables, behind
+    // FF_V2_LISTS_API) -- 31_lists-api.js. The legacy /api/lists/like and
+    // /api/lists/like-external routes below are left to answer as they do.
+    const listsApiResponse = await handleListsApi(request, env, url, path);
+    if (listsApiResponse) return listsApiResponse;
+    // /api/likes/{list|channel|external}/{id} (likes over the v2 tables, behind
+    // the same flag) -- 32_likes-api.js.
+    const likesApiResponse = await handleLikesApi(request, env, url, path);
+    if (likesApiResponse) return likesApiResponse;
 
     if (path === "/" || path === "") {
       ctx.waitUntil(bumpStat(env, "pageviews"));
@@ -564,6 +577,10 @@ async function handleFetch(request, env, ctx) {
     // just lands on the normal default builder page rather than a hard
     // /lists/public.json or /api/public-lists.json -> JSON directory of all published public lists
     if (path === "/lists/public.json" || path === "/api/public-lists.json") {
+      // From the v2 tables when FF_V2_LISTS_READ is on (P3b-6,
+      // 33_lists-directory.js); null means use the legacy path below.
+      const v2Directory = await v2PublicListsResponse(env, url);
+      if (v2Directory) return v2Directory;
       if (!env || !env.CONFIGS) {
         return json({ ok: true, lists: [] }, 200, { "Cache-Control": "public, max-age=60", ...corsHeaders() });
       }
@@ -719,8 +736,9 @@ async function handleFetch(request, env, ctx) {
       if (parts.length >= 3) {
         const u = decodeURIComponent(parts[1]).toLowerCase();
         const s = decodeURIComponent(parts[2]).toLowerCase();
-        let code = "";
-        if (env && env.CONFIGS) {
+        // From v2 when reads are there (P3b-8), else the legacy map and index.
+        let code = (await channelsV2CodeBySlug(env, u, s)) || "";
+        if (!code && env && env.CONFIGS && !isV2ListsOnly(env)) {
           try {
             code = (await env.CONFIGS.get(`creatorchannel:${u}:${s}`)) || "";
           } catch {}
@@ -735,8 +753,11 @@ async function handleFetch(request, env, ctx) {
         if (code) {
           if (wantsJson) {
             try {
-              const raw = await env.CONFIGS.get(`channelshare:${code}`);
-              const record = raw ? JSON.parse(raw) : null;
+              let record = await channelsV2Record(env, code, { items: true });
+              if (!record && !isV2ListsOnly(env)) {
+                const raw = await env.CONFIGS.get(`channelshare:${code}`);
+                record = raw ? JSON.parse(raw) : null;
+              }
               if (record && record.channel) {
                 const ch = sanitizeSharedChannel(record.channel);
                 if (ch) {
@@ -7158,12 +7179,15 @@ function generateSearchVariations(query) {
             continue;
           }
           if (!listed.has(code)) {
-            let record = null;
-            try {
-              const raw = await env.CONFIGS.get(`channelshare:${code}`);
-              record = raw ? JSON.parse(raw) : null;
-            } catch {
-              record = null;
+            // From v2 when its copy of the channel is current (P3b-8).
+            let record = await channelsV2Record(env, code, { items: true });
+            if (!record && !isV2ListsOnly(env)) {
+              try {
+                const raw = await env.CONFIGS.get(`channelshare:${code}`);
+                record = raw ? JSON.parse(raw) : null;
+              } catch {
+                record = null;
+              }
             }
             listed.set(code, record && record.published && record.channel ? record : null);
           }
@@ -7279,6 +7303,13 @@ function generateSearchVariations(query) {
       }
       const likeVoterName = likeAuth.username;
 
+      // FF_V2_LISTS_ONLY (P3b-9): the like is v2's alone.
+      if (isV2ListsOnly(env)) {
+        const v2 = await listsV2LikeList(env, likeUser, likeSlug, likeVoterName, !likeUnlike);
+        if (v2.error) return json({ ok: false, error: v2.error }, v2.status);
+        return json({ ok: true, likes: v2.likes, liked: !likeUnlike });
+      }
+
       // The list must actually exist before any vote is recorded --
       // otherwise a ledger (and a permanent KV key) could be created for
       // any username/slug pair someone cared to invent.
@@ -7369,7 +7400,11 @@ function generateSearchVariations(query) {
         }
       }
 
-      return json({ ok: true, likes: count, liked: !likeUnlike, capped: capped || undefined });
+      // The same like in v2 (P3b-7). With reads on v2 the count people see
+      // is v2's, which keeps any higher legacy total the copy carried over.
+      const v2Likes = await listsV2MirrorLike(env, likeUser, likeSlug, likeVoterName, !likeUnlike);
+      const shownLikes = isV2ListsReadEnabled(env) && v2Likes != null ? v2Likes : count;
+      return json({ ok: true, likes: shownLikes, liked: !likeUnlike, capped: capped || undefined });
     }
 
     if (path === "/api/lists/like-external" && request.method === "POST") {
@@ -7402,6 +7437,10 @@ function generateSearchVariations(query) {
       const extVoterName = extAuth.username;
 
       const hash = await hashStringForKey(normalizedUrl);
+      // FF_V2_LISTS_ONLY (P3b-9): the like is v2's alone, under the same hash.
+      if (isV2ListsOnly(env)) {
+        return json({ ok: true, likes: await listsV2LikeExternal(env, hash, extVoterName, !unlike), liked: !unlike });
+      }
       const key = `externallike:${hash}`;
       const voterId = await likeVoterId(request, env, extVoterName, hash);
       if (!voterId) return json({ ok: false, error: "Could not process this request." }, 400);
@@ -7422,6 +7461,8 @@ function generateSearchVariations(query) {
         data.updatedAt = Date.now();
         await env.CONFIGS.put(key, JSON.stringify(data));
       }
+      // The same like in v2, under the same hash (P3b-7).
+      await listsV2MirrorExternalLike(env, hash, extVoterName, !unlike);
       return json({ ok: true, likes: count, liked: !unlike, capped: capped || undefined });
     }
 

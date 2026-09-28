@@ -5,13 +5,13 @@
 ---
 
 ## Current Status
-- **Last Updated**: 2026-09-27
+- **Last Updated**: 2026-09-28
 - **Last Active AI**: Claude Code (Opus 5.5)
-- **Active Task**: Phase 3a is complete: P3a-1 through P3a-10 are done, verified and tested. Next: Phase 3b (lists, likes, channels), starting with P3b-1.
-- **Task State**: All tests passing (1,399 passed, 0 failed, 1 skipped: the opt-in network test). `verify.sh` checks pass. CI on GitHub runs the same suite on Node 22.
+- **Active Task**: Phase 3b (lists, likes, channels). P3b-1 (migration `0016_lists_v2.sql`) is written and tested, waiting for the owner to apply it. P3b-2 (the media resolver, `29_media.js`) is done. P3b-3 (the list backfill, `30_lists-backfill.js`) is written and tested; the owner runs it from `/admin` after deploying. P3b-4 (the list API, `31_lists-api.js`) and P3b-5 (the likes API, `32_likes-api.js`), both behind `FF_V2_LISTS_API`, are done. P3b-6 (the directory and search on v2, `33_lists-directory.js`, behind `FF_V2_LISTS_READ`) is done. P3b-7 (the legacy list routes over v2 and the rest of the read switch, `34_lists-v2-bridge.js`) is done. P1-C5 (imported lists losing their sync settings) is fixed in this PR, at the owner's request. P3b-8 (shared channels as rows plus R2 pools, `35_channels-v2.js`) is done. P3b-9 (stopping the legacy writes, behind the one-way flag `FF_V2_LISTS_ONLY`) is done in code. **All of Phase 3b is written**; the PR waits for the owner's review and deploy.
+- **Task State**: All tests passing (1,495 passed, 0 failed, 1 skipped: the opt-in network test), both as they are and with `MLA_TEST_V2_LISTS_READ=1` (every test with lists read from v2). `verify.sh` checks pass. CI on GitHub runs the suite both ways on Node 22.
 - **Git State**:
-  - The review fixes, P3a-8 and P3a-9 were merged into `main` as PR #1.
-  - P3a-10 is on the branch `feat/p3a-10-provider-tokens`, with its own PR into `main`.
+  - Phase 3a is merged into `main` (PR #1 and PR #2).
+  - **All of Phase 3b goes on the branch `claude/beautiful-lamport-kx261g`**, in one draft PR into `main`. The owner deploys Phase 3b from that PR when it is done. Keep adding each P3b task to this branch as its own commit.
 - **The owner is not a programmer.** Explain in plain words, do the git work for them, and ask before anything that changes stored user data or needs a dashboard change.
 
 ---
@@ -64,12 +64,15 @@ These are deliberate. Several are "one place" mechanisms that cover the whole Wo
    - `\n` in client code must be written `\\n`.
 3. **All numbered files share one scope.**
    - Top-level names must be unique across files.
-   - New server-only code goes in a new numbered file **after `26_`** (the next is `29_...`), never between `09_` and `24_`.
+   - New server-only code goes in a new numbered file **after `26_`** (the next is `36_...`), never between `09_` and `24_`.
    - `25_` and `26_` are the **inside** of `handleFetch` (they share `request`, `env`, `path`, `authenticateCreator`). `27_installs.js` and `28_connections.js` come after the `export default` block, at module level, so they cannot see those; pass what they need. `tests/client-harness.mjs` renders the page from the code **before** `export default`, so page rendering must never depend on `27_`+.
    - Tests that load source files into a sandbox (`loadSourceFunctions`) and call `resolveConfig` must include `27_installs.js`.
-4. **Shell heredocs in this environment mangle `\\` sequences.** Write patch scripts to a file and run them, or use the file-editing tool.
-5. **The test D1** (`tests/harness.mjs`, real SQLite) enforces D1's limits: 100 bound parameters, 2 MB per row, 100,000-byte statements. A query that trips these would fail in production too.
-6. The preview harness (`.claude/launch.json` → `mylists-harness`, port 8787) loads the built Worker once at startup. **Restart it after every rebuild.**
+4. **In `27_` onward, never write the words `export default` together, even in a comment.** Those files come after the Worker's real export, and `render_check.js` (a CI step) cuts the combined file at the *last* place the words appear, so the page checks break.
+5. **Shell heredocs in this environment mangle `\\` sequences.** Write patch scripts to a file and run them, or use the file-editing tool.
+6. **The test D1** (`tests/harness.mjs`, real SQLite) enforces D1's limits: 100 bound parameters, 2 MB per row, 100,000-byte statements. A query that trips these would fail in production too.
+7. The preview harness (`.claude/launch.json` → `mylists-harness`, port 8787) loads the built Worker once at startup. **Restart it after every rebuild.**
+8. **Run the suite both ways:** `node --test tests/*.test.mjs`, then `MLA_TEST_V2_LISTS_READ=1 node --test tests/*.test.mjs` (CI does both). With the variable set, `makeEnv` turns `FF_V2_LISTS_READ` on for every test; a test that sets the flag itself still decides. A test that edits the legacy store directly (KV or `creator_lists`) goes around the v2 mirror. If it is testing the legacy store's own internals, pin it with `delete env.FF_V2_LISTS_READ` and a comment saying why; otherwise make v2 behave the same.
+9. **Per-instance caches in `33_`/`34_` remember which database they came from** (`db === env.DB`), because each test has its own. Keep that for any new cache of database state.
 
 ---
 
@@ -88,7 +91,7 @@ node scope_check.mjs worker worker_entry_combined.js
 ```
 Then delete `node_modules`.
 
-Last run (2026-09-27): all of the above pass, 1,372 tests passed, 0 failed, 1 skipped.
+Last run (2026-09-28): all of the above pass, plus every CI step (scope, render and HTML checks). 1,459 tests passed, 0 failed, 1 skipped.
 
 The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/json` to every POST, so a route test cannot notice a page that forgets them. A static test ("every mutating fetch the pages make sends a JSON content type") covers that instead.
 
@@ -110,7 +113,7 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
   - one install-config schema, which fixed Configure → Update switching Better Posters off;
   - catalog rows no longer read watch history they don't use;
   - `stats` key-range queries.
-- **Phase 3a (in progress):**
+- **Phase 3a (done):**
   - **P3a-1:** Migration `0015_accounts_sessions_installs.sql` written for `accounts`, `sessions`, `installs`, `provider_connections`, `install_secrets`, `rate_counters`, `account_settings`; added to `schema.sql`, `D1_SCHEMA_MANIFEST`.
   - **P3a-2:** AES-GCM-256 token encryption/decryption with key rotation (`TOKEN_ENCRYPTION_KEY`) and blind index HMAC (`LOOKUP_PEPPER`) implemented in `02_http-and-creator-utils.js` and verified with comprehensive unit tests. Documentation updated in `README.md`, `wrangler.toml`, and `docs/OPERATIONS.md`.
   - **P3a-3:** Accounts backfill job implemented (`backfillAccounts`, `reconcileAccounts` in `02_http-and-creator-utils.js`, `/admin/api/migrate-accounts` route in `26_api-creator-and-admin-routes.js`, Admin maintenance panel in `03_admin.js`). Copies data from D1 `creators` and KV `creator:*` into `accounts` (newest `keyHash` wins; D1 wins ties), verifies `count(accounts) = |creators ∪ creator:*|`, leaves existing records intact.
@@ -138,12 +141,57 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
     - `POST /api/connections/import-local` (checked with each provider, once, rate-limited), `GET /api/connections`, and `DELETE /api/connections/:provider` (which revokes at Trakt and TMDB).
     - Page changes: the `apply*Connection` helpers, `pickUpServerConnection`, `forgetServerConnection` and `importLocalConnectionsOnce` in `17_`, with hooks in `22_` and `24_`.
 
+- **Phase 3b (in progress, branch `claude/beautiful-lamport-kx261g`):**
+  - **P3b-1 (Claude):** migration `migrations/0016_lists_v2.sql` adds `media`, `lists`, `list_items`, `list_slug_history`, `likes`, `channels`, `account_list_prefs`, `presets`, `lists_fts2` and `jobs`. Also in `schema.sql` and `D1_SCHEMA_MANIFEST`. Tests in `tests/lists-v2.test.mjs`; the manifest drift test in `tests/worker.test.mjs` now also catches `UNIQUE` indexes. Nothing reads or writes the tables yet, and `REQUIRED_SCHEMA_VERSION` stays `0014`.
+    - Where it differs from the architecture sketch, and why, is listed under P3b-1 in `NEXT_VERSION_TASKS.md`. The ones the next tasks must know:
+      - a list entry is `(list, media, season, episode)`: storyline lists hold single episodes. `extra_json` keeps item fields with no column;
+      - `media.kind` is `movie`/`series`; a title TMDB can't resolve is a stub with `title` NULL and `resolved_at` NULL;
+      - `lists_fts2` keeps its own copy of the text and is maintained **by rowid in code** (no triggers). Only public, non-deleted lists go in it;
+      - an account's vote is `acct:<accounts.id>` (legacy signed-out votes keep `a:<hash>`, D-9); `channel_add` rows are channel adds;
+      - `lists.legacy_id` is the backfill's idempotency key;
+      - a deleted account's shared channels stay (owner NULL); its private channels must be deleted by code.
+  - **P3b-2 (Claude):** the media resolver, in `29_media.js` (module level, after `export default`, so pass `env`). `resolveMediaBatch(env, items, { kind, maxLookups, tmdbKey, retryStubs }) → { ids, stats }` takes legacy list items as they are; `resolveMedia` does one; `retryUnresolvedMedia` retries stubs. Tests: "P3b-2" in `tests/lists-v2.test.mjs`, loaded into a vm sandbox with a fake TMDB. Details and what is left (merging a stub into a row that already has its TMDB id) under P3b-2 in `NEXT_VERSION_TASKS.md`.
+    - `stats` is counted per input (`found`, `resolved`, `stubs`, `unusable`), ready for P3b-3's reconciliation record.
+    - D1 allows about 1,000 queries per invocation and each new title is one write, so P3b-3 must feed it about 1,000 items per invocation at most.
+    - A test sandbox that loads `02_` must not call `fetch`: `02_`'s module-level `fetch` guard becomes the sandbox's global and calls itself. Load `00_` and `29_` only, and set `sandbox.fetch`.
+  - **P3b-3 (Claude):** the backfill `migrate.lists`, in `30_lists-backfill.js`, run from `/admin` → Maintenance → **Lists v2** (routes `/admin/api/lists-backfill/step` and `/status`, dispatched from `25_` next to installs and connections). The owner approved writing it; running it on production is theirs to do (`docs/OPERATIONS.md` §9). Details and deviations under P3b-3 in `NEXT_VERSION_TASKS.md`.
+    - **It must never write the legacy store.** Everything goes through `listsBackfillEnv`, which has no KV writes and refuses D1 writes outside the v2 tables. Keep it that way; a test enforces it.
+    - `lists.legacy_hash` was added to 0016. Channels are copied since P3b-8 (the "channels" phase).
+  - **P3b-4 (Claude):** the list API, `/api/lists`, in `31_lists-api.js` (dispatched from `25_` after the backfill routes; the legacy `/api/lists/like` and `/like-external` are passed through). Behind `FF_V2_LISTS_API`, which must stay off in production until P3b-7. Session auth only. Details under P3b-4 in `NEXT_VERSION_TASKS.md`.
+    - Every write is one batch: the change, `item_count` from the rows, the list's version, the account's version, and `lists_fts2`. Keep that shape in P3b-5 onwards.
+    - `listOwnerSearchName` (`30_`) is what `lists_fts2.owner_name` holds, for both the backfill and the API.
+    - The list item insert names the list by `public_id` through a `VALUES` join, so a new list and its first items go in one batch.
+  - **P3b-5 (Claude):** the likes API, `/api/likes/{list|channel|external}/{id}`, in `32_likes-api.js` (dispatched from `25_` after the list API), behind the same flag. Details under P3b-5 in `NEXT_VERSION_TASKS.md`.
+    - `likeWriteStatements` must keep the `like_count ± changes()` statement straight after the like itself: `changes()` is the previous statement's row count.
+    - Channel likes work since P3b-8 filled `channels`.
+  - **P3b-6 (Claude):** `/lists/public.json` and `/api/search-published-lists` read from v2 when `FF_V2_LISTS_READ` is on (`33_lists-directory.js`, called at the top of each route in `25_` and `26_`; either falls back to its legacy path when v2 fails). Details under P3b-6 in `NEXT_VERSION_TASKS.md`.
+    - `FF_V2_LISTS_READ` is **the** read switch; P3b-7 extended it to the list pages, catalogs and the legacy list routes. Since P3b-7 the directory and search also wait for the whole copy to have finished.
+    - Test fixtures for search need lists that have items: an empty list is left out of search, and an early fixture passed vacuously because every "Drama" list was empty. The test now asserts each query finds something.
+    - **Legacy bug found:** `getCreatorList` (`02_`) rewrote a list's KV record from its D1 row on every dashboard read, without `sourceUrl`, `synced`, `lastSyncedAt` or `baseItemIds`. **P1-C5**, fixed on this branch (the owner chose this PR over a separate one): the rebuilt record carries them (and `isWatchlist`) over from KV. It reaches the live site with Phase 3b; lists that already lost their settings are not repaired.
+  - **P3b-7 (Claude):** the legacy list routes over v2, in `34_lists-v2-bridge.js` (module level; hooks in `02_` `deleteCreatorLists`/`purgeCreatorData` and `05_` `fetchLiveCreatorListItems`, both `typeof`-guarded because those files are also loaded alone, and in the `25_`/`26_` routes). Details, deviations and known limits under P3b-7 in `NEXT_VERSION_TASKS.md`.
+    - **Writes go to both stores.** The legacy routes write the legacy store first, as before, then mirror into v2 (`listsV2MirrorLists`, `listsV2MirrorOrder`, `listsV2MirrorLike`, `listsV2MirrorExternalLike`, `listsV2PurgeAccount`). This happens whenever the 0016 tables exist, **whatever the flag says**. A list's items are mirrored as a diff (`planListEntryDiff`), never replaced.
+    - Mirror and copy share a per-account lease (`claimListsAccountLease`, `run_after` on the account's `migrate.lists` job). A mirror that cannot take it marks the job dirty; one that fails marks the copy stale (`queued`).
+    - **Reads, with the flag,** come from v2 only for an account whose job is `done` (`listsV2Ready`); the dashboard and list contents copy an unfinished account first (`listsV2MigrateOnRead`). The Watchlist is always read from the legacy store; its v2 copy is kept current for the directory.
+    - With the flag on, `backfillAccountLists` skips accounts that are `done`. That is on purpose: v2 is then what people see.
+    - Items come back exact through `legacyItemFromEntryRow`; the list-level legacy fields that have no column (`baseItemIds`, `noVersion`) live in `lists.source_json` (`legacyListSourceJson`).
+    - Before P3b-9 stops the legacy writes, it has to deal with the known limits listed under P3b-7: lists over 1,500 items are not mirrored on save, and legacy anonymous lists are not mirrored.
+  - **P3b-8 (Claude):** shared channels (`channelshare:`, `index:publicchannels`, the channel like and add ledgers) as `channels` rows plus R2 pools, in `35_channels-v2.js` (module level). Hooks in the `/api/channel/*` routes and the admin channel routes (`26_`), and in `/channels/{user}/{slug}` and the signed-out `/api/save` (`25_`); the copy has a new "channels" phase (`30_`). Details, deviations and known limits under P3b-8 in `NEXT_VERSION_TASKS.md`.
+    - **Same strangler as P3b-7:** legacy KV first, then `channelsV2SyncShare` / `channelsV2MirrorLike` / `channelsV2MirrorAdd` / `channelsV2Delete`. A row with `legacy_hash` NULL is behind and never read.
+    - Episodes live in R2 at `channels/{code}/{version}.json` under the new binding **`BLOBS`** (bucket `mylists-blobs`; OPERATIONS §2). The code works without it (episodes then come from KV). `tests/harness.mjs` binds an in-memory one by default (`makeR2`); pass `BLOBS: null` for a deployment without it.
+    - Adds are rows in `likes` with `target_type` `channel_add`.
+    - Channels an account syncs between its own browsers (`creatorsyncchannels:`) are **not** moved: they stay a sync blob until the Phase 6 channel builder.
+  - **P3b-9 (Claude):** `FF_V2_LISTS_ONLY` (off; one-way; implies `FF_V2_LISTS_READ`), `isV2ListsOnly(env)` in `02_`. With it on, every legacy list, like and channel route reads and writes v2 only. Details, fixes found on the way and what is left under P3b-9 in `NEXT_VERSION_TASKS.md`.
+    - **The shape of it:** each route keeps its request and answer. In `26_`/`25_` it branches to the v2 functions at the end of `34_` (`listsV2WriteRecord`, `listsV2DeleteRecords`, `listsV2WriteOrder`, `listsV2GetRecordRaw`, `listsV2LikeList`, `listsV2LikeExternal`) and `35_` (`channelsV2Share`, `channelsV2Like`, `channelsV2Added`, `channelsV2Unlist`). `applyLegacyRecordToV2` is the one writer both the P3b-7 mirror and the flagged routes use.
+    - **Never let a legacy read reach v2 with the flag on:** the mirrors (`listsV2MirrorLists` and friends), the copy (`runListsBackfillStep`, `backfillAccountLists`) and migrate-on-read all return early, because the legacy store is behind and copying from it would undo changes.
+    - Big writes go through `d1JsonChunks` (`29_`): one JSON value per statement, read with `json_each`. Keep that for anything that writes thousands of rows.
+    - The test to extend when a list route changes: "answers every list, like and channel request as before, and writes nothing to the legacy store" runs one script against a dual-written env and a flagged one and compares every answer.
+
 ---
 
 ## Owner Actions Still Open (not code)
 1. **Deploy what is on `main`:**
    1. back up D1;
-   2. run `migrations/0014_add_schema_migrations.sql`, then `migrations/0015_accounts_sessions_installs.sql`, in the D1 console. Both only add tables and are safe to run twice;
+   2. run `migrations/0014_add_schema_migrations.sql`, then `migrations/0015_accounts_sessions_installs.sql`, in the D1 console. Both only add tables and are safe to run twice. When Phase 3b is deployed, `migrations/0016_lists_v2.sql` follows them (same: only adds tables, safe to run twice);
    3. add the `ANALYTICS` Analytics Engine binding (dataset `mylists_events`);
    4. paste `worker_entry_combined.js` and deploy;
    5. delete the retired variables `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET` and `CRON_SUBREQUEST_BUDGET`.
@@ -157,13 +205,14 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
    Full steps are in `docs/OPERATIONS.md` §1, and `CHANGELOG.md` has them at the top of `[Unreleased]`.
 2. **When ready, move install-link keys to encrypted storage:** follow `docs/OPERATIONS.md` §8 (apply 0015, back up D1, add `TOKEN_ENCRYPTION_KEY` and keep a copy of it, set `INSTALL_MIGRATION_PERCENT` to `10`, check progress, then raise it).
 3. **Turn on backups:** add the GitHub repository secrets `CLOUDFLARE_API_TOKEN` (D1 Read), `CLOUDFLARE_ACCOUNT_ID`, `D1_DATABASE_ID` and `BACKUP_PASSPHRASE`. Keep a copy of the passphrase outside GitHub.
+   - **Check the first run.** `migrations/0007` notes that `wrangler d1 export` refuses a database that has virtual (full-text search) tables. `lists_fts` (0007) is one, and `lists_fts2` (0016) is another. If the daily export fails for that reason, the workflow needs to export around them (for example table by table), and the search tables are rebuilt afterwards. Not changed yet.
 
 ---
 
 ## Next Steps for Incoming AI
-1. **Phase 3a is done** (`NEXT_VERSION_TASKS.md`; the reasoning is in `MIGRATION_PLAN.md`). Next:
-   - **Phase 3b** (lists, likes, channels): P3b-1, migration `0016_lists_v2.sql`, comes first. Read `MIGRATION_PLAN.md` §3b before starting.
-     - It rewrites how lists are stored, so it will need the owner's approval before any backfill touches stored data.
+1. **Phase 3b** (lists, likes, channels) is written, P3b-1 to P3b-9, on `claude/beautiful-lamport-kx261g` (PR #3). What is left is the owner's: review, deploy, run the copy, then turn on `FF_V2_LISTS_READ` and, later, `FF_V2_LISTS_ONLY` (OPERATIONS §9 to §11). Keep the PR green while it waits. Next in the plan is **Phase 3c** (activity); read its tasks in `NEXT_VERSION_TASKS.md`. The next server file is `36_...`.
+     - `FF_V2_LISTS_API` (the v2 list and likes APIs) must stay off until P3b-9: what they write is not in the legacy store, so a flag-off rollback or a copy re-run would lose it.
+     - Phase 3b rewrites how lists are stored, so it needs the owner's approval before any backfill (P3b-3) touches stored data.
      - Decide which wins when an install has its own keys in `install_secrets` and its owner also has a connection. Today `install_secrets` is the only source.
      - v2 installs (`/i/{token}`) have no keys of their own, so their personal Trakt/MDBList/Simkl rows only work once this lands.
    - A v2 link's `/i/{token}/configure` page renders, but its **Update** still saves a new legacy link through `/api/save`. The UI for v2 links (Phase 6) should `PATCH /api/installs/:id` instead.
