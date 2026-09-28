@@ -226,6 +226,10 @@ async function handleFetch(request, env, ctx) {
     // 49_imports.js.
     const importsResponse = await handleImportsApi(request, env, url, path);
     if (importsResponse) return importsResponse;
+    // DELETE /api/me (deleting an account in the background, P5-8) --
+    // 51_account-purge.js.
+    const accountDeleteResponse = await handleAccountDeleteApi(request, env, url, path);
+    if (accountDeleteResponse) return accountDeleteResponse;
 
     if (path === "/" || path === "") {
       ctx.waitUntil(bumpStat(env, "pageviews"));

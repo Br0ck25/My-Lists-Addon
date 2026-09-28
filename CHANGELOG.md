@@ -27,6 +27,11 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 8. **Recommended: set up the background jobs queue** (Phase 5, `docs/OPERATIONS.md` §18): create the queues `mylists-jobs` and `mylists-jobs-dlq`, make this Worker the consumer of `mylists-jobs` (batch size 25, 5 retries, dead-letter queue `mylists-jobs-dlq`), bind `mylists-jobs` to the Worker as `JOBS`, then press **Send a test job** in `/admin` → Maintenance. Without it everything works as before.
 
+### 🗑️ Deleting an account in the background, and a hole closed (P5-8)
+
+- A new way to delete an account (`DELETE /api/me`, for the new settings screen): it takes effect at once (signed out everywhere, install links stop, the username can't be taken) and the data is removed in the background, retried until it is all gone.
+- **Fixed:** deleting an account left its watch history in the activity database, its likes in the new likes table, its private channels and a few other things, filed under its account number. The database can give that number to the next account created, which would then have seen them. Every deletion now removes them, the current delete button included.
+
 ### 🔑 Connected accounts renewed before they expire (P5-7)
 
 - Once a day, Trakt and MDBList sign-ins kept on the server that expire within a week are renewed, instead of only when a row happened to need them in their last hour.
