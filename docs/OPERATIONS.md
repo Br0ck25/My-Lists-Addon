@@ -69,6 +69,7 @@ Adding a binding before the code that uses it is harmless. Removing a binding th
 - `FF_V2_LISTS_API` (optional): `1` turns on `/api/lists`, the item-level list API, and `/api/likes`, the likes API, over the new list tables (P3b-4, P3b-5). **Leave unset.** What these APIs write goes to the new tables only. Until a later release stops writing the old storage (P3b-9), turning `FF_V2_LISTS_READ` off, or running the copy again, would lose it.
 - `FF_V2_LISTS_ONLY` (optional, P3b-9): `1` stops writing the old list and channel storage; the new tables become the only store, and everything reads from them. **One-way.** Leave unset until §11 says it is time, and once set, leave it set.
 - `FF_PROVIDER_BREAKER` (optional, P4-4): `1` turns on the provider breaker (§14). When a provider (TMDB, Trakt, MDBList, Simkl, ...) fails five times in a row, the site stops calling it for a minute and serves its last good copies straight away, instead of every row waiting for a timeout. Safe to turn on and off at any time.
+- `FF_MATERIALIZER` (optional, P5-11): `1` makes installs that use **Remove duplicate items across lists** build their home screen once per hour instead of each row rebuilding the rows above it (§19). Safe to turn on and off at any time.
 - `INSTALL_MIGRATION_PERCENT` (optional, `0` to `100`): the share of existing install links whose keys and tokens move into encrypted D1 storage the first time they are used. See §8 before setting it.
 - **Delete** these retired variables if they are still set: `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET`, `CRON_SUBREQUEST_BUDGET`. The code ignores them.
 
@@ -384,3 +385,9 @@ From Phase 5, background work (refreshing charts and show schedules, imports, cl
 **Comparing the shelves (P5-4):** `shelf.shadow` (hourly) compares each copied account's stored Continue Watching and Airing Next with the ones worked out from the show schedules. It only reads. After the queue, the activity database and the history copy are running, leave it for a week, then look at **Check jobs**: the line under `shelf.shadow` gives the difference. Under 1% means the new shelves can be switched on (`FF_SHOW_SCHEDULE`, in a later release).
 
 **Better Posters (P5-9):** with both `BLOBS` (§2) and the queue bound, Better Posters are stored in R2 (`img/bp/...`) and fetched from btttr.cc by `poster.fetch` jobs, so no page or Stremio row waits on btttr.cc. Posters already stored in KV keep being served and move to R2 as they are used.
+
+## 19. Building a home screen once (P5-11)
+
+`FF_MATERIALIZER` only matters for installs with **Remove duplicate items across lists** turned on. For those, each Stremio row used to rebuild every row above it to know what to hide, so a 20-row home screen did about 210 row builds. With the switch on, the first page of every row is built once, duplicates are removed in one pass, and the result is kept for an hour (in KV as `snap:mat:...`, one key per install). A home screen then costs at most one build per row per hour. Personal rows (Watchlist, Continue Watching and the like) are never de-duplicated and are unaffected, as are pages after the first.
+
+**Turning it on:** Worker → Settings → Variables and Secrets → Add → type *Text*, name `FF_MATERIALIZER`, value `1`. Deploy. **Turning it off:** delete the variable and deploy. Both are safe at any time; the `snap:mat:` keys expire by themselves within an hour. A change to an install (rows added, removed or reordered) is picked up at once, as a new build.

@@ -27,6 +27,11 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 8. **Recommended: set up the background jobs queue** (Phase 5, `docs/OPERATIONS.md` §18): create the queues `mylists-jobs` and `mylists-jobs-dlq`, make this Worker the consumer of `mylists-jobs` (batch size 25, 5 retries, dead-letter queue `mylists-jobs-dlq`), bind `mylists-jobs` to the Worker as `JOBS`, then press **Send a test job** in `/admin` → Maintenance. Without it everything works as before.
 
+### 🏠 Home screens with "remove duplicates" built once (P5-11)
+
+- **A new switch, `FF_MATERIALIZER` (off).** For installs with "Remove duplicate items across lists", each Stremio row used to rebuild every row above it; a 20-row home screen did about 210 row builds. With the switch on, the whole home screen is built once per hour (at most 20 builds) and served from there. The rows are the same.
+- Each title in those rows also carries the site's own id for it where known, groundwork for the rows the new screens will build.
+
 ### 🧰 Four more background jobs (P5-10)
 
 - **Quick Add network channels** are rebuilt once a day, one job per network, instead of one network every few minutes (with the queue; without it, as before).

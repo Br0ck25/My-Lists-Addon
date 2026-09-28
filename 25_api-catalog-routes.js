@@ -1139,8 +1139,17 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // to a config that PROVED it belongs to that account. See resolveConfig
         // (04_config-resolution.js) for how that is established and
         // mayReadTrackedShelf (02_http-and-creator-utils.js) for what it gates.
-        let metas = await fetchCatalog(entry, skip, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, adultContentFilter, isStremioCatalog: true, canonicalIds: true, betterPosters, betterPostersOptions: betterPostersOptionsFrom(resolvedConfig, url.origin), showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, env, ctx, origin: url.origin });
-        if (dedupeAcrossLists) {
+        const catalogKeys = { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, adultContentFilter, isStremioCatalog: true, canonicalIds: true, betterPosters, betterPostersOptions: betterPostersOptionsFrom(resolvedConfig, url.origin), showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, env, ctx, origin: url.origin };
+        // FF_MATERIALIZER (P5-11, 54_materializer.js): with de-duplication, the
+        // first page of every non-personal row is built once per install and
+        // de-duplicated in one pass, instead of each row rebuilding the rows
+        // above it. Null means the usual path below.
+        let metas = dedupeAcrossLists && skip === 0 && !searchQuery && !isUserPersonal && isMaterializerEnabled(env)
+          ? await materializedRowPage(env, ctx, { config, entries, entryIndex, keys: catalogKeys })
+          : null;
+        const materialized = !!metas;
+        if (!metas) metas = await fetchCatalog(entry, skip, catalogKeys);
+        if (dedupeAcrossLists && !materialized) {
           metas = await dedupeAcrossListEntries(entries, entryIndex, skip, metas, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, canonicalIds: true, env, ctx });
         }
         if (searchQuery && Array.isArray(metas) && metas.length > 0) {

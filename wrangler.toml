@@ -130,6 +130,10 @@ dead_letter_queue = "mylists-jobs-dlq"
 # add-ons can open (an IMDb id, "tmdb:N" or a channel); rows that cannot are
 # left out, and duplicates removed. See docs/OPERATIONS.md section 17.
 # FF_CANONICAL_IDS = "1"
+# Optional, Phase 5 (P5-11): with "remove duplicates across lists", build a
+# home screen's rows once per install and hour instead of each row rebuilding
+# the rows above it. Safe to turn on and off (docs/OPERATIONS.md section 19).
+# FF_MATERIALIZER = "1"
 # Optional, 0-100: share of existing install links whose keys and tokens are
 # moved into encrypted D1 storage on first use (needs TOKEN_ENCRYPTION_KEY)
 # INSTALL_MIGRATION_PERCENT = "0"
