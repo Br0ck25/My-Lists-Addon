@@ -13,7 +13,7 @@ How the hosted Worker is deployed, configured and recovered. The Worker is deplo
    node --check worker_entry_combined.js
    node --test tests/*.test.mjs
    ```
-2. **Apply database migrations first** if the release adds any (see §4). The current release has three, `0014`, `0015`, then `0016`. A Worker that needs a newer schema than the database has refuses writes with a maintenance message rather than failing silently. That guard only works once migration `0014` is applied.
+2. **Apply database migrations first** if the release adds any (see §4). The current release has four, `0014`, `0015`, `0016`, then `0017`. A Worker that needs a newer schema than the database has refuses writes with a maintenance message rather than failing silently. That guard only works once migration `0014` is applied.
 3. **Back up D1** (see §5) if the release contains a migration.
 4. **Deploy.** Cloudflare dashboard → Workers & Pages → the My Lists Worker → **Edit code** → select all → paste the new `worker_entry_combined.js` → **Deploy**.
 5. **Smoke test:**
@@ -37,7 +37,7 @@ Set these in the dashboard: Worker → **Settings → Bindings → Add**.
 | `CONFIGS` | KV namespace | **Yes** | Install configs, list and sync records (being moved to D1), caches, rate limits | In use |
 | `DB` | D1 database (`my-lists-db`) | **Yes** | Accounts, lists, likes, tracking, directory, search, counters | In use |
 | `ANALYTICS` | Analytics Engine dataset (`mylists_events`) | Recommended | Per-request route, status and storage-operation counts, used to measure the next phases | **Add now.** The code writes to it when present and skips it otherwise. |
-| `DB_ACTIVITY` | D1 database (`mylists-activity`) | Later (Phase 3c) | Watch events and progress | Not yet |
+| `DB_ACTIVITY` | D1 database (`mylists-activity`) | Later (Phase 3c) | Watch events and progress | Can be added now; nothing uses it yet. Create the database (D1 → Create → `mylists-activity`), run `migrations/activity/A0001_activity.sql` in **its** Console (not the main database's), then bind it. See §4. |
 | `BLOBS` | R2 bucket (`mylists-blobs`) | Recommended (Phase 3b) | Shared channels' episode lists (P3b-8); later posters, exports and D1 backups | **Add with Phase 3b.** Create the bucket (R2 → Create bucket → `mylists-blobs`), then bind it. Without it, shared channels still get their rows and their episodes are read from KV. |
 | `JOBS` | Queue producer (`mylists-jobs`) | Later (Phase 5) | Background jobs | Not yet. The queue **consumer** is configured on the queue: Queues → `mylists-jobs` → Settings → Add consumer → this Worker. |
 
@@ -100,6 +100,12 @@ Adding a binding before the code that uses it is harmless. Removing a binding th
 3. Add the same objects to `schema.sql`, plus `('NNNN', 0)` to its ledger seed. The drift test fails if the two disagree.
 4. Add the migration's tables, indexes and columns to `D1_SCHEMA_MANIFEST` in `00_constants.js`.
 5. If the code **needs** the migration, raise `REQUIRED_SCHEMA_VERSION` in `00_constants.js` in the same change. Until the migration is applied, the deployed Worker then refuses API writes with a 503 "My Lists is being updated" instead of failing quietly. **Always apply the migration before deploying.**
+
+### The activity database (Phase 3c)
+
+`DB_ACTIVITY` is a second D1 database with its own migrations, in `migrations/activity/` (`A0001`, `A0002`, ...). Run those in the **activity database's** Console, never in the main one, and the main ones never there. A fresh activity database can take `schema_activity.sql` instead. It has its own `schema_migrations` ledger.
+
+When it nears D1's size limit it can be split: create and bind `DB_ACTIVITY_1`, `DB_ACTIVITY_2`, ... (each with the same migrations) and set the variable `ACTIVITY_SHARD_COUNT` to how many there are in all. Accounts are then spread by id. This moves accounts between databases, so it needs a copy job first; do not set it on its own.
 
 ## 5. Backups
 
@@ -233,3 +239,55 @@ What it copies: every account's lists (with their order, items and likes), the o
 - Deleting a list or an account still removes what the old storage held of it.
 - **How to check it worked:** in the Analytics Engine dataset `mylists_events`, the eighth number of each data point (`double8`) counts writes to the old list keys. It should stay at 0.
 - The old keys and tables stay where they are, unused, until a later cleanup removes them. The old anonymous lists (from before accounts) are still served from the old storage.
+
+## 12. Copying watch history into the activity database (P3c-3)
+
+Phase 3c moves watch history and show progress into their own database, `mylists-activity` (binding `DB_ACTIVITY`, §2 and §4). The first part copies what every account has. **It only copies.** The history people see today is not changed, and nothing on the site reads the copy yet, so running it changes nothing a visitor sees.
+
+What it copies, for each account:
+
+- **Watch History**, from all three places it is kept today: the account's tracking record in KV, the D1 `watch_history` table, and the small scrobble queue. Where one entry is in more than one, the newest copy counts. This is also what the website shows today.
+- **Where each show is up to**: the furthest episode watched, and when. On top of that: finished shows, shows hidden from Continue Watching or Airing Next (and at which episode), and storyline suggestions (the next movie or spin-off). A show that is in Continue Watching with no history behind it keeps its place.
+- **Movies watched**: how many times each, and when last.
+
+It does not copy Airing Next or the recommendations. Both are worked out rather than kept, and later jobs rebuild them (Phase 5). The Watchlist is a list: the list copy (§9) takes it.
+
+**Running it:**
+
+1. Create the activity database and bind it (§2), and run `migrations/activity/A0001_activity.sql` in **its** Console (§4).
+2. Migration `0016` is applied in the main database (the copy records each title in its `media` table), and **Migrate Accounts** has been run (§9, step 3).
+3. Back up D1 (§5).
+4. `/admin` → Maintenance → **Activity: copy watch history** → *Copy history*. It works in small steps and keeps going by itself while the page is open. Closing the page pauses it; *Copy history* carries on where it stopped.
+5. When it says *Done*, press *Check results*.
+
+**Reading the results:**
+
+- *Plays copied* against the old history. The same play recorded twice within ten minutes (the same episode under two ids, or a retried scrobble) is kept once; an entry with no id at all cannot be copied (nothing can show it today either). Both are counted, with examples.
+- *Accounts with fewer plays than their old history* should be 0, or explained by those two reasons. The examples say which.
+- *Titles TMDB could not place yet* are **kept**, with the id they had, and tried again later.
+- *Failed accounts* names each account the copy could not finish and why. The rest carry on.
+
+**Running it again:** *Copy history* does nothing once the copy is done. *Start over* copies every account again from the start: what an earlier copy made is replaced, so the copy matches the old storage as it is now. Plays recorded some other way (once scrobbles go to the new database, P3c-4) are kept.
+
+## 13. Serving watch history from the activity database (P3c-6)
+
+`FF_EVENT_TRACKING` switches watch history over to the activity database. For each account whose history copy (§12) has finished, Watch History, show progress, and what people hid or finished are then read from the activity database and written there. The old storage stops being written: the tracking record in KV, the scrobble queue, and the D1 tracking tables. The website, Stremio and Nuvio see the same things as before; the tests compare them.
+
+**This is one-way for each account it covers.** Once an account is served from the activity database, its old records stop moving, so turning the flag off would show them as they were on the day it was turned on. Once set, leave it set.
+
+**Before turning it on:**
+
+1. The activity database is bound and migrated (§2, §4), and migration `0017` is applied.
+2. The copy (§12) says *Done*, and *Check results* shows no failed accounts you have not looked at, and no account with fewer plays than its old history that you cannot explain.
+3. Back up D1 (§5), and export the tracking keys from KV (`creatorsynctracking:`) if you want a copy of the old records.
+
+**Turning it on:** Worker → Settings → Variables and Secrets → Add → type *Text*, name `FF_EVENT_TRACKING`, value `1`. Deploy.
+
+**What happens then:**
+
+- Accounts whose copy has finished are served from the activity database straight away. Any other account stays on the old storage until *Copy history* has copied it. *Start over* is refused while the flag is on.
+- Continue Watching and Airing Next are shown as they were last worked out, as today. Working them out from the show schedule comes with `FF_SHOW_SCHEDULE`, after the schedule job exists (Phase 5).
+- Known differences:
+  - Watch History shows an episode as "Episode N" with the show's poster, where the old record kept the episode's own title and still.
+  - The website's list is capped at the latest 5,000 plays; the database keeps them all.
+

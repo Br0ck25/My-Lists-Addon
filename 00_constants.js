@@ -1180,6 +1180,35 @@ const D1_SCHEMA_MANIFEST = [
     migration: "0016", kind: "index", name: "idx_jobs_account",
     consequence: "Finding one account's backfill job scans the jobs table. Slower, not broken.",
   },
+  // 0017 (Phase 3c). Nothing reads or writes these yet either.
+  {
+    migration: "0017", kind: "table", name: "show_schedule",
+    consequence: "The new Continue Watching and Airing Next have no episode dates to work from. Nothing uses it yet.",
+  },
+  {
+    migration: "0017", kind: "index", name: "idx_show_schedule_due",
+    consequence: "Finding the shows due for a refresh scans the whole schedule. Slower, not broken.",
+  },
+  {
+    migration: "0017", kind: "table", name: "account_recommendations",
+    consequence: "Recommendation shelves cannot be stored in D1. Nothing uses it yet.",
+  },
+  {
+    migration: "0017", kind: "index", name: "idx_account_recs_media",
+    consequence: "Removing a title scans every recommendation shelf. Slower, not broken.",
+  },
+  {
+    migration: "0017", kind: "table", name: "title_daily_stats",
+    consequence: "Most Watched cannot be counted per title in D1. Nothing uses it yet.",
+  },
+  {
+    migration: "0017", kind: "index", name: "idx_title_daily_stats_top",
+    consequence: "Reading a day's most-watched titles scans that day. Slower, not broken.",
+  },
+  {
+    migration: "0017", kind: "index", name: "idx_title_daily_stats_media",
+    consequence: "Removing a title scans the daily counts. Slower, not broken.",
+  },
 ];
 
 

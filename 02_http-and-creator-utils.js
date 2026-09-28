@@ -5398,6 +5398,9 @@ async function recordTrackingD1Result(env, username, ok, stamp) {
 
 async function saveCreatorTrackingD1(env, username, trackingData, isIntentionalRemoval) {
   if (!env || !env.DB || !username || !trackingData) return false;
+  // With FF_EVENT_TRACKING, an account served from the activity database
+  // (40_event-tracking.js) no longer has its D1 tracking tables written.
+  if (typeof eventTrackingOwns === "function" && (await eventTrackingOwns(env, username)) != null) return true;
   const ok = await writeCreatorTrackingD1(env, username, trackingData, isIntentionalRemoval);
   await recordTrackingD1Result(env, username, ok, trackingData.updatedAt);
   return ok;
@@ -5417,6 +5420,9 @@ async function saveCreatorTrackingD1(env, username, trackingData, isIntentionalR
 // next full write or read-repair to catch up.
 async function saveAiringNextD1(env, username, items, updatedAt, previousStamp) {
   if (!env || !env.DB || !username || !Array.isArray(items)) return false;
+  // With FF_EVENT_TRACKING, an account served from the activity database
+  // (40_event-tracking.js) no longer has its D1 tracking tables written.
+  if (typeof eventTrackingOwns === "function" && (await eventTrackingOwns(env, username)) != null) return true;
   let ok = true;
   try {
     const metaRow = await env.DB.prepare(
@@ -5808,6 +5814,9 @@ async function ensureTrackingWatchlist(env, username, blob) {
 // shape: compare the stamps, hand back the newer copy, and say so.
 async function readCreatorTrackingD1(env, username) {
   if (!env || !env.DB || !username) return null;
+  // With FF_EVENT_TRACKING, an account served from the activity database
+  // (40_event-tracking.js) no longer has its D1 tracking tables read: null sends the caller to the record in KV, which is assembled there.
+  if (typeof eventTrackingOwns === "function" && (await eventTrackingOwns(env, username)) != null) return null;
   try {
     const metaRow = await env.DB.prepare(
       "SELECT * FROM creator_tracking_meta WHERE username = ?"

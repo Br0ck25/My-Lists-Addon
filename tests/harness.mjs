@@ -54,6 +54,7 @@ export async function freshIsolate() {
 }
 
 const SCHEMA_SQL = readFileSync(new URL("../schema.sql", import.meta.url), "utf8");
+const ACTIVITY_SCHEMA_SQL = readFileSync(new URL("../schema_activity.sql", import.meta.url), "utf8");
 
 export function makeKv(initial = {}) {
   const store = new Map(Object.entries(initial));
@@ -127,10 +128,12 @@ export const D1_MAX_BOUND_PARAMS = 100;
 export const D1_MAX_ROW_BYTES = 2 * 1024 * 1024;
 export const D1_MAX_STATEMENT_BYTES = 100000;
 
-export function makeD1({ foreignKeys = true } = {}) {
+// `schema`: "main" (schema.sql, the default) or "activity"
+// (schema_activity.sql, the DB_ACTIVITY database of Phase 3c).
+export function makeD1({ foreignKeys = true, schema = "main" } = {}) {
   const db = new DatabaseSync(":memory:");
   if (foreignKeys) db.exec("PRAGMA foreign_keys = ON;");
-  db.exec(SCHEMA_SQL);
+  db.exec(schema === "activity" ? ACTIVITY_SCHEMA_SQL : SCHEMA_SQL);
   // schema.sql is the documented way to provision a fresh database and now
   // carries every index the migrations leave behind, so there is nothing to
   // add here -- the drift test in worker.test.mjs is what keeps the two

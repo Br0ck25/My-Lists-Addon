@@ -1203,6 +1203,35 @@ const D1_SCHEMA_MANIFEST = [
     migration: "0016", kind: "index", name: "idx_jobs_account",
     consequence: "Finding one account's backfill job scans the jobs table. Slower, not broken.",
   },
+  // 0017 (Phase 3c). Nothing reads or writes these yet either.
+  {
+    migration: "0017", kind: "table", name: "show_schedule",
+    consequence: "The new Continue Watching and Airing Next have no episode dates to work from. Nothing uses it yet.",
+  },
+  {
+    migration: "0017", kind: "index", name: "idx_show_schedule_due",
+    consequence: "Finding the shows due for a refresh scans the whole schedule. Slower, not broken.",
+  },
+  {
+    migration: "0017", kind: "table", name: "account_recommendations",
+    consequence: "Recommendation shelves cannot be stored in D1. Nothing uses it yet.",
+  },
+  {
+    migration: "0017", kind: "index", name: "idx_account_recs_media",
+    consequence: "Removing a title scans every recommendation shelf. Slower, not broken.",
+  },
+  {
+    migration: "0017", kind: "table", name: "title_daily_stats",
+    consequence: "Most Watched cannot be counted per title in D1. Nothing uses it yet.",
+  },
+  {
+    migration: "0017", kind: "index", name: "idx_title_daily_stats_top",
+    consequence: "Reading a day's most-watched titles scans that day. Slower, not broken.",
+  },
+  {
+    migration: "0017", kind: "index", name: "idx_title_daily_stats_media",
+    consequence: "Removing a title scans the daily counts. Slower, not broken.",
+  },
 ];
 
 
@@ -8310,6 +8339,9 @@ async function recordTrackingD1Result(env, username, ok, stamp) {
 
 async function saveCreatorTrackingD1(env, username, trackingData, isIntentionalRemoval) {
   if (!env || !env.DB || !username || !trackingData) return false;
+  // With FF_EVENT_TRACKING, an account served from the activity database
+  // (40_event-tracking.js) no longer has its D1 tracking tables written.
+  if (typeof eventTrackingOwns === "function" && (await eventTrackingOwns(env, username)) != null) return true;
   const ok = await writeCreatorTrackingD1(env, username, trackingData, isIntentionalRemoval);
   await recordTrackingD1Result(env, username, ok, trackingData.updatedAt);
   return ok;
@@ -8329,6 +8361,9 @@ async function saveCreatorTrackingD1(env, username, trackingData, isIntentionalR
 // next full write or read-repair to catch up.
 async function saveAiringNextD1(env, username, items, updatedAt, previousStamp) {
   if (!env || !env.DB || !username || !Array.isArray(items)) return false;
+  // With FF_EVENT_TRACKING, an account served from the activity database
+  // (40_event-tracking.js) no longer has its D1 tracking tables written.
+  if (typeof eventTrackingOwns === "function" && (await eventTrackingOwns(env, username)) != null) return true;
   let ok = true;
   try {
     const metaRow = await env.DB.prepare(
@@ -8720,6 +8755,9 @@ async function ensureTrackingWatchlist(env, username, blob) {
 // shape: compare the stamps, hand back the newer copy, and say so.
 async function readCreatorTrackingD1(env, username) {
   if (!env || !env.DB || !username) return null;
+  // With FF_EVENT_TRACKING, an account served from the activity database
+  // (40_event-tracking.js) no longer has its D1 tracking tables read: null sends the caller to the record in KV, which is assembled there.
+  if (typeof eventTrackingOwns === "function" && (await eventTrackingOwns(env, username)) != null) return null;
   try {
     const metaRow = await env.DB.prepare(
       "SELECT * FROM creator_tracking_meta WHERE username = ?"
@@ -10814,6 +10852,7 @@ async function renderAdminDashboard(env) {
   // entirely optional, and every D1-specific action in that tab only
   // makes sense once this is true.
   const isD1Bound = !!(env && env.DB);
+  const isActivityBound = !!(env && env.DB && env.DB_ACTIVITY);
   const today = statsToday();
   const [
     totalPV, todayPV, totalIN, todayIN, totalPP, todayPP,
@@ -11508,6 +11547,16 @@ async function renderAdminDashboard(env) {
       <div id="listsBackfillResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
     </div>
 
+    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
+      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Activity: copy watch history</div>
+      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Copies every account&rsquo;s Watch History, and where each show is up to (finished, hidden from Continue Watching or Airing Next, storyline suggestions), into the activity database (<code>DB_ACTIVITY</code>, migration A0001). It only copies: the history people see today is not changed, and nothing reads the copy yet. Needs <code>DB_ACTIVITY</code> bound, and <strong>Migrate Accounts</strong> and migration 0016 first. It works in small steps and can be stopped and carried on; <strong>Start over</strong> copies every account again from the start.</p>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillBtn" onclick="runActivityBackfill(false)" ${isActivityBound ? '' : 'disabled'}>Copy history</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillRestartBtn" onclick="runActivityBackfill(true)" ${isActivityBound ? '' : 'disabled'}>Start over</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillStatusBtn" onclick="runActivityBackfillStatus()" ${isActivityBound ? '' : 'disabled'}>Check results</button>
+      <span id="activityBackfillStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;">${isActivityBound ? '' : 'DB_ACTIVITY is not bound.'}</span>
+      <div id="activityBackfillResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
+    </div>
+
     <div class="panel" style="margin:0; padding:14px 16px;">
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Database schema</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Migrations are applied by hand and nothing records that it happened, so this Worker can end up running ahead of its own database. It degrades quietly when that happens rather than refusing to start &mdash; which is why this check exists. Run it after any deploy that shipped a new file under <code>migrations/</code>.</p>
@@ -12123,6 +12172,81 @@ async function renderAdminDashboard(env) {
         }
         if (d.failed.length) lines.push('Failed accounts: ' + d.failed.map(function (f) { return '#' + f.accountId + ' (' + f.error + ')'; }).join('; '));
         if (d.worst.length) lines.push('Most items not carried: ' + d.worst.map(function (w) { return '#' + w.accountId + ' ' + (w.mismatchRate * 100).toFixed(2) + '%'; }).join(', ') + '. Examples from the first: ' + JSON.stringify(d.worst[0].samples));
+        out.innerHTML = '';
+        lines.forEach(function (line) {
+          const div = document.createElement('div');
+          div.style.margin = '0 0 4px';
+          div.textContent = line;
+          out.appendChild(div);
+        });
+      } catch (e) {
+        status.textContent = 'Failed: network error.';
+      }
+    }
+
+    // Activity backfill (P3c-3): the same loop as the list copy above.
+    async function runActivityBackfill(restart) {
+      if (restart && !confirm('Copy every account again from the start? What an earlier copy made is replaced; the history people use today is not touched.')) return;
+      const btns = [document.getElementById('activityBackfillBtn'), document.getElementById('activityBackfillRestartBtn')];
+      const status = document.getElementById('activityBackfillStatus');
+      btns.forEach(function (b) { b.disabled = true; });
+      let pendingRestart = !!restart;
+      let steps = 0;
+      try {
+        while (steps < 20000) {
+          steps++;
+          const res = await fetch('/admin/api/activity-backfill/step', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ restart: pendingRestart }),
+          });
+          const data = await res.json();
+          if (data.busy) {
+            status.textContent = 'Another step is running. Waiting...';
+            await new Promise(function (r) { setTimeout(r, 5000); });
+            continue;
+          }
+          pendingRestart = false;
+          if (!data.ok) {
+            status.textContent = 'Stopped: ' + (data.error || 'unknown error');
+            break;
+          }
+          const failedNote = data.accountsFailed ? ' (' + data.accountsFailed + ' failed)' : '';
+          if (data.done) {
+            status.textContent = 'Done: ' + data.accountsDone + ' accounts' + failedNote + '. Press Check results.';
+            break;
+          }
+          status.textContent = 'Copying: ' + data.accountsDone + ' of ' + data.accountsTotal + ' accounts' + failedNote + '...';
+        }
+      } catch (e) {
+        status.textContent = 'Stopped: network error. Press Copy history to carry on.';
+      }
+      btns.forEach(function (b) { b.disabled = false; });
+    }
+
+    async function runActivityBackfillStatus() {
+      const status = document.getElementById('activityBackfillStatus');
+      const out = document.getElementById('activityBackfillResult');
+      status.textContent = 'Checking...';
+      try {
+        const res = await fetch('/admin/api/activity-backfill/status');
+        const d = await res.json();
+        if (!d.ok) {
+          status.textContent = 'Unavailable: ' + (d.error || 'unknown error');
+          return;
+        }
+        status.textContent = 'Phase: ' + d.run.phase + (d.run.lastError ? ' (last error: ' + d.run.lastError + ')' : '') + '.';
+        const h = d.totals.history;
+        const sh = d.totals.shows;
+        const lines = [
+          'Accounts: ' + (d.accounts.done || 0) + ' done, ' + (d.accounts.running || 0) + ' in progress, ' + (d.accounts.queued || 0) + ' waiting, ' + (d.accounts.failed || 0) + ' failed.',
+          'History: ' + h.kv + ' entries in KV, ' + h.d1 + ' in D1, ' + h.queue + ' in the scrobble queue, ' + h.union + ' different entries in all. ' + h.copied + ' plays copied; ' + h.duplicates + ' were the same play twice (within ten minutes), ' + h.unusable + ' had no usable id' + (h.undated ? ', ' + h.undated + ' had no date (given the record date)' : '') + '. ' + h.stubs + ' titles TMDB could not place yet (kept, tried again later).',
+          'Shows: ' + sh.progress + ' with progress, ' + sh.completed + ' finished, ' + sh.dismissed + ' hidden from Continue Watching, ' + sh.airingHidden + ' hidden from Airing Next, ' + sh.kept + ' storyline or movie suggestions kept, ' + sh.cwOnly + ' in Continue Watching with no history' + (sh.unusable ? ', ' + sh.unusable + ' with no usable id' : '') + '. Movies watched: ' + d.totals.movies + '.',
+          'Plays now in the activity database: ' + d.totals.events + ' (the larger of the KV and D1 histories added up: ' + d.totals.legacyMax + '). Accounts with fewer plays than their old history: ' + d.totals.shortAccounts + '.',
+        ];
+        if (d.run.phase === 'done' && !(d.accounts.running || d.accounts.queued || d.accounts.failed) && !d.totals.shortAccounts) lines.push('Every account is copied, none with fewer plays than before.');
+        if (d.failed.length) lines.push('Failed accounts: ' + d.failed.map(function (f) { return '#' + f.accountId + ' (' + f.error + ')'; }).join('; '));
+        if (d.short.length) lines.push('Fewest plays against their old history: ' + d.short.map(function (s) { return '#' + s.accountId + ' ' + s.short + ' of ' + s.legacy; }).join(', ') + '. Examples from the first: ' + JSON.stringify(d.short[0].samples));
         out.innerHTML = '';
         lines.forEach(function (line) {
           const div = document.createElement('div');
@@ -75564,6 +75688,10 @@ async function handleFetch(request, env, ctx) {
     // /admin) -- 30_lists-backfill.js.
     const listsBackfillResponse = await handleListsBackfillApi(request, env, url, path);
     if (listsBackfillResponse) return listsBackfillResponse;
+    // /admin/api/activity-backfill/* (copying watch history into the
+    // activity database, run from /admin) -- 37_activity-backfill.js.
+    const activityBackfillResponse = await handleActivityBackfillApi(request, env, url, path);
+    if (activityBackfillResponse) return activityBackfillResponse;
     // /api/lists (the item-level list API over the v2 tables, behind
     // FF_V2_LISTS_API) -- 31_lists-api.js. The legacy /api/lists/like and
     // /api/lists/like-external routes below are left to answer as they do.
@@ -83468,6 +83596,9 @@ function generateSearchVariations(query) {
             if (env.DB) {
               await saveCreatorTrackingD1(env, auth.username, blob, false);
             }
+            // And the activity database (P3c-4, 38_activity-scrobble.js):
+            // the entry just put first in Watch History is this play.
+            await recordActivityPlay(env, auth.username, activityPlayFromLegacyEntry(blob.watchHistory[0]), "ping");
 
             // Also write a tiny dedicated scrobble-queue key.
             // Cloudflare KV is eventually consistent -- a write from one edge
@@ -84144,6 +84275,10 @@ function generateSearchVariations(query) {
         await env.CONFIGS.put(syncKey, JSON.stringify(blob));
         if (env.DB) {
           await saveCreatorTrackingD1(env, authUser, blob, false);
+        }
+        // And the activity database (P3c-4, 38_activity-scrobble.js).
+        if (matched.startsWith("yes")) {
+          await recordActivityPlay(env, authUser, activityPlayFromLegacyEntry(blob.watchHistory[0]), "webhook");
         }
 
         // Also write to creatorscrobblequeue to protect against KV propagation lag
@@ -86972,7 +87107,10 @@ function generateSearchVariations(query) {
         clientVersion: nextSyncVersion(storedClientVersion || 0),
         updatedAt: Date.now(),
       };
-      const serialized = JSON.stringify(blob);
+      // With FF_EVENT_TRACKING the record goes to the activity database
+      // (40_event-tracking.js), which needs to know that entries left out
+      // were removed on purpose. Never stored.
+      const serialized = JSON.stringify(body.intentionalRemoval && isEventTrackingEnabled(env) ? { ...blob, _intentionalRemoval: true } : blob);
       if (serialized.length > 24 * 1024 * 1024) {
         return json({ ok: false, error: "Your Watch History is too large to store (over the 25MB limit)." });
       }
@@ -90903,7 +91041,9 @@ export default {
     const counters = (env && env.ANALYTICS)
       ? { kvReads: 0, kvWrites: 0, kvLists: 0, d1Statements: 0, d1Batches: 0, kvLegacyListPuts: 0 }
       : null;
-    const runEnv = counters ? instrumentEnv(env, counters) : env;
+    // FF_EVENT_TRACKING: tracking records of accounts served from the
+    // activity database are read and written there (40_event-tracking.js).
+    const runEnv = eventTrackingEnv(counters ? instrumentEnv(env, counters) : env);
     try {
       response = await schemaWriteGate(request, env);
       if (!response) response = await handleFetch(request, runEnv, ctx);
@@ -90961,6 +91101,8 @@ export default {
     // empty API key just because this isolate's first event happened to be a
     // cron tick rather than a request. See applyEnvApiKeys.
     applyEnvApiKeys(env);
+    // FF_EVENT_TRACKING, as in the fetch handler above.
+    env = eventTrackingEnv(env);
     // No outbound-fetch budget is divided between the tasks any more. That
     // arithmetic (CRON_SUBREQUEST_BUDGET and its shares) existed to fit a tick
     // inside the Workers Free plan's 50 subrequests; the hosted Worker runs on
@@ -96698,4 +96840,1730 @@ async function channelsV2AllRows(env, limit, offset) {
      WHERE c.deleted_at IS NULL ORDER BY c.id LIMIT ? OFFSET ?`
   ).bind(limit + 1, offset).all();
   return results || [];
+}
+
+// --- The activity database: watch history and progress (Phase 3c, P3c-1) -----
+//
+// Watch history is the biggest thing the site stores (about 4.5 GB at 100k
+// accounts, NEXT_VERSION_ARCHITECTURE.md 3.4), so it lives in its own D1
+// database, mylists-activity, bound as DB_ACTIVITY, with the tables of
+// migrations/activity/A0001_activity.sql. Every query there is for one
+// account, which is what lets it be split later.
+//
+// Always reach it through activityDb(env, accountId), never env.DB_ACTIVITY:
+// that is the one place that decides which database holds an account.
+// Today there is one. When it nears D1's size limit, the owner binds
+// DB_ACTIVITY_1 ... DB_ACTIVITY_{N-1} next to it and sets
+// ACTIVITY_SHARD_COUNT to N. Accounts then route by id % N. Changing N moves
+// accounts between databases, so it goes with a copy job; it is not a
+// switch to flip alone.
+//
+// Nothing calls this yet. The backfill (P3c-3), scrobbles (P3c-4) and the
+// shelves (P3c-5) will. Without the binding every caller gets null and keeps
+// the legacy tracking store.
+
+const ACTIVITY_SHARD_MAX = 16;
+
+// How many activity databases there are: ACTIVITY_SHARD_COUNT when every
+// binding it names exists, else 1. A count whose bindings are missing would
+// send accounts to a database that is not there, so it is not honored.
+function activityShardCount(env) {
+  const raw = Number.parseInt(String((env && env.ACTIVITY_SHARD_COUNT) || "1"), 10);
+  const n = Number.isFinite(raw) ? Math.min(Math.max(raw, 1), ACTIVITY_SHARD_MAX) : 1;
+  for (let i = 1; i < n; i++) {
+    if (!env[`DB_ACTIVITY_${i}`]) {
+      console.error(`[activity] ACTIVITY_SHARD_COUNT is ${n} but DB_ACTIVITY_${i} is not bound: using one database.`);
+      return 1;
+    }
+  }
+  return n;
+}
+
+// Which activity database holds an account: 0 is DB_ACTIVITY, i is
+// DB_ACTIVITY_i. Account ids are accounts.id (a positive integer).
+function shardFor(env, accountId) {
+  const n = activityShardCount(env);
+  if (n <= 1) return 0;
+  const id = Number(accountId);
+  if (!Number.isSafeInteger(id) || id < 0) throw new Error(`shardFor: bad account id ${accountId}`);
+  return id % n;
+}
+
+// The D1 binding for an account's activity, or null when the activity
+// database is not bound (the caller keeps the legacy store).
+function activityDb(env, accountId) {
+  if (!env || !env.DB_ACTIVITY) return null;
+  const shard = shardFor(env, accountId);
+  return shard === 0 ? env.DB_ACTIVITY : env[`DB_ACTIVITY_${shard}`];
+}
+
+// Every activity database, for work that crosses accounts (the admin status
+// panel, a copy job).
+function activityDbs(env) {
+  if (!env || !env.DB_ACTIVITY) return [];
+  const n = activityShardCount(env);
+  const out = [env.DB_ACTIVITY];
+  for (let i = 1; i < n; i++) out.push(env[`DB_ACTIVITY_${i}`]);
+  return out;
+}
+
+// Whether an activity database has A0001 applied. Remembered per database
+// object (each test has its own), for a minute once true.
+let activitySchemaCache = null;
+async function activitySchemaReady(db) {
+  if (!db) return false;
+  const now = Date.now();
+  if (activitySchemaCache && activitySchemaCache.db === db && activitySchemaCache.until > now) return true;
+  try {
+    const row = await db.prepare("SELECT version FROM schema_migrations WHERE version = 'A0001'").first();
+    if (!row) return false;
+    activitySchemaCache = { db, until: now + 60 * 1000 };
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+// The same play reported twice (the subtitles ping and the webhook, a retry,
+// or two copies of one history entry) is one row: watch_events.dedupe_key
+// is the account, the title, the episode and the watch time rounded down to
+// ten minutes. Writers also skip a play within ten minutes either side of one
+// already stored (a pair either side of a boundary has different keys).
+const ACTIVITY_DEDUPE_WINDOW_MS = 10 * 60 * 1000;
+
+function activityDedupeKey(accountId, mediaId, season, episode, watchedAt) {
+  const s = season == null ? "" : String(season);
+  const e = episode == null ? "" : String(episode);
+  return `${accountId}:${mediaId}:${s}:${e}:${Math.floor(Number(watchedAt) / ACTIVITY_DEDUPE_WINDOW_MS)}`;
+}
+
+// --- Activity backfill: migrate.activity (Phase 3c, P3c-3) --------------------
+//
+// Copies every account's watch history and show state into the activity
+// database (DB_ACTIVITY, 36_activity-db.js, migrations/activity/):
+//
+//   1. Watch History becomes watch_events, one row per play, source
+//      'migrated'. The history is the union of the three places it lives
+//      today -- the KV record creatorsynctracking:{u} (or, for an account
+//      that never had one, the older creatorsync:{u}), the D1 table
+//      watch_history, and the scrobble queue creatorscrobblequeue:{u} --
+//      taking the newest copy of an entry that is in more than one. That is
+//      also what /api/creator/sync/load shows today: it merges the queue in.
+//      A play already stored within ten minutes of another for the same
+//      title and episode is kept once (ACTIVITY_DEDUPE_WINDOW_MS).
+//   2. show_progress and user_media_state are then worked out from those
+//      events: per show, the furthest episode watched (the one the legacy
+//      Continue Watching counts from) and when it was last watched; per
+//      movie, how many plays and when last.
+//   3. On top of that, per show: completed (fullyWatchedShowIds), the
+//      Continue Watching dismissal and the Airing Next removal (each the
+//      watched episode it was made at), and the Continue Watching entries
+//      progress cannot rebuild -- companions (the next movie or spin-off in
+//      a storyline) and movies -- kept whole in companion_json. A Continue
+//      Watching show with no history at all keeps its place as progress
+//      "just before" the episode it offered (last_episode one less).
+//
+// Not copied here: Airing Next and the recommendations are worked out, not
+// kept (show_schedule and a job, Phase 5), and the Watchlist is a list
+// (P3b-3 copies its list record; one kept only in the tracking record moves
+// when the tracking reads do, P3c-6).
+//
+// It COPIES. The legacy keys and tables are only read: the env it works
+// through (activityBackfillEnv) cannot write KV at all, may write only the
+// media rows and its own job rows in DB, and only the three activity tables
+// in DB_ACTIVITY. An account copied afresh first removes its earlier
+// 'migrated' rows, so a copy made again after the legacy store changed
+// shows that store as it now is; plays written some other way stay.
+//
+// It runs only when an operator asks, from /admin -> Maintenance, one bounded
+// step per request, with its progress and a per-account reconciliation in
+// `jobs` (the same shape as the list copy, 30_lists-backfill.js).
+
+const ACTIVITY_BACKFILL_TYPE = "migrate.activity";
+const ACTIVITY_BACKFILL_RUN_KEY = "migrate.activity:run";
+const ACTIVITY_BACKFILL_STEP_OPS = 350;      // D1 statements and KV reads started per step
+const ACTIVITY_BACKFILL_STEP_ITEMS = 1000;   // history entries copied per step
+const ACTIVITY_BACKFILL_STEP_LOOKUPS = 100;  // TMDB lookups per step
+const ACTIVITY_BACKFILL_CHUNK = 200;         // history entries resolved and written together
+const ACTIVITY_BACKFILL_SAMPLES = 5;         // examples kept of each kind of difference
+const ACTIVITY_BACKFILL_LEASE_MS = 90000;    // one step at a time
+const ACTIVITY_BACKFILL_ENTRY_MAX = 4000;    // characters of a Continue Watching entry kept in companion_json
+const ACTIVITY_BACKFILL_MAIN_TABLES = new Set(["media", "jobs"]);
+const ACTIVITY_BACKFILL_ACTIVITY_TABLES = new Set(["watch_events", "show_progress", "user_media_state"]);
+
+// A D1 binding that counts every statement against the step's budget and
+// refuses a schema change or a write to any table not in `tables`.
+function activityBackfillD1(db, tables, meter, label) {
+  const guard = (sql) => {
+    const s = String(sql);
+    if (/^\s*(?:DROP|ALTER|CREATE)\b/i.test(s)) throw new Error(`activity backfill: refusing a schema change on ${label}`);
+    // A statement that opens with WITH could hide a write behind it.
+    if (/^\s*WITH\b/i.test(s) && /\b(?:INSERT|UPDATE|DELETE|REPLACE)\b/i.test(s)) {
+      throw new Error(`activity backfill: refusing a WITH write on ${label}`);
+    }
+    const m = /^\s*(?:INSERT(?:\s+OR\s+\w+)?\s+INTO|REPLACE\s+INTO|UPDATE(?:\s+OR\s+\w+)?|DELETE\s+FROM)\s+([A-Za-z_]\w*)/i.exec(s);
+    if (m && !tables.has(m[1].toLowerCase())) throw new Error(`activity backfill: refusing to write to ${m[1]} on ${label}`);
+  };
+  const wrap = (st) => ({
+    _inner: st,
+    bind: (...args) => wrap(st.bind(...args)),
+    run: () => { meter.ops++; return st.run(); },
+    all: () => { meter.ops++; return st.all(); },
+    first: (col) => { meter.ops++; return col === undefined ? st.first() : st.first(col); },
+  });
+  return {
+    prepare: (sql) => { guard(sql); return wrap(db.prepare(sql)); },
+    batch: (stmts) => { meter.ops += stmts.length; return db.batch(stmts.map((s) => (s && s._inner) || s)); },
+  };
+}
+
+// The env every step works through. KV has no write methods at all; R2 is
+// not there; DB may write media (29_media.js resolves titles) and jobs;
+// every activity database may write only the activity tables.
+function activityBackfillEnv(env, meter) {
+  const kv = env.CONFIGS;
+  const out = {
+    ...env,
+    DB: activityBackfillD1(env.DB, ACTIVITY_BACKFILL_MAIN_TABLES, meter, "DB"),
+    CONFIGS: kv ? {
+      get: (...args) => { meter.ops++; return kv.get(...args); },
+      list: (...args) => { meter.ops++; return kv.list(...args); },
+    } : undefined,
+    BLOBS: undefined,
+  };
+  for (const name of Object.keys(env)) {
+    if (name === "DB_ACTIVITY" || /^DB_ACTIVITY_\d+$/.test(name)) {
+      out[name] = env[name] ? activityBackfillD1(env[name], ACTIVITY_BACKFILL_ACTIVITY_TABLES, meter, name) : env[name];
+    }
+  }
+  return out;
+}
+
+function activityBackfillOpsLeft(budget) {
+  return budget.meter.ops < budget.maxOps;
+}
+
+function activityBackfillSample(arr, value) {
+  if (Array.isArray(arr) && arr.length < ACTIVITY_BACKFILL_SAMPLES) arr.push(value);
+}
+
+function emptyActivityRecon() {
+  return {
+    history: { kv: 0, d1: 0, queue: 0, union: 0, copied: 0, duplicates: 0, unusable: 0, undated: 0, stubs: 0 },
+    shows: { progress: 0, completed: 0, dismissed: 0, airingHidden: 0, kept: 0, cwOnly: 0, unusable: 0 },
+    movies: 0,
+    events: 0,
+    legacyMax: 0,
+    short: 0,
+    samples: { unusable: [], duplicates: [], short: [] },
+  };
+}
+
+async function loadActivityBackfillJob(env, key) {
+  const row = await env.DB.prepare(
+    "SELECT id, status, attempts, run_after, progress_json, last_error FROM jobs WHERE dedupe_key = ?"
+  ).bind(key).first();
+  if (!row) return null;
+  let progress = {};
+  try {
+    progress = row.progress_json ? JSON.parse(row.progress_json) : {};
+  } catch {
+    progress = {};
+  }
+  return { ...row, progress };
+}
+
+async function saveActivityBackfillJob(env, key, accountId, fields) {
+  const now = Date.now();
+  await env.DB.prepare(
+    `INSERT INTO jobs (type, dedupe_key, account_id, status, attempts, run_after, progress_json, last_error, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(dedupe_key) DO UPDATE SET status = excluded.status, attempts = excluded.attempts, run_after = excluded.run_after,
+       progress_json = excluded.progress_json, last_error = excluded.last_error, updated_at = excluded.updated_at`
+  ).bind(ACTIVITY_BACKFILL_TYPE, key, accountId, fields.status, fields.attempts || 0, fields.runAfter || 0,
+    JSON.stringify(fields.progress || {}), fields.lastError || null, now, now).run();
+}
+
+// --- Reading the legacy store (read only) -------------------------------------
+
+function parseActivityJson(raw) {
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw);
+    return v && typeof v === "object" ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function activityStamp(raw) {
+  const n = Number(raw);
+  if (Number.isFinite(n) && n > 0) return n;
+  const d = Date.parse(String(raw || ""));
+  return Number.isFinite(d) && d > 0 ? d : 0;
+}
+
+// A legacy table that is not there (its migration never applied) reads as
+// empty, as the legacy reads treat it.
+async function readLegacyActivityRows(env, sql, username) {
+  try {
+    const { results } = await env.DB.prepare(sql).bind(username).all();
+    return results || [];
+  } catch (e) {
+    if (/no such table|no such column/i.test(String((e && e.message) || e))) return [];
+    throw e;
+  }
+}
+
+// D1's continue_watching row as the entry it was saved from (the reverse of
+// writeCreatorTrackingD1, as readCreatorTrackingD1 reads it).
+function legacyContinueWatchingFromRow(r) {
+  let entry = {
+    id: r.item_id,
+    showId: r.show_id,
+    name: r.name || undefined,
+    poster: r.poster || undefined,
+    showTitle: r.show_title || undefined,
+    showPoster: r.show_poster || undefined,
+    seasonNum: r.season_num != null ? r.season_num : undefined,
+    episodeNum: r.episode_num != null ? r.episode_num : undefined,
+    updatedAt: r.updated_at,
+  };
+  if (r.show_title && String(r.show_title).startsWith("COMPANION:")) {
+    const meta = parseActivityJson(String(r.show_title).slice(10));
+    if (meta) {
+      entry = {
+        ...entry,
+        isCompanion: true,
+        companionType: meta.companionType,
+        companionNote: meta.companionNote,
+        companionStoryline: meta.companionStoryline,
+        precedingShowId: meta.precedingShowId,
+        showTitle: meta.showTitle || undefined,
+        kind: meta.kind || undefined,
+        type: meta.type || (meta.kind === "movie" ? "movie" : "episode"),
+      };
+    }
+  } else if (r.season_num == null && r.episode_num == null && !r.show_title) {
+    entry.type = "movie";
+    entry.kind = "movie";
+  } else {
+    entry.type = "episode";
+  }
+  return entry;
+}
+
+function legacyStatesFromRows(rows) {
+  const fullyWatched = [];
+  const dismissed = {};
+  const removedAiring = {};
+  for (const s of rows) {
+    const id = String(s.show_id || "");
+    if (!id) continue;
+    if (s.is_fully_watched) fullyWatched.push(id);
+    if (s.dismissed_season != null || s.dismissed_episode != null) {
+      dismissed[id] = { seasonNum: s.dismissed_season != null ? s.dismissed_season : 0, episodeNum: s.dismissed_episode != null ? s.dismissed_episode : 0 };
+    }
+    if (s.airing_removed_season != null || s.airing_removed_episode != null) {
+      removedAiring[id] = { seasonNum: s.airing_removed_season != null ? s.airing_removed_season : 0, episodeNum: s.airing_removed_episode != null ? s.airing_removed_episode : 0 };
+    }
+  }
+  return { fullyWatched, dismissed, removedAiring };
+}
+
+// Everything one account has, from the three places, without changing any.
+async function readLegacyActivity(env, username) {
+  const [trackingRaw, queueRaw] = await Promise.all([
+    env.CONFIGS ? env.CONFIGS.get(`creatorsynctracking:${username}`) : null,
+    env.CONFIGS ? env.CONFIGS.get(`creatorscrobblequeue:${username}`) : null,
+  ]);
+  let kv = parseActivityJson(trackingRaw);
+  // Tracking kept inside the sync record, from before it had its own key
+  // (ensureTrackingMigrated moves it on the account's next write).
+  if (!kv && trackingRaw == null && env.CONFIGS) {
+    const old = parseActivityJson(await env.CONFIGS.get(`creatorsync:${username}`));
+    if (old && (Array.isArray(old.watchHistory) || Array.isArray(old.continueWatching) || Array.isArray(old.fullyWatchedShowIds) || old.dismissedContinueWatching)) {
+      kv = { ...old, updatedAt: activityStamp(old.updatedAt) };
+    }
+  }
+
+  let d1 = null;
+  if (env.DB) {
+    const meta = (await readLegacyActivityRows(env, "SELECT updated_at FROM creator_tracking_meta WHERE username = ?", username))[0] || null;
+    const wh = await readLegacyActivityRows(env, "SELECT * FROM watch_history WHERE username = ?", username);
+    const cw = await readLegacyActivityRows(env, "SELECT * FROM continue_watching WHERE username = ?", username);
+    const states = await readLegacyActivityRows(env, "SELECT * FROM creator_show_states WHERE username = ?", username);
+    if (meta || wh.length || cw.length || states.length) {
+      d1 = {
+        updatedAt: meta ? activityStamp(meta.updated_at) : 0,
+        watchHistory: wh.map((r) => ({
+          id: r.item_id,
+          type: r.item_type,
+          name: r.title || undefined,
+          showId: r.show_id || undefined,
+          showTitle: r.show_title || undefined,
+          seasonNum: r.season_num != null ? r.season_num : undefined,
+          episodeNum: r.episode_num != null ? r.episode_num : undefined,
+          year: r.year || undefined,
+          watchedAt: r.watched_at,
+        })),
+        continueWatching: cw.map(legacyContinueWatchingFromRow),
+        ...legacyStatesFromRows(states),
+      };
+    }
+  }
+
+  const queue = parseActivityJson(queueRaw);
+  const queueWh = Array.isArray(queue) ? queue : (queue && Array.isArray(queue.watchHistory) ? queue.watchHistory : []);
+  const queueCw = queue && !Array.isArray(queue) && Array.isArray(queue.continueWatching) ? queue.continueWatching : [];
+
+  return {
+    kv: kv ? {
+      updatedAt: activityStamp(kv.updatedAt),
+      watchHistory: Array.isArray(kv.watchHistory) ? kv.watchHistory : [],
+      continueWatching: Array.isArray(kv.continueWatching) ? kv.continueWatching : [],
+      fullyWatched: Array.isArray(kv.fullyWatchedShowIds) ? kv.fullyWatchedShowIds.map(String) : [],
+      dismissed: kv.dismissedContinueWatching && typeof kv.dismissedContinueWatching === "object" ? kv.dismissedContinueWatching : {},
+      removedAiring: kv.removedAiringNext && typeof kv.removedAiringNext === "object" ? kv.removedAiringNext : {},
+    } : null,
+    d1,
+    queue: { watchHistory: queueWh, continueWatching: queueCw },
+  };
+}
+
+// --- History -------------------------------------------------------------------
+
+// A history entry's identity in the legacy store: its id, or for an episode
+// without one, show:season:episode (writeCreatorTrackingD1's fallback).
+function legacyHistoryId(item) {
+  if (!item || typeof item !== "object") return "";
+  if (item.id != null && String(item.id)) return String(item.id);
+  if (item.showId) return `${item.showId}:${item.seasonNum}:${item.episodeNum}`;
+  return "";
+}
+
+// The entry as a play: which title (as a ref resolveMediaBatch reads), which
+// episode, and when. An episode saved without its show (the web page does
+// that when it had no show loaded) is named by its composite id, which
+// carries both: "tt0903747:1:2" or "tmdb:1396:1:2".
+function legacyHistoryPlay(item, fallbackAt) {
+  const id = legacyHistoryId(item);
+  let season = Number.isFinite(Number(item.seasonNum)) && item.seasonNum !== null && item.seasonNum !== "" ? Number(item.seasonNum) : null;
+  let episode = Number.isFinite(Number(item.episodeNum)) && item.episodeNum !== null && item.episodeNum !== "" ? Number(item.episodeNum) : null;
+  let showId = item.showId ? String(item.showId) : "";
+  const isEpisode = String(item.type || "").toLowerCase() === "episode" || season != null || episode != null || !!showId;
+  if (isEpisode && (!showId || season == null || episode == null)) {
+    const parts = id.split(":");
+    const tail = parts.length >= 3 ? parts.slice(-2) : null;
+    if (tail && /^\d+$/.test(tail[0]) && /^\d+$/.test(tail[1])) {
+      if (!showId) showId = parts.slice(0, -2).join(":");
+      if (season == null) season = Number(tail[0]);
+      if (episode == null) episode = Number(tail[1]);
+    }
+  }
+  let watchedAt = activityStamp(item.watchedAt);
+  const undated = !watchedAt;
+  if (!watchedAt) watchedAt = fallbackAt || 0;
+  const ref = isEpisode
+    ? { type: "episode", showId, imdbId: item.imdbId, showTitle: item.showTitle, seasonNum: season, episodeNum: episode }
+    : { ...item };
+  return {
+    id,
+    ref,
+    season: isEpisode ? season : null,
+    episode: isEpisode ? episode : null,
+    watchedAt,
+    undated,
+    label: String(item.showTitle || item.name || item.title || id || "(no id)").slice(0, 80) + (isEpisode && season != null ? ` S${season}E${episode}` : ""),
+  };
+}
+
+// The union of the three histories, the newest copy of an entry kept, oldest
+// play first (so plays added while a copy is under way land after its
+// cursor). Also the counts the reconciliation compares against.
+function mergeLegacyHistory(legacy) {
+  const merged = new Map();
+  const counts = { kv: 0, d1: 0, queue: 0 };
+  const add = (items, source, fallbackAt) => {
+    const seen = new Set();
+    for (const item of items || []) {
+      if (!item || typeof item !== "object") continue;
+      const id = legacyHistoryId(item);
+      if (!id) {
+        // No identity at all: cannot be copied, and the legacy store could
+        // not show it either. Counted, and reported as having no usable id.
+        counts[source]++;
+        merged.set(`(no id):${source}:${counts[source]}`, { item, fallbackAt });
+        continue;
+      }
+      if (seen.has(id)) continue;
+      seen.add(id);
+      counts[source]++;
+      const prev = merged.get(id);
+      if (!prev || activityStamp(item.watchedAt) > activityStamp(prev.item.watchedAt)) merged.set(id, { item, fallbackAt });
+    }
+  };
+  if (legacy.kv) add(legacy.kv.watchHistory, "kv", legacy.kv.updatedAt);
+  if (legacy.d1) add(legacy.d1.watchHistory, "d1", legacy.d1.updatedAt);
+  add(legacy.queue.watchHistory, "queue", 0);
+  // Each play's cursor key is its merge key, so entries with no id (which
+  // share an empty id) still each have their own place in the order.
+  const plays = [...merged.entries()].map(([key, { item, fallbackAt }]) => ({ ...legacyHistoryPlay(item || {}, fallbackAt), id: key }));
+  plays.sort((a, b) => a.watchedAt - b.watchedAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  return { plays, counts, union: merged.size };
+}
+
+function activityCursorAfter(play, cursor) {
+  if (!cursor) return true;
+  return play.watchedAt > cursor.t || (play.watchedAt === cursor.t && play.id > cursor.k);
+}
+
+// One chunk of plays: titles resolved, then written as events, skipping a
+// play within ten minutes of one already stored for the same episode.
+async function copyActivityHistoryChunk(env, actDb, accountId, chunk, budget, recon) {
+  const { ids, stats } = await resolveMediaBatch(env, chunk.map((p) => p.ref), { maxLookups: Math.max(0, budget.lookups) });
+  budget.lookups -= stats.lookups;
+  budget.items -= chunk.length;
+
+  const rows = [];
+  chunk.forEach((play, i) => {
+    if (play.undated) recon.history.undated++;
+    const mediaId = ids[i];
+    if (mediaId == null) {
+      recon.history.unusable++;
+      activityBackfillSample(recon.samples.unusable, play.label);
+      return;
+    }
+    rows.push({ mediaId, season: play.season, episode: play.episode, t: play.watchedAt, label: play.label,
+      legacyId: String(play.id).startsWith("(no id)") ? null : play.id });
+  });
+  const { inserted, kept } = await insertActivityPlays(actDb, accountId, rows, "migrated", (r) => {
+    recon.history.duplicates++;
+    activityBackfillSample(recon.samples.duplicates, r.label);
+  });
+  recon.history.copied += inserted;
+  // A play the statement skipped was within ten minutes of one stored by
+  // an earlier chunk (or a same-key play): a duplicate as well.
+  recon.history.duplicates += Math.max(0, kept - inserted);
+}
+
+// Writes plays ({ mediaId, season, episode, t, legacyId }) as events, one
+// statement per JSON chunk. Two plays of one episode ten minutes apart or
+// less are one: within `rows` here (a statement cannot see its own rows),
+// and against what is stored by the NOT EXISTS. onDuplicate is called for
+// each play dropped here. Returns { inserted, kept }: kept minus inserted
+// is the plays the statement skipped (duplicates of stored ones). Shared by
+// the history copy and the save-tracking shim (40_event-tracking.js).
+async function insertActivityPlays(actDb, accountId, rows, source, onDuplicate) {
+  const sorted = rows.slice().sort((a, b) => a.mediaId - b.mediaId || String(a.season).localeCompare(String(b.season))
+    || String(a.episode).localeCompare(String(b.episode)) || a.t - b.t);
+  const kept = [];
+  for (const r of sorted) {
+    const last = kept[kept.length - 1];
+    if (last && last.mediaId === r.mediaId && last.season === r.season && last.episode === r.episode && r.t - last.t < ACTIVITY_DEDUPE_WINDOW_MS) {
+      if (onDuplicate) onDuplicate(r);
+      continue;
+    }
+    kept.push(r);
+  }
+  let inserted = 0;
+  const data = kept.map((r) => [r.mediaId, r.season, r.episode, r.t, activityDedupeKey(accountId, r.mediaId, r.season, r.episode, r.t), r.legacyId || null]);
+  for (const part of d1JsonChunks(data)) {
+    const out = await actDb.prepare(
+      `INSERT OR IGNORE INTO watch_events (account_id, media_id, season, episode, watched_at, source, dedupe_key, legacy_id)
+       SELECT ?, j.m, j.s, j.e, j.t, ?, j.k, j.l
+       FROM (SELECT json_extract(value, '$[0]') AS m, json_extract(value, '$[1]') AS s, json_extract(value, '$[2]') AS e,
+                    json_extract(value, '$[3]') AS t, json_extract(value, '$[4]') AS k, json_extract(value, '$[5]') AS l FROM json_each(?)) AS j
+       WHERE NOT EXISTS (
+         SELECT 1 FROM watch_events w
+         WHERE w.account_id = ? AND w.media_id = j.m AND w.season IS j.s AND w.episode IS j.e
+           AND w.watched_at > j.t - ? AND w.watched_at < j.t + ?)`
+    ).bind(accountId, source, part, accountId, ACTIVITY_DEDUPE_WINDOW_MS, ACTIVITY_DEDUPE_WINDOW_MS).run();
+    inserted += Number(out && out.meta && out.meta.changes) || 0;
+  }
+  return { inserted, kept: kept.length };
+}
+
+// --- Show state ------------------------------------------------------------------
+
+function legacyShowRefInput(key) {
+  return { id: key, type: "series" };
+}
+
+// Which show a Continue Watching entry is about, and whether progress can
+// rebuild it: an episode of a show can; a companion (the next movie or
+// spin-off in a storyline) or a movie cannot, so it is kept whole.
+function legacyContinueWatchingKey(entry) {
+  return trackingShowKey(entry.showId || entry.id || entry.imdbId || (entry.tmdbId ? "tmdb:" + entry.tmdbId : ""));
+}
+
+// The show state both stores hold, the newer store winning where they
+// differ: fully watched is the newer store's set (it is cleared when a new
+// episode turns up); a dismissal or an Airing Next removal is only ever
+// replaced, never undone, so the older store's are kept under the newer's.
+// Continue Watching entries in the order /api/creator/sync/load shows them:
+// the queue first, then the newer store, then the older.
+function mergeLegacyShowState(legacy) {
+  const stores = [legacy.kv, legacy.d1].filter(Boolean).sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0));
+  const newer = stores[stores.length - 1] || null;
+  const fullyWatched = new Set((newer ? newer.fullyWatched : []).map((s) => trackingShowKey(s)).filter(Boolean));
+  const dismissed = new Map();
+  const removedAiring = new Map();
+  for (const store of stores) {
+    for (const [k, v] of Object.entries(store.dismissed || {})) if (trackingShowKey(k)) dismissed.set(trackingShowKey(k), v || {});
+    for (const [k, v] of Object.entries(store.removedAiring || {})) if (trackingShowKey(k)) removedAiring.set(trackingShowKey(k), v || {});
+  }
+  const cw = new Map();
+  for (const list of [legacy.queue.continueWatching, ...stores.slice().reverse().map((s) => s.continueWatching)]) {
+    for (const entry of list || []) {
+      if (!entry || typeof entry !== "object") continue;
+      const key = legacyContinueWatchingKey(entry);
+      if (!key || cw.has(key)) continue;
+      if (!entry.isCompanion && fullyWatched.has(key)) continue;
+      cw.set(key, entry);
+    }
+  }
+  return { fullyWatched, dismissed, removedAiring, cw };
+}
+
+function legacyEpisodeNumber(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.trunc(n) : 0;
+}
+
+// show_progress and user_media_state, rebuilt for the account in one batch
+// on its activity database: from its events, then the legacy show state on
+// top. Returns the counts for the reconciliation.
+async function rebuildActivityProgress(env, actDb, accountId, legacy, budget, recon) {
+  const state = mergeLegacyShowState(legacy);
+  const keys = new Set([...state.fullyWatched, ...state.dismissed.keys(), ...state.removedAiring.keys()]);
+  const stateKeys = [...keys];
+  const cwEntries = [...state.cw.entries()];
+  const inputs = [
+    ...stateKeys.map(legacyShowRefInput),
+    ...cwEntries.map(([, entry]) => entry),
+  ];
+  let ids = [];
+  if (inputs.length) {
+    const out = await resolveMediaBatch(env, inputs, { maxLookups: Math.max(0, budget.lookups) });
+    budget.lookups -= out.stats.lookups;
+    ids = out.ids;
+  }
+
+  const now = Date.now();
+  // media id -> the state columns for it.
+  const rows = new Map();
+  const rowFor = (mediaId) => {
+    let r = rows.get(mediaId);
+    if (!r) {
+      r = { status: null, ds: null, de: null, as: null, ae: null, entry: null, cs: null, ce: null, ct: null };
+      rows.set(mediaId, r);
+    }
+    return r;
+  };
+  stateKeys.forEach((key, i) => {
+    const mediaId = ids[i];
+    if (mediaId == null) {
+      recon.shows.unusable++;
+      return;
+    }
+    const r = rowFor(mediaId);
+    if (state.fullyWatched.has(key)) r.status = "completed";
+    const dis = state.dismissed.get(key);
+    if (dis) {
+      r.ds = legacyEpisodeNumber(dis.seasonNum);
+      r.de = legacyEpisodeNumber(dis.episodeNum);
+    }
+    const rem = state.removedAiring.get(key);
+    if (rem) {
+      r.as = legacyEpisodeNumber(rem.seasonNum);
+      r.ae = legacyEpisodeNumber(rem.episodeNum);
+    }
+  });
+  cwEntries.forEach(([key, entry], j) => {
+    const mediaId = ids[stateKeys.length + j];
+    if (mediaId == null) {
+      recon.shows.unusable++;
+      return;
+    }
+    const r = rowFor(mediaId);
+    const season = Number(entry.seasonNum);
+    const episode = Number(entry.episodeNum);
+    const isEpisode = !entry.isCompanion && String(entry.type || "episode") !== "movie" && entry.kind !== "movie"
+      && Number.isFinite(season) && Number.isFinite(episode);
+    if (isEpisode) {
+      // Used only when the show has no history to count from (below).
+      r.cs = Math.trunc(season);
+      r.ce = Math.max(0, Math.trunc(episode) - 1);
+      r.ct = activityStamp(entry.updatedAt || entry.watchedAt) || null;
+      return;
+    }
+    let text = null;
+    try {
+      text = JSON.stringify(entry);
+    } catch {
+      text = null;
+    }
+    if (text && text.length <= ACTIVITY_BACKFILL_ENTRY_MAX) r.entry = text;
+    if (!r.ct) r.ct = activityStamp(entry.updatedAt || entry.watchedAt) || null;
+  });
+
+  const stateData = [...rows.entries()].map(([mediaId, r]) => [mediaId, r.status, r.ds, r.de, r.as, r.ae, r.entry, r.cs, r.ce, r.ct]);
+  const stmts = [
+    actDb.prepare("DELETE FROM show_progress WHERE account_id = ?").bind(accountId),
+    actDb.prepare("DELETE FROM user_media_state WHERE account_id = ?").bind(accountId),
+    // Per show: the furthest episode watched, and when the show was last
+    // watched at all.
+    actDb.prepare(
+      `INSERT INTO show_progress (account_id, media_id, last_season, last_episode, last_watched_at, updated_at)
+       SELECT account_id, media_id, season, episode, last_at, ?
+       FROM (SELECT account_id, media_id, season, episode,
+                    max(watched_at) OVER (PARTITION BY media_id) AS last_at,
+                    row_number() OVER (PARTITION BY media_id ORDER BY season DESC, episode DESC, watched_at DESC) AS rn
+             FROM watch_events WHERE account_id = ? AND season IS NOT NULL AND episode IS NOT NULL)
+       WHERE rn = 1`
+    ).bind(now, accountId),
+    // Per movie (or a show marked watched as a whole): plays and the last one.
+    actDb.prepare(
+      `INSERT INTO user_media_state (account_id, media_id, watched_count, last_watched_at)
+       SELECT account_id, media_id, count(*), max(watched_at)
+       FROM watch_events WHERE account_id = ? AND season IS NULL AND episode IS NULL
+       GROUP BY account_id, media_id`
+    ).bind(accountId),
+  ];
+  for (const part of d1JsonChunks(stateData)) {
+    stmts.push(actDb.prepare(
+      `INSERT INTO show_progress (account_id, media_id, last_season, last_episode, last_watched_at, status,
+         dismissed_at_season, dismissed_at_episode, airing_hidden_at_season, airing_hidden_at_episode, companion_json, updated_at)
+       SELECT ?, json_extract(value, '$[0]'), json_extract(value, '$[7]'), json_extract(value, '$[8]'), json_extract(value, '$[9]'),
+              COALESCE(json_extract(value, '$[1]'), 'watching'), json_extract(value, '$[2]'), json_extract(value, '$[3]'),
+              json_extract(value, '$[4]'), json_extract(value, '$[5]'), json_extract(value, '$[6]'), ?
+       FROM json_each(?) WHERE true
+       ON CONFLICT (account_id, media_id) DO UPDATE SET
+         status = excluded.status,
+         dismissed_at_season = excluded.dismissed_at_season,
+         dismissed_at_episode = excluded.dismissed_at_episode,
+         airing_hidden_at_season = excluded.airing_hidden_at_season,
+         airing_hidden_at_episode = excluded.airing_hidden_at_episode,
+         companion_json = excluded.companion_json`
+    ).bind(accountId, now, part));
+  }
+  await actDb.batch(stmts);
+
+  for (const r of rows.values()) {
+    if (r.status === "completed") recon.shows.completed++;
+    if (r.ds != null) recon.shows.dismissed++;
+    if (r.as != null) recon.shows.airingHidden++;
+    if (r.entry) recon.shows.kept++;
+  }
+  const counts = await actDb.prepare(
+    `SELECT (SELECT count(*) FROM watch_events WHERE account_id = ?) AS events,
+            (SELECT count(*) FROM show_progress WHERE account_id = ?) AS progress,
+            (SELECT count(*) FROM show_progress WHERE account_id = ? AND last_season IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM watch_events w WHERE w.account_id = show_progress.account_id AND w.media_id = show_progress.media_id AND w.season IS NOT NULL)) AS cw_only,
+            (SELECT count(*) FROM user_media_state WHERE account_id = ?) AS movies`
+  ).bind(accountId, accountId, accountId, accountId).first();
+  recon.events = Number(counts && counts.events) || 0;
+  // Titles in the account's history TMDB could not place yet (stubs, tried
+  // again later): counted over the finished copy, however it was split up.
+  const { results: watched } = await actDb.prepare("SELECT DISTINCT media_id FROM watch_events WHERE account_id = ?").bind(accountId).all();
+  const mediaIds = (watched || []).map((r) => r.media_id);
+  recon.history.stubs = 0;
+  for (let i = 0; i < mediaIds.length; i += MEDIA_LOOKUP_CHUNK) {
+    const part = mediaIds.slice(i, i + MEDIA_LOOKUP_CHUNK);
+    const row = await env.DB.prepare(`SELECT count(*) AS n FROM media WHERE resolved_at IS NULL AND id IN (${part.map(() => "?").join(", ")})`).bind(...part).first();
+    recon.history.stubs += Number(row && row.n) || 0;
+  }
+  recon.shows.progress = Number(counts && counts.progress) || 0;
+  recon.shows.cwOnly = Number(counts && counts.cw_only) || 0;
+  recon.movies = Number(counts && counts.movies) || 0;
+}
+
+// --- One account --------------------------------------------------------------
+
+// Returns { finished, failed }. Not finished: the budget ran out and the
+// account's job row holds where to resume. A failure is recorded on the
+// account's row and the run moves on.
+async function backfillAccountActivity(env, account, budget) {
+  const key = `${ACTIVITY_BACKFILL_TYPE}:acct:${account.id}`;
+  const job = await loadActivityBackfillJob(env, key);
+  if (job && job.status === "done") return { finished: true, failed: false, skipped: true };
+  const actDb = activityDb(env, account.id);
+  let p = job && job.status === "running" && job.progress && job.progress.phase ? job.progress : null;
+  try {
+    const legacy = await readLegacyActivity(env, account.username);
+    const { plays, counts, union } = mergeLegacyHistory(legacy);
+    if (!p) {
+      // A fresh copy: what an earlier one left is replaced, so a play the
+      // legacy store no longer has does not linger.
+      await actDb.prepare("DELETE FROM watch_events WHERE account_id = ? AND source = 'migrated'").bind(account.id).run();
+      p = { phase: "history", cursor: null, recon: emptyActivityRecon(), startedAt: Date.now() };
+    }
+    if (p.phase === "history") {
+      let i = 0;
+      while (i < plays.length && !activityCursorAfter(plays[i], p.cursor)) i++;
+      while (i < plays.length) {
+        if (!activityBackfillOpsLeft(budget) || budget.items <= 0) {
+          await saveActivityBackfillJob(env, key, account.id, { status: "running", attempts: job ? job.attempts : 0, progress: p });
+          return { finished: false };
+        }
+        const chunk = plays.slice(i, i + Math.min(ACTIVITY_BACKFILL_CHUNK, budget.items));
+        await copyActivityHistoryChunk(env, actDb, account.id, chunk, budget, p.recon);
+        i += chunk.length;
+        const last = chunk[chunk.length - 1];
+        p.cursor = { t: last.watchedAt, k: last.id };
+      }
+      p.phase = "shows";
+    }
+    if (!activityBackfillOpsLeft(budget)) {
+      await saveActivityBackfillJob(env, key, account.id, { status: "running", attempts: job ? job.attempts : 0, progress: p });
+      return { finished: false };
+    }
+    await rebuildActivityProgress(env, actDb, account.id, legacy, budget, p.recon);
+
+    const recon = p.recon;
+    recon.history.kv = counts.kv;
+    recon.history.d1 = counts.d1;
+    recon.history.queue = counts.queue;
+    recon.history.union = union;
+    recon.legacyMax = Math.max(counts.kv, counts.d1);
+    recon.short = Math.max(0, recon.legacyMax - recon.events);
+    if (recon.short) {
+      activityBackfillSample(recon.samples.short, `${recon.short} fewer plays than the old history (${recon.history.duplicates} duplicates, ${recon.history.unusable} with no usable id)`);
+    }
+    await saveActivityBackfillJob(env, key, account.id, {
+      status: "done", attempts: job ? job.attempts : 0,
+      progress: { recon, startedAt: p.startedAt, finishedAt: Date.now() },
+    });
+    return { finished: true, failed: false };
+  } catch (e) {
+    console.error("activity backfill: account " + account.id + " failed", e);
+    await saveActivityBackfillJob(env, key, account.id, {
+      status: "failed", attempts: (job ? job.attempts : 0) + 1,
+      progress: { recon: p ? p.recon : emptyActivityRecon(), phase: p ? p.phase : null, failedAt: Date.now() },
+      lastError: safeErrorMessage(e),
+    });
+    return { finished: true, failed: true };
+  }
+}
+
+// --- The driver ---------------------------------------------------------------
+
+function activityBackfillLimit(value, min, max) {
+  const n = Math.floor(Number(value));
+  return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : max;
+}
+
+// Why the copy cannot run yet, or null.
+async function activityBackfillBlocker(env) {
+  if (!env.DB_ACTIVITY) return "The activity database is not bound. Create mylists-activity, run migrations/activity/A0001_activity.sql in it, and bind it as DB_ACTIVITY.";
+  for (const db of activityDbs(env)) {
+    if (!(await activitySchemaReady(db))) return "Run migrations/activity/A0001_activity.sql in the activity database first.";
+  }
+  return null;
+}
+
+// One bounded step. opts (admin only): restart -- copy every account again
+// from the start; maxOps / maxItems / maxLookups -- a smaller step (tests use
+// these to force a copy across many steps).
+async function runActivityBackfillStep(env, opts = {}) {
+  // With FF_EVENT_TRACKING, copied accounts are served from the activity
+  // database and their legacy stores stop moving: copying them again would
+  // undo what happened since. New accounts are still copied.
+  if (opts.restart && typeof isEventTrackingEnabled === "function" && isEventTrackingEnabled(env)) {
+    return { ok: false, error: "FF_EVENT_TRACKING is on: copied accounts are served from the activity database, so they cannot be copied again. Copy history still copies the rest." };
+  }
+  const blocker = await activityBackfillBlocker(env);
+  if (blocker) return { ok: false, error: blocker };
+  const now = Date.now();
+  await env.DB.prepare(
+    "INSERT INTO jobs (type, dedupe_key, status, run_after, progress_json, created_at, updated_at) VALUES (?, ?, 'queued', 0, '{}', ?, ?) ON CONFLICT(dedupe_key) DO NOTHING"
+  ).bind(ACTIVITY_BACKFILL_TYPE, ACTIVITY_BACKFILL_RUN_KEY, now, now).run();
+  const claim = await env.DB.prepare(
+    "UPDATE jobs SET run_after = ?, updated_at = ? WHERE dedupe_key = ? AND run_after <= ?"
+  ).bind(now + ACTIVITY_BACKFILL_LEASE_MS, now, ACTIVITY_BACKFILL_RUN_KEY, now).run();
+  if (!claim || !claim.meta || Number(claim.meta.changes) !== 1) {
+    return { ok: false, busy: true, error: "Another copy step is running. Try again in a minute." };
+  }
+  const meter = { ops: 0 };
+  const menv = activityBackfillEnv(env, meter);
+  const budget = {
+    meter,
+    maxOps: activityBackfillLimit(opts.maxOps, 20, ACTIVITY_BACKFILL_STEP_OPS),
+    items: activityBackfillLimit(opts.maxItems, 1, ACTIVITY_BACKFILL_STEP_ITEMS),
+    lookups: activityBackfillLimit(opts.maxLookups, 0, ACTIVITY_BACKFILL_STEP_LOOKUPS),
+  };
+  let run;
+  try {
+    const job = await loadActivityBackfillJob(menv, ACTIVITY_BACKFILL_RUN_KEY);
+    run = !opts.restart && job && job.progress && job.progress.phase ? job.progress : null;
+    if (!run) {
+      run = { phase: "accounts", afterAccountId: 0, accountsTotal: 0, accountsDone: 0, accountsFailed: 0, startedAt: Date.now() };
+      if (opts.restart) {
+        // Every account is copied afresh.
+        await menv.DB.prepare("UPDATE jobs SET status = 'queued' WHERE type = ? AND account_id IS NOT NULL")
+          .bind(ACTIVITY_BACKFILL_TYPE).run();
+      }
+      const counted = await menv.DB.prepare("SELECT count(*) AS n FROM accounts WHERE deleted_at IS NULL").first();
+      run.accountsTotal = Number(counted && counted.n) || 0;
+      if (!run.accountsTotal) {
+        await saveActivityBackfillJob(menv, ACTIVITY_BACKFILL_RUN_KEY, null, { status: "queued", progress: {}, runAfter: 0 });
+        return { ok: false, error: "The accounts table is empty. Run Migrate Accounts first." };
+      }
+    }
+    while (run.phase !== "done" && activityBackfillOpsLeft(budget)) {
+      const account = await menv.DB.prepare(
+        "SELECT id, username FROM accounts WHERE id > ? AND deleted_at IS NULL ORDER BY id LIMIT 1"
+      ).bind(run.afterAccountId).first();
+      if (!account) {
+        run.phase = "done";
+        run.finishedAt = Date.now();
+        break;
+      }
+      const r = await backfillAccountActivity(menv, account, budget);
+      if (!r.finished) break;
+      run.afterAccountId = account.id;
+      run.accountsDone++;
+      if (r.failed) run.accountsFailed++;
+    }
+    run.updatedAt = Date.now();
+    await saveActivityBackfillJob(menv, ACTIVITY_BACKFILL_RUN_KEY, null, { status: run.phase === "done" ? "done" : "running", progress: run, runAfter: 0 });
+  } catch (e) {
+    // Let go of the lease so the next step can try again.
+    await env.DB.prepare("UPDATE jobs SET run_after = 0, last_error = ?, updated_at = ? WHERE dedupe_key = ?")
+      .bind(safeErrorMessage(e), Date.now(), ACTIVITY_BACKFILL_RUN_KEY).run();
+    throw e;
+  }
+  return {
+    ok: true, done: run.phase === "done", phase: run.phase,
+    accountsTotal: run.accountsTotal, accountsDone: run.accountsDone, accountsFailed: run.accountsFailed,
+    ops: meter.ops,
+  };
+}
+
+// Where the run is, and the reconciliation added up over every account.
+async function activityBackfillStatus(env) {
+  const run = await loadActivityBackfillJob(env, ACTIVITY_BACKFILL_RUN_KEY);
+  const sum = (path) => `COALESCE(sum(json_extract(progress_json, '$.recon.${path}')), 0)`;
+  const fields = {
+    history: ["kv", "d1", "queue", "union", "copied", "duplicates", "unusable", "undated", "stubs"],
+    shows: ["progress", "completed", "dismissed", "airingHidden", "kept", "cwOnly", "unusable"],
+  };
+  const cols = [];
+  for (const [group, names] of Object.entries(fields)) {
+    for (const n of names) cols.push(`${sum(`${group}.${n}`)} AS ${group}_${n}`);
+  }
+  cols.push(`${sum("movies")} AS movies`, `${sum("events")} AS events`, `${sum("legacyMax")} AS legacy_max`,
+    `COALESCE(sum(CASE WHEN json_extract(progress_json, '$.recon.short') > 0 THEN 1 ELSE 0 END), 0) AS short_accounts`);
+  const { results } = await env.DB.prepare(
+    `SELECT status, count(*) AS n, ${cols.join(", ")} FROM jobs WHERE type = ? AND account_id IS NOT NULL GROUP BY status`
+  ).bind(ACTIVITY_BACKFILL_TYPE).all();
+  const accounts = { done: 0, running: 0, failed: 0, queued: 0 };
+  const totals = { history: {}, shows: {}, movies: 0, events: 0, legacyMax: 0, shortAccounts: 0 };
+  for (const [group, names] of Object.entries(fields)) for (const n of names) totals[group][n] = 0;
+  for (const r of results || []) {
+    accounts[r.status] = (accounts[r.status] || 0) + r.n;
+    for (const [group, names] of Object.entries(fields)) for (const n of names) totals[group][n] += Number(r[`${group}_${n}`]) || 0;
+    totals.movies += Number(r.movies) || 0;
+    totals.events += Number(r.events) || 0;
+    totals.legacyMax += Number(r.legacy_max) || 0;
+    totals.shortAccounts += Number(r.short_accounts) || 0;
+  }
+  const { results: failed } = await env.DB.prepare(
+    "SELECT account_id, last_error FROM jobs WHERE type = ? AND status = 'failed' ORDER BY updated_at DESC LIMIT 20"
+  ).bind(ACTIVITY_BACKFILL_TYPE).all();
+  const { results: short } = await env.DB.prepare(
+    `SELECT account_id, json_extract(progress_json, '$.recon.short') AS short, json_extract(progress_json, '$.recon.legacyMax') AS legacy,
+            json_extract(progress_json, '$.recon.samples') AS samples
+     FROM jobs WHERE type = ? AND status = 'done' AND account_id IS NOT NULL AND json_extract(progress_json, '$.recon.short') > 0
+     ORDER BY short DESC LIMIT 10`
+  ).bind(ACTIVITY_BACKFILL_TYPE).all();
+  const progress = run ? run.progress || {} : {};
+  return {
+    ok: true,
+    run: run ? {
+      phase: progress.phase || "not started", accountsTotal: progress.accountsTotal || 0, accountsDone: progress.accountsDone || 0,
+      startedAt: progress.startedAt || null, updatedAt: progress.updatedAt || null, finishedAt: progress.finishedAt || null,
+      lastError: run.last_error || null,
+    } : { phase: "not started" },
+    accounts,
+    totals,
+    failed: (failed || []).map((r) => ({ accountId: r.account_id, error: r.last_error })),
+    short: (short || []).map((r) => {
+      let samples = null;
+      try {
+        samples = typeof r.samples === "string" ? JSON.parse(r.samples) : r.samples;
+      } catch {
+        samples = null;
+      }
+      return { accountId: r.account_id, short: r.short, legacy: r.legacy, samples };
+    }),
+  };
+}
+
+async function handleActivityBackfillApi(request, env, url, path) {
+  if (!path.startsWith("/admin/api/activity-backfill/")) return null;
+  if (!(await isAdminRequest(request, env))) return json({ ok: false, error: "Not authorized." }, 401);
+  if (!env || !env.DB) return json({ ok: false, error: "No D1 database binding 'DB'." }, 503);
+  try {
+    if (path === "/admin/api/activity-backfill/step" && request.method === "POST") {
+      let body = {};
+      try {
+        body = await request.json();
+      } catch {
+        body = {};
+      }
+      const out = await runActivityBackfillStep(env, body || {});
+      return json(out, out.ok || out.busy ? 200 : 409);
+    }
+    if (path === "/admin/api/activity-backfill/status" && request.method === "GET") {
+      return json(await activityBackfillStatus(env));
+    }
+    return json({ ok: false, error: "Not found." }, 404);
+  } catch (e) {
+    console.error("Activity backfill failed:", e);
+    const msg = safeErrorMessage(e);
+    if (/no such table|no such column/i.test(msg)) return json({ ok: false, error: "Apply migrations 0016 (main database) and A0001 (activity database) first." }, 503);
+    return json({ ok: false, error: msg }, 500);
+  }
+}
+
+// --- Recording a play in the activity database (Phase 3c, P3c-4) --------------
+//
+// One play -- the subtitles ping (Stremio, Nuvio), a media-server webhook
+// (Plex, Jellyfin, Emby) -- becomes, on the account's activity database
+// (36_activity-db.js), in one batch:
+//   1. a watch_events row, skipped when the same title and episode was
+//      recorded within ten minutes either side (activityDedupeKey);
+//   2. for an episode, its show_progress row (made if new; moved on only
+//      when this episode is further than the furthest one watched);
+//      for a movie, its user_media_state row (one more play);
+// and, the first time an account watches a show, one more watcher on the
+// show's show_schedule row in the main database. That is at most four
+// writes; finding the title's media row is a read (plus an insert the first
+// time a title is ever seen, 29_media.js).
+//
+// Until P3c-6 the legacy tracking store stays the one people see: the play
+// routes write it exactly as before, then call this. Nothing here can fail
+// them -- every error is logged and swallowed. Nothing is written to KV.
+// Without the activity database (or before A0001 is applied), or before the
+// copy of the account's history (P3c-3) exists at all, it does nothing: the
+// copy picks the play up from the legacy store. A play recorded here and
+// then copied is one row (the ten-minute rule).
+//
+// The web page's "mark watched" reaches the server only as a whole tracking
+// record (save-tracking); its plays are taken from there by the P3c-6 shim.
+
+const ACTIVITY_SOURCES = new Set(["ping", "webhook", "web"]);
+
+async function activityAccountId(env, username) {
+  if (!env.DB || !username) return null;
+  const row = await env.DB.prepare("SELECT id FROM accounts WHERE username = ? COLLATE NOCASE AND deleted_at IS NULL").bind(String(username)).first();
+  return row ? row.id : null;
+}
+
+// The play a legacy history entry describes (the entry the play routes just
+// put first in Watch History), in the form recordActivityPlay takes.
+function activityPlayFromLegacyEntry(entry) {
+  if (!entry || typeof entry !== "object") return null;
+  const play = legacyHistoryPlay(entry, Date.now());
+  return { ref: play.ref, season: play.season, episode: play.episode, watchedAt: play.watchedAt, legacyId: play.id || null };
+}
+
+// The statements for one play, given its media id. Exposed for the tests
+// that count them.
+function activityPlayStatements(actDb, accountId, mediaId, play, source, now) {
+  const { season, episode, watchedAt } = play;
+  const stmts = [
+    actDb.prepare(
+      `INSERT OR IGNORE INTO watch_events (account_id, media_id, season, episode, watched_at, source, dedupe_key, legacy_id)
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?
+       WHERE NOT EXISTS (SELECT 1 FROM watch_events w WHERE w.account_id = ? AND w.media_id = ? AND w.season IS ? AND w.episode IS ?
+                           AND w.watched_at > ? AND w.watched_at < ?)`
+    ).bind(accountId, mediaId, season, episode, watchedAt, source, activityDedupeKey(accountId, mediaId, season, episode, watchedAt),
+      play.legacyId || null, accountId, mediaId, season, episode, watchedAt - ACTIVITY_DEDUPE_WINDOW_MS, watchedAt + ACTIVITY_DEDUPE_WINDOW_MS),
+  ];
+  if (season != null && episode != null) {
+    stmts.push(actDb.prepare(
+      `INSERT INTO show_progress (account_id, media_id, last_season, last_episode, last_watched_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT (account_id, media_id) DO UPDATE SET
+         last_season = CASE WHEN show_progress.last_season IS NULL OR excluded.last_season > show_progress.last_season
+                              OR (excluded.last_season = show_progress.last_season AND excluded.last_episode > COALESCE(show_progress.last_episode, -1))
+                            THEN excluded.last_season ELSE show_progress.last_season END,
+         last_episode = CASE WHEN show_progress.last_season IS NULL OR excluded.last_season > show_progress.last_season
+                               OR (excluded.last_season = show_progress.last_season AND excluded.last_episode > COALESCE(show_progress.last_episode, -1))
+                             THEN excluded.last_episode ELSE show_progress.last_episode END,
+         last_watched_at = max(COALESCE(show_progress.last_watched_at, 0), excluded.last_watched_at),
+         updated_at = excluded.updated_at`
+    ).bind(accountId, mediaId, season, episode, watchedAt, now));
+  } else {
+    stmts.push(actDb.prepare(
+      `INSERT INTO user_media_state (account_id, media_id, watched_count, last_watched_at)
+       SELECT ?, ?, 1, ? WHERE changes() > 0
+       ON CONFLICT (account_id, media_id) DO UPDATE SET
+         watched_count = user_media_state.watched_count + 1,
+         last_watched_at = max(COALESCE(user_media_state.last_watched_at, 0), excluded.last_watched_at)`
+    ).bind(accountId, mediaId, watchedAt));
+  }
+  return stmts;
+}
+
+// Records one play. Returns { recorded, reason } -- never throws.
+async function recordActivityPlay(env, username, play, source) {
+  try {
+    if (!env || !env.DB || !env.DB_ACTIVITY || !play || !play.ref) return { recorded: false, reason: "unbound" };
+    const src = ACTIVITY_SOURCES.has(source) ? source : "ping";
+    const accountId = await activityAccountId(env, username);
+    if (accountId == null) return { recorded: false, reason: "no account" };
+    const actDb = activityDb(env, accountId);
+    if (!(await activitySchemaReady(actDb))) return { recorded: false, reason: "no schema" };
+    // Before the account's history is copied, the copy will bring this play.
+    const job = await env.DB.prepare("SELECT status FROM jobs WHERE dedupe_key = ?").bind(`${ACTIVITY_BACKFILL_TYPE}:acct:${accountId}`).first();
+    if (!job || job.status !== "done") return { recorded: false, reason: "not copied yet" };
+
+    const { ids } = await resolveMediaBatch(env, [play.ref], { maxLookups: 1 });
+    const mediaId = ids[0];
+    if (mediaId == null) return { recorded: false, reason: "no usable id" };
+    const watchedAt = Number(play.watchedAt) || Date.now();
+    const p = { season: play.season == null ? null : Number(play.season), episode: play.episode == null ? null : Number(play.episode), watchedAt, legacyId: play.legacyId };
+    const isEpisode = p.season != null && p.episode != null;
+    const now = Date.now();
+
+    // Whether this is the account's first play of the show, for the schedule.
+    const known = isEpisode
+      ? await actDb.prepare("SELECT 1 AS x FROM show_progress WHERE account_id = ? AND media_id = ?").bind(accountId, mediaId).first()
+      : true;
+    const out = await actDb.batch(activityPlayStatements(actDb, accountId, mediaId, p, src, now));
+    const inserted = Number(out && out[0] && out[0].meta && out[0].meta.changes) > 0;
+    if (!known) {
+      try {
+        await env.DB.prepare(
+          `INSERT INTO show_schedule (media_id, watcher_count, next_check_at) VALUES (?, 1, 0)
+           ON CONFLICT (media_id) DO UPDATE SET watcher_count = show_schedule.watcher_count + 1`
+        ).bind(mediaId).run();
+      } catch (e) {
+        // 0017 not applied: the schedule job (Phase 5) recounts anyway.
+        if (!/no such table/i.test(String((e && e.message) || e))) console.error("activity: watcher count failed", e);
+      }
+    }
+    try {
+      if (env.ANALYTICS && typeof env.ANALYTICS.writeDataPoint === "function") {
+        env.ANALYTICS.writeDataPoint({ blobs: ["play", src, isEpisode ? "episode" : "movie"], doubles: [inserted ? 1 : 0, mediaId], indexes: ["play"] });
+      }
+    } catch {}
+    return { recorded: inserted, reason: inserted ? "ok" : "duplicate", mediaId, accountId };
+  } catch (e) {
+    console.error("activity: recording a play failed", e);
+    return { recorded: false, reason: "error" };
+  }
+}
+
+// --- Personal shelves from the activity database (Phase 3c, P3c-5) ------------
+//
+// Continue Watching, Airing Next, Watch History and the Watchlist, worked
+// out when read instead of stored:
+//
+//   - Continue Watching and Airing Next are two queries and a join in the
+//     Worker: up to SHELF_PROGRESS_LIMIT show_progress rows for the account
+//     (activity database), then the titles and show_schedule rows for them
+//     (main database), SHELF_JOIN_CHUNK ids at a time -- the two live in
+//     different databases, so SQL cannot join them.
+//   - Watch History pages the account's watch_events, newest first.
+//   - The Watchlist is the account's watchlist list (lists v2).
+//
+// The rules are the legacy ones (checkForNewEpisodes, refreshAiringNext-
+// Sweep and the website's), applied to rows:
+//   - Continue Watching: per show, the episode after the furthest one
+//     watched, once it exists (aired, or announced with a date: isUnaired);
+//     not while the show's dismissal stands (made at or after the furthest
+//     episode watched); storyline suggestions and movies kept whole in
+//     companion_json as they were. Most recently watched first.
+//   - Airing Next: per show with a watched episode (or finished), the next
+//     episode when it has not aired yet; not while the show's removal stands
+//     (made at or after the furthest episode watched). Soonest first.
+//   - Progress (S, 0) means "nothing of season S yet", so the episode after
+//     it is (S, 1). 37_activity-backfill.js keeps a Continue Watching show
+//     with no history that way.
+//
+// Items come back in the legacy shapes the catalogs and the website already
+// read (see fetchAutoTrackedCatalog), each with its mediaId. A show whose
+// schedule row is missing (not refreshed yet, Phase 5) is left off and
+// named in `missingSchedule`, so a caller can tell "nothing new" from "not
+// known yet".
+//
+// Nothing calls these yet: P3c-6 serves /sync/load and the personal rows
+// from them, behind FF_EVENT_TRACKING.
+
+const SHELF_PROGRESS_LIMIT = 200;
+const SHELF_JOIN_CHUNK = 90;
+const SHELF_HISTORY_PAGE = 50;
+const SHELF_HISTORY_PAGE_MAX = 500;
+
+// Today as YYYY-MM-DD. An episode has aired when its date is before today,
+// as isEpisodeAired has it.
+function shelfToday(now) {
+  const d = new Date(Number.isFinite(Number(now)) ? Number(now) : Date.now());
+  return d.toISOString().slice(0, 10);
+}
+
+function shelfAired(date, today) {
+  return !!date && String(date).slice(0, 10) < today;
+}
+
+// (a, b) at or before (c, d), episode by episode.
+function shelfAtOrBefore(aS, aE, bS, bE) {
+  return aS < bS || (aS === bS && aE <= bE);
+}
+
+function shelfShowId(m) {
+  if (m.imdb_id) return m.imdb_id;
+  if (m.tmdb_id) return `tmdb:${m.tmdb_id}`;
+  return m.alt_id || `media:${m.id}`;
+}
+
+function shelfPoster(m) {
+  if (m.poster_path) return String(m.poster_path).startsWith("http") ? m.poster_path : LEGACY_ITEM_POSTER_BASE + m.poster_path;
+  return m.imdb_id ? `https://images.metahub.space/poster/medium/${m.imdb_id}/img` : "";
+}
+
+function shelfEpisodeCounts(sched) {
+  if (!sched || !sched.season_episode_counts) return null;
+  try {
+    const raw = JSON.parse(sched.season_episode_counts);
+    const out = new Map();
+    for (const [k, v] of Object.entries(raw || {})) {
+      const s = Number(k);
+      const n = Number(v);
+      if (Number.isInteger(s) && Number.isFinite(n)) out.set(s, n);
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+// The episode after (season, episode) as the schedule knows it:
+// { season, episode, airDate, aired }, or null when there is none yet (or
+// the schedule cannot say). Episode counts name it across a season boundary;
+// without them, only what the last aired and next episodes pin down.
+function shelfEpisodeAfter(sched, season, episode, today) {
+  if (!sched) return null;
+  const lastS = sched.last_aired_season;
+  const lastE = sched.last_aired_episode;
+  const nextS = sched.next_season;
+  const nextE = sched.next_episode;
+  let cand = null;
+  const counts = shelfEpisodeCounts(sched);
+  if (counts) {
+    if ((counts.get(season) || 0) > episode) {
+      cand = { season, episode: episode + 1 };
+    } else {
+      const later = [...counts.entries()].filter(([s, n]) => s > season && s > 0 && n > 0).map(([s]) => s).sort((a, b) => a - b);
+      if (later.length) cand = { season: later[0], episode: 1 };
+    }
+  }
+  // No counts, or counts that do not list the season TMDB has just
+  // announced: what the last aired and next episodes pin down.
+  if (!cand) {
+    if (lastS != null && lastE != null && lastS === season && lastE > episode) {
+      cand = { season, episode: episode + 1 };
+    } else if (nextS === season && nextE === episode + 1) {
+      cand = { season, episode: episode + 1 };
+    } else if (nextS != null && nextS > season && nextE === 1) {
+      cand = { season: nextS, episode: 1 };
+    } else if (episode === 0 && lastS != null && (lastS > season || (lastS === season && lastE >= 1))) {
+      cand = { season, episode: 1 };
+    }
+  }
+  if (!cand) return null;
+  if (nextS === cand.season && nextE === cand.episode) {
+    return { ...cand, airDate: sched.next_air_date || null, aired: shelfAired(sched.next_air_date, today) };
+  }
+  if (lastS != null && lastE != null && shelfAtOrBefore(cand.season, cand.episode, lastS, lastE)) {
+    return { ...cand, airDate: lastS === cand.season && lastE === cand.episode ? sched.last_aired_date || null : null, aired: true };
+  }
+  // Past the last aired episode and not the announced next one: not known.
+  return null;
+}
+
+function shelfBadges(sched, season, episode) {
+  const finaleSeason = sched.season_finale_season != null ? sched.season_finale_season : (sched.next_season != null ? sched.next_season : sched.last_aired_season);
+  const inFinaleSeason = finaleSeason === season;
+  return {
+    isSeasonPremiere: episode === 1 || undefined,
+    isSeasonFinale: (inFinaleSeason && sched.season_finale_episode != null && episode === sched.season_finale_episode) || undefined,
+    seasonFinaleAirDate: inFinaleSeason ? sched.season_finale_date || undefined : undefined,
+    seasonFinaleEpisodeNumber: inFinaleSeason && sched.season_finale_episode != null ? sched.season_finale_episode : undefined,
+  };
+}
+
+// Query one: the account's shows and suggestions, most recent first.
+async function shelfProgressRows(env, accountId) {
+  const actDb = activityDb(env, accountId);
+  if (!actDb) return [];
+  const { results } = await actDb.prepare(
+    `SELECT * FROM show_progress WHERE account_id = ?
+     ORDER BY last_watched_at IS NULL, last_watched_at DESC, media_id LIMIT ?`
+  ).bind(accountId, SHELF_PROGRESS_LIMIT).all();
+  return results || [];
+}
+
+// Query two: the titles and their schedules, SHELF_JOIN_CHUNK at a time.
+// Without migration 0017 the titles alone.
+async function shelfTitles(env, mediaIds) {
+  const out = new Map();
+  const ids = [...new Set(mediaIds.filter((id) => id != null))];
+  for (let i = 0; i < ids.length; i += SHELF_JOIN_CHUNK) {
+    const part = ids.slice(i, i + SHELF_JOIN_CHUNK);
+    const marks = part.map(() => "?").join(", ");
+    let rows;
+    try {
+      ({ results: rows } = await env.DB.prepare(
+        `SELECT m.id, m.kind, m.imdb_id, m.tmdb_id, m.alt_id, m.title, m.year, m.poster_path,
+                s.media_id AS s_media, s.status AS s_status, s.last_aired_season, s.last_aired_episode, s.last_aired_date,
+                s.next_season, s.next_episode, s.next_air_date, s.next_air_time, s.air_tz,
+                s.season_finale_season, s.season_finale_date, s.season_finale_episode, s.season_episode_counts
+         FROM media m LEFT JOIN show_schedule s ON s.media_id = m.id WHERE m.id IN (${marks})`
+      ).bind(...part).all());
+    } catch (e) {
+      if (!/no such table|no such column/i.test(String((e && e.message) || e))) throw e;
+      ({ results: rows } = await env.DB.prepare(
+        `SELECT id, kind, imdb_id, tmdb_id, alt_id, title, year, poster_path FROM media WHERE id IN (${marks})`
+      ).bind(...part).all());
+    }
+    for (const r of rows || []) out.set(r.id, { media: r, sched: r.s_media != null ? r : null });
+  }
+  return out;
+}
+
+async function continueWatching(env, accountId, opts = {}) {
+  const today = shelfToday(opts.now);
+  const rows = await shelfProgressRows(env, accountId);
+  const titles = await shelfTitles(env, rows.map((r) => r.media_id));
+  const items = [];
+  const missingSchedule = [];
+  for (const row of rows) {
+    if (row.status === "dropped") continue;
+    const t = titles.get(row.media_id);
+    if (row.last_season == null || row.last_episode == null) {
+      // A storyline suggestion or a movie, kept as the entry it was.
+      if (row.companion_json) {
+        try {
+          const entry = JSON.parse(row.companion_json);
+          items.push({ ...entry, mediaId: row.media_id, updatedAt: Number(row.last_watched_at) || Number(entry.updatedAt) || 0 });
+        } catch {}
+      }
+      continue;
+    }
+    if (!t) continue;
+    const lastS = Number(row.last_season);
+    const lastE = Number(row.last_episode);
+    if (row.dismissed_at_season != null && shelfAtOrBefore(lastS, lastE, Number(row.dismissed_at_season), Number(row.dismissed_at_episode) || 0)) continue;
+    if (!t.sched) {
+      missingSchedule.push(row.media_id);
+      continue;
+    }
+    const next = shelfEpisodeAfter(t.sched, lastS, lastE, today);
+    if (!next) continue;
+    const showId = shelfShowId(t.media);
+    const poster = shelfPoster(t.media);
+    items.push({
+      id: `${showId}:${next.season}:${next.episode}`,
+      type: "episode",
+      name: next.episode === 1 ? "Season Premiere" : `Episode ${next.episode}`,
+      poster,
+      showId,
+      showTitle: t.media.title || "",
+      showPoster: poster,
+      seasonNum: next.season,
+      episodeNum: next.episode,
+      airDate: next.airDate || undefined,
+      isUnaired: next.aired ? undefined : true,
+      ...shelfBadges(t.sched, next.season, next.episode),
+      updatedAt: Number(row.last_watched_at) || 0,
+      mediaId: row.media_id,
+    });
+  }
+  items.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  return { items, missingSchedule };
+}
+
+async function airingNext(env, accountId, opts = {}) {
+  const today = shelfToday(opts.now);
+  const rows = await shelfProgressRows(env, accountId);
+  const candidates = rows.filter((r) => r.status !== "dropped" && (r.last_season != null || r.status === "completed"));
+  const titles = await shelfTitles(env, candidates.map((r) => r.media_id));
+  const items = [];
+  const missingSchedule = [];
+  for (const row of candidates) {
+    if (row.airing_hidden_at_season != null) {
+      const stands = row.last_season == null
+        || shelfAtOrBefore(Number(row.last_season), Number(row.last_episode) || 0, Number(row.airing_hidden_at_season), Number(row.airing_hidden_at_episode) || 0);
+      if (stands) continue;
+    }
+    const t = titles.get(row.media_id);
+    if (!t || t.media.kind !== "series") continue;
+    if (!t.sched) {
+      missingSchedule.push(row.media_id);
+      continue;
+    }
+    const s = t.sched;
+    if (!s.next_air_date || shelfAired(s.next_air_date, today) || s.next_season == null || s.next_episode == null) continue;
+    const showId = shelfShowId(t.media);
+    const name = s.next_episode === 1 ? "Season Premiere" : `Episode ${s.next_episode}`;
+    const label = s.next_air_time && typeof formatAirTimeLabel === "function" ? formatAirTimeLabel(s.next_air_time, s.air_tz) : "";
+    items.push({
+      id: showId,
+      type: "series",
+      showId,
+      canonicalTmdbId: t.media.tmdb_id ? String(t.media.tmdb_id) : null,
+      showTitle: t.media.title || "",
+      showPoster: shelfPoster(t.media),
+      name,
+      episodeTitle: name,
+      airDate: s.next_air_date,
+      seasonNum: s.next_season,
+      episodeNum: s.next_episode,
+      ...shelfBadges(s, s.next_season, s.next_episode),
+      airTime: label || null,
+      isUnaired: true,
+      mediaId: row.media_id,
+    });
+  }
+  items.sort((a, b) => String(a.airDate || "").localeCompare(String(b.airDate || "")) || a.mediaId - b.mediaId);
+  return { items, missingSchedule };
+}
+
+// One page of Watch History, newest first. cursor is the opaque string the
+// previous page returned ("watchedAt:id"); null at the end.
+async function watchHistoryPage(env, accountId, opts = {}) {
+  const actDb = activityDb(env, accountId);
+  if (!actDb) return { items: [], cursor: null };
+  const limit = Math.max(1, Math.min(SHELF_HISTORY_PAGE_MAX, Math.floor(Number(opts.limit)) || SHELF_HISTORY_PAGE));
+  let sql = "SELECT id, media_id, season, episode, watched_at, legacy_id FROM watch_events WHERE account_id = ?";
+  const args = [accountId];
+  const m = /^(\d+):(\d+)$/.exec(String(opts.cursor || ""));
+  if (m) {
+    sql += " AND (watched_at < ? OR (watched_at = ? AND id < ?))";
+    args.push(Number(m[1]), Number(m[1]), Number(m[2]));
+  }
+  sql += " ORDER BY watched_at DESC, id DESC LIMIT ?";
+  args.push(limit + 1);
+  const { results } = await actDb.prepare(sql).bind(...args).all();
+  const rows = results || [];
+  const more = rows.length > limit;
+  const page = more ? rows.slice(0, limit) : rows;
+  const titles = await shelfTitles(env, page.map((r) => r.media_id));
+  const items = [];
+  for (const r of page) {
+    const t = titles.get(r.media_id);
+    if (!t) continue;
+    const showId = shelfShowId(t.media);
+    const poster = shelfPoster(t.media);
+    if (r.season != null && r.episode != null) {
+      items.push({
+        id: r.legacy_id || `${showId}:${r.season}:${r.episode}`, type: "episode", name: `Episode ${r.episode}`, poster,
+        showId, showTitle: t.media.title || "", showPoster: poster, seasonNum: r.season, episodeNum: r.episode,
+        watchedAt: r.watched_at, mediaId: r.media_id,
+      });
+    } else {
+      items.push({
+        id: r.legacy_id || showId, type: t.media.kind === "series" ? "series" : "movie", name: t.media.title || "", poster,
+        year: t.media.year ? String(t.media.year) : undefined, watchedAt: r.watched_at, mediaId: r.media_id,
+      });
+    }
+  }
+  const last = page[page.length - 1];
+  return { items, cursor: more && last ? `${last.watched_at}:${last.id}` : null };
+}
+
+// The Watchlist: the account's watchlist list in lists v2, as legacy items.
+async function watchlistShelf(env, accountId) {
+  try {
+    const row = await env.DB.prepare(
+      "SELECT slug FROM lists WHERE owner_account_id = ? AND kind = 'watchlist' AND deleted_at IS NULL ORDER BY id LIMIT 1"
+    ).bind(accountId).first();
+    const rec = await listsV2RecordFor(env, { id: accountId }, row ? row.slug : "watchlist");
+    return { items: rec && Array.isArray(rec.items) ? rec.items : [], updatedAt: rec && Number(rec.updatedAt) || 0 };
+  } catch (e) {
+    if (/no such table/i.test(String((e && e.message) || e))) return { items: [], updatedAt: 0 };
+    throw e;
+  }
+}
+
+// --- The tracking record served from the activity database (P3c-6) ------------
+//
+// FF_EVENT_TRACKING (off). With it on, for an account whose history copy
+// (P3c-3) has finished, the legacy tracking stores stop being written and
+// the tracking record every route reads is put together from the activity
+// database:
+//
+//   creatorsynctracking:{u}  (KV)  get -> assembled; put -> the diff shim below
+//   creatorscrobblequeue:{u} (KV)  get -> nothing; put -> dropped
+//   trackingd1behind:{u}     (KV)  get -> nothing; put -> dropped
+//   the D1 tracking tables          not written (saveCreatorTrackingD1 and
+//                                   saveAiringNextD1 return early), not read
+//                                   (readCreatorTrackingD1 answers null, and
+//                                   isTrackingD1Behind true, so the catalog
+//                                   rows read the assembled record instead)
+//
+// It is done at the storage boundary (eventTrackingEnv wraps CONFIGS once, in
+// the fetch and scheduled handlers) so the fifteen places that read or write
+// the record -- save-tracking, /sync/load, the ping, the webhook, the crons,
+// the catalog rows -- keep their code and their answers.
+//
+// Where each part of the record lives:
+//   - Watch History: watch_events. A put inserts the entries v2 does not have
+//     (a new play, the website's "mark watched"); an entry missing from a put
+//     is removed only when the put is an intentional removal (save-tracking's
+//     intentionalRemoval: Clear Watch History, deleting an entry) -- the same
+//     rule the D1 tables followed.
+//   - Show state (finished, dismissed, removed from Airing Next, companions):
+//     show_progress, rebuilt from the events and the put's state on each put.
+//   - Everything else (the settings, the Watchlist copy, Continue Watching and
+//     Airing Next as the writers computed them, the stamps): a small JSON in
+//     account_settings under "tracking". Continue Watching and Airing Next are
+//     served from there until FF_SHOW_SCHEDULE (Phase 5) switches them to the
+//     shelves worked out from show_schedule (39_activity-shelves.js).
+//
+// The flag is ONE-WAY per account: once an account is served from here its
+// legacy stores stop moving, so turning it off shows them as they were.
+// Accounts whose copy has not finished stay on the legacy stores until it
+// has, and the copy's Start over is refused while the flag is on.
+
+const EVENT_TRACKING_HISTORY_MAX = 5000;   // Watch History entries a record holds
+const EVENT_TRACKING_CACHE_MS = 60 * 1000;
+const EVENT_TRACKING_KEY = "creatorsynctracking:";
+
+function isEventTrackingEnabled(env) {
+  const v = env ? env.FF_EVENT_TRACKING : undefined;
+  return (v === "1" || v === "true" || v === true) && !!(env && env.DB && env.DB_ACTIVITY);
+}
+
+// Whether this account's record is served from the activity database: the
+// flag, the database, and a finished history copy. Remembered a minute per
+// isolate, per database (each test has its own).
+let eventTrackingOwnerCache = null;
+async function eventTrackingOwns(env, username) {
+  if (!isEventTrackingEnabled(env) || !username) return null;
+  const now = Date.now();
+  const db = env.DB;
+  if (!eventTrackingOwnerCache || eventTrackingOwnerCache.db !== db) eventTrackingOwnerCache = { db, map: new Map() };
+  const key = String(username).toLowerCase();
+  const hit = eventTrackingOwnerCache.map.get(key);
+  if (hit && hit.until > now) return hit.accountId;
+  let accountId = null;
+  try {
+    const row = await db.prepare(
+      `SELECT a.id FROM accounts a JOIN jobs j ON j.dedupe_key = 'migrate.activity:acct:' || a.id
+       WHERE a.username = ? COLLATE NOCASE AND a.deleted_at IS NULL AND j.status = 'done'`
+    ).bind(String(username)).first();
+    accountId = row ? row.id : null;
+  } catch {
+    accountId = null;
+  }
+  // Only "yes" is remembered: an account whose copy finishes is served from
+  // here on its next request.
+  if (accountId != null) eventTrackingOwnerCache.map.set(key, { accountId, until: now + EVENT_TRACKING_CACHE_MS });
+  return accountId;
+}
+
+async function readTrackingSettings(env, accountId) {
+  const row = await env.DB.prepare("SELECT settings_json FROM account_settings WHERE account_id = ?").bind(accountId).first();
+  let all = {};
+  try {
+    all = row && row.settings_json ? JSON.parse(row.settings_json) : {};
+  } catch {
+    all = {};
+  }
+  return { all: all && typeof all === "object" ? all : {}, tracking: all && all.tracking && typeof all.tracking === "object" ? all.tracking : null };
+}
+
+async function writeTrackingSettings(env, accountId, all, tracking) {
+  const next = { ...all, tracking };
+  await env.DB.prepare(
+    `INSERT INTO account_settings (account_id, settings_json, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT (account_id) DO UPDATE SET settings_json = excluded.settings_json, updated_at = excluded.updated_at`
+  ).bind(accountId, JSON.stringify(next), Date.now()).run();
+}
+
+// The record as the legacy routes read it.
+async function assembleTrackingRecord(env, rawKv, username, accountId) {
+  const settings = await readTrackingSettings(env, accountId);
+  let rest = settings.tracking;
+  if (!rest) {
+    // The first read after the switch: everything but the history comes over
+    // from the legacy record once.
+    let legacy = null;
+    try {
+      legacy = JSON.parse((await rawKv.get(EVENT_TRACKING_KEY + username)) || "null");
+    } catch {
+      legacy = null;
+    }
+    rest = trackingRecordRest(legacy || {});
+    await writeTrackingSettings(env, accountId, settings.all, rest);
+  }
+  const history = [];
+  let cursor = null;
+  do {
+    const page = await watchHistoryPage(env, accountId, { cursor, limit: SHELF_HISTORY_PAGE_MAX });
+    history.push(...page.items.map((it) => {
+      const { mediaId, ...legacyItem } = it;
+      return legacyItem;
+    }));
+    cursor = page.cursor;
+  } while (cursor && history.length < EVENT_TRACKING_HISTORY_MAX);
+  const record = { ...rest, watchHistory: history };
+  if (isShowScheduleEnabled(env)) {
+    const [cw, an] = await Promise.all([continueWatching(env, accountId), airingNext(env, accountId)]);
+    record.continueWatching = cw.items.map(({ mediaId, ...it }) => it);
+    record.airingNext = an.items.map(({ mediaId, ...it }) => it);
+  }
+  return record;
+}
+
+function isShowScheduleEnabled(env) {
+  const v = env ? env.FF_SHOW_SCHEDULE : undefined;
+  return v === "1" || v === "true" || v === true;
+}
+
+// Everything in a record but its Watch History.
+function trackingRecordRest(record) {
+  const { watchHistory, _intentionalRemoval, ...rest } = record && typeof record === "object" ? record : {};
+  return rest;
+}
+
+// The diff shim: a record written by any route goes into the activity
+// database. New entries become plays; with an intentional removal, plays
+// the record no longer lists are removed; the show state is rebuilt.
+async function saveTrackingRecord(env, username, accountId, record) {
+  const intentional = !!(record && record._intentionalRemoval);
+  const rest = trackingRecordRest(record);
+  const settings = await readTrackingSettings(env, accountId);
+  await writeTrackingSettings(env, accountId, settings.all, rest);
+
+  const actDb = activityDb(env, accountId);
+  const incoming = Array.isArray(record.watchHistory) ? record.watchHistory : [];
+  const { results: storedRows } = await actDb.prepare(
+    "SELECT id, legacy_id FROM watch_events WHERE account_id = ?"
+  ).bind(accountId).all();
+  const known = new Set((storedRows || []).map((r) => r.legacy_id).filter(Boolean));
+  const listed = new Set();
+  const fresh = [];
+  for (const item of incoming) {
+    if (!item || typeof item !== "object") continue;
+    const id = legacyHistoryId(item);
+    if (!id) continue;
+    listed.add(id);
+    if (!known.has(id)) fresh.push({ ...legacyHistoryPlay(item, Number(record.updatedAt) || Date.now()), id });
+  }
+  if (fresh.length) {
+    for (let i = 0; i < fresh.length; i += ACTIVITY_BACKFILL_CHUNK) {
+      const chunk = fresh.slice(i, i + ACTIVITY_BACKFILL_CHUNK);
+      const { ids } = await resolveMediaBatch(env, chunk.map((p) => p.ref), { maxLookups: 20 });
+      const rows = [];
+      chunk.forEach((p, j) => {
+        if (ids[j] != null) rows.push({ mediaId: ids[j], season: p.season, episode: p.episode, t: p.watchedAt, legacyId: p.id });
+      });
+      await insertActivityPlays(actDb, accountId, rows, "web");
+    }
+  }
+  if (intentional) {
+    // Only plays the website knows by id can be removed by leaving them out:
+    // a play with no legacy id came from somewhere the website never listed.
+    const gone = (storedRows || []).filter((r) => r.legacy_id && !listed.has(r.legacy_id)).map((r) => r.id);
+    for (let i = 0; i < gone.length; i += 90) {
+      const part = gone.slice(i, i + 90);
+      await actDb.prepare(`DELETE FROM watch_events WHERE account_id = ? AND id IN (${part.map(() => "?").join(", ")})`).bind(accountId, ...part).run();
+    }
+  }
+  const legacy = {
+    kv: {
+      updatedAt: Number(record.updatedAt) || Date.now(),
+      watchHistory: [],
+      continueWatching: Array.isArray(record.continueWatching) ? record.continueWatching : [],
+      fullyWatched: Array.isArray(record.fullyWatchedShowIds) ? record.fullyWatchedShowIds.map(String) : [],
+      dismissed: record.dismissedContinueWatching && typeof record.dismissedContinueWatching === "object" ? record.dismissedContinueWatching : {},
+      removedAiring: record.removedAiringNext && typeof record.removedAiringNext === "object" ? record.removedAiringNext : {},
+    },
+    d1: null,
+    queue: { watchHistory: [], continueWatching: [] },
+  };
+  await rebuildActivityProgress(env, actDb, accountId, legacy, { lookups: 20 }, emptyActivityRecon());
+}
+
+// The env every handler runs with: CONFIGS wrapped for the tracking keys of
+// accounts served from the activity database. Unchanged without the flag.
+function eventTrackingEnv(env) {
+  if (!isEventTrackingEnabled(env) || !env.CONFIGS) return env;
+  const kv = env.CONFIGS;
+  const owner = (key, prefix) => (String(key).startsWith(prefix) ? String(key).slice(prefix.length) : null);
+  const wrapped = {
+    get: async (key, ...rest) => {
+      const u = owner(key, EVENT_TRACKING_KEY);
+      if (u) {
+        const accountId = await eventTrackingOwns(env, u);
+        if (accountId != null) {
+          const record = await assembleTrackingRecord(env, kv, u, accountId);
+          const type = rest[0] && typeof rest[0] === "object" ? rest[0].type : rest[0];
+          return type === "json" ? record : JSON.stringify(record);
+        }
+      }
+      for (const prefix of ["creatorscrobblequeue:", "trackingd1behind:"]) {
+        const q = owner(key, prefix);
+        if (q && (await eventTrackingOwns(env, q)) != null) return prefix === "trackingd1behind:" ? "1" : null;
+      }
+      return kv.get(key, ...rest);
+    },
+    put: async (key, value, ...rest) => {
+      const u = owner(key, EVENT_TRACKING_KEY);
+      if (u) {
+        const accountId = await eventTrackingOwns(env, u);
+        if (accountId != null) {
+          let record = null;
+          try {
+            record = typeof value === "string" ? JSON.parse(value) : null;
+          } catch {
+            record = null;
+          }
+          if (record && typeof record === "object") return saveTrackingRecord(env, u, accountId, record);
+          return undefined;
+        }
+      }
+      for (const prefix of ["creatorscrobblequeue:", "trackingd1behind:"]) {
+        const q = owner(key, prefix);
+        if (q && (await eventTrackingOwns(env, q)) != null) return undefined;
+      }
+      return kv.put(key, value, ...rest);
+    },
+    delete: async (key, ...rest) => {
+      const u = owner(key, EVENT_TRACKING_KEY);
+      if (u) {
+        const accountId = await eventTrackingOwns(env, u);
+        if (accountId != null) {
+          // The account's tracking is being wiped (account reset or delete).
+          const actDb = activityDb(env, accountId);
+          await actDb.batch([
+            actDb.prepare("DELETE FROM watch_events WHERE account_id = ?").bind(accountId),
+            actDb.prepare("DELETE FROM show_progress WHERE account_id = ?").bind(accountId),
+            actDb.prepare("DELETE FROM user_media_state WHERE account_id = ?").bind(accountId),
+          ]);
+          const settings = await readTrackingSettings(env, accountId);
+          const { tracking, ...others } = settings.all;
+          await writeTrackingSettings(env, accountId, others, {});
+        }
+      }
+      return kv.delete(key, ...rest);
+    },
+  };
+  for (const name of ["list", "getWithMetadata"]) {
+    if (typeof kv[name] === "function") wrapped[name] = (...a) => kv[name](...a);
+  }
+  return new Proxy(env, {
+    get(target, prop, receiver) {
+      if (prop === "CONFIGS") return wrapped;
+      return Reflect.get(target, prop, receiver);
+    },
+  });
 }
