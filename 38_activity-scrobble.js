@@ -38,7 +38,7 @@ async function activityAccountId(env, username) {
 function activityPlayFromLegacyEntry(entry) {
   if (!entry || typeof entry !== "object") return null;
   const play = legacyHistoryPlay(entry, Date.now());
-  return { ref: play.ref, season: play.season, episode: play.episode, watchedAt: play.watchedAt };
+  return { ref: play.ref, season: play.season, episode: play.episode, watchedAt: play.watchedAt, legacyId: play.id || null };
 }
 
 // The statements for one play, given its media id. Exposed for the tests
@@ -47,12 +47,12 @@ function activityPlayStatements(actDb, accountId, mediaId, play, source, now) {
   const { season, episode, watchedAt } = play;
   const stmts = [
     actDb.prepare(
-      `INSERT OR IGNORE INTO watch_events (account_id, media_id, season, episode, watched_at, source, dedupe_key)
-       SELECT ?, ?, ?, ?, ?, ?, ?
+      `INSERT OR IGNORE INTO watch_events (account_id, media_id, season, episode, watched_at, source, dedupe_key, legacy_id)
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?
        WHERE NOT EXISTS (SELECT 1 FROM watch_events w WHERE w.account_id = ? AND w.media_id = ? AND w.season IS ? AND w.episode IS ?
                            AND w.watched_at > ? AND w.watched_at < ?)`
     ).bind(accountId, mediaId, season, episode, watchedAt, source, activityDedupeKey(accountId, mediaId, season, episode, watchedAt),
-      accountId, mediaId, season, episode, watchedAt - ACTIVITY_DEDUPE_WINDOW_MS, watchedAt + ACTIVITY_DEDUPE_WINDOW_MS),
+      play.legacyId || null, accountId, mediaId, season, episode, watchedAt - ACTIVITY_DEDUPE_WINDOW_MS, watchedAt + ACTIVITY_DEDUPE_WINDOW_MS),
   ];
   if (season != null && episode != null) {
     stmts.push(actDb.prepare(
@@ -97,7 +97,7 @@ async function recordActivityPlay(env, username, play, source) {
     const mediaId = ids[0];
     if (mediaId == null) return { recorded: false, reason: "no usable id" };
     const watchedAt = Number(play.watchedAt) || Date.now();
-    const p = { season: play.season == null ? null : Number(play.season), episode: play.episode == null ? null : Number(play.episode), watchedAt };
+    const p = { season: play.season == null ? null : Number(play.season), episode: play.episode == null ? null : Number(play.episode), watchedAt, legacyId: play.legacyId };
     const isEpisode = p.season != null && p.episode != null;
     const now = Date.now();
 

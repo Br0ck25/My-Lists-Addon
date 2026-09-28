@@ -396,6 +396,20 @@ No npm, no `src/` tree, no esbuild, no new test framework (D-11). Phase 2 is now
     - **`missingSchedule`:** a show whose schedule row does not exist yet is left off and named, so "nothing new" and "not known yet" can be told apart. Before `FF_SHOW_SCHEDULE`, the refresh job (P5-3) must have filled the schedule, then the shadow comparison runs (MIGRATION_PLAN §2 Phase 5).
   - **Changes to 0017 (not applied anywhere yet, as 0016 was edited during 3b):** `show_schedule` gains `season_finale_season` (which season the finale fields describe) and `season_episode_counts`. The second is a JSON object of season to episode count, so "the episode after S1E7" is known across a season boundary without asking TMDB. **P5-3 fills both.** Without counts, the shelf uses what the last aired and next episodes pin down, and leaves a show off rather than guessing.
 - [ ] **P3c-6** Compatibility: `/api/creator/sync/save-tracking` is a diff shim that inserts new events and honors intentional removals only. `/api/creator/sync/load` assembles the legacy shape from v2. Stop writing `creatorsynctracking:`, `creatorscrobblequeue:`, `trackingd1behind:` and the legacy D1 tracking tables behind `FF_EVENT_TRACKING`. *Done when:* the legacy client suite passes and the KV writes for these prefixes are 0.
+  - **Written (Claude, 2026-09-28), behind `FF_EVENT_TRACKING` (off)**, in `40_event-tracking.js`. Turning it on is the owner's (`docs/OPERATIONS.md` §13). Tests: "P3c-6" in `tests/activity.test.mjs`, through the real Worker: `/sync/load` from v2, and save-tracking adding plays with **no write to KV or the D1 tracking tables** (a snapshot of both is compared). They also cover the removal rule, an account not copied yet, no flag, and Start over refused. The whole legacy suite passes unchanged.
+    - **At the storage boundary, not route by route.** `eventTrackingEnv` wraps `CONFIGS` once, in the fetch and scheduled handlers. For an account whose copy is `done` (`eventTrackingOwns`):
+      - `creatorsynctracking:{u}` reads are assembled from v2, and writes go through the diff shim;
+      - `creatorscrobblequeue:` and `trackingd1behind:` are dropped (and `trackingd1behind` reads as "behind", so the catalog rows read the assembled record);
+      - `saveCreatorTrackingD1`, `saveAiringNextD1` and `readCreatorTrackingD1` return early (`02_`).
+      So the fifteen readers and writers keep their code.
+    - **The diff shim:** entries v2 does not know (by `watch_events.legacy_id`) become plays (source `web`, ten-minute rule). Entries left out are removed only on an intentional removal: save-tracking marks the record `_intentionalRemoval`, which is never stored. `show_progress` is rebuilt from the events and the record's state (`rebuildActivityProgress`). Everything else in the record (settings, the Watchlist copy, Continue Watching and Airing Next as the writers computed them, the stamps) is kept in `account_settings.settings_json.tracking`, copied over from KV on the first read.
+    - **`watch_events.legacy_id`** (A0001 edited, applied nowhere yet) keeps the id the website knows each play by. The history copy, `recordActivityPlay` and the shim all set it.
+    - **Continue Watching and Airing Next** are served as last computed until `FF_SHOW_SCHEDULE` (Phase 5), when the `39_` shelves take over.
+    - **One-way per account**, like `FF_V2_LISTS_ONLY`. The copy's *Start over* is refused while the flag is on.
+  - **Known differences:**
+    - History items from v2 are named "Episode N" with the show's poster (the episode's own title and still are not stored).
+    - The assembled record carries the latest 5,000 plays.
+    - Plays a ping writes into the record are labelled `web` when the shim sees them before `recordActivityPlay` does. That only affects the source column.
 
 ---
 

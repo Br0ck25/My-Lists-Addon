@@ -268,3 +268,26 @@ It does not copy Airing Next or the recommendations. Both are worked out rather 
 - *Failed accounts* names each account the copy could not finish and why. The rest carry on.
 
 **Running it again:** *Copy history* does nothing once the copy is done. *Start over* copies every account again from the start: what an earlier copy made is replaced, so the copy matches the old storage as it is now. Plays recorded some other way (once scrobbles go to the new database, P3c-4) are kept.
+
+## 13. Serving watch history from the activity database (P3c-6)
+
+`FF_EVENT_TRACKING` switches watch history over to the activity database. For each account whose history copy (§12) has finished, Watch History, show progress, and what people hid or finished are then read from the activity database and written there. The old storage stops being written: the tracking record in KV, the scrobble queue, and the D1 tracking tables. The website, Stremio and Nuvio see the same things as before; the tests compare them.
+
+**This is one-way for each account it covers.** Once an account is served from the activity database, its old records stop moving, so turning the flag off would show them as they were on the day it was turned on. Once set, leave it set.
+
+**Before turning it on:**
+
+1. The activity database is bound and migrated (§2, §4), and migration `0017` is applied.
+2. The copy (§12) says *Done*, and *Check results* shows no failed accounts you have not looked at, and no account with fewer plays than its old history that you cannot explain.
+3. Back up D1 (§5), and export the tracking keys from KV (`creatorsynctracking:`) if you want a copy of the old records.
+
+**Turning it on:** Worker → Settings → Variables and Secrets → Add → type *Text*, name `FF_EVENT_TRACKING`, value `1`. Deploy.
+
+**What happens then:**
+
+- Accounts whose copy has finished are served from the activity database straight away. Any other account stays on the old storage until *Copy history* has copied it. *Start over* is refused while the flag is on.
+- Continue Watching and Airing Next are shown as they were last worked out, as today. Working them out from the show schedule comes with `FF_SHOW_SCHEDULE`, after the schedule job exists (Phase 5).
+- Known differences:
+  - Watch History shows an episode as "Episode N" with the show's poster, where the old record kept the episode's own title and still.
+  - The website's list is capped at the latest 5,000 plays; the database keeps them all.
+

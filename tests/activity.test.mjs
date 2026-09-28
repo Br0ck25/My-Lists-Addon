@@ -835,3 +835,101 @@ describe("P3c-5: the shelves, worked out when read", () => {
     assert.equal(cw.missingSchedule.length, 6);
   });
 });
+
+// --- P3c-6: the tracking record served from the activity database -------------
+
+async function eventTrackingSetup(extra = {}) {
+  const env = activityEnv({ FF_EVENT_TRACKING: "1", ...extra });
+  const user = await createUser(env, "annwatch");
+  await seedLegacyActivity(env, "annwatch");
+  const cookie = await adminCookie(env);
+  await runActivityBackfill(env, cookie);
+  return { env, user, cookie };
+}
+
+const creds = (user) => ({ creatorName: user.creatorName, creatorKey: user.creatorKey });
+const loadTracking = async (env, user) => (await call(env, "/api/creator/sync/load", { method: "POST", json: creds(user) })).body.data;
+const saveTrackingV2 = (env, user, body) => call(env, "/api/creator/sync/save-tracking", { method: "POST", json: { ...creds(user), ...body } });
+
+function legacyTrackingStores(env) {
+  const kv = [...env.CONFIGS._store.entries()].filter(([k]) => /^(creatorsynctracking|creatorscrobblequeue|trackingd1behind):/.test(k)).sort();
+  const tables = {};
+  for (const t of ["watch_history", "continue_watching", "airing_next", "creator_show_states", "creator_tracking_meta"]) {
+    tables[t] = env.DB._db.prepare(`SELECT * FROM ${t} ORDER BY 1, 2`).all();
+  }
+  return JSON.stringify({ kv, tables });
+}
+
+describe("P3c-6: with FF_EVENT_TRACKING, a copied account is served from the activity database", () => {
+  it("/sync/load hands back the same history ids and settings, from v2", async () => {
+    const { env, user } = await eventTrackingSetup();
+    const data = await loadTracking(env, user);
+    const ids = new Set(data.watchHistory.map((it) => it.id));
+    for (const id of ["e1", "e2", "tt0137523", "tt0944947:2:3", "tt0068646", "e4"]) assert.ok(ids.has(id), `history has ${id}`);
+    assert.deepEqual(data.fullyWatchedShowIds, ["tt0944947"]);
+    assert.deepEqual(data.dismissedContinueWatching, { tt0903747: { seasonNum: 1, episodeNum: 2 } });
+    assert.equal(data.continueWatching.length, 3, "Continue Watching as last computed, until FF_SHOW_SCHEDULE");
+  });
+
+  it("save-tracking adds new plays to v2 and writes nothing to the legacy tracking stores", async () => {
+    const { env, user } = await eventTrackingSetup();
+    const before = legacyTrackingStores(env);
+    const data = await loadTracking(env, user);
+    const history = [{ id: "e5", type: "episode", showId: "tt0903747", showTitle: "Breaking Bad", seasonNum: 1, episodeNum: 5, watchedAt: T0 + 6 * H }, ...data.watchHistory];
+    const r = await saveTrackingV2(env, user, { ...data, watchHistory: history, trackPlayback: true, expectedClientVersion: data.trackingClientVersion });
+    assert.equal(r.body.ok, true, JSON.stringify(r.body));
+    assert.equal(legacyTrackingStores(env), before, "no KV or D1 tracking write");
+    const id = accountId(env, "annwatch");
+    const e5 = env.DB_ACTIVITY._db.prepare("SELECT season, episode, source FROM watch_events WHERE account_id = ? AND legacy_id = 'e5'").get(id);
+    assert.deepEqual([e5.season, e5.episode, e5.source], [1, 5, "web"]);
+    const again = await loadTracking(env, user);
+    assert.equal(again.trackPlayback, true);
+    assert.equal(again.watchHistory[0].id, "e5");
+    const bb = env.DB_ACTIVITY._db.prepare("SELECT last_episode FROM show_progress WHERE account_id = ? AND media_id = ?").get(id, mediaIdBy(env, "imdb_id", "tt0903747"));
+    assert.equal(bb.last_episode, 5, "progress follows");
+  });
+
+  it("an entry left out is removed only when the save is an intentional removal", async () => {
+    const { env, user } = await eventTrackingSetup();
+    const id = accountId(env, "annwatch");
+    const count = () => env.DB_ACTIVITY._db.prepare("SELECT count(*) AS n FROM watch_events WHERE account_id = ?").get(id).n;
+    const n = count();
+    let data = await loadTracking(env, user);
+    const without = data.watchHistory.filter((it) => it.id !== "tt0137523");
+    await saveTrackingV2(env, user, { ...data, watchHistory: without, expectedClientVersion: data.trackingClientVersion });
+    assert.equal(count(), n, "an ordinary save never shortens the history");
+    data = await loadTracking(env, user);
+    const r = await saveTrackingV2(env, user, { ...data, watchHistory: without, intentionalRemoval: true, expectedClientVersion: data.trackingClientVersion });
+    assert.equal(r.body.ok, true);
+    assert.equal(count(), n - 1);
+    assert.ok(!(await loadTracking(env, user)).watchHistory.some((it) => it.id === "tt0137523"));
+  });
+
+  it("an account whose history is not copied yet stays on the legacy stores", async () => {
+    const env = activityEnv({ FF_EVENT_TRACKING: "1" });
+    const user = await createUser(env, "newcomer");
+    const r = await saveTrackingV2(env, user, { watchHistory: [{ id: "tt0137523", type: "movie", watchedAt: T0 }] });
+    assert.equal(r.body.ok, true);
+    const blob = JSON.parse(await env.CONFIGS.get("creatorsynctracking:newcomer"));
+    assert.equal(blob.watchHistory[0].id, "tt0137523");
+    assert.equal(env.DB_ACTIVITY._db.prepare("SELECT count(*) AS n FROM watch_events").get().n, 0);
+  });
+
+  it("without the flag nothing changes: the legacy stores are written", async () => {
+    const env = activityEnv();
+    const user = await createUser(env, "annwatch");
+    await seedLegacyActivity(env, "annwatch");
+    await runActivityBackfill(env, await adminCookie(env));
+    const data = await loadTracking(env, user);
+    await saveTrackingV2(env, user, { ...data, watchHistory: [{ id: "zz", type: "movie", watchedAt: T0 }, ...data.watchHistory], expectedClientVersion: data.trackingClientVersion });
+    const blob = JSON.parse(await env.CONFIGS.get("creatorsynctracking:annwatch"));
+    assert.ok(blob.watchHistory.some((it) => it.id === "zz"), "the legacy record holds the new entry");
+  });
+
+  it("the copy cannot start over while the flag is on", async () => {
+    const { env, cookie } = await eventTrackingSetup();
+    const r = await call(env, "/admin/api/activity-backfill/step", { method: "POST", cookie, json: { restart: true } });
+    assert.equal(r.status, 409);
+    assert.match(r.body.error, /FF_EVENT_TRACKING/);
+  });
+});

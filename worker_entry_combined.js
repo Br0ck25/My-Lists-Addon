@@ -8339,6 +8339,9 @@ async function recordTrackingD1Result(env, username, ok, stamp) {
 
 async function saveCreatorTrackingD1(env, username, trackingData, isIntentionalRemoval) {
   if (!env || !env.DB || !username || !trackingData) return false;
+  // With FF_EVENT_TRACKING, an account served from the activity database
+  // (40_event-tracking.js) no longer has its D1 tracking tables written.
+  if (typeof eventTrackingOwns === "function" && (await eventTrackingOwns(env, username)) != null) return true;
   const ok = await writeCreatorTrackingD1(env, username, trackingData, isIntentionalRemoval);
   await recordTrackingD1Result(env, username, ok, trackingData.updatedAt);
   return ok;
@@ -8358,6 +8361,9 @@ async function saveCreatorTrackingD1(env, username, trackingData, isIntentionalR
 // next full write or read-repair to catch up.
 async function saveAiringNextD1(env, username, items, updatedAt, previousStamp) {
   if (!env || !env.DB || !username || !Array.isArray(items)) return false;
+  // With FF_EVENT_TRACKING, an account served from the activity database
+  // (40_event-tracking.js) no longer has its D1 tracking tables written.
+  if (typeof eventTrackingOwns === "function" && (await eventTrackingOwns(env, username)) != null) return true;
   let ok = true;
   try {
     const metaRow = await env.DB.prepare(
@@ -8749,6 +8755,9 @@ async function ensureTrackingWatchlist(env, username, blob) {
 // shape: compare the stamps, hand back the newer copy, and say so.
 async function readCreatorTrackingD1(env, username) {
   if (!env || !env.DB || !username) return null;
+  // With FF_EVENT_TRACKING, an account served from the activity database
+  // (40_event-tracking.js) no longer has its D1 tracking tables read: null sends the caller to the record in KV, which is assembled there.
+  if (typeof eventTrackingOwns === "function" && (await eventTrackingOwns(env, username)) != null) return null;
   try {
     const metaRow = await env.DB.prepare(
       "SELECT * FROM creator_tracking_meta WHERE username = ?"
@@ -87098,7 +87107,10 @@ function generateSearchVariations(query) {
         clientVersion: nextSyncVersion(storedClientVersion || 0),
         updatedAt: Date.now(),
       };
-      const serialized = JSON.stringify(blob);
+      // With FF_EVENT_TRACKING the record goes to the activity database
+      // (40_event-tracking.js), which needs to know that entries left out
+      // were removed on purpose. Never stored.
+      const serialized = JSON.stringify(body.intentionalRemoval && isEventTrackingEnabled(env) ? { ...blob, _intentionalRemoval: true } : blob);
       if (serialized.length > 24 * 1024 * 1024) {
         return json({ ok: false, error: "Your Watch History is too large to store (over the 25MB limit)." });
       }
@@ -91029,7 +91041,9 @@ export default {
     const counters = (env && env.ANALYTICS)
       ? { kvReads: 0, kvWrites: 0, kvLists: 0, d1Statements: 0, d1Batches: 0, kvLegacyListPuts: 0 }
       : null;
-    const runEnv = counters ? instrumentEnv(env, counters) : env;
+    // FF_EVENT_TRACKING: tracking records of accounts served from the
+    // activity database are read and written there (40_event-tracking.js).
+    const runEnv = eventTrackingEnv(counters ? instrumentEnv(env, counters) : env);
     try {
       response = await schemaWriteGate(request, env);
       if (!response) response = await handleFetch(request, runEnv, ctx);
@@ -91087,6 +91101,8 @@ export default {
     // empty API key just because this isolate's first event happened to be a
     // cron tick rather than a request. See applyEnvApiKeys.
     applyEnvApiKeys(env);
+    // FF_EVENT_TRACKING, as in the fetch handler above.
+    env = eventTrackingEnv(env);
     // No outbound-fetch budget is divided between the tasks any more. That
     // arithmetic (CRON_SUBREQUEST_BUDGET and its shares) existed to fit a tick
     // inside the Workers Free plan's 50 subrequests; the hosted Worker runs on
@@ -97318,40 +97334,54 @@ async function copyActivityHistoryChunk(env, actDb, accountId, chunk, budget, re
       activityBackfillSample(recon.samples.unusable, play.label);
       return;
     }
-    rows.push({ mediaId, season: play.season, episode: play.episode, t: play.watchedAt, label: play.label });
+    rows.push({ mediaId, season: play.season, episode: play.episode, t: play.watchedAt, label: play.label,
+      legacyId: String(play.id).startsWith("(no id)") ? null : play.id });
   });
-  // Within the chunk: two plays of one episode ten minutes apart or less
-  // are one (the statement below cannot see its own rows).
-  rows.sort((a, b) => a.mediaId - b.mediaId || String(a.season).localeCompare(String(b.season)) || String(a.episode).localeCompare(String(b.episode)) || a.t - b.t);
+  const { inserted, kept } = await insertActivityPlays(actDb, accountId, rows, "migrated", (r) => {
+    recon.history.duplicates++;
+    activityBackfillSample(recon.samples.duplicates, r.label);
+  });
+  recon.history.copied += inserted;
+  // A play the statement skipped was within ten minutes of one stored by
+  // an earlier chunk (or a same-key play): a duplicate as well.
+  recon.history.duplicates += Math.max(0, kept - inserted);
+}
+
+// Writes plays ({ mediaId, season, episode, t, legacyId }) as events, one
+// statement per JSON chunk. Two plays of one episode ten minutes apart or
+// less are one: within `rows` here (a statement cannot see its own rows),
+// and against what is stored by the NOT EXISTS. onDuplicate is called for
+// each play dropped here. Returns { inserted, kept }: kept minus inserted
+// is the plays the statement skipped (duplicates of stored ones). Shared by
+// the history copy and the save-tracking shim (40_event-tracking.js).
+async function insertActivityPlays(actDb, accountId, rows, source, onDuplicate) {
+  const sorted = rows.slice().sort((a, b) => a.mediaId - b.mediaId || String(a.season).localeCompare(String(b.season))
+    || String(a.episode).localeCompare(String(b.episode)) || a.t - b.t);
   const kept = [];
-  for (const r of rows) {
+  for (const r of sorted) {
     const last = kept[kept.length - 1];
     if (last && last.mediaId === r.mediaId && last.season === r.season && last.episode === r.episode && r.t - last.t < ACTIVITY_DEDUPE_WINDOW_MS) {
-      recon.history.duplicates++;
-      activityBackfillSample(recon.samples.duplicates, r.label);
+      if (onDuplicate) onDuplicate(r);
       continue;
     }
     kept.push(r);
   }
   let inserted = 0;
-  const data = kept.map((r) => [r.mediaId, r.season, r.episode, r.t, activityDedupeKey(accountId, r.mediaId, r.season, r.episode, r.t)]);
+  const data = kept.map((r) => [r.mediaId, r.season, r.episode, r.t, activityDedupeKey(accountId, r.mediaId, r.season, r.episode, r.t), r.legacyId || null]);
   for (const part of d1JsonChunks(data)) {
     const out = await actDb.prepare(
-      `INSERT OR IGNORE INTO watch_events (account_id, media_id, season, episode, watched_at, source, dedupe_key)
-       SELECT ?, j.m, j.s, j.e, j.t, 'migrated', j.k
+      `INSERT OR IGNORE INTO watch_events (account_id, media_id, season, episode, watched_at, source, dedupe_key, legacy_id)
+       SELECT ?, j.m, j.s, j.e, j.t, ?, j.k, j.l
        FROM (SELECT json_extract(value, '$[0]') AS m, json_extract(value, '$[1]') AS s, json_extract(value, '$[2]') AS e,
-                    json_extract(value, '$[3]') AS t, json_extract(value, '$[4]') AS k FROM json_each(?)) AS j
+                    json_extract(value, '$[3]') AS t, json_extract(value, '$[4]') AS k, json_extract(value, '$[5]') AS l FROM json_each(?)) AS j
        WHERE NOT EXISTS (
          SELECT 1 FROM watch_events w
          WHERE w.account_id = ? AND w.media_id = j.m AND w.season IS j.s AND w.episode IS j.e
            AND w.watched_at > j.t - ? AND w.watched_at < j.t + ?)`
-    ).bind(accountId, part, accountId, ACTIVITY_DEDUPE_WINDOW_MS, ACTIVITY_DEDUPE_WINDOW_MS).run();
+    ).bind(accountId, source, part, accountId, ACTIVITY_DEDUPE_WINDOW_MS, ACTIVITY_DEDUPE_WINDOW_MS).run();
     inserted += Number(out && out.meta && out.meta.changes) || 0;
   }
-  recon.history.copied += inserted;
-  // A play the statement skipped was within ten minutes of one stored by
-  // an earlier chunk (or a same-key play): a duplicate as well.
-  recon.history.duplicates += Math.max(0, kept.length - inserted);
+  return { inserted, kept: kept.length };
 }
 
 // --- Show state ------------------------------------------------------------------
@@ -97637,6 +97667,12 @@ async function activityBackfillBlocker(env) {
 // from the start; maxOps / maxItems / maxLookups -- a smaller step (tests use
 // these to force a copy across many steps).
 async function runActivityBackfillStep(env, opts = {}) {
+  // With FF_EVENT_TRACKING, copied accounts are served from the activity
+  // database and their legacy stores stop moving: copying them again would
+  // undo what happened since. New accounts are still copied.
+  if (opts.restart && typeof isEventTrackingEnabled === "function" && isEventTrackingEnabled(env)) {
+    return { ok: false, error: "FF_EVENT_TRACKING is on: copied accounts are served from the activity database, so they cannot be copied again. Copy history still copies the rest." };
+  }
   const blocker = await activityBackfillBlocker(env);
   if (blocker) return { ok: false, error: blocker };
   const now = Date.now();
@@ -97831,7 +97867,7 @@ async function activityAccountId(env, username) {
 function activityPlayFromLegacyEntry(entry) {
   if (!entry || typeof entry !== "object") return null;
   const play = legacyHistoryPlay(entry, Date.now());
-  return { ref: play.ref, season: play.season, episode: play.episode, watchedAt: play.watchedAt };
+  return { ref: play.ref, season: play.season, episode: play.episode, watchedAt: play.watchedAt, legacyId: play.id || null };
 }
 
 // The statements for one play, given its media id. Exposed for the tests
@@ -97840,12 +97876,12 @@ function activityPlayStatements(actDb, accountId, mediaId, play, source, now) {
   const { season, episode, watchedAt } = play;
   const stmts = [
     actDb.prepare(
-      `INSERT OR IGNORE INTO watch_events (account_id, media_id, season, episode, watched_at, source, dedupe_key)
-       SELECT ?, ?, ?, ?, ?, ?, ?
+      `INSERT OR IGNORE INTO watch_events (account_id, media_id, season, episode, watched_at, source, dedupe_key, legacy_id)
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?
        WHERE NOT EXISTS (SELECT 1 FROM watch_events w WHERE w.account_id = ? AND w.media_id = ? AND w.season IS ? AND w.episode IS ?
                            AND w.watched_at > ? AND w.watched_at < ?)`
     ).bind(accountId, mediaId, season, episode, watchedAt, source, activityDedupeKey(accountId, mediaId, season, episode, watchedAt),
-      accountId, mediaId, season, episode, watchedAt - ACTIVITY_DEDUPE_WINDOW_MS, watchedAt + ACTIVITY_DEDUPE_WINDOW_MS),
+      play.legacyId || null, accountId, mediaId, season, episode, watchedAt - ACTIVITY_DEDUPE_WINDOW_MS, watchedAt + ACTIVITY_DEDUPE_WINDOW_MS),
   ];
   if (season != null && episode != null) {
     stmts.push(actDb.prepare(
@@ -97890,7 +97926,7 @@ async function recordActivityPlay(env, username, play, source) {
     const mediaId = ids[0];
     if (mediaId == null) return { recorded: false, reason: "no usable id" };
     const watchedAt = Number(play.watchedAt) || Date.now();
-    const p = { season: play.season == null ? null : Number(play.season), episode: play.episode == null ? null : Number(play.episode), watchedAt };
+    const p = { season: play.season == null ? null : Number(play.season), episode: play.episode == null ? null : Number(play.episode), watchedAt, legacyId: play.legacyId };
     const isEpisode = p.season != null && p.episode != null;
     const now = Date.now();
 
@@ -98205,7 +98241,7 @@ async function watchHistoryPage(env, accountId, opts = {}) {
   const actDb = activityDb(env, accountId);
   if (!actDb) return { items: [], cursor: null };
   const limit = Math.max(1, Math.min(SHELF_HISTORY_PAGE_MAX, Math.floor(Number(opts.limit)) || SHELF_HISTORY_PAGE));
-  let sql = "SELECT id, media_id, season, episode, watched_at FROM watch_events WHERE account_id = ?";
+  let sql = "SELECT id, media_id, season, episode, watched_at, legacy_id FROM watch_events WHERE account_id = ?";
   const args = [accountId];
   const m = /^(\d+):(\d+)$/.exec(String(opts.cursor || ""));
   if (m) {
@@ -98227,13 +98263,13 @@ async function watchHistoryPage(env, accountId, opts = {}) {
     const poster = shelfPoster(t.media);
     if (r.season != null && r.episode != null) {
       items.push({
-        id: `${showId}:${r.season}:${r.episode}`, type: "episode", name: `Episode ${r.episode}`, poster,
+        id: r.legacy_id || `${showId}:${r.season}:${r.episode}`, type: "episode", name: `Episode ${r.episode}`, poster,
         showId, showTitle: t.media.title || "", showPoster: poster, seasonNum: r.season, episodeNum: r.episode,
         watchedAt: r.watched_at, mediaId: r.media_id,
       });
     } else {
       items.push({
-        id: showId, type: t.media.kind === "series" ? "series" : "movie", name: t.media.title || "", poster,
+        id: r.legacy_id || showId, type: t.media.kind === "series" ? "series" : "movie", name: t.media.title || "", poster,
         year: t.media.year ? String(t.media.year) : undefined, watchedAt: r.watched_at, mediaId: r.media_id,
       });
     }
@@ -98254,4 +98290,280 @@ async function watchlistShelf(env, accountId) {
     if (/no such table/i.test(String((e && e.message) || e))) return { items: [], updatedAt: 0 };
     throw e;
   }
+}
+
+// --- The tracking record served from the activity database (P3c-6) ------------
+//
+// FF_EVENT_TRACKING (off). With it on, for an account whose history copy
+// (P3c-3) has finished, the legacy tracking stores stop being written and
+// the tracking record every route reads is put together from the activity
+// database:
+//
+//   creatorsynctracking:{u}  (KV)  get -> assembled; put -> the diff shim below
+//   creatorscrobblequeue:{u} (KV)  get -> nothing; put -> dropped
+//   trackingd1behind:{u}     (KV)  get -> nothing; put -> dropped
+//   the D1 tracking tables          not written (saveCreatorTrackingD1 and
+//                                   saveAiringNextD1 return early), not read
+//                                   (readCreatorTrackingD1 answers null, and
+//                                   isTrackingD1Behind true, so the catalog
+//                                   rows read the assembled record instead)
+//
+// It is done at the storage boundary (eventTrackingEnv wraps CONFIGS once, in
+// the fetch and scheduled handlers) so the fifteen places that read or write
+// the record -- save-tracking, /sync/load, the ping, the webhook, the crons,
+// the catalog rows -- keep their code and their answers.
+//
+// Where each part of the record lives:
+//   - Watch History: watch_events. A put inserts the entries v2 does not have
+//     (a new play, the website's "mark watched"); an entry missing from a put
+//     is removed only when the put is an intentional removal (save-tracking's
+//     intentionalRemoval: Clear Watch History, deleting an entry) -- the same
+//     rule the D1 tables followed.
+//   - Show state (finished, dismissed, removed from Airing Next, companions):
+//     show_progress, rebuilt from the events and the put's state on each put.
+//   - Everything else (the settings, the Watchlist copy, Continue Watching and
+//     Airing Next as the writers computed them, the stamps): a small JSON in
+//     account_settings under "tracking". Continue Watching and Airing Next are
+//     served from there until FF_SHOW_SCHEDULE (Phase 5) switches them to the
+//     shelves worked out from show_schedule (39_activity-shelves.js).
+//
+// The flag is ONE-WAY per account: once an account is served from here its
+// legacy stores stop moving, so turning it off shows them as they were.
+// Accounts whose copy has not finished stay on the legacy stores until it
+// has, and the copy's Start over is refused while the flag is on.
+
+const EVENT_TRACKING_HISTORY_MAX = 5000;   // Watch History entries a record holds
+const EVENT_TRACKING_CACHE_MS = 60 * 1000;
+const EVENT_TRACKING_KEY = "creatorsynctracking:";
+
+function isEventTrackingEnabled(env) {
+  const v = env ? env.FF_EVENT_TRACKING : undefined;
+  return (v === "1" || v === "true" || v === true) && !!(env && env.DB && env.DB_ACTIVITY);
+}
+
+// Whether this account's record is served from the activity database: the
+// flag, the database, and a finished history copy. Remembered a minute per
+// isolate, per database (each test has its own).
+let eventTrackingOwnerCache = null;
+async function eventTrackingOwns(env, username) {
+  if (!isEventTrackingEnabled(env) || !username) return null;
+  const now = Date.now();
+  const db = env.DB;
+  if (!eventTrackingOwnerCache || eventTrackingOwnerCache.db !== db) eventTrackingOwnerCache = { db, map: new Map() };
+  const key = String(username).toLowerCase();
+  const hit = eventTrackingOwnerCache.map.get(key);
+  if (hit && hit.until > now) return hit.accountId;
+  let accountId = null;
+  try {
+    const row = await db.prepare(
+      `SELECT a.id FROM accounts a JOIN jobs j ON j.dedupe_key = 'migrate.activity:acct:' || a.id
+       WHERE a.username = ? COLLATE NOCASE AND a.deleted_at IS NULL AND j.status = 'done'`
+    ).bind(String(username)).first();
+    accountId = row ? row.id : null;
+  } catch {
+    accountId = null;
+  }
+  // Only "yes" is remembered: an account whose copy finishes is served from
+  // here on its next request.
+  if (accountId != null) eventTrackingOwnerCache.map.set(key, { accountId, until: now + EVENT_TRACKING_CACHE_MS });
+  return accountId;
+}
+
+async function readTrackingSettings(env, accountId) {
+  const row = await env.DB.prepare("SELECT settings_json FROM account_settings WHERE account_id = ?").bind(accountId).first();
+  let all = {};
+  try {
+    all = row && row.settings_json ? JSON.parse(row.settings_json) : {};
+  } catch {
+    all = {};
+  }
+  return { all: all && typeof all === "object" ? all : {}, tracking: all && all.tracking && typeof all.tracking === "object" ? all.tracking : null };
+}
+
+async function writeTrackingSettings(env, accountId, all, tracking) {
+  const next = { ...all, tracking };
+  await env.DB.prepare(
+    `INSERT INTO account_settings (account_id, settings_json, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT (account_id) DO UPDATE SET settings_json = excluded.settings_json, updated_at = excluded.updated_at`
+  ).bind(accountId, JSON.stringify(next), Date.now()).run();
+}
+
+// The record as the legacy routes read it.
+async function assembleTrackingRecord(env, rawKv, username, accountId) {
+  const settings = await readTrackingSettings(env, accountId);
+  let rest = settings.tracking;
+  if (!rest) {
+    // The first read after the switch: everything but the history comes over
+    // from the legacy record once.
+    let legacy = null;
+    try {
+      legacy = JSON.parse((await rawKv.get(EVENT_TRACKING_KEY + username)) || "null");
+    } catch {
+      legacy = null;
+    }
+    rest = trackingRecordRest(legacy || {});
+    await writeTrackingSettings(env, accountId, settings.all, rest);
+  }
+  const history = [];
+  let cursor = null;
+  do {
+    const page = await watchHistoryPage(env, accountId, { cursor, limit: SHELF_HISTORY_PAGE_MAX });
+    history.push(...page.items.map((it) => {
+      const { mediaId, ...legacyItem } = it;
+      return legacyItem;
+    }));
+    cursor = page.cursor;
+  } while (cursor && history.length < EVENT_TRACKING_HISTORY_MAX);
+  const record = { ...rest, watchHistory: history };
+  if (isShowScheduleEnabled(env)) {
+    const [cw, an] = await Promise.all([continueWatching(env, accountId), airingNext(env, accountId)]);
+    record.continueWatching = cw.items.map(({ mediaId, ...it }) => it);
+    record.airingNext = an.items.map(({ mediaId, ...it }) => it);
+  }
+  return record;
+}
+
+function isShowScheduleEnabled(env) {
+  const v = env ? env.FF_SHOW_SCHEDULE : undefined;
+  return v === "1" || v === "true" || v === true;
+}
+
+// Everything in a record but its Watch History.
+function trackingRecordRest(record) {
+  const { watchHistory, _intentionalRemoval, ...rest } = record && typeof record === "object" ? record : {};
+  return rest;
+}
+
+// The diff shim: a record written by any route goes into the activity
+// database. New entries become plays; with an intentional removal, plays
+// the record no longer lists are removed; the show state is rebuilt.
+async function saveTrackingRecord(env, username, accountId, record) {
+  const intentional = !!(record && record._intentionalRemoval);
+  const rest = trackingRecordRest(record);
+  const settings = await readTrackingSettings(env, accountId);
+  await writeTrackingSettings(env, accountId, settings.all, rest);
+
+  const actDb = activityDb(env, accountId);
+  const incoming = Array.isArray(record.watchHistory) ? record.watchHistory : [];
+  const { results: storedRows } = await actDb.prepare(
+    "SELECT id, legacy_id FROM watch_events WHERE account_id = ?"
+  ).bind(accountId).all();
+  const known = new Set((storedRows || []).map((r) => r.legacy_id).filter(Boolean));
+  const listed = new Set();
+  const fresh = [];
+  for (const item of incoming) {
+    if (!item || typeof item !== "object") continue;
+    const id = legacyHistoryId(item);
+    if (!id) continue;
+    listed.add(id);
+    if (!known.has(id)) fresh.push({ ...legacyHistoryPlay(item, Number(record.updatedAt) || Date.now()), id });
+  }
+  if (fresh.length) {
+    for (let i = 0; i < fresh.length; i += ACTIVITY_BACKFILL_CHUNK) {
+      const chunk = fresh.slice(i, i + ACTIVITY_BACKFILL_CHUNK);
+      const { ids } = await resolveMediaBatch(env, chunk.map((p) => p.ref), { maxLookups: 20 });
+      const rows = [];
+      chunk.forEach((p, j) => {
+        if (ids[j] != null) rows.push({ mediaId: ids[j], season: p.season, episode: p.episode, t: p.watchedAt, legacyId: p.id });
+      });
+      await insertActivityPlays(actDb, accountId, rows, "web");
+    }
+  }
+  if (intentional) {
+    // Only plays the website knows by id can be removed by leaving them out:
+    // a play with no legacy id came from somewhere the website never listed.
+    const gone = (storedRows || []).filter((r) => r.legacy_id && !listed.has(r.legacy_id)).map((r) => r.id);
+    for (let i = 0; i < gone.length; i += 90) {
+      const part = gone.slice(i, i + 90);
+      await actDb.prepare(`DELETE FROM watch_events WHERE account_id = ? AND id IN (${part.map(() => "?").join(", ")})`).bind(accountId, ...part).run();
+    }
+  }
+  const legacy = {
+    kv: {
+      updatedAt: Number(record.updatedAt) || Date.now(),
+      watchHistory: [],
+      continueWatching: Array.isArray(record.continueWatching) ? record.continueWatching : [],
+      fullyWatched: Array.isArray(record.fullyWatchedShowIds) ? record.fullyWatchedShowIds.map(String) : [],
+      dismissed: record.dismissedContinueWatching && typeof record.dismissedContinueWatching === "object" ? record.dismissedContinueWatching : {},
+      removedAiring: record.removedAiringNext && typeof record.removedAiringNext === "object" ? record.removedAiringNext : {},
+    },
+    d1: null,
+    queue: { watchHistory: [], continueWatching: [] },
+  };
+  await rebuildActivityProgress(env, actDb, accountId, legacy, { lookups: 20 }, emptyActivityRecon());
+}
+
+// The env every handler runs with: CONFIGS wrapped for the tracking keys of
+// accounts served from the activity database. Unchanged without the flag.
+function eventTrackingEnv(env) {
+  if (!isEventTrackingEnabled(env) || !env.CONFIGS) return env;
+  const kv = env.CONFIGS;
+  const owner = (key, prefix) => (String(key).startsWith(prefix) ? String(key).slice(prefix.length) : null);
+  const wrapped = {
+    get: async (key, ...rest) => {
+      const u = owner(key, EVENT_TRACKING_KEY);
+      if (u) {
+        const accountId = await eventTrackingOwns(env, u);
+        if (accountId != null) {
+          const record = await assembleTrackingRecord(env, kv, u, accountId);
+          const type = rest[0] && typeof rest[0] === "object" ? rest[0].type : rest[0];
+          return type === "json" ? record : JSON.stringify(record);
+        }
+      }
+      for (const prefix of ["creatorscrobblequeue:", "trackingd1behind:"]) {
+        const q = owner(key, prefix);
+        if (q && (await eventTrackingOwns(env, q)) != null) return prefix === "trackingd1behind:" ? "1" : null;
+      }
+      return kv.get(key, ...rest);
+    },
+    put: async (key, value, ...rest) => {
+      const u = owner(key, EVENT_TRACKING_KEY);
+      if (u) {
+        const accountId = await eventTrackingOwns(env, u);
+        if (accountId != null) {
+          let record = null;
+          try {
+            record = typeof value === "string" ? JSON.parse(value) : null;
+          } catch {
+            record = null;
+          }
+          if (record && typeof record === "object") return saveTrackingRecord(env, u, accountId, record);
+          return undefined;
+        }
+      }
+      for (const prefix of ["creatorscrobblequeue:", "trackingd1behind:"]) {
+        const q = owner(key, prefix);
+        if (q && (await eventTrackingOwns(env, q)) != null) return undefined;
+      }
+      return kv.put(key, value, ...rest);
+    },
+    delete: async (key, ...rest) => {
+      const u = owner(key, EVENT_TRACKING_KEY);
+      if (u) {
+        const accountId = await eventTrackingOwns(env, u);
+        if (accountId != null) {
+          // The account's tracking is being wiped (account reset or delete).
+          const actDb = activityDb(env, accountId);
+          await actDb.batch([
+            actDb.prepare("DELETE FROM watch_events WHERE account_id = ?").bind(accountId),
+            actDb.prepare("DELETE FROM show_progress WHERE account_id = ?").bind(accountId),
+            actDb.prepare("DELETE FROM user_media_state WHERE account_id = ?").bind(accountId),
+          ]);
+          const settings = await readTrackingSettings(env, accountId);
+          const { tracking, ...others } = settings.all;
+          await writeTrackingSettings(env, accountId, others, {});
+        }
+      }
+      return kv.delete(key, ...rest);
+    },
+  };
+  for (const name of ["list", "getWithMetadata"]) {
+    if (typeof kv[name] === "function") wrapped[name] = (...a) => kv[name](...a);
+  }
+  return new Proxy(env, {
+    get(target, prop, receiver) {
+      if (prop === "CONFIGS") return wrapped;
+      return Reflect.get(target, prop, receiver);
+    },
+  });
 }

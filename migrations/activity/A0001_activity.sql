@@ -24,6 +24,8 @@
 -- season and episode are NULL for a movie.
 -- source says where the play came from: ping, webhook, web, migrated,
 -- trakt, simkl, mdblist.
+-- legacy_id is the id the old Watch History knew the play by (a TMDB episode
+-- id, an IMDb id), so the website keeps recognising its own entries.
 CREATE TABLE IF NOT EXISTS watch_events (
     id          INTEGER PRIMARY KEY,
     account_id  INTEGER NOT NULL,
@@ -32,7 +34,8 @@ CREATE TABLE IF NOT EXISTS watch_events (
     episode     INTEGER,
     watched_at  INTEGER NOT NULL,
     source      TEXT NOT NULL,
-    dedupe_key  TEXT NOT NULL UNIQUE
+    dedupe_key  TEXT NOT NULL UNIQUE,
+    legacy_id   TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_we_account_time ON watch_events(account_id, watched_at DESC);
 CREATE INDEX IF NOT EXISTS idx_we_account_media ON watch_events(account_id, media_id, season, episode);

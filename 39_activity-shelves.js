@@ -281,7 +281,7 @@ async function watchHistoryPage(env, accountId, opts = {}) {
   const actDb = activityDb(env, accountId);
   if (!actDb) return { items: [], cursor: null };
   const limit = Math.max(1, Math.min(SHELF_HISTORY_PAGE_MAX, Math.floor(Number(opts.limit)) || SHELF_HISTORY_PAGE));
-  let sql = "SELECT id, media_id, season, episode, watched_at FROM watch_events WHERE account_id = ?";
+  let sql = "SELECT id, media_id, season, episode, watched_at, legacy_id FROM watch_events WHERE account_id = ?";
   const args = [accountId];
   const m = /^(\d+):(\d+)$/.exec(String(opts.cursor || ""));
   if (m) {
@@ -303,13 +303,13 @@ async function watchHistoryPage(env, accountId, opts = {}) {
     const poster = shelfPoster(t.media);
     if (r.season != null && r.episode != null) {
       items.push({
-        id: `${showId}:${r.season}:${r.episode}`, type: "episode", name: `Episode ${r.episode}`, poster,
+        id: r.legacy_id || `${showId}:${r.season}:${r.episode}`, type: "episode", name: `Episode ${r.episode}`, poster,
         showId, showTitle: t.media.title || "", showPoster: poster, seasonNum: r.season, episodeNum: r.episode,
         watchedAt: r.watched_at, mediaId: r.media_id,
       });
     } else {
       items.push({
-        id: showId, type: t.media.kind === "series" ? "series" : "movie", name: t.media.title || "", poster,
+        id: r.legacy_id || showId, type: t.media.kind === "series" ? "series" : "movie", name: t.media.title || "", poster,
         year: t.media.year ? String(t.media.year) : undefined, watchedAt: r.watched_at, mediaId: r.media_id,
       });
     }

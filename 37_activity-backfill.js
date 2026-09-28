@@ -396,40 +396,54 @@ async function copyActivityHistoryChunk(env, actDb, accountId, chunk, budget, re
       activityBackfillSample(recon.samples.unusable, play.label);
       return;
     }
-    rows.push({ mediaId, season: play.season, episode: play.episode, t: play.watchedAt, label: play.label });
+    rows.push({ mediaId, season: play.season, episode: play.episode, t: play.watchedAt, label: play.label,
+      legacyId: String(play.id).startsWith("(no id)") ? null : play.id });
   });
-  // Within the chunk: two plays of one episode ten minutes apart or less
-  // are one (the statement below cannot see its own rows).
-  rows.sort((a, b) => a.mediaId - b.mediaId || String(a.season).localeCompare(String(b.season)) || String(a.episode).localeCompare(String(b.episode)) || a.t - b.t);
+  const { inserted, kept } = await insertActivityPlays(actDb, accountId, rows, "migrated", (r) => {
+    recon.history.duplicates++;
+    activityBackfillSample(recon.samples.duplicates, r.label);
+  });
+  recon.history.copied += inserted;
+  // A play the statement skipped was within ten minutes of one stored by
+  // an earlier chunk (or a same-key play): a duplicate as well.
+  recon.history.duplicates += Math.max(0, kept - inserted);
+}
+
+// Writes plays ({ mediaId, season, episode, t, legacyId }) as events, one
+// statement per JSON chunk. Two plays of one episode ten minutes apart or
+// less are one: within `rows` here (a statement cannot see its own rows),
+// and against what is stored by the NOT EXISTS. onDuplicate is called for
+// each play dropped here. Returns { inserted, kept }: kept minus inserted
+// is the plays the statement skipped (duplicates of stored ones). Shared by
+// the history copy and the save-tracking shim (40_event-tracking.js).
+async function insertActivityPlays(actDb, accountId, rows, source, onDuplicate) {
+  const sorted = rows.slice().sort((a, b) => a.mediaId - b.mediaId || String(a.season).localeCompare(String(b.season))
+    || String(a.episode).localeCompare(String(b.episode)) || a.t - b.t);
   const kept = [];
-  for (const r of rows) {
+  for (const r of sorted) {
     const last = kept[kept.length - 1];
     if (last && last.mediaId === r.mediaId && last.season === r.season && last.episode === r.episode && r.t - last.t < ACTIVITY_DEDUPE_WINDOW_MS) {
-      recon.history.duplicates++;
-      activityBackfillSample(recon.samples.duplicates, r.label);
+      if (onDuplicate) onDuplicate(r);
       continue;
     }
     kept.push(r);
   }
   let inserted = 0;
-  const data = kept.map((r) => [r.mediaId, r.season, r.episode, r.t, activityDedupeKey(accountId, r.mediaId, r.season, r.episode, r.t)]);
+  const data = kept.map((r) => [r.mediaId, r.season, r.episode, r.t, activityDedupeKey(accountId, r.mediaId, r.season, r.episode, r.t), r.legacyId || null]);
   for (const part of d1JsonChunks(data)) {
     const out = await actDb.prepare(
-      `INSERT OR IGNORE INTO watch_events (account_id, media_id, season, episode, watched_at, source, dedupe_key)
-       SELECT ?, j.m, j.s, j.e, j.t, 'migrated', j.k
+      `INSERT OR IGNORE INTO watch_events (account_id, media_id, season, episode, watched_at, source, dedupe_key, legacy_id)
+       SELECT ?, j.m, j.s, j.e, j.t, ?, j.k, j.l
        FROM (SELECT json_extract(value, '$[0]') AS m, json_extract(value, '$[1]') AS s, json_extract(value, '$[2]') AS e,
-                    json_extract(value, '$[3]') AS t, json_extract(value, '$[4]') AS k FROM json_each(?)) AS j
+                    json_extract(value, '$[3]') AS t, json_extract(value, '$[4]') AS k, json_extract(value, '$[5]') AS l FROM json_each(?)) AS j
        WHERE NOT EXISTS (
          SELECT 1 FROM watch_events w
          WHERE w.account_id = ? AND w.media_id = j.m AND w.season IS j.s AND w.episode IS j.e
            AND w.watched_at > j.t - ? AND w.watched_at < j.t + ?)`
-    ).bind(accountId, part, accountId, ACTIVITY_DEDUPE_WINDOW_MS, ACTIVITY_DEDUPE_WINDOW_MS).run();
+    ).bind(accountId, source, part, accountId, ACTIVITY_DEDUPE_WINDOW_MS, ACTIVITY_DEDUPE_WINDOW_MS).run();
     inserted += Number(out && out.meta && out.meta.changes) || 0;
   }
-  recon.history.copied += inserted;
-  // A play the statement skipped was within ten minutes of one stored by
-  // an earlier chunk (or a same-key play): a duplicate as well.
-  recon.history.duplicates += Math.max(0, kept.length - inserted);
+  return { inserted, kept: kept.length };
 }
 
 // --- Show state ------------------------------------------------------------------
@@ -715,6 +729,12 @@ async function activityBackfillBlocker(env) {
 // from the start; maxOps / maxItems / maxLookups -- a smaller step (tests use
 // these to force a copy across many steps).
 async function runActivityBackfillStep(env, opts = {}) {
+  // With FF_EVENT_TRACKING, copied accounts are served from the activity
+  // database and their legacy stores stop moving: copying them again would
+  // undo what happened since. New accounts are still copied.
+  if (opts.restart && typeof isEventTrackingEnabled === "function" && isEventTrackingEnabled(env)) {
+    return { ok: false, error: "FF_EVENT_TRACKING is on: copied accounts are served from the activity database, so they cannot be copied again. Copy history still copies the rest." };
+  }
   const blocker = await activityBackfillBlocker(env);
   if (blocker) return { ok: false, error: blocker };
   const now = Date.now();

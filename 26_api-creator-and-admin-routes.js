@@ -4025,7 +4025,10 @@
         clientVersion: nextSyncVersion(storedClientVersion || 0),
         updatedAt: Date.now(),
       };
-      const serialized = JSON.stringify(blob);
+      // With FF_EVENT_TRACKING the record goes to the activity database
+      // (40_event-tracking.js), which needs to know that entries left out
+      // were removed on purpose. Never stored.
+      const serialized = JSON.stringify(body.intentionalRemoval && isEventTrackingEnabled(env) ? { ...blob, _intentionalRemoval: true } : blob);
       if (serialized.length > 24 * 1024 * 1024) {
         return json({ ok: false, error: "Your Watch History is too large to store (over the 25MB limit)." });
       }
@@ -7956,7 +7959,9 @@ export default {
     const counters = (env && env.ANALYTICS)
       ? { kvReads: 0, kvWrites: 0, kvLists: 0, d1Statements: 0, d1Batches: 0, kvLegacyListPuts: 0 }
       : null;
-    const runEnv = counters ? instrumentEnv(env, counters) : env;
+    // FF_EVENT_TRACKING: tracking records of accounts served from the
+    // activity database are read and written there (40_event-tracking.js).
+    const runEnv = eventTrackingEnv(counters ? instrumentEnv(env, counters) : env);
     try {
       response = await schemaWriteGate(request, env);
       if (!response) response = await handleFetch(request, runEnv, ctx);
@@ -8014,6 +8019,8 @@ export default {
     // empty API key just because this isolate's first event happened to be a
     // cron tick rather than a request. See applyEnvApiKeys.
     applyEnvApiKeys(env);
+    // FF_EVENT_TRACKING, as in the fetch handler above.
+    env = eventTrackingEnv(env);
     // No outbound-fetch budget is divided between the tasks any more. That
     // arithmetic (CRON_SUBREQUEST_BUDGET and its shares) existed to fit a tick
     // inside the Workers Free plan's 50 subrequests; the hosted Worker runs on
