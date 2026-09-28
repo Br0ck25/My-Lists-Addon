@@ -23,6 +23,10 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 `FF_SESSIONS`, `FF_INSTALLS`, `FF_V2_LISTS_API`, `FF_V2_LISTS_READ` and `FF_V2_LISTS_ONLY` stay **off** (unset). Leave the first three off until the new sign-in, install-link and list screens ship. `FF_V2_LISTS_READ` stays off until the list copy (`docs/OPERATIONS.md` §9) has finished and its report has been checked; §10 then gives the steps, and turning it off again is always safe. `FF_V2_LISTS_ONLY` comes last and is **one-way**: only after reads have been on the new tables for a while (§11).
 
+### 📺 A database for watch history (P3c-1)
+
+- **Groundwork only, nothing changes for visitors.** Watch history and show progress will move into their own D1 database, `mylists-activity` (binding `DB_ACTIVITY`), so the biggest data the site keeps does not crowd out lists and accounts. Its tables are in `migrations/activity/A0001_activity.sql`. Nothing uses them yet, so there is no need to create it with this release; `docs/OPERATIONS.md` §2 and §4 have the steps for when it is wanted.
+
 ### 🏁 The old list storage can be switched off (P3b-9)
 
 - **A new switch, `FF_V2_LISTS_ONLY` (off), makes the new tables the only store** for lists, likes and shared channels. The old storage stops being written, and everything reads from the new tables. Every answer stays the same: the tests run the same 60-odd requests with and without it and compare every answer.
