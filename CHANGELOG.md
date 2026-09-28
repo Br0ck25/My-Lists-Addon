@@ -27,6 +27,11 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 8. **Recommended: set up the background jobs queue** (Phase 5, `docs/OPERATIONS.md` §18): create the queues `mylists-jobs` and `mylists-jobs-dlq`, make this Worker the consumer of `mylists-jobs` (batch size 25, 5 retries, dead-letter queue `mylists-jobs-dlq`), bind `mylists-jobs` to the Worker as `JOBS`, then press **Send a test job** in `/admin` → Maintenance. Without it everything works as before.
 
+### 📥 Imports that finish on their own (P5-6, server side)
+
+- **Not used by the website yet** (its import screen moves over in Phase 6). A signed-in account can hand over up to 5,000 titles (a Letterboxd export or a CSV) in one go, and the site works through them in the background: closing the tab no longer stops an import. Progress can be checked at any time.
+- Titles TMDB can't place for certain (two films with the same name, no year) are kept for the person to choose from, instead of the first search result being taken or the title dropped.
+
 ### 🔄 Charts refreshed in the background (P5-5)
 
 - **With `FF_CHART_SNAPSHOTS` on**, every chart someone uses (in every region their install asks for) is rebuilt once an hour by a background job, so no visitor waits for a chart to be rebuilt. An empty or failed answer still never replaces a good copy. The old every-few-minutes chart warm-up then leaves those charts alone.

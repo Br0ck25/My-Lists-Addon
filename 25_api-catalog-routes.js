@@ -222,6 +222,10 @@ async function handleFetch(request, env, ctx) {
     // the same flag) -- 32_likes-api.js.
     const likesApiResponse = await handleLikesApi(request, env, url, path);
     if (likesApiResponse) return likesApiResponse;
+    // /api/imports (imports resolved by a background job, P5-6) --
+    // 49_imports.js.
+    const importsResponse = await handleImportsApi(request, env, url, path);
+    if (importsResponse) return importsResponse;
 
     if (path === "/" || path === "") {
       ctx.waitUntil(bumpStat(env, "pageviews"));
