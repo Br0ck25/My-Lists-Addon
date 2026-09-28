@@ -345,6 +345,9 @@ async function handleJobsAdminApi(request, env, url, path) {
         batchSize: JOBS_BATCH_SIZE,
         maxRetries: JOBS_MAX_RETRIES,
         types: [...JOB_HANDLERS.keys()].sort(),
+        // The jobs table's view (45_jobs-dispatcher.js): periodic jobs' last
+        // runs, and one-off jobs by state. Null without migration 0016.
+        jobs: typeof jobsTableStatus === "function" ? await jobsTableStatus(env) : null,
       });
     }
     if (path === "/admin/api/jobs/ping" && request.method === "POST") {

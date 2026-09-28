@@ -27,6 +27,12 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 8. **Recommended: set up the background jobs queue** (Phase 5, `docs/OPERATIONS.md` §18): create the queues `mylists-jobs` and `mylists-jobs-dlq`, make this Worker the consumer of `mylists-jobs` (batch size 25, 5 retries, dead-letter queue `mylists-jobs-dlq`), bind `mylists-jobs` to the Worker as `JOBS`, then press **Send a test job** in `/admin` → Maintenance. Without it everything works as before.
 
+### ⏱️ The cron hands its work to the queue (P5-2)
+
+- **Nothing changes for visitors.** With the queue bound, each cron tick now only hands out the work that is due (Continue Watching and Airing Next sweeps, New on Streaming, chart and poster warming, channel presets, housekeeping), and the queue does each piece separately, with its own retries. The same piece never runs twice at once.
+- If the queue does not pick a job up within 10 minutes, the tick does it itself. Without the queue (or before migration 0016), the tick works exactly as before.
+- `/admin` → Maintenance → **Check jobs** shows when each piece last ran and whether it is failing.
+
 ### 📬 A queue for background work (P5-1)
 
 - **Nothing changes for visitors yet.** The Worker can now put jobs on a Cloudflare Queue (`mylists-jobs`) and run them itself, one after another, outside any web request. A job that fails is tried again after 30 seconds, then 1, 2, 4 and 8 minutes; after that it is kept in a second queue (`mylists-jobs-dlq`) to be looked at, not lost. A job of a kind this version does not know is kept too, so rolling back a release does not throw work away.

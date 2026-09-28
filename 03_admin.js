@@ -2450,6 +2450,10 @@ async function renderAdminDashboard(env) {
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Background work moves onto the Cloudflare Queue <code>mylists-jobs</code>, which this Worker also reads (Phase 5). Setting it up: create the queues <code>mylists-jobs</code> and <code>mylists-jobs-dlq</code>, add this Worker as the consumer of <code>mylists-jobs</code> (batch size 25, 5 retries, dead-letter queue <code>mylists-jobs-dlq</code>), and bind <code>mylists-jobs</code> to this Worker as <code>JOBS</code>. See docs/OPERATIONS.md section 18. <strong>Send a test job</strong> puts one job on the queue and waits for this Worker to pick it up, which proves all three steps worked.</p>
       <button type="button" class="admin-select" style="cursor:pointer;" id="jobsPingBtn" onclick="runJobsPing()" ${isJobsBound ? '' : 'disabled'}>Send a test job</button>
       <span id="jobsPingStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;">${isJobsBound ? '' : 'JOBS is not bound.'}</span>
+      <p style="color:#8E8E93; margin:12px 0 8px; font-size:0.8rem;">Once the queue is bound, every cron tick only hands out the work that is due (the Continue Watching and Airing Next sweeps, New on Streaming, chart and poster warming, channel presets, housekeeping), and the queue does it. Without it, the tick does the work itself, as before. <strong>Check jobs</strong> shows when each one last ran. Needs migration 0016.</p>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="jobsStatusBtn" onclick="runJobsStatus()" ${isD1Bound ? '' : 'disabled'}>Check jobs</button>
+      <span id="jobsStatusStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <div id="jobsStatusResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
     </div>
 
     <div class="panel" style="margin:0; padding:14px 16px;">
@@ -3187,6 +3191,60 @@ async function renderAdminDashboard(env) {
         status.textContent = 'Failed: network error.';
       }
       btn.disabled = false;
+    }
+
+    function jobsAgo(ms) {
+      const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+      if (s < 90) return s + ' s ago';
+      if (s < 5400) return Math.round(s / 60) + ' min ago';
+      return Math.round(s / 3600) + ' h ago';
+    }
+
+    // The jobs table's view (P5-2): each periodic job's last run, and one-off
+    // jobs by state.
+    async function runJobsStatus() {
+      const status = document.getElementById('jobsStatusStatus');
+      const out = document.getElementById('jobsStatusResult');
+      status.textContent = 'Checking...';
+      try {
+        const res = await fetch('/admin/api/jobs/status');
+        const d = await res.json();
+        if (!d.ok) {
+          status.textContent = 'Unavailable: ' + (d.error || 'unknown error');
+          return;
+        }
+        status.textContent = d.bound ? 'The queue does the work.' : 'No queue: each cron tick does the work itself.';
+        const lines = [];
+        if (!d.jobs) {
+          lines.push('No jobs table yet (apply migration 0016).');
+        } else {
+          if (!d.jobs.periodic.length) lines.push(d.bound ? 'No cron tick has run since the queue was bound.' : 'Jobs are recorded here once the queue is bound.');
+          d.jobs.periodic.forEach(function (j) {
+            let line = j.type + ': ';
+            if (j.status === 'running') line += 'running now';
+            else if (j.status === 'sent') line += 'sent to the queue ' + jobsAgo(j.sentAt) + ', waiting to be picked up';
+            else if (!j.runs) line += 'not run yet';
+            else line += 'last ran ' + jobsAgo(j.lastStartedAt) + (j.lastMs != null ? ' (took ' + (j.lastMs / 1000).toFixed(1) + ' s)' : '');
+            if (j.runs) line += ', ' + j.runs + ' runs';
+            if (j.failuresInARow) line += '. FAILING, ' + j.failuresInARow + ' in a row: ' + (j.lastError || 'unknown error');
+            else if (j.lastOkAt) line += ', last success ' + jobsAgo(j.lastOkAt);
+            lines.push(line + '.');
+          });
+          Object.keys(d.jobs.durable || {}).forEach(function (type) {
+            const c = d.jobs.durable[type];
+            lines.push(type + ': ' + Object.keys(c).map(function (k) { return c[k] + ' ' + k; }).join(', ') + '.');
+          });
+        }
+        out.innerHTML = '';
+        lines.forEach(function (line) {
+          const div = document.createElement('div');
+          div.style.margin = '0 0 4px';
+          div.textContent = line;
+          out.appendChild(div);
+        });
+      } catch (e) {
+        status.textContent = 'Failed: network error.';
+      }
     }
 
     // Browsing one creator's stored list records.

@@ -72,7 +72,7 @@ Adding a binding before the code that uses it is harmless. Removing a binding th
 - `INSTALL_MIGRATION_PERCENT` (optional, `0` to `100`): the share of existing install links whose keys and tokens move into encrypted D1 storage the first time they are used. See §8 before setting it.
 - **Delete** these retired variables if they are still set: `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET`, `CRON_SUBREQUEST_BUDGET`. The code ignores them.
 
-**Cron trigger** (Worker → Settings → Triggers): `*/6 * * * *`. Later phases replace this with a 5-minute dispatcher plus hourly and daily triggers.
+**Cron trigger** (Worker → Settings → Triggers): `*/5 * * * *` (the older `*/6 * * * *` works the same). One trigger is enough: with the queue bound (§18) each tick only hands out due jobs, each with its own schedule.
 
 **Compatibility date:** check the value under Worker → Settings → Runtime and record it here. When raising it, run the full test suite and a staging deploy first.
 
@@ -374,3 +374,5 @@ From Phase 5, background work (refreshing charts and show schedules, imports, cl
 - With the `ANALYTICS` binding, each batch writes one point per job type, index `job`: blobs `["job", <type>, <queue>]` and doubles `[jobs, done, tried again, dropped, milliseconds spent]`.
 
 **Turning it off:** delete the `JOBS` binding and deploy. Jobs already waiting stay on the queue and run when it is bound again (or expire after 4 days). Removing the consumer (step 3) while `JOBS` is still bound makes jobs pile up unrun, so remove the binding first.
+
+**What runs on it (P5-2):** once `JOBS` is bound, the cron's work runs as seven jobs (`cron.episodes`, `cron.airing-next`, `cron.new-on-streaming`, `cron.charts`, `cron.better-posters`, `cron.channel-presets`, `cron.housekeeping`). `/admin` → Maintenance → **Check jobs** shows each one's last run. A job the queue does not pick up within 10 minutes is run by the cron itself, so a broken queue slows the work but never stops it. Needs migration 0016; without it the cron does the work itself, as before.
