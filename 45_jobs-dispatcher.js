@@ -553,7 +553,8 @@ definePeriodicJob("cron.airing-next", {
   run: (env, payload, job) => refreshAiringNextSweep(env, job.ctx),
 });
 
-definePeriodicJob("cron.new-on-streaming", {
+// New on Streaming (P5-10 names it nos.sweep; its quota ledger is in D1).
+definePeriodicJob("nos.sweep", {
   everyMs: LEGACY_CRON_EVERY_MS,
   legacy: true,
   run: (env, payload, job) => runJobSteps([
@@ -574,11 +575,7 @@ definePeriodicJob("cron.better-posters", {
   run: (env, payload, job) => prewarmBetterPosters(env, job.ctx),
 });
 
-definePeriodicJob("cron.channel-presets", {
-  everyMs: LEGACY_CRON_EVERY_MS,
-  legacy: true,
-  run: (env, payload, job) => prewarmChannelPresets(env, job.ctx),
-});
+// The channel presets are the daily channel.presets job (53_more-jobs.js).
 
 definePeriodicJob("cron.housekeeping", {
   everyMs: LEGACY_CRON_EVERY_MS,

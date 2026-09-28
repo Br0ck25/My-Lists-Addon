@@ -318,10 +318,11 @@ describe("makeQueue", () => {
 // Every periodic job, in the order they are defined (and first sent), with
 // its period: the cron's own work every tick, then the show schedule (P5-3).
 const PERIODIC_EVERY = {
-  "cron.episodes": 4 * 60000, "cron.airing-next": 4 * 60000, "cron.new-on-streaming": 4 * 60000, "cron.charts": 4 * 60000,
-  "cron.better-posters": 4 * 60000, "cron.channel-presets": 4 * 60000, "cron.housekeeping": 4 * 60000,
+  "cron.episodes": 4 * 60000, "cron.airing-next": 4 * 60000, "nos.sweep": 4 * 60000, "cron.charts": 4 * 60000,
+  "cron.better-posters": 4 * 60000, "cron.housekeeping": 4 * 60000,
   "show.watchers": 24 * 3600000, "show.refresh": 3600000,
   "shelf.shadow": 3600000, "chart.refresh": 3600000, "token.refresh": 24 * 3600000,
+  "channel.presets": 24 * 3600000, "recs.build": 3600000, "rollup.daily": 24 * 3600000,
 };
 const CRON_JOBS = Object.keys(PERIODIC_EVERY);
 
@@ -362,7 +363,9 @@ function jobRow(env, type) {
   return { ...row, q: JSON.parse(row.progress_json || "{}")._q || {} };
 }
 
-const sentTypes = (env) => env.JOBS._pending.map((m) => m.body.type);
+// The periodic jobs sent. Some periodic jobs send work of their own (one
+// channel.pool.build per network, P5-10), which these tests leave aside.
+const sentTypes = (env) => env.JOBS._pending.map((m) => m.body.type).filter((t) => t in PERIODIC_EVERY);
 
 describe("P5-2: the cron tick only dispatches", () => {
   it("with the queue bound, a tick sends one job per piece of work and does none of it", async () => {
@@ -404,7 +407,7 @@ describe("P5-2: the cron tick only dispatches", () => {
       await runScheduledTick(env);
       const beforeDrain = Date.now();
       const log = await drainQueue(env);
-      assert.deepEqual(log.deliveries.map((d) => d.outcome), CRON_JOBS.map(() => "ack"));
+      assert.deepEqual(log.deliveries.filter((d) => d.type in PERIODIC_EVERY).map((d) => d.outcome), CRON_JOBS.map(() => "ack"));
       for (const type of CRON_JOBS) {
         const row = jobRow(env, type);
         assert.equal(row.status, "queued", type);
@@ -439,7 +442,10 @@ describe("P5-2: the cron tick only dispatches", () => {
         env.CONFIGS._hooks.beforePut = async (key) => { written.add(key); };
         await runScheduledTick(env, {}, w);
         if (withQueue) await drainQueue(env, { w });
-        return [...written].sort();
+        // The channel presets' rotation cursor is the one key that differs on
+        // purpose: with the queue, channel.presets builds every network once
+        // a day instead (P5-10).
+        return [...written].filter((k) => k !== "cron:channelpresets:cursor").sort();
       };
       const inline = await run(false);
       const queued = await run(true);

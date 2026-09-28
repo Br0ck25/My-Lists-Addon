@@ -27,6 +27,12 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 8. **Recommended: set up the background jobs queue** (Phase 5, `docs/OPERATIONS.md` §18): create the queues `mylists-jobs` and `mylists-jobs-dlq`, make this Worker the consumer of `mylists-jobs` (batch size 25, 5 retries, dead-letter queue `mylists-jobs-dlq`), bind `mylists-jobs` to the Worker as `JOBS`, then press **Send a test job** in `/admin` → Maintenance. Without it everything works as before.
 
+### 🧰 Four more background jobs (P5-10)
+
+- **Quick Add network channels** are rebuilt once a day, one job per network, instead of one network every few minutes (with the queue; without it, as before).
+- **New on Streaming's RapidAPI allowance** is counted in D1 instead of KV, so two sweeps running at once can no longer both miss each other's requests. It carries this month's count over from KV.
+- **Recommendations** and **daily "most watched" counts** are now worked out on the server from watch history, ready for the rows that will read them. Nothing visitors see changes yet.
+
 ### 🖼️ Better Posters without the wait (P5-9)
 
 - **Once the R2 bucket and the job queue are both set up**, Better Posters are kept in R2, and a poster the site doesn't have yet no longer makes anyone wait (btttr.cc can take close to a minute to draw one). Stremio gets the title's ordinary poster straight away, the website its usual stand-in, and the real one is fetched in the background for next time.

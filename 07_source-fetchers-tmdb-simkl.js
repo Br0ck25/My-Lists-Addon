@@ -1323,6 +1323,12 @@ async function getRapidApiMonthlyUsage(env) {
     limit: RAPIDAPI_MONTHLY_LIMIT,
     safetyCap: RAPIDAPI_MONTHLY_SAFETY_CAP,
   };
+  // The ledger is a D1 row since P5-10 (rapidApiLedgerD1, 53_more-jobs.js),
+  // seeded from this KV key the first time. KV is the fallback without D1.
+  if (typeof rapidApiLedgerD1 === "function") {
+    const d1 = await rapidApiLedgerD1(env, 0);
+    if (d1) return { ...d1, limit: RAPIDAPI_MONTHLY_LIMIT, safetyCap: RAPIDAPI_MONTHLY_SAFETY_CAP };
+  }
   if (!env || !env.CONFIGS) return defaultUsage;
   try {
     const raw = await env.CONFIGS.get("cron:rapidapi:usage");
@@ -1344,6 +1350,12 @@ async function getRapidApiMonthlyUsage(env) {
 
 async function recordRapidApiUsage(env, addCount = 1) {
   const currentMonth = new Date().toISOString().slice(0, 7);
+  // One atomic statement in D1 (P5-10); the KV read-and-write below only
+  // without it.
+  if (typeof rapidApiLedgerD1 === "function") {
+    const d1 = await rapidApiLedgerD1(env, Math.max(0, Math.floor(addCount)));
+    if (d1) return { ...d1, limit: RAPIDAPI_MONTHLY_LIMIT, safetyCap: RAPIDAPI_MONTHLY_SAFETY_CAP };
+  }
   const usage = await getRapidApiMonthlyUsage(env);
   usage.count += Math.max(0, Math.floor(addCount));
   usage.lastAt = Math.floor(Date.now() / 1000);
