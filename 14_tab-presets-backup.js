@@ -37,7 +37,12 @@
         <input type="file" id="configFileInput" aria-label="Choose a backup file to restore" accept="application/json,.json" style="display:none;" onchange="uploadConfigFile(this)">
       </div>
 
-      <div style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px;">
+      <!-- Importing from an install link is not offered in the new UI: an
+           install id is an unrevocable bearer credential that returns connected
+           accounts' tokens (SECURITY_AUDIT.md S-02), and a backup file does the
+           same job safely. The legacy page keeps it until P6-8 removes the old
+           markup for good. -->
+${newUi ? '' : `      <div style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px;">
         <p style="margin:0 0 6px; font-weight:700; font-size:0.88rem;">Import from Install / Configure Link:</p>
         <div class="row">
           <input type="text" id="importLinkInput" placeholder="Paste an install or configure link here">
@@ -45,6 +50,7 @@
           <button type="button" class="secondary lc-btn" onclick="restoreListsFromLink()" title="Rebuild and restore custom lists &amp; channels from this link into My Lists without altering your catalog shelves">Restore Lists</button>
         </div>
       </div>
+`}
     </div>
 
     <!-- Export Lists & History (Universal CSV / Trakt / Letterboxd / MDBList / Simkl) -->

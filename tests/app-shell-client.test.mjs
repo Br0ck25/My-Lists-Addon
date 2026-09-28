@@ -197,6 +197,22 @@ describe("the shell's API client", () => {
     assert.match(res.error, /offline/i);
   });
 
+  it("sends the JSON content type on a mutation with no body too", async () => {
+    // verifyCsrf (02_) refuses every POST, PUT, PATCH and DELETE that arrives
+    // without this header -- body or not -- so a body-less DELETE that left it
+    // off had signing out answered with 403. Asserted here as well as through
+    // the settings screen, because this is the one place that sets it.
+    const client = loadClient({
+      newUi: true,
+      routes: { "/api/session": async () => ({ status: 200, json: { ok: true } }) },
+    });
+    await client.call("appShellApiFetch", "/api/session", { method: "DELETE" });
+    const sent = requestsTo(client, "/api/session")[0];
+    assert.equal(sent.method, "DELETE");
+    assert.equal(sent.headers["Content-Type"], "application/json");
+    assert.equal(sent.body, null, "no body, but the header still goes");
+  });
+
   it("sends a JSON content type with a JSON body, and none for a GET", async () => {
     const client = loadClient({
       newUi: true,

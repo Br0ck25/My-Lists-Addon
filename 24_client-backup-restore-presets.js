@@ -2995,9 +2995,15 @@ async function appShellApiFetch(path, options) {
     cache: 'no-store',
     headers: Object.assign({ 'Accept': 'application/json' }, o.headers || {}),
   };
-  if (o.body !== undefined && o.body !== null && method !== 'GET' && method !== 'HEAD') {
+  // Every mutating request carries this, body or not: verifyCsrf (02_) refuses
+  // anything else with 403, and a DELETE with nothing in it is still a
+  // mutation. (It was learned the hard way: signing out and revoking an install
+  // link sent no body, so the header was left off and the server answered 403.)
+  if (method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE') {
     init.headers['Content-Type'] = 'application/json';
-    init.body = (typeof o.body === 'string') ? o.body : JSON.stringify(o.body);
+    if (o.body !== undefined && o.body !== null) {
+      init.body = (typeof o.body === 'string') ? o.body : JSON.stringify(o.body);
+    }
   }
   if (o.signal) init.signal = o.signal;
 
@@ -3213,6 +3219,468 @@ async function appShellRefreshAccount() {
   return account;
 }
 
+// --- Settings (P6-2) ---------------------------------------------------------
+//
+// The Settings view in the shell, in one place: the account, its devices, its
+// connected accounts and its install links. It is additive -- the legacy panels
+// below it are untouched -- and it exists only on a shell page: the container it
+// renders into is emitted by the server (15_tab-settings-html.js) when, and only
+// when, the request carries the FF_NEW_UI cookie.
+//
+// Everything here talks to the account APIs over the session cookie
+// (appShellApiFetch), and every control is wired with a data-app-shell-action
+// attribute instead of an inline handler: new UI code adds none of those
+// (P6-8 removes the rest of the page's).
+
+// The providers the site can hold a sign-in for. The start and stop entries are
+// the legacy functions that already do the OAuth dance and the local clean-up,
+// so this screen cannot drift from the rest of the page about how a connection
+// is made, or dropped.
+const APP_SHELL_CONNECTIONS = [
+  { id: 'trakt', label: 'Trakt', what: 'Watchlist, history and your personal Trakt rows.', start: startTraktConnect, stop: disconnectTrakt },
+  { id: 'mdblist', label: 'MDBList', what: 'Your MDBList lists, watchlist and charts.', start: startMdblistConnect, stop: disconnectMdblist },
+  { id: 'simkl', label: 'Simkl', what: 'Watchlist, history and Airing Next.', start: startSimklConnect, stop: disconnectSimkl },
+  { id: 'tmdb', label: 'TMDB', what: 'Personal lists, favorites and watchlist, plus unlimited requests.', start: startTmdbConnect, stop: disconnectTmdb },
+];
+
+function appShellSettingsHost() {
+  return document.getElementById('appShellSettingsHome');
+}
+
+function appShellSettingsEscape(value) {
+  return escapeHtml(String(value === null || value === undefined ? '' : value));
+}
+
+function appShellSettingsButton(action, label, id, cls) {
+  return '<button type="button" class="' + (cls || 'secondary lc-btn') + '" data-app-shell-action="' + action + '"' +
+    (id ? ' data-app-shell-id="' + appShellSettingsEscape(id) + '"' : '') + '>' + appShellSettingsEscape(label) + '</button>';
+}
+
+function appShellSettingsPanel(role, title, body) {
+  return '<div class="panel" style="margin-top:12px;">' +
+    '<h2 class="panel-title">' + title + '</h2>' +
+    '<div id="appShellSettingsBody-' + role + '">' + body + '</div>' +
+    '</div>';
+}
+
+function appShellSettingsBody(role, html) {
+  const el = document.getElementById('appShellSettingsBody-' + role);
+  if (el) el.innerHTML = html;
+}
+
+function appShellSettingsRow(main, controls, chip) {
+  return '<div class="app-shell-row"><div class="app-shell-row-main">' + main + '</div>' +
+    '<div class="app-shell-row-controls">' + (chip || '') + (controls || '') + '</div></div>';
+}
+
+function appShellChip(text, tone) {
+  return '<span class="app-shell-chip' + (tone ? ' app-shell-chip-' + tone : '') + '">' + appShellSettingsEscape(text) + '</span>';
+}
+
+// A date, or "never". Kept short and forgiving: a session row whose timestamp
+// is missing must not print "Invalid Date".
+function appShellWhen(ms) {
+  const n = Number(ms);
+  if (!n || !isFinite(n)) return 'never';
+  try {
+    return new Date(n).toLocaleDateString();
+  } catch (e) {
+    return 'recently';
+  }
+}
+
+function appShellProvider(id) {
+  const want = String(id || '');
+  for (let i = 0; i < APP_SHELL_CONNECTIONS.length; i++) {
+    if (APP_SHELL_CONNECTIONS[i].id === want) return APP_SHELL_CONNECTIONS[i];
+  }
+  return null;
+}
+
+function appShellConnectionWords(conn) {
+  const status = String((conn && conn.status) || '');
+  const who = conn && conn.username ? '@' + conn.username : '';
+  if (status === 'ok') return who ? 'Connected as ' + who : 'Connected';
+  if (status === 'reauth_required') return who ? 'Reconnect as ' + who : 'Reconnect needed';
+  if (status === 'invalid') return who ? 'Sign-in expired (' + who + ')' : 'Sign-in expired';
+  if (status === 'unreachable') return 'Could not be checked';
+  return 'Not connected';
+}
+
+function appShellConnectionTone(conn) {
+  const status = String((conn && conn.status) || '');
+  if (status === 'ok') return 'ok';
+  if (status === 'reauth_required' || status === 'invalid' || status === 'unreachable') return 'warn';
+  return '';
+}
+
+function appShellDeviceLabel(session) {
+  const ua = String((session && session.userAgent) || '');
+  if (!ua) return 'Unknown device';
+  const browser = ua.indexOf('Firefox/') !== -1 ? 'Firefox'
+    : ua.indexOf('Edg/') !== -1 ? 'Edge'
+      : ua.indexOf('Chrome/') !== -1 ? 'Chrome'
+        : ua.indexOf('Safari/') !== -1 ? 'Safari' : 'Browser';
+  const os = ua.indexOf('Windows') !== -1 ? 'Windows'
+    : ua.indexOf('Android') !== -1 ? 'Android'
+      : ua.indexOf('iPhone') !== -1 || ua.indexOf('iPad') !== -1 ? 'iOS'
+        : ua.indexOf('Mac OS') !== -1 ? 'macOS'
+          : ua.indexOf('Linux') !== -1 ? 'Linux' : '';
+  return os ? browser + ' on ' + os : browser;
+}
+
+// 'https://host/abc/manifest.json' -> 'stremio://host/abc/manifest.json'. Split
+// rather than a regex: this file lives inside the page's template literal, where
+// backslashes are eaten before the browser ever sees them.
+function appShellSchemeUrl(link, scheme) {
+  const s = String(link || '');
+  const i = s.indexOf('://');
+  return i === -1 ? s : scheme + s.slice(i);
+}
+
+function appShellInstallLinkStateSafe() {
+  try {
+    return appShellInstallLinkState();
+  } catch (e) {
+    return { state: 'none', link: '' };
+  }
+}
+
+// --- the panels --------------------------------------------------------------
+
+function appShellAccountBody(account) {
+  if (!account) {
+    return '<p class="app-shell-muted">You are not signed in. What you build right now is kept in this browser only.</p>' +
+      '<div class="app-shell-actions">' +
+      appShellSettingsButton('account-signin', 'Sign in or restore') +
+      appShellSettingsButton('account-import-backup', 'Import a backup file') +
+      '</div>' +
+      '<p class="app-shell-muted">Signing in restores your lists, channels, connections and install links from your account. Lost your Account Key? Use "Forgot your key?" under Your Account below: the site has no email recovery, so keep the key somewhere safe.</p>';
+  }
+  const name = account.displayName || account.username || '';
+  return '<p class="app-shell-kv"><strong>' + appShellSettingsEscape(name) + '</strong>' +
+    (account.username ? ' <span class="app-shell-muted">@' + appShellSettingsEscape(account.username) + '</span>' : '') + '</p>' +
+    '<p class="app-shell-muted">Signed in. Your lists, channels, connections and install links are kept on your account and follow you to any device.</p>' +
+    '<div class="app-shell-actions">' +
+    appShellSettingsButton('account-signout', 'Sign out') +
+    appShellSettingsButton('account-delete', 'Delete account', '', 'secondary lc-btn app-shell-danger') +
+    '</div>';
+}
+
+function appShellDevicesBody(res, sessions) {
+  if (!res || !res.ok) {
+    if (res && res.signInRequired) return '<p class="app-shell-muted">Sign in to see the devices using your account.</p>';
+    return '<p class="app-shell-muted">' + appShellSettingsEscape((res && res.error) || 'Could not load your devices.') + '</p>' +
+      '<div class="app-shell-actions">' + appShellSettingsButton('settings-refresh', 'Try again') + '</div>';
+  }
+  const list = sessions || [];
+  if (!list.length) return '<p class="app-shell-muted">No devices are signed in.</p>';
+  let html = list.map(function (s) {
+    const label = appShellDeviceLabel(s);
+    return appShellSettingsRow(
+      '<strong>' + appShellSettingsEscape(label) + '</strong><br><span class="app-shell-muted">Last used ' + appShellSettingsEscape(appShellWhen(s.lastSeenAt)) + '</span>',
+      s.current ? '' : appShellSettingsButton('device-signout', 'Sign out', s.id),
+      s.current ? appShellChip('This device', 'ok') : ''
+    );
+  }).join('');
+  if (list.length > 1) {
+    html += '<div class="app-shell-actions">' + appShellSettingsButton('devices-signout-others', 'Sign out my other devices') + '</div>';
+  }
+  return html;
+}
+
+function appShellConnectionsBody(res, byProvider) {
+  if (res && res.signInRequired) {
+    return '<p class="app-shell-muted">Sign in to connect Trakt, MDBList, Simkl or TMDB. A connection is kept on your account, so your personal rows keep working without a new install link.</p>';
+  }
+  if (res && !res.ok) {
+    return '<p class="app-shell-muted">' + appShellSettingsEscape(res.error || 'Could not load your connected accounts.') + '</p>' +
+      '<div class="app-shell-actions">' + appShellSettingsButton('settings-refresh', 'Try again') + '</div>';
+  }
+  const map = byProvider || {};
+  let html = APP_SHELL_CONNECTIONS.map(function (p) {
+    const conn = map[p.id] || null;
+    const connected = Boolean(conn) && conn.status === 'ok';
+    const control = (connected || conn)
+      ? appShellSettingsButton('connection-disconnect', connected ? 'Disconnect' : 'Reconnect', p.id)
+      : appShellSettingsButton('connection-connect', 'Connect', p.id);
+    const who = conn && conn.username ? ' <span class="app-shell-muted">@' + appShellSettingsEscape(conn.username) + '</span>' : '';
+    return appShellSettingsRow(
+      '<strong>' + appShellSettingsEscape(p.label) + '</strong>' + who + '<br><span class="app-shell-muted">' + appShellSettingsEscape(p.what) + '</span>',
+      control,
+      appShellChip(appShellConnectionWords(conn), appShellConnectionTone(conn))
+    );
+  }).join('');
+  html += '<div class="app-shell-actions">' + appShellSettingsButton('settings-refresh', 'Refresh') + '</div>';
+  return html;
+}
+
+function appShellInstallsBody(linkState, res, installs) {
+  const link = linkState && linkState.link ? String(linkState.link) : '';
+  let html = '';
+  if (!link) {
+    html += '<p class="app-shell-muted">Nothing is installed from this browser yet. Build the home screen you want, then get the install link here.</p>' +
+      '<div class="app-shell-actions">' + appShellSettingsButton('install-get', 'Get install link') + '</div>';
+  } else {
+    const live = (linkState && linkState.state === 'live');
+    html += appShellSettingsRow(
+      '<strong>Install link for this browser</strong><br><span class="app-shell-muted" style="word-break:break-all;">' + appShellSettingsEscape(link) + '</span>',
+      '<a class="secondary lc-btn" href="' + appShellSettingsEscape(appShellSchemeUrl(link, 'stremio')) + '">Install in Stremio</a>' +
+      '<a class="secondary lc-btn" href="' + appShellSettingsEscape(appShellSchemeUrl(link, 'nuvio')) + '">Install in Nuvio</a>' +
+      appShellSettingsButton('install-copy', 'Copy link') +
+      appShellSettingsButton('install-get', live ? 'Update link' : 'Update link'),
+      appShellChip(live ? 'Up to date' : 'Changed since', live ? 'ok' : 'warn')
+    );
+    html += '<details class="app-shell-details"><summary>Other apps (Wako, and anything else)</summary>' +
+      '<p class="app-shell-muted">In Wako, open Settings, then Add-ons, Add, and paste this manifest URL. The same URL works in any app that takes a Stremio add-on manifest.</p>' +
+      '<p class="app-shell-kv" style="word-break:break-all;">' + appShellSettingsEscape(link) + '</p></details>';
+  }
+
+  if (res && res.ok && Array.isArray(installs)) {
+    if (!installs.length) {
+      html += '<p class="app-shell-muted">No install links are saved on your account yet.</p>';
+    } else {
+      html += installs.map(function (inst) {
+        const name = inst && inst.name ? inst.name : 'Install link';
+        const rows = inst && inst.rows !== null && inst.rows !== undefined ? ' &middot; ' + inst.rows + ' rows' : '';
+        const used = ' <span class="app-shell-muted">Last used ' + appShellSettingsEscape(appShellWhen(inst && inst.lastUsedAt)) + '</span>';
+        const revoked = inst && inst.revokedAt ? appShellChip('Revoked', 'warn') : '';
+        return appShellSettingsRow(
+          '<strong>' + appShellSettingsEscape(name) + '</strong>' + rows + '<br>' + used,
+          inst && inst.revokedAt ? '' : appShellSettingsButton('install-revoke', 'Revoke', String(inst && inst.id)),
+          revoked
+        );
+      }).join('');
+    }
+  } else if (res && res.signInRequired) {
+    html += '<p class="app-shell-muted">Sign in to keep named install links on your account, and to revoke one from here.</p>';
+  } else if (res && res.status === 404) {
+    html += '<p class="app-shell-muted">Saved install links are not switched on for this site yet.</p>';
+  } else if (res) {
+    html += '<p class="app-shell-muted">' + appShellSettingsEscape(res.error || 'Could not load your install links.') + '</p>';
+  }
+  return html;
+}
+
+// --- loading -----------------------------------------------------------------
+
+function appShellSettingsHeadline() {
+  return {
+    account: 'Loading...',
+    devices: 'Loading...',
+    connections: 'Loading...',
+    installs: 'Loading...',
+  };
+}
+
+function appShellRenderSettingsSkeleton() {
+  const loading = '<p class="app-shell-muted">Loading...</p>';
+  appShellSettingsBody('account', loading);
+  appShellSettingsBody('devices', loading);
+  appShellSettingsBody('connections', loading);
+  appShellSettingsBody('installs', loading);
+}
+
+async function appShellRefreshSettingsHome() {
+  const host = appShellSettingsHost();
+  if (!host || !NEW_UI) return false;
+  appShellRenderSettingsSkeleton();
+  const account = await appShellRefreshAccount();
+  appShellSettingsBody('account', appShellAccountBody(account));
+  if (!account) {
+    const signedOut = { ok: false, status: 401, error: 'Sign in first.', signInRequired: true, data: null };
+    appShellSettingsBody('devices', appShellDevicesBody(signedOut, []));
+    appShellSettingsBody('connections', appShellConnectionsBody(signedOut, {}));
+    appShellSettingsBody('installs', appShellInstallsBody(appShellInstallLinkStateSafe(), signedOut, []));
+    return true;
+  }
+  const sessionsRes = await appShellApiFetch('/api/me/sessions');
+  appShellSettingsBody('devices', appShellDevicesBody(sessionsRes, (sessionsRes.data && sessionsRes.data.sessions) || []));
+  const connectionsRes = await appShellApiFetch('/api/connections');
+  const byProvider = {};
+  ((connectionsRes.data && connectionsRes.data.connections) || []).forEach(function (c) {
+    if (c && c.provider) byProvider[c.provider] = c;
+  });
+  appShellSettingsBody('connections', appShellConnectionsBody(connectionsRes, byProvider));
+  const installsRes = await appShellApiFetch('/api/installs');
+  appShellSettingsBody('installs', appShellInstallsBody(appShellInstallLinkStateSafe(), installsRes, (installsRes.data && installsRes.data.installs) || []));
+  return true;
+}
+
+// Called when the Settings view is opened (appShellApplyRoute) and after any
+// action that changes what it shows.
+function appShellRenderSettingsHome() {
+  const host = appShellSettingsHost();
+  if (!host || !NEW_UI) return false;
+  host.innerHTML =
+    appShellSettingsPanel('account', 'Account', '<p class="app-shell-muted">Loading...</p>') +
+    appShellSettingsPanel('devices', 'Devices', '<p class="app-shell-muted">Loading...</p>') +
+    appShellSettingsPanel('connections', 'Connections', '<p class="app-shell-muted">Loading...</p>') +
+    appShellSettingsPanel('installs', 'Install links', '<p class="app-shell-muted">Loading...</p>');
+  appShellRefreshSettingsHome();
+  return true;
+}
+
+// --- actions -----------------------------------------------------------------
+
+function appShellFocusSignIn() {
+  const section = document.getElementById('accountKeySection');
+  if (section && section.scrollIntoView) {
+    try { section.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+  }
+  const first = document.getElementById('creatorNameInput') || document.getElementById('creatorKeyInput');
+  if (first && first.focus) {
+    try { first.focus(); } catch (e) {}
+  }
+  showToast('Sign in under Your Account to restore everything.', 'info');
+  return true;
+}
+
+function appShellImportBackup() {
+  const input = document.getElementById('configFileInput');
+  if (input && input.click) {
+    input.click();
+    return true;
+  }
+  appShellGo(appShellPathFor('settings', 'backup'));
+  return true;
+}
+
+async function appShellCopyText(text, message) {
+  const value = String(text || '');
+  if (!value) return false;
+  try {
+    if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(value);
+      showToast(message || 'Copied.', 'success');
+      return true;
+    }
+  } catch (e) {}
+  showToast('Select the link and copy it by hand.', 'info');
+  return false;
+}
+
+async function appShellSignOut() {
+  const res = await appShellApiFetch('/api/session', { method: 'DELETE' });
+  if (!res.ok) {
+    showToast(res.error || 'Could not sign out just now.', 'error');
+    return false;
+  }
+  if (typeof clearLocalAccountData === 'function') {
+    try { clearLocalAccountData(); } catch (e) {}
+  }
+  appShellState.set({ account: null });
+  showToast('Signed out.', 'success');
+  await appShellRefreshSettingsHome();
+  return true;
+}
+
+async function appShellDeleteAccount() {
+  const confirmed = await appShellDialog({
+    title: 'Delete your account?',
+    message: 'Everything on your account is deleted: your lists, channels, connections and install links. This cannot be undone.',
+    confirmLabel: 'Delete everything',
+    cancelLabel: 'Keep my account',
+  });
+  if (!confirmed) return false;
+  const res = await appShellApiFetch('/api/me', { method: 'DELETE', body: { confirm: 'DELETE' } });
+  if (!res.ok) {
+    showToast(res.error || 'Could not delete the account just now.', 'error');
+    return false;
+  }
+  if (typeof clearLocalAccountData === 'function') {
+    try { clearLocalAccountData(); } catch (e) {}
+  }
+  appShellState.set({ account: null });
+  showToast('Your account and its data have been deleted.', 'success');
+  await appShellRefreshSettingsHome();
+  return true;
+}
+
+function appShellConnectProvider(id) {
+  const provider = appShellProvider(id);
+  if (!provider || typeof provider.start !== 'function') return false;
+  provider.start();
+  return true;
+}
+
+async function appShellDisconnectProvider(id) {
+  const provider = appShellProvider(id);
+  if (!provider || typeof provider.stop !== 'function') return false;
+  try {
+    provider.stop();
+  } catch (e) {}
+  showToast(provider.label + ' disconnected.', 'success');
+  await appShellRefreshSettingsHome();
+  return true;
+}
+
+async function appShellRevokeSession(id) {
+  const res = await appShellApiFetch('/api/me/sessions', { method: 'DELETE', body: { id: String(id || '') } });
+  if (!res.ok) {
+    showToast(res.error || 'Could not sign that device out.', 'error');
+    return false;
+  }
+  showToast('That device was signed out.', 'success');
+  await appShellRefreshSettingsHome();
+  return true;
+}
+
+async function appShellRevokeOtherSessions() {
+  const res = await appShellApiFetch('/api/me/sessions', { method: 'DELETE', body: { allExceptCurrent: true } });
+  if (!res.ok) {
+    showToast(res.error || 'Could not sign the other devices out.', 'error');
+    return false;
+  }
+  showToast('Your other devices were signed out.', 'success');
+  await appShellRefreshSettingsHome();
+  return true;
+}
+
+async function appShellRevokeInstall(id) {
+  const confirmed = await appShellDialog({
+    title: 'Revoke this install link?',
+    message: 'Apps using it stop getting the add-on right away. You can install again from here at any time.',
+    confirmLabel: 'Revoke',
+    cancelLabel: 'Keep it',
+  });
+  if (!confirmed) return false;
+  const res = await appShellApiFetch('/api/installs/' + encodeURIComponent(String(id || '')), { method: 'DELETE' });
+  if (!res.ok) {
+    showToast(res.error || 'Could not revoke that install link.', 'error');
+    return false;
+  }
+  showToast('Install link revoked.', 'success');
+  await appShellRefreshSettingsHome();
+  return true;
+}
+
+// One dispatcher for the panel's controls. The attribute is on the button in
+// the markup above, and appShellOnClick routes it here -- so the panels contain
+// no inline handlers.
+async function appShellSettingsAction(action, id) {
+  const what = String(action || '');
+  if (what === 'account-signin') return appShellFocusSignIn();
+  if (what === 'account-import-backup') return appShellImportBackup();
+  if (what === 'account-signout') return appShellSignOut();
+  if (what === 'account-delete') return appShellDeleteAccount();
+  if (what === 'settings-refresh') return appShellRefreshSettingsHome();
+  if (what === 'connection-connect') return appShellConnectProvider(id);
+  if (what === 'connection-disconnect') return appShellDisconnectProvider(id);
+  if (what === 'device-signout') return appShellRevokeSession(id);
+  if (what === 'devices-signout-others') return appShellRevokeOtherSessions();
+  if (what === 'install-revoke') return appShellRevokeInstall(id);
+  if (what === 'install-get') {
+    await appShellInstallBarAction();
+    return appShellRefreshSettingsHome();
+  }
+  if (what === 'install-copy') {
+    const state = appShellInstallLinkStateSafe();
+    return appShellCopyText(state.link, 'Install link copied.');
+  }
+  return false;
+}
+
 // --- routing -----------------------------------------------------------------
 
 function appShellFindSubPill(tabId, sub) {
@@ -3253,6 +3721,9 @@ function appShellApplyRoute(route) {
     appShellApplyingRoute = false;
   }
   appShellState.set({ route: { tab: tab.id, sub: sub } });
+  // Settings is rendered by the shell itself (P6-2): the legacy panels below
+  // it stay, and these cards sit above them.
+  if (tab.id === 'settings') appShellRenderSettingsHome();
   return true;
 }
 
@@ -3305,6 +3776,14 @@ function appShellOnClick(e) {
   if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
   const target = e.target;
   if (!target || !target.closest) return;
+  // The Settings cards wire themselves with this attribute rather than an
+  // onclick: one listener for the whole page, and no inline handlers added.
+  const actionEl = target.closest('[data-app-shell-action]');
+  if (actionEl) {
+    e.preventDefault();
+    appShellSettingsAction(actionEl.getAttribute('data-app-shell-action'), actionEl.getAttribute('data-app-shell-id') || '');
+    return;
+  }
   const link = target.closest('a[data-app-route]');
   if (!link) return;
   if (link.target && link.target !== '_self') return;

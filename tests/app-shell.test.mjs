@@ -38,6 +38,10 @@ describe("the new UI shell is opt-in through a cookie", () => {
     assert.equal(legacy.text.includes('id="appShellInstallBar"'), false, "no install bar without the cookie");
     assert.equal(legacy.text.includes("const NEW_UI = true;"), false, "the preamble should say NEW_UI is off");
     assert.ok(legacy.text.includes("const NEW_UI = false;"), "the preamble should say NEW_UI is off");
+    // No shell Settings cards, and the install-link import the new UI drops is
+    // still where it always was on the legacy page.
+    assert.equal(legacy.text.includes('id="appShellSettingsHome"'), false);
+    assert.ok(legacy.text.includes('id="importLinkInput"'), "the legacy page keeps its install-link import for now");
     // The legacy nav is still buttons driven by inline handlers.
     assert.ok(legacy.text.includes(`onclick="switchTab('catalogs')"`), "the legacy tabs should be unchanged");
   });
@@ -57,6 +61,12 @@ describe("the new UI shell is opt-in through a cookie", () => {
     }
     assert.equal((shell.text.match(/<a class="tab-btn[^>]*href="\/catalogs"/g) || []).length, 1);
     assert.equal((shell.text.match(/<a class="bottom-nav-item[^>]*href="\/catalogs"/g) || []).length, 1);
+    // The shell's Settings view (P6-2) has its own container, and importing
+    // from an install link -- an install id is a bearer credential that hands
+    // back connected accounts (SECURITY_AUDIT.md S-02) -- is not offered there.
+    assert.ok(shell.text.includes('id="appShellSettingsHome"'), "the shell's Settings cards have a home");
+    assert.equal(shell.text.includes('id="importLinkInput"'), false, "no install-link import in the new UI");
+
     // A shell nav does not need the inline handlers at all.
     assert.equal(shell.text.includes(`onclick="switchTab('catalogs')"`), false, "the shell nav is links, not inline handlers");
     // The head script (which runs before the body exists) gets the same routes.

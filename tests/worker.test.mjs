@@ -16257,12 +16257,32 @@ describe("P3a review: the accounts row follows the creator profile", () => {
     // tests/harness.mjs adds Content-Type: application/json to every POST it
     // sends, so a route test cannot notice a page that leaves it out. Five
     // admin buttons did, and the CSRF check refused them with 403.
+    //
+    // One exemption, and it is checked rather than trusted: the shell's own API
+    // client (appShellApiFetch, 24_) sets the header once for every mutating
+    // request, so its call sites inherit it. That it does is asserted right
+    // here and again in tests/app-shell-client.test.mjs -- a body-less DELETE
+    // is still a mutation, and forgetting that made signing out answer 403.
+    const shellSource = fs.readFileSync(path.join(REPO_ROOT, "24_client-backup-restore-presets.js"), "utf8");
+    const helperStart = shellSource.indexOf("async function appShellApiFetch(");
+    assert.ok(helperStart !== -1, "appShellApiFetch should exist");
+    const helperEnd = shellSource.indexOf("function appShellApiMessage(", helperStart);
+    assert.ok(helperEnd > helperStart, "appShellApiFetch should be followed by appShellApiMessage");
+    const helperBody = shellSource.slice(helperStart, helperEnd);
+    assert.ok(
+      helperBody.includes("Content-Type") && helperBody.includes("'application/json'"),
+      "appShellApiFetch must set the JSON content type"
+    );
+    // ...and for a DELETE with no body too, which is how signing out is sent.
+    assert.ok(/DELETE/.test(helperBody), "a body-less DELETE is still a mutation");
+
     const files = fs.readdirSync(REPO_ROOT).filter((f) => /^(0[0-9]|1[0-9]|2[0-4])_.*\.js$/.test(f));
     const offenders = [];
     for (const f of files) {
       const lines = fs.readFileSync(path.join(REPO_ROOT, f), "utf8").split(/\r?\n/);
       lines.forEach((line, i) => {
         if (!/method\s*:\s*['"](POST|PUT|PATCH|DELETE)['"]/.test(line)) return;
+        if (line.includes("appShellApiFetch(")) return;   // covered by the helper above
         const around = lines.slice(Math.max(0, i - 6), i + 10).join("\n");
         if (!around.includes("application/json")) offenders.push(`${f}:${i + 1}`);
       });

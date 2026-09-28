@@ -27,6 +27,16 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 8. **Recommended: set up the background jobs queue** (Phase 5, `docs/OPERATIONS.md` §18): create the queues `mylists-jobs` and `mylists-jobs-dlq`, make this Worker the consumer of `mylists-jobs` (batch size 25, 5 retries, dead-letter queue `mylists-jobs-dlq`), bind `mylists-jobs` to the Worker as `JOBS`, then press **Send a test job** in `/admin` → Maintenance. Without it everything works as before.
 
+### ⚙️ Settings in the new UI: account, devices, connections, install links (P6-2)
+
+- **Only for a browser on the new interface** (`?ff_new_ui=1`). Settings → Account & Sync now opens with four cards above the panels that were there before:
+  - **Account** — who you are signed in as, **Sign out**, and **Delete account** (which asks first, then removes everything in the background).
+  - **Devices** — every browser signed in to your account, when each was last used, **Sign out** per device and **Sign out my other devices**. The one you are using is marked and cannot sign itself out by accident.
+  - **Connections** — Trakt, MDBList, Simkl and TMDB, each showing *Connected as @you*, *Reconnect needed*, *Sign-in expired* or *Not connected*, with the one button that connects, reconnects or disconnects it. Connecting uses the same flow as the rest of the site, so a connection now works in Stremio without a new install link.
+  - **Install links** — this browser's link with **Install in Stremio**, **Install in Nuvio**, **Copy link** and instructions for other apps (Wako and anything else that takes a Stremio manifest), plus the install links saved on your account (name, rows, when last used) with **Revoke**.
+- **Removed in the new interface:** "Import from Install / Configure Link". An install link hands back the connected accounts' tokens (SECURITY_AUDIT S-02); a backup file does the same job safely, and that is offered instead. The page everyone else sees keeps it until the old markup goes (P6-8).
+- Nothing changes for anyone not on the new interface: the same screen, the same buttons.
+
 ### 🧭 The new frontend, opt-in per browser (P6-1)
 
 - **Nothing changes for anyone who does not ask for it.** The frontend rebuild starts here, and it is switched on per browser rather than per deploy: open `mylistsaddon.com/?ff_new_ui=1` and that browser gets the new shell, `?ff_new_ui=0` puts it back. `docs/OPERATIONS.md` §20 has the two links.

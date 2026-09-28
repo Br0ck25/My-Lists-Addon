@@ -396,7 +396,7 @@ From Phase 5, background work (refreshing charts and show schedules, imports, cl
 
 The frontend rebuild (Phase 6) is being built behind a **cookie**, not a Worker variable, so the owner can walk the new interface on their own device while everyone else keeps the page they know, and a rollback is one cookie rather than a deploy.
 
-**What it changes:** with the cookie set, the six views have real addresses — `/catalogs`, `/catalogs/quickadd`, `/lists/liked`, `/channels/explore`, `/discover/movies`, `/search`, `/settings/account` and so on — the tabs are ordinary links (middle-click and open-in-a-new-tab work), every view keeps the same panels it has today, and an install bar above the tabs says whether this browser's install link is up to date.
+**What it changes:** with the cookie set, the six views have real addresses — `/catalogs`, `/catalogs/quickadd`, `/lists/liked`, `/channels/explore`, `/discover/movies`, `/search`, `/settings/account` and so on — the tabs are ordinary links (middle-click and open-in-a-new-tab work), every view keeps the same panels it has today, and an install bar above the tabs says whether this browser's install link is up to date. Settings → Account & Sync also gains four cards at the top -- account, devices, connections and install links -- which read and change things on the server (sign out, delete the account, sign devices out, connect a provider, revoke an install link).
 
 **Turning it on for yourself:** open
 

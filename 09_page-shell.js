@@ -3684,6 +3684,31 @@ ${seoHeadHtml}
      exists to remove. */
   html[data-app-shell="1"] #unsavedInstallBanner { display: none !important; }
 
+  /* The shell's Settings cards (P6-2). The card itself is the ordinary
+     .panel; these are the rows, the small action row and the status chip
+     inside it, so the new panels look like the rest of the page without a
+     second stylesheet. */
+  html[data-app-shell="1"] .app-shell-muted { color: var(--muted); font-size: 0.85rem; margin: 0 0 10px; }
+  html[data-app-shell="1"] .app-shell-kv { margin: 0 0 8px; font-size: 0.92rem; }
+  html[data-app-shell="1"] .app-shell-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+  html[data-app-shell="1"] .app-shell-row {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap; padding: 12px 0;
+    border-top: 1px solid var(--border);
+  }
+  html[data-app-shell="1"] .app-shell-row-main { flex: 1 1 240px; min-width: 0; font-size: 0.9rem; }
+  html[data-app-shell="1"] .app-shell-row-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  html[data-app-shell="1"] .app-shell-chip {
+    display: inline-block; padding: 2px 10px; border-radius: var(--radius-pill);
+    font-size: 0.75rem; font-weight: 600;
+    border: 1px solid var(--border); color: var(--muted);
+  }
+  html[data-app-shell="1"] .app-shell-chip-ok { color: var(--success); border-color: rgba(52, 199, 89, 0.45); }
+  html[data-app-shell="1"] .app-shell-chip-warn { color: var(--warn); border-color: rgba(255, 149, 0, 0.45); }
+  html[data-app-shell="1"] .app-shell-danger { color: var(--danger); border-color: rgba(255, 59, 48, 0.35); }
+  html[data-app-shell="1"] .app-shell-details { margin-top: 10px; font-size: 0.88rem; }
+  html[data-app-shell="1"] .app-shell-details summary { cursor: pointer; color: var(--text); }
+
   /* --- Floating Unsaved Changes to Install Link Banner -------------------- */
   .unsaved-install-banner {
     position: fixed;
