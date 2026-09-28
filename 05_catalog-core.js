@@ -138,50 +138,26 @@ async function fetchCatalog(entry, skip = 0, keys = {}) {
   if (urls.length > 1) {
     result = await fetchMergedCatalog(urls, entry.type, skip, keys);
   } else {
-    const mdblistKey = keys.mdblistAccessToken || keys.mdblistKey || MDBLIST_API_KEY;
-    const traktKey = keys.traktKey || TRAKT_CLIENT_ID;
-    const source = detectSource(entry.url);
-    if (source === "mdblist-watchlist") { trackSharedApiUse(keys, !(keys.mdblistKey || keys.mdblistAccessToken), "mdblist"); result = await fetchMdblistWatchlist(entry, skip, mdblistKey, keys.mdblistAccessToken || ""); }
-    else if (source === "mdblist-history") { trackSharedApiUse(keys, !(keys.mdblistKey || keys.mdblistAccessToken), "mdblist"); result = await fetchMdblistHistory(entry, skip, mdblistKey, keys.mdblistAccessToken || ""); }
-    else if (source === "mdblist-airing-next") { trackSharedApiUse(keys, !(keys.mdblistKey || keys.mdblistAccessToken), "mdblist"); result = await fetchMdblistAiringNext(entry, skip, mdblistKey, keys.mdblistAccessToken || "", keys.tmdbKey || TMDB_API_KEY, keys.env, keys.ctx); }
-    else if (source === "mdblist-upnext") { trackSharedApiUse(keys, !(keys.mdblistKey || keys.mdblistAccessToken), "mdblist"); result = await fetchMdblistUpNext(entry, skip, mdblistKey, keys.mdblistAccessToken || "", keys.tmdbKey || TMDB_API_KEY, keys.env, keys.ctx); }
-    else if (source === "trakt") { trackSharedApiUse(keys, !keys.traktKey, "trakt"); result = await fetchTrakt(entry, skip, traktKey, keys.traktAccessToken || "", keys.env, keys.ctx); }
-    else if (source === "trakt-watchlist") { trackSharedApiUse(keys, !keys.traktKey, "trakt"); result = await fetchTraktWatchlist(entry, skip, traktKey, keys.traktAccessToken || "", keys.env, keys.ctx); }
-    else if (source === "trakt-history") { trackSharedApiUse(keys, !keys.traktKey, "trakt"); result = await fetchTraktHistory(entry, skip, traktKey, keys.traktAccessToken || "", keys.env, keys.ctx); }
-    else if (source === "trakt-airing-next") { trackSharedApiUse(keys, !keys.traktKey, "trakt"); result = await fetchTraktAiringNext(entry, skip, traktKey, keys.traktAccessToken || "", keys.tmdbKey || TMDB_API_KEY, keys.env, keys.ctx); }
-    else if (source === "trakt-continue-watching") { trackSharedApiUse(keys, !keys.traktKey, "trakt"); result = await fetchTraktContinueWatching(entry, skip, traktKey, keys.traktAccessToken || "", keys.env, keys.ctx); }
-    else if (source === "tmdb") { trackSharedApiUse(keys, true, "tmdb"); result = await fetchTmdb(entry, skip, TMDB_API_KEY); }
-    else if (source === "tmdb-chart") {
-      trackSharedApiUse(keys, true, "tmdb");
-      const webChart = typeof parseTmdbWebChartUrl === "function" ? parseTmdbWebChartUrl(entry.url) : null;
-      const chartKey = webChart ? webChart.chartKey : entry.url.trim().slice("tmdb:chart:".length);
-      result = await fetchTmdbChart(entry, skip, TMDB_API_KEY, chartKey, keys.region, keys.hideNonDigitalReleases, keys.env, keys.ctx);
-    }
-    else if (source === "tmdb-collection") { trackSharedApiUse(keys, true, "tmdb"); result = await fetchTmdbCollection(entry, skip, TMDB_API_KEY, keys.env, keys.ctx); }
-    else if (source === "tmdb-top10") { trackSharedApiUse(keys, true, "tmdb"); result = await fetchTmdbProviderTop10(entry, skip, TMDB_API_KEY, entry.url.trim().slice("tmdb:top10:".length), keys.region); }
-    else if (source === "tmdb-hidden-gems") { trackSharedApiUse(keys, true, "tmdb"); result = await fetchTmdbHiddenGems(entry, skip, TMDB_API_KEY); }
-    else if (source === "tmdb-kids") { trackSharedApiUse(keys, true, "tmdb"); result = await fetchTmdbKids(entry, skip, TMDB_API_KEY, entry.url.trim().slice("tmdb:kids:".length)); }
-    else if (source === "tmdb-holiday") { trackSharedApiUse(keys, true, "tmdb"); result = await fetchTmdbHoliday(entry, skip, TMDB_API_KEY, entry.url.trim().slice("tmdb:holiday:".length)); }
-    else if (source === "tmdb-genre") { trackSharedApiUse(keys, true, "tmdb"); result = await fetchTmdbGenre(entry, skip, TMDB_API_KEY, entry.url.trim().slice("tmdb:genre:".length), keys.region); }
-    // No trackSharedApiUse: this one reads D1 and makes no provider call at
-    // all. Its TMDB spend happens on the cron tick (sweepNewOnStreaming),
-    // where it is already counted against the sweep's own budget rather than
-    // against whoever happened to open the shelf.
-    else if (source === "tmdb-new-on-streaming") { result = await fetchNewOnStreaming(entry, skip, keys); }
-    // Reads this add-on's own watch counts (a KV snapshot, rebuilt at most
-    // hourly/daily); see fetchMostWatchedCatalog.
-    else if (source === "mylists-most-watched") { result = await fetchMostWatchedCatalog(entry, skip, keys); }
-    else if (source === "trakt-chart") { trackSharedApiUse(keys, !keys.traktKey, "trakt"); result = await fetchTraktChart(entry, skip, traktKey, entry.url.trim().slice("trakt:chart:".length), keys.env, keys.ctx); }
-    else if (source === "simkl-chart") { trackSharedApiUse(keys, true, "simkl"); result = await fetchSimklChart(entry, skip, SIMKL_CLIENT_ID, entry.url.trim().slice("simkl:chart:".length), keys.env, keys.ctx); }
-    else if (source === "simkl-user") { trackSharedApiUse(keys, true, "simkl"); result = await fetchSimklUserList(entry, skip, keys.simklAccessToken, SIMKL_CLIENT_ID, entry.url.trim().slice("simkl:user:".length), keys.tmdbKey, keys.env, keys.ctx); }
-    else if (source === "channel") result = fetchChannelCatalog(entry, keys.origin);
-    else if (source === "custom-list") result = await fetchCustomListCatalog(entry, skip, keys);
-    else if (source === "autotrack") result = await fetchAutoTrackedCatalog(entry, keys.env, keys);
-    else if (source === "curated") { trackSharedApiUse(keys, true, "tmdb"); result = await fetchCuratedCatalog(entry, skip, keys); }
-    else if (source === "published-list") result = await fetchPublishedListCatalog(entry, keys.env);
-    else {
-      trackSharedApiUse(keys, !(keys.mdblistKey || keys.mdblistAccessToken), "mdblist");
-      result = await fetchMdblist(entry, skip, mdblistKey, keys.env, keys.ctx);
+    // One source. The provider registry (CATALOG_SOURCES,
+    // 04_config-resolution.js) says what it is, which provider's key it
+    // spends, and which fetcher serves it.
+    const ref = resolveSourceRef(entry.url);
+    const source = catalogSourceByName(ref.source);
+    if (source.apiUse) trackSharedApiUse(keys, PROVIDER_ADAPTERS[source.apiUse].usesSharedKey(keys), source.apiUse);
+    // FF_PROVIDER_BREAKER: learn whether another isolate found this provider
+    // down (41_provider-breaker.js; typeof-guarded, the tests load this file
+    // without it).
+    if (typeof providerBreakerRefresh === "function") await providerBreakerRefresh(keys.env, source.apiUse || ref.provider);
+    // FF_CHART_SNAPSHOTS: a chart page is served from its snapshot
+    // (42_chart-snapshots.js), otherwise the fetcher is called as before.
+    result = typeof fetchSourcePageWithSnapshot === "function"
+      ? await fetchSourcePageWithSnapshot(source, ref, { entry, skip, keys })
+      : await source.fetchPage(ref, { entry, skip, keys });
+    // FF_CANONICAL_IDS: a Stremio catalog's ids made canonical
+    // (43_catalog-ids.js). A merged row's sources each come through here, so
+    // the merge above de-duplicates canonical ids.
+    if (keys.canonicalIds === true && typeof canonicalizeCatalogMetas === "function") {
+      result = await canonicalizeCatalogMetas(keys.env, result, { kind: entry.type });
     }
   }
 

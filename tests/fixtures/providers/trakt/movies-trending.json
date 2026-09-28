@@ -1,0 +1,77 @@
+{
+  "provider": "trakt",
+  "endpoint": "/movies/trending (and /shows/trending, /movies/watched/weekly ...): items wrapped as { movie } or { show }",
+  "origin": "Written from the provider's API reference (it needs a key); the nightly live check compares it with the real thing.",
+  "usedBy": [
+    "fetchTraktChart",
+    "mapTraktItems",
+    "traktPayloadWithTotal"
+  ],
+  "live": {
+    "needs": [
+      "TRAKT_CLIENT_ID"
+    ],
+    "request": {
+      "url": "https://api.trakt.tv/movies/trending?limit=10&page=1&extended=full",
+      "headers": {
+        "Content-Type": "application/json",
+        "trakt-api-version": "2",
+        "trakt-api-key": "{TRAKT_CLIENT_ID}"
+      }
+    }
+  },
+  "required": [
+    "[]",
+    "[].movie.ids.trakt:number",
+    "[].movie.title:string",
+    "[*].movie.year:number",
+    "[*].movie.ids.imdb:string",
+    "[*].movie.ids.tmdb:number"
+  ],
+  "headers": {
+    "x-pagination-item-count": "303",
+    "x-pagination-page": "1",
+    "x-pagination-limit": "100",
+    "x-pagination-page-count": "4"
+  },
+  "response": [
+    {
+      "watchers": 312,
+      "movie": {
+        "title": "Inception",
+        "year": 2010,
+        "ids": {
+          "trakt": 16662,
+          "slug": "inception-2010",
+          "imdb": "tt1375666",
+          "tmdb": 27205
+        },
+        "rating": 8.2,
+        "votes": 5000,
+        "genres": [
+          "drama"
+        ],
+        "certification": "R"
+      }
+    },
+    {
+      "watchers": 280,
+      "movie": {
+        "title": "The Dark Knight",
+        "year": 2008,
+        "ids": {
+          "trakt": 120,
+          "slug": "the-dark-knight-2008",
+          "imdb": "tt0468569",
+          "tmdb": 155
+        },
+        "rating": 8.2,
+        "votes": 5000,
+        "genres": [
+          "drama"
+        ],
+        "certification": "R"
+      }
+    }
+  ]
+}

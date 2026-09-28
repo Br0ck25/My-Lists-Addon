@@ -1,0 +1,76 @@
+{
+  "provider": "tmdb",
+  "endpoint": "/3/collection/{id}",
+  "origin": "Written from the provider's API reference (it needs a key); the nightly live check compares it with the real thing.",
+  "usedBy": [
+    "fetchTmdbCollection"
+  ],
+  "live": {
+    "needs": [
+      "TMDB_API_KEY"
+    ],
+    "request": {
+      "url": "https://api.themoviedb.org/3/collection/10?api_key={TMDB_API_KEY}"
+    }
+  },
+  "required": [
+    "id:number",
+    "name:string",
+    "parts[]",
+    "parts[].id:number",
+    "parts[].title:string",
+    "parts[*].release_date:string",
+    "parts[*].poster_path:string"
+  ],
+  "response": {
+    "id": 10,
+    "name": "Star Wars Collection",
+    "overview": "An overview.",
+    "poster_path": "/r8Ph5MYXL04Qzu4QBbq2KjqwtkQ.jpg",
+    "backdrop_path": "/zZDkgOmFMVYpGAkR9Tkxw0CRnxX.jpg",
+    "parts": [
+      {
+        "adult": false,
+        "backdrop_path": null,
+        "id": 1893,
+        "title": "Star Wars: Episode I - The Phantom Menace",
+        "original_language": "en",
+        "original_title": "Star Wars: Episode I - The Phantom Menace",
+        "overview": "An overview.",
+        "poster_path": "/6wkfovpn7Eq8dYNKaG5PY3q2oq6.jpg",
+        "media_type": "movie",
+        "genre_ids": [
+          12,
+          28,
+          878
+        ],
+        "popularity": 120.5,
+        "release_date": "1999-06-12",
+        "video": false,
+        "vote_average": 6.5,
+        "vote_count": 2100
+      },
+      {
+        "adult": false,
+        "backdrop_path": null,
+        "id": 11,
+        "title": "Star Wars",
+        "original_language": "en",
+        "original_title": "Star Wars",
+        "overview": "An overview.",
+        "poster_path": "/6FfCtAuVAW8XJjZ7eWeLibRLWTw.jpg",
+        "media_type": "movie",
+        "genre_ids": [
+          12,
+          28,
+          878
+        ],
+        "popularity": 120.5,
+        "release_date": "1977-06-12",
+        "video": false,
+        "vote_average": 8.2,
+        "vote_count": 2100
+      }
+    ]
+  }
+}

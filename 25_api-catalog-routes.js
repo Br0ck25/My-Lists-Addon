@@ -1026,6 +1026,8 @@ Sitemap: ${url.origin}/sitemap.xml`;
         const searchConfig = config ? await resolveConfig(config, env) : {};
         const effectiveTmdbKey = searchConfig.tmdbKey || TMDB_API_KEY;
         let metas = await searchCatalogMetas(searchQuery, type, skip, effectiveTmdbKey, env, ctx, url.origin);
+        // FF_CANONICAL_IDS (43_catalog-ids.js), as fetchCatalog does for rows.
+        metas = await canonicalizeCatalogMetas(env, metas, { kind: type });
         // This route builds its metas directly rather than through
         // fetchCatalog, so it needs its own call -- otherwise search results
         // would be the one row in Stremio still showing the old artwork.
@@ -1081,9 +1083,9 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // to a config that PROVED it belongs to that account. See resolveConfig
         // (04_config-resolution.js) for how that is established and
         // mayReadTrackedShelf (02_http-and-creator-utils.js) for what it gates.
-        let metas = await fetchCatalog(entry, skip, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, adultContentFilter, isStremioCatalog: true, betterPosters, betterPostersOptions: betterPostersOptionsFrom(resolvedConfig, url.origin), showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, env, ctx, origin: url.origin });
+        let metas = await fetchCatalog(entry, skip, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, adultContentFilter, isStremioCatalog: true, canonicalIds: true, betterPosters, betterPostersOptions: betterPostersOptionsFrom(resolvedConfig, url.origin), showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, env, ctx, origin: url.origin });
         if (dedupeAcrossLists) {
-          metas = await dedupeAcrossListEntries(entries, entryIndex, skip, metas, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, env, ctx });
+          metas = await dedupeAcrossListEntries(entries, entryIndex, skip, metas, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, canonicalIds: true, env, ctx });
         }
         if (searchQuery && Array.isArray(metas) && metas.length > 0) {
           const sq = searchQuery.toLowerCase();

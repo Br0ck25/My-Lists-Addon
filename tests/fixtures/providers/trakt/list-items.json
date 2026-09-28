@@ -1,0 +1,90 @@
+{
+  "provider": "trakt",
+  "endpoint": "/users/{user}/lists/{list}/items[/movies|/shows...] (the same items as /lists/{id}/items)",
+  "origin": "Written from the provider's API reference (it needs a key); the nightly live check compares it with the real thing.",
+  "usedBy": [
+    "fetchTrakt",
+    "mapTraktItems"
+  ],
+  "live": {
+    "needs": [
+      "TRAKT_CLIENT_ID"
+    ],
+    "discover": {
+      "url": "https://api.trakt.tv/lists/popular?limit=1",
+      "headers": {
+        "Content-Type": "application/json",
+        "trakt-api-version": "2",
+        "trakt-api-key": "{TRAKT_CLIENT_ID}"
+      },
+      "pick": "0.list.ids.trakt"
+    },
+    "request": {
+      "url": "https://api.trakt.tv/lists/{DISCOVERED}/items?limit=10&page=1&extended=full",
+      "headers": {
+        "Content-Type": "application/json",
+        "trakt-api-version": "2",
+        "trakt-api-key": "{TRAKT_CLIENT_ID}"
+      }
+    }
+  },
+  "required": [
+    "[]",
+    "[].rank:number",
+    "[].type:string",
+    "[].listed_at:string",
+    "[*].movie.ids.trakt:number || [*].show.ids.trakt:number"
+  ],
+  "headers": {
+    "x-pagination-item-count": "2"
+  },
+  "response": [
+    {
+      "rank": 1,
+      "id": 101,
+      "listed_at": "2024-06-16T06:07:12.000Z",
+      "notes": null,
+      "type": "movie",
+      "movie": {
+        "title": "Inception",
+        "year": 2010,
+        "ids": {
+          "trakt": 16662,
+          "slug": "inception-2010",
+          "imdb": "tt1375666",
+          "tmdb": 27205
+        },
+        "rating": 8.2,
+        "votes": 5000,
+        "genres": [
+          "drama"
+        ],
+        "certification": "R"
+      }
+    },
+    {
+      "rank": 2,
+      "id": 102,
+      "listed_at": "2024-06-16T06:08:12.000Z",
+      "notes": null,
+      "type": "show",
+      "show": {
+        "title": "Breaking Bad",
+        "year": 2008,
+        "ids": {
+          "trakt": 1388,
+          "slug": "breaking-bad",
+          "tvdb": 81189,
+          "imdb": "tt0903747",
+          "tmdb": 1396
+        },
+        "rating": 8.9,
+        "votes": 9000,
+        "genres": [
+          "drama"
+        ],
+        "certification": "TV-MA"
+      }
+    }
+  ]
+}

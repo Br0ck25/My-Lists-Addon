@@ -258,54 +258,345 @@ function parseTmdbWebChartUrl(rawUrl) {
   return null;
 }
 
+// --- The provider registry (P4-1) -------------------------------------------
+//
+// Every catalog source this add-on serves, in the order they are tried, and
+// the provider adapter that owns each. It replaces two chains that had to be
+// kept in step by hand: detectSource's if/else (what a row's URL is) and the
+// matching if/else in fetchCatalog (which fetcher serves it). One row of
+// CATALOG_SOURCES now says both, so a new source is added in one place.
+//
+// A source:
+//   name       What detectSource returns. Other code keys off these names
+//              (STREMIO_LIVE_ROW_SOURCES, the catalog route), so never rename
+//              one.
+//   provider   The adapter that owns it (PROVIDER_ADAPTERS below).
+//   kind       "chart"    a ranking, the same for everyone;
+//              "list"     a public list, the same for everyone;
+//              "personal" one account's shelf (watchlist, history, Up Next,
+//                         Airing Next, Recommended). These are exactly the rows
+//                         STREMIO_LIVE_ROW_SOURCES (00_constants.js) serves
+//                         no-store, and a test keeps the two in agreement;
+//              "own"      a row whose payload is in the row itself (a channel,
+//                         a custom list).
+//              The adapter contract in NEXT_VERSION_ARCHITECTURE §6.2 calls
+//              "chart" and "list" shared, and "personal" user-authenticated.
+//   match(s)   True when the trimmed URL or sentinel is this source. ORDER
+//              MATTERS: the first match wins, exactly as the if/else did.
+//              mdblist:watchlist is tried before the MDBList catch-all, the
+//              published-list shape before trakt.tv and themoviedb.org, and
+//              the MDBList public list takes anything nothing else claimed,
+//              as it always has (old configs rely on it).
+//   arg(s)     Optional: the part of the string the fetcher needs (a chart or
+//              genre key), so fetchCatalog no longer slices it out itself.
+//   apiUse     The provider whose key the request may spend, counted against
+//              the shared key in the admin API Usage tab (trackSharedApiUse,
+//              05_catalog-core.js). null when the row makes no provider call.
+//   fetchPage(ref, { entry, skip, keys })
+//              The fetcher, called with exactly the arguments fetchCatalog
+//              used to pass it.
+//   snapshot   Charts only, optional: the page may be served from a chart
+//              snapshot (P4-3, 42_chart-snapshots.js). { region: true } when
+//              the install's region changes the rows; variant(ref, page) for
+//              anything else that does (a setting, the day). The chart key,
+//              the row's type and the page are always part of the snapshot.
+//
+// The fetchers live in 05_, 06_ and 07_. They are only named inside the
+// closures, so this file still loads on its own (the tests load it that way to
+// check detection).
+
+// "trakt:watchlist", or the same sentinel with a suffix ("trakt:watchlist:x").
+function isSourceSentinel(s, name) {
+  return s === name || s.startsWith(name + ":");
+}
+
+function sourceArgAfter(prefix) {
+  return (s) => s.slice(prefix.length);
+}
+
+// The MDBList credential a row uses: the connected account's token, then the
+// install's own key, then the site's.
+function catalogMdblistKey(keys) {
+  return keys.mdblistAccessToken || keys.mdblistKey || MDBLIST_API_KEY;
+}
+
+function catalogTraktKey(keys) {
+  return keys.traktKey || TRAKT_CLIENT_ID;
+}
+
+const CATALOG_SOURCES = [
+  {
+    name: "mdblist-watchlist", provider: "mdblist", kind: "personal", apiUse: "mdblist",
+    match: (s) => isSourceSentinel(s, "mdblist:watchlist") || /^https?:\/\/(www\.)?mdblist\.com\/(?:lists\/[^/]+\/)?watchlist\/?/i.test(s),
+    fetchPage: (ref, { entry, skip, keys }) => fetchMdblistWatchlist(entry, skip, catalogMdblistKey(keys), keys.mdblistAccessToken || ""),
+  },
+  {
+    name: "mdblist-history", provider: "mdblist", kind: "personal", apiUse: "mdblist",
+    match: (s) => isSourceSentinel(s, "mdblist:history") || /^https?:\/\/(www\.)?mdblist\.com\/(?:lists\/[^/]+\/)?history\/?/i.test(s),
+    fetchPage: (ref, { entry, skip, keys }) => fetchMdblistHistory(entry, skip, catalogMdblistKey(keys), keys.mdblistAccessToken || ""),
+  },
+  {
+    name: "mdblist-airing-next", provider: "mdblist", kind: "personal", apiUse: "mdblist",
+    match: (s) => isSourceSentinel(s, "mdblist:airing-next") || s === "mdblist:user:shows:airing-next",
+    fetchPage: (ref, { entry, skip, keys }) => fetchMdblistAiringNext(entry, skip, catalogMdblistKey(keys), keys.mdblistAccessToken || "", keys.tmdbKey || TMDB_API_KEY, keys.env, keys.ctx),
+  },
+  {
+    name: "mdblist-upnext", provider: "mdblist", kind: "personal", apiUse: "mdblist",
+    match: (s) => isSourceSentinel(s, "mdblist:upnext") || s === "mdblist:user:shows:upnext",
+    fetchPage: (ref, { entry, skip, keys }) => fetchMdblistUpNext(entry, skip, catalogMdblistKey(keys), keys.mdblistAccessToken || "", keys.tmdbKey || TMDB_API_KEY, keys.env, keys.ctx),
+  },
+  // (www.|app.) and a trailing "?query" or "#hash" are tolerated in the
+  // trakt.tv URLs below. A fully $-anchored .../watchlist$ failed to recognize
+  // a URL copied while a filter was active on trakt.tv (a trailing
+  // "?something=x"), or one copied from app.trakt.tv. It then fell through to
+  // the generic "trakt" source, which expects a /lists/ path, and the row
+  // never resolved.
+  {
+    name: "trakt-watchlist", provider: "trakt", kind: "personal", apiUse: "trakt",
+    match: (s) => isSourceSentinel(s, "trakt:watchlist") || /^https?:\/\/(www\.|app\.)?trakt\.tv\/users\/[^/]+\/watchlist\/?(?:[?#].*)?$/i.test(s),
+    fetchPage: (ref, { entry, skip, keys }) => fetchTraktWatchlist(entry, skip, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx),
+  },
+  {
+    name: "trakt-history", provider: "trakt", kind: "personal", apiUse: "trakt",
+    match: (s) => isSourceSentinel(s, "trakt:history") || /^https?:\/\/(www\.|app\.)?trakt\.tv\/users\/[^/]+\/history\/?(?:[?#].*)?$/i.test(s),
+    fetchPage: (ref, { entry, skip, keys }) => fetchTraktHistory(entry, skip, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx),
+  },
+  {
+    name: "trakt-airing-next", provider: "trakt", kind: "personal", apiUse: "trakt",
+    match: (s) => isSourceSentinel(s, "trakt:airing-next") || s === "trakt:user:shows:airing-next",
+    fetchPage: (ref, { entry, skip, keys }) => fetchTraktAiringNext(entry, skip, catalogTraktKey(keys), keys.traktAccessToken || "", keys.tmdbKey || TMDB_API_KEY, keys.env, keys.ctx),
+  },
+  {
+    name: "trakt-continue-watching", provider: "trakt", kind: "personal", apiUse: "trakt",
+    match: (s) => isSourceSentinel(s, "trakt:continue-watching") || s === "trakt:user:continue-watching" || /^https?:\/\/(www\.|app\.)?trakt\.tv\/users\/[^/]+\/continue-watching\/?(?:[?#].*)?$/i.test(s),
+    fetchPage: (ref, { entry, skip, keys }) => fetchTraktContinueWatching(entry, skip, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx),
+  },
+  {
+    name: "tmdb-chart", provider: "tmdb", kind: "chart", apiUse: "tmdb",
+    snapshot: { region: true, variant: (ref, { keys }) => (keys.hideNonDigitalReleases ? "digital" : "") },
+    match: (s) => s.startsWith("tmdb:chart:") || !!parseTmdbWebChartUrl(s),
+    arg: (s) => {
+      const webChart = parseTmdbWebChartUrl(s);
+      return webChart ? webChart.chartKey : s.slice("tmdb:chart:".length);
+    },
+    fetchPage: (ref, { entry, skip, keys }) => fetchTmdbChart(entry, skip, TMDB_API_KEY, ref.arg, keys.region, keys.hideNonDigitalReleases, keys.env, keys.ctx),
+  },
+  {
+    name: "tmdb-top10", provider: "tmdb", kind: "chart", apiUse: "tmdb",
+    snapshot: { region: true },
+    match: (s) => s.startsWith("tmdb:top10:"),
+    arg: sourceArgAfter("tmdb:top10:"),
+    fetchPage: (ref, { entry, skip, keys }) => fetchTmdbProviderTop10(entry, skip, TMDB_API_KEY, ref.arg, keys.region),
+  },
+  {
+    name: "tmdb-hidden-gems", provider: "tmdb", kind: "chart", apiUse: "tmdb",
+    // A different slice each UTC day (fetchTmdbHiddenGems), so the day is part of the snapshot.
+    snapshot: { variant: () => "day" + Math.floor(Date.now() / 86400000) },
+    match: (s) => s === "tmdb:hidden-gems",
+    fetchPage: (ref, { entry, skip }) => fetchTmdbHiddenGems(entry, skip, TMDB_API_KEY),
+  },
+  {
+    name: "tmdb-kids", provider: "tmdb", kind: "chart", apiUse: "tmdb",
+    snapshot: {},
+    match: (s) => s.startsWith("tmdb:kids:"),
+    arg: sourceArgAfter("tmdb:kids:"),
+    fetchPage: (ref, { entry, skip }) => fetchTmdbKids(entry, skip, TMDB_API_KEY, ref.arg),
+  },
+  {
+    name: "tmdb-holiday", provider: "tmdb", kind: "chart", apiUse: "tmdb",
+    snapshot: {},
+    match: (s) => s.startsWith("tmdb:holiday:"),
+    arg: sourceArgAfter("tmdb:holiday:"),
+    fetchPage: (ref, { entry, skip }) => fetchTmdbHoliday(entry, skip, TMDB_API_KEY, ref.arg),
+  },
+  {
+    name: "tmdb-genre", provider: "tmdb", kind: "chart", apiUse: "tmdb",
+    snapshot: { region: true },
+    match: (s) => s.startsWith("tmdb:genre:"),
+    arg: sourceArgAfter("tmdb:genre:"),
+    fetchPage: (ref, { entry, skip, keys }) => fetchTmdbGenre(entry, skip, TMDB_API_KEY, ref.arg, keys.region),
+  },
+  // New on Streaming: bare, or with a "+"-separated service selection after a
+  // colon ("tmdb:new-on-streaming:netflix+hulu"). It reads D1 and makes no
+  // provider call: the JustWatch (or RapidAPI) and TMDB calls happen in the
+  // cron sweep (sweepNewOnStreaming), counted against the sweep's own budget
+  // rather than against whoever opened the shelf. So it belongs to this site,
+  // and spends no key here.
+  {
+    name: "tmdb-new-on-streaming", provider: "mylists", kind: "chart", apiUse: null,
+    match: (s) => isSourceSentinel(s, "tmdb:new-on-streaming") || isSourceSentinel(s, "rapidapi:new-on-streaming") || isSourceSentinel(s, "streaming:new-on-streaming"),
+    fetchPage: (ref, { entry, skip, keys }) => fetchNewOnStreaming(entry, skip, keys),
+  },
+  // This add-on's own Most Watched chart ("mylists:most-watched:today|7|30"),
+  // read from a KV snapshot rebuilt at most hourly or daily
+  // (fetchMostWatchedCatalog).
+  {
+    name: "mylists-most-watched", provider: "mylists", kind: "chart", apiUse: null,
+    match: (s) => s.startsWith("mylists:most-watched:"),
+    fetchPage: (ref, { entry, skip, keys }) => fetchMostWatchedCatalog(entry, skip, keys),
+  },
+  {
+    name: "trakt-chart", provider: "trakt", kind: "chart", apiUse: "trakt",
+    snapshot: {},
+    match: (s) => s.startsWith("trakt:chart:"),
+    arg: sourceArgAfter("trakt:chart:"),
+    fetchPage: (ref, { entry, skip, keys }) => fetchTraktChart(entry, skip, catalogTraktKey(keys), ref.arg, keys.env, keys.ctx),
+  },
+  {
+    name: "simkl-chart", provider: "simkl", kind: "chart", apiUse: "simkl",
+    snapshot: {},
+    match: (s) => s.startsWith("simkl:chart:"),
+    arg: sourceArgAfter("simkl:chart:"),
+    fetchPage: (ref, { entry, skip, keys }) => fetchSimklChart(entry, skip, SIMKL_CLIENT_ID, ref.arg, keys.env, keys.ctx),
+  },
+  {
+    name: "simkl-user", provider: "simkl", kind: "personal", apiUse: "simkl",
+    match: (s) => s.startsWith("simkl:user:"),
+    arg: sourceArgAfter("simkl:user:"),
+    fetchPage: (ref, { entry, skip, keys }) => fetchSimklUserList(entry, skip, keys.simklAccessToken, SIMKL_CLIENT_ID, ref.arg, keys.tmdbKey, keys.env, keys.ctx),
+  },
+  {
+    name: "channel", provider: "mylists", kind: "own", apiUse: null,
+    match: (s) => s.startsWith("channel:v1:"),
+    fetchPage: (ref, { entry, keys }) => fetchChannelCatalog(entry, keys.origin),
+  },
+  {
+    name: "custom-list", provider: "mylists", kind: "own", apiUse: null,
+    match: (s) => s.startsWith("customlist:v1:"),
+    fetchPage: (ref, { entry, skip, keys }) => fetchCustomListCatalog(entry, skip, keys),
+  },
+  {
+    name: "autotrack", provider: "mylists", kind: "personal", apiUse: null,
+    match: (s) => s.startsWith("autotrack:") || s === "custom:watch-history" || s === "custom:continue-watching" || s === "custom:watchlist" || s.startsWith("custom:watch-history:") || s.startsWith("custom:continue-watching:"),
+    fetchPage: (ref, { entry, keys }) => fetchAutoTrackedCatalog(entry, keys.env, keys),
+  },
+  // Recommended Movies / Shows: the account's own Discover snapshot, or, when
+  // that is too old, recommendations built from TMDB (so it counts as TMDB).
+  {
+    name: "curated", provider: "mylists", kind: "personal", apiUse: "tmdb",
+    match: (s) => s.startsWith("custom:curated:") || s.startsWith("curated:"),
+    fetchPage: (ref, { entry, skip, keys }) => fetchCuratedCatalog(entry, skip, keys),
+  },
+  {
+    name: "tmdb-collection", provider: "tmdb", kind: "list", apiUse: "tmdb",
+    match: (s) => s.startsWith("tmdb:collection:") || /^https?:\/\/(?:www\.)?themoviedb\.org\/collection\//i.test(s),
+    fetchPage: (ref, { entry, skip, keys }) => fetchTmdbCollection(entry, skip, TMDB_API_KEY, keys.env, keys.ctx),
+  },
+  // A list published on this site, read from its own storage, never fetched.
+  {
+    name: "published-list", provider: "mylists", kind: "list", apiUse: null,
+    match: (s) => !!parsePublishedListUrl(s),
+    fetchPage: (ref, { entry, keys }) => fetchPublishedListCatalog(entry, keys.env),
+  },
+  {
+    name: "trakt", provider: "trakt", kind: "list", apiUse: "trakt",
+    match: (s) => /^https?:\/\/(www\.|app\.)?trakt\.tv\//i.test(s),
+    fetchPage: (ref, { entry, skip, keys }) => fetchTrakt(entry, skip, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx),
+  },
+  {
+    name: "tmdb", provider: "tmdb", kind: "list", apiUse: "tmdb",
+    match: (s) => /^https?:\/\/(www\.)?themoviedb\.org\/list\//i.test(s),
+    fetchPage: (ref, { entry, skip }) => fetchTmdb(entry, skip, TMDB_API_KEY),
+  },
+  // The default, and backwards-compatible with existing configs: anything not
+  // claimed above is an MDBList public list (a URL, or a bare "user/list").
+  {
+    name: "mdblist", provider: "mdblist", kind: "list", apiUse: "mdblist",
+    match: () => true,
+    fetchPage: (ref, { entry, skip, keys }) => fetchMdblist(entry, skip, catalogMdblistKey(keys), keys.env, keys.ctx),
+  },
+];
+
+const CATALOG_SOURCE_BY_NAME = new Map(CATALOG_SOURCES.map((src) => [src.name, src]));
+
+function catalogSourceByName(name) {
+  return CATALOG_SOURCE_BY_NAME.get(name) || null;
+}
+
+// What a row's URL (or sentinel) is, as the adapters see it:
+//   { source, provider, kind, url, arg }
+// Always returns a ref: the last source takes anything.
+function resolveSourceRef(input) {
+  const s = String(input || "").trim();
+  for (const src of CATALOG_SOURCES) {
+    if (src.match(s)) {
+      return { source: src.name, provider: src.provider, kind: src.kind, url: s, arg: src.arg ? src.arg(s) : "" };
+    }
+  }
+  return null;
+}
+
 function detectSource(input) {
-  const s = (input || "").trim();
-  if (s === "mdblist:watchlist" || s.startsWith("mdblist:watchlist:") || /^https?:\/\/(www\.)?mdblist\.com\/(?:lists\/[^/]+\/)?watchlist\/?/i.test(s)) return "mdblist-watchlist";
-  if (s === "mdblist:history" || s.startsWith("mdblist:history:") || /^https?:\/\/(www\.)?mdblist\.com\/(?:lists\/[^/]+\/)?history\/?/i.test(s)) return "mdblist-history";
-  if (s === "mdblist:airing-next" || s.startsWith("mdblist:airing-next:") || s === "mdblist:user:shows:airing-next") return "mdblist-airing-next";
-  if (s === "mdblist:upnext" || s.startsWith("mdblist:upnext:") || s === "mdblist:user:shows:upnext") return "mdblist-upnext";
-  // (www.|app.) and a trailing "?query" or "#hash" both tolerated here --
-  // matching every other trakt.tv regex in this function -- because a
-  // fully $-anchored .../watchlist$ / .../history$ (this used to require
-  // the URL end exactly there) silently failed to recognize a URL copied
-  // while some filter/view toggle on trakt.tv's own site was active (e.g.
-  // a trailing "?something=x"), or one copied from app.trakt.tv. It still
-  // fell through to the generic "trakt" case below rather than erroring,
-  // but generic handling expects a /lists/ path a watchlist/history URL
-  // doesn't have, so the list failed to resolve at all.
-  if (s === "trakt:watchlist" || s.startsWith("trakt:watchlist:") || /^https?:\/\/(www\.|app\.)?trakt\.tv\/users\/[^/]+\/watchlist\/?(?:[?#].*)?$/i.test(s)) return "trakt-watchlist";
-  if (s === "trakt:history" || s.startsWith("trakt:history:") || /^https?:\/\/(www\.|app\.)?trakt\.tv\/users\/[^/]+\/history\/?(?:[?#].*)?$/i.test(s)) return "trakt-history";
-  if (s === "trakt:airing-next" || s.startsWith("trakt:airing-next:") || s === "trakt:user:shows:airing-next") return "trakt-airing-next";
-  if (s === "trakt:continue-watching" || s.startsWith("trakt:continue-watching:") || s === "trakt:user:continue-watching" || /^https?:\/\/(www\.|app\.)?trakt\.tv\/users\/[^/]+\/continue-watching\/?(?:[?#].*)?$/i.test(s)) return "trakt-continue-watching";
-  if (s.startsWith("tmdb:chart:") || parseTmdbWebChartUrl(s)) return "tmdb-chart";
-  if (s.startsWith("tmdb:top10:")) return "tmdb-top10";
-  if (s === "tmdb:hidden-gems") return "tmdb-hidden-gems";
-  if (s.startsWith("tmdb:kids:")) return "tmdb-kids";
-  if (s.startsWith("tmdb:holiday:")) return "tmdb-holiday";
-  if (s.startsWith("tmdb:genre:")) return "tmdb-genre";
-  // Bare, or with a "+"-separated service selection after a colon --
-  // "tmdb:new-on-streaming", "tmdb:new-on-streaming:netflix+hulu". Matched
-  // before nothing else because it shares no prefix with the entries above;
-  // it is listed here so the tmdb: family stays in one place.
-  if (
-    s === "tmdb:new-on-streaming" || s.startsWith("tmdb:new-on-streaming:") ||
-    s === "rapidapi:new-on-streaming" || s.startsWith("rapidapi:new-on-streaming:") ||
-    s === "streaming:new-on-streaming" || s.startsWith("streaming:new-on-streaming:")
-  ) return "tmdb-new-on-streaming";
-  // This add-on's own Most Watched chart -- "mylists:most-watched:today|7|30".
-  if (s.startsWith("mylists:most-watched:")) return "mylists-most-watched";
-  if (s.startsWith("trakt:chart:")) return "trakt-chart";
-  if (s.startsWith("simkl:chart:")) return "simkl-chart";
-  if (s.startsWith("simkl:user:")) return "simkl-user";
-  if (s.startsWith("channel:v1:")) return "channel";
-  if (s.startsWith("customlist:v1:")) return "custom-list";
-  if (s.startsWith("autotrack:") || s === "custom:watch-history" || s === "custom:continue-watching" || s === "custom:watchlist" || s.startsWith("custom:watch-history:") || s.startsWith("custom:continue-watching:")) return "autotrack";
-  if (s.startsWith("custom:curated:") || s.startsWith("curated:")) return "curated";
-  if (s.startsWith("tmdb:collection:") || /^https?:\/\/(?:www\.)?themoviedb\.org\/collection\//i.test(s)) return "tmdb-collection";
-  if (parsePublishedListUrl(s)) return "published-list";
-  if (/^https?:\/\/(www\.|app\.)?trakt\.tv\//i.test(s)) return "trakt";
-  if (/^https?:\/\/(www\.)?themoviedb\.org\/list\//i.test(s)) return "tmdb";
-  return "mdblist"; // default / backwards-compatible with existing configs
+  return resolveSourceRef(input).source;
+}
+
+// A Letterboxd list or watchlist URL: { provider, kind: "import", user, slug }.
+// Letterboxd has no API, so its rows are never served live: a Letterboxd list
+// is imported (read in the browser, matched through /api/bulk-resolve) and
+// becomes one of the person's own lists. detectSource does not claim these
+// URLs, so a pasted one still goes to the MDBList default, as before.
+function parseLetterboxdListUrl(input) {
+  const s = String(input || "").trim();
+  const m = s.match(/^https?:\/\/(?:www\.)?letterboxd\.com\/([A-Za-z0-9_]{1,40})\/(?:list\/([A-Za-z0-9_-]{1,120})|(watchlist))\/?(?:[?#].*)?$/i);
+  if (!m) return null;
+  return { provider: "letterboxd", kind: "import", url: s, user: m[1].toLowerCase(), slug: (m[2] || m[3]).toLowerCase() };
+}
+
+// The provider adapters. Each one names the hosts it talks to, the catalog
+// sources it owns (filled from CATALOG_SOURCES below) and parseRef, which
+// reads a URL or sentinel into a ref when it is one of that provider's.
+//
+// usesSharedKey(keys): whether a request with these install keys spends the
+// site's own key rather than the person's. Only the providers some source
+// names as its apiUse have one.
+//
+// Some providers serve no catalog row. JustWatch and RapidAPI feed the New on
+// Streaming sweep, TVmaze gives air times, Cinemeta is the metadata fallback,
+// and Letterboxd is import only. They are here so every provider this Worker
+// calls has one entry to hang its breaker, metrics and fixtures on (P4-4,
+// P4-5).
+function makeProviderAdapter(id, label, hosts, extra) {
+  return {
+    id,
+    label,
+    hosts,
+    sources: [],
+    parseRef(input) {
+      const ref = resolveSourceRef(input);
+      return ref && ref.provider === id ? ref : null;
+    },
+    ...(extra || {}),
+  };
+}
+
+const PROVIDER_ADAPTERS = {
+  tmdb: makeProviderAdapter("tmdb", "TMDB", ["api.themoviedb.org", "themoviedb.org", "www.themoviedb.org"], {
+    usesSharedKey: () => true,
+  }),
+  trakt: makeProviderAdapter("trakt", "Trakt", ["api.trakt.tv", "trakt.tv", "www.trakt.tv", "app.trakt.tv"], {
+    usesSharedKey: (keys) => !keys.traktKey,
+  }),
+  mdblist: makeProviderAdapter("mdblist", "MDBList", ["api.mdblist.com", "mdblist.com", "www.mdblist.com"], {
+    usesSharedKey: (keys) => !(keys.mdblistKey || keys.mdblistAccessToken),
+  }),
+  simkl: makeProviderAdapter("simkl", "Simkl", ["api.simkl.com", "data.simkl.in", "simkl.com", "www.simkl.com"], {
+    usesSharedKey: () => true,
+  }),
+  justwatch: makeProviderAdapter("justwatch", "JustWatch", ["apis.justwatch.com"], { parseRef: () => null }),
+  rapidapi: makeProviderAdapter("rapidapi", "RapidAPI Streaming Availability", ["streaming-availability.p.rapidapi.com"], { parseRef: () => null }),
+  tvmaze: makeProviderAdapter("tvmaze", "TVmaze", ["api.tvmaze.com"], { parseRef: () => null }),
+  cinemeta: makeProviderAdapter("cinemeta", "Cinemeta", ["v3-cinemeta.strem.io", "images.metahub.space"], { parseRef: () => null }),
+  letterboxd: makeProviderAdapter("letterboxd", "Letterboxd", ["letterboxd.com", "www.letterboxd.com"], { parseRef: parseLetterboxdListUrl }),
+  // This site's own rows: channels, custom and published lists, the tracked
+  // shelves, Recommended, Most Watched and New on Streaming. Served from its
+  // own storage; no host.
+  mylists: makeProviderAdapter("mylists", "My Lists", []),
+};
+
+for (const src of CATALOG_SOURCES) PROVIDER_ADAPTERS[src.provider].sources.push(src.name);
+
+function providerAdapter(id) {
+  return Object.prototype.hasOwnProperty.call(PROVIDER_ADAPTERS, id) ? PROVIDER_ADAPTERS[id] : null;
 }
 
 // --- What a signed-out install may carry (docs/DECISIONS.md D-8) ------------

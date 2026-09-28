@@ -746,7 +746,7 @@ The existing files keep their responsibilities:
 | `01_icon-asset.js` | The app icon |
 | `02_http-and-creator-utils.js` | HTTP helpers and the fetch guard, auth and account helpers, storage helpers (KV/D1), likes, the directory, the schema gate and request metrics |
 | `03_admin.js` | The admin page and its data queries |
-| `04_config-resolution.js` | Install configs, source detection, the D-8 account rule |
+| `04_config-resolution.js` | Install configs, source detection and the provider registry (`CATALOG_SOURCES`, `PROVIDER_ADAPTERS`, P4-1), the D-8 account rule |
 | `05_catalog-core.js` | Stremio catalog/meta building, the channel engine, posters and badges |
 | `06_`, `07_` | Provider fetchers (MDBList, Trakt, TMDB, Simkl, JustWatch, TVmaze) and the cron sweeps |
 | `08_quickadd-chart-data.js` | Quick Add chart tables |
@@ -761,6 +761,9 @@ The existing files keep their responsibilities:
 | `33_lists-directory.js` | The public list directory and search read from v2 (P3b-6) |
 | `34_lists-v2-bridge.js` | The legacy list routes over v2: mirroring every legacy list write into v2, and the rest of the read switch (P3b-7) |
 | `35_channels-v2.js` | Shared channels as `channels` rows plus R2 pools: the mirror of every legacy channel write, the reads, Explore Channels as a query, and the copy's channels phase (P3b-8) |
+| `41_provider-breaker.js` | The per-provider breaker behind the fetch guard, its `pb:` KV sharing and provider metrics (P4-4) |
+| `42_chart-snapshots.js` | Chart snapshots: one shared copy per chart page in KV, served stale-while-revalidate (P4-3) |
+| `43_catalog-ids.js` | Canonical ids for every Stremio catalog row, from the row's own ids and the `media` table (P4-2) |
 
 **New server-only areas go in new numbered files after `26_`**, each starting with a comment saying what it owns. They can't go between `09_` and `24_`, which are inside the page's template literal. Top-level names must be unique across every file.
 

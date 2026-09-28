@@ -68,6 +68,7 @@ Adding a binding before the code that uses it is harmless. Removing a binding th
 - `FF_V2_LISTS_READ` (optional): `1` makes the site read lists and shared channels from the new tables: the dashboard, list pages, catalogs, the directory and search, shared channels and Explore Channels (P3b-6 to P3b-8). **Leave unset** until the copy (§9) has finished; §10 has the steps. Turning it off again is always safe, because every change is still written to the old storage.
 - `FF_V2_LISTS_API` (optional): `1` turns on `/api/lists`, the item-level list API, and `/api/likes`, the likes API, over the new list tables (P3b-4, P3b-5). **Leave unset.** What these APIs write goes to the new tables only. Until a later release stops writing the old storage (P3b-9), turning `FF_V2_LISTS_READ` off, or running the copy again, would lose it.
 - `FF_V2_LISTS_ONLY` (optional, P3b-9): `1` stops writing the old list and channel storage; the new tables become the only store, and everything reads from them. **One-way.** Leave unset until §11 says it is time, and once set, leave it set.
+- `FF_PROVIDER_BREAKER` (optional, P4-4): `1` turns on the provider breaker (§14). When a provider (TMDB, Trakt, MDBList, Simkl, ...) fails five times in a row, the site stops calling it for a minute and serves its last good copies straight away, instead of every row waiting for a timeout. Safe to turn on and off at any time.
 - `INSTALL_MIGRATION_PERCENT` (optional, `0` to `100`): the share of existing install links whose keys and tokens move into encrypted D1 storage the first time they are used. See §8 before setting it.
 - **Delete** these retired variables if they are still set: `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET`, `CRON_SUBREQUEST_BUDGET`. The code ignores them.
 
@@ -290,4 +291,59 @@ It does not copy Airing Next or the recommendations. Both are worked out rather 
 - Known differences:
   - Watch History shows an episode as "Episode N" with the show's poster, where the old record kept the episode's own title and still.
   - The website's list is capped at the latest 5,000 plays; the database keeps them all.
+
+## 14. The provider breaker (P4-4)
+
+`FF_PROVIDER_BREAKER` protects the site when a provider (TMDB, Trakt, MDBList, Simkl, JustWatch, RapidAPI, TVmaze, Cinemeta) is down. Without it, every request that needs that provider waits for the call to time out (10 to 30 seconds) before the last good copy is shown. That wait is repeated for every row on every Stremio home screen, for as long as the outage lasts.
+
+**What it does:** after five failures in a row (no answer, a server error, or "too many requests"), calls to that provider are refused for one minute. Rows that have a saved copy show it at once; rows that don't show their usual "couldn't load" state. After the minute, one call is let through: if it works, everything goes back to normal; if not, the provider is skipped for another minute. A wrong key or a title that doesn't exist does not count as a failure.
+
+Each Worker copy keeps its own count. The first one to find a provider down writes `pb:<provider>` to KV (it expires by itself after a minute), and other copies read it before calling that provider for a catalog row, so the whole site skips a dead provider within about a minute.
+
+**Turning it on:** Worker → Settings → Variables and Secrets → Add → type *Text*, name `FF_PROVIDER_BREAKER`, value `1`. Deploy. **Turning it off:** delete the variable and deploy. Both are safe at any time; nothing is stored except the short-lived `pb:` keys.
+
+**Watching it:** with the `ANALYTICS` binding, each Worker copy writes one point per provider at most once a minute, with index `provider`: blobs `["provider", <id>, "open" | "closed"]` and doubles `[calls, failures, calls refused, total wait in ms, times opened]`. The Worker's logs also say `[ProviderBreaker] <provider>: 5 failures in a row` each time one opens.
+
+## 15. Chart snapshots (P4-3)
+
+`FF_CHART_SNAPSHOTS` makes every TMDB, Trakt and Simkl chart row (Popular, Trending, Top 10, genres, kids, holidays, Hidden Gems) come from one shared copy per page, kept in KV under `snap:chart:...`. Everyone with the same chart, region and settings reads the same copy.
+
+**How it behaves:** a copy is fresh for two hours. After that it is still served straight away, and a new one is built in the background. If the provider answers with an empty chart, or fails, the old copy stays (a chart is never really empty), and that copy is not rebuilt again for five minutes. Copies are kept for a week, so an outage makes charts older, not empty. Your own charts (Most Watched, New on Streaming) are copies already and are not affected.
+
+**Turning it on:** Worker → Settings → Variables and Secrets → Add → type *Text*, name `FF_CHART_SNAPSHOTS`, value `1`. Deploy. **Turning it off:** delete the variable and deploy. Both are safe at any time. The `snap:chart:` keys expire by themselves after a week; they can also be deleted by hand, and are rebuilt when next asked for.
+
+**Cost:** one KV read per chart row per Worker copy per minute at most (each copy remembers what it read for a minute), and one KV write per chart page every two hours while someone is asking for it.
+
+## 16. The nightly provider check (P4-5)
+
+`.github/workflows/provider-live-check.yml` runs every night (and from Actions → *Provider live check* → *Run workflow*). It asks each provider the site reads one real question and checks that the answer still has every field the site depends on. When a provider changes something, the run fails and its summary names the provider and the field, so it can be fixed before catalogs go empty. It never writes anything.
+
+The keyless providers (MDBList public lists, Simkl's charts, TVmaze, Cinemeta, JustWatch) are checked with no setup. To check the others, add these repository secrets (Settings → Secrets and variables → Actions), with the same values the Worker uses. Each is optional; a provider without its key shows as *skipped*.
+
+| Secret | Checks |
+|---|---|
+| `TMDB_API_KEY` | TMDB charts, details, lookups, collections and lists |
+| `TRAKT_CLIENT_ID` | Trakt charts and list items |
+| `MDBLIST_API_KEY` | MDBList Popular Lists |
+| `RAPIDAPI_KEY` | RapidAPI's changes feed. Only if the RapidAPI engine is in use: each run spends one request of its monthly quota. |
+
+`SIMKL_CLIENT_ID` can be added too, but nothing needs it today: Simkl's chart files are public.
+
+**When it fails:** open the run and read its summary. *HTTP 401/403* means a key is wrong or expired. *HTTP 404* on a sample means the sample itself went away, and the fixture's `live` request needs a new one. A named field (for example `results[].title is missing`) means the provider changed its answer: the fetcher that reads it (the fixture's `usedBy`) needs updating, along with the fixture.
+
+## 17. Canonical ids in Stremio catalogs (P4-2)
+
+`FF_CANONICAL_IDS` makes every title a Stremio (or Nuvio, wako) catalog serves carry an id the apps and other add-ons can open:
+
+- an IMDb id (`tt...`) wherever one is known: on the row itself, or in the site's `media` table (migration 0016);
+- otherwise `tmdb:<number>`;
+- a channel keeps its own id.
+
+Before, some rows passed on whatever id they had, and the app showed a tile that opened to "not found". The main case is an episode in a storyline list, which was sent under TMDB's number for the episode; it now opens its show. Anime ids from Kitsu, MyAnimeList, AniList and AniDB are kept when the site doesn't know the title's IMDb or TMDB id, because anime add-ons read them. A row with an id nothing can open is left out, and a title that appears twice in one row is shown once.
+
+The website's previews are not affected. They still show a storyline list's episodes one by one.
+
+**One thing to know before turning it on:** where the site knows a title's IMDb id, a title that was served as `tmdb:<number>` is now served under its IMDb id. Stremio treats that as a different title, so anything someone saved in Stremio itself under the old id (its own library or Continue Watching) stays under the old id. The site's own shelves are not affected.
+
+**Turning it on:** Worker → Settings → Variables and Secrets → Add → type *Text*, name `FF_CANONICAL_IDS`, value `1`. Deploy. **Turning it off:** delete the variable and deploy; rows go back to the ids they had. Neither stores anything.
 

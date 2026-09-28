@@ -23,6 +23,40 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 `FF_SESSIONS`, `FF_INSTALLS`, `FF_V2_LISTS_API`, `FF_V2_LISTS_READ` and `FF_V2_LISTS_ONLY` stay **off** (unset). Leave the first three off until the new sign-in, install-link and list screens ship. `FF_V2_LISTS_READ` stays off until the list copy (`docs/OPERATIONS.md` §9) has finished and its report has been checked; §10 then gives the steps, and turning it off again is always safe. `FF_V2_LISTS_ONLY` comes last and is **one-way**: only after reads have been on the new tables for a while (§11).
 
+`FF_PROVIDER_BREAKER` (P4-4), `FF_CHART_SNAPSHOTS` (P4-3) and `FF_CANONICAL_IDS` (P4-2), all below, are optional and can be turned on or off at any time (`docs/OPERATIONS.md` §14, §15, §17; read §17 before the last one).
+
+### 🪪 Every title in a Stremio catalog opens (P4-2)
+
+- **A new switch, `FF_CANONICAL_IDS` (off).** With it on, every title a Stremio, Nuvio or wako catalog serves carries an id the apps can open: its IMDb id where the site knows it, otherwise its TMDB id.
+- **Fixed with it:** an episode in a storyline list (a custom list of episodes) was sent under TMDB's number for the episode, which no add-on recognizes, so its tile opened to "not found". It now opens its show. A title that appears twice in one row is shown once, and a row whose id nothing can open is left out.
+- Anime ids (Kitsu, MyAnimeList, AniList, AniDB) are kept, because anime add-ons read them. The website's own previews are unchanged.
+- One thing to know before turning it on (`docs/OPERATIONS.md` §17): a title served until now by its TMDB id is served by its IMDb id once the site knows it, and Stremio's own library keeps anything saved under the old id separately.
+
+### 🔭 A nightly check that every provider still answers the way the site expects (P4-5)
+
+- **For maintainers; nothing changes for visitors.** Example answers from every provider the site reads (TMDB, Trakt, MDBList, Simkl, TVmaze, Cinemeta, JustWatch, RapidAPI) are now kept with the tests, each listing the fields the site depends on. The test suite runs the real code over them.
+- A new GitHub workflow asks each provider the same questions every night and checks the real answers against the same lists. When a provider renames or drops a field, it fails and names the field, instead of a catalog quietly going empty. Adding the provider keys as GitHub secrets turns on the checks that need them (`docs/OPERATIONS.md` §16); the keyless providers are checked without them.
+
+### 📸 Charts from one shared copy (P4-3)
+
+- **A new switch, `FF_CHART_SNAPSHOTS` (off).** With it on, TMDB, Trakt and Simkl charts (Popular, Trending, Top 10, genres, kids, holidays, Hidden Gems) are served from one shared copy per page, kept in KV. Everyone with the same chart and region reads the same copy, and each chart page is asked of the provider about once every two hours rather than about every ten minutes.
+- A copy is refreshed in the background after two hours, without anyone waiting for it. If the provider answers with an empty chart or an error, the last good copy stays: a chart never goes blank because a provider had a bad moment.
+- Safe to turn on and off at any time (`docs/OPERATIONS.md` §15).
+
+### 🛡️ A provider that is down no longer holds up every row (P4-4)
+
+- **A new switch, `FF_PROVIDER_BREAKER` (off).** With it on, when TMDB, Trakt, MDBList, Simkl or another provider fails five times in a row, the site stops calling it for a minute and shows the last good copy of each row straight away. Before, every row waited up to 10 to 30 seconds for the provider to time out, on every home screen, for as long as the outage lasted.
+- After the minute, one call is let through, and the provider is used again as soon as it answers. A wrong key or a missing title does not count as a failure.
+- One copy of the Worker that finds a provider down tells the others through a short-lived KV key (`pb:<provider>`, gone after a minute).
+- The request metrics gain one point per provider each minute: calls, failures, calls refused, and time spent waiting. `docs/OPERATIONS.md` §14 has the details.
+- Safe to turn on and off at any time.
+
+### 🧭 One table for every kind of catalog row (P4-1)
+
+- **Nothing changes for visitors.** Every kind of row the add-on can serve (a TMDB or Trakt chart, an MDBList or Trakt list, a watchlist, a channel, a custom list, and so on, 28 in all) is now described once, in one table, together with the provider it comes from and the code that fetches it. Before, the add-on worked out what a row was in one long chain of checks and fetched it in a second chain that had to be kept in step with the first by hand.
+- It is the groundwork for the rest of Phase 4: one place to add protections per provider (a provider that is down is skipped quickly instead of making every row wait) and to keep a copy of each chart.
+- Tests hold the new table to the old chains word for word: every kind of row gets the same name, is fetched by the same code with the same keys, and counts the same way in the admin API Usage tab.
+
 ### 📺 A database for watch history (P3c-1)
 
 - **Groundwork only, nothing changes for visitors.** Watch history and show progress will move into their own D1 database, `mylists-activity` (binding `DB_ACTIVITY`), so the biggest data the site keeps does not crowd out lists and accounts. Its tables are in `migrations/activity/A0001_activity.sql`. Nothing uses them yet, so there is no need to create it with this release; `docs/OPERATIONS.md` §2 and §4 have the steps for when it is wanted.
