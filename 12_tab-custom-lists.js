@@ -8,6 +8,12 @@
 
   <!-- Submenu 1: User's Connected Account & Custom Lists -->
   <div class="lists-subpanel" id="listsSubMyLists">
+    <!-- The shell's own list cards (P6-4): open a list, add titles to it, put
+         it on the home screen, share it. Emitted only for a browser with the
+         FF_NEW_UI cookie; the dashboard below is the same one the old page
+         uses. -->
+${newUi ? '    <div id="appShellListsHome"></div>' : ''}
+
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">Your Custom Lists</h2>
@@ -84,6 +90,10 @@
 
   <!-- Submenu 5: Create Custom List Builder -->
   <div class="lists-subpanel" id="listsSubCreateList" style="display:none;">
+    <!-- Inline "Add titles" search (P6-4), shell only: type, tap Add, and the
+         title is in the draft this panel already saves. -->
+${newUi ? '    <div id="appShellAddTitles"></div>' : ''}
+
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title" id="customListEditorTitle">Create a Custom List</h2>

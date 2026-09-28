@@ -3723,6 +3723,17 @@ ${seoHeadHtml}
   }
   html[data-app-shell="1"] .app-shell-dedupe input { margin-top: 2px; cursor: pointer; width: 16px; height: 16px; }
 
+  /* A visibility choice (P6-4) is a chip you can press: Private, Unlisted,
+     Public. The chosen one is highlighted; the one that needs the new list
+     service is disabled and says why. */
+  html[data-app-shell="1"] button.app-shell-chip {
+    background: none; font: inherit; cursor: pointer;
+  }
+  html[data-app-shell="1"] button.app-shell-chip.is-on {
+    color: var(--accent); border-color: var(--accent);
+  }
+  html[data-app-shell="1"] button.app-shell-chip[disabled] { cursor: not-allowed; opacity: 0.55; }
+
   /* --- Floating Unsaved Changes to Install Link Banner -------------------- */
   .unsaved-install-banner {
     position: fixed;

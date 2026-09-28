@@ -169,6 +169,19 @@ describe("the new UI shell is opt-in through a cookie", () => {
     assert.equal(JSON.stringify(pack), JSON.stringify(demo), "the pack is the same eight rows");
   });
 
+  it("emits the Lists containers only for the shell (P6-4)", async () => {
+    const env = makeEnv();
+    const legacy = await call(env, "/");
+    assert.equal(legacy.text.includes('id="appShellListsHome"'), false);
+    assert.equal(legacy.text.includes('id="appShellAddTitles"'), false);
+    // The shell's own Lists view is a cookie-only path (as every shell path is).
+    assert.equal((await call(env, "/lists")).status, 404);
+    const shell = await call(env, "/lists", { cookie: SHELL_COOKIE });
+    assert.equal(shell.status, 200);
+    assert.ok(shell.text.includes('id="appShellListsHome"'), "the List cards need a home");
+    assert.ok(shell.text.includes('id="appShellAddTitles"'), "the inline search needs a home");
+  });
+
   it("ships one bundle and one stylesheet for both variants", async () => {
     // A shell-only line inside either of them would make one cached,
     // publicly-hashed file depend on a cookie. Each isolate's hash describes

@@ -30168,6 +30168,17 @@ ${seoHeadHtml}
   }
   html[data-app-shell="1"] .app-shell-dedupe input { margin-top: 2px; cursor: pointer; width: 16px; height: 16px; }
 
+  /* A visibility choice (P6-4) is a chip you can press: Private, Unlisted,
+     Public. The chosen one is highlighted; the one that needs the new list
+     service is disabled and says why. */
+  html[data-app-shell="1"] button.app-shell-chip {
+    background: none; font: inherit; cursor: pointer;
+  }
+  html[data-app-shell="1"] button.app-shell-chip.is-on {
+    color: var(--accent); border-color: var(--accent);
+  }
+  html[data-app-shell="1"] button.app-shell-chip[disabled] { cursor: not-allowed; opacity: 0.55; }
+
   /* --- Floating Unsaved Changes to Install Link Banner -------------------- */
   .unsaved-install-banner {
     position: fixed;
@@ -30916,6 +30927,12 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ''}
 
   <!-- Submenu 1: User's Connected Account & Custom Lists -->
   <div class="lists-subpanel" id="listsSubMyLists">
+    <!-- The shell's own list cards (P6-4): open a list, add titles to it, put
+         it on the home screen, share it. Emitted only for a browser with the
+         FF_NEW_UI cookie; the dashboard below is the same one the old page
+         uses. -->
+${newUi ? '    <div id="appShellListsHome"></div>' : ''}
+
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">Your Custom Lists</h2>
@@ -30992,6 +31009,10 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ''}
 
   <!-- Submenu 5: Create Custom List Builder -->
   <div class="lists-subpanel" id="listsSubCreateList" style="display:none;">
+    <!-- Inline "Add titles" search (P6-4), shell only: type, tap Add, and the
+         title is in the draft this panel already saves. -->
+${newUi ? '    <div id="appShellAddTitles"></div>' : ''}
+
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title" id="customListEditorTitle">Create a Custom List</h2>
@@ -76544,6 +76565,454 @@ function appShellAfterHomeChange(message) {
   return true;
 }
 
+// --- the Lists view (P6-4) ---------------------------------------------------
+//
+// Your lists, as cards you can act on: open one, add titles to it without
+// leaving the page, put it on the home screen, and share it. It is additive --
+// the dashboard the page already has stays underneath -- and it exists only on
+// a shell page: the containers it fills are emitted by the server (12_) when,
+// and only when, the request carries the FF_NEW_UI cookie.
+//
+// Everything reuses the page's own machinery rather than re-implementing it:
+// editing a list is editCreatorList(slug)/editLocalCustomList(slug) (the same
+// entry points the dashboard's Edit button uses), adding a title is
+// addToCustomListDraft (21_), putting a list on the home screen builds the same
+// customlist:v1: snapshot the dashboard's "+ Add" builds, and the search is
+// /api/title-search -- the same endpoint the Search tab uses.
+
+// E2E 7 wants one share control with three states. The legacy list store only
+// knows private and public: normalizeListVisibility (02_) maps anything that is
+// not "public" to "private", so offering Unlisted there would quietly save a
+// private list. Unlisted is part of the next list service (31_lists-api.js,
+// PUT /api/lists/:publicId/visibility), which is behind FF_V2_LISTS_API and is
+// off until reads move to the new tables. It is therefore shown, with what it
+// means, and disabled with the reason -- and turning it on is this one flag.
+const APP_SHELL_UNLISTED_READY = false;
+
+const APP_SHELL_LIST_VISIBILITIES = [
+  { id: 'private', label: 'Private', what: 'Only you can open it. Not reachable by link.' },
+  { id: 'unlisted', label: 'Unlisted', what: 'Anyone with the link can open it; it is not listed in Explore.' },
+  { id: 'public', label: 'Public', what: 'Anyone can find it in Explore, and it can be liked.' },
+];
+
+// Which list's share panel is open, and the results of the last title search.
+let appShellShareSlug = null;
+let appShellTitleResults = [];
+let appShellTitleSearchSeq = 0;
+var appShellTitleSearchTimer = null;
+
+function appShellListsHomeHost() {
+  return document.getElementById('appShellListsHome');
+}
+
+function appShellListsEscape(value) {
+  return escapeHtml(String(value === null || value === undefined ? '' : value));
+}
+
+// The lists this browser can act on: the account's, when it is signed in, and
+// the ones kept in this browser otherwise (D-8).
+function appShellOwnLists() {
+  const out = [];
+  const signedIn = (typeof activeCreator !== 'undefined' && !!activeCreator && !!activeCreator.creatorName);
+  if (signedIn && typeof lastCreatorListsData !== 'undefined' && Array.isArray(lastCreatorListsData)) {
+    lastCreatorListsData.forEach(function (l) {
+      if (l && l.slug) out.push(l);
+    });
+    return out;
+  }
+  const map = (typeof loadLocalCustomLists === 'function') ? (loadLocalCustomLists() || {}) : {};
+  Object.keys(map).forEach(function (key) {
+    const l = map[key];
+    if (!l) return;
+    out.push(Object.assign({}, l, { slug: l.slug || key, local: true }));
+  });
+  return out;
+}
+
+function appShellListBySlug(slug) {
+  const want = String(slug || '');
+  const all = appShellOwnLists();
+  for (let i = 0; i < all.length; i++) {
+    if (String(all[i].slug) === want) return all[i];
+  }
+  return null;
+}
+
+function appShellListCount(list) {
+  if (!list) return 0;
+  if (Array.isArray(list.items)) return list.items.length;
+  if (typeof list.itemCount === 'number') return list.itemCount;
+  if (typeof list.count === 'number') return list.count;
+  return 0;
+}
+
+function appShellListKind(list) {
+  const t = list && list.type;
+  if (t === 'series') return 'Shows';
+  if (t === 'movie') return 'Movies';
+  return 'Movies and Shows';
+}
+
+function appShellListVisibility(list) {
+  const v = list && list.visibility;
+  if (v === 'public' || v === 'unlisted' || v === 'private') return v;
+  return 'private';
+}
+
+// The link to a list as other people would open it: the published address when
+// the list has one, otherwise the account's own /lists/<you>/<slug>.
+function appShellListShareUrl(list) {
+  if (!list) return '';
+  if (list.url) return String(list.url);
+  const who = (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) ? activeCreator.creatorName : '';
+  const slug = String(list.slug || '');
+  if (who && slug) return location.origin + '/lists/' + encodeURIComponent(who) + '/' + encodeURIComponent(slug);
+  return location.origin + '/lists/' + encodeURIComponent(slug);
+}
+
+function appShellListOnHomeScreen(slug) {
+  const want = String(slug || '');
+  // The page's own answer first: isListAddedToConfig (16_) is what the
+  // dashboard's own "+ Add" / "Remove" buttons read, so the card and those
+  // buttons can never disagree about whether a list is on the home screen.
+  const list = appShellListBySlug(slug);
+  if (typeof isListAddedToConfig === 'function' && list) {
+    if (isListAddedToConfig(null, list.type, want)) return true;
+    if (isListAddedToConfig(null, 'movie', want) || isListAddedToConfig(null, 'series', want)) return true;
+  }
+  const rows = document.querySelectorAll('#lists .entry');
+  for (let i = 0; i < rows.length; i++) {
+    const urlInput = rows[i].querySelector ? rows[i].querySelector('.url') : null;
+    if (!urlInput) continue;
+    const payload = (typeof parseCustomListPayloadClient === 'function') ? parseCustomListPayloadClient(urlInput.value) : null;
+    if (payload && (String(payload.localSlug || '') === want || String(payload.listSlug || '') === want)) return true;
+  }
+  return false;
+}
+
+// The card's home-screen button, doing exactly what the dashboard's own
+// "+ Add" / "Remove" does for the same list (see 22_client-creator-profile.js).
+function appShellListToggleHomeScreen(slug) {
+  const list = appShellListBySlug(slug);
+  if (!list) {
+    showToast('Could not find that list -- try refreshing.', 'error');
+    return false;
+  }
+  if (appShellListOnHomeScreen(slug)) {
+    if (typeof removeListFromConfig === 'function') {
+      removeListFromConfig(null, list.type, slug);
+      removeListFromConfig(null, 'movie', slug);
+      removeListFromConfig(null, 'series', slug);
+    }
+    const rows = document.querySelectorAll('#lists .entry');
+    for (let i = 0; i < rows.length; i++) {
+      const urlInput = rows[i].querySelector ? rows[i].querySelector('.url') : null;
+      if (!urlInput) continue;
+      const payload = (typeof parseCustomListPayloadClient === 'function') ? parseCustomListPayloadClient(urlInput.value) : null;
+      if (payload && (String(payload.localSlug || '') === String(slug) || String(payload.listSlug || '') === String(slug))) rows[i].remove();
+    }
+    if (typeof renumber === 'function') renumber();
+    if (typeof saveState === 'function') saveState();
+    appShellRenderListsHome();
+    showToast('"' + list.name + '" removed from your home screen.', 'success');
+    return true;
+  }
+  const items = (typeof normalizeSnapshotItemsForCatalog === 'function') ? normalizeSnapshotItemsForCatalog(list.items || []) : (list.items || []);
+  const snapshot = { listId: generateChannelId(), localSlug: slug, listSlug: slug, type: list.type || 'movie', items: items, shuffle: false };
+  addRow(list.name, 'customlist:v1:' + JSON.stringify(snapshot), list.type || 'movie', true, 'My Lists');
+  if (typeof renumber === 'function') renumber();
+  if (typeof saveState === 'function') saveState();
+  appShellRenderListsHome();
+  showToast('"' + list.name + '" added to your home screen.', 'success');
+  return true;
+}
+
+function appShellListChoiceHtml(slug, choice, current) {
+  const on = choice.id === current;
+  const ready = choice.id !== 'unlisted' || APP_SHELL_UNLISTED_READY;
+  return '<button type="button" class="app-shell-chip' + (on ? ' is-on' : '') + '"' +
+    ' data-app-shell-action="list-visibility" data-app-shell-id="' + appShellListsEscape(slug) + '|' + choice.id + '"' +
+    (ready ? '' : ' disabled title="' + appShellListsEscape(choice.what + ' This needs the new list service, which is not switched on yet.') + '"') +
+    '>' + appShellListsEscape(choice.label) + '</button>';
+}
+
+function appShellListShareHtml(list) {
+  const slug = String(list.slug || '');
+  const current = appShellListVisibility(list);
+  let html = '<div class="app-shell-actions" style="margin:6px 0 6px;">';
+  APP_SHELL_LIST_VISIBILITIES.forEach(function (choice) {
+    html += appShellListChoiceHtml(slug, choice, current);
+  });
+  html += '</div>';
+  const chosen = APP_SHELL_LIST_VISIBILITIES.filter(function (c) { return c.id === current; })[0];
+  if (chosen) html += '<p class="app-shell-muted">' + appShellListsEscape(chosen.what) + '</p>';
+  if (!APP_SHELL_UNLISTED_READY) {
+    html += '<p class="app-shell-muted">Unlisted needs the new list service, which is not switched on yet -- until then a list is private or public.</p>';
+  }
+  const url = appShellListShareUrl(list);
+  html += '<p class="app-shell-kv"><span class="app-shell-review-url">' + appShellListsEscape(url) + '</span></p>';
+  html += '<div class="app-shell-actions">' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="list-copy" data-app-shell-id="' + appShellListsEscape(slug) + '">Copy link</button>' +
+    (current === 'private' ? '' : '<button type="button" class="secondary lc-btn" data-app-shell-action="list-preview" data-app-shell-id="' + appShellListsEscape(slug) + '">Open the page</button>') +
+    '</div>';
+  return html;
+}
+
+function appShellListCardHtml(list) {
+  const slug = String(list.slug || '');
+  const onHome = appShellListOnHomeScreen(slug);
+  const vis = appShellListVisibility(list);
+  const count = appShellListCount(list);
+  const meta = appShellListsEscape(vis.charAt(0).toUpperCase() + vis.slice(1)) + ' &middot; ' + appShellListsEscape(appShellListKind(list)) +
+    ' &middot; ' + count + (count === 1 ? ' title' : ' titles');
+  let html = '<div class="app-shell-row">' +
+    '<div class="app-shell-row-main"><strong>' + appShellListsEscape(list.name || slug) + '</strong>' +
+    '<br><span class="app-shell-muted">' + meta + '</span></div>' +
+    '<div class="app-shell-row-controls">' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="list-open" data-app-shell-id="' + appShellListsEscape(slug) + '">Open</button>' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="list-edit" data-app-shell-id="' + appShellListsEscape(slug) + '">Add titles</button>' +
+    '<button type="button" class="' + (onHome ? 'secondary lc-btn' : 'primary lc-btn') + '" data-app-shell-action="list-home" data-app-shell-id="' + appShellListsEscape(slug) + '">' +
+    (onHome ? 'On your home screen' : 'Show on home screen') + '</button>' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="list-share" data-app-shell-id="' + appShellListsEscape(slug) + '">Share</button>' +
+    '</div></div>';
+  if (appShellShareSlug === slug) html += appShellListShareHtml(list);
+  return html;
+}
+
+// Whether this view has already asked the page to fetch the account's lists.
+// One ask only: an account with no lists must end up on the empty state, not
+// on a loop of requests.
+var appShellListsLoadRequested = false;
+
+function appShellRenderListsHome() {
+  const host = appShellListsHomeHost();
+  if (!host || !NEW_UI) return false;
+  const lists = appShellOwnLists();
+  const signedIn = (typeof activeCreator !== 'undefined' && !!activeCreator && !!activeCreator.creatorName);
+  if (!lists.length && signedIn && !appShellListsLoadRequested) {
+    appShellListsLoadRequested = true;
+    host.innerHTML = '<div class="panel" style="margin-bottom:12px;">' +
+      '<h2 class="panel-title">Your lists</h2>' +
+      '<p class="app-shell-muted">Loading your lists...</p></div>';
+    appShellListsRefresh();
+    return true;
+  }
+  if (!lists.length) {
+    host.innerHTML = '<div class="panel" style="margin-bottom:12px;">' +
+      '<h2 class="panel-title">Your lists</h2>' +
+      '<p class="app-shell-muted">' + (signedIn
+        ? 'No lists yet. Start one below, then add titles to it right here.'
+        : 'No lists in this browser yet. Sign in to keep them on your account, or start one below -- it is saved in this browser until then.') + '</p>' +
+      '<div class="app-shell-actions"><button type="button" class="primary lc-btn" data-app-shell-action="list-new">+ New list</button></div>' +
+      '</div>';
+    return true;
+  }
+  let html = '<div class="panel" style="margin-bottom:12px;">' +
+    '<h2 class="panel-title">Your lists</h2>' +
+    '<p class="app-shell-muted">Open one, add titles to it, put it on your home screen, or share it. ' +
+    (signedIn ? 'Everything here is saved to your account.' : 'These are saved in this browser only until you sign in.') + '</p>';
+  lists.forEach(function (list) {
+    html += appShellListCardHtml(list);
+  });
+  html += '<div class="app-shell-actions" style="margin-top:10px;">' +
+    '<button type="button" class="primary lc-btn" data-app-shell-action="list-new">+ New list</button>' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="lists-refresh">Refresh</button></div></div>';
+  host.innerHTML = html;
+  return true;
+}
+
+// --- the inline "Add titles" search -----------------------------------------
+//
+// In the list editor (12_), so creating a list and editing one are the same
+// thing: type, tap Add, and the title is in the draft. Save (the panel's own
+// button) writes it, which is where "Saved" comes from.
+
+function appShellAddTitlesHost() {
+  return document.getElementById('appShellAddTitles');
+}
+
+function appShellTitleResultHtml(result, index) {
+  const year = result && result.year ? ' &middot; ' + appShellListsEscape(result.year) : '';
+  return '<div class="app-shell-row"><div class="app-shell-row-main">' +
+    '<strong>' + appShellListsEscape((result && result.title) || 'Untitled') + '</strong>' +
+    '<br><span class="app-shell-muted">' + (result && result.type === 'tv' ? 'Show' : 'Movie') + year + '</span></div>' +
+    '<div class="app-shell-row-controls"><button type="button" class="primary lc-btn" data-app-shell-action="title-add" data-app-shell-id="' + index + '">Add</button></div></div>';
+}
+
+function appShellRenderAddTitles(message) {
+  const host = appShellAddTitlesHost();
+  if (!host || !NEW_UI) return false;
+  let html = '<div class="panel" style="margin-bottom:12px;">' +
+    '<h2 class="panel-title">Add titles</h2>' +
+    '<p class="app-shell-muted">Search for a movie or a show and add it straight to this list.</p>' +
+    '<div class="row"><input type="text" id="appShellAddTitlesInput" placeholder="Add titles\u2026" aria-label="Search for a title to add" spellcheck="false"></div>';
+  if (message) html += '<p class="app-shell-muted">' + appShellListsEscape(message) + '</p>';
+  if (appShellTitleResults.length) {
+    html += '<div class="app-shell-review">' + appShellTitleResults.map(appShellTitleResultHtml).join('') + '</div>';
+  }
+  html += '</div>';
+  host.innerHTML = html;
+  const input = document.getElementById('appShellAddTitlesInput');
+  if (input && input.addEventListener) {
+    input.addEventListener('input', function () {
+      const value = input.value || '';
+      if (appShellTitleSearchTimer) clearTimeout(appShellTitleSearchTimer);
+      appShellTitleSearchTimer = setTimeout(function () {
+        appShellTitleSearchTimer = null;
+        appShellSearchTitles(value);
+      }, 300);
+    });
+  }
+  return true;
+}
+
+async function appShellSearchTitles(query) {
+  const q = String(query || '').trim();
+  if (!q) {
+    appShellTitleResults = [];
+    appShellRenderAddTitles('');
+    return [];
+  }
+  const seq = ++appShellTitleSearchSeq;
+  const kind = (typeof customListDraftType !== 'undefined' && customListDraftType === 'series') ? 'tv' : 'movie';
+  const res = await appShellApiFetch('/api/title-search?q=' + encodeURIComponent(q) + '&type=' + kind);
+  if (seq !== appShellTitleSearchSeq) return [];
+  if (!res.ok) {
+    appShellTitleResults = [];
+    appShellRenderAddTitles(res.error || 'Could not search just now.');
+    return [];
+  }
+  const results = (res.data && res.data.results) || [];
+  appShellTitleResults = results.slice(0, 8);
+  const input = document.getElementById('appShellAddTitlesInput');
+  if (input) input.value = q;
+  appShellRenderAddTitles(appShellTitleResults.length ? '' : 'Nothing found for that.');
+  return appShellTitleResults;
+}
+
+async function appShellAddTitle(index) {
+  const item = appShellTitleResults[Number(index)];
+  if (!item) return false;
+  if (typeof addToCustomListDraft !== 'function') return false;
+  const kind = (typeof customListDraftType !== 'undefined' && customListDraftType === 'series') ? 'tv' : 'movie';
+  await addToCustomListDraft(kind, item.tmdbId, item.title, item.year, item.poster, null);
+  showToast('Added "' + (item.title || 'that title') + '" to the list. Save it when you are done.', 'success');
+  return true;
+}
+
+// --- actions -----------------------------------------------------------------
+
+function appShellStartListEdit(slug) {
+  const list = appShellListBySlug(slug);
+  if (!list) {
+    showToast('Could not find that list -- try refreshing.', 'error');
+    return false;
+  }
+  if (list.local && typeof editLocalCustomList === 'function') {
+    editLocalCustomList(slug);
+  } else if (typeof editCreatorList === 'function') {
+    editCreatorList(slug);
+  }
+  if (typeof switchListsSubmenu === 'function') switchListsSubmenu('create-list');
+  appShellRenderAddTitles('');
+  const input = document.getElementById('appShellAddTitlesInput');
+  if (input && input.focus) {
+    try { input.focus(); } catch (e) {}
+  }
+  return true;
+}
+
+async function appShellSetListVisibility(slug, visibility) {
+  const list = appShellListBySlug(slug);
+  if (!list) return false;
+  const want = String(visibility || '');
+  if (want !== 'private' && want !== 'public') {
+    showToast('Unlisted is not switched on yet -- a list is private or public for now.', 'info');
+    return false;
+  }
+  if (appShellListVisibility(list) === want) {
+    appShellRenderListsHome();
+    return true;
+  }
+  const body = {
+    creatorName: (activeCreator && activeCreator.creatorName) || '',
+    creatorKey: localStorage.getItem('myListAddon:creatorKey') || '',
+    name: list.name,
+    type: list.type || 'movie',
+    items: list.items || [],
+    visibility: want,
+  };
+  const res = await appShellApiFetch('/api/creator/lists/save', { method: 'POST', body: body });
+  if (!res.ok) {
+    showToast(res.error || 'Could not save that change.', 'error');
+    return false;
+  }
+  list.visibility = want;
+  appShellRenderListsHome();
+  showToast(want === 'public' ? 'Anyone with the link can open it, and it is listed in Explore.' : 'Now private -- only you can open it.', 'success');
+  return true;
+}
+
+async function appShellListsRefresh() {
+  if (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) {
+    if (typeof loadCreatorSync === 'function') {
+      try { await loadCreatorSync(); } catch (e) {}
+    } else if (typeof renderCreatorDashboard === 'function') {
+      try { await renderCreatorDashboard(); } catch (e) {}
+    }
+  }
+  return appShellRenderListsHome();
+}
+
+// Which of the two dispatchers an action belongs to (see appShellOnClick).
+const APP_SHELL_LISTS_ACTION = /^(list-|lists-|title-)/;
+
+async function appShellListsAction(action, id) {
+  const what = String(action || '');
+  const slug = String(id || '');
+  if (what === 'list-new') {
+    if (typeof openCreateListModal === 'function') openCreateListModal('custom');
+    return true;
+  }
+  if (what === 'lists-refresh') return appShellListsRefresh();
+  if (what === 'list-open') {
+    const list = appShellListBySlug(slug);
+    if (!list) return false;
+    if (typeof openListDetailsPage === 'function') {
+      openListDetailsPage(list.name, list.type || 'movie', 'custom:' + slug);
+      return true;
+    }
+    return false;
+  }
+  if (what === 'list-edit') return appShellStartListEdit(slug);
+  if (what === 'list-home') return appShellListToggleHomeScreen(slug);
+  if (what === 'list-share') {
+    appShellShareSlug = (appShellShareSlug === slug) ? null : slug;
+    appShellRenderListsHome();
+    return true;
+  }
+  if (what === 'list-copy') {
+    const list = appShellListBySlug(slug);
+    if (!list) return false;
+    return appShellCopyText(appShellListShareUrl(list), 'List link copied.');
+  }
+  if (what === 'list-preview') {
+    const list = appShellListBySlug(slug);
+    if (!list) return false;
+    if (typeof openListDetailsPage === 'function') {
+      openListDetailsPage(list.name, list.type || 'movie', 'custom:' + slug);
+      return true;
+    }
+    return false;
+  }
+  if (what === 'list-visibility') {
+    const parts = slug.split('|');
+    return appShellSetListVisibility(parts[0], parts[1]);
+  }
+  if (what === 'title-add') return appShellAddTitle(id);
+  return false;
+}
+
 // --- routing -----------------------------------------------------------------
 
 function appShellFindSubPill(tabId, sub) {
@@ -76588,6 +77057,10 @@ function appShellApplyRoute(route) {
   // it stay, and these cards sit above them.
   if (tab.id === 'settings') appShellRenderSettingsHome();
   if (tab.id === 'catalogs') appShellRenderHomeEditor();
+  if (tab.id === 'lists') {
+    appShellRenderListsHome();
+    if (sub === 'create-list') appShellRenderAddTitles('');
+  }
   return true;
 }
 
@@ -76645,7 +77118,14 @@ function appShellOnClick(e) {
   const actionEl = target.closest('[data-app-shell-action]');
   if (actionEl) {
     e.preventDefault();
-    appShellSettingsAction(actionEl.getAttribute('data-app-shell-action'), actionEl.getAttribute('data-app-shell-id') || '');
+    const action = actionEl.getAttribute('data-app-shell-action');
+    const id = actionEl.getAttribute('data-app-shell-id') || '';
+    // The Lists view (P6-4) and the Settings view (P6-2) share this one
+    // listener, so the action names decide which module answers. The prefix
+    // test is here rather than a truthy return because appShellSettingsAction
+    // is async -- its promise is truthy for every action, handled or not.
+    if (APP_SHELL_LISTS_ACTION.test(action)) appShellListsAction(action, id);
+    else appShellSettingsAction(action, id);
     return;
   }
   const link = target.closest('a[data-app-route]');

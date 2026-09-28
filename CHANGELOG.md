@@ -27,6 +27,15 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 8. **Recommended: set up the background jobs queue** (Phase 5, `docs/OPERATIONS.md` §18): create the queues `mylists-jobs` and `mylists-jobs-dlq`, make this Worker the consumer of `mylists-jobs` (batch size 25, 5 retries, dead-letter queue `mylists-jobs-dlq`), bind `mylists-jobs` to the Worker as `JOBS`, then press **Send a test job** in `/admin` → Maintenance. Without it everything works as before.
 
+### 📋 Your lists, cards you can act on (P6-4, new UI only)
+
+- **Only for a browser on the new interface** (`?ff_new_ui=1`). Lists now opens with a card per list -- name, who can see it, and how many titles:
+  - **Add titles** opens the list in the editor and puts a search box right there: type, tap **Add**, and the title is in the list. Save writes it, exactly as before, so nothing about how a list is stored changes.
+  - **Show on home screen** adds the list as a row (and **On your home screen** takes it off again), using the same row the old **+ Add** button builds.
+  - **Share** gives one place for who can see a list -- **Private / Unlisted / Public**, what each one means, and **Copy link**. Unlisted belongs to the next list service, which is not switched on yet, so it is shown, explained, and disabled rather than saved as something else; until then a list is private or public.
+  - **Open** goes to the list's own page, and **+ New list** starts one.
+- The dashboard the page already had stays underneath (drag to reorder, edit, delete, the connected providers), so nothing is lost while the new view grows.
+
 ### 📺 A paste-first home screen in the new UI (P6-3)
 
 - **Only for a browser on the new interface** (`?ff_new_ui=1`). The Catalogs view (the home screen) now opens with an editor above the rows:
