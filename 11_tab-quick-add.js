@@ -12,6 +12,12 @@
     <button type="button" class="subnav-pill" data-sub="genres" onclick="filterDiscoverShelves('genres', this)">Genres</button>
   </div>
 
+  <!-- The shell's Explore section (P6-5): community lists from this site and
+       from MDBList, Trakt and TMDB, with a preview and one button to add one to
+       the home screen. Emitted only for a browser with the FF_NEW_UI cookie;
+       the Discover feeds below are unchanged. -->
+${newUi ? '  <div id="appShellExplore"></div>' : ''}
+
   <!-- Discover Shelves Feed -->
   <div id="discoverShelvesContainer">
     <!-- My Lists Addon Charts Shelf -->

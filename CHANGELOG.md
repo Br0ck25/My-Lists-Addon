@@ -27,6 +27,15 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 8. **Recommended: set up the background jobs queue** (Phase 5, `docs/OPERATIONS.md` §18): create the queues `mylists-jobs` and `mylists-jobs-dlq`, make this Worker the consumer of `mylists-jobs` (batch size 25, 5 retries, dead-letter queue `mylists-jobs-dlq`), bind `mylists-jobs` to the Worker as `JOBS`, then press **Send a test job** in `/admin` → Maintenance. Without it everything works as before.
 
+### 🧭 Explore: other people's lists in one place (P6-5, new UI only)
+
+- **Only for a browser on the new interface** (`?ff_new_ui=1`). Discover opens with an **Explore** section:
+  - **Source chips**: All sources · My Lists community · MDBList · Trakt · TMDB. Pick one and only that source is asked.
+  - **Search as you type** (a pause of a third of a second, then results), or leave the box empty to browse what is popular.
+  - **Sort**: **Most liked** (every source reports likes) or **Newest** (for the lists that say when they last changed — this site's own; the providers do not, so theirs keep their place rather than being guessed at). **Most added** counts how many people put a list on their home screen, which the new list service keeps and which is not switched on yet, so it is shown, explained and disabled.
+  - **Preview** looks inside a list before you add it — the first few posters and how many titles — and every card (and the preview) has **Add to home screen**, which puts it in your rows the same way the old search's button does. Press it again to take it off.
+- One thing said out loud rather than hidden: MDBList publishes no list search, so MDBList results are its popular lists narrowed to your words — the same thing the old search did, now labelled.
+
 ### 📋 Your lists, cards you can act on (P6-4, new UI only)
 
 - **Only for a browser on the new interface** (`?ff_new_ui=1`). Lists now opens with a card per list -- name, who can see it, and how many titles:

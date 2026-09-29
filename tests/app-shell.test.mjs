@@ -182,6 +182,19 @@ describe("the new UI shell is opt-in through a cookie", () => {
     assert.ok(shell.text.includes('id="appShellAddTitles"'), "the inline search needs a home");
   });
 
+  it("emits the Explore section only for the shell (P6-5)", async () => {
+    const env = makeEnv();
+    const legacy = await call(env, "/");
+    assert.equal(legacy.text.includes('id="appShellExplore"'), false);
+    const shell = await call(env, "/discover", { cookie: SHELL_COOKIE });
+    assert.equal(shell.status, 200);
+    assert.ok(shell.text.includes('id="appShellExplore"'), "the Explore section needs a home");
+    // ...and for a browser that lands on a different view, it is not fetched at
+    // boot: the view is rendered when Discover is opened.
+    const elsewhere = await call(env, "/settings/account", { cookie: SHELL_COOKIE });
+    assert.ok(elsewhere.text.includes('id="appShellExplore"'), "the container is on the page");
+  });
+
   it("ships one bundle and one stylesheet for both variants", async () => {
     // A shell-only line inside either of them would make one cached,
     // publicly-hashed file depend on a cookie. Each isolate's hash describes

@@ -3734,6 +3734,17 @@ ${seoHeadHtml}
   }
   html[data-app-shell="1"] button.app-shell-chip[disabled] { cursor: not-allowed; opacity: 0.55; }
 
+  /* What is actually in a list, previewed before it is added (P6-5). */
+  html[data-app-shell="1"] .app-shell-explore-preview { padding: 2px 0 10px; }
+  html[data-app-shell="1"] .app-shell-explore-posters {
+    display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 8px;
+  }
+  html[data-app-shell="1"] .app-shell-explore-poster {
+    width: 58px; height: 87px; object-fit: cover; border-radius: 6px;
+    background: var(--panel-strong); border: 1px solid var(--border);
+  }
+  html[data-app-shell="1"] .app-shell-explore-poster-none { display: block; }
+
   /* --- Floating Unsaved Changes to Install Link Banner -------------------- */
   .unsaved-install-banner {
     position: fixed;

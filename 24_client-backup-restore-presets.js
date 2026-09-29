@@ -4401,8 +4401,9 @@ async function appShellListsRefresh() {
   return appShellRenderListsHome();
 }
 
-// Which of the two dispatchers an action belongs to (see appShellOnClick).
+// Which of the three dispatchers an action belongs to (see appShellOnClick).
 const APP_SHELL_LISTS_ACTION = /^(list-|lists-|title-)/;
+const APP_SHELL_EXPLORE_ACTION = /^explore-/;
 
 async function appShellListsAction(action, id) {
   const what = String(action || '');
@@ -4447,6 +4448,464 @@ async function appShellListsAction(action, id) {
     return appShellSetListVisibility(parts[0], parts[1]);
   }
   if (what === 'title-add') return appShellAddTitle(id);
+  return false;
+}
+
+// --- Explore (P6-5) ----------------------------------------------------------
+//
+// Somebody else's public lists, in one place: pick where to look, type, and see
+// what comes back with one button to put it on your home screen. It is additive
+// -- the Discover feeds underneath are untouched -- and it exists only on a
+// shell page: the container comes from the server (11_tab-quick-add.js) when,
+// and only when, the request carries the FF_NEW_UI cookie.
+//
+// Every source here is one the page already talks to, with the page's own
+// helpers where they exist:
+//
+//   My Lists community   /lists/public.json (browse) and
+//                        /api/search-published-lists (search)
+//   MDBList              /api/toplists -- cached by ensureMdblistPopularLoaded
+//                        (19_), which is also what the legacy list search
+//                        matches MDBList against: MDBList has no list search of
+//                        its own, so this filters the popular set by name.
+//   Trakt                /api/trakt-popular-lists (browse) and
+//                        /api/trakt-search (search)
+//   TMDB                 /api/tmdb-search-lists -- search only; TMDB publishes
+//                        no list directory to browse.
+
+// What the sort chips can honestly do today. Most liked works everywhere: it is
+// the order the server sends and every source reports likes. Newest works for
+// the lists that report when they changed, which is this site's own; the
+// providers do not, so those are kept and shown after the dated ones rather
+// than pretending they are new. "Most added" counts how many people put a list
+// on a home screen -- a column that exists only in the next list service
+// (add_count, 33_lists-directory.js, /lists/public.json?sort=added), which is
+// behind FF_V2_LISTS_READ and must stay off until reads move to the new tables.
+const APP_SHELL_EXPLORE_SORTS = [
+  { id: 'popular', label: 'Most liked', ready: true },
+  { id: 'new', label: 'Newest', ready: true },
+  { id: 'added', label: 'Most added', ready: false, why: 'Counting how many people put a list on their home screen needs the new list service, which is not switched on yet.' },
+];
+
+const APP_SHELL_EXPLORE_SOURCES = [
+  { id: 'mylists', label: 'My Lists community' },
+  { id: 'mdblist', label: 'MDBList' },
+  { id: 'trakt', label: 'Trakt' },
+  { id: 'tmdb', label: 'TMDB' },
+];
+
+const APP_SHELL_EXPLORE_MAX = 24;
+
+let appShellExploreSource = 'all';
+let appShellExploreSort = 'popular';
+let appShellExploreQuery = '';
+let appShellExploreResults = [];
+let appShellExploreNote = '';
+let appShellExplorePreview = -1;
+let appShellExplorePreviewData = null;
+let appShellExploreSeq = 0;
+var appShellExploreTimer = null;
+var appShellExploreLoaded = false;
+
+function appShellExploreHost() {
+  return document.getElementById('appShellExplore');
+}
+
+// Whether the Discover view is the one currently on screen. A shell page can be
+// served straight at /discover (or at /, which is Discover), and then the view
+// is worth its fetch at boot; served at any other view it is not, and the fetch
+// waits until somebody opens Discover.
+function appShellDiscoverIsOpen() {
+  const panel = document.getElementById('content-discover');
+  return !!(panel && !panel.hidden);
+}
+
+function appShellExploreEscape(value) {
+  return escapeHtml(String(value === null || value === undefined ? '' : value));
+}
+
+// Every source's own idea of a list, in one shape. The timestamp field is
+// only ever set by a source that actually reports one.
+function appShellExploreNormalize(entry, source) {
+  const e = entry || {};
+  const items = (typeof e.items === 'number') ? e.items : (typeof e.itemCount === 'number' ? e.itemCount : 0);
+  return {
+    name: e.name || 'Untitled list',
+    url: e.url || '',
+    type: e.type || e.contentType || 'movie',
+    items: items,
+    likes: Number(e.likes) || 0,
+    by: e.creatorName || e.creator || e.user || '',
+    source: source,
+    when: Number(e.updatedAt) || 0,
+  };
+}
+
+function appShellExploreSortRows(rows) {
+  const list = rows.slice();
+  if (appShellExploreSort === 'new') {
+    // Dated first, newest first; a source that does not say when a list
+    // changed keeps its place after them rather than being guessed at.
+    list.sort(function (a, b) {
+      if (!!a.when !== !!b.when) return a.when ? -1 : 1;
+      if (a.when !== b.when) return b.when - a.when;
+      return b.likes - a.likes;
+    });
+    return list;
+  }
+  list.sort(function (a, b) {
+    if (b.likes !== a.likes) return b.likes - a.likes;
+    return b.items - a.items;
+  });
+  return list;
+}
+
+function appShellExploreDedupe(rows) {
+  const seen = {};
+  const out = [];
+  rows.forEach(function (row) {
+    const key = String(row.url || '').toLowerCase() || (String(row.name).toLowerCase() + '|' + row.source);
+    if (seen[key]) return;
+    seen[key] = true;
+    out.push(row);
+  });
+  return out;
+}
+
+function appShellExploreWants(source) {
+  return appShellExploreSource === 'all' || appShellExploreSource === source;
+}
+
+// --- fetching ----------------------------------------------------------------
+
+async function appShellExploreMdbList() {
+  if (typeof ensureMdblistPopularLoaded !== 'function') return [];
+  const rows = await ensureMdblistPopularLoaded();
+  return (Array.isArray(rows) ? rows : []).map(function (r) { return appShellExploreNormalize(r, 'mdblist'); });
+}
+
+async function appShellExploreTraktBrowse() {
+  if (typeof ensureTraktPopularLoaded !== 'function') return [];
+  const rows = await ensureTraktPopularLoaded();
+  return (Array.isArray(rows) ? rows : []).map(function (r) { return appShellExploreNormalize(r, 'trakt'); });
+}
+
+async function appShellExploreMyListsBrowse() {
+  const res = await appShellApiFetch('/lists/public.json?limit=' + APP_SHELL_EXPLORE_MAX);
+  if (!res.ok) return null;
+  const rows = (res.data && res.data.lists) || [];
+  return rows.map(function (r) { return appShellExploreNormalize(r, 'mylists'); });
+}
+
+async function appShellExploreMyListsSearch(q) {
+  const res = await appShellApiFetch('/api/search-published-lists?q=' + encodeURIComponent(q));
+  if (!res.ok) return null;
+  const rows = (res.data && res.data.lists) || [];
+  return rows.map(function (r) { return appShellExploreNormalize(r, 'mylists'); });
+}
+
+async function appShellExploreTraktSearch(q) {
+  const key = (document.getElementById('traktKeyInput') ? document.getElementById('traktKeyInput').value.trim() : '') || localStorage.getItem('myListAddon:traktKey') || '';
+  const res = await appShellApiFetch('/api/trakt-search?q=' + encodeURIComponent(q) + (key ? '&traktKey=' + encodeURIComponent(key) : ''));
+  if (!res.ok) return null;
+  return ((res.data && res.data.lists) || []).map(function (r) { return appShellExploreNormalize(r, 'trakt'); });
+}
+
+async function appShellExploreTmdbSearch(q) {
+  const key = (document.getElementById('tmdbKeyInput') ? document.getElementById('tmdbKeyInput').value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const adult = (typeof isAdultContentFilterEnabled === 'function' && isAdultContentFilterEnabled()) ? '&adultContentFilter=1' : '';
+  const res = await appShellApiFetch('/api/tmdb-search-lists?q=' + encodeURIComponent(q) + (key ? '&tmdbKey=' + encodeURIComponent(key) : '') + adult);
+  if (!res.ok) return null;
+  return ((res.data && res.data.lists) || []).map(function (r) { return appShellExploreNormalize(r, 'tmdb'); });
+}
+
+// The provider lists in the popular sets, narrowed to the words somebody typed.
+// MDBList has no list search (see the note at the top of this module), so this
+// is what the legacy search does too -- said out loud in the note below.
+function appShellExploreFilterByName(rows, q) {
+  const words = String(q || '').toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return rows;
+  return rows.filter(function (row) {
+    const text = (String(row.name) + ' ' + String(row.by)).toLowerCase();
+    return words.every(function (w) { return text.indexOf(w) !== -1; });
+  });
+}
+
+async function appShellExploreRun() {
+  const q = String(appShellExploreQuery || '').trim();
+  const seq = ++appShellExploreSeq;
+  const want = appShellExploreSource;
+  const results = [];
+  const notes = [];
+  const jobs = [];
+
+  // This site's own lists: the directory when nothing has been typed, its
+  // search when something has.
+  if (appShellExploreWants('mylists')) {
+    jobs.push((q ? appShellExploreMyListsSearch(q) : appShellExploreMyListsBrowse()).then(function (rows) {
+      if (rows) results.push.apply(results, rows);
+      else notes.push('The My Lists directory could not be reached.');
+    }));
+  }
+  if (appShellExploreWants('mdblist')) {
+    jobs.push(appShellExploreMdbList().then(function (rows) {
+      const matching = appShellExploreFilterByName(rows, q);
+      results.push.apply(results, q ? matching.slice(0, APP_SHELL_EXPLORE_MAX) : matching);
+      if (q && want !== 'mylists') notes.push('MDBList has no list search of its own, so the MDBList results are the popular ones matching your words.');
+    }));
+  }
+  if (appShellExploreWants('trakt')) {
+    jobs.push((q ? appShellExploreTraktSearch(q) : appShellExploreTraktBrowse()).then(function (rows) {
+      if (rows) results.push.apply(results, rows);
+      else if (q) notes.push('trakt.tv could not be searched just now.');
+    }));
+  }
+  if (appShellExploreWants('tmdb')) {
+    jobs.push((q ? appShellExploreTmdbSearch(q) : Promise.resolve(null)).then(function (rows) {
+      if (rows) results.push.apply(results, rows);
+      else if (q) notes.push('TMDB could not be searched just now.');
+      else if (want === 'tmdb') notes.push('TMDB publishes no list directory to browse -- search for one by name.');
+    }));
+  }
+
+  await Promise.all(jobs);
+  // A newer search already went out while this one was running: drop this
+  // answer rather than landing it on top of the newer one.
+  if (seq !== appShellExploreSeq) return appShellExploreResults;
+
+  appShellExploreResults = appShellExploreSortRows(appShellExploreDedupe(results)).slice(0, APP_SHELL_EXPLORE_MAX);
+  appShellExploreNote = notes.join(' ');
+  appShellExploreLoaded = true;
+  appShellExplorePreview = -1;
+  appShellExplorePreviewData = null;
+  appShellRenderExplore(true);
+  return appShellExploreResults;
+}
+
+// The preview: what is actually in the list, fetched the way the home editor
+// fetches it, so nothing is added before it has been seen.
+async function appShellExplorePreviewRow(index) {
+  const row = appShellExploreResults[Number(index)];
+  if (!row) return null;
+  if (appShellExplorePreview === Number(index)) {
+    appShellExplorePreview = -1;
+    appShellExploreRenderPreview();
+    return null;
+  }
+  appShellExplorePreview = Number(index);
+  appShellExplorePreviewData = { loading: true };
+  appShellExploreRenderPreview();
+  const auth = (typeof previewCreatorAuth === 'function') ? previewCreatorAuth() : {};
+  const body = Object.assign({ url: row.url, type: row.type === 'series' ? 'series' : 'movie', sample: 6 }, auth);
+  const res = await appShellApiFetch('/api/preview', { method: 'POST', body: body });
+  if (appShellExplorePreview !== Number(index)) return null;
+  appShellExplorePreviewData = res.ok
+    ? { sample: (res.data && res.data.sample) || [], count: Number(res.data && (res.data.totalItems || res.data.count)) || 0, error: '' }
+    : { sample: [], count: 0, error: res.error || 'That list could not be read.' };
+  appShellExploreRenderPreview();
+  return appShellExplorePreviewData;
+}
+
+function appShellExplorePosterHtml(item) {
+  const poster = item && (item.poster || item.showPoster);
+  if (!poster) return '<div class="app-shell-explore-poster app-shell-explore-poster-none"></div>';
+  return '<img class="app-shell-explore-poster" loading="lazy" alt="" src="' + appShellExploreEscape(poster) + '">';
+}
+
+function appShellExploreOnHomeScreen(row) {
+  if (typeof isListAddedToConfig !== 'function') return false;
+  const type = row.type === 'series' ? 'series' : (row.type === 'movie' ? 'movie' : null);
+  if (isListAddedToConfig(row.url, type)) return true;
+  return isListAddedToConfig(row.url, 'movie') || isListAddedToConfig(row.url, 'series');
+}
+
+// Exactly what the legacy search's own "+ Add" does for a result list (19_,
+// the .searchAddBtn handler), including the two rows a mixed list becomes.
+function appShellExploreToggleHomeScreen(index) {
+  const row = appShellExploreResults[Number(index)];
+  if (!row) return false;
+  if (appShellExploreOnHomeScreen(row)) {
+    if (typeof removeListFromConfig === 'function') {
+      removeListFromConfig(row.url, row.type);
+      removeListFromConfig(row.url, 'movie');
+      removeListFromConfig(row.url, 'series');
+      removeListFromConfig(row.url, null);
+    }
+    const rows = document.querySelectorAll('#lists .entry');
+    for (let i = 0; i < rows.length; i++) {
+      const urlInput = rows[i].querySelector ? rows[i].querySelector('.url') : null;
+      if (urlInput && String(urlInput.value).indexOf(row.url) !== -1) rows[i].remove();
+    }
+    if (typeof renumber === 'function') renumber();
+    if (typeof saveState === 'function') saveState();
+    appShellRenderExplore(false);
+    showToast('Removed "' + row.name + '" from your Catalogs.', 'success');
+    return true;
+  }
+  if (row.type === 'mixed' || row.type === 'unknown') {
+    addRow(row.name + ' (Movies)', row.url, 'movie', true, 'Custom');
+    addRow(row.name + ' (Shows)', row.url, 'series', true, 'Custom');
+  } else {
+    addRow(row.name, row.url, row.type, true, 'Custom');
+  }
+  if (typeof renumber === 'function') renumber();
+  if (typeof saveState === 'function') saveState();
+  appShellRenderExplore(false);
+  showToast('Added "' + row.name + '" to your home screen.', 'success');
+  return true;
+}
+
+function appShellExploreSourceLabel(id) {
+  for (let i = 0; i < APP_SHELL_EXPLORE_SOURCES.length; i++) {
+    if (APP_SHELL_EXPLORE_SOURCES[i].id === id) return APP_SHELL_EXPLORE_SOURCES[i].label;
+  }
+  return id === 'mylists' ? 'My Lists community' : id;
+}
+
+function appShellExploreCardHtml(row, index) {
+  const meta = appShellExploreEscape(appShellExploreSourceLabel(row.source)) +
+    ' &middot; ' + appShellExploreEscape(row.type === 'series' ? 'Shows' : (row.type === 'movie' ? 'Movies' : 'Movies and Shows')) +
+    (row.items ? ' &middot; ' + row.items + (row.items === 1 ? ' title' : ' titles') : '') +
+    (row.likes ? ' &middot; &#9829; ' + row.likes : '') +
+    (row.by ? ' &middot; ' + appShellExploreEscape(row.by) : '');
+  const onHome = appShellExploreOnHomeScreen(row);
+  const open = appShellExplorePreview === index;
+  return '<div class="app-shell-row">' +
+    '<div class="app-shell-row-main"><strong>' + appShellExploreEscape(row.name) + '</strong>' +
+    '<br><span class="app-shell-muted">' + meta + '</span>' +
+    '<br><span class="app-shell-muted app-shell-review-url">' + appShellExploreEscape(row.url) + '</span></div>' +
+    '<div class="app-shell-row-controls">' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="explore-preview" data-app-shell-id="' + index + '">' + (open ? 'Hide preview' : 'Preview') + '</button>' +
+    '<button type="button" class="' + (onHome ? 'secondary lc-btn' : 'primary lc-btn') + '" data-app-shell-action="explore-add" data-app-shell-id="' + index + '">' + (onHome ? 'On your home screen' : 'Add to home screen') + '</button>' +
+    '</div></div>' +
+    (open ? '<div class="app-shell-explore-preview" id="appShellExplorePreviewArea-' + index + '"></div>' : '');
+}
+
+function appShellExplorePreviewInnerHtml(index) {
+  const row = appShellExploreResults[index];
+  const data = appShellExplorePreviewData;
+  if (!row || !data) return '';
+  if (data.loading) return '<p class="app-shell-muted">Looking inside...</p>';
+  if (data.error) return '<p class="app-shell-muted app-shell-review-bad">' + appShellExploreEscape(data.error) + '</p>';
+  const sample = data.sample || [];
+  const count = data.count || sample.length;
+  let html = '<div class="app-shell-explore-posters">' + sample.map(appShellExplorePosterHtml).join('') + '</div>';
+  html += '<p class="app-shell-muted">' + (count ? 'First ' + Math.min(sample.length, count) + ' of ' + count + (count === 1 ? ' title' : ' titles') : 'This list is empty.') + '</p>';
+  html += '<div class="app-shell-actions">' +
+    '<button type="button" class="primary lc-btn" data-app-shell-action="explore-add" data-app-shell-id="' + index + '">Add to home screen</button>' +
+    '</div>';
+  return html;
+}
+
+// Rewrites just the open preview in place, the same way the settings panels
+// refresh without rebuilding the screen around them.
+function appShellExploreRenderPreview() {
+  const area = document.getElementById('appShellExplorePreviewArea-' + appShellExplorePreview);
+  if (!area) return false;
+  area.innerHTML = appShellExplorePreviewInnerHtml(appShellExplorePreview);
+  return true;
+}
+
+function appShellExploreChips(rows, current, action) {
+  return rows.map(function (row) {
+    const on = row.id === current;
+    const ready = row.ready !== false;
+    return '<button type="button" class="app-shell-chip' + (on ? ' is-on' : '') + '"' +
+      ' data-app-shell-action="' + action + '" data-app-shell-id="' + appShellExploreEscape(row.id) + '"' +
+      (ready ? '' : ' disabled title="' + appShellExploreEscape(row.why || '') + '"') +
+      '>' + appShellExploreEscape(row.label) + '</button>';
+  }).join('');
+}
+
+function appShellRenderExplore(scrollToResults) {
+  const host = appShellExploreHost();
+  if (!host || !NEW_UI) return false;
+  const sources = [{ id: 'all', label: 'All sources', ready: true }].concat(APP_SHELL_EXPLORE_SOURCES);
+  let html = '<div class="panel" style="margin-bottom:12px;">' +
+    '<h2 class="panel-title">Explore</h2>' +
+    '<p class="app-shell-muted">Community lists from this site and from MDBList, Trakt and TMDB. Preview one, then put it on your home screen.</p>' +
+    '<div class="app-shell-actions" style="margin-bottom:8px;">' + appShellExploreChips(sources, appShellExploreSource, 'explore-source') + '</div>' +
+    '<div class="app-shell-actions" style="margin-bottom:8px;">' + appShellExploreChips(APP_SHELL_EXPLORE_SORTS, appShellExploreSort, 'explore-sort') + '</div>' +
+    '<div class="row"><input type="text" id="appShellExploreSearch" placeholder="Search lists\u2026" aria-label="Search public lists" spellcheck="false" value="' + appShellExploreEscape(appShellExploreQuery) + '"></div>';
+
+  if (!appShellExploreLoaded) {
+    html += '<p class="app-shell-muted" id="appShellExploreStatus">Loading\u2026</p>';
+  } else if (!appShellExploreResults.length) {
+    html += '<p class="app-shell-muted" id="appShellExploreStatus">' +
+      (appShellExploreQuery ? 'Nothing found for those words.' : 'Nothing to show right now.') + '</p>';
+  } else {
+    html += '<p class="app-shell-muted" id="appShellExploreStatus">' + appShellExploreResults.length +
+      (appShellExploreResults.length === 1 ? ' list' : ' lists') +
+      (appShellExploreQuery ? ' matching "' + appShellExploreEscape(appShellExploreQuery) + '"' : '') + '.</p>';
+    html += '<div class="app-shell-review" id="appShellExploreResults">' +
+      appShellExploreResults.map(appShellExploreCardHtml).join('') + '</div>';
+  }
+  if (appShellExploreNote) html += '<p class="app-shell-muted" id="appShellExploreNote">' + appShellExploreEscape(appShellExploreNote) + '</p>';
+  html += '<p class="app-shell-muted">Most added is not offered yet: it counts how many people put a list on their home screen, which the new list service keeps and which is not switched on yet.</p>';
+  html += '</div>';
+  host.innerHTML = html;
+
+  const input = document.getElementById('appShellExploreSearch');
+  if (input && input.addEventListener) {
+    input.addEventListener('input', function () {
+      appShellExploreQuery = input.value || '';
+      if (appShellExploreTimer) clearTimeout(appShellExploreTimer);
+      appShellExploreTimer = setTimeout(function () {
+        appShellExploreTimer = null;
+        appShellExploreRun();
+      }, 300);
+    });
+  }
+  // Results are fetched in full, so a card's own re-render keeps the open
+  // preview; only its placeholder needs filling.
+  if (appShellExplorePreview >= 0) appShellExploreRenderPreview();
+  if (scrollToResults) {
+    const box = document.getElementById('appShellExploreResults');
+    if (box && box.scrollIntoView) {
+      try { box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {}
+    }
+  }
+  return true;
+}
+
+// Opening the view: render the frame, then fetch once. Coming back to the tab
+// keeps what is already there.
+function appShellOpenExplore() {
+  if (!NEW_UI) return false;
+  const first = !appShellExploreLoaded;
+  appShellRenderExplore(false);
+  if (first) {
+    appShellExploreRun();
+  } else {
+    appShellRenderExplore(false);
+  }
+  return true;
+}
+
+async function appShellExploreAction(action, id) {
+  const what = String(action || '');
+  if (what === 'explore-source') {
+    appShellExploreSource = String(id || 'all');
+    return appShellExploreRun();
+  }
+  if (what === 'explore-sort') {
+    const want = String(id || 'popular');
+    const sort = APP_SHELL_EXPLORE_SORTS.filter(function (s) { return s.id === want && s.ready !== false; })[0];
+    if (!sort) {
+      showToast('That order is not switched on yet.', 'info');
+      return false;
+    }
+    appShellExploreSort = sort.id;
+    appShellExploreResults = appShellExploreSortRows(appShellExploreResults);
+    appShellRenderExplore(false);
+    return true;
+  }
+  if (what === 'explore-preview') return appShellExplorePreviewRow(id);
+  if (what === 'explore-add') return appShellExploreToggleHomeScreen(id);
+  if (what === 'explore-refresh') {
+    appShellExploreLoaded = false;
+    return appShellExploreRun();
+  }
   return false;
 }
 
@@ -4498,6 +4957,7 @@ function appShellApplyRoute(route) {
     appShellRenderListsHome();
     if (sub === 'create-list') appShellRenderAddTitles('');
   }
+  if (tab.id === 'discover') appShellOpenExplore();
   return true;
 }
 
@@ -4562,6 +5022,7 @@ function appShellOnClick(e) {
     // test is here rather than a truthy return because appShellSettingsAction
     // is async -- its promise is truthy for every action, handled or not.
     if (APP_SHELL_LISTS_ACTION.test(action)) appShellListsAction(action, id);
+    else if (APP_SHELL_EXPLORE_ACTION.test(action)) appShellExploreAction(action, id);
     else appShellSettingsAction(action, id);
     return;
   }
@@ -4619,6 +5080,7 @@ function initAppShell() {
 
   appShellRefreshInstallBar();
   appShellRenderHomeEditor();
+  if (typeof appShellExploreHost === 'function' && appShellExploreHost() && appShellDiscoverIsOpen()) appShellOpenExplore();
   if (typeof isSignedIn === 'function' && isSignedIn()) appShellRefreshAccount();
   appShellState.set({ ready: true });
 }
