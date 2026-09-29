@@ -1075,6 +1075,132 @@ const D1_SCHEMA_MANIFEST = [
     migration: "0015", kind: "table", name: "account_settings",
     consequence: "Account-level UI and sync preferences cannot be stored in D1.",
   },
+  // 0016 (Phase 3b). Nothing reads or writes these yet, so today a missing
+  // one costs nothing a visitor can see; each line says what will need it.
+  {
+    migration: "0016", kind: "table", name: "media",
+    consequence: "Lists v2 has nowhere to record titles, so the list backfill and the new list API cannot start. Nothing uses it yet.",
+  },
+  {
+    migration: "0016", kind: "index", name: "idx_media_tmdb",
+    consequence: "Two rows could be stored for the same TMDB title, and looking a title up by TMDB id scans the table.",
+  },
+  {
+    migration: "0016", kind: "index", name: "idx_media_imdb",
+    consequence: "Two rows could be stored for the same IMDb id, and looking a title up by IMDb id scans the table.",
+  },
+  {
+    migration: "0016", kind: "index", name: "idx_media_alt",
+    consequence: "Two rows could be stored for a title known only by another id (kitsu:, mal:).",
+  },
+  {
+    migration: "0016", kind: "index", name: "idx_media_unresolved",
+    consequence: "Retrying titles TMDB could not resolve scans the whole media table. Slower, not broken.",
+  },
+  {
+    migration: "0016", kind: "table", name: "lists",
+    consequence: "Lists v2 cannot store lists, so the list backfill and the new list API cannot start. Nothing uses it yet.",
+  },
+  {
+    migration: "0016", kind: "index", name: "idx_lists_owner_slug",
+    consequence: "Two live lists of one account could share an address, and finding a list by its address scans the table.",
+  },
+  {
+    migration: "0016", kind: "index", name: "idx_lists_owner",
+    consequence: "Listing one account's lists in order scans the lists table. Slower, not broken.",
+  },
+  {
+    migration: "0016", kind: "index", name: "idx_lists_dir_popular",
+    consequence: "The v2 directory's Popular order sorts every public list on each request. Slower, not broken.",
+  },
+  {
+    migration: "0016", kind: "index", name: "idx_lists_dir_new",
+    consequence: "The v2 directory's Newest order sorts every public list on each request. Slower, not broken.",
+  },
+  {
+    migration: "0016", kind: "index", name: "idx_lists_dir_added",
+    consequence: "The v2 directory's Most added order sorts every public list on each request. Slower, not broken.",
+  },
+  {
+    migration: "0016", kind: "table", name: "list_items",
+    consequence: "Lists v2 cannot store the titles in a list. Nothing uses it yet.",
+  },
+  {
+    migration: "0016", kind: "index", name: "idx_list_items_entry",
+    consequence: "The same title (or the same episode) could be stored twice in one list.",
+  },
+  {
+    migration: "0016", kind: "index", name: "idx_list_items_order",
+    consequence: "Reading a list page in order sorts the whole list on each request. Slower, not broken.",
+  },
+  {
+    migration: "0016", kind: "index", name: "idx_list_items_media",
+    consequence: "Finding which lists hold a title scans every list item. Slower, not broken.",
+  },
+  {
+    migration: "0016", kind: "table", name: "list_slug_history",
+    consequence: "A renamed v2 list stops answering at its old address. Nothing uses it yet.",
+  },
+  {
+    migration: "0016", kind: "index", name: "idx_list_slug_history_list",
+    consequence: "Deleting a v2 list scans the old-address table. Slower, not broken.",
+  },
+  {
+    migration: "0016", kind: "table", name: "lists_fts2",
+    consequence: "Search over v2 lists is unavailable. The current directory search uses lists_fts and is not affected.",
+  },
+  {
+    migration: "0016", kind: "table", name: "likes",
+    consequence: "Likes and channel adds cannot move to D1 rows, so the likes API cannot start. Nothing uses it yet.",
+  },
+  {
+    migration: "0016", kind: "index", name: "idx_likes_voter",
+    consequence: "Removing a deleted account's likes scans the whole likes table. Slower, not broken.",
+  },
+  {
+    migration: "0016", kind: "table", name: "channels",
+    consequence: "Shared channels are not copied into D1 rows, so Explore Channels and channel likes stay on their KV keys. Nothing is lost: those keys are still written.",
+  },
+  {
+    migration: "0016", kind: "index", name: "idx_channels_owner_client",
+    consequence: "One account could end up with two rows for the same synced channel.",
+  },
+  {
+    migration: "0016", kind: "index", name: "idx_channels_owner_slug",
+    consequence: "Listing an account's channels, or opening /channels/:user/:slug, scans the channels table. Slower, not broken.",
+  },
+  {
+    migration: "0016", kind: "index", name: "idx_channels_dir_new",
+    consequence: "The v2 channel directory's Newest order sorts every public channel. Slower, not broken.",
+  },
+  {
+    migration: "0016", kind: "index", name: "idx_channels_dir_liked",
+    consequence: "The v2 channel directory's Most liked order sorts every public channel. Slower, not broken.",
+  },
+  {
+    migration: "0016", kind: "index", name: "idx_channels_dir_added",
+    consequence: "The v2 channel directory's Most added order sorts every public channel. Slower, not broken.",
+  },
+  {
+    migration: "0016", kind: "table", name: "account_list_prefs",
+    consequence: "Liked and hidden lists cannot move off the sync blob. Nothing uses it yet.",
+  },
+  {
+    migration: "0016", kind: "table", name: "presets",
+    consequence: "Presets cannot move off the creatorsyncpresets blob. Nothing uses it yet.",
+  },
+  {
+    migration: "0016", kind: "table", name: "jobs",
+    consequence: "The list backfill has nowhere to keep its progress, so it cannot run. Nothing uses it yet.",
+  },
+  {
+    migration: "0016", kind: "index", name: "idx_jobs_due",
+    consequence: "Finding the next job to run scans the jobs table. Slower, not broken.",
+  },
+  {
+    migration: "0016", kind: "index", name: "idx_jobs_account",
+    consequence: "Finding one account's backfill job scans the jobs table. Slower, not broken.",
+  },
 ];
 
 

@@ -11,16 +11,94 @@ All notable changes to **My Lists Addon** ([mylistsaddon.com](https://mylistsadd
 Do these in order. Details are in `docs/OPERATIONS.md`.
 
 1. **Back up D1**: Time Travel, or `npx wrangler d1 export my-lists-db --remote --output=backup.sql`.
-2. **Apply `migrations/0014_add_schema_migrations.sql`, then `migrations/0015_accounts_sessions_installs.sql`**, in the D1 Console and in that order. Both only add tables and are safe to run twice. The new sign-in code writes to 0015's tables when they exist and skips them when they don't, so nothing breaks in between; until it is applied the admin schema check lists it as missing.
+2. **Apply `migrations/0014_add_schema_migrations.sql`, then `migrations/0015_accounts_sessions_installs.sql`, then `migrations/0016_lists_v2.sql`**, in the D1 Console and in that order. All three only add tables and are safe to run twice. The new sign-in code writes to 0015's tables when they exist and skips them when they don't, so nothing breaks in between; until it is applied the admin schema check lists it as missing. Once 0016 is applied, every change to a list or a shared channel is also written to its tables as it happens (P3b-7 and P3b-8 below); nothing reads them until `FF_V2_LISTS_READ` is on.
 3. **Add the Analytics Engine binding**: Worker → Settings → Bindings → Add → Analytics Engine, name `ANALYTICS`, dataset `mylists_events`.
-4. **Paste and deploy** `worker_entry_combined.js`.
-5. **Delete the retired variables** if they are set: `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET`, `CRON_SUBREQUEST_BUDGET`. The code ignores them either way.
+4. **Add the R2 bucket** (recommended, for Phase 3b): R2 → Create bucket → `mylists-blobs`; then Worker → Settings → Bindings → Add → R2 bucket, name `BLOBS`, bucket `mylists-blobs`. Shared channels' episode lists go there. Without it, everything works and they stay in KV.
+5. **Paste and deploy** `worker_entry_combined.js`.
+6. **Delete the retired variables** if they are set: `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET`, `CRON_SUBREQUEST_BUDGET`. The code ignores them either way.
 
-6. **Optional: add the secret `LOOKUP_PEPPER`** (Worker → Settings → Variables and Secrets → Add → type *Secret*). Any long random value; generate one with `openssl rand -base64 32`. With it set, "Forgot username" starts using the new key index (P3a-7). Without it, everything works as before. **Once set, never change or delete it**: every entry in the new index was computed from it.
+7. **Optional: add the secret `LOOKUP_PEPPER`** (Worker → Settings → Variables and Secrets → Add → type *Secret*). Any long random value; generate one with `openssl rand -base64 32`. With it set, "Forgot username" starts using the new key index (P3a-7). Without it, everything works as before. **Once set, never change or delete it**: every entry in the new index was computed from it.
 
 `TOKEN_ENCRYPTION_KEY` is needed only to start moving install-link keys into encrypted storage (P3a-8, below). That move stays **off** until `INSTALL_MIGRATION_PERCENT` is set, and `docs/OPERATIONS.md` §8 gives the steps. Deploying without it changes nothing.
 
-`FF_SESSIONS` and `FF_INSTALLS` stay **off** (unset). Leave them off until the new sign-in and install-link screens ship.
+`FF_SESSIONS`, `FF_INSTALLS`, `FF_V2_LISTS_API`, `FF_V2_LISTS_READ` and `FF_V2_LISTS_ONLY` stay **off** (unset). Leave the first three off until the new sign-in, install-link and list screens ship. `FF_V2_LISTS_READ` stays off until the list copy (`docs/OPERATIONS.md` §9) has finished and its report has been checked; §10 then gives the steps, and turning it off again is always safe. `FF_V2_LISTS_ONLY` comes last and is **one-way**: only after reads have been on the new tables for a while (§11).
+
+### 🏁 The old list storage can be switched off (P3b-9)
+
+- **A new switch, `FF_V2_LISTS_ONLY` (off), makes the new tables the only store** for lists, likes and shared channels. The old storage stops being written, and everything reads from the new tables. Every answer stays the same: the tests run the same 60-odd requests with and without it and compare every answer.
+- **It is one-way**, so it comes last: after reads have been on the new tables for a while and the copy shows nothing left (`docs/OPERATIONS.md` §11).
+- **Big lists save in one go:** a list of up to 10,000 titles is written to the new tables in one request (a few dozen database queries rather than thousands).
+- **Fixed on the way:** a list made again after being deleted no longer inherits the old one's likes in the new tables; titles a playback ping takes off the Watchlist now reach them; a new Watchlist is placed first, as before; and a catalog row pointing at a creator's list page reads the new tables when the read switch is on.
+- A new number in the request metrics counts writes to the old list storage, so switching it off can be checked: it should stay at 0.
+
+### 📺 Shared channels move to the new tables (P3b-8)
+
+- **Shared and published channels get their own rows**, and each channel's episode list is stored in an R2 bucket instead of one KV value of up to 4 MB. Explore Channels becomes a database query: no 500-listing cap, and a listing can no longer be lost when two people publish at the same moment.
+- Channel likes and "added" counts move to the new tables too (liking twice counts once, and old like totals are kept).
+- As with lists, every share, edit, unpublish, like and takedown still goes to today's storage first, then to the new tables. With `FF_V2_LISTS_READ` on, a shared channel is read from the new tables, and it plays exactly the same lineup on the same day (tested).
+- The list copy in `/admin` now copies shared channels as well.
+- **New recommended binding:** an R2 bucket named `mylists-blobs`, bound as `BLOBS` (see the deploy notes). Without it everything still works, and episode lists stay in KV.
+
+### 🩹 Imported lists keep their sync settings (P1-C5)
+
+- **Fixed:** an imported list set to stay in sync (from MDBList, for example) lost its source link, its "keep synced" setting and its last sync time whenever the dashboard loaded it, and again when it was edited. They are now kept.
+- Lists that already lost them are not repaired: link or import them again to restore the settings.
+
+### 🔀 Lists read from the new tables, behind one switch (P3b-7)
+
+- **With `FF_V2_LISTS_READ` on, lists are read from the new tables**: the dashboard, list contents, public list pages and Custom List catalog rows, as well as the directory and search (P3b-6). Every answer is the same as today's, item for item. Tests compare the two, and the whole test suite now runs twice in CI, once with the switch on.
+- **Every change to a list still goes to today's storage first**, and is then copied into the new tables as it happens: saves, deletes, reordering, likes, account resets and deletions, and the Watchlist. Only what changed is written: adding one title to a list writes one row. So turning the switch off again at any time loses nothing.
+- An account is read from the new tables once its copy has finished. Opening the dashboard finishes it on the spot; until then, and whenever a copy falls behind, the account is read from today's storage. The directory waits until every account is copied.
+- The Watchlist is still read from today's storage (it moves with watch history in a later phase).
+- Nothing changes on the site: the switch stays off (see the deploy notes).
+
+### 🔎 The list directory and search, read from the new tables (P3b-6)
+
+- **`/lists/public.json` and list search can read from the new list tables**, behind `FF_V2_LISTS_READ` (off). They answer in exactly the same shape and order as today: on a 130-list test fixture the top 100 match the current directory list for list.
+- The directory gains `?sort=popular` (today's order), `new` and `added`, and a `cursor` for the next page; `?offset=` keeps working.
+- Search covers list names, descriptions, and creators' display names and usernames.
+- If the new tables can't answer, both fall back to today's storage by themselves.
+- Nothing changes on the site while the switch is off. Since P3b-7 both also wait for the list copy to finish before reading the new tables.
+
+### ❤️ A likes API over the new tables (P3b-5)
+
+- **`/api/likes/{list|channel|external}/{id}`**, behind the same switch as the list API (off): `PUT` likes, `DELETE` takes the like back, `GET` says whether you have liked it and how many likes it has.
+- A like belongs to a signed-in account (D-6). Liking twice counts once; there is no cap (the old ledgers stopped at 5,000 voters).
+- Likes cast signed out before D-6 keep counting (D-9), and like totals carried over from the old storage are kept.
+- An outside list (MDBList, Trakt and the like) is liked by its URL, under the same key the current site uses, so its old likes and new ones add up.
+- Nothing changes on the site: the switch stays off until reads move to the new tables.
+
+### 🧩 A list API over the new tables (P3b-4)
+
+- **`/api/lists`**, behind `FF_V2_LISTS_API` (off): a signed-in account can list, create, rename, describe, reorder, hide or share (private, unlisted, public) and delete its lists, and add, remove and move single entries, up to 500 at a time. Built for the new list screens (Phase 6).
+- Anyone can read a public or unlisted list; a private list answers "not found" to everyone but its owner.
+- Adding one title writes one small row instead of resending the whole list. Every change also updates the list's item count and version, and the account's version, in the same step.
+- Renaming or deleting needs the version the page last saw (`If-Match`), so a change made on another device is never silently overwritten. A renamed list keeps answering at its old address.
+- Nothing changes on the site: the switch stays off until reads move to the new tables.
+
+### 📋 Copying existing lists into the new tables (P3b-3)
+
+- **A new `/admin` button copies every list into the new list tables**: each account's lists in their dashboard order, their items (each matched to its movie or show record), their likes, the old anonymous lists (unlisted, as D-6 decided), and likes on outside lists. Channels follow in a later step.
+- **It only copies.** It cannot write to the old storage at all, the lists people use today are not changed, and nothing on the site reads the copies yet.
+- It runs in small steps, can be paused and carried on, and can be run again (only lists that changed are copied again).
+- *Check results* shows the reconciliation: how many lists and items were found and copied, and why any item was not (no usable id, or listed twice), with examples. No like total goes down.
+- Run it after deploying and applying migration 0016: see `docs/OPERATIONS.md` §9.
+- Migration 0016 gains one column (`lists.legacy_hash`) before anyone has applied it.
+
+### 🎬 One record per movie or show (P3b-2)
+
+- **`29_media.js` turns any list item's id into one `media` row**, the record lists v2 entries point at. It checks the database first, then asks TMDB, then stores the answer, so each title is looked up once for the whole site.
+  - It understands every id form list items carry today (`tt…`, `tmdb:…`, bare TMDB numbers, other schemes such as `kitsu:`). An episode entry is filed under its show.
+  - A title TMDB can't place still gets a record with the ids and name the item had, and is tried again later. No list entry is dropped for want of a title.
+  - At most six TMDB requests at a time, and a limit per call, so a large list can't run away with the Worker's time.
+- Nothing calls it yet. The list backfill (P3b-3) and the new list API (P3b-4) will. Nothing a visitor sees changes.
+
+### 🗂️ New tables for lists, likes and channels (P3b-1)
+
+- **Migration 0016** (`migrations/0016_lists_v2.sql`) adds the tables Phase 3b moves lists onto: `media`, `lists`, `list_items`, `list_slug_history`, `likes`, `channels`, `account_list_prefs`, `presets`, the search table `lists_fts2`, and `jobs` (for the list backfill's progress).
+  - Nothing reads or writes them yet. No existing table or row is touched, and nothing a visitor sees changes.
+  - The required database version stays at 0014, so deploying before running 0016 does not pause anything. Until it is applied, the admin schema check lists it as missing.
+  - A list entry can be a single episode as well as a whole title, because storyline and crossover lists hold episodes. Item details with no column of their own (companion notes, air dates) are kept with the entry, so copying lists across loses nothing.
 
 ### 🔐 Stremio rows use the account's own connections (P3a-10)
 

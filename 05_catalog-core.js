@@ -1627,7 +1627,8 @@ function parseCustomListPayload(rawUrl) {
   }
 }
 
-// Re-reads a Creator-hosted list's current record straight from this
+// Re-reads a Creator-hosted list's current record: from the v2 tables once
+// they are the ones being read (P3b-7), otherwise straight from this
 // Worker's own KV, the same key shape /api/creator/lists/save writes to
 // and the /lists/:username/:slug viewer route already reads from. Returns
 // null (never a record with no items) on anything short of a confirmed,
@@ -1638,7 +1639,19 @@ function parseCustomListPayload(rawUrl) {
 // liveShelfName): a shelf whose title lags its contents is the same bug
 // with a different symptom.
 async function readLiveCreatorList(env, owner, slug, verifiedOwner = "") {
-  if (!owner || !slug || !env || !env.CONFIGS) return null;
+  if (!owner || !slug || !env) return null;
+  // From v2 when FF_V2_LISTS_READ is on and the owner's copy is finished
+  // (P3b-7, 34_lists-v2-bridge.js), with the same rule as below: public to
+  // anyone, private only to a verified owner. null means the legacy keys.
+  // typeof-guarded: this file is also loaded on its own (tests, the page).
+  const v2Rec = typeof listsV2LiveListRecord === "function"
+    ? await listsV2LiveListRecord(env, owner, slug, verifiedOwner)
+    : null;
+  if (v2Rec) return v2Rec;
+  // With FF_V2_LISTS_ONLY (P3b-9) the legacy keys are behind: nothing live in
+  // v2 means nothing live.
+  if (typeof isV2ListsOnly === "function" && isV2ListsOnly(env)) return null;
+  if (!env.CONFIGS) return null;
   const ownerLower = String(owner).toLowerCase();
   const slugLower = String(slug).toLowerCase();
   // A private list is live only to a reader that PROVED it owns the account
@@ -2624,9 +2637,14 @@ async function fetchPublishedListCatalog(entry, env) {
   if (!parsed) return [];
 
   let payload = null;
+  // A creator's list from v2 when reads are there (P3b-7) -- and only from
+  // there with FF_V2_LISTS_ONLY (P3b-9). The legacy anonymous lists
+  // (publishedlist:) are read where they have always been.
+  const v2Items = typeof listsV2LiveListItems === "function" ? await listsV2LiveListItems(env, parsed.username, parsed.listName) : null;
+  if (v2Items) payload = { items: v2Items, visibility: "public" };
+  const listsOnly = typeof isV2ListsOnly === "function" && isV2ListsOnly(env);
   const keysToTry = [
-    `creatorlist:${parsed.username}:${parsed.listName}`,
-    `creatorlist:${parsed.rawUsername}:${parsed.rawListName}`,
+    ...(listsOnly ? [] : [`creatorlist:${parsed.username}:${parsed.listName}`, `creatorlist:${parsed.rawUsername}:${parsed.rawListName}`]),
     `publishedlist:${parsed.username}:${parsed.listName}`,
     `publishedlist:${parsed.rawUsername}:${parsed.rawListName}`,
   ];

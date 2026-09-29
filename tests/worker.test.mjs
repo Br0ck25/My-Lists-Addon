@@ -8368,7 +8368,9 @@ describe("the Worker can tell an operator it is ahead of its own database", () =
       for (const m of sql.matchAll(/CREATE\s+(?:VIRTUAL\s+)?TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+([A-Za-z_][\w]*)/gi)) {
         found.push(`${migration}:table:${m[1]}`);
       }
-      for (const m of sql.matchAll(/CREATE\s+INDEX(?:\s+IF\s+NOT\s+EXISTS)?\s+([A-Za-z_][\w]*)/gi)) {
+      // UNIQUE included: 0016 is the first migration with unique indexes, and
+      // without it they would slip past this check unnoticed.
+      for (const m of sql.matchAll(/CREATE\s+(?:UNIQUE\s+)?INDEX(?:\s+IF\s+NOT\s+EXISTS)?\s+([A-Za-z_][\w]*)/gi)) {
         found.push(`${migration}:index:${m[1]}`);
       }
       for (const m of sql.matchAll(/ALTER\s+TABLE\s+([A-Za-z_][\w]*)\s+ADD\s+COLUMN\s+([A-Za-z_][\w]*)/gi)) {
@@ -8383,7 +8385,8 @@ describe("the Worker can tell an operator it is ahead of its own database", () =
     // endpoint's report IS the manifest -- and it comes through the same code
     // path an operator would use.
     const db = makeD1();
-    for (const t of ["install_secrets", "installs", "provider_connections", "sessions", "account_settings", "accounts", "rate_counters", "creators", "creator_lists", "source_groups", "stats", "creator_tombstones", "published_lists", "lists_fts", "list_tombstones", "list_likes", "feedback", "scrobble_tokens", "event_meta", "watch_history", "continue_watching", "airing_next", "creator_user_lists", "creator_show_states", "creator_tracking_meta", "streaming_events", "creator_key_lookups", "schema_migrations"]) {
+    for (const t of ["list_items", "list_slug_history", "lists_fts2", "likes", "channels", "account_list_prefs", "presets", "jobs", "lists", "media",
+      "install_secrets", "installs", "provider_connections", "sessions", "account_settings", "accounts", "rate_counters", "creators", "creator_lists", "source_groups", "stats", "creator_tombstones", "published_lists", "lists_fts", "list_tombstones", "list_likes", "feedback", "scrobble_tokens", "event_meta", "watch_history", "continue_watching", "airing_next", "creator_user_lists", "creator_show_states", "creator_tracking_meta", "streaming_events", "creator_key_lookups", "schema_migrations"]) {
       db._db.exec(`DROP TABLE IF EXISTS ${t};`);
     }
     const env = makeEnv({ CONFIGS: makeKv(), DB: db });
@@ -8744,6 +8747,7 @@ describe("FE-17: the custom-lists stamp cannot silently stop working", () => {
   const NON_MUTATORS = {
     "02_http-and-creator-utils.js :: getCreatorList": "reads one record",
     "02_http-and-creator-utils.js :: readAccountWatchlist": "reads the Watchlist's list record to pick its newest copy; writes nothing",
+    "02_http-and-creator-utils.js :: removeLegacyListLeftovers": "removes a deleted list's leftover legacy record with FF_V2_LISTS_ONLY; its only caller, deleteCreatorLists, bumps",
     "26_api-creator-and-admin-routes.js :: /admin/api/creator-lists": "enumerates one creator's records for the admin browse; changes nothing",
     "26_api-creator-and-admin-routes.js :: /api/creator/lists": "self-heals the order key on a read; the same response already carries the healed order",
     "26_api-creator-and-admin-routes.js :: /api/creator/sync/load": "reads the order key",
@@ -9697,6 +9701,10 @@ describe("Phase 2: Identity and lists become D1-authoritative", () => {
     const kv = makeKv();
     const db = makeD1();
     const env = makeEnv({ CONFIGS: kv, DB: db });
+    // The repair is getCreatorList's, which only the legacy reads run. With
+    // reads on v2 the dashboard never calls it: the save's mirror already
+    // took the newer copy (lists-v2.test.mjs, P3b-7, "a D1 write that failed").
+    delete env.FF_V2_LISTS_READ;
     const u = await createUser(env, "p2heal");
     const K = { creatorName: "p2heal", creatorKey: u.creatorKey };
 
@@ -9723,6 +9731,42 @@ describe("Phase 2: Identity and lists become D1-authoritative", () => {
     assert.equal(d1Row.name, "Healed From KV");
     assert.equal(d1Row.updated_at, freshKv.updatedAt);
     assert.ok(d1Row.items_json.includes("tt2"));
+  });
+
+  // P1-C5. Reading the dashboard rebuilt each list's KV record from its D1
+  // row and wrote it back whole, without the four fields only KV holds, so an
+  // imported list lost its source link, "keep synced" and sync bookkeeping on
+  // the first read -- and an edit that read it back lost them too.
+  it("keeps an imported list's sync settings through dashboard reads and edits", async () => {
+    const kv = makeKv();
+    const env = makeEnv({ CONFIGS: kv, DB: makeD1() });
+    const u = await createUser(env, "p1c5sync");
+    const K = { creatorName: "p1c5sync", creatorKey: u.creatorKey };
+    const sync = { sourceUrl: "https://mdblist.com/lists/someone/good-shows", synced: true, lastSyncedAt: 1700000000000, baseItemIds: ["tt0903747"] };
+    const saved = await call(env, "/api/creator/lists/save", { method: "POST", json: {
+      ...K, name: "Imported", type: "series", visibility: "private", items: [{ id: "tt0903747", type: "series" }], ...sync,
+    }});
+    assert.equal(saved.body.ok, true);
+    const slug = saved.body.slug;
+    const pick = (o) => ({ sourceUrl: o.sourceUrl, synced: o.synced, lastSyncedAt: o.lastSyncedAt, baseItemIds: o.baseItemIds });
+    const stored = () => pick(JSON.parse(kv._store.get(`creatorlist:p1c5sync:${slug}`)));
+    for (const read of [1, 2]) {
+      const listed = await call(env, "/api/creator/lists", { method: "POST", json: { ...K, includeItems: true } });
+      assert.deepEqual(pick(listed.body.lists.find((l) => l.slug === slug)), sync, `the dashboard, read ${read}`);
+      assert.deepEqual(stored(), sync, `the KV record after read ${read}`);
+    }
+    const items = await call(env, "/api/creator/lists/items", { method: "POST", json: { ...K, slugs: [slug] } });
+    assert.deepEqual(items.body.lists[0].baseItemIds, sync.baseItemIds);
+
+    // An edit that does not send them again (adding a title) keeps them.
+    const edited = await call(env, "/api/creator/lists/save", { method: "POST", json: {
+      ...K, slug, name: "Imported", type: "series", visibility: "private",
+      items: [{ id: "tt0903747", type: "series" }, { id: "tt0141842", type: "series" }],
+    }});
+    assert.equal(edited.body.ok, true);
+    assert.deepEqual(stored(), sync, "after an edit");
+    const again = await call(env, "/api/creator/lists", { method: "POST", json: K });
+    assert.deepEqual(pick(again.body.lists.find((l) => l.slug === slug)), sync, "and the dashboard after it");
   });
 
   it("creator_lists.sort_order drives ordering and survives missing creatorlistorder KV key", async () => {

@@ -752,6 +752,15 @@ The existing files keep their responsibilities:
 | `08_quickadd-chart-data.js` | Quick Add chart tables |
 | `09_`–`24_` | The page shell and the client application (inside `renderBuilder`'s template literal) |
 | `25_`, `26_` | Routes (`handleFetch`), the `fetch` / `scheduled` exports |
+| `27_installs.js` | Install links: the encrypted-secrets move and `/api/installs` (P3a-8) |
+| `28_connections.js` | Provider connections, and catalogs reading them (P3a-9, P3a-10) |
+| `29_media.js` | The media resolver: any list item's id to one `media` row (P3b-2) |
+| `30_lists-backfill.js` | Copying the legacy lists, likes and anonymous lists into the v2 tables (P3b-3) |
+| `31_lists-api.js` | The item-level list API, `/api/lists` (P3b-4) |
+| `32_likes-api.js` | The likes API, `/api/likes` (P3b-5) |
+| `33_lists-directory.js` | The public list directory and search read from v2 (P3b-6) |
+| `34_lists-v2-bridge.js` | The legacy list routes over v2: mirroring every legacy list write into v2, and the rest of the read switch (P3b-7) |
+| `35_channels-v2.js` | Shared channels as `channels` rows plus R2 pools: the mirror of every legacy channel write, the reads, Explore Channels as a query, and the copy's channels phase (P3b-8) |
 
 **New server-only areas go in new numbered files after `26_`**, each starting with a comment saying what it owns. They can't go between `09_` and `24_`, which are inside the page's template literal. Top-level names must be unique across every file.
 
@@ -765,7 +774,8 @@ Where the rest of this plan names a module path, it maps to:
 | `stremio/`, `channels/engine`, `images/` | `05_` |
 | `providers/` | `06_`, `07_`, plus `27_provider-http.js` for `providerFetch` |
 | `jobs/` | `07_` and the `scheduled` export in `26_`, plus a new numbered file for the queue consumer when Queues arrive |
-| `media/`, `activity/` | new numbered files after `26_` when they are built |
+| `media/` | `29_media.js` |
+| `activity/` | a new numbered file after `26_` when it is built |
 | `admin/` | `03_`, and the admin routes in `26_` |
 | `frontend/` | `09_`–`24_` |
 | `shared/constants` | `00_` |

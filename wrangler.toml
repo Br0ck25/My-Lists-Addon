@@ -41,6 +41,16 @@ database_id = "YOUR_DATABASE_ID"
 binding = "ANALYTICS"
 dataset = "mylists_events"
 
+# --- R2 (recommended from Phase 3b) ----------------------------------------------
+# Shared channels' episode lists, one object per version
+# (channels/{code}/{version}.json, P3b-8). Without it the channel rows are
+# still written and episodes are read from KV.
+# Dashboard: R2 -> Create bucket mylists-blobs, then Worker -> Settings ->
+# Bindings -> Add -> R2 bucket, name BLOBS, bucket mylists-blobs.
+[[r2_buckets]]
+binding = "BLOBS"
+bucket_name = "mylists-blobs"
+
 # --- Plan ---------------------------------------------------------------------
 # The hosted Worker runs on Workers Paid (10,000 outbound fetches and 30 s CPU
 # per invocation). The old per-invocation budgets that let it fit the Free
@@ -58,6 +68,16 @@ dataset = "mylists_events"
 # FF_SESSIONS = "1"
 # Optional feature flag for Phase 3a: the /api/installs management API
 # FF_INSTALLS = "1"
+# Optional feature flag for Phase 3b: read lists from the v2 tables. Leave
+# unset until the list copy has finished (docs/OPERATIONS.md sections 9 and 10).
+# FF_V2_LISTS_READ = "1"
+# Optional feature flag for Phase 3b: the /api/lists list API and /api/likes.
+# Leave unset in production until the legacy list writes stop (P3b-9).
+# FF_V2_LISTS_API = "1"
+# Optional, Phase 3b (P3b-9): stop writing the old list and channel storage;
+# the new tables become the only store. ONE-WAY -- see docs/OPERATIONS.md
+# section 11 before setting it.
+# FF_V2_LISTS_ONLY = "1"
 # Optional, 0-100: share of existing install links whose keys and tokens are
 # moved into encrypted D1 storage on first use (needs TOKEN_ENCRYPTION_KEY)
 # INSTALL_MIGRATION_PERCENT = "0"
