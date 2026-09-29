@@ -4,7 +4,8 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 
 **Status**
 - **Release 1** went live on 2026-09-29. The owner reports everything working.
-- **Release 2** is prepared and not yet live.
+- **Release 2** went live on 2026-09-29. The owner reports no issues.
+- **Release 3** is prepared and not yet live.
 
 The owner decided to release the new version **one phase at a time, straight to the live site**, with no separate test site. Each release waits until the one before it has run cleanly for at least a day.
 
@@ -22,7 +23,7 @@ The owner decided to release the new version **one phase at a time, straight to 
 |---|---|---|---|---|
 | 1 | Phase 1 (+ the Sept 26 ports) | `31e55d9` | `0014` | Analytics Engine binding (optional); delete 3 retired variables |
 | 2 | Phase 2 | `3d0638a` | none | none |
-| 3 | Phase 3a: accounts and sessions | `56d0154` | `0015` | `/admin` → Migrate Accounts; secrets `TOKEN_ENCRYPTION_KEY`, `LOOKUP_PEPPER` (needed once their switches go on); switches stay off |
+| 3 | Phase 3a: accounts and sessions | `56d0154` | `0015` | `/admin` → Migrate Accounts; no secrets yet: `TOKEN_ENCRYPTION_KEY` and `LOOKUP_PEPPER` come with the switches that need them |
 | 4 | Phase 3b: new list tables | `188db3e` | `0016` | R2 bucket `BLOBS`; the list copy; switches later |
 | 5 | Phase 3c: activity database | `69fda2e` | `0017`, and `A0001` in the new database | a second D1 database `DB_ACTIVITY`; the history copy |
 | 6 | Phase 4 | `46a33d6` | none | optional switches (breaker, snapshots, ids) |
@@ -156,6 +157,63 @@ No database update, no new bindings and no new settings this time.
    - press **Update Link** there and check the rows still load.
 4. **Watch for 30 minutes**: Metrics and Logs. The logs should show `[redacted]` wherever a key would have been.
 
+**Live since 2026-09-29.**
+
 ### Rollback
 
 Paste Release 1's file and Deploy. Nothing to undo in the database.
+
+---
+
+## Release 3: Phase 3a (accounts, sessions, install links, connections)
+
+**Branch point:** `c3ef940` on `claude/elegant-ride-o7m8fh`, which merges `main` at `56d0154` (the end of Phase 3a, public PRs #1 and #2 on this repository) into Release 2.
+
+`bash verify.sh` passes: 1,451 tests passed, 0 failed, 1 skipped.
+
+Two conflicts with the ported live-list code, both resolved by keeping both sides:
+- **the manifest route** keeps #77's live shelf names and no-store, and gains Phase 3a's after-the-response install move;
+- **`tests/client.test.mjs`**: both sides had appended test suites at the end.
+
+### What is switched on for everyone
+
+- **Every write request must come from the site itself** (P3a-5): the same origin, with `Content-Type: application/json`. Every write request in the page and in `/admin` was checked, including #77's `/api/list-live/save`, and all already send this. The exceptions are the scrobble webhooks, the OAuth sign-in round trips, and `/admin` login and logout. A script or tool outside the site that posts to `/api/...` would now get a 403.
+- **New accounts get a row in the new `accounts` table**, and so does the account behind a signed-in "Update Link". Nothing reads it yet except the parts that are switched off.
+- **Resetting a key signs out every session of that account.** There are no sessions yet, so nothing changes today.
+
+### What stays off
+
+Nothing below runs until its switch or secret is set, and none is set in this release:
+- **session sign-in** (`FF_SESSIONS`);
+- **install-link management** (`FF_INSTALLS`);
+- **moving install-link keys into encrypted storage** (`INSTALL_MIGRATION_PERCENT`, and it also needs `TOKEN_ENCRYPTION_KEY`);
+- **provider connections kept on the server** (need a session, and `TOKEN_ENCRYPTION_KEY`);
+- **the v2 forgot-username index** (`LOOKUP_PEPPER`).
+
+The code checks for all of these, and without migration 0015 each one says "not available right now" instead of failing. `REQUIRED_SCHEMA_VERSION` stays `0014`, so writes are never paused by this release.
+
+### Steps, in order
+
+1. **Keep Release 2's file** (`release-2-NEW-worker.js`) as the rollback file.
+2. **Note the time** (the database can be wound back to it).
+3. **Apply migration 0015:**
+   - Cloudflare dashboard → Storage & Databases → D1 → `my-lists-db` → **Console**;
+   - paste the whole of `migrations/0015_accounts_sessions_installs.sql` and run it;
+   - then run `SELECT version FROM schema_migrations ORDER BY version;`, whose last line should be `0015`.
+4. **Deploy:** Workers & Pages → the My Lists Worker → **Edit code** → select all → paste Release 3's `worker_entry_combined.js` → **Deploy**.
+5. **Smoke test:**
+   - the site loads;
+   - existing install rows load in Stremio or Nuvio;
+   - sign in, edit a list, and the change reaches the apps;
+   - generate or update an install link;
+   - like a list, then unlike it;
+   - `/admin` → Maintenance → **Check schema** says up to date, at `0015`.
+6. **Copy the accounts:** `/admin` → Maintenance → **Unified accounts table** → **Migrate Accounts**.
+   - It copies every account's name and key hash into the new table. Nothing a visitor sees changes, and it is safe to press again.
+   - It reports, for example, *Done — 812 accounts in table (810 D1, 812 KV, union 812). Reconciled ✓*.
+   - **Report the whole message.** *Mismatch!* or *Failed* is not an emergency (nothing uses the table yet), but it has to be sorted out before Release 4, whose list copy works account by account from this table. With a very large number of accounts, one press can run into Cloudflare's per-request limits, and the copy would then need to be split into steps.
+7. **Watch for 30 minutes**: Metrics and Logs. A burst of 403 "Cross-origin request forbidden" in the logs would mean something outside the site posts to the API; say so.
+
+### Rollback
+
+Paste Release 2's file and Deploy. Leave migration 0015 in place: the older code does not know the new tables are there.
