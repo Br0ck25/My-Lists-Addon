@@ -2,6 +2,12 @@
 
 > **Notice to Incoming AI**: Read this file first! It records the current progress, modified files, and what needs to be done next. Do not start over or undo existing work.
 
+> **Release in progress (2026-09-29): read `docs/RELEASES.md` first.**
+> - The owner is taking the new version live one phase at a time, straight to mylistsaddon.com.
+> - Branch `claude/elegant-ride-o7m8fh` is Release 1: `main` at the end of Phase 1 (`31e55d9`), plus three updates from the public repository (Br0ck25/My-Lists, 2026-09-26) that this repository was missing.
+> - Each later release merges the next phase's commit from `main` into that branch. The table in `docs/RELEASES.md` lists them.
+> - The rest of this file describes `main` as it was at the end of Phase 1.
+
 ---
 
 ## Current Status
