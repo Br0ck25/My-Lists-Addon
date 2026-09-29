@@ -5,7 +5,8 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 **Status**
 - **Release 1** went live on 2026-09-29. The owner reports everything working.
 - **Release 2** went live on 2026-09-29. The owner reports no issues.
-- **Release 3** is prepared and not yet live.
+- **Release 3** went live on 2026-09-29. Migrate Accounts reported: *695 accounts in table (695 D1, 658 KV, union 695). Reconciled ✓*.
+- **Release 4** is prepared and not yet live.
 
 The owner decided to release the new version **one phase at a time, straight to the live site**, with no separate test site. Each release waits until the one before it has run cleanly for at least a day.
 
@@ -214,6 +215,82 @@ The code checks for all of these, and without migration 0015 each one says "not 
    - **Report the whole message.** *Mismatch!* or *Failed* is not an emergency (nothing uses the table yet), but it has to be sorted out before Release 4, whose list copy works account by account from this table. With a very large number of accounts, one press can run into Cloudflare's per-request limits, and the copy would then need to be split into steps.
 7. **Watch for 30 minutes**: Metrics and Logs. A burst of 403 "Cross-origin request forbidden" in the logs would mean something outside the site posts to the API; say so.
 
+**Live since 2026-09-29.** Migrate Accounts: 695 accounts, reconciled.
+
 ### Rollback
 
 Paste Release 2's file and Deploy. Leave migration 0015 in place: the older code does not know the new tables are there.
+
+---
+
+## Release 4: Phase 3b (the new list tables)
+
+**Branch point:** `f3524c3` on `claude/elegant-ride-o7m8fh`, which merges `main` at `188db3e` (the end of Phase 3b, PR #3) into Release 3.
+
+`bash verify.sh` passes (1,552 tests passed, 0 failed, 1 skipped), and so does the suite with `MLA_TEST_V2_LISTS_READ=1`.
+
+### The one real conflict, and why it mattered
+
+Public #77 (ported in Release 1) had turned `fetchLiveCreatorListItems` into `readLiveCreatorList`:
+- it returns the whole record, so the shelf title can follow a rename;
+- following #76, it serves a private list to its proven owner.
+
+Phase 3b had taught the old function to read the v2 tables, but for public lists only.
+
+**Merged as:** `readLiveCreatorList` asks the v2 tables first, through a new `listsV2LiveListRecord` (`34_lists-v2-bridge.js`), with the legacy rule:
+- a public list goes to anyone;
+- a private list goes only to a reader that proved it owns the account.
+
+With `FF_V2_LISTS_ONLY`, nothing live in v2 means nothing live, because the legacy keys are behind.
+
+**Why it mattered:** without this, the day `FF_V2_LISTS_ONLY` went on, an owner's edits to a *private* list would have stopped reaching Stremio and Nuvio, because the legacy keys it would still have been read from stop being written.
+
+**Tests:** `tests/every-list-live-v2.test.mjs` (5) covers private and public lists and a link that only names the account. It also covers an edit and a rename with `FF_V2_LISTS_ONLY`; that test fails without the owner rule in `listsV2LiveListRecord`.
+
+### What changes for everyone once migration 0016 is applied
+
+- **Every change is also written to the new tables:** a list save, delete or reorder, a like, a channel share.
+  - Each one is a few extra D1 writes and at most 25 TMDB lookups per save; the rest are kept as "not placed yet" and tried again later.
+  - A failure there is logged and never stops the save.
+- **Nothing reads the new tables yet.** Visitors see exactly what they see today.
+
+### What stays off
+
+- `FF_V2_LISTS_READ` (read lists from the new tables). **A separate step after this release**, once the copy's results have been checked; it can be turned off again.
+- `FF_V2_LISTS_API` (the new list and likes API). Leave it off.
+- `FF_V2_LISTS_ONLY` (**one-way**). Weeks later, never as part of a release (`docs/OPERATIONS.md` §11).
+
+### Steps, in order
+
+1. **Keep Release 3's file** (`release-3-NEW-worker.js`) as the rollback file.
+2. **Note the time.** This release copies every list into the database, so the rewind point matters more than before.
+3. **Apply migration 0016:**
+   - Cloudflare dashboard → Storage & Databases → D1 → `my-lists-db` → **Console**;
+   - paste the whole of `migrations/0016_lists_v2.sql` and run it;
+   - then run `SELECT version FROM schema_migrations ORDER BY version;`, whose last line should be `0016`.
+4. **Create the storage bucket:** Cloudflare dashboard → **R2** → **Create bucket** → name `mylists-blobs` → Create. (If R2 asks to be enabled first, enable it: the free allowance is far more than this needs.)
+5. **Bind it:** Workers & Pages → the My Lists Worker → Settings → Bindings → **Add** → **R2 bucket**, variable name `BLOBS`, bucket `mylists-blobs`. Do this before step 8: shared channels' episode lists go into it during the copy.
+6. **Deploy:** **Edit code** → select all → paste Release 4's `worker_entry_combined.js` → **Deploy**.
+7. **Smoke test:**
+   - the site loads;
+   - existing install rows load in Stremio or Nuvio;
+   - sign in, edit a list (add and remove an item), and the change reaches the apps;
+   - like and unlike a list;
+   - share a channel;
+   - `/admin` → Maintenance → **Check schema** says up to date, at `0016`.
+8. **Copy the lists:** `/admin` → Maintenance → **Lists v2: copy existing lists** → **Copy lists**.
+   - It works in small steps and shows *Copying (...): N of 695 accounts*.
+   - **Keep the page open until it says *Done*.** Closing it only pauses; pressing Copy lists again carries on.
+9. **Press Check results** and send the whole text it shows. It says:
+   - how many lists and items were copied;
+   - what could not be carried, with reasons and examples;
+   - whether any account failed.
+10. **Watch for 30 minutes**: Metrics and Logs. `lists v2 ... failed` lines are worth reporting; saves keep working either way.
+
+**Do not add `FF_V2_LISTS_READ` yet.** The results from step 9 decide when.
+
+### Rollback
+
+Paste Release 3's file and Deploy. Leave migration 0016, the bucket and the copy in place:
+- the older code does not know they are there;
+- a later *Start over* brings the copy up to date.
