@@ -30205,6 +30205,49 @@ ${seoHeadHtml}
     border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.95rem;
   }
 
+  /* Channels (P6-7): the template cards, the schedule panel, and the lineup
+     the server answers with. The lineup tiles are the same shape as the
+     list preview's posters (P6-5), deliberately. */
+  html[data-app-shell="1"] .app-shell-template-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px; margin: 12px 0;
+  }
+  html[data-app-shell="1"] button.app-shell-template-card {
+    display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
+    text-align: left; padding: 12px 14px; cursor: pointer; font: inherit;
+    border: 1px solid var(--border); border-radius: 10px;
+    background: var(--surface); color: var(--text);
+  }
+  html[data-app-shell="1"] button.app-shell-template-card:hover { border-color: var(--accent); }
+  html[data-app-shell="1"] .app-shell-template-card .app-shell-muted { font-size: 0.8rem; }
+  html[data-app-shell="1"] .app-shell-template-note { font-size: 0.74rem; }
+  html[data-app-shell="1"] .app-shell-schedule {
+    margin: 12px 0; padding: 10px 12px; border: 1px solid var(--border);
+    border-radius: 10px; background: var(--surface);
+  }
+  html[data-app-shell="1"] .app-shell-schedule summary { cursor: pointer; font-weight: 600; }
+  html[data-app-shell="1"] .app-shell-schedule input[type="number"] { width: 84px; }
+  html[data-app-shell="1"] .app-shell-schedule .app-shell-muted { font-size: 0.8rem; }
+  html[data-app-shell="1"] .app-shell-person-grid { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+  html[data-app-shell="1"] .app-shell-lineup {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+    gap: 8px; margin: 8px 0 10px;
+  }
+  html[data-app-shell="1"] .app-shell-lineup-tile { display: flex; flex-direction: column; gap: 4px; }
+  html[data-app-shell="1"] .app-shell-lineup-tile img,
+  html[data-app-shell="1"] .app-shell-lineup-blank {
+    width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 6px;
+    background: var(--panel-strong); border: 1px solid var(--border);
+  }
+  html[data-app-shell="1"] .app-shell-lineup-tile span {
+    font-size: 0.72rem; color: var(--muted);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  html[data-app-shell="1"] #appShellChannels input[type="text"] {
+    width: 100%; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.95rem;
+  }
+
   /* --- Floating Unsaved Changes to Install Link Banner -------------------- */
   .unsaved-install-banner {
     position: fixed;
@@ -31179,6 +31222,12 @@ ${newUi ? '    <div id="appShellImports"></div>' : ''}
 
   <!-- Submenu 1: My Channels -->
   <div class="channels-subpanel" id="channelsSubMyChannels">
+    <!-- The shell's own channel templates (P6-7): choose a template, look at
+         what is playing today, then add the channel to the home screen.
+         Emitted only for a browser with the FF_NEW_UI cookie; every panel
+         below is unchanged, and the Custom template hands off to the legacy
+         builder itself until that is rewritten. -->
+${newUi ? '    <div id="appShellChannels"></div>' : ''}
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">My Channels</h2>
@@ -54777,14 +54826,21 @@ async function fetchStorylineOrderedItems(eventId) {
   return { event, items: fullOrderedItems };
 }
 
-// Whether a storyline's channel is in the Live Preview. "+ Add" puts a
-// catalog row there and nothing in My Channels, so the rows are what to ask --
-// isListAddedToConfig only recognizes list rows, never a channel:v1: one. The
-// exact "channelId" key, not a substring: one storyline's id can be the start
-// of another's.
-function isStorylineChannelInCatalog(chId) {
-  const needle = '"channelId":"' + chId + '"';
+// Whether a channel is in the Live Preview -- the one answer every channel
+// button reads. "+ Add" puts a catalog row there and nothing in My Channels,
+// so the rows are what to ask: isListAddedToConfig only recognizes list rows,
+// never a channel:v1: one. The exact "channelId" key, not a substring: one
+// channel's id can be the start of another's.
+function isChannelInConfig(channelId) {
+  const wanted = String(channelId == null ? '' : channelId);
+  if (!wanted) return false;
+  const needle = '"channelId":"' + wanted + '"';
   return [...document.querySelectorAll('#lists .entry .url')].some((u) => String(u.value || '').includes(needle));
+}
+
+// The Storylines tab's own question, in terms of the one helper above.
+function isStorylineChannelInCatalog(chId) {
+  return isChannelInConfig(chId);
 }
 
 async function createInstantStorylineChannel(eventId, btn) {
@@ -55399,7 +55455,7 @@ function renderMyCreatedChannelsList() {
   }
 
   box.innerHTML = shown.map((ch) => {
-    const isAdded = [...document.querySelectorAll('#lists .entry .url')].some((u) => u.value.includes(ch.channelId));
+    const isAdded = isChannelInConfig(ch.channelId);
     const allItems = ch.items || [];
     const totalEpisodes = allItems.length;
     // Every rule a channel carries, spelled out on its card -- a channel
@@ -55827,8 +55883,35 @@ async function buildChannelItemsFromShows(shows, opts) {
   return { items: items, poster: poster, backdrop: backdrop };
 }
 
+// Builds a channel out of a network id or a pasted list URL. Every caller --
+// Quick Add's own buttons, the Import tab, and the shell's TV network / From a
+// list templates (P6-7) -- comes through here, so there is one traversal, one
+// preset lookup and one saved row shape.
+//
+// options, all optional and all defaulting to what this function has always
+// done:
+//   liveSync            keep the channel following a pasted list
+//   schedule            the P6-7 Schedule options as payload fields
+//                       (dailyRotate, rotateShows, rotateEpisodes, autoSort,
+//                       sortByAired, shuffle, hideWatched), applied on top of
+//                       what the preset or this function would otherwise set
+//   addToCatalog        false builds and saves the channel in this browser
+//                       without putting a row in the config, so a screen can
+//                       show the lineup first; the row is added afterwards by
+//                       toggleChannelInCatalog, from the same saved record
+//   preferPreset        false skips the server's network preset, for when the
+//                       Schedule options ask for a channel the preset is not
+//                       (it is 24 shows x 3 episodes a day, rotating)
+//   maxEpisodesPerShow  how many episodes of one show the traversal keeps
+//   onProgress          called with a plain sentence as the pool is built
+//
+// Returns the saved channel record, or null when nothing was built.
 async function quickAddChannel(name, listUrl, networkId, btn, options) {
-  if (!requireSignedInFor('build channels')) return; // docs/DECISIONS.md D-8
+  if (!requireSignedInFor('build channels')) return null; // docs/DECISIONS.md D-8
+  const o = options || {};
+  const sched = (o.schedule && typeof o.schedule === 'object') ? o.schedule : null;
+  const addToCatalog = o.addToCatalog !== false;
+  const note = (typeof o.onProgress === 'function') ? o.onProgress : null;
   const statusBox = document.getElementById('channelQuickAddStatus');
   const originalLabel = btn ? btn.textContent : '';
   if (btn) {
@@ -55837,7 +55920,7 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
   }
   if (statusBox) statusBox.innerHTML = '<p><small>Adding ' + escapeHtml(name) + '\u2026</small></p>';
   try {
-    if (networkId) {
+    if (networkId && o.preferPreset !== false) {
       try {
         const res = await fetch(ORIGIN + '/api/channel-preset?networkId=' + encodeURIComponent(networkId) + '&name=' + encodeURIComponent(name), { cache: 'no-store' });
         const data = await res.json();
@@ -55862,9 +55945,9 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
           // account's cloud channels blob (which has its own, much smaller
           // 24MB cap -- easy to blow past once a few of these 5,000-item
           // pools are all kept in full).
-          const payload = Object.assign({}, data.channel, { channelId: channelId, name: name, liveSync: false, sourceUrl: '', presetNetworkId: networkId });
+          const payload = Object.assign({}, data.channel, { channelId: channelId, name: name, liveSync: false, sourceUrl: '', presetNetworkId: networkId }, sched || {});
           saveLocalChannel(payload);
-          const pointerPayload = {
+          const pointerPayload = Object.assign({
             channelId: channelId,
             name: name,
             poster: data.channel.poster,
@@ -55875,18 +55958,21 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
             dailyRotate: true,
             liveSync: false,
             sourceUrl: '',
-          };
-          addRow(name, 'channel:v1:' + JSON.stringify(pointerPayload), 'series', true, 'Channels', channelId);
-          renderMyCreatedChannelsList();
-          renderChannelMergeList();
-          showAddedToast('Channel "' + name + '" added to your Catalogs.');
+          }, sched || {});
+          if (addToCatalog) {
+            addRow(name, 'channel:v1:' + JSON.stringify(pointerPayload), 'series', true, 'Channels', channelId);
+            renderMyCreatedChannelsList();
+            renderChannelMergeList();
+            showAddedToast('Channel "' + name + '" added to your Catalogs.');
+          }
           if (statusBox) {
             statusBox.innerHTML = '<p class="testresult ok" style="margin:4px 0 0;">\u2713 Channel "' + escapeHtml(name) + '" added (' + (payload.items ? payload.items.length : 0) + ' episodes with daily rotation)!</p>';
             setTimeout(() => {
               if (statusBox) statusBox.innerHTML = '';
             }, 4000);
           }
-          return;
+          if (note) note('');
+          return payload;
         }
       } catch (e) {}
     }
@@ -55922,13 +56008,16 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
       shows[i] = shows[j];
       shows[j] = tmp;
     }
+    if (note) note('Building the pool from ' + shows.length + ' shows\u2026');
     const built = await buildChannelItemsFromShows(shows, {
       poster: data.networkLogo || null,
+      maxEpisodesPerShow: o.maxEpisodesPerShow || undefined,
       onProgress: function (i, total, show) {
         if (statusBox) {
           statusBox.innerHTML = '<p><small>Building ' + escapeHtml(name) + '\u2026 show ' + (i + 1) + ' of ' + total +
             ' (' + escapeHtml(show.name) + ')</small></p>';
         }
+        if (note) note('Building ' + name + '\u2026 show ' + (i + 1) + ' of ' + total + ' (' + show.name + ')');
       },
     });
     const items = built.items;
@@ -55943,7 +56032,7 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
       return;
     }
     const channelId = generateChannelId();
-    const payload = {
+    const payload = Object.assign({
       channelId: channelId,
       name: name,
       poster: poster,
@@ -55955,26 +56044,31 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
       // Import tab's toggle was left on: the channel keeps the URL, and the
       // Worker rebuilds its pool from that list in the background instead of
       // this staying the one-time snapshot it used to be.
-      liveSync: !!(options && options.liveSync && listUrl),
-      sourceUrl: (options && options.liveSync && listUrl) ? listUrl : '',
-    };
+      liveSync: !!(o.liveSync && listUrl),
+      sourceUrl: (o.liveSync && listUrl) ? listUrl : '',
+    }, sched || {});
     saveLocalChannel(payload);
-    addRow(name, 'channel:v1:' + JSON.stringify(payload), 'series', true, 'Channels', channelId);
-    renderMyCreatedChannelsList();
-    renderChannelMergeList();
-    showAddedToast('Channel "' + name + '" added to your Catalogs.');
+    if (addToCatalog) {
+      addRow(name, 'channel:v1:' + JSON.stringify(payload), 'series', true, 'Channels', channelId);
+      renderMyCreatedChannelsList();
+      renderChannelMergeList();
+      showAddedToast('Channel "' + name + '" added to your Catalogs.');
+    }
     if (statusBox) {
       statusBox.innerHTML = '<p class="testresult ok" style="margin:4px 0 0;">\u2713 Channel "' + escapeHtml(name) + '" added (' + items.length + ' episodes with daily rotation)!</p>';
       setTimeout(function() {
         if (statusBox) statusBox.innerHTML = '';
       }, 4000);
     }
+    if (note) note('');
+    return payload;
   } catch (e) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Network Error', 'Network error while adding ' + name + '.');
     } else {
       alert('Network error while adding ' + name + '.');
     }
+    return null;
   } finally {
     if (btn) {
       btn.disabled = false;
@@ -56692,6 +56786,114 @@ async function addPersonShowEpisodes(tmdbId, showTitle, showPoster, btn, duplica
   }
 }
 
+// Builds a Spotlight channel's picks out of one person's credits: their films
+// and the episodes of theirs the server could place.
+//
+// Pulled out of addWholeSpotlightToDraft below so the legacy builder's "Add
+// whole spotlight" and the shell's Actor or creator template (P6-7) build the
+// SAME channel rather than two that look alike. Two details are why it is
+// written once:
+//
+//   - a film needs its IMDB id resolved one at a time, because a channel
+//     item's id IS the stream request (channelItemStreamId, server side), so
+//     a film with no id would play as nothing;
+//   - an episode list comes from /api/person-show-episodes, which also says
+//     whether that show is a regular credit or a guest appearance -- a
+//     distinction the note under the picks is built from.
+//
+// Never throws: a credit that cannot be read is skipped and the rest of the
+// channel is still built. onProgress(stage, index, total, label) is called
+// once per credit, before the request, with stage 'movies' or 'shows' -- the
+// two callers word the sentence their own way.
+async function buildSpotlightItemsFromCredits(credits, opts) {
+  const o = opts || {};
+  const c = credits || {};
+  const movies = Array.isArray(c.movies) ? c.movies : [];
+  const shows = Array.isArray(c.shows) ? c.shows : [];
+  const onProgress = (typeof o.onProgress === 'function') ? o.onProgress : null;
+  const movieItems = [];
+  const episodeItems = [];
+  let guestShows = 0;
+  let poster = c.poster || null;
+  let backdrop = c.backdrop || null;
+
+  for (let i = 0; i < movies.length; i++) {
+    const m = movies[i];
+    if (!m) continue;
+    if (onProgress) onProgress('movies', i, movies.length, m.title || '');
+    try {
+      const r = await fetch(ORIGIN + '/api/resolve-movie?tmdbId=' + encodeURIComponent(m.tmdbId), { cache: 'no-store' });
+      const d = await r.json();
+      if (!d.ok || !d.imdbId) continue;
+      if (!poster && m.poster) poster = m.poster;
+      if (!backdrop && m.backdrop) backdrop = m.backdrop;
+      movieItems.push({
+        kind: 'movie',
+        imdbId: d.imdbId,
+        tmdbId: m.tmdbId,
+        title: m.title,
+        year: m.year || '',
+        showName: m.title,
+        epName: 'Movie',
+        released: m.released || (m.year ? m.year + '-01-01' : ''),
+        runtime: d.runtime || 0,
+        thumbnail: m.backdrop || m.poster || '',
+        poster: m.poster || '',
+        showPoster: m.poster || '',
+        backdrop: m.backdrop || '',
+        spotlightRating: m.rating || 0,
+      });
+    } catch (e) {
+      continue;
+    }
+  }
+
+  for (let i = 0; i < shows.length; i++) {
+    const sh = shows[i];
+    if (!sh) continue;
+    if (onProgress) onProgress('shows', i, shows.length, sh.title || '');
+    try {
+      const r = await fetch(ORIGIN + '/api/person-show-episodes?personId=' + encodeURIComponent(c.personId) +
+        '&tmdbId=' + encodeURIComponent(sh.tmdbId), { cache: 'no-store' });
+      const d = await r.json();
+      if (!d.ok || !Array.isArray(d.episodes) || !d.episodes.length) continue;
+      if (!d.regular) guestShows++;
+      const showPoster = d.poster || sh.poster || '';
+      const showName = d.showName || sh.title || '';
+      if (!poster && showPoster) poster = showPoster;
+      if (!backdrop && d.backdrop) backdrop = d.backdrop;
+      d.episodes.forEach((ep) => {
+        episodeItems.push({
+          kind: 'episode',
+          imdbId: channelStreamShowId(d.imdbId, sh.tmdbId),
+          season: ep.season,
+          episode: ep.episode,
+          showName: showName,
+          epName: ep.name,
+          title: showName + ' S' + ep.season + 'E' + ep.episode + ' \u2014 ' + ep.name,
+          released: ep.released || '',
+          runtime: ep.runtime || 0,
+          thumbnail: ep.thumbnail || showPoster,
+          poster: showPoster || ep.thumbnail || '',
+          showPoster: showPoster,
+          spotlightRating: sh.rating || 0,
+        });
+      });
+    } catch (e) {
+      continue;
+    }
+  }
+
+  return {
+    items: movieItems.concat(episodeItems),
+    movieItems: movieItems,
+    episodeItems: episodeItems,
+    guestShows: guestShows,
+    poster: poster,
+    backdrop: backdrop,
+  };
+}
+
 async function addWholeSpotlightToDraft(btn) {
   if (!channelPersonCredits) return;
   const c = channelPersonCredits;
@@ -56703,75 +56905,20 @@ async function addWholeSpotlightToDraft(btn) {
     btn.textContent = 'Building\u2026';
   }
   try {
-    // A film needs its IMDB id resolved one by one: a channel item's id IS
-    // the stream request (see channelItemStreamId server-side), so a movie
-    // with no id would play as nothing.
-    const movieItems = [];
-    for (let i = 0; i < c.movies.length; i++) {
-      const m = c.movies[i];
-      say('<p><small>Resolving films\u2026 ' + (i + 1) + ' of ' + c.movies.length + ' (' + escapeHtml(m.title) + ')</small></p>');
-      try {
-        const r = await fetch(ORIGIN + '/api/resolve-movie?tmdbId=' + encodeURIComponent(m.tmdbId), { cache: 'no-store' });
-        const d = await r.json();
-        if (!d.ok || !d.imdbId) continue;
-        movieItems.push({
-          kind: 'movie',
-          imdbId: d.imdbId,
-          tmdbId: m.tmdbId,
-          title: m.title,
-          year: m.year || '',
-          showName: m.title,
-          epName: 'Movie',
-          released: m.released || (m.year ? m.year + '-01-01' : ''),
-          runtime: d.runtime || 0,
-          thumbnail: m.backdrop || m.poster || '',
-          poster: m.poster || '',
-          showPoster: m.poster || '',
-          backdrop: m.backdrop || '',
-          spotlightRating: m.rating || 0,
-        });
-      } catch (e) {
-        continue;
-      }
-    }
-
-    const episodeItems = [];
-    let guestShows = 0;
-    for (let i = 0; i < c.shows.length; i++) {
-      const sh = c.shows[i];
-      say('<p><small>Finding ' + escapeHtml(c.name) + '\u2019s episodes\u2026 show ' + (i + 1) + ' of ' + c.shows.length +
-        ' (' + escapeHtml(sh.title) + ')</small></p>');
-      try {
-        const r = await fetch(ORIGIN + '/api/person-show-episodes?personId=' + encodeURIComponent(c.personId) +
-          '&tmdbId=' + encodeURIComponent(sh.tmdbId), { cache: 'no-store' });
-        const d = await r.json();
-        if (!d.ok || !Array.isArray(d.episodes) || !d.episodes.length) continue;
-        if (!d.regular) guestShows++;
-        const showPoster = d.poster || sh.poster || '';
-        const showName = d.showName || sh.title || '';
-        d.episodes.forEach((ep) => {
-          episodeItems.push({
-            kind: 'episode',
-            imdbId: channelStreamShowId(d.imdbId, sh.tmdbId),
-            season: ep.season,
-            episode: ep.episode,
-            showName: showName,
-            epName: ep.name,
-            title: showName + ' S' + ep.season + 'E' + ep.episode + ' \u2014 ' + ep.name,
-            released: ep.released || '',
-            runtime: ep.runtime || 0,
-            thumbnail: ep.thumbnail || showPoster,
-            poster: showPoster || ep.thumbnail || '',
-            showPoster: showPoster,
-            spotlightRating: sh.rating || 0,
-          });
-        });
-      } catch (e) {
-        continue;
-      }
-    }
-
-    const items = sortSpotlightItems(movieItems.concat(episodeItems), channelSpotlightSort);
+    const built = await buildSpotlightItemsFromCredits(c, {
+      onProgress: function (stage, i, total, label) {
+        if (stage === 'movies') {
+          say('<p><small>Resolving films\u2026 ' + (i + 1) + ' of ' + total + ' (' + escapeHtml(label) + ')</small></p>');
+        } else {
+          say('<p><small>Finding ' + escapeHtml(c.name) + '\u2019s episodes\u2026 show ' + (i + 1) + ' of ' + total +
+            ' (' + escapeHtml(label) + ')</small></p>');
+        }
+      },
+    });
+    const movieItems = built.movieItems;
+    const episodeItems = built.episodeItems;
+    const guestShows = built.guestShows;
+    const items = sortSpotlightItems(built.items, channelSpotlightSort);
     if (!items.length) {
       say('<p class="testresult err">\u2717 Could not resolve any of ' + escapeHtml(c.name) + '\u2019s credits to something playable.</p>');
       return;
@@ -78209,6 +78356,797 @@ async function appShellImportsAction(action, id) {
   return false;
 }
 
+// --- Channels: the template flow (P6-7) --------------------------------------
+//
+// "I want to create a channel": choose a template, look at today's lineup,
+// then put it on the home screen. The five templates FRONTEND_UX_AUDIT
+// scenario 6 names, and what each one is underneath -- none of them builds a
+// channel a second way, which is what "wrap the legacy builder until it is
+// rewritten" means for this task:
+//
+//   TV network          quickAddChannel (20_), which prefers the server-built
+//                       network preset and falls back to the page's own
+//                       traversal with visible progress
+//   Franchise/universe  the saga registry the page already carries
+//                       (TV_CROSSOVER_EVENTS), through the same ordered-items
+//                       fetch the Storylines tab uses
+//   Actor or creator    /api/person-search -> /api/person-credits, then the
+//                       same pick builder the legacy Spotlight uses
+//                       (buildSpotlightItemsFromCredits, 20_)
+//   From a list         quickAddChannel with a pasted list URL
+//   Custom              openBuildCustomChannel -- the legacy builder itself
+//
+// The lineup in the preview is the server's answer (POST /api/channel-lineup),
+// not an arrangement made here: it is the same resolveChannelLineup that
+// answers a Stremio request, so what the preview shows is what plays. The two
+// rules that route cannot honour (Hide watched and a dynamic channel need an
+// account it has no way to prove) come back named, and are said rather than
+// quietly shown as if they applied.
+//
+// Nothing goes into the config until "Add to home screen" is pressed: the
+// channel is built and saved to this browser first (saveLocalChannel), so the
+// preview and the row that follows cannot describe two different channels.
+// Adding and removing is toggleChannelInCatalog (20_) -- the same button the
+// My Channels cards use -- except for a saga, which is a catalog-only row and
+// goes through createInstantStorylineChannel, exactly as the Storylines tab
+// adds one.
+//
+// Signed out: a saga can still be added (docs/DECISIONS.md D-8 -- a storyline
+// row is public and needs no account), and everything else asks for an account
+// the way every other builder button already does (requireSignedInFor).
+
+// The tiles a lineup preview draws. The rest of the lineup is counted, not
+// listed -- a day's block is 24 shows x 3 episodes and nobody reads that as a
+// poster grid.
+const APP_SHELL_CHANNEL_LINEUP_TILES = 12;
+const APP_SHELL_CHANNELS_ACTION = /^chan-/;
+
+// The five templates, in the order the audit lists them. needsAccount mirrors
+// rowNeedsAccount (16_): a saga is the one that works signed out.
+const APP_SHELL_CHANNEL_TEMPLATES = [
+  { id: 'network', title: 'TV network', blurb: 'A&E, HBO, NBC, Cartoon Network and the rest -- a rotating 24/7 channel for a whole network.', needsAccount: true },
+  { id: 'saga', title: 'Franchise or universe', blurb: 'A saga in its canon order: the Marvel Infinity Saga, a trilogy, a TV universe. Works without an account.', needsAccount: false },
+  { id: 'person', title: 'Actor or creator', blurb: 'Everything someone was in, as episodes -- a Christopher Lloyd marathon in one channel.', needsAccount: true },
+  { id: 'list', title: 'From a list', blurb: 'A TV list from MDBList, Trakt, TMDB or this site, kept in step with the list if you want.', needsAccount: true },
+  { id: 'custom', title: 'Custom', blurb: 'Pick the shows and episodes yourself, with the full builder. Nothing is decided for you.', needsAccount: true }
+];
+
+var appShellChannelTemplate = '';        // '' = the gallery, otherwise a template id
+var appShellChannelDraft = null;         // the built channel: { template, channelId, eventId, name, url, poolSize }
+var appShellChannelLineup = null;        // the last POST /api/channel-lineup answer
+var appShellChannelLineupFor = '';       // the url that answer belongs to
+var appShellChannelBusy = '';            // the sentence shown while something runs
+var appShellChannelNotice = '';          // the last thing that happened, in words
+var appShellChannelBuildInFlight = false;
+var appShellChannelPersonResults = [];
+var appShellChannelPersonPick = null;    // { personId, name }
+var appShellChannelSagaPick = '';
+var appShellChannelListName = '';        // the name field's last value, so a re-render keeps it
+
+// Schedule options (the details panel under every template except a saga,
+// which has a fixed canon order). The two toggles are buttons carrying their
+// state, so a re-render cannot lose it; the numbers are read from their inputs
+// when a build starts, with the same defaults the legacy builder starts from.
+var appShellChannelSchedule = { rotate: true, hideWatched: false, shows: 24, episodes: 3, order: 'listed', perShow: 50 };
+
+function appShellChannelsHost() {
+  return document.getElementById('appShellChannels');
+}
+
+// Whether Channels > My Channels is the sub on screen (the container is
+// emitted on every shell page; the panel is not).
+function appShellChannelsIsOpen() {
+  const panel = document.getElementById('channelsSubMyChannels');
+  return !!(panel && panel.style && panel.style.display !== 'none');
+}
+
+function appShellChannelEscape(value) {
+  return escapeHtml(String(value === null || value === undefined ? '' : value));
+}
+
+function appShellChannelAttr(value) {
+  return escapeAttr(String(value === null || value === undefined ? '' : value));
+}
+
+function appShellChannelNumber(n) {
+  return Number(n) || 0;
+}
+
+// The networks the Quick Add tab offers, read from that tab's own buttons
+// rather than a second list that could drift from it.
+function appShellChannelNetworks() {
+  const out = [];
+  const buttons = document.querySelectorAll('#channelsSubQuickAdd .channelQuickAddBtn');
+  for (let i = 0; i < buttons.length; i++) {
+    const b = buttons[i];
+    if (!b || !b.getAttribute) continue;
+    const networkId = b.getAttribute('data-networkid') || '';
+    const name = b.getAttribute('data-name') || '';
+    if (networkId && name) out.push({ networkId: networkId, name: name });
+  }
+  return out;
+}
+
+// The sagas and universes worth a channel: the same filter the Storylines grid
+// uses, so a single-episode crossover (which only ever lands on its parent
+// show's page) is not offered as a channel here either.
+function appShellChannelSagas() {
+  const events = (typeof TV_CROSSOVER_EVENTS === 'undefined' || !Array.isArray(TV_CROSSOVER_EVENTS)) ? [] : TV_CROSSOVER_EVENTS;
+  const out = [];
+  events.forEach(function (ev) {
+    if (!ev || !ev.id || !Array.isArray(ev.episodes) || !ev.episodes.length) return;
+    const episodeOnly = ev.episodes.every(function (ep) { return ep && ep.type === 'episode'; });
+    if (episodeOnly) return;
+    out.push({ id: String(ev.id), name: ev.name || String(ev.id), parts: ev.episodes.length, category: ev.category || '' });
+  });
+  return out;
+}
+
+// The schedule, as the payload fields the Worker reads (05_catalog_core):
+// dailyRotate + rotateShows/rotateEpisodes for a broadcast schedule, autoSort
+// for the one static arrangement it acts on, sortByAired, shuffle, hideWatched.
+function appShellChannelSchedulePayload() {
+  const s = appShellChannelSchedule;
+  const order = String(s.order || 'listed');
+  const shows = Math.max(1, Math.min(48, parseInt(s.shows, 10) || 24));
+  const episodes = Math.max(1, Math.min(12, parseInt(s.episodes, 10) || 3));
+  const payload = {
+    dailyRotate: !!s.rotate,
+    rotateShows: s.rotate ? shows : 0,
+    rotateEpisodes: s.rotate ? episodes : 0,
+    autoSort: order === 'interleave' ? 'interleave' : '',
+    sortByAired: order === 'aired',
+    shuffle: order === 'shuffle',
+    hideWatched: !!s.hideWatched
+  };
+  return payload;
+}
+
+// The inputs are the source of truth for the three numbers, read at build
+// time; a blank or missing input keeps the default above.
+function appShellChannelReadSchedule() {
+  const readNumber = function (id, fallback) {
+    const el = document.getElementById(id);
+    const n = el && el.value !== undefined && el.value !== null ? parseInt(el.value, 10) : NaN;
+    return (n > 0) ? n : fallback;
+  };
+  const orderSel = document.getElementById('appShellChannelOrderSelect');
+  const typedOrder = (orderSel && orderSel.value) ? String(orderSel.value) : '';
+  appShellChannelSchedule.shows = readNumber('appShellChannelRotateShows', appShellChannelSchedule.shows || 24);
+  appShellChannelSchedule.episodes = readNumber('appShellChannelRotateEpisodes', appShellChannelSchedule.episodes || 3);
+  appShellChannelSchedule.perShow = readNumber('appShellChannelPerShow', appShellChannelSchedule.perShow || 50);
+  if (typedOrder) appShellChannelSchedule.order = typedOrder;
+  return appShellChannelSchedule;
+}
+
+// Whether the schedule is still the one the server's network preset is built
+// with (rotation on, 24 shows x 3 episodes a day, no re-ordering, watched
+// kept). The preset is one request instead of a traversal, so it is worth
+// using -- but only while it would produce the same channel the options ask
+// for, never as a silent override of them.
+function appShellChannelScheduleIsDefault() {
+  const s = appShellChannelSchedule;
+  const order = String(s.order || 'listed');
+  return !!s.rotate &&
+    (parseInt(s.shows, 10) || 24) === 24 &&
+    (parseInt(s.episodes, 10) || 3) === 3 &&
+    !s.hideWatched &&
+    order === 'listed';
+}
+
+function appShellChannelSetNotice(text) {
+  appShellChannelNotice = String(text || '');
+}
+
+// Progress during a build touches one line, never a whole re-render: a
+// re-render would wipe out whatever the person had typed in the template's
+// own fields.
+function appShellChannelProgress(text) {
+  appShellChannelBusy = String(text || '');
+  const box = document.getElementById('appShellChannelProgress');
+  if (box) box.innerHTML = text ? appShellChannelEscape(text) : '';
+}
+
+// --- what the flow is doing --------------------------------------------------
+
+function appShellChannelPickTemplate(id) {
+  const wanted = String(id || '');
+  const known = APP_SHELL_CHANNEL_TEMPLATES.some(function (t) { return t.id === wanted; });
+  appShellChannelTemplate = known ? wanted : '';
+  appShellChannelDraft = null;
+  appShellChannelLineup = null;
+  appShellChannelLineupFor = '';
+  appShellChannelBusy = '';
+  appShellChannelNotice = '';
+  appShellChannelPersonPick = null;
+  appShellChannelPersonResults = [];
+  if (known && wanted !== 'saga') appShellChannelSchedule.rotate = true;
+  if (known && wanted === 'saga') appShellChannelSchedule.rotate = false;
+  appShellRenderChannels();
+  return true;
+}
+
+// The channel was built and saved to this browser -- the preview and the row
+// that may follow both come from this one record.
+function appShellChannelSetDraft(draft) {
+  appShellChannelDraft = draft;
+  appShellChannelBusy = '';
+  appShellChannelLineup = null;
+  appShellChannelLineupFor = '';
+  appShellRenderChannels();
+  return true;
+}
+
+function appShellChannelOnHome() {
+  const draft = appShellChannelDraft;
+  if (!draft || !draft.channelId) return false;
+  return (typeof isChannelInConfig === 'function') ? !!isChannelInConfig(String(draft.channelId)) : false;
+}
+
+async function appShellChannelBuild() {
+  const template = appShellChannelTemplate;
+  if (!template) return false;
+  if (appShellChannelBuildInFlight) return false;
+  appShellChannelReadSchedule();
+  appShellChannelNotice = '';
+  appShellChannelBuildInFlight = true;
+  appShellChannelProgress('Getting started\\u2026');
+  let built = false;
+  try {
+    if (template === 'network') built = await appShellChannelBuildNetwork();
+    else if (template === 'list') built = await appShellChannelBuildList();
+    else if (template === 'person') built = await appShellChannelBuildPerson();
+    else if (template === 'saga') built = await appShellChannelBuildSaga();
+  } finally {
+    appShellChannelBuildInFlight = false;
+  }
+  // Nothing built: the form has to come back with its button live again, and
+  // the sentence saying what happened is already in the notice above.
+  if (!built) {
+    appShellChannelProgress('');
+    appShellRenderChannels();
+  }
+  return built;
+}
+
+// TV network and From a list are the same journey -- a name, and either a
+// network id or a pasted list URL -- so both go through the page's own
+// quickAddChannel. addToCatalog is false because this screen shows the lineup
+// first: the channel is saved to this browser, and the row is added when
+// somebody presses the button under the preview.
+async function appShellChannelBuildNetwork() {
+  const sel = document.getElementById('appShellChannelNetworkSelect');
+  const networkId = (sel && sel.value) ? String(sel.value) : '';
+  const networks = appShellChannelNetworks();
+  let name = '';
+  networks.forEach(function (n) { if (n.networkId === networkId) name = n.name; });
+  if (!networkId || !name) {
+    appShellChannelSetNotice('Pick a network first.');
+    return false;
+  }
+  const typed = appShellChannelTypedName();
+  const channelName = typed || name;
+  const built = await quickAddChannel(channelName, null, networkId, null, {
+    schedule: appShellChannelSchedulePayload(),
+    addToCatalog: false,
+    preferPreset: appShellChannelScheduleIsDefault(),
+    maxEpisodesPerShow: appShellChannelSchedule.perShow,
+    onProgress: appShellChannelProgress
+  });
+  if (!built || !built.channelId) return false;
+  appShellChannelListName = channelName;
+  return appShellChannelFinishBuild(channelName, built, { template: 'network', networkId: networkId });
+}
+
+async function appShellChannelBuildList() {
+  const urlInput = document.getElementById('appShellChannelListUrl');
+  const listUrl = (urlInput && urlInput.value ? urlInput.value : '').trim();
+  if (!listUrl) {
+    appShellChannelSetNotice('Paste a list link first.');
+    return false;
+  }
+  const liveCheck = document.getElementById('appShellChannelLiveSyncCheck');
+  const liveSync = liveCheck ? liveCheck.checked !== false : true;
+  const channelName = appShellChannelTypedName() || appShellChannelListNameFromUrl(listUrl);
+  const built = await quickAddChannel(channelName, listUrl, null, null, {
+    liveSync: liveSync,
+    schedule: appShellChannelSchedulePayload(),
+    addToCatalog: false,
+    maxEpisodesPerShow: appShellChannelSchedule.perShow,
+    onProgress: appShellChannelProgress
+  });
+  if (!built || !built.channelId) return false;
+  appShellChannelListName = channelName;
+  return appShellChannelFinishBuild(channelName, built, { template: 'list', liveSync: liveSync });
+}
+
+// "https://mdblist.com/lists/kit/sitcoms" -> "Sitcoms". A name is asked for on
+// the screen; this is only what a blank one falls back to.
+function appShellChannelListNameFromUrl(url) {
+  let path = '';
+  try {
+    path = new URL(String(url), ORIGIN).pathname;
+  } catch (e) {
+    path = String(url || '');
+  }
+  const parts = path.split('/').filter(function (p) { return !!p; });
+  const last = parts.length ? parts[parts.length - 1] : 'My channel';
+  const words = last.replace(/[-_]+/g, ' ').trim();
+  if (!words) return 'My channel';
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+function appShellChannelTypedName() {
+  const input = document.getElementById('appShellChannelNameInput');
+  const typed = (input && input.value ? String(input.value) : '').trim();
+  return typed ? typed.slice(0, 120) : '';
+}
+
+// --- Actor or creator --------------------------------------------------------
+
+async function appShellChannelPersonSearch() {
+  const input = document.getElementById('appShellChannelPersonQuery');
+  const q = (input && input.value ? String(input.value) : '').trim();
+  if (!q) {
+    appShellChannelSetNotice('Type a name first.');
+    appShellRenderChannels();
+    return false;
+  }
+  appShellChannelSetNotice('Searching\\u2026');
+  appShellRenderChannels();
+  const res = await appShellApiFetch('/api/person-search?q=' + encodeURIComponent(q));
+  if (!res.ok) {
+    appShellChannelPersonResults = [];
+    appShellChannelSetNotice(res.error || 'That search did not work.');
+    appShellRenderChannels();
+    return false;
+  }
+  appShellChannelPersonResults = (res.data && Array.isArray(res.data.results)) ? res.data.results : [];
+  appShellChannelSetNotice(appShellChannelPersonResults.length ? '' : 'No one by that name.');
+  appShellRenderChannels();
+  return true;
+}
+
+function appShellChannelPersonPickResult(personId) {
+  const wanted = String(personId || '');
+  let picked = null;
+  appShellChannelPersonResults.forEach(function (p) {
+    if (p && String(p.personId) === wanted) picked = p;
+  });
+  if (!picked) return false;
+  appShellChannelPersonPick = { personId: wanted, name: picked.name || '', knownFor: picked.knownFor || picked.department || '' };
+  appShellChannelSetNotice('');
+  appShellRenderChannels();
+  return true;
+}
+
+// Their credits, then the same pick builder the legacy Spotlight uses --
+// one implementation of "what does this person's channel hold".
+async function appShellChannelBuildPerson() {
+  const pick = appShellChannelPersonPick;
+  if (!pick) {
+    appShellChannelSetNotice('Pick someone first.');
+    return false;
+  }
+  const res = await appShellApiFetch('/api/person-credits?personId=' + encodeURIComponent(pick.personId) +
+    '&sort=chronological&movies=120&shows=60');
+  if (!res.ok || !res.data) {
+    appShellChannelSetNotice(res.error || 'Could not read that filmography.');
+    return false;
+  }
+  const credits = {
+    personId: pick.personId,
+    name: res.data.name || pick.name || '',
+    poster: res.data.poster || null,
+    backdrop: res.data.backdrop || null,
+    movies: Array.isArray(res.data.movies) ? res.data.movies : [],
+    shows: Array.isArray(res.data.shows) ? res.data.shows : []
+  };
+  const built = await buildSpotlightItemsFromCredits(credits, { onProgress: appShellChannelPersonProgress(credits.name) });
+  if (!built || !built.items.length) {
+    appShellChannelSetNotice('Nothing in that filmography resolved to something playable.');
+    return false;
+  }
+  const channelName = appShellChannelTypedName() || ((credits.name || pick.name || 'Spotlight') + ' Spotlight');
+  appShellChannelListName = channelName;
+  return appShellChannelFinishBuild(channelName, appShellChannelSaveLocal(credits, built, channelName), { template: 'person' });
+}
+
+// The legacy builder's own two progress sentences, so a build reads the same
+// wherever it was started from.
+function appShellChannelPersonProgress(personName) {
+  return function (stage, i, total, label) {
+    const who = appShellChannelEscape(personName || '');
+    if (stage === 'movies') {
+      appShellChannelProgress('Resolving films\\u2026 ' + (i + 1) + ' of ' + total + ' (' + appShellChannelEscape(label) + ')');
+    } else {
+      appShellChannelProgress('Finding ' + who + '\\u2019s episodes\\u2026 show ' + (i + 1) + ' of ' + total + ' (' + appShellChannelEscape(label) + ')');
+    }
+  };
+}
+
+function appShellChannelSaveLocal(credits, built, channelName) {
+  const channelId = generateChannelId();
+  const sched = appShellChannelSchedulePayload();
+  const payload = Object.assign({
+    channelId: channelId,
+    name: channelName,
+    poster: built.poster || credits.poster || null,
+    backdrop: built.backdrop || credits.backdrop || null,
+    items: built.items,
+    shuffle: !!sched.shuffle
+  }, sched);
+  saveLocalChannel(payload);
+  return payload;
+}
+
+// --- Franchise or universe ---------------------------------------------------
+
+async function appShellChannelBuildSaga() {
+  const sel = document.getElementById('appShellChannelSagaSelect');
+  const eventId = (sel && sel.value) ? String(sel.value) : appShellChannelSagaPick;
+  if (!eventId) {
+    appShellChannelSetNotice('Pick a saga first.');
+    return false;
+  }
+  appShellChannelSagaPick = eventId;
+  const found = await fetchStorylineOrderedItems(eventId);
+  if (!found || !found.items || !found.items.length) {
+    appShellChannelSetNotice('That saga has nothing the page could resolve.');
+    return false;
+  }
+  const event = found.event || {};
+  const firstWithPoster = found.items.filter(function (it) { return it && (it.poster || it.thumbnail); })[0];
+  const firstWithBackdrop = found.items.filter(function (it) { return it && (it.backdrop || it.showBackdrop); })[0];
+  // The same payload createInstantStorylineChannel builds when the + Add
+  // button on the Storylines tab is pressed: the stable channel-<event id>,
+  // storylineId (that is what makes the row public and account-free
+  // server-side) and catalogOnly, so it stays a row rather than a copy in
+  // My Channels.
+  const payload = {
+    channelId: 'channel-' + eventId,
+    storylineId: eventId,
+    catalogOnly: true,
+    name: event.name || eventId,
+    poster: firstWithPoster ? (firstWithPoster.poster || firstWithPoster.thumbnail) : null,
+    backdrop: firstWithBackdrop ? (firstWithBackdrop.backdrop || firstWithBackdrop.showBackdrop) : null,
+    items: found.items,
+    shuffle: false,
+    dailyRotate: false
+  };
+  return appShellChannelFinishBuild(payload.name, payload, { template: 'saga', eventId: eventId });
+}
+
+// --- the built channel --------------------------------------------------------
+
+function appShellChannelFinishBuild(name, channel, extra) {
+  const draft = Object.assign({
+    template: appShellChannelTemplate,
+    channelId: String(channel.channelId || ''),
+    name: name || channel.name || 'Channel',
+    url: 'channel:v1:' + JSON.stringify(channel),
+    poolSize: (channel.items || []).length
+  }, extra || {});
+  // The preview asks the server about exactly the url a row would carry, so
+  // it cannot describe a different channel from the one that gets added.
+  if (typeof channelRowUrl === 'function') draft.url = channelRowUrl(channel);
+  appShellChannelSetDraft(draft);
+  appShellChannelSetNotice('Built. This is what is playing today -- nothing is on your home screen until you say so.');
+  appShellRenderChannels();
+  appShellChannelLoadLineup();
+  return true;
+}
+
+async function appShellChannelLoadLineup() {
+  const draft = appShellChannelDraft;
+  if (!draft) return false;
+  appShellChannelLineupFor = draft.url;
+  const res = await appShellApiFetch('/api/channel-lineup', { method: 'POST', body: { url: draft.url } });
+  if (appShellChannelLineupFor !== draft.url) return false;   // a newer build won the race
+  if (!res.ok) {
+    appShellChannelLineup = { error: res.error || 'The lineup could not be read just now.' };
+  } else {
+    appShellChannelLineup = res.data || {};
+  }
+  appShellRenderChannels();
+  return true;
+}
+
+// Adding and removing is the page's own toggle (20_), so the button under the
+// preview, the My Channels card and the Storylines tab cannot disagree about
+// what is in the config.
+function appShellChannelSetHome(on) {
+  const draft = appShellChannelDraft;
+  if (!draft) return false;
+  const wants = String(on) !== 'off';
+  if (draft.template === 'saga' && draft.eventId && typeof createInstantStorylineChannel === 'function') {
+    createInstantStorylineChannel(draft.eventId, null);
+    if (typeof renderMyCreatedChannelsList === 'function') renderMyCreatedChannelsList();
+  } else if (draft.channelId && typeof toggleChannelInCatalog === 'function') {
+    toggleChannelInCatalog(draft.channelId);
+  } else {
+    return false;
+  }
+  appShellChannelSetNotice(wants ? 'On your home screen.' : 'Off your home screen. The channel is still saved in My Channels.');
+  appShellRenderChannels();
+  return true;
+}
+
+// --- drawing -----------------------------------------------------------------
+
+function appShellChannelGalleryHtml() {
+  let html = '<div class="app-shell-template-grid">';
+  APP_SHELL_CHANNEL_TEMPLATES.forEach(function (t) {
+    html += '<button type="button" class="app-shell-template-card" data-app-shell-action="chan-template" data-app-shell-id="' + appShellChannelAttr(t.id) + '">' +
+      '<strong>' + appShellChannelEscape(t.title) + '</strong>' +
+      '<span class="app-shell-muted">' + appShellChannelEscape(t.blurb) + '</span>' +
+      (t.needsAccount ? '<span class="app-shell-muted app-shell-template-note">Needs a free account</span>' : '') +
+      '</button>';
+  });
+  html += '</div>';
+  html += '<p class="app-shell-muted">A saga can be added without signing in. Everything that becomes a channel of your own asks for an account first, the same as the builder does.</p>';
+  return html;
+}
+
+function appShellChannelNetworkFormHtml() {
+  const networks = appShellChannelNetworks();
+  let html = '<label class="app-shell-muted" for="appShellChannelNetworkSelect">Which network?</label>';
+  if (!networks.length) {
+    return html + '<p class="app-shell-muted">The network list is not on this page yet. Reload, or use the Quick Add tab below.</p>' +
+      '<div class="app-shell-actions"><button type="button" class="secondary lc-btn" data-app-shell-action="chan-template" data-app-shell-id="">Back</button></div>';
+  }
+  html += '<select id="appShellChannelNetworkSelect">';
+  networks.forEach(function (n) {
+    html += '<option value="' + appShellChannelAttr(n.networkId) + '">' + appShellChannelEscape(n.name) + '</option>';
+  });
+  html += '</select>';
+  html += '<label class="app-shell-muted" for="appShellChannelNameInput">Channel name (optional)</label>' +
+    '<input type="text" id="appShellChannelNameInput" value="' + appShellChannelAttr(appShellChannelListName) + '" placeholder="Uses the network name">';
+  return html;
+}
+
+function appShellChannelSagaFormHtml() {
+  const sagas = appShellChannelSagas();
+  if (!sagas.length) {
+    return '<p class="app-shell-muted">The saga list is not on this page yet. Reload, or use Storylines &amp; Universes below.</p>';
+  }
+  let html = '<label class="app-shell-muted" for="appShellChannelSagaSelect">Which saga or universe?</label><select id="appShellChannelSagaSelect">';
+  sagas.forEach(function (s) {
+    html += '<option value="' + appShellChannelAttr(s.id) + '"' + (s.id === appShellChannelSagaPick ? ' selected' : '') + '>' +
+      appShellChannelEscape(s.name) + ' (' + appShellChannelNumber(s.parts) + ' parts)</option>';
+  });
+  html += '</select><p class="app-shell-muted">A saga plays in its canon order, so it has no schedule to set here.</p>';
+  return html;
+}
+
+function appShellChannelPersonFormHtml() {
+  let html = '<label class="app-shell-muted" for="appShellChannelPersonQuery">Who?</label>' +
+    '<div class="app-shell-row-controls"><input type="text" id="appShellChannelPersonQuery" placeholder="Actor or director name">' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="chan-person-search">Search</button></div>';
+  if (appShellChannelPersonResults.length) {
+    html += '<div class="app-shell-person-grid">';
+    appShellChannelPersonResults.slice(0, 12).forEach(function (p) {
+      const on = appShellChannelPersonPick && String(appShellChannelPersonPick.personId) === String(p.personId);
+      html += '<button type="button" class="' + (on ? 'primary' : 'secondary') + ' lc-btn" data-app-shell-action="chan-person-pick" data-app-shell-id="' + appShellChannelAttr(String(p.personId)) + '">' +
+        appShellChannelEscape(p.name || 'Unknown') +
+        (on ? '' : '<br><span class="app-shell-muted">' + appShellChannelEscape(p.knownFor || p.department || '') + '</span>') +
+        '</button>';
+    });
+    html += '</div>';
+  }
+  if (appShellChannelPersonPick) {
+    html += '<p class="app-shell-kv">Building from <strong>' + appShellChannelEscape(appShellChannelPersonPick.name) + '</strong>. Their films and the episodes they were in.</p>' +
+      '<label class="app-shell-muted" for="appShellChannelNameInput">Channel name (optional)</label>' +
+      '<input type="text" id="appShellChannelNameInput" value="' + appShellChannelAttr(appShellChannelListName) + '" placeholder="Uses their name">';
+  }
+  return html;
+}
+
+function appShellChannelListFormHtml() {
+  return '<label class="app-shell-muted" for="appShellChannelListUrl">The list</label>' +
+    '<input type="text" id="appShellChannelListUrl" placeholder="A MDBList, Trakt or TMDB show list link">' +
+    '<label class="app-shell-muted" for="appShellChannelNameInput">Channel name (optional)</label>' +
+    '<input type="text" id="appShellChannelNameInput" value="' + appShellChannelAttr(appShellChannelListName) + '" placeholder="Named after the list">' +
+    '<label class="app-shell-dedupe" for="appShellChannelLiveSyncCheck">' +
+    '<input type="checkbox" id="appShellChannelLiveSyncCheck" checked>' +
+    '<span><strong>Keep it in step with the list</strong><br><span class="app-shell-muted">The channel remembers the link and picks up titles the list gains. Off, it is a one-time snapshot.</span></span></label>' +
+    '<p class="app-shell-muted">A list link is read as shows: films mixed into it are left out, because a channel plays episodes.</p>';
+}
+
+function appShellChannelCustomHtml() {
+  return '<p class="app-shell-muted">The full builder is still the page\\u2019s own: search shows and films, add a season at a time, choose the poster, lock a story, set the play order. It opens right below.</p>' +
+    '<div class="app-shell-actions">' +
+    '<button type="button" class="primary lc-btn" data-app-shell-action="chan-custom">Open the full builder</button>' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="chan-template" data-app-shell-id="">Back</button>' +
+    '</div>';
+}
+
+function appShellChannelScheduleHtml() {
+  const s = appShellChannelSchedule;
+  const order = String(s.order || 'listed');
+  const option = function (value, label) {
+    return '<option value="' + appShellChannelAttr(value) + '"' + (order === value ? ' selected' : '') + '>' + label + '</option>';
+  };
+  return '<details class="app-shell-schedule" id="appShellChannelScheduleDetails">' +
+    '<summary>Schedule options</summary>' +
+    '<button type="button" class="app-shell-chip' + (s.rotate ? ' is-on' : '') + '" data-app-shell-action="chan-rotate" data-app-shell-id="' + (s.rotate ? 'off' : 'on') + '">' +
+    'Daily rotation: ' + (s.rotate ? 'on' : 'off') + '</button>' +
+    '<p class="app-shell-muted">On, the channel keeps a pool and deals a fresh day\\u2019s lineup out of it every day. Off, everything in the pool plays in the order below.</p>' +
+    '<div class="app-shell-row-controls">' +
+    '<label class="app-shell-muted" for="appShellChannelRotateShows">Shows a day</label>' +
+    '<input type="number" id="appShellChannelRotateShows" min="1" max="48" value="' + appShellChannelNumber(s.shows || 24) + '">' +
+    '<label class="app-shell-muted" for="appShellChannelRotateEpisodes">Episodes a block</label>' +
+    '<input type="number" id="appShellChannelRotateEpisodes" min="1" max="12" value="' + appShellChannelNumber(s.episodes || 3) + '">' +
+    '</div>' +
+    '<label class="app-shell-muted" for="appShellChannelOrderSelect">Play order</label>' +
+    '<select id="appShellChannelOrderSelect">' +
+    option('listed', 'As the channel is') +
+    option('interleave', 'Interleaved -- one episode per show, in turn') +
+    option('aired', 'Air date -- oldest first') +
+    option('shuffle', 'Shuffled') +
+    '</select>' +
+    '<div class="app-shell-row-controls">' +
+    '<label class="app-shell-muted" for="appShellChannelPerShow">Episodes kept per show</label>' +
+    '<input type="number" id="appShellChannelPerShow" min="1" max="200" value="' + appShellChannelNumber(s.perShow || 50) + '">' +
+    '</div>' +
+    '<button type="button" class="app-shell-chip' + (s.hideWatched ? ' is-on' : '') + '" data-app-shell-action="chan-hide-watched" data-app-shell-id="' + (s.hideWatched ? 'off' : 'on') + '">' +
+    'Hide watched: ' + (s.hideWatched ? 'on' : 'off') + '</button>' +
+    '<p class="app-shell-muted">Hide watched needs Auto-track playback signed in. The preview below says when the server cannot apply it.</p>' +
+    '</details>';
+}
+
+function appShellChannelLineupHtml() {
+  const draft = appShellChannelDraft;
+  if (!draft) return '';
+  if (!appShellChannelLineup) {
+    return '<h3 class="app-shell-h3">Today\\u2019s lineup</h3><p class="app-shell-muted">Asking the server what is playing\\u2026</p>';
+  }
+  if (appShellChannelLineup.error) {
+    return '<h3 class="app-shell-h3">Today\\u2019s lineup</h3><p class="app-shell-review-bad">' + appShellChannelEscape(appShellChannelLineup.error) + '</p>' +
+      '<div class="app-shell-actions"><button type="button" class="secondary lc-btn" data-app-shell-action="chan-preview">Try again</button></div>';
+  }
+  const items = Array.isArray(appShellChannelLineup.items) ? appShellChannelLineup.items : [];
+  // plan is channelRotationPlan's answer, the same numbers the Worker clamped
+  // the channel to -- { shows, episodes, turnover } -- so the sentence under
+  // the posters describes the channel that will actually play.
+  const plan = appShellChannelLineup.plan;
+  const pool = appShellChannelNumber(appShellChannelLineup.poolSize) || draft.poolSize;
+  const bits = [];
+  if (plan && plan.shows) bits.push(plan.shows + ' shows a day');
+  if (plan && plan.episodes) bits.push(plan.episodes + ' episodes a block');
+  if (pool) bits.push(pool + ' episode' + (pool === 1 ? '' : 's') + ' in the pool');
+  if (appShellChannelLineup.rotating) bits.push('rotates daily');
+  const bitsHtml = bits.map(appShellChannelEscape).join(' &middot; ');
+  let html = '<h3 class="app-shell-h3">Today\\u2019s lineup</h3>';
+  html += '<p class="app-shell-kv">' + (bitsHtml || 'Ready') + '</p>';
+  if (Array.isArray(appShellChannelLineup.unappliedRules) && appShellChannelLineup.unappliedRules.length) {
+    const named = appShellChannelLineup.unappliedRules.map(function (r) { return r === 'hideWatched' ? 'Hide watched' : 'This channel fills itself in from your account'; });
+    html += '<p class="app-shell-muted">A preview cannot prove which account is asking, so ' + appShellChannelEscape(named.join(' and ')) +
+      ' ' + (named.length === 1 ? 'is' : 'are') + ' not applied here. In Stremio they are.</p>';
+  }
+  if (!items.length) {
+    html += '<p class="app-shell-muted">The server has no lineup for this channel yet. A rotating channel needs its pool first -- try again in a moment.</p>';
+  } else {
+    html += '<div class="app-shell-lineup">';
+    items.slice(0, APP_SHELL_CHANNEL_LINEUP_TILES).forEach(function (it) {
+      const poster = it.thumbnail || it.poster || it.showPoster || '';
+      const label = it.showName ? (it.showName + (it.season != null && it.episode != null ? ' S' + it.season + 'E' + it.episode : '')) : (it.title || it.epName || '');
+      html += '<div class="app-shell-lineup-tile">' +
+        (poster ? '<img src="' + appShellChannelAttr(poster) + '" alt="" loading="lazy">' : '<div class="app-shell-lineup-blank"></div>') +
+        '<span title="' + appShellChannelAttr(label) + '">' + appShellChannelEscape(label) + '</span>' +
+        '</div>';
+    });
+    html += '</div>';
+    if (items.length > APP_SHELL_CHANNEL_LINEUP_TILES) {
+      html += '<p class="app-shell-muted">Showing the first ' + APP_SHELL_CHANNEL_LINEUP_TILES + ' of ' + items.length + ' in today\\u2019s lineup.</p>';
+    }
+  }
+  const onHome = appShellChannelOnHome();
+  html += '<div class="app-shell-actions">' +
+    '<button type="button" class="' + (onHome ? 'secondary' : 'primary') + ' lc-btn" data-app-shell-action="chan-home" data-app-shell-id="' + (onHome ? 'off' : 'on') + '">' +
+    (onHome ? 'On your home screen' : 'Add to home screen') + '</button>' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="chan-preview">New lineup</button>' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="chan-reset">Build another channel</button>' +
+    '</div>';
+  html += '<p class="app-shell-muted">It is saved in My Channels either way. Removing it from the home screen leaves it there to edit or add back.</p>';
+  return html;
+}
+
+function appShellChannelFlowHtml() {
+  const template = appShellChannelTemplate;
+  const found = APP_SHELL_CHANNEL_TEMPLATES.filter(function (t) { return t.id === template; })[0];
+  if (!found) return appShellChannelGalleryHtml();
+  let html = '<div class="app-shell-row-controls"><button type="button" class="secondary lc-btn" data-app-shell-action="chan-template" data-app-shell-id="">All templates</button>' +
+    '<strong>' + appShellChannelEscape(found.title) + '</strong></div>' +
+    '<p class="app-shell-muted">' + appShellChannelEscape(found.blurb) + '</p>';
+  if (template === 'custom') return html + appShellChannelCustomHtml();
+  if (appShellChannelDraft && appShellChannelDraft.template === template) {
+    html += '<p class="app-shell-kv">' + appShellChannelEscape(appShellChannelDraft.name) + ' &middot; ' +
+      appShellChannelNumber(appShellChannelDraft.poolSize) + ' episodes in the pool</p>' + appShellChannelLineupHtml();
+    return html;
+  }
+  if (template === 'network') html += appShellChannelNetworkFormHtml();
+  else if (template === 'saga') html += appShellChannelSagaFormHtml();
+  else if (template === 'person') html += appShellChannelPersonFormHtml();
+  else if (template === 'list') html += appShellChannelListFormHtml();
+  if (template !== 'saga') html += appShellChannelScheduleHtml();
+  html += '<div class="app-shell-actions">' +
+    '<button type="button" class="primary lc-btn"' + (appShellChannelBuildInFlight ? ' disabled' : '') + ' data-app-shell-action="chan-build">' +
+    (appShellChannelBuildInFlight ? 'Building\\u2026' : 'Build this channel') + '</button>' +
+    '</div>';
+  return html;
+}
+
+function appShellRenderChannels() {
+  const host = appShellChannelsHost();
+  if (!host || !NEW_UI) return false;
+  let html = '<div class="panel">' +
+    '<h2 class="panel-title">New channel</h2>' +
+    '<p class="app-shell-muted">Choose a template, look at what is playing today, then add it to your home screen. The full builder is still there under Custom.</p>';
+  if (appShellChannelNotice) html += '<p class="app-shell-kv" id="appShellChannelNotice">' + appShellChannelEscape(appShellChannelNotice) + '</p>';
+  html += '<p class="app-shell-muted" id="appShellChannelProgress">' + appShellChannelEscape(appShellChannelBusy) + '</p>';
+  const account = appShellState.get().account;
+  if (!account && appShellChannelTemplate && appShellChannelTemplate !== 'saga') {
+    html += '<p class="app-shell-muted">Sign in first: a channel of your own is kept on your account, so it follows you to another device.</p>' +
+      '<div class="app-shell-actions"><button type="button" class="primary lc-btn" data-app-shell-action="chan-account">Go to Settings to sign in</button></div>' +
+      '<div class="app-shell-actions"><button type="button" class="secondary lc-btn" data-app-shell-action="chan-template" data-app-shell-id="">All templates</button></div></div>';
+    host.innerHTML = html;
+    return true;
+  }
+  html += appShellChannelFlowHtml() + '</div>';
+  host.innerHTML = html;
+  return true;
+}
+
+// --- the one click listener's handler ----------------------------------------
+
+async function appShellChannelsAction(action, id) {
+  const what = String(action || '');
+  if (what === 'chan-template') return appShellChannelPickTemplate(id);
+  if (what === 'chan-build') return appShellChannelBuild();
+  if (what === 'chan-rotate') {
+    appShellChannelSchedule.rotate = String(id) !== 'off';
+    appShellRenderChannels();
+    return true;
+  }
+  if (what === 'chan-hide-watched') {
+    appShellChannelSchedule.hideWatched = String(id) !== 'off';
+    appShellRenderChannels();
+    return true;
+  }
+  if (what === 'chan-person-search') return appShellChannelPersonSearch();
+  if (what === 'chan-person-pick') return appShellChannelPersonPickResult(id);
+  if (what === 'chan-preview') return appShellChannelLoadLineup();
+  if (what === 'chan-home') return appShellChannelSetHome(id);
+  if (what === 'chan-reset') {
+    appShellChannelDraft = null;
+    appShellChannelLineup = null;
+    appShellChannelLineupFor = '';
+    appShellChannelNotice = '';
+    appShellChannelBusy = '';
+    appShellRenderChannels();
+    return true;
+  }
+  if (what === 'chan-custom') {
+    if (typeof openBuildCustomChannel === 'function') openBuildCustomChannel();
+    return true;
+  }
+  if (what === 'chan-account') {
+    appShellGo('/settings/account');
+    if (typeof appShellFocusSignIn === 'function') appShellFocusSignIn();
+    return true;
+  }
+  return false;
+}
+
+// Called when the view is opened, and once at boot for a page served straight
+// at Channels.
+function appShellOpenChannels() {
+  if (!NEW_UI) return false;
+  if (!appShellChannelsHost() || !appShellChannelsIsOpen()) return false;
+  return appShellRenderChannels();
+}
+
 // --- routing -----------------------------------------------------------------
 
 function appShellFindSubPill(tabId, sub) {
@@ -78262,6 +79200,7 @@ function appShellApplyRoute(route) {
     }
   }
   if (tab.id === 'discover') appShellOpenExplore();
+  if (tab.id === 'channels') appShellOpenChannels();
   return true;
 }
 
@@ -78328,6 +79267,7 @@ function appShellOnClick(e) {
     if (APP_SHELL_LISTS_ACTION.test(action)) appShellListsAction(action, id);
     else if (APP_SHELL_EXPLORE_ACTION.test(action)) appShellExploreAction(action, id);
     else if (APP_SHELL_IMPORTS_ACTION.test(action)) appShellImportsAction(action, id);
+    else if (APP_SHELL_CHANNELS_ACTION.test(action)) appShellChannelsAction(action, id);
     else appShellSettingsAction(action, id);
     return;
   }
@@ -78390,6 +79330,7 @@ function initAppShell() {
     appShellRenderImports();
     appShellResumeImport();
   }
+  if (typeof appShellChannelsHost === 'function' && appShellChannelsHost() && appShellChannelsIsOpen()) appShellRenderChannels();
   if (typeof isSignedIn === 'function' && isSignedIn()) appShellRefreshAccount();
   appShellState.set({ ready: true });
 }

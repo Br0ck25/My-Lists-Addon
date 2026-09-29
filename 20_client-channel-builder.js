@@ -9934,14 +9934,21 @@ async function fetchStorylineOrderedItems(eventId) {
   return { event, items: fullOrderedItems };
 }
 
-// Whether a storyline's channel is in the Live Preview. "+ Add" puts a
-// catalog row there and nothing in My Channels, so the rows are what to ask --
-// isListAddedToConfig only recognizes list rows, never a channel:v1: one. The
-// exact "channelId" key, not a substring: one storyline's id can be the start
-// of another's.
-function isStorylineChannelInCatalog(chId) {
-  const needle = '"channelId":"' + chId + '"';
+// Whether a channel is in the Live Preview -- the one answer every channel
+// button reads. "+ Add" puts a catalog row there and nothing in My Channels,
+// so the rows are what to ask: isListAddedToConfig only recognizes list rows,
+// never a channel:v1: one. The exact "channelId" key, not a substring: one
+// channel's id can be the start of another's.
+function isChannelInConfig(channelId) {
+  const wanted = String(channelId == null ? '' : channelId);
+  if (!wanted) return false;
+  const needle = '"channelId":"' + wanted + '"';
   return [...document.querySelectorAll('#lists .entry .url')].some((u) => String(u.value || '').includes(needle));
+}
+
+// The Storylines tab's own question, in terms of the one helper above.
+function isStorylineChannelInCatalog(chId) {
+  return isChannelInConfig(chId);
 }
 
 async function createInstantStorylineChannel(eventId, btn) {
@@ -10556,7 +10563,7 @@ function renderMyCreatedChannelsList() {
   }
 
   box.innerHTML = shown.map((ch) => {
-    const isAdded = [...document.querySelectorAll('#lists .entry .url')].some((u) => u.value.includes(ch.channelId));
+    const isAdded = isChannelInConfig(ch.channelId);
     const allItems = ch.items || [];
     const totalEpisodes = allItems.length;
     // Every rule a channel carries, spelled out on its card -- a channel
@@ -10984,8 +10991,35 @@ async function buildChannelItemsFromShows(shows, opts) {
   return { items: items, poster: poster, backdrop: backdrop };
 }
 
+// Builds a channel out of a network id or a pasted list URL. Every caller --
+// Quick Add's own buttons, the Import tab, and the shell's TV network / From a
+// list templates (P6-7) -- comes through here, so there is one traversal, one
+// preset lookup and one saved row shape.
+//
+// options, all optional and all defaulting to what this function has always
+// done:
+//   liveSync            keep the channel following a pasted list
+//   schedule            the P6-7 Schedule options as payload fields
+//                       (dailyRotate, rotateShows, rotateEpisodes, autoSort,
+//                       sortByAired, shuffle, hideWatched), applied on top of
+//                       what the preset or this function would otherwise set
+//   addToCatalog        false builds and saves the channel in this browser
+//                       without putting a row in the config, so a screen can
+//                       show the lineup first; the row is added afterwards by
+//                       toggleChannelInCatalog, from the same saved record
+//   preferPreset        false skips the server's network preset, for when the
+//                       Schedule options ask for a channel the preset is not
+//                       (it is 24 shows x 3 episodes a day, rotating)
+//   maxEpisodesPerShow  how many episodes of one show the traversal keeps
+//   onProgress          called with a plain sentence as the pool is built
+//
+// Returns the saved channel record, or null when nothing was built.
 async function quickAddChannel(name, listUrl, networkId, btn, options) {
-  if (!requireSignedInFor('build channels')) return; // docs/DECISIONS.md D-8
+  if (!requireSignedInFor('build channels')) return null; // docs/DECISIONS.md D-8
+  const o = options || {};
+  const sched = (o.schedule && typeof o.schedule === 'object') ? o.schedule : null;
+  const addToCatalog = o.addToCatalog !== false;
+  const note = (typeof o.onProgress === 'function') ? o.onProgress : null;
   const statusBox = document.getElementById('channelQuickAddStatus');
   const originalLabel = btn ? btn.textContent : '';
   if (btn) {
@@ -10994,7 +11028,7 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
   }
   if (statusBox) statusBox.innerHTML = '<p><small>Adding ' + escapeHtml(name) + '\u2026</small></p>';
   try {
-    if (networkId) {
+    if (networkId && o.preferPreset !== false) {
       try {
         const res = await fetch(ORIGIN + '/api/channel-preset?networkId=' + encodeURIComponent(networkId) + '&name=' + encodeURIComponent(name), { cache: 'no-store' });
         const data = await res.json();
@@ -11019,9 +11053,9 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
           // account's cloud channels blob (which has its own, much smaller
           // 24MB cap -- easy to blow past once a few of these 5,000-item
           // pools are all kept in full).
-          const payload = Object.assign({}, data.channel, { channelId: channelId, name: name, liveSync: false, sourceUrl: '', presetNetworkId: networkId });
+          const payload = Object.assign({}, data.channel, { channelId: channelId, name: name, liveSync: false, sourceUrl: '', presetNetworkId: networkId }, sched || {});
           saveLocalChannel(payload);
-          const pointerPayload = {
+          const pointerPayload = Object.assign({
             channelId: channelId,
             name: name,
             poster: data.channel.poster,
@@ -11032,18 +11066,21 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
             dailyRotate: true,
             liveSync: false,
             sourceUrl: '',
-          };
-          addRow(name, 'channel:v1:' + JSON.stringify(pointerPayload), 'series', true, 'Channels', channelId);
-          renderMyCreatedChannelsList();
-          renderChannelMergeList();
-          showAddedToast('Channel "' + name + '" added to your Catalogs.');
+          }, sched || {});
+          if (addToCatalog) {
+            addRow(name, 'channel:v1:' + JSON.stringify(pointerPayload), 'series', true, 'Channels', channelId);
+            renderMyCreatedChannelsList();
+            renderChannelMergeList();
+            showAddedToast('Channel "' + name + '" added to your Catalogs.');
+          }
           if (statusBox) {
             statusBox.innerHTML = '<p class="testresult ok" style="margin:4px 0 0;">\u2713 Channel "' + escapeHtml(name) + '" added (' + (payload.items ? payload.items.length : 0) + ' episodes with daily rotation)!</p>';
             setTimeout(() => {
               if (statusBox) statusBox.innerHTML = '';
             }, 4000);
           }
-          return;
+          if (note) note('');
+          return payload;
         }
       } catch (e) {}
     }
@@ -11079,13 +11116,16 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
       shows[i] = shows[j];
       shows[j] = tmp;
     }
+    if (note) note('Building the pool from ' + shows.length + ' shows\u2026');
     const built = await buildChannelItemsFromShows(shows, {
       poster: data.networkLogo || null,
+      maxEpisodesPerShow: o.maxEpisodesPerShow || undefined,
       onProgress: function (i, total, show) {
         if (statusBox) {
           statusBox.innerHTML = '<p><small>Building ' + escapeHtml(name) + '\u2026 show ' + (i + 1) + ' of ' + total +
             ' (' + escapeHtml(show.name) + ')</small></p>';
         }
+        if (note) note('Building ' + name + '\u2026 show ' + (i + 1) + ' of ' + total + ' (' + show.name + ')');
       },
     });
     const items = built.items;
@@ -11100,7 +11140,7 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
       return;
     }
     const channelId = generateChannelId();
-    const payload = {
+    const payload = Object.assign({
       channelId: channelId,
       name: name,
       poster: poster,
@@ -11112,26 +11152,31 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
       // Import tab's toggle was left on: the channel keeps the URL, and the
       // Worker rebuilds its pool from that list in the background instead of
       // this staying the one-time snapshot it used to be.
-      liveSync: !!(options && options.liveSync && listUrl),
-      sourceUrl: (options && options.liveSync && listUrl) ? listUrl : '',
-    };
+      liveSync: !!(o.liveSync && listUrl),
+      sourceUrl: (o.liveSync && listUrl) ? listUrl : '',
+    }, sched || {});
     saveLocalChannel(payload);
-    addRow(name, 'channel:v1:' + JSON.stringify(payload), 'series', true, 'Channels', channelId);
-    renderMyCreatedChannelsList();
-    renderChannelMergeList();
-    showAddedToast('Channel "' + name + '" added to your Catalogs.');
+    if (addToCatalog) {
+      addRow(name, 'channel:v1:' + JSON.stringify(payload), 'series', true, 'Channels', channelId);
+      renderMyCreatedChannelsList();
+      renderChannelMergeList();
+      showAddedToast('Channel "' + name + '" added to your Catalogs.');
+    }
     if (statusBox) {
       statusBox.innerHTML = '<p class="testresult ok" style="margin:4px 0 0;">\u2713 Channel "' + escapeHtml(name) + '" added (' + items.length + ' episodes with daily rotation)!</p>';
       setTimeout(function() {
         if (statusBox) statusBox.innerHTML = '';
       }, 4000);
     }
+    if (note) note('');
+    return payload;
   } catch (e) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Network Error', 'Network error while adding ' + name + '.');
     } else {
       alert('Network error while adding ' + name + '.');
     }
+    return null;
   } finally {
     if (btn) {
       btn.disabled = false;
@@ -11849,6 +11894,114 @@ async function addPersonShowEpisodes(tmdbId, showTitle, showPoster, btn, duplica
   }
 }
 
+// Builds a Spotlight channel's picks out of one person's credits: their films
+// and the episodes of theirs the server could place.
+//
+// Pulled out of addWholeSpotlightToDraft below so the legacy builder's "Add
+// whole spotlight" and the shell's Actor or creator template (P6-7) build the
+// SAME channel rather than two that look alike. Two details are why it is
+// written once:
+//
+//   - a film needs its IMDB id resolved one at a time, because a channel
+//     item's id IS the stream request (channelItemStreamId, server side), so
+//     a film with no id would play as nothing;
+//   - an episode list comes from /api/person-show-episodes, which also says
+//     whether that show is a regular credit or a guest appearance -- a
+//     distinction the note under the picks is built from.
+//
+// Never throws: a credit that cannot be read is skipped and the rest of the
+// channel is still built. onProgress(stage, index, total, label) is called
+// once per credit, before the request, with stage 'movies' or 'shows' -- the
+// two callers word the sentence their own way.
+async function buildSpotlightItemsFromCredits(credits, opts) {
+  const o = opts || {};
+  const c = credits || {};
+  const movies = Array.isArray(c.movies) ? c.movies : [];
+  const shows = Array.isArray(c.shows) ? c.shows : [];
+  const onProgress = (typeof o.onProgress === 'function') ? o.onProgress : null;
+  const movieItems = [];
+  const episodeItems = [];
+  let guestShows = 0;
+  let poster = c.poster || null;
+  let backdrop = c.backdrop || null;
+
+  for (let i = 0; i < movies.length; i++) {
+    const m = movies[i];
+    if (!m) continue;
+    if (onProgress) onProgress('movies', i, movies.length, m.title || '');
+    try {
+      const r = await fetch(ORIGIN + '/api/resolve-movie?tmdbId=' + encodeURIComponent(m.tmdbId), { cache: 'no-store' });
+      const d = await r.json();
+      if (!d.ok || !d.imdbId) continue;
+      if (!poster && m.poster) poster = m.poster;
+      if (!backdrop && m.backdrop) backdrop = m.backdrop;
+      movieItems.push({
+        kind: 'movie',
+        imdbId: d.imdbId,
+        tmdbId: m.tmdbId,
+        title: m.title,
+        year: m.year || '',
+        showName: m.title,
+        epName: 'Movie',
+        released: m.released || (m.year ? m.year + '-01-01' : ''),
+        runtime: d.runtime || 0,
+        thumbnail: m.backdrop || m.poster || '',
+        poster: m.poster || '',
+        showPoster: m.poster || '',
+        backdrop: m.backdrop || '',
+        spotlightRating: m.rating || 0,
+      });
+    } catch (e) {
+      continue;
+    }
+  }
+
+  for (let i = 0; i < shows.length; i++) {
+    const sh = shows[i];
+    if (!sh) continue;
+    if (onProgress) onProgress('shows', i, shows.length, sh.title || '');
+    try {
+      const r = await fetch(ORIGIN + '/api/person-show-episodes?personId=' + encodeURIComponent(c.personId) +
+        '&tmdbId=' + encodeURIComponent(sh.tmdbId), { cache: 'no-store' });
+      const d = await r.json();
+      if (!d.ok || !Array.isArray(d.episodes) || !d.episodes.length) continue;
+      if (!d.regular) guestShows++;
+      const showPoster = d.poster || sh.poster || '';
+      const showName = d.showName || sh.title || '';
+      if (!poster && showPoster) poster = showPoster;
+      if (!backdrop && d.backdrop) backdrop = d.backdrop;
+      d.episodes.forEach((ep) => {
+        episodeItems.push({
+          kind: 'episode',
+          imdbId: channelStreamShowId(d.imdbId, sh.tmdbId),
+          season: ep.season,
+          episode: ep.episode,
+          showName: showName,
+          epName: ep.name,
+          title: showName + ' S' + ep.season + 'E' + ep.episode + ' \u2014 ' + ep.name,
+          released: ep.released || '',
+          runtime: ep.runtime || 0,
+          thumbnail: ep.thumbnail || showPoster,
+          poster: showPoster || ep.thumbnail || '',
+          showPoster: showPoster,
+          spotlightRating: sh.rating || 0,
+        });
+      });
+    } catch (e) {
+      continue;
+    }
+  }
+
+  return {
+    items: movieItems.concat(episodeItems),
+    movieItems: movieItems,
+    episodeItems: episodeItems,
+    guestShows: guestShows,
+    poster: poster,
+    backdrop: backdrop,
+  };
+}
+
 async function addWholeSpotlightToDraft(btn) {
   if (!channelPersonCredits) return;
   const c = channelPersonCredits;
@@ -11860,75 +12013,20 @@ async function addWholeSpotlightToDraft(btn) {
     btn.textContent = 'Building\u2026';
   }
   try {
-    // A film needs its IMDB id resolved one by one: a channel item's id IS
-    // the stream request (see channelItemStreamId server-side), so a movie
-    // with no id would play as nothing.
-    const movieItems = [];
-    for (let i = 0; i < c.movies.length; i++) {
-      const m = c.movies[i];
-      say('<p><small>Resolving films\u2026 ' + (i + 1) + ' of ' + c.movies.length + ' (' + escapeHtml(m.title) + ')</small></p>');
-      try {
-        const r = await fetch(ORIGIN + '/api/resolve-movie?tmdbId=' + encodeURIComponent(m.tmdbId), { cache: 'no-store' });
-        const d = await r.json();
-        if (!d.ok || !d.imdbId) continue;
-        movieItems.push({
-          kind: 'movie',
-          imdbId: d.imdbId,
-          tmdbId: m.tmdbId,
-          title: m.title,
-          year: m.year || '',
-          showName: m.title,
-          epName: 'Movie',
-          released: m.released || (m.year ? m.year + '-01-01' : ''),
-          runtime: d.runtime || 0,
-          thumbnail: m.backdrop || m.poster || '',
-          poster: m.poster || '',
-          showPoster: m.poster || '',
-          backdrop: m.backdrop || '',
-          spotlightRating: m.rating || 0,
-        });
-      } catch (e) {
-        continue;
-      }
-    }
-
-    const episodeItems = [];
-    let guestShows = 0;
-    for (let i = 0; i < c.shows.length; i++) {
-      const sh = c.shows[i];
-      say('<p><small>Finding ' + escapeHtml(c.name) + '\u2019s episodes\u2026 show ' + (i + 1) + ' of ' + c.shows.length +
-        ' (' + escapeHtml(sh.title) + ')</small></p>');
-      try {
-        const r = await fetch(ORIGIN + '/api/person-show-episodes?personId=' + encodeURIComponent(c.personId) +
-          '&tmdbId=' + encodeURIComponent(sh.tmdbId), { cache: 'no-store' });
-        const d = await r.json();
-        if (!d.ok || !Array.isArray(d.episodes) || !d.episodes.length) continue;
-        if (!d.regular) guestShows++;
-        const showPoster = d.poster || sh.poster || '';
-        const showName = d.showName || sh.title || '';
-        d.episodes.forEach((ep) => {
-          episodeItems.push({
-            kind: 'episode',
-            imdbId: channelStreamShowId(d.imdbId, sh.tmdbId),
-            season: ep.season,
-            episode: ep.episode,
-            showName: showName,
-            epName: ep.name,
-            title: showName + ' S' + ep.season + 'E' + ep.episode + ' \u2014 ' + ep.name,
-            released: ep.released || '',
-            runtime: ep.runtime || 0,
-            thumbnail: ep.thumbnail || showPoster,
-            poster: showPoster || ep.thumbnail || '',
-            showPoster: showPoster,
-            spotlightRating: sh.rating || 0,
-          });
-        });
-      } catch (e) {
-        continue;
-      }
-    }
-
-    const items = sortSpotlightItems(movieItems.concat(episodeItems), channelSpotlightSort);
+    const built = await buildSpotlightItemsFromCredits(c, {
+      onProgress: function (stage, i, total, label) {
+        if (stage === 'movies') {
+          say('<p><small>Resolving films\u2026 ' + (i + 1) + ' of ' + total + ' (' + escapeHtml(label) + ')</small></p>');
+        } else {
+          say('<p><small>Finding ' + escapeHtml(c.name) + '\u2019s episodes\u2026 show ' + (i + 1) + ' of ' + total +
+            ' (' + escapeHtml(label) + ')</small></p>');
+        }
+      },
+    });
+    const movieItems = built.movieItems;
+    const episodeItems = built.episodeItems;
+    const guestShows = built.guestShows;
+    const items = sortSpotlightItems(built.items, channelSpotlightSort);
     if (!items.length) {
       say('<p class="testresult err">\u2717 Could not resolve any of ' + escapeHtml(c.name) + '\u2019s credits to something playable.</p>');
       return;

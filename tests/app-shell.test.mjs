@@ -206,6 +206,20 @@ describe("the new UI shell is opt-in through a cookie", () => {
     assert.ok(shell.text.includes('id="unifiedImportFileInput"'), "the old import panel should still be there");
   });
 
+  it("emits the Channels templates only for the shell (P6-7)", async () => {
+    const env = makeEnv();
+    const legacy = await call(env, "/");
+    assert.equal(legacy.text.includes('id="appShellChannels"'), false);
+    const shell = await call(env, "/channels", { cookie: SHELL_COOKIE });
+    assert.equal(shell.status, 200);
+    assert.ok(shell.text.includes('id="appShellChannels"'), "the channel templates need a home");
+    // ...above the My Channels panel, which stays exactly as it is, and before
+    // the merge tools under it.
+    assert.ok(shell.text.includes('id="myCreatedChannelsList"'), "the old My Channels panel should still be there");
+    assert.ok(shell.text.indexOf('id="appShellChannels"') < shell.text.indexOf('id="myCreatedChannelsList"'),
+      "the templates come first");
+  });
+
   it("ships one bundle and one stylesheet for both variants", async () => {
     // A shell-only line inside either of them would make one cached,
     // publicly-hashed file depend on a cookie. Each isolate's hash describes

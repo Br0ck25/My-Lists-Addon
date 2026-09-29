@@ -27,6 +27,15 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 8. **Recommended: set up the background jobs queue** (Phase 5, `docs/OPERATIONS.md` §18): create the queues `mylists-jobs` and `mylists-jobs-dlq`, make this Worker the consumer of `mylists-jobs` (batch size 25, 5 retries, dead-letter queue `mylists-jobs-dlq`), bind `mylists-jobs` to the Worker as `JOBS`, then press **Send a test job** in `/admin` → Maintenance. Without it everything works as before.
 
+### 📺 Building a channel starts with a template (P6-7, new UI only)
+
+- **Only for a browser on the new interface** (`?ff_new_ui=1`). Channels opens with **New channel** above the panels that were there before: pick a template, look at what is playing today, then add it to your home screen.
+  - **TV network** (A&E, HBO, NBC, Cartoon Network and the rest), **Franchise or universe** (a saga in its canon order), **Actor or creator**, **From a list** (a MDBList, Trakt or TMDB show list, kept in step with it if you leave the switch on), and **Custom** -- which opens the full builder rather than a cut-down copy of it.
+  - **Today's lineup is the server's answer**, not an arrangement made on the page: the preview asks the same code a Stremio request goes through, shows the plan (say "24 shows a day, 3 episodes a block, 1,820 episodes in the pool") and up to twelve posters, and says so when a rule like *Hide watched* cannot be applied to a preview.
+  - **Nothing is added to your home screen until you press it.** The channel is built and saved in this browser first, My Channels lists it either way, and the one button under the preview adds or removes the row.
+  - **Schedule options** sit under the template: daily rotation with shows a day and episodes a block, play order (as the channel is, interleaved, by air date, shuffled), *Hide watched*, and how many episodes of one show the pool keeps. A TV network still uses the server's ready-made pool whenever those options are the ones it is built with; ask for something different and the pool is built for your choices instead.
+  - A **saga** needs no account (it is a public row, like the Storylines tab's own "Add"); the other templates ask you to sign in first, exactly as the builder does.
+
 ### 📥 Importing a list is a job now, with progress and a review step (P6-6, new UI only)
 
 - **Only for a browser on the new interface** (`?ff_new_ui=1`). Lists › Import opens with the new importer above the panel that was there before:

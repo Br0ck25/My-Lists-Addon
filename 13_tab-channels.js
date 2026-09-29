@@ -34,6 +34,12 @@
 
   <!-- Submenu 1: My Channels -->
   <div class="channels-subpanel" id="channelsSubMyChannels">
+    <!-- The shell's own channel templates (P6-7): choose a template, look at
+         what is playing today, then add the channel to the home screen.
+         Emitted only for a browser with the FF_NEW_UI cookie; every panel
+         below is unchanged, and the Custom template hands off to the legacy
+         builder itself until that is rewritten. -->
+${newUi ? '    <div id="appShellChannels"></div>' : ''}
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">My Channels</h2>

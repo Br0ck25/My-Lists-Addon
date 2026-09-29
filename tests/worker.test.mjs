@@ -2542,8 +2542,14 @@ describe("My Channels does not quietly adopt a storyline or Explore row", () => 
   // "Remove" add a second copy instead.
   it("finds an added storyline by its exact channel id in the rows", () => {
     const urls = [{ value: "channel:v1:" + JSON.stringify({ channelId: "channel-movie_mcu_infinity_saga", storylineId: "movie_mcu_infinity_saga", items: [] }) }];
-    const inCatalog = loadOneClientFunction("20_client-channel-builder.js", "isStorylineChannelInCatalog", {
+    // isStorylineChannelInCatalog is the storyline-shaped name for the one
+    // helper every channel button asks (isChannelInConfig), so it is loaded
+    // with it -- the seam is the wrap, not a second copy of the needle.
+    const isChannelInConfig = loadOneClientFunction("20_client-channel-builder.js", "isChannelInConfig", {
       document: { querySelectorAll: () => urls }, String,
+    });
+    const inCatalog = loadOneClientFunction("20_client-channel-builder.js", "isStorylineChannelInCatalog", {
+      isChannelInConfig,
     });
     assert.equal(inCatalog("channel-movie_mcu_infinity_saga"), true);
     assert.equal(inCatalog("channel-movie_mcu"), false, "one storyline's id can be the start of another's");
