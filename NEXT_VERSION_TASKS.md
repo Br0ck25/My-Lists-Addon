@@ -83,18 +83,33 @@ No npm, no `src/` tree, no esbuild, no new test framework (D-11). Phase 2 is now
   - top-level names stay unique across all files (`scope_check.mjs` enforces this);
   - client code stays in `09_`–`24_`;
   - `NEXT_VERSION_ARCHITECTURE.md` §7.2 maps each planned module to its file.
-- [ ] **P2-3** Middleware at the entry point, keeping `handleFetch` and its route order as they are. It needs:
+- [x] **P2-3** Middleware at the entry point, keeping `handleFetch` and its route order as they are. It needs:
   - one error boundary (`safeErrorMessage`);
   - security headers;
   - `no-store` as the default for JSON responses, with public routes opting in to caching (BE-M17).
 
-  The declarative router table is dropped (D-11: the route chain is not rewritten). *Done when:* a test shows an uncaught error answers a generic 500, and a JSON response with no explicit cache header is `no-store`.
+  The declarative router table is dropped (D-11: the route chain is not rewritten). *Done when:* a test shows an uncaught error answers a generic 500, and a JSON response with no explicit cache header is `no-store`. — **Status:** Done.
+  - The error boundary and security headers were already in place and tested (A13).
+  - `json()` now defaults to `no-store`, and public routes opt in with `jsonCacheable` (Stremio through `jsonPublic`).
+  - A route probe and a full instrumented test run confirmed no public route lost its caching.
 - [x] **P2-4** ~~esbuild bundle with hashed JS and CSS assets.~~ — **Status:** Dropped (D-11). `/app.js` and `/app.css` keep being split from the rendered page at run time (`splitAppBundle`, memoized per isolate), so FT-23 stays.
 - [x] **P2-5** ~~Retire `build.py`, `check_sync.py`, `gen_map.py` and `scope_check.mjs`, and replace the render checks with ESLint.~~ — **Status:** Dropped (D-11). These checks are what makes the shared scope and the template-literal client safe, so they stay.
-- [ ] **P2-6** `providerFetch(provider, url, {auth, timeoutMs=10000, retries, cache})` in a new numbered file, `27_provider-http.js`. All provider calls go through it. It refuses `cf.cacheTtl` when `auth` is `user` (the fetch guard in `02_` already does this for every call), and it redacts secrets in errors and logs. *Done when:* a test that greps the sources finds no raw `fetch(` to a provider host outside `providerFetch`.
-- [ ] **P2-7** Log redaction: `redactForLog(value)` in `02_` masks `api_key`, `apikey`, `access_token`, `token` and `key` query parameters and `Authorization` headers, and the server's `console.error` / `console.warn` calls go through it. (Checked 2026-09-27: no current log line writes a key or token. This keeps it that way.) *Done when:* a test logging a URL that contains `api_key=SECRET` sees `api_key=[redacted]`.
-- [ ] **P2-8** One install-config schema: `INSTALL_CONFIG_FIELDS` in `00_constants.js` (name, type, default, validator, stored-when rule). It is written into the page with `jsonForScript` for the client, the way `PERSONAL_SHELF_URL_PREFIXES` is. It is used by `decodeConfig`, `resolveConfig`, the `/api/save` allowlist, the client's save body, and `renderBuilder`'s initial keys. *Done when:* the six copies are gone and a round-trip test covers every field.
-- [ ] **P2-9** Pass the resolved config through the catalog pipeline; remove the extra `resolveConfig` calls in `fetchAutoTrackedCatalog` / `fetchCuratedCatalog` (BE-H04, BE-M08). Stop merging the tracking blob into `resolveConfig`; personal rows read their own data. *Done when:* a catalog request for a non-personal row performs zero reads of `creatorsynctracking:`.
+- [x] **P2-6** `providerFetch(provider, url, {auth, timeoutMs=10000, retries, cache})` in a new numbered file, `27_provider-http.js`. All provider calls go through it. It refuses `cf.cacheTtl` when `auth` is `user` (the fetch guard in `02_` already does this for every call), and it redacts secrets in errors and logs. *Done when:* a test that greps the sources finds no raw `fetch(` to a provider host outside `providerFetch`. — **Status:** Done in the existing `fetch` guard in `02_` rather than a new file and wrapper: every outbound call already goes through it.
+  - It strips edge caching from credentialed requests (Phase 1).
+  - It adds a 30-second timeout (`OUTBOUND_DEFAULT_TIMEOUT_MS`) when the caller set none. A caller's own signal wins, and Request objects are left alone.
+  - Log redaction comes from P2-7.
+  - Per-provider retries stay where they are (`fetchTraktWithRetry`).
+  - A test hangs the upstream and checks that the default applies, and that a caller's own 10 s is kept.
+- [x] **P2-7** Log redaction: `redactForLog(value)` in `02_` masks `api_key`, `apikey`, `access_token`, `token` and `key` query parameters and `Authorization` headers, and the server's `console.error` / `console.warn` calls go through it. (Checked 2026-09-27: no current log line writes a key or token. This keeps it that way.) *Done when:* a test logging a URL that contains `api_key=SECRET` sees `api_key=[redacted]`. — **Status:** Done: `redactForLog` and a module-level `console` at the top of `00_constants.js` cover every log call without editing each one. Tests cover URLs, Bearer tokens, Creator Keys, objects, Headers and Errors, and check that the real console is looked up at call time.
+- [x] **P2-8** One install-config schema: `INSTALL_CONFIG_FIELDS` in `00_constants.js` (name, type, default, validator, stored-when rule). It is written into the page with `jsonForScript` for the client, the way `PERSONAL_SHELF_URL_PREFIXES` is. It is used by `decodeConfig`, `resolveConfig`, the `/api/save` allowlist, the client's save body, and `renderBuilder`'s initial keys. *Done when:* the six copies are gone and a round-trip test covers every field. — **Status:** Done.
+  - `INSTALL_CONFIG_FIELDS` and three helpers (`readInstallConfigFields`, `storedInstallConfigFields`, `nonSecretInstallConfigFields`) live in `00_constants.js`.
+  - The page gets the list as `INSTALL_CONFIG_FIELD_LIST`.
+  - It fixed a real bug: Configure dropped Better Posters.
+  - `collectKeys` still reads each setting from its own control; a test checks it provides every field in the list.
+- [x] **P2-9** Pass the resolved config through the catalog pipeline; remove the extra `resolveConfig` calls in `fetchAutoTrackedCatalog` / `fetchCuratedCatalog` (BE-H04, BE-M08). Stop merging the tracking blob into `resolveConfig`; personal rows read their own data. *Done when:* a catalog request for a non-personal row performs zero reads of `creatorsynctracking:`. — **Status:** Done.
+  - `resolveConfig(config, env, { withTracking })` reads `creatorsynctracking:` only when asked; the channel meta route and `/api/resolve` ask.
+  - `fetchCuratedCatalog` and `fetchAutoTrackedCatalog` use the owner the route passes, and resolve again only for callers that pass nothing.
+  - Measured by tests: 0 tracking reads for a chart row (was 1); 1 for a curated row (was 3); the install config read once per request.
 - [x] **P2-10** Replace the `stats` `LIKE 'prefix%'` queries with range predicates (`kind >= ? AND kind < ?`) (BE-H11 interim). *Done when:* `EXPLAIN QUERY PLAN` on D1 shows the primary-key index being used. — **Status:** Done: every `stats` prefix read uses a `[prefix, upper)` key range (`statKindRange`, `03_admin.js`). The windowed leaderboard query now searches the primary key. The all-time reads keep using the `(day, n, kind)` covering index, which they already did.
 
 ---

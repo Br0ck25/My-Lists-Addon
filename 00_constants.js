@@ -1,3 +1,93 @@
+// --- Logs never carry a secret (S-14, task P2-7) -----------------------------
+//
+// Every console call in the Worker goes through here. This top-level `console`
+// shadows the global one for all the numbered files -- they share one module
+// scope -- the same way the `fetch` guard in 02_http-and-creator-utils.js does,
+// so the ~120 existing log lines and any added later are covered without each
+// one remembering. Each argument passes through redactForLog first.
+//
+// The real console is looked up at call time, so a test that swaps
+// console.error still sees every line. Declared first, in the first file, so
+// nothing can log before it exists; it and its helpers depend on nothing
+// declared later.
+const console = makeRedactingConsole();
+
+function makeRedactingConsole() {
+  const out = {};
+  for (const level of ["log", "info", "warn", "error", "debug"]) {
+    out[level] = (...args) => {
+      const real = globalThis.console;
+      if (!real || typeof real[level] !== "function") return;
+      let safe;
+      try {
+        safe = args.map((a) => redactForLog(a));
+      } catch {
+        safe = ["[log line dropped: it could not be redacted]"];
+      }
+      real[level](...safe);
+    };
+  }
+  return out;
+}
+
+// Masks secrets in a value that is about to be logged:
+//   - key, token and session query parameters in any URL in a string
+//     (api_key, apikey, access_token, refresh_token, token, key, client_secret,
+//     session_id, creatorKey, code);
+//   - "Bearer <token>" (an Authorization header value);
+//   - a Creator Key (MYL-XXXX-XXXX-XXXX);
+//   - in a plain object, array or Headers, any field whose name says it is a
+//     key, token, secret, password, cookie or Authorization -- two levels deep.
+// An Error keeps its name, with its message and stack redacted. Anything else
+// is logged as it is.
+// Types are told apart by their tag rather than instanceof, so an object made
+// in another realm (a test sandbox, a vm context) is recognized too.
+function redactForLog(value, depth = 0) {
+  if (typeof value === "string") return redactSecretsInText(value);
+  if (!value || typeof value !== "object") return value;
+  const tag = Object.prototype.toString.call(value);
+  if (tag === "[object Error]") {
+    const copy = new Error(redactSecretsInText(value.message));
+    copy.name = value.name;
+    if (value.stack) copy.stack = redactSecretsInText(value.stack);
+    return copy;
+  }
+  if (depth >= 2) return value;
+  if (tag === "[object Headers]" && typeof value.forEach === "function") {
+    const copy = {};
+    value.forEach((v, k) => { copy[k] = isSecretFieldName(k) ? "[redacted]" : redactSecretsInText(v); });
+    return copy;
+  }
+  if (Array.isArray(value)) return value.map((v) => redactForLog(v, depth + 1));
+  // A plain object: its prototype is some realm's Object.prototype (whose own
+  // prototype is null), or null. Class instances are logged as they are.
+  const proto = Object.getPrototypeOf(value);
+  if (tag !== "[object Object]" || (proto !== null && Object.getPrototypeOf(proto) !== null)) return value;
+  const copy = {};
+  for (const [k, v] of Object.entries(value)) {
+    copy[k] = isSecretFieldName(k) ? "[redacted]" : redactForLog(v, depth + 1);
+  }
+  return copy;
+}
+
+function redactSecretsInText(text) {
+  return String(text)
+    .replace(/([?&#;](?:api_key|apikey|access_token|refresh_token|token|key|client_secret|session_id|sessionid|creatorkey|code)=)[^&#\s"'<>]*/gi, "$1[redacted]")
+    .replace(/\b(Bearer)\s+[A-Za-z0-9._~+\/=-]+/gi, "$1 [redacted]")
+    .replace(/\bMYL-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}\b/g, "MYL-[redacted]");
+}
+
+// Field names that hold a credential: exact names (authorization, cookie,
+// password, token, secret) and names ending in one (apiKey, tmdbKey,
+// creatorKey, traktAccessToken, client_secret, sessionId). A bare `key` is
+// left alone -- in this codebase that is almost always a KV key name.
+function isSecretFieldName(name) {
+  const n = String(name);
+  if (/^(authorization|cookie|set-cookie|password|token|secret)$/i.test(n)) return true;
+  if (/(api_?key|_key|secret|_token|access_?token|refresh_?token|session_?id|password)$/i.test(n)) return true;
+  return /[a-z](Key|Token)$/.test(n);
+}
+
 const ADDON_ID = "app.my-list";
 const ADDON_VERSION = "1.5.5";
 const ADDON_NAME = "My Lists";
@@ -1075,6 +1165,115 @@ const STREMIO_BADGE_KEYS = [
   "showBadgesStremioWatchlist",
   "showBadgesStremioCatalogs",
 ];
+
+// --- The install config, field by field (task P2-8) -------------------------
+//
+// Every setting an install link can carry, in one place. It used to be written
+// out by hand in six -- /api/save's allowlist, resolveConfig, decodeConfig, the
+// builder's save body, its signed-out filter and the configure page -- and the
+// copies drifted: the badge toggles and then Better Posters were each missing
+// from the save allowlist (the setting looked saved and never reached the
+// apps), resolveConfig never read simklUsername back, and the configure page
+// was never handed Better Posters, so opening Configure on an install that
+// used it showed it off, and pressing Update saved it off.
+//
+// kind:
+//   "account" -- belongs to a connected provider account. Stored only for a
+//                signed-in save (docs/DECISIONS.md D-8); read back as "".
+//                `secret` marks the keys and tokens, which never leave the
+//                server in a page or an API answer.
+//   "flag"    -- off unless set; stored only when on.
+//   "flagOn"  -- on unless set to false; stored only when off, so a config
+//                with everything on stays as small as it was.
+//   "choice"  -- a string with a default and, optionally, the values allowed
+//                (checked at the door: /api/save is unauthenticated and some of
+//                these end up in a URL); stored only when allowed and not the
+//                default.
+// requires: stored only while that flag is on (Better Posters' style options).
+//
+// Not here: `entries`, and the account-proof fields (track, trackCreatorName,
+// trackCreatorKey, trackOwner), which /api/save sets only after verifying the
+// account.
+const INSTALL_CONFIG_FIELDS = [
+  { name: "tmdbKey", kind: "account", secret: true },
+  { name: "mdblistKey", kind: "account", secret: true },
+  { name: "mdblistAccessToken", kind: "account", secret: true },
+  { name: "traktKey", kind: "account", secret: true },
+  { name: "traktUsername", kind: "account" },
+  { name: "traktAccessToken", kind: "account", secret: true },
+  { name: "simklKey", kind: "account", secret: true },
+  { name: "simklAccessToken", kind: "account", secret: true },
+  { name: "simklUsername", kind: "account" },
+  { name: "shuffleShelves", kind: "flag" },
+  { name: "shuffleItems", kind: "flag" },
+  { name: "region", kind: "choice", default: "US" },
+  { name: "hideNonDigitalReleases", kind: "flag" },
+  { name: "adultContentFilter", kind: "flag" },
+  { name: "dedupeAcrossLists", kind: "flag" },
+  ...STREMIO_BADGE_KEYS.map((name) => ({ name, kind: "flagOn" })),
+  { name: "betterPosters", kind: "flag" },
+  { name: "betterPostersGenre", kind: "flagOn", requires: "betterPosters" },
+  { name: "betterPostersRating", kind: "flagOn", requires: "betterPosters" },
+  { name: "betterPostersTrendTags", kind: "flagOn", requires: "betterPosters" },
+  { name: "betterPostersQuality", kind: "flag", requires: "betterPosters" },
+  { name: "betterPostersAge", kind: "flag", requires: "betterPosters" },
+  {
+    name: "betterPostersLang", kind: "choice", default: "en", requires: "betterPosters",
+    allowed: BETTER_POSTERS_LANGS.map((l) => l.value),
+  },
+  {
+    name: "betterPostersRatingSource", kind: "choice", default: "avg", requires: "betterPosters",
+    allowed: BETTER_POSTERS_RATING_SOURCES.map((r) => r.value),
+  },
+];
+
+// Every field, read out of a stored or decoded config with its default
+// applied. `parsed` may be anything -- an old link's bare entries array, or
+// garbage -- and the answer is always complete.
+function readInstallConfigFields(parsed) {
+  const src = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  const out = {};
+  for (const f of INSTALL_CONFIG_FIELDS) {
+    const v = src[f.name];
+    if (f.kind === "account") out[f.name] = typeof v === "string" ? v : "";
+    else if (f.kind === "flag") out[f.name] = !!v;
+    else if (f.kind === "flagOn") out[f.name] = v !== false;
+    else out[f.name] = (typeof v === "string" && v) ? v : f.default;
+  }
+  return out;
+}
+
+// The fields /api/save stores from a request body: only what differs from its
+// default, only what passes its check, and account fields only for a signed-in
+// save.
+function storedInstallConfigFields(body, withAccountFields) {
+  const src = body && typeof body === "object" ? body : {};
+  const out = {};
+  for (const f of INSTALL_CONFIG_FIELDS) {
+    if (f.requires && !src[f.requires]) continue;
+    const v = src[f.name];
+    if (f.kind === "account") {
+      if (withAccountFields && typeof v === "string" && v) out[f.name] = v;
+    } else if (f.kind === "flag") {
+      if (v) out[f.name] = true;
+    } else if (f.kind === "flagOn") {
+      if (v === false) out[f.name] = false;
+    } else if (typeof v === "string" && v && v !== f.default && (!f.allowed || f.allowed.includes(v))) {
+      out[f.name] = v;
+    }
+  }
+  return out;
+}
+
+// The same values with every key and token removed: what a page or an API
+// answer may carry (the configure page's starting values, for one).
+function nonSecretInstallConfigFields(values) {
+  const out = {};
+  for (const f of INSTALL_CONFIG_FIELDS) {
+    if (!f.secret && values && f.name in values) out[f.name] = values[f.name];
+  }
+  return out;
+}
 
 // --- Catalog rows that are one account's live state -------------------------
 //

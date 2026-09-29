@@ -6043,6 +6043,30 @@ describe("client: Trakt device login waits out a rate limit once", () => {
   });
 });
 
+// P2-8: the builder sends every install setting the server's schema names,
+// and collectKeys provides each one -- a field added to the schema but not to
+// collectKeys would silently never be saved.
+describe("client: the save body follows the install-config schema", () => {
+  it("collectKeys provides every schema field, and the save body carries them all", () => {
+    const client = loadClient();
+    const fields = client.get("INSTALL_CONFIG_FIELD_LIST");
+    assert.ok(fields.length >= 25);
+    const keys = client.call("collectKeys");
+    for (const f of fields) assert.ok(f.name in keys, `collectKeys does not provide ${f.name}`);
+    const body = client.call("installSaveBody", [], keys);
+    for (const f of fields) assert.ok(f.name in body, `the save body leaves out ${f.name}`);
+  });
+
+  it("drops every account field from a signed-out save, using the same list", () => {
+    const client = loadClient();
+    const fields = client.get("INSTALL_CONFIG_FIELD_LIST");
+    const full = {};
+    for (const f of fields) full[f.name] = "x";
+    const out = client.call("withAccountProof", full);
+    for (const f of fields) assert.equal(f.name in out, !f.account, f.name);
+  });
+});
+
 describe("client: channel share links", () => {
   const load = (routes = {}) => loadClient({ routes, storage: { "myListAddon:creatorKey": "KEY-1" }, signedIn: true });
 

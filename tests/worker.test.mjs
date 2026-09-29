@@ -2193,6 +2193,314 @@ describe("P2-10: stats prefix reads use the primary key", () => {
   });
 });
 
+// P2-7. Every log line the Worker writes goes through redactForLog, via the
+// module-level `console` at the top of 00_constants.js.
+describe("P2-7: logs never carry a secret", () => {
+  it("masks keys and tokens in URLs, Bearer tokens and Creator Keys", () => {
+    const { redactForLog } = loadSourceFunctions("00_constants.js");
+    assert.equal(
+      redactForLog("GET https://api.themoviedb.org/3/tv/1?api_key=SECRET&language=en"),
+      "GET https://api.themoviedb.org/3/tv/1?api_key=[redacted]&language=en",
+    );
+    const line = redactForLog("x?apikey=A1&access_token=B2&token=C3&key=D4&code=E5 Bearer abc.def-ghi MYL-AB23-CD45-EF67");
+    for (const secret of ["A1", "B2", "C3", "D4", "E5", "abc.def-ghi", "AB23-CD45-EF67"]) {
+      assert.ok(!line.includes(secret), `${secret} survived: ${line}`);
+    }
+  });
+
+  it("masks credential fields in objects and headers, and keeps a KV key name readable", () => {
+    const sb = loadSourceFunctions("00_constants.js");
+    const out = sb.redactForLog({
+      key: "creator:alice", tmdbKey: "T1", traktAccessToken: "T2", creatorKey: "T3",
+      Authorization: "Bearer T4", nested: { api_key: "T5", url: "https://x/?token=T6" },
+    });
+    assert.equal(out.key, "creator:alice", "a KV key name is not a secret");
+    const flat = JSON.stringify(out);
+    for (const secret of ["T1", "T2", "T3", "T4", "T5", "T6"]) assert.ok(!flat.includes(secret), `${secret} survived: ${flat}`);
+    const h = sb.redactForLog(new Headers({ Authorization: "Bearer T7", "Content-Type": "application/json" }));
+    assert.equal(h.authorization, "[redacted]");
+    assert.equal(h["content-type"], "application/json");
+  });
+
+  it("redacts an Error's message and stack but keeps its name", () => {
+    const { redactForLog } = loadSourceFunctions("00_constants.js");
+    const err = new TypeError("fetch failed for https://api.trakt.tv/x?access_token=T8");
+    const out = redactForLog(err);
+    assert.equal(out.name, "TypeError");
+    assert.ok(!out.message.includes("T8") && !String(out.stack).includes("T8"));
+  });
+
+  it("routes the file's own console through it, to whatever console is current", () => {
+    const sb = loadSourceFunctions("00_constants.js");
+    const seen = [];
+    sb.console = { error: (...a) => seen.push(a), warn: (...a) => seen.push(a), log() {}, info() {}, debug() {} };
+    vm.runInContext(`console.error("TMDB failed:", "https://api.themoviedb.org/3/x?api_key=LEAKED1");
+      console.warn({ traktAccessToken: "LEAKED2" });`, sb);
+    assert.equal(seen.length, 2, "both lines reached the console that is current at call time");
+    assert.ok(!JSON.stringify(seen).includes("LEAKED"), JSON.stringify(seen));
+  });
+});
+
+// P2-3 / BE-M17. JSON responses are no-store unless the route says its data
+// is public. The old default (max-age=3600 for any success) had to be opted OUT
+// of, and the routes that forgot were personal.
+describe("P2-3: JSON is no-store unless a route opts in to caching", () => {
+  function stubFetch(handler) {
+    const real = globalThis.fetch;
+    globalThis.fetch = async (input) => handler(String(input && input.url ? input.url : input));
+    return () => { globalThis.fetch = real; };
+  }
+  const jsonRes = (body) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+
+  it("keeps the Stremio routes and public lookups cacheable for an hour", async () => {
+    const restore = stubFetch(() => jsonRes({ results: [], tv_results: [], movie_results: [] }));
+    try {
+      const env = makeEnv({ CONFIGS: makeKv(), TMDB_API_KEY: "k" });
+      const manifest = await call(env, "/manifest.json");
+      assert.equal(manifest.headers.get("cache-control"), "max-age=3600");
+      assert.ok(manifest.headers.get("access-control-allow-origin"), "and still CORS-enabled for the apps");
+      const search = await call(env, "/api/title-search?q=matrix&type=movie");
+      assert.equal(search.status, 200);
+      assert.equal(search.body.ok, true);
+      assert.equal(search.headers.get("cache-control"), "max-age=3600");
+    } finally {
+      restore();
+    }
+  });
+
+  it("makes a success no-store unless the route opts in", () => {
+    const sb = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js");
+    sb.Response = Response;
+    const cc = (res) => res.headers.get("cache-control");
+    assert.equal(cc(sb.json({ ok: true, lists: [] })), "no-store", "a route that says nothing is not cached");
+    assert.equal(cc(sb.jsonCacheable({ ok: true })), "max-age=3600");
+    assert.equal(cc(sb.jsonCacheable({ ok: false, error: "x" })), "no-store", "an ok:false body is an error");
+    assert.equal(cc(sb.jsonCacheable({ ok: true }, 404)), "no-store");
+    assert.equal(cc(sb.jsonCacheable({ ok: true }, 200, { "Cache-Control": "max-age=60" })), "max-age=60", "the route's own header wins");
+    assert.equal(cc(sb.jsonPublic({ metas: [] })), "max-age=3600", "Stremio responses stay cacheable");
+  });
+
+  it("never caches an error, even from a route that caches its answers", async () => {
+    const env = makeEnv({ CONFIGS: makeKv(), TMDB_API_KEY: "k" });
+    const r = await call(env, "/api/title-search");
+    assert.ok(r.status >= 400 || (r.body && r.body.ok === false), "precondition: the request fails");
+    assert.equal(r.headers.get("cache-control"), "no-store");
+  });
+});
+
+// P2-6 / BE-H10. Every outbound call gets a timeout, from the fetch guard in
+// 02_, when its caller set none. Measured by making the upstream hang: the
+// timeout the guard asks for is recorded, then shortened so the test is quick.
+describe("P2-6: an outbound call that sets no timeout still gets one", () => {
+  async function withHangingUpstream(run) {
+    const realFetch = globalThis.fetch;
+    const realTimeout = AbortSignal.timeout;
+    const asked = [];
+    AbortSignal.timeout = (ms) => { asked.push(ms); return realTimeout.call(AbortSignal, 5); };
+    globalThis.fetch = (input, init) => new Promise((resolve, reject) => {
+      const signal = init && init.signal;
+      if (!signal) return; // no timeout at all: hangs, and the test times out
+      signal.addEventListener("abort", () => reject(signal.reason || new Error("aborted")));
+    });
+    try {
+      return await run(asked);
+    } finally {
+      globalThis.fetch = realFetch;
+      AbortSignal.timeout = realTimeout;
+    }
+  }
+
+  it("ends a hung provider call that had no timeout of its own", async () => {
+    await withHangingUpstream(async (asked) => {
+      const env = makeEnv({ CONFIGS: makeKv(), TMDB_API_KEY: "k" });
+      const r = await call(env, "/api/imdb-ids", { method: "POST", json: { items: [{ id: "tmdb:550", type: "movie" }] } });
+      assert.equal(r.status, 200, "the route answered instead of hanging");
+      assert.deepEqual(r.body.map, {}, "and the hung lookup simply found nothing");
+      assert.ok(asked.includes(30000), `the guard's default was used, asked: ${asked}`);
+    });
+  });
+
+  it("keeps a caller's own, tighter timeout", async () => {
+    await withHangingUpstream(async (asked) => {
+      const env = makeEnv({ CONFIGS: makeKv(), TRAKT_CLIENT_ID: "t" });
+      await call(env, "/api/trakt-search?q=matrix");
+      assert.ok(asked.includes(10000), `fetchWithTimeout's own 10 s was used, asked: ${asked}`);
+      assert.ok(!asked.includes(30000), "and the default was not stacked on top of it");
+    });
+  });
+});
+
+// P2-8. One install-config schema (INSTALL_CONFIG_FIELDS, 00_constants.js)
+// drives /api/save, resolveConfig, decodeConfig, the configure page and the
+// builder's save body. Every field is round-tripped here, so a field added to
+// the schema is covered the moment it exists.
+describe("P2-8: every install setting survives a save, from one schema", () => {
+  const sb = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "04_config-resolution.js");
+  const FIELDS = vm.runInContext("INSTALL_CONFIG_FIELDS", sb).map((f) => ({ ...f }));
+  const ROW = { id: "pop", name: "Pop", type: "movie", url: "tmdb:chart:popular" };
+  // A value for each field that is NOT its default, so it has to be stored.
+  function nonDefault(f) {
+    if (f.kind === "account") return "V-" + f.name;
+    if (f.kind === "flag") return true;
+    if (f.kind === "flagOn") return false;
+    return f.allowed ? f.allowed.find((v) => v !== f.default) : "GB";
+  }
+
+  it("names every field once, with a kind this code understands", () => {
+    assert.ok(FIELDS.length >= 25, `expected the whole config, got ${FIELDS.length}`);
+    assert.equal(new Set(FIELDS.map((f) => f.name)).size, FIELDS.length, "no field is listed twice");
+    for (const f of FIELDS) assert.ok(["account", "flag", "flagOn", "choice"].includes(f.kind), f.name);
+  });
+
+  it("stores every changed field for a signed-in save and reads each one back", async () => {
+    const env = makeEnv({ CONFIGS: makeKv() });
+    const body = { ...(await accountProof(env)), entries: [ROW] };
+    for (const f of FIELDS) body[f.name] = nonDefault(f);
+    const r = await call(env, "/api/save", { method: "POST", json: body });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    const stored = JSON.parse(env.CONFIGS._store.get("cfg:" + r.body.id));
+    const resolved = await sb.resolveConfig(r.body.id, env);
+    for (const f of FIELDS) {
+      assert.deepEqual(stored[f.name], body[f.name], `${f.name} was not stored`);
+      assert.deepEqual(resolved[f.name], body[f.name], `${f.name} did not read back`);
+    }
+  });
+
+  it("stores nothing for a field left at its default, and still reads every one back", async () => {
+    const env = makeEnv({ CONFIGS: makeKv() });
+    const r = await call(env, "/api/save", { method: "POST", json: { ...(await accountProof(env)), entries: [ROW] } });
+    const stored = JSON.parse(env.CONFIGS._store.get("cfg:" + r.body.id));
+    const resolved = await sb.resolveConfig(r.body.id, env);
+    for (const f of FIELDS) {
+      assert.equal(f.name in stored, false, `${f.name} was stored at its default`);
+      assert.ok(f.name in resolved, `${f.name} is missing from the resolved config`);
+    }
+  });
+
+  it("stores no account field for a signed-out save, and the rest as usual", async () => {
+    const env = makeEnv({ CONFIGS: makeKv() });
+    const body = { entries: [ROW] };
+    for (const f of FIELDS) body[f.name] = nonDefault(f);
+    const r = await call(env, "/api/save", { method: "POST", json: body });
+    const stored = JSON.parse(env.CONFIGS._store.get("cfg:" + r.body.id));
+    for (const f of FIELDS) {
+      if (f.kind === "account") assert.equal(f.name in stored, false, `${f.name} was stored signed out`);
+      else assert.deepEqual(stored[f.name], body[f.name], `${f.name} was not stored`);
+    }
+  });
+
+  it("refuses a Better Posters option outside its list, and every style option while Better Posters is off", async () => {
+    const env = makeEnv({ CONFIGS: makeKv() });
+    const bad = await call(env, "/api/save", { method: "POST", json: {
+      entries: [ROW], betterPosters: true, betterPostersLang: "../evil", betterPostersRatingSource: "zz",
+    }});
+    const badStored = JSON.parse(env.CONFIGS._store.get("cfg:" + bad.body.id));
+    assert.equal("betterPostersLang" in badStored, false);
+    assert.equal("betterPostersRatingSource" in badStored, false);
+    const off = await call(env, "/api/save", { method: "POST", json: {
+      entries: [ROW], betterPosters: false, betterPostersGenre: false, betterPostersQuality: true,
+    }});
+    const offStored = JSON.parse(env.CONFIGS._store.get("cfg:" + off.body.id));
+    assert.equal("betterPostersGenre" in offStored, false);
+    assert.equal("betterPostersQuality" in offStored, false);
+  });
+
+  it("reads an old base64 link, and an old bare-array link, with every default", () => {
+    const b64 = (v) => Buffer.from(JSON.stringify(v), "utf8").toString("base64");
+    const withSettings = sb.decodeConfig(b64({ entries: [], region: "DE", showBadgesStremio: false, simklUsername: "s1" }));
+    assert.equal(withSettings.region, "DE");
+    assert.equal(withSettings.showBadgesStremio, false);
+    assert.equal(withSettings.simklUsername, "s1", "simklUsername was never read back before");
+    const bare = sb.decodeConfig(b64([ROW]));
+    const garbage = sb.decodeConfig("!!!not-a-config");
+    for (const decoded of [bare, garbage]) {
+      for (const f of FIELDS) assert.ok(f.name in decoded, `${f.name} missing`);
+      assert.equal(decoded.showBadgesStremioCatalogs, true, "a badge toggle defaults on");
+      assert.equal(decoded.betterPosters, false);
+      assert.equal(decoded.region, "US");
+    }
+  });
+
+  it("shows the configure page an install's Better Posters setting, and never its keys", async () => {
+    const env = makeEnv({ CONFIGS: makeKv() });
+    const r = await call(env, "/api/save", { method: "POST", json: {
+      ...(await accountProof(env)), entries: [ROW], betterPosters: true, betterPostersQuality: true,
+      traktAccessToken: "TRAKT-SECRET-TOKEN",
+    }});
+    const page = await call(env, `/${r.body.id}/configure`);
+    assert.equal(page.status, 200);
+    assert.ok(page.text.includes('id="betterPostersCheckbox" checked'), "Better Posters showed as off for an install that has it on");
+    assert.ok(!page.text.includes("TRAKT-SECRET-TOKEN"));
+  });
+});
+
+// P2-9 / BE-H04. A catalog request reads the owner's tracking record (which
+// can be megabytes) only for a row that is built from it. A Trending row used
+// to read and parse it once, and a curated row three times.
+describe("P2-9: a catalog row reads the tracking record only if it needs it", () => {
+  async function setup() {
+    const env = makeEnv({ CONFIGS: makeKv() });
+    const proof = await accountProof(env, "p29owner");
+    await call(env, "/api/creator/sync/save-tracking", { method: "POST", json: {
+      ...proof, watchHistory: [{ id: "tt90:1:1", showId: "tt90", showTitle: "Mine", seasonNum: 1, episodeNum: 1, watchedAt: 1 }],
+    }});
+    const saved = await call(env, "/api/save", { method: "POST", json: {
+      ...proof,
+      entries: [
+        { id: "pop", name: "Pop", type: "movie", url: "tmdb:chart:popular" },
+        { id: "rec", name: "Recommended", type: "movie", url: "custom:curated:recommended" },
+        { id: "wh", name: "History", type: "series", url: "autotrack:watch-history:series:p29owner" },
+      ],
+      trackCreatorName: "p29owner", trackCreatorKey: proof.creatorKey,
+    }});
+    assert.ok(saved.body.id, JSON.stringify(saved.body));
+    let reads = 0;
+    let configReads = 0;
+    const realGet = env.CONFIGS.get.bind(env.CONFIGS);
+    env.CONFIGS.get = async (key, ...rest) => {
+      if (String(key).startsWith("creatorsynctracking:")) reads++;
+      if (String(key) === "cfg:" + saved.body.id) configReads++;
+      return realGet(key, ...rest);
+    };
+    return {
+      env, id: saved.body.id,
+      readsFor: async (path) => { reads = 0; await call(env, path); return reads; },
+      configReadsFor: async (path) => { configReads = 0; await call(env, path); return configReads; },
+    };
+  }
+
+  it("reads it zero times for a row that is not built from it", async () => {
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({ results: [] }), { status: 200, headers: { "content-type": "application/json" } });
+    try {
+      const { id, readsFor } = await setup();
+      assert.equal(await readsFor(`/${id}/catalog/movie/pop.json`), 0);
+      assert.equal(await readsFor(`/${id}/manifest.json`), 0);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("reads it once, not three times, for a curated row", async () => {
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({ results: [] }), { status: 200, headers: { "content-type": "application/json" } });
+    try {
+      const { id, readsFor, configReadsFor } = await setup();
+      assert.equal(await readsFor(`/${id}/catalog/movie/rec.json`), 1);
+      assert.equal(await configReadsFor(`/${id}/catalog/movie/rec.json`), 1,
+        "the install config is read once per request, not resolved again inside the row");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("still serves the personal shelf, which reads its own data", async () => {
+    const { env, id } = await setup();
+    const cat = await call(env, `/${id}/catalog/series/wh.json`);
+    assert.equal((cat.body.metas || []).length, 1, "the owner's shelf still has its item");
+  });
+});
+
 describe("My Channels does not quietly adopt a storyline or Explore row", () => {
   it("skips catalogOnly rows and still adopts a channel someone built", () => {
     let saved = null;
@@ -11172,7 +11480,8 @@ describe("Anime Unpacking: restoring multi-season division for compressed anime 
 });
 
 describe("worker: adult content filter & safe poster generator", () => {
-  const httpUtils = loadSourceFunctions("02_http-and-creator-utils.js");
+  // decodeConfig reads its fields through INSTALL_CONFIG_FIELDS (00_constants.js).
+  const httpUtils = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js");
   const configFns = loadSourceFunctions("04_config-resolution.js");
   const catalogFns = loadSourceFunctions("05_catalog-core.js");
 

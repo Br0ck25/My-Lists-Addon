@@ -473,7 +473,7 @@ async function handleFetch(request, env, ctx) {
       // any device by account sync), and a signed-out save stores none
       // (docs/DECISIONS.md D-8). With nothing embedded, the page falls back to
       // whatever this browser already has.
-      const { entries, traktUsername, shuffleShelves, shuffleItems, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists } = await resolveConfig(m[1], env);
+      const resolvedForPage = await resolveConfig(m[1], env);
       // The one page that still sends no-store (it renders the person's own
       // API keys -- see the note on the headers below), but it should not
       // also be re-sending the 1.3MB client bundle every time. The split
@@ -482,8 +482,11 @@ async function handleFetch(request, env, ctx) {
       // shared, immutable /app.js everyone else already has.
       return new Response(
         await pageWithExternalBundle(renderBuilder(url.origin, {
-          initialEntries: entries,
-          initialKeys: { traktUsername, shuffleShelves, shuffleItems, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists },
+          initialEntries: resolvedForPage.entries,
+          // Every setting the link carries except its keys and tokens. This
+          // used to name seven fields by hand and left Better Posters out, so
+          // the page showed it off for an install that had it on.
+          initialKeys: nonSecretInstallConfigFields(resolvedForPage),
           isConfigureMode: true,
         })),
         // The one builder page that deliberately keeps no-store rather than
@@ -1404,7 +1407,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
           // dynamic Next Up channel. resolveConfig only fills them in for a
           // config that PROVED whose it is (see trackOwner there), so an
           // unverified config simply gets a channel with neither applied.
-          const { entries, watchHistory, continueWatching, tmdbKey, mdblistKey, traktKey, traktAccessToken } = await resolveConfig(config, env);
+          const { entries, watchHistory, continueWatching, tmdbKey, mdblistKey, traktKey, traktAccessToken } = await resolveConfig(config, env, { withTracking: true });
           let matchedEntry = null;
           for (const e of entries) {
             if (e.enabled === false) continue;
@@ -1579,7 +1582,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // this endpoint (see the comment above).
         ctx.waitUntil(bumpStat(env, "apiuse:mdblistpopular"));
         const lists = await fetchTopLists(MDBLIST_POPULAR_KEY, env, ctx);
-        return json({ ok: true, lists });
+        return jsonCacheable({ ok: true, lists });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err) });
       }
@@ -1718,7 +1721,7 @@ function generateSearchVariations(query) {
               isAdultPosterFiltered: isAdultFilterActive && isAdultItem,
             };
           });
-          return json({ ok: true, results });
+          return jsonCacheable({ ok: true, results });
         }
 
         // Active search: fetch all relevant search results across pages
@@ -1933,7 +1936,7 @@ function generateSearchVariations(query) {
           })
         );
 
-        return json({ ok: true, results });
+        return jsonCacheable({ ok: true, results });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err) });
       }
@@ -1953,7 +1956,7 @@ function generateSearchVariations(query) {
       if (env && env.CONFIGS) {
         try {
           const cached = await env.CONFIGS.get(cacheKey);
-          if (cached) return json({ ok: true, poster: cached });
+          if (cached) return jsonCacheable({ ok: true, poster: cached });
         } catch {}
       }
 
@@ -2041,7 +2044,7 @@ function generateSearchVariations(query) {
         ctx.waitUntil(env.CONFIGS.put(cacheKey, resolvedPoster, { expirationTtl: 604800 })); // 7-day cache
       }
 
-      return json({ ok: !!resolvedPoster, poster: resolvedPoster });
+      return jsonCacheable({ ok: !!resolvedPoster, poster: resolvedPoster });
     }
 
     // /api/show-seasons?tmdbId=...
@@ -2091,7 +2094,7 @@ function generateSearchVariations(query) {
           }
         }
         seasons = seasons.concat(specials);
-        return json({
+        return jsonCacheable({
           ok: true,
           imdbId: details.imdbId,
           name: data.name,
@@ -2123,7 +2126,7 @@ function generateSearchVariations(query) {
             thumbnail: e.still_path || null,
             runtime: Number.isInteger(e.runtime) ? e.runtime : null,
           }));
-          return json({ ok: true, episodes });
+          return jsonCacheable({ ok: true, episodes });
         }
 
         // Always the shared key.
@@ -2145,7 +2148,7 @@ function generateSearchVariations(query) {
               thumbnail: e.still_path || null,
               runtime: Number.isInteger(e.runtime) ? e.runtime : null,
             }));
-            return json({ ok: true, episodes });
+            return jsonCacheable({ ok: true, episodes });
           }
           return json({ ok: false, error: `TMDB season lookup failed (HTTP ${res.status}).` });
         }
@@ -2162,7 +2165,7 @@ function generateSearchVariations(query) {
           // downstream may require it.
           runtime: Number.isInteger(e.runtime) ? e.runtime : null,
         }));
-        return json({ ok: true, episodes });
+        return jsonCacheable({ ok: true, episodes });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err) });
       }
@@ -2270,7 +2273,7 @@ function generateSearchVariations(query) {
     // whose whole response shape is built around a title.
     if (path === "/api/person-search") {
       const q = (url.searchParams.get("q") || "").trim();
-      if (!q) return json({ ok: true, results: [] });
+      if (!q) return jsonCacheable({ ok: true, results: [] });
       try {
         ctx.waitUntil(bumpStat(env, "apiuse:tmdb"));
         const res = await fetch(
@@ -2656,7 +2659,7 @@ function generateSearchVariations(query) {
         ctx.waitUntil(bumpStatBy(env, "apiuse:tmdb", pagesFetched + (networkId ? 1 : 0) + candidates.length));
         const finalTitles = resolved.filter(Boolean).slice(0, limit);
         if (!finalTitles.length) return json({ ok: false, error: "Couldn't resolve any of those titles to IMDB." });
-        return json({ ok: true, items: finalTitles, shows: finalTitles, networkLogo });
+        return jsonCacheable({ ok: true, items: finalTitles, shows: finalTitles, networkLogo });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err) });
       }
@@ -2812,7 +2815,7 @@ function generateSearchVariations(query) {
         ctx.waitUntil(bumpStat(env, "apiuse:tmdb"));
         const details = await fetchTmdbDetails(tmdbId, "movie", TMDB_API_KEY);
         if (!details.imdbId) return json({ ok: false, error: "Couldn't resolve an IMDB id for this movie." });
-        return json({ ok: true, imdbId: details.imdbId, runtime: Number.isInteger(details.runtime) ? details.runtime : null });
+        return jsonCacheable({ ok: true, imdbId: details.imdbId, runtime: Number.isInteger(details.runtime) ? details.runtime : null });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err) });
       }
@@ -2828,7 +2831,7 @@ function generateSearchVariations(query) {
         ctx.waitUntil(bumpStat(env, "apiuse:tmdb"));
         const details = await fetchTmdbDetails(tmdbId, "tv", TMDB_API_KEY);
         if (!details.imdbId) return json({ ok: false, error: "Couldn't resolve an IMDB id for this show." });
-        return json({ ok: true, imdbId: details.imdbId });
+        return jsonCacheable({ ok: true, imdbId: details.imdbId });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err) });
       }
@@ -2951,7 +2954,7 @@ function generateSearchVariations(query) {
       const tmdbKey = tmdbKeyParam || TMDB_API_KEY;
       const isAdultFilterActive = url.searchParams.get("adultContentFilter") === "1";
       if (!q || !tmdbKey) {
-        return json({ ok: true, lists: [] });
+        return jsonCacheable({ ok: true, lists: [] });
       }
 
       try {
@@ -3068,7 +3071,7 @@ function generateSearchVariations(query) {
           }
         }
 
-        return json({ ok: true, lists: results.slice(0, 30) });
+        return jsonCacheable({ ok: true, lists: results.slice(0, 30) });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err), lists: [] });
       }
@@ -3085,7 +3088,7 @@ function generateSearchVariations(query) {
       try {
         const lists = await searchTraktLists(q, traktKey);
         if (!traktKey) ctx.waitUntil(bumpStatBy(env, "apiuse:trakt", 1 + lists.length));
-        return json({ ok: true, lists });
+        return jsonCacheable({ ok: true, lists });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err) });
       }
@@ -3172,7 +3175,7 @@ function generateSearchVariations(query) {
               });
           },
         });
-        return json({ ok: true, lists });
+        return jsonCacheable({ ok: true, lists });
       } catch (err) {
         return json({ ok: false, lists: [] });
       }
@@ -6944,7 +6947,7 @@ function generateSearchVariations(query) {
       const config = url.searchParams.get("config") || "";
       if (!config) return json({ ok: false, error: "Missing config." }, 400);
       try {
-        const resData = await resolveConfig(config, env);
+        const resData = await resolveConfig(config, env, { withTracking: true });
         const { entries, traktUsername, watchHistory, continueWatching, watchlist, airingNext } = resData;
         if (!entries || !entries.length) return json({ ok: false, error: "That link has no lists in it." });
         // No provider keys or tokens. This used to hand back the link's MDBList
@@ -7140,18 +7143,13 @@ function generateSearchVariations(query) {
         savedEntries = rewritten;
       }
 
-      const payload = { entries: savedEntries };
-      if (saveAccount) {
-        if (body.tmdbKey) payload.tmdbKey = body.tmdbKey;
-        if (body.mdblistKey) payload.mdblistKey = body.mdblistKey;
-        if (body.mdblistAccessToken) payload.mdblistAccessToken = body.mdblistAccessToken;
-        if (body.traktKey) payload.traktKey = body.traktKey;
-        if (body.traktUsername) payload.traktUsername = body.traktUsername;
-        if (body.traktAccessToken) payload.traktAccessToken = body.traktAccessToken;
-        if (body.simklKey) payload.simklKey = body.simklKey;
-        if (body.simklAccessToken) payload.simklAccessToken = body.simklAccessToken;
-        if (body.simklUsername) payload.simklUsername = body.simklUsername;
-      }
+      // Every install setting comes from the one schema
+      // (INSTALL_CONFIG_FIELDS, 00_constants.js): only what differs from its
+      // default, only what passes its check, and account keys and tokens only
+      // for a signed-in save. This used to be written out field by field here,
+      // and a field missing from that list was dropped on the floor -- the
+      // badge toggles and then Better Posters each were, once.
+      const payload = { entries: savedEntries, ...storedInstallConfigFields(body, !!saveAccount) };
       // `track` (the Auto-track Playback flag, which is what makes the manifest
       // declare a subtitles resource) and the account credential are now stored
       // independently. They used to be one branch, so a config with a personal
@@ -7166,50 +7164,6 @@ function generateSearchVariations(query) {
         // through a later Creator Key rotation instead of going empty the
         // moment the stored key stops matching. See resolveConfig.
         payload.trackOwner = saveVerifiedOwner;
-      }
-      if (body.shuffleShelves) payload.shuffleShelves = true;
-      if (body.shuffleItems) payload.shuffleItems = true;
-      if (body.region && body.region !== "US") payload.region = body.region;
-      if (body.hideNonDigitalReleases) payload.hideNonDigitalReleases = true;
-      if (body.adultContentFilter) payload.adultContentFilter = true;
-      if (body.dedupeAcrossLists) payload.dedupeAcrossLists = true;
-      // The Stremio/Nuvio artwork-overlay toggles. Stored only when switched
-      // OFF, because resolveConfig reads an absent key as on -- so a config
-      // with all of them on stays exactly the size it was.
-      //
-      // These were missing from this allowlist entirely, which meant turning
-      // any of them off never reached the install link: the setting looked
-      // saved, and the badges kept appearing in the apps. It read as harmless
-      // only because the default is on; the same gap left Better Posters
-      // (default off) looking completely dead. See that key below.
-      for (const badgeKey of STREMIO_BADGE_KEYS) {
-        if (body[badgeKey] === false) payload[badgeKey] = false;
-      }
-      // Better Posters. This builder is an allowlist -- a key it does not name
-      // is dropped on the floor -- and this is the PRIMARY install path
-      // whenever a CONFIGS KV namespace is bound, so a key missing here does
-      // not degrade the feature, it disables it outright: resolveConfig reads
-      // betterPosters back as false and Stremio/Nuvio get the plain artwork,
-      // no matter what the builder page shows. Only the base64 fallback link
-      // (buildConfig, 23_client-list-management.js) carried it before this.
-      // Each style key is stored only when it differs from btttr.cc's own
-      // default for that option, matching buildConfig.
-      if (body.betterPosters) {
-        payload.betterPosters = true;
-        if (body.betterPostersGenre === false) payload.betterPostersGenre = false;
-        if (body.betterPostersRating === false) payload.betterPostersRating = false;
-        if (body.betterPostersTrendTags === false) payload.betterPostersTrendTags = false;
-        if (body.betterPostersQuality) payload.betterPostersQuality = true;
-        if (body.betterPostersAge) payload.betterPostersAge = true;
-        // Validated at the door rather than only where the URL is built: this
-        // endpoint is unauthenticated, and there is no reason to persist a
-        // value btttr.cc would reject anyway.
-        if (BETTER_POSTERS_LANGS.some((l) => l.value === body.betterPostersLang) && body.betterPostersLang !== "en") {
-          payload.betterPostersLang = body.betterPostersLang;
-        }
-        if (BETTER_POSTERS_RATING_SOURCES.some((r) => r.value === body.betterPostersRatingSource) && body.betterPostersRatingSource !== "avg") {
-          payload.betterPostersRatingSource = body.betterPostersRatingSource;
-        }
       }
 
       const savePayload = JSON.stringify(payload);

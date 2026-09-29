@@ -301,15 +301,14 @@ function json(data, status = 200, extraHeaders = {}) {
       // { ok: false, error } without changing the status code, and a status
       // check alone would have missed every one of them.
       //
-      // A successful 2xx keeps the previous default deliberately. Flipping it
-      // wholesale would strip edge caching from the catalog and provider
-      // endpoints this add-on leans on to stay inside upstream rate limits,
-      // which is a much larger change than the defect requires; the handful
-      // of successful responses that genuinely must not be cached set
-      // no-store explicitly at their call site instead.
-      "Cache-Control": (status >= 400 || (data && typeof data === "object" && data.ok === false))
-        ? "no-store"
-        : "max-age=3600",
+      // A success is no-store too, by default (BE-M17, task P2-3). It used to
+      // be max-age=3600, so every personal route had to remember to opt OUT,
+      // and /api/resolve once forgot. Public data that is the same for
+      // everyone opts IN with jsonCacheable (below), and the Stremio routes do
+      // through jsonPublic, so a route added later is safe unless it says
+      // otherwise. Every public GET that relied on the old default was moved
+      // to jsonCacheable in the same change, so nothing public lost caching.
+      "Cache-Control": "no-store",
       // Applied last so a caller (e.g. the admin dashboard's own JSON
       // endpoints -- see their own comment on why they need this) can
       // override the max-age default above, rather than every non-admin
@@ -343,8 +342,19 @@ function refuseQueryCredentials(url, names) {
   return null;
 }
 
+// A JSON response that may be cached for an hour: public data that is the
+// same for everyone who asks -- a title search, a show's seasons, the channel
+// directory, a Stremio catalog. An error, or an `ok: false` body, is still
+// never cached. A caller's own Cache-Control wins.
+function jsonCacheable(data, status = 200, extraHeaders = {}) {
+  const isError = status >= 400 || (data && typeof data === "object" && data.ok === false);
+  return json(data, status, isError ? extraHeaders : { "Cache-Control": "max-age=3600", ...extraHeaders });
+}
+
+// The Stremio protocol routes (manifest, catalog, meta, subtitles): CORS, and
+// cacheable for an hour, as they always have been.
 function jsonPublic(data, status = 200, extraHeaders = {}) {
-  return json(data, status, { ...corsHeaders(), ...extraHeaders });
+  return jsonCacheable(data, status, { ...corsHeaders(), ...extraHeaders });
 }
 
 // For a response whose BODY belongs to one account: their lists (public and
@@ -509,7 +519,10 @@ function deterministicDailyShuffle(array, salt = "") {
 // with no CONFIGS KV binding, and without KV there are no Creator Profiles for
 // a personal shelf to belong to.
 function decodeConfig(config) {
-  const empty = { entries: [], tmdbKey: "", mdblistKey: "", mdblistAccessToken: "", traktKey: "", traktUsername: "", traktAccessToken: "", simklKey: "", simklAccessToken: "", track: false, trackCreatorName: "", trackCreatorKey: "", trackOwner: "", shuffleShelves: false, shuffleItems: false, region: "US", hideNonDigitalReleases: false, adultContentFilter: false, dedupeAcrossLists: false, betterPosters: false };
+  // An old self-contained base64 install link. Its settings are read through
+  // the one install-config schema (INSTALL_CONFIG_FIELDS, 00_constants.js), so
+  // a field and its default are defined once for every kind of link.
+  const noAccount = { track: false, trackCreatorName: "", trackCreatorKey: "", trackOwner: "" };
   try {
     const b64 = config.replace(/-/g, "+").replace(/_/g, "/");
     const padded = b64 + "===".slice((b64.length + 3) % 4);
@@ -519,68 +532,25 @@ function decodeConfig(config) {
     const jsonStr = new TextDecoder().decode(bytes);
     const parsed = JSON.parse(jsonStr);
 
+    // The oldest links are a bare array of rows, with no settings at all.
     const rawEntries = Array.isArray(parsed) ? parsed : parsed.entries;
     const entries = Array.isArray(rawEntries)
       ? rawEntries
           .filter((e) => e && e.id && e.url && e.type)
           .map((e) => ({ ...e, enabled: e.enabled !== false }))
       : [];
+    const settings = Array.isArray(parsed) ? {} : parsed;
 
     return {
       entries,
-      tmdbKey: (!Array.isArray(parsed) && parsed.tmdbKey) || "",
-      mdblistKey: (!Array.isArray(parsed) && parsed.mdblistKey) || "",
-      mdblistAccessToken: (!Array.isArray(parsed) && parsed.mdblistAccessToken) || "",
-      traktKey: (!Array.isArray(parsed) && parsed.traktKey) || "",
-      traktUsername: (!Array.isArray(parsed) && parsed.traktUsername) || "",
-      traktAccessToken: (!Array.isArray(parsed) && parsed.traktAccessToken) || "",
-      simklKey: (!Array.isArray(parsed) && parsed.simklKey) || "",
-      simklAccessToken: (!Array.isArray(parsed) && parsed.simklAccessToken) || "",
-      track: !!(!Array.isArray(parsed) && parsed.track),
-      trackCreatorName: (!Array.isArray(parsed) && parsed.trackCreatorName) || "",
-      trackCreatorKey: (!Array.isArray(parsed) && parsed.trackCreatorKey) || "",
+      ...readInstallConfigFields(settings),
+      track: !!settings.track,
+      trackCreatorName: settings.trackCreatorName || "",
+      trackCreatorKey: settings.trackCreatorKey || "",
       trackOwner: "",
-      shuffleShelves: !!(!Array.isArray(parsed) && parsed.shuffleShelves),
-      shuffleItems: !!(!Array.isArray(parsed) && parsed.shuffleItems),
-      // Two-letter watch_region for streaming-availability catalogs
-      // (provider charts, Stream Releases) and content ratings -- see
-      // 07_source-fetchers-tmdb-simkl.js's tmdbProviderChartPaths and
-      // fetchTmdbItemDetailsUncached for where this actually gets used.
-      // Defaults to US so every install predating this feature keeps
-      // behaving exactly as it always did.
-      region: (!Array.isArray(parsed) && parsed.region) || "US",
-      // Filters items with no known digital release (movie charts only,
-      // see fetchTmdbChart's own comment for why) out of TMDB Trending/
-      // Popular movie catalogs. Defaults to false so every install
-      // predating this feature keeps showing everything, same reasoning
-      // as region's own default above.
-      hideNonDigitalReleases: !!(!Array.isArray(parsed) && parsed.hideNonDigitalReleases),
-      adultContentFilter: !!(!Array.isArray(parsed) && parsed.adultContentFilter),
-      // Keeps the first list of a given type in a config untouched and
-      // strips whatever a later list of the same type shares with an
-      // earlier one -- see dedupeAcrossListEntries (05_catalog-core.js) for
-      // where this is actually applied. Defaults to false, same reasoning
-      // as region/hideNonDigitalReleases above.
-      dedupeAcrossLists: !!(!Array.isArray(parsed) && parsed.dedupeAcrossLists),
-      // Badge toggles default ON when absent, the way the others here do, so
-      // an install predating this one keeps showing them.
-      showBadgesStremioWatchlist: Array.isArray(parsed) || parsed.showBadgesStremioWatchlist !== false,
-      // BetterPosters (btttr.cc) replacement artwork -- see
-      // applyBetterPostersToMetas (05_catalog-core.js). Opt-in, so it
-      // defaults to false and every install predating it is untouched. The
-      // style keys below only matter when betterPosters itself is on, and
-      // each one defaults to btttr.cc's own default for that option.
-      betterPosters: !!(!Array.isArray(parsed) && parsed.betterPosters),
-      betterPostersGenre: Array.isArray(parsed) || parsed.betterPostersGenre !== false,
-      betterPostersRating: Array.isArray(parsed) || parsed.betterPostersRating !== false,
-      betterPostersQuality: !!(!Array.isArray(parsed) && parsed.betterPostersQuality),
-      betterPostersAge: !!(!Array.isArray(parsed) && parsed.betterPostersAge),
-      betterPostersTrendTags: Array.isArray(parsed) || parsed.betterPostersTrendTags !== false,
-      betterPostersLang: (!Array.isArray(parsed) && parsed.betterPostersLang) || "en",
-      betterPostersRatingSource: (!Array.isArray(parsed) && parsed.betterPostersRatingSource) || "avg",
     };
   } catch {
-    return empty;
+    return { entries: [], ...readInstallConfigFields({}), ...noAccount };
   }
 }
 
@@ -1693,6 +1663,16 @@ async function fetchWithPerUserCacheUncoalesced({
 // connection open.
 const OUTBOUND_TIMEOUT_MS = 10000;
 
+// The ceiling for an outbound call that sets no timeout of its own (BE-H10,
+// task P2-6). Most provider calls had none, so a provider that stopped
+// answering held the request -- or a cron sweep -- until the platform gave up.
+// The fetch guard below applies it to every such call. It is deliberately
+// generous: it exists to end a hang, not to pace anything, and some calls are
+// legitimately slow (a large Trakt sync upload, a long MDBList list). The
+// calls a Stremio app is actively waiting on already use the tighter
+// OUTBOUND_TIMEOUT_MS through fetchWithTimeout.
+const OUTBOUND_DEFAULT_TIMEOUT_MS = 30000;
+
 // --- Outbound fetch guard: never edge-cache a request carrying a credential --
 //
 // Every `fetch(` in this Worker resolves to this module-scope function rather
@@ -1715,8 +1695,24 @@ const OUTBOUND_TIMEOUT_MS = 10000;
 // with no Authorization header is untouched. Credentials carried in the URL
 // itself (MDBList's apikey, TMDB's session_id) make the URL unique per user, so
 // they cannot be served across users and are left alone.
+//
+// It also gives every call a timeout when the caller did not set one: see
+// OUTBOUND_DEFAULT_TIMEOUT_MS, and withDefaultTimeout below. Together with
+// the log redaction at the top of 00_constants.js, this is the whole of the
+// planned `providerFetch` (task P2-6): one place every outbound call goes
+// through, instead of a wrapper each call site has to remember to use.
 function fetch(input, init) {
-  return globalThis.fetch(input, withoutEdgeCacheForCredentials(input, init));
+  return globalThis.fetch(input, withDefaultTimeout(input, withoutEdgeCacheForCredentials(input, init)));
+}
+
+// A caller's own signal always wins. A Request object is left alone too: it
+// always carries a signal, so there is no telling whether that one was meant.
+function withDefaultTimeout(input, init) {
+  if (init && init.signal) return init;
+  if (input && typeof input === "object" && typeof input.url === "string") return init;
+  const signal = timeoutSignal(OUTBOUND_DEFAULT_TIMEOUT_MS);
+  if (!signal) return init;
+  return { ...(init || {}), signal };
 }
 
 function headersCarryAuthorization(headers) {

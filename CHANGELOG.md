@@ -65,6 +65,19 @@ Lists published anonymously before accounts existed (`/lists/user/<slug>`) **sti
 
 ### 🔒 Security fixes
 
+- **Logs can't carry a secret.** Every log line the Worker writes now goes through `redactForLog`. It masks:
+  - key, token and session parameters in URLs (`api_key`, `access_token`, `token`, `key`, `code`, …);
+  - `Bearer` tokens;
+  - Creator Keys;
+  - credential-named fields in logged objects.
+
+  A module-level `console` at the top of `00_constants.js` does this, the same way the `fetch` guard works, so all ~120 existing log calls and any future ones are covered. A check on 2026-09-27 found no current log line writing a secret; this keeps it that way.
+- **Every outbound call now has a timeout.** Most provider calls had none, so a provider that stopped answering held the request, or a cron sweep, until the platform gave up. The `fetch` guard in `02_` now gives any call without its own timeout a 30-second ceiling. The calls Stremio waits on keep their own 10 seconds. A test makes an upstream hang and checks the Worker still answers.
+- **API responses are no longer cacheable unless the route says so.** `json()` used to mark every success as cacheable for an hour, so personal routes had to remember to opt out, and `/api/resolve` once didn't. Success is now `no-store` by default.
+  - Public lookups (title and person search, show seasons and episodes, list search, the channel directory, published-list search) opt in with `jsonCacheable`.
+  - The Stremio routes opt in through `jsonPublic`.
+  - A probe of every route, plus a full test run with `json()` instrumented, confirmed the same public routes are still cached as before.
+
 - **An install link no longer exposes the provider keys and tokens inside it.** Install links get pasted into apps and shared.
   - `/<id>/configure` used to write the link's TMDB, MDBList and Trakt keys and tokens into the page.
   - `/api/resolve`, which "Import from link" uses, returned the MDBList and Trakt ones. Importing someone else's link also connected you to *their* Trakt and MDBList accounts.
@@ -106,7 +119,21 @@ With the `ANALYTICS` binding, every request writes one Analytics Engine data poi
 - About 17 "the Worker owner needs to set X" messages now read "X is temporarily unavailable".
 - The in-app guide's Self-Hosting section was removed, and the page title no longer says "Self-Hosted".
 
+### ⚡ Catalog rows stop reading watch history they don't use
+
+Every Stremio row request for an install with a personal shelf used to read and parse the owner's whole tracking record, which can be megabytes, even for a Trending row. A "Recommended" row read it three times.
+- `resolveConfig` now reads the tracking record only when asked. Only the channel meta route and `/api/resolve` ask.
+- The curated and auto-tracked rows use the owner the catalog route already passes, instead of resolving the install config a second time.
+- Tests count the reads: none for a chart row, one for a curated row, and the install config read once per request.
+
 ### 🐛 Smaller fixes
+
+- **Opening Configure no longer switches Better Posters off.** The configure page was never told an install's Better Posters settings, so it showed them off, and pressing Update saved them off. All install-link settings now come from one list, `INSTALL_CONFIG_FIELDS` in `00_constants.js`. It is used by `/api/save`, `resolveConfig`, `decodeConfig`, the configure page, and the builder's save body and signed-out filter; each of those used to keep its own hand-written copy, and the copies had drifted:
+  - Configure left out Better Posters;
+  - `simklUsername` was stored but never read back;
+  - old base64 links read only one of the five badge toggles.
+
+  A test round-trips every field in the list, so a field added later is covered automatically. Another checks the builder sends every one.
 
 - **Faster TMDB-to-IMDb lookups.** `/api/imdb-ids` now resolves up to 100 posters per call (was 24), 8 at a time, so a whole See All page is one request.
 - **No sleeping inside the Trakt PIN request.** When Trakt rate-limits `/api/trakt/device/code`, the Worker now hands the 429 and its `Retry-After` back instead of sleeping. The page waits it out and retries once on its own. The OAuth callback keeps its single 1.5 s pause, because it is a browser redirect with no page to retry it.

@@ -2119,6 +2119,11 @@ function copyLink(url) {
 // verifies it and never stores it in the link). Signed out, the save carries
 // no provider keys, tokens or playback tracking: a signed-out install is the
 // site's public lists only, and the server would not store them anyway.
+// The server's install-config schema (INSTALL_CONFIG_FIELDS, 00_constants.js),
+// written into the page when it is rendered: each field's name, and whether it
+// belongs to a connected account.
+const INSTALL_CONFIG_FIELD_LIST = ${jsonForScript(INSTALL_CONFIG_FIELDS.map((f) => ({ name: f.name, account: f.kind === 'account' })))};
+
 function withAccountProof(body) {
   const out = Object.assign({}, body);
   if (isSignedIn()) {
@@ -2126,10 +2131,22 @@ function withAccountProof(body) {
     try { out.creatorKey = localStorage.getItem('myListAddon:creatorKey') || ''; } catch (e) { out.creatorKey = ''; }
     return out;
   }
-  ['tmdbKey', 'mdblistKey', 'mdblistAccessToken', 'traktKey', 'traktUsername', 'traktAccessToken',
-    'simklKey', 'simklAccessToken', 'simklUsername', 'track', 'trackCreatorName', 'trackCreatorKey']
-    .forEach((k) => { delete out[k]; });
+  INSTALL_CONFIG_FIELD_LIST.forEach((f) => { if (f.account) delete out[f.name]; });
+  ['track', 'trackCreatorName', 'trackCreatorKey'].forEach((k) => { delete out[k]; });
   return out;
+}
+
+// What the builder sends to /api/save: the rows, the account-proof fields, and
+// every install setting the schema names, straight from collectKeys.
+function installSaveBody(entries, keys) {
+  const body = {
+    entries: entries,
+    track: keys.track,
+    trackCreatorName: keys.trackCreatorName,
+    trackCreatorKey: keys.trackCreatorKey,
+  };
+  INSTALL_CONFIG_FIELD_LIST.forEach((f) => { body[f.name] = keys[f.name]; });
+  return body;
 }
 
 // The rows a signed-out install link cannot carry, named, with a way in.
@@ -2172,46 +2189,7 @@ async function generate() {
     const res = await fetch(ORIGIN + '/api/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(withAccountProof({
-        entries,
-        tmdbKey: keys.tmdbKey,
-        mdblistKey: keys.mdblistKey,
-        mdblistAccessToken: keys.mdblistAccessToken,
-        traktKey: keys.traktKey,
-        traktUsername: keys.traktUsername,
-        traktAccessToken: keys.traktAccessToken,
-        simklKey: keys.simklKey,
-        simklAccessToken: keys.simklAccessToken,
-        simklUsername: keys.simklUsername,
-        track: keys.track,
-        trackCreatorName: keys.trackCreatorName,
-        trackCreatorKey: keys.trackCreatorKey,
-        shuffleShelves: keys.shuffleShelves,
-        shuffleItems: keys.shuffleItems,
-        region: keys.region,
-        hideNonDigitalReleases: keys.hideNonDigitalReleases,
-        adultContentFilter: keys.adultContentFilter,
-        dedupeAcrossLists: keys.dedupeAcrossLists,
-        // Must be listed explicitly: this body is an allowlist, and /api/save
-        // is the link Stremio/Nuvio actually install. Left out, the setting
-        // never leaves the browser and the feature looks dead in the apps
-        // while the website shows it working.
-        // Same allowlist problem as betterPosters below: left out, switching
-        // any of these off never leaves the browser.
-        showBadgesStremio: keys.showBadgesStremio,
-        showBadgesStremioAiringNext: keys.showBadgesStremioAiringNext,
-        showBadgesStremioContinueWatching: keys.showBadgesStremioContinueWatching,
-        showBadgesStremioWatchlist: keys.showBadgesStremioWatchlist,
-        showBadgesStremioCatalogs: keys.showBadgesStremioCatalogs,
-        betterPosters: keys.betterPosters,
-        betterPostersGenre: keys.betterPostersGenre,
-        betterPostersRating: keys.betterPostersRating,
-        betterPostersTrendTags: keys.betterPostersTrendTags,
-        betterPostersQuality: keys.betterPostersQuality,
-        betterPostersAge: keys.betterPostersAge,
-        betterPostersLang: keys.betterPostersLang,
-        betterPostersRatingSource: keys.betterPostersRatingSource,
-      })),
+      body: JSON.stringify(withAccountProof(installSaveBody(entries, keys))),
     });
     const data = await res.json();
     if (data.ok) {

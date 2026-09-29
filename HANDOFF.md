@@ -1,6 +1,6 @@
 # Live AI Agent Handoff Status
 
-> **Notice to Incoming AI**: Read this file first! It records the current progress, modified files, and what needs to be done next. Do not start over or undo existing work.
+> **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
 > **Release in progress (2026-09-29): read `docs/RELEASES.md` first.**
 > - The owner is taking the new version live one phase at a time, straight to mylistsaddon.com.
@@ -12,74 +12,129 @@
 
 ## Current Status
 - **Last Updated**: 2026-09-27
-- **Last Active AI**: Claude Code (Claude Opus 5.5)
-- **Active Task**: The next-version plan. Phase 1 code is finished, and the plan has been rewritten to keep the split files and `build.py` (no npm build).
-- **Task State**: All work committed. All tests passing (1,256 passed, 0 failed, 1 skipped: the opt-in network test).
-- **Git State**: Clean working tree on `main`. **Every commit after `88a39bd` ("Initial commit") is local only.** Check `git status -sb` for the count. Push to GitHub only when the owner says so.
+- **Last Active AI**: Antigravity (Gemini 3.8 Flash)
+- **Active Task**: None in progress. Phase 1 (code) and Phase 2 (P2-1 to P2-10) are finished and verified. Awaiting owner instructions on Phase 3a or deployment.
+- **Task State**: All tests passing: 1,277 passed, 0 failed, 1 skipped. Build and sync checks verified.
+- **Git State**: Clean working tree on `main`, in sync with `origin/main` (`https://github.com/Br0ck25/My-Lists-Addon`). Commit and push only when the owner asks.
+- **The owner is not a programmer.** Explain in plain words, do the git work for them, and ask before anything that changes stored user data or needs a dashboard change.
 
 ---
 
 ## Read Before Changing Anything
-- `docs/DECISIONS.md`: the owner's decisions D-1 to D-12. Key ones:
-  - D-6: likes and shares need an account.
-  - D-8: signed out, an install link carries the site's public lists only.
-  - D-10: install links never expire.
-  - D-11: no npm build, no `src/`, no frameworks.
-  - D-12: no email recovery.
-- `NEXT_VERSION_TASKS.md`: the task checklist with a status on each item. Phase 2 was rewritten on 2026-09-27 around the numbered files.
-- `docs/OPERATIONS.md`: deploy checklist, bindings, migrations, backups.
+- `AGENTS.md`: the rules for every assistant (split files only, no npm or frameworks, verify after every change).
+- `docs/DECISIONS.md`: the owner's decisions D-1 to D-12. The ones that shape everyday work:
+  - **D-3 / D-11:**
+    - the code stays in the numbered split files;
+    - `python build.py` produces `worker_entry_combined.js`, which the owner pastes into the Cloudflare dashboard;
+    - no npm build, no `src/` folder, no frameworks.
+  - **D-6:** liking, sharing and publishing need an account.
+  - **D-8:**
+    - signed out, a visitor can add only the site's public lists (plus storylines and Explore Channels listings) and generate an install link;
+    - custom lists, channels, personal shelves and connected accounts need an account.
+  - **D-9:** likes cast signed-out in the past keep counting.
+  - **D-10:** install links never expire.
+  - **D-12:** no email recovery.
+- `NEXT_VERSION_TASKS.md`: the task checklist, with a status on every item.
+- `docs/OPERATIONS.md`: deploy checklist, bindings, secrets, migrations, backups.
+- `CHANGELOG.md`: the `[Unreleased]` section describes everything done since the last deploy.
 
 ---
 
-## Recent File Changes (this session, all committed)
-- **`25_api-catalog-routes.js`**:
-  - `/<id>/configure` and `/api/resolve` no longer return an install link's provider keys or tokens;
-  - `/api/imdb-ids` does up to 100 lookups, 8 at a time;
-  - the Trakt device-code route hands a 429 back instead of sleeping.
-- **`07_source-fetchers-tmdb-simkl.js`**: the leftover `meter` / Airing Next budget-pool code is removed.
-- **`03_admin.js`**: `stats` prefix reads use a key range (`statKindRange`) instead of `LIKE`.
-- **`04_config-resolution.js`, `16_client-row-core.js`**: the D-8 sign-in rule. Storyline and Explore Channels rows are public. The page and the server share `PERSONAL_SHELF_URL_PREFIXES`.
-- **`17_`, `19_`, `20_`, `24_` client files**:
-  - sign-in gates;
-  - the Trakt PIN retry;
-  - storyline and Explore adds become catalog rows (no My Channels copy);
-  - "Import from link" no longer copies tokens.
-- **`00_constants.js`**: `IMDB_ID_LOOKUP_MAX` is 100 and `IMDB_ID_LOOKUP_CONCURRENCY` is 8; `TMDB_ITEM_DETAILS_MAX_FETCHES` is removed.
-- **`.github/workflows/d1-backup.yml`** (new): a daily encrypted D1 export. It stays off until its 4 repository secrets are set.
-- **`tests/`**: a route-by-route secret-leak test (P1-T2), plus tests for everything above.
-- **Plan docs**: `NEXT_VERSION_*.md`, `MIGRATION_PLAN.md`, the audits and `docs/` now follow D-11.
+## Safeguards Already in the Code (do not remove or bypass)
+These are deliberate. Several are "one place" mechanisms that cover the whole Worker, so they are easy to break by accident.
+
+| Where | What it does |
+|---|---|
+| Top of `00_constants.js` | A module-level `console` that passes every log line through `redactForLog` (masks keys, tokens, Creator Keys). **Never declare another top-level `console`.** |
+| `02_http-and-creator-utils.js`, `function fetch` | A module-level `fetch` guard. It strips edge caching from any request carrying `Authorization` (a real cross-user leak before), and gives every call without its own timeout a 30 s ceiling. **Never declare another top-level `fetch`.** |
+| `02_`, `json()` / `jsonCacheable()` / `jsonPublic()` | JSON responses default to `no-store`. Public data opts in to caching with `jsonCacheable`; the Stremio routes do through `jsonPublic`. A new route that returns something personal must use plain `json()`. |
+| `00_`, `INSTALL_CONFIG_FIELDS` | One definition of every install-link setting, used by `/api/save`, `resolveConfig`, `decodeConfig`, the configure page and the builder's save body. **Add a new setting here**, never by hand in one of those places. |
+| `04_`, `entryAccountRequirement`; `16_`, `rowNeedsAccount` | The D-8 rule, on the server and in the page. A test (`the builder page and the server draw the line in the same place`) keeps them in agreement, so change both. |
+| `00_`, `REQUIRED_SCHEMA_VERSION`; `02_`, `schemaWriteGate` | API writes are refused (503 "being updated") while the database is behind the code. A new migration must: <br>1. end with an `INSERT` into `schema_migrations`; <br>2. be added to `schema.sql` and `D1_SCHEMA_MANIFEST`; <br>3. bump `REQUIRED_SCHEMA_VERSION` if the code depends on it. <br>See `docs/OPERATIONS.md` §4. |
+| `04_`, `resolveConfig(config, env, { withTracking })` | Reads a person's tracking record only when asked (the channel meta route and `/api/resolve`). Catalog rows must not ask. |
+| `/<id>/configure` and `/api/resolve` | Never return provider keys or tokens. The `P1-T2` test probes every route for this. |
 
 ---
 
-## Verification Summary
-- `python build.py`: PASS
-- `python check_sync.py`: PASS
-- `node --check worker_entry_combined.js`: PASS
-- `node scope_check.mjs worker|page`: PASS (every identifier resolves)
-- `render_check.js` + `html_checks.py` (builder, admin, hostile, service worker): PASS
-- `python gen_map.py`: map current
-- `node --test tests/*.test.mjs`: 1,256 passed, 0 failed, 1 skipped
+## Traps in This Codebase
+1. **Never edit `worker_entry_combined.js` by hand.** Edit the split files and run `python build.py`.
+2. **Files `09_` to `24_` are inside a template literal** (the web page is rendered as one big string):
+   - a backslash or `${` in client code must be escaped;
+   - prefer `startsWith` / `split` over regular expressions;
+   - `\n` in client code must be written `\\n`.
+3. **All numbered files share one scope.**
+   - Top-level names must be unique across files.
+   - New server-only code goes in a new numbered file **after `26_`** (for example `27_...`), never between `09_` and `24_`.
+4. **Shell heredocs in this environment mangle `\\` sequences.** Write patch scripts to a file and run them, or use the file-editing tool.
+5. **The test D1** (`tests/harness.mjs`, real SQLite) enforces D1's limits: 100 bound parameters, 2 MB per row, 100,000-byte statements. A query that trips these would fail in production too.
+6. The preview harness (`.claude/launch.json` → `mylists-harness`, port 8787) loads the built Worker once at startup. **Restart it after every rebuild.**
+
+---
+
+## Verification (run after every change, and before handing off)
+```bash
+python build.py
+python check_sync.py
+node --check worker_entry_combined.js
+python gen_map.py
+node --test tests/*.test.mjs
+```
+For the scope check (catches names that resolve to nothing):
+```bash
+npm install --no-save acorn@8.14.0 eslint-scope@8.2.0
+node scope_check.mjs worker worker_entry_combined.js
+```
+Then delete `node_modules`.
+
+Last run (2026-09-27): all of the above pass, including the render and HTML checks (builder, admin, hostile input, service worker).
+
+---
+
+## What Was Done (all committed and pushed)
+- **Phase 1:**
+  - hotfixes;
+  - Free-plan code removed;
+  - the D-8 sign-in rules;
+  - the migration ledger and write gate;
+  - Analytics Engine metrics;
+  - no secrets from install links;
+  - the daily encrypted D1 backup workflow (`.github/workflows/d1-backup.yml`).
+- **Phase 2:**
+  - log redaction;
+  - `no-store` by default;
+  - a timeout on every outbound call;
+  - one install-config schema, which fixed Configure → Update switching Better Posters off;
+  - catalog rows no longer read watch history they don't use;
+  - `stats` key-range queries.
+
+  The plan was rewritten around the split files (D-11).
+- **Tests:** each fix has a test, and each test was checked to fail with the fix removed.
 
 ---
 
 ## Owner Actions Still Open (not code)
-1. Deploy:
-   - back up D1;
-   - run `migrations/0014_add_schema_migrations.sql` in the D1 console;
-   - add the `ANALYTICS` Analytics Engine binding (dataset `mylists_events`);
-   - paste `worker_entry_combined.js` and deploy;
-   - delete the retired `*_SUBREQUEST_BUDGET` variables.
-2. To turn on backups, add these GitHub secrets: `CLOUDFLARE_API_TOKEN` (D1 Read), `CLOUDFLARE_ACCOUNT_ID`, `D1_DATABASE_ID` and `BACKUP_PASSPHRASE`.
-3. Decide whether the README's source links should point to `github.com/Br0ck25/My-Lists` (as now) or `github.com/Br0ck25/My-Lists-Addon`.
+1. **Deploy what is on `main`:**
+   1. back up D1;
+   2. run `migrations/0014_add_schema_migrations.sql` in the D1 console;
+   3. add the `ANALYTICS` Analytics Engine binding (dataset `mylists_events`);
+   4. paste `worker_entry_combined.js` and deploy;
+   5. delete the retired variables `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET` and `CRON_SUBREQUEST_BUDGET`.
+
+   Full steps are in `docs/OPERATIONS.md` §1, and `CHANGELOG.md` has them at the top of `[Unreleased]`.
+2. **Turn on backups:** add the GitHub repository secrets `CLOUDFLARE_API_TOKEN` (D1 Read), `CLOUDFLARE_ACCOUNT_ID`, `D1_DATABASE_ID` and `BACKUP_PASSPHRASE`. Keep a copy of the passphrase outside GitHub.
 
 ---
 
 ## Next Steps for Incoming AI
-1. **Phase 2, in `NEXT_VERSION_TASKS.md`**, suggested order: P2-7 (log redaction), P2-3 (entry-point middleware, JSON `no-store` by default), P2-6 (`providerFetch` in a new `27_provider-http.js`), P2-8 (one install-config schema), P2-9 (pass the resolved config through the catalog pipeline).
-2. Follow D-11 strictly:
-   - edit only the split files;
-   - put new server-only code in new numbered files after `26_` (never between `09_` and `24_`, which are inside the page's template literal);
-   - keep top-level names unique across files;
-   - write client code that needs no backslashes where possible.
-3. After every change, run `python build.py`, `python check_sync.py`, `node --check worker_entry_combined.js`, `python gen_map.py` and `node --test tests/*.test.mjs`. For the scope check: `npm install --no-save acorn@8.14.0 eslint-scope@8.2.0`, then `node scope_check.mjs worker worker_entry_combined.js`, then delete `node_modules`.
-4. Shell heredocs in this environment can mangle `\\` sequences. Write patch scripts to a file rather than piping them through a heredoc.
+1. **Do not start Phase 3a without the owner's explicit go-ahead.**
+   - **What it is:** `NEXT_VERSION_TASKS.md` Phase 3a, with the reasoning in `MIGRATION_PLAN.md`:
+     - login sessions with a cookie;
+     - one permanent install link per install;
+     - provider tokens moved into encrypted account storage.
+   - **What it needs from the owner:**
+     - two new Cloudflare secrets (`TOKEN_ENCRYPTION_KEY`, `LOOKUP_PEPPER`);
+     - a new D1 migration (`0015`) applied before the code that uses it;
+     - explicit approval before existing install links are rewritten to remove tokens, because that changes stored user data. Do it gradually, and back up first.
+   - It was proposed to the owner on 2026-09-27; no answer yet.
+2. **If the owner asks for something else first:** keep changes small and targeted, add a test for each fix, update `CHANGELOG.md` under `[Unreleased]`, and update this file.
+3. **When finishing:** run the verification above, commit with a clear message, and update this file. Push only if the owner asks.
