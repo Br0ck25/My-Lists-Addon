@@ -1408,7 +1408,7 @@ function removeWatchedItemFromWatchlist(id, showId, extraIds) {
     if (!s) return;
     targetIds.add(s);
     if (s.startsWith('tmdb:')) targetIds.add(s.slice(5));
-    else if (/^\d+$/.test(s)) targetIds.add('tmdb:' + s);
+    else if (/^\\d+$/.test(s)) targetIds.add('tmdb:' + s);
   };
   addId(id);
   if (Array.isArray(extraIds)) extraIds.forEach(addId);
@@ -1444,11 +1444,11 @@ function removeWatchedItemFromWatchlist(id, showId, extraIds) {
         if (itShowId && fullyWatchedShowIds.has(itShowId)) return false;
         if (itTmdbId && fullyWatchedShowIds.has(itTmdbId)) return false;
         if (itId && itId.startsWith('tmdb:') && fullyWatchedShowIds.has(itId.slice(5))) return false;
-        if (itId && /^\d+$/.test(itId) && fullyWatchedShowIds.has('tmdb:' + itId)) return false;
+        if (itId && /^\\d+$/.test(itId) && fullyWatchedShowIds.has('tmdb:' + itId)) return false;
         return true;
       }
 
-      if (itId && (targetIds.has(itId) || (/^\d+$/.test(itId) && targetIds.has('tmdb:' + itId)) || (itId.startsWith('tmdb:') && targetIds.has(itId.slice(5))))) return false;
+      if (itId && (targetIds.has(itId) || (/^\\d+$/.test(itId) && targetIds.has('tmdb:' + itId)) || (itId.startsWith('tmdb:') && targetIds.has(itId.slice(5))))) return false;
       if (itImdbId && targetIds.has(itImdbId)) return false;
       if (itTmdbId && (targetIds.has(itTmdbId) || targetIds.has('tmdb:' + itTmdbId))) return false;
       return true;
@@ -1517,11 +1517,11 @@ function removeWatchedItemFromWatchlist(id, showId, extraIds) {
           if (itShowId && fullyWatchedShowIds.has(itShowId)) return false;
           if (itTmdbId && fullyWatchedShowIds.has(itTmdbId)) return false;
           if (itId && itId.startsWith('tmdb:') && fullyWatchedShowIds.has(itId.slice(5))) return false;
-          if (itId && /^\d+$/.test(itId) && fullyWatchedShowIds.has('tmdb:' + itId)) return false;
+          if (itId && /^\\d+$/.test(itId) && fullyWatchedShowIds.has('tmdb:' + itId)) return false;
           return true;
         }
 
-        if (itId && (targetIds.has(itId) || (/^\d+$/.test(itId) && targetIds.has('tmdb:' + itId)) || (itId.startsWith('tmdb:') && targetIds.has(itId.slice(5))))) return false;
+        if (itId && (targetIds.has(itId) || (/^\\d+$/.test(itId) && targetIds.has('tmdb:' + itId)) || (itId.startsWith('tmdb:') && targetIds.has(itId.slice(5))))) return false;
         if (itImdbId && targetIds.has(itImdbId)) return false;
         if (itTmdbId && (targetIds.has(itTmdbId) || targetIds.has('tmdb:' + itTmdbId))) return false;
         return true;
@@ -1566,7 +1566,7 @@ function cleanWatchedFromWatchlists() {
       const s = String(w.id);
       watchedIds.add(s);
       if (s.startsWith('tmdb:')) watchedIds.add(s.slice(5));
-      else if (/^\d+$/.test(s)) watchedIds.add('tmdb:' + s);
+      else if (/^\\d+$/.test(s)) watchedIds.add('tmdb:' + s);
     }
     if (w.imdbId) watchedIds.add(String(w.imdbId));
     if (w.tmdbId) {
@@ -1602,11 +1602,11 @@ function cleanWatchedFromWatchlists() {
         if (itImdbId && fullyWatchedShowIds.has(itImdbId)) return false;
         if (itTmdbId && fullyWatchedShowIds.has(itTmdbId)) return false;
         if (itId && itId.startsWith('tmdb:') && fullyWatchedShowIds.has(itId.slice(5))) return false;
-        if (itId && /^\d+$/.test(itId) && fullyWatchedShowIds.has('tmdb:' + itId)) return false;
+        if (itId && /^\\d+$/.test(itId) && fullyWatchedShowIds.has('tmdb:' + itId)) return false;
         return true;
       } else {
         // Movies: remove as soon as they appear in Watch History.
-        if (itId && (watchedIds.has(itId) || (/^\d+$/.test(itId) && watchedIds.has('tmdb:' + itId)) || (itId.startsWith('tmdb:') && watchedIds.has(itId.slice(5))))) return false;
+        if (itId && (watchedIds.has(itId) || (/^\\d+$/.test(itId) && watchedIds.has('tmdb:' + itId)) || (itId.startsWith('tmdb:') && watchedIds.has(itId.slice(5))))) return false;
         if (itImdbId && watchedIds.has(itImdbId)) return false;
         if (itTmdbId && (watchedIds.has(itTmdbId) || watchedIds.has('tmdb:' + itTmdbId))) return false;
         return true;

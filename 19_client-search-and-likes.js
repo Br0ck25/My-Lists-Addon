@@ -184,7 +184,7 @@ function escapeAttr(s) { return escapeHtml(s); }
 // A plain data-* or title attribute still wants escapeAttr.
 
 function escapeRegex(s) {
-  return String(s).replace(/[.*+?^\x24\x7B\x7D()|[\]\\]/g, '\\$&');
+  return String(s).replace(/[.*+?^\\x24\\x7B\\x7D()|[\\]\\\\]/g, '\\\\$&');
 }
 
 function isAdultContentFilterEnabled() {
@@ -650,7 +650,7 @@ function scoreListSearchMatch(list, rawQuery, intent) {
   }
 
   // Check if anything matched title, user, source, or url
-  const tokens = targetTerm.split(/\s+/).filter(Boolean);
+  const tokens = targetTerm.split(/\\s+/).filter(Boolean);
   let matchedTokensInName = 0;
   let matchedTokensInUser = 0;
   for (const token of tokens) {
@@ -698,7 +698,7 @@ function scoreListSearchMatch(list, rawQuery, intent) {
 
   // 4. Word boundary matches
   try {
-    const rx = new RegExp('\\b' + escapeRegex(targetTerm) + '\\b', 'i');
+    const rx = new RegExp('\\\\b' + escapeRegex(targetTerm) + '\\\\b', 'i');
     if (rx.test(listName)) score += 400;
     if (rx.test(listUser)) score += 400;
   } catch (e) {}
@@ -1917,7 +1917,7 @@ async function loadCuratedListsFeed(forceRefresh) {
         const title = (it.title || it.name || it.showTitle || it.showName || '').trim();
         if (title) {
           historyTitles.push(title.toLowerCase());
-          title.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).forEach(function(w) {
+          title.toLowerCase().replace(/[^a-z0-9\\s]/g, ' ').split(/\\s+/).forEach(function(w) {
             if (w.length > 3 && !['episode', 'season', 'movie', 'series', 'show', 'part'].includes(w)) {
               watchHistoryKeywords.add(w);
             }
@@ -1931,7 +1931,7 @@ async function loadCuratedListsFeed(forceRefresh) {
         likedUrls.forEach(function(u) {
           const parts = u.split('/').filter(Boolean);
           const last = parts[parts.length - 1] ? parts[parts.length - 1].replace(/[-_]/g, ' ').toLowerCase() : '';
-          last.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).forEach(function(w) {
+          last.replace(/[^a-z0-9\\s]/g, ' ').split(/\\s+/).forEach(function(w) {
             if (w.length > 3 && !['list', 'lists', 'user', 'collection'].includes(w)) {
               likedKeywords.add(w);
             }
@@ -2306,7 +2306,7 @@ function isEpisodeAired(ep) {
   if (!ep) return false;
   const dateStr = (typeof ep === 'string') ? ep : (ep.air_date || ep.airDate || '');
   if (!dateStr) return false;
-  const parts = String(dateStr).split(/[-T\s]/);
+  const parts = String(dateStr).split(/[-T\\s]/);
   if (parts.length < 3) return false;
   const year = parseInt(parts[0], 10);
   const month = parseInt(parts[1], 10) - 1;
@@ -2652,7 +2652,7 @@ window.watchItemAirDateBadgeHtml = watchItemAirDateBadgeHtml;
 
 function formatAirDateBadge(airDateStr) {
   if (!airDateStr) return '';
-  const parts = String(airDateStr).split(/[-T\s]/);
+  const parts = String(airDateStr).split(/[-T\\s]/);
   if (parts.length < 3) return '';
   const year = parseInt(parts[0], 10);
   const month = parseInt(parts[1], 10) - 1;
@@ -3165,7 +3165,7 @@ function renderItemStorylinesWatchOrder(d, type) {
 
       const clickHandler = (!isCurrent && partId) ?
         ' data-act="openItemDetailsModal" data-act-stop data-act-args="' + appActArgs([partId, partType]) + '"' :
-        (isCurrent ? ' data-act="appActScrollToTop" data-act-stop"' : '');
+        (isCurrent ? ' data-act="appActScrollToTop" data-act-stop' : '');
 
       // Skipped on the card for the title already open in this modal -- its
       // rating is already shown up in the main info block, so repeating it
@@ -3741,7 +3741,7 @@ function openSelectListModal(id, type, title, poster) {
         }
         const nameInput = row.querySelector('.name');
         let listName = nameInput ? nameInput.value : (payload.listName || 'Unnamed List');
-        if (/^watchlist\s*\((movies|shows|series)\)$/i.test(String(listName).trim())) {
+        if (/^watchlist\\s*\\((movies|shows|series)\\)$/i.test(String(listName).trim())) {
           listName = 'Watchlist';
         }
         customLists.push({
@@ -3826,7 +3826,7 @@ function openSelectListModal(id, type, title, poster) {
       } catch(e) {}
       
       let displayName = list.name || 'Custom List';
-      if (/^watchlist(\s*\((movies|shows|series)\))?$/i.test(String(displayName).trim())) {
+      if (/^watchlist(\\s*\\((movies|shows|series)\\))?$/i.test(String(displayName).trim())) {
         displayName = 'Watchlist';
       }
       
@@ -4447,7 +4447,7 @@ async function syncCustomListPayload(payload, name, applyEdit) {
         // the other device actually saved.
         const target = {
           slug: payload.creatorSlug,
-          name: name.replace(/\s*\((?:Movies|Shows)\)$/i, ''),
+          name: name.replace(/\\s*\\((?:Movies|Shows)\\)$/i, ''),
           type: finalType,
           items: combinedItems,
           visibility: payload.visibility || (creatorListMeta ? creatorListMeta.visibility : 'private'),
@@ -4490,7 +4490,7 @@ async function syncCustomListPayload(payload, name, applyEdit) {
       } else {
         map[payload.localSlug] = {
           slug: payload.localSlug,
-          name: (name || payload.localSlug).replace(/\s*\((?:Movies|Shows)\)$/i, ''),
+          name: (name || payload.localSlug).replace(/\\s*\\((?:Movies|Shows)\\)$/i, ''),
           type: finalType,
           isWatchlist: payload.localSlug === 'watchlist',
           items: combinedItems,

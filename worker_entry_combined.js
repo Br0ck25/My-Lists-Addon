@@ -4760,10 +4760,14 @@ function appShellSwitchResponse(url) {
   const clean = new URL(url.href);
   clean.searchParams.delete("ff_new_ui");
   const qs = clean.searchParams.toString();
+  // One leading slash, always. A path that starts with two (//evil.com/,
+  // which is also what /\evil.com parses to) is a protocol-relative address,
+  // and a browser follows it to that host: the switch was an open redirect.
+  const samePath = "/" + clean.pathname.replace(/^\/+/, "");
   return new Response(null, {
     status: 302,
     headers: {
-      Location: clean.pathname + (qs ? "?" + qs : "") + (clean.hash || ""),
+      Location: samePath + (qs ? "?" + qs : "") + (clean.hash || ""),
       "Set-Cookie": appShellCookieHeader(on),
       "Cache-Control": "no-store",
     },
@@ -26362,15 +26366,23 @@ const COMBINED_CHART_LISTS = [
 ];
 
 // Renders each source list as a single-quoted JS array literal (e.g.
-// ['a','b']) so it can sit inside an onclick="..." attribute -- which is
-// itself double-quoted -- without the two colliding.
+// ['a','b']) for the generated addAllCombinedCharts() body below, which is
+// code. Never for a data-act-args value: that is JSON, read with JSON.parse
+// and never evaluated, so this would arrive as a string (see
+// buildCombinedChartsHtml).
 function jsStringArrayLiteral(arr) {
   return "[" + arr.map((s) => "'" + String(s).replace(/'/g, "\\'") + "'").join(",") + "]";
 }
 
 function buildCombinedChartsHtml() {
   const rows = COMBINED_CHART_LISTS.map((p) => {
-    const movieUrlsJoined = p.movieUrls.join("\\n");
+    // These arguments are JSON (P6-8), not JavaScript. The inline handlers they
+    // replaced were code, so a "\\n" written here became a line break and an
+    // array literal became an array; as data the first arrives as a backslash
+    // and an n, and the second as a string -- addCombinedRow's urls.join threw
+    // and See All read one URL with backslashes in it. So: the arrays
+    // themselves, and a real line break.
+    const movieUrlsJoined = p.movieUrls.join("\n");
     return `
     <div class="discover-chart-card">
       <div class="discover-chart-header">
@@ -26381,8 +26393,8 @@ function buildCombinedChartsHtml() {
         <a href="javascript:void(0)" class="discover-chart-seeall" data-act="openListDetailsPage" data-act-args="${appActArgsServer([p.name, "movie", movieUrlsJoined])}">See All &rsaquo;</a>
       </div>
       <div class="discover-chart-btns">
-        <button type="button" class="lc-btn secondary" data-act="addCombinedRow" data-act-args="${appActArgsServer([p.name, jsStringArrayLiteral(p.movieUrls), "movie", "Combined Charts"])}">+ Movies</button>
-        <button type="button" class="lc-btn secondary" data-act="addCombinedRow" data-act-args="${appActArgsServer([p.name, jsStringArrayLiteral(p.showUrls), "series", "Combined Charts"])}">+ Shows</button>
+        <button type="button" class="lc-btn secondary" data-act="addCombinedRow" data-act-args="${appActArgsServer([p.name, p.movieUrls, "movie", "Combined Charts"])}">+ Movies</button>
+        <button type="button" class="lc-btn secondary" data-act="addCombinedRow" data-act-args="${appActArgsServer([p.name, p.showUrls, "series", "Combined Charts"])}">+ Shows</button>
       </div>
     </div>`;
   }).join("");
@@ -32814,7 +32826,21 @@ const PROVIDER_SECRET_KEYS = [
   'myListAddon:simklAccessToken'
 ];
 
-// This page's own copy, for as long as the tab is open.
+// The same eight under the names collectKeys (23_) and the account's sync
+// record give them, each with the provider whose Disconnect clears it.
+const PROVIDER_SECRET_FIELDS = {
+  tmdbKey: 'tmdb', tmdbSessionId: 'tmdb',
+  mdblistKey: 'mdblist', mdblistAccessToken: 'mdblist',
+  traktKey: 'trakt', traktAccessToken: 'trakt',
+  simklKey: 'simkl', simklAccessToken: 'simkl'
+};
+
+function isProviderDisconnected(provider) {
+  try { return localStorage.getItem('myListAddon:' + provider + 'Disconnected') === 'true'; } catch (e) { return false; }
+}
+
+// This page's own copy, for as long as the tab is open. Emptied by
+// clearLocalAccountData (22_): the storage sweep there cannot reach it.
 var _providerSecretsInMemory = {};
 
 function isProviderSecretKey(key) {
@@ -32987,7 +33013,18 @@ function appActRunOne(el, ev) {
     }
     return false;
   }
-  if (ev && el.hasAttribute('data-act-stop') && typeof ev.stopPropagation === 'function') ev.stopPropagation();
+  if (ev && el.hasAttribute('data-act-stop')) {
+    if (typeof ev.stopPropagation === 'function') ev.stopPropagation();
+    // An inline stopPropagation() kept the event from every listener above the
+    // control, the page's own document-level ones included -- the poster click
+    // that opens a title's details (19_) is one. This listener is on document
+    // too, registered before all of them (initDelegatedActions runs as 16_
+    // loads), so stopping propagation alone no longer reached them: a channel
+    // card's mini-poster opened the details and the poster listener closed
+    // them again at once. Stopping the rest of document's listeners here is
+    // what the inline call used to do.
+    if (typeof ev.stopImmediatePropagation === 'function') ev.stopImmediatePropagation();
+  }
   if (ev && el.hasAttribute('data-act-prevent') && typeof ev.preventDefault === 'function') ev.preventDefault();
   fn.apply(null, appActReadArgs(el, ev));
   const then = el.getAttribute('data-act-then');
@@ -40108,9 +40145,9 @@ async function onUnifiedImportFilesSelected(input) {
           if (!items.length) continue;
 
           // Categorization & chunk grouping logic for Trakt, Letterboxd, Simkl, and custom lists
-          const noExt = baseName.replace(/\.[^.]+$/, '');
+          const noExt = baseName.replace(/\\.[^.]+$/, '');
           // Strip chunk number suffixes e.g. -1, -2, _1, .part1, (1)
-          const cleanBase = noExt.replace(/[-_ ]\d+$/, '').replace(/\.part\d+$/, '');
+          const cleanBase = noExt.replace(/[-_ ]\\d+$/, '').replace(/\\.part\\d+$/, '');
           const lowerClean = cleanBase.toLowerCase();
 
           let catKey = lowerClean;
@@ -40241,7 +40278,7 @@ async function onUnifiedImportFilesSelected(input) {
           if (lowerName.includes('history') || lowerName.includes('watched') || lowerName.includes('diary')) {
             defaultTarget = 'watch-history';
           }
-          const defaultNewName = file.name.replace(/\.[^.]+$/, '');
+          const defaultNewName = file.name.replace(/\\.[^.]+$/, '');
           discovered.push({
             id: 'file_' + file.name,
             label: file.name,
@@ -40387,7 +40424,7 @@ function extractItemsFromFileContent(filename, text, source) {
     const lf = String.fromCharCode(10);
     const cleanText = text ? text.split(cr).join('') : '';
     const lines = cleanText.split(lf);
-    const ttRgx = new RegExp('\\b(tt\\d{7,10})\\b');
+    const ttRgx = new RegExp('\\\\b(tt\\\\d{7,10})\\\\b');
     const sepRgx = new RegExp('[,\\t]', 'g');
     lines.forEach(l => {
       const match = l.match(ttRgx);
@@ -40407,7 +40444,7 @@ function extractItemsFromFileContent(filename, text, source) {
     return items;
   }
 
-  const digitRgx = new RegExp('^\\d+$');
+  const digitRgx = new RegExp('^\\\\d+$');
   rows.forEach(r => {
     let imdbId = r.const || r.tconst || r.imdbid || r.imdb_id || '';
     if (imdbId && !imdbId.startsWith('tt') && digitRgx.test(imdbId)) {
@@ -40809,7 +40846,7 @@ function escapeAttr(s) { return escapeHtml(s); }
 // A plain data-* or title attribute still wants escapeAttr.
 
 function escapeRegex(s) {
-  return String(s).replace(/[.*+?^\x24\x7B\x7D()|[\]\\]/g, '\\$&');
+  return String(s).replace(/[.*+?^\\x24\\x7B\\x7D()|[\\]\\\\]/g, '\\\\$&');
 }
 
 function isAdultContentFilterEnabled() {
@@ -41275,7 +41312,7 @@ function scoreListSearchMatch(list, rawQuery, intent) {
   }
 
   // Check if anything matched title, user, source, or url
-  const tokens = targetTerm.split(/\s+/).filter(Boolean);
+  const tokens = targetTerm.split(/\\s+/).filter(Boolean);
   let matchedTokensInName = 0;
   let matchedTokensInUser = 0;
   for (const token of tokens) {
@@ -41323,7 +41360,7 @@ function scoreListSearchMatch(list, rawQuery, intent) {
 
   // 4. Word boundary matches
   try {
-    const rx = new RegExp('\\b' + escapeRegex(targetTerm) + '\\b', 'i');
+    const rx = new RegExp('\\\\b' + escapeRegex(targetTerm) + '\\\\b', 'i');
     if (rx.test(listName)) score += 400;
     if (rx.test(listUser)) score += 400;
   } catch (e) {}
@@ -42542,7 +42579,7 @@ async function loadCuratedListsFeed(forceRefresh) {
         const title = (it.title || it.name || it.showTitle || it.showName || '').trim();
         if (title) {
           historyTitles.push(title.toLowerCase());
-          title.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).forEach(function(w) {
+          title.toLowerCase().replace(/[^a-z0-9\\s]/g, ' ').split(/\\s+/).forEach(function(w) {
             if (w.length > 3 && !['episode', 'season', 'movie', 'series', 'show', 'part'].includes(w)) {
               watchHistoryKeywords.add(w);
             }
@@ -42556,7 +42593,7 @@ async function loadCuratedListsFeed(forceRefresh) {
         likedUrls.forEach(function(u) {
           const parts = u.split('/').filter(Boolean);
           const last = parts[parts.length - 1] ? parts[parts.length - 1].replace(/[-_]/g, ' ').toLowerCase() : '';
-          last.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).forEach(function(w) {
+          last.replace(/[^a-z0-9\\s]/g, ' ').split(/\\s+/).forEach(function(w) {
             if (w.length > 3 && !['list', 'lists', 'user', 'collection'].includes(w)) {
               likedKeywords.add(w);
             }
@@ -42931,7 +42968,7 @@ function isEpisodeAired(ep) {
   if (!ep) return false;
   const dateStr = (typeof ep === 'string') ? ep : (ep.air_date || ep.airDate || '');
   if (!dateStr) return false;
-  const parts = String(dateStr).split(/[-T\s]/);
+  const parts = String(dateStr).split(/[-T\\s]/);
   if (parts.length < 3) return false;
   const year = parseInt(parts[0], 10);
   const month = parseInt(parts[1], 10) - 1;
@@ -43277,7 +43314,7 @@ window.watchItemAirDateBadgeHtml = watchItemAirDateBadgeHtml;
 
 function formatAirDateBadge(airDateStr) {
   if (!airDateStr) return '';
-  const parts = String(airDateStr).split(/[-T\s]/);
+  const parts = String(airDateStr).split(/[-T\\s]/);
   if (parts.length < 3) return '';
   const year = parseInt(parts[0], 10);
   const month = parseInt(parts[1], 10) - 1;
@@ -43790,7 +43827,7 @@ function renderItemStorylinesWatchOrder(d, type) {
 
       const clickHandler = (!isCurrent && partId) ?
         ' data-act="openItemDetailsModal" data-act-stop data-act-args="' + appActArgs([partId, partType]) + '"' :
-        (isCurrent ? ' data-act="appActScrollToTop" data-act-stop"' : '');
+        (isCurrent ? ' data-act="appActScrollToTop" data-act-stop' : '');
 
       // Skipped on the card for the title already open in this modal -- its
       // rating is already shown up in the main info block, so repeating it
@@ -44366,7 +44403,7 @@ function openSelectListModal(id, type, title, poster) {
         }
         const nameInput = row.querySelector('.name');
         let listName = nameInput ? nameInput.value : (payload.listName || 'Unnamed List');
-        if (/^watchlist\s*\((movies|shows|series)\)$/i.test(String(listName).trim())) {
+        if (/^watchlist\\s*\\((movies|shows|series)\\)$/i.test(String(listName).trim())) {
           listName = 'Watchlist';
         }
         customLists.push({
@@ -44451,7 +44488,7 @@ function openSelectListModal(id, type, title, poster) {
       } catch(e) {}
       
       let displayName = list.name || 'Custom List';
-      if (/^watchlist(\s*\((movies|shows|series)\))?$/i.test(String(displayName).trim())) {
+      if (/^watchlist(\\s*\\((movies|shows|series)\\))?$/i.test(String(displayName).trim())) {
         displayName = 'Watchlist';
       }
       
@@ -45072,7 +45109,7 @@ async function syncCustomListPayload(payload, name, applyEdit) {
         // the other device actually saved.
         const target = {
           slug: payload.creatorSlug,
-          name: name.replace(/\s*\((?:Movies|Shows)\)$/i, ''),
+          name: name.replace(/\\s*\\((?:Movies|Shows)\\)$/i, ''),
           type: finalType,
           items: combinedItems,
           visibility: payload.visibility || (creatorListMeta ? creatorListMeta.visibility : 'private'),
@@ -45115,7 +45152,7 @@ async function syncCustomListPayload(payload, name, applyEdit) {
       } else {
         map[payload.localSlug] = {
           slug: payload.localSlug,
-          name: (name || payload.localSlug).replace(/\s*\((?:Movies|Shows)\)$/i, ''),
+          name: (name || payload.localSlug).replace(/\\s*\\((?:Movies|Shows)\\)$/i, ''),
           type: finalType,
           isWatchlist: payload.localSlug === 'watchlist',
           items: combinedItems,
@@ -60326,7 +60363,7 @@ function removeWatchedItemFromWatchlist(id, showId, extraIds) {
     if (!s) return;
     targetIds.add(s);
     if (s.startsWith('tmdb:')) targetIds.add(s.slice(5));
-    else if (/^\d+$/.test(s)) targetIds.add('tmdb:' + s);
+    else if (/^\\d+$/.test(s)) targetIds.add('tmdb:' + s);
   };
   addId(id);
   if (Array.isArray(extraIds)) extraIds.forEach(addId);
@@ -60362,11 +60399,11 @@ function removeWatchedItemFromWatchlist(id, showId, extraIds) {
         if (itShowId && fullyWatchedShowIds.has(itShowId)) return false;
         if (itTmdbId && fullyWatchedShowIds.has(itTmdbId)) return false;
         if (itId && itId.startsWith('tmdb:') && fullyWatchedShowIds.has(itId.slice(5))) return false;
-        if (itId && /^\d+$/.test(itId) && fullyWatchedShowIds.has('tmdb:' + itId)) return false;
+        if (itId && /^\\d+$/.test(itId) && fullyWatchedShowIds.has('tmdb:' + itId)) return false;
         return true;
       }
 
-      if (itId && (targetIds.has(itId) || (/^\d+$/.test(itId) && targetIds.has('tmdb:' + itId)) || (itId.startsWith('tmdb:') && targetIds.has(itId.slice(5))))) return false;
+      if (itId && (targetIds.has(itId) || (/^\\d+$/.test(itId) && targetIds.has('tmdb:' + itId)) || (itId.startsWith('tmdb:') && targetIds.has(itId.slice(5))))) return false;
       if (itImdbId && targetIds.has(itImdbId)) return false;
       if (itTmdbId && (targetIds.has(itTmdbId) || targetIds.has('tmdb:' + itTmdbId))) return false;
       return true;
@@ -60435,11 +60472,11 @@ function removeWatchedItemFromWatchlist(id, showId, extraIds) {
           if (itShowId && fullyWatchedShowIds.has(itShowId)) return false;
           if (itTmdbId && fullyWatchedShowIds.has(itTmdbId)) return false;
           if (itId && itId.startsWith('tmdb:') && fullyWatchedShowIds.has(itId.slice(5))) return false;
-          if (itId && /^\d+$/.test(itId) && fullyWatchedShowIds.has('tmdb:' + itId)) return false;
+          if (itId && /^\\d+$/.test(itId) && fullyWatchedShowIds.has('tmdb:' + itId)) return false;
           return true;
         }
 
-        if (itId && (targetIds.has(itId) || (/^\d+$/.test(itId) && targetIds.has('tmdb:' + itId)) || (itId.startsWith('tmdb:') && targetIds.has(itId.slice(5))))) return false;
+        if (itId && (targetIds.has(itId) || (/^\\d+$/.test(itId) && targetIds.has('tmdb:' + itId)) || (itId.startsWith('tmdb:') && targetIds.has(itId.slice(5))))) return false;
         if (itImdbId && targetIds.has(itImdbId)) return false;
         if (itTmdbId && (targetIds.has(itTmdbId) || targetIds.has('tmdb:' + itTmdbId))) return false;
         return true;
@@ -60484,7 +60521,7 @@ function cleanWatchedFromWatchlists() {
       const s = String(w.id);
       watchedIds.add(s);
       if (s.startsWith('tmdb:')) watchedIds.add(s.slice(5));
-      else if (/^\d+$/.test(s)) watchedIds.add('tmdb:' + s);
+      else if (/^\\d+$/.test(s)) watchedIds.add('tmdb:' + s);
     }
     if (w.imdbId) watchedIds.add(String(w.imdbId));
     if (w.tmdbId) {
@@ -60520,11 +60557,11 @@ function cleanWatchedFromWatchlists() {
         if (itImdbId && fullyWatchedShowIds.has(itImdbId)) return false;
         if (itTmdbId && fullyWatchedShowIds.has(itTmdbId)) return false;
         if (itId && itId.startsWith('tmdb:') && fullyWatchedShowIds.has(itId.slice(5))) return false;
-        if (itId && /^\d+$/.test(itId) && fullyWatchedShowIds.has('tmdb:' + itId)) return false;
+        if (itId && /^\\d+$/.test(itId) && fullyWatchedShowIds.has('tmdb:' + itId)) return false;
         return true;
       } else {
         // Movies: remove as soon as they appear in Watch History.
-        if (itId && (watchedIds.has(itId) || (/^\d+$/.test(itId) && watchedIds.has('tmdb:' + itId)) || (itId.startsWith('tmdb:') && watchedIds.has(itId.slice(5))))) return false;
+        if (itId && (watchedIds.has(itId) || (/^\\d+$/.test(itId) && watchedIds.has('tmdb:' + itId)) || (itId.startsWith('tmdb:') && watchedIds.has(itId.slice(5))))) return false;
         if (itImdbId && watchedIds.has(itImdbId)) return false;
         if (itTmdbId && (watchedIds.has(itTmdbId) || watchedIds.has('tmdb:' + itTmdbId))) return false;
         return true;
@@ -63685,15 +63722,43 @@ function pendingListSaves() {
 // has usually already taken them, so this finds nothing to do). Every list
 // somebody asked to save is pushed, and the result is said out loud: a silent
 // failure here would leave a list in a store this page no longer shows.
-async function flushPendingListSaves() {
+//
+// Signing in to an account that already has lists (opts.avoidExistingSlugs,
+// submitRestoreProfile) is the one case where a queued list's slug can already
+// be taken -- by a DIFFERENT list: the queue only ever holds lists the account
+// had never been told about, and /api/creator/lists/save treats a named slug as
+// "edit that list". A "Favorites" built signed out would have replaced the
+// account's own "Favorites". Such a list goes up without a slug and gets a free
+// one; and if the account's lists cannot be read, every one does -- a second
+// list can be deleted, an overwritten one cannot be brought back. Sign-up keeps
+// the slug: the account is new, and the migration has just uploaded the same
+// list under it, so re-using it is what keeps the flush from adding a copy.
+async function accountListSlugsForFlush() {
+  try {
+    const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
+    if (!creatorKey || typeof fetchCreatorListsOnce !== 'function') return null;
+    const data = await fetchCreatorListsOnce(creatorKey);
+    if (!data || !data.ok || !Array.isArray(data.lists)) return null;
+    const taken = {};
+    data.lists.forEach((l) => { if (l && l.slug) taken[String(l.slug)] = true; });
+    return taken;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function flushPendingListSaves(opts) {
   if (!_pendingListSaves.length) return 0;
   if (!activeCreator || !activeCreator.creatorName) return 0;
   const waiting = _pendingListSaves;
   _pendingListSaves = [];
+  const avoidExisting = !!(opts && opts.avoidExistingSlugs);
+  const taken = avoidExisting ? await accountListSlugsForFlush() : null;
   let saved = 0;
   let failed = 0;
   for (const pending of waiting) {
-    const result = await uploadLocalListPayloadToAccount(pending);
+    const clash = avoidExisting && (!taken || taken[String(pending.slug)]);
+    const result = await uploadLocalListPayloadToAccount(clash ? Object.assign({}, pending, { slug: '' }) : pending);
     if (result.ok) saved++; else failed++;
   }
   if (saved && typeof showToast === 'function') {
@@ -64670,7 +64735,7 @@ async function refreshTrackPlaybackStatus() {
     const serverLabel = data.lastServer ? '<strong>' + escapeHtml(data.lastServer) + '</strong>' : '<strong>In-App Streaming Player</strong>';
     const userLabel = data.lastUser ? ' &bull; User: <strong>' + escapeHtml(data.lastUser) + '</strong>' : '';
     const rawMatched = data.matched || data.lastPingId || 'OK';
-    const displayMatched = rawMatched.replace(/^(yes|no|error)\b/i, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+    const displayMatched = rawMatched.replace(/^(yes|no|error)\\b/i, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
     statusBox.innerHTML =
       '<div style="padding:10px 12px; background:rgba(0,122,255,0.08); border:1px solid rgba(0,122,255,0.25); border-radius:8px; font-size:0.84rem;">' +
         '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">' +
@@ -64715,6 +64780,12 @@ function clearLocalAccountData() {
   tmdbSessionId = '';
   tmdbAccountId = '';
   tmdbUsername = '';
+  // Since P6-8 the provider keys and tokens live in memory, not localStorage,
+  // so the storage sweep below no longer reaches them. Left in place, the next
+  // account signed in on this tab inherited the last one's -- and the first
+  // load of an account with none of its own pushed them up to it.
+  _providerSecretsInMemory = {};
+  _creatorKeysAppliedFor = null;
 
   // Clear personal list arrays & tracking sets
   window._myTraktLists = [];
@@ -64941,8 +65012,9 @@ async function submitRestoreProfile() {
     if (data.session && typeof importLocalConnectionsOnce === 'function') importLocalConnectionsOnce(data.creatorName);
     // P6-9: a list marked "Save to an account" while signed out was copied out
     // of the store before this sign-in (clearLocalAccountData empties it), and
-    // is pushed now -- which is the only moment it can be.
-    await flushPendingListSaves();
+    // is pushed now -- which is the only moment it can be. This account may
+    // already have lists, so a clashing slug is not re-used (see the function).
+    await flushPendingListSaves({ avoidExistingSlugs: true });
   } catch (e) {
     errBox.innerHTML = '<p class="testresult err">Network error.</p>';
   } finally {
@@ -65357,6 +65429,37 @@ function creatorSyncGateOpen() {
   return _creatorSyncLoadedFor === activeCreator.creatorName;
 }
 
+// --- The provider credentials a push may speak for ---------------------------
+//
+// The gate above opens on a timer when the first load never lands, and that
+// used to be safe for the credentials because this browser kept its own copy
+// of them. Since P6-8 it does not: a tab knows the account's keys and tokens
+// only once a load has handed them back. A push from a tab that never got that
+// far would send every one of them blank, and sync/save stores what it is sent
+// -- one failed load, then any autosave, and the account's Trakt, MDBList,
+// Simkl and TMDB connections were gone.
+//
+// So until the account's own credentials have been applied, a blank one is
+// left out of the push rather than sent, and the server keeps what it has for
+// anything a push leaves out (see /api/creator/sync/save, 26_). A credential
+// this tab does have still goes up, and so does a blank for a provider that
+// was disconnected on purpose: that blank is the disconnect.
+var _creatorKeysAppliedFor = null;
+
+function accountProviderSecretsApplied() {
+  if (typeof activeCreator === 'undefined' || !activeCreator) return false;
+  return _creatorKeysAppliedFor === activeCreator.creatorName;
+}
+
+function creatorSyncKeysForPush() {
+  const keys = (typeof collectKeys === 'function') ? collectKeys() : {};
+  if (accountProviderSecretsApplied()) return keys;
+  Object.keys(PROVIDER_SECRET_FIELDS).forEach((field) => {
+    if (!keys[field] && !isProviderDisconnected(PROVIDER_SECRET_FIELDS[field])) delete keys[field];
+  });
+  return keys;
+}
+
 // Remembers that a push was wanted. Which kind is all that needs keeping --
 // every push reads the current state out of localStorage/the DOM when it
 // runs, so one deferred push covers any number of changes made while the gate
@@ -65626,7 +65729,8 @@ async function pushCreatorSync() {
         creatorName: activeCreator.creatorName,
         creatorKey: creatorKey,
         config: collectEntries(),
-        keys: (typeof collectKeys === 'function') ? collectKeys() : {},
+        // Not collectKeys() as it stands: see creatorSyncKeysForPush.
+        keys: creatorSyncKeysForPush(),
         // Presets and tracking data (watchHistory/continueWatching/etc)
         // deliberately NOT included here -- both are pieces of this state
         // that can genuinely grow large, while everything else in this
@@ -66047,6 +66151,8 @@ async function loadCreatorSync(opts) {
     // account emptied while this browser was asleep? If so its copy is stale by
     // definition, and uploading it is exactly how a reset used to undo itself.
     if (shouldApplyAccountReset(data.resetAt)) {
+      // An emptied account has no credentials to lose: blank is the truth.
+      _creatorKeysAppliedFor = loadingFor;
       markCreatorSyncLoaded();
       applyRemoteAccountReset(data.resetAt);
       return;
@@ -66055,6 +66161,7 @@ async function loadCreatorSync(opts) {
       // This account has nothing stored, so there is nothing to be stale
       // against and this browser's state becomes its first save -- open the
       // gate first, or the pushes below would defer against themselves.
+      _creatorKeysAppliedFor = loadingFor;
       markCreatorSyncLoaded();
       pushCreatorSync();
       const localPresets = loadPresetsMap();
@@ -66798,6 +66905,7 @@ async function loadCreatorSync(opts) {
     // The account's state is applied, so anything this browser wants to send
     // is now built on it rather than on nothing. Releases whatever was held
     // back while this load was in flight -- see creatorSyncGateOpen.
+    _creatorKeysAppliedFor = loadingFor;
     markCreatorSyncLoaded();
   } catch (e) {
     // Network hiccup -- stay with whatever's already on this browser
@@ -71254,9 +71362,9 @@ function handlePosterImgError(img) {
   const betterPosterId = typeof betterPosterImdbFromUrl === 'function' ? betterPosterImdbFromUrl(failedSrc) : '';
 
   // Clean episode indicators from show title for fallback lookup, e.g. "Ted Lasso S03E01" -> "Ted Lasso"
-  const cleanTitle = title.replace(/\s+S\d+E\d+.*$/i, '').trim();
+  const cleanTitle = title.replace(/\\s+S\\d+E\\d+.*$/i, '').trim();
 
-  const tmdbId = betterPosterId ? '' : (id.startsWith('tmdb:') ? id.slice(5).split(':')[0] : (/^\d+/.test(id) ? id.split(':')[0] : ''));
+  const tmdbId = betterPosterId ? '' : (id.startsWith('tmdb:') ? id.slice(5).split(':')[0] : (/^\\d+/.test(id) ? id.split(':')[0] : ''));
   const imdbId = betterPosterId || (id.startsWith('tt') ? id.split(':')[0] : '');
 
   if (cleanTitle || tmdbId || imdbId) {
@@ -74930,7 +75038,7 @@ function extractCustomListsAndChannelsFromPreset(preset) {
         try {
           const payload = JSON.parse(u.slice('customlist:v1:'.length));
           if (payload && Array.isArray(payload.items)) {
-            const cleanName = (e.name || payload.name || 'Custom List').replace(/\s*\((Movies|Shows)\)$/i, '').trim();
+            const cleanName = (e.name || payload.name || 'Custom List').replace(/\\s*\\((Movies|Shows)\\)$/i, '').trim();
             const slug = payload.localSlug || payload.listSlug || payload.creatorSlug || payload.slug || (typeof slugify === 'function' ? slugify(cleanName) : cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '-')) || 'list';
             const itemType = payload.type || e.type || 'movie';
 
@@ -75318,7 +75426,7 @@ function uploadPresetFile(input) {
       else showToast('That file does not look like a preset -- expected an "entries" array.', 'error');
       return;
     }
-    const suggested = (file.name || 'Preset').replace(/\.json$/i, '');
+    const suggested = (file.name || 'Preset').replace(/\\.json$/i, '');
     const saveWithGivenName = (rawName) => {
       const name = (rawName || '').trim();
       if (!name) return;
@@ -75577,12 +75685,34 @@ function updateInstallLinkFromBanner() {
   if (typeof appShellActive !== 'undefined' && appShellActive) appShellInstallBarAction();
 }
 
+// myListAddon:state is this browser's copy of the rows and settings, and it
+// carried the provider keys and tokens too: collectKeys() returns them, and
+// saveState wrote the whole object on every change -- so moving the
+// credentials into memory (P6-8) still left a full copy of them here. They are
+// left out now. A copy written before this is carried forward only until this
+// tab has the account's own (the rule the separately stored keys follow, see
+// dropLegacyProviderSecret, 16_), and never for a provider disconnected since.
+// Nothing new is ever written: a key typed in this visit lives in memory.
+function stateKeysForStorage(keys) {
+  const out = Object.assign({}, keys || {});
+  const fields = Object.keys(PROVIDER_SECRET_FIELDS);
+  fields.forEach((field) => { delete out[field]; });
+  if (typeof accountProviderSecretsApplied === 'function' && accountProviderSecretsApplied()) return out;
+  const previous = loadSavedState();
+  if (!previous || !previous.keys) return out;
+  fields.forEach((field) => {
+    const value = previous.keys[field];
+    if (value && !isProviderDisconnected(PROVIDER_SECRET_FIELDS[field])) out[field] = value;
+  });
+  return out;
+}
+
 function saveState() {
   if (suppressSave) return;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       entries: collectEntries(),
-      keys: collectKeys(),
+      keys: stateKeysForStorage(collectKeys()),
       shuffleShelves: document.getElementById('shuffleShelvesCheckbox') ? document.getElementById('shuffleShelvesCheckbox').checked : false,
       shuffleItems: document.getElementById('shuffleItemsCheckbox') ? document.getElementById('shuffleItemsCheckbox').checked : false,
     }));
@@ -92522,10 +92652,12 @@ function generateSearchVariations(query) {
       // nextSyncVersion.
       const currentRaw = await env.CONFIGS.get(`creatorsync:${auth.username}`);
       let currentUpdatedAt = 0;
+      let currentKeys = null;
       if (currentRaw) {
         try {
           const current = JSON.parse(currentRaw);
           currentUpdatedAt = Number(current.updatedAt) || 0;
+          currentKeys = current.keys && typeof current.keys === "object" ? current.keys : null;
           if (expectedUpdatedAt !== null && currentUpdatedAt > expectedUpdatedAt) {
             // Purely for visibility -- this was previously invisible even
             // to us; now it's at least countable on the admin dashboard.
@@ -92538,9 +92670,26 @@ function generateSearchVariations(query) {
         }
       }
 
+      // A provider credential the request leaves OUT is kept as stored. Since
+      // P6-8 a browser holds the account's keys and tokens only in memory,
+      // once a load has handed them back; a tab whose load failed omits the
+      // ones it does not know instead of sending them blank (see
+      // creatorSyncKeysForPush, 22_), because a blank here used to be stored
+      // as-is and cost the account every connection. A blank that IS sent
+      // still clears the credential: that is what a disconnect sends.
+      const incomingKeys = body.keys && typeof body.keys === "object" && !Array.isArray(body.keys) ? body.keys : {};
+      const mergedKeys = Object.assign({}, incomingKeys);
+      if (currentKeys) {
+        for (const field of ["tmdbKey", "tmdbSessionId", "mdblistKey", "mdblistAccessToken", "traktKey", "traktAccessToken", "simklKey", "simklAccessToken"]) {
+          if (!Object.prototype.hasOwnProperty.call(incomingKeys, field) && typeof currentKeys[field] === "string" && currentKeys[field]) {
+            mergedKeys[field] = currentKeys[field];
+          }
+        }
+      }
+
       const blob = {
         config: Array.isArray(body.config) ? body.config : [],
-        keys: body.keys && typeof body.keys === "object" ? body.keys : {},
+        keys: mergedKeys,
         collapsedPanels: body.collapsedPanels && typeof body.collapsedPanels === "object" ? body.collapsedPanels : {},
         likedLists: Array.isArray(body.likedLists) ? body.likedLists.map(String) : [],
         hiddenLists: Array.isArray(body.hiddenLists) ? body.hiddenLists.map(String) : [],

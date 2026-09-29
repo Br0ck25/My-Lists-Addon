@@ -510,15 +510,43 @@ function pendingListSaves() {
 // has usually already taken them, so this finds nothing to do). Every list
 // somebody asked to save is pushed, and the result is said out loud: a silent
 // failure here would leave a list in a store this page no longer shows.
-async function flushPendingListSaves() {
+//
+// Signing in to an account that already has lists (opts.avoidExistingSlugs,
+// submitRestoreProfile) is the one case where a queued list's slug can already
+// be taken -- by a DIFFERENT list: the queue only ever holds lists the account
+// had never been told about, and /api/creator/lists/save treats a named slug as
+// "edit that list". A "Favorites" built signed out would have replaced the
+// account's own "Favorites". Such a list goes up without a slug and gets a free
+// one; and if the account's lists cannot be read, every one does -- a second
+// list can be deleted, an overwritten one cannot be brought back. Sign-up keeps
+// the slug: the account is new, and the migration has just uploaded the same
+// list under it, so re-using it is what keeps the flush from adding a copy.
+async function accountListSlugsForFlush() {
+  try {
+    const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
+    if (!creatorKey || typeof fetchCreatorListsOnce !== 'function') return null;
+    const data = await fetchCreatorListsOnce(creatorKey);
+    if (!data || !data.ok || !Array.isArray(data.lists)) return null;
+    const taken = {};
+    data.lists.forEach((l) => { if (l && l.slug) taken[String(l.slug)] = true; });
+    return taken;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function flushPendingListSaves(opts) {
   if (!_pendingListSaves.length) return 0;
   if (!activeCreator || !activeCreator.creatorName) return 0;
   const waiting = _pendingListSaves;
   _pendingListSaves = [];
+  const avoidExisting = !!(opts && opts.avoidExistingSlugs);
+  const taken = avoidExisting ? await accountListSlugsForFlush() : null;
   let saved = 0;
   let failed = 0;
   for (const pending of waiting) {
-    const result = await uploadLocalListPayloadToAccount(pending);
+    const clash = avoidExisting && (!taken || taken[String(pending.slug)]);
+    const result = await uploadLocalListPayloadToAccount(clash ? Object.assign({}, pending, { slug: '' }) : pending);
     if (result.ok) saved++; else failed++;
   }
   if (saved && typeof showToast === 'function') {
@@ -1495,7 +1523,7 @@ async function refreshTrackPlaybackStatus() {
     const serverLabel = data.lastServer ? '<strong>' + escapeHtml(data.lastServer) + '</strong>' : '<strong>In-App Streaming Player</strong>';
     const userLabel = data.lastUser ? ' &bull; User: <strong>' + escapeHtml(data.lastUser) + '</strong>' : '';
     const rawMatched = data.matched || data.lastPingId || 'OK';
-    const displayMatched = rawMatched.replace(/^(yes|no|error)\b/i, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+    const displayMatched = rawMatched.replace(/^(yes|no|error)\\b/i, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
     statusBox.innerHTML =
       '<div style="padding:10px 12px; background:rgba(0,122,255,0.08); border:1px solid rgba(0,122,255,0.25); border-radius:8px; font-size:0.84rem;">' +
         '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">' +
@@ -1540,6 +1568,12 @@ function clearLocalAccountData() {
   tmdbSessionId = '';
   tmdbAccountId = '';
   tmdbUsername = '';
+  // Since P6-8 the provider keys and tokens live in memory, not localStorage,
+  // so the storage sweep below no longer reaches them. Left in place, the next
+  // account signed in on this tab inherited the last one's -- and the first
+  // load of an account with none of its own pushed them up to it.
+  _providerSecretsInMemory = {};
+  _creatorKeysAppliedFor = null;
 
   // Clear personal list arrays & tracking sets
   window._myTraktLists = [];
@@ -1766,8 +1800,9 @@ async function submitRestoreProfile() {
     if (data.session && typeof importLocalConnectionsOnce === 'function') importLocalConnectionsOnce(data.creatorName);
     // P6-9: a list marked "Save to an account" while signed out was copied out
     // of the store before this sign-in (clearLocalAccountData empties it), and
-    // is pushed now -- which is the only moment it can be.
-    await flushPendingListSaves();
+    // is pushed now -- which is the only moment it can be. This account may
+    // already have lists, so a clashing slug is not re-used (see the function).
+    await flushPendingListSaves({ avoidExistingSlugs: true });
   } catch (e) {
     errBox.innerHTML = '<p class="testresult err">Network error.</p>';
   } finally {
@@ -2182,6 +2217,37 @@ function creatorSyncGateOpen() {
   return _creatorSyncLoadedFor === activeCreator.creatorName;
 }
 
+// --- The provider credentials a push may speak for ---------------------------
+//
+// The gate above opens on a timer when the first load never lands, and that
+// used to be safe for the credentials because this browser kept its own copy
+// of them. Since P6-8 it does not: a tab knows the account's keys and tokens
+// only once a load has handed them back. A push from a tab that never got that
+// far would send every one of them blank, and sync/save stores what it is sent
+// -- one failed load, then any autosave, and the account's Trakt, MDBList,
+// Simkl and TMDB connections were gone.
+//
+// So until the account's own credentials have been applied, a blank one is
+// left out of the push rather than sent, and the server keeps what it has for
+// anything a push leaves out (see /api/creator/sync/save, 26_). A credential
+// this tab does have still goes up, and so does a blank for a provider that
+// was disconnected on purpose: that blank is the disconnect.
+var _creatorKeysAppliedFor = null;
+
+function accountProviderSecretsApplied() {
+  if (typeof activeCreator === 'undefined' || !activeCreator) return false;
+  return _creatorKeysAppliedFor === activeCreator.creatorName;
+}
+
+function creatorSyncKeysForPush() {
+  const keys = (typeof collectKeys === 'function') ? collectKeys() : {};
+  if (accountProviderSecretsApplied()) return keys;
+  Object.keys(PROVIDER_SECRET_FIELDS).forEach((field) => {
+    if (!keys[field] && !isProviderDisconnected(PROVIDER_SECRET_FIELDS[field])) delete keys[field];
+  });
+  return keys;
+}
+
 // Remembers that a push was wanted. Which kind is all that needs keeping --
 // every push reads the current state out of localStorage/the DOM when it
 // runs, so one deferred push covers any number of changes made while the gate
@@ -2451,7 +2517,8 @@ async function pushCreatorSync() {
         creatorName: activeCreator.creatorName,
         creatorKey: creatorKey,
         config: collectEntries(),
-        keys: (typeof collectKeys === 'function') ? collectKeys() : {},
+        // Not collectKeys() as it stands: see creatorSyncKeysForPush.
+        keys: creatorSyncKeysForPush(),
         // Presets and tracking data (watchHistory/continueWatching/etc)
         // deliberately NOT included here -- both are pieces of this state
         // that can genuinely grow large, while everything else in this
@@ -2872,6 +2939,8 @@ async function loadCreatorSync(opts) {
     // account emptied while this browser was asleep? If so its copy is stale by
     // definition, and uploading it is exactly how a reset used to undo itself.
     if (shouldApplyAccountReset(data.resetAt)) {
+      // An emptied account has no credentials to lose: blank is the truth.
+      _creatorKeysAppliedFor = loadingFor;
       markCreatorSyncLoaded();
       applyRemoteAccountReset(data.resetAt);
       return;
@@ -2880,6 +2949,7 @@ async function loadCreatorSync(opts) {
       // This account has nothing stored, so there is nothing to be stale
       // against and this browser's state becomes its first save -- open the
       // gate first, or the pushes below would defer against themselves.
+      _creatorKeysAppliedFor = loadingFor;
       markCreatorSyncLoaded();
       pushCreatorSync();
       const localPresets = loadPresetsMap();
@@ -3623,6 +3693,7 @@ async function loadCreatorSync(opts) {
     // The account's state is applied, so anything this browser wants to send
     // is now built on it rather than on nothing. Releases whatever was held
     // back while this load was in flight -- see creatorSyncGateOpen.
+    _creatorKeysAppliedFor = loadingFor;
     markCreatorSyncLoaded();
   } catch (e) {
     // Network hiccup -- stay with whatever's already on this browser

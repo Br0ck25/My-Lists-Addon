@@ -1298,9 +1298,9 @@ function handlePosterImgError(img) {
   const betterPosterId = typeof betterPosterImdbFromUrl === 'function' ? betterPosterImdbFromUrl(failedSrc) : '';
 
   // Clean episode indicators from show title for fallback lookup, e.g. "Ted Lasso S03E01" -> "Ted Lasso"
-  const cleanTitle = title.replace(/\s+S\d+E\d+.*$/i, '').trim();
+  const cleanTitle = title.replace(/\\s+S\\d+E\\d+.*$/i, '').trim();
 
-  const tmdbId = betterPosterId ? '' : (id.startsWith('tmdb:') ? id.slice(5).split(':')[0] : (/^\d+/.test(id) ? id.split(':')[0] : ''));
+  const tmdbId = betterPosterId ? '' : (id.startsWith('tmdb:') ? id.slice(5).split(':')[0] : (/^\\d+/.test(id) ? id.split(':')[0] : ''));
   const imdbId = betterPosterId || (id.startsWith('tt') ? id.split(':')[0] : '');
 
   if (cleanTitle || tmdbId || imdbId) {

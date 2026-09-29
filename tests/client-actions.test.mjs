@@ -147,6 +147,20 @@ describe("P6-8: controls name their action instead of carrying one", () => {
     assert.deepEqual(calls, ["button"], "a stop inside a card is the whole point of data-act-stop");
     assert.equal(ev.stopped, true);
 
+    // The dispatcher listens on document, as the page's own poster listener
+    // (19_) does. An inline stopPropagation() kept the click from that listener
+    // too; here only stopImmediatePropagation can, or a channel card's
+    // mini-poster opens a title's details and the poster listener closes them.
+    let immediate = false;
+    const withImmediate = clickEvent(button, { stopImmediatePropagation() { immediate = true; } });
+    client.call("appActDispatch", withImmediate);
+    assert.equal(immediate, true, "a stop also stops the other document listeners");
+    let looseImmediate = false;
+    const noStop = control({ "data-act": "__p68Button" });
+    client.call("appActDispatch", clickEvent(noStop, { stopImmediatePropagation() { looseImmediate = true; } }));
+    assert.equal(looseImmediate, false, "a control without data-act-stop leaves them alone");
+    calls.length = 0;
+
     calls.length = 0;
     const loose = control({ "data-act": "__p68Button" });
     loose.parentNode = card;
@@ -187,5 +201,34 @@ describe("P6-8: controls name their action instead of carrying one", () => {
     assert.equal(client.get("APP_ACT_EVENT_TYPES").join(","), "click,change,input,keydown");
     assert.equal(client.call("initDelegatedActions"), false, "already bound at load");
     assert.equal(client.get("window._appActBound"), true);
+  });
+
+  // The Worker builds some of the page's markup itself (08_), and its
+  // arguments used to be JavaScript: an array literal was an array and a "\\n"
+  // was a line break. As JSON the first arrived as a string -- the Combined
+  // Charts "+ Movies"/"+ Shows" threw on urls.join -- and the second as a
+  // backslash and an n, so their See All read one URL with backslashes in it.
+  it("hands the Worker-built chart controls real arrays and real line breaks", () => {
+    const html = renderPage();
+    const decode = (v) => v.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+    const controls = (name) => [...html.matchAll(new RegExp(`data-act="${name}" data-act-args="([^"]*)"`, "g"))]
+      .map((m) => decode(m[1]));
+
+    const combined = controls("addCombinedRow");
+    assert.ok(combined.length >= 2, "the Combined Charts cards are on the page");
+    const client = loadClient();
+    const added = [];
+    client.set("addRow", function (name, url, type, enabled, group) { added.push({ name, url, type, group }); });
+    const button = control({ "data-act": "addCombinedRow", "data-act-args": combined[0] });
+    client.call("appActDispatch", clickEvent(button));
+    assert.equal(added.length, 1, "the button adds its row instead of throwing");
+    assert.ok(added[0].url.split("\n").length > 1, "one row carrying every source, a line each");
+    assert.equal(added[0].url.includes("\\"), false, "no backslashes in the sources");
+
+    for (const raw of controls("openListDetailsPage")) {
+      const args = JSON.parse(raw);
+      assert.equal(String(args[2]).includes("\\"), false, `See All read a backslash: ${raw.slice(0, 80)}`);
+    }
   });
 });

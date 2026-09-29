@@ -328,15 +328,23 @@ const COMBINED_CHART_LISTS = [
 ];
 
 // Renders each source list as a single-quoted JS array literal (e.g.
-// ['a','b']) so it can sit inside an onclick="..." attribute -- which is
-// itself double-quoted -- without the two colliding.
+// ['a','b']) for the generated addAllCombinedCharts() body below, which is
+// code. Never for a data-act-args value: that is JSON, read with JSON.parse
+// and never evaluated, so this would arrive as a string (see
+// buildCombinedChartsHtml).
 function jsStringArrayLiteral(arr) {
   return "[" + arr.map((s) => "'" + String(s).replace(/'/g, "\\'") + "'").join(",") + "]";
 }
 
 function buildCombinedChartsHtml() {
   const rows = COMBINED_CHART_LISTS.map((p) => {
-    const movieUrlsJoined = p.movieUrls.join("\\n");
+    // These arguments are JSON (P6-8), not JavaScript. The inline handlers they
+    // replaced were code, so a "\\n" written here became a line break and an
+    // array literal became an array; as data the first arrives as a backslash
+    // and an n, and the second as a string -- addCombinedRow's urls.join threw
+    // and See All read one URL with backslashes in it. So: the arrays
+    // themselves, and a real line break.
+    const movieUrlsJoined = p.movieUrls.join("\n");
     return `
     <div class="discover-chart-card">
       <div class="discover-chart-header">
@@ -347,8 +355,8 @@ function buildCombinedChartsHtml() {
         <a href="javascript:void(0)" class="discover-chart-seeall" data-act="openListDetailsPage" data-act-args="${appActArgsServer([p.name, "movie", movieUrlsJoined])}">See All &rsaquo;</a>
       </div>
       <div class="discover-chart-btns">
-        <button type="button" class="lc-btn secondary" data-act="addCombinedRow" data-act-args="${appActArgsServer([p.name, jsStringArrayLiteral(p.movieUrls), "movie", "Combined Charts"])}">+ Movies</button>
-        <button type="button" class="lc-btn secondary" data-act="addCombinedRow" data-act-args="${appActArgsServer([p.name, jsStringArrayLiteral(p.showUrls), "series", "Combined Charts"])}">+ Shows</button>
+        <button type="button" class="lc-btn secondary" data-act="addCombinedRow" data-act-args="${appActArgsServer([p.name, p.movieUrls, "movie", "Combined Charts"])}">+ Movies</button>
+        <button type="button" class="lc-btn secondary" data-act="addCombinedRow" data-act-args="${appActArgsServer([p.name, p.showUrls, "series", "Combined Charts"])}">+ Shows</button>
       </div>
     </div>`;
   }).join("");

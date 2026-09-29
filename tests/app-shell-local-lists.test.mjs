@@ -176,6 +176,43 @@ describe("P6-9: a list saved in this browser only", () => {
     assert.equal(saves.length, 1);
   });
 
+  // /api/creator/lists/save treats a named slug as "edit that list", and the
+  // queue only holds lists the account had never been told about -- so on
+  // signing in to an account that already has a "sci-fi", re-using the slug
+  // would have replaced that list with this one.
+  it("never replaces a list the account already has when the sign-in flush pushes a queued one", async () => {
+    const cases = [
+      ["the account has its own sci-fi", () => ({ json: { ok: true, lists: [{ slug: "sci-fi", name: "My Sci-Fi", items: [] }], order: ["sci-fi"] } }), false],
+      ["the account has no sci-fi", () => ({ json: { ok: true, lists: [{ slug: "horror", name: "Horror", items: [] }], order: ["horror"] } }), true],
+      ["the account's lists cannot be read", () => ({ status: 500, json: { ok: false, error: "boom" } }), false],
+    ];
+    for (const [label, listsRoute, keepsSlug] of cases) {
+      const saves = [];
+      const client = loadClient({
+        newUi: true, signedIn: true, storage: legacyStorage(),
+        routes: {
+          "/api/creator/lists": listsRoute,
+          "/api/creator/lists/save": async (req) => {
+            saves.push(req.body);
+            const slug = req.body.slug || "sci-fi-night";
+            return { json: { ok: true, slug, url: "https://example.com/lists/alice/" + slug } };
+          },
+        },
+      });
+      client.set("activeCreator", null);
+      client.set("openRestoreModal", () => {});
+      client.call("appShellSaveLocalListToAccount", "sci-fi");
+      client.localStorage.removeItem(LISTS_KEY);
+      client.set("activeCreator", { creatorName: "alice", displayName: "Alice" });
+
+      assert.equal(await client.call("flushPendingListSaves", { avoidExistingSlugs: true }), 1, label);
+      assert.equal(saves.length, 1, label);
+      assert.equal(saves[0].name, "Sci-Fi Night", label);
+      assert.equal(saves[0].slug === "sci-fi", keepsSlug,
+        `${label}: ${keepsSlug ? "a free slug is re-used" : "a taken (or unknown) slug is left for the server to pick"}`);
+    }
+  });
+
   it("exports one list as a file the page's own restore can read back", async () => {
     const client = loadClient({ newUi: true, routes: {}, storage: legacyStorage() });
     client.call("appShellRenderListsHome");

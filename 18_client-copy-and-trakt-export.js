@@ -1220,9 +1220,9 @@ async function onUnifiedImportFilesSelected(input) {
           if (!items.length) continue;
 
           // Categorization & chunk grouping logic for Trakt, Letterboxd, Simkl, and custom lists
-          const noExt = baseName.replace(/\.[^.]+$/, '');
+          const noExt = baseName.replace(/\\.[^.]+$/, '');
           // Strip chunk number suffixes e.g. -1, -2, _1, .part1, (1)
-          const cleanBase = noExt.replace(/[-_ ]\d+$/, '').replace(/\.part\d+$/, '');
+          const cleanBase = noExt.replace(/[-_ ]\\d+$/, '').replace(/\\.part\\d+$/, '');
           const lowerClean = cleanBase.toLowerCase();
 
           let catKey = lowerClean;
@@ -1353,7 +1353,7 @@ async function onUnifiedImportFilesSelected(input) {
           if (lowerName.includes('history') || lowerName.includes('watched') || lowerName.includes('diary')) {
             defaultTarget = 'watch-history';
           }
-          const defaultNewName = file.name.replace(/\.[^.]+$/, '');
+          const defaultNewName = file.name.replace(/\\.[^.]+$/, '');
           discovered.push({
             id: 'file_' + file.name,
             label: file.name,
@@ -1499,7 +1499,7 @@ function extractItemsFromFileContent(filename, text, source) {
     const lf = String.fromCharCode(10);
     const cleanText = text ? text.split(cr).join('') : '';
     const lines = cleanText.split(lf);
-    const ttRgx = new RegExp('\\b(tt\\d{7,10})\\b');
+    const ttRgx = new RegExp('\\\\b(tt\\\\d{7,10})\\\\b');
     const sepRgx = new RegExp('[,\\t]', 'g');
     lines.forEach(l => {
       const match = l.match(ttRgx);
@@ -1519,7 +1519,7 @@ function extractItemsFromFileContent(filename, text, source) {
     return items;
   }
 
-  const digitRgx = new RegExp('^\\d+$');
+  const digitRgx = new RegExp('^\\\\d+$');
   rows.forEach(r => {
     let imdbId = r.const || r.tconst || r.imdbid || r.imdb_id || '';
     if (imdbId && !imdbId.startsWith('tt') && digitRgx.test(imdbId)) {

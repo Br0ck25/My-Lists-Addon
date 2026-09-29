@@ -1412,7 +1412,7 @@ function extractCustomListsAndChannelsFromPreset(preset) {
         try {
           const payload = JSON.parse(u.slice('customlist:v1:'.length));
           if (payload && Array.isArray(payload.items)) {
-            const cleanName = (e.name || payload.name || 'Custom List').replace(/\s*\((Movies|Shows)\)$/i, '').trim();
+            const cleanName = (e.name || payload.name || 'Custom List').replace(/\\s*\\((Movies|Shows)\\)$/i, '').trim();
             const slug = payload.localSlug || payload.listSlug || payload.creatorSlug || payload.slug || (typeof slugify === 'function' ? slugify(cleanName) : cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '-')) || 'list';
             const itemType = payload.type || e.type || 'movie';
 
@@ -1800,7 +1800,7 @@ function uploadPresetFile(input) {
       else showToast('That file does not look like a preset -- expected an "entries" array.', 'error');
       return;
     }
-    const suggested = (file.name || 'Preset').replace(/\.json$/i, '');
+    const suggested = (file.name || 'Preset').replace(/\\.json$/i, '');
     const saveWithGivenName = (rawName) => {
       const name = (rawName || '').trim();
       if (!name) return;
@@ -2059,12 +2059,34 @@ function updateInstallLinkFromBanner() {
   if (typeof appShellActive !== 'undefined' && appShellActive) appShellInstallBarAction();
 }
 
+// myListAddon:state is this browser's copy of the rows and settings, and it
+// carried the provider keys and tokens too: collectKeys() returns them, and
+// saveState wrote the whole object on every change -- so moving the
+// credentials into memory (P6-8) still left a full copy of them here. They are
+// left out now. A copy written before this is carried forward only until this
+// tab has the account's own (the rule the separately stored keys follow, see
+// dropLegacyProviderSecret, 16_), and never for a provider disconnected since.
+// Nothing new is ever written: a key typed in this visit lives in memory.
+function stateKeysForStorage(keys) {
+  const out = Object.assign({}, keys || {});
+  const fields = Object.keys(PROVIDER_SECRET_FIELDS);
+  fields.forEach((field) => { delete out[field]; });
+  if (typeof accountProviderSecretsApplied === 'function' && accountProviderSecretsApplied()) return out;
+  const previous = loadSavedState();
+  if (!previous || !previous.keys) return out;
+  fields.forEach((field) => {
+    const value = previous.keys[field];
+    if (value && !isProviderDisconnected(PROVIDER_SECRET_FIELDS[field])) out[field] = value;
+  });
+  return out;
+}
+
 function saveState() {
   if (suppressSave) return;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       entries: collectEntries(),
-      keys: collectKeys(),
+      keys: stateKeysForStorage(collectKeys()),
       shuffleShelves: document.getElementById('shuffleShelvesCheckbox') ? document.getElementById('shuffleShelvesCheckbox').checked : false,
       shuffleItems: document.getElementById('shuffleItemsCheckbox') ? document.getElementById('shuffleItemsCheckbox').checked : false,
     }));

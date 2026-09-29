@@ -138,6 +138,19 @@ describe("the new UI shell is opt-in through a cookie", () => {
     assert.match(onAlias.headers.get("set-cookie") || "", /^FF_NEW_UI=1;/);
   });
 
+  it("never redirects off the site, whatever the path looks like", async () => {
+    // //evil.com/ is a protocol-relative address: sent back as a Location, a
+    // browser follows it to evil.com. /\evil.com parses to the same path.
+    const env = makeEnv();
+    for (const path of ["//evil.com/?ff_new_ui=1", "///evil.com/x?ff_new_ui=0", "/\\evil.com?ff_new_ui=1"]) {
+      const res = await call(env, path);
+      assert.equal(res.status, 302, path);
+      const location = res.headers.get("location") || "";
+      assert.ok(location.startsWith("/") && !location.startsWith("//"), `${path} -> ${location}`);
+      assert.ok(location.includes("evil.com"), "the path itself is kept, as a path on this site");
+    }
+  });
+
   it("hands the home editor its rows instead of pre-filling them (P6-3)", async () => {
     const env = makeEnv();
     const legacy = await call(env, "/");

@@ -393,7 +393,21 @@ const PROVIDER_SECRET_KEYS = [
   'myListAddon:simklAccessToken'
 ];
 
-// This page's own copy, for as long as the tab is open.
+// The same eight under the names collectKeys (23_) and the account's sync
+// record give them, each with the provider whose Disconnect clears it.
+const PROVIDER_SECRET_FIELDS = {
+  tmdbKey: 'tmdb', tmdbSessionId: 'tmdb',
+  mdblistKey: 'mdblist', mdblistAccessToken: 'mdblist',
+  traktKey: 'trakt', traktAccessToken: 'trakt',
+  simklKey: 'simkl', simklAccessToken: 'simkl'
+};
+
+function isProviderDisconnected(provider) {
+  try { return localStorage.getItem('myListAddon:' + provider + 'Disconnected') === 'true'; } catch (e) { return false; }
+}
+
+// This page's own copy, for as long as the tab is open. Emptied by
+// clearLocalAccountData (22_): the storage sweep there cannot reach it.
 var _providerSecretsInMemory = {};
 
 function isProviderSecretKey(key) {
@@ -566,7 +580,18 @@ function appActRunOne(el, ev) {
     }
     return false;
   }
-  if (ev && el.hasAttribute('data-act-stop') && typeof ev.stopPropagation === 'function') ev.stopPropagation();
+  if (ev && el.hasAttribute('data-act-stop')) {
+    if (typeof ev.stopPropagation === 'function') ev.stopPropagation();
+    // An inline stopPropagation() kept the event from every listener above the
+    // control, the page's own document-level ones included -- the poster click
+    // that opens a title's details (19_) is one. This listener is on document
+    // too, registered before all of them (initDelegatedActions runs as 16_
+    // loads), so stopping propagation alone no longer reached them: a channel
+    // card's mini-poster opened the details and the poster listener closed
+    // them again at once. Stopping the rest of document's listeners here is
+    // what the inline call used to do.
+    if (typeof ev.stopImmediatePropagation === 'function') ev.stopImmediatePropagation();
+  }
   if (ev && el.hasAttribute('data-act-prevent') && typeof ev.preventDefault === 'function') ev.preventDefault();
   fn.apply(null, appActReadArgs(el, ev));
   const then = el.getAttribute('data-act-then');

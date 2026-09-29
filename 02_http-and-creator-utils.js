@@ -1762,10 +1762,14 @@ function appShellSwitchResponse(url) {
   const clean = new URL(url.href);
   clean.searchParams.delete("ff_new_ui");
   const qs = clean.searchParams.toString();
+  // One leading slash, always. A path that starts with two (//evil.com/,
+  // which is also what /\evil.com parses to) is a protocol-relative address,
+  // and a browser follows it to that host: the switch was an open redirect.
+  const samePath = "/" + clean.pathname.replace(/^\/+/, "");
   return new Response(null, {
     status: 302,
     headers: {
-      Location: clean.pathname + (qs ? "?" + qs : "") + (clean.hash || ""),
+      Location: samePath + (qs ? "?" + qs : "") + (clean.hash || ""),
       "Set-Cookie": appShellCookieHeader(on),
       "Cache-Control": "no-store",
     },

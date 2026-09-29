@@ -27,6 +27,18 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 8. **Recommended: set up the background jobs queue** (Phase 5, `docs/OPERATIONS.md` §18): create the queues `mylists-jobs` and `mylists-jobs-dlq`, make this Worker the consumer of `mylists-jobs` (batch size 25, 5 retries, dead-letter queue `mylists-jobs-dlq`), bind `mylists-jobs` to the Worker as `JOBS`, then press **Send a test job** in `/admin` → Maintenance. Without it everything works as before.
 
+### 🩹 Fixes from reviewing Phase 6
+
+Nothing to configure and nothing to undo; all of it ships with the next deploy.
+
+- **Your connected accounts could be erased by one failed page load.** Since P6-8 the page holds your Trakt, MDBList, Simkl and TMDB keys and tokens only once your account has handed them back. If that first load failed (offline, a server error), the page still saved your settings 20 seconds later — with every key blank, and the server stored the blanks. Now the page leaves out any key it has not seen yet, and the server keeps what it has for anything left out. Disconnecting still clears a key, because a disconnect sends the blank on purpose.
+- **Signing out now forgets those keys in the open tab.** Before, the next person to sign in on the same tab could inherit them — and if their account had none, the page saved the previous person's tokens into it.
+- **The keys are really out of browser storage now.** P6-8 stopped writing them under their own names, but the page's saved state (`myListAddon:state`) still carried a full copy on every change. It no longer does. A copy saved before this is kept only until your account has handed the keys back, the same rule the other old copies follow.
+- **"Save to an account" can no longer replace one of your account's lists.** Pressing it while signed out, then signing in to an account that already had a list with the same name, would have overwritten that list. A clashing list now goes up under a new address instead (a second list can be deleted; an overwritten one cannot come back).
+- **Buttons that stopped working after P6-8:** the Combined Charts cards' **+ Movies** / **+ Shows** (they threw an error and added nothing) and their **See All**; and on channel cards, tapping a small poster opened the title's details and closed them again at once.
+- **A redirect that could send people to another site.** `?ff_new_ui=1` on an address starting with two slashes (`//other-site.com/?ff_new_ui=1`) redirected there. It now always stays on this site.
+- **About thirty patterns in the page's code that never matched what they were written for** (from before Phase 6, and the same slip P6-6 found one of): search words were split on the letter "s", the file importer's IMDb-id finder never found an id, "hide watched" never recognised a bare TMDB id, " (Movies)"/" (Shows)" was never trimmed off a list name, and a file name without a dot lost its whole name. The page's code sits inside the Worker's own template, so every backslash in it has to be written twice; a new test (`tests/client-escapes.test.mjs`) now fails the build when one is not.
+
 ### 🔧 The admin dashboard's controls name their action too (P6-10)
 
 - **Not behind the new-interface cookie: this is the `/admin` page's own markup, so it reaches the dashboard the moment it is deployed.** Nothing to configure and nothing to undo (`docs/OPERATIONS.md` §23). Only the dashboard you use to see the site's numbers is affected; nothing visitors see changes.
