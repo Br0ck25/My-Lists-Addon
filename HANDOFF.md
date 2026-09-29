@@ -4,9 +4,9 @@
 
 > **Release in progress (2026-09-29): read `docs/RELEASES.md` first.**
 > - The owner is taking the new version live one phase at a time, straight to mylistsaddon.com.
-> - Branch `claude/elegant-ride-o7m8fh` is Release 1: `main` at the end of Phase 1 (`31e55d9`), plus three updates from the public repository (Br0ck25/My-Lists, 2026-09-26) that this repository was missing.
-> - Each later release merges the next phase's commit from `main` into that branch. The table in `docs/RELEASES.md` lists them.
-> - The rest of this file describes `main` as it was at the end of Phase 1.
+> - Branch `claude/elegant-ride-o7m8fh` started as Release 1: `main` at the end of Phase 1 (`31e55d9`), plus three updates from the public repository (Br0ck25/My-Lists, 2026-09-26) that this repository was missing. Release 1 has been live since 2026-09-29.
+> - Each later release merges the next phase's commit from `main` into that branch. The table in `docs/RELEASES.md` lists them. The branch is now Release 2 (Phase 2), prepared and not yet live.
+> - The rest of this file describes `main` as it was at the end of the newest phase merged in.
 
 ---
 
