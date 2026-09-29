@@ -69,7 +69,9 @@ describe("the shell's Lists view", () => {
 
   it("asks the page for the account's lists once, then shows the empty state", async () => {
     const client = loadListsClient();
-    client.set("lastCreatorListsData", []);
+    // null is "this browser has not seen the account's lists yet" -- [] would
+    // mean it has, and there are none (P6-9's own rule; see appShellOwnLists).
+    client.set("lastCreatorListsData", null);
     let loads = 0;
     client.set("loadCreatorSync", async () => { loads += 1; });
     client.call("appShellRenderListsHome");

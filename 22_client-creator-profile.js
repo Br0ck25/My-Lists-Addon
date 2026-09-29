@@ -366,6 +366,181 @@ function saveLocalCustomList(sourceRow, urlInput, payload, name) {
 // place. Best-effort per list -- one failing (e.g. a dropped connection
 // partway through) doesn't lose the others; anything that didn't migrate
 // stays in the local store rather than being deleted, so it isn't lost.
+// --- Browser-only lists, and how one gets to an account (P6-9) --------------
+//
+// A list made while signed out lives in this browser alone (D-8). That is a
+// deliberate mode, not a bug -- but it is invisible, which is UX-H10, and
+// nothing in the old UI would move one to an account afterwards. The shell's
+// Lists view now says "Saved in this browser only" on every one of them and
+// offers two ways out: **Save to an account** and **Export** (a small JSON
+// file the same page can restore -- see appShellExportList in 24_).
+//
+// What "browser only" means in code: an entry in the local custom-lists map
+// with no creatorSlug. Every list the account owns gets one -- it is stamped on
+// the way up (here and in uploadMissingLocalListsToAccount) and on the way
+// down (backfillCreatorListsIntoLocalMap) -- so a missing one is the honest
+// answer to "does the account have this list".
+//
+// The push itself is the same request migrateLocalCustomListsToAccount has
+// always made; it is one function now so the sign-up migration and the per-list
+// button cannot drift apart.
+
+// The request, and nothing else: hand this list's payload to the account. The
+// caller decides what happens to the browser's copy afterwards, because the two
+// callers differ -- sign-up deletes it, the sign-in flush has nothing to delete
+// (signing in already cleared this browser's store).
+async function uploadLocalListPayloadToAccount(payload) {
+  if (!activeCreator || !activeCreator.creatorName) return { ok: false, error: 'signed-out' };
+  const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
+  if (!creatorKey) return { ok: false, error: 'signed-out' };
+  const list = payload || {};
+  const body = {
+    creatorName: activeCreator.creatorName,
+    creatorKey: creatorKey,
+    slug: list.creatorSlug || list.slug,
+    name: list.name || list.slug,
+    type: list.type || 'movie',
+    items: Array.isArray(list.items) ? list.items : [],
+    visibility: list.visibility || 'private',
+  };
+  if (list.sourceUrl) body.sourceUrl = list.sourceUrl;
+  if (list.synced != null) body.synced = list.synced;
+  if (list.lastSyncedAt != null) body.lastSyncedAt = list.lastSyncedAt;
+  if (list.baseItemIds) body.baseItemIds = list.baseItemIds;
+  try {
+    const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!data || !data.ok || !data.slug) {
+      return { ok: false, error: (data && data.error) || 'save-failed' };
+    }
+    return { ok: true, slug: data.slug, url: data.url || '', visibility: body.visibility };
+  } catch (e) {
+    return { ok: false, error: 'network' };
+  }
+}
+
+// Every catalog row built from this local list now points at the account's
+// copy, so a later edit or re-save targets the list rather than re-creating a
+// second local one.
+function repointLocalListRowsToCreator(localSlug, result, visibility) {
+  const slug = String(localSlug || '');
+  const data = result || {};
+  const vis = visibility || 'private';
+  document.querySelectorAll('#lists .url').forEach((urlInput) => {
+    const rowPayload = parseCustomListPayloadClient(urlInput.value);
+    if (!rowPayload || rowPayload.localSlug !== slug) return;
+    const updatedPayload = Object.assign({}, rowPayload, {
+      publishedUrl: data.url,
+      creatorSlug: data.slug,
+      creatorOwner: (activeCreator && activeCreator.creatorName) || '',
+      visibility: vis,
+    });
+    delete updatedPayload.localSlug;
+    const sourceRow = urlInput.closest('.source-row');
+    if (sourceRow) sourceRow.outerHTML = customListSourceRowHtml('customlist:v1:' + JSON.stringify(updatedPayload));
+  });
+}
+
+// One list, by the slug it has in this browser's store. Used by the shell's
+// "Save to an account" button (signed in) -- the signed-out path remembers the
+// payload instead, because signing in clears this browser's store before the
+// push can happen.
+async function saveLocalListToAccount(slug, opts) {
+  const want = String(slug || '');
+  const map = loadLocalCustomLists();
+  const list = map[want];
+  if (!list || typeof list !== 'object') return { ok: false, error: 'missing' };
+  const options = opts || {};
+  const visibility = (options.visibility === 'public' || options.visibility === 'unlisted') ? options.visibility : 'private';
+  const payload = Object.assign({}, list, {
+    slug: list.creatorSlug || want,
+    name: list.name || want,
+    type: list.type || 'movie',
+    visibility: visibility,
+  });
+  const result = await uploadLocalListPayloadToAccount(payload);
+  if (!result.ok) return result;
+  repointLocalListRowsToCreator(want, result, visibility);
+  // Only now does the browser's copy go: the account has answered that it has
+  // the list, so there is nothing here that is not on the account.
+  const latest = loadLocalCustomLists();
+  if (latest && latest[want]) {
+    delete latest[want];
+    saveLocalCustomListsMap(latest);
+  }
+  // The account's list cache no longer describes reality (this list was not in
+  // it). Re-fetching is the caller's job: the migration below moves several
+  // lists and refreshes once at the end, and the shell's card refreshes before
+  // it re-renders, so neither shows a list that has just moved as missing.
+  if (typeof resetCreatorListsCache === 'function') resetCreatorListsCache();
+  return result;
+}
+
+// A press of "Save to an account" while signed out. The payload is copied here
+// rather than looked up later on purpose: signing in calls
+// clearLocalAccountData(), which empties this browser's list store, so by the
+// time there is an account to save to there would be nothing left to read.
+let _pendingListSaves = [];
+function rememberPendingListSave(slug) {
+  const want = String(slug || '');
+  const map = loadLocalCustomLists();
+  const list = map[want];
+  if (!list || typeof list !== 'object') return false;
+  if (_pendingListSaves.some((p) => p && p.slug === want)) return true;
+  _pendingListSaves.push({
+    slug: want,
+    name: list.name || want,
+    type: list.type || 'movie',
+    items: Array.isArray(list.items) ? list.items : [],
+    visibility: 'private',
+  });
+  return true;
+}
+
+function pendingListSaves() {
+  return _pendingListSaves.slice();
+}
+
+// Runs right after a sign-in completes (submitRestoreProfile) and after an
+// account is created (submitCreateProfile -- where the whole-store migration
+// has usually already taken them, so this finds nothing to do). Every list
+// somebody asked to save is pushed, and the result is said out loud: a silent
+// failure here would leave a list in a store this page no longer shows.
+async function flushPendingListSaves() {
+  if (!_pendingListSaves.length) return 0;
+  if (!activeCreator || !activeCreator.creatorName) return 0;
+  const waiting = _pendingListSaves;
+  _pendingListSaves = [];
+  let saved = 0;
+  let failed = 0;
+  for (const pending of waiting) {
+    const result = await uploadLocalListPayloadToAccount(pending);
+    if (result.ok) saved++; else failed++;
+  }
+  if (saved && typeof showToast === 'function') {
+    showToast(saved === 1
+      ? 'Saved "' + (waiting[0].name || 'your list') + '" to your account.'
+      : 'Saved ' + saved + ' lists to your account.', 'success');
+  }
+  if (failed && typeof showToast === 'function') {
+    showToast(failed === 1
+      ? 'One list could not be saved to your account -- press Save to an account on it to try again.'
+      : failed + ' lists could not be saved to your account -- press Save to an account on each to try again.', 'error');
+  }
+  if (saved && typeof resetCreatorListsCache === 'function') resetCreatorListsCache();
+  if (saved && typeof renderCreatorDashboard === 'function') { try { renderCreatorDashboard({ silent: true }); } catch (e) {} }
+  // The shell's Lists view is showing these as browser-only; it needs to hear
+  // that they moved.
+  if (saved && typeof appShellRenderListsHome === 'function') {
+    try { appShellRenderListsHome(); } catch (e) {}
+  }
+  return saved;
+}
+
 async function migrateLocalCustomListsToAccount() {
   if (!activeCreator) return;
   const localMap = loadLocalCustomLists();
@@ -374,9 +549,9 @@ async function migrateLocalCustomListsToAccount() {
   // here would silently turn private watch history into a public server
   // list (see visibility: 'public' below) and then delete the local copy.
   // They do still get synced to the account, just privately and through
-  // pushCreatorSync/loadCreatorSync's own blob instead of this endpoint --
-  // that already runs right after this function returns (see
-  // submitCreateProfile), so nothing here needs to push them itself.
+  // pushCreatorSync/loadCreatorSync's own blob instead -- that already runs
+  // right after this function returns (see submitCreateProfile), so nothing
+  // here needs to push them itself.
   const AUTO_TRACKED_SLUGS = ['watch-history', 'continue-watching'];
   // The Watchlist migrates, but privately.
   //
@@ -400,56 +575,28 @@ async function migrateLocalCustomListsToAccount() {
       || (typeof list.name === 'string' && list.name.toLowerCase() === 'watchlist')));
   const slugs = Object.keys(localMap).filter((slug) => !AUTO_TRACKED_SLUGS.includes(slug));
   if (!slugs.length) return;
-  const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
   let migratedCount = 0;
   let failedCount = 0;
   for (const slug of slugs) {
-    const list = localMap[slug];
-    try {
-      const res = await fetch(ORIGIN + '/api/creator/lists/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          creatorName: activeCreator.creatorName,
-          creatorKey: creatorKey,
-          name: list.name,
-          type: list.type,
-          items: list.items,
-          visibility: isWatchlistSlug(slug, list) ? 'private' : 'public',
-        }),
-      });
-      const data = await res.json();
-      if (!data.ok) {
-        failedCount++;
-        continue;
-      }
-      migratedCount++;
-      delete localMap[slug];
-      // Repoint any row already in #lists that was built from this local
-      // list so it now saves/edits against the account instead.
-      document.querySelectorAll('#lists .url').forEach((urlInput) => {
-        const rowPayload = parseCustomListPayloadClient(urlInput.value);
-        if (!rowPayload || rowPayload.localSlug !== slug) return;
-        const updatedPayload = Object.assign({}, rowPayload, {
-          publishedUrl: data.url,
-          creatorSlug: data.slug,
-          creatorOwner: activeCreator.creatorName,
-          visibility: 'public',
-        });
-        delete updatedPayload.localSlug;
-        const sourceRow = urlInput.closest('.source-row');
-        if (sourceRow) sourceRow.outerHTML = customListSourceRowHtml('customlist:v1:' + JSON.stringify(updatedPayload));
-      });
-    } catch (e) {
+    const list = localMap[slug] || {};
+    const visibility = isWatchlistSlug(slug, list) ? 'private' : 'public';
+    // saveLocalListToAccount reads the store itself (the map object above is
+    // replaced by every save), so read the one field this loop needs first
+    // and let it do the rest.
+    const label = list.name || slug;
+    const result = await saveLocalListToAccount(slug, { visibility: visibility });
+    if (!result || !result.ok) {
       failedCount++;
+      continue;
     }
+    migratedCount++;
+    console.info('Migrated local list "' + label + '" to ' + slug + '.');
   }
-  saveLocalCustomListsMap(localMap);
   if (migratedCount) {
-    renumber();
-    checkAllDuplicateUrls();
+    if (typeof renumber === 'function') renumber();
+    if (typeof checkAllDuplicateUrls === 'function') checkAllDuplicateUrls();
     saveState();
-    renderCreatorDashboard();
+    if (typeof renderCreatorDashboard === 'function') renderCreatorDashboard();
   }
   if (failedCount) {
     showToast(
@@ -1617,6 +1764,10 @@ async function submitRestoreProfile() {
     await loadCreatorSync();
     // After the sync load, so tokens this account keeps in sync are included.
     if (data.session && typeof importLocalConnectionsOnce === 'function') importLocalConnectionsOnce(data.creatorName);
+    // P6-9: a list marked "Save to an account" while signed out was copied out
+    // of the store before this sign-in (clearLocalAccountData empties it), and
+    // is pushed now -- which is the only moment it can be.
+    await flushPendingListSaves();
   } catch (e) {
     errBox.innerHTML = '<p class="testresult err">Network error.</p>';
   } finally {
@@ -3648,7 +3799,15 @@ async function submitCreateProfile() {
     renderTrackPlaybackSection();
     showKeyRevealModal(data.displayName, data.creatorKey);
     loadCreatorSync();
-    migrateLocalCustomListsToAccount();
+    // A list somebody pressed "Save to an account" on while signed out is in
+    // the queue. The whole-store migration above uploads every hand-built list
+    // and usually takes it first, so the flush waits for the migration (which
+    // is not awaited here) and then clears the queue either way -- see
+    // flushPendingListSaves.
+    Promise.resolve()
+      .then(function () { return migrateLocalCustomListsToAccount(); })
+      .catch(function () {})
+      .then(function () { return flushPendingListSaves(); });
   } catch (e) {
     errBox.innerHTML = '<p class="testresult err">Network error.</p>';
   } finally {

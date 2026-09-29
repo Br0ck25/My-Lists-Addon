@@ -4047,23 +4047,58 @@ function appShellListsEscape(value) {
 }
 
 // The lists this browser can act on: the account's, when it is signed in, and
-// the ones kept in this browser otherwise (D-8).
+// the ones kept in this browser on their own (D-8).
+//
+// P6-9: both, not either. Until this task the signed-in branch returned the
+// account's lists and nothing else, so a list built while signed out -- which
+// survives signing in, because nothing migrates it then -- was simply not on
+// screen anywhere in the new UI, and there was no way to save it. A list the
+// account does not have is marked local, which is what the card's "Saved in
+// this browser only" line, its Save/Export buttons and the Share control all
+// read.
 function appShellOwnLists() {
   const out = [];
   const signedIn = (typeof activeCreator !== 'undefined' && !!activeCreator && !!activeCreator.creatorName);
+  const accountSlugs = {};
   if (signedIn && typeof lastCreatorListsData !== 'undefined' && Array.isArray(lastCreatorListsData)) {
     lastCreatorListsData.forEach(function (l) {
-      if (l && l.slug) out.push(l);
+      if (l && l.slug) {
+        out.push(l);
+        accountSlugs[String(l.slug)] = true;
+      }
     });
-    return out;
   }
   const map = (typeof loadLocalCustomLists === 'function') ? (loadLocalCustomLists() || {}) : {};
   Object.keys(map).forEach(function (key) {
     const l = map[key];
     if (!l) return;
-    out.push(Object.assign({}, l, { slug: l.slug || key, local: true }));
+    // The auto-tracked lists are not hand-built ones and are not "browser
+    // only" in the sense this view means: their content travels in the
+    // account's own tracking record (pushTrackingSync, 22_), and the sign-up
+    // migration deliberately leaves them out of the per-list upload for that
+    // reason. Offering "Save to an account" on one would either duplicate it
+    // as a second list or, signed out, pretend a generated shelf is something
+    // the person built.
+    if (APP_SHELL_AUTO_TRACKED_SLUGS.indexOf(String(l.slug || key)) !== -1) return;
+    const slug = String(l.slug || key);
+    // While signed in, this store is also the account's own copy: every list
+    // the account has is mirrored into it with a creatorSlug (backfill /
+    // upload), so an entry carrying one is not browser-only, it is the
+    // account's list seen through the cache. An entry without one is a list
+    // the account has never been told about.
+    if (signedIn && (l.creatorSlug || accountSlugs[slug])) return;
+    out.push(Object.assign({}, l, { slug: slug, local: true }));
   });
   return out;
+}
+
+// The generated lists that live in the same browser store but are not
+// browser-only lists -- see appShellOwnLists.
+const APP_SHELL_AUTO_TRACKED_SLUGS = ['watchlist', 'watch-history', 'continue-watching', 'airing-next'];
+
+// A list the account does not have. See appShellOwnLists.
+function appShellListIsLocal(list) {
+  return !!(list && list.local);
 }
 
 function appShellListBySlug(slug) {
@@ -4199,21 +4234,108 @@ function appShellListCardHtml(list) {
   const slug = String(list.slug || '');
   const onHome = appShellListOnHomeScreen(slug);
   const vis = appShellListVisibility(list);
+  const local = appShellListIsLocal(list);
   const count = appShellListCount(list);
-  const meta = appShellListsEscape(vis.charAt(0).toUpperCase() + vis.slice(1)) + ' &middot; ' + appShellListsEscape(appShellListKind(list)) +
-    ' &middot; ' + count + (count === 1 ? ' title' : ' titles');
+  const meta = (local ? 'Saved in this browser only' : appShellListsEscape(vis.charAt(0).toUpperCase() + vis.slice(1))) +
+    ' &middot; ' + appShellListsEscape(appShellListKind(list)) + ' &middot; ' + count + (count === 1 ? ' title' : ' titles');
   let html = '<div class="app-shell-row">' +
     '<div class="app-shell-row-main"><strong>' + appShellListsEscape(list.name || slug) + '</strong>' +
-    '<br><span class="app-shell-muted">' + meta + '</span></div>' +
+    '<br><span class="app-shell-muted">' + meta + '</span>' +
+    (local ? '<br><span class="app-shell-muted">It lives in this browser alone, so clearing this browser\u2019s data loses it. Save it to an account to keep it, or Export a copy.</span>' : '') +
+    '</div>' +
     '<div class="app-shell-row-controls">' +
     '<button type="button" class="secondary lc-btn" data-app-shell-action="list-open" data-app-shell-id="' + appShellListsEscape(slug) + '">Open</button>' +
     '<button type="button" class="secondary lc-btn" data-app-shell-action="list-edit" data-app-shell-id="' + appShellListsEscape(slug) + '">Add titles</button>' +
     '<button type="button" class="' + (onHome ? 'secondary lc-btn' : 'primary lc-btn') + '" data-app-shell-action="list-home" data-app-shell-id="' + appShellListsEscape(slug) + '">' +
     (onHome ? 'On your home screen' : 'Show on home screen') + '</button>' +
-    '<button type="button" class="secondary lc-btn" data-app-shell-action="list-share" data-app-shell-id="' + appShellListsEscape(slug) + '">Share</button>' +
+    (local
+      ? '<button type="button" class="primary lc-btn" data-app-shell-action="list-save-account" data-app-shell-id="' + appShellListsEscape(slug) + '">Save to an account</button>' +
+        '<button type="button" class="secondary lc-btn" data-app-shell-action="list-export" data-app-shell-id="' + appShellListsEscape(slug) + '">Export</button>'
+      : '<button type="button" class="secondary lc-btn" data-app-shell-action="list-share" data-app-shell-id="' + appShellListsEscape(slug) + '">Share</button>') +
     '</div></div>';
-  if (appShellShareSlug === slug) html += appShellListShareHtml(list);
+  if (!local && appShellShareSlug === slug) html += appShellListShareHtml(list);
   return html;
+}
+
+// --- browser-only lists (P6-9) ----------------------------------------------
+//
+// The Lists view shows the lists this browser keeps on its own (D-8) beside the
+// account's, says which is which, and gives each of those two ways out. Both
+// end up in 22_client-creator-profile.js: the push is the same request the
+// sign-up migration makes (saveLocalListToAccount), and the export is a file
+// this same page can restore.
+
+// The button on a card. Signed in, it saves the list and the browser's copy
+// goes (the account has it now). Signed out, it copies the list out of the
+// store first and asks the person to sign in -- signing in empties this
+// browser's store (clearLocalAccountData), so the push happens right after it
+// completes, from that copy (flushPendingListSaves). Without the copy the list
+// would be gone by the time there was an account to save it to.
+async function appShellSaveLocalListToAccount(slug) {
+  const list = appShellListBySlug(slug);
+  if (!list) {
+    showToast('Could not find that list -- try refreshing.', 'error');
+    return false;
+  }
+  const signedIn = (typeof activeCreator !== 'undefined' && !!activeCreator && !!activeCreator.creatorName);
+  if (!signedIn) {
+    if (typeof rememberPendingListSave !== 'function' || !rememberPendingListSave(slug)) {
+      showToast('Could not read that list -- try refreshing.', 'error');
+      return false;
+    }
+    showToast('"' + (list.name || slug) + '" will be saved to the account you sign in to.', 'info', { duration: 8000 });
+    if (typeof openRestoreModal === 'function') openRestoreModal();
+    return true;
+  }
+  if (typeof saveLocalListToAccount !== 'function') return false;
+  const result = await saveLocalListToAccount(slug, { visibility: 'private' });
+  if (!result || !result.ok) {
+    showToast(result && result.error === 'signed-out'
+      ? 'Sign in to save this list to an account.'
+      : 'Could not save that list to your account -- try again.', 'error');
+    return false;
+  }
+  // Ask the account what it has before re-rendering: the list has just changed
+  // hands, and the card must come back from the account's own answer rather
+  // than flicker out because the cache predates the save.
+  if (typeof renderCreatorDashboard === 'function') {
+    try { await renderCreatorDashboard({ silent: true }); } catch (e) {}
+  }
+  showToast('"' + (list.name || slug) + '" is saved to your account now. It is private until you share it.', 'success');
+  appShellRenderListsHome();
+  return true;
+}
+
+// Export one list as the small JSON file this page's own restore reads
+// (Settings -> Backups -> Restore, which merges customLists into the browser's
+// store). Deliberately not the whole-library file: the point of the button is
+// that one list is only in this browser, and the person wants a copy of it.
+function appShellExportList(slug) {
+  const list = appShellListBySlug(slug);
+  if (!list) {
+    showToast('Could not find that list -- try refreshing.', 'error');
+    return false;
+  }
+  const key = String(list.slug || slug);
+  const payload = {
+    version: BACKUP_FORMAT_VERSION,
+    exportedAt: new Date().toISOString(),
+    exportedFrom: 'My Lists Addon (a list saved in one browser)',
+    customLists: {},
+  };
+  payload.customLists[key] = {
+    slug: key,
+    name: list.name || key,
+    type: list.type || 'movie',
+    items: Array.isArray(list.items) ? list.items : [],
+    visibility: appShellListVisibility(list),
+    updatedAt: Number(list.updatedAt) || Date.now(),
+  };
+  const filename = (slugify(list.name || key) || key) + '-list.json';
+  if (typeof downloadJsonFile !== 'function') return false;
+  downloadJsonFile(filename, payload);
+  showToast('Exported "' + (list.name || key) + '" as ' + filename + '.', 'success');
+  return true;
 }
 
 // Whether this view has already asked the page to fetch the account's lists.
@@ -4226,7 +4348,13 @@ function appShellRenderListsHome() {
   if (!host || !NEW_UI) return false;
   const lists = appShellOwnLists();
   const signedIn = (typeof activeCreator !== 'undefined' && !!activeCreator && !!activeCreator.creatorName);
-  if (!lists.length && signedIn && !appShellListsLoadRequested) {
+  // P6-9: "no lists" and "the account's lists have not arrived yet" are
+  // different states, and only the second one is worth waiting for. The
+  // browser's own store is a *cache* of the account's lists while signed in, so
+  // rendering from it before the account answers would label an account list as
+  // browser-only for as long as the request takes.
+  const accountKnown = !signedIn || (typeof lastCreatorListsData !== 'undefined' && Array.isArray(lastCreatorListsData));
+  if (!accountKnown && !appShellListsLoadRequested) {
     appShellListsLoadRequested = true;
     host.innerHTML = '<div class="panel" style="margin-bottom:12px;">' +
       '<h2 class="panel-title">Your lists</h2>' +
@@ -4247,7 +4375,9 @@ function appShellRenderListsHome() {
   let html = '<div class="panel" style="margin-bottom:12px;">' +
     '<h2 class="panel-title">Your lists</h2>' +
     '<p class="app-shell-muted">Open one, add titles to it, put it on your home screen, or share it. ' +
-    (signedIn ? 'Everything here is saved to your account.' : 'These are saved in this browser only until you sign in.') + '</p>';
+    (signedIn
+      ? 'Each list says where it is saved. Anything marked "Saved in this browser only" is not on your account yet.'
+      : 'Everything here is saved in this browser only. Save a list to an account to keep it, or export a copy.') + '</p>';
   lists.forEach(function (list) {
     html += appShellListCardHtml(list);
   });
@@ -4448,6 +4578,8 @@ async function appShellListsAction(action, id) {
     const parts = slug.split('|');
     return appShellSetListVisibility(parts[0], parts[1]);
   }
+  if (what === 'list-save-account') return appShellSaveLocalListToAccount(slug);
+  if (what === 'list-export') return appShellExportList(slug);
   if (what === 'title-add') return appShellAddTitle(id);
   return false;
 }

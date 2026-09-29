@@ -2,6 +2,13 @@
 
 Decisions the owner has made. They are recorded here so the code, the plan documents and future work agree. The newest entries are at the top.
 
+## 2026-09-28 — Lists that live in one browser (P6-9)
+
+| # | Decision | Consequence in the code |
+|---|---|---|
+| D-16 | **A list saved to an account while signed out is queued with its own copy of the data.** Pressing "Save to an account" signed out copies the whole list into memory (`rememberPendingListSave`, `_pendingListSaves`, `22_`) and opens the sign-in dialog; the queue is pushed right after the sign-in completes (`flushPendingListSaves`, awaited in `submitRestoreProfile`) and, for a new account, after the one-time migration of the browser's lists (`submitCreateProfile`). | Signing in calls `clearLocalAccountData()`, which deletes the whole `myListAddon:` prefix **and** the sessionStorage list mirror, so a payload looked up after the sign-in would not exist -- the copy is made before it, not after. The flush announces what it saved and what it could not, so a failed push never leaves a list only in a store the page has stopped showing. |
+| D-17 | **Signing in to an existing account does not auto-merge the browser's lists into it.** The lists are shown, labelled "Saved in this browser only", and each one moves only when its own button is pressed. | The automatic path stays what it was: the whole-store migration runs on **sign-up** (`submitCreateProfile`), where the account is new by definition and nothing can be duplicated. On sign-in to an existing account the button is the person's to press (`saveLocalListToAccount`, private by default), which is the only way to avoid duplicating a list the account already has. |
+
 ## 2026-09-28 — Phase 6, session UI cleanup (P6-8)
 
 | # | Decision | Consequence in the code |

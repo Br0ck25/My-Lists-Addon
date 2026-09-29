@@ -27,6 +27,17 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 8. **Recommended: set up the background jobs queue** (Phase 5, `docs/OPERATIONS.md` §18): create the queues `mylists-jobs` and `mylists-jobs-dlq`, make this Worker the consumer of `mylists-jobs` (batch size 25, 5 retries, dead-letter queue `mylists-jobs-dlq`), bind `mylists-jobs` to the Worker as `JOBS`, then press **Send a test job** in `/admin` → Maintenance. Without it everything works as before.
 
+### 🌐 Your lists now say where they are saved (P6-9, new UI only)
+
+- **Only for a browser on the new interface** (`?ff_new_ui=1`). Lists shows the lists your account has **and** the ones this browser keeps on its own, and each card says which is which.
+  - A list built while signed out is marked **"Saved in this browser only"**, with a sentence under it saying that clearing this browser's data loses it, and two buttons that were not there before: **Save to an account** and **Export** (it has no Share button — there is nothing to share until it is saved).
+  - **Save to an account**, signed in: the list is sent to your account as **private**, the browser's copy is deleted once the account has confirmed it has the list, and any row already built from it now edits the account's copy. A list that fails to save stays in this browser rather than disappearing.
+  - **Save to an account**, signed out: pressing it copies the list and asks you to sign in, then saves it the moment you are signed in. (Signing in empties this browser's list store, which is why the copy is made first — and the save is said out loud, so a list that could not be sent is never left behind quietly.)
+  - **Export** downloads that one list as a small JSON file — the same shape Settings › Backups › Restore already reads — so it can be restored on any browser.
+  - The generated shelves (Watchlist, Watch History, Continue Watching, Airing Next) are **not** offered this way: they are not hand-built lists, and their content already travels with your account's tracking record.
+  - Nothing migrates by itself when you sign in to an account that already has lists: the lists are shown, and the button is yours to press — which is what keeps a list the account already has from being duplicated.
+- The old page is unchanged, and nothing here needs a dashboard change or a migration (`docs/OPERATIONS.md` §22).
+
 ### 🧹 Buttons say what they do, and the browser stops keeping your keys (P6-8)
 
 - **Not behind the new-interface cookie: this one is the page's own markup and this browser's own storage, so it reaches everyone once it is deployed.** Nothing to configure (`docs/OPERATIONS.md` §21).

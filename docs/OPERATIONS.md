@@ -421,3 +421,18 @@ You are bounced back to the page you asked for, without the parameter, and the c
 - **Provider keys are no longer re-saved in the browser.** A Trakt, MDBList, Simkl or TMDB key or token lives in memory while the page is open, is read from the old stored copy if one is there, and the stored copy is cleaned up once the account (signed in) hands the same value back. Consequence to know: if a visitor is **not signed in** and pastes a key, it works for that visit but is not kept for the next one — signing in is what saves it. The Creator Key itself is untouched (it is what signs this browser in; it moves in P6-9).
 - **Nothing to undo** if the deploy has to be rolled back: the previous file re-stores what the old page stored.
 
+## 22. Lists that live in one browser (P6-9)
+
+**Nothing to configure.** Like P6-1 to P6-7 this screen is only reachable with the new-UI cookie (§20); no migration, no variable and no dashboard change. The old page is untouched, and the API call it makes (`POST /api/creator/lists/save`) is the one the sign-up migration has always used.
+
+**What changed:** Lists now shows the account's lists **and** the lists this browser keeps on its own (a list built while signed out lives in `myListAddon:localCustomLists` and stays there through a sign-in, because nothing migrates it at that moment). A list the account does not have is labelled **"Saved in this browser only"** and carries **Save to an account** and **Export** instead of Share.
+
+- **How a list is known to be browser-only.** Every list the account owns is mirrored into the local map with a `creatorSlug`; an entry without one has never been sent to an account. That is a lookup, not a guess — which is why the view waits ("Loading your lists…") while signed in until the account's own list has arrived: the local map is a *cache* of the account's lists in that state, and rendering early would label an account's list as browser-only.
+- **Save to an account, signed in.** The list is posted as **private**, the row that pointed at the local copy is re-pointed at the account's, and the browser's copy is deleted *after* the account confirms it has the list. A failure leaves the browser's copy alone and says so.
+- **Save to an account, signed out.** Signing in runs `clearLocalAccountData()`, which empties this browser's list store, so the list is copied into a pending queue *before* the sign-in dialog opens and pushed the moment the sign-in completes (a new account pushes the queue after its one-time migration of everything else, so nothing is sent twice). Both outcomes are announced in a toast.
+- **Export** downloads that one list as the small JSON file Settings › Backups › Restore already reads (`version: "3.0"`, one entry in `customLists`), so it can be restored in any browser.
+- **Nothing merges by itself.** Signing in to an account that already has lists does not sweep the browser's lists into it; each one waits for its own button. That is deliberate: an automatic merge cannot tell a list the account already has from one it does not, and would duplicate it.
+- **Not offered for the generated shelves** (Watchlist, Watch History, Continue Watching, Airing Next): their content travels with the account's tracking record, and "saving" one would either duplicate it or invent a list.
+- **Nothing to undo** if the deploy is rolled back: the browser's store is the same store the old page uses, and a list moves only when someone presses the button.
+
+**If something looks wrong:** the console names the action that failed (`Action failed: <name>`), and a list that did not move is still in this browser — reload Lists and it is there.
