@@ -28,12 +28,23 @@ function savedConfigKey(id) {
 // channel meta route and /api/resolve ask for it; a personal shelf reads its
 // own data in fetchAutoTrackedCatalog.
 async function resolveConfig(configParam, env, { withTracking = false } = {}) {
+  // A v2 install link, /i/{token}/... (P3a-8, 27_installs.js).
+  if (isV2InstallParam(configParam)) return resolveV2InstallConfig(configParam, env, { withTracking });
   if (configParam.length <= SHORT_ID_LENGTH && env && env.CONFIGS) {
     const stored = (await env.CONFIGS.get(savedConfigKey(configParam)))
       || (await env.CONFIGS.get(configParam));
     if (stored) {
       try {
-        const parsed = JSON.parse(stored);
+        let parsed = JSON.parse(stored);
+        // A record whose keys and tokens have moved into install_secrets
+        // (P3a-8) gets them back here, so nothing below can tell the
+        // difference. One that still holds them is noted for the move.
+        if (parsed && parsed._install) {
+          parsed = await applyLegacyInstallRecord(env, configParam, parsed);
+          if (parsed._revoked) return emptyResolvedInstallConfig();
+        } else {
+          noteLegacyInstallCandidate(configParam, parsed);
+        }
         let watchHistory = Array.isArray(parsed.watchHistory) ? parsed.watchHistory : [];
         let continueWatching = Array.isArray(parsed.continueWatching) ? parsed.continueWatching : [];
         let watchlist = Array.isArray(parsed.watchlist) ? parsed.watchlist : [];
@@ -71,17 +82,34 @@ async function resolveConfig(configParam, env, { withTracking = false } = {}) {
         //   * it predates both, and LEGACY_UNVERIFIED_CONFIG_SHELVES says to
         //     honour those -- see that constant for exactly what it costs.
         let trackOwner = "";
+        // Proven by the config's own Creator Key, the strongest of the three.
+        // P3a-10 lends provider connections only to this or an ownerId stamp.
+        let keyVerifiedOwner = "";
         if (creatorName) {
           if (parsed.trackCreatorKey) {
             trackOwner = await verifyShelfOwner(env, creatorName, parsed.trackCreatorKey);
+            keyVerifiedOwner = trackOwner;
           }
           if (!trackOwner && typeof parsed.trackOwner === "string" && parsed.trackOwner) {
             const stamped = String(parsed.trackOwner).toLowerCase();
             if (stamped === String(creatorName).toLowerCase()) trackOwner = stamped;
           }
-          if (!trackOwner && LEGACY_UNVERIFIED_CONFIG_SHELVES && !parsed.trackCreatorKey && !parsed.trackOwner) {
+          if (!trackOwner && LEGACY_UNVERIFIED_CONFIG_SHELVES && !parsed.trackCreatorKey && !parsed.trackOwner && !parsed._legacyShelfRuleOff) {
             trackOwner = String(creatorName).toLowerCase();
           }
+        }
+        // The keys and tokens this config does not carry itself, from its
+        // proven owner's own connections (P3a-10, 28_connections.js). Its own
+        // always win, so a link that has them serves exactly as before.
+        // Guarded: a failure here must leave the link serving as it would
+        // without connections, not fall through to the base64 decode below.
+        try {
+          const connectionOwnerId = await connectionOwnerForConfig(env, parsed, keyVerifiedOwner);
+          if (connectionOwnerId != null) {
+            parsed = { ...parsed, ...(await connectionFieldsForConfig(env, connectionOwnerId, readInstallConfigFields(parsed))) };
+          }
+        } catch (e) {
+          console.error("Could not read the install owner's connections:", e);
         }
         if (withTracking && trackOwner && env.CONFIGS) {
           const trackingRaw = await env.CONFIGS.get(`creatorsynctracking:${trackOwner}`);

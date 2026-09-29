@@ -60,6 +60,9 @@ function isPrivateApiPath(path) {
   // fixed at the route, because this is the choke point that is supposed to
   // mean a route added later cannot forget.
   if (p === "/api/resolve") return true;
+  if (p === "/api/session" || p === "/api/me" || p.startsWith("/api/me/")) return true;
+  if (p === "/api/installs" || p.startsWith("/api/installs/")) return true;
+  if (p === "/api/connections" || p.startsWith("/api/connections/")) return true;
   return p.startsWith("/api/creator/") || p === "/admin" || p.startsWith("/admin/");
 }
 
@@ -118,11 +121,14 @@ function securityHeaders() {
 // like Content-Type/Cache-Control/CORS) -- see securityHeaders' own
 // comment for why this is applied here, once, rather than at each call
 // site.
-function withSecurityHeaders(response, privatePath = false) {
+function withSecurityHeaders(response, privatePath = false, extraSetCookie = null) {
   const headers = new Headers(response.headers);
   const extra = securityHeaders();
   for (const key in extra) {
     if (!headers.has(key)) headers.set(key, extra[key]);
+  }
+  if (extraSetCookie && !headers.has("Set-Cookie")) {
+    headers.set("Set-Cookie", extraSetCookie);
   }
   // Deliberately set rather than defaulted -- see isPrivateApiPath.
   if (privatePath) headers.set("Cache-Control", "no-store");
@@ -189,6 +195,60 @@ async function schemaWriteGate(request, env) {
     maintenance: true,
     error: "My Lists is being updated. Please try again in a few minutes.",
   }, 503, { "Cache-Control": "no-store", "Retry-After": "120" });
+}
+
+// --- CSRF protection middleware (P3a-5) -----------------------------------
+// Enforces that state-changing requests (POST, PUT, PATCH, DELETE) come from
+// our own origin (or have Sec-Fetch-Site: same-origin) AND carry Content-Type: application/json.
+// Exemptions:
+// 1. Webhook ingestion routes (/api/scrobble*) - called by media servers/Stremio
+// 2. OAuth provider callbacks and starts (/api/*/oauth/*)
+// 3. Admin form login and logout (/admin/login, /admin/logout)
+function verifyCsrf(request) {
+  const method = (request.method || "GET").toUpperCase();
+  if (method !== "POST" && method !== "PUT" && method !== "PATCH" && method !== "DELETE") {
+    return null;
+  }
+
+  let url;
+  try {
+    url = new URL(request.url);
+  } catch {
+    return json({ ok: false, error: "Invalid request URL." }, 400);
+  }
+  const path = url.pathname;
+
+  // Exemptions
+  if (path.startsWith("/api/scrobble")) {
+    return null;
+  }
+  if (path.includes("/oauth/")) {
+    return null;
+  }
+  if (path === "/admin/login" || path === "/admin/logout") {
+    return null;
+  }
+
+  // Check Origin or Sec-Fetch-Site: must be same-origin
+  const origin = request.headers.get("Origin") || request.headers.get("origin");
+  const secFetchSite = request.headers.get("Sec-Fetch-Site") || request.headers.get("sec-fetch-site");
+  const requestOrigin = url.origin.toLowerCase();
+
+  const isSameOrigin = (origin && origin.toLowerCase() === requestOrigin) ||
+                       (secFetchSite && secFetchSite.toLowerCase() === "same-origin");
+
+  if (!isSameOrigin) {
+    return json({ ok: false, error: "Cross-origin request forbidden." }, 403);
+  }
+
+  // Check Content-Type: application/json
+  const contentType = request.headers.get("Content-Type") || request.headers.get("content-type") || "";
+  const mime = contentType.split(";")[0].trim().toLowerCase();
+  if (mime !== "application/json") {
+    return json({ ok: false, error: "Content-Type must be application/json." }, 403);
+  }
+
+  return null;
 }
 
 // --- Per-request metrics (Workers Analytics Engine) --------------------------
@@ -740,6 +800,333 @@ function invalidateCreatorAuthMemo() {
   CREATOR_AUTH_MEMO.clear();
 }
 
+// --- Session management (P3a-4) -------------------------------------------
+const SESSION_COOKIE_NAME = "mla_session";
+const SESSION_TTL_SEC = 30 * 24 * 60 * 60; // 30 days
+const SESSION_TTL_MS = SESSION_TTL_SEC * 1000;
+const SESSION_CACHE = new Map();
+const SESSION_CACHE_TTL_MS = 60 * 1000; // 60 s isolate cache
+const SESSION_CACHE_MAX = 1000;
+
+function extractSessionToken(request) {
+  if (!request) return null;
+  const cookieHeader = request.headers.get("Cookie") || request.headers.get("cookie") || "";
+  const match = cookieHeader.match(/(?:^|;\s*)mla_session=([^;]+)/);
+  if (match) {
+    try { return decodeURIComponent(match[1].trim()); } catch { return match[1].trim(); }
+  }
+  const authHeader = request.headers.get("Authorization") || request.headers.get("authorization") || "";
+  if (authHeader.startsWith("Bearer ")) {
+    return authHeader.slice(7).trim();
+  }
+  return null;
+}
+
+async function hashSessionToken(token) {
+  if (!token || typeof token !== "string") return "";
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+  return bufferToHex(new Uint8Array(digest));
+}
+
+function buildSessionCookieHeader(token) {
+  return `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL_SEC}`;
+}
+
+function buildClearSessionCookieHeader() {
+  return `${SESSION_COOKIE_NAME}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+}
+
+function isSessionsEnabled(env) {
+  if (!env) return false;
+  return env.FF_SESSIONS === "1" || env.FF_SESSIONS === "true" || env.FF_SESSIONS === true;
+}
+
+// The accounts row is a mirror of the creator profile (`creator:{u}` in KV,
+// `creators` in D1), which stays the source of truth until the legacy stores
+// retire: every key reset, recovery-answer change and deletion still writes
+// the profile first. So a row is never trusted on its own. A caller that has
+// just verified the profile passes it in, and a row that has drifted from it
+// (a key reset, a username deleted and registered again) is corrected before
+// a session is tied to it.
+//
+// A missing row is filled for this one account only. This used to run the
+// whole backfillAccounts() -- every creator in D1 and every creator:* key in
+// KV -- on each sign-in by an account the backfill had not reached yet.
+async function getOrBackfillAccount(env, username, profile = null) {
+  if (!env || !env.DB) return null;
+  const norm = String(username || "").trim().toLowerCase();
+  if (!norm) return null;
+  const selectRow = async () => {
+    const { results } = await env.DB.prepare(
+      "SELECT id, username, display_name, key_hash, recovery_answer_hash, key_lookup_hmac, created_at, last_active_at, version, status, deleted_at " +
+      "FROM accounts WHERE username = ? COLLATE NOCASE"
+    ).bind(norm).all();
+    return results && results.length > 0 ? results[0] : null;
+  };
+  let row;
+  try {
+    row = await selectRow();
+  } catch (e) {
+    // Most often migration 0015 not applied yet: no accounts table.
+    console.error("D1 accounts lookup failed:", e);
+    return null;
+  }
+  const rowDeleted = Boolean(row) && (row.deleted_at != null || row.status === "deleted");
+  // Any other status (a suspension, say) is a decision about this account,
+  // not a leftover: signing in must neither undo it nor replace the row.
+  if (row && !rowDeleted && row.status && row.status !== "active") return null;
+  const rowIsLive = Boolean(row) && !rowDeleted;
+  if (rowIsLive && (!profile || accountRowMatchesProfile(row, profile))) return row;
+
+  if (!profile) {
+    try {
+      const raw = await getCreator(env, norm);
+      profile = raw ? JSON.parse(raw) : null;
+    } catch {
+      profile = null;
+    }
+    if (!profile || typeof profile.keyHash !== "string" || !profile.keyHash) return null;
+    if (rowIsLive && accountRowMatchesProfile(row, profile)) return row;
+  }
+
+  try {
+    // A row marked deleted belongs to an earlier holder of this username.
+    // Reviving it would hand the new holder its id, and with it every
+    // session, install and provider connection still filed under that id.
+    if (rowDeleted && !(await deleteAccountRow(env, norm)).ok) return null;
+    await env.DB.prepare(
+      "INSERT INTO accounts (" +
+      "  username, display_name, key_hash, recovery_answer_hash," +
+      "  key_lookup_hmac, created_at, last_active_at, version, deleted_at, status" +
+      ") VALUES (?, ?, ?, ?, NULL, ?, NULL, 0, NULL, 'active') " +
+      "ON CONFLICT(username) DO UPDATE SET " +
+      "  display_name = excluded.display_name," +
+      "  key_hash = excluded.key_hash," +
+      "  recovery_answer_hash = excluded.recovery_answer_hash," +
+      // The blind index belongs to the key it was computed from. A new key
+      // hash means a new key, so the old entry would point forgot-username
+      // at this account for a key that no longer opens it.
+      "  key_lookup_hmac = CASE WHEN accounts.key_hash = excluded.key_hash THEN accounts.key_lookup_hmac ELSE NULL END"
+    ).bind(
+      norm,
+      profile.displayName || norm,
+      profile.keyHash,
+      profile.recoveryAnswerHash || null,
+      typeof profile.createdAt === "number" && profile.createdAt > 0 ? profile.createdAt : Date.now()
+    ).run();
+    return await selectRow();
+  } catch (e) {
+    console.error("D1 accounts upsert failed:", e);
+    return null;
+  }
+}
+
+function accountRowMatchesProfile(row, profile) {
+  if (!row || !profile) return false;
+  return row.key_hash === profile.keyHash &&
+    (row.recovery_answer_hash || null) === (profile.recoveryAnswerHash || null) &&
+    row.display_name === (profile.displayName || row.username);
+}
+
+// Removes an account's row and everything filed under its id. Called when the
+// identity itself goes (delete-account), and before a username is registered
+// again, so nothing an earlier holder left can be reached through it. Explicit
+// deletes rather than relying on ON DELETE CASCADE alone: provider_connections
+// holds third-party tokens, and their removal should not depend on a pragma.
+async function deleteAccountRow(env, username) {
+  if (!env || !env.DB) return { ok: true };
+  const norm = String(username || "").trim().toLowerCase();
+  if (!norm) return { ok: true };
+  let ids = [];
+  try {
+    const { results } = await env.DB.prepare(
+      "SELECT id FROM accounts WHERE username = ? COLLATE NOCASE"
+    ).bind(norm).all();
+    ids = (results || []).map((r) => r.id);
+  } catch (e) {
+    // No accounts table (migration 0015 not applied): nothing to remove.
+    if (String(e && e.message || e).includes("no such table")) return { ok: true };
+    console.error("deleteAccountRow: lookup failed:", e);
+    return { ok: false };
+  }
+  for (const id of ids) {
+    await revokeAccountSessions(env, id);
+    // Before the rows go: a snapshot would keep serving them for up to a day.
+    await forgetAccountInstallSnapshots(env, id);
+    try {
+      await env.DB.batch([
+        env.DB.prepare("DELETE FROM sessions WHERE account_id = ?").bind(id),
+        env.DB.prepare("DELETE FROM provider_connections WHERE account_id = ?").bind(id),
+        env.DB.prepare("DELETE FROM account_settings WHERE account_id = ?").bind(id),
+        env.DB.prepare("DELETE FROM install_secrets WHERE install_id IN (SELECT id FROM installs WHERE account_id = ?)").bind(id),
+        env.DB.prepare("DELETE FROM installs WHERE account_id = ?").bind(id),
+        env.DB.prepare("DELETE FROM accounts WHERE id = ?").bind(id),
+      ]);
+    } catch (e) {
+      console.error("deleteAccountRow: delete failed:", e);
+      return { ok: false };
+    }
+  }
+  return { ok: true };
+}
+
+// Signs every device out of one account. A key reset has to do this: the
+// reason to reset a key is usually that someone else has it, and a session
+// they opened with it would otherwise outlive the key by up to 30 days.
+async function revokeSessionsForUsername(env, username) {
+  if (!env || !env.DB) return;
+  const norm = String(username || "").trim().toLowerCase();
+  if (!norm) return;
+  try {
+    const { results } = await env.DB.prepare(
+      "SELECT id FROM accounts WHERE username = ? COLLATE NOCASE"
+    ).bind(norm).all();
+    for (const r of (results || [])) await revokeAccountSessions(env, r.id);
+  } catch {
+    // No accounts table yet: no sessions can exist either.
+  }
+}
+
+async function createSession(env, accountId, userAgent = null) {
+  if (!env || !env.DB) throw new Error("Database binding DB is required to create a session.");
+  const tokenBytes = crypto.getRandomValues(new Uint8Array(32));
+  const token = bufferToHex(tokenBytes);
+  const idHash = await hashSessionToken(token);
+  const now = Date.now();
+  const expiresAt = now + SESSION_TTL_MS;
+
+  await env.DB.prepare(
+    "INSERT INTO sessions (id_hash, account_id, created_at, last_seen_at, expires_at, user_agent, revoked_at) " +
+    "VALUES (?, ?, ?, ?, ?, ?, NULL)"
+  ).bind(idHash, accountId, now, now, expiresAt, userAgent || null).run();
+
+  return {
+    token,
+    idHash,
+    accountId,
+    createdAt: now,
+    lastSeenAt: now,
+    expiresAt,
+    userAgent: userAgent || null,
+  };
+}
+
+async function resolveSession(request, env) {
+  const token = extractSessionToken(request);
+  if (!token) return null;
+  const idHash = await hashSessionToken(token);
+  if (!idHash) return null;
+
+  const now = Date.now();
+  const cached = SESSION_CACHE.get(idHash);
+  if (cached) {
+    if (now - cached.cachedAt < SESSION_CACHE_TTL_MS) {
+      return { account: cached.account, session: cached.session };
+    }
+    SESSION_CACHE.delete(idHash);
+  }
+
+  if (!env || !env.DB) return null;
+
+  try {
+    const { results } = await env.DB.prepare(
+      "SELECT " +
+      "  s.id_hash, s.account_id, s.created_at AS session_created_at, s.last_seen_at, s.expires_at, s.user_agent, s.revoked_at, " +
+      "  a.id, a.username, a.display_name, a.key_hash, a.recovery_answer_hash, a.key_lookup_hmac, a.created_at AS account_created_at, a.last_active_at, a.version, a.deleted_at, a.status " +
+      "FROM sessions s " +
+      "JOIN accounts a ON a.id = s.account_id " +
+      "WHERE s.id_hash = ?"
+    ).bind(idHash).all();
+
+    if (!results || results.length === 0) return null;
+    const row = results[0];
+
+    // Check revocation, expiration, and account status
+    if (row.revoked_at != null) return null;
+    if (typeof row.expires_at === "number" && row.expires_at <= now) return null;
+    if (row.deleted_at != null || (row.status && row.status !== "active")) return null;
+
+    // Throttle last_seen_at update (at most once every 5 minutes per session)
+    if (typeof row.last_seen_at === "number" && now - row.last_seen_at > 5 * 60 * 1000) {
+      env.DB.prepare("UPDATE sessions SET last_seen_at = ? WHERE id_hash = ?").bind(now, idHash).run().catch(() => {});
+    }
+
+    const account = {
+      id: row.id,
+      username: row.username,
+      displayName: row.display_name,
+      createdAt: row.account_created_at,
+      lastActiveAt: row.last_active_at,
+      version: row.version || 0,
+      status: row.status || "active",
+      // Whether one is set, never the hash: authenticateCreator reports it
+      // to the page, which offers to set one when it is missing.
+      hasRecoveryAnswer: Boolean(row.recovery_answer_hash),
+    };
+
+    const session = {
+      idHash: row.id_hash,
+      accountId: row.account_id,
+      createdAt: row.session_created_at,
+      lastSeenAt: row.last_seen_at,
+      expiresAt: row.expires_at,
+      userAgent: row.user_agent,
+    };
+
+    if (SESSION_CACHE.size >= SESSION_CACHE_MAX) {
+      const oldestKey = SESSION_CACHE.keys().next().value;
+      if (oldestKey !== undefined) SESSION_CACHE.delete(oldestKey);
+    }
+    SESSION_CACHE.set(idHash, { account, session, cachedAt: now });
+
+    return { account, session };
+  } catch (e) {
+    // If table doesn't exist or DB errors, fail closed safely
+    return null;
+  }
+}
+
+async function revokeSession(env, idHash) {
+  if (!idHash) return;
+  SESSION_CACHE.delete(idHash);
+  if (env && env.DB) {
+    try {
+      const now = Date.now();
+      await env.DB.prepare("UPDATE sessions SET revoked_at = ? WHERE id_hash = ? AND revoked_at IS NULL").bind(now, idHash).run();
+    } catch {}
+  }
+}
+
+async function revokeAccountSessions(env, accountId, exceptIdHash = null) {
+  if (!accountId) return;
+  for (const [k, v] of SESSION_CACHE.entries()) {
+    if (v && v.account && v.account.id === accountId) {
+      if (!exceptIdHash || k !== exceptIdHash) {
+        SESSION_CACHE.delete(k);
+      }
+    }
+  }
+  if (env && env.DB) {
+    try {
+      const now = Date.now();
+      if (exceptIdHash) {
+        await env.DB.prepare(
+          "UPDATE sessions SET revoked_at = ? WHERE account_id = ? AND id_hash != ? AND revoked_at IS NULL"
+        ).bind(now, accountId, exceptIdHash).run();
+      } else {
+        await env.DB.prepare(
+          "UPDATE sessions SET revoked_at = ? WHERE account_id = ? AND revoked_at IS NULL"
+        ).bind(now, accountId).run();
+      }
+    } catch {}
+  }
+}
+
+function clearSessionCache() {
+  SESSION_CACHE.clear();
+}
+
+
 // MYL-XXXX-XXXX-XXXX -- excludes visually-ambiguous characters (0/O, 1/I/L)
 // so a key someone's reading off a screen to type into another device
 // doesn't turn into a guessing game. 12 real characters from a 32-symbol
@@ -797,6 +1184,18 @@ async function storeCreatorKeyLookup(env, key, username) {
     } catch (dbErr) {
       console.error("D1 write error (storeCreatorKeyLookup):", dbErr);
     }
+    if (env.LOOKUP_PEPPER) {
+      try {
+        const hmac = await hmacLookupKey(key, env);
+        if (hmac) {
+          await env.DB.prepare(
+            "UPDATE accounts SET key_lookup_hmac = ? WHERE lower(username) = lower(?)"
+          ).bind(hmac, username).run();
+        }
+      } catch (hmacErr) {
+        console.error("D1 write error (storeCreatorKeyLookup key_lookup_hmac):", hmacErr);
+      }
+    }
   }
   if (env.CONFIGS) {
     try {
@@ -825,6 +1224,11 @@ async function deleteCreatorKeyLookup(env, username, key) {
     } catch (dbErr) {
       console.error("D1 delete error (deleteCreatorKeyLookup):", dbErr);
     }
+    if (username) {
+      try {
+        await env.DB.prepare("UPDATE accounts SET key_lookup_hmac = NULL WHERE lower(username) = lower(?)").bind(username).run();
+      } catch {}
+    }
   }
   if (env.CONFIGS) {
     try {
@@ -843,14 +1247,37 @@ async function deleteCreatorKeyLookup(env, username, key) {
   }
 }
 
-async function usernameForCreatorKeyLookup(env, key) {
+async function usernameForCreatorKeyLookup(env, key, outMeta = null) {
   if (!env || !key) return "";
+
+  // 1. Check Blind Index v2 (HMAC) first if LOOKUP_PEPPER is available and DB is bound
+  if (env.DB && env.LOOKUP_PEPPER) {
+    try {
+      const hmac = await hmacLookupKey(key, env);
+      if (hmac) {
+        const row = await env.DB.prepare(
+          "SELECT username FROM accounts WHERE key_lookup_hmac = ? AND (status != 'deleted' AND deleted_at IS NULL)"
+        ).bind(hmac).first();
+        if (row && row.username) {
+          if (outMeta && typeof outMeta === "object") outMeta.source = "hmac";
+          return row.username;
+        }
+      }
+    } catch (hmacErr) {
+      console.error("D1 HMAC lookup error (usernameForCreatorKeyLookup):", hmacErr);
+    }
+  }
+
+  // 2. Fall back to legacy SHA-256 lookup in D1 creator_key_lookups and KV
   const lookupHash = await creatorKeyLookupHash(key);
   if (!lookupHash) return "";
   if (env.DB) {
     try {
       const row = await env.DB.prepare("SELECT username FROM creator_key_lookups WHERE lookup_hash = ?").bind(lookupHash).first();
-      if (row && row.username) return row.username;
+      if (row && row.username) {
+        if (outMeta && typeof outMeta === "object") outMeta.source = "legacy_d1";
+        return row.username;
+      }
     } catch (dbErr) {
       console.error("D1 read error (usernameForCreatorKeyLookup):", dbErr);
     }
@@ -858,12 +1285,181 @@ async function usernameForCreatorKeyLookup(env, key) {
   if (env.CONFIGS) {
     try {
       const u = (await env.CONFIGS.get(creatorKeyLookupKey(lookupHash))) || "";
-      if (u) return u;
+      if (u) {
+        if (outMeta && typeof outMeta === "object") outMeta.source = "legacy_kv";
+        return u;
+      }
     } catch (kvErr) {
       console.error("KV read error (usernameForCreatorKeyLookup):", kvErr);
     }
   }
   return "";
+}
+
+async function recordLegacyLookupHit(env) {
+  if (!env) return;
+  try {
+    if (env.ANALYTICS && typeof env.ANALYTICS.writeDataPoint === "function") {
+      env.ANALYTICS.writeDataPoint({
+        blobs: ["legacy_lookup_hit", "forgot_username"],
+        doubles: [1],
+        indexes: ["legacy_lookup_hit"],
+      });
+    }
+  } catch {
+    // Analytics Engine errors must never affect the request
+  }
+  try {
+    if (env.CONFIGS) {
+      const current = parseInt((await env.CONFIGS.get("stats:legacy_lookup_hits")) || "0", 10);
+      await env.CONFIGS.put("stats:legacy_lookup_hits", String(current + 1));
+    }
+  } catch {
+    // KV errors must never affect the request
+  }
+}
+
+// --- Phase 3a: Token encryption & blind lookup hashing ----------------------
+//
+// provider_connections and install_secrets store third-party tokens and API
+// keys encrypted at rest using AES-GCM-256 with a 12-byte IV.
+// The secret TOKEN_ENCRYPTION_KEY holds one or more keys in rotation format:
+// "k1:<base64-32-bytes>,k0:<older-base64>". A bare base64 string defaults to "k1".
+//
+// Serialized ciphertexts are formatted as: "<keyId>:<ivHex>:<ciphertextHex>"
+//
+// Every caller passes the key ring explicitly: the TOKEN_ENCRYPTION_KEY string
+// itself, or the request's `env` (whose TOKEN_ENCRYPTION_KEY is read). There is
+// no module-level env in a Worker to fall back to.
+//
+// `context` binds a ciphertext to where it is stored, as AES-GCM additional
+// data -- for example "account:42:trakt" for a provider_connections row. A
+// token copied into a different row then fails to decrypt instead of silently
+// becoming that row's token. Decrypt with the same context it was encrypted
+// with; "" (the default) means none.
+
+// atob, not Buffer: Buffer is not in the Workers runtime, and decoding with it
+// in tests would test a different path from the one that runs in production
+// (Buffer also silently skips invalid characters where atob throws).
+function base64ToUint8(b64) {
+  const clean = String(b64 || "").trim().replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(clean);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+function parseTokenEncryptionKeys(secret) {
+  let raw = secret;
+  if (!raw) return { activeKeyId: null, keys: new Map() };
+  if (typeof raw === "object" && !(raw instanceof Uint8Array)) {
+    if (raw.TOKEN_ENCRYPTION_KEY) raw = raw.TOKEN_ENCRYPTION_KEY;
+    else if (raw instanceof Map) return { activeKeyId: raw.keys().next().value || null, keys: raw };
+  }
+  if (raw instanceof Uint8Array) {
+    return { activeKeyId: "k1", keys: new Map([["k1", raw]]) };
+  }
+  const str = String(raw).trim();
+  if (!str) return { activeKeyId: null, keys: new Map() };
+
+  const keys = new Map();
+  let activeKeyId = null;
+  const parts = str.split(",");
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    let id = "k1";
+    let b64 = trimmed;
+    const colonIdx = trimmed.indexOf(":");
+    if (colonIdx > 0) {
+      id = trimmed.slice(0, colonIdx).trim();
+      b64 = trimmed.slice(colonIdx + 1).trim();
+    }
+    try {
+      const bytes = base64ToUint8(b64);
+      if (bytes.length > 0) {
+        keys.set(id, bytes);
+        if (!activeKeyId) activeKeyId = id;
+      }
+    } catch {
+      // Ignore malformed key entries in rotation list
+    }
+  }
+  return { activeKeyId, keys };
+}
+
+async function encryptToken(plaintext, keyRing, context = "") {
+  if (plaintext == null) return "";
+  const parsed = parseTokenEncryptionKeys(keyRing);
+  if (!parsed.activeKeyId || !parsed.keys.has(parsed.activeKeyId)) {
+    throw new Error("TOKEN_ENCRYPTION_KEY is required for encryption");
+  }
+  const keyBytes = parsed.keys.get(parsed.activeKeyId);
+  if (keyBytes.length !== 32) {
+    throw new Error(`TOKEN_ENCRYPTION_KEY must be 32 bytes (got ${keyBytes.length})`);
+  }
+  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["encrypt"]);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encrypted = await crypto.subtle.encrypt(
+    aesGcmParams(iv, context),
+    key,
+    new TextEncoder().encode(String(plaintext))
+  );
+  return `${parsed.activeKeyId}:${bufferToHex(iv)}:${bufferToHex(new Uint8Array(encrypted))}`;
+}
+
+async function decryptToken(ciphertext, keyRing, context = "") {
+  if (!ciphertext) return "";
+  const parts = String(ciphertext).split(":");
+  if (parts.length !== 3) {
+    throw new Error("Invalid encrypted token format; expected keyId:iv:ciphertext");
+  }
+  const [keyId, ivHex, ctHex] = parts;
+  const parsed = parseTokenEncryptionKeys(keyRing);
+  const keyBytes = parsed.keys.get(keyId);
+  if (!keyBytes) {
+    throw new Error(`Encryption key '${keyId}' not found in key ring`);
+  }
+  if (keyBytes.length !== 32) {
+    throw new Error(`Encryption key '${keyId}' must be 32 bytes (got ${keyBytes.length})`);
+  }
+  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["decrypt"]);
+  const decrypted = await crypto.subtle.decrypt(
+    aesGcmParams(hexToBuffer(ivHex), context),
+    key,
+    hexToBuffer(ctHex)
+  );
+  return new TextDecoder().decode(decrypted);
+}
+
+// AES-GCM parameters, with `context` as additional authenticated data when
+// one is given (see the header above).
+function aesGcmParams(iv, context) {
+  const params = { name: "AES-GCM", iv };
+  if (context) params.additionalData = new TextEncoder().encode(String(context));
+  return params;
+}
+
+// `pepper` is the LOOKUP_PEPPER string itself, or the request's `env`.
+async function hmacLookupKey(key, pepper) {
+  let pepperStr = pepper;
+  if (pepper && typeof pepper === "object") {
+    pepperStr = pepper.LOOKUP_PEPPER || "";
+  }
+  pepperStr = String(pepperStr || "");
+  if (!pepperStr) throw new Error("LOOKUP_PEPPER is required for HMAC lookup");
+  const normalized = String(key || "").trim().toUpperCase();
+  if (!normalized) return "";
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(pepperStr),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign("HMAC", keyMaterial, enc.encode("keylookup:" + normalized));
+  return bufferToHex(new Uint8Array(signature));
 }
 
 // "user" is reserved because that's the literal namespace anonymous
@@ -3389,6 +3985,16 @@ async function purgeCreatorData(env, username, options = {}) {
           console.error("D1 write error (purgeCreatorData identity):", dbErr);
           d1Ok = false;
         }
+        // The accounts row goes with the identity, and every session with it.
+        // Left behind, it kept the old key's hash under a username that is
+        // about to be free: POST /api/session would still sign that key in,
+        // and once someone else registered the name, into their account.
+        // /api/creator/create clears a leftover too, so a failure here is
+        // logged rather than allowed to block the deletion.
+        if (d1Ok) {
+          const removed = await deleteAccountRow(env, u);
+          if (!removed.ok) console.error("purgeCreatorData: could not remove the accounts row for", u);
+        }
       }
       if (d1Ok) {
         try {
@@ -3914,6 +4520,13 @@ async function rotateCreatorKeyHashInD1(env, username, keyHash) {
       // write is the source of truth -- but worth surfacing.
       console.warn("D1 key rotation matched no row for", username, "-- KV updated");
     }
+    try {
+      await env.DB.prepare(
+        "UPDATE accounts SET key_hash = ?, version = version + 1 WHERE lower(username) = lower(?)"
+      ).bind(keyHash, username).run();
+    } catch {
+      // accounts table may not exist in pre-0015 schemas
+    }
     return { ok: true };
   } catch (dbErr) {
     console.error("D1 write error (key rotation):", dbErr);
@@ -3925,6 +4538,330 @@ async function rotateCreatorKeyHashInD1(env, username, keyHash) {
       return { ok: false };
     }
   }
+}
+
+// Phase 3a: P3a-3 Accounts Backfill (migrate.accounts)
+// Backfills creators from D1 creators table and KV creator:* keys into the unified accounts table.
+// Invariants:
+// - Newest keyHash wins; D1 wins ties.
+// - count(accounts) = |creators ∪ creator:*|
+// - Copies data only; does not mutate or delete existing creators or creator:* records.
+// - Idempotent and safe to run multiple times.
+async function backfillAccounts(env, options = {}) {
+  if (!env || !env.DB) {
+    return { ok: false, error: "D1 database binding 'DB' is required for accounts backfill." };
+  }
+
+  // Verify accounts table exists (migration 0015 applied)
+  try {
+    await env.DB.prepare("SELECT 1 FROM accounts LIMIT 1").all();
+  } catch (e) {
+    const msg = safeErrorMessage(e);
+    if (msg.includes("no such table") || (e && e.message && e.message.includes("no such table"))) {
+      return { ok: false, error: "Table 'accounts' does not exist. Please apply migration 0015 first." };
+    }
+    return { ok: false, error: "Database check failed: " + msg };
+  }
+
+  // 1. Gather all creators from D1
+  const d1Creators = new Map();
+  try {
+    const { results } = await env.DB.prepare(
+      "SELECT username, display_name, key_hash, recovery_answer_hash, created_at, last_active FROM creators"
+    ).all();
+    for (const r of (results || [])) {
+      const rawUser = String(r.username || "").trim();
+      const norm = rawUser.toLowerCase();
+      if (!norm) continue;
+      d1Creators.set(norm, {
+        username: rawUser,
+        displayName: r.display_name || rawUser,
+        keyHash: typeof r.key_hash === "string" ? r.key_hash : "",
+        recoveryAnswerHash: r.recovery_answer_hash || null,
+        createdAt: typeof r.created_at === "number" ? r.created_at : 0,
+        lastActive: typeof r.last_active === "number" ? r.last_active : null,
+        lookupCreatedAt: 0,
+      });
+    }
+  } catch (e) {
+    return { ok: false, error: "Failed to read creators from D1: " + safeErrorMessage(e) };
+  }
+
+  // Optional: check key lookup timestamps in D1
+  try {
+    const { results: lookupRows } = await env.DB.prepare(
+      "SELECT username, created_at FROM creator_key_lookups"
+    ).all();
+    for (const lr of (lookupRows || [])) {
+      const norm = String(lr.username || "").trim().toLowerCase();
+      const rec = d1Creators.get(norm);
+      if (rec && typeof lr.created_at === "number") {
+        rec.lookupCreatedAt = Math.max(rec.lookupCreatedAt || 0, lr.created_at);
+      }
+    }
+  } catch {}
+
+  // 2. Gather all creator:* records from KV
+  const kvCreators = new Map();
+  if (env.CONFIGS) {
+    try {
+      const listResult = await listAllKeys(env.CONFIGS, "creator:");
+      const keys = (listResult && listResult.keys) || [];
+      for (const k of keys) {
+        if (!k.name.startsWith("creator:")) continue;
+        const rawUser = k.name.slice("creator:".length).trim();
+        const norm = rawUser.toLowerCase();
+        if (!norm) continue;
+
+        let data = null;
+        try {
+          const raw = await env.CONFIGS.get(k.name);
+          if (raw) data = JSON.parse(raw);
+        } catch {}
+        if (!data || typeof data !== "object") continue;
+
+        let resetAt = 0;
+        try {
+          const resetRaw = await env.CONFIGS.get(creatorResetKey(norm));
+          resetAt = resetRaw ? parseInt(resetRaw, 10) || 0 : 0;
+        } catch {}
+
+        let lastSeen = null;
+        try {
+          const lastSeenRaw = await env.CONFIGS.get("creatorlastseen:" + norm);
+          lastSeen = lastSeenRaw ? parseInt(lastSeenRaw, 10) || null : null;
+        } catch {}
+
+        kvCreators.set(norm, {
+          username: rawUser,
+          displayName: data.displayName || rawUser,
+          keyHash: typeof data.keyHash === "string" ? data.keyHash : "",
+          recoveryAnswerHash: data.recoveryAnswerHash || null,
+          createdAt: typeof data.createdAt === "number" ? data.createdAt : 0,
+          updatedAt: typeof data.updatedAt === "number" ? data.updatedAt : 0,
+          lastActive: (typeof data.lastActive === "number" ? data.lastActive : null) || lastSeen,
+          resetAt,
+        });
+      }
+    } catch (e) {
+      return { ok: false, error: "Failed to read KV creator records: " + safeErrorMessage(e) };
+    }
+  }
+
+  // 3. Compute distinct union of normalized usernames: |creators ∪ creator:*|
+  const allNormUsernames = Array.from(new Set([...d1Creators.keys(), ...kvCreators.keys()]));
+  const unionCount = allNormUsernames.length;
+  const d1Count = d1Creators.size;
+  const kvCount = kvCreators.size;
+
+  let d1Wins = 0;
+  let kvWins = 0;
+  let ties = 0;
+  let d1Only = 0;
+  let kvOnly = 0;
+  let inBoth = 0;
+
+  const resolvedAccounts = [];
+
+  for (const norm of allNormUsernames) {
+    const d1Rec = d1Creators.get(norm);
+    const kvRec = kvCreators.get(norm);
+
+    if (d1Rec && !kvRec) {
+      d1Only++;
+      d1Wins++;
+      resolvedAccounts.push({
+        username: d1Rec.username,
+        displayName: d1Rec.displayName,
+        keyHash: d1Rec.keyHash,
+        recoveryAnswerHash: d1Rec.recoveryAnswerHash,
+        createdAt: d1Rec.createdAt > 0 ? d1Rec.createdAt : Date.now(),
+        lastActiveAt: d1Rec.lastActive,
+      });
+    } else if (!d1Rec && kvRec) {
+      kvOnly++;
+      kvWins++;
+      resolvedAccounts.push({
+        username: kvRec.username,
+        displayName: kvRec.displayName,
+        keyHash: kvRec.keyHash,
+        recoveryAnswerHash: kvRec.recoveryAnswerHash,
+        createdAt: kvRec.createdAt > 0 ? kvRec.createdAt : Date.now(),
+        lastActiveAt: kvRec.lastActive,
+      });
+    } else {
+      inBoth++;
+      let win = "d1";
+      if (d1Rec.keyHash === kvRec.keyHash) {
+        win = "d1"; // tie
+        ties++;
+        d1Wins++;
+      } else {
+        const d1Time = d1Rec.lookupCreatedAt || d1Rec.createdAt || 0;
+        const kvTime = Math.max(kvRec.updatedAt || 0, kvRec.resetAt || 0, kvRec.createdAt || 0);
+        if (kvTime > d1Time) {
+          win = "kv";
+          kvWins++;
+        } else {
+          win = "d1";
+          if (d1Time === kvTime) ties++;
+          d1Wins++;
+        }
+      }
+
+      const primary = win === "d1" ? d1Rec : kvRec;
+      const secondary = win === "d1" ? kvRec : d1Rec;
+
+      let createdAt = 0;
+      if (d1Rec.createdAt > 0 && kvRec.createdAt > 0) {
+        createdAt = Math.min(d1Rec.createdAt, kvRec.createdAt);
+      } else {
+        createdAt = d1Rec.createdAt || kvRec.createdAt || Date.now();
+      }
+
+      const lastActiveAt = (d1Rec.lastActive && kvRec.lastActive)
+        ? Math.max(d1Rec.lastActive, kvRec.lastActive)
+        : (d1Rec.lastActive || kvRec.lastActive || null);
+
+      resolvedAccounts.push({
+        username: primary.username || secondary.username,
+        displayName: primary.displayName || secondary.displayName || primary.username,
+        keyHash: primary.keyHash || secondary.keyHash,
+        recoveryAnswerHash: primary.recoveryAnswerHash || secondary.recoveryAnswerHash || null,
+        createdAt,
+        lastActiveAt,
+      });
+    }
+  }
+
+  // If dry-run requested, report without modifying database
+  if (options && options.dryRun) {
+    let currentAccountsCount = 0;
+    try {
+      const countRes = await env.DB.prepare("SELECT COUNT(*) AS n FROM accounts").all();
+      currentAccountsCount = countRes.results && countRes.results[0] ? Number(countRes.results[0].n) || 0 : 0;
+    } catch {}
+
+    return {
+      ok: true,
+      done: true,
+      dryRun: true,
+      d1Count,
+      kvCount,
+      unionCount,
+      accountsCount: currentAccountsCount,
+      reconciled: currentAccountsCount === unionCount,
+      d1Only,
+      kvOnly,
+      inBoth,
+      d1Wins,
+      kvWins,
+      ties,
+      inserted: 0,
+      updated: 0,
+      errors: [],
+    };
+  }
+
+  // 4. Track existing rows to accurately measure inserts vs updates
+  const existingAccounts = new Set();
+  try {
+    const { results } = await env.DB.prepare("SELECT username FROM accounts").all();
+    for (const r of (results || [])) {
+      existingAccounts.add(String(r.username || "").trim().toLowerCase());
+    }
+  } catch {}
+
+  let inserted = 0;
+  let updated = 0;
+  const errors = [];
+
+  const upsertStmt = env.DB.prepare(
+    "INSERT INTO accounts (" +
+    "  username, display_name, key_hash, recovery_answer_hash," +
+    "  key_lookup_hmac, created_at, last_active_at, version, deleted_at, status" +
+    ") VALUES (?, ?, ?, ?, NULL, ?, ?, 0, NULL, 'active') " +
+    "ON CONFLICT(username) DO UPDATE SET " +
+    "  display_name = excluded.display_name," +
+    "  key_hash = excluded.key_hash," +
+    "  recovery_answer_hash = COALESCE(excluded.recovery_answer_hash, accounts.recovery_answer_hash)," +
+    "  created_at = CASE " +
+    "    WHEN accounts.created_at > 0 AND excluded.created_at > 0 THEN MIN(accounts.created_at, excluded.created_at) " +
+    "    ELSE COALESCE(NULLIF(accounts.created_at, 0), excluded.created_at) " +
+    "  END," +
+    "  last_active_at = CASE " +
+    "    WHEN COALESCE(accounts.last_active_at, 0) > 0 OR COALESCE(excluded.last_active_at, 0) > 0 " +
+    "    THEN MAX(COALESCE(accounts.last_active_at, 0), COALESCE(excluded.last_active_at, 0)) " +
+    "    ELSE NULL " +
+    "  END," +
+    "  status = 'active'"
+  );
+
+  const BATCH_SIZE = 25;
+  for (let i = 0; i < resolvedAccounts.length; i += BATCH_SIZE) {
+    const chunk = resolvedAccounts.slice(i, i + BATCH_SIZE);
+    const batchStmts = chunk.map((acc) => {
+      const isExisting = existingAccounts.has(acc.username.toLowerCase());
+      if (isExisting) updated++;
+      else inserted++;
+      return upsertStmt.bind(
+        acc.username,
+        acc.displayName,
+        acc.keyHash,
+        acc.recoveryAnswerHash,
+        acc.createdAt,
+        acc.lastActiveAt != null ? acc.lastActiveAt : null
+      );
+    });
+
+    try {
+      if (typeof env.DB.batch === "function") {
+        await env.DB.batch(batchStmts);
+      } else {
+        for (const st of batchStmts) {
+          await st.run();
+        }
+      }
+    } catch (batchErr) {
+      console.error("Batch upsert error in backfillAccounts:", batchErr);
+      errors.push(safeErrorMessage(batchErr));
+    }
+  }
+
+  // 5. Query final accounts count and verify reconciliation
+  let finalAccountsCount = 0;
+  try {
+    const finalCountRes = await env.DB.prepare("SELECT COUNT(*) AS n FROM accounts").all();
+    finalAccountsCount = finalCountRes.results && finalCountRes.results[0] ? Number(finalCountRes.results[0].n) || 0 : 0;
+  } catch (e) {
+    errors.push("Failed to count final accounts: " + safeErrorMessage(e));
+  }
+
+  const reconciled = (errors.length === 0 && finalAccountsCount === unionCount);
+
+  return {
+    ok: errors.length === 0,
+    done: true,
+    dryRun: false,
+    d1Count,
+    kvCount,
+    unionCount,
+    accountsCount: finalAccountsCount,
+    reconciled,
+    d1Only,
+    kvOnly,
+    inBoth,
+    d1Wins,
+    kvWins,
+    ties,
+    inserted,
+    updated,
+    errors,
+  };
+}
+
+async function reconcileAccounts(env) {
+  return backfillAccounts(env, { dryRun: true });
 }
 
 // D1 is the authoritative store for creator lists when bound.

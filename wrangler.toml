@@ -54,6 +54,13 @@ dataset = "mylists_events"
 [vars]
 # Optional. "justwatch" (default, no key needed) or "rapidapi".
 # NEW_ON_STREAMING_ENGINE = "justwatch"
+# Optional feature flag for Phase 3a: session auth and dual-auth compatibility
+# FF_SESSIONS = "1"
+# Optional feature flag for Phase 3a: the /api/installs management API
+# FF_INSTALLS = "1"
+# Optional, 0-100: share of existing install links whose keys and tokens are
+# moved into encrypted D1 storage on first use (needs TOKEN_ENCRYPTION_KEY)
+# INSTALL_MIGRATION_PERCENT = "0"
 
 # --- Cron trigger (REQUIRED for Continue Watching) ---------------------------
 # Drives the scheduled() export at the bottom of
@@ -102,3 +109,7 @@ crons = ["*/6 * * * *"]
 #   npx wrangler secret put MDBLIST_CLIENT_SECRET   # required with the id above; OAuth fails without it
 #   npx wrangler secret put SIMKL_CLIENT_ID         # simkl.com/settings/developer/
 #   npx wrangler secret put SIMKL_CLIENT_SECRET     # required only for Simkl OAuth
+#
+# Phase 3a encryption & blind-index secrets:
+#   npx wrangler secret put TOKEN_ENCRYPTION_KEY    # k1:<32-bytes-base64> for AES-GCM token storage
+#   npx wrangler secret put LOOKUP_PEPPER           # Pepper for HMAC blind index lookups

@@ -11,6 +11,35 @@
     // or revoke separately from the key itself.
     async function authenticateCreator(creatorNameRaw, creatorKey) {
       if (!env || !env.CONFIGS) return { ok: false, error: "no-kv" };
+
+      const sessionsEnabled = isSessionsEnabled(env);
+
+      // Behind FF_SESSIONS: if a session is present and creatorKey was not provided,
+      // authenticate via the session (request.account).
+      if (sessionsEnabled && request && request.account && !creatorKey) {
+        if (creatorNameRaw !== undefined && creatorNameRaw !== null && String(creatorNameRaw).trim() !== "") {
+          const v = validateCreatorUsername(creatorNameRaw);
+          if (!v.ok || v.normalized !== request.account.username.toLowerCase()) {
+            return { ok: false, error: "Username or Key is incorrect." };
+          }
+        }
+        if (request.account.deletedAt || request.account.status === "deleted") {
+          return { ok: false, error: "Username or Key is incorrect." };
+        }
+        const tombstoned = await isCreatorTombstoned(env, request.account.username.toLowerCase());
+        if (tombstoned) {
+          return { ok: false, error: "Username or Key is incorrect." };
+        }
+        touchCreatorLastSeen(env, request.account.username.toLowerCase());
+        return {
+          ok: true,
+          username: request.account.username,
+          displayName: request.account.displayName || request.account.username,
+          hasRecoveryAnswer: Boolean(request.account.hasRecoveryAnswer),
+          sessionAuth: true,
+        };
+      }
+
       const v = validateCreatorUsername(creatorNameRaw);
       if (!v.ok) return { ok: false, error: "Username or Key is incorrect." };
       // A username being deleted right now stops authenticating, whatever the
@@ -80,6 +109,56 @@
       // Fire-and-forget, not awaited -- see touchCreatorLastSeen's own
       // comment for why this is throttled and safe to never wait on.
       touchCreatorLastSeen(env, v.normalized);
+
+      // Behind FF_SESSIONS: a successful key-in-body auth also sets a session cookie (P3a-6).
+      //
+      // Only on the /api/creator/* routes, which the page calls and which keep
+      // the cookie. The same check also serves /api/preview, /api/save and the
+      // like, and a caller that never stores cookies would get a new 30-day
+      // session row on every request. And not when the request already carries
+      // a live session for this account: /api/creator/restore runs on every
+      // page load, so re-issuing there grew one row per visit.
+      if (sessionsEnabled && env.DB && request && typeof path === "string" && path.startsWith("/api/creator/")) {
+        if (!request._sessionCookie && (!request.account || request.account.username.toLowerCase() !== v.normalized)) {
+          try {
+            const accountRow = await getOrBackfillAccount(env, v.normalized, profile);
+            if (accountRow) {
+              const userAgent = request.headers ? (request.headers.get("user-agent") || null) : null;
+              const session = await createSession(env, accountRow.id, userAgent);
+              request._sessionCookie = buildSessionCookieHeader(session.token);
+              // Replaced, not filled in only when empty: a request carrying a
+              // session for a different account is now acting as this one.
+              request.account = {
+                id: accountRow.id,
+                username: accountRow.username,
+                displayName: profile.displayName || accountRow.username,
+                createdAt: accountRow.created_at,
+                lastActiveAt: accountRow.last_active_at,
+                version: accountRow.version || 0,
+                status: accountRow.status || "active",
+                hasRecoveryAnswer: Boolean(profile.recoveryAnswerHash),
+              };
+              request.session = session;
+              if (env.LOOKUP_PEPPER && accountRow && creatorKey) {
+                try {
+                  const hmac = await hmacLookupKey(creatorKey, env);
+                  if (hmac && accountRow.key_lookup_hmac !== hmac) {
+                    await env.DB.prepare(
+                      "UPDATE accounts SET key_lookup_hmac = ? WHERE id = ?"
+                    ).bind(hmac, accountRow.id).run();
+                    accountRow.key_lookup_hmac = hmac;
+                  }
+                } catch (hmacErr) {
+                  console.error("Failed to write accounts.key_lookup_hmac on creator auth:", hmacErr);
+                }
+              }
+            }
+          } catch (sessionErr) {
+            console.error("Failed to issue session cookie on creator auth:", sessionErr);
+          }
+        }
+      }
+
       return {
         ok: true,
         username: profile.username || v.normalized,
@@ -156,13 +235,20 @@
     async function handleSubtitlesTrack(configParam, stremioType, id, env, request) {
       if (!env || !env.CONFIGS) return;
 
-      let track, trackCreatorName, trackCreatorKey, tmdbKey;
+      let track, trackCreatorName, trackCreatorKey, tmdbKey, installTrackOwner;
       try {
-        ({ track, trackCreatorName, trackCreatorKey, tmdbKey } = await resolveConfig(configParam, env));
+        ({ track, trackCreatorName, trackCreatorKey, tmdbKey, installTrackOwner } = await resolveConfig(configParam, env));
       } catch {
         return;
       }
-      if (!trackCreatorName || !trackCreatorKey) return;
+      // A v2 install link carries no Creator Key: its "track" scope, granted
+      // to the signed-in account that created it, stands in for one (see
+      // resolveV2InstallConfig, 27_installs.js).
+      if (installTrackOwner) {
+        trackCreatorName = installTrackOwner;
+      } else if (!trackCreatorName || !trackCreatorKey) {
+        return;
+      }
       if (!track) {
         // Auto-track Playback resolved to off for this install link. This
         // can happen even when the user sees the toggle on in Settings, if
@@ -178,7 +264,9 @@
         return;
       }
 
-      const auth = await authenticateCreator(trackCreatorName, trackCreatorKey);
+      const auth = installTrackOwner
+        ? ((await isCreatorTombstoned(env, installTrackOwner)) ? { ok: false } : { ok: true, username: installTrackOwner })
+        : await authenticateCreator(trackCreatorName, trackCreatorKey);
       const diagnosticsKey = `creatortrack:${auth.ok ? auth.username : String(trackCreatorName).toLowerCase()}`;
       const pingId = `${stremioType}:${id}`;
 
@@ -574,7 +662,13 @@
       if (!authUser && configParam) {
         try {
           const resolved = await resolveConfig(configParam, env);
-          if (resolved && resolved.trackCreatorName && resolved.trackCreatorKey) {
+          if (resolved && resolved.installTrackOwner) {
+            // A v2 install link with the "track" scope -- see handleSubtitlesTrack.
+            if (!(await isCreatorTombstoned(env, resolved.installTrackOwner))) {
+              authUser = resolved.installTrackOwner;
+              if (resolved.tmdbKey) effectiveTmdbKey = resolved.tmdbKey;
+            }
+          } else if (resolved && resolved.trackCreatorName && resolved.trackCreatorKey) {
             const auth = await authenticateCreator(resolved.trackCreatorName, resolved.trackCreatorKey);
             if (auth.ok) {
               authUser = auth.username;
@@ -1133,6 +1227,226 @@
       });
     }
 
+    // --- Sessions API (Phase 3a: P3a-4) ------------------------------------
+
+    // POST /api/session  { username, key } -> { ok, account }
+    // Authenticates account credentials via PBKDF2, issues a 256-bit session token,
+    // stores its SHA-256 hash in D1 sessions, and sets the mla_session cookie.
+    if (path === "/api/session" && request.method === "POST") {
+      if (!env || !env.DB) return json({ ok: false, error: "Database unavailable." }, 503);
+      let body;
+      try {
+        body = await request.json();
+      } catch {
+        return json({ ok: false, error: "Invalid JSON body." }, 400);
+      }
+      const usernameRaw = body.username || body.creatorName;
+      const keyRaw = body.key || body.creatorKey;
+      if (!usernameRaw || !keyRaw) {
+        return json({ ok: false, error: "Username and Account Key are required." }, 400);
+      }
+      // The creator profile decides, exactly as it does for every key-in-body
+      // route: authenticateCreator applies the deletion tombstone, the per-IP
+      // PBKDF2 throttle and the memo. This used to verify against
+      // accounts.key_hash alone, which nothing kept current -- a deleted
+      // account's key still signed in, with no throttle on guessing.
+      const auth = await authenticateCreator(usernameRaw, keyRaw);
+      if (!auth.ok) return authFailureResponse(auth);
+
+      let profile = null;
+      try {
+        const raw = await getCreator(env, auth.username);
+        profile = raw ? JSON.parse(raw) : null;
+      } catch {
+        profile = null;
+      }
+      // Brought up to date from the profile just verified, before a session is
+      // tied to it. Null means the accounts table cannot be written: most
+      // likely migration 0015 has not been applied yet.
+      const accountRow = profile ? await getOrBackfillAccount(env, auth.username, profile) : null;
+      if (!accountRow) {
+        return json({ ok: false, error: "Signing in isn't available right now. Please try again later." }, 503);
+      }
+
+      // A key stored under fewer PBKDF2 iterations than today's target is
+      // rehashed while the plaintext is at hand. Through the same path as a
+      // key reset (D1 first, then KV), because the profile is the copy that
+      // is checked: upgrading only the accounts row would change nothing.
+      const hashParts = String(profile.keyHash || "").split(":");
+      if (hashParts.length === 4 && hashParts[0] === "pbkdf2" && parseInt(hashParts[1], 10) < PBKDF2_ITERATIONS) {
+        try {
+          const upgradedHash = await hashCreatorKey(keyRaw);
+          const rotation = await rotateCreatorKeyHashInD1(env, auth.username, upgradedHash);
+          if (rotation.ok) {
+            await env.CONFIGS.put(`creator:${auth.username}`, JSON.stringify({ ...profile, keyHash: upgradedHash }));
+            accountRow.key_hash = upgradedHash;
+          }
+        } catch (e) {
+          console.error("Failed to upgrade PBKDF2 iterations:", e);
+        }
+      }
+
+      // Blind index v2: if LOOKUP_PEPPER is configured, write accounts.key_lookup_hmac
+      if (env.LOOKUP_PEPPER) {
+        try {
+          const hmac = await hmacLookupKey(keyRaw, env);
+          if (hmac && accountRow.key_lookup_hmac !== hmac) {
+            await env.DB.prepare(
+              "UPDATE accounts SET key_lookup_hmac = ? WHERE id = ?"
+            ).bind(hmac, accountRow.id).run();
+            accountRow.key_lookup_hmac = hmac;
+          }
+        } catch (hmacErr) {
+          console.error("Failed to write accounts.key_lookup_hmac on login:", hmacErr);
+        }
+      }
+
+      // Update last active
+      const now = Date.now();
+      await env.DB.prepare("UPDATE accounts SET last_active_at = ? WHERE id = ?").bind(now, accountRow.id).run().catch(() => {});
+
+      // Create session
+      const userAgent = request.headers.get("user-agent") || null;
+      const session = await createSession(env, accountRow.id, userAgent);
+
+      const cookie = buildSessionCookieHeader(session.token);
+      return json(
+        {
+          ok: true,
+          account: {
+            id: accountRow.id,
+            username: accountRow.username,
+            displayName: accountRow.display_name,
+            createdAt: accountRow.created_at,
+            lastActiveAt: now,
+          },
+        },
+        200,
+        {
+          "Set-Cookie": cookie,
+          "Cache-Control": "no-store",
+        }
+      );
+    }
+
+    // DELETE /api/session -> logs out by revoking current session and clearing cookie
+    if (path === "/api/session" && request.method === "DELETE") {
+      const token = extractSessionToken(request);
+      if (token) {
+        const idHash = await hashSessionToken(token);
+        await revokeSession(env, idHash);
+      }
+      return json(
+        { ok: true },
+        200,
+        {
+          "Set-Cookie": buildClearSessionCookieHeader(),
+          "Cache-Control": "no-store",
+        }
+      );
+    }
+
+    // GET /api/me -> returns the current authenticated account profile
+    if (path === "/api/me" && request.method === "GET") {
+      if (!request.account) {
+        return json({ ok: false, error: "Authentication required." }, 401);
+      }
+      return json(
+        {
+          ok: true,
+          account: {
+            id: request.account.id,
+            username: request.account.username,
+            displayName: request.account.displayName,
+            createdAt: request.account.createdAt,
+            lastActiveAt: request.account.lastActiveAt,
+            version: request.account.version || 0,
+            status: request.account.status || "active",
+          },
+        },
+        200,
+        { "Cache-Control": "no-store" }
+      );
+    }
+
+    // GET /api/me/sessions -> lists active sessions for the current account
+    if (path === "/api/me/sessions" && request.method === "GET") {
+      if (!request.account || !env || !env.DB) {
+        return json({ ok: false, error: "Authentication required." }, 401);
+      }
+      const now = Date.now();
+      const currentHash = request.session ? request.session.idHash : null;
+      try {
+        const { results } = await env.DB.prepare(
+          "SELECT id_hash, created_at, last_seen_at, expires_at, user_agent " +
+          "FROM sessions " +
+          "WHERE account_id = ? AND revoked_at IS NULL AND expires_at > ? " +
+          "ORDER BY last_seen_at DESC"
+        ).bind(request.account.id, now).all();
+
+        const sessions = (results || []).map((s) => ({
+          id: s.id_hash.slice(0, 16),
+          createdAt: s.created_at,
+          lastSeenAt: s.last_seen_at,
+          expiresAt: s.expires_at,
+          userAgent: s.user_agent,
+          current: s.id_hash === currentHash,
+        }));
+        return json({ ok: true, sessions }, 200, { "Cache-Control": "no-store" });
+      } catch (e) {
+        return json({ ok: false, error: "Failed to load sessions." }, 500);
+      }
+    }
+
+    // DELETE /api/me/sessions -> revokes active sessions for current account
+    if (path === "/api/me/sessions" && request.method === "DELETE") {
+      if (!request.account || !env || !env.DB) {
+        return json({ ok: false, error: "Authentication required." }, 401);
+      }
+      let body = {};
+      try {
+        body = await request.json();
+      } catch {}
+
+      const currentHash = request.session ? request.session.idHash : null;
+      const url = new URL(request.url);
+      const revokeOthers = body.allExceptCurrent || url.searchParams.get("other") === "1";
+      const targetId = body.id || url.searchParams.get("id");
+
+      if (revokeOthers) {
+        await revokeAccountSessions(env, request.account.id, currentHash);
+        return json({ ok: true, revokedOthers: true }, 200, { "Cache-Control": "no-store" });
+      }
+
+      if (targetId) {
+        const { results } = await env.DB.prepare(
+          "SELECT id_hash FROM sessions WHERE account_id = ? AND id_hash LIKE ? AND revoked_at IS NULL"
+        ).bind(request.account.id, targetId + "%").all();
+
+        let revokedCurrent = false;
+        for (const r of (results || [])) {
+          await revokeSession(env, r.id_hash);
+          if (r.id_hash === currentHash) revokedCurrent = true;
+        }
+        const headers = { "Cache-Control": "no-store" };
+        if (revokedCurrent) {
+          headers["Set-Cookie"] = buildClearSessionCookieHeader();
+        }
+        return json({ ok: true, revoked: (results || []).length }, 200, headers);
+      }
+
+      // No target specified: revoke all sessions including current
+      await revokeAccountSessions(env, request.account.id, null);
+      return json(
+        { ok: true, revokedAll: true },
+        200,
+        {
+          "Set-Cookie": buildClearSessionCookieHeader(),
+          "Cache-Control": "no-store",
+        }
+      );
+    }
+
     // /api/creator/track-status  (POST)  { creatorName, creatorKey } ->
     // { ok, lastPingAt, lastPingId, matched } -- powers the "last ping"
     // status line on the Settings page's Auto-track playback panel, same
@@ -1297,7 +1611,17 @@
           error: "Couldn't set that Profile up just now. Please try again in a moment.",
         }, 503);
       }
-      
+      // Same principle for the accounts row: one left by an earlier holder of
+      // this username would carry its sessions, installs and provider
+      // connections into the new account. The uniqueness check above has
+      // established there is no live profile, so any row here is a leftover.
+      if (!(await deleteAccountRow(env, v.normalized)).ok) {
+        return json({
+          ok: false,
+          error: "Couldn't set that Profile up just now. Please try again in a moment.",
+        }, 503);
+      }
+
       // D1 write is authoritative when DB is bound: fail the request if D1 fails,
       // then populate the KV read-through cache.
       if (env.DB) {
@@ -1319,8 +1643,12 @@
         }
       }
       await env.CONFIGS.put(`creator:${v.normalized}`, JSON.stringify(profileObj));
+      // The accounts row from the start, so a new account never waits on the
+      // backfill. Best-effort: without migration 0015 this does nothing, and
+      // the first sign-in fills the row anyway.
+      await getOrBackfillAccount(env, v.normalized, profileObj);
       await storeCreatorKeyLookup(env, creatorKey, v.normalized);
-      
+
       try {
         const countRaw = await env.CONFIGS.get("stats:creator_count");
         const count = parseInt(countRaw || "0", 10) + 1;
@@ -1448,6 +1776,10 @@
         JSON.stringify({ ...profile, keyHash })
       );
       await storeCreatorKeyLookup(env, creatorKey, v.normalized);
+      // Every device signs in again with the new key. A session opened with the
+      // old one would otherwise outlive it, and a lost or leaked key is the
+      // usual reason to reset.
+      await revokeSessionsForUsername(env, v.normalized);
       return json({ ok: true, creatorName: v.normalized, displayName: profile.displayName, creatorKey }, 200, { "Cache-Control": "no-store" });
     }
 
@@ -1510,6 +1842,8 @@
         JSON.stringify({ ...profile, keyHash })
       );
       await storeCreatorKeyLookup(env, creatorKey, v.normalized);
+      // Signed out everywhere, for the same reason as the self-service reset.
+      await revokeSessionsForUsername(env, v.normalized);
       return json({ ok: true, creatorKey }, 200, { "Cache-Control": "no-store" });
     }
 
@@ -1547,6 +1881,11 @@
           console.error("D1 write error (update recovery answer):", dbErr);
           return json({ ok: false, error: "Failed to update recovery answer. Please try again." }, 500);
         }
+        try {
+          await env.DB.prepare(
+            "UPDATE accounts SET recovery_answer_hash = ? WHERE username = ? COLLATE NOCASE"
+          ).bind(recoveryAnswerHash, auth.username).run();
+        } catch (accErr) {}
       }
 
       const raw = await getCreator(env, auth.username);
@@ -1560,7 +1899,9 @@
         }
       }
 
-      await storeCreatorKeyLookup(env, body.creatorKey, auth.username);
+      if (body.creatorKey) {
+        await storeCreatorKeyLookup(env, body.creatorKey, auth.username);
+      }
 
       return jsonPrivate({ ok: true, hasRecoveryAnswer: true });
     }
@@ -1595,7 +1936,9 @@
         return json({ ok: false, error: genericError }, 401);
       }
 
-      let resolvedUsername = await usernameForCreatorKeyLookup(env, presentedKey);
+      const lookupMeta = {};
+      let resolvedUsername = await usernameForCreatorKeyLookup(env, presentedKey, lookupMeta);
+      let isLegacyHit = Boolean(lookupMeta.source && lookupMeta.source.startsWith("legacy"));
 
       // Fallback for pre-migration accounts in D1: scan up to 50 accounts
       if (!resolvedUsername && env.DB) {
@@ -1607,6 +1950,7 @@
             for (const r of rows.results) {
               if (r.key_hash && (await verifyCreatorKey(presentedKey, r.key_hash))) {
                 resolvedUsername = r.username;
+                isLegacyHit = true;
                 await storeCreatorKeyLookup(env, presentedKey, r.username);
                 break;
               }
@@ -1621,17 +1965,40 @@
         return json({ ok: false, error: genericError }, 401);
       }
 
+      if (isLegacyHit) {
+        await recordLegacyLookupHit(env);
+      }
+
       const v = validateCreatorUsername(resolvedUsername);
       if (!v.ok) return json({ ok: false, error: genericError }, 401);
 
-      const raw = await getCreator(env, v.normalized);
-      if (!raw) return json({ ok: false, error: genericError }, 401);
-      let profile;
-      try {
-        profile = JSON.parse(raw);
-      } catch {
-        return json({ ok: false, error: genericError }, 401);
+      let profile = null;
+      let accountRow = null;
+      if (env.DB) {
+        try {
+          accountRow = await env.DB.prepare(
+            "SELECT id, username, display_name, key_hash, recovery_answer_hash, status FROM accounts WHERE lower(username) = lower(?) AND (status != 'deleted' AND deleted_at IS NULL)"
+          ).bind(v.normalized).first();
+        } catch {}
       }
+
+      const raw = await getCreator(env, v.normalized);
+      if (raw) {
+        try {
+          profile = JSON.parse(raw);
+        } catch {}
+      }
+
+      if (!profile && accountRow) {
+        profile = {
+          username: accountRow.username,
+          displayName: accountRow.display_name,
+          keyHash: accountRow.key_hash,
+          recoveryAnswerHash: accountRow.recovery_answer_hash,
+        };
+      }
+
+      if (!profile) return json({ ok: false, error: genericError }, 401);
 
       const keyMatches = await verifyCreatorKey(presentedKey, profile.keyHash);
       if (!keyMatches) {
@@ -1714,23 +2081,33 @@
       try {
         body = await request.json();
       } catch {
-        return json({ ok: false, error: "Invalid JSON body." }, 400);
+        if (request.account && isSessionsEnabled(env)) {
+          body = {};
+        } else {
+          return json({ ok: false, error: "Invalid JSON body." }, 400);
+        }
       }
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) {
         if (auth.error !== "no-kv") await noteAuthFailure(env, restoreFailScope, restoreFailDay);
         return authFailureResponse(auth);
       }
-      if (ctx && typeof ctx.waitUntil === "function") {
-        ctx.waitUntil(storeCreatorKeyLookup(env, body.creatorKey, auth.username).catch(() => {}));
-      } else {
-        await storeCreatorKeyLookup(env, body.creatorKey, auth.username).catch(() => {});
+      if (body.creatorKey) {
+        if (ctx && typeof ctx.waitUntil === "function") {
+          ctx.waitUntil(storeCreatorKeyLookup(env, body.creatorKey, auth.username).catch(() => {}));
+        } else {
+          await storeCreatorKeyLookup(env, body.creatorKey, auth.username).catch(() => {});
+        }
       }
       return jsonPrivate({
         ok: true,
         creatorName: auth.username,
         displayName: auth.displayName,
         hasRecoveryAnswer: Boolean(auth.hasRecoveryAnswer),
+        // Whether this browser now holds a session for the account (FF_SESSIONS).
+        // The page offers its locally held provider tokens to
+        // /api/connections/import-local only when it does (P3a-9).
+        session: Boolean(request.session && request.account && String(request.account.username || "").toLowerCase() === String(auth.username || "").toLowerCase()),
       });
     }
 
@@ -1743,7 +2120,11 @@
       try {
         body = await request.json();
       } catch {
-        return json({ ok: false, error: "Invalid JSON body." }, 400);
+        if (request.account && isSessionsEnabled(env)) {
+          body = {};
+        } else {
+          return json({ ok: false, error: "Invalid JSON body." }, 400);
+        }
       }
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) return authFailureResponse(auth);
@@ -2964,6 +3345,11 @@
           cleared: { lists: purged.listsCleared, keys: purged.keysCleared },
         }, 500);
       }
+      // purgeCreatorData has already removed the accounts row and its sessions;
+      // this only tells the browser to drop the cookie.
+      if (request.account || request._sessionCookie) {
+        request._sessionCookie = buildClearSessionCookieHeader();
+      }
       return json({ ok: true, cleared: { lists: purged.listsCleared, keys: purged.keysCleared } });
     }
 
@@ -3744,7 +4130,11 @@
       try {
         body = await request.json();
       } catch {
-        return json({ ok: false, error: "Invalid JSON body." }, 400);
+        if (request.account && isSessionsEnabled(env)) {
+          body = {};
+        } else {
+          return json({ ok: false, error: "Invalid JSON body." }, 400);
+        }
       }
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) return authFailureResponse(auth);
@@ -3840,7 +4230,11 @@
       try {
         body = await request.json();
       } catch {
-        return json({ ok: false, error: "Invalid JSON body." }, 400);
+        if (request.account && isSessionsEnabled(env)) {
+          body = {};
+        } else {
+          return json({ ok: false, error: "Invalid JSON body." }, 400);
+        }
       }
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) return authFailureResponse(auth);
@@ -5479,6 +5873,31 @@
       }
 
       return json({ ok: true, done, results, thisCall, scanned: state.scanned });
+    }
+
+    // /admin/api/migrate-accounts  (POST / GET)
+    // Phase 3a (P3a-3): Backfills creators and KV creator:* records into accounts.
+    // Newest keyHash wins; D1 wins ties.
+    // Returns reconciliation report showing count(accounts) = |creators ∪ creator:*|.
+    // POST runs the backfill (or dryRun if requested in body/query); GET runs dryRun reconciliation check only.
+    if (path === "/admin/api/migrate-accounts" && (request.method === "POST" || request.method === "GET")) {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      if (!env || !env.DB) return json({ ok: false, error: "No D1 database binding 'DB'." }, 500);
+
+      let body = {};
+      if (request.method === "POST") {
+        try {
+          body = await request.json();
+        } catch {
+          body = {};
+        }
+      }
+      const url = new URL(request.url);
+      const dryRun = request.method === "GET" || !!body.dryRun || (url.searchParams.get("dry_run") === "1");
+
+      const report = await backfillAccounts(env, { dryRun });
+      return json(report, report.ok ? 200 : 500);
     }
 
     // /admin/api/rebuild-search-index (and alias /admin/api/rebuild-public-index) (POST) -> { ok, done, count, scanned, ms }
@@ -7288,7 +7707,7 @@ export default {
       // An unparseable URL cannot have reached a private route anyway.
     }
     if (counters) writeRequestMetrics(env, request, response, startedAt, counters);
-    return withSecurityHeaders(response, privatePath);
+    return withSecurityHeaders(response, privatePath, request ? request._sessionCookie : null);
   },
 
   // Runs on whatever schedule this Worker's owner configured under

@@ -116,30 +116,69 @@ No npm, no `src/` tree, no esbuild, no new test framework (D-11). Phase 2 is now
 
 ## Phase 3a — Identity, sessions, installs, connections
 
-- [ ] **P3a-1** Migration `0015_accounts_sessions_installs.sql`: `accounts`, `sessions`, `installs` (+ `legacy_cfg_id` UNIQUE), `install_secrets` (transitional, encrypted), `provider_connections`, `rate_counters`, `account_settings` (NEXT_VERSION_ARCHITECTURE §4.3). *Done when:* applied; the ledger is updated.
-- [ ] **P3a-2** Secrets: `TOKEN_ENCRYPTION_KEY` (base64, 32 bytes; stored as `k1:<base64>` to allow rotation) and `LOOKUP_PEPPER`. `src/shared/crypto.js` provides `encrypt(plaintext) → "k1:<iv>:<ct>"` and `decrypt()` with AES-GCM. *Done when:* round-trip and wrong-key tests pass.
-- [ ] **P3a-3** Backfill job `migrate.accounts`: for every `creators` row and every KV `creator:*` key, upsert `accounts` (newest `keyHash` wins; D1 wins ties). *Done when:* the reconciliation report shows `count(accounts) = |creators ∪ creator:*|`.
-- [ ] **P3a-4** Sessions:
+- [x] **P3a-1** Migration `0015_accounts_sessions_installs.sql`: `accounts`, `sessions`, `installs` (+ `legacy_cfg_id` UNIQUE), `install_secrets` (transitional, encrypted), `provider_connections`, `rate_counters`, `account_settings` (NEXT_VERSION_ARCHITECTURE §4.3). *Done when:* applied; the ledger is updated. — **Status:** Written (`migrations/0015_accounts_sessions_installs.sql`); added to `schema.sql`, `D1_SCHEMA_MANIFEST`, and verified with the test suite. Ready to apply in D1.
+- [x] **P3a-2** Secrets: `TOKEN_ENCRYPTION_KEY` (base64, 32 bytes; stored as `k1:<base64>` to allow rotation) and `LOOKUP_PEPPER`. `src/shared/crypto.js` provides `encrypt(plaintext) → "k1:<iv>:<ct>"` and `decrypt()` with AES-GCM. *Done when:* round-trip and wrong-key tests pass. — **Status:** Implemented in `02_http-and-creator-utils.js` (`encryptToken`, `decryptToken`, `hmacLookupKey`, `parseTokenEncryptionKeys`).
+  - The generic `encrypt` / `decrypt` names were dropped: every file shares one scope.
+  - An optional `context` binds a ciphertext to its row (AES-GCM additional data), so callers should pass one, for example `account:<id>:<provider>`.
+  - Tested for round-trip, key rotation, wrong key, tampering, malformed keys, context binding and HMAC hashing.
+- [x] **P3a-3** Backfill job `migrate.accounts`: for every `creators` row and every KV `creator:*` key, upsert `accounts` (newest `keyHash` wins; D1 wins ties). *Done when:* the reconciliation report shows `count(accounts) = |creators ∪ creator:*|`. — **Status:** Implemented (`backfillAccounts`, `reconcileAccounts` in `02_http-and-creator-utils.js`, `/admin/api/migrate-accounts` route in `26_api-creator-and-admin-routes.js`, Admin maintenance panel in `03_admin.js`), verified with comprehensive unit and route tests.
+- [x] **P3a-4** Sessions:
   - `POST /api/session` {username, key}: PBKDF2 verify, rehash if the iteration count is below the target, create a 256-bit token, store its SHA-256 in `sessions`, and set the `mla_session` cookie (`HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=30d`).
   - `DELETE /api/session`.
   - `GET /api/me`.
   - `GET/DELETE /api/me/sessions` (devices).
   - Middleware resolves the session (with a 60 s isolate cache) and sets `request.account`.
 
-  *Done when:* the auth tests pass, including revocation.
-- [ ] **P3a-5** CSRF middleware for POST, PUT, PATCH and DELETE: require `Origin` equal to our origin (or `Sec-Fetch-Site: same-origin`) **and** `Content-Type: application/json`. Webhook routes (`/api/scrobble*`) and OAuth callbacks are exempt. *Done when:* a cross-origin `text/plain` POST to `/api/lists/like` is rejected with 403.
-- [ ] **P3a-6** Compatibility: every `/api/creator/*` route accepts either a session **or** `creatorName`/`creatorKey` in the body. A successful key-in-body auth also sets a session cookie. Behind `FF_SESSIONS`. *Done when:* the old client flows pass unchanged and the new cookie is issued.
-- [ ] **P3a-7** Blind index v2: on a successful login or key reset, write `accounts.key_lookup_hmac = HMAC(LOOKUP_PEPPER, normalizedKey)`. `forgot-username` checks the HMAC first, then the legacy SHA-256. *Done when:* the tests pass; there is a metric for legacy-lookup hits.
-- [ ] **P3a-8** Installs:
+  *Done when:* the auth tests pass, including revocation. — **Status:** Implemented (`createSession`, `resolveSession`, `revokeSession`, `revokeAccountSessions` in `02_http-and-creator-utils.js`, middleware in `25_api-catalog-routes.js`, routes in `26_api-creator-and-admin-routes.js`), verified with 12 comprehensive unit and route tests covering login, PBKDF2 upgrade, lazy backfill, session resolution via cookie/Bearer, device management, logout, and multi-session revocation.
+- [x] **P3a-5** CSRF middleware for POST, PUT, PATCH and DELETE: require `Origin` equal to our origin (or `Sec-Fetch-Site: same-origin`) **and** `Content-Type: application/json`. Webhook routes (`/api/scrobble*`) and OAuth callbacks are exempt. *Done when:* a cross-origin `text/plain` POST to `/api/lists/like` is rejected with 403. — **Status:** Implemented (`verifyCsrf` in `02_http-and-creator-utils.js`, wired into `handleFetch` in `25_api-catalog-routes.js`), verified with 10 comprehensive tests covering cross-origin rejection, non-JSON rejection, Sec-Fetch-Site enforcement, webhook and OAuth exemptions, admin login form exemption, safe method passthrough, and direct helper unit tests.
+- [x] **P3a-6** Compatibility: every `/api/creator/*` route accepts either a session **or** `creatorName`/`creatorKey` in the body. A successful key-in-body auth also sets a session cookie. Behind `FF_SESSIONS`. *Done when:* the old client flows pass unchanged and the new cookie is issued. — **Status:** Implemented (`authenticateCreator` dual auth, `isSessionsEnabled`, `getOrBackfillAccount`, cookie attachment via `withSecurityHeaders`), verified with 13 comprehensive unit and route tests covering session auth without key, key-in-body auth issuing cookies, flag gating behind `FF_SESSIONS`, username matching enforcement, empty body tolerance, cookie clearance on account deletion, and lazy backfills.
+- [x] **P3a-7** Blind index v2: on a successful login or key reset, write `accounts.key_lookup_hmac = HMAC(LOOKUP_PEPPER, normalizedKey)`. `forgot-username` checks the HMAC first, then the legacy SHA-256. *Done when:* the tests pass; there is a metric for legacy-lookup hits. — **Status:** Implemented (`accounts.key_lookup_hmac` written on session login, creator route key-in-body login, creator key reset, and admin key reset; HMAC check first in `usernameForCreatorKeyLookup` and `/api/creator/forgot-username`; legacy lookup fallback; `recordLegacyLookupHit` reporting to Analytics Engine and KV `stats:legacy_lookup_hits`), verified with 13 comprehensive unit and integration tests.
+- **Review of P3a-4 to P3a-7** (2026-09-27): fixed before any of it reached production. See `CHANGELOG.md`, "Phase 3a review fixes".
+  - The `accounts` row is a mirror of the creator profile (`creator:{u}` / `creators`), which stays the source of truth until Phase 10. `getOrBackfillAccount(env, username, profile)` corrects a drifted row from the profile and fills a missing one for that account only.
+  - `POST /api/session` authenticates through `authenticateCreator`.
+  - Delete-account removes the `accounts` row and everything under its id (`deleteAccountRow`); create clears a leftover row first.
+  - Key resets revoke every session (`revokeSessionsForUsername`).
+  - Key-in-body issues a session on `/api/creator/*` only, and not when a live session for the account is already present.
+  - Admin maintenance buttons send `Content-Type: application/json` (the CSRF check refused them); a test scans every mutating `fetch` in the pages.
+- [x] **P3a-8** Installs:
   - `src/installs/legacy-resolver.js` (MIGRATION_PLAN §3.2): converts `cfg:{id}` and bare ids into `installs` rows and binds the owner. Tokens go to `provider_connections` (when an owner exists) or `install_secrets`. **Rewrite the KV record without secrets.**
   - Base64: read-only transient install.
   - New routes: `/i/{token}/manifest.json`, `/catalog/...`, `/meta/...`, `/subtitles/...`.
   - Management API: `GET/POST/PATCH/DELETE /api/installs` (session required).
   - A KV snapshot `install:{tokenHash}` with a 1-day TTL, invalidated by bumping `version`.
 
-  *Done when:* a sample of legacy ids (fixtures) serves identical manifests and catalogs; KV `cfg:` records no longer contain `trackCreatorKey` or tokens after first use.
-- [ ] **P3a-9** Connections: the OAuth callbacks (Trakt, MDBList, Simkl, TMDB) store tokens server-side (encrypted, **including `refresh_token` and `expires_at`**) when a session exists, and redirect to `/settings/connections?connected=trakt` with **no token in the URL**. The signed-out fallback keeps today's behavior until P6. `POST /api/connections/import-local` accepts legacy browser tokens once, validates them, and stores them. `DELETE /api/connections/:provider` revokes (where the provider supports it) and deletes. *Done when:* no OAuth redirect contains a token for signed-in users.
-- [ ] **P3a-10** Provider calls for personal rows read tokens from `provider_connections` (install owner) instead of the config. *Done when:* personal Trakt, MDBList and Simkl rows work with configs stripped of tokens.
+  *Done when:* a sample of legacy ids (fixtures) serves identical manifests and catalogs; KV `cfg:` records no longer contain `trackCreatorKey` or tokens after first use. — **Status:** Done, in `27_installs.js`, with tests in `tests/worker.test.mjs` ("P3a-8"). Off until the owner sets `INSTALL_MIGRATION_PERCENT` (the move) and `FF_INSTALLS` (the API); `docs/OPERATIONS.md` §8 has the steps.
+  - **Where it differs from the plan, and why:**
+    - Only records that hold a secret move. A signed-out link has nothing to move and is left untouched.
+    - Secrets always go to `install_secrets`, **not** `provider_connections`. The install keeps its own keys, so it serves exactly as before even when an account's links hold different or stale tokens. Which store wins is P3a-9/P3a-10's decision.
+    - The Creator Key (`trackCreatorKey`) is stored encrypted too, not dropped. Reading the link puts it back, so playback tracking and "a key reset stops old links tracking" work unchanged, and the move can be undone.
+    - A legacy install's `config_json` is `'{}'`. Its config stays in the (now secret-free) `cfg:` record, which every request reads anyway, so D1's 2 MB row limit never applies to it.
+    - `token_hash` for a legacy install is `legacy:{id}`, which no SHA-256 can equal.
+    - Reads never depend on the flags: a moved record is always read through the table.
+  - **Added:** an emergency undo (`/admin/api/installs/restore`), the admin progress panel, and a check on each move that the stored keys decrypt back to the originals before KV is touched.
+  - **Base64 links:** already read-only and transient (`decodeConfig`); unchanged.
+- [x] **P3a-9** Connections: the OAuth callbacks (Trakt, MDBList, Simkl, TMDB) store tokens server-side (encrypted, **including `refresh_token` and `expires_at`**) when a session exists, and redirect to `/settings/connections?connected=trakt` with **no token in the URL**. The signed-out fallback keeps today's behavior until P6. `POST /api/connections/import-local` accepts legacy browser tokens once, validates them, and stores them. `DELETE /api/connections/:provider` revokes (where the provider supports it) and deletes. *Done when:* no OAuth redirect contains a token for signed-in users. — **Status:** Done, in `28_connections.js`, the callbacks in `25_`, and the page (`17_`, `22_`, `24_`). Tests: "P3a-9" in `tests/worker.test.mjs` and `tests/client.test.mjs`.
+  - **Where it differs from the plan, and why:**
+    - The redirect is `/?connected=<provider>`. `/settings/connections` does not exist until the Phase 6 pages.
+    - The page still works from its own copy of each token (about 430 places read one). So after a signed-in connect it fetches the token once over its session: `POST /api/connections/:provider/token`, a POST so the CSRF check applies. Remove it when the Phase 6 pages stop holding tokens.
+    - "Signed in" means the browser has a session, so this starts working when `FF_SESSIONS` is on. Without `TOKEN_ENCRYPTION_KEY` the callbacks fall back to today's behaviour rather than fail.
+    - Also added: `GET /api/connections` (no tokens), the Trakt device flow storing a copy, `session` in the `/api/creator/restore` answer (the page imports only when it is true), and a rate limit on import.
+    - The page still pushes its tokens into account sync (`creatorsync:{u}`, plain KV) as before. Stopping that is Phase 6, once nothing in the page needs them.
+- [x] **P3a-10** Provider calls for personal rows read tokens from `provider_connections` (install owner) instead of the config. *Done when:* personal Trakt, MDBList and Simkl rows work with configs stripped of tokens. — **Status:** Done, in `28_connections.js` (`connectionFieldsForConfig`, `connectionOwnerForConfig`, `refreshProviderConnectionIfDue`), called from `resolveConfig` (`04_`) and `resolveV2InstallConfig` (`27_`). Tests: "P3a-10" in `tests/worker.test.mjs`.
+  - **Decisions made here:**
+    - **Only for a proven owner:**
+      - a v2 install's `account_id`;
+      - a verifying `trackCreatorKey`;
+      - the new `ownerId` + `ownerSince` stamp (accounts id and `created_at`) that `/api/save` writes for every signed-in save.
+
+      The older `trackOwner` stamp and the unverified-shelf fallback are names only and lend nothing. That keeps the re-registered-username problem (spawned as its own task) from reaching provider tokens.
+    - **Precedence:** the config's own key or token wins, and connections fill only what is missing, so legacy links serve identically. A token and its client id are filled together (paired) for Trakt and Simkl.
+    - **Saves:** a signed-in `/api/save` leaves out the fields the account's working connections supply (read fresh, never from the isolate cache), and stamps the owner.
+    - **Refresh:**
+      - Trakt (site-issued tokens only; tried under the web and device redirect URIs) and MDBList, an hour before expiry.
+      - A refused refresh re-reads the row, so the loser of a race uses the winner's token.
+      - Otherwise the connection is marked `expired`.
+    - Website API routes that take a token in the request body (Trakt export, private lists and the like) are unchanged. Moving them to connections belongs with the Phase 6 pages.
 
 ## Phase 3b — Lists, likes, channels
 

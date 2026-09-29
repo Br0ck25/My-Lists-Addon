@@ -8324,3 +8324,105 @@ describe("client: preview proves ownership for its own creator-list rows", () =>
     assert.equal(out.call("previewCreatorKey", snapRow({ creatorSlug: "faves" })), "");
   });
 });
+
+// P3a-9. A signed-in connect comes back as ?connected=<provider> with no token
+// in the address bar; the page fetches the token over its session and treats
+// it exactly as it treated a token in the address bar before.
+describe("client: connections kept on the server (P3a-9)", () => {
+  const settle = () => new Promise((r) => setImmediate(r));
+
+  function withUrl(client, search, hash = "") {
+    client.location.search = search;
+    client.location.hash = hash;
+    const urls = [];
+    client.history.replaceState = (_s, _t, u) => { urls.push(u); };
+    return urls;
+  }
+
+  it("picks up a signed-in Trakt connect from the server and cleans the address bar", async () => {
+    const client = loadClient({
+      routes: {
+        "/api/connections/trakt/token": () => ({ json: { ok: true, provider: "trakt", accessToken: "SERVER-TRAKT", username: "fan" } }),
+      },
+    });
+    const urls = withUrl(client, "?connected=trakt");
+    await client.call("pickUpServerConnection");
+    await settle();
+
+    const [req] = requestsTo(client, "/api/connections/trakt/token");
+    assert.equal(req.method, "POST");
+    assert.equal(req.headers["Content-Type"], "application/json", "the CSRF check needs it");
+    assert.equal(client.localStorage.getItem("myListAddon:traktAccessToken"), "SERVER-TRAKT");
+    assert.equal(client.localStorage.getItem("myListAddon:traktUsername"), "fan");
+    assert.equal(client.get("traktAccessToken"), "SERVER-TRAKT");
+    assert.ok(urls.length && !urls.some((u) => String(u).includes("connected=")), "the marker leaves the address bar");
+  });
+
+  it("does the same for TMDB, with its account id", async () => {
+    const client = loadClient({
+      routes: {
+        "/api/connections/tmdb/token": () => ({ json: { ok: true, accessToken: "SERVER-TMDB", username: "tfan", id: "77" } }),
+      },
+    });
+    withUrl(client, "?connected=tmdb");
+    await client.call("pickUpServerConnection");
+    await settle();
+    assert.equal(client.localStorage.getItem("myListAddon:tmdbSessionId"), "SERVER-TMDB");
+    assert.equal(client.localStorage.getItem("myListAddon:tmdbAccountId"), "77");
+    assert.equal(client.localStorage.getItem("myListAddon:tmdbUsername"), "tfan");
+  });
+
+  it("still takes a token from the address bar when the sign-in was signed out", async () => {
+    const client = loadClient({ routes: {} });
+    const urls = withUrl(client, "", "#trakt_token=FRAG-TOKEN&trakt_username=fraguser");
+    client.call("pickUpTraktTokenFromUrl");
+    await settle();
+    assert.equal(client.localStorage.getItem("myListAddon:traktAccessToken"), "FRAG-TOKEN");
+    assert.equal(client.localStorage.getItem("myListAddon:traktUsername"), "fraguser");
+    assert.ok(urls.some((u) => !String(u).includes("trakt_token")), "the token is stripped from the address bar");
+  });
+
+  it("disconnecting also asks the server to forget its copy", async () => {
+    const client = loadClient({
+      routes: { "/api/connections/simkl": () => ({ json: { ok: true, removed: true } }) },
+      storage: { "myListAddon:simklAccessToken": "OLD" },
+    });
+    client.call("disconnectSimkl");
+    await settle();
+    const [req] = requestsTo(client, "/api/connections/simkl");
+    assert.equal(req.method, "DELETE");
+    assert.equal(client.localStorage.getItem("myListAddon:simklAccessToken"), null);
+  });
+
+  it("offers the browser's tokens to the server once per account", async () => {
+    const posts = [];
+    const client = loadClient({
+      storage: { "myListAddon:traktAccessToken": "LOCAL-TRAKT", "myListAddon:mdblistKey": "LOCAL-MDB" },
+      routes: {
+        "/api/connections/import-local": (req) => {
+          posts.push(req.body);
+          return { json: { ok: true, results: { trakt: "imported", mdblist: "imported" } } };
+        },
+      },
+    });
+    await client.call("importLocalConnectionsOnce", "Alice");
+    await client.call("importLocalConnectionsOnce", "Alice");
+    assert.equal(posts.length, 1, "once");
+    assert.equal(posts[0].keys.traktAccessToken, "LOCAL-TRAKT");
+    assert.equal(posts[0].keys.mdblistKey, "LOCAL-MDB");
+    assert.equal(posts[0].keys.shuffleShelves, undefined, "only credentials, not every setting");
+  });
+
+  it("offers them again later when a provider could not be reached", async () => {
+    let n = 0;
+    const client = loadClient({
+      storage: { "myListAddon:simklAccessToken": "LOCAL-SIMKL" },
+      routes: {
+        "/api/connections/import-local": () => { n++; return { json: { ok: true, results: { simkl: "unreachable" } } }; },
+      },
+    });
+    await client.call("importLocalConnectionsOnce", "bob");
+    await client.call("importLocalConnectionsOnce", "bob");
+    assert.equal(n, 2);
+  });
+});

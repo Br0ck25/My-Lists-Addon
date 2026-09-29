@@ -1062,6 +1062,42 @@ const D1_SCHEMA_MANIFEST = [
     migration: "0014", kind: "table", name: "schema_migrations",
     consequence: "The Worker cannot tell which migrations have run, so it cannot refuse writes while it is ahead of the database. Apply migrations/0014.",
   },
+  {
+    migration: "0015", kind: "table", name: "accounts",
+    consequence: "The unified accounts system is unavailable. User profiles, authentication, and session-based identity fall back to legacy creators store.",
+  },
+  {
+    migration: "0015", kind: "table", name: "sessions",
+    consequence: "Session storage is unavailable. Browser login sessions, cookies, and multi-device authentication cannot be established.",
+  },
+  {
+    migration: "0015", kind: "index", name: "idx_sessions_account",
+    consequence: "Listing or revoking an account's active sessions scans the sessions table instead of an index. Slower, not broken.",
+  },
+  {
+    migration: "0015", kind: "table", name: "installs",
+    consequence: "Modern install links and permanent install configs cannot be stored or resolved from D1.",
+  },
+  {
+    migration: "0015", kind: "index", name: "idx_installs_account",
+    consequence: "Querying installs by account scans the installs table instead of an index. Slower, not broken.",
+  },
+  {
+    migration: "0015", kind: "table", name: "provider_connections",
+    consequence: "Server-side encrypted OAuth tokens and provider credentials cannot be stored on the account.",
+  },
+  {
+    migration: "0015", kind: "table", name: "install_secrets",
+    consequence: "Transitional encrypted provider credentials on unowned install links cannot be stored.",
+  },
+  {
+    migration: "0015", kind: "table", name: "rate_counters",
+    consequence: "Per-account and credential rate limits cannot be tracked in D1.",
+  },
+  {
+    migration: "0015", kind: "table", name: "account_settings",
+    consequence: "Account-level UI and sync preferences cannot be stored in D1.",
+  },
 ];
 
 
@@ -2831,6 +2867,9 @@ function isPrivateApiPath(path) {
   // fixed at the route, because this is the choke point that is supposed to
   // mean a route added later cannot forget.
   if (p === "/api/resolve") return true;
+  if (p === "/api/session" || p === "/api/me" || p.startsWith("/api/me/")) return true;
+  if (p === "/api/installs" || p.startsWith("/api/installs/")) return true;
+  if (p === "/api/connections" || p.startsWith("/api/connections/")) return true;
   return p.startsWith("/api/creator/") || p === "/admin" || p.startsWith("/admin/");
 }
 
@@ -2889,11 +2928,14 @@ function securityHeaders() {
 // like Content-Type/Cache-Control/CORS) -- see securityHeaders' own
 // comment for why this is applied here, once, rather than at each call
 // site.
-function withSecurityHeaders(response, privatePath = false) {
+function withSecurityHeaders(response, privatePath = false, extraSetCookie = null) {
   const headers = new Headers(response.headers);
   const extra = securityHeaders();
   for (const key in extra) {
     if (!headers.has(key)) headers.set(key, extra[key]);
+  }
+  if (extraSetCookie && !headers.has("Set-Cookie")) {
+    headers.set("Set-Cookie", extraSetCookie);
   }
   // Deliberately set rather than defaulted -- see isPrivateApiPath.
   if (privatePath) headers.set("Cache-Control", "no-store");
@@ -2960,6 +3002,60 @@ async function schemaWriteGate(request, env) {
     maintenance: true,
     error: "My Lists is being updated. Please try again in a few minutes.",
   }, 503, { "Cache-Control": "no-store", "Retry-After": "120" });
+}
+
+// --- CSRF protection middleware (P3a-5) -----------------------------------
+// Enforces that state-changing requests (POST, PUT, PATCH, DELETE) come from
+// our own origin (or have Sec-Fetch-Site: same-origin) AND carry Content-Type: application/json.
+// Exemptions:
+// 1. Webhook ingestion routes (/api/scrobble*) - called by media servers/Stremio
+// 2. OAuth provider callbacks and starts (/api/*/oauth/*)
+// 3. Admin form login and logout (/admin/login, /admin/logout)
+function verifyCsrf(request) {
+  const method = (request.method || "GET").toUpperCase();
+  if (method !== "POST" && method !== "PUT" && method !== "PATCH" && method !== "DELETE") {
+    return null;
+  }
+
+  let url;
+  try {
+    url = new URL(request.url);
+  } catch {
+    return json({ ok: false, error: "Invalid request URL." }, 400);
+  }
+  const path = url.pathname;
+
+  // Exemptions
+  if (path.startsWith("/api/scrobble")) {
+    return null;
+  }
+  if (path.includes("/oauth/")) {
+    return null;
+  }
+  if (path === "/admin/login" || path === "/admin/logout") {
+    return null;
+  }
+
+  // Check Origin or Sec-Fetch-Site: must be same-origin
+  const origin = request.headers.get("Origin") || request.headers.get("origin");
+  const secFetchSite = request.headers.get("Sec-Fetch-Site") || request.headers.get("sec-fetch-site");
+  const requestOrigin = url.origin.toLowerCase();
+
+  const isSameOrigin = (origin && origin.toLowerCase() === requestOrigin) ||
+                       (secFetchSite && secFetchSite.toLowerCase() === "same-origin");
+
+  if (!isSameOrigin) {
+    return json({ ok: false, error: "Cross-origin request forbidden." }, 403);
+  }
+
+  // Check Content-Type: application/json
+  const contentType = request.headers.get("Content-Type") || request.headers.get("content-type") || "";
+  const mime = contentType.split(";")[0].trim().toLowerCase();
+  if (mime !== "application/json") {
+    return json({ ok: false, error: "Content-Type must be application/json." }, 403);
+  }
+
+  return null;
 }
 
 // --- Per-request metrics (Workers Analytics Engine) --------------------------
@@ -3511,6 +3607,333 @@ function invalidateCreatorAuthMemo() {
   CREATOR_AUTH_MEMO.clear();
 }
 
+// --- Session management (P3a-4) -------------------------------------------
+const SESSION_COOKIE_NAME = "mla_session";
+const SESSION_TTL_SEC = 30 * 24 * 60 * 60; // 30 days
+const SESSION_TTL_MS = SESSION_TTL_SEC * 1000;
+const SESSION_CACHE = new Map();
+const SESSION_CACHE_TTL_MS = 60 * 1000; // 60 s isolate cache
+const SESSION_CACHE_MAX = 1000;
+
+function extractSessionToken(request) {
+  if (!request) return null;
+  const cookieHeader = request.headers.get("Cookie") || request.headers.get("cookie") || "";
+  const match = cookieHeader.match(/(?:^|;\s*)mla_session=([^;]+)/);
+  if (match) {
+    try { return decodeURIComponent(match[1].trim()); } catch { return match[1].trim(); }
+  }
+  const authHeader = request.headers.get("Authorization") || request.headers.get("authorization") || "";
+  if (authHeader.startsWith("Bearer ")) {
+    return authHeader.slice(7).trim();
+  }
+  return null;
+}
+
+async function hashSessionToken(token) {
+  if (!token || typeof token !== "string") return "";
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+  return bufferToHex(new Uint8Array(digest));
+}
+
+function buildSessionCookieHeader(token) {
+  return `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL_SEC}`;
+}
+
+function buildClearSessionCookieHeader() {
+  return `${SESSION_COOKIE_NAME}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+}
+
+function isSessionsEnabled(env) {
+  if (!env) return false;
+  return env.FF_SESSIONS === "1" || env.FF_SESSIONS === "true" || env.FF_SESSIONS === true;
+}
+
+// The accounts row is a mirror of the creator profile (`creator:{u}` in KV,
+// `creators` in D1), which stays the source of truth until the legacy stores
+// retire: every key reset, recovery-answer change and deletion still writes
+// the profile first. So a row is never trusted on its own. A caller that has
+// just verified the profile passes it in, and a row that has drifted from it
+// (a key reset, a username deleted and registered again) is corrected before
+// a session is tied to it.
+//
+// A missing row is filled for this one account only. This used to run the
+// whole backfillAccounts() -- every creator in D1 and every creator:* key in
+// KV -- on each sign-in by an account the backfill had not reached yet.
+async function getOrBackfillAccount(env, username, profile = null) {
+  if (!env || !env.DB) return null;
+  const norm = String(username || "").trim().toLowerCase();
+  if (!norm) return null;
+  const selectRow = async () => {
+    const { results } = await env.DB.prepare(
+      "SELECT id, username, display_name, key_hash, recovery_answer_hash, key_lookup_hmac, created_at, last_active_at, version, status, deleted_at " +
+      "FROM accounts WHERE username = ? COLLATE NOCASE"
+    ).bind(norm).all();
+    return results && results.length > 0 ? results[0] : null;
+  };
+  let row;
+  try {
+    row = await selectRow();
+  } catch (e) {
+    // Most often migration 0015 not applied yet: no accounts table.
+    console.error("D1 accounts lookup failed:", e);
+    return null;
+  }
+  const rowDeleted = Boolean(row) && (row.deleted_at != null || row.status === "deleted");
+  // Any other status (a suspension, say) is a decision about this account,
+  // not a leftover: signing in must neither undo it nor replace the row.
+  if (row && !rowDeleted && row.status && row.status !== "active") return null;
+  const rowIsLive = Boolean(row) && !rowDeleted;
+  if (rowIsLive && (!profile || accountRowMatchesProfile(row, profile))) return row;
+
+  if (!profile) {
+    try {
+      const raw = await getCreator(env, norm);
+      profile = raw ? JSON.parse(raw) : null;
+    } catch {
+      profile = null;
+    }
+    if (!profile || typeof profile.keyHash !== "string" || !profile.keyHash) return null;
+    if (rowIsLive && accountRowMatchesProfile(row, profile)) return row;
+  }
+
+  try {
+    // A row marked deleted belongs to an earlier holder of this username.
+    // Reviving it would hand the new holder its id, and with it every
+    // session, install and provider connection still filed under that id.
+    if (rowDeleted && !(await deleteAccountRow(env, norm)).ok) return null;
+    await env.DB.prepare(
+      "INSERT INTO accounts (" +
+      "  username, display_name, key_hash, recovery_answer_hash," +
+      "  key_lookup_hmac, created_at, last_active_at, version, deleted_at, status" +
+      ") VALUES (?, ?, ?, ?, NULL, ?, NULL, 0, NULL, 'active') " +
+      "ON CONFLICT(username) DO UPDATE SET " +
+      "  display_name = excluded.display_name," +
+      "  key_hash = excluded.key_hash," +
+      "  recovery_answer_hash = excluded.recovery_answer_hash," +
+      // The blind index belongs to the key it was computed from. A new key
+      // hash means a new key, so the old entry would point forgot-username
+      // at this account for a key that no longer opens it.
+      "  key_lookup_hmac = CASE WHEN accounts.key_hash = excluded.key_hash THEN accounts.key_lookup_hmac ELSE NULL END"
+    ).bind(
+      norm,
+      profile.displayName || norm,
+      profile.keyHash,
+      profile.recoveryAnswerHash || null,
+      typeof profile.createdAt === "number" && profile.createdAt > 0 ? profile.createdAt : Date.now()
+    ).run();
+    return await selectRow();
+  } catch (e) {
+    console.error("D1 accounts upsert failed:", e);
+    return null;
+  }
+}
+
+function accountRowMatchesProfile(row, profile) {
+  if (!row || !profile) return false;
+  return row.key_hash === profile.keyHash &&
+    (row.recovery_answer_hash || null) === (profile.recoveryAnswerHash || null) &&
+    row.display_name === (profile.displayName || row.username);
+}
+
+// Removes an account's row and everything filed under its id. Called when the
+// identity itself goes (delete-account), and before a username is registered
+// again, so nothing an earlier holder left can be reached through it. Explicit
+// deletes rather than relying on ON DELETE CASCADE alone: provider_connections
+// holds third-party tokens, and their removal should not depend on a pragma.
+async function deleteAccountRow(env, username) {
+  if (!env || !env.DB) return { ok: true };
+  const norm = String(username || "").trim().toLowerCase();
+  if (!norm) return { ok: true };
+  let ids = [];
+  try {
+    const { results } = await env.DB.prepare(
+      "SELECT id FROM accounts WHERE username = ? COLLATE NOCASE"
+    ).bind(norm).all();
+    ids = (results || []).map((r) => r.id);
+  } catch (e) {
+    // No accounts table (migration 0015 not applied): nothing to remove.
+    if (String(e && e.message || e).includes("no such table")) return { ok: true };
+    console.error("deleteAccountRow: lookup failed:", e);
+    return { ok: false };
+  }
+  for (const id of ids) {
+    await revokeAccountSessions(env, id);
+    // Before the rows go: a snapshot would keep serving them for up to a day.
+    await forgetAccountInstallSnapshots(env, id);
+    try {
+      await env.DB.batch([
+        env.DB.prepare("DELETE FROM sessions WHERE account_id = ?").bind(id),
+        env.DB.prepare("DELETE FROM provider_connections WHERE account_id = ?").bind(id),
+        env.DB.prepare("DELETE FROM account_settings WHERE account_id = ?").bind(id),
+        env.DB.prepare("DELETE FROM install_secrets WHERE install_id IN (SELECT id FROM installs WHERE account_id = ?)").bind(id),
+        env.DB.prepare("DELETE FROM installs WHERE account_id = ?").bind(id),
+        env.DB.prepare("DELETE FROM accounts WHERE id = ?").bind(id),
+      ]);
+    } catch (e) {
+      console.error("deleteAccountRow: delete failed:", e);
+      return { ok: false };
+    }
+  }
+  return { ok: true };
+}
+
+// Signs every device out of one account. A key reset has to do this: the
+// reason to reset a key is usually that someone else has it, and a session
+// they opened with it would otherwise outlive the key by up to 30 days.
+async function revokeSessionsForUsername(env, username) {
+  if (!env || !env.DB) return;
+  const norm = String(username || "").trim().toLowerCase();
+  if (!norm) return;
+  try {
+    const { results } = await env.DB.prepare(
+      "SELECT id FROM accounts WHERE username = ? COLLATE NOCASE"
+    ).bind(norm).all();
+    for (const r of (results || [])) await revokeAccountSessions(env, r.id);
+  } catch {
+    // No accounts table yet: no sessions can exist either.
+  }
+}
+
+async function createSession(env, accountId, userAgent = null) {
+  if (!env || !env.DB) throw new Error("Database binding DB is required to create a session.");
+  const tokenBytes = crypto.getRandomValues(new Uint8Array(32));
+  const token = bufferToHex(tokenBytes);
+  const idHash = await hashSessionToken(token);
+  const now = Date.now();
+  const expiresAt = now + SESSION_TTL_MS;
+
+  await env.DB.prepare(
+    "INSERT INTO sessions (id_hash, account_id, created_at, last_seen_at, expires_at, user_agent, revoked_at) " +
+    "VALUES (?, ?, ?, ?, ?, ?, NULL)"
+  ).bind(idHash, accountId, now, now, expiresAt, userAgent || null).run();
+
+  return {
+    token,
+    idHash,
+    accountId,
+    createdAt: now,
+    lastSeenAt: now,
+    expiresAt,
+    userAgent: userAgent || null,
+  };
+}
+
+async function resolveSession(request, env) {
+  const token = extractSessionToken(request);
+  if (!token) return null;
+  const idHash = await hashSessionToken(token);
+  if (!idHash) return null;
+
+  const now = Date.now();
+  const cached = SESSION_CACHE.get(idHash);
+  if (cached) {
+    if (now - cached.cachedAt < SESSION_CACHE_TTL_MS) {
+      return { account: cached.account, session: cached.session };
+    }
+    SESSION_CACHE.delete(idHash);
+  }
+
+  if (!env || !env.DB) return null;
+
+  try {
+    const { results } = await env.DB.prepare(
+      "SELECT " +
+      "  s.id_hash, s.account_id, s.created_at AS session_created_at, s.last_seen_at, s.expires_at, s.user_agent, s.revoked_at, " +
+      "  a.id, a.username, a.display_name, a.key_hash, a.recovery_answer_hash, a.key_lookup_hmac, a.created_at AS account_created_at, a.last_active_at, a.version, a.deleted_at, a.status " +
+      "FROM sessions s " +
+      "JOIN accounts a ON a.id = s.account_id " +
+      "WHERE s.id_hash = ?"
+    ).bind(idHash).all();
+
+    if (!results || results.length === 0) return null;
+    const row = results[0];
+
+    // Check revocation, expiration, and account status
+    if (row.revoked_at != null) return null;
+    if (typeof row.expires_at === "number" && row.expires_at <= now) return null;
+    if (row.deleted_at != null || (row.status && row.status !== "active")) return null;
+
+    // Throttle last_seen_at update (at most once every 5 minutes per session)
+    if (typeof row.last_seen_at === "number" && now - row.last_seen_at > 5 * 60 * 1000) {
+      env.DB.prepare("UPDATE sessions SET last_seen_at = ? WHERE id_hash = ?").bind(now, idHash).run().catch(() => {});
+    }
+
+    const account = {
+      id: row.id,
+      username: row.username,
+      displayName: row.display_name,
+      createdAt: row.account_created_at,
+      lastActiveAt: row.last_active_at,
+      version: row.version || 0,
+      status: row.status || "active",
+      // Whether one is set, never the hash: authenticateCreator reports it
+      // to the page, which offers to set one when it is missing.
+      hasRecoveryAnswer: Boolean(row.recovery_answer_hash),
+    };
+
+    const session = {
+      idHash: row.id_hash,
+      accountId: row.account_id,
+      createdAt: row.session_created_at,
+      lastSeenAt: row.last_seen_at,
+      expiresAt: row.expires_at,
+      userAgent: row.user_agent,
+    };
+
+    if (SESSION_CACHE.size >= SESSION_CACHE_MAX) {
+      const oldestKey = SESSION_CACHE.keys().next().value;
+      if (oldestKey !== undefined) SESSION_CACHE.delete(oldestKey);
+    }
+    SESSION_CACHE.set(idHash, { account, session, cachedAt: now });
+
+    return { account, session };
+  } catch (e) {
+    // If table doesn't exist or DB errors, fail closed safely
+    return null;
+  }
+}
+
+async function revokeSession(env, idHash) {
+  if (!idHash) return;
+  SESSION_CACHE.delete(idHash);
+  if (env && env.DB) {
+    try {
+      const now = Date.now();
+      await env.DB.prepare("UPDATE sessions SET revoked_at = ? WHERE id_hash = ? AND revoked_at IS NULL").bind(now, idHash).run();
+    } catch {}
+  }
+}
+
+async function revokeAccountSessions(env, accountId, exceptIdHash = null) {
+  if (!accountId) return;
+  for (const [k, v] of SESSION_CACHE.entries()) {
+    if (v && v.account && v.account.id === accountId) {
+      if (!exceptIdHash || k !== exceptIdHash) {
+        SESSION_CACHE.delete(k);
+      }
+    }
+  }
+  if (env && env.DB) {
+    try {
+      const now = Date.now();
+      if (exceptIdHash) {
+        await env.DB.prepare(
+          "UPDATE sessions SET revoked_at = ? WHERE account_id = ? AND id_hash != ? AND revoked_at IS NULL"
+        ).bind(now, accountId, exceptIdHash).run();
+      } else {
+        await env.DB.prepare(
+          "UPDATE sessions SET revoked_at = ? WHERE account_id = ? AND revoked_at IS NULL"
+        ).bind(now, accountId).run();
+      }
+    } catch {}
+  }
+}
+
+function clearSessionCache() {
+  SESSION_CACHE.clear();
+}
+
+
 // MYL-XXXX-XXXX-XXXX -- excludes visually-ambiguous characters (0/O, 1/I/L)
 // so a key someone's reading off a screen to type into another device
 // doesn't turn into a guessing game. 12 real characters from a 32-symbol
@@ -3568,6 +3991,18 @@ async function storeCreatorKeyLookup(env, key, username) {
     } catch (dbErr) {
       console.error("D1 write error (storeCreatorKeyLookup):", dbErr);
     }
+    if (env.LOOKUP_PEPPER) {
+      try {
+        const hmac = await hmacLookupKey(key, env);
+        if (hmac) {
+          await env.DB.prepare(
+            "UPDATE accounts SET key_lookup_hmac = ? WHERE lower(username) = lower(?)"
+          ).bind(hmac, username).run();
+        }
+      } catch (hmacErr) {
+        console.error("D1 write error (storeCreatorKeyLookup key_lookup_hmac):", hmacErr);
+      }
+    }
   }
   if (env.CONFIGS) {
     try {
@@ -3596,6 +4031,11 @@ async function deleteCreatorKeyLookup(env, username, key) {
     } catch (dbErr) {
       console.error("D1 delete error (deleteCreatorKeyLookup):", dbErr);
     }
+    if (username) {
+      try {
+        await env.DB.prepare("UPDATE accounts SET key_lookup_hmac = NULL WHERE lower(username) = lower(?)").bind(username).run();
+      } catch {}
+    }
   }
   if (env.CONFIGS) {
     try {
@@ -3614,14 +4054,37 @@ async function deleteCreatorKeyLookup(env, username, key) {
   }
 }
 
-async function usernameForCreatorKeyLookup(env, key) {
+async function usernameForCreatorKeyLookup(env, key, outMeta = null) {
   if (!env || !key) return "";
+
+  // 1. Check Blind Index v2 (HMAC) first if LOOKUP_PEPPER is available and DB is bound
+  if (env.DB && env.LOOKUP_PEPPER) {
+    try {
+      const hmac = await hmacLookupKey(key, env);
+      if (hmac) {
+        const row = await env.DB.prepare(
+          "SELECT username FROM accounts WHERE key_lookup_hmac = ? AND (status != 'deleted' AND deleted_at IS NULL)"
+        ).bind(hmac).first();
+        if (row && row.username) {
+          if (outMeta && typeof outMeta === "object") outMeta.source = "hmac";
+          return row.username;
+        }
+      }
+    } catch (hmacErr) {
+      console.error("D1 HMAC lookup error (usernameForCreatorKeyLookup):", hmacErr);
+    }
+  }
+
+  // 2. Fall back to legacy SHA-256 lookup in D1 creator_key_lookups and KV
   const lookupHash = await creatorKeyLookupHash(key);
   if (!lookupHash) return "";
   if (env.DB) {
     try {
       const row = await env.DB.prepare("SELECT username FROM creator_key_lookups WHERE lookup_hash = ?").bind(lookupHash).first();
-      if (row && row.username) return row.username;
+      if (row && row.username) {
+        if (outMeta && typeof outMeta === "object") outMeta.source = "legacy_d1";
+        return row.username;
+      }
     } catch (dbErr) {
       console.error("D1 read error (usernameForCreatorKeyLookup):", dbErr);
     }
@@ -3629,12 +4092,181 @@ async function usernameForCreatorKeyLookup(env, key) {
   if (env.CONFIGS) {
     try {
       const u = (await env.CONFIGS.get(creatorKeyLookupKey(lookupHash))) || "";
-      if (u) return u;
+      if (u) {
+        if (outMeta && typeof outMeta === "object") outMeta.source = "legacy_kv";
+        return u;
+      }
     } catch (kvErr) {
       console.error("KV read error (usernameForCreatorKeyLookup):", kvErr);
     }
   }
   return "";
+}
+
+async function recordLegacyLookupHit(env) {
+  if (!env) return;
+  try {
+    if (env.ANALYTICS && typeof env.ANALYTICS.writeDataPoint === "function") {
+      env.ANALYTICS.writeDataPoint({
+        blobs: ["legacy_lookup_hit", "forgot_username"],
+        doubles: [1],
+        indexes: ["legacy_lookup_hit"],
+      });
+    }
+  } catch {
+    // Analytics Engine errors must never affect the request
+  }
+  try {
+    if (env.CONFIGS) {
+      const current = parseInt((await env.CONFIGS.get("stats:legacy_lookup_hits")) || "0", 10);
+      await env.CONFIGS.put("stats:legacy_lookup_hits", String(current + 1));
+    }
+  } catch {
+    // KV errors must never affect the request
+  }
+}
+
+// --- Phase 3a: Token encryption & blind lookup hashing ----------------------
+//
+// provider_connections and install_secrets store third-party tokens and API
+// keys encrypted at rest using AES-GCM-256 with a 12-byte IV.
+// The secret TOKEN_ENCRYPTION_KEY holds one or more keys in rotation format:
+// "k1:<base64-32-bytes>,k0:<older-base64>". A bare base64 string defaults to "k1".
+//
+// Serialized ciphertexts are formatted as: "<keyId>:<ivHex>:<ciphertextHex>"
+//
+// Every caller passes the key ring explicitly: the TOKEN_ENCRYPTION_KEY string
+// itself, or the request's `env` (whose TOKEN_ENCRYPTION_KEY is read). There is
+// no module-level env in a Worker to fall back to.
+//
+// `context` binds a ciphertext to where it is stored, as AES-GCM additional
+// data -- for example "account:42:trakt" for a provider_connections row. A
+// token copied into a different row then fails to decrypt instead of silently
+// becoming that row's token. Decrypt with the same context it was encrypted
+// with; "" (the default) means none.
+
+// atob, not Buffer: Buffer is not in the Workers runtime, and decoding with it
+// in tests would test a different path from the one that runs in production
+// (Buffer also silently skips invalid characters where atob throws).
+function base64ToUint8(b64) {
+  const clean = String(b64 || "").trim().replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(clean);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+function parseTokenEncryptionKeys(secret) {
+  let raw = secret;
+  if (!raw) return { activeKeyId: null, keys: new Map() };
+  if (typeof raw === "object" && !(raw instanceof Uint8Array)) {
+    if (raw.TOKEN_ENCRYPTION_KEY) raw = raw.TOKEN_ENCRYPTION_KEY;
+    else if (raw instanceof Map) return { activeKeyId: raw.keys().next().value || null, keys: raw };
+  }
+  if (raw instanceof Uint8Array) {
+    return { activeKeyId: "k1", keys: new Map([["k1", raw]]) };
+  }
+  const str = String(raw).trim();
+  if (!str) return { activeKeyId: null, keys: new Map() };
+
+  const keys = new Map();
+  let activeKeyId = null;
+  const parts = str.split(",");
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    let id = "k1";
+    let b64 = trimmed;
+    const colonIdx = trimmed.indexOf(":");
+    if (colonIdx > 0) {
+      id = trimmed.slice(0, colonIdx).trim();
+      b64 = trimmed.slice(colonIdx + 1).trim();
+    }
+    try {
+      const bytes = base64ToUint8(b64);
+      if (bytes.length > 0) {
+        keys.set(id, bytes);
+        if (!activeKeyId) activeKeyId = id;
+      }
+    } catch {
+      // Ignore malformed key entries in rotation list
+    }
+  }
+  return { activeKeyId, keys };
+}
+
+async function encryptToken(plaintext, keyRing, context = "") {
+  if (plaintext == null) return "";
+  const parsed = parseTokenEncryptionKeys(keyRing);
+  if (!parsed.activeKeyId || !parsed.keys.has(parsed.activeKeyId)) {
+    throw new Error("TOKEN_ENCRYPTION_KEY is required for encryption");
+  }
+  const keyBytes = parsed.keys.get(parsed.activeKeyId);
+  if (keyBytes.length !== 32) {
+    throw new Error(`TOKEN_ENCRYPTION_KEY must be 32 bytes (got ${keyBytes.length})`);
+  }
+  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["encrypt"]);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encrypted = await crypto.subtle.encrypt(
+    aesGcmParams(iv, context),
+    key,
+    new TextEncoder().encode(String(plaintext))
+  );
+  return `${parsed.activeKeyId}:${bufferToHex(iv)}:${bufferToHex(new Uint8Array(encrypted))}`;
+}
+
+async function decryptToken(ciphertext, keyRing, context = "") {
+  if (!ciphertext) return "";
+  const parts = String(ciphertext).split(":");
+  if (parts.length !== 3) {
+    throw new Error("Invalid encrypted token format; expected keyId:iv:ciphertext");
+  }
+  const [keyId, ivHex, ctHex] = parts;
+  const parsed = parseTokenEncryptionKeys(keyRing);
+  const keyBytes = parsed.keys.get(keyId);
+  if (!keyBytes) {
+    throw new Error(`Encryption key '${keyId}' not found in key ring`);
+  }
+  if (keyBytes.length !== 32) {
+    throw new Error(`Encryption key '${keyId}' must be 32 bytes (got ${keyBytes.length})`);
+  }
+  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["decrypt"]);
+  const decrypted = await crypto.subtle.decrypt(
+    aesGcmParams(hexToBuffer(ivHex), context),
+    key,
+    hexToBuffer(ctHex)
+  );
+  return new TextDecoder().decode(decrypted);
+}
+
+// AES-GCM parameters, with `context` as additional authenticated data when
+// one is given (see the header above).
+function aesGcmParams(iv, context) {
+  const params = { name: "AES-GCM", iv };
+  if (context) params.additionalData = new TextEncoder().encode(String(context));
+  return params;
+}
+
+// `pepper` is the LOOKUP_PEPPER string itself, or the request's `env`.
+async function hmacLookupKey(key, pepper) {
+  let pepperStr = pepper;
+  if (pepper && typeof pepper === "object") {
+    pepperStr = pepper.LOOKUP_PEPPER || "";
+  }
+  pepperStr = String(pepperStr || "");
+  if (!pepperStr) throw new Error("LOOKUP_PEPPER is required for HMAC lookup");
+  const normalized = String(key || "").trim().toUpperCase();
+  if (!normalized) return "";
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(pepperStr),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign("HMAC", keyMaterial, enc.encode("keylookup:" + normalized));
+  return bufferToHex(new Uint8Array(signature));
 }
 
 // "user" is reserved because that's the literal namespace anonymous
@@ -6160,6 +6792,16 @@ async function purgeCreatorData(env, username, options = {}) {
           console.error("D1 write error (purgeCreatorData identity):", dbErr);
           d1Ok = false;
         }
+        // The accounts row goes with the identity, and every session with it.
+        // Left behind, it kept the old key's hash under a username that is
+        // about to be free: POST /api/session would still sign that key in,
+        // and once someone else registered the name, into their account.
+        // /api/creator/create clears a leftover too, so a failure here is
+        // logged rather than allowed to block the deletion.
+        if (d1Ok) {
+          const removed = await deleteAccountRow(env, u);
+          if (!removed.ok) console.error("purgeCreatorData: could not remove the accounts row for", u);
+        }
       }
       if (d1Ok) {
         try {
@@ -6685,6 +7327,13 @@ async function rotateCreatorKeyHashInD1(env, username, keyHash) {
       // write is the source of truth -- but worth surfacing.
       console.warn("D1 key rotation matched no row for", username, "-- KV updated");
     }
+    try {
+      await env.DB.prepare(
+        "UPDATE accounts SET key_hash = ?, version = version + 1 WHERE lower(username) = lower(?)"
+      ).bind(keyHash, username).run();
+    } catch {
+      // accounts table may not exist in pre-0015 schemas
+    }
     return { ok: true };
   } catch (dbErr) {
     console.error("D1 write error (key rotation):", dbErr);
@@ -6696,6 +7345,330 @@ async function rotateCreatorKeyHashInD1(env, username, keyHash) {
       return { ok: false };
     }
   }
+}
+
+// Phase 3a: P3a-3 Accounts Backfill (migrate.accounts)
+// Backfills creators from D1 creators table and KV creator:* keys into the unified accounts table.
+// Invariants:
+// - Newest keyHash wins; D1 wins ties.
+// - count(accounts) = |creators ∪ creator:*|
+// - Copies data only; does not mutate or delete existing creators or creator:* records.
+// - Idempotent and safe to run multiple times.
+async function backfillAccounts(env, options = {}) {
+  if (!env || !env.DB) {
+    return { ok: false, error: "D1 database binding 'DB' is required for accounts backfill." };
+  }
+
+  // Verify accounts table exists (migration 0015 applied)
+  try {
+    await env.DB.prepare("SELECT 1 FROM accounts LIMIT 1").all();
+  } catch (e) {
+    const msg = safeErrorMessage(e);
+    if (msg.includes("no such table") || (e && e.message && e.message.includes("no such table"))) {
+      return { ok: false, error: "Table 'accounts' does not exist. Please apply migration 0015 first." };
+    }
+    return { ok: false, error: "Database check failed: " + msg };
+  }
+
+  // 1. Gather all creators from D1
+  const d1Creators = new Map();
+  try {
+    const { results } = await env.DB.prepare(
+      "SELECT username, display_name, key_hash, recovery_answer_hash, created_at, last_active FROM creators"
+    ).all();
+    for (const r of (results || [])) {
+      const rawUser = String(r.username || "").trim();
+      const norm = rawUser.toLowerCase();
+      if (!norm) continue;
+      d1Creators.set(norm, {
+        username: rawUser,
+        displayName: r.display_name || rawUser,
+        keyHash: typeof r.key_hash === "string" ? r.key_hash : "",
+        recoveryAnswerHash: r.recovery_answer_hash || null,
+        createdAt: typeof r.created_at === "number" ? r.created_at : 0,
+        lastActive: typeof r.last_active === "number" ? r.last_active : null,
+        lookupCreatedAt: 0,
+      });
+    }
+  } catch (e) {
+    return { ok: false, error: "Failed to read creators from D1: " + safeErrorMessage(e) };
+  }
+
+  // Optional: check key lookup timestamps in D1
+  try {
+    const { results: lookupRows } = await env.DB.prepare(
+      "SELECT username, created_at FROM creator_key_lookups"
+    ).all();
+    for (const lr of (lookupRows || [])) {
+      const norm = String(lr.username || "").trim().toLowerCase();
+      const rec = d1Creators.get(norm);
+      if (rec && typeof lr.created_at === "number") {
+        rec.lookupCreatedAt = Math.max(rec.lookupCreatedAt || 0, lr.created_at);
+      }
+    }
+  } catch {}
+
+  // 2. Gather all creator:* records from KV
+  const kvCreators = new Map();
+  if (env.CONFIGS) {
+    try {
+      const listResult = await listAllKeys(env.CONFIGS, "creator:");
+      const keys = (listResult && listResult.keys) || [];
+      for (const k of keys) {
+        if (!k.name.startsWith("creator:")) continue;
+        const rawUser = k.name.slice("creator:".length).trim();
+        const norm = rawUser.toLowerCase();
+        if (!norm) continue;
+
+        let data = null;
+        try {
+          const raw = await env.CONFIGS.get(k.name);
+          if (raw) data = JSON.parse(raw);
+        } catch {}
+        if (!data || typeof data !== "object") continue;
+
+        let resetAt = 0;
+        try {
+          const resetRaw = await env.CONFIGS.get(creatorResetKey(norm));
+          resetAt = resetRaw ? parseInt(resetRaw, 10) || 0 : 0;
+        } catch {}
+
+        let lastSeen = null;
+        try {
+          const lastSeenRaw = await env.CONFIGS.get("creatorlastseen:" + norm);
+          lastSeen = lastSeenRaw ? parseInt(lastSeenRaw, 10) || null : null;
+        } catch {}
+
+        kvCreators.set(norm, {
+          username: rawUser,
+          displayName: data.displayName || rawUser,
+          keyHash: typeof data.keyHash === "string" ? data.keyHash : "",
+          recoveryAnswerHash: data.recoveryAnswerHash || null,
+          createdAt: typeof data.createdAt === "number" ? data.createdAt : 0,
+          updatedAt: typeof data.updatedAt === "number" ? data.updatedAt : 0,
+          lastActive: (typeof data.lastActive === "number" ? data.lastActive : null) || lastSeen,
+          resetAt,
+        });
+      }
+    } catch (e) {
+      return { ok: false, error: "Failed to read KV creator records: " + safeErrorMessage(e) };
+    }
+  }
+
+  // 3. Compute distinct union of normalized usernames: |creators ∪ creator:*|
+  const allNormUsernames = Array.from(new Set([...d1Creators.keys(), ...kvCreators.keys()]));
+  const unionCount = allNormUsernames.length;
+  const d1Count = d1Creators.size;
+  const kvCount = kvCreators.size;
+
+  let d1Wins = 0;
+  let kvWins = 0;
+  let ties = 0;
+  let d1Only = 0;
+  let kvOnly = 0;
+  let inBoth = 0;
+
+  const resolvedAccounts = [];
+
+  for (const norm of allNormUsernames) {
+    const d1Rec = d1Creators.get(norm);
+    const kvRec = kvCreators.get(norm);
+
+    if (d1Rec && !kvRec) {
+      d1Only++;
+      d1Wins++;
+      resolvedAccounts.push({
+        username: d1Rec.username,
+        displayName: d1Rec.displayName,
+        keyHash: d1Rec.keyHash,
+        recoveryAnswerHash: d1Rec.recoveryAnswerHash,
+        createdAt: d1Rec.createdAt > 0 ? d1Rec.createdAt : Date.now(),
+        lastActiveAt: d1Rec.lastActive,
+      });
+    } else if (!d1Rec && kvRec) {
+      kvOnly++;
+      kvWins++;
+      resolvedAccounts.push({
+        username: kvRec.username,
+        displayName: kvRec.displayName,
+        keyHash: kvRec.keyHash,
+        recoveryAnswerHash: kvRec.recoveryAnswerHash,
+        createdAt: kvRec.createdAt > 0 ? kvRec.createdAt : Date.now(),
+        lastActiveAt: kvRec.lastActive,
+      });
+    } else {
+      inBoth++;
+      let win = "d1";
+      if (d1Rec.keyHash === kvRec.keyHash) {
+        win = "d1"; // tie
+        ties++;
+        d1Wins++;
+      } else {
+        const d1Time = d1Rec.lookupCreatedAt || d1Rec.createdAt || 0;
+        const kvTime = Math.max(kvRec.updatedAt || 0, kvRec.resetAt || 0, kvRec.createdAt || 0);
+        if (kvTime > d1Time) {
+          win = "kv";
+          kvWins++;
+        } else {
+          win = "d1";
+          if (d1Time === kvTime) ties++;
+          d1Wins++;
+        }
+      }
+
+      const primary = win === "d1" ? d1Rec : kvRec;
+      const secondary = win === "d1" ? kvRec : d1Rec;
+
+      let createdAt = 0;
+      if (d1Rec.createdAt > 0 && kvRec.createdAt > 0) {
+        createdAt = Math.min(d1Rec.createdAt, kvRec.createdAt);
+      } else {
+        createdAt = d1Rec.createdAt || kvRec.createdAt || Date.now();
+      }
+
+      const lastActiveAt = (d1Rec.lastActive && kvRec.lastActive)
+        ? Math.max(d1Rec.lastActive, kvRec.lastActive)
+        : (d1Rec.lastActive || kvRec.lastActive || null);
+
+      resolvedAccounts.push({
+        username: primary.username || secondary.username,
+        displayName: primary.displayName || secondary.displayName || primary.username,
+        keyHash: primary.keyHash || secondary.keyHash,
+        recoveryAnswerHash: primary.recoveryAnswerHash || secondary.recoveryAnswerHash || null,
+        createdAt,
+        lastActiveAt,
+      });
+    }
+  }
+
+  // If dry-run requested, report without modifying database
+  if (options && options.dryRun) {
+    let currentAccountsCount = 0;
+    try {
+      const countRes = await env.DB.prepare("SELECT COUNT(*) AS n FROM accounts").all();
+      currentAccountsCount = countRes.results && countRes.results[0] ? Number(countRes.results[0].n) || 0 : 0;
+    } catch {}
+
+    return {
+      ok: true,
+      done: true,
+      dryRun: true,
+      d1Count,
+      kvCount,
+      unionCount,
+      accountsCount: currentAccountsCount,
+      reconciled: currentAccountsCount === unionCount,
+      d1Only,
+      kvOnly,
+      inBoth,
+      d1Wins,
+      kvWins,
+      ties,
+      inserted: 0,
+      updated: 0,
+      errors: [],
+    };
+  }
+
+  // 4. Track existing rows to accurately measure inserts vs updates
+  const existingAccounts = new Set();
+  try {
+    const { results } = await env.DB.prepare("SELECT username FROM accounts").all();
+    for (const r of (results || [])) {
+      existingAccounts.add(String(r.username || "").trim().toLowerCase());
+    }
+  } catch {}
+
+  let inserted = 0;
+  let updated = 0;
+  const errors = [];
+
+  const upsertStmt = env.DB.prepare(
+    "INSERT INTO accounts (" +
+    "  username, display_name, key_hash, recovery_answer_hash," +
+    "  key_lookup_hmac, created_at, last_active_at, version, deleted_at, status" +
+    ") VALUES (?, ?, ?, ?, NULL, ?, ?, 0, NULL, 'active') " +
+    "ON CONFLICT(username) DO UPDATE SET " +
+    "  display_name = excluded.display_name," +
+    "  key_hash = excluded.key_hash," +
+    "  recovery_answer_hash = COALESCE(excluded.recovery_answer_hash, accounts.recovery_answer_hash)," +
+    "  created_at = CASE " +
+    "    WHEN accounts.created_at > 0 AND excluded.created_at > 0 THEN MIN(accounts.created_at, excluded.created_at) " +
+    "    ELSE COALESCE(NULLIF(accounts.created_at, 0), excluded.created_at) " +
+    "  END," +
+    "  last_active_at = CASE " +
+    "    WHEN COALESCE(accounts.last_active_at, 0) > 0 OR COALESCE(excluded.last_active_at, 0) > 0 " +
+    "    THEN MAX(COALESCE(accounts.last_active_at, 0), COALESCE(excluded.last_active_at, 0)) " +
+    "    ELSE NULL " +
+    "  END," +
+    "  status = 'active'"
+  );
+
+  const BATCH_SIZE = 25;
+  for (let i = 0; i < resolvedAccounts.length; i += BATCH_SIZE) {
+    const chunk = resolvedAccounts.slice(i, i + BATCH_SIZE);
+    const batchStmts = chunk.map((acc) => {
+      const isExisting = existingAccounts.has(acc.username.toLowerCase());
+      if (isExisting) updated++;
+      else inserted++;
+      return upsertStmt.bind(
+        acc.username,
+        acc.displayName,
+        acc.keyHash,
+        acc.recoveryAnswerHash,
+        acc.createdAt,
+        acc.lastActiveAt != null ? acc.lastActiveAt : null
+      );
+    });
+
+    try {
+      if (typeof env.DB.batch === "function") {
+        await env.DB.batch(batchStmts);
+      } else {
+        for (const st of batchStmts) {
+          await st.run();
+        }
+      }
+    } catch (batchErr) {
+      console.error("Batch upsert error in backfillAccounts:", batchErr);
+      errors.push(safeErrorMessage(batchErr));
+    }
+  }
+
+  // 5. Query final accounts count and verify reconciliation
+  let finalAccountsCount = 0;
+  try {
+    const finalCountRes = await env.DB.prepare("SELECT COUNT(*) AS n FROM accounts").all();
+    finalAccountsCount = finalCountRes.results && finalCountRes.results[0] ? Number(finalCountRes.results[0].n) || 0 : 0;
+  } catch (e) {
+    errors.push("Failed to count final accounts: " + safeErrorMessage(e));
+  }
+
+  const reconciled = (errors.length === 0 && finalAccountsCount === unionCount);
+
+  return {
+    ok: errors.length === 0,
+    done: true,
+    dryRun: false,
+    d1Count,
+    kvCount,
+    unionCount,
+    accountsCount: finalAccountsCount,
+    reconciled,
+    d1Only,
+    kvOnly,
+    inBoth,
+    d1Wins,
+    kvWins,
+    ties,
+    inserted,
+    updated,
+    errors,
+  };
+}
+
+async function reconcileAccounts(env) {
+  return backfillAccounts(env, { dryRun: true });
 }
 
 // D1 is the authoritative store for creator lists when bound.
@@ -10293,6 +11266,23 @@ async function renderAdminDashboard(env) {
       <p style="color:#8E8E93; margin:10px 0 0; font-size:0.8rem;">Copies existing Creator Profiles, Custom Lists, likes, feedback, and tracking records from KV into D1. Safe to run more than once.</p>
     </div>
 
+    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
+      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Unified accounts table (v2 identity)</div>
+      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Backfills existing creator identities from D1 <code>creators</code> and KV <code>creator:*</code> into the unified <code>accounts</code> table. Newest key hash wins; D1 wins ties. Copies data only &mdash; safe to run more than once.</p>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="migrateAccountsBtn" onclick="runMigrateAccounts()" ${isD1Bound ? '' : 'disabled'}>Migrate Accounts</button>
+      <span id="migrateAccountsStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+    </div>
+
+    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
+      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Install links: keys moving to encrypted storage</div>
+      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">The first time an existing install link is used, its provider keys, tokens and Creator Key move out of its KV record into encrypted D1 storage, for the share of links set in <code>INSTALL_MIGRATION_PERCENT</code>. Links keep their URL and serve exactly as before. Needs <code>TOKEN_ENCRYPTION_KEY</code> and migration 0015. Read-only: this button only reports progress.</p>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="installsStatusBtn" onclick="runInstallsStatus()" ${isD1Bound ? '' : 'disabled'}>Check progress</button>
+      <span id="installsStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <p style="color:#8E8E93; margin:12px 0 8px; font-size:0.8rem;">Emergency only: puts every moved link's keys back into its KV record, exactly as they were, and empties the table. Set <code>INSTALL_MIGRATION_PERCENT</code> to <code>0</code> first. Links removed from an account stay removed.</p>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="installsRestoreBtn" onclick="runInstallsRestore()" ${isD1Bound ? '' : 'disabled'}>Undo the move</button>
+      <span id="installsRestoreStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+    </div>
+
     <div class="panel" style="margin:0; padding:14px 16px;">
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Database schema</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Migrations are applied by hand and nothing records that it happened, so this Worker can end up running ahead of its own database. It degrades quietly when that happens rather than refusing to start &mdash; which is why this check exists. Run it after any deploy that shipped a new file under <code>migrations/</code>.</p>
@@ -10653,7 +11643,7 @@ async function renderAdminDashboard(env) {
       try {
         while (safetyCounter < 500) {
           safetyCounter++;
-          const res = await fetch('/admin/api/backfill-trending', { method: 'POST' });
+          const res = await fetch('/admin/api/backfill-trending', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
           const data = await res.json();
           if (!data.ok) {
             status.textContent = 'Stopped: ' + (data.error || 'unknown error') + ' (processed ' + accountsDone + ' account' + (accountsDone === 1 ? '' : 's') + ')';
@@ -10686,7 +11676,7 @@ async function renderAdminDashboard(env) {
       try {
         while (safetyCounter < 1000) {
           safetyCounter++;
-          const res = await fetch('/admin/api/migrate-day-counts', { method: 'POST' });
+          const res = await fetch('/admin/api/migrate-day-counts', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
           const data = await res.json();
           if (!data.ok) {
             status.textContent = 'Stopped: ' + (data.error || 'unknown error') + ' (migrated ' + keysMigrated + ' day-count' + (keysMigrated === 1 ? '' : 's') + ')';
@@ -10728,7 +11718,7 @@ async function renderAdminDashboard(env) {
       try {
         while (safetyCounter < 1000) {
           safetyCounter++;
-          const res = await fetch('/admin/api/migrate-d1', { method: 'POST' });
+          const res = await fetch('/admin/api/migrate-d1', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
           const data = await res.json();
           if (!data.ok) {
             status.textContent = 'Failed: ' + (data.error || 'unknown error');
@@ -10753,6 +11743,86 @@ async function renderAdminDashboard(env) {
         }
       } catch (e) {
         status.textContent = 'Failed: network error.';
+      }
+      btn.disabled = false;
+    }
+
+    async function runMigrateAccounts() {
+      const btn = document.getElementById('migrateAccountsBtn');
+      const status = document.getElementById('migrateAccountsStatus');
+      btn.disabled = true;
+      status.textContent = 'Working…';
+      try {
+        const res = await fetch('/admin/api/migrate-accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        const data = await res.json();
+        if (!data.ok) {
+          status.textContent = 'Failed: ' + (data.error || 'unknown error');
+        } else {
+          status.textContent = 'Done — ' + (data.accountsCount || 0) + ' accounts in table (' +
+            (data.d1Count || 0) + ' D1, ' + (data.kvCount || 0) + ' KV, union ' + (data.unionCount || 0) + '). ' +
+            (data.reconciled ? 'Reconciled ✓' : 'Mismatch!');
+        }
+      } catch (e) {
+        status.textContent = 'Failed: network error.';
+      }
+      btn.disabled = false;
+    }
+
+    async function runInstallsStatus() {
+      const btn = document.getElementById('installsStatusBtn');
+      const status = document.getElementById('installsStatus');
+      btn.disabled = true;
+      status.textContent = 'Checking...';
+      try {
+        const res = await fetch('/admin/api/installs/status');
+        const data = await res.json();
+        if (!data.ok) {
+          status.textContent = 'Unavailable: ' + (data.error || 'unknown error');
+        } else {
+          status.textContent = 'Moving ' + data.migrationPercent + '% of links' +
+            (data.encryptionKeyConfigured ? '' : ' (TOKEN_ENCRYPTION_KEY is missing, so nothing with a key can move)') +
+            '. Moved so far: ' + data.legacy + '. New-style links: ' + data.v2 +
+            '. Linked to an account: ' + data.owned + '. Removed: ' + data.revoked + '.';
+        }
+      } catch (e) {
+        status.textContent = 'Failed: network error.';
+      }
+      btn.disabled = false;
+    }
+
+    async function runInstallsRestore() {
+      if (!confirm('Put the keys back into every moved install link and empty the installs table? Only do this if the move has gone wrong.')) return;
+      const btn = document.getElementById('installsRestoreBtn');
+      const status = document.getElementById('installsRestoreStatus');
+      btn.disabled = true;
+      let afterId = 0;
+      let restored = 0;
+      let failed = 0;
+      let safetyCounter = 0;
+      try {
+        while (safetyCounter < 1000) {
+          safetyCounter++;
+          status.textContent = 'Working... ' + restored + ' restored';
+          const res = await fetch('/admin/api/installs/restore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ limit: 50, afterId: afterId }),
+          });
+          const data = await res.json();
+          if (data.error) {
+            status.textContent = 'Stopped: ' + data.error;
+            break;
+          }
+          restored += data.restored || 0;
+          failed += (data.failed || []).length;
+          if (data.done) {
+            status.textContent = 'Done: ' + restored + ' restored' + (failed ? ', ' + failed + ' could not be (see the Worker logs)' : '') + '.';
+            break;
+          }
+          afterId = data.nextAfterId;
+        }
+      } catch (e) {
+        status.textContent = 'Failed: network error (' + restored + ' restored so far).';
       }
       btn.disabled = false;
     }
@@ -11348,7 +12418,7 @@ async function renderAdminDashboard(env) {
       try {
         while (safetyCounter < 1000) {
           safetyCounter++;
-          const res = await fetch('/admin/api/rebuild-public-index', { method: 'POST' });
+          const res = await fetch('/admin/api/rebuild-public-index', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
           const data = await res.json();
           if (!data.ok) {
             status.textContent = 'Failed: ' + (data.error || 'unknown error');
@@ -12378,12 +13448,23 @@ function savedConfigKey(id) {
 // channel meta route and /api/resolve ask for it; a personal shelf reads its
 // own data in fetchAutoTrackedCatalog.
 async function resolveConfig(configParam, env, { withTracking = false } = {}) {
+  // A v2 install link, /i/{token}/... (P3a-8, 27_installs.js).
+  if (isV2InstallParam(configParam)) return resolveV2InstallConfig(configParam, env, { withTracking });
   if (configParam.length <= SHORT_ID_LENGTH && env && env.CONFIGS) {
     const stored = (await env.CONFIGS.get(savedConfigKey(configParam)))
       || (await env.CONFIGS.get(configParam));
     if (stored) {
       try {
-        const parsed = JSON.parse(stored);
+        let parsed = JSON.parse(stored);
+        // A record whose keys and tokens have moved into install_secrets
+        // (P3a-8) gets them back here, so nothing below can tell the
+        // difference. One that still holds them is noted for the move.
+        if (parsed && parsed._install) {
+          parsed = await applyLegacyInstallRecord(env, configParam, parsed);
+          if (parsed._revoked) return emptyResolvedInstallConfig();
+        } else {
+          noteLegacyInstallCandidate(configParam, parsed);
+        }
         let watchHistory = Array.isArray(parsed.watchHistory) ? parsed.watchHistory : [];
         let continueWatching = Array.isArray(parsed.continueWatching) ? parsed.continueWatching : [];
         let watchlist = Array.isArray(parsed.watchlist) ? parsed.watchlist : [];
@@ -12421,17 +13502,34 @@ async function resolveConfig(configParam, env, { withTracking = false } = {}) {
         //   * it predates both, and LEGACY_UNVERIFIED_CONFIG_SHELVES says to
         //     honour those -- see that constant for exactly what it costs.
         let trackOwner = "";
+        // Proven by the config's own Creator Key, the strongest of the three.
+        // P3a-10 lends provider connections only to this or an ownerId stamp.
+        let keyVerifiedOwner = "";
         if (creatorName) {
           if (parsed.trackCreatorKey) {
             trackOwner = await verifyShelfOwner(env, creatorName, parsed.trackCreatorKey);
+            keyVerifiedOwner = trackOwner;
           }
           if (!trackOwner && typeof parsed.trackOwner === "string" && parsed.trackOwner) {
             const stamped = String(parsed.trackOwner).toLowerCase();
             if (stamped === String(creatorName).toLowerCase()) trackOwner = stamped;
           }
-          if (!trackOwner && LEGACY_UNVERIFIED_CONFIG_SHELVES && !parsed.trackCreatorKey && !parsed.trackOwner) {
+          if (!trackOwner && LEGACY_UNVERIFIED_CONFIG_SHELVES && !parsed.trackCreatorKey && !parsed.trackOwner && !parsed._legacyShelfRuleOff) {
             trackOwner = String(creatorName).toLowerCase();
           }
+        }
+        // The keys and tokens this config does not carry itself, from its
+        // proven owner's own connections (P3a-10, 28_connections.js). Its own
+        // always win, so a link that has them serves exactly as before.
+        // Guarded: a failure here must leave the link serving as it would
+        // without connections, not fall through to the base64 decode below.
+        try {
+          const connectionOwnerId = await connectionOwnerForConfig(env, parsed, keyVerifiedOwner);
+          if (connectionOwnerId != null) {
+            parsed = { ...parsed, ...(await connectionFieldsForConfig(env, connectionOwnerId, readInstallConfigFields(parsed))) };
+          }
+        } catch (e) {
+          console.error("Could not read the install owner's connections:", e);
         }
         if (withTracking && trackOwner && env.CONFIGS) {
           const trackingRaw = await env.CONFIGS.get(`creatorsynctracking:${trackOwner}`);
@@ -34160,6 +35258,7 @@ function startMdblistConnect() {
 }
 
 function disconnectMdblist() {
+  forgetServerConnection('mdblist');
   const input = document.getElementById('mdblistKeyInput');
   if (input) input.value = '';
   mdblistAccessToken = '';
@@ -34236,34 +35335,40 @@ function renderMdblistConnectStatus() {
   }
 }
 
+// A newly connected MDBList account: from the address bar after a signed-out
+// connect, or from the server after a signed-in one (pickUpServerConnection).
+function applyMdblistConnection(token, username) {
+  mdblistAccessToken = token;
+  try {
+    localStorage.removeItem('myListAddon:mdblistDisconnected');
+  } catch (e) {}
+  if (username) {
+    mdblistUsername = username;
+    try {
+      localStorage.setItem('myListAddon:mdblistUsername', mdblistUsername);
+    } catch (e) {}
+  }
+  try {
+    localStorage.setItem('myListAddon:mdblistAccessToken', mdblistAccessToken);
+  } catch (e) {}
+  saveState();
+  if (typeof pushCreatorSync === 'function') pushCreatorSync();
+  if (typeof showAppAlert === 'function') {
+    showAppAlert('MDBList Connected', 'Connected to MDBList.', true);
+  } else {
+    alert('Connected to MDBList.');
+  }
+  renderMdblistConnectStatus();
+  scheduleMyMdblistListsRefresh();
+}
+
 function pickUpMdblistTokenFromUrl() {
   const hash = window.location.hash || '';
   const match = /(?:^|[#&])mdblist_token=([^&]+)/.exec(hash);
   if (match) {
-    mdblistAccessToken = decodeURIComponent(match[1]);
-    try {
-      localStorage.removeItem('myListAddon:mdblistDisconnected');
-    } catch (e) {}
     const userMatch = /(?:^|[#&])mdblist_username=([^&]+)/.exec(hash);
-    if (userMatch) {
-      mdblistUsername = decodeURIComponent(userMatch[1]);
-      try {
-        localStorage.setItem('myListAddon:mdblistUsername', mdblistUsername);
-      } catch (e) {}
-    }
-    try {
-      localStorage.setItem('myListAddon:mdblistAccessToken', mdblistAccessToken);
-    } catch (e) {}
-    saveState();
-    if (typeof pushCreatorSync === 'function') pushCreatorSync();
     history.replaceState(null, '', window.location.pathname + window.location.search);
-    if (typeof showAppAlert === 'function') {
-      showAppAlert('MDBList Connected', 'Connected to MDBList.', true);
-    } else {
-      alert('Connected to MDBList.');
-    }
-    renderMdblistConnectStatus();
-    scheduleMyMdblistListsRefresh();
+    applyMdblistConnection(decodeURIComponent(match[1]), userMatch ? decodeURIComponent(userMatch[1]) : '');
   }
   const params = new URLSearchParams(window.location.search);
   const err = params.get('mdblist_error');
@@ -34305,6 +35410,7 @@ function startTraktConnect() {
 }
 
 function disconnectTrakt() {
+  forgetServerConnection('trakt');
   const keyInput = document.getElementById('traktKeyInput');
   if (keyInput) keyInput.value = '';
   const userInput = document.getElementById('traktUsernameInput');
@@ -34390,34 +35496,39 @@ function renderTraktConnectStatus() {
 // the callback's own failure path. Either way, strips whatever it found
 // from the address bar immediately so a page refresh or a copied/shared
 // URL never carries it forward.
+// A newly connected Trakt account: from the address bar after a signed-out
+// connect, or from the server after a signed-in one (pickUpServerConnection).
+function applyTraktConnection(token, user) {
+  traktAccessToken = token;
+  try {
+    localStorage.setItem('myListAddon:traktAccessToken', traktAccessToken);
+    localStorage.removeItem('myListAddon:traktDisconnected');
+  } catch (e) {}
+  if (user) {
+    try {
+      localStorage.setItem('myListAddon:traktUsername', user);
+    } catch (e) {}
+    const uInput = document.getElementById('traktUsernameInput');
+    if (uInput) uInput.value = user;
+  }
+  saveState();
+  if (typeof pushCreatorSync === 'function') pushCreatorSync();
+  if (typeof showAppAlert === 'function') {
+    showAppAlert('Trakt Connected', 'Connected to Trakt.', true);
+  } else {
+    alert('Connected to Trakt.');
+  }
+  renderTraktConnectStatus();
+  scheduleMyTraktListsRefresh();
+}
+
 function pickUpTraktTokenFromUrl() {
   const hash = window.location.hash || '';
   const match = /(?:^|[#&])trakt_token=([^&]+)/.exec(hash);
   if (match) {
-    traktAccessToken = decodeURIComponent(match[1]);
-    try {
-      localStorage.setItem('myListAddon:traktAccessToken', traktAccessToken);
-      localStorage.removeItem('myListAddon:traktDisconnected');
-    } catch (e) {}
     const userMatch = /(?:^|[#&])trakt_username=([^&]+)/.exec(hash);
-    if (userMatch) {
-      const user = decodeURIComponent(userMatch[1]);
-      try {
-        localStorage.setItem('myListAddon:traktUsername', user);
-      } catch (e) {}
-      const uInput = document.getElementById('traktUsernameInput');
-      if (uInput) uInput.value = user;
-    }
-    saveState();
-    if (typeof pushCreatorSync === 'function') pushCreatorSync();
     history.replaceState(null, '', window.location.pathname + window.location.search);
-    if (typeof showAppAlert === 'function') {
-      showAppAlert('Trakt Connected', 'Connected to Trakt.', true);
-    } else {
-      alert('Connected to Trakt.');
-    }
-    renderTraktConnectStatus();
-    scheduleMyTraktListsRefresh();
+    applyTraktConnection(decodeURIComponent(match[1]), userMatch ? decodeURIComponent(userMatch[1]) : '');
   }
   const params = new URLSearchParams(window.location.search);
   const err = params.get('trakt_error');
@@ -35077,6 +36188,7 @@ function toggleListsTmdbConnection() {
 }
 
 function disconnectTmdb() {
+  forgetServerConnection('tmdb');
   const input = document.getElementById('tmdbKeyInput');
   if (input) input.value = '';
   tmdbSessionId = '';
@@ -35098,6 +36210,24 @@ function disconnectTmdb() {
   scheduleMyTmdbListsRefresh();
 }
 
+// A newly connected TMDB account: from the address bar after a signed-out
+// connect, or from the server after a signed-in one (pickUpServerConnection).
+function applyTmdbConnection(sess, acc, user) {
+  tmdbSessionId = sess;
+  tmdbAccountId = acc || '';
+  tmdbUsername = user || '';
+  try {
+    localStorage.removeItem('myListAddon:tmdbDisconnected');
+    localStorage.setItem('myListAddon:tmdbSessionId', tmdbSessionId);
+    if (tmdbAccountId) localStorage.setItem('myListAddon:tmdbAccountId', tmdbAccountId);
+    if (tmdbUsername) localStorage.setItem('myListAddon:tmdbUsername', tmdbUsername);
+  } catch (e) {}
+  saveState();
+  if (typeof pushCreatorSync === 'function') pushCreatorSync();
+  renderTmdbConnectStatus();
+  scheduleMyTmdbListsRefresh();
+}
+
 function pickUpTmdbTokenFromUrl() {
   const hash = window.location.hash || '';
   if (hash.startsWith('#') && hash.includes('tmdb_session=')) {
@@ -35106,24 +36236,12 @@ function pickUpTmdbTokenFromUrl() {
     const acc = params.get('tmdb_account');
     const user = params.get('tmdb_user');
     if (sess) {
-      tmdbSessionId = sess;
-      tmdbAccountId = acc || '';
-      tmdbUsername = user || '';
-      try {
-        localStorage.removeItem('myListAddon:tmdbDisconnected');
-        localStorage.setItem('myListAddon:tmdbSessionId', tmdbSessionId);
-        if (tmdbAccountId) localStorage.setItem('myListAddon:tmdbAccountId', tmdbAccountId);
-        if (tmdbUsername) localStorage.setItem('myListAddon:tmdbUsername', tmdbUsername);
-      } catch (e) {}
-      saveState();
-      if (typeof pushCreatorSync === 'function') pushCreatorSync();
       params.delete('tmdb_session');
       params.delete('tmdb_account');
       params.delete('tmdb_user');
       const rem = params.toString();
       history.replaceState(null, '', window.location.pathname + window.location.search + (rem ? '#' + rem : ''));
-      renderTmdbConnectStatus();
-      scheduleMyTmdbListsRefresh();
+      applyTmdbConnection(sess, acc, user);
     }
   }
 
@@ -35361,6 +36479,7 @@ function startSimklConnect() {
 }
 
 function disconnectSimkl() {
+  forgetServerConnection('simkl');
   const input = document.getElementById('simklKeyInput');
   if (input) input.value = '';
   simklAccessToken = '';
@@ -35390,32 +36509,131 @@ function toggleListsSimklConnection() {
   }
 }
 
+// A newly connected Simkl account: from the address bar after a signed-out
+// connect, or from the server after a signed-in one (pickUpServerConnection).
+function applySimklConnection(token, username) {
+  simklAccessToken = token;
+  try {
+    localStorage.removeItem('myListAddon:simklDisconnected');
+    localStorage.setItem('myListAddon:simklAccessToken', simklAccessToken);
+  } catch (e) {}
+  if (username) {
+    simklUsername = username;
+    try {
+      localStorage.setItem('myListAddon:simklUsername', simklUsername);
+    } catch (e) {}
+  }
+  saveState();
+  if (typeof pushCreatorSync === 'function') pushCreatorSync();
+  if (typeof showAppAlert === 'function') {
+    showAppAlert('Simkl Connected', 'Your Simkl account was successfully connected.', true);
+  } else {
+    alert('Connected to Simkl.');
+  }
+  renderSimklConnectStatus();
+  scheduleMySimklListsRefresh();
+}
+
+// --- Connections kept on the server (P3a-9) ----------------------------------
+//
+// Signed in, connecting Trakt, MDBList, Simkl or TMDB keeps the token on the
+// server and comes back as ?connected=<provider>, with no token in the address
+// bar. This page still works from its own copy of each token, so it asks for
+// that one once, over the signed-in session, and hands it to the same code a
+// token in the address bar reaches.
+async function pickUpServerConnection() {
+  const params = new URLSearchParams(window.location.search);
+  const provider = params.get('connected');
+  if (!provider) return;
+  let data = null;
+  let reached = false;
+  try {
+    const res = await fetch(ORIGIN + '/api/connections/' + encodeURIComponent(provider) + '/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    reached = true;
+    data = await res.json();
+  } catch (e) {}
+  // Left in the address bar only when the server could not be reached, so a
+  // reload tries again.
+  if (reached) {
+    params.delete('connected');
+    const qs = params.toString();
+    history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : '') + window.location.hash);
+  }
+  if (!data || !data.ok || !data.accessToken) {
+    const msg = reached
+      ? 'That account could not be loaded. Please connect it again from Settings.'
+      : 'Your account was connected, but this page could not load it. Reload the page to try again.';
+    if (typeof showAppAlert === 'function') showAppAlert('Connection', msg, false);
+    else alert(msg);
+    return;
+  }
+  if (provider === 'trakt') applyTraktConnection(data.accessToken, data.username || '');
+  else if (provider === 'mdblist') applyMdblistConnection(data.accessToken, data.username || '');
+  else if (provider === 'simkl') applySimklConnection(data.accessToken, data.username || '');
+  else if (provider === 'tmdb') applyTmdbConnection(data.accessToken, data.id || '', data.username || '');
+}
+
+// Disconnecting removes the server's copy too. Harmless when there is none, or
+// when this browser has no session (the server answers 401).
+function forgetServerConnection(provider) {
+  try {
+    fetch(ORIGIN + '/api/connections/' + encodeURIComponent(provider), {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+    }).catch(() => {});
+  } catch (e) {}
+}
+
+// Once per account on this device, and only once the browser has a session
+// (/api/creator/restore says so): offers the provider tokens this browser
+// already holds to the server, which checks each with its provider and keeps
+// the good ones.
+async function importLocalConnectionsOnce(creatorName) {
+  if (!creatorName || typeof collectKeys !== 'function') return;
+  const flag = 'myListAddon:connectionsImported:' + String(creatorName).toLowerCase();
+  try {
+    if (localStorage.getItem(flag) === '1') return;
+  } catch (e) {
+    return;
+  }
+  const k = collectKeys();
+  const keys = {
+    traktAccessToken: k.traktAccessToken, traktKey: k.traktKey, traktUsername: k.traktUsername,
+    mdblistAccessToken: k.mdblistAccessToken, mdblistKey: k.mdblistKey, mdblistUsername: k.mdblistUsername,
+    simklAccessToken: k.simklAccessToken, simklKey: k.simklKey, simklUsername: k.simklUsername,
+    tmdbSessionId: k.tmdbSessionId, tmdbKey: k.tmdbKey, tmdbAccountId: k.tmdbAccountId, tmdbUsername: k.tmdbUsername,
+  };
+  if (!keys.traktAccessToken && !keys.mdblistAccessToken && !keys.mdblistKey && !keys.simklAccessToken && !keys.tmdbSessionId) {
+    try { localStorage.setItem(flag, '1'); } catch (e) {}
+    return;
+  }
+  try {
+    const res = await fetch(ORIGIN + '/api/connections/import-local', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keys: keys }),
+    });
+    const data = await res.json();
+    // Finished once every token has had an answer about itself. One whose
+    // provider could not be reached is offered again on a later visit.
+    if (data && data.ok) {
+      const pending = Object.values(data.results || {}).some((r) => r === 'unreachable' || r === 'failed');
+      if (!pending) localStorage.setItem(flag, '1');
+    }
+  } catch (e) {}
+}
+
 function pickUpSimklTokenFromUrl() {
   const hash = window.location.hash || '';
   const match = /(?:^|[#&])simkl_token=([^&]+)/.exec(hash);
   if (match) {
-    simklAccessToken = decodeURIComponent(match[1]);
-    try {
-      localStorage.removeItem('myListAddon:simklDisconnected');
-      localStorage.setItem('myListAddon:simklAccessToken', simklAccessToken);
-    } catch (e) {}
     const userMatch = /(?:^|[#&])simkl_username=([^&]+)/.exec(hash);
-    if (userMatch) {
-      simklUsername = decodeURIComponent(userMatch[1]);
-      try {
-        localStorage.setItem('myListAddon:simklUsername', simklUsername);
-      } catch (e) {}
-    }
-    saveState();
-    if (typeof pushCreatorSync === 'function') pushCreatorSync();
     history.replaceState(null, '', window.location.pathname + window.location.search);
-    if (typeof showAppAlert === 'function') {
-      showAppAlert('Simkl Connected', 'Your Simkl account was successfully connected.', true);
-    } else {
-      alert('Connected to Simkl.');
-    }
-    renderSimklConnectStatus();
-    scheduleMySimklListsRefresh();
+    applySimklConnection(decodeURIComponent(match[1]), userMatch ? decodeURIComponent(userMatch[1]) : '');
   }
   const params = new URLSearchParams(window.location.search);
   const err = params.get('simkl_error');
@@ -61876,6 +63094,8 @@ async function submitRestoreProfile() {
     renderTrackPlaybackSection();
     renderCreatorDashboard();
     await loadCreatorSync();
+    // After the sync load, so tokens this account keeps in sync are included.
+    if (data.session && typeof importLocalConnectionsOnce === 'function') importLocalConnectionsOnce(data.creatorName);
   } catch (e) {
     errBox.innerHTML = '<p class="testresult err">Network error.</p>';
   } finally {
@@ -62046,7 +63266,10 @@ async function tryAutoRestoreCreatorProfile() {
       renderWatchlistPreferencesSection();
       renderTrackPlaybackSection();
       renderCreatorDashboard();
-      loadCreatorSync();
+      const syncing = loadCreatorSync();
+      if (data.session && typeof importLocalConnectionsOnce === 'function') {
+        Promise.resolve(syncing).catch(() => {}).then(() => importLocalConnectionsOnce(data.creatorName));
+      }
     }
   } catch (e) {
     // stay logged out
@@ -73092,6 +74315,8 @@ if (typeof renderHiddenListsSettingsSection === 'function') renderHiddenListsSet
 if (typeof renderRemovedAiringNextSettingsSection === 'function') renderRemovedAiringNextSettingsSection();
 renderTrackPlaybackSection();
 renderCreatorDashboard();
+// A signed-in connect comes back as ?connected=<provider> (P3a-9).
+if (typeof pickUpServerConnection === 'function') pickUpServerConnection();
 if (typeof pickUpMdblistTokenFromUrl === 'function') pickUpMdblistTokenFromUrl();
 if (typeof renderMdblistConnectStatus === 'function') renderMdblistConnectStatus();
 pickUpTraktTokenFromUrl();
@@ -74531,7 +75756,10 @@ async function handleFetch(request, env, ctx) {
     applyEnvApiKeys(env);
 
     const url = new URL(request.url);
-    const path = url.pathname;
+    // A v2 install link, /i/{token}/..., is handed to the same manifest,
+    // catalog, meta, subtitles and configure routes as a legacy id, with the
+    // token as its config segment (see v2InstallPath, 27_installs.js).
+    const path = v2InstallPath(url.pathname) || url.pathname;
 
     if (request.method === "OPTIONS") {
       if (isPublicCorsPath(path)) {
@@ -74539,6 +75767,26 @@ async function handleFetch(request, env, ctx) {
       }
       return new Response(null, { status: 204 });
     }
+
+    // CSRF protection for mutating requests (P3a-5)
+    const csrfErr = verifyCsrf(request);
+    if (csrfErr) return csrfErr;
+
+    // Resolve session if mla_session cookie or Bearer token is present
+    const sessionAuth = await resolveSession(request, env);
+    if (sessionAuth) {
+      request.account = sessionAuth.account;
+      request.session = sessionAuth.session;
+    }
+
+    // /api/installs (an account's install links) and the admin status of the
+    // install move -- 27_installs.js.
+    const installsResponse = await handleInstallsApi(request, env, url, path);
+    if (installsResponse) return installsResponse;
+    // /api/connections (an account's Trakt, MDBList, Simkl and TMDB
+    // connections) -- 28_connections.js.
+    const connectionsResponse = await handleConnectionsApi(request, env, url, path);
+    if (connectionsResponse) return connectionsResponse;
 
     if (path === "/" || path === "") {
       ctx.waitUntil(bumpStat(env, "pageviews"));
@@ -75116,6 +76364,9 @@ async function handleFetch(request, env, ctx) {
       }
       const resolved = await resolveConfig(m[1], env);
       const { entries, track, shuffleShelves } = resolved;
+      // Moves this link's keys and tokens out of its KV record, if they are
+      // still there and the move is switched on. After the response.
+      ctx.waitUntil(maybeMigrateLegacyInstall(env, m[1]));
       // A shelf's title in the apps comes from here, so the title has to be
       // read from the same live copy the shelf's items are read from
       // (liveShelfNames, 05_catalog-core.js) -- otherwise renaming a list on
@@ -75374,6 +76625,8 @@ Sitemap: ${url.origin}/sitemap.xml`;
       // Kept as a whole object as well as destructured: the betterPosters*
       // style keys are passed through wholesale rather than one at a time.
       const resolvedConfig = await resolveConfig(config, env);
+      // As in the manifest route: most installs ask for catalogs far more often.
+      ctx.waitUntil(maybeMigrateLegacyInstall(env, config));
       const { entries, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, trackCreatorName, trackOwner, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists, betterPosters, showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist } = resolvedConfig;
       const entryIndex = entries.findIndex((e) => e.id === id && e.type === type);
       const entry = entryIndex >= 0 ? entries[entryIndex] : null;
@@ -77861,6 +79114,20 @@ function generateSearchVariations(query) {
             if (meData && meData.username) traktUsername = meData.username;
           }
         } catch {}
+        // Signed in: the token is kept on the server, encrypted, and the
+        // address bar never carries it (P3a-9, 28_connections.js). The page
+        // fetches it back over the session. Anything else, as before.
+        if (await storeProviderConnection(env, request.account, "trakt", {
+          accessToken: tokenData.access_token,
+          refreshToken: tokenData.refresh_token,
+          expiresAt: tokenData.created_at && tokenData.expires_in ? (tokenData.created_at + tokenData.expires_in) * 1000 : null,
+          externalUser: { username: traktUsername },
+        })) {
+          return new Response(null, {
+            status: 302,
+            headers: { Location: `${url.origin}/?connected=trakt`, "Set-Cookie": clearStateCookie },
+          });
+        }
         return new Response(null, {
           status: 302,
           headers: {
@@ -77983,6 +79250,16 @@ function generateSearchVariations(query) {
           }
         } catch {}
 
+        // Kept on the server too when signed in (P3a-9). The token still comes
+        // back in this JSON: it never passes through an address bar here, and
+        // the page works from its own copy until Phase 6.
+        await storeProviderConnection(env, request.account, "trakt", {
+          accessToken: data.access_token,
+          refreshToken: data.refresh_token,
+          expiresAt: data.created_at && data.expires_in ? (data.created_at + data.expires_in) * 1000 : null,
+          apiKey: userKey || null,
+          externalUser: { username: traktUsername },
+        });
         return json({ ok: true, access_token: data.access_token, username: traktUsername });
       } catch (err) {
         return json({ ok: false, error: safeErrorMessage(err) }, 500);
@@ -78114,6 +79391,18 @@ function generateSearchVariations(query) {
             }
           } catch {}
         }
+        // Signed in: kept on the server, no token in the address bar (P3a-9).
+        if (await storeProviderConnection(env, request.account, "mdblist", {
+          accessToken: token,
+          refreshToken: tokenData.refresh_token,
+          expiresAt: tokenData.expires_in ? Date.now() + Number(tokenData.expires_in) * 1000 : null,
+          externalUser: { username: mdblistUsername },
+        })) {
+          return new Response(null, {
+            status: 302,
+            headers: { Location: `${url.origin}/?connected=mdblist`, "Set-Cookie": clearStateCookie },
+          });
+        }
         return new Response(null, {
           status: 302,
           headers: {
@@ -78229,6 +79518,16 @@ function generateSearchVariations(query) {
           }
         } catch {}
 
+        // Signed in: kept on the server, no token in the address bar (P3a-9).
+        if (await storeProviderConnection(env, request.account, "simkl", {
+          accessToken: token,
+          externalUser: { username: simklUsername },
+        })) {
+          return new Response(null, {
+            status: 302,
+            headers: { Location: `${url.origin}/?connected=simkl`, "Set-Cookie": clearStateCookie },
+          });
+        }
         return new Response(null, {
           status: 302,
           headers: {
@@ -79639,6 +80938,16 @@ function generateSearchVariations(query) {
         const accountId = accountData.id ? String(accountData.id) : "";
         const username = accountData.username || "";
 
+        // Signed in: kept on the server, no session id in the address bar (P3a-9).
+        if (await storeProviderConnection(env, request.account, "tmdb", {
+          accessToken: sessionId,
+          externalUser: { username, id: accountId },
+        })) {
+          return new Response(null, {
+            status: 302,
+            headers: { Location: `${url.origin}/?connected=tmdb`, "Set-Cookie": clearCookie },
+          });
+        }
         return new Response(null, {
           status: 302,
           headers: {
@@ -81526,6 +82835,19 @@ function generateSearchVariations(query) {
         // moment the stored key stops matching. See resolveConfig.
         payload.trackOwner = saveVerifiedOwner;
       }
+      // A signed-in save names its account in a way a reused username cannot
+      // match: the accounts row's id and when it was created (P3a-10). With
+      // that proof the link's personal rows can use the account's own
+      // connections, so the keys and tokens those supply are not copied into
+      // it. Without a table, a key or any connection, this changes nothing.
+      if (saveAccount) {
+        const ownerRow = await getOrBackfillAccount(env, saveAccount);
+        if (ownerRow && ownerRow.created_at) {
+          payload.ownerId = ownerRow.id;
+          payload.ownerSince = ownerRow.created_at;
+          for (const field of await connectionSuppliedConfigFields(env, ownerRow.id)) delete payload[field];
+        }
+      }
 
       const savePayload = JSON.stringify(payload);
       // Row count alone is not a size bound -- a row carries a URL, a
@@ -81936,6 +83258,35 @@ function generateSearchVariations(query) {
     // or revoke separately from the key itself.
     async function authenticateCreator(creatorNameRaw, creatorKey) {
       if (!env || !env.CONFIGS) return { ok: false, error: "no-kv" };
+
+      const sessionsEnabled = isSessionsEnabled(env);
+
+      // Behind FF_SESSIONS: if a session is present and creatorKey was not provided,
+      // authenticate via the session (request.account).
+      if (sessionsEnabled && request && request.account && !creatorKey) {
+        if (creatorNameRaw !== undefined && creatorNameRaw !== null && String(creatorNameRaw).trim() !== "") {
+          const v = validateCreatorUsername(creatorNameRaw);
+          if (!v.ok || v.normalized !== request.account.username.toLowerCase()) {
+            return { ok: false, error: "Username or Key is incorrect." };
+          }
+        }
+        if (request.account.deletedAt || request.account.status === "deleted") {
+          return { ok: false, error: "Username or Key is incorrect." };
+        }
+        const tombstoned = await isCreatorTombstoned(env, request.account.username.toLowerCase());
+        if (tombstoned) {
+          return { ok: false, error: "Username or Key is incorrect." };
+        }
+        touchCreatorLastSeen(env, request.account.username.toLowerCase());
+        return {
+          ok: true,
+          username: request.account.username,
+          displayName: request.account.displayName || request.account.username,
+          hasRecoveryAnswer: Boolean(request.account.hasRecoveryAnswer),
+          sessionAuth: true,
+        };
+      }
+
       const v = validateCreatorUsername(creatorNameRaw);
       if (!v.ok) return { ok: false, error: "Username or Key is incorrect." };
       // A username being deleted right now stops authenticating, whatever the
@@ -82005,6 +83356,56 @@ function generateSearchVariations(query) {
       // Fire-and-forget, not awaited -- see touchCreatorLastSeen's own
       // comment for why this is throttled and safe to never wait on.
       touchCreatorLastSeen(env, v.normalized);
+
+      // Behind FF_SESSIONS: a successful key-in-body auth also sets a session cookie (P3a-6).
+      //
+      // Only on the /api/creator/* routes, which the page calls and which keep
+      // the cookie. The same check also serves /api/preview, /api/save and the
+      // like, and a caller that never stores cookies would get a new 30-day
+      // session row on every request. And not when the request already carries
+      // a live session for this account: /api/creator/restore runs on every
+      // page load, so re-issuing there grew one row per visit.
+      if (sessionsEnabled && env.DB && request && typeof path === "string" && path.startsWith("/api/creator/")) {
+        if (!request._sessionCookie && (!request.account || request.account.username.toLowerCase() !== v.normalized)) {
+          try {
+            const accountRow = await getOrBackfillAccount(env, v.normalized, profile);
+            if (accountRow) {
+              const userAgent = request.headers ? (request.headers.get("user-agent") || null) : null;
+              const session = await createSession(env, accountRow.id, userAgent);
+              request._sessionCookie = buildSessionCookieHeader(session.token);
+              // Replaced, not filled in only when empty: a request carrying a
+              // session for a different account is now acting as this one.
+              request.account = {
+                id: accountRow.id,
+                username: accountRow.username,
+                displayName: profile.displayName || accountRow.username,
+                createdAt: accountRow.created_at,
+                lastActiveAt: accountRow.last_active_at,
+                version: accountRow.version || 0,
+                status: accountRow.status || "active",
+                hasRecoveryAnswer: Boolean(profile.recoveryAnswerHash),
+              };
+              request.session = session;
+              if (env.LOOKUP_PEPPER && accountRow && creatorKey) {
+                try {
+                  const hmac = await hmacLookupKey(creatorKey, env);
+                  if (hmac && accountRow.key_lookup_hmac !== hmac) {
+                    await env.DB.prepare(
+                      "UPDATE accounts SET key_lookup_hmac = ? WHERE id = ?"
+                    ).bind(hmac, accountRow.id).run();
+                    accountRow.key_lookup_hmac = hmac;
+                  }
+                } catch (hmacErr) {
+                  console.error("Failed to write accounts.key_lookup_hmac on creator auth:", hmacErr);
+                }
+              }
+            }
+          } catch (sessionErr) {
+            console.error("Failed to issue session cookie on creator auth:", sessionErr);
+          }
+        }
+      }
+
       return {
         ok: true,
         username: profile.username || v.normalized,
@@ -82081,13 +83482,20 @@ function generateSearchVariations(query) {
     async function handleSubtitlesTrack(configParam, stremioType, id, env, request) {
       if (!env || !env.CONFIGS) return;
 
-      let track, trackCreatorName, trackCreatorKey, tmdbKey;
+      let track, trackCreatorName, trackCreatorKey, tmdbKey, installTrackOwner;
       try {
-        ({ track, trackCreatorName, trackCreatorKey, tmdbKey } = await resolveConfig(configParam, env));
+        ({ track, trackCreatorName, trackCreatorKey, tmdbKey, installTrackOwner } = await resolveConfig(configParam, env));
       } catch {
         return;
       }
-      if (!trackCreatorName || !trackCreatorKey) return;
+      // A v2 install link carries no Creator Key: its "track" scope, granted
+      // to the signed-in account that created it, stands in for one (see
+      // resolveV2InstallConfig, 27_installs.js).
+      if (installTrackOwner) {
+        trackCreatorName = installTrackOwner;
+      } else if (!trackCreatorName || !trackCreatorKey) {
+        return;
+      }
       if (!track) {
         // Auto-track Playback resolved to off for this install link. This
         // can happen even when the user sees the toggle on in Settings, if
@@ -82103,7 +83511,9 @@ function generateSearchVariations(query) {
         return;
       }
 
-      const auth = await authenticateCreator(trackCreatorName, trackCreatorKey);
+      const auth = installTrackOwner
+        ? ((await isCreatorTombstoned(env, installTrackOwner)) ? { ok: false } : { ok: true, username: installTrackOwner })
+        : await authenticateCreator(trackCreatorName, trackCreatorKey);
       const diagnosticsKey = `creatortrack:${auth.ok ? auth.username : String(trackCreatorName).toLowerCase()}`;
       const pingId = `${stremioType}:${id}`;
 
@@ -82499,7 +83909,13 @@ function generateSearchVariations(query) {
       if (!authUser && configParam) {
         try {
           const resolved = await resolveConfig(configParam, env);
-          if (resolved && resolved.trackCreatorName && resolved.trackCreatorKey) {
+          if (resolved && resolved.installTrackOwner) {
+            // A v2 install link with the "track" scope -- see handleSubtitlesTrack.
+            if (!(await isCreatorTombstoned(env, resolved.installTrackOwner))) {
+              authUser = resolved.installTrackOwner;
+              if (resolved.tmdbKey) effectiveTmdbKey = resolved.tmdbKey;
+            }
+          } else if (resolved && resolved.trackCreatorName && resolved.trackCreatorKey) {
             const auth = await authenticateCreator(resolved.trackCreatorName, resolved.trackCreatorKey);
             if (auth.ok) {
               authUser = auth.username;
@@ -83058,6 +84474,226 @@ function generateSearchVariations(query) {
       });
     }
 
+    // --- Sessions API (Phase 3a: P3a-4) ------------------------------------
+
+    // POST /api/session  { username, key } -> { ok, account }
+    // Authenticates account credentials via PBKDF2, issues a 256-bit session token,
+    // stores its SHA-256 hash in D1 sessions, and sets the mla_session cookie.
+    if (path === "/api/session" && request.method === "POST") {
+      if (!env || !env.DB) return json({ ok: false, error: "Database unavailable." }, 503);
+      let body;
+      try {
+        body = await request.json();
+      } catch {
+        return json({ ok: false, error: "Invalid JSON body." }, 400);
+      }
+      const usernameRaw = body.username || body.creatorName;
+      const keyRaw = body.key || body.creatorKey;
+      if (!usernameRaw || !keyRaw) {
+        return json({ ok: false, error: "Username and Account Key are required." }, 400);
+      }
+      // The creator profile decides, exactly as it does for every key-in-body
+      // route: authenticateCreator applies the deletion tombstone, the per-IP
+      // PBKDF2 throttle and the memo. This used to verify against
+      // accounts.key_hash alone, which nothing kept current -- a deleted
+      // account's key still signed in, with no throttle on guessing.
+      const auth = await authenticateCreator(usernameRaw, keyRaw);
+      if (!auth.ok) return authFailureResponse(auth);
+
+      let profile = null;
+      try {
+        const raw = await getCreator(env, auth.username);
+        profile = raw ? JSON.parse(raw) : null;
+      } catch {
+        profile = null;
+      }
+      // Brought up to date from the profile just verified, before a session is
+      // tied to it. Null means the accounts table cannot be written: most
+      // likely migration 0015 has not been applied yet.
+      const accountRow = profile ? await getOrBackfillAccount(env, auth.username, profile) : null;
+      if (!accountRow) {
+        return json({ ok: false, error: "Signing in isn't available right now. Please try again later." }, 503);
+      }
+
+      // A key stored under fewer PBKDF2 iterations than today's target is
+      // rehashed while the plaintext is at hand. Through the same path as a
+      // key reset (D1 first, then KV), because the profile is the copy that
+      // is checked: upgrading only the accounts row would change nothing.
+      const hashParts = String(profile.keyHash || "").split(":");
+      if (hashParts.length === 4 && hashParts[0] === "pbkdf2" && parseInt(hashParts[1], 10) < PBKDF2_ITERATIONS) {
+        try {
+          const upgradedHash = await hashCreatorKey(keyRaw);
+          const rotation = await rotateCreatorKeyHashInD1(env, auth.username, upgradedHash);
+          if (rotation.ok) {
+            await env.CONFIGS.put(`creator:${auth.username}`, JSON.stringify({ ...profile, keyHash: upgradedHash }));
+            accountRow.key_hash = upgradedHash;
+          }
+        } catch (e) {
+          console.error("Failed to upgrade PBKDF2 iterations:", e);
+        }
+      }
+
+      // Blind index v2: if LOOKUP_PEPPER is configured, write accounts.key_lookup_hmac
+      if (env.LOOKUP_PEPPER) {
+        try {
+          const hmac = await hmacLookupKey(keyRaw, env);
+          if (hmac && accountRow.key_lookup_hmac !== hmac) {
+            await env.DB.prepare(
+              "UPDATE accounts SET key_lookup_hmac = ? WHERE id = ?"
+            ).bind(hmac, accountRow.id).run();
+            accountRow.key_lookup_hmac = hmac;
+          }
+        } catch (hmacErr) {
+          console.error("Failed to write accounts.key_lookup_hmac on login:", hmacErr);
+        }
+      }
+
+      // Update last active
+      const now = Date.now();
+      await env.DB.prepare("UPDATE accounts SET last_active_at = ? WHERE id = ?").bind(now, accountRow.id).run().catch(() => {});
+
+      // Create session
+      const userAgent = request.headers.get("user-agent") || null;
+      const session = await createSession(env, accountRow.id, userAgent);
+
+      const cookie = buildSessionCookieHeader(session.token);
+      return json(
+        {
+          ok: true,
+          account: {
+            id: accountRow.id,
+            username: accountRow.username,
+            displayName: accountRow.display_name,
+            createdAt: accountRow.created_at,
+            lastActiveAt: now,
+          },
+        },
+        200,
+        {
+          "Set-Cookie": cookie,
+          "Cache-Control": "no-store",
+        }
+      );
+    }
+
+    // DELETE /api/session -> logs out by revoking current session and clearing cookie
+    if (path === "/api/session" && request.method === "DELETE") {
+      const token = extractSessionToken(request);
+      if (token) {
+        const idHash = await hashSessionToken(token);
+        await revokeSession(env, idHash);
+      }
+      return json(
+        { ok: true },
+        200,
+        {
+          "Set-Cookie": buildClearSessionCookieHeader(),
+          "Cache-Control": "no-store",
+        }
+      );
+    }
+
+    // GET /api/me -> returns the current authenticated account profile
+    if (path === "/api/me" && request.method === "GET") {
+      if (!request.account) {
+        return json({ ok: false, error: "Authentication required." }, 401);
+      }
+      return json(
+        {
+          ok: true,
+          account: {
+            id: request.account.id,
+            username: request.account.username,
+            displayName: request.account.displayName,
+            createdAt: request.account.createdAt,
+            lastActiveAt: request.account.lastActiveAt,
+            version: request.account.version || 0,
+            status: request.account.status || "active",
+          },
+        },
+        200,
+        { "Cache-Control": "no-store" }
+      );
+    }
+
+    // GET /api/me/sessions -> lists active sessions for the current account
+    if (path === "/api/me/sessions" && request.method === "GET") {
+      if (!request.account || !env || !env.DB) {
+        return json({ ok: false, error: "Authentication required." }, 401);
+      }
+      const now = Date.now();
+      const currentHash = request.session ? request.session.idHash : null;
+      try {
+        const { results } = await env.DB.prepare(
+          "SELECT id_hash, created_at, last_seen_at, expires_at, user_agent " +
+          "FROM sessions " +
+          "WHERE account_id = ? AND revoked_at IS NULL AND expires_at > ? " +
+          "ORDER BY last_seen_at DESC"
+        ).bind(request.account.id, now).all();
+
+        const sessions = (results || []).map((s) => ({
+          id: s.id_hash.slice(0, 16),
+          createdAt: s.created_at,
+          lastSeenAt: s.last_seen_at,
+          expiresAt: s.expires_at,
+          userAgent: s.user_agent,
+          current: s.id_hash === currentHash,
+        }));
+        return json({ ok: true, sessions }, 200, { "Cache-Control": "no-store" });
+      } catch (e) {
+        return json({ ok: false, error: "Failed to load sessions." }, 500);
+      }
+    }
+
+    // DELETE /api/me/sessions -> revokes active sessions for current account
+    if (path === "/api/me/sessions" && request.method === "DELETE") {
+      if (!request.account || !env || !env.DB) {
+        return json({ ok: false, error: "Authentication required." }, 401);
+      }
+      let body = {};
+      try {
+        body = await request.json();
+      } catch {}
+
+      const currentHash = request.session ? request.session.idHash : null;
+      const url = new URL(request.url);
+      const revokeOthers = body.allExceptCurrent || url.searchParams.get("other") === "1";
+      const targetId = body.id || url.searchParams.get("id");
+
+      if (revokeOthers) {
+        await revokeAccountSessions(env, request.account.id, currentHash);
+        return json({ ok: true, revokedOthers: true }, 200, { "Cache-Control": "no-store" });
+      }
+
+      if (targetId) {
+        const { results } = await env.DB.prepare(
+          "SELECT id_hash FROM sessions WHERE account_id = ? AND id_hash LIKE ? AND revoked_at IS NULL"
+        ).bind(request.account.id, targetId + "%").all();
+
+        let revokedCurrent = false;
+        for (const r of (results || [])) {
+          await revokeSession(env, r.id_hash);
+          if (r.id_hash === currentHash) revokedCurrent = true;
+        }
+        const headers = { "Cache-Control": "no-store" };
+        if (revokedCurrent) {
+          headers["Set-Cookie"] = buildClearSessionCookieHeader();
+        }
+        return json({ ok: true, revoked: (results || []).length }, 200, headers);
+      }
+
+      // No target specified: revoke all sessions including current
+      await revokeAccountSessions(env, request.account.id, null);
+      return json(
+        { ok: true, revokedAll: true },
+        200,
+        {
+          "Set-Cookie": buildClearSessionCookieHeader(),
+          "Cache-Control": "no-store",
+        }
+      );
+    }
+
     // /api/creator/track-status  (POST)  { creatorName, creatorKey } ->
     // { ok, lastPingAt, lastPingId, matched } -- powers the "last ping"
     // status line on the Settings page's Auto-track playback panel, same
@@ -83222,7 +84858,17 @@ function generateSearchVariations(query) {
           error: "Couldn't set that Profile up just now. Please try again in a moment.",
         }, 503);
       }
-      
+      // Same principle for the accounts row: one left by an earlier holder of
+      // this username would carry its sessions, installs and provider
+      // connections into the new account. The uniqueness check above has
+      // established there is no live profile, so any row here is a leftover.
+      if (!(await deleteAccountRow(env, v.normalized)).ok) {
+        return json({
+          ok: false,
+          error: "Couldn't set that Profile up just now. Please try again in a moment.",
+        }, 503);
+      }
+
       // D1 write is authoritative when DB is bound: fail the request if D1 fails,
       // then populate the KV read-through cache.
       if (env.DB) {
@@ -83244,8 +84890,12 @@ function generateSearchVariations(query) {
         }
       }
       await env.CONFIGS.put(`creator:${v.normalized}`, JSON.stringify(profileObj));
+      // The accounts row from the start, so a new account never waits on the
+      // backfill. Best-effort: without migration 0015 this does nothing, and
+      // the first sign-in fills the row anyway.
+      await getOrBackfillAccount(env, v.normalized, profileObj);
       await storeCreatorKeyLookup(env, creatorKey, v.normalized);
-      
+
       try {
         const countRaw = await env.CONFIGS.get("stats:creator_count");
         const count = parseInt(countRaw || "0", 10) + 1;
@@ -83373,6 +85023,10 @@ function generateSearchVariations(query) {
         JSON.stringify({ ...profile, keyHash })
       );
       await storeCreatorKeyLookup(env, creatorKey, v.normalized);
+      // Every device signs in again with the new key. A session opened with the
+      // old one would otherwise outlive it, and a lost or leaked key is the
+      // usual reason to reset.
+      await revokeSessionsForUsername(env, v.normalized);
       return json({ ok: true, creatorName: v.normalized, displayName: profile.displayName, creatorKey }, 200, { "Cache-Control": "no-store" });
     }
 
@@ -83435,6 +85089,8 @@ function generateSearchVariations(query) {
         JSON.stringify({ ...profile, keyHash })
       );
       await storeCreatorKeyLookup(env, creatorKey, v.normalized);
+      // Signed out everywhere, for the same reason as the self-service reset.
+      await revokeSessionsForUsername(env, v.normalized);
       return json({ ok: true, creatorKey }, 200, { "Cache-Control": "no-store" });
     }
 
@@ -83472,6 +85128,11 @@ function generateSearchVariations(query) {
           console.error("D1 write error (update recovery answer):", dbErr);
           return json({ ok: false, error: "Failed to update recovery answer. Please try again." }, 500);
         }
+        try {
+          await env.DB.prepare(
+            "UPDATE accounts SET recovery_answer_hash = ? WHERE username = ? COLLATE NOCASE"
+          ).bind(recoveryAnswerHash, auth.username).run();
+        } catch (accErr) {}
       }
 
       const raw = await getCreator(env, auth.username);
@@ -83485,7 +85146,9 @@ function generateSearchVariations(query) {
         }
       }
 
-      await storeCreatorKeyLookup(env, body.creatorKey, auth.username);
+      if (body.creatorKey) {
+        await storeCreatorKeyLookup(env, body.creatorKey, auth.username);
+      }
 
       return jsonPrivate({ ok: true, hasRecoveryAnswer: true });
     }
@@ -83520,7 +85183,9 @@ function generateSearchVariations(query) {
         return json({ ok: false, error: genericError }, 401);
       }
 
-      let resolvedUsername = await usernameForCreatorKeyLookup(env, presentedKey);
+      const lookupMeta = {};
+      let resolvedUsername = await usernameForCreatorKeyLookup(env, presentedKey, lookupMeta);
+      let isLegacyHit = Boolean(lookupMeta.source && lookupMeta.source.startsWith("legacy"));
 
       // Fallback for pre-migration accounts in D1: scan up to 50 accounts
       if (!resolvedUsername && env.DB) {
@@ -83532,6 +85197,7 @@ function generateSearchVariations(query) {
             for (const r of rows.results) {
               if (r.key_hash && (await verifyCreatorKey(presentedKey, r.key_hash))) {
                 resolvedUsername = r.username;
+                isLegacyHit = true;
                 await storeCreatorKeyLookup(env, presentedKey, r.username);
                 break;
               }
@@ -83546,17 +85212,40 @@ function generateSearchVariations(query) {
         return json({ ok: false, error: genericError }, 401);
       }
 
+      if (isLegacyHit) {
+        await recordLegacyLookupHit(env);
+      }
+
       const v = validateCreatorUsername(resolvedUsername);
       if (!v.ok) return json({ ok: false, error: genericError }, 401);
 
-      const raw = await getCreator(env, v.normalized);
-      if (!raw) return json({ ok: false, error: genericError }, 401);
-      let profile;
-      try {
-        profile = JSON.parse(raw);
-      } catch {
-        return json({ ok: false, error: genericError }, 401);
+      let profile = null;
+      let accountRow = null;
+      if (env.DB) {
+        try {
+          accountRow = await env.DB.prepare(
+            "SELECT id, username, display_name, key_hash, recovery_answer_hash, status FROM accounts WHERE lower(username) = lower(?) AND (status != 'deleted' AND deleted_at IS NULL)"
+          ).bind(v.normalized).first();
+        } catch {}
       }
+
+      const raw = await getCreator(env, v.normalized);
+      if (raw) {
+        try {
+          profile = JSON.parse(raw);
+        } catch {}
+      }
+
+      if (!profile && accountRow) {
+        profile = {
+          username: accountRow.username,
+          displayName: accountRow.display_name,
+          keyHash: accountRow.key_hash,
+          recoveryAnswerHash: accountRow.recovery_answer_hash,
+        };
+      }
+
+      if (!profile) return json({ ok: false, error: genericError }, 401);
 
       const keyMatches = await verifyCreatorKey(presentedKey, profile.keyHash);
       if (!keyMatches) {
@@ -83639,23 +85328,33 @@ function generateSearchVariations(query) {
       try {
         body = await request.json();
       } catch {
-        return json({ ok: false, error: "Invalid JSON body." }, 400);
+        if (request.account && isSessionsEnabled(env)) {
+          body = {};
+        } else {
+          return json({ ok: false, error: "Invalid JSON body." }, 400);
+        }
       }
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) {
         if (auth.error !== "no-kv") await noteAuthFailure(env, restoreFailScope, restoreFailDay);
         return authFailureResponse(auth);
       }
-      if (ctx && typeof ctx.waitUntil === "function") {
-        ctx.waitUntil(storeCreatorKeyLookup(env, body.creatorKey, auth.username).catch(() => {}));
-      } else {
-        await storeCreatorKeyLookup(env, body.creatorKey, auth.username).catch(() => {});
+      if (body.creatorKey) {
+        if (ctx && typeof ctx.waitUntil === "function") {
+          ctx.waitUntil(storeCreatorKeyLookup(env, body.creatorKey, auth.username).catch(() => {}));
+        } else {
+          await storeCreatorKeyLookup(env, body.creatorKey, auth.username).catch(() => {});
+        }
       }
       return jsonPrivate({
         ok: true,
         creatorName: auth.username,
         displayName: auth.displayName,
         hasRecoveryAnswer: Boolean(auth.hasRecoveryAnswer),
+        // Whether this browser now holds a session for the account (FF_SESSIONS).
+        // The page offers its locally held provider tokens to
+        // /api/connections/import-local only when it does (P3a-9).
+        session: Boolean(request.session && request.account && String(request.account.username || "").toLowerCase() === String(auth.username || "").toLowerCase()),
       });
     }
 
@@ -83668,7 +85367,11 @@ function generateSearchVariations(query) {
       try {
         body = await request.json();
       } catch {
-        return json({ ok: false, error: "Invalid JSON body." }, 400);
+        if (request.account && isSessionsEnabled(env)) {
+          body = {};
+        } else {
+          return json({ ok: false, error: "Invalid JSON body." }, 400);
+        }
       }
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) return authFailureResponse(auth);
@@ -84889,6 +86592,11 @@ function generateSearchVariations(query) {
           cleared: { lists: purged.listsCleared, keys: purged.keysCleared },
         }, 500);
       }
+      // purgeCreatorData has already removed the accounts row and its sessions;
+      // this only tells the browser to drop the cookie.
+      if (request.account || request._sessionCookie) {
+        request._sessionCookie = buildClearSessionCookieHeader();
+      }
       return json({ ok: true, cleared: { lists: purged.listsCleared, keys: purged.keysCleared } });
     }
 
@@ -85669,7 +87377,11 @@ function generateSearchVariations(query) {
       try {
         body = await request.json();
       } catch {
-        return json({ ok: false, error: "Invalid JSON body." }, 400);
+        if (request.account && isSessionsEnabled(env)) {
+          body = {};
+        } else {
+          return json({ ok: false, error: "Invalid JSON body." }, 400);
+        }
       }
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) return authFailureResponse(auth);
@@ -85765,7 +87477,11 @@ function generateSearchVariations(query) {
       try {
         body = await request.json();
       } catch {
-        return json({ ok: false, error: "Invalid JSON body." }, 400);
+        if (request.account && isSessionsEnabled(env)) {
+          body = {};
+        } else {
+          return json({ ok: false, error: "Invalid JSON body." }, 400);
+        }
       }
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) return authFailureResponse(auth);
@@ -87404,6 +89120,31 @@ function generateSearchVariations(query) {
       }
 
       return json({ ok: true, done, results, thisCall, scanned: state.scanned });
+    }
+
+    // /admin/api/migrate-accounts  (POST / GET)
+    // Phase 3a (P3a-3): Backfills creators and KV creator:* records into accounts.
+    // Newest keyHash wins; D1 wins ties.
+    // Returns reconciliation report showing count(accounts) = |creators ∪ creator:*|.
+    // POST runs the backfill (or dryRun if requested in body/query); GET runs dryRun reconciliation check only.
+    if (path === "/admin/api/migrate-accounts" && (request.method === "POST" || request.method === "GET")) {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      if (!env || !env.DB) return json({ ok: false, error: "No D1 database binding 'DB'." }, 500);
+
+      let body = {};
+      if (request.method === "POST") {
+        try {
+          body = await request.json();
+        } catch {
+          body = {};
+        }
+      }
+      const url = new URL(request.url);
+      const dryRun = request.method === "GET" || !!body.dryRun || (url.searchParams.get("dry_run") === "1");
+
+      const report = await backfillAccounts(env, { dryRun });
+      return json(report, report.ok ? 200 : 500);
     }
 
     // /admin/api/rebuild-search-index (and alias /admin/api/rebuild-public-index) (POST) -> { ok, done, count, scanned, ms }
@@ -89213,7 +90954,7 @@ export default {
       // An unparseable URL cannot have reached a private route anyway.
     }
     if (counters) writeRequestMetrics(env, request, response, startedAt, counters);
-    return withSecurityHeaders(response, privatePath);
+    return withSecurityHeaders(response, privatePath, request ? request._sessionCookie : null);
   },
 
   // Runs on whatever schedule this Worker's owner configured under
@@ -89299,3 +91040,1572 @@ export default {
     }
   },
 };
+
+// --- Installs (Phase 3a, P3a-8) ---------------------------------------------
+//
+// An install is one add-on link someone put into Stremio, Nuvio or wako. Two
+// kinds live in the `installs` table (migration 0015):
+//
+//   * v2 installs, /i/{token}/manifest.json. The token is 32 random bytes and
+//     only its SHA-256 is stored (token_hash). One is created through
+//     POST /api/installs by a signed-in account, which owns it and can rename,
+//     edit, rotate or revoke it (behind FF_INSTALLS).
+//   * legacy installs, /{id}/manifest.json: the short KV ids /api/save has
+//     always handed out. token_hash is "legacy:{id}", which no SHA-256 can
+//     equal, and legacy_cfg_id is the id.
+//
+// A legacy id moves into the table the first time it is used after the move is
+// switched on (INSTALL_MIGRATION_PERCENT), and only when its KV record holds
+// something to move: a provider key or token, or a Creator Key. Those go to
+// install_secrets, encrypted under TOKEN_ENCRYPTION_KEY with a context naming
+// the install and provider, and the KV record is rewritten without them,
+// carrying `_install: <id>` instead. resolveConfig puts them back when it reads
+// the record, so everything downstream behaves exactly as before: the
+// catalogs, the Creator Key check that authorises playback tracking, and a key
+// reset stopping that tracking.
+//
+// The URL never changes. Stremio installs pin it, so legacy URLs are served
+// indefinitely and never redirected (MIGRATION_PLAN.md §3.2).
+//
+// Reads never depend on the flags. A record that has been moved is always read
+// through the table, so switching a flag off later cannot strand its secrets.
+
+// The config segment a v2 install is handed on as. "~" is not in the base64url
+// alphabet, so it can collide with neither a KV id nor a base64 config.
+const INSTALL_TOKEN_PARAM_PREFIX = "i~";
+const INSTALL_LEGACY_HASH_PREFIX = "legacy:";
+const INSTALL_SNAPSHOT_KEY_PREFIX = "install:";
+// KV snapshot of one install row and its encrypted secrets, so a catalog
+// request does not reach D1. Every change deletes it (and bumps `version`).
+const INSTALL_SNAPSHOT_TTL_SEC = 86400;
+// And an isolate copy on top: a Stremio home screen asks for every row of one
+// install at once.
+const INSTALL_SNAPSHOT_CACHE = new Map();
+const INSTALL_SNAPSHOT_CACHE_TTL_MS = 30 * 1000;
+const INSTALL_SNAPSHOT_CACHE_MAX = 500;
+// D1 caps a row at 2 MB. A v2 install's config is stored in its row.
+const INSTALL_CONFIG_JSON_MAX = 1500000;
+// Active v2 installs one account may hold.
+const INSTALLS_PER_ACCOUNT_MAX = 50;
+const INSTALL_NAME_MAX = 80;
+
+// Where each secret config field is filed in install_secrets. A test checks
+// that every `secret: true` field of INSTALL_CONFIG_FIELDS is named here.
+const INSTALL_SECRET_COLUMNS = {
+  tmdbKey: ["tmdb", "api_key_enc"],
+  mdblistKey: ["mdblist", "api_key_enc"],
+  mdblistAccessToken: ["mdblist", "access_token_enc"],
+  traktKey: ["trakt", "api_key_enc"],
+  traktAccessToken: ["trakt", "access_token_enc"],
+  simklKey: ["simkl", "api_key_enc"],
+  simklAccessToken: ["simkl", "access_token_enc"],
+  // The account's own key, carried by a config with a personal shelf. Kept
+  // (encrypted) because it is what authorises that link's playback tracking,
+  // and because it lets the move be undone.
+  trackCreatorKey: ["creator", "api_key_enc"],
+};
+// Any other top-level field whose name says it is a credential. Saves were
+// written field by field before INSTALL_CONFIG_FIELDS, so an old record may
+// hold one the table above does not name. Kept together, as one encrypted JSON
+// object, and put back as they were.
+const INSTALL_OTHER_SECRETS_PROVIDER = "legacy";
+
+function isInstallSecretFieldName(name) {
+  if (Object.prototype.hasOwnProperty.call(INSTALL_SECRET_COLUMNS, name)) return true;
+  if (/(Key|Token|Secret|Password)$/.test(name)) return true;
+  return /^(apikey|api_key|access_token|refresh_token|token|key|secret|password|creatorkey)$/i.test(name);
+}
+
+function isInstallsEnabled(env) {
+  const v = env ? env.FF_INSTALLS : undefined;
+  return v === "1" || v === "true" || v === true;
+}
+
+// INSTALL_MIGRATION_PERCENT: the share of legacy ids moved on first use, 0 to
+// 100, chosen by a stable hash of the id so a rollout can start small and
+// widen. A percentage rather than an on/off flag on purpose: "1" means 1%, and
+// "100" means every id. Unset, "0" or anything unreadable moves nothing.
+function installMigrationPercent(env) {
+  const raw = env ? env.INSTALL_MIGRATION_PERCENT : undefined;
+  const n = parseInt(String(raw == null ? "" : raw).trim(), 10);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(100, n);
+}
+
+async function installMigrationBucket(id) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("installbucket:" + id));
+  const b = new Uint8Array(digest);
+  return ((b[0] << 24 >>> 0) + (b[1] << 16) + (b[2] << 8) + b[3]) % 100;
+}
+
+function hasTokenEncryptionKey(env) {
+  try {
+    const ring = parseTokenEncryptionKeys(env);
+    const key = ring.activeKeyId ? ring.keys.get(ring.activeKeyId) : null;
+    return Boolean(key && key.length === 32);
+  } catch {
+    return false;
+  }
+}
+
+function isV2InstallParam(param) {
+  return typeof param === "string" && param.startsWith(INSTALL_TOKEN_PARAM_PREFIX);
+}
+
+function isWellFormedInstallToken(token) {
+  return typeof token === "string" && /^[A-Za-z0-9_-]{43}$/.test(token);
+}
+
+// /i/{token}/rest -> /i~{token}/rest, which the existing manifest, catalog,
+// meta, subtitles and configure routes then serve like any other config.
+function v2InstallPath(path) {
+  const m = /^\/i\/([A-Za-z0-9_-]{43})(\/.*)$/.exec(String(path || ""));
+  return m ? `/${INSTALL_TOKEN_PARAM_PREFIX}${m[1]}${m[2]}` : null;
+}
+
+function generateInstallToken() {
+  return base64UrlEncodeBytes(crypto.getRandomValues(new Uint8Array(32)));
+}
+
+async function installTokenHash(token) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(token)));
+  return bufferToHex(new Uint8Array(digest));
+}
+
+function installSecretContext(installId, provider) {
+  return `install:${installId}:${provider}`;
+}
+
+// Same shape resolveConfig returns for an unreadable config: no rows, every
+// setting at its default, no account.
+function emptyResolvedInstallConfig() {
+  return {
+    entries: [],
+    watchHistory: [],
+    continueWatching: [],
+    watchlist: [],
+    airingNext: [],
+    ...readInstallConfigFields({}),
+    track: false,
+    trackCreatorName: "",
+    trackCreatorKey: "",
+    trackOwner: "",
+  };
+}
+
+// Splits a stored config into what may stay in KV and what has to move.
+// `byProvider` maps provider -> { column: plaintext }; `other` collects
+// credential-looking fields the table does not name.
+function splitInstallSecrets(parsed) {
+  const publicPart = {};
+  const byProvider = new Map();
+  const other = {};
+  let hasSecrets = false;
+  for (const name of Object.keys(parsed || {})) {
+    const value = parsed[name];
+    if (!isInstallSecretFieldName(name)) {
+      publicPart[name] = value;
+      continue;
+    }
+    if (value == null || value === "") continue;
+    hasSecrets = true;
+    const target = INSTALL_SECRET_COLUMNS[name];
+    if (target && typeof value === "string") {
+      const [provider, column] = target;
+      if (!byProvider.has(provider)) byProvider.set(provider, {});
+      byProvider.get(provider)[column] = value;
+    } else {
+      other[name] = value;
+    }
+  }
+  if (Object.keys(other).length) {
+    byProvider.set(INSTALL_OTHER_SECRETS_PROVIDER, { api_key_enc: JSON.stringify(other) });
+  }
+  return { publicPart, byProvider, hasSecrets };
+}
+
+function installRecordHasSecrets(parsed) {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+  for (const name of Object.keys(parsed)) {
+    if (isInstallSecretFieldName(name) && parsed[name] != null && parsed[name] !== "") return true;
+  }
+  return false;
+}
+
+async function encryptInstallSecrets(env, installId, byProvider) {
+  const rows = [];
+  for (const [provider, cols] of byProvider) {
+    const context = installSecretContext(installId, provider);
+    rows.push({
+      provider,
+      access_token_enc: cols.access_token_enc ? await encryptToken(cols.access_token_enc, env, context) : null,
+      api_key_enc: cols.api_key_enc ? await encryptToken(cols.api_key_enc, env, context) : null,
+    });
+  }
+  return rows;
+}
+
+// install_secrets rows (as stored, or as the snapshot carries them) back into
+// config fields. A row that will not decrypt is logged and left out: the
+// install then serves as it would without that key, rather than not at all.
+async function decryptInstallSecretFields(env, installId, rows) {
+  const fields = {};
+  const byColumn = {};
+  for (const [field, [provider, column]] of Object.entries(INSTALL_SECRET_COLUMNS)) {
+    byColumn[provider + ":" + column] = field;
+  }
+  for (const row of rows || []) {
+    const provider = row.provider;
+    const context = installSecretContext(installId, provider);
+    try {
+      if (provider === INSTALL_OTHER_SECRETS_PROVIDER) {
+        if (row.api_key_enc) Object.assign(fields, JSON.parse(await decryptToken(row.api_key_enc, env, context)));
+        continue;
+      }
+      for (const column of ["access_token_enc", "api_key_enc"]) {
+        const field = byColumn[provider + ":" + column];
+        if (field && row[column]) fields[field] = await decryptToken(row[column], env, context);
+      }
+    } catch (e) {
+      console.error(`Install ${installId}: could not decrypt its ${provider} secrets:`, e);
+    }
+  }
+  return fields;
+}
+
+// One install row and its encrypted secrets, from the isolate copy, then KV,
+// then D1 (which refreshes both).
+//   null            D1 could not be asked (not bound, or it failed)
+//   { missing }     no such install: never created, or deleted with its account
+//   snapshot        { id, v, accountId, owner, scopes, revoked, secrets, config? }
+// A v2 snapshot carries its config; a legacy one does not, since that lives in
+// the cfg: record the request has already read.
+async function loadInstallSnapshot(env, tokenHash) {
+  const now = Date.now();
+  const cached = INSTALL_SNAPSHOT_CACHE.get(tokenHash);
+  if (cached && now - cached.at < INSTALL_SNAPSHOT_CACHE_TTL_MS) return cached.snap;
+  let snap = null;
+  if (env && env.CONFIGS) {
+    try {
+      const raw = await env.CONFIGS.get(INSTALL_SNAPSHOT_KEY_PREFIX + tokenHash);
+      if (raw) snap = JSON.parse(raw);
+    } catch {
+      snap = null;
+    }
+  }
+  if (!snap) {
+    if (!env || !env.DB) return null;
+    try {
+      const row = await env.DB.prepare(
+        "SELECT i.id, i.account_id, i.config_json, i.version, i.scopes, i.revoked_at, a.username " +
+        "FROM installs i LEFT JOIN accounts a ON a.id = i.account_id WHERE i.token_hash = ?"
+      ).bind(tokenHash).first();
+      if (!row) {
+        // Isolate only. Writing a KV key for every token nobody holds would let
+        // anyone mint billed writes by guessing.
+        snap = { missing: true };
+      } else {
+        const { results } = await env.DB.prepare(
+          "SELECT provider, access_token_enc, api_key_enc FROM install_secrets WHERE install_id = ?"
+        ).bind(row.id).all();
+        snap = {
+          id: row.id,
+          v: row.version,
+          accountId: row.account_id,
+          owner: row.username ? String(row.username).toLowerCase() : "",
+          scopes: row.scopes || "read",
+          revoked: row.revoked_at != null,
+          secrets: (results || []).map((r) => ({
+            provider: r.provider,
+            access_token_enc: r.access_token_enc || null,
+            api_key_enc: r.api_key_enc || null,
+          })),
+        };
+        if (!tokenHash.startsWith(INSTALL_LEGACY_HASH_PREFIX)) snap.config = row.config_json;
+        // Day-level "last used": the snapshot is rebuilt at most once a day.
+        try {
+          await env.DB.prepare("UPDATE installs SET last_used_at = ? WHERE id = ?").bind(now, row.id).run();
+        } catch {}
+        if (env.CONFIGS) {
+          try {
+            await env.CONFIGS.put(INSTALL_SNAPSHOT_KEY_PREFIX + tokenHash, JSON.stringify(snap), { expirationTtl: INSTALL_SNAPSHOT_TTL_SEC });
+          } catch {}
+        }
+      }
+    } catch (e) {
+      console.error("Install lookup failed:", e);
+      return null;
+    }
+  }
+  if (INSTALL_SNAPSHOT_CACHE.size >= INSTALL_SNAPSHOT_CACHE_MAX) {
+    const oldest = INSTALL_SNAPSHOT_CACHE.keys().next().value;
+    if (oldest !== undefined) INSTALL_SNAPSHOT_CACHE.delete(oldest);
+  }
+  INSTALL_SNAPSHOT_CACHE.set(tokenHash, { snap, at: now });
+  return snap;
+}
+
+async function forgetInstallSnapshot(env, tokenHash) {
+  if (!tokenHash) return;
+  INSTALL_SNAPSHOT_CACHE.delete(tokenHash);
+  if (env && env.CONFIGS) {
+    try {
+      await env.CONFIGS.delete(INSTALL_SNAPSHOT_KEY_PREFIX + tokenHash);
+    } catch {}
+  }
+}
+
+// Before an account's installs are deleted: their snapshots would otherwise
+// keep serving them, owner and secrets included, for up to a day.
+async function forgetAccountInstallSnapshots(env, accountId) {
+  if (!env || !env.DB || accountId == null) return;
+  try {
+    const { results } = await env.DB.prepare("SELECT token_hash FROM installs WHERE account_id = ?").bind(accountId).all();
+    for (const r of results || []) await forgetInstallSnapshot(env, r.token_hash);
+  } catch {
+    // No installs table yet: nothing was ever snapshotted.
+  }
+}
+
+// A moved legacy record, as resolveConfig reads it: the KV part plus its
+// secrets from the table.
+//
+// The two ways the table cannot answer are treated differently. D1 failing is
+// an outage, and the record serves without its secrets until it recovers. No
+// row means it was deleted with its account (deleteAccountRow): the record's
+// stamped owner is dropped too, so a link from a deleted account cannot read
+// the shelves of whoever registers that username next. In both cases the
+// unverified-shelf fallback (LEGACY_UNVERIFIED_CONFIG_SHELVES) is off, since
+// what it relies on -- that the config never had a key -- is no longer known.
+async function applyLegacyInstallRecord(env, id, parsed) {
+  const out = { ...parsed };
+  delete out._install;
+  const snap = await loadInstallSnapshot(env, INSTALL_LEGACY_HASH_PREFIX + id);
+  if (!snap) {
+    out._legacyShelfRuleOff = true;
+    return out;
+  }
+  if (snap.missing) {
+    delete out.trackOwner;
+    out._legacyShelfRuleOff = true;
+    return out;
+  }
+  if (snap.revoked) return { _revoked: true };
+  return { ...out, ...(await decryptInstallSecretFields(env, snap.id, snap.secrets)) };
+}
+
+async function resolveV2InstallConfig(param, env, { withTracking = false } = {}) {
+  const token = param.slice(INSTALL_TOKEN_PARAM_PREFIX.length);
+  if (!isWellFormedInstallToken(token)) return emptyResolvedInstallConfig();
+  const snap = await loadInstallSnapshot(env, await installTokenHash(token));
+  if (!snap || snap.missing || snap.revoked || typeof snap.config !== "string") return emptyResolvedInstallConfig();
+  let cfg;
+  try {
+    cfg = JSON.parse(snap.config);
+  } catch {
+    return emptyResolvedInstallConfig();
+  }
+  if (!cfg || typeof cfg !== "object") return emptyResolvedInstallConfig();
+  // The owner is the account that created it while signed in: proven once, at
+  // creation, and ended by revoking the install or deleting the account (which
+  // deletes the row).
+  const owner = snap.owner || "";
+  const canTrack = Boolean(owner) && String(snap.scopes || "").split(",").includes("track");
+  let watchHistory = [];
+  let continueWatching = [];
+  let watchlist = [];
+  let airingNext = [];
+  if (withTracking && owner && env && env.CONFIGS) {
+    try {
+      const trackingRaw = await env.CONFIGS.get(`creatorsynctracking:${owner}`);
+      const tracking = trackingRaw ? JSON.parse(trackingRaw) : null;
+      if (tracking) {
+        if (Array.isArray(tracking.watchHistory)) watchHistory = tracking.watchHistory;
+        if (Array.isArray(tracking.continueWatching)) continueWatching = tracking.continueWatching;
+        if (Array.isArray(tracking.watchlist)) watchlist = tracking.watchlist;
+        if (Array.isArray(tracking.airingNext)) airingNext = tracking.airingNext;
+      }
+    } catch {}
+  }
+  const secrets = snap.secrets && snap.secrets.length ? await decryptInstallSecretFields(env, snap.id, snap.secrets) : {};
+  // A v2 install carries no keys: its personal rows use the owner's own
+  // connections (P3a-10, 28_connections.js).
+  let fromConnections = {};
+  if (snap.accountId != null) {
+    try {
+      fromConnections = await connectionFieldsForConfig(env, snap.accountId, readInstallConfigFields({ ...cfg, ...secrets }));
+    } catch (e) {
+      console.error("Could not read the install owner's connections:", e);
+    }
+  }
+  const track = Boolean(cfg.track) && canTrack;
+  return {
+    entries: Array.isArray(cfg.entries) ? cfg.entries : [],
+    watchHistory,
+    continueWatching,
+    watchlist,
+    airingNext,
+    ...readInstallConfigFields({ ...cfg, ...secrets, ...fromConnections }),
+    track,
+    trackCreatorName: owner,
+    trackCreatorKey: "",
+    trackOwner: owner,
+    // Playback pings from this link record to this account. A legacy link
+    // proves that with the Creator Key it carries; a v2 link has no key, and
+    // its "track" scope, granted to a signed-in owner, is the proof instead.
+    installTrackOwner: track ? owner : "",
+  };
+}
+
+// Ids whose record resolveConfig found holding secrets and not yet moved. The
+// manifest and catalog routes hand these to maybeMigrateLegacyInstall.
+const LEGACY_INSTALL_CANDIDATES = new Set();
+const LEGACY_INSTALL_CANDIDATES_MAX = 5000;
+
+function noteLegacyInstallCandidate(id, parsed) {
+  if (!installRecordHasSecrets(parsed)) return;
+  if (LEGACY_INSTALL_CANDIDATES.size >= LEGACY_INSTALL_CANDIDATES_MAX) LEGACY_INSTALL_CANDIDATES.clear();
+  LEGACY_INSTALL_CANDIDATES.add(id);
+}
+
+// Run from the manifest and catalog routes under ctx.waitUntil, so a request
+// never waits on the move. Tried once per isolate per id; a failure is left for
+// a later isolate to retry.
+async function maybeMigrateLegacyInstall(env, id) {
+  if (!LEGACY_INSTALL_CANDIDATES.has(id)) return;
+  LEGACY_INSTALL_CANDIDATES.delete(id);
+  const percent = installMigrationPercent(env);
+  if (!percent) return;
+  if (percent < 100 && (await installMigrationBucket(id)) >= percent) return;
+  try {
+    const result = await migrateLegacyInstall(env, id);
+    // Never the id itself in a log line: it is the link, and works like a
+    // password for it.
+    if (!result.ok && result.reason !== "nothing-to-move") {
+      console.warn(`An install link was not moved: ${result.reason}`);
+    }
+  } catch (e) {
+    console.error("An install link's move failed:", e);
+  }
+}
+
+// The creator a legacy config names, the way resolveConfig finds it.
+function legacyInstallNamedCreator(parsed) {
+  let name = parsed.trackCreatorName || parsed.creatorName || "";
+  if (!name && Array.isArray(parsed.entries)) {
+    for (const e of parsed.entries) {
+      if (e && typeof e.url === "string" && e.url.startsWith("autotrack:")) {
+        const parts = e.url.split(":");
+        if (parts.length >= 4 && parts[3]) {
+          name = parts[3];
+          break;
+        }
+      }
+    }
+  }
+  return String(name || "");
+}
+
+// Moves one legacy record's secrets into the table and rewrites the record
+// without them. Order is what makes it safe to interrupt at any point:
+//   1. the install row, and its owner if the record proves one;
+//   2. the secrets, encrypted, then decrypted again and compared with the
+//      originals -- nothing is removed from KV unless they match exactly;
+//   3. only then the KV record, rewritten without them.
+// A retry after a failure at any step finds the row (INSERT OR IGNORE),
+// rewrites the secrets and carries on. /api/save never rewrites an id, so no
+// save can race this.
+async function migrateLegacyInstall(env, id) {
+  if (!env || !env.DB || !env.CONFIGS) return { ok: false, reason: "unbound" };
+  if (typeof id !== "string" || !id || id.length > SHORT_ID_LENGTH) return { ok: false, reason: "not-a-legacy-id" };
+  let raw = await env.CONFIGS.get(savedConfigKey(id));
+  let atBareKey = false;
+  if (!raw) {
+    raw = await env.CONFIGS.get(id);
+    atBareKey = Boolean(raw);
+  }
+  if (!raw) return { ok: false, reason: "missing" };
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { ok: false, reason: "unparseable" };
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return { ok: false, reason: "shape" };
+  if (parsed._install) return { ok: true, already: true };
+  const { publicPart, byProvider, hasSecrets } = splitInstallSecrets(parsed);
+  if (!hasSecrets) return { ok: false, reason: "nothing-to-move" };
+  if (!hasTokenEncryptionKey(env)) return { ok: false, reason: "no-encryption-key" };
+
+  // The owner, bound only when the record proves it the way resolveConfig
+  // accepts: the Creator Key it carries still verifies, or /api/save stamped
+  // the owner after verifying. This binding is for listing and for deletion
+  // with the account; serving still derives the owner from the record.
+  let accountId = null;
+  const named = legacyInstallNamedCreator(parsed);
+  const v = named ? validateCreatorUsername(named) : { ok: false };
+  if (v.ok) {
+    const [tombstoned, rawProfile] = await Promise.all([
+      isCreatorTombstoned(env, v.normalized),
+      getCreator(env, v.normalized),
+    ]);
+    // Mid-deletion: wait until the account is gone, then move it unowned.
+    if (tombstoned) return { ok: false, reason: "owner-being-deleted" };
+    let profile = null;
+    try {
+      profile = rawProfile ? JSON.parse(rawProfile) : null;
+    } catch {
+      profile = null;
+    }
+    if (profile && typeof profile.keyHash === "string" && profile.keyHash) {
+      const keyOk = typeof parsed.trackCreatorKey === "string" && parsed.trackCreatorKey
+        ? await verifyCreatorKeyMemoized(parsed.trackCreatorKey, profile.keyHash, v.normalized)
+        : false;
+      const stampOk = typeof parsed.trackOwner === "string" && parsed.trackOwner.toLowerCase() === v.normalized;
+      if (keyOk || stampOk) {
+        const account = await getOrBackfillAccount(env, v.normalized, profile);
+        if (!account) return { ok: false, reason: "no-accounts-table" };
+        accountId = account.id;
+      }
+    }
+  }
+
+  const tokenHash = INSTALL_LEGACY_HASH_PREFIX + id;
+  const now = Date.now();
+  let row;
+  try {
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO installs (token_hash, legacy_cfg_id, account_id, name, config_json, version, scopes, created_at, updated_at, last_used_at) " +
+      // config_json stays "{}": a legacy install's config lives in its cfg:
+      // record, which every request reads anyway.
+      "VALUES (?, ?, ?, NULL, '{}', 1, 'read', ?, ?, ?)"
+    ).bind(tokenHash, id, accountId, now, now, now).run();
+    row = await env.DB.prepare("SELECT id, account_id, revoked_at FROM installs WHERE legacy_cfg_id = ?").bind(id).first();
+  } catch (e) {
+    return { ok: false, reason: "d1-failed", error: safeErrorMessage(e) };
+  }
+  if (!row) return { ok: false, reason: "d1-failed" };
+  if (row.revoked_at != null) return { ok: false, reason: "revoked" };
+
+  let secretRows;
+  try {
+    secretRows = await encryptInstallSecrets(env, row.id, byProvider);
+    const restored = await decryptInstallSecretFields(env, row.id, secretRows);
+    for (const name of Object.keys(parsed)) {
+      if (!isInstallSecretFieldName(name) || parsed[name] == null || parsed[name] === "") continue;
+      if (JSON.stringify(restored[name]) !== JSON.stringify(parsed[name])) {
+        return { ok: false, reason: "round-trip-mismatch", field: name };
+      }
+    }
+    const stmts = secretRows.map((s) => env.DB.prepare(
+      "INSERT OR REPLACE INTO install_secrets (install_id, provider, access_token_enc, refresh_token_enc, expires_at, api_key_enc, updated_at) " +
+      "VALUES (?, ?, ?, NULL, NULL, ?, ?)"
+    ).bind(row.id, s.provider, s.access_token_enc, s.api_key_enc, now));
+    if (accountId != null && row.account_id == null) {
+      stmts.push(env.DB.prepare("UPDATE installs SET account_id = ? WHERE id = ? AND account_id IS NULL").bind(accountId, row.id));
+    }
+    await env.DB.batch(stmts);
+  } catch (e) {
+    return { ok: false, reason: "secrets-failed", error: safeErrorMessage(e) };
+  }
+
+  await forgetInstallSnapshot(env, tokenHash);
+  await env.CONFIGS.put(savedConfigKey(id), JSON.stringify({ ...publicPart, _install: row.id }));
+  if (atBareKey) {
+    // The pre-prefix copy still holds the secrets. resolveConfig reads cfg:
+    // first, so the record just written is the one served from here on.
+    try {
+      await env.CONFIGS.delete(id);
+    } catch {}
+  }
+  return { ok: true, installId: row.id, owned: (accountId != null) || row.account_id != null };
+}
+
+// The move, undone: a moved legacy record gets its keys and tokens back, as
+// they were, and its rows leave the table. For an emergency only, and only
+// while INSTALL_MIGRATION_PERCENT is 0 -- otherwise the next request would
+// move it straight back. KV is written before anything in D1 is deleted, so a
+// failure part-way leaves each record either moved or restored, never
+// stripped with its secrets gone. A removed (revoked) install is left as it
+// is: restoring it would make its link serve again.
+async function restoreLegacyInstalls(env, { limit = 50, afterId = 0 } = {}) {
+  if (!env || !env.DB || !env.CONFIGS) return { ok: false, error: "D1 and KV must both be bound." };
+  if (installMigrationPercent(env) > 0) {
+    return { ok: false, error: "Set INSTALL_MIGRATION_PERCENT to 0 first, or the links would be moved again on their next use." };
+  }
+  if (!hasTokenEncryptionKey(env)) return { ok: false, error: "TOKEN_ENCRYPTION_KEY is missing, so the stored keys cannot be read." };
+  const n = Math.max(1, Math.min(200, Number(limit) || 50));
+  // A cursor, so a record that keeps failing cannot hold up every one after it.
+  const { results } = await env.DB.prepare(
+    "SELECT id, legacy_cfg_id, token_hash FROM installs WHERE legacy_cfg_id IS NOT NULL AND revoked_at IS NULL AND id > ? ORDER BY id LIMIT ?"
+  ).bind(Number(afterId) || 0, n).all();
+  let restored = 0;
+  let lastId = Number(afterId) || 0;
+  const failed = [];
+  for (const r of results || []) {
+    lastId = r.id;
+    const id = r.legacy_cfg_id;
+    try {
+      const raw = await env.CONFIGS.get(savedConfigKey(id));
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (parsed && parsed._install) {
+        const { results: secretRows } = await env.DB.prepare(
+          "SELECT provider, access_token_enc, api_key_enc FROM install_secrets WHERE install_id = ?"
+        ).bind(r.id).all();
+        // Every row has to come back. decryptInstallSecretFields skips one it
+        // cannot read, which is right for serving and wrong here: the rows are
+        // deleted next.
+        const fields = {};
+        for (const sr of secretRows || []) {
+          const one = await decryptInstallSecretFields(env, r.id, [sr]);
+          if (!Object.keys(one).length) throw new Error(`its ${sr.provider} keys would not decrypt`);
+          Object.assign(fields, one);
+        }
+        const record = { ...parsed, ...fields };
+        delete record._install;
+        await env.CONFIGS.put(savedConfigKey(id), JSON.stringify(record));
+      }
+      await env.DB.batch([
+        env.DB.prepare("DELETE FROM install_secrets WHERE install_id = ?").bind(r.id),
+        env.DB.prepare("DELETE FROM installs WHERE id = ?").bind(r.id),
+      ]);
+      await forgetInstallSnapshot(env, r.token_hash);
+      restored++;
+    } catch (e) {
+      console.error(`Install ${r.id}: restore failed:`, e);
+      failed.push({ installId: r.id, error: safeErrorMessage(e) });
+    }
+  }
+  const left = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM installs WHERE legacy_cfg_id IS NOT NULL AND revoked_at IS NULL"
+  ).first();
+  return {
+    ok: failed.length === 0,
+    restored,
+    failed,
+    remaining: Number(left && left.n) || 0,
+    // Pass back as afterId for the next batch; done when a batch is empty.
+    nextAfterId: lastId,
+    done: !(results || []).length,
+  };
+}
+
+// --- /api/installs: an account's own installs (session required) ------------
+
+function installSummary(row, origin) {
+  const legacy = row.legacy_cfg_id != null;
+  let rows = null;
+  if (!legacy) {
+    try {
+      const cfg = JSON.parse(row.config_json || "{}");
+      rows = Array.isArray(cfg.entries) ? cfg.entries.length : 0;
+    } catch {
+      rows = 0;
+    }
+  }
+  return {
+    id: row.id,
+    kind: legacy ? "legacy" : "v2",
+    name: row.name || null,
+    // A legacy link is its id, so its owner can be shown it again. A v2
+    // link's token is only ever shown when it is created or rotated.
+    manifestUrl: legacy ? `${origin}/${row.legacy_cfg_id}/manifest.json` : null,
+    rows,
+    scopes: String(row.scopes || "read").split(","),
+    version: row.version,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    lastUsedAt: row.last_used_at,
+    revokedAt: row.revoked_at,
+  };
+}
+
+// The config a v2 install stores: its rows, and every setting except keys and
+// tokens. A personal shelf may only be the signed-in account's own.
+function buildV2InstallConfig(body, account) {
+  const entries = Array.isArray(body.entries) ? body.entries : [];
+  if (!entries.length) return { error: "No lists provided.", status: 400 };
+  if (entries.length > SAVED_CONFIG_ENTRIES_MAX) return { error: "Too many lists in that configuration.", status: 413 };
+  const me = String(account.username || "").toLowerCase();
+  for (const e of entries) {
+    const eUrl = e && typeof e.url === "string" ? e.url : "";
+    for (const line of eUrl.split("\n")) {
+      const s = line.trim();
+      if (!s.startsWith("autotrack:")) continue;
+      const segs = s.split(":");
+      if (segs.length >= 4 && segs[3] && String(segs[3]).toLowerCase().trim() !== me) {
+        return { error: "An install can only carry your own Watch History, Continue Watching or Watchlist.", status: 400 };
+      }
+    }
+  }
+  const config = { entries, ...nonSecretInstallConfigFields(storedInstallConfigFields(body, true)) };
+  if (body.track) config.track = true;
+  const json = JSON.stringify(config);
+  if (utf8ByteLength(json) > INSTALL_CONFIG_JSON_MAX) return { error: "That configuration is too large to save.", status: 413 };
+  return { config, json };
+}
+
+function installNameFrom(value) {
+  if (value == null) return null;
+  const name = String(value).trim().slice(0, INSTALL_NAME_MAX);
+  return name || null;
+}
+
+const INSTALL_ROW_COLUMNS = "id, token_hash, legacy_cfg_id, account_id, name, config_json, version, scopes, created_at, updated_at, last_used_at, revoked_at";
+
+async function handleInstallsApi(request, env, url, path) {
+  if (path !== "/api/installs" && !path.startsWith("/api/installs/") && !path.startsWith("/admin/api/installs/")) return null;
+  try {
+    return await handleInstallsApiRoutes(request, env, url, path);
+  } catch (e) {
+    // Most often migration 0015 not applied yet.
+    console.error("Installs API failed:", e);
+    return json({ ok: false, error: "Installs aren't available right now." }, 503);
+  }
+}
+
+async function handleInstallsApiRoutes(request, env, url, path) {
+  if (path.startsWith("/admin/api/installs/")) {
+    if (!(await isAdminRequest(request, env))) return json({ ok: false, error: "Not authorized." }, 401);
+    if (path === "/admin/api/installs/status" && request.method === "GET") return json(await installsStatus(env));
+    if (path === "/admin/api/installs/restore" && request.method === "POST") {
+      let body = {};
+      try {
+        body = await request.json();
+      } catch {}
+      return json(await restoreLegacyInstalls(env, { limit: body && body.limit, afterId: body && body.afterId }));
+    }
+    return json({ ok: false, error: "Not found." }, 404);
+  }
+  if (path !== "/api/installs" && !path.startsWith("/api/installs/")) return null;
+  if (!isInstallsEnabled(env)) return json({ ok: false, error: "Not found." }, 404);
+  if (!env || !env.DB) return json({ ok: false, error: "Installs aren't available right now." }, 503);
+  if (!request.account) {
+    return json({ ok: false, error: "Sign in to manage your installs.", signInRequired: true }, 401);
+  }
+  const accountId = request.account.id;
+  const sub = path.slice("/api/installs".length);
+
+  if (sub === "" || sub === "/") {
+    if (request.method === "GET") {
+      const { results } = await env.DB.prepare(
+        `SELECT ${INSTALL_ROW_COLUMNS} FROM installs WHERE account_id = ? ORDER BY created_at DESC LIMIT 200`
+      ).bind(accountId).all();
+      return json({ ok: true, installs: (results || []).map((r) => installSummary(r, url.origin)) });
+    }
+    if (request.method === "POST") {
+      let body;
+      try {
+        body = await request.json();
+      } catch {
+        return json({ ok: false, error: "Invalid JSON body." }, 400);
+      }
+      const built = buildV2InstallConfig(body || {}, request.account);
+      if (built.error) return json({ ok: false, error: built.error }, built.status);
+      const active = await env.DB.prepare(
+        "SELECT COUNT(*) AS n FROM installs WHERE account_id = ? AND legacy_cfg_id IS NULL AND revoked_at IS NULL"
+      ).bind(accountId).first();
+      if (active && active.n >= INSTALLS_PER_ACCOUNT_MAX) {
+        return json({ ok: false, error: `You can have up to ${INSTALLS_PER_ACCOUNT_MAX} install links. Remove one first.` }, 409);
+      }
+      const token = generateInstallToken();
+      const tokenHash = await installTokenHash(token);
+      const now = Date.now();
+      await env.DB.prepare(
+        "INSERT INTO installs (token_hash, legacy_cfg_id, account_id, name, config_json, version, scopes, created_at, updated_at, last_used_at) " +
+        "VALUES (?, NULL, ?, ?, ?, 1, ?, ?, ?, NULL)"
+      ).bind(tokenHash, accountId, installNameFrom(body.name), built.json, built.config.track ? "read,track" : "read", now, now).run();
+      const row = await env.DB.prepare(`SELECT ${INSTALL_ROW_COLUMNS} FROM installs WHERE token_hash = ?`).bind(tokenHash).first();
+      return json({
+        ok: true,
+        install: installSummary(row, url.origin),
+        // Shown this once. Only its hash is kept, so it cannot be shown again;
+        // rotating it (PATCH { rotateToken: true }) issues a new one.
+        token,
+        manifestUrl: `${url.origin}/i/${token}/manifest.json`,
+      }, 201);
+    }
+    return json({ ok: false, error: "Method not allowed." }, 405);
+  }
+
+  const m = /^\/(\d+)$/.exec(sub);
+  if (!m) return json({ ok: false, error: "Not found." }, 404);
+  const installId = Number(m[1]);
+  const row = await env.DB.prepare(
+    `SELECT ${INSTALL_ROW_COLUMNS} FROM installs WHERE id = ? AND account_id = ?`
+  ).bind(installId, accountId).first();
+  // Someone else's install answers exactly like one that does not exist.
+  if (!row) return json({ ok: false, error: "Not found." }, 404);
+
+  if (request.method === "GET") {
+    return json({ ok: true, install: installSummary(row, url.origin) });
+  }
+
+  if (request.method === "DELETE") {
+    const now = Date.now();
+    await env.DB.prepare(
+      "UPDATE installs SET revoked_at = ?, version = version + 1, updated_at = ? WHERE id = ? AND account_id = ? AND revoked_at IS NULL"
+    ).bind(now, now, installId, accountId).run();
+    await forgetInstallSnapshot(env, row.token_hash);
+    return json({ ok: true, revoked: true });
+  }
+
+  if (request.method === "PATCH") {
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return json({ ok: false, error: "Invalid JSON body." }, 400);
+    }
+    body = body || {};
+    if (row.revoked_at != null) return json({ ok: false, error: "That install link has been removed." }, 409);
+    // Optimistic concurrency: a client that read version N may only replace N.
+    const expected = body.version != null ? Number(body.version) : Number(String(request.headers.get("If-Match") || "").replace(/"/g, "") || NaN);
+    if (Number.isFinite(expected) && expected !== row.version) {
+      return json({ ok: false, error: "That install link was changed somewhere else. Reload and try again.", version: row.version }, 409);
+    }
+    const legacy = row.legacy_cfg_id != null;
+    const changesConfig = body.entries !== undefined || body.track !== undefined ||
+      INSTALL_CONFIG_FIELDS.some((f) => body[f.name] !== undefined);
+    if (legacy && (changesConfig || body.rotateToken)) {
+      return json({ ok: false, error: "An older install link can only be renamed or removed here. Update its lists from its Configure page." }, 400);
+    }
+    let name = row.name;
+    if (body.name !== undefined) name = installNameFrom(body.name);
+    let configJson = row.config_json;
+    let scopes = row.scopes;
+    if (changesConfig) {
+      const current = (() => {
+        try { return JSON.parse(row.config_json || "{}"); } catch { return {}; }
+      })();
+      const merged = { ...current, ...body };
+      if (body.entries === undefined) merged.entries = current.entries;
+      if (body.track === undefined) merged.track = current.track;
+      const built = buildV2InstallConfig(merged, request.account);
+      if (built.error) return json({ ok: false, error: built.error }, built.status);
+      configJson = built.json;
+      scopes = built.config.track ? "read,track" : "read";
+    }
+    let token = null;
+    let tokenHash = row.token_hash;
+    if (body.rotateToken) {
+      token = generateInstallToken();
+      tokenHash = await installTokenHash(token);
+    }
+    const now = Date.now();
+    const res = await env.DB.prepare(
+      "UPDATE installs SET name = ?, config_json = ?, scopes = ?, token_hash = ?, version = version + 1, updated_at = ? " +
+      "WHERE id = ? AND account_id = ? AND version = ?"
+    ).bind(name, configJson, scopes, tokenHash, now, installId, accountId, row.version).run();
+    if (!(res && res.meta && res.meta.changes > 0)) {
+      return json({ ok: false, error: "That install link was changed somewhere else. Reload and try again." }, 409);
+    }
+    await forgetInstallSnapshot(env, row.token_hash);
+    if (tokenHash !== row.token_hash) await forgetInstallSnapshot(env, tokenHash);
+    const updated = await env.DB.prepare(`SELECT ${INSTALL_ROW_COLUMNS} FROM installs WHERE id = ?`).bind(installId).first();
+    const out = { ok: true, install: installSummary(updated, url.origin) };
+    if (token) {
+      out.token = token;
+      out.manifestUrl = `${url.origin}/i/${token}/manifest.json`;
+    }
+    return json(out);
+  }
+
+  return json({ ok: false, error: "Method not allowed." }, 405);
+}
+
+// For the admin panel: how far the move has got, and whether it can run.
+async function installsStatus(env) {
+  const out = {
+    ok: true,
+    installsEnabled: isInstallsEnabled(env),
+    migrationPercent: installMigrationPercent(env),
+    encryptionKeyConfigured: hasTokenEncryptionKey(env),
+    total: 0,
+    legacy: 0,
+    v2: 0,
+    owned: 0,
+    revoked: 0,
+    withSecrets: 0,
+  };
+  if (!env || !env.DB) return { ...out, ok: false, error: "D1 is not bound." };
+  try {
+    const counts = await env.DB.prepare(
+      "SELECT COUNT(*) AS total, " +
+      "COALESCE(SUM(CASE WHEN legacy_cfg_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS legacy, " +
+      "COALESCE(SUM(CASE WHEN account_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS owned, " +
+      "COALESCE(SUM(CASE WHEN revoked_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS revoked " +
+      "FROM installs"
+    ).first();
+    const secrets = await env.DB.prepare("SELECT COUNT(DISTINCT install_id) AS n FROM install_secrets").first();
+    out.total = Number(counts.total) || 0;
+    out.legacy = Number(counts.legacy) || 0;
+    out.v2 = out.total - out.legacy;
+    out.owned = Number(counts.owned) || 0;
+    out.revoked = Number(counts.revoked) || 0;
+    out.withSecrets = Number(secrets && secrets.n) || 0;
+  } catch (e) {
+    return { ...out, ok: false, error: "Migration 0015 has not been applied: " + safeErrorMessage(e) };
+  }
+  return out;
+}
+
+// --- Provider connections (Phase 3a, P3a-9) ---------------------------------
+//
+// A signed-in account's Trakt, MDBList, Simkl and TMDB connections, kept on the
+// server in provider_connections (migration 0015), each secret encrypted under
+// TOKEN_ENCRYPTION_KEY with the context "account:<id>:<provider>".
+//
+// How a connection gets here:
+//   * the OAuth callbacks (25_api-catalog-routes.js) store it whenever the
+//     browser finishing the sign-in has a session, and then redirect to
+//     /?connected=<provider> with no token in the address bar. Signed out, or
+//     with no encryption key or no table yet, they do what they always did;
+//   * the Trakt device-code flow stores it the same way;
+//   * POST /api/connections/import-local takes the tokens a browser already
+//     holds, once, checks each with its provider, and stores the good ones.
+//
+// The page still works from its own copy of each token (about 430 places read
+// one), so after a signed-in connect it asks for it once, over the session:
+// POST /api/connections/:provider/token. That bridge goes when the Phase 6
+// pages stop holding tokens. Catalogs read from here too: see "Catalogs read
+// an account's connections (P3a-10)" below.
+
+const CONNECTION_PROVIDERS = ["trakt", "mdblist", "simkl", "tmdb"];
+
+function isConnectionProvider(p) {
+  return CONNECTION_PROVIDERS.includes(p);
+}
+
+function connectionContext(accountId, provider) {
+  return `account:${accountId}:${provider}`;
+}
+
+// external_user holds who the connection is, as JSON: { username, id }. A
+// plain string (written by hand, or by an older build) reads as a username.
+function parseConnectionUser(raw) {
+  if (!raw) return { username: "", id: "" };
+  try {
+    const v = JSON.parse(raw);
+    if (v && typeof v === "object") return { username: String(v.username || ""), id: String(v.id || "") };
+  } catch {}
+  return { username: String(raw), id: "" };
+}
+
+// Stores (or replaces) one connection for a signed-in account. Answers false,
+// having stored nothing, when there is no account, no encryption key, or no
+// table -- the callers then fall back to what they did before, so connecting
+// never breaks because of this. An API key already on file is kept when the
+// new connection brings none (an OAuth sign-in never does).
+async function storeProviderConnection(env, account, provider, conn) {
+  if (!account || account.id == null || !env || !env.DB) return false;
+  if (!isConnectionProvider(provider) || !conn || !conn.accessToken) return false;
+  if (!hasTokenEncryptionKey(env)) return false;
+  try {
+    const context = connectionContext(account.id, provider);
+    const accessEnc = await encryptToken(conn.accessToken, env, context);
+    const refreshEnc = conn.refreshToken ? await encryptToken(conn.refreshToken, env, context) : null;
+    const apiKeyEnc = conn.apiKey ? await encryptToken(conn.apiKey, env, context) : null;
+    const user = conn.externalUser || {};
+    const externalUser = JSON.stringify({ username: String(user.username || ""), id: String(user.id || "") });
+    const expiresAt = Number.isFinite(conn.expiresAt) && conn.expiresAt > 0 ? Math.floor(conn.expiresAt) : null;
+    await env.DB.prepare(
+      "INSERT INTO provider_connections (account_id, provider, external_user, access_token_enc, refresh_token_enc, expires_at, api_key_enc, status, last_error, updated_at) " +
+      "VALUES (?, ?, ?, ?, ?, ?, ?, 'ok', NULL, ?) " +
+      "ON CONFLICT(account_id, provider) DO UPDATE SET " +
+      "  external_user = excluded.external_user," +
+      "  access_token_enc = excluded.access_token_enc," +
+      "  refresh_token_enc = excluded.refresh_token_enc," +
+      "  expires_at = excluded.expires_at," +
+      "  api_key_enc = COALESCE(excluded.api_key_enc, provider_connections.api_key_enc)," +
+      "  status = 'ok', last_error = NULL, updated_at = excluded.updated_at"
+    ).bind(account.id, provider, externalUser, accessEnc, refreshEnc, expiresAt, apiKeyEnc, Date.now()).run();
+    forgetAccountConnectionsCache(account.id);
+    return true;
+  } catch (e) {
+    console.error(`Could not store a ${provider} connection:`, e);
+    return false;
+  }
+}
+
+// One connection, decrypted. Null when there is none, or it cannot be read.
+async function loadProviderConnection(env, accountId, provider) {
+  if (!env || !env.DB || accountId == null || !isConnectionProvider(provider)) return null;
+  try {
+    const row = await env.DB.prepare(
+      "SELECT external_user, access_token_enc, refresh_token_enc, expires_at, api_key_enc, status, updated_at " +
+      "FROM provider_connections WHERE account_id = ? AND provider = ?"
+    ).bind(accountId, provider).first();
+    if (!row) return null;
+    const context = connectionContext(accountId, provider);
+    const user = parseConnectionUser(row.external_user);
+    return {
+      provider,
+      accessToken: row.access_token_enc ? await decryptToken(row.access_token_enc, env, context) : "",
+      refreshToken: row.refresh_token_enc ? await decryptToken(row.refresh_token_enc, env, context) : "",
+      apiKey: row.api_key_enc ? await decryptToken(row.api_key_enc, env, context) : "",
+      expiresAt: row.expires_at,
+      username: user.username,
+      id: user.id,
+      status: row.status,
+      updatedAt: row.updated_at,
+    };
+  } catch (e) {
+    console.error(`Could not read a ${provider} connection:`, e);
+    return null;
+  }
+}
+
+// Asks the provider whether a token works: "ok" (with the username it belongs
+// to), "invalid" (the provider refused it), or "unreachable" (no answer we can
+// trust either way).
+async function checkProviderCredentials(env, provider, creds) {
+  const ua = `my-list-addon/${ADDON_VERSION}`;
+  const verdict = (res) => (res.status === 401 || res.status === 403 ? "invalid" : "unreachable");
+  try {
+    if (provider === "trakt") {
+      const clientId = creds.apiKey || TRAKT_CLIENT_ID;
+      if (!creds.accessToken || !clientId) return { status: "invalid" };
+      const res = await fetch("https://api.trakt.tv/users/me", {
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${creds.accessToken}`,
+          "trakt-api-version": "2",
+          "trakt-api-key": clientId,
+          "User-Agent": ua,
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!res.ok) return { status: verdict(res) };
+      const me = await res.json().catch(() => ({}));
+      return { status: "ok", username: (me && me.username) || creds.username || "" };
+    }
+    if (provider === "mdblist") {
+      const token = creds.accessToken || creds.apiKey;
+      if (!token) return { status: "invalid" };
+      const headers = { "User-Agent": ua, "Accept": "application/json" };
+      if (creds.accessToken) headers["Authorization"] = `Bearer ${creds.accessToken}`;
+      const res = await fetch(`https://api.mdblist.com/user?apikey=${encodeURIComponent(token)}`, {
+        headers,
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!res.ok) return { status: verdict(res) };
+      const u = await res.json().catch(() => ({}));
+      return { status: "ok", username: (u && (u.username || u.user_name || u.name)) || creds.username || "" };
+    }
+    if (provider === "simkl") {
+      const clientId = creds.apiKey || SIMKL_CLIENT_ID;
+      if (!creds.accessToken || !clientId) return { status: "invalid" };
+      const res = await fetch("https://api.simkl.com/users/settings", {
+        headers: {
+          "Authorization": `Bearer ${creds.accessToken}`,
+          "simkl-api-key": clientId,
+          "User-Agent": ua,
+          "Accept": "application/json",
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!res.ok) return { status: verdict(res) };
+      const s = await res.json().catch(() => ({}));
+      const user = s && s.user ? (s.user.username || s.user.name) : "";
+      return { status: "ok", username: user || creds.username || "" };
+    }
+    if (provider === "tmdb") {
+      const apiKey = creds.apiKey || TMDB_API_KEY;
+      if (!creds.accessToken || !apiKey) return { status: "invalid" };
+      const res = await fetch(
+        `https://api.themoviedb.org/3/account?api_key=${encodeURIComponent(apiKey)}&session_id=${encodeURIComponent(creds.accessToken)}`,
+        { headers: { "User-Agent": ua }, signal: AbortSignal.timeout(10000) }
+      );
+      if (!res.ok) return { status: verdict(res) };
+      const a = await res.json().catch(() => ({}));
+      return { status: "ok", username: (a && a.username) || creds.username || "", id: a && a.id != null ? String(a.id) : (creds.id || "") };
+    }
+  } catch {
+    return { status: "unreachable" };
+  }
+  return { status: "invalid" };
+}
+
+// Best effort: tells the provider to forget the token, where it has a way to.
+// Trakt only for tokens issued to this site's own client (its secret is the
+// one we hold); TMDB deletes the session. MDBList and Simkl have no revoke
+// endpoint, so for them removing our copy is all there is.
+async function revokeAtProvider(env, provider, conn) {
+  try {
+    if (provider === "trakt" && conn.accessToken && !conn.apiKey && TRAKT_CLIENT_ID && env && env.TRAKT_CLIENT_SECRET) {
+      await fetch("https://api.trakt.tv/oauth/revoke", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "User-Agent": `my-list-addon/${ADDON_VERSION}` },
+        body: JSON.stringify({ token: conn.accessToken, client_id: TRAKT_CLIENT_ID, client_secret: env.TRAKT_CLIENT_SECRET }),
+        signal: AbortSignal.timeout(10000),
+      });
+      return true;
+    }
+    if (provider === "tmdb" && conn.accessToken) {
+      const apiKey = conn.apiKey || TMDB_API_KEY;
+      if (!apiKey) return false;
+      await fetch(`https://api.themoviedb.org/3/authentication/session?api_key=${encodeURIComponent(apiKey)}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", "User-Agent": `my-list-addon/${ADDON_VERSION}` },
+        body: JSON.stringify({ session_id: conn.accessToken }),
+        signal: AbortSignal.timeout(10000),
+      });
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
+// The page's own keys (collectKeys, 23_client-list-management.js), as one
+// credential set per provider.
+function localConnectionCredentials(keys) {
+  const s = (v) => (typeof v === "string" ? v.trim() : "");
+  const k = keys && typeof keys === "object" ? keys : {};
+  return {
+    trakt: { accessToken: s(k.traktAccessToken), apiKey: s(k.traktKey), username: s(k.traktUsername) },
+    mdblist: { accessToken: s(k.mdblistAccessToken), apiKey: s(k.mdblistKey), username: s(k.mdblistUsername) },
+    simkl: { accessToken: s(k.simklAccessToken), apiKey: s(k.simklKey), username: s(k.simklUsername) },
+    tmdb: { accessToken: s(k.tmdbSessionId), apiKey: s(k.tmdbKey), username: s(k.tmdbUsername), id: s(k.tmdbAccountId) },
+  };
+}
+
+function connectionSummary(row) {
+  const user = parseConnectionUser(row.external_user);
+  return {
+    provider: row.provider,
+    username: user.username || null,
+    status: row.status,
+    expiresAt: row.expires_at,
+    updatedAt: row.updated_at,
+    hasToken: Boolean(row.access_token_enc),
+    hasApiKey: Boolean(row.api_key_enc),
+  };
+}
+
+async function handleConnectionsApi(request, env, url, path) {
+  if (path !== "/api/connections" && !path.startsWith("/api/connections/")) return null;
+  try {
+    return await handleConnectionsApiRoutes(request, env, url, path);
+  } catch (e) {
+    // Most often migration 0015 not applied yet.
+    console.error("Connections API failed:", e);
+    return json({ ok: false, error: "Connected accounts aren't available right now." }, 503);
+  }
+}
+
+async function handleConnectionsApiRoutes(request, env, url, path) {
+  if (!env || !env.DB) return json({ ok: false, error: "Connected accounts aren't available right now." }, 503);
+  if (!request.account) {
+    return json({ ok: false, error: "Sign in to manage your connected accounts.", signInRequired: true }, 401);
+  }
+  const accountId = request.account.id;
+
+  if (path === "/api/connections") {
+    if (request.method !== "GET") return json({ ok: false, error: "Method not allowed." }, 405);
+    const { results } = await env.DB.prepare(
+      "SELECT provider, external_user, access_token_enc, api_key_enc, expires_at, status, updated_at FROM provider_connections WHERE account_id = ? ORDER BY provider"
+    ).bind(accountId).all();
+    return json({ ok: true, connections: (results || []).map(connectionSummary) });
+  }
+
+  if (path === "/api/connections/import-local") {
+    if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405);
+    if (!hasTokenEncryptionKey(env)) return json({ ok: false, error: "Connected accounts can't be stored yet." }, 503);
+    // Each import can call four providers with this site's own client ids, so
+    // a loop of them would spend those providers' rate limits for everyone.
+    // The page imports once per device; five a minute per account is plenty.
+    if (await consumeRateLimit(env, null, "connimport", "a" + accountId, 5)) {
+      return json({ ok: false, error: "Too many attempts. Please wait a minute and try again." }, 429);
+    }
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return json({ ok: false, error: "Invalid JSON body." }, 400);
+    }
+    const local = localConnectionCredentials(body && body.keys ? body.keys : body);
+    const { results } = await env.DB.prepare(
+      "SELECT provider, status FROM provider_connections WHERE account_id = ?"
+    ).bind(accountId).all();
+    const existing = new Map((results || []).map((r) => [r.provider, r.status]));
+    const outcome = {};
+    for (const provider of CONNECTION_PROVIDERS) {
+      const creds = local[provider];
+      // MDBList works from an API key alone; the others need a sign-in token.
+      const credential = provider === "mdblist" ? (creds.accessToken || creds.apiKey) : creds.accessToken;
+      if (!credential) continue;
+      // Once: a connection already here is the newer one -- it came from a
+      // sign-in on the server, or from an earlier import.
+      if (existing.get(provider) === "ok") {
+        outcome[provider] = "exists";
+        continue;
+      }
+      const checked = await checkProviderCredentials(env, provider, creds);
+      if (checked.status !== "ok") {
+        outcome[provider] = checked.status;
+        continue;
+      }
+      const stored = await storeProviderConnection(env, request.account, provider, {
+        // An API-key-only MDBList connection keeps the key in both places, so
+        // whatever reads the token finds it.
+        accessToken: creds.accessToken || creds.apiKey,
+        apiKey: creds.apiKey,
+        externalUser: { username: checked.username || creds.username, id: checked.id || creds.id },
+      });
+      outcome[provider] = stored ? "imported" : "failed";
+    }
+    return json({ ok: true, results: outcome });
+  }
+
+  const m = /^\/api\/connections\/([a-z]+)(\/token)?$/.exec(path);
+  if (!m || !isConnectionProvider(m[1])) return json({ ok: false, error: "Not found." }, 404);
+  const provider = m[1];
+
+  // The bridge for this page (see the header above): the token, once, to the
+  // signed-in browser that just connected. POST, so the CSRF check applies.
+  if (m[2]) {
+    if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405);
+    const conn = await loadProviderConnection(env, accountId, provider);
+    if (!conn || !conn.accessToken) return json({ ok: false, error: "That account isn't connected." }, 404);
+    return json({ ok: true, provider, accessToken: conn.accessToken, username: conn.username, id: conn.id });
+  }
+
+  if (request.method === "DELETE") {
+    const conn = await loadProviderConnection(env, accountId, provider);
+    const revoked = conn ? await revokeAtProvider(env, provider, conn) : false;
+    await env.DB.prepare("DELETE FROM provider_connections WHERE account_id = ? AND provider = ?").bind(accountId, provider).run();
+    forgetAccountConnectionsCache(accountId);
+    return json({ ok: true, removed: Boolean(conn), revokedAtProvider: revoked });
+  }
+
+  return json({ ok: false, error: "Method not allowed." }, 405);
+}
+
+// --- Catalogs read an account's connections (P3a-10) --------------------------
+//
+// A personal Trakt, MDBList or Simkl row (and every row, for a TMDB key) can
+// get its keys and tokens from the account's own connections instead of from
+// the install config. resolveConfig asks for them only for an install whose
+// owner is PROVEN, never for one that merely names a user:
+//   * a v2 install: its installs.account_id, set by the signed-in account that
+//     created it, and deleted with that account;
+//   * a stored config whose Creator Key still verifies (a re-registered
+//     username has a new key, so it cannot);
+//   * a stored config /api/save stamped with ownerId + ownerSince, the
+//     accounts row's id and created_at -- a username deleted and registered
+//     again gets a new row with a new created_at, so the stamp stops matching.
+// The older trackOwner stamp and the unverified-shelf fallback are NOT enough:
+// both are names, and a name can change hands.
+//
+// A key or token the config carries itself always wins, so an existing link
+// serves exactly as before; connections fill only what it lacks. A token and
+// the client id it was issued to travel together (Trakt and Simkl reject a
+// token presented with another app's id).
+//
+// Nothing here runs without TOKEN_ENCRYPTION_KEY: no connection can exist.
+
+const CONNECTION_ROWS_CACHE = new Map();
+const CONNECTION_ROWS_CACHE_TTL_MS = 60 * 1000;
+const CONNECTION_ROWS_CACHE_MAX = 500;
+const CONNECTION_OWNER_CACHE = new Map();
+// A token is renewed when it has less than this left, so a request never
+// carries one that expires on the way.
+const CONNECTION_REFRESH_MARGIN_MS = 60 * 60 * 1000;
+// The site is hosted only at mylistsaddon.com (docs/DECISIONS.md D-1), and a
+// refresh has to name the redirect URI the token was issued under.
+const TRAKT_OAUTH_REDIRECT_URI = "https://mylistsaddon.com/api/trakt/oauth/callback";
+
+// The config fields each provider's connection supplies. `paired`: the token is
+// only good with the client id it was issued to, so both come from the
+// connection or neither does.
+const CONNECTION_CONFIG_FIELDS = {
+  trakt: { token: "traktAccessToken", apiKey: "traktKey", user: "traktUsername", paired: true },
+  simkl: { token: "simklAccessToken", apiKey: "simklKey", user: "simklUsername", paired: true },
+  mdblist: { token: "mdblistAccessToken", apiKey: "mdblistKey" },
+  // A TMDB session is a website feature; catalogs use only the API key.
+  tmdb: { apiKey: "tmdbKey" },
+};
+
+function forgetAccountConnectionsCache(accountId) {
+  if (accountId != null) CONNECTION_ROWS_CACHE.delete(String(accountId));
+}
+
+function connectionCacheSet(map, key, value) {
+  if (map.size >= CONNECTION_ROWS_CACHE_MAX) {
+    const oldest = map.keys().next().value;
+    if (oldest !== undefined) map.delete(oldest);
+  }
+  map.set(key, { value, at: Date.now() });
+}
+
+function connectionCacheGet(map, key) {
+  const hit = map.get(key);
+  if (hit && Date.now() - hit.at < CONNECTION_ROWS_CACHE_TTL_MS) return hit;
+  if (hit) map.delete(key);
+  return null;
+}
+
+// `fresh` skips the isolate copy. A save decides from it what to leave out of
+// a link for good, so it must not act on a connection another isolate has
+// just removed.
+async function accountConnectionRows(env, accountId, { fresh = false } = {}) {
+  const key = String(accountId);
+  const cached = fresh ? null : connectionCacheGet(CONNECTION_ROWS_CACHE, key);
+  if (cached) return cached.value;
+  let rows = [];
+  try {
+    const { results } = await env.DB.prepare(
+      "SELECT provider, external_user, access_token_enc, refresh_token_enc, expires_at, api_key_enc, status, updated_at " +
+      "FROM provider_connections WHERE account_id = ?"
+    ).bind(accountId).all();
+    rows = results || [];
+  } catch {
+    // No table yet: no connections.
+    rows = [];
+  }
+  connectionCacheSet(CONNECTION_ROWS_CACHE, key, rows);
+  return rows;
+}
+
+async function decryptConnectionRow(env, accountId, row) {
+  const context = connectionContext(accountId, row.provider);
+  try {
+    const user = parseConnectionUser(row.external_user);
+    return {
+      provider: row.provider,
+      accessToken: row.access_token_enc ? await decryptToken(row.access_token_enc, env, context) : "",
+      refreshToken: row.refresh_token_enc ? await decryptToken(row.refresh_token_enc, env, context) : "",
+      apiKey: row.api_key_enc ? await decryptToken(row.api_key_enc, env, context) : "",
+      expiresAt: row.expires_at,
+      username: user.username,
+      id: user.id,
+      status: row.status,
+      updatedAt: row.updated_at,
+    };
+  } catch (e) {
+    console.error(`Could not read a ${row.provider} connection:`, e);
+    return null;
+  }
+}
+
+async function markConnectionStatus(env, accountId, provider, status, error) {
+  try {
+    await env.DB.prepare(
+      "UPDATE provider_connections SET status = ?, last_error = ?, updated_at = ? WHERE account_id = ? AND provider = ?"
+    ).bind(status, error ? String(error).slice(0, 300) : null, Date.now(), accountId, provider).run();
+  } catch {}
+  forgetAccountConnectionsCache(accountId);
+}
+
+// Asks the provider for a new token. { accessToken, refreshToken, expiresAt },
+// or { rejected: true } when the provider refused the refresh token, or null
+// when it could not be asked (not configured, network) -- a transient failure
+// must not mark a connection broken.
+async function exchangeRefreshToken(env, provider, conn) {
+  const ua = `my-list-addon/${ADDON_VERSION}`;
+  if (provider === "trakt") {
+    // Only a token issued to this site's own client: renewing one issued to a
+    // person's own Trakt app needs that app's secret, which we never had.
+    if (conn.apiKey || !TRAKT_CLIENT_ID || !env || !env.TRAKT_CLIENT_SECRET) return null;
+    let rejected = false;
+    // The web sign-in's redirect URI, then the device flow's out-of-band one:
+    // a token from either flow is renewed under the URI it was issued with.
+    for (const redirectUri of [TRAKT_OAUTH_REDIRECT_URI, "urn:ietf:wg:oauth:2.0:oob"]) {
+      try {
+        const res = await fetch("https://api.trakt.tv/oauth/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "trakt-api-version": "2", "trakt-api-key": TRAKT_CLIENT_ID, "User-Agent": ua },
+          body: JSON.stringify({
+            refresh_token: conn.refreshToken,
+            client_id: TRAKT_CLIENT_ID,
+            client_secret: env.TRAKT_CLIENT_SECRET,
+            redirect_uri: redirectUri,
+            grant_type: "refresh_token",
+          }),
+          signal: AbortSignal.timeout(10000),
+        });
+        if (res.ok) {
+          const d = await res.json().catch(() => ({}));
+          if (!d.access_token) return null;
+          return {
+            accessToken: d.access_token,
+            refreshToken: d.refresh_token || conn.refreshToken,
+            expiresAt: d.created_at && d.expires_in ? (d.created_at + d.expires_in) * 1000 : null,
+          };
+        }
+        if (res.status === 400 || res.status === 401 || res.status === 403) rejected = true;
+        else return null;
+      } catch {
+        return null;
+      }
+    }
+    return rejected ? { rejected: true } : null;
+  }
+  if (provider === "mdblist") {
+    const clientId = MDBLIST_CLIENT_ID || (env && env.MDBLIST_CLIENT_ID) || "";
+    const clientSecret = (env && env.MDBLIST_CLIENT_SECRET) || "";
+    if (!clientId || !clientSecret) return null;
+    try {
+      const form = new URLSearchParams();
+      form.set("grant_type", "refresh_token");
+      form.set("refresh_token", conn.refreshToken);
+      form.set("client_id", clientId);
+      form.set("client_secret", clientSecret);
+      const res = await fetch("https://api.mdblist.com/oauth/token/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+          "Authorization": `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
+          "User-Agent": ua,
+          "Accept": "application/json",
+        },
+        body: form.toString(),
+        signal: AbortSignal.timeout(10000),
+      });
+      if (res.ok) {
+        const d = await res.json().catch(() => ({}));
+        const token = d.access_token || d.token;
+        if (!token) return null;
+        return {
+          accessToken: token,
+          refreshToken: d.refresh_token || conn.refreshToken,
+          expiresAt: d.expires_in ? Date.now() + Number(d.expires_in) * 1000 : null,
+        };
+      }
+      if (res.status === 400 || res.status === 401 || res.status === 403) return { rejected: true };
+    } catch {}
+    return null;
+  }
+  return null;
+}
+
+// The connection, renewed first if its token is expired or about to be. Null
+// when there is no usable token.
+//
+// Refresh tokens are single-use, and two isolates can reach an expiring token
+// at once: the one whose refresh is refused re-reads the row, and uses what the
+// other one stored rather than marking a working connection broken.
+async function refreshProviderConnectionIfDue(env, accountId, provider, conn) {
+  const now = Date.now();
+  if (!conn.expiresAt || conn.expiresAt - now > CONNECTION_REFRESH_MARGIN_MS) return conn;
+  const stillValid = conn.expiresAt > now ? conn : null;
+  if (!conn.refreshToken) return stillValid;
+  const fresh = await exchangeRefreshToken(env, provider, conn);
+  if (fresh && fresh.accessToken) {
+    await storeProviderConnection(env, { id: accountId }, provider, {
+      accessToken: fresh.accessToken,
+      refreshToken: fresh.refreshToken,
+      expiresAt: fresh.expiresAt,
+      externalUser: { username: conn.username, id: conn.id },
+    });
+    return { ...conn, ...fresh };
+  }
+  if (fresh && fresh.rejected) {
+    const again = await loadProviderConnection(env, accountId, provider);
+    if (again && again.accessToken && again.accessToken !== conn.accessToken) {
+      forgetAccountConnectionsCache(accountId);
+      return again;
+    }
+    if (!stillValid) await markConnectionStatus(env, accountId, provider, "expired", "The provider refused to renew this sign-in.");
+  }
+  return stillValid;
+}
+
+// The config fields an account's connections supply that `current` (the
+// config's own values, from readInstallConfigFields) lacks.
+async function connectionFieldsForConfig(env, accountId, current) {
+  if (!env || !env.DB || accountId == null || !hasTokenEncryptionKey(env)) return {};
+  const rows = await accountConnectionRows(env, accountId);
+  const out = {};
+  for (const row of rows) {
+    const map = CONNECTION_CONFIG_FIELDS[row.provider];
+    if (!map || row.status !== "ok") continue;
+    const tokenMissing = Boolean(map.token && !current[map.token] && row.access_token_enc);
+    const keyMissing = Boolean(map.apiKey && !current[map.apiKey] && row.api_key_enc);
+    if (!tokenMissing && !keyMissing) continue;
+    let conn = await decryptConnectionRow(env, accountId, row);
+    if (!conn) continue;
+    if (tokenMissing) {
+      conn = await refreshProviderConnectionIfDue(env, accountId, row.provider, conn);
+      if (!conn || !conn.accessToken) continue;
+      // An MDBList connection made from an API key alone stores the key as its
+      // token too (import-local). It is a key, not a bearer token.
+      if (row.provider === "mdblist" && conn.apiKey && conn.accessToken === conn.apiKey) {
+        if (!current.mdblistKey) out.mdblistKey = conn.apiKey;
+        continue;
+      }
+      out[map.token] = conn.accessToken;
+      // "" means this site's own client id, the one the token was issued to.
+      if (map.paired) out[map.apiKey] = conn.apiKey || "";
+      else if (keyMissing && conn.apiKey) out[map.apiKey] = conn.apiKey;
+      if (map.user && !current[map.user] && conn.username) out[map.user] = conn.username;
+      continue;
+    }
+    // Only a key is missing. A paired key is never borrowed on its own: the
+    // config's token was issued to some other client id.
+    if (!map.paired && conn.apiKey) out[map.apiKey] = conn.apiKey;
+  }
+  return out;
+}
+
+// The accounts row a stored config's provider keys may come from, or null. See
+// the header above for what counts as proof. `keyVerifiedOwner` is the username
+// resolveConfig just proved with the config's own Creator Key, or "".
+async function connectionOwnerForConfig(env, parsed, keyVerifiedOwner) {
+  if (!env || !env.DB || !hasTokenEncryptionKey(env)) return null;
+  if (keyVerifiedOwner) {
+    const key = "u:" + keyVerifiedOwner;
+    const cached = connectionCacheGet(CONNECTION_OWNER_CACHE, key);
+    if (cached) return cached.value;
+    const row = await getOrBackfillAccount(env, keyVerifiedOwner);
+    const id = row ? row.id : null;
+    connectionCacheSet(CONNECTION_OWNER_CACHE, key, id);
+    return id;
+  }
+  const ownerId = Number(parsed && parsed.ownerId);
+  const ownerSince = Number(parsed && parsed.ownerSince);
+  if (!Number.isFinite(ownerId) || !Number.isFinite(ownerSince) || !ownerId || !ownerSince) return null;
+  const key = `i:${ownerId}:${ownerSince}`;
+  const cached = connectionCacheGet(CONNECTION_OWNER_CACHE, key);
+  if (cached) return cached.value;
+  let id = null;
+  try {
+    const row = await env.DB.prepare(
+      "SELECT id, created_at, status, deleted_at FROM accounts WHERE id = ?"
+    ).bind(ownerId).first();
+    if (row && Number(row.created_at) === ownerSince && row.deleted_at == null && (!row.status || row.status === "active")) id = row.id;
+  } catch {
+    id = null;
+  }
+  connectionCacheSet(CONNECTION_OWNER_CACHE, key, id);
+  return id;
+}
+
+// For /api/save: the config fields a signed-in save can leave out, because the
+// account's connections supply them when the link is read. Only connections
+// that work now; paired fields go together.
+async function connectionSuppliedConfigFields(env, accountId) {
+  if (!env || !env.DB || accountId == null || !hasTokenEncryptionKey(env)) return [];
+  const rows = await accountConnectionRows(env, accountId, { fresh: true });
+  const fields = [];
+  for (const row of rows) {
+    const map = CONNECTION_CONFIG_FIELDS[row.provider];
+    if (!map || row.status !== "ok") continue;
+    if (row.provider === "mdblist") {
+      const conn = await decryptConnectionRow(env, accountId, row);
+      if (!conn) continue;
+      const keyOnly = conn.apiKey && conn.accessToken === conn.apiKey;
+      if (!keyOnly && conn.accessToken) fields.push(map.token);
+      if (conn.apiKey) fields.push(map.apiKey);
+      continue;
+    }
+    if (map.token && row.access_token_enc) {
+      fields.push(map.token);
+      if (map.paired) fields.push(map.apiKey);
+    } else if (!map.token && row.api_key_enc) {
+      fields.push(map.apiKey);
+    }
+  }
+  return fields;
+}

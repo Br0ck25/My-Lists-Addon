@@ -293,14 +293,23 @@ export async function call(env, path, opts = {}) {
   const h = { ...headers };
   if (ip) h["CF-Connecting-IP"] = ip;
   if (cookie) h.Cookie = cookie;
+  if (!h.Origin && !h.origin && !h["Sec-Fetch-Site"] && !h["sec-fetch-site"]) {
+    h.Origin = "https://example.test";
+  }
   const init = { method, headers: h };
   if (json !== undefined) {
-    init.headers["Content-Type"] = "application/json";
-    init.body = JSON.stringify(json);
+    if (!h["Content-Type"] && !h["content-type"]) {
+      h["Content-Type"] = "application/json";
+    }
+    init.body = typeof json === "string" ? json : JSON.stringify(json);
   } else if (form) {
     const fd = new FormData();
     for (const [k, v] of Object.entries(form)) fd.set(k, v);
     init.body = fd;
+  } else if (method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE") {
+    if (!h["Content-Type"] && !h["content-type"]) {
+      h["Content-Type"] = "application/json";
+    }
   }
   const res = await worker.fetch(new Request("https://example.test" + path, init), env, ctx);
   await Promise.all(pending);

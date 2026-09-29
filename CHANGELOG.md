@@ -11,10 +11,127 @@ All notable changes to **My Lists Addon** ([mylistsaddon.com](https://mylistsadd
 Do these in order. Details are in `docs/OPERATIONS.md`.
 
 1. **Back up D1**: Time Travel, or `npx wrangler d1 export my-lists-db --remote --output=backup.sql`.
-2. **Apply `migrations/0014_add_schema_migrations.sql`** in the D1 Console. It is additive and safe to run twice.
+2. **Apply `migrations/0014_add_schema_migrations.sql`, then `migrations/0015_accounts_sessions_installs.sql`**, in the D1 Console and in that order. Both only add tables and are safe to run twice. The new sign-in code writes to 0015's tables when they exist and skips them when they don't, so nothing breaks in between; until it is applied the admin schema check lists it as missing.
 3. **Add the Analytics Engine binding**: Worker → Settings → Bindings → Add → Analytics Engine, name `ANALYTICS`, dataset `mylists_events`.
 4. **Paste and deploy** `worker_entry_combined.js`.
 5. **Delete the retired variables** if they are set: `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET`, `CRON_SUBREQUEST_BUDGET`. The code ignores them either way.
+
+6. **Optional: add the secret `LOOKUP_PEPPER`** (Worker → Settings → Variables and Secrets → Add → type *Secret*). Any long random value; generate one with `openssl rand -base64 32`. With it set, "Forgot username" starts using the new key index (P3a-7). Without it, everything works as before. **Once set, never change or delete it**: every entry in the new index was computed from it.
+
+`TOKEN_ENCRYPTION_KEY` is needed only to start moving install-link keys into encrypted storage (P3a-8, below). That move stays **off** until `INSTALL_MIGRATION_PERCENT` is set, and `docs/OPERATIONS.md` §8 gives the steps. Deploying without it changes nothing.
+
+`FF_SESSIONS` and `FF_INSTALLS` stay **off** (unset). Leave them off until the new sign-in and install-link screens ship.
+
+### 🔐 Stremio rows use the account's own connections (P3a-10)
+
+- **A personal Trakt, MDBList or Simkl row gets its token from the install owner's connection** when the install link does not carry one itself. A TMDB key is filled the same way.
+  - Only for an owner the link *proves*:
+    - a new-style `/i/{token}` link, which belongs to the account that created it;
+    - a link whose own Creator Key still verifies;
+    - a link stamped by a signed-in save with the account's id and creation time (`ownerId`, `ownerSince`).
+  - A link that only names a username (the older `trackOwner` stamp, or an unverified shelf) borrows nothing, because a username can change hands.
+  - A key or token the link carries itself always wins, so existing links serve exactly as before.
+  - A Trakt or Simkl token always goes with the client id it was issued to.
+- **Signed-in saves no longer copy what the account's connections supply.** The token (and its client id) is left out of the link and read from the connection when the link is used. Disconnecting then really disconnects every link that relied on it. Without `TOKEN_ENCRYPTION_KEY` or any connection, saves are stored exactly as before.
+- **Expiring Trakt and MDBList tokens are renewed** with their refresh token, an hour before they run out.
+  - When two requests race to renew the same token, the one refused uses what the other stored.
+  - A token the provider will not renew marks the connection `expired`, and rows stop using it.
+- Lookups are cached for a minute per Worker instance. A save always reads the connections fresh.
+
+### 🔐 Connected accounts are kept on the server when signed in (P3a-9)
+
+- **Connecting Trakt, MDBList, Simkl or TMDB while signed in (with a session) keeps the token on the server**, encrypted with `TOKEN_ENCRYPTION_KEY` in `provider_connections`, together with its refresh token and expiry where the provider gives them.
+  - The sign-in comes back as `/?connected=trakt`, with no token in the address bar, the browser history or any log.
+  - The page then fetches the token once over its session (`POST /api/connections/:provider/token`), so every screen that uses it keeps working. That bridge goes away with the Phase 6 pages.
+  - The Trakt PIN-code flow keeps a copy too.
+  - Signed out, without a session (`FF_SESSIONS` off), or without `TOKEN_ENCRYPTION_KEY`, connecting works exactly as before.
+- **`POST /api/connections/import-local`**: after a sign-in that opens a session, the page offers the tokens it already holds, once per account on that device. Each is checked with its provider before it is kept. One already on the server is not replaced, and one the provider rejects is reported and not stored. Limited to five a minute per account.
+- **`GET /api/connections`** lists an account's connections without their tokens.
+- **Disconnecting** also removes the server's copy (`DELETE /api/connections/:provider`), and revokes the token at Trakt (for tokens issued to this site) and at TMDB. MDBList and Simkl have no revoke call.
+- Deleting an account deletes its connections.
+- Catalog rows do not read from here yet: that is P3a-10.
+
+### 🔐 Install links: keys move to encrypted storage, and install links an account can manage (P3a-8)
+
+- **Existing install links keep their keys in encrypted D1 storage**, behind `INSTALL_MIGRATION_PERCENT` (off by default).
+  - When a link with a provider key, a token or a Creator Key is first used, those move from its KV `cfg:` record into `install_secrets`, encrypted with `TOKEN_ENCRYPTION_KEY`. The record is rewritten without them.
+  - When the link is read, they are decrypted and put back. Catalogs, playback tracking, and a key reset stopping that tracking behave exactly as before, and the URL never changes.
+  - The keys are checked before anything is removed: encrypted, decrypted again, and compared with the originals.
+  - A share of links can be moved first (for example `10`), chosen by a stable hash of the link.
+  - Links with nothing secret in them are never touched.
+  - A link whose owner is proven (its Creator Key verifies, or it carries the owner stamp) is tied to that account. Deleting the account deletes those rows and their keys. The link then serves its public rows only, and never the shelves of whoever registers that username next.
+  - `/admin` → Maintenance → **Install links** shows progress, and has an emergency **Undo the move** that puts every key back as it was.
+- **New install links, `/i/{token}/manifest.json`**, created by a signed-in account through `POST /api/installs`, behind `FF_INSTALLS`.
+  - Only the token's SHA-256 is stored, and the token is shown once.
+  - `GET /api/installs` lists an account's links: new ones, and old ones that have moved. `PATCH /api/installs/:id` renames, edits or rotates a link, and refuses an edit made from a stale copy. `DELETE /api/installs/:id` removes it, and its URL then serves nothing.
+  - A new link holds no keys or tokens, and may carry only its own account's personal shelves. Its playback tracking is authorised by the account that created it.
+  - A cached copy of each link (KV `install:*`, one day) is dropped on every change.
+- Old self-contained (base64) links are unchanged: read-only, served from the link itself.
+
+### 🔒 Phase 3a review fixes (sign-in, sessions, CSRF)
+
+A review of P3a-4 to P3a-7 before they reach production. Only the first item would have been visible after a deploy; the rest only matter once `FF_SESSIONS` is switched on or the new sign-in endpoint is used.
+
+- **Admin maintenance buttons work again.** Five of them (backfill trending, migrate day-counts, migrate to D1, migrate accounts, rebuild public index) sent a POST without a JSON content type, which the CSRF check refuses with 403. They now send it, and a test checks every mutating request the site's pages make.
+- **Signing in checks the real account record.** `POST /api/session` verified the key against the `accounts` copy, which nothing kept up to date. A deleted account's key still signed in, and after someone else registered that username, the old key could sign into their account. It now goes through the same check as every other route (the creator profile, the deletion hold, the guessing throttle), then brings the `accounts` row up to date from it.
+- **Deleting an account removes its `accounts` row and every session.** Creating an account clears any leftover row for that username first, then writes the new one.
+- **A key reset signs every device out**, both the self-service reset and the admin reset.
+- **A sign-in fills in only its own `accounts` row.** It used to run the whole accounts backfill (every account in D1 and KV) for any account not yet copied.
+- **Sessions are issued only where the page keeps them.** Key-in-body sign-in issues a session cookie on `/api/creator/*` routes only, and not when the request already carries a live session for that account. Before, `/api/creator/restore` made a new session row on every page load.
+- A PBKDF2 rehash on sign-in now updates the stored key hash itself (D1 and KV), not only the `accounts` copy.
+
+### 🔒 Phase 3a: accounts, sessions, and authentication (P3a-1, P3a-2, P3a-3, P3a-4, P3a-5, P3a-6, P3a-7)
+
+- **Blind Index v2 for Account Key Lookups (P3a-7)**:
+  - On successful login (`POST /api/session` or creator route key-in-body auth) or key reset (`/api/creator/reset-key`, `/admin/api/reset-creator-key`), the Worker writes `accounts.key_lookup_hmac = HMAC(LOOKUP_PEPPER, normalizedKey)` in D1 whenever `LOOKUP_PEPPER` is configured.
+  - Key reset updates both `accounts.key_hash` and `accounts.key_lookup_hmac` alongside legacy `creators` and KV records.
+  - `/api/creator/forgot-username` checks the HMAC blind index (`accounts.key_lookup_hmac`) first before falling back to legacy unsalted SHA-256 indices (`creator_key_lookups` in D1 and `keylookup:<hash>` in KV).
+  - When an account is resolved via legacy fallback, `recordLegacyLookupHit` emits a metric data point to Cloudflare Analytics Engine (`blobs: ["legacy_lookup_hit", "forgot_username"]`, `doubles: [1]`, `indexes: ["legacy_lookup_hit"]`) and increments `stats:legacy_lookup_hits` in KV, while lazily upgrading the account's `key_lookup_hmac` so future lookups hit HMAC.
+  - Operates completely fail-closed and backwards-compatible: if `LOOKUP_PEPPER` is omitted, lookups seamlessly fall back to legacy behavior without errors.
+
+- **Creator Routes Dual Authentication Compatibility (P3a-6)**:
+  - Behind feature flag `FF_SESSIONS` (`1` / `true`), every `/api/creator/*` route now supports dual authentication: accepting either an authenticated session (cookie or Bearer) without `creatorKey` in the body, or the legacy `creatorName` / `creatorKey` in the request body.
+  - Successful key-in-body authentication on creator routes automatically establishes a session row in D1 `sessions` and sets the `mla_session` cookie (`HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=30d`), enabling seamless transition from key-in-body to session auth.
+  - If a creator account has not yet been migrated to D1 `accounts`, creator route authentication lazily backfills the account record directly into D1 `accounts`.
+  - When authenticated via session, creator endpoints (`/api/creator/lists`, `/api/creator/sync/load`, `/api/creator/sync/meta`) safely tolerate empty request payloads `{}`.
+  - `/api/creator/delete-account` revokes all active account sessions in D1 and clears the `mla_session` cookie (`Max-Age=0`).
+  - When `FF_SESSIONS` is disabled (the default), legacy client behavior is 100% preserved and no session cookies or session records are created.
+
+- **CSRF Protection Middleware (P3a-5)**:
+  - Enforces same-origin validation (`Origin` header matching Worker origin or `Sec-Fetch-Site: same-origin`) and `Content-Type: application/json` on all state-changing requests (`POST`, `PUT`, `PATCH`, `DELETE`).
+  - Blocks cross-origin mutating attempts and non-JSON payloads (such as `text/plain` beacon or simple form requests) with `403 Forbidden`.
+  - Safely exempts webhook ingestion routes (`/api/scrobble*`), OAuth provider flow routes (`/api/*/oauth/*`), and admin HTML login/logout forms (`/admin/login`, `/admin/logout`).
+  - Does not restrict safe methods (`GET`, `HEAD`, `OPTIONS`).
+
+- **Sessions API and Authentication (P3a-4)**:
+  - `POST /api/session`: Authenticates with username and Account Key (or legacy `creatorName`/`creatorKey`). Verifies PBKDF2 hash, automatically upgrades PBKDF2 iterations to target (`PBKDF2_ITERATIONS`) on login, and lazily backfills accounts from legacy D1/KV records if not yet migrated. Generates a crypto-random 256-bit token stored as SHA-256 hash in D1 `sessions`, and sets the `mla_session` cookie (`HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=30d`).
+  - `DELETE /api/session`: Revokes the current session in D1 and isolate cache, and clears the session cookie (`Max-Age=0`).
+  - `GET /api/me`: Returns the authenticated account profile (`id`, `username`, `displayName`, `createdAt`, `lastActiveAt`, `version`, `status`) with strict `no-store` caching.
+  - `GET /api/me/sessions`: Lists active devices/sessions for the current account, indicating the current device (`current: true`), creation time, last active time, expiration, and user agent.
+  - `DELETE /api/me/sessions`: Device/session revocation endpoint supporting revoking all other sessions (`{ allExceptCurrent: true }` / `?other=1`), revoking a specific session by ID prefix (`{ id }`), or revoking all sessions across all devices.
+  - **Session resolution middleware**: Resolves sessions via `mla_session` cookie or `Authorization: Bearer <token>` in `handleFetch`, sets `request.account` and `request.session`, and caches verified sessions in isolate memory for 60 seconds.
+
+
+- **Accounts backfill job** (`backfillAccounts`, `reconcileAccounts` in `02_http-and-creator-utils.js`, `/admin/api/migrate-accounts` in `26_api-creator-and-admin-routes.js`):
+  - Copies all identities from D1 `creators` and KV `creator:*` into the `accounts` table created in migration 0015.
+  - Conflict resolution: newest `keyHash` wins; D1 wins ties.
+  - Reconciliation check: verifies `count(accounts) = |creators ∪ creator:*|`.
+  - Non-destructive: copies data only, never mutates or deletes old `creators` or `creator:*` records.
+  - Safe and idempotent to run multiple times, preserving existing account `id`s.
+  - Supports dry-run inspection via `reconcileAccounts` or `GET /admin/api/migrate-accounts`.
+  - Admin maintenance tab adds a panel and button to run the accounts migration and display live reconciliation status.
+
+- **Migration 0015** (`migrations/0015_accounts_sessions_installs.sql`) adds the tables `accounts`, `sessions`, `installs`, `provider_connections`, `install_secrets`, `rate_counters` and `account_settings`.
+  - It is also in `schema.sql` and the admin schema check.
+  - The required database version stays at 0014, so deploying before running 0015 does not pause anything.
+- **Token encryption** (`encryptToken` / `decryptToken` in `02_http-and-creator-utils.js`):
+  - AES-256-GCM with a random 12-byte IV, and support for rotating keys (`TOKEN_ENCRYPTION_KEY`, as `k1:<base64>,k0:<older>`).
+  - An optional context argument binds a ciphertext to the row it belongs to (for example `account:42:trakt`), so a token copied into another row fails to decrypt.
+- **Blind index** (`hmacLookupKey`): HMAC-SHA256 under `LOOKUP_PEPPER`, with the same key normalisation as the existing forgot-username lookup.
+- Tests cover:
+  - round trip and key rotation;
+  - the wrong key, a tampered IV or ciphertext, and a missing or malformed key;
+  - context binding.
 
 ### 🔒 Signed out, an install link carries the site's public lists only
 
