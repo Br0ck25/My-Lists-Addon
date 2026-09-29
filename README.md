@@ -130,7 +130,7 @@ The three variables that used to size the Free-plan budgets (`BULK_RESOLVE_SUBRE
 
 How mylistsaddon.com itself is set up, from an empty Cloudflare account. For a release to the existing deployment, follow the checklist in [docs/OPERATIONS.md](docs/OPERATIONS.md) instead.
 
-The Worker runs on Cloudflare only. Account creation, restore, key reset, feedback and list preview are rate-limited using Cloudflare's `CF-Connecting-IP` header — IPv6 is counted per `/64`. That header is set by the Cloudflare edge and cannot be spoofed there. If the header is missing, those endpoints reject the request rather than sharing one global bucket. Running this Worker outside Cloudflare therefore has **no real per-client rate limit** on those paths: they fail closed instead of pretending to throttle everyone together.
+The Worker runs on Cloudflare only. Account creation, sign-in, restore, key reset, feedback, list preview and the tracking beacons are rate-limited per client using Cloudflare's `CF-Connecting-IP` header — IPv6 is counted per `/64`. That header is set by the Cloudflare edge and cannot be spoofed there. If the header is missing, those endpoints reject the request rather than sharing one global bucket. Running this Worker outside Cloudflare therefore has **no real per-client rate limit** on those paths: they fail closed instead of pretending to throttle everyone together. The counters themselves live in D1 (`rate_counters`, phase 7's P7-3 — the call sites are listed in `docs/OPERATIONS.md` §26); a deployment with no D1 falls back to a counter inside each isolate, which still refuses a burst but lets several isolates each spend the budget.
 
 ### Step 1 — Create the Cloudflare Worker
 

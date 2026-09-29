@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import zlib from "node:zlib";
-import { call, makeEnv } from "./harness.mjs";
+import { awaitFreshRateWindow, call, makeD1, makeEnv } from "./harness.mjs";
 
 // P7-1: the Content-Security-Policy is nonce-based, every page the Worker
 // serves is stamped with the one nonce its own response names, and the two
@@ -364,21 +364,54 @@ describe("P7-1: the /api/csp-report sink", () => {
   });
 
   it("rate-limits per IP without telling the reporter", async () => {
-    const env = makeEnv();
+    const env = makeEnv({ DB: makeD1() });
     const points = [];
     env.ANALYTICS = { writeDataPoint: (p) => points.push(p) };
     const ip = "203.0.113.9";
+    // The budget is per window and the windows are clock-aligned, so this
+    // starts with at least three seconds of window left: the 65 reports below
+    // take milliseconds, but a boundary falling in the middle of them would
+    // reset the counter and every one of them would be recorded.
+    await awaitFreshRateWindow();
+    const report = () => call(env, "/api/csp-report", {
+      method: "POST", ip,
+      headers: { "Content-Type": "application/csp-report", Origin: "" },
+      rawBody: legacyBody,
+    });
     for (let i = 0; i < 5; i++) {
-      const res = await call(env, "/api/csp-report", {
-        method: "POST", ip,
-        headers: { "Content-Type": "application/csp-report", Origin: "" },
-        rawBody: legacyBody,
-      });
-      assert.equal(res.status, 204);
+      assert.equal((await report()).status, 204);
     }
-    // Five reports from one IP spend five of the minute's budget, and the
-    // counter is visible where the limiter keeps it.
-    const counter = env.CONFIGS._store.get(`ratelimit:csp-report:${ip}`);
-    assert.equal(counter, "5");
+    // Five reports from one IP spend five of the minute's budget, and since
+    // P7-3 the counter is a row in D1 -- exact, atomic, one per aligned
+    // window -- rather than a KV key whose reads the edge could serve stale.
+    const row = await env.DB.prepare("SELECT count FROM rate_counters WHERE scope = ?")
+      .bind(`csp-report:${ip}`).first();
+    assert.equal(Number(row && row.count), 5);
+    // ...and a refused report is answered 204 too, so the only way to see the
+    // limit from outside is that nothing was recorded for it. The window is
+    // seeded to its ceiling here rather than by sending the 60 reports that
+    // spend it: the outcome must not depend on how long 60 requests take,
+    // because their window is one the clock can end underneath them. The seed
+    // is retried once for the same reason -- a seed and the request after it
+    // can land either side of a boundary, which would zero the row.
+    const recorded = () => points.filter((p) => String((p.indexes && p.indexes[0]) || "").startsWith("csp:")).length;
+    const scope = `csp-report:${ip}`;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const windowStart = Math.floor(Date.now() / 60000) * 60000;
+      await env.DB.prepare("DELETE FROM rate_counters WHERE scope = ?").bind(scope).run();
+      await env.DB.prepare("INSERT INTO rate_counters (scope, window_start, count) VALUES (?, ?, ?)")
+        .bind(scope, windowStart, 60).run();
+      const before = recorded();
+      assert.equal((await report()).status, 204, "a browser must never be told it was throttled");
+      if (recorded() === before) break;
+      assert.equal(attempt, 0, "a report over the window's budget was still recorded");
+    }
+    const after = await env.DB.prepare("SELECT count FROM rate_counters WHERE scope = ?")
+      .bind(scope).first();
+    assert.equal(Number(after && after.count), 61, "a refused report still counts as having arrived");
+    // The acceptance test for the whole P7-3 move: not one ratelimit: key in
+    // KV, however much limiting just happened.
+    const kvRateKeys = [...env.CONFIGS._store.keys()].filter((k) => k.startsWith("ratelimit:"));
+    assert.deepEqual(kvRateKeys, []);
   });
 });

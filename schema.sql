@@ -346,6 +346,9 @@ CREATE TABLE IF NOT EXISTS rate_counters (
     count        INTEGER NOT NULL DEFAULT 1,
     PRIMARY KEY (scope, window_start)
 );
+-- The sweep that clears spent windows (migrations/0019, P7-3): the primary key
+-- is (scope, window_start), so this covers the WHERE window_start < cutoff side.
+CREATE INDEX IF NOT EXISTS idx_rate_counters_window ON rate_counters(window_start);
 
 CREATE TABLE IF NOT EXISTS account_settings (
     account_id    INTEGER PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
@@ -611,4 +614,5 @@ INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES
   ('0015', 0),
   ('0016', 0),
   ('0017', 0),
-  ('0018', 0);
+  ('0018', 0),
+  ('0019', 0);

@@ -183,7 +183,7 @@ There are 138 exact-path routes plus 14 regex or prefix routes, about 152 handle
 - **Channels:** `channelshare:{code}`, `creatorchannel:{u}:{slug}`, `index:publicchannels`, `channellikevoters:`, `channel:preset:v2:{network}`, `channelpool:`, `channelnew:`.
 - **Caches:** `cache:{kvKey}` (provider responses), `cache:poster_fallback:`, `tmdbdetail_v2:`, `tvmaze:airtime:v3:`, `unpacked_show:`, `mylists:mostwatched:v2:`, `bpimg:v1:` (BetterPosters image **bytes**), `bp:retry:v1`, `bp:variants:v1`, `bp:sharedids:v1`.
 - **Counters (KV fallbacks):** `stats:*`, `evtcount:*`, `evtdayindex:*`, `evtmeta:*`, `searchquery:*`, `searchquerydayindex:*`, `feedback:*`, `feedbackrate:`.
-- **Rate limits:** `ratelimit:{bucket}:{ip}` (about 12 buckets).
+- **Rate limits:** D1 `rate_counters`, one row per `{bucket}:{ip}` (or `{bucket}:a{accountId}`) per clock-aligned window (P7-3; `consumeRateLimit`, `02_`). A deployment with no D1 falls back to a per-isolate in-memory counter. Nothing is written to KV for a limit any more.
 - **Cron and migration state:** `cron:continuewatching:cursor`, `cron:airingnext:cursor`, `cron:prewarm:cursor`, `cron:channelpresets:cursor`, `cron:bpwarm:cursor`, `cron:last_warmed:mdblist`, `cron:newonstreaming:{lastsweep, streams:, jwdays:, bumpcursor:}`, `cron:rapidapi:usage`, `backfilltrending:cursor`, `migrated1:state`, `migratedaycounts:state`, `stats:genredecade:migrated`.
 
 **Per-isolate memory caches:**
@@ -431,7 +431,7 @@ For each type the table records the authority today, duplication, caching, the s
 | Temporary markers (tombstones, reset markers, `trackingd1behind`, scrobble queue, `airingnextchecked`) | KV and D1 | Both | — | — | — | TTL | **Delete.** They exist only to reconcile the dual store and local-first sync. |
 | Provider caches | Isolate Map → KV `cache:` → edge | Three tiers | Yes by design | Refetch | — | TTL | **KV `pc:` (TTL)** plus in-flight coalescing |
 | Chart / catalog caches | KV `cache:`, `lastgood:`, prewarm | — | Yes | Refetch | — | BG | **KV `snap:chart:{id}:{region}:{page}`** written by a job |
-| Rate limits | KV (non-atomic) plus D1 `authfail` | — | — | Limits reset | — | TTL | **WAF rules** (per IP) plus **D1 `rate_counters`** (per account/credential) |
+| Rate limits | **D1 `rate_counters`** (a batch per spend, atomic — P7-3) plus D1 `authfail` for daily budgets; per-isolate memory when D1 is absent | — | — | Limits reset | Falls back to each isolate's memory (looser, never unlimited) | TX | WAF rules (per IP, optional, `docs/OPERATIONS.md` §6) on top of what is already here |
 | Public directory / search | D1 `UNION` query plus FTS5 (standalone); KV scan fallback | — | — | — | — | FTS | **D1 `lists` index plus FTS5 external-content table**; KV cache of page 1 for 60 s |
 | Title metadata (event_meta, titles on rows) | D1 plus KV | Both | Yes | — | — | — | **D1 `media`** (canonical, persisted) |
 | Generated images | KV `bpimg:` (bytes); badged SVGs regenerated per request | — | — | Refetch | — | — | **R2 plus Cache API** |

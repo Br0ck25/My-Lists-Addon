@@ -1048,7 +1048,7 @@ const D1_SCHEMA_MANIFEST = [
   },
   {
     migration: "0015", kind: "table", name: "rate_counters",
-    consequence: "Per-account and credential rate limits cannot be tracked in D1.",
+    consequence: "Every rate limit falls back to a per-isolate in-memory counter, so a burst spread across isolates can spend the budget more than once (P7-3). Limits still apply, they are just looser.",
   },
   {
     migration: "0015", kind: "table", name: "account_settings",
@@ -1232,6 +1232,10 @@ const D1_SCHEMA_MANIFEST = [
   {
     migration: "0018", kind: "index", name: "idx_admin_audit_action",
     consequence: "Filtering the audit log by action scans the table. Slower, not broken.",
+  },
+  {
+    migration: "0019", kind: "index", name: "idx_rate_counters_window",
+    consequence: "Clearing spent rate-limit windows scans the whole counters table every ten minutes instead of a window range. Slower, not broken (P7-3).",
   },
 ];
 

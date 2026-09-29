@@ -34,7 +34,7 @@ Set these in the dashboard: Worker → **Settings → Bindings → Add**.
 
 | Binding name | Type | Required | What it is for | Status |
 |---|---|---|---|---|
-| `CONFIGS` | KV namespace | **Yes** | Install configs, list and sync records (being moved to D1), caches, rate limits | In use |
+| `CONFIGS` | KV namespace | **Yes** | Install configs, list and sync records (being moved to D1), caches | In use |
 | `DB` | D1 database (`my-lists-db`) | **Yes** | Accounts, lists, likes, tracking, directory, search, counters | In use |
 | `ANALYTICS` | Analytics Engine dataset (`mylists_events`) | Recommended | Per-request route, status and storage-operation counts, used to measure the next phases | **Add now.** The code writes to it when present and skips it otherwise. |
 | `DB_ACTIVITY` | D1 database (`mylists-activity`) | Later (Phase 3c) | Watch events and progress | Can be added now; nothing uses it yet. Create the database (D1 → Create → `mylists-activity`), run `migrations/activity/A0001_activity.sql` in **its** Console (not the main database's), then bind it. See §4. |
@@ -129,18 +129,30 @@ When it nears D1's size limit it can be split: create and bind `DB_ACTIVITY_1`, 
   5. Never load a backup into the live database on top of existing data.
 - The KV namespace has no built-in backup. The data that matters in KV is being moved to D1 (see `MIGRATION_PLAN.md`).
 
-## 6. Recommended WAF rate-limiting rules
+## 6. Recommended WAF rate-limiting rules (optional)
 
-Configure these under Security → WAF → Rate limiting rules on the zone. They stop abuse before it reaches the Worker. Starting points (per IP, 1 minute):
+**Nothing in the code needs these.** Every limit the Worker applies itself is a D1 counter now (§26), and it works with no dashboard change at all. What a rule here adds is that the request is refused at Cloudflare's edge and never reaches the Worker: no CPU spent, no D1 write, and the same protection while the Worker is mid-deploy or over its CPU budget.
 
-| Path | Limit |
-|---|---|
-| `/api/creator/create` | 5 |
-| `/api/creator/restore`, `/api/creator/reset-key`, `/api/creator/forgot-username` | 20 |
-| `/admin/login` | 10 |
-| `/api/save` | 30 |
-| `/api/lists/like*`, `/api/channel/like`, `/api/channel/share` | 60 |
-| `/api/feedback*` | 20 |
+Configure them under **Security → WAF → Rate limiting rules** on the zone. Each rule is: an expression (which requests), a threshold (how many, over what period), a counting characteristic (**IP source address**), and an action (**Block**, for a minute). Starting points, per IP, per minute:
+
+| Path | Limit | Why |
+|---|---|---|
+| `POST /api/session` | 30 | Signing in verifies a PBKDF2 hash — the most CPU-expensive request in the app |
+| `POST /api/creator/create` | 10 | Mints a profile and a Creator Key |
+| `POST /api/creator/restore`, `/api/creator/reset-key`, `/api/creator/forgot-username` | 20 | Credential guesses |
+| `POST /admin/login` | 10 | The admin key |
+| `POST /api/installs/*` | 30 | Install links are written, not just read |
+| `POST /api/likes/*` | 60 | Liking and unliking |
+| `POST /api/imports`, `/api/imports/*` | 10 | Each import can call four providers with this site's keys |
+| `POST /api/feedback`, `/api/feedback/threads` | 20 | Feedback writes |
+| `POST /api/scrobble*` | 120 | A webhook from someone's media server, so a first sync arrives in a burst — keep this one generous |
+| `POST /api/save` | 30 | Anonymous 10 MB blobs (S-12) |
+
+- **The expression for one path**, in the dashboard's own syntax: `(http.request.method eq "POST" and http.request.uri.path eq "/api/session")`. For a prefix: `(http.request.method eq "POST" and starts_with(http.request.uri.path, "/api/likes/"))`.
+- **Your plan decides how many you get.** Cloudflare gives the Free plan **one** rate-limiting rule, Pro two, Business five. If you only get one, make it `POST /api/session` — it is the check an attacker can make expensive. The rest are already covered by the code's own limits; these rules only move where the refusal happens.
+- **Keep the counting characteristic on IP**, not "everything": a global count on a shared path would let one visitor spend everyone's budget.
+- **An edge block looks different from an app block.** Cloudflare answers with its own 429 page (error 1015) and the Worker never logs the request; the app's own limits answer with a JSON body (`{"ok":false,"error":"Too many attempts…"}`) or the admin login page. If you see 1015 in a browser, you set a rule too tight — raise the threshold or lengthen the period; no deploy is needed either way.
+- **IPv6** is counted per `/64` by the Worker's own limits (one address block, not one address), and Cloudflare's rules count the same way for `ip.src`.
 
 ## 7. Health
 
@@ -496,3 +508,18 @@ You are bounced back to the page you asked for, without the parameter, and the c
 - **"Too many redirects" / a blank page from Access:** the Access application's policy is not letting you in. Check the application's path (`admin`) and its policy — Access answers before the Worker, so nothing in this repo can see or log those attempts.
 - **Access asks who you are, then the dashboard shows the key login page:** the token did not verify. The Worker logs `[admin] refused a Cloudflare Access token: <reason>` once per distinct reason — `audience` means `CF_ACCESS_AUD` does not match this application, `issuer` means `CF_ACCESS_TEAM_DOMAIN` is wrong, `signature` means the certs came from a different team. The key box below the note is the way in while you fix it.
 - **"You are not authorized" after Access let you in:** `FF_ADMIN_EMAILS` is set and your address is not on it.
+
+## 26. Rate limits that count exactly (P7-3)
+
+**Nothing to configure, and nothing to run except one optional index.** Deploying `worker_entry_combined.js` is the whole change: every limit in this Worker — profile creation, restore, the admin login, previews, saves, the tracking beacons, the CSP reports, the bulk resolve — is now a counter in D1's `rate_counters` table (created by migration `0015`, so most deployments already have it) instead of a `ratelimit:` key in KV. There is no new binding, no new secret, and no new variable. §6 above is the optional edge half.
+
+- **Why it moved.** A KV counter is read, compared and written back, and KV serves reads from the edge cache for up to a minute. A burst arriving in parallel — which is what a script, a scraper or a password guesser is — therefore all read the same pre-increment value and all passed. The limit was not a limit in the only conditions it existed for (SECURITY_AUDIT S-13). D1 has real transactions, so the limit is now the number it says.
+- **What is counted, and how.** One row per bucket, per client and per window: `scope` is `bucket:key` (`adminlogin:203.0.113.9`, `connimport:a<accountId>`), `window_start` is the epoch millisecond the window began at. Windows are **aligned to the clock**, not started by the first request, so a window is a row that can be deleted when it is spent. The increment and the read-back happen in one D1 batch — one transaction — so two requests landing in the same instant cannot both spend the last of a budget.
+- **Which endpoints spend on failure, and which spend up front.** The credential endpoints (`/admin/login`, `/api/creator/restore`, `/api/creator/forgot-username`) read the count and spend only when a guess actually fails, because a correct key must never consume the budget that protects it. Everything else spends first and refuses over — including the refused requests, so the counter is a record of what arrived rather than a budget that resets when someone pauses.
+- **What happens without D1.** A deployment with no `DB` binding, or a database that has not had `0015` applied, falls back to a counter in the isolate's own memory. It still limits — a burst from one client is refused — but it is per isolate, so several isolates each allow the full budget: looser than D1, never unlimited. The admin dashboard's **Maintenance → Schema status** names `rate_counters` if the table is the thing that is missing (`D1_SCHEMA_MANIFEST`), and the Worker logs `[ratelimit] D1 counter failed, falling back to this isolate's memory: <reason>` **once per distinct reason** so a broken binding cannot flood the logs.
+- **The optional index (`migrations/0019_rate_counters_window_index.sql`).** Spent rows are deleted in the background — at most once every ten minutes per isolate, never on the request's own path. The delete filters on `window_start`, which the table's primary key `(scope, window_start)` cannot serve, so without this index the cleanup scans the whole table: **slower, not broken.** Apply it in the D1 Console when convenient; it is one `CREATE INDEX IF NOT EXISTS` and one ledger row, and safe to run twice.
+- **Where to look when you wonder whether a limit is biting:** Workers Logs, filtered on `[ratelimit]`. To see the counters themselves, run this in the D1 Console (read-only):
+  `SELECT scope, datetime(window_start / 1000, 'unixepoch') AS window, count FROM rate_counters ORDER BY window_start DESC LIMIT 30;`
+  A row disappears once its window is a day old. Nothing in the dashboard shows these; they are operational counters, not statistics.
+- **Setting a limit** means editing the constant the call site names (`CSP_REPORT_MAX_PER_MINUTE`, `DETAILS_BATCH_IDS_PER_MINUTE`, `BULK_RESOLVE_ITEMS_PER_MINUTE`, `ADMIN_LOGIN_MAX_FAILURES_PER_DAY`, …) in `00_constants.js` and redeploying — there is deliberately no per-deployment variable for any of them, because a limit nobody can see in the code is a limit nobody can reason about. The one exception is §6's WAF rules, which are dashboard edits.
+- **Nothing to undo** if you roll the deploy back: the previous file writes `ratelimit:` KV keys again and ignores the table. The table itself is harmless without the code (it is only rows of `bucket:key` and counts, and it is not read or written by anything else), and the index is one of the ones `schema.sql` provisions.

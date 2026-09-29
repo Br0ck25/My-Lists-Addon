@@ -1071,7 +1071,7 @@ const D1_SCHEMA_MANIFEST = [
   },
   {
     migration: "0015", kind: "table", name: "rate_counters",
-    consequence: "Per-account and credential rate limits cannot be tracked in D1.",
+    consequence: "Every rate limit falls back to a per-isolate in-memory counter, so a burst spread across isolates can spend the budget more than once (P7-3). Limits still apply, they are just looser.",
   },
   {
     migration: "0015", kind: "table", name: "account_settings",
@@ -1255,6 +1255,10 @@ const D1_SCHEMA_MANIFEST = [
   {
     migration: "0018", kind: "index", name: "idx_admin_audit_action",
     consequence: "Filtering the audit log by action scans the table. Slower, not broken.",
+  },
+  {
+    migration: "0019", kind: "index", name: "idx_rate_counters_window",
+    consequence: "Clearing spent rate-limit windows scans the whole counters table every ten minutes instead of a window range. Slower, not broken (P7-3).",
   },
 ];
 
@@ -3163,8 +3167,8 @@ const CSP_REPORT_MAX_BYTES = 8192;
 
 // Per-IP reports a minute. One page firing one violation per render sends
 // reports the browser batches and rate-limits on its own; this is the ceiling
-// for something that is not a browser, and it costs one KV read per report
-// (see consumeRateLimit).
+// for something that is not a browser, and it costs one atomic D1 counter
+// (see consumeRateLimit, which is where every limit in this Worker lives).
 const CSP_REPORT_MAX_PER_MINUTE = 60;
 
 // CSP (P7-1): scripts are nonce-only. Every inline <script> this Worker emits
@@ -5852,41 +5856,198 @@ function clientIpKey(request) {
   return ip.toLowerCase();
 }
 
-// --- Shared per-IP rate limiter --------------------------------------------
+// --- Rate limits (P7-3) -----------------------------------------------------
 //
-// The same IP-keyed 60-second KV slot /api/preview, /api/creator/create,
-// /api/creator/restore and /admin/login each grew their own copy of. Pulled
-// out because the endpoints that spend THIS Worker owner's provider quota
-// (rather than the caller's own key) all need it and all want it to behave
-// identically.
+// One primitive, and it is exact. Every limit in this Worker used to be a KV
+// slot (`ratelimit:<bucket>:<ip>`): read the number, compare it, write it
+// back. That is the wrong shape for a counter, and KV says so itself -- reads
+// are edge-cached for up to a minute, so N requests arriving together all read
+// the same pre-increment value and all pass. The limit was therefore not a
+// limit under exactly the conditions it exists for: a script, a scraper or a
+// password guesser is parallel by nature. (S-13.)
 //
-// Returns true when the caller is over budget and the request should stop.
-// Follows the convention the existing call sites already established:
-// skipped entirely when CONFIGS isn't bound (every KV-optional feature here
-// degrades rather than fails closed), and the increment rides on
-// ctx.waitUntil so a rate-limit bookkeeping write never adds latency to the
-// request it is protecting. Callers check for a missing client IP
-// themselves, since what to return in that case is route-specific.
+// Limits now live in D1's `rate_counters` (migration 0015), whose
+// (scope, window_start) primary key makes the increment atomic:
+//
+//   INSERT INTO rate_counters (scope, window_start, count) VALUES (?, ?, ?)
+//     ON CONFLICT(scope, window_start) DO UPDATE SET count = count + excluded.count
+//
+// The increment and the read-back go in ONE batch, which D1 runs as one
+// transaction -- so two requests landing in the same instant cannot both read
+// the same pre-increment value and both be told they are under budget. A
+// single RETURNING statement would also work and is one round trip fewer; it
+// is deliberately not used, because the SQLite test harness models D1's
+// run()/all() split and correctness here matters more than one round trip.
+//
+// Windows are ALIGNED to the clock (window_start is the epoch millisecond the
+// window began at), not started by the first request. That is what makes the
+// counter one row per (bucket, key, window) rather than one row per key with a
+// TTL, and it is what Cloudflare's own rules do. The cost is the usual one: a
+// burst straddling a boundary can spend up to two windows' worth in a rolling
+// minute. The per-account daily budgets (readAuthFailureCount / noteAuthFailure
+// below) and the WAF rules (docs/OPERATIONS.md section 26) are the answer to
+// that, not a tighter short window.
+//
+// No D1 (a self-hosted copy), or 0015 not applied yet: an in-memory counter per
+// isolate. That is weaker -- several isolates each allow the full budget -- so
+// it is a degradation, not a design, and it is still strictly better than the
+// unlimited pass-through it replaces. What it is NOT is a KV write: KV is not a
+// counter and this file no longer pretends it is.
+//
+// Sweeping: rows are one per (bucket, key, window), which is small each and
+// many together, so old windows are deleted opportunistically -- at most once
+// every RATE_LIMIT_SWEEP_MS per isolate, on the write path, on ctx.waitUntil so
+// it never adds latency to the request that triggered it. The sweep needs the
+// window_start index (migration 0019); without it the delete scans, which is
+// slow but not wrong, and rate limits keep working either way.
+const RATE_LIMIT_SWEEP_MS = 10 * 60 * 1000;
+const RATE_LIMIT_KEEP_MS = 24 * 60 * 60 * 1000;
+const RATE_LIMIT_MEMO_MAX = 20000;
+let _rateLimitSweptAt = 0;
+const RATE_LIMIT_MEMO = new Map();
+const RATE_LIMIT_WARNED = new Set();
+
+// The epoch millisecond the window containing `now` began at.
+function rateLimitWindowStart(now, windowSec) {
+  const windowMs = Math.max(1, Math.floor(windowSec || 60)) * 1000;
+  return Math.floor(now / windowMs) * windowMs;
+}
+
+// Which counter: the bucket name (what is limited) and the key (who). Same
+// `bucket:key` scope the KV keys used, so a scope in a log line or an
+// admin query reads the way it always did.
+function rateLimitScope(bucket, key) {
+  return String(bucket || "unknown") + ":" + String(key == null ? "" : key);
+}
+
+// The increment and the read-back, one transaction. Returns the count AFTER
+// the spend, or null when this deployment cannot use the table (no D1, or
+// 0015 not applied) -- the caller then falls back to memory.
+async function d1RateLimitCount(env, scope, windowStart, spend) {
+  const statements = [];
+  if (spend > 0) {
+    statements.push(
+      env.DB.prepare(
+        "INSERT INTO rate_counters (scope, window_start, count) VALUES (?, ?, ?) " +
+        "ON CONFLICT(scope, window_start) DO UPDATE SET count = count + excluded.count"
+      ).bind(scope, windowStart, spend)
+    );
+  }
+  statements.push(
+    env.DB.prepare("SELECT count FROM rate_counters WHERE scope = ? AND window_start = ?").bind(scope, windowStart)
+  );
+  const out = await env.DB.batch(statements);
+  const last = out && out[out.length - 1];
+  const rows = (last && last.results) || [];
+  return rows.length ? Number(rows[0].count) || 0 : 0;
+}
+
+// Fire-and-forget cleanup of windows nobody can be counted against any more.
+function sweepRateCounters(env, ctx, now) {
+  if (now - _rateLimitSweptAt < RATE_LIMIT_SWEEP_MS) return;
+  _rateLimitSweptAt = now;
+  const cutoff = now - RATE_LIMIT_KEEP_MS;
+  const work = env.DB.prepare("DELETE FROM rate_counters WHERE window_start < ?").bind(cutoff).run()
+    .catch((e) => {
+      // No index yet (0019 not applied) makes this slow, not wrong; the table
+      // being missing means the counters are in memory and there is nothing
+      // to sweep.
+      if (!/no such table/i.test(String((e && e.message) || e))) console.warn("[ratelimit] sweep failed:", e);
+    });
+  if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(work);
+}
+
+// The per-isolate counter: the fallback path only (see the note above).
+//
+// Capped, and the cap is real: over MAX entries the oldest are dropped first
+// (a Map iterates in insertion order), which can only ever make a limit
+// LOSER for a client that stopped sending anything -- never for one that is
+// hammering, whose entry was just written. The alternative, expiring by the
+// window in the key, leaves the map at whatever a single window's traffic
+// made it, which is not a cap at all under exactly the load this path is for.
+function memoryRateLimitCount(scope, windowStart, spend) {
+  const key = scope + ":" + windowStart;
+  const used = RATE_LIMIT_MEMO.get(key) || 0;
+  if (spend <= 0) return used;
+  RATE_LIMIT_MEMO.set(key, used + spend);
+  let over = RATE_LIMIT_MEMO.size - RATE_LIMIT_MEMO_MAX;
+  if (over > 0) {
+    for (const k of RATE_LIMIT_MEMO.keys()) {
+      if (over-- <= 0) break;
+      RATE_LIMIT_MEMO.delete(k);
+    }
+  }
+  return used + spend;
+}
+
+// Read the current count, optionally spending first. Never throws: a limiter
+// that breaks must not break the request it is protecting, and a counter that
+// cannot be read is treated as "spend into memory" rather than "no limit".
+async function rateLimitCount(env, ctx, bucket, key, windowSec, spend) {
+  const amount = Number.isFinite(spend) && spend > 0 ? Math.floor(spend) : 0;
+  const now = Date.now();
+  const windowStart = rateLimitWindowStart(now, windowSec);
+  const scope = rateLimitScope(bucket, key);
+  if (env && env.DB) {
+    try {
+      const used = await d1RateLimitCount(env, scope, windowStart, amount);
+      if (amount > 0) sweepRateCounters(env, ctx, now);
+      return used;
+    } catch (e) {
+      const why = String((e && e.message) || e);
+      if (!/no such table/i.test(why) && !RATE_LIMIT_WARNED.has(why) && RATE_LIMIT_WARNED.size < 20) {
+        RATE_LIMIT_WARNED.add(why);
+        console.warn("[ratelimit] D1 counter failed, falling back to this isolate's memory:", why);
+      }
+    }
+  }
+  return memoryRateLimitCount(scope, windowStart, amount);
+}
+
+// Spend now, refuse over. Returns true when the caller is over budget and
+// should stop -- the same contract, and the same argument order, the KV
+// version had, so the call sites read the same.
+//
+// A request that is already over still spends (the row keeps growing inside
+// the window). That is deliberate: it keeps the counter a record of what
+// arrived, and it means a caller that keeps hammering stays refused until the
+// window rolls rather than getting a fresh budget the moment it stops.
+//
 // `cost` is how much of the bucket this call spends -- 1 for an ordinary
-// request, and for /api/bulk-resolve the number of titles it is about to
-// look up. That endpoint's real cost is someone else's TMDB quota, not the
-// request itself, so counting requests would move the ceiling by a factor of
-// eight the moment a request was split into several smaller invocations.
-// Every other caller omits it and behaves exactly as before.
-async function consumeRateLimit(env, ctx, bucket, ip, maxPerWindow, windowSec = 60, cost = 1) {
+// request, and for /api/bulk-resolve or /api/details/batch the number of
+// titles it is about to look up, because their real cost is someone else's
+// quota rather than the request itself.
+async function consumeRateLimit(env, ctx, bucket, key, maxPerWindow, windowSec = 60, cost = 1) {
   // No client IP means the request did not come through Cloudflare's edge,
   // which the hosted Worker always sits behind: refuse rather than let it
   // through unthrottled (that exemption existed for self-hosted copies).
-  if (!ip) return true;
-  if (!env || !env.CONFIGS) return false;
-  const key = `ratelimit:${bucket}:${ip}`;
-  const used = parseInt((await env.CONFIGS.get(key)) || "0", 10) || 0;
-  if (used >= maxPerWindow) return true;
-  const spend = Number.isFinite(cost) && cost > 0 ? Math.floor(cost) : 1;
-  const write = env.CONFIGS.put(key, String(used + spend), { expirationTtl: windowSec });
-  if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(write);
-  else await write;
-  return false;
+  if (!key) return true;
+  const used = await rateLimitCount(env, ctx, bucket, key, windowSec, cost);
+  return used > maxPerWindow;
+}
+
+// The read half, for the endpoints where a SUCCESS must not spend the budget
+// that protects them: a correct password is not a guess, and an admin who
+// signs in on a run of devices must not lock themselves out (the daily failure
+// budgets below are built on exactly that rule).
+//
+// A request refused at this gate spends nothing -- nothing was attempted, and
+// the count stays where it is for the rest of the window, so it is still
+// refused. That is the difference from consumeRateLimit above, which spends
+// first and so counts every arrival including the refused ones.
+//
+// Read-then-note is not atomic, so several guesses arriving in the same
+// instant can each see the pre-increment count. That is bounded, not open: the
+// daily budget is one atomic upsert per failure, so what concurrency can win
+// is a handful of extra attempts inside a minute, never extra attempts overall.
+async function readRateLimitCount(env, ctx, bucket, key, windowSec = 60) {
+  return rateLimitCount(env, ctx, bucket, key, windowSec, 0);
+}
+
+// The spend half, for a failure that has already happened.
+async function noteRateLimit(env, ctx, bucket, key, windowSec = 60, cost = 1) {
+  if (!key) return;
+  await rateLimitCount(env, ctx, bucket, key, windowSec, cost);
 }
 
 // --- Per-account authentication failure budget -------------------------------
@@ -83674,18 +83835,13 @@ Sitemap: ${url.origin}/sitemap.xml`;
       }
 
       // Unauthenticated and heavyweight: each call can fan out to TMDB /
-      // Trakt / MDBList. Same IP-keyed KV slot as create/restore/feedback
-      // -- 240/minute provides sufficient budget for browsing multi-card
+      // Trakt / MDBList. Same IP-keyed bucket as create/restore/feedback --
+      // 240/minute provides sufficient budget for browsing multi-card
       // Discover shelves while protecting against automated scraping.
       const ip = clientIpKey(request);
       if (!ip) return json({ ok: false, error: "Couldn't load that list." }, 400, { "Cache-Control": "no-store" });
-      if (env && env.CONFIGS) {
-        const rateKey = `ratelimit:preview:${ip}`;
-        const n = parseInt((await env.CONFIGS.get(rateKey)) || "0", 10) || 0;
-        if (n >= 240) {
-          return json({ ok: false, error: "Couldn't load that list." }, 429, { "Cache-Control": "no-store" });
-        }
-        ctx.waitUntil(env.CONFIGS.put(rateKey, String(n + 1), { expirationTtl: 60 }));
+      if (await consumeRateLimit(env, ctx, "preview", ip, 240)) {
+        return json({ ok: false, error: "Couldn't load that list." }, 429, { "Cache-Control": "no-store" });
       }
 
       const sourceUrls = previewSourceUrls(testUrl);
@@ -88915,10 +89071,7 @@ function generateSearchVariations(query) {
       // ok:true-on-limit behaviour (it's a beacon, not a feature).
       const searchIp = clientIpKey(request);
       if (!searchIp) return json({ ok: true });
-      const searchRateKey = `ratelimit:tracksearch:${searchIp}`;
-      const searchAttempts = parseInt((await env.CONFIGS.get(searchRateKey)) || "0", 10);
-      if (searchAttempts >= 30) return json({ ok: true });
-      ctx.waitUntil(env.CONFIGS.put(searchRateKey, String(searchAttempts + 1), { expirationTtl: 60 }));
+      if (await consumeRateLimit(env, ctx, "tracksearch", searchIp, 30)) return json({ ok: true });
 
       if (body && typeof body.query === "string" && body.query.trim()) {
         ctx.waitUntil(recordSearchQuery(env, body.query.trim()));
@@ -88943,13 +89096,9 @@ function generateSearchVariations(query) {
       // anonymous write endpoints here use. Returns ok:true rather than
       // 429 on purpose: this is a fire-and-forget beacon, and a real
       // client has nothing useful to do with a rejection.
-      // CONFIGS is guaranteed bound at this point (checked above).
       const trackIp = clientIpKey(request);
       if (!trackIp) return json({ ok: true });
-      const trackRateKey = `ratelimit:trackevent:${trackIp}`;
-      const trackAttempts = parseInt((await env.CONFIGS.get(trackRateKey)) || "0", 10);
-      if (trackAttempts >= 30) return json({ ok: true });
-      ctx.waitUntil(env.CONFIGS.put(trackRateKey, String(trackAttempts + 1), { expirationTtl: 60 }));
+      if (await consumeRateLimit(env, ctx, "trackevent", trackIp, 30)) return json({ ok: true });
 
       const events = Array.isArray(body.events) ? body.events.slice(0, 50) : [];
       // "catalog-add" is deliberately absent: no client has ever sent it
@@ -89488,12 +89637,9 @@ function generateSearchVariations(query) {
       // somebody is still using.
       const saveIp = clientIpKey(request);
       if (!saveIp) return json({ ok: false, error: "Could not process this request." }, 400);
-      const saveRateKey = `ratelimit:save:${saveIp}`;
-      const saveAttempts = parseInt((await env.CONFIGS.get(saveRateKey)) || "0", 10);
-      if (saveAttempts >= 20) {
+      if (await consumeRateLimit(env, ctx, "save", saveIp, 20)) {
         return json({ ok: false, error: "Too many saves just now. Please wait a minute and try again." }, 429);
       }
-      await env.CONFIGS.put(saveRateKey, String(saveAttempts + 1), { expirationTtl: 60 });
 
       let body;
       try {
@@ -91557,16 +91703,14 @@ function generateSearchVariations(query) {
 
     // /api/creator/create  (POST)  { creatorName, displayName?, recoveryAnswer? }
     //   -> { ok, creatorName, displayName, creatorKey }
-    // Rate limited to one new profile per minute per IP, tracked via a
-    // short-lived KV key rather than anything more elaborate -- this add-on
-    // has no user-identity system to rate-limit against besides the
-    // requester's own IP.
+    // Rate limited to one new profile per minute per IP, counted in D1
+    // (rate_counters, P7-3) -- this add-on has no user-identity system to
+    // rate-limit against besides the requester's own IP.
     if (path === "/api/creator/create" && request.method === "POST") {
       if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
       const ip = clientIpKey(request);
       if (!ip) return json({ ok: false, error: "Could not process this request." }, 400);
-      const rateLimitKey = `ratelimit:creatorcreate:${ip}`;
-      if (await env.CONFIGS.get(rateLimitKey)) {
+      if (await consumeRateLimit(env, ctx, "creatorcreate", ip, 1)) {
         return json({ ok: false, error: "Please wait a moment before creating another Profile." }, 429);
       }
       let body;
@@ -91580,11 +91724,13 @@ function generateSearchVariations(query) {
       const dn = normalizeCreatorDisplayName(body.displayName, v.normalized);
       if (!dn.ok) return json({ ok: false, error: dn.error }, 400);
       const displayName = dn.displayName;
-      // Reserve the rate-limit slot before the uniqueness check, not after
-      // -- otherwise two requests landing at nearly the same instant could
-      // both pass the "is it taken" check before either has written
-      // anything, and both succeed.
-      await env.CONFIGS.put(rateLimitKey, "1", { expirationTtl: 60 });
+      // The rate-limit slot was already spent above, BEFORE this uniqueness
+      // check -- otherwise two requests landing at nearly the same instant
+      // could both pass the "is it taken" check before either had written
+      // anything, and both succeed. That order is why the limiter is the
+      // spend-first kind (consumeRateLimit, 02_http-and-creator-utils.js):
+      // reading a counter and writing it back later would reopen exactly that
+      // window, which is what the KV version did.
       const existing = await getCreator(env, v.normalized);
       if (existing) {
         return json({ ok: false, error: "That username is already taken." });
@@ -91964,19 +92110,26 @@ function generateSearchVariations(query) {
       const ip = clientIpKey(request);
       if (!ip) return json({ ok: false, error: "Could not process this request." }, 400);
 
-      const rateLimitKey = `ratelimit:forgotusername:${ip}`;
-      const attempts = parseInt((await env.CONFIGS.get(rateLimitKey)) || "0", 10);
-      if (attempts >= FORGOT_USERNAME_IP_MAX_FAILURES) {
+      // A wrong Key or Recovery Answer is what spends this bucket, never a
+      // right one -- the constant is literally named ..._MAX_FAILURES, and the
+      // same rule the daily budgets follow (a correct secret must not consume
+      // the budget that protects it). P7-3: counted in D1, so the number is
+      // the real one rather than a per-edge-cache approximation of it.
+      if ((await readRateLimitCount(env, ctx, "forgotusername", ip, FORGOT_USERNAME_IP_TTL_SEC)) >= FORGOT_USERNAME_IP_MAX_FAILURES) {
         return json({ ok: false, error: "Too many attempts. Please wait 15 minutes and try again." }, 429);
       }
-      await env.CONFIGS.put(rateLimitKey, String(attempts + 1), { expirationTtl: FORGOT_USERNAME_IP_TTL_SEC });
+      const noteForgotFailure = async () => noteRateLimit(env, ctx, "forgotusername", ip, FORGOT_USERNAME_IP_TTL_SEC);
+      const failForgot = async (error, status) => {
+        await noteForgotFailure();
+        return json({ ok: false, error }, status);
+      };
 
       const presentedKey = String(body.creatorKey || "").trim().toUpperCase();
       const presentedAnswer = String(body.recoveryAnswer || "").trim();
 
       const genericError = "No matching account found. Check your Key and Recovery Answer and try again.";
       if (!presentedKey || !/^MYL-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(presentedKey)) {
-        return json({ ok: false, error: genericError }, 401);
+        return failForgot(genericError, 401);
       }
 
       const lookupMeta = {};
@@ -92005,7 +92158,7 @@ function generateSearchVariations(query) {
       }
 
       if (!resolvedUsername) {
-        return json({ ok: false, error: genericError }, 401);
+        return failForgot(genericError, 401);
       }
 
       if (isLegacyHit) {
@@ -92013,7 +92166,7 @@ function generateSearchVariations(query) {
       }
 
       const v = validateCreatorUsername(resolvedUsername);
-      if (!v.ok) return json({ ok: false, error: genericError }, 401);
+      if (!v.ok) return failForgot(genericError, 401);
 
       let profile = null;
       let accountRow = null;
@@ -92041,20 +92194,20 @@ function generateSearchVariations(query) {
         };
       }
 
-      if (!profile) return json({ ok: false, error: genericError }, 401);
+      if (!profile) return failForgot(genericError, 401);
 
       const keyMatches = await verifyCreatorKey(presentedKey, profile.keyHash);
       if (!keyMatches) {
-        return json({ ok: false, error: genericError }, 401);
+        return failForgot(genericError, 401);
       }
 
       if (profile.recoveryAnswerHash) {
         if (!presentedAnswer) {
-          return json({ ok: false, error: "A Recovery Answer is required for this account. Please enter your Recovery Answer." }, 401);
+          return failForgot("A Recovery Answer is required for this account. Please enter your Recovery Answer.", 401);
         }
         const answerMatches = await verifyCreatorKey(presentedAnswer.toLowerCase(), profile.recoveryAnswerHash);
         if (!answerMatches) {
-          return json({ ok: false, error: genericError }, 401);
+          return failForgot(genericError, 401);
         }
       }
 
@@ -92100,15 +92253,14 @@ function generateSearchVariations(query) {
       if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
       const ip = clientIpKey(request);
       if (!ip) return json({ ok: false, error: "Could not process this request." }, 400);
-      const rateLimitKey = `ratelimit:creatorrestore:${ip}`;
-      const attempts = parseInt((await env.CONFIGS.get(rateLimitKey)) || "0", 10);
       // More generous than profile creation (this is a normal, repeatable
       // action -- someone restoring on a new device isn't abuse), but still
-      // capped well below what's useful for guessing a ~60-bit key.
-      if (attempts >= 20) {
+      // capped well below what's useful for guessing a ~60-bit key. Like the
+      // daily budget below it, spent on FAILURES only (P7-3): restoring on a
+      // run of new devices must not be what locks someone out.
+      if ((await readRateLimitCount(env, ctx, "creatorrestore", ip, 60)) >= 20) {
         return json({ ok: false, error: "Too many attempts. Please wait a minute and try again." }, 429);
       }
-      await env.CONFIGS.put(rateLimitKey, String(attempts + 1), { expirationTtl: 60 });
 
       // Same reasoning as /admin/login: the 60s bucket shapes a burst, this
       // daily budget is what actually bounds guessing at a Creator Key over
@@ -92132,7 +92284,10 @@ function generateSearchVariations(query) {
       }
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) {
-        if (auth.error !== "no-kv") await noteAuthFailure(env, restoreFailScope, restoreFailDay);
+        if (auth.error !== "no-kv") {
+          await noteAuthFailure(env, restoreFailScope, restoreFailDay);
+          await noteRateLimit(env, ctx, "creatorrestore", ip, 60);
+        }
         return authFailureResponse(auth);
       }
       if (body.creatorKey) {
@@ -97771,16 +97926,19 @@ function generateSearchVariations(query) {
       // never did, despite guarding the one secret that can rotate any
       // creator's key via /admin/api/reset-creator-key with no other
       // verification. Same pattern as /api/creator/restore: a per-IP
-      // counter with a 60s window. Skipped entirely (not failed closed)
-      // when CONFIGS isn't bound, matching every other KV-optional
-      // feature in this app -- login by ADMIN_KEY alone still works.
-      // Failed closed when CONFIGS IS bound but CF-Connecting-IP is
+      // counter with a 60s window, in D1 since P7-3 (a KV counter is not a
+      // counter: its reads are edge-cached, so a parallel guesser walked
+      // straight through it). Failed closed when CF-Connecting-IP is
       // missing, same as restore, because there is no other safe
       // per-client identity to key a shared bucket on.
-      // Set inside the KV branch below and read again after the compare, so
+      // Set inside the branch below and read again after the compare, so
       // only a genuine wrong key spends the daily budget.
       let adminLoginFailScope = "";
       let adminLoginFailDay = "";
+      // Set inside the branch below and read after the compare, so a failed
+      // login can spend the burst bucket too -- both budgets are spent on
+      // failures only.
+      let adminLoginRateIp = "";
       if (env.CONFIGS) {
         const ip = clientIpKey(request);
         if (!ip) {
@@ -97789,20 +97947,20 @@ function generateSearchVariations(query) {
             headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
           });
         }
-        const rateLimitKey = `ratelimit:adminlogin:${ip}`;
-        const attempts = parseInt((await env.CONFIGS.get(rateLimitKey)) || "0", 10);
-        if (attempts >= 10) {
+        adminLoginRateIp = ip;
+        // 10 guesses a minute from one address, counted in D1 (P7-3) and spent
+        // on failures only, exactly like the daily budget below it.
+        if ((await readRateLimitCount(env, ctx, "adminlogin", ip, 60)) >= 10) {
           return new Response(renderAdminLoginPage("Too many attempts. Please wait a minute and try again.", adminAccessConfigured(env)), {
             status: 429,
             headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
           });
         }
-        await env.CONFIGS.put(rateLimitKey, String(attempts + 1), { expirationTtl: 60 });
 
-        // The 60s bucket above shapes a burst but leans on a KV counter that
-        // is edge-cached and non-atomic, so it is not the only thing that
-        // should stand in front of ADMIN_KEY. This daily budget is spent on
-        // failures only and is atomic wherever D1 is bound.
+        // A minute is a very short window, and the address is not the secret:
+        // an attacker rotating source IPs is back to a full 10 guesses on each
+        // one. This daily budget is what bounds a slow, distributed guess at
+        // ADMIN_KEY, and it is spent on failures only.
         adminLoginFailScope = `adminlogin:${ip}`;
         adminLoginFailDay = statsToday();
         if (await readAuthFailureCount(env, adminLoginFailScope, adminLoginFailDay) >= ADMIN_LOGIN_MAX_FAILURES_PER_DAY) {
@@ -97826,7 +97984,10 @@ function generateSearchVariations(query) {
         // Failures only -- a correct key must never spend the budget that
         // protects it, or an admin who logs in often would lock themselves
         // out.
-        if (adminLoginFailScope) await noteAuthFailure(env, adminLoginFailScope, adminLoginFailDay);
+        if (adminLoginFailScope) {
+          await noteAuthFailure(env, adminLoginFailScope, adminLoginFailDay);
+          if (adminLoginRateIp) await noteRateLimit(env, ctx, "adminlogin", adminLoginRateIp, 60);
+        }
         return new Response(renderAdminLoginPage("Incorrect key.", adminAccessConfigured(env)), {
           status: 401,
           headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },

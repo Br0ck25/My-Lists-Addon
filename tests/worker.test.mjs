@@ -639,15 +639,25 @@ describe("audit fix: the channel image endpoints are bounded and cacheable", () 
 });
 
 // The 60-second per-IP buckets on /admin/login and /api/creator/restore bound
-// a burst, but they are KV counters -- edge-cached reads, no atomic increment
-// -- and they reset every minute, so across rolling windows they placed no
-// bound at all on how many guesses one address could make in a day. Both now
-// also carry a daily failure budget, spent only on failures and atomic
-// wherever D1 is bound.
+// a burst but reset every minute, so across rolling windows they placed no
+// bound at all on how many guesses one address could make in a day. Both also
+// carry a daily failure budget, spent only on failures. (Until P7-3 the short
+// bucket was a KV counter on top of that: edge-cached reads, no atomic
+// increment, so under a parallel guesser it was not even a burst bound. It is
+// an exact D1 row now -- see the D1 cases below, where rolling the window is
+// deleting that row, and the memory case, where it cannot be rolled at all
+// because the counter lives inside the isolate.)
 describe("audit fix: credential endpoints bound guesses across rolling windows", () => {
-  // Deleting the 60s key is what a real attacker gets for free by waiting:
-  // the short window rolls over, and only the daily budget accumulates.
-  async function rollWindow(env, key) { await env.CONFIGS.delete(key); }
+  // Rolling the window is what a real attacker gets for free by waiting: the
+  // per-minute counter starts again, and only the daily budget accumulates.
+  // It is a row in rate_counters (P7-3), one per (bucket, key, window), so
+  // that is the row this deletes. Without D1 the counter is in the isolate's
+  // memory, out of a test's reach -- there the loops below simply prove the
+  // burst bucket itself stops the guessing.
+  async function rollWindow(env, bucket, key) {
+    if (!env.DB) return;
+    await env.DB.prepare("DELETE FROM rate_counters WHERE scope = ?").bind(`${bucket}:${key}`).run();
+  }
 
   for (const [label, makeStores] of [
     ["KV only", () => ({ CONFIGS: makeKv() })],
@@ -659,7 +669,7 @@ describe("audit fix: credential endpoints bound guesses across rolling windows",
       let attempted = 0;
       let blocked = false;
       for (let round = 0; round < 15 && !blocked; round++) {
-        await rollWindow(env, `ratelimit:adminlogin:${ip}`);
+        await rollWindow(env, "adminlogin", ip);
         for (let i = 0; i < 9; i++) {
           const r = await call(env, "/admin/login", { method: "POST", ip, form: { key: "wrong-key" } });
           attempted++;
@@ -675,7 +685,7 @@ describe("audit fix: credential endpoints bound guesses across rolling windows",
       const env = makeEnv(makeStores());
       const ip = nextIp();
       for (let i = 0; i < 60; i++) {
-        await rollWindow(env, `ratelimit:adminlogin:${ip}`);
+        await rollWindow(env, "adminlogin", ip);
         const r = await call(env, "/admin/login", { method: "POST", ip, form: { key: env.ADMIN_KEY } });
         assert.equal(r.status, 302, `login ${i + 1} was refused -- successes are spending the budget`);
       }
@@ -689,7 +699,7 @@ describe("audit fix: credential endpoints bound guesses across rolling windows",
     let attempted = 0;
     let blocked = false;
     for (let round = 0; round < 20 && !blocked; round++) {
-      await rollWindow(env, `ratelimit:creatorrestore:${ip}`);
+      await rollWindow(env, "creatorrestore", ip);
       for (let i = 0; i < 19; i++) {
         const r = await call(env, "/api/creator/restore", {
           method: "POST", ip,
@@ -4101,11 +4111,25 @@ describe("audit fix 5: shared-key fan-out endpoints are bounded", () => {
     // subrequest budget can split a refresh across invocations, counting
     // requests would have cut the real ceiling by the number of chunks. 3,600
     // and 14,400 ids are the same ceilings in the unit the endpoint spends.
-    const env = makeEnv();
+    const env = makeEnv({ DB: makeD1() });
+    // Since P7-3 the counter is a row in rate_counters, one per aligned
+    // window, so starting from a spent budget means writing that row. Two
+    // attempts per probe: a seed and the request it precedes can land either
+    // side of a minute boundary (which zeroes the row), and retrying is more
+    // honest than loosening the assertion.
     const spend = async (used, extra = {}) => {
       const ip = nextIp();
-      await env.CONFIGS.put(`ratelimit:detailsbatch:${ip}`, String(used));
-      return call(env, "/api/details/batch", { method: "POST", ip, json: { ids: ["tt1"], ...extra } });
+      let r;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const windowStart = Math.floor(Date.now() / 60000) * 60000;
+        const scope = `detailsbatch:${ip}`;
+        await env.DB.prepare("DELETE FROM rate_counters WHERE scope = ?").bind(scope).run();
+        await env.DB.prepare("INSERT INTO rate_counters (scope, window_start, count) VALUES (?, ?, ?)")
+          .bind(scope, windowStart, used).run();
+        r = await call(env, "/api/details/batch", { method: "POST", ip, json: { ids: ["tt1"], ...extra } });
+        if (r.status === 429) return r;
+      }
+      return r;
     };
 
     assert.notEqual((await spend(3599)).status, 429, "under the shared ceiling must still be served");
@@ -9464,12 +9488,15 @@ describe("1.5.3: telemetry counters go to D1 when it is bound", () => {
     const env = makeEnv({ CONFIGS: kv, DB: makeD1() });
     const cold = countPuts(kv);
     await watch(env, titles(10));
-    // 10 display-field blobs + the one per-IP rate-limit counter. It was 41.
-    assert.equal(cold.n, 11, `cold: ${JSON.stringify(cold.keys)}`);
+    // 10 display-field blobs, and nothing else. It was 41 before the D1
+    // move, then 11 while the per-IP rate limit still wrote a KV key -- since
+    // P7-3 that counter is a D1 row too, so the request touches KV only for
+    // the blobs it actually needs.
+    assert.equal(cold.n, 10, `cold: ${JSON.stringify(cold.keys)}`);
 
     const warm = countPuts(kv);
     await watch(env, titles(10));
-    assert.equal(warm.n, 1, `a second batch of the same titles must only touch the rate-limit key, got ${JSON.stringify(warm.keys)}`);
+    assert.equal(warm.n, 0, `a second batch of the same titles must touch KV not at all, got ${JSON.stringify(warm.keys)}`);
   });
 
   it("still records a search, and spends nothing on it", async () => {

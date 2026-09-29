@@ -116,8 +116,8 @@ const CSP_REPORT_MAX_BYTES = 8192;
 
 // Per-IP reports a minute. One page firing one violation per render sends
 // reports the browser batches and rate-limits on its own; this is the ceiling
-// for something that is not a browser, and it costs one KV read per report
-// (see consumeRateLimit).
+// for something that is not a browser, and it costs one atomic D1 counter
+// (see consumeRateLimit, which is where every limit in this Worker lives).
 const CSP_REPORT_MAX_PER_MINUTE = 60;
 
 // CSP (P7-1): scripts are nonce-only. Every inline <script> this Worker emits
@@ -2805,41 +2805,198 @@ function clientIpKey(request) {
   return ip.toLowerCase();
 }
 
-// --- Shared per-IP rate limiter --------------------------------------------
+// --- Rate limits (P7-3) -----------------------------------------------------
 //
-// The same IP-keyed 60-second KV slot /api/preview, /api/creator/create,
-// /api/creator/restore and /admin/login each grew their own copy of. Pulled
-// out because the endpoints that spend THIS Worker owner's provider quota
-// (rather than the caller's own key) all need it and all want it to behave
-// identically.
+// One primitive, and it is exact. Every limit in this Worker used to be a KV
+// slot (`ratelimit:<bucket>:<ip>`): read the number, compare it, write it
+// back. That is the wrong shape for a counter, and KV says so itself -- reads
+// are edge-cached for up to a minute, so N requests arriving together all read
+// the same pre-increment value and all pass. The limit was therefore not a
+// limit under exactly the conditions it exists for: a script, a scraper or a
+// password guesser is parallel by nature. (S-13.)
 //
-// Returns true when the caller is over budget and the request should stop.
-// Follows the convention the existing call sites already established:
-// skipped entirely when CONFIGS isn't bound (every KV-optional feature here
-// degrades rather than fails closed), and the increment rides on
-// ctx.waitUntil so a rate-limit bookkeeping write never adds latency to the
-// request it is protecting. Callers check for a missing client IP
-// themselves, since what to return in that case is route-specific.
+// Limits now live in D1's `rate_counters` (migration 0015), whose
+// (scope, window_start) primary key makes the increment atomic:
+//
+//   INSERT INTO rate_counters (scope, window_start, count) VALUES (?, ?, ?)
+//     ON CONFLICT(scope, window_start) DO UPDATE SET count = count + excluded.count
+//
+// The increment and the read-back go in ONE batch, which D1 runs as one
+// transaction -- so two requests landing in the same instant cannot both read
+// the same pre-increment value and both be told they are under budget. A
+// single RETURNING statement would also work and is one round trip fewer; it
+// is deliberately not used, because the SQLite test harness models D1's
+// run()/all() split and correctness here matters more than one round trip.
+//
+// Windows are ALIGNED to the clock (window_start is the epoch millisecond the
+// window began at), not started by the first request. That is what makes the
+// counter one row per (bucket, key, window) rather than one row per key with a
+// TTL, and it is what Cloudflare's own rules do. The cost is the usual one: a
+// burst straddling a boundary can spend up to two windows' worth in a rolling
+// minute. The per-account daily budgets (readAuthFailureCount / noteAuthFailure
+// below) and the WAF rules (docs/OPERATIONS.md section 26) are the answer to
+// that, not a tighter short window.
+//
+// No D1 (a self-hosted copy), or 0015 not applied yet: an in-memory counter per
+// isolate. That is weaker -- several isolates each allow the full budget -- so
+// it is a degradation, not a design, and it is still strictly better than the
+// unlimited pass-through it replaces. What it is NOT is a KV write: KV is not a
+// counter and this file no longer pretends it is.
+//
+// Sweeping: rows are one per (bucket, key, window), which is small each and
+// many together, so old windows are deleted opportunistically -- at most once
+// every RATE_LIMIT_SWEEP_MS per isolate, on the write path, on ctx.waitUntil so
+// it never adds latency to the request that triggered it. The sweep needs the
+// window_start index (migration 0019); without it the delete scans, which is
+// slow but not wrong, and rate limits keep working either way.
+const RATE_LIMIT_SWEEP_MS = 10 * 60 * 1000;
+const RATE_LIMIT_KEEP_MS = 24 * 60 * 60 * 1000;
+const RATE_LIMIT_MEMO_MAX = 20000;
+let _rateLimitSweptAt = 0;
+const RATE_LIMIT_MEMO = new Map();
+const RATE_LIMIT_WARNED = new Set();
+
+// The epoch millisecond the window containing `now` began at.
+function rateLimitWindowStart(now, windowSec) {
+  const windowMs = Math.max(1, Math.floor(windowSec || 60)) * 1000;
+  return Math.floor(now / windowMs) * windowMs;
+}
+
+// Which counter: the bucket name (what is limited) and the key (who). Same
+// `bucket:key` scope the KV keys used, so a scope in a log line or an
+// admin query reads the way it always did.
+function rateLimitScope(bucket, key) {
+  return String(bucket || "unknown") + ":" + String(key == null ? "" : key);
+}
+
+// The increment and the read-back, one transaction. Returns the count AFTER
+// the spend, or null when this deployment cannot use the table (no D1, or
+// 0015 not applied) -- the caller then falls back to memory.
+async function d1RateLimitCount(env, scope, windowStart, spend) {
+  const statements = [];
+  if (spend > 0) {
+    statements.push(
+      env.DB.prepare(
+        "INSERT INTO rate_counters (scope, window_start, count) VALUES (?, ?, ?) " +
+        "ON CONFLICT(scope, window_start) DO UPDATE SET count = count + excluded.count"
+      ).bind(scope, windowStart, spend)
+    );
+  }
+  statements.push(
+    env.DB.prepare("SELECT count FROM rate_counters WHERE scope = ? AND window_start = ?").bind(scope, windowStart)
+  );
+  const out = await env.DB.batch(statements);
+  const last = out && out[out.length - 1];
+  const rows = (last && last.results) || [];
+  return rows.length ? Number(rows[0].count) || 0 : 0;
+}
+
+// Fire-and-forget cleanup of windows nobody can be counted against any more.
+function sweepRateCounters(env, ctx, now) {
+  if (now - _rateLimitSweptAt < RATE_LIMIT_SWEEP_MS) return;
+  _rateLimitSweptAt = now;
+  const cutoff = now - RATE_LIMIT_KEEP_MS;
+  const work = env.DB.prepare("DELETE FROM rate_counters WHERE window_start < ?").bind(cutoff).run()
+    .catch((e) => {
+      // No index yet (0019 not applied) makes this slow, not wrong; the table
+      // being missing means the counters are in memory and there is nothing
+      // to sweep.
+      if (!/no such table/i.test(String((e && e.message) || e))) console.warn("[ratelimit] sweep failed:", e);
+    });
+  if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(work);
+}
+
+// The per-isolate counter: the fallback path only (see the note above).
+//
+// Capped, and the cap is real: over MAX entries the oldest are dropped first
+// (a Map iterates in insertion order), which can only ever make a limit
+// LOSER for a client that stopped sending anything -- never for one that is
+// hammering, whose entry was just written. The alternative, expiring by the
+// window in the key, leaves the map at whatever a single window's traffic
+// made it, which is not a cap at all under exactly the load this path is for.
+function memoryRateLimitCount(scope, windowStart, spend) {
+  const key = scope + ":" + windowStart;
+  const used = RATE_LIMIT_MEMO.get(key) || 0;
+  if (spend <= 0) return used;
+  RATE_LIMIT_MEMO.set(key, used + spend);
+  let over = RATE_LIMIT_MEMO.size - RATE_LIMIT_MEMO_MAX;
+  if (over > 0) {
+    for (const k of RATE_LIMIT_MEMO.keys()) {
+      if (over-- <= 0) break;
+      RATE_LIMIT_MEMO.delete(k);
+    }
+  }
+  return used + spend;
+}
+
+// Read the current count, optionally spending first. Never throws: a limiter
+// that breaks must not break the request it is protecting, and a counter that
+// cannot be read is treated as "spend into memory" rather than "no limit".
+async function rateLimitCount(env, ctx, bucket, key, windowSec, spend) {
+  const amount = Number.isFinite(spend) && spend > 0 ? Math.floor(spend) : 0;
+  const now = Date.now();
+  const windowStart = rateLimitWindowStart(now, windowSec);
+  const scope = rateLimitScope(bucket, key);
+  if (env && env.DB) {
+    try {
+      const used = await d1RateLimitCount(env, scope, windowStart, amount);
+      if (amount > 0) sweepRateCounters(env, ctx, now);
+      return used;
+    } catch (e) {
+      const why = String((e && e.message) || e);
+      if (!/no such table/i.test(why) && !RATE_LIMIT_WARNED.has(why) && RATE_LIMIT_WARNED.size < 20) {
+        RATE_LIMIT_WARNED.add(why);
+        console.warn("[ratelimit] D1 counter failed, falling back to this isolate's memory:", why);
+      }
+    }
+  }
+  return memoryRateLimitCount(scope, windowStart, amount);
+}
+
+// Spend now, refuse over. Returns true when the caller is over budget and
+// should stop -- the same contract, and the same argument order, the KV
+// version had, so the call sites read the same.
+//
+// A request that is already over still spends (the row keeps growing inside
+// the window). That is deliberate: it keeps the counter a record of what
+// arrived, and it means a caller that keeps hammering stays refused until the
+// window rolls rather than getting a fresh budget the moment it stops.
+//
 // `cost` is how much of the bucket this call spends -- 1 for an ordinary
-// request, and for /api/bulk-resolve the number of titles it is about to
-// look up. That endpoint's real cost is someone else's TMDB quota, not the
-// request itself, so counting requests would move the ceiling by a factor of
-// eight the moment a request was split into several smaller invocations.
-// Every other caller omits it and behaves exactly as before.
-async function consumeRateLimit(env, ctx, bucket, ip, maxPerWindow, windowSec = 60, cost = 1) {
+// request, and for /api/bulk-resolve or /api/details/batch the number of
+// titles it is about to look up, because their real cost is someone else's
+// quota rather than the request itself.
+async function consumeRateLimit(env, ctx, bucket, key, maxPerWindow, windowSec = 60, cost = 1) {
   // No client IP means the request did not come through Cloudflare's edge,
   // which the hosted Worker always sits behind: refuse rather than let it
   // through unthrottled (that exemption existed for self-hosted copies).
-  if (!ip) return true;
-  if (!env || !env.CONFIGS) return false;
-  const key = `ratelimit:${bucket}:${ip}`;
-  const used = parseInt((await env.CONFIGS.get(key)) || "0", 10) || 0;
-  if (used >= maxPerWindow) return true;
-  const spend = Number.isFinite(cost) && cost > 0 ? Math.floor(cost) : 1;
-  const write = env.CONFIGS.put(key, String(used + spend), { expirationTtl: windowSec });
-  if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(write);
-  else await write;
-  return false;
+  if (!key) return true;
+  const used = await rateLimitCount(env, ctx, bucket, key, windowSec, cost);
+  return used > maxPerWindow;
+}
+
+// The read half, for the endpoints where a SUCCESS must not spend the budget
+// that protects them: a correct password is not a guess, and an admin who
+// signs in on a run of devices must not lock themselves out (the daily failure
+// budgets below are built on exactly that rule).
+//
+// A request refused at this gate spends nothing -- nothing was attempted, and
+// the count stays where it is for the rest of the window, so it is still
+// refused. That is the difference from consumeRateLimit above, which spends
+// first and so counts every arrival including the refused ones.
+//
+// Read-then-note is not atomic, so several guesses arriving in the same
+// instant can each see the pre-increment count. That is bounded, not open: the
+// daily budget is one atomic upsert per failure, so what concurrency can win
+// is a handful of extra attempts inside a minute, never extra attempts overall.
+async function readRateLimitCount(env, ctx, bucket, key, windowSec = 60) {
+  return rateLimitCount(env, ctx, bucket, key, windowSec, 0);
+}
+
+// The spend half, for a failure that has already happened.
+async function noteRateLimit(env, ctx, bucket, key, windowSec = 60, cost = 1) {
+  if (!key) return;
+  await rateLimitCount(env, ctx, bucket, key, windowSec, cost);
 }
 
 // --- Per-account authentication failure budget -------------------------------

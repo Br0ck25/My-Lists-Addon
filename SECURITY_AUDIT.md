@@ -262,8 +262,10 @@ Tokens arrive in URL fragments after OAuth (`25_:3438`, `3704`, `3819`, `5212`).
 
 ### S-13 — Rate limiting
 
-- **Where.** KV `ratelimit:*` (`02_:1698-1708`, plus 8 inline copies). The code acknowledges that stale reads let bursts through. Most limits key only on IP; IPv6 is collapsed to /64 (good).
-- **Proposed.** WAF rate-limiting rules for per-IP limits at the edge, plus D1 atomic counters for per-account and per-credential limits (FT-13). For login: per-username and per-IP limits with exponential backoff.
+- **Where.** Every limiter in the Worker: `consumeRateLimit` (`02_`) and its call sites in `25_`, `26_` and `28_`.
+- **Was.** KV `ratelimit:*` (`02_:1698-1708`, plus 8 inline copies). The code acknowledged that stale reads let bursts through — KV caches reads at the edge for up to a minute and has no atomic increment, so a parallel burst (what a scraper or a guesser is) all read the same pre-increment value and all passed. Most limits keyed only on IP; IPv6 is collapsed to /64 (good).
+- **~~Proposed.~~ Done by P7-3 (the code half):** the counters are D1 rows in `rate_counters` (migration 0015), one per bucket, client and clock-aligned window, incremented by an atomic upsert and read back inside the same `batch` — one transaction, which D1 does not interleave with another batch. **No `ratelimit:` KV write remains anywhere** (`tests/rate-limit.test.mjs` asserts that over every limiter with D1 bound and without it, and that two requests arriving together cannot both spend a budget of one). The credential endpoints spend only on a *failed* guess (a correct secret must not consume the budget that protects it); everything else spends up front, refused requests included. With no D1 the counter is per isolate: looser, never unlimited, and logged once per distinct reason. The per-IP edge half is the operator's, written as a short optional list with thresholds in `docs/OPERATIONS.md` §6 — **nothing has to be clicked for the code to work.**
+- **What is left.** No per-username backoff on creator sign-in (`/api/session` verifies the key hash and is limited per IP at 60/min, `creatorauth`; the per-account daily budget of 5 (`RESET_KEY_ACCOUNT_MAX_FAILURES`) covers key *reset*, not sign-in) — it matters less now that the per-IP half is exact and the key space is ~60 bits, but a per-account counter with a delay is still the better shape. The daily budgets stay where they are (`authfail:<scope>:<day>`, atomic on D1, KV fallback).
 
 ### S-14 — Secrets in logs
 
@@ -335,4 +337,4 @@ Tokens arrive in URL fragments after OAuth (`25_:3438`, `3704`, `3819`, `5212`).
    - S-21 (confirm rotation).
 2. **Phase 7 (with sessions):** S-01, S-02, S-04, S-06, S-08, S-09, S-11, S-16.
 3. **Phase 6 (with the frontend rewrite):** S-05 CSP and Trusted Types.
-4. **Ongoing:** S-10 Cloudflare Access for admin, S-12, S-13, S-14.
+4. **Ongoing:** S-10 (the code half is P7-2; the Access application is a dashboard step), S-12, S-13 (the code half is P7-3; the WAF rules are optional and listed in `docs/OPERATIONS.md` §6), S-14.

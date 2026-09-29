@@ -1401,18 +1401,13 @@ Sitemap: ${url.origin}/sitemap.xml`;
       }
 
       // Unauthenticated and heavyweight: each call can fan out to TMDB /
-      // Trakt / MDBList. Same IP-keyed KV slot as create/restore/feedback
-      // -- 240/minute provides sufficient budget for browsing multi-card
+      // Trakt / MDBList. Same IP-keyed bucket as create/restore/feedback --
+      // 240/minute provides sufficient budget for browsing multi-card
       // Discover shelves while protecting against automated scraping.
       const ip = clientIpKey(request);
       if (!ip) return json({ ok: false, error: "Couldn't load that list." }, 400, { "Cache-Control": "no-store" });
-      if (env && env.CONFIGS) {
-        const rateKey = `ratelimit:preview:${ip}`;
-        const n = parseInt((await env.CONFIGS.get(rateKey)) || "0", 10) || 0;
-        if (n >= 240) {
-          return json({ ok: false, error: "Couldn't load that list." }, 429, { "Cache-Control": "no-store" });
-        }
-        ctx.waitUntil(env.CONFIGS.put(rateKey, String(n + 1), { expirationTtl: 60 }));
+      if (await consumeRateLimit(env, ctx, "preview", ip, 240)) {
+        return json({ ok: false, error: "Couldn't load that list." }, 429, { "Cache-Control": "no-store" });
       }
 
       const sourceUrls = previewSourceUrls(testUrl);
@@ -6642,10 +6637,7 @@ function generateSearchVariations(query) {
       // ok:true-on-limit behaviour (it's a beacon, not a feature).
       const searchIp = clientIpKey(request);
       if (!searchIp) return json({ ok: true });
-      const searchRateKey = `ratelimit:tracksearch:${searchIp}`;
-      const searchAttempts = parseInt((await env.CONFIGS.get(searchRateKey)) || "0", 10);
-      if (searchAttempts >= 30) return json({ ok: true });
-      ctx.waitUntil(env.CONFIGS.put(searchRateKey, String(searchAttempts + 1), { expirationTtl: 60 }));
+      if (await consumeRateLimit(env, ctx, "tracksearch", searchIp, 30)) return json({ ok: true });
 
       if (body && typeof body.query === "string" && body.query.trim()) {
         ctx.waitUntil(recordSearchQuery(env, body.query.trim()));
@@ -6670,13 +6662,9 @@ function generateSearchVariations(query) {
       // anonymous write endpoints here use. Returns ok:true rather than
       // 429 on purpose: this is a fire-and-forget beacon, and a real
       // client has nothing useful to do with a rejection.
-      // CONFIGS is guaranteed bound at this point (checked above).
       const trackIp = clientIpKey(request);
       if (!trackIp) return json({ ok: true });
-      const trackRateKey = `ratelimit:trackevent:${trackIp}`;
-      const trackAttempts = parseInt((await env.CONFIGS.get(trackRateKey)) || "0", 10);
-      if (trackAttempts >= 30) return json({ ok: true });
-      ctx.waitUntil(env.CONFIGS.put(trackRateKey, String(trackAttempts + 1), { expirationTtl: 60 }));
+      if (await consumeRateLimit(env, ctx, "trackevent", trackIp, 30)) return json({ ok: true });
 
       const events = Array.isArray(body.events) ? body.events.slice(0, 50) : [];
       // "catalog-add" is deliberately absent: no client has ever sent it
@@ -7215,12 +7203,9 @@ function generateSearchVariations(query) {
       // somebody is still using.
       const saveIp = clientIpKey(request);
       if (!saveIp) return json({ ok: false, error: "Could not process this request." }, 400);
-      const saveRateKey = `ratelimit:save:${saveIp}`;
-      const saveAttempts = parseInt((await env.CONFIGS.get(saveRateKey)) || "0", 10);
-      if (saveAttempts >= 20) {
+      if (await consumeRateLimit(env, ctx, "save", saveIp, 20)) {
         return json({ ok: false, error: "Too many saves just now. Please wait a minute and try again." }, 429);
       }
-      await env.CONFIGS.put(saveRateKey, String(saveAttempts + 1), { expirationTtl: 60 });
 
       let body;
       try {
