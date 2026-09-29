@@ -134,6 +134,11 @@ dead_letter_queue = "mylists-jobs-dlq"
 # home screen's rows once per install and hour instead of each row rebuilding
 # the rows above it. Safe to turn on and off (docs/OPERATIONS.md section 19).
 # FF_MATERIALIZER = "1"
+# Optional, Phase 7 (P7-1): "0" turns OFF the report-only
+# require-trusted-types-for header (CSP/Trusted Types reports posted to
+# /api/csp-report). Unset means on. The enforced policy is unaffected either
+# way; this only stops the reports (docs/OPERATIONS.md section 24).
+# FF_CSP_TT_REPORT = "0"
 # Optional, 0-100: share of existing install links whose keys and tokens are
 # moved into encrypted D1 storage on first use (needs TOKEN_ENCRYPTION_KEY)
 # INSTALL_MIGRATION_PERCENT = "0"

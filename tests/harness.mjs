@@ -447,6 +447,11 @@ export async function call(env, path, opts = {}) {
     method = "GET",
     json,
     form,
+    // A raw body, for a request that is not JSON and cannot go through `json`
+    // -- a browser's CSP report (application/csp-report,
+    // application/reports+json) is the one that needs it (tests/csp.test.mjs).
+    // Named rawBody, not body: the response parsing below already owns `body`.
+    rawBody,
     headers = {},
     ip = nextIp(),
     cookie,
@@ -473,6 +478,8 @@ export async function call(env, path, opts = {}) {
     const fd = new FormData();
     for (const [k, v] of Object.entries(form)) fd.set(k, v);
     init.body = fd;
+  } else if (rawBody !== undefined) {
+    init.body = rawBody;
   } else if (method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE") {
     if (!h["Content-Type"] && !h["content-type"]) {
       h["Content-Type"] = "application/json";

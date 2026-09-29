@@ -276,6 +276,45 @@ for i, s in enumerate(styles):
         print(f"FAIL: <style> block {i} unbalanced: {{={o} }}={c}"); sys.exit(1)
 print(f"  CSS brace balance OK ({len(styles)} blocks, {tot_o} pairs)")
 
+# --- P7-1: every inline <script>/<style> carries the CSP nonce ---
+#
+# script-src is 'self' 'nonce-<one per response>' now -- there is no
+# 'unsafe-inline' left to catch a block that forgot one. A page whose inline
+# script is not stamped does not merely lose a feature: the whole bundle is
+# refused by the browser and the page is dead on arrival. That failure is
+# invisible to everything else here (this file parses the block and the bundle
+# is fine; it is the BROWSER that decides not to run it), so it is checked
+# directly, on every render, and on the placeholder rather than a nonce --
+# render_check renders with the same placeholder the Worker stores and the
+# boundary substitutes (CSP_NONCE_PLACEHOLDER, 00_constants.js).
+#
+# <script src=...> needs nothing (script-src 'self' covers it), and neither
+# does a block that is split out to /app.js or /app.css before it is served --
+# those are matched here by the same markers splitAppBundle/splitAppCss use, so
+# a marker that drifts out of step with the markup (which would silently leave
+# 2MB of bundle inline) fails here too.
+PLACEHOLDER_ATTR = 'nonce="%%CSP_NONCE%%"'
+inline_scripts = [m for m in re.finditer(r'<script([^>]*)>(.*?)</script>', html, re.DOTALL)
+                  if not re.search(r'\bsrc\s*=', m.group(1))]
+uncovered = [m for m in inline_scripts if PLACEHOLDER_ATTR not in m.group(1)]
+inline_styles = [m for m in re.finditer(r'<style([^>]*)>(.*?)</style>', html, re.DOTALL)]
+uncovered += [m for m in inline_styles if PLACEHOLDER_ATTR not in m.group(1)]
+if uncovered:
+    print(f"FAIL: {len(uncovered)} inline <script>/<style> block(s) without the CSP nonce:")
+    for m in uncovered[:6]:
+        head = m.group(0)[:120].replace('\n', ' ')
+        print(f"    {head}...")
+    print("  script-src is nonce-only (P7-1): an unstamped block is blocked by the")
+    print("  browser and the page stops working. Stamp it with the placeholder the")
+    print("  boundary substitutes -- " + PLACEHOLDER_ATTR)
+    sys.exit(1)
+print(f"  inline blocks all carry the CSP nonce ({len(inline_scripts)} scripts, {len(inline_styles)} styles)")
+
+# (The bundle/CSS split's own invariant -- that a SERVED page names
+# /app.js?v=<hash> rather than carrying 1.3MB inline -- is asserted in
+# tests/csp.test.mjs against the real response, because this file sees the
+# pre-split render, where the markers are supposed to be present.)
+
 # --- unresolved template placeholders ---
 leftovers = re.findall(r'\$\{[a-zA-Z_$]', html)
 print(f"  unresolved ${{ placeholders: {len(leftovers)}")

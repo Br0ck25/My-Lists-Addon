@@ -27,6 +27,15 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 8. **Recommended: set up the background jobs queue** (Phase 5, `docs/OPERATIONS.md` §18): create the queues `mylists-jobs` and `mylists-jobs-dlq`, make this Worker the consumer of `mylists-jobs` (batch size 25, 5 retries, dead-letter queue `mylists-jobs-dlq`), bind `mylists-jobs` to the Worker as `JOBS`, then press **Send a test job** in `/admin` → Maintenance. Without it everything works as before.
 
+Nothing to configure for the strict CSP (P7-1, below): it is part of the Worker itself. One optional variable is described there — `FF_CSP_TT_REPORT=0` turns off the report-only Trusted Types reports (`docs/OPERATIONS.md` §24).
+
+### 🔒 A strict Content-Security-Policy, and no more third-party requests (P7-1)
+
+- **Every page now carries a policy that lets only its own code run.** `script-src 'self' 'nonce-…'` — `'unsafe-inline'` and the jsDelivr host are gone, and the nonce is new for every response, so a `<script>` somebody managed to inject into a page is refused by the browser instead of running. The style half is split the same way for `<style>` elements; `style-src` keeps `'unsafe-inline'` for the app's own `style="…"` attributes, which a nonce cannot cover (documented in `securityHeaders`). If a page ever came out without its nonce it would be visibly dead, not quietly loosened, and both `html_checks.py` and `tests/csp.test.mjs` fail the build if one does.
+- **The page makes no third-party request any more.** The zip reader (fflate 0.8.2) is vendored into the Worker and served from `/vendor/fflate-0.8.2.js` — cacheable forever, cached by the service worker, so importing an export zip works offline too where it used to need jsDelivr. The three Google Fonts families are replaced by the device's own fonts (`docs/DECISIONS.md` D-20): page headings keep their weight and size, the letterforms are whatever the reader's system uses, and the two `preconnect`s and the stylesheet are gone. `tests/csp.test.mjs` pins the vendored bytes by SHA-256 and unzips a real zip with them.
+- **Trusted Types is in report-only mode** (`require-trusted-types-for 'script'`), which blocks nothing: it reports what *would* be blocked, because the app still assigns to `innerHTML` in ~300 places and that is a to-do list rather than a switch. Reports go to `POST /api/csp-report`, which is anonymous by necessity (a browser sends no cookie and no `Origin`), answers 204 to everything, stores nothing per report, is capped at 8 KB and 60/min per IP, counts in Analytics Engine when the binding is set, and writes one `[csp]` line per distinct violation per isolate to Workers Logs. Setting `FF_CSP_TT_REPORT=0` turns the reports off without touching the enforced policy.
+- **Nothing to undo** if the deploy is rolled back: the previous file serves the previous header and the CDN script tag.
+
 ### 🩹 Fixes from reviewing Phase 6
 
 Nothing to configure and nothing to undo; all of it ships with the next deploy.

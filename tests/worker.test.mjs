@@ -1830,40 +1830,64 @@ describe("audit fix: recovery answers are throttled per account, not just per IP
   });
 });
 
-// The page loads fflate from a CDN that the CSP's script-src allows, so
-// whatever that URL returns runs with full page privileges -- and this page
-// keeps myListAddon:creatorKey, the MDBList/Simkl access tokens and the
-// provider API keys in localStorage, all readable by any script in it.
-// Pinning the version is not integrity checking.
-describe("audit fix: the CDN script is integrity-pinned", () => {
-  it("carries an SRI hash and crossorigin on every external script", async () => {
+// This block used to assert that the page's one CDN script (fflate, from
+// cdn.jsdelivr.net) carried an SRI hash -- the page keeps
+// myListAddon:creatorKey, the MDBList/Simkl access tokens and the provider API
+// keys in localStorage, all readable by any script in it, so what that URL
+// returned had to be the bytes it claimed. P7-1 removed the third-party origin
+// instead of pinning it: the zip reader is this Worker's own file now, and
+// script-src has no host in it at all. What is worth asserting is that nothing
+// cross-origin is left, and that the vendored copy is the one being served.
+describe("P7-1: the page loads no third-party script, and the vendored one is ours", () => {
+  it("serves every script from this origin", async () => {
     const env = makeEnv();
     const page = await call(env, "/");
-    const externals = [...page.text.matchAll(/<script\b[^>]*\bsrc="(https?:[^"]+)"[^>]*>/g)];
-    assert.ok(externals.length > 0, "expected at least one external script tag");
-    for (const [tag, src] of externals) {
-      assert.match(tag, /\bintegrity="sha(256|384|512)-[A-Za-z0-9+/=]+"/, `no SRI hash on ${src}`);
-      // Required for SRI to be enforced on a cross-origin script.
-      assert.match(tag, /\bcrossorigin="anonymous"/, `no crossorigin on ${src}`);
-      // A hash only means anything against a pinned version.
-      assert.match(src, /@\d+\.\d+\.\d+\//, `unpinned version in ${src}`);
+    const srcs = [...page.text.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map((m) => m[1]);
+    assert.ok(srcs.length >= 2, `expected the bundle and the vendored zip reader, found ${srcs.length}`);
+    for (const src of srcs) {
+      assert.ok(src.startsWith("/"), `a script is loaded from another origin: ${src}`);
     }
+    assert.ok(srcs.some((s) => s.startsWith("/app.js?v=")), "the shared bundle is still /app.js");
+    assert.ok(srcs.includes("/vendor/fflate-0.8.2.js"), "the zip reader is self-hosted now");
+    assert.equal(/<script\b[^>]*\bsrc="https?:/.test(page.text), false, "no cross-origin script may remain");
+    // Nothing that would fetch from another origin on first paint: no
+    // preconnect, no webfont stylesheet, no external stylesheet of any kind.
+    // Same-origin links may be absolute (the manifest, canonical and icon
+    // hrefs are), so each one is resolved rather than pattern-matched.
+    // (Comments in the markup may still NAME the old origins -- they are where
+    // the change was made; only attributes load anything.)
+    const linkHrefs = [...page.text.matchAll(/<link\b[^>]*\bhref="([^"]+)"/g)].map((m) => m[1]);
+    for (const href of linkHrefs) {
+      const url = new URL(href, "https://example.test");
+      assert.equal(url.origin, "https://example.test", `a <link> points off-origin: ${href}`);
+    }
+    assert.equal(/rel="preconnect"/.test(page.text), false, "a preconnect hint is back");
+    // And the policy itself has no host to fall back on for scripts, styles or
+    // fonts: the whole point of P7-1 is that an injected URL has nowhere to go.
+    const csp = page.headers.get("content-security-policy") || "";
+    assert.equal(/cdn\.jsdelivr\.net|fonts\.googleapis\.com|fonts\.gstatic\.com/.test(csp), false,
+      `a third-party origin is allowed by the CSP: ${csp}`);
+    const scriptSrc = (csp.match(/script-src ([^;]*)/) || [])[1] || "";
+    assert.equal(/https?:/.test(scriptSrc), false,
+      `script-src may not name a host at all: ${scriptSrc}`);
   });
 
-  it("pins a hash that matches the bytes the CDN actually serves", { skip: !process.env.NETWORK_TESTS }, async () => {
-    // Opt-in (NETWORK_TESTS=1): the rest of the suite is hermetic, and CI
-    // should not fail because a CDN is briefly unreachable. Run this when
-    // changing the script URL or bumping its version.
+  it("serves the vendored zip reader byte for byte, cacheable forever", async () => {
     const env = makeEnv();
-    const page = await call(env, "/");
-    const m = page.text.match(/<script\b[^>]*\bsrc="(https:[^"]+)"[^>]*\bintegrity="sha384-([A-Za-z0-9+/=]+)"/);
-    assert.ok(m, "no integrity-pinned external script found");
-    const [, src, pinned] = m;
-    const res = await fetch(src);
+    const res = await call(env, "/vendor/fflate-0.8.2.js");
     assert.equal(res.status, 200);
-    const digest = await crypto.subtle.digest("SHA-384", await res.arrayBuffer());
-    const actual = Buffer.from(digest).toString("base64");
-    assert.equal(actual, pinned, `SRI hash does not match what ${src} serves -- regenerate it`);
+    assert.equal(res.headers.get("content-type"), "application/javascript; charset=utf-8");
+    assert.equal(res.headers.get("cache-control"), "public, max-age=31536000, immutable");
+    // The version is in the path, so the hash is pinned to the version: these
+    // are the bytes of fflate 0.8.2's UMD build, and a bump changes both.
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(res.text));
+    const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+    assert.equal(hex, "c3b34f2e9f5e74d4d7d64e01cac7a0c01954c6c406414d42185c7b53d6875ddf",
+      "the served bytes are not the vendored fflate 0.8.2 build");
+    // A repeat load is a 304, not another 32KB.
+    const again = await call(env, "/vendor/fflate-0.8.2.js", { headers: { "If-None-Match": res.headers.get("etag") } });
+    assert.equal(again.status, 304);
+    assert.equal(again.text, "");
   });
 });
 

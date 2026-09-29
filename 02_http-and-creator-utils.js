@@ -79,25 +79,87 @@ function isPrivateApiPath(path) {
 // set a more specific value for one of these (none do today) would still
 // win, rather than this clobbering it.
 //
-// CSP is deliberately not the strict, script-src-locked-down kind: this app
-// still serves its page as inline <script> blocks (the builder bundle and the
-// per-request preamble, and /admin's own script), which only work with
-// 'unsafe-inline' on script-src. That half is P7-1's, and it is what is left:
-// the inline on*= handlers this comment used to cite are gone from both pages
-// -- P6-8 on the builder, P6-10 on /admin -- and are now data-act attributes
-// run by a delegated listener instead, checked the same way (html_checks.py
-// resolves every action name against the page that declares it, and fails the
-// build on an inline handler, whatever it is called). Removing the handlers is
-// what makes a nonce/hash for the <script> blocks a header change away rather
-// than part of a much larger rewrite. What this CSP
-// still buys, even with 'unsafe-inline' allowed: no loading of scripts/
-// styles/fonts from any origin except the ones this app actually uses
-// (jsDelivr for fflate, Google Fonts, YouTube for trailer embeds), no
-// <object>/<embed> plugins, no <base> tag hijacking, and (via
-// frame-ancestors) this site can't be iframed by someone else's page for
-// a clickjacking attempt.
-function securityHeaders() {
-  return {
+// --- the CSP nonce (P7-1) ----------------------------------------------------
+//
+// Every inline <script> and <style> a page carries is stamped with a one-time
+// nonce, and the Content-Security-Policy that goes with the response names
+// only that nonce -- so an injected <script> is refused by the browser even
+// when it reaches the HTML. `'unsafe-inline'` is gone from script-src (see
+// securityHeaders, 02_http-and-creator-utils.js).
+//
+// The markup is written with the PLACEHOLDER below, not a nonce: the page
+// renderers are memoized (renderBuilderCached, 02_) and the HTML is shared,
+// while the nonce must not be. The placeholder is what the memo holds and what
+// the ETag is computed from -- so a repeat visit is still a 304 -- and the
+// real nonce is substituted once per response at the Worker's boundary
+// (withSecurityHeaders, 02_), which is also where the header is set. One place
+// substitutes, so a page that forgets is a page that does not run, and the
+// build fails on one (html_checks.py) rather than shipping it.
+//
+// It is deliberately not a valid base64 nonce value: nothing that is not this
+// exact placeholder can be mistaken for one.
+const CSP_NONCE_PLACEHOLDER = "%%CSP_NONCE%%";
+
+// Where browsers post CSP and Trusted Types reports
+// (require-trusted-types-for is report-only for now; see securityHeaders).
+// Anonymous by necessity -- a browser sends these itself, with no Origin and
+// no cookie -- so it is exempt from the CSRF check (verifyCsrf, 02_) and does
+// nothing but count (25_api-catalog-routes.js).
+const CSP_REPORT_PATH = "/api/csp-report";
+
+// The most of a report this Worker will read. Real ones are a few hundred
+// bytes (the Reporting API batches a handful per POST), and the endpoint is
+// anonymous, so anything larger is refused before it is parsed -- a 204, so a
+// browser learns nothing and a stranger gets no work done. See handleCspReport
+// (02_http-and-creator-utils.js).
+const CSP_REPORT_MAX_BYTES = 8192;
+
+// Per-IP reports a minute. One page firing one violation per render sends
+// reports the browser batches and rate-limits on its own; this is the ceiling
+// for something that is not a browser, and it costs one KV read per report
+// (see consumeRateLimit).
+const CSP_REPORT_MAX_PER_MINUTE = 60;
+
+// CSP (P7-1): scripts are nonce-only. Every inline <script> this Worker emits
+// is stamped with a fresh nonce per response (cspNonce below; the markup holds
+// CSP_NONCE_PLACEHOLDER, just below), and script-src names that
+// nonce and nothing else. 'unsafe-inline' is gone, which is the whole point:
+// until P7-1 an injected <script> ran, as long as it got into the HTML, and a
+// stored XSS was one unescaped field away from being script execution rather
+// than markup. It also means a third-party script cannot be loaded even if a
+// URL is injected -- script-src has no host to fall back on.
+//
+// The history matters for reading this: the inline on*= handlers the CSP used
+// to need 'unsafe-inline' for are gone from both pages -- P6-8 on the builder,
+// P6-10 on /admin -- replaced by data-act attributes run by one delegated
+// listener, and html_checks.py fails the build on a handler, whatever it is
+// called. P7-1 closed the second half: the inline <script> blocks themselves.
+//
+// style-src keeps 'unsafe-inline'. That is deliberate and it is about
+// ATTRIBUTES, not elements: the app writes style="..." on elements it builds
+// in strings (hundreds of sites), and a nonce cannot cover an attribute. What
+// style-src-elem does cover is the element half -- inline <style> blocks and
+// <link rel=stylesheet> are nonce-and-self only, with style-src as the
+// fallback for a browser that does not know style-src-elem. CSS injection
+// remains possible in an XSS; script execution, which is what a stolen
+// Provider key or Creator Key needs, does not.
+//
+// What this CSP buys beyond scripts: no loading of styles or fonts from any
+// origin but this one, no <object>/<embed> plugins, no <base> tag hijacking,
+// no framing by another site (frame-ancestors), and only YouTube may be framed
+// in (the trailer embeds).
+//
+// require-trusted-types-for 'script' rides along in REPORT-ONLY mode, with
+// reports posted to CSP_REPORT_PATH (25_api-catalog-routes.js). The app
+// assigns to innerHTML in ~300 places, so enforcement would break the UI
+// today; report-only is how the remaining sinks are found before that changes.
+// `FF_CSP_TT_REPORT=0` (dashboard variable) drops the report-only header for a
+// deployment that does not want the traffic; it does not affect enforcement of
+// the policy above.
+function securityHeaders(nonce, env) {
+  const scriptSrc = nonce ? "'self' 'nonce-" + nonce + "'" : "'self'";
+  const styleElemSrc = nonce ? "'self' 'nonce-" + nonce + "'" : "'self'";
+  const headers = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "SAMEORIGIN",
     "Referrer-Policy": "strict-origin-when-cross-origin",
@@ -105,17 +167,158 @@ function securityHeaders() {
     "Strict-Transport-Security": "max-age=15552000; includeSubDomains",
     "Content-Security-Policy": [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "font-src 'self' https://fonts.gstatic.com data:",
+      "script-src " + scriptSrc,
+      "style-src 'self' 'unsafe-inline'",
+      "style-src-elem " + styleElemSrc,
+      // No webfont origin: the pages use the device's own fonts (P7-1, D-20).
+      "font-src 'self' data:",
+      // Posters come from whatever host a provider's artwork is on, so img-src
+      // cannot be a list of hosts; it is https-or-this-origin, no data: for
+      // documents and no http at all.
       "img-src 'self' https: data:",
+      // The client talks to provider APIs directly (TMDB, Trakt, MDBList,
+      // Simkl), so this stays https:. Narrowing it to a host list is a
+      // follow-up, not part of P7-1.
       "connect-src 'self' https:",
       "frame-src https://www.youtube.com",
       "frame-ancestors 'self'",
       "base-uri 'self'",
       "object-src 'none'",
+      "worker-src 'self'",
     ].join("; "),
   };
+  // Report-only, and only where a browser will actually send something: an
+  // HTML document. The endpoint is same-origin, so no outbound connection is
+  // added.
+  if (!env || env.FF_CSP_TT_REPORT !== "0") {
+    headers["Content-Security-Policy-Report-Only"] =
+      "require-trusted-types-for 'script'; report-uri " + CSP_REPORT_PATH + "; report-to csp-endpoint";
+    headers["Reporting-Endpoints"] = "csp-endpoint=\"" + CSP_REPORT_PATH + "\"";
+  }
+  return headers;
+}
+
+// A fresh nonce for one response: 128 bits from the platform CSPRNG, in
+// base64url (the CSP grammar accepts it, and it never needs escaping in an
+// attribute). Called once per request in the boundary, so two responses never
+// share one -- which is the entire security property, and why the page
+// renderers hold CSP_NONCE_PLACEHOLDER instead of a value.
+function cspNonce() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return base64UrlEncodeBytes(bytes);
+}
+
+// --- CSP / Trusted Types report sink (P7-1) ---------------------------------
+//
+// Where a browser posts what a report-only policy refused. It is anonymous by
+// construction -- the browser sends it, with no cookie, no Origin and a
+// content type of application/csp-report or application/reports+json -- which
+// is why verifyCsrf exempts it and why nothing here is trusted:
+//
+//   - no storage write per report. Counting is one Analytics Engine data
+//     point when that binding exists (cheap, and where the numbers belong),
+//     plus one console line per distinct violation PER ISOLATE, so a page
+//     that fires the same report on every render cannot flood the logs;
+//   - the body is capped (CSP_REPORT_MAX_BYTES) and the
+//     endpoint is rate-limited per IP by the caller, so a spammed endpoint
+//     costs a 204 rather than a KV write;
+//   - a malformed report is answered 204 all the same. A browser ignores the
+//     status, and telling a stranger what parsed is free information.
+//
+// What it is FOR: require-trusted-types-for 'script' is report-only (see
+// securityHeaders), and the reports are how the innerHTML sinks that would
+// break under enforcement get found before it is turned on. Nothing depends on
+// them: if this endpoint is unreachable or CONFIGS is unbound, the page is
+// unaffected.
+const _cspLogged = new Set();
+
+function cspReportSignature(kind, directive, blocked) {
+  return kind + "|" + directive + "|" + blocked;
+}
+
+function parseCspReport(raw) {
+  // Two shapes, one parser: the Reporting API posts an ARRAY of
+  // { type, body } (application/reports+json), and the older report-uri
+  // posts an object with a "csp-report" member (application/csp-report).
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  const out = [];
+  const push = (kind, body) => {
+    if (!body || typeof body !== "object") return;
+    // Both spellings of every field: the Reporting API is camelCase
+    // (effectiveDirective, blockedURL) and the older report-uri format is
+    // hyphenated (effective-directive, blocked-uri). A browser sends one or
+    // the other depending on which directive asked for the report.
+    const directive = String(
+      body.effectiveDirective || body["effective-directive"] ||
+      body.violatedDirective || body["violated-directive"] ||
+      body.violationType || ""
+    ).slice(0, 80);
+    // Where the refused thing came from. Only the ORIGIN is kept off the URL:
+    // a blocked-uri can carry a payload (...?q=<script>, a data: document),
+    // and this line ends up in logs.
+    let blocked = String(body.blockedURI || body["blocked-uri"] || body.blockedURL || "");
+    try {
+      const u = new URL(blocked);
+      blocked = u.protocol + "//" + u.host;
+    } catch {
+      blocked = blocked.slice(0, 60);
+    }
+    out.push({ kind, directive, blocked });
+  };
+  if (Array.isArray(parsed)) {
+    for (const entry of parsed.slice(0, 20)) push(String((entry && entry.type) || "csp-violation"), entry && entry.body);
+  } else if (parsed && typeof parsed === "object") {
+    push("csp-violation", parsed["csp-report"] || parsed);
+  }
+  return out;
+}
+
+async function handleCspReport(request, env, ctx) {
+  const done = () => new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
+  const declared = parseInt(request.headers.get("Content-Length") || "0", 10) || 0;
+  if (declared > CSP_REPORT_MAX_BYTES) return done();
+  let raw = "";
+  try {
+    raw = await request.text();
+  } catch {
+    return done();
+  }
+  if (!raw || raw.length > CSP_REPORT_MAX_BYTES) return done();
+
+  const reports = parseCspReport(raw);
+  for (const report of reports) {
+    // One log line per distinct violation per isolate. The set is small and
+    // bounded rather than unbounded: past the limit the endpoint still counts
+    // into Analytics Engine, it just stops logging new signatures.
+    const signature = cspReportSignature(report.kind, report.directive, report.blocked);
+    if (_cspLogged.size < 200 && !_cspLogged.has(signature)) {
+      _cspLogged.add(signature);
+      console.warn("[csp] refused:", report.kind, report.directive || "(no directive)", report.blocked || "(no source)");
+    }
+    try {
+      if (env && env.ANALYTICS && typeof env.ANALYTICS.writeDataPoint === "function") {
+        env.ANALYTICS.writeDataPoint({
+          blobs: [report.kind, report.directive, report.blocked],
+          doubles: [1],
+          indexes: ["csp:" + report.kind],
+        });
+      }
+    } catch {
+      // Metrics must never affect a response.
+    }
+  }
+  if (ctx && typeof ctx.waitUntil === "function") {
+    // Nothing to wait for today; this is where a sampled KV counter would go if
+    // the owner ever wants the number on the admin dashboard (P8-2 moves the
+    // admin's counters to Analytics Engine and would read it from there).
+  }
+  return done();
 }
 
 // Wraps a Response with the headers above, without disturbing anything the
@@ -123,9 +326,28 @@ function securityHeaders() {
 // like Content-Type/Cache-Control/CORS) -- see securityHeaders' own
 // comment for why this is applied here, once, rather than at each call
 // site.
-function withSecurityHeaders(response, privatePath = false, extraSetCookie = null) {
+//
+// It is also where the nonce is put into the page (P7-1). The renderers are
+// memoized and the HTML is shared, so they emit CSP_NONCE_PLACEHOLDER where a
+// nonce belongs; this substitutes the real one, once, for HTML responses that
+// carry it. Doing it here rather than in each renderer is the same argument as
+// the headers: a page cannot forget, because a page does not decide.
+//
+// A 304 or a bodyless response has nothing to substitute -- and must not: its
+// whole point is that the browser already holds the bytes.
+async function withSecurityHeaders(response, privatePath = false, extraSetCookie = null, nonce = "", env = null) {
   const headers = new Headers(response.headers);
-  const extra = securityHeaders();
+  let body = response.body;
+  const contentType = headers.get("Content-Type") || "";
+  if (nonce && body !== null && contentType.indexOf("text/html") === 0) {
+    // response.text() on a string body is the string; on a stream it is read
+    // once, which is fine because nothing else reads it.
+    const html = await response.text();
+    body = html.indexOf(CSP_NONCE_PLACEHOLDER) === -1
+      ? html
+      : html.split(CSP_NONCE_PLACEHOLDER).join(nonce);
+  }
+  const extra = securityHeaders(nonce, env);
   for (const key in extra) {
     if (!headers.has(key)) headers.set(key, extra[key]);
   }
@@ -134,7 +356,9 @@ function withSecurityHeaders(response, privatePath = false, extraSetCookie = nul
   }
   // Deliberately set rather than defaulted -- see isPrivateApiPath.
   if (privatePath) headers.set("Cache-Control", "no-store");
-  return new Response(response.body, {
+  // `body`, not response.body: when the nonce was substituted this is the
+  // rewritten string, and when it was not it IS response.body.
+  return new Response(body, {
     status: response.status,
     statusText: response.statusText,
     headers,
@@ -228,6 +452,16 @@ function verifyCsrf(request) {
     return null;
   }
   if (path === "/admin/login" || path === "/admin/logout") {
+    return null;
+  }
+  // A CSP/Trusted Types report is sent by the BROWSER, not by a page's script:
+  // no Origin, no cookie, and a content type of application/csp-report or
+  // application/reports+json. It has to be exempt from the same-origin and
+  // application/json checks, or every report is a 403 and the report-only
+  // policy has no sink (P7-1). What keeps this from being a way in: the
+  // endpoint stores nothing per request, caps the body and is rate-limited
+  // (handleCspReport, 02_, and its route in 25_).
+  if (path === CSP_REPORT_PATH) {
     return null;
   }
 
@@ -1858,7 +2092,7 @@ async function htmlEtagFor(html) {
 // HTML, so each one re-sent all 1.3MB. Now they all share one cached
 // bundle, and the browser can reuse its compiled copy instead of re-parsing
 // inline script on every page load.
-const APP_BUNDLE_START = "<script>/*MYLISTS_APP_BUNDLE_START*/";
+const APP_BUNDLE_START = "<script nonce=\"" + CSP_NONCE_PLACEHOLDER + "\">/*MYLISTS_APP_BUNDLE_START*/";
 const APP_BUNDLE_END = "/*MYLISTS_APP_BUNDLE_END*/<" + "/script>";
 
 // A single entry, because the bundle is the same for everyone. Populated by
@@ -1900,7 +2134,7 @@ async function splitAppBundle(html) {
 // re-sent inline with every page. Splitting it out also means the browser
 // can start fetching it in parallel with the page's own parse rather than
 // after re-reading it inline.
-const APP_CSS_START = "<style>/*MYLISTS_APP_CSS_START*/";
+const APP_CSS_START = "<style nonce=\"" + CSP_NONCE_PLACEHOLDER + "\">/*MYLISTS_APP_CSS_START*/";
 const APP_CSS_END = "/*MYLISTS_APP_CSS_END*/<" + "/style>";
 
 let APP_CSS = null;

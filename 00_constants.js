@@ -1550,6 +1550,7 @@ const BETTER_POSTER_PREWARM_FETCHES_PER_TICK = 8;
 // stale URL can never open a panel that does not exist.
 const NEW_UI_COOKIE = "FF_NEW_UI";
 
+
 const APP_SHELL_TABS = [
   { id: "catalogs", label: "Catalogs", path: "/catalogs", subs: ["all", "quickadd", "bulk"] },
   { id: "lists", label: "Lists", path: "/lists", subs: ["my-lists", "liked", "create-list", "import"] },

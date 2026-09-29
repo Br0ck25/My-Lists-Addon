@@ -1612,15 +1612,14 @@ function renderAdminLoginPage(errorMsg) {
 <meta name="theme-color" content="#F2F2F7">
 <title>Admin \u2014 ${ADDON_NAME}</title>
 <link rel="icon" type="image/png" href="/icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<script>
+<!-- The device's own fonts (P7-1) -- this page used to pull Inter, Space
+     Grotesk and JetBrains Mono from Google Fonts. See docs/DECISIONS.md D-20. -->
+<script nonce="${CSP_NONCE_PLACEHOLDER}">
   if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
     document.documentElement.classList.add('dark-theme');
   }
 </script>
-<style>
+<style nonce="${CSP_NONCE_PLACEHOLDER}">
   :root {
     --bg: #F2F2F7;
     --surface: #FFFFFF;
@@ -1637,7 +1636,7 @@ function renderAdminLoginPage(errorMsg) {
     --radius: 14px;
     --radius-sm: 10px;
     --radius-pill: 999px;
-    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
   }
   html.dark-theme {
     --bg: #000000; --surface: #1C1C1E; --panel-strong: #2C2C2E;
@@ -1920,12 +1919,12 @@ async function renderAdminDashboard(env) {
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Admin \u2014 My Lists Addon</title>
-<script>
+<script nonce="${CSP_NONCE_PLACEHOLDER}">
   if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
     document.documentElement.classList.add('dark-theme');
   }
 </script>
-<style>
+<style nonce="${CSP_NONCE_PLACEHOLDER}">
   :root {
     --bg: #F2F2F7;
     --surface: #FFFFFF;
@@ -1951,7 +1950,7 @@ async function renderAdminDashboard(env) {
     --text: #FFFFFF; --text-2: #EBEBF5;
   }
   * { box-sizing: border-box; }
-  body { background:var(--bg); color:var(--text); font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,sans-serif; max-width:900px; margin:0 auto; padding:20px 14px; }
+  body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,system-ui,sans-serif; max-width:900px; margin:0 auto; padding:20px 14px; }
   h1 { margin-bottom:4px; font-size:1.6rem; color:var(--text); }
   h2 { font-size:1.1rem; color:var(--text); }
   .stat-cards { display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:12px; margin:16px 0; }
@@ -2558,7 +2557,7 @@ async function renderAdminDashboard(env) {
   <form method="POST" action="/admin/logout" style="margin-top:24px;">
     <button type="submit" class="linklike">Log out</button>
   </form>
-  <script>
+  <script nonce="${CSP_NONCE_PLACEHOLDER}">
     const categoryDefaults = {
       overview: 'last30',
       discovery: 'trending',

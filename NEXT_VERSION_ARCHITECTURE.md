@@ -120,7 +120,7 @@ The things that would push a team toward PostgreSQL are the 10 GB D1 limit and t
 |---|---|---|---|
 | `header.js` | 50 | Banner comment for the combined file | **Stale.** Says "stateless… no database, no server-side auth". |
 | `00_constants.js` | 1,265 | Limits, free-tier budgets, provider IDs, env-key globals (`let TMDB_API_KEY…`), `D1_SCHEMA_MANIFEST`, BetterPosters options, personal-shelf prefixes | Config, budgets, schema metadata and UI option HTML builders in one file |
-| `01_icon-asset.js` | 1,393 | 115 KB base64 PNG | Should be a build asset |
+| `01_icon-asset.js` | 1,393 | 115 KB base64 PNG + the vendored fflate 0.8.2 UMD source (P7-1) | The PNG should be a build asset; fflate is deliberate (see `tests/csp.test.mjs`) |
 | `02_http-and-creator-utils.js` | 4,995 | CORS/CSP/JSON helpers; base64 config decode; PBKDF2/auth memo; key blind index; page memo and bundle split; 3-tier provider cache and circuit breaker; timeouts; IP keys; KV rate limiter; auth-failure budget; likes ledger; scrobble tokens; list tombstones; purge; slugs; SSRF guard; public directory query; sync versioning; creator tombstones; `getCreator`; `getCreatorList`; share gate; air-time formatting; schema check; the tracking D1 read/write engine; the channel directory index | At least 12 subsystems |
 | `03_admin.js` | 4,430 | Counters, telemetry, leaderboards, audience analytics, admin HMAC cookie, admin login page, **admin dashboard as a 150 KB template literal** | Analytics engine and admin UI |
 | `04_config-resolution.js` | 537 | `resolveConfig` (install config plus tracking-blob merge plus ownership proof), `detectSource` (30-way prefix/regex dispatch), URL parsers, MDBList toplists, Trakt list search | Config storage, authorization and provider parsing |
@@ -743,7 +743,7 @@ The existing files keep their responsibilities:
 | File | Owns |
 |---|---|
 | `00_constants.js` | Constants, limits, shared tables (shelf prefixes, schema manifest) |
-| `01_icon-asset.js` | The app icon |
+| `01_icon-asset.js` | The app icon, and the browser assets the Worker serves itself (fflate, P7-1) |
 | `02_http-and-creator-utils.js` | HTTP helpers and the fetch guard, auth and account helpers, storage helpers (KV/D1), likes, the directory, the schema gate and request metrics |
 | `03_admin.js` | The admin page and its data queries |
 | `04_config-resolution.js` | Install configs, source detection and the provider registry (`CATALOG_SOURCES`, `PROVIDER_ADAPTERS`, P4-1), the D-8 account rule |

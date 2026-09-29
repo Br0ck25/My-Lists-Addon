@@ -8021,7 +8021,11 @@ export default {
     } catch {
       // Never affects the response.
     }
-    return withSecurityHeaders(response, privatePath, request ? request._sessionCookie : null);
+    // One nonce per response (P7-1): it goes into the CSP header and,
+    // for an HTML page, into every inline <script>/<style> the page
+    // carries -- see withSecurityHeaders and CSP_NONCE_PLACEHOLDER.
+    const nonce = cspNonce();
+    return await withSecurityHeaders(response, privatePath, request ? request._sessionCookie : null, nonce, env);
   },
 
   // Runs on whatever schedule this Worker's owner configured under

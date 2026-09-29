@@ -46,7 +46,7 @@
 | S-02 | **High** | The install config id is an unrevocable bearer credential that returns OAuth tokens and grants scrobble writes |
 | S-03 | **High** (verify) | Authenticated Trakt `users/me/*` responses are edge-cached by URL (`cf.cacheTtl`) and may be served across users |
 | S-04 | **High** | Provider OAuth tokens and API keys are stored unencrypted in many places and never refreshed or revoked |
-| S-05 | **High** | XSS blast radius: `'unsafe-inline'` CSP (inline `<script>` blocks, P7-1), 326 `innerHTML` sites, secrets in `localStorage` -- the 733 inline handlers are gone (P6-8, P6-10) |
+| S-05 | **High** | XSS blast radius: 326 `innerHTML` sites, secrets in `localStorage` -- **narrowed by P7-1**: `script-src` is nonce-only (no `'unsafe-inline'`, no host), so an injected `<script>` no longer executes; the inline handlers (P6-8, P6-10) and the third-party script/font origins are gone. Trusted Types is report-only until the `innerHTML` sinks are converted |
 | S-06 | **Medium-High** | The Creator Key blind index is an unsalted, unpeppered SHA-256 |
 | S-07 | **Medium** | TMDB OAuth callback accepts `request_token` from the query string without binding it to the state cookie (login CSRF) |
 | S-08 | **Medium** | The scrobble webhook accepts the install id, or the Creator Key in the query string, as write credentials |
@@ -178,7 +178,7 @@ Tokens arrive in URL fragments after OAuth (`25_:3438`, `3704`, `3819`, `5212`).
 
 **Current:**
 
-- CSP `script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net` (`02_`). **What is left is the inline `<script>` blocks** (the builder bundle, the per-request preamble, /admin's own script) -- P7-1's task. The inline handlers this line used to cite are gone: P6-8 converted the builder page's ~470 and P6-10 /admin's 76, each to `data-act` + one delegated listener (`appActDispatch`, `16_` / `adminActDispatch`, `03_`), with `html_checks.py` resolving every action name and failing the build on a handler, whatever it is called.
+- **Fixed by P7-1 (2026-09-29):** CSP `script-src 'self' 'nonce-<one per response>'` (`02_`), with a fresh nonce stamped into every inline `<script>`/`<style>` at the Worker's boundary (`withSecurityHeaders`, `02_`; the placeholder is `CSP_NONCE_PLACEHOLDER`, and `html_checks.py` fails the build if a rendered block lacks it). There is no `'unsafe-inline'` and no host left in `script-src`, so an injected `<script>` -- or an injected `src` to someone else's server -- is refused by the browser. `style-src-elem` is nonce-only too; `style-src` keeps `'unsafe-inline'` for the app's own `style="..."` attributes, which a nonce cannot cover. The third-party origins that used to be in the policy are gone: fflate is served from this Worker (`/vendor/fflate-0.8.2.js`, `FFLATE_UMD_JS` in `01_`) and the webfonts are the device's own (D-20). The inline handlers this line used to cite went in P6-8/P6-10.
 - 326 `innerHTML` assignments in the client, against 260 `escapeHtml(` calls. Escaping is applied per call site by convention.
 - User-controlled strings rendered in many places: list names, display names, channel descriptions, feedback text, provider titles.
 - **Every secret is in `localStorage`:** the Creator Key, OAuth tokens and API keys.
@@ -189,10 +189,10 @@ Tokens arrive in URL fragments after OAuth (`25_:3438`, `3704`, `3819`, `5212`).
 **Proposed:**
 
 - Remove secrets from `localStorage` (S-01, S-04). Session cookies are `HttpOnly`.
-- ~~Move to event delegation with no inline handlers~~ (done: P6-8 on the builder page, P6-10 on /admin), then a nonce-based or hash-based CSP (`script-src 'self'`) for the inline `<script>` blocks, which is P7-1.
+- ~~Move to event delegation with no inline handlers~~ (done: P6-8 on the builder page, P6-10 on /admin), ~~then a nonce-based CSP (`script-src 'self'`) for the inline `<script>` blocks~~ (done: P7-1).
 - Render user strings through the existing `escapeHtml` / `escapeAttr` helpers every time, or use `textContent` (vanilla JavaScript, no framework, D-11).
-- Add a Trusted Types policy (`require-trusted-types-for 'script'`) once `innerHTML` is gone.
-- Self-host `fflate`; drop jsDelivr from `script-src`.
+- Trusted Types is **report-only** as of P7-1 (`require-trusted-types-for 'script'`, reports to `/api/csp-report`, counted in Analytics Engine and logged once per distinct violation per isolate; `FF_CSP_TT_REPORT=0` turns the reports off). Enforcement waits on the `innerHTML` sites.
+- ~~Self-host `fflate`; drop jsDelivr from `script-src`~~ (done: P7-1).
 
 ---
 
