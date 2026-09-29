@@ -7267,7 +7267,10 @@ describe("A15: a fresh schema.sql and a migrated database must be the same shape
 describe("A12: a response that should never be cached must say so", () => {
   it("an admin 401 is not cacheable", async () => {
     const env = makeEnv({ CONFIGS: makeKv() });
-    for (const p of ["/admin/api/analytics", "/admin/api/feedback", "/admin/api/leaderboard", "/admin/api/apiusage"]) {
+    // The session list and the audit log are named here too: they are the
+    // most personal things the dashboard answers, and a cached 401 (or a
+    // cached 200 on a shared machine) is exactly what A12 is about.
+    for (const p of ["/admin/api/analytics", "/admin/api/feedback", "/admin/api/leaderboard", "/admin/api/apiusage", "/admin/api/admin-sessions", "/admin/api/audit"]) {
       const r = await call(env, p);
       assert.equal(r.status, 401);
       assert.match(r.headers.get("cache-control") || "", /no-store/,
@@ -8416,7 +8419,7 @@ describe("the Worker can tell an operator it is ahead of its own database", () =
     // path an operator would use.
     const db = makeD1();
     for (const t of ["show_schedule", "account_recommendations", "title_daily_stats", "list_items", "list_slug_history", "lists_fts2", "likes", "channels", "account_list_prefs", "presets", "jobs", "lists", "media",
-      "install_secrets", "installs", "provider_connections", "sessions", "account_settings", "accounts", "rate_counters", "creators", "creator_lists", "source_groups", "stats", "creator_tombstones", "published_lists", "lists_fts", "list_tombstones", "list_likes", "feedback", "scrobble_tokens", "event_meta", "watch_history", "continue_watching", "airing_next", "creator_user_lists", "creator_show_states", "creator_tracking_meta", "streaming_events", "creator_key_lookups", "schema_migrations"]) {
+      "install_secrets", "installs", "provider_connections", "sessions", "account_settings", "accounts", "rate_counters", "creators", "creator_lists", "source_groups", "stats", "creator_tombstones", "published_lists", "lists_fts", "list_tombstones", "list_likes", "feedback", "scrobble_tokens", "event_meta", "watch_history", "continue_watching", "airing_next", "creator_user_lists", "creator_show_states", "creator_tracking_meta", "streaming_events", "creator_key_lookups", "schema_migrations", "admin_sessions", "admin_audit_log"]) {
       db._db.exec(`DROP TABLE IF EXISTS ${t};`);
     }
     const env = makeEnv({ CONFIGS: makeKv(), DB: db });

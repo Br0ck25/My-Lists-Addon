@@ -461,3 +461,38 @@ You are bounced back to the page you asked for, without the parameter, and the c
 - **The endpoint's guardrails** (`handleCspReport`, `02_`): anonymous by necessity (a browser sends these with no cookie and no `Origin`, and a content type of `application/csp-report` or `application/reports+json`, which is why the CSRF check exempts it); answers `204` to everything, including junk and oversized bodies; caps a body at 8 KB (`CSP_REPORT_MAX_BYTES`); rate-limits per IP at 60 a minute (`CSP_REPORT_MAX_PER_MINUTE`); and keeps only the *origin* of a `blocked-uri` (a blocked URL can carry the payload that caused it, and the line goes to logs).
 - **The vendored zip reader** is `FFLATE_UMD_JS` in `01_icon-asset.js`, served at `/vendor/fflate-0.8.2.js` with `Cache-Control: public, max-age=31536000, immutable` and an `ETag` (the version is in the path, so a bump is a new URL and no browser can hold a stale copy). The service worker caches it beside `/app.js` and `/app.css`, so a zip import no longer needs the network. To update it: `npm pack fflate@<version>`, replace the raw string and the two constants, run the tests (`tests/csp.test.mjs` pins the SHA-256 of the exact bytes).
 - **Nothing to undo** if the deploy is rolled back: the previous file serves the previous header and the CDN script tag.
+
+## 25. Cloudflare Access on the admin dashboard (P7-2)
+
+**Two optional variables and one migration.** Without any of it the dashboard works exactly as it did: the admin key signs you in, the cookie is the signed expiry it always was, and nothing is logged. With it, `/admin` is behind Cloudflare's own identity provider (Google, GitHub, one-time PIN — whatever the Access policy says), so the dashboard can have a real second factor, and every sign-in and every action that changes something is recorded.
+
+### Turning it on (dashboard work, in this order)
+
+1. **Zero Trust → Access → Applications → Add an application → Self-hosted.**
+   - Name it something you will recognize (e.g. `My Lists admin`).
+   - **Application domain:** your Worker's hostname, path `admin` — that covers `/admin` and everything under it (`/admin/api/...`).
+   - Add a policy. A "one-time PIN to my email" policy is enough, or an email/GitHub/Google rule. Keep it to the people who should see the numbers; `FF_ADMIN_EMAILS` below is a second lock, not a substitute for this.
+   - Session duration is your choice; seven days matches the dashboard's own cookie.
+2. **Copy the Application Audience (AUD) Tag** from the application's overview page.
+3. **Worker → Settings → Variables and Secrets → Add** (plain text, not secrets — neither is sensitive):
+   - `CF_ACCESS_TEAM_DOMAIN` = your team domain, e.g. `myteam.cloudflareaccess.com`
+   - `CF_ACCESS_AUD` = the AUD tag from step 2
+   - Optional: `FF_ADMIN_EMAILS` = `you@example.com,second@example.com` — the only addresses allowed to *use* the dashboard. Empty means "everyone Access lets through".
+4. **Deploy, then apply `migrations/0018_admin_sessions_audit.sql`** in the D1 Console (it only adds two tables and is safe to run twice). Without it the dashboard still signs you in with the key, but sessions cannot be listed or revoked and nothing is recorded — the Maintenance tab says exactly that.
+5. **Check it:** open `/admin` in a new private window. Access should ask who you are *before* the Worker ever sees the request, and you should land on the dashboard without typing the admin key. Then look at **Maintenance → Audit log** — your arrival should be in it if you came in through the key box, and **Signed-in admin browsers** should list this browser.
+
+### What changes once it is on
+
+- **Signing in through Access is the sign-in.** No key is typed, and each sign-in is recorded as `access:<email>`, so the audit log names a person rather than "admin".
+- **The admin key still works, on purpose.** It is the break-glass path, and it is what you fall back to if Access is misconfigured, if you reach the Worker by a hostname Access does not cover, or if Cloudflare Access itself is having a bad day. It is recorded as actor `key`. If you would rather nothing could bypass Access, there is no variable for that today — leave it and remember the key still works, or rotate `ADMIN_KEY` to a long random value you keep in your password manager.
+- **The login page says Access is on** when it is, so a locked-out admin knows to look at the Access policy instead of hunting for the key.
+- **Every sign-in is now a row that can be revoked.** Maintenance → **Signed-in admin browsers** lists them with the IP and browser each came from, and **Sign out** on a row ends that browser on its next request — no `ADMIN_KEY` rotation, no signing out your own laptop by accident. **Sign out every browser** does all of them at once. This needs migration 0018.
+- **Every action that changes something is logged** (Maintenance → **Audit log**, newest first): resetting a creator's key, deleting a list or a channel, replying to feedback, running a migration, clearing a channel preset, signing in and out, revoking a session. Each row has the time, the person, the action, what it was done to, the request's identifying fields, and the IP. **No key, token or password is ever recorded** — the fields are picked by name, so a credential cannot arrive in the log by accident, and reading the log is itself not an action.
+- **The log is capped at the newest 5,000 rows**, pruned as new rows are written. It is a record of what happened recently, not an archive; if you ever need longer, export it from D1.
+- **Nothing to undo** if you roll the deploy back: the old code ignores the two tables, and the dashboard goes back to the key-only cookie. Removing the Access application is a dashboard change, and the key keeps working throughout.
+
+### If something looks wrong
+
+- **"Too many redirects" / a blank page from Access:** the Access application's policy is not letting you in. Check the application's path (`admin`) and its policy — Access answers before the Worker, so nothing in this repo can see or log those attempts.
+- **Access asks who you are, then the dashboard shows the key login page:** the token did not verify. The Worker logs `[admin] refused a Cloudflare Access token: <reason>` once per distinct reason — `audience` means `CF_ACCESS_AUD` does not match this application, `issuer` means `CF_ACCESS_TEAM_DOMAIN` is wrong, `signature` means the certs came from a different team. The key box below the note is the way in while you fix it.
+- **"You are not authorized" after Access let you in:** `FF_ADMIN_EMAILS` is set and your address is not on it.

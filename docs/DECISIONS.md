@@ -2,6 +2,15 @@
 
 Decisions the owner has made. They are recorded here so the code, the plan documents and future work agree. The newest entries are at the top.
 
+## 2026-09-29 — The admin dashboard's identity (P7-2)
+
+| # | Decision | Consequence in the code |
+|---|---|---|
+| D-24 | **Cloudflare Access is the front door, and the admin key stays as break-glass.** Once `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` are set, a verified Access token IS the sign-in and names a person (`access:<email>`). The key is deliberately still accepted. | Verification, not trust: the `Cf-Access-Jwt-Assertion` header is only a header, so the RS256 signature is checked against the team's own certs (cached 5 minutes per isolate) along with the issuer, the audience and the expiry — the audience is what stops a token minted for another Access app in the same account from opening this dashboard. `FF_ADMIN_EMAILS` is an optional second lock on *who may use it*, separate from Access's own policy on who may reach it. The key path remains because being unable to sign in at all is worse than a longer login page, and the login page says which one is in effect. |
+| D-25 | **An admin session is a row, not a self-contained cookie — and the old cookie still works.** A sign-in (Access or key) creates an `admin_sessions` row; the cookie carries `<id>.<secret>`, only the secret's SHA-256 is stored, and a row can be revoked on its own. | `resolveAdminIdentity` tries Access, then a live session row, then `isValidAdminCookie` (the pre-P7-2 signed expiry, unchanged). That order is why a browser signed in before the deploy is not thrown out, and why a deployment with no D1 — or one where 0018 has not been applied — keeps working: sign-in must never depend on a migration. Sessions are listed and revoked from Maintenance → Signed-in admin browsers; logout revokes the row rather than only dropping the cookie. |
+| D-26 | **The audit log is written in `isAdminRequest`, the one gate every admin route already passes through.** | 39 call sites cover every mutating admin route without editing any of them, and a new admin route is audited the moment it exists rather than when someone remembers to add a call. A `WeakSet` on the request keeps it to one row per request even when a route checks twice; GETs are not audited except the paths listed in `ADMIN_AUDIT_GET_MUTATORS` (today `/admin/api/migrate-accounts`, which changes state behind a GET). |
+| D-27 | **The log records named fields, never bodies.** `ADMIN_AUDIT_BODY_FIELDS` picks the identifying fields; nothing else is read. | A `creatorKey`, `adminKey`, `token` or `password` in a request body cannot reach the log — there is no code path that copies an unknown field, which is the failure mode that makes credential material show up in a log six months later. The body is read from `request.clone()`, so the route can still read it. The table keeps the newest 5,000 rows (`recordAdminAudit`'s own pruning) and is read-only through the API: a log editable from the dashboard it records is not a log. |
+
 ## 2026-09-29 — The strict CSP (P7-1)
 
 | # | Decision | Consequence in the code |

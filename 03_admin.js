@@ -1598,12 +1598,487 @@ function parseCookies(request) {
   return map;
 }
 
-async function isAdminRequest(request, env) {
-  const cookies = parseCookies(request);
-  return isValidAdminCookie(env, cookies[ADMIN_COOKIE_NAME]);
+// --- P7-2: who the admin is, revocable sessions, and the audit log ----------
+//
+// Before this, one shared ADMIN_KEY was the whole of the admin's identity: the
+// cookie was an HMAC over its own expiry, so it could not be revoked (only
+// rotating the key signed anyone out), it named nobody, and nothing recorded
+// what the dashboard did with the power it holds -- which includes rotating any
+// creator's key. S-10. Three things changed:
+//
+//  1. Cloudflare Access first. When CF_ACCESS_TEAM_DOMAIN and CF_ACCESS_AUD are
+//     set, a request carrying a valid Access JWT (Cf-Access-Jwt-Assertion) IS
+//     the admin, named by the email in it. The signature is verified against
+//     the team's own certs -- a header alone is not proof, since anyone who can
+//     reach the Worker directly could set one. See docs/OPERATIONS.md section
+//     25 for turning Access on; nothing here is required for the dashboard to
+//     work.
+//  2. A session that is a row. Signing in with the key (break-glass) or through
+//     Access creates an admin_sessions row; the cookie carries an opaque token,
+//     only its SHA-256 is stored, and a row can be revoked on its own. The old
+//     signed cookie still validates, so a browser signed in before this deploy
+//     is not thrown out, and a Worker with no D1 bound behaves exactly as it
+//     did -- sign-in must never depend on a migration having been applied.
+//  3. An audit row per login, logout and mutating admin request, written here
+//     because this IS the one place every admin route already goes through
+//     (39 call sites). See recordAdminAudit.
+
+// The team's own certs. Cached per isolate for five minutes: they rotate about
+// once a year, and a fetch on every admin request would put Cloudflare's Access
+// service on the dashboard's own critical path.
+const ADMIN_ACCESS_JWKS_TTL_MS = 5 * 60 * 1000;
+const ADMIN_ACCESS_JWKS = { keys: null, url: "", fetchedAt: 0 };
+// One warning per distinct rejected token per isolate, so a flood of forged
+// headers cannot fill the log (same shape as the CSP report sink, 02_).
+const ADMIN_ACCESS_WARNED = new Set();
+const ADMIN_ACCESS_WARN_MAX = 100;
+
+function adminAccessTeam(env) {
+  const raw = String((env && env.CF_ACCESS_TEAM_DOMAIN) || "").trim();
+  if (!raw) return "";
+  return raw.replace(/^https?:\/\//i, "").replace(/\/+$/, "").toLowerCase();
 }
 
-function renderAdminLoginPage(errorMsg) {
+// Access is on when BOTH are set. The AUD tag is what says which Access
+// application this is: without it, a token minted for any other Access app in
+// the same account would open this dashboard.
+function adminAccessConfigured(env) {
+  return !!(adminAccessTeam(env) && String((env && env.CF_ACCESS_AUD) || "").trim());
+}
+
+function adminBase64UrlToBytes(value) {
+  const s = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
+  const padded = s + (s.length % 4 ? "=".repeat(4 - (s.length % 4)) : "");
+  const bin = atob(padded);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function adminBase64UrlToText(value) {
+  try {
+    return new TextDecoder().decode(adminBase64UrlToBytes(value));
+  } catch {
+    return "";
+  }
+}
+
+async function adminAccessKeys(env) {
+  const team = adminAccessTeam(env);
+  const url = "https://" + team + "/cdn-cgi/access/certs";
+  const now = Date.now();
+  if (ADMIN_ACCESS_JWKS.keys && ADMIN_ACCESS_JWKS.url === url && now - ADMIN_ACCESS_JWKS.fetchedAt < ADMIN_ACCESS_JWKS_TTL_MS) {
+    return ADMIN_ACCESS_JWKS.keys;
+  }
+  const res = await fetch(url, { headers: { accept: "application/json" } });
+  if (!res || !res.ok) throw new Error("access certs: HTTP " + (res ? res.status : "no response"));
+  const jwks = await res.json();
+  const keys = (jwks && jwks.keys) || [];
+  if (!keys.length) throw new Error("access certs: no keys");
+  ADMIN_ACCESS_JWKS.keys = keys;
+  ADMIN_ACCESS_JWKS.url = url;
+  ADMIN_ACCESS_JWKS.fetchedAt = now;
+  return keys;
+}
+
+// Returns the Access identity ({ email, sub }) or null. Null means "this
+// request is not an Access identity", which is not the same as invalid: a
+// browser that signed in with the key has no JWT at all and is handled next.
+async function adminAccessIdentity(request, env) {
+  if (!adminAccessConfigured(env) || !request) return null;
+  const token = request.headers.get("Cf-Access-Jwt-Assertion") || request.headers.get("cf-access-jwt-assertion") || "";
+  if (!token) return null;
+  const parts = String(token).split(".");
+  if (parts.length !== 3) return null;
+  try {
+    const header = JSON.parse(adminBase64UrlToText(parts[0]) || "{}");
+    if (header.alg !== "RS256" || !header.kid) return null;
+    const keys = await adminAccessKeys(env);
+    const jwk = keys.find((k) => k && k.kid === header.kid);
+    if (!jwk) return null;
+    const cryptoKey = await crypto.subtle.importKey(
+      "jwk",
+      { kty: jwk.kty || "RSA", n: jwk.n, e: jwk.e, alg: "RS256", ext: true },
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+      false,
+      ["verify"]
+    );
+    const ok = await crypto.subtle.verify(
+      "RSASSA-PKCS1-v1_5",
+      cryptoKey,
+      adminBase64UrlToBytes(parts[2]),
+      new TextEncoder().encode(parts[0] + "." + parts[1])
+    );
+    if (!ok) throw new Error("signature");
+    const claims = JSON.parse(adminBase64UrlToText(parts[1]) || "{}");
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (!(typeof claims.exp === "number" && claims.exp > nowSec)) throw new Error("expired");
+    if (typeof claims.nbf === "number" && claims.nbf > nowSec + 60) throw new Error("not yet valid");
+    if (claims.iss !== "https://" + adminAccessTeam(env)) throw new Error("issuer");
+    const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+    if (!aud.includes(String(env.CF_ACCESS_AUD).trim())) throw new Error("audience");
+    const email = String(claims.email || "").trim().toLowerCase();
+    if (!email) throw new Error("no email on the token");
+    // Optional second lock: Access decides who may reach /admin, this decides
+    // who may use it. Comma-separated FF_ADMIN_EMAILS.
+    const allow = String((env && env.FF_ADMIN_EMAILS) || "")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    if (allow.length && !allow.includes(email)) throw new Error("not an allowed admin email");
+    return { email: email, sub: String(claims.sub || "") };
+  } catch (err) {
+    const why = String((err && err.message) || err);
+    const key = why + ":" + String(token).slice(-12);
+    if (!ADMIN_ACCESS_WARNED.has(key) && ADMIN_ACCESS_WARNED.size < ADMIN_ACCESS_WARN_MAX) {
+      ADMIN_ACCESS_WARNED.add(key);
+      console.warn("[admin] refused a Cloudflare Access token:", why);
+    }
+    return null;
+  }
+}
+
+// --- admin sessions (a revocable row per signed-in browser) -----------------
+
+function adminSessionActorForAccess(identity) {
+  return identity && identity.email ? "access:" + identity.email : "key";
+}
+
+async function createAdminSession(env, actor, request) {
+  if (!env || !env.DB) return null;
+  const id = bufferToHex(crypto.getRandomValues(new Uint8Array(16)));
+  const secret = bufferToHex(crypto.getRandomValues(new Uint8Array(32)));
+  const tokenHash = await hashSessionToken(secret);
+  const now = Date.now();
+  const ip = clientIpKey(request) || null;
+  let userAgent = "";
+  try {
+    userAgent = String((request && request.headers.get("User-Agent")) || "").slice(0, 200);
+  } catch {}
+  try {
+    // Expired rows go first, so a long-lived deployment does not accumulate
+    // them. Best effort: a failure here must not stop a sign-in.
+    await env.DB.prepare("DELETE FROM admin_sessions WHERE expires_at < ?").bind(now).run().catch(() => {});
+    await env.DB.prepare(
+      "INSERT INTO admin_sessions (id, token_hash, actor, created_at, last_seen_at, expires_at, revoked_at, ip, user_agent) " +
+      "VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)"
+    ).bind(id, tokenHash, actor, now, now, now + ADMIN_SESSION_MS, ip, userAgent || null).run();
+  } catch (e) {
+    // No admin_sessions table (migration 0018 not applied yet) -- fall back to
+    // the old stateless cookie. Never fail a sign-in over this.
+    if (!/no such table/i.test(String((e && e.message) || e))) console.error("admin session: create failed:", e);
+    return null;
+  }
+  return { id: id, token: id + "." + secret, actor: actor, expiresAt: now + ADMIN_SESSION_MS };
+}
+
+// The cookie's two halves: 32 hex characters that name the row, and the secret
+// whose hash is what the row stores. A revoked row stops working the moment it
+// is revoked, unlike the signed cookie it replaces.
+async function resolveAdminSession(env, cookieValue) {
+  if (!env || !env.DB || !cookieValue) return null;
+  const dot = String(cookieValue).indexOf(".");
+  if (dot === -1) return null;
+  const id = String(cookieValue).slice(0, dot);
+  const secret = String(cookieValue).slice(dot + 1);
+  if (!/^[0-9a-f]{32}$/.test(id) || !secret) return null;
+  const tokenHash = await hashSessionToken(secret);
+  const now = Date.now();
+  try {
+    const { results } = await env.DB.prepare(
+      "SELECT id, token_hash, actor, last_seen_at, expires_at, revoked_at FROM admin_sessions WHERE id = ?"
+    ).bind(id).all();
+    const row = results && results[0];
+    if (!row) return null;
+    if (row.revoked_at != null) return null;
+    if (typeof row.expires_at === "number" && row.expires_at <= now) return null;
+    if (!timingSafeEqualHex(String(row.token_hash || ""), tokenHash)) return null;
+    // At most one write an hour per browser: last_seen_at is a convenience,
+    // not a security property, and D1 writes are the scarce thing here.
+    if (typeof row.last_seen_at === "number" && now - row.last_seen_at > 60 * 60 * 1000) {
+      env.DB.prepare("UPDATE admin_sessions SET last_seen_at = ? WHERE id = ?").bind(now, id).run().catch(() => {});
+    }
+    return { id: row.id, actor: row.actor, expiresAt: row.expires_at };
+  } catch (e) {
+    if (!/no such table/i.test(String((e && e.message) || e))) console.error("admin session: lookup failed:", e);
+    return null;
+  }
+}
+
+async function revokeAdminSessionById(env, id) {
+  if (!env || !env.DB || !id) return false;
+  try {
+    const res = await env.DB.prepare("UPDATE admin_sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL")
+      .bind(Date.now(), String(id)).run();
+    return !!(res && res.meta && res.meta.changes > 0);
+  } catch (e) {
+    if (!/no such table/i.test(String((e && e.message) || e))) console.error("admin session: revoke failed:", e);
+    return false;
+  }
+}
+
+async function revokeAllAdminSessions(env, actor) {
+  if (!env || !env.DB) return 0;
+  try {
+    const now = Date.now();
+    const res = actor
+      ? await env.DB.prepare("UPDATE admin_sessions SET revoked_at = ? WHERE revoked_at IS NULL AND actor = ?").bind(now, actor).run()
+      : await env.DB.prepare("UPDATE admin_sessions SET revoked_at = ? WHERE revoked_at IS NULL").bind(now).run();
+    return (res && res.meta && res.meta.changes) || 0;
+  } catch (e) {
+    if (!/no such table/i.test(String((e && e.message) || e))) console.error("admin session: revoke-all failed:", e);
+    return 0;
+  }
+}
+
+// Same cookie, same attributes as the signed value it replaces -- only the
+// value's meaning changed (an id, then the session's secret). Strict is
+// deliberate and unchanged: nothing outside this site has any business
+// carrying an admin cookie.
+function adminSessionCookieHeader(token) {
+  return `${ADMIN_COOKIE_NAME}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${Math.floor(ADMIN_SESSION_MS / 1000)}`;
+}
+
+// Reads the cookie back out of a request and revokes the row it names.
+async function revokeAdminSessionFromRequest(request, env) {
+  const cookies = parseCookies(request);
+  const value = cookies[ADMIN_COOKIE_NAME] || "";
+  const id = String(value).slice(0, String(value).indexOf("."));
+  if (!/^[0-9a-f]{32}$/.test(id)) return false;
+  return revokeAdminSessionById(env, id);
+}
+
+async function listAdminSessions(env, limit = 50) {
+  if (!env || !env.DB) return { ok: true, sessions: [], unavailable: "no-d1" };
+  const now = Date.now();
+  try {
+    await env.DB.prepare("DELETE FROM admin_sessions WHERE expires_at < ?").bind(now).run().catch(() => {});
+    const { results } = await env.DB.prepare(
+      "SELECT id, actor, created_at, last_seen_at, expires_at, revoked_at, ip, user_agent FROM admin_sessions " +
+      "ORDER BY last_seen_at DESC LIMIT ?"
+    ).bind(Math.max(1, Math.min(200, limit))).all();
+    return {
+      ok: true,
+      sessions: (results || []).map((r) => ({
+        id: r.id,
+        actor: r.actor,
+        createdAt: r.created_at,
+        lastSeenAt: r.last_seen_at,
+        expiresAt: r.expires_at,
+        revokedAt: r.revoked_at == null ? null : r.revoked_at,
+        ip: r.ip || "",
+        userAgent: r.user_agent || "",
+        expired: typeof r.expires_at === "number" && r.expires_at <= now,
+      })),
+    };
+  } catch (e) {
+    if (/no such table/i.test(String((e && e.message) || e))) return { ok: true, sessions: [], unavailable: "migration-0018" };
+    console.error("admin session: list failed:", e);
+    return { ok: false, sessions: [], error: "Could not read the session list." };
+  }
+}
+
+// --- the audit log ----------------------------------------------------------
+
+// What each mutating admin route is called in the log. A route that is not
+// listed falls back to its own path (admin.api.<path with dots>), so a new
+// admin route is audited the moment it exists rather than only once someone
+// remembers to add it here. GETs are never audited except the few paths named
+// in ADMIN_AUDIT_GET_MUTATORS, which change state behind a GET.
+const ADMIN_AUDIT_ACTIONS = {
+  "/admin/api/reset-creator-key": "admin.creator.reset-key",
+  "/admin/api/rebuild-search-index": "admin.search.rebuild",
+  "/admin/api/rebuild-public-index": "admin.search.rebuild",
+  "/admin/api/delete-creator-list": "admin.list.delete",
+  "/admin/api/delete-published-list": "admin.published-list.delete",
+  "/admin/api/channel-moderate": "admin.channel.moderate",
+  "/admin/api/channel-presets/rebuild": "admin.channel-presets.rebuild",
+  "/admin/api/channel-presets/clear": "admin.channel-presets.clear",
+  "/admin/api/feedback/reply": "admin.feedback.reply",
+  "/admin/api/feedback/edit": "admin.feedback.edit",
+  "/admin/api/feedback/delete": "admin.feedback.delete",
+  "/admin/api/feedback/status": "admin.feedback.set-status",
+  "/admin/api/migrate-d1": "admin.migrate.kv-to-d1",
+  "/admin/api/migrate-accounts": "admin.migrate.accounts",
+  "/admin/api/migrate-day-counts": "admin.migrate.day-counts",
+  "/admin/api/backfill-trending": "admin.backfill.trending",
+  "/admin/api/new-on-streaming/sweep": "admin.new-on-streaming.sweep",
+  "/admin/api/new-on-streaming/add": "admin.new-on-streaming.add",
+  "/admin/api/installs/restore": "admin.installs.undo-move",
+  "/admin/api/lists-backfill/step": "admin.backfill.lists",
+  "/admin/api/lists-backfill/restart": "admin.backfill.lists.restart",
+  "/admin/api/activity-backfill/step": "admin.backfill.activity",
+  "/admin/api/activity-backfill/restart": "admin.backfill.activity.restart",
+  "/admin/api/jobs/ping": "admin.jobs.test",
+  "/admin/api/revoke-admin-session": "admin.session.revoke",
+  "/admin/api/revoke-all-admin-sessions": "admin.session.revoke-all",
+};
+const ADMIN_AUDIT_GET_MUTATORS = new Set(["/admin/api/migrate-accounts"]);
+// Body fields worth keeping. Nothing else is read, so a field this list does
+// not name cannot end up in the log -- including, deliberately, any key or
+// token an admin form might carry. `slugs` is here for the delete flows.
+const ADMIN_AUDIT_BODY_FIELDS = [
+  "username", "creatorName", "slug", "slugs", "name", "listName", "channelId", "networkId",
+  "feedbackId", "id", "ids", "status", "action", "day", "job", "nonce", "reason",
+];
+const ADMIN_AUDIT_VALUE_MAX = 200;
+const ADMIN_AUDIT_DETAIL_MAX = 600;
+
+function adminAuditActionFor(path) {
+  if (ADMIN_AUDIT_ACTIONS[path]) return ADMIN_AUDIT_ACTIONS[path];
+  const rest = String(path || "").replace(/^\/admin\/api\//, "").replace(/[^A-Za-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "");
+  return rest ? "admin.api." + rest : "admin.api";
+}
+
+function adminAuditIsMutating(method, path) {
+  if (!path || path.indexOf("/admin/api/") !== 0) return false;
+  if (ADMIN_AUDIT_GET_MUTATORS.has(path)) return true;
+  return method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE";
+}
+
+// The identifying fields of a request body, as a short JSON string. The body is
+// read from a CLONE: the route still has to be able to read it itself.
+async function adminAuditDetail(request, path) {
+  try {
+    const contentType = String(request.headers.get("Content-Type") || "");
+    if (contentType.indexOf("application/json") === -1) return { target: "", detail: "" };
+    const clone = request.clone();
+    const text = await clone.text();
+    if (!text || text.length > 20000) return { target: "", detail: "" };
+    const body = JSON.parse(text);
+    if (!body || typeof body !== "object") return { target: "", detail: "" };
+    const picked = {};
+    for (const field of ADMIN_AUDIT_BODY_FIELDS) {
+      if (body[field] === undefined || body[field] === null) continue;
+      const value = String(body[field]);
+      picked[field] = value.length > ADMIN_AUDIT_VALUE_MAX ? value.slice(0, ADMIN_AUDIT_VALUE_MAX) + "\u2026" : value;
+    }
+    const keys = Object.keys(picked);
+    if (!keys.length) return { target: "", detail: "" };
+    // Which field is "what it was done to" differs per route, so the order is
+    // most-specific-first: a slug or an id names one row, a username names an
+    // account, and anything else is left to the detail string.
+    const target = String(
+      picked.slug || picked.slugs || picked.channelId || picked.networkId ||
+      picked.feedbackId || picked.username || picked.creatorName || picked.job || picked.day || picked.id || ""
+    ).slice(0, 120);
+    let detail = JSON.stringify(picked);
+    if (detail.length > ADMIN_AUDIT_DETAIL_MAX) detail = detail.slice(0, ADMIN_AUDIT_DETAIL_MAX);
+    return { target: target, detail: detail };
+  } catch {
+    return { target: "", detail: "" };
+  }
+}
+
+// Best effort, always: the dashboard must not fail because its log could not be
+// written, and a failed write is reported to the console instead. `status` is
+// filled in only where the caller already knows it (login, logout, revoke);
+// an audited route's row is written when the request is authorized, which is
+// what makes this one place able to cover all of them -- see isAdminRequest.
+async function recordAdminAudit(env, request, actor, action, detail, status) {
+  if (!env || !env.DB) {
+    console.warn("[admin] " + action + " by " + (actor || "unknown") + (detail && detail.detail ? " " + detail.detail : "") + " (no D1, not recorded)");
+    return false;
+  }
+  const info = detail || {};
+  const now = Date.now();
+  let ip = null;
+  try {
+    ip = clientIpKey(request) || null;
+  } catch {}
+  let userAgent = "";
+  try {
+    userAgent = String((request && request.headers.get("User-Agent")) || "").slice(0, 200);
+  } catch {}
+  try {
+    await env.DB.prepare(
+      "INSERT INTO admin_audit_log (at, actor, action, target, detail, status, ip, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    ).bind(now, String(actor || "unknown"), String(action || "admin.unknown"), info.target || null, info.detail || null,
+      typeof status === "number" ? status : null, ip, userAgent || null).run();
+    // A bounded log: the newest 5,000 rows are plenty, and this keeps a busy
+    // dashboard (or a scripted one) from growing the table forever.
+    if (Math.random() < 0.02) {
+      await env.DB.prepare("DELETE FROM admin_audit_log WHERE id <= (SELECT MAX(id) - 5000 FROM admin_audit_log)").run().catch(() => {});
+    }
+    return true;
+  } catch (e) {
+    if (!/no such table/i.test(String((e && e.message) || e))) console.error("admin audit: write failed:", e);
+    return false;
+  }
+}
+
+async function listAdminAudit(env, limit = 100) {
+  if (!env || !env.DB) return { ok: true, entries: [], unavailable: "no-d1" };
+  try {
+    const { results } = await env.DB.prepare(
+      "SELECT id, at, actor, action, target, detail, status, ip FROM admin_audit_log ORDER BY at DESC, id DESC LIMIT ?"
+    ).bind(Math.max(1, Math.min(500, limit))).all();
+    return { ok: true, entries: (results || []).map((r) => ({
+      id: r.id, at: r.at, actor: r.actor, action: r.action, target: r.target || "",
+      detail: r.detail || "", status: r.status == null ? null : r.status, ip: r.ip || "",
+    })) };
+  } catch (e) {
+    if (/no such table/i.test(String((e && e.message) || e))) return { ok: true, entries: [], unavailable: "migration-0018" };
+    console.error("admin audit: read failed:", e);
+    return { ok: false, entries: [], error: "Could not read the audit log." };
+  }
+}
+
+// One request, one audit row for the mutating routes. A WeakSet on the Request
+// object: the row is written the first time a route asks whether this request
+// is an admin, and never twice, even though several routes check twice.
+const ADMIN_AUDITED_REQUESTS = new WeakSet();
+
+async function auditMutatingAdminRequest(request, env, actor, path, method) {
+  if (!adminAuditIsMutating(method, path)) return;
+  try {
+    if (ADMIN_AUDITED_REQUESTS.has(request)) return;
+    ADMIN_AUDITED_REQUESTS.add(request);
+  } catch {
+    return;
+  }
+  const info = await adminAuditDetail(request, path);
+  await recordAdminAudit(env, request, actor, adminAuditActionFor(path), info, undefined);
+}
+
+// Who this request is, or null. In order: a Cloudflare Access identity, then a
+// live admin session row, then the break-glass signed cookie (ADMIN_KEY).
+async function resolveAdminIdentity(request, env) {
+  const identity = await adminAccessIdentity(request, env);
+  if (identity) return { actor: adminSessionActorForAccess(identity), via: "access", identity: identity };
+  const cookies = parseCookies(request);
+  const session = await resolveAdminSession(env, cookies[ADMIN_COOKIE_NAME]);
+  if (session) return { actor: session.actor, via: "session", session: session };
+  if (await isValidAdminCookie(env, cookies[ADMIN_COOKIE_NAME])) {
+    return { actor: "key", via: "key" };
+  }
+  return null;
+}
+
+async function isAdminRequest(request, env) {
+  const identity = await resolveAdminIdentity(request, env);
+  if (!identity) return false;
+  let path = "";
+  let method = "GET";
+  try {
+    path = new URL(request.url).pathname;
+    method = String(request.method || "GET").toUpperCase();
+  } catch {}
+  // Awaiting the audit here (not after the route) is what lets ONE place cover
+  // every admin route: this call is the gate they all pass through. It records
+  // that the request was authorized; the outcome is on the route's own
+  // response, and the log's status column is filled in where a handler can see
+  // it (login, logout, session revoke).
+  await auditMutatingAdminRequest(request, env, identity.actor, path, method).catch(() => {});
+  return true;
+}
+
+// `accessOn` says Cloudflare Access is configured for this deployment (P7-2).
+// The page still offers the key box -- Access can be misconfigured or an admin
+// may be reaching the Worker by a hostname Access does not cover, and being
+// unable to sign in at all is worse than a longer page. The note says which is
+// which, so a locked-out admin knows to look at Access rather than at the key.
+function renderAdminLoginPage(errorMsg, accessOn) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1714,6 +2189,9 @@ function renderAdminLoginPage(errorMsg) {
     </div>
     <div class="panel">
       <h2 class="panel-title">Admin sign in</h2>
+      ${accessOn
+        ? `<p style="color:var(--text-2); margin:0 0 14px; font-size:0.85rem; line-height:1.45;">Cloudflare Access is <strong>on</strong> for this dashboard. If you reached this page through Access, you are already signed in &mdash; <a href="/admin" style="color:var(--accent);">open the dashboard</a>.<br>If you are seeing this instead, Access did not let the request through (check the Access application&rsquo;s policy for <code>/admin</code>), or this hostname is not covered by it. The key below is the break-glass way in.</p>`
+        : ""}
       <form method="POST" action="/admin/login">
         <div class="row">
           <input type="password" name="key" placeholder="Admin key" autofocus>
@@ -2550,6 +3028,23 @@ async function renderAdminDashboard(env) {
       </div>
       <div id="publishedChannelResults"></div>
     </div>
+
+    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
+      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Signed-in admin browsers</div>
+      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Every browser signed in to this dashboard, newest activity first, with the address it signed in from. Before P7-2 there was no such list: the cookie was self-contained, so signing anyone out meant changing <code>ADMIN_KEY</code> and signing everyone out. <strong>Sign out</strong> ends one browser's session on its own &mdash; it stops working on the next request, not in seven days. Needs migration 0018. If you are signed in with Cloudflare Access, your browser may appear here too; closing its row does not stop Access from letting you back in.</p>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="adminSessionsBtn" data-act="loadAdminSessions">Load</button>
+      <button type="button" class="admin-select" style="cursor:pointer; margin-left:6px; color:#FF3B30; border-color:rgba(255,59,48,0.35);" id="adminSessionsRevokeAllBtn" data-act="revokeAllAdminSessions">Sign out every browser</button>
+      <span id="adminSessionsStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <div id="adminSessionsResult" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="panel" style="margin:0; padding:14px 16px;">
+      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Audit log</div>
+      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">What this dashboard has been used for: sign-ins, sign-outs, and every action that changes something &mdash; resetting a creator&rsquo;s key, deleting a list or a channel, running a migration, replying to feedback. Each row is written as the request is authorized, with the address it came from and the identifying details it named (never a key or a token). Newest first, and read-only: nothing in this dashboard can edit it. Needs migration 0018.</p>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="adminAuditBtn" data-act="loadAdminAudit">Load recent activity</button>
+      <span id="adminAuditStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <div id="adminAuditResult" style="margin-top:10px;"></div>
+    </div>
   </div>
 
   <!-- A form, not a link: logging out is a state change, and /admin/logout
@@ -2726,6 +3221,139 @@ async function renderAdminDashboard(env) {
     function closeResetKeyOverlay() {
       const overlay = document.getElementById('resetKeyOverlay');
       if (overlay && overlay.remove) overlay.remove();
+    }
+
+    // --- P7-2: the two security panels -------------------------------------
+
+    function adminWhen(ms) {
+      if (!ms) return '\u2014';
+      try {
+        return new Date(ms).toLocaleString();
+      } catch (e) {
+        return String(ms);
+      }
+    }
+
+    async function loadAdminSessions() {
+      const box = document.getElementById('adminSessionsResult');
+      const status = document.getElementById('adminSessionsStatus');
+      status.textContent = 'Loading\u2026';
+      box.innerHTML = '';
+      try {
+        const res = await fetch('/admin/api/admin-sessions');
+        const data = await res.json();
+        status.textContent = '';
+        if (!data.ok) {
+          status.textContent = data.error || 'Could not load.';
+          return;
+        }
+        if (data.unavailable) {
+          box.innerHTML = '<p style="color:#8E8E93; font-size:0.82rem; margin:0;">No session list yet &mdash; apply migration 0018 (<code>migrations/0018_admin_sessions_audit.sql</code>). Until then, this dashboard signs in with the older cookie, which cannot be listed or revoked on its own.</p>';
+          return;
+        }
+        if (!data.sessions.length) {
+          box.innerHTML = '<p style="color:#8E8E93; font-size:0.82rem; margin:0;">No signed-in browsers.</p>';
+          return;
+        }
+        const rows = data.sessions.map((s) => {
+          const current = s.id === data.current ? ' <span style="color:#30d158;">(this browser)</span>' : '';
+          const state = s.revokedAt ? '<span style="color:#FF3B30;">signed out</span>' : (s.expired ? '<span style="color:#FF9500;">expired</span>' : '<span style="color:#30d158;">live</span>');
+          return '<tr>' +
+            '<td>' + escapeHtmlAdmin(s.actor) + current + '</td>' +
+            '<td>' + state + '</td>' +
+            '<td>' + escapeHtmlAdmin(adminWhen(s.lastSeenAt)) + '</td>' +
+            '<td>' + escapeHtmlAdmin(adminWhen(s.expiresAt)) + '</td>' +
+            '<td>' + escapeHtmlAdmin(s.ip || '\u2014') + '</td>' +
+            '<td style="max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escapeHtmlAdmin(s.userAgent || '\u2014') + '</td>' +
+            '<td>' + (s.revokedAt || s.expired ? '' : '<button type="button" class="admin-select" style="cursor:pointer; color:#FF3B30; border-color:rgba(255,59,48,0.35);" data-act="revokeAdminSession" data-act-args="' + adminActAttr([s.id]) + '">Sign out</button>') + '</td>' +
+            '</tr>';
+        }).join('');
+        box.innerHTML = '<table><tr><th>Signed in as</th><th>State</th><th>Last seen</th><th>Expires</th><th>IP</th><th>Browser</th><th></th></tr>' + rows + '</table>';
+      } catch (e) {
+        status.textContent = 'Could not load \u2014 try again.';
+      }
+    }
+
+    async function revokeAdminSession(btn, id) {
+      const sure = confirm('Sign that browser out of the admin dashboard?\\n\\nIt stops working on its next request. If it is this browser, you will be asked to sign in again.');
+      if (!sure) return;
+      try {
+        const res = await fetch('/admin/api/revoke-admin-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: id }),
+        });
+        const data = await res.json();
+        if (!data.ok) {
+          showAdminAlert('Could not sign out', data.error || 'Unknown error.', false);
+          return;
+        }
+        if (data.self) {
+          window.location.href = '/admin';
+          return;
+        }
+        loadAdminSessions();
+      } catch (e) {
+        showAdminAlert('Network Error', 'Could not reach the server \u2014 try again.', false);
+      }
+    }
+
+    async function revokeAllAdminSessions() {
+      const sure = confirm('Sign every browser out of the admin dashboard, including this one?\\n\\nEach one stops working on its next request, and you will need the admin key (or Cloudflare Access) to get back in. Nothing else about the site is affected.');
+      if (!sure) return;
+      try {
+        const res = await fetch('/admin/api/revoke-admin-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ all: true }),
+        });
+        const data = await res.json();
+        if (!data.ok) {
+          showAdminAlert('Could not sign out', data.error || 'Unknown error.', false);
+          return;
+        }
+        showAdminAlert('Signed out', (data.revoked || 0) + ' session(s) ended.', true);
+        loadAdminSessions();
+      } catch (e) {
+        showAdminAlert('Network Error', 'Could not reach the server \u2014 try again.', false);
+      }
+    }
+
+    async function loadAdminAudit() {
+      const box = document.getElementById('adminAuditResult');
+      const status = document.getElementById('adminAuditStatus');
+      status.textContent = 'Loading\u2026';
+      box.innerHTML = '';
+      try {
+        const res = await fetch('/admin/api/audit?limit=100');
+        const data = await res.json();
+        status.textContent = '';
+        if (!data.ok) {
+          status.textContent = data.error || 'Could not load.';
+          return;
+        }
+        if (data.unavailable) {
+          box.innerHTML = '<p style="color:#8E8E93; font-size:0.82rem; margin:0;">No log yet &mdash; apply migration 0018 (<code>migrations/0018_admin_sessions_audit.sql</code>). Until then, admin actions are not recorded.</p>';
+          return;
+        }
+        if (!data.entries.length) {
+          box.innerHTML = '<p style="color:#8E8E93; font-size:0.82rem; margin:0;">Nothing recorded yet. Signing out and back in writes the first two rows.</p>';
+          return;
+        }
+        const rows = data.entries.map((e) =>
+          '<tr>' +
+          '<td>' + escapeHtmlAdmin(adminWhen(e.at)) + '</td>' +
+          '<td>' + escapeHtmlAdmin(e.actor) + '</td>' +
+          '<td><strong>' + escapeHtmlAdmin(e.action) + '</strong></td>' +
+          '<td>' + escapeHtmlAdmin(e.target || '\u2014') + '</td>' +
+          '<td style="max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + escapeHtmlAdmin(e.detail || '') + '">' + escapeHtmlAdmin(e.detail || '\u2014') + '</td>' +
+          '<td>' + escapeHtmlAdmin(e.ip || '\u2014') + '</td>' +
+          '</tr>'
+        ).join('');
+        box.innerHTML = '<table><tr><th>When</th><th>Who</th><th>Action</th><th>Target</th><th>Detail</th><th>IP</th></tr>' + rows + '</table>';
+      } catch (e) {
+        status.textContent = 'Could not load \u2014 try again.';
+      }
     }
 
     async function loadSearchData() {

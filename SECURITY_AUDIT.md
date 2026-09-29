@@ -51,7 +51,7 @@
 | S-07 | **Medium** | TMDB OAuth callback accepts `request_token` from the query string without binding it to the state cookie (login CSRF) |
 | S-08 | **Medium** | The scrobble webhook accepts the install id, or the Creator Key in the query string, as write credentials |
 | S-09 | **Medium** | No `Origin`/`Sec-Fetch-Site` checks: cross-site pages can drive anonymous writes (likes, adds, telemetry, `/api/save`) from visitors' IPs |
-| S-10 | **Medium** | Admin: one shared secret, stateless 7-day cookie, no per-session revocation, no audit log, no second factor |
+| S-10 | **Medium → addressed by P7-2** | Admin: Cloudflare Access (a real second factor) or the shared secret as break-glass; per-browser revocable sessions; an audit log of every mutating admin request. What is left is that the break-glass key path cannot be disabled by a variable |
 | S-11 | **Medium** | The recovery answer is a password-equivalent that can mint a new key |
 | S-12 | **Medium** | `/api/save` allows unauthenticated permanent writes of up to 10 MB, 20 per minute per IP (storage and cost abuse) |
 | S-13 | **Medium** | Rate limiting is non-atomic (KV) and IP-only for most routes |
@@ -240,8 +240,8 @@ Tokens arrive in URL fragments after OAuth (`25_:3438`, `3704`, `3819`, `5212`).
   - No second factor.
   - The admin can reset any user's key (`/admin/api/reset-creator-key`, `26_:1465`) and read any list.
 - **Proposed.**
-  - Put `/admin*` behind **Cloudflare Access** (Zero Trust; dashboard-configured; SSO plus MFA). Keep `ADMIN_KEY` only as a break-glass fallback.
-  - Store admin sessions in D1 (revocable), with an `admin_audit_log` table written on every mutating admin call.
+  - ~~Put `/admin*` behind **Cloudflare Access** (Zero Trust; dashboard-configured; SSO plus MFA). Keep `ADMIN_KEY` only as a break-glass fallback.~~ **Done by P7-2**: `CF_ACCESS_TEAM_DOMAIN` + `CF_ACCESS_AUD` (and the optional `FF_ADMIN_EMAILS`) make a *verified* Access token the sign-in -- the JWT signature is checked against the team's own certs, with issuer, audience and expiry, because the header itself proves nothing. The key stays as break-glass on purpose (D-24), and the login page says which is in effect. Setup: `docs/OPERATIONS.md` §25.
+  - ~~Store admin sessions in D1 (revocable), with an `admin_audit_log` table written on every mutating admin call.~~ **Done by P7-2** (migration 0018): the cookie is `<id>.<secret>` with only the secret's SHA-256 stored, sessions are listed and revoked in the Maintenance tab, logout revokes the row, and every mutating admin request writes an audit row from the one gate all 39 admin routes pass through (`isAdminRequest`). The log records named fields only, so a key or token cannot reach it (D-27). What is left: the break-glass key path cannot be disabled by a variable, and the log keeps the newest 5,000 rows rather than an archive.
 
 ### S-11 — Recovery answer equals password
 

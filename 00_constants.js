@@ -1209,6 +1209,30 @@ const D1_SCHEMA_MANIFEST = [
     migration: "0017", kind: "index", name: "idx_title_daily_stats_media",
     consequence: "Removing a title scans the daily counts. Slower, not broken.",
   },
+  {
+    migration: "0018", kind: "table", name: "admin_sessions",
+    consequence: "Admin sign-in falls back to the old stateless cookie: nothing can be revoked, and ADMIN_KEY has to be rotated to sign a browser out (P7-2).",
+  },
+  {
+    migration: "0018", kind: "index", name: "idx_admin_sessions_expires",
+    consequence: "Clearing expired admin sessions scans the table. Slower, not broken.",
+  },
+  {
+    migration: "0018", kind: "index", name: "idx_admin_sessions_actor",
+    consequence: "Signing one admin identity out everywhere scans the table. Slower, not broken.",
+  },
+  {
+    migration: "0018", kind: "table", name: "admin_audit_log",
+    consequence: "No admin action is recorded: logins, logouts and every mutating admin request go unlogged (S-10).",
+  },
+  {
+    migration: "0018", kind: "index", name: "idx_admin_audit_at",
+    consequence: "Reading the recent audit log sorts the whole table. Slower, not broken.",
+  },
+  {
+    migration: "0018", kind: "index", name: "idx_admin_audit_action",
+    consequence: "Filtering the audit log by action scans the table. Slower, not broken.",
+  },
 ];
 
 

@@ -5477,7 +5477,7 @@
 
       const authed = await isAdminRequest(request, env);
       if (!authed) {
-        return new Response(renderAdminLoginPage(), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+        return new Response(renderAdminLoginPage("", adminAccessConfigured(env)), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
       }
       const html = await renderAdminDashboard(env);
       return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
@@ -7727,9 +7727,24 @@
     }
 
     if (path === "/admin/login" && request.method === "POST") {
+      // P7-2: a valid Cloudflare Access identity signs in without the key. It
+      // is checked before the key is looked at, so a deployment with Access on
+      // does not need ADMIN_KEY at all.
+      const accessIdentity = await adminAccessIdentity(request, env);
+      if (accessIdentity) {
+        const actor = adminSessionActorForAccess(accessIdentity);
+        // A session row is not needed to stay signed in through Access (the
+        // JWT is on every request), but it is what makes this sign-in visible
+        // in the dashboard's own session list and revocable from it.
+        const session = await createAdminSession(env, actor, request);
+        await recordAdminAudit(env, request, actor, "admin.login", { target: actor, detail: JSON.stringify({ via: "access" }) }, 302);
+        const headers = { "Location": "/admin" };
+        if (session) headers["Set-Cookie"] = adminSessionCookieHeader(session.token);
+        return new Response(null, { status: 302, headers: headers });
+      }
       if (!env || !env.ADMIN_KEY) {
         return new Response(
-          renderAdminLoginPage("This Worker has no ADMIN_KEY secret set -- run `wrangler secret put ADMIN_KEY` (or set it in the Cloudflare dashboard) first."),
+          renderAdminLoginPage("This Worker has no ADMIN_KEY secret set -- run `wrangler secret put ADMIN_KEY` (or set it in the Cloudflare dashboard) first.", adminAccessConfigured(env)),
           { status: 500, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } }
         );
       }
@@ -7751,7 +7766,7 @@
       if (env.CONFIGS) {
         const ip = clientIpKey(request);
         if (!ip) {
-          return new Response(renderAdminLoginPage("Could not process this request."), {
+          return new Response(renderAdminLoginPage("Could not process this request.", adminAccessConfigured(env)), {
             status: 400,
             headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
           });
@@ -7759,7 +7774,7 @@
         const rateLimitKey = `ratelimit:adminlogin:${ip}`;
         const attempts = parseInt((await env.CONFIGS.get(rateLimitKey)) || "0", 10);
         if (attempts >= 10) {
-          return new Response(renderAdminLoginPage("Too many attempts. Please wait a minute and try again."), {
+          return new Response(renderAdminLoginPage("Too many attempts. Please wait a minute and try again.", adminAccessConfigured(env)), {
             status: 429,
             headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
           });
@@ -7773,7 +7788,7 @@
         adminLoginFailScope = `adminlogin:${ip}`;
         adminLoginFailDay = statsToday();
         if (await readAuthFailureCount(env, adminLoginFailScope, adminLoginFailDay) >= ADMIN_LOGIN_MAX_FAILURES_PER_DAY) {
-          return new Response(renderAdminLoginPage("Too many failed attempts today. Please try again tomorrow."), {
+          return new Response(renderAdminLoginPage("Too many failed attempts today. Please try again tomorrow.", adminAccessConfigured(env)), {
             status: 429,
             headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
           });
@@ -7794,12 +7809,20 @@
         // protects it, or an admin who logs in often would lock themselves
         // out.
         if (adminLoginFailScope) await noteAuthFailure(env, adminLoginFailScope, adminLoginFailDay);
-        return new Response(renderAdminLoginPage("Incorrect key."), {
+        return new Response(renderAdminLoginPage("Incorrect key.", adminAccessConfigured(env)), {
           status: 401,
           headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
         });
       }
-      const cookieValue = await makeAdminCookieValue(env);
+      // The key is the break-glass path: a session row when D1 has migration
+      // 0018 (so this browser can be signed out on its own), and the old signed
+      // expiry it has always been when it does not. Either way the sign-in
+      // works -- a migration that has not been applied yet must never lock the
+      // owner out of their own dashboard.
+      const session = await createAdminSession(env, "key", request);
+      const cookieValue = session ? session.token : await makeAdminCookieValue(env);
+      await recordAdminAudit(env, request, "key", "admin.login",
+        { target: "key", detail: JSON.stringify({ via: "key", revocable: !!session }) }, 302);
       return new Response(null, {
         status: 302,
         headers: {
@@ -7818,6 +7841,54 @@
       });
     }
 
+    // /admin/api/admin-sessions  (GET) -> { ok, sessions }
+    // The browsers signed in to this dashboard right now. P7-2: before this,
+    // "who is signed in" had no answer at all -- the cookie was self-contained.
+    if (path === "/admin/api/admin-sessions" && request.method === "GET") {
+      const identity = await resolveAdminIdentity(request, env);
+      if (!identity) return json({ ok: false, error: "Not authorized." }, 401);
+      const result = await listAdminSessions(env, 50);
+      return json({ ...result, current: identity.session ? identity.session.id : null, via: identity.via }, 200, { "Cache-Control": "no-store" });
+    }
+
+    // /admin/api/revoke-admin-session  (POST) { id } -> { ok, revoked }
+    // Signs one browser out without rotating ADMIN_KEY. `all: true` signs every
+    // browser out, which is what a lost laptop or a shared password needs.
+    if (path === "/admin/api/revoke-admin-session" && request.method === "POST") {
+      const identity = await resolveAdminIdentity(request, env);
+      if (!identity) return json({ ok: false, error: "Not authorized." }, 401);
+      if (!env || !env.DB) return json({ ok: false, error: "No D1 database binding 'DB'." }, 503);
+      let body = {};
+      try {
+        body = await request.json();
+      } catch {}
+      if (body && body.all === true) {
+        const revoked = await revokeAllAdminSessions(env);
+        await recordAdminAudit(env, request, identity.actor, "admin.session.revoke-all",
+          { detail: JSON.stringify({ revoked: revoked }) }, 200);
+        return json({ ok: true, revoked: revoked }, 200, { "Cache-Control": "no-store" });
+      }
+      const id = String((body && body.id) || "").trim();
+      if (!/^[0-9a-f]{32}$/.test(id)) return json({ ok: false, error: "Unknown session." }, 400);
+      const revoked = await revokeAdminSessionById(env, id);
+      await recordAdminAudit(env, request, identity.actor, "admin.session.revoke",
+        { target: id, detail: JSON.stringify({ id: id, revoked: revoked }) }, 200);
+      return json({ ok: true, revoked: revoked, self: !!(identity.session && identity.session.id === id) }, 200, { "Cache-Control": "no-store" });
+    }
+
+    // /admin/api/audit?limit=100  (GET) -> { ok, entries }
+    // The admin audit log (P7-2, migration 0018): logins, logouts and every
+    // mutating admin request, newest first. Read-only; nothing here is writable
+    // through the API, because a log that can be edited from the same dashboard
+    // it records is not a log.
+    if (path === "/admin/api/audit" && request.method === "GET") {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      const limit = parseInt(url.searchParams.get("limit") || "100", 10) || 100;
+      const result = await listAdminAudit(env, limit);
+      return json(result, 200, { "Cache-Control": "no-store" });
+    }
+
     // POST only. A logout that answers a GET is a state change any page can
     // trigger with an <img src>, and while the session cookie is SameSite=Strict
     // (so this was never actually reachable cross-site) that is protection by a
@@ -7827,6 +7898,15 @@
       return new Response(null, { status: 405, headers: { "Allow": "POST", "Cache-Control": "no-store" } });
     }
     if (path === "/admin/logout") {
+      // P7-2: the row is revoked, not just the cookie dropped. Dropping the
+      // cookie alone would leave a live session that anything able to set the
+      // cookie back could carry on using.
+      const identity = await resolveAdminIdentity(request, env);
+      const revoked = await revokeAdminSessionFromRequest(request, env);
+      if (identity) {
+        await recordAdminAudit(env, request, identity.actor, "admin.logout",
+          { detail: JSON.stringify({ revoked: revoked }) }, 302);
+      }
       return new Response(null, {
         status: 302,
         headers: {
