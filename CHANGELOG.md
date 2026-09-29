@@ -27,6 +27,18 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 8. **Recommended: set up the background jobs queue** (Phase 5, `docs/OPERATIONS.md` §18): create the queues `mylists-jobs` and `mylists-jobs-dlq`, make this Worker the consumer of `mylists-jobs` (batch size 25, 5 retries, dead-letter queue `mylists-jobs-dlq`), bind `mylists-jobs` to the Worker as `JOBS`, then press **Send a test job** in `/admin` → Maintenance. Without it everything works as before.
 
+### 📥 Importing a list is a job now, with progress and a review step (P6-6, new UI only)
+
+- **Only for a browser on the new interface** (`?ff_new_ui=1`). Lists › Import opens with the new importer above the panel that was there before:
+  - **Choose a file** — a Letterboxd zip or CSV, an IMDb CSV, a Trakt export — and the screen says what it found: how many films, how many shows, and the list name it suggests. The file is read in the browser (through the importer the page already had) because the rows are what get sent.
+  - **The matching happens on the server.** The rows are handed over once (up to 5,000) and a background job resolves them; the screen shows **Matched 34 of 120**, a progress bar, and how many titles are waiting for review or were not found. **Close the page and it keeps going** — come back and it is where you left it, and it says so once when it has finished.
+  - **A file with both films and shows is two imports** (one import is one kind), so the chips say which half is being sent and the other half waits for a second run. A chip with nothing behind it says so and is disabled rather than sending the wrong rows.
+  - **Review** — the titles TMDB could not settle on its own are collected with up to three candidates each: pick the right one, or **Skip**. The rest of the import never waits for them.
+  - **The result is a list, and one toggle adds it to the home screen.** Name it (the file's own name is suggested), and **Show it on my home screen** — ticked by default — adds a single row for it, built exactly the way the dashboard's own **+ Add** row is built; the same button takes it off again. Import another file when you are done.
+  - Anything that matched nothing is counted and said plainly rather than quietly dropped.
+- **The old import panel is still there** underneath and the old page's Import is unchanged. `/api/bulk-resolve`, the browser-side resolver this replaces, is kept one more release as a shim.
+- **One bug fixed on the way**, found by the new tests: the shell's Explore search box (P6-5) split its query on the letter "s" — inside the Worker's own template literal a `\s` written with one backslash reaches the browser as a bare `s`. Fixed for Explore and for the import screen; the same mistake in three older client regexes is written up in `HANDOFF.md` rather than changed here, because it is not this task's code.
+
 ### 🧭 Explore: other people's lists in one place (P6-5, new UI only)
 
 - **Only for a browser on the new interface** (`?ff_new_ui=1`). Discover opens with an **Explore** section:

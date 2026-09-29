@@ -195,6 +195,17 @@ describe("the new UI shell is opt-in through a cookie", () => {
     assert.ok(elsewhere.text.includes('id="appShellExplore"'), "the container is on the page");
   });
 
+  it("emits the Imports screen only for the shell (P6-6)", async () => {
+    const env = makeEnv();
+    const legacy = await call(env, "/");
+    assert.equal(legacy.text.includes('id="appShellImports"'), false);
+    const shell = await call(env, "/lists/import", { cookie: SHELL_COOKIE });
+    assert.equal(shell.status, 200);
+    assert.ok(shell.text.includes('id="appShellImports"'), "the Imports screen needs a home");
+    // ...inside the panel the old import from a link lives in, which stays.
+    assert.ok(shell.text.includes('id="unifiedImportFileInput"'), "the old import panel should still be there");
+  });
+
   it("ships one bundle and one stylesheet for both variants", async () => {
     // A shell-only line inside either of them would make one cached,
     // publicly-hashed file depend on a cookie. Each isolate's hash describes

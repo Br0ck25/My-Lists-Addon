@@ -164,6 +164,12 @@ ${newUi ? '    <div id="appShellAddTitles"></div>' : ''}
 
   <!-- Submenu 7: Import list from a Link -->
   <div class="lists-subpanel" id="listsSubImport" style="display:none;">
+    <!-- The shell's own importer (P6-6): choose a Letterboxd, IMDb or Trakt
+         file and the server does the matching, with real progress, a review
+         step, and the result saved as a list. Emitted only for a browser with
+         the FF_NEW_UI cookie; the panel below it is unchanged. -->
+${newUi ? '    <div id="appShellImports"></div>' : ''}
+
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">Import list from a link</h2>

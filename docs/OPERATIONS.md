@@ -398,6 +398,8 @@ The frontend rebuild (Phase 6) is being built behind a **cookie**, not a Worker 
 
 **What it changes:** with the cookie set, the six views have real addresses — `/catalogs`, `/catalogs/quickadd`, `/lists/liked`, `/channels/explore`, `/discover/movies`, `/search`, `/settings/account` and so on — the tabs are ordinary links (middle-click and open-in-a-new-tab work), every view keeps the same panels it has today, and an install bar above the tabs says whether this browser's install link is up to date. Settings → Account & Sync also gains four cards at the top -- account, devices, connections and install links -- which read and change things on the server (sign out, delete the account, sign devices out, connect a provider, revoke an install link).
 
+**What it needs on the server:** the screens that read or change *your account* -- Settings' four cards, and Imports below -- go through the session cookie (`/api/me`, `/api/imports`, ...), which is what `FF_SESSIONS=1` turns on. With it unset those screens say you are not signed in, and the import API answers 401; nothing else on the page is affected. Set it in the dashboard (Worker → Settings → Variables) before trying them, and remember that turning it off again signs every browser out.
+
 **Turning it on for yourself:** open
 
 ```

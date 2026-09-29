@@ -3745,6 +3745,21 @@ ${seoHeadHtml}
   }
   html[data-app-shell="1"] .app-shell-explore-poster-none { display: block; }
 
+  /* Import progress (P6-6): how far the server has got, and a heading for the
+     blocks under it. */
+  html[data-app-shell="1"] .app-shell-h3 { margin: 14px 0 6px; font-size: 1rem; }
+  html[data-app-shell="1"] .app-shell-bar {
+    height: 8px; border-radius: 999px; overflow: hidden;
+    background: var(--panel-strong); border: 1px solid var(--border); margin: 2px 0 8px;
+  }
+  html[data-app-shell="1"] .app-shell-bar > span {
+    display: block; height: 100%; background: var(--accent); transition: width 0.3s ease;
+  }
+  html[data-app-shell="1"] #appShellImportName, html[data-app-shell="1"] #appShellAddTitlesInput {
+    width: 100%; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.95rem;
+  }
+
   /* --- Floating Unsaved Changes to Install Link Banner -------------------- */
   .unsaved-install-banner {
     position: fixed;

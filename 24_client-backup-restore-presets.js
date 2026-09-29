@@ -4404,6 +4404,7 @@ async function appShellListsRefresh() {
 // Which of the three dispatchers an action belongs to (see appShellOnClick).
 const APP_SHELL_LISTS_ACTION = /^(list-|lists-|title-)/;
 const APP_SHELL_EXPLORE_ACTION = /^explore-/;
+const APP_SHELL_IMPORTS_ACTION = /^import-/;
 
 async function appShellListsAction(action, id) {
   const what = String(action || '');
@@ -4623,7 +4624,7 @@ async function appShellExploreTmdbSearch(q) {
 // MDBList has no list search (see the note at the top of this module), so this
 // is what the legacy search does too -- said out loud in the note below.
 function appShellExploreFilterByName(rows, q) {
-  const words = String(q || '').toLowerCase().split(/\s+/).filter(Boolean);
+  const words = String(q || '').toLowerCase().split(/\\s+/).filter(Boolean);
   if (!words.length) return rows;
   return rows.filter(function (row) {
     const text = (String(row.name) + ' ' + String(row.by)).toLowerCase();
@@ -4909,6 +4910,704 @@ async function appShellExploreAction(action, id) {
   return false;
 }
 
+// --- Imports (P6-6) ----------------------------------------------------------
+//
+// "I want to import a Letterboxd list": pick the file your other site exported,
+// and the matching happens on the server (49_imports.js) instead of in this tab.
+// That is what makes the rest of this screen possible -- the job keeps running
+// when the page is closed, the progress it reports is real, and the titles TMDB
+// could not place are shown for a person to decide about rather than dropped.
+//
+//   POST /api/imports                    hand the rows over once
+//   GET  /api/imports/:id                { status, total, done, matched,
+//                                          ambiguous, unmatched }
+//   GET  /api/imports/:id/review         the ambiguous rows and their candidates
+//   POST /api/imports/:id/review         { choices: [{ row, tmdbId | null }] }
+//   GET  /api/imports/:id/result         the matched titles, in the file's order
+//
+// The file itself is read here, in the browser, because it has to be: the rows
+// are what get posted. The reading reuses the page's own importer
+// (extractItemsFromFileContent, and the fflate zip reader the page already
+// loads, 18_) rather than a second parser with its own bugs.
+//
+// Everything needs an account -- the API is per account, and one import at a
+// time -- so a signed-out browser gets a card pointing at Settings.
+
+// The server's own ceiling: IMPORT_ROWS_MAX in 49_imports.js. A literal rather
+// than an interpolation because 49_ is declared after the Worker's exports and
+// so is not in scope where this page is built; the two are checked together by
+// the imports test, and the server refuses anything over its own limit anyway.
+const APP_SHELL_IMPORT_ROWS_MAX = 5000;
+const APP_SHELL_IMPORT_POLL_MS = 1500;
+
+var appShellImportPollTimer = null;
+var appShellImportsResumed = false;
+var appShellImportFileNote = '';
+var appShellImportFile = null;   // { name, byKind: { movie: [], series: [] }, counts, truncated }
+var appShellImportKind = 'movie';
+var appShellImportJob = null;    // the last status the server gave us
+var appShellImportReview = [];   // the ambiguous rows still to decide
+var appShellImportItems = [];    // the matched titles, once the job is done
+var appShellImportSaved = null;  // { name, slug, type } -- the saved list, once there is one
+
+function appShellImportsHost() {
+  return document.getElementById('appShellImports');
+}
+
+// Whether the Lists > Import panel is the one on screen (the container exists
+// on every shell page; the panel does not).
+function appShellImportsIsOpen() {
+  const panel = document.getElementById('listsSubImport');
+  return !!(panel && panel.style && panel.style.display !== 'none');
+}
+
+function appShellImportsEscape(value) {
+  return escapeHtml(String(value === null || value === undefined ? '' : value));
+}
+
+function appShellImportsNumber(n) {
+  return Number(n) || 0;
+}
+
+// What a file's name would be as a list name: "letterboxd-watchlist.csv" ->
+// "Letterboxd Watchlist".
+function appShellImportNameFromFile(fileName) {
+  const base = String(fileName || '').replace(/\\.[^.]+$/, '').replace(/[-_]+/g, ' ').replace(/\\s+/g, ' ').trim();
+  if (!base) return 'Imported list';
+  return base.replace(/(^|\\s)([a-z])/g, function (m, sp, ch) { return sp + ch.toUpperCase(); }).slice(0, 80);
+}
+
+// --- reading the file --------------------------------------------------------
+
+// One file's text through the page's own extractor, which knows Letterboxd,
+// IMDb, Trakt, Simkl, MovieLens and TMDB export shapes.
+function appShellImportItemsFromText(fileName, text) {
+  if (typeof extractItemsFromFileContent !== 'function') return [];
+  try {
+    const items = extractItemsFromFileContent(fileName, String(text || ''), 'auto');
+    return Array.isArray(items) ? items : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+// The rows the import API takes ({ title, year?, imdbId?, tmdbId? }), grouped
+// by kind: one import is one kind (that is the server's model), so a file that
+// holds both is two imports and the screen picks which one it is sending.
+function appShellImportRowsFromItems(items) {
+  const byKind = { movie: [], series: [] };
+  (items || []).forEach(function (it) {
+    if (!it) return;
+    const title = String(it.title || it.name || '').trim();
+    const imdbId = /^tt\\d{1,10}$/.test(String(it.imdbId || '')) ? String(it.imdbId) : '';
+    const tmdbId = Number(it.tmdbId) > 0 ? Number(it.tmdbId) : 0;
+    if (!title && !imdbId && !tmdbId) return;
+    const year = /^\\d{4}$/.test(String(it.year || '').trim()) ? Number(String(it.year).trim()) : null;
+    const kind = (it.type === 'series' || it.type === 'show' || it.type === 'tv') ? 'series' : 'movie';
+    byKind[kind].push({ title: title, year: year, imdbId: imdbId || null, tmdbId: tmdbId || null });
+  });
+  return { byKind: byKind, counts: { movie: byKind.movie.length, series: byKind.series.length } };
+}
+
+// One chosen file: a zip (a Trakt or Letterboxd export holds several CSVs) or a
+// single CSV/JSON. Returns { name, byKind, counts, truncated } or { error }.
+async function appShellImportReadFile(file) {
+  const name = String((file && file.name) || 'file');
+  let items = [];
+  if (/\\.zip$/i.test(name)) {
+    if (typeof fflate === 'undefined' || !fflate || typeof fflate.unzipSync !== 'function') {
+      return { error: 'The zip reader is still loading. Try again in a moment, or unzip the file and choose the CSV inside it.' };
+    }
+    let unzipped = null;
+    try {
+      const buf = await file.arrayBuffer();
+      unzipped = fflate.unzipSync(new Uint8Array(buf));
+    } catch (e) {
+      return { error: 'That zip could not be read. Try unzipping it and choosing the CSV inside.' };
+    }
+    const entryNames = Object.keys(unzipped || {}).sort();
+    for (let i = 0; i < entryNames.length; i++) {
+      const entryName = entryNames[i];
+      if (entryName.slice(-1) === '/' || entryName.indexOf('__MACOSX') === 0) continue;
+      if (!/\\.(csv|json|txt)$/i.test(entryName)) continue;
+      const text = (typeof fflate.strFromU8 === 'function') ? fflate.strFromU8(unzipped[entryName]) : '';
+      const parts = entryName.split('/');
+      items = items.concat(appShellImportItemsFromText(parts[parts.length - 1] || entryName, text));
+      if (items.length > APP_SHELL_IMPORT_ROWS_MAX) break;
+    }
+  } else {
+    let text = '';
+    try {
+      text = await file.text();
+    } catch (e) {
+      return { error: 'That file could not be read.' };
+    }
+    items = appShellImportItemsFromText(name, text);
+  }
+  if (!items.length) {
+    return { error: 'No titles were found in that file. CSV, JSON, and Trakt or Letterboxd exports inside a zip are all supported.' };
+  }
+  const read = appShellImportRowsFromItems(items.slice(0, APP_SHELL_IMPORT_ROWS_MAX));
+  if (!read.counts.movie && !read.counts.series) return { error: 'No titles were found in that file.' };
+  return { name: name, byKind: read.byKind, counts: read.counts, truncated: items.length > APP_SHELL_IMPORT_ROWS_MAX };
+}
+
+// --- the job -----------------------------------------------------------------
+
+function appShellImportRemember(id) {
+  try { localStorage.setItem('myListAddon:lastImport', String(id)); } catch (e) {}
+}
+
+function appShellImportRemembered() {
+  try { return localStorage.getItem('myListAddon:lastImport') || ''; } catch (e) { return ''; }
+}
+
+function appShellImportMarkSeen(id) {
+  try { localStorage.setItem('myListAddon:lastImportSeen', String(id)); } catch (e) {}
+}
+
+function appShellImportSeen(id) {
+  try { return (localStorage.getItem('myListAddon:lastImportSeen') || '') === String(id); } catch (e) { return true; }
+}
+
+function appShellImportStopPolling() {
+  if (appShellImportPollTimer) {
+    clearTimeout(appShellImportPollTimer);
+    appShellImportPollTimer = null;
+  }
+}
+
+function appShellImportIsRunning() {
+  return !!(appShellImportJob && (appShellImportJob.status === 'queued' || appShellImportJob.status === 'running'));
+}
+
+async function appShellImportStart() {
+  const file = appShellImportFile;
+  if (!file) return false;
+  const kind = appShellImportKind === 'series' ? 'series' : 'movie';
+  const rows = (file.byKind && file.byKind[kind]) ? file.byKind[kind] : [];
+  if (!rows.length) {
+    showToast(kind === 'series' ? 'That file has no shows in it -- pick Movies, or a different file.' : 'That file has no movies in it -- pick Shows, or a different file.', 'info');
+    return false;
+  }
+  const name = appShellImportListName();
+  // One line per mutating call: the CSRF scanner reads this file and calls an
+  // appShellApiFetch( on the same line as method: 'POST' exempt.
+  const startBody = { rows: rows, kind: kind, source: 'file', name: name };
+  const res = await appShellApiFetch('/api/imports', { method: 'POST', body: startBody });
+  if (!res.ok) {
+    // "An import is already running" answers 409 with the id of the one that
+    // is -- that is something to pick up, not a failure to report.
+    const busyId = res.data && res.data.id;
+    if (res.status === 409 && busyId) {
+      appShellImportRemember(busyId);
+      appShellImportFile = null;
+      await appShellImportRefresh();
+      showToast('An import was already running, so this screen picked it up.', 'info');
+      return true;
+    }
+    showToast(res.error || 'The import could not be started.', 'error');
+    return false;
+  }
+  const id = (res.data && res.data.id) || null;
+  if (!id) {
+    showToast('The import could not be started.', 'error');
+    return false;
+  }
+  appShellImportRemember(id);
+  appShellImportFile = null;
+  appShellImportReview = [];
+  appShellImportItems = [];
+  appShellImportSaved = null;
+  appShellImportJob = {
+    id: id,
+    status: 'queued',
+    kind: kind,
+    name: name,
+    total: appShellImportsNumber(res.data.total),
+    done: 0, matched: 0, ambiguous: 0, unmatched: 0, error: null,
+  };
+  appShellRenderImports();
+  appShellImportSchedulePoll();
+  showToast('Import started. You can leave this page -- it keeps going.', 'success');
+  return true;
+}
+
+function appShellImportSchedulePoll() {
+  appShellImportStopPolling();
+  if (!appShellImportIsRunning()) return false;
+  appShellImportPollTimer = setTimeout(function () {
+    appShellImportPollTimer = null;
+    appShellImportRefresh();
+  }, APP_SHELL_IMPORT_POLL_MS);
+  return true;
+}
+
+// Reads the job's status, and -- once it has finished -- the review rows and
+// the titles behind them.
+async function appShellImportRefresh() {
+  const id = (appShellImportJob && appShellImportJob.id) || appShellImportRemembered();
+  if (!id) return false;
+  const res = await appShellApiFetch('/api/imports/' + encodeURIComponent(id));
+  if (!res.ok) {
+    if (res.status === 404) {
+      // The remembered import is gone -- a different account, or a job the
+      // store no longer keeps. Forget it rather than showing a stuck screen.
+      try { localStorage.removeItem('myListAddon:lastImport'); } catch (e) {}
+      appShellImportJob = null;
+      appShellRenderImports();
+      return false;
+    }
+    showToast(res.error || 'Could not read the import just now.', 'error');
+    appShellImportSchedulePoll();
+    return false;
+  }
+  const data = res.data || {};
+  appShellImportJob = {
+    id: data.id || id,
+    status: data.status || 'queued',
+    kind: data.kind === 'series' ? 'series' : 'movie',
+    name: data.name || (appShellImportJob && appShellImportJob.name) || null,
+    total: appShellImportsNumber(data.total),
+    done: appShellImportsNumber(data.done),
+    matched: appShellImportsNumber(data.matched),
+    ambiguous: appShellImportsNumber(data.ambiguous),
+    unmatched: appShellImportsNumber(data.unmatched),
+    error: data.error || null,
+  };
+  if (appShellImportJob.status === 'done') {
+    await appShellImportLoadDone(true);
+    // Said once per import, which is the point of the job running on the
+    // server: it can finish while nobody is watching.
+    if (!appShellImportSeen(appShellImportJob.id)) {
+      appShellImportMarkSeen(appShellImportJob.id);
+      showToast('Your import finished: ' + appShellImportJob.matched + ' of ' + appShellImportJob.total +
+        (appShellImportJob.total === 1 ? ' title matched.' : ' titles matched.'), 'success');
+    }
+  } else if (appShellImportJob.status === 'failed') {
+    appShellImportMarkSeen(appShellImportJob.id);
+  }
+  appShellRenderImports();
+  if (appShellImportIsRunning()) appShellImportSchedulePoll();
+  return true;
+}
+
+// The review rows, and the titles that came out of the import. reloadItems
+// is false only when the titles already on screen are known to be current.
+async function appShellImportLoadDone(reloadItems) {
+  const job = appShellImportJob;
+  if (!job) return false;
+  const reviewRes = await appShellApiFetch('/api/imports/' + encodeURIComponent(job.id) + '/review');
+  appShellImportReview = (reviewRes.ok && reviewRes.data && reviewRes.data.review) ? reviewRes.data.review : [];
+  if (reloadItems === false && appShellImportItems.length) return true;
+  const resultRes = await appShellApiFetch('/api/imports/' + encodeURIComponent(job.id) + '/result');
+  appShellImportItems = (resultRes.ok && resultRes.data && resultRes.data.items) ? resultRes.data.items : [];
+  return true;
+}
+
+// Picking a candidate, or skipping the row. One choice per press: the row
+// leaves the review as soon as the server has taken it, so there is nothing
+// half-decided to lose.
+async function appShellImportChoose(choiceId) {
+  const job = appShellImportJob;
+  if (!job || job.status !== 'done') return false;
+  const parts = String(choiceId || '').split('|');
+  const rowIndex = Number(parts[0]);
+  const tmdbId = parts[1] === 'skip' ? null : Number(parts[1]);
+  if (!Number.isInteger(rowIndex)) return false;
+  if (tmdbId !== null && !(tmdbId > 0)) return false;
+  const res = await appShellApiFetch('/api/imports/' + encodeURIComponent(job.id) + '/review', { method: 'POST', body: { choices: [{ row: rowIndex, tmdbId: tmdbId }] } });
+  if (!res.ok) {
+    showToast(res.error || 'That choice could not be saved.', 'error');
+    return false;
+  }
+  appShellImportJob.matched = appShellImportsNumber(res.data && res.data.matched);
+  appShellImportJob.ambiguous = appShellImportsNumber(res.data && res.data.ambiguous);
+  appShellImportJob.unmatched = appShellImportsNumber(res.data && res.data.unmatched);
+  appShellImportReview = appShellImportReview.filter(function (r) { return Number(r.row) !== rowIndex; });
+  // The titles are the server's answer, so they are re-read rather than guessed
+  // at here: a chosen row's id is the server's to decide.
+  await appShellImportLoadDone(true);
+  appShellRenderImports();
+  showToast(tmdbId === null ? 'Skipped.' : 'Added to the import.', 'success');
+  return true;
+}
+
+// --- turning the result into a list -----------------------------------------
+
+// The same item shape the page's own importer writes into a list (18_): the id
+// under both names, the title under both names, and the poster metahub serves
+// for an IMDb id when the file did not carry one.
+function appShellImportListItems() {
+  return appShellImportItems.map(function (it) {
+    const id = String(it.id || '');
+    const imdbId = /^tt\\d+$/.test(id) ? id : '';
+    return {
+      id: id,
+      imdbId: imdbId,
+      tmdbId: imdbId ? '' : (id.indexOf('tmdb:') === 0 ? id.slice(5) : ''),
+      type: (it.type === 'series') ? 'series' : 'movie',
+      name: it.name || it.title || '',
+      title: it.name || it.title || '',
+      poster: imdbId ? ('https://images.metahub.space/poster/medium/' + imdbId + '/img') : '',
+      year: it.year || '',
+    };
+  });
+}
+
+function appShellImportListName() {
+  const input = document.getElementById('appShellImportName');
+  const typed = (input && input.value ? input.value : '').trim();
+  if (typed) return typed.slice(0, 120);
+  if (appShellImportJob && appShellImportJob.name) return String(appShellImportJob.name).slice(0, 120);
+  if (appShellImportFile) return appShellImportNameFromFile(appShellImportFile.name);
+  return 'Imported list';
+}
+
+async function appShellImportSaveList() {
+  const items = appShellImportItems;
+  if (!items.length) {
+    showToast('There is nothing matched to save yet.', 'info');
+    return false;
+  }
+  const name = appShellImportListName();
+  const type = (appShellImportJob && appShellImportJob.kind === 'series') ? 'series' : (appShellImportKind === 'series' ? 'series' : 'movie');
+  // Same authentication as the Lists view's own save (appShellSetListVisibility):
+  // the route checks creatorName + creatorKey, and empty strings let a session
+  // cookie stand in for them when the browser has one.
+  const saveBody = {
+    creatorName: (typeof activeCreator !== 'undefined' && activeCreator) ? activeCreator.creatorName : '',
+    creatorKey: localStorage.getItem('myListAddon:creatorKey') || '',
+    name: name,
+    type: type,
+    items: appShellImportListItems(),
+    visibility: 'private',
+  };
+  const res = await appShellApiFetch('/api/creator/lists/save', { method: 'POST', body: saveBody });
+  if (!res.ok) {
+    showToast(res.error || 'The list could not be saved.', 'error');
+    return false;
+  }
+  const slug = (res.data && res.data.slug) || '';
+  appShellImportSaved = { name: name, slug: slug, type: type };
+  // The checkbox beside the button decides whether it belongs on the home
+  // screen: "the result is a list, and one toggle adds it".
+  const toggle = document.getElementById('appShellImportHomeToggle');
+  const wantsHome = !toggle || !!toggle.checked;
+  if (wantsHome) {
+    appShellImportSetHome(true, true);
+  } else {
+    appShellRenderImports();
+  }
+  appShellRenderImports();
+  showToast('Saved "' + name + '" with ' + items.length + ' titles. It is on your account -- My Lists shows it.', 'success');
+  return true;
+}
+
+// Whether the row for a saved import is on the home screen. The page's own
+// answer counts first -- isListAddedToConfig is what the dashboard's buttons
+// read -- and the #lists scan catches a row this screen did not add.
+function appShellImportOnHome() {
+  const saved = appShellImportSaved;
+  if (!saved || !saved.slug) return false;
+  if (typeof isListAddedToConfig === 'function') {
+    if (isListAddedToConfig(null, saved.type, saved.slug)) return true;
+    if (isListAddedToConfig(null, 'movie', saved.slug) || isListAddedToConfig(null, 'series', saved.slug)) return true;
+  }
+  const rows = document.querySelectorAll('#lists .entry');
+  for (let i = 0; i < rows.length; i++) {
+    const urlInput = rows[i].querySelector ? rows[i].querySelector('.url') : null;
+    if (!urlInput) continue;
+    const payload = (typeof parseCustomListPayloadClient === 'function') ? parseCustomListPayloadClient(urlInput.value) : null;
+    if (payload && (String(payload.localSlug || '') === String(saved.slug) || String(payload.listSlug || '') === String(saved.slug))) return true;
+  }
+  return false;
+}
+
+// On or off the home screen, with exactly the snapshot the Lists view's own
+// toggle builds (P6-4), so the row behaves like every other one: the same
+// customlist:v1 payload, the same group, and a name the rest of the page
+// already knows how to play.
+function appShellImportSetHome(on, quiet) {
+  const saved = appShellImportSaved;
+  if (!saved) return false;
+  if (!on) {
+    if (typeof removeListFromConfig === 'function') {
+      removeListFromConfig(null, saved.type, saved.slug);
+      removeListFromConfig(null, 'movie', saved.slug);
+      removeListFromConfig(null, 'series', saved.slug);
+    }
+    const rows = document.querySelectorAll('#lists .entry');
+    for (let i = 0; i < rows.length; i++) {
+      const urlInput = rows[i].querySelector ? rows[i].querySelector('.url') : null;
+      if (!urlInput) continue;
+      const payload = (typeof parseCustomListPayloadClient === 'function') ? parseCustomListPayloadClient(urlInput.value) : null;
+      if (payload && (String(payload.localSlug || '') === String(saved.slug) || String(payload.listSlug || '') === String(saved.slug))) rows[i].remove();
+    }
+    if (typeof renumber === 'function') renumber();
+    if (typeof saveState === 'function') saveState();
+    appShellRenderImports();
+    if (!quiet) showToast('"' + saved.name + '" removed from your home screen.', 'success');
+    return true;
+  }
+  const items = (typeof normalizeSnapshotItemsForCatalog === 'function')
+    ? normalizeSnapshotItemsForCatalog(appShellImportListItems())
+    : appShellImportListItems();
+  const snapshot = { listId: generateChannelId(), localSlug: saved.slug, listSlug: saved.slug, type: saved.type, items: items, shuffle: false };
+  addRow(saved.name, 'customlist:v1:' + JSON.stringify(snapshot), saved.type, true, 'My Lists');
+  if (typeof renumber === 'function') renumber();
+  if (typeof saveState === 'function') saveState();
+  appShellRenderImports();
+  if (!quiet) showToast('"' + saved.name + '" added to your home screen.', 'success');
+  return true;
+}
+
+// --- the screen --------------------------------------------------------------
+
+function appShellImportProgressHtml(job) {
+  const total = job.total || 0;
+  const done = Math.min(job.done || 0, total);
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  const parts = [];
+  if (job.ambiguous) parts.push(job.ambiguous + ' to review');
+  if (job.unmatched) parts.push(job.unmatched + ' not found');
+  let html = '<p class="app-shell-kv" id="appShellImportProgress">Matched <strong>' + job.matched + '</strong> of ' + total +
+    (parts.length ? ' &middot; ' + parts.join(' &middot; ') : '') + '</p>' +
+    '<div class="app-shell-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '"><span style="width:' + pct + '%"></span></div>';
+  if (job.status === 'running' || job.status === 'queued') {
+    html += '<p class="app-shell-muted">The server is working through it. You can close this page -- it keeps going, and this screen picks it up when you come back.</p>' +
+      '<div class="app-shell-actions"><button type="button" class="secondary lc-btn" data-app-shell-action="import-refresh">Check again</button></div>';
+  }
+  return html;
+}
+
+function appShellImportReviewHtml() {
+  if (!appShellImportReview.length) return '';
+  let html = '<h3 class="app-shell-h3">Review ' + appShellImportReview.length + (appShellImportReview.length === 1 ? ' title' : ' titles') + '</h3>' +
+    '<p class="app-shell-muted">These look like more than one title. Pick the right one, or skip it -- the rest of the import is already matched and does not wait for this.</p>';
+  appShellImportReview.slice(0, 50).forEach(function (r) {
+    html += '<div class="app-shell-review-row"><div class="app-shell-row-main"><strong>' +
+      appShellImportsEscape(r.title || '(untitled)') + '</strong>' +
+      (r.year ? '<br><span class="app-shell-muted">' + appShellImportsEscape(r.year) + '</span>' : '') +
+      '</div><div class="app-shell-row-controls">';
+    (r.candidates || []).forEach(function (c) {
+      html += '<button type="button" class="secondary lc-btn" data-app-shell-action="import-choose" data-app-shell-id="' +
+        Number(r.row) + '|' + Number(c.tmdbId) + '">' + appShellImportsEscape(c.title || 'Untitled') +
+        (c.year ? ' (' + Number(c.year) + ')' : '') + '</button>';
+    });
+    html += '<button type="button" class="secondary lc-btn" data-app-shell-action="import-choose" data-app-shell-id="' +
+      Number(r.row) + '|skip">Skip</button></div></div>';
+  });
+  if (appShellImportReview.length > 50) {
+    html += '<p class="app-shell-muted">Showing the first 50 of ' + appShellImportReview.length + '. Decide these and the rest follow.</p>';
+  }
+  return html;
+}
+
+function appShellImportUnmatchedHtml() {
+  if (!appShellImportJob || !appShellImportJob.unmatched) return '';
+  return '<p class="app-shell-muted">' + appShellImportJob.unmatched + (appShellImportJob.unmatched === 1 ? ' title was' : ' titles were') +
+    ' not found on TMDB and ' + (appShellImportJob.unmatched === 1 ? 'is' : 'are') + ' left out. Search for them in the Search tab, or fix the spelling in the file and import it again.</p>';
+}
+
+function appShellImportFinishedHtml() {
+  const job = appShellImportJob;
+  const items = appShellImportItems;
+  let html = '<h3 class="app-shell-h3">Import finished</h3>' + appShellImportProgressHtml(job);
+  if (!items.length) {
+    return html + '<p class="app-shell-muted">Nothing matched, so there is no list to save.</p>' + appShellImportUnmatchedHtml() +
+      '<div class="app-shell-actions"><button type="button" class="secondary lc-btn" data-app-shell-action="import-forget">Import another file</button></div>';
+  }
+  if (appShellImportSaved) {
+    const onHome = appShellImportOnHome();
+    html += '<p class="app-shell-kv">Saved as <strong>' + appShellImportsEscape(appShellImportSaved.name) + '</strong> with ' + items.length + ' titles.</p>' +
+      '<div class="app-shell-actions">' +
+      '<button type="button" class="' + (onHome ? 'secondary' : 'primary') + ' lc-btn" data-app-shell-action="import-home" data-app-shell-id="' + (onHome ? 'off' : 'on') + '">' +
+      (onHome ? 'On your home screen' : 'Show it on my home screen') + '</button>' +
+      '<button type="button" class="secondary lc-btn" data-app-shell-action="import-forget">Import another file</button>' +
+      '</div>' + appShellImportUnmatchedHtml();
+    return html;
+  }
+  html += '<label class="app-shell-muted" for="appShellImportName" style="display:block; margin:6px 0 4px;">List name</label>' +
+    '<input type="text" id="appShellImportName" value="' + appShellImportsEscape(appShellImportListName()) + '">' +
+    '<label class="app-shell-dedupe" for="appShellImportHomeToggle">' +
+    '<input type="checkbox" id="appShellImportHomeToggle" checked>' +
+    '<span><strong>Show it on my home screen</strong><br><span class="app-shell-muted">The list is saved either way; this decides whether a row for it goes into your rows above.</span></span></label>' +
+    '<div class="app-shell-actions"><button type="button" class="primary lc-btn" data-app-shell-action="import-save">Save ' + items.length + ' titles as a list</button></div>' +
+    appShellImportUnmatchedHtml();
+  return html;
+}
+
+// One kind of import the chosen file holds. Disabled when it holds none: the
+// server takes one kind per import, so an empty chip is nothing to send.
+function appShellImportKindChip(kind, label, count) {
+  const on = (appShellImportKind === 'series' ? 'series' : 'movie') === kind;
+  return '<button type="button" class="app-shell-chip' + (on ? ' is-on' : '') + '"' +
+    ' data-app-shell-action="import-kind" data-app-shell-id="' + kind + '"' +
+    (count ? '' : ' disabled title="The chosen file has none of these."') + '>' +
+    label + ' (' + count + ')</button>';
+}
+
+function appShellRenderImports() {
+  const host = appShellImportsHost();
+  if (!host || !NEW_UI) return false;
+  const typed = document.getElementById('appShellImportName');
+  const typedValue = typed ? typed.value : '';
+  let html = '<div class="panel" style="margin-bottom:12px;">' +
+    '<h2 class="panel-title">Import a file</h2>' +
+    '<p class="app-shell-muted">A Letterboxd zip or CSV, an IMDb CSV, a Trakt export. Matching happens on the server, so you can close this page and come back.</p>';
+
+  const account = appShellState.get().account;
+  if (!account) {
+    html += '<p class="app-shell-muted">Sign in first: an import is kept on your account and matched against your own library.</p>' +
+      '<div class="app-shell-actions"><button type="button" class="primary lc-btn" data-app-shell-action="import-account">Go to Settings to sign in</button></div></div>';
+    host.innerHTML = html;
+    return true;
+  }
+
+  if (appShellImportJob) {
+    if (appShellImportJob.status === 'failed') {
+      html += '<p class="app-shell-review-bad">' + appShellImportsEscape(appShellImportJob.error || 'The import stopped. Please try again.') + '</p>' +
+        '<div class="app-shell-actions"><button type="button" class="secondary lc-btn" data-app-shell-action="import-forget">Start a new import</button></div>';
+    } else if (appShellImportJob.status === 'done') {
+      html += appShellImportReviewHtml() + appShellImportFinishedHtml();
+    } else {
+      html += '<p class="app-shell-muted">Import #' + appShellImportsNumber(appShellImportJob.id) +
+        (appShellImportJob.name ? ' &middot; ' + appShellImportsEscape(appShellImportJob.name) : '') + '</p>' +
+        appShellImportProgressHtml(appShellImportJob);
+    }
+  } else if (appShellImportFile) {
+    const counts = appShellImportFile.counts || { movie: 0, series: 0 };
+    const chosen = appShellImportKind === 'series' ? 'series' : 'movie';
+    const sending = counts[chosen];
+    html += '<p class="app-shell-kv"><strong>' + appShellImportsEscape(appShellImportFile.name) + '</strong> &middot; ' +
+      (counts.movie + counts.series) + ' titles' +
+      (appShellImportFile.truncated ? ' (the first ' + APP_SHELL_IMPORT_ROWS_MAX + ')' : '') + '</p>' +
+      '<div class="app-shell-actions" style="margin-bottom:8px;">' + appShellImportKindChip('movie', 'Movies', counts.movie) +
+      appShellImportKindChip('series', 'Shows', counts.series) + '</div>';
+    if (counts.movie && counts.series) {
+      html += '<p class="app-shell-muted">That file has both. One import is one kind, so this sends the ' + sending + ' ' +
+        (chosen === 'movie' ? 'movies' : 'shows') + ' -- pick the other chip afterwards for the rest.</p>';
+    }
+    html += '<label class="app-shell-muted" for="appShellImportName" style="display:block; margin:6px 0 4px;">List name</label>' +
+      '<input type="text" id="appShellImportName" value="' + appShellImportsEscape(typedValue || appShellImportNameFromFile(appShellImportFile.name)) + '">' +
+      '<div class="app-shell-actions" style="margin-top:10px;">' +
+      '<button type="button" class="primary lc-btn" data-app-shell-action="import-start"' + (sending ? '' : ' disabled title="There are none of these in the chosen file."') + '>Start the import' + (sending ? ' (' + sending + (sending === 1 ? ' title)' : ' titles)') : '') + '</button>' +
+      '<button type="button" class="secondary lc-btn" data-app-shell-action="import-clear">Choose another file</button>' +
+      '</div>';
+  } else {
+    html += '<div class="app-shell-actions"><button type="button" class="primary lc-btn" data-app-shell-action="import-pick">Choose a file\\u2026</button></div>' +
+      '<p class="app-shell-muted" id="appShellImportStatus">' + appShellImportsEscape(appShellImportFileNote || 'Nothing chosen yet.') + '</p>';
+  }
+
+  html += '<input type="file" id="appShellImportFileInput" accept=".csv,.json,.zip,.txt" style="display:none" aria-label="Choose a file to import">' +
+    '</div>';
+  host.innerHTML = html;
+
+  const nameInput = document.getElementById('appShellImportName');
+  if (nameInput && typedValue && nameInput.value !== typedValue) nameInput.value = typedValue;
+  const input = document.getElementById('appShellImportFileInput');
+  if (input && input.addEventListener) input.addEventListener('change', appShellImportFileChosen);
+  return true;
+}
+
+function appShellImportFileChosen(e) {
+  const input = (e && e.target) || document.getElementById('appShellImportFileInput');
+  const list = (input && input.files) ? input.files : null;
+  if (!list || !list.length) return false;
+  const files = [];
+  for (let i = 0; i < list.length; i++) files.push(list[i]);
+  appShellImportReadFiles(files);
+  return true;
+}
+
+async function appShellImportReadFiles(files) {
+  appShellImportFileNote = 'Reading ' + files.length + (files.length === 1 ? ' file\\u2026' : ' files\\u2026');
+  appShellRenderImports();
+  const byKind = { movie: [], series: [] };
+  let truncated = false;
+  let error = '';
+  for (let i = 0; i < files.length; i++) {
+    const read = await appShellImportReadFile(files[i]);
+    if (read.error) { error = read.error; continue; }
+    ['movie', 'series'].forEach(function (kind) {
+      const room = APP_SHELL_IMPORT_ROWS_MAX - byKind.movie.length - byKind.series.length;
+      const rows = read.byKind[kind] || [];
+      if (rows.length > room) truncated = true;
+      rows.slice(0, Math.max(0, room)).forEach(function (r) { byKind[kind].push(r); });
+    });
+  }
+  const counts = { movie: byKind.movie.length, series: byKind.series.length };
+  appShellImportFileNote = '';
+  if (!counts.movie && !counts.series) {
+    showToast(error || 'No titles were found in that file.', 'error');
+    appShellRenderImports();
+    return false;
+  }
+  appShellImportFile = {
+    name: files.length === 1 ? files[0].name : files.length + ' files',
+    byKind: byKind,
+    counts: counts,
+    truncated: truncated || (counts.movie + counts.series) >= APP_SHELL_IMPORT_ROWS_MAX,
+  };
+  appShellImportKind = counts.series > counts.movie ? 'series' : 'movie';
+  appShellRenderImports();
+  return true;
+}
+
+// Called when the view is opened, and once at boot for a page served straight
+// at it. The remembered import is looked up only for a screen that is actually
+// being shown, and only once per page load.
+async function appShellResumeImport() {
+  if (!NEW_UI) return false;
+  if (appShellImportsResumed) return true;
+  appShellImportsResumed = true;
+  const id = appShellImportRemembered();
+  if (!id || appShellImportJob) return false;
+  await appShellImportRefresh();
+  return true;
+}
+
+async function appShellImportsAction(action, id) {
+  const what = String(action || '');
+  if (what === 'import-pick') {
+    const input = document.getElementById('appShellImportFileInput');
+    if (input && input.click) input.click();
+    return true;
+  }
+  if (what === 'import-kind') {
+    appShellImportKind = String(id) === 'series' ? 'series' : 'movie';
+    appShellRenderImports();
+    return true;
+  }
+  if (what === 'import-start') return appShellImportStart();
+  if (what === 'import-clear') {
+    appShellImportFile = null;
+    appShellImportFileNote = '';
+    appShellRenderImports();
+    return true;
+  }
+  if (what === 'import-refresh') return appShellImportRefresh();
+  if (what === 'import-choose') return appShellImportChoose(id);
+  if (what === 'import-save') return appShellImportSaveList();
+  if (what === 'import-home') return appShellImportSetHome(String(id) !== 'off');
+  if (what === 'import-account') {
+    appShellGo('/settings/account');
+    if (typeof appShellFocusSignIn === 'function') appShellFocusSignIn();
+    return true;
+  }
+  if (what === 'import-forget') {
+    try { localStorage.removeItem('myListAddon:lastImport'); } catch (e) {}
+    appShellImportJob = null;
+    appShellImportReview = [];
+    appShellImportItems = [];
+    appShellImportSaved = null;
+    appShellRenderImports();
+    return true;
+  }
+  return false;
+}
+
 // --- routing -----------------------------------------------------------------
 
 function appShellFindSubPill(tabId, sub) {
@@ -4956,6 +5655,10 @@ function appShellApplyRoute(route) {
   if (tab.id === 'lists') {
     appShellRenderListsHome();
     if (sub === 'create-list') appShellRenderAddTitles('');
+    if (sub === 'import') {
+      appShellRenderImports();
+      appShellResumeImport();
+    }
   }
   if (tab.id === 'discover') appShellOpenExplore();
   return true;
@@ -5023,6 +5726,7 @@ function appShellOnClick(e) {
     // is async -- its promise is truthy for every action, handled or not.
     if (APP_SHELL_LISTS_ACTION.test(action)) appShellListsAction(action, id);
     else if (APP_SHELL_EXPLORE_ACTION.test(action)) appShellExploreAction(action, id);
+    else if (APP_SHELL_IMPORTS_ACTION.test(action)) appShellImportsAction(action, id);
     else appShellSettingsAction(action, id);
     return;
   }
@@ -5081,6 +5785,10 @@ function initAppShell() {
   appShellRefreshInstallBar();
   appShellRenderHomeEditor();
   if (typeof appShellExploreHost === 'function' && appShellExploreHost() && appShellDiscoverIsOpen()) appShellOpenExplore();
+  if (typeof appShellImportsHost === 'function' && appShellImportsHost() && appShellImportsIsOpen()) {
+    appShellRenderImports();
+    appShellResumeImport();
+  }
   if (typeof isSignedIn === 'function' && isSignedIn()) appShellRefreshAccount();
   appShellState.set({ ready: true });
 }
