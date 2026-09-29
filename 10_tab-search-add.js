@@ -1,9 +1,9 @@
 <div class="tab-panel" data-tab-panel="catalogs" id="content-catalogs" role="tabpanel" aria-labelledby="tab-desktop-catalogs" hidden>
   <!-- Top Submenu Pills for Catalogs -->
   <div class="subnav-pills-bar" id="catalogsFilterBar">
-    <button type="button" class="subnav-pill active" data-sub="all" onclick="switchCatalogsSubmenu('all', this)"><span class="check-icon">&#x2713;</span> My Catalogs</button>
-    <button type="button" class="subnav-pill" data-sub="quickadd" onclick="switchCatalogsSubmenu('quickadd', this)">Quick Add</button>
-    <button type="button" class="subnav-pill" data-sub="bulk" onclick="switchCatalogsSubmenu('bulk', this)">Bulk Add</button>
+    <button type="button" class="subnav-pill active" data-sub="all" data-act="switchCatalogsSubmenu" data-act-args="[&quot;all&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> My Catalogs</button>
+    <button type="button" class="subnav-pill" data-sub="quickadd" data-act="switchCatalogsSubmenu" data-act-args="[&quot;quickadd&quot;,&quot;@self&quot;]">Quick Add</button>
+    <button type="button" class="subnav-pill" data-sub="bulk" data-act="switchCatalogsSubmenu" data-act-args="[&quot;bulk&quot;,&quot;@self&quot;]">Bulk Add</button>
   </div>
 
   <div class="lists-subpanel" id="catalogsSubShelves">
@@ -12,19 +12,25 @@
     <div class="shelf-header" style="margin-bottom:12px;">
       <h2 class="shelf-title">Live Preview &amp; Editor</h2>
       <div class="actions" style="flex-direction:row; flex-wrap:wrap; align-items:center; gap:6px;">
-        <button type="button" class="primary lc-btn" onclick="openAddShelfModal()">+ New Catalog</button>
-        <button type="button" class="secondary lc-btn" id="livePreviewEditBtn" onclick="toggleLivePreviewEdit()">Edit</button>
-        <button type="button" class="secondary lc-btn" onclick="renderLivePreview()">Refresh Preview</button>
+        <button type="button" class="primary lc-btn" data-act="openAddShelfModal">+ New Catalog</button>
+        <button type="button" class="secondary lc-btn" id="livePreviewEditBtn" data-act="toggleLivePreviewEdit">Edit</button>
+        <button type="button" class="secondary lc-btn" data-act="renderLivePreview">Refresh Preview</button>
       </div>
     </div>
     <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Catalogs and lists you've added to your add-on. Reorder, edit, and preview your active shelves.</p>
 
     <div class="row" style="margin-bottom:12px; gap:8px;">
-      <input type="text" id="listFilterInput" aria-label="Filter catalogs by name" placeholder="Filter catalogs by name..." oninput="filterLists()">
-      <select id="listGroupFilterSelect" aria-label="Filter catalogs by group" onchange="filterLists()" style="flex:none; width:auto;">
+      <input type="text" id="listFilterInput" aria-label="Filter catalogs by name" placeholder="Filter catalogs by name..." data-act-on="input" data-act="filterLists">
+      <select id="listGroupFilterSelect" aria-label="Filter catalogs by group" data-act="filterLists" style="flex:none; width:auto;">
         <option value="">All groups</option>
       </select>
     </div>
+
+    <!-- The shell's paste-first home-screen editor (P6-3): add lists, the
+         duplicate toggle, the starter pack. Emitted only for a browser with the
+         FF_NEW_UI cookie; the reorderable rows below it are the same ones the
+         old page uses. -->
+${newUi ? '    <div id="appShellHomeEditor"></div>' : ''}
 
     <!-- Reorderable Catalog Shelves -->
     <div id="lists"></div>
@@ -36,26 +42,26 @@
       </div>
       <div style="display:flex; flex-direction:column; gap:8px;">
         <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.88rem; margin:0; user-select:none;">
-          <input type="checkbox" id="shuffleShelvesCheckbox" onchange="saveState()" style="cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="shuffleShelvesCheckbox" data-act="saveState" style="cursor:pointer; width:16px; height:16px;">
           <span>Shuffle Catalogs daily (every 24h)</span>
         </label>
         <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.88rem; margin:0; user-select:none;">
-          <input type="checkbox" id="shuffleItemsCheckbox" onchange="saveState()" style="cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="shuffleItemsCheckbox" data-act="saveState" style="cursor:pointer; width:16px; height:16px;">
           <span>Shuffle items in Catalogs daily (every 24h)</span>
         </label>
       </div>
     </div>
 
     <div class="actions" style="margin-top:16px;">
-      <button type="button" onclick="removeAllLists()" class="secondary" style="color:var(--danger); border-color:rgba(255,59,48,0.25);">Remove All</button>
-      <button type="button" class="primary" onclick="generate()">${isConfigureMode ? "Update Add-on" : "Generate Install Link"}</button>
+      <button type="button" data-act="removeAllLists" class="secondary" style="color:var(--danger); border-color:rgba(255,59,48,0.25);">Remove All</button>
+      <button type="button" class="primary" data-act="generate">${isConfigureMode ? "Update Add-on" : "Generate Install Link"}</button>
     </div>
   </div>
 
   <!-- Undo Toast -->
   <div id="undoToast" class="undo-toast" style="display:none;">
     <span id="undoToastMsg"></span>
-    <button type="button" class="secondary" onclick="performUndo()">Undo</button>
+    <button type="button" class="secondary" data-act="performUndo">Undo</button>
   </div>
 
   <!-- Generated Install Link Result Box -->
@@ -69,7 +75,7 @@
     <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Paste multiple list URLs at once, one per line. Each list is automatically detected and added to your catalogs.</p>
     <textarea id="bulkPasteBox" rows="5" style="width:100%;font-family:monospace;font-size:15px;" placeholder="https://mdblist.com/lists/user/list-one&#10;https://trakt.tv/users/user/lists/list-two&#10;https://www.themoviedb.org/list/12345"></textarea>
     <div class="actions" style="margin-top:12px;">
-      <button type="button" class="primary" onclick="bulkAddLists(this)">Add All Lines as Catalogs</button>
+      <button type="button" class="primary" data-act="bulkAddLists" data-act-args="[&quot;@self&quot;]">Add All Lines as Catalogs</button>
     </div>
   </div>
   </div>

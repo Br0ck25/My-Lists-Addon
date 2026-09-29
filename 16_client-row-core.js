@@ -23,6 +23,11 @@
 <script>
 const ORIGIN = (typeof location !== 'undefined' && location.origin) ? location.origin : ${jsonForScript(origin)};
 const IS_CONFIGURE = ${isConfigureMode};
+// Whether this page was served as the new UI shell (Phase 6, P6-1). It is a
+// cookie, so it differs per browser rather than per deploy -- everything that
+// depends on it lives in the bundle and reads this flag, because the bundle
+// itself is one shared, content-hashed file (splitAppBundle, 02_).
+const NEW_UI = ${newUi ? "true" : "false"};
 // Populated by the /lists/<slug> route (25_api-catalog-routes.js) when this
 // exact page load resolved a known chart slug -- e.g. loading
 // /lists/TMDB-Trending directly (a bookmark, a shared link, a refresh)
@@ -50,6 +55,15 @@ const serverEntries = (${initialEntriesJson});
 const serverEntriesAreDefaults = ${usingDefaultEntries ? 'true' : 'false'};
 const serverShuffleShelves = ${initialShuffleShelves ? 'true' : 'false'};
 const serverShuffleItems = ${initialShuffleItems ? 'true' : 'false'};
+
+// The rows the home-screen editor offers as a starter pack (P6-3), and nothing
+// else: a shell page is not pre-filled the way the old page is (FRONTEND_UX_AUDIT
+// §7, scenario 1), it is offered the same rows as a button. STARTER_PACK_ENTRIES
+// (00_constants.js) is what the old page's own fallback uses, so the two cannot
+// drift -- and this has to be declared HERE, in the per-request block, not down
+// in the bundle: /app.js is one shared, cached file built once (splitAppBundle,
+// 02_), so a value that differs between the two variants cannot live in it.
+const APP_SHELL_STARTER_PACK = ${newUi ? jsonForScript(STARTER_PACK_ENTRIES) : "[]"};
 </script>
 <script>/*MYLISTS_APP_BUNDLE_START*/
 // Every native/official chart's (slug, name, movieUrl, showUrl) -- lets
@@ -63,6 +77,11 @@ const CHART_SLUG_ENTRIES = ${jsonForScript(CHART_SLUG_ENTRIES)};
 // route had nothing to look a slug up in and guessed the name and type
 // instead -- and guessed wrong for "true-crime-mystery", which is a series.
 const CURATED_LIST_ENTRIES = ${jsonForScript(CURATED_LIST_ENTRIES)};
+// The site's views, as the Worker's one table describes them (APP_SHELL_TABS,
+// 00_constants.js). The shell's router (24_client-backup-restore-presets.js)
+// builds its paths from this and the Worker rendered the nav from the same
+// table, so the two cannot drift.
+const APP_SHELL_TAB_LIST = ${jsonForScript(APP_SHELL_TABS)};
 
 // The Lists tab remembers which sub-tab you were last on, in localStorage, and
 // that value outlives the release that wrote it -- so it can name a panel this
@@ -95,7 +114,7 @@ function normalizeListsSubmenu(raw) {
     var catBar = document.getElementById('catalogsFilterBar');
     if (catBar) {
       catBar.querySelectorAll('.subnav-pill').forEach(function(p) {
-        var match = p.getAttribute('data-sub') === catSub || (p.getAttribute('onclick') || '').indexOf("'" + catSub + "'") !== -1;
+        var match = p.getAttribute('data-sub') === catSub;
         p.classList.toggle('active', match);
         var c = p.querySelector('.check-icon'); if (c) c.remove();
         if (match) p.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
@@ -113,7 +132,7 @@ function normalizeListsSubmenu(raw) {
     var listBar = document.getElementById('listsSubnavBar');
     if (listBar) {
       listBar.querySelectorAll('.subnav-pill').forEach(function(p) {
-        var match = p.getAttribute('data-sub') === listSub || (p.getAttribute('onclick') || '').indexOf("'" + listSub + "'") !== -1;
+        var match = p.getAttribute('data-sub') === listSub;
         p.classList.toggle('active', match);
         var c = p.querySelector('.check-icon'); if (c) c.remove();
         if (match) p.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
@@ -133,7 +152,7 @@ function normalizeListsSubmenu(raw) {
     var chBar = document.getElementById('channelsSubnavBar');
     if (chBar) {
       chBar.querySelectorAll('.subnav-pill').forEach(function(p) {
-        var match = p.getAttribute('data-sub') === chSub || (p.getAttribute('onclick') || '').indexOf("'" + chSub + "'") !== -1;
+        var match = p.getAttribute('data-sub') === chSub;
         p.classList.toggle('active', match);
         var c = p.querySelector('.check-icon'); if (c) c.remove();
         if (match) p.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
@@ -155,7 +174,7 @@ function normalizeListsSubmenu(raw) {
     var setBar = document.getElementById('settingsSubnavBar');
     if (setBar) {
       setBar.querySelectorAll('.subnav-pill').forEach(function(p) {
-        var match = p.getAttribute('data-sub') === setSub || (p.getAttribute('onclick') || '').indexOf("'" + setSub + "'") !== -1;
+        var match = p.getAttribute('data-sub') === setSub;
         p.classList.toggle('active', match);
         var c = p.querySelector('.check-icon'); if (c) c.remove();
         if (match) p.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
@@ -176,7 +195,7 @@ function normalizeListsSubmenu(raw) {
     var discBar = document.getElementById('discoverSubnavBar');
     if (discBar) {
       discBar.querySelectorAll('.subnav-pill').forEach(function(p) {
-        var match = p.getAttribute('data-sub') === discSub || (p.getAttribute('onclick') || '').indexOf("'" + discSub + "'") !== -1;
+        var match = p.getAttribute('data-sub') === discSub;
         p.classList.toggle('active', match);
         var c = p.querySelector('.check-icon'); if (c) c.remove();
         if (match) p.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
@@ -345,6 +364,437 @@ function getListCleanPath(listUrl, name) {
   }
 
   return null;
+}
+
+// --- Provider credentials (P6-8) ---------------------------------------------
+//
+// The keys and tokens for Trakt, MDBList, Simkl and TMDB belong to the
+// account: every config push already sends them up (/api/creator/sync/save,
+// 23_) and every load hands them back. Keeping a second copy in localStorage
+// meant a bearer token for somebody's watch history sat in the browser for
+// any script on the page to read -- SECURITY_AUDIT S-05, and FE-3's "about
+// 80 keys including credentials". From P6-8 the page holds them in memory
+// for the tab's own calls and never writes them to storage again.
+//
+// Reads still fall back to localStorage, so a browser that has been signed in
+// since before P6-8 keeps working; the old copy is dropped only once the
+// account has handed the same credential back (see loadCreatorSync, 22_),
+// never on a guess. myListAddon:creatorKey is deliberately NOT in this list:
+// it is what signs this browser in, and it moves with the new sign-in in
+// P6-9 rather than here.
+const PROVIDER_SECRET_KEYS = [
+  'myListAddon:tmdbKey',
+  'myListAddon:tmdbSessionId',
+  'myListAddon:mdblistKey',
+  'myListAddon:mdblistAccessToken',
+  'myListAddon:traktKey',
+  'myListAddon:traktAccessToken',
+  'myListAddon:simklKey',
+  'myListAddon:simklAccessToken'
+];
+
+// The same eight under the names collectKeys (23_) and the account's sync
+// record give them, each with the provider whose Disconnect clears it.
+const PROVIDER_SECRET_FIELDS = {
+  tmdbKey: 'tmdb', tmdbSessionId: 'tmdb',
+  mdblistKey: 'mdblist', mdblistAccessToken: 'mdblist',
+  traktKey: 'trakt', traktAccessToken: 'trakt',
+  simklKey: 'simkl', simklAccessToken: 'simkl'
+};
+
+function isProviderDisconnected(provider) {
+  try { return localStorage.getItem('myListAddon:' + provider + 'Disconnected') === 'true'; } catch (e) { return false; }
+}
+
+// This page's own copy, for as long as the tab is open. Emptied by
+// clearLocalAccountData (22_): the storage sweep there cannot reach it.
+var _providerSecretsInMemory = {};
+
+function isProviderSecretKey(key) {
+  return PROVIDER_SECRET_KEYS.indexOf(String(key || '')) !== -1;
+}
+
+// Memory first (what this tab knows), then whatever a browser wrote before
+// P6-8. Never null, so callers that compare or trim keep working.
+function readProviderSecret(key) {
+  if (isProviderSecretKey(key) && _providerSecretsInMemory[key]) return _providerSecretsInMemory[key];
+  try { return localStorage.getItem(key) || ''; } catch (e) { return ''; }
+}
+
+// Keeps a credential for this tab. Deliberately does not write storage: that
+// is the whole point of the three functions around this one.
+function rememberProviderSecret(key, value) {
+  if (!isProviderSecretKey(key)) return false;
+  _providerSecretsInMemory[key] = String(value === null || value === undefined ? '' : value);
+  return true;
+}
+
+// Disconnecting, or the account saying we are disconnected: both copies go.
+function forgetProviderSecret(key) {
+  if (!isProviderSecretKey(key)) return false;
+  delete _providerSecretsInMemory[key];
+  try { localStorage.removeItem(key); } catch (e) {}
+  return true;
+}
+
+// The account has just handed the same credential back, so a pre-P6-8 copy in
+// this browser is redundant (and is exactly what P6-8 is removing).
+function dropLegacyProviderSecret(key) {
+  if (!isProviderSecretKey(key)) return false;
+  try { localStorage.removeItem(key); } catch (e) {}
+  return true;
+}
+
+// --- One dispatcher for every control on the page (P6-8) ---------------------
+//
+// Up to P6-8 every button, select and input in this app carried an inline
+// on*= attribute that called a global function by name -- about 470 of them
+// (and 77 more on /admin, which P6-10 converted with its own copy of this
+// runtime). That is why script-src has to allow 'unsafe-inline' (SECURITY_AUDIT),
+// why
+// the arguments had to be escaped into a JavaScript string *inside* an
+// attribute (the shape escapeAttr gets wrong -- see the FE-02 note in
+// 19_client-search-and-likes.js), and why FE-2 calls the whole client "hidden
+// coupling":
+// a renamed function, or a list name with a quote in it, was a page that
+// silently stopped responding.
+//
+// A control now says what it does in data attributes and one listener per
+// event type, on document, runs it:
+//
+//   data-act          the name of the global function to call
+//   data-act-args     JSON array of arguments. "@self", "@checked", "@value"
+//                     and "@event" stand for the element, its checked state,
+//                     its value, the event; anything else is a literal
+//   data-act-on       the event it answers to, when the element's own tag does
+//                     not say (a text input that searches as you type rather
+//                     than on blur: data-act-on="input"). A comma-separated
+//                     list is allowed; the handler then reads @event to tell
+//                     which one fired -- the catalog search box does.
+//   data-act-stop     stopPropagation() before the call
+//   data-act-prevent  preventDefault() before the call
+//   data-act-keys     a keydown only, and only for that key -- "Enter"
+//   data-act-then     call that function afterwards, with no arguments
+//
+// Which event a control answers to, when it does not say. The tag is enough
+// for all but one shape: a button, a link, a div, a span answer a click; an
+// image answers an error (the poster fallbacks); and a checkbox, select,
+// textarea or file input answers a change. Input events and clicks on a form
+// control are the exceptions, and those carry data-act-on explicitly -- 17
+// text inputs that search as you type, and one readonly field that selects its
+// own text. Getting this wrong is not cosmetic: a file input that answered
+// both input and change would upload the same backup twice.
+//
+// The arguments live in one JSON attribute because appActArgs() escapes them
+// once, for both JSON and HTML, at the point where the markup is built -- so a
+// title carrying a quote is a string in an array rather than a way out of the
+// attribute. 08_quickadd-chart-data.js builds its markup inside the Worker
+// instead (see buildCombinedChartsHtml), and uses appActArgsServer, its
+// server-side twin (09_page-shell.js).
+const APP_ACT_EVENT_TYPES = ['click', 'change', 'input', 'keydown'];
+
+// What a call site writes: appActArgs([name, id, 3, true]) -> the attribute
+// value. undefined/null become '' the way the deleted attribute escaper did,
+// so a call site that passed an absent value keeps passing an empty string.
+function appActArgs(values) {
+  const out = [];
+  const list = values || [];
+  for (let i = 0; i < list.length; i++) {
+    const v = list[i];
+    out.push(v === undefined || v === null ? '' : v);
+  }
+  return escapeAttr(JSON.stringify(out));
+}
+
+// The element an event belongs to: the target itself, or the nearest ancestor
+// carrying data-act. A card with a button in it has a click action on both, so
+// the walk in appActDispatch continues upwards until something stops it.
+function appActElement(node) {
+  let el = node;
+  while (el && typeof el.getAttribute === 'function') {
+    if (el.getAttribute('data-act')) return el;
+    el = el.parentNode || el.parentElement || null;
+  }
+  return null;
+}
+
+function appActReadArgs(el, ev) {
+  const raw = el.getAttribute('data-act-args');
+  if (!raw) return [];
+  let values = null;
+  try {
+    values = JSON.parse(raw);
+  } catch (e) {
+    return [];
+  }
+  if (!Array.isArray(values)) return [];
+  const out = [];
+  for (let i = 0; i < values.length; i++) {
+    const v = values[i];
+    if (v === '@self') out.push(el);
+    else if (v === '@checked') out.push(!!el.checked);
+    else if (v === '@value') out.push(el.value);
+    else if (v === '@event') out.push(ev);
+    else out.push(v);
+  }
+  return out;
+}
+
+// Whether this event is the one the control answers to. See the note above
+// APP_ACT_EVENT_TYPES for where each answer comes from.
+function appActAnswers(el, ev) {
+  if (!ev) return false;
+  const explicit = el.getAttribute('data-act-on');
+  if (explicit) {
+    const list = String(explicit).split(',');
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].trim() === ev.type) return true;
+    }
+    return false;
+  }
+  if (el.hasAttribute('data-act-keys')) return ev.type === 'keydown';
+  const tag = String((el.tagName || el.nodeName || '')).toUpperCase();
+  if (tag === 'IMG') return ev.type === 'error';
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return ev.type === 'change';
+  return ev.type === 'click';
+}
+
+var _appActMissingReported = {};
+
+function appActRunOne(el, ev) {
+  const name = el.getAttribute('data-act') || '';
+  if (!name) return false;
+  if (!appActAnswers(el, ev)) return false;
+  if (el.hasAttribute('data-act-keys')) {
+    const wanted = el.getAttribute('data-act-keys') || '';
+    if (String(ev.key || '') !== wanted) return false;
+  }
+  const fn = window[name];
+  if (typeof fn !== 'function') {
+    // A renamed or misspelled action fails loudly once per name. The inline
+    // handlers it replaced failed silently -- html_checks.py exists because
+    // of exactly that, and now checks these names the same way.
+    if (!_appActMissingReported[name]) {
+      _appActMissingReported[name] = true;
+      console.warn('Delegated action not found: ' + name);
+    }
+    return false;
+  }
+  if (ev && el.hasAttribute('data-act-stop')) {
+    if (typeof ev.stopPropagation === 'function') ev.stopPropagation();
+    // An inline stopPropagation() kept the event from every listener above the
+    // control, the page's own document-level ones included -- the poster click
+    // that opens a title's details (19_) is one. This listener is on document
+    // too, registered before all of them (initDelegatedActions runs as 16_
+    // loads), so stopping propagation alone no longer reached them: a channel
+    // card's mini-poster opened the details and the poster listener closed
+    // them again at once. Stopping the rest of document's listeners here is
+    // what the inline call used to do.
+    if (typeof ev.stopImmediatePropagation === 'function') ev.stopImmediatePropagation();
+  }
+  if (ev && el.hasAttribute('data-act-prevent') && typeof ev.preventDefault === 'function') ev.preventDefault();
+  fn.apply(null, appActReadArgs(el, ev));
+  const then = el.getAttribute('data-act-then');
+  if (then && typeof window[then] === 'function') window[then]();
+  return true;
+}
+
+function appActDispatch(ev) {
+  if (!ev) return false;
+  let el = appActElement(ev.target || null);
+  let ran = false;
+  // Innermost first, the order the inline handlers ran in. stopPropagation on
+  // a control means "this one, not the card behind it", which is what the
+  // walk honours by stopping rather than by relying on the event's own path.
+  while (el) {
+    const stops = el.hasAttribute('data-act-stop');
+    if (appActRunOne(el, ev)) ran = true;
+    if (stops) break;
+    el = appActElement(el.parentNode || el.parentElement || null);
+  }
+  return ran;
+}
+
+function initDelegatedActions() {
+  if (window._appActBound) return false;
+  window._appActBound = true;
+  const handler = function (ev) { appActDispatch(ev); };
+  for (let i = 0; i < APP_ACT_EVENT_TYPES.length; i++) {
+    document.addEventListener(APP_ACT_EVENT_TYPES[i], handler, false);
+  }
+  // A broken poster fires an error event that does not bubble, so the
+  // fallbacks (handlePosterImgError and friends) are caught in the capture
+  // phase instead.
+  window.addEventListener('error', handler, true);
+  return true;
+}
+
+if (typeof document !== 'undefined' && document.addEventListener) initDelegatedActions();
+
+// --- The handful of behaviours that used to be written inline ---------------
+//
+// Everything else is a plain call to a function that already existed. These
+// are the sites whose inline bodies did something of their own -- write a
+// setting, open a file picker, clear a select -- which is now a named
+// function, so the markup never carries JavaScript again.
+
+// A decorative stop (a drag handle inside a clickable card): stop, do nothing.
+function appActNothing() {
+  return false;
+}
+
+function appActHideAddShelfModal() {
+  const modal = document.getElementById('addShelfModal');
+  if (modal) modal.style.display = 'none';
+  return true;
+}
+
+function appActValidateCreateListName(value) {
+  const btn = document.getElementById('createListModalBtn');
+  if (!btn) return false;
+  const text = String(value === null || value === undefined ? '' : value).trim();
+  btn.disabled = !text;
+  btn.style.opacity = text ? '1' : '0.5';
+  return true;
+}
+
+function appActRefreshDiscoverCharts() {
+  if (typeof renderDiscoverChartsList === 'function') {
+    renderDiscoverChartsList(window._currentDiscoverFilter || 'movie', true);
+  }
+  return true;
+}
+
+function appActRefreshCreatorDashboard() {
+  return (async function () {
+    await loadCreatorSync();
+    renderCreatorDashboard();
+    return true;
+  })();
+}
+
+function appActOpenFilePicker(id) {
+  const input = document.getElementById(String(id || ''));
+  if (!input) return false;
+  input.click();
+  return true;
+}
+
+// The catalog search box is the one control in the app that answered two
+// events: it searches as you type (350ms behind the last keystroke), and Enter
+// runs the same search immediately instead of waiting. Both are one action
+// here, because one element gets one data-act; @event is which one happened.
+function appActCatalogSearchInput(el, ev) {
+  if (ev && ev.type === 'keydown') {
+    if (ev.key !== 'Enter') return false;
+    if (typeof ev.preventDefault === 'function') ev.preventDefault();
+    runCatalogSearch();
+    return true;
+  }
+  handleCatalogSearchInput(el);
+  return true;
+}
+
+function appActSelectChannelDraftGroup(el, value) {
+  selectChannelDraftByGroup(value);
+  if (el) el.selectedIndex = 0;
+  return true;
+}
+
+function appActShuffleChannelPicks() {
+  shuffleChannelDraft();
+  if (typeof showAddedToast === 'function') showAddedToast('Channel picks shuffled.');
+  return true;
+}
+
+function appActStoreSettingValue(key, value) {
+  try { localStorage.setItem(String(key), String(value === null || value === undefined ? '' : value)); } catch (e) {}
+  saveState();
+  return true;
+}
+
+function appActStoreSettingChecked(key, checked) {
+  try { localStorage.setItem(String(key), checked ? '1' : '0'); } catch (e) {}
+  saveState();
+  return true;
+}
+
+// The adult filter is the one preference whose change has to drop the poster
+// preview cache, or the titles it was hiding stay on screen.
+function appActToggleAdultFilter(checked) {
+  try { localStorage.setItem('myListAddon:adultContentFilter', checked ? '1' : '0'); } catch (e) {}
+  if (window._listPreviewCache) window._listPreviewCache.clear();
+  saveState();
+  return true;
+}
+
+// Typing into a provider's key box: the "you disconnected this" flag goes, the
+// state is saved (which is what sends the key up to the account), and that
+// provider's lists are refreshed.
+function appActProviderKeyTyped(provider, value) {
+  const name = String(provider || '');
+  const typed = String(value === null || value === undefined ? '' : value).trim();
+  if (typed) {
+    try { localStorage.removeItem('myListAddon:' + name + 'Disconnected'); } catch (e) {}
+  }
+  saveState();
+  if (name === 'trakt') {
+    if (typeof scheduleMyTraktListsRefresh === 'function') scheduleMyTraktListsRefresh();
+  } else if (name === 'mdblist') {
+    if (typeof scheduleMyMdblistListsRefresh === 'function') scheduleMyMdblistListsRefresh();
+  } else if (name === 'simkl') {
+    if (typeof scheduleMySimklListsRefresh === 'function') scheduleMySimklListsRefresh();
+  } else if (name === 'tmdb') {
+    if (typeof onTmdbKeyInputChanged === 'function') onTmdbKeyInputChanged();
+  }
+  return true;
+}
+
+// Enter in the feedback reply box sends it; Shift+Enter is a new line.
+function appActFeedbackReplyOnEnter(ev) {
+  if (!ev || ev.key !== 'Enter' || ev.shiftKey) return false;
+  if (typeof ev.preventDefault === 'function') ev.preventDefault();
+  if (typeof sendUserFeedbackReply === 'function') sendUserFeedbackReply();
+  return true;
+}
+
+function appActRemoveShelfLinkRow(el) {
+  if (el && typeof el.closest === 'function') {
+    const row = el.closest('.add-shelf-link-row');
+    if (row) row.remove();
+  }
+  if (typeof validateAddShelfModal === 'function') validateAddShelfModal();
+  return true;
+}
+
+function appActScrollToTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  return true;
+}
+
+function appActSelectChannelPosterFromEl(el) {
+  const data = (el && el.dataset) || {};
+  selectChannelPoster(data.poster || '', data.backdrop || '');
+  return true;
+}
+
+function appActSelectText(el) {
+  if (el && typeof el.select === 'function') el.select();
+  return true;
+}
+
+function appActAddChannelToMerge(id, el) {
+  addChannelToMerge(id, el ? el.value : '');
+  if (el) el.value = '';
+  return true;
+}
+
+// The channel builder's "make a Quick Add network channel" shortcut.
+function appActGoToQuickAdd() {
+  const bar = document.getElementById('channelsSubnavBar');
+  const pill = bar && bar.querySelector ? bar.querySelector('button:nth-child(2)') : null;
+  switchChannelsSubmenu('quickadd', pill || null);
+  return true;
 }
 
 function isListAddedToConfig(url, type, slug) {
@@ -565,7 +1015,7 @@ function navigateBackFromDetail() {
   } else {
     const targetTab = window._originTab || window._previousTab || localStorage.getItem('myListAddon:activeTab') || 'discover';
     const cleanTab = (targetTab === 'list-details' || targetTab === 'item-details') ? 'discover' : targetTab;
-    if (location.pathname.startsWith('/lists/') || location.pathname.startsWith('/channels/')) {
+    if (!appShellActive && (location.pathname.startsWith('/lists/') || location.pathname.startsWith('/channels/'))) {
       try {
         history.replaceState({ view: 'tab', tab: cleanTab }, '', '/');
       } catch (e) {}
@@ -593,6 +1043,13 @@ function navigateBackFromDetail() {
 
 // Global state variables
 var suppressSave = false;
+// True once initAppShell (24_client-backup-restore-presets.js) has taken over
+// navigation on a shell page. While it is true the shell's router owns the
+// address bar: the legacy tab and sub-tab switchers still do all their DOM
+// work, but they route through the shell (appShellHandleNav) and skip their own
+// history writes, which all point at "/". Declared here because 16_ is the
+// first file whose functions read it.
+var appShellActive = false;
 var activeCreator = (function() {
   try {
     const name = localStorage.getItem('myListAddon:creatorName');
@@ -676,6 +1133,11 @@ if (typeof document !== 'undefined') {
 }
 
 function switchTab(name) {
+  // On a shell page the router owns navigation, including the aliases below
+  // (see appShellRouteForName, 24_client-backup-restore-presets.js). A name it
+  // does not know -- list-details, item-details -- comes back false and takes
+  // the legacy path untouched.
+  if (appShellHandleNav('tab', name)) return;
   if (name === 'backup') {
     switchTab('settings');
     switchSettingsSubmenu('backup', document.querySelector('#settingsSubnavBar button:nth-child(4)'));
@@ -725,6 +1187,14 @@ function switchTab(name) {
     const b = tabBtns[i];
     const on = b.getAttribute('data-tab') === name;
     b.classList.toggle('active', on);
+    // A shell nav item is a link, not a tab: it keeps its place in the tab
+    // order (every view is reachable by keyboard) and says which page it is
+    // with aria-current, instead of taking the roving tabindex a tablist
+    // would give it.
+    if (b.tagName === 'A') {
+      if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+      continue;
+    }
     b.setAttribute('aria-selected', on ? 'true' : 'false');
     b.setAttribute('tabindex', on ? '0' : '-1');
   }
@@ -733,6 +1203,10 @@ function switchTab(name) {
     const b = navItems[i];
     const on = b.getAttribute('data-tab') === name;
     b.classList.toggle('active', on);
+    if (b.tagName === 'A') {
+      if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+      continue;
+    }
     b.setAttribute('aria-selected', on ? 'true' : 'false');
     b.setAttribute('tabindex', on ? '0' : '-1');
   }
@@ -743,15 +1217,19 @@ function switchTab(name) {
     try {
       localStorage.setItem('myListAddon:activeTab', name);
     } catch (e) {}
-    const hash = location.hash || '';
-    const isDetailUrl = hash.startsWith('#/item?') || hash.startsWith('#/list?') || (location.pathname.startsWith('/lists/') && location.pathname !== '/lists');
-    try {
-      if (isDetailUrl) {
-        history.pushState({ view: 'tab', tab: name, fromCatalogsSubmenu: window._currentCatalogsSubmenu }, '', '/');
-      } else {
-        history.replaceState({ view: 'tab', tab: name, fromCatalogsSubmenu: window._currentCatalogsSubmenu }, '', '/');
-      }
-    } catch (e) {}
+    // On a shell page the router wrote the URL (a real path per view) before
+    // calling this, so rewriting it to "/" here would undo that.
+    if (!appShellActive) {
+      const hash = location.hash || '';
+      const isDetailUrl = hash.startsWith('#/item?') || hash.startsWith('#/list?') || (location.pathname.startsWith('/lists/') && location.pathname !== '/lists');
+      try {
+        if (isDetailUrl) {
+          history.pushState({ view: 'tab', tab: name, fromCatalogsSubmenu: window._currentCatalogsSubmenu }, '', '/');
+        } else {
+          history.replaceState({ view: 'tab', tab: name, fromCatalogsSubmenu: window._currentCatalogsSubmenu }, '', '/');
+        }
+      } catch (e) {}
+    }
   }
 
   if (name === 'catalogs') {
@@ -773,8 +1251,7 @@ function switchTab(name) {
       const pills = document.querySelectorAll('#listsSubnavBar .subnav-pill');
       let targetBtn = null;
       pills.forEach((p) => {
-        const oc = p.getAttribute('onclick') || '';
-        if (oc.indexOf("'" + savedSub + "'") !== -1 || oc.indexOf('"' + savedSub + '"') !== -1) {
+        if (p.getAttribute('data-sub') === savedSub) {
           targetBtn = p;
         }
       });
@@ -791,8 +1268,7 @@ function switchTab(name) {
       const pills = document.querySelectorAll('#settingsSubnavBar .subnav-pill');
       let targetBtn = null;
       pills.forEach((p) => {
-        const oc = p.getAttribute('onclick') || '';
-        if (oc.indexOf("'" + savedSub + "'") !== -1 || oc.indexOf('"' + savedSub + '"') !== -1) {
+        if (p.getAttribute('data-sub') === savedSub) {
           targetBtn = p;
         }
       });
@@ -809,8 +1285,7 @@ function switchTab(name) {
       const pills = document.querySelectorAll('#channelsSubnavBar .subnav-pill');
       let targetBtn = null;
       pills.forEach((p) => {
-        const oc = p.getAttribute('onclick') || '';
-        if (oc.indexOf("'" + savedSub + "'") !== -1 || oc.indexOf('"' + savedSub + '"') !== -1) {
+        if (p.getAttribute('data-sub') === savedSub) {
           targetBtn = p;
         }
       });
@@ -848,8 +1323,7 @@ function switchTab(name) {
       const pills = document.querySelectorAll('#discoverSubnavBar .subnav-pill');
       let targetBtn = null;
       pills.forEach((p) => {
-        const oc = p.getAttribute('onclick') || '';
-        if (oc.indexOf("'" + activeFilter + "'") !== -1 || oc.indexOf('"' + activeFilter + '"') !== -1) {
+        if (p.getAttribute('data-sub') === activeFilter) {
           targetBtn = p;
         }
       });
@@ -1073,7 +1547,7 @@ function renderMediaCard(item, options = {}) {
   const styleStr = options.style ? ' style="' + options.style + '"' : '';
 
   const posterImg = poster
-    ? '<img class="live-preview-poster" src="' + escapeAttr(poster) + '" alt="" loading="lazy" onerror="handlePosterImgError(this)">'
+    ? '<img class="live-preview-poster" src="' + escapeAttr(poster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
     : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
 
   const topLeft = options.topLeftHtml !== undefined ? options.topLeftHtml : '';
@@ -1678,6 +2152,15 @@ function closeModal() {
   existing.remove();
   document.removeEventListener('keydown', handleModalKeydown, true);
   lockBackgroundScroll(false);
+  // An appShellDialog (24_client-backup-restore-presets.js) that was dismissed
+  // rather than answered -- Escape, or a click on the backdrop -- resolves as
+  // false here, so its promise never hangs. That marker is a var for exactly
+  // this check: typeof on a let in the temporal dead zone would throw.
+  if (typeof appShellDialogClose === 'function') {
+    const settle = appShellDialogClose;
+    appShellDialogClose = null;
+    settle(false);
+  }
   if (_modalReturnFocus && typeof _modalReturnFocus.focus === 'function') {
     try { _modalReturnFocus.focus(); } catch (e) {}
   }
@@ -1693,15 +2176,20 @@ function showAppAlert(title, message, isSuccess = false) {
         '<span style="color:' + iconColor + '; font-weight:bold; font-size:1.2rem;">' + icon + '</span> ' +
         escapeHtml(title) +
       '</h3>' +
-      '<button type="button" class="action-btn" aria-label="Close" onclick="closeModal()" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
     '</div>' +
     '<p style="margin:0 0 16px; color:var(--muted); font-size:0.9rem; line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;">' + escapeHtml(message) + '</p>' +
     '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
-      '<button type="button" class="primary" onclick="closeModal()" style="min-width:80px; padding:8px 16px;">OK</button>' +
+      '<button type="button" class="primary" data-act="closeModal" style="min-width:80px; padding:8px 16px;">OK</button>' +
     '</div>';
   showModal(html);
 }
 
+// Nothing in this page calls alert() any more (P6-8 replaced every one of
+// them with showToast -- a dialog that blocks the tab, has no styling and
+// cannot be read by the rest of the app is not a notification). This stands
+// only as a net for a call that reaches the window from somewhere this file
+// cannot see, such as a browser extension or an old cached inline script.
 if (typeof window !== 'undefined') {
   window.alert = function(message) {
     if (typeof showToast === 'function') {
@@ -1748,11 +2236,11 @@ function showAppConfirm(title, message, confirmBtnText, onConfirm, isDanger = tr
         '<span style="color:' + iconColor + '; font-weight:bold; font-size:1.2rem;">' + icon + '</span> ' +
         escapeHtml(title) +
       '</h3>' +
-      '<button type="button" class="action-btn" aria-label="Close" onclick="closeModal()" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
     '</div>' +
     '<p style="margin:0 0 16px; color:var(--muted); font-size:0.9rem; line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;">' + escapeHtml(message) + '</p>' +
     '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
-      '<button type="button" class="secondary" onclick="closeModal()" style="min-width:80px; padding:8px 16px;">Cancel</button>' +
+      '<button type="button" class="secondary" data-act="closeModal" style="min-width:80px; padding:8px 16px;">Cancel</button>' +
       '<button type="button" class="primary" id="appConfirmBtn" style="min-width:80px; padding:8px 16px; ' + confirmBtnStyle + '">' + escapeHtml(confirmBtnText || 'Confirm') + '</button>' +
     '</div>';
   showModal(html);
@@ -1918,12 +2406,12 @@ function showAppPrompt(title, message, defaultValue, onConfirm) {
   const html =
     '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">' +
       '<h3 style="margin:0; font-size:1.1rem;">' + escapeHtml(title) + '</h3>' +
-      '<button type="button" class="action-btn" aria-label="Close" onclick="closeModal()" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
     '</div>' +
     (message ? '<p style="margin:0 0 12px; color:var(--muted); font-size:0.9rem;">' + escapeHtml(message) + '</p>' : '') +
     '<input type="text" id="appPromptInput" class="input" style="width:100%; margin-bottom:16px;" value="' + escapeAttr(defaultValue || '') + '" />' +
     '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
-      '<button type="button" class="secondary" onclick="closeModal()" style="min-width:80px; padding:8px 16px;">Cancel</button>' +
+      '<button type="button" class="secondary" data-act="closeModal" style="min-width:80px; padding:8px 16px;">Cancel</button>' +
       '<button type="button" class="primary" id="appPromptBtn" style="min-width:80px; padding:8px 16px;">OK</button>' +
     '</div>';
   showModal(html);
@@ -1994,6 +2482,7 @@ function restoreActiveTab() {
 }
 
 function switchListsSubmenu(name, btn) {
+  if (appShellHandleNav('sub', 'lists', name)) return;
   try {
     document.documentElement.removeAttribute('data-initial-lists-sub');
     localStorage.setItem('myListAddon:listsSubmenu', name);
@@ -2071,6 +2560,7 @@ function switchListsSubmenu(name, btn) {
 }
 
 function switchSettingsSubmenu(name, btn) {
+  if (appShellHandleNav('sub', 'settings', name)) return;
   try {
     document.documentElement.removeAttribute('data-initial-settings-sub');
     localStorage.setItem('myListAddon:settingsSubmenu', name);
@@ -2238,7 +2728,7 @@ function renderUserFeedbackThreadsUI() {
       const catLabel = t.category ? (t.category.charAt(0).toUpperCase() + t.category.slice(1)) : 'Support';
       const hasAdminReply = Array.isArray(t.messages) && t.messages.some((m) => m.sender === 'admin');
       const badge = hasAdminReply ? ' \uD83D\uDCAC' : '';
-      return '<button type="button" class="support-thread-pill ' + (isActive ? 'active' : '') + '" onclick="selectFeedbackThread(&quot;' + escapeJsAttr(t.id) + '&quot;)">' +
+      return '<button type="button" class="support-thread-pill ' + (isActive ? 'active' : '') + '" data-act="selectFeedbackThread" data-act-args="' + appActArgs([t.id]) + '">' +
         escapeHtml(catLabel) + badge +
       '</button>';
     }).join('');
@@ -2413,6 +2903,7 @@ function trackEventsBatch(eventType, items) {
 }
 
 function filterDiscoverShelves(filter, btn) {
+  if (appShellHandleNav('sub', 'discover', filter)) return;
   try {
     document.documentElement.removeAttribute('data-initial-discover-sub');
   } catch (e) {}
@@ -2653,6 +3144,7 @@ function switchCatalogsSubmenu(filter, btn) {
     switchTab('channels');
     return;
   }
+  if (appShellHandleNav('sub', 'catalogs', filter)) return;
   try {
     document.documentElement.removeAttribute('data-initial-catalogs-sub');
   } catch (e) {}
@@ -2662,7 +3154,7 @@ function switchCatalogsSubmenu(filter, btn) {
   } catch (e) {}
   const hash = location.hash || '';
   const isDetailUrl = hash.startsWith('#/item?') || hash.startsWith('#/list?') || (location.pathname.startsWith('/lists/') && location.pathname !== '/lists');
-  if (!isDetailUrl) {
+  if (!isDetailUrl && !appShellActive) {
     try {
       history.replaceState({ view: 'tab', tab: 'catalogs', fromCatalogsSubmenu: filter || 'all' }, '', '/');
     } catch (e) {}
@@ -2756,19 +3248,19 @@ function sourceRowHtml(u, readonly) {
       '<input type="text" class="url" value="mdblist:watchlist" readonly style="opacity:0.75;">' +
       '</div>' +
       '<div class="testrow">' +
-      '<button type="button" class="btn-test secondary" onclick="testSourceRow(this)">Test</button>' +
+      '<button type="button" class="btn-test secondary" data-act="testSourceRow" data-act-args="[&quot;@self&quot;]">Test</button>' +
       '<div class="testresult"></div>' +
       '</div>' +
       '</div>';
   }
   return '<div class="source-row">' +
     '<div class="row field-row">' +
-    '<input type="text" placeholder="mdblist.com, trakt.tv, or themoviedb.org list URL" class="url" value="' + escapeAttr(u) + '" oninput="checkDuplicateUrl(this)">' +
-    '<button type="button" class="movebtn removebtn remove-source-btn" aria-label="Remove this source" onclick="removeSourceRow(this)" style="display:none;">\u2715</button>' +
+    '<input type="text" placeholder="mdblist.com, trakt.tv, or themoviedb.org list URL" class="url" value="' + escapeAttr(u) + '" data-act-on="input" data-act="checkDuplicateUrl" data-act-args="[&quot;@self&quot;]">' +
+    '<button type="button" class="movebtn removebtn remove-source-btn" aria-label="Remove this source" data-act="removeSourceRow" data-act-args="[&quot;@self&quot;]" style="display:none;">\u2715</button>' +
     '</div>' +
     '<small class="dup-warning" style="display:none;">\u26a0 Already added elsewhere in this list.</small>' +
     '<div class="testrow">' +
-    '<button type="button" class="btn-test secondary" onclick="testSourceRow(this)">Test</button>' +
+    '<button type="button" class="btn-test secondary" data-act="testSourceRow" data-act-args="[&quot;@self&quot;]">Test</button>' +
     '<div class="testresult"></div>' +
     '</div>' +
     '</div>';
@@ -2812,7 +3304,7 @@ function channelSourceRowHtml(u) {
   }
   return '<div class="source-row">' +
     '<p style="margin:0;"><small>' + escapeHtml(summary) + ' \u2014 built with the Channels panel above.</small> ' +
-    '<button type="button" class="secondary channelEditBtn" style="padding:4px 10px; min-height:unset;" onclick="editChannel(this)">Edit</button></p>' +
+    '<button type="button" class="secondary channelEditBtn" style="padding:4px 10px; min-height:unset;" data-act="editChannel" data-act-args="[&quot;@self&quot;]">Edit</button></p>' +
     '<input type="hidden" class="url" value="' + escapeAttr(u) + '">' +
     '</div>';
 }
@@ -2910,8 +3402,8 @@ function customListSourceRowHtml(u) {
   }
   return '<div class="source-row">' +
     '<p style="margin:0;"><small>' + escapeHtml(summary) + ' \u2014 built with the Custom List panel above.</small> ' +
-    '<button type="button" class="secondary customListEditBtn" style="padding:4px 10px; min-height:unset;" onclick="editCustomList(this)">Edit</button> ' +
-    '<button type="button" class="secondary customListShareBtn" style="padding:4px 10px; min-height:unset;" onclick="startSaveListFlow(this)">Save List</button></p>' +
+    '<button type="button" class="secondary customListEditBtn" style="padding:4px 10px; min-height:unset;" data-act="editCustomList" data-act-args="[&quot;@self&quot;]">Edit</button> ' +
+    '<button type="button" class="secondary customListShareBtn" style="padding:4px 10px; min-height:unset;" data-act="startSaveListFlow" data-act-args="[&quot;@self&quot;]">Save List</button></p>' +
     publishedLinkHtml +
     '<input type="hidden" class="url" value="' + escapeAttr(u) + '">' +
     '</div>';
@@ -3010,7 +3502,7 @@ function openAddShelfModal() {
   document.getElementById('addShelfModalName').value = '';
   document.getElementById('addShelfModalLinksContainer').innerHTML = 
     '<div class="add-shelf-link-row" style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">' +
-      '<input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd)" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" oninput="onAddShelfModalLinkInput(this); validateAddShelfModal()">' +
+      '<input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd)" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
     '</div>';
   document.getElementById('addShelfModalType').value = 'movie';
   validateAddShelfModal();
@@ -3027,8 +3519,8 @@ function addShelfModalAddLink() {
   div.style.gap = '8px';
   div.style.marginBottom = '12px';
   div.innerHTML = 
-    '<input type="url" class="addShelfModalLinkInput" placeholder="Additional URL" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" oninput="onAddShelfModalLinkInput(this); validateAddShelfModal()">' +
-    '<button type="button" class="lc-btn secondary" aria-label="Remove this URL" style="padding: 12px;" onclick="this.closest(&quot;.add-shelf-link-row&quot;).remove(); validateAddShelfModal()">\u2715</button>';
+    '<input type="url" class="addShelfModalLinkInput" placeholder="Additional URL" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
+    '<button type="button" class="lc-btn secondary" aria-label="Remove this URL" style="padding: 12px;" data-act="appActRemoveShelfLinkRow" data-act-args="[&quot;@self&quot;]">\u2715</button>';
   container.appendChild(div);
   validateAddShelfModal();
 }
@@ -3153,13 +3645,13 @@ function addRow(name, url, type, enabled, group, channelId) {
     '<div class="entry-card-top" style="flex-direction: column;">' +
       '<div class="entry-ctrl-row" style="width: 100%; justify-content: flex-start; margin-bottom: 2px;">' +
         '<div class="entry-pos-wrap" style="display:flex; align-items:center;">' +
-          '<input type="number" class="pos" min="1" title="Type a position number to move this list there" onchange="movePosTo(this)">' +
+          '<input type="number" class="pos" min="1" title="Type a position number to move this list there" data-act="movePosTo" data-act-args="[&quot;@self&quot;]">' +
         '</div>' +
         '<span class="drag-handle ec-btn" title="Drag to reorder" style="cursor:grab; font-size:1rem;">&#9776;</span>' +
-        '<button type="button" class="ec-btn movebtn secondary" onclick="moveRow(this, -1)" title="Move up">&#8593;</button>' +
-        '<button type="button" class="ec-btn movebtn secondary" onclick="moveRow(this, 1)" title="Move down">&#8595;</button>' +
-        ((isCustomList || isChannel) ? ('<button type="button" class="ec-btn secondary" style="margin-left: auto; margin-right: 6px; font-weight:600; padding: 2px 10px;" onclick="' + (isCustomList ? 'editEntryCustomList(this)' : 'editEntryChannel(this)') + '">Edit</button>') : '') +
-        '<button type="button" class="ec-btn movebtn removebtn danger" onclick="removeEntryWithUndo(this)" title="Remove this list" aria-label="Remove this list" style="' + (!(isCustomList || isChannel) ? 'margin-left: auto;' : '') + '">' +
+        '<button type="button" class="ec-btn movebtn secondary" data-act="moveRow" data-act-args="[&quot;@self&quot;,-1]" title="Move up">&#8593;</button>' +
+        '<button type="button" class="ec-btn movebtn secondary" data-act="moveRow" data-act-args="[&quot;@self&quot;,1]" title="Move down">&#8595;</button>' +
+        ((isCustomList || isChannel) ? ('<button type="button" class="ec-btn secondary" style="margin-left: auto; margin-right: 6px; font-weight:600; padding: 2px 10px;" data-act="' + (isCustomList ? 'editEntryCustomList' : 'editEntryChannel') + '" data-act-args="[&quot;@self&quot;]">Edit</button>') : '') +
+        '<button type="button" class="ec-btn movebtn removebtn danger" data-act="removeEntryWithUndo" data-act-args="[&quot;@self&quot;]" title="Remove this list" aria-label="Remove this list" style="' + (!(isCustomList || isChannel) ? 'margin-left: auto;' : '') + '">' +
           '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none;">' +
             '<polyline points="3 6 5 6 21 6"></polyline>' +
             '<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>' +
@@ -3187,7 +3679,7 @@ function addRow(name, url, type, enabled, group, channelId) {
       ? '<p class="watchlist-note"><small>Uses the MDBList API key from Settings.</small></p>'
       : (isChannel || isCustomList || isPremade)
         ? ''
-        : '<button type="button" class="secondary add-source-btn" onclick="addSourceRow(this)">+ Add another source (merge into one catalog)</button>') +
+        : '<button type="button" class="secondary add-source-btn" data-act="addSourceRow" data-act-args="[&quot;@self&quot;]">+ Add another source (merge into one catalog)</button>') +
     '<div class="live-preview-shelf" style="padding:0; margin:0; border:none; background:transparent;"><div class="live-preview-shelf-title"><span class="shelf-drag-handle" title="Drag to reorder catalog">&#x2630;</span><span class="shelf-title-text">' + escapeHtml(name || 'Unnamed') + ' - ' + (type === 'series' ? 'Series' : 'Movies') + '</span><span class="live-preview-shelf-status"></span><button type="button" class="text-action-btn" disabled>See All &rsaquo;</button></div><div class="live-preview-posters"><p style="color:var(--muted); font-size:0.88rem; text-align:center; padding: 20px;"><small>Click "Refresh Preview" above to load posters.</small></p></div></div>';
   container.appendChild(div);
   updateSourceRemoveButtons(div);

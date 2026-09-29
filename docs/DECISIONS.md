@@ -2,6 +2,28 @@
 
 Decisions the owner has made. They are recorded here so the code, the plan documents and future work agree. The newest entries are at the top.
 
+## 2026-09-28 — The admin dashboard's actions (P6-10)
+
+| # | Decision | Consequence in the code |
+|---|---|---|
+| D-18 | **The `/admin` dashboard carries its own copy of the delegated-action contract.** A control names its action in `data-act` with its arguments as one JSON value, run by one listener per event type (`adminActDispatch`) -- the same attribute vocabulary as the builder page, and a separate implementation, because `/admin` is its own document and does not load the builder's bundle (D-11 keeps it that way: no shared npm package). | `adminActArgs` (Worker side, for the dashboard's own markup) and `adminActAttr` (browser side, for the markup the page builds from server data) are the `appActArgs` / `appActArgsServer` pair one page over. `html_checks.py` resolves `data-act` names against whichever page declares them and now fails **any** render carrying an inline handler -- the admin exception from D-14 is closed. D-14's other half still stands: `'unsafe-inline'` stays until P7-1 moves the pages' inline `<script>` blocks. |
+| D-19 | **The dashboard's `alert()` calls are the dashboard's own dialog (`showAdminAlert`); its ten `confirm()` prompts stay native for now.** | The 8 alerts were the last in the repo (D-15's other half). A `confirm()` sits inside a destructive flow -- delete lists, undo the installs move, restart a copy, reset a creator's key -- and `if (!confirm(...)) return;` has to become a callback before it can be replaced with the dashboard's existing `showAdminConfirm`; that is a change of its own, deliberately not folded into a markup conversion. |
+
+## 2026-09-28 — Lists that live in one browser (P6-9)
+
+| # | Decision | Consequence in the code |
+|---|---|---|
+| D-16 | **A list saved to an account while signed out is queued with its own copy of the data.** Pressing "Save to an account" signed out copies the whole list into memory (`rememberPendingListSave`, `_pendingListSaves`, `22_`) and opens the sign-in dialog; the queue is pushed right after the sign-in completes (`flushPendingListSaves`, awaited in `submitRestoreProfile`) and, for a new account, after the one-time migration of the browser's lists (`submitCreateProfile`). | Signing in calls `clearLocalAccountData()`, which deletes the whole `myListAddon:` prefix **and** the sessionStorage list mirror, so a payload looked up after the sign-in would not exist -- the copy is made before it, not after. The flush announces what it saved and what it could not, so a failed push never leaves a list only in a store the page has stopped showing. |
+| D-17 | **Signing in to an existing account does not auto-merge the browser's lists into it.** The lists are shown, labelled "Saved in this browser only", and each one moves only when its own button is pressed. | The automatic path stays what it was: the whole-store migration runs on **sign-up** (`submitCreateProfile`), where the account is new by definition and nothing can be duplicated. On sign-in to an existing account the button is the person's to press (`saveLocalListToAccount`, private by default), which is the only way to avoid duplicating a list the account already has. |
+
+## 2026-09-28 — Phase 6, session UI cleanup (P6-8)
+
+| # | Decision | Consequence in the code |
+|---|---|---|
+| D-13 | **The browser keeps no provider credential.** Trakt, MDBList, Simkl and TMDB keys, tokens and session ids belong to the account: they are held in memory for the visit and never written to `localStorage` again. The copy a browser wrote before P6-8 keeps working and is dropped once the account hands the same value back. | `rememberProviderSecret` / `readProviderSecret` / `forgetProviderSecret` / `dropLegacyProviderSecret` and `PROVIDER_SECRET_KEYS` (`16_`). A signed-out visitor who pastes a key keeps it for the visit only -- saving it is what signing in does (`saveState` pushes the keys up). `myListAddon:creatorKey` is **not** in the list: it is what signs this browser in, and it moves with P6-9's session sign-in, together with the rest of the browser-only data (P6-9's "Save to an account" / "Export" is what a browser-only list needs). |
+| D-14 | **No inline `on*=` handlers in the builder; controls name their action.** A control carries `data-act`, `data-act-args` (one JSON value, escaped once by `appActArgs`) and `data-act-on` when its tag does not say which event it answers; one delegated listener per event type runs them (`appActDispatch`, `16_`). | The FE-02 shape (a JavaScript string inside an attribute) is deleted from the client, with `escapeJsAttr`; `html_checks.py` resolves every `data-act` against the bundle and fails the builder page if a handler returns. The `/admin` page had its own until P6-10, which converted them with its own copy of this runtime (see D-18) -- the check no longer excludes it. The `'unsafe-inline'` CSP stays until the page's inline `<script>` blocks move (P7-1) -- removing the handlers is headroom, not the fix. |
+| D-15 | **`alert()` and friends are not used in the app's page.** A message is the app's own toast (`showToast`) and a question is the app's own dialog. | ~120 calls rewritten in the client; `03_admin.js`'s four are P6-10's. `window.alert` is kept as a one-way shim to the toast, for a call arriving from outside this file. |
+
 ## 2026-09-27 — Build and account recovery
 
 | # | Decision | Consequence in the code |

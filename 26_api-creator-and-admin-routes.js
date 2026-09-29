@@ -3597,10 +3597,12 @@
       // nextSyncVersion.
       const currentRaw = await env.CONFIGS.get(`creatorsync:${auth.username}`);
       let currentUpdatedAt = 0;
+      let currentKeys = null;
       if (currentRaw) {
         try {
           const current = JSON.parse(currentRaw);
           currentUpdatedAt = Number(current.updatedAt) || 0;
+          currentKeys = current.keys && typeof current.keys === "object" ? current.keys : null;
           if (expectedUpdatedAt !== null && currentUpdatedAt > expectedUpdatedAt) {
             // Purely for visibility -- this was previously invisible even
             // to us; now it's at least countable on the admin dashboard.
@@ -3613,9 +3615,26 @@
         }
       }
 
+      // A provider credential the request leaves OUT is kept as stored. Since
+      // P6-8 a browser holds the account's keys and tokens only in memory,
+      // once a load has handed them back; a tab whose load failed omits the
+      // ones it does not know instead of sending them blank (see
+      // creatorSyncKeysForPush, 22_), because a blank here used to be stored
+      // as-is and cost the account every connection. A blank that IS sent
+      // still clears the credential: that is what a disconnect sends.
+      const incomingKeys = body.keys && typeof body.keys === "object" && !Array.isArray(body.keys) ? body.keys : {};
+      const mergedKeys = Object.assign({}, incomingKeys);
+      if (currentKeys) {
+        for (const field of ["tmdbKey", "tmdbSessionId", "mdblistKey", "mdblistAccessToken", "traktKey", "traktAccessToken", "simklKey", "simklAccessToken"]) {
+          if (!Object.prototype.hasOwnProperty.call(incomingKeys, field) && typeof currentKeys[field] === "string" && currentKeys[field]) {
+            mergedKeys[field] = currentKeys[field];
+          }
+        }
+      }
+
       const blob = {
         config: Array.isArray(body.config) ? body.config : [],
-        keys: body.keys && typeof body.keys === "object" ? body.keys : {},
+        keys: mergedKeys,
         collapsedPanels: body.collapsedPanels && typeof body.collapsedPanels === "object" ? body.collapsedPanels : {},
         likedLists: Array.isArray(body.likedLists) ? body.likedLists.map(String) : [],
         hiddenLists: Array.isArray(body.hiddenLists) ? body.hiddenLists.map(String) : [],
@@ -5106,7 +5125,7 @@
       // 304 can only happen when the browser already holds this list.
       return await htmlPageResponse(
         request,
-        renderBuilder(url.origin, {
+        renderPage(request, url.origin, {
           deepLinkList: {
             name: deslugifyServer(mdblistSlug),
             type: "movie",
@@ -5133,7 +5152,7 @@
       // 304 can only happen when the browser already holds this list.
       return await htmlPageResponse(
         request,
-        renderBuilder(url.origin, {
+        renderPage(request, url.origin, {
           deepLinkList: {
             name: deslugifyServer(traktSlug),
             type: "movie",
@@ -5160,7 +5179,7 @@
       // 304 can only happen when the browser already holds this list.
       return await htmlPageResponse(
         request,
-        renderBuilder(url.origin, {
+        renderPage(request, url.origin, {
           deepLinkList: {
             name,
             type: "movie",
@@ -5187,7 +5206,7 @@
       // 304 can only happen when the browser already holds this list.
       return await htmlPageResponse(
         request,
-        renderBuilder(url.origin, {
+        renderPage(request, url.origin, {
           deepLinkList: {
             name,
             type: "movie",
@@ -5418,7 +5437,7 @@
       // 304 can only happen when the browser already holds this list.
       return await htmlPageResponse(
         request,
-        renderBuilder(url.origin, {
+        renderPage(request, url.origin, {
           deepLinkList: {
             name: listData.name,
             type: listData.type,
