@@ -2,6 +2,14 @@
 
 Decisions the owner has made. They are recorded here so the code, the plan documents and future work agree. The newest entries are at the top.
 
+## 2026-09-28 — Phase 6, session UI cleanup (P6-8)
+
+| # | Decision | Consequence in the code |
+|---|---|---|
+| D-13 | **The browser keeps no provider credential.** Trakt, MDBList, Simkl and TMDB keys, tokens and session ids belong to the account: they are held in memory for the visit and never written to `localStorage` again. The copy a browser wrote before P6-8 keeps working and is dropped once the account hands the same value back. | `rememberProviderSecret` / `readProviderSecret` / `forgetProviderSecret` / `dropLegacyProviderSecret` and `PROVIDER_SECRET_KEYS` (`16_`). A signed-out visitor who pastes a key keeps it for the visit only -- saving it is what signing in does (`saveState` pushes the keys up). `myListAddon:creatorKey` is **not** in the list: it is what signs this browser in, and it moves with P6-9's session sign-in, together with the rest of the browser-only data (P6-9's "Save to an account" / "Export" is what a browser-only list needs). |
+| D-14 | **No inline `on*=` handlers in the builder; controls name their action.** A control carries `data-act`, `data-act-args` (one JSON value, escaped once by `appActArgs`) and `data-act-on` when its tag does not say which event it answers; one delegated listener per event type runs them (`appActDispatch`, `16_`). | The FE-02 shape (a JavaScript string inside an attribute) is deleted from the client, with `escapeJsAttr`; `html_checks.py` resolves every `data-act` against the bundle and fails the builder page if a handler returns. The `/admin` page keeps its own inline handlers until P6-10, which is why that check excludes it. The `'unsafe-inline'` CSP stays until the page's inline `<script>` blocks move (P7-1) -- removing the handlers is headroom, not the fix. |
+| D-15 | **`alert()` and friends are not used in the app's page.** A message is the app's own toast (`showToast`) and a question is the app's own dialog. | ~120 calls rewritten in the client; `03_admin.js`'s four are P6-10's. `window.alert` is kept as a one-way shim to the toast, for a call arriving from outside this file. |
+
 ## 2026-09-27 — Build and account recovery
 
 | # | Decision | Consequence in the code |

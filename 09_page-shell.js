@@ -80,6 +80,16 @@ const APP_SHELL_INSTALL_BAR_HTML = `<div id="appShellInstallBar" class="app-shel
     <button type="button" class="app-shell-install-action" id="appShellInstallBtn" data-action="install">Get install link</button>
   </div>`;
 
+// The Worker-side twin of appActArgs (16_client-row-core.js). 08_quickadd-chart-data.js
+// builds some of the page's markup here in the Worker rather than in the
+// browser (see buildCombinedChartsHtml), so its data-act arguments need the
+// same JSON-then-HTML escaping at render time. Kept next to renderBuilder so
+// it is obviously server-side code: the client's own copy is inside the
+// template literal below and is not in scope here.
+function appActArgsServer(values) {
+  return escapeHtmlServer(JSON.stringify(values || []));
+}
+
 function renderBuilder(
   origin,
   { initialEntries = [], initialKeys = {}, isConfigureMode = false, deepLinkList = null, newUi = false } = {}
@@ -3919,7 +3929,7 @@ ${seoHeadHtml}
       </div>
     </div>
     <div class="app-header-actions">
-      <button type="button" class="theme-toggle-btn dark-mode-toggle" id="themeToggleBtn" onclick="toggleTheme()" aria-label="Toggle Light or Dark Mode" title="Toggle Light / Dark Mode">
+      <button type="button" class="theme-toggle-btn dark-mode-toggle" id="themeToggleBtn" data-act="toggleTheme" aria-label="Toggle Light or Dark Mode" title="Toggle Light / Dark Mode">
         <svg class="theme-icon-sun" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="12" cy="12" r="4" fill="currentColor"></circle>
           <line x1="12" y1="2" x2="12" y2="4.5"></line>
@@ -3945,29 +3955,29 @@ ${newUi ? "  " + APP_SHELL_INSTALL_BAR_HTML : ""}
 
   <!-- Top Tab Bar (Desktop View) -->
 ${newUi ? appShellDesktopNavHtml : `  <div class="tab-bar" role="tablist" aria-label="Main navigation">
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-catalogs" aria-controls="content-catalogs" aria-selected="false" tabindex="-1" data-tab="catalogs" onclick="switchTab('catalogs')">Catalogs</button>
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-lists" aria-controls="content-lists" aria-selected="false" tabindex="-1" data-tab="lists" onclick="switchTab('lists')">Lists</button>
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-channels" aria-controls="content-channels" aria-selected="false" tabindex="-1" data-tab="channels" onclick="switchTab('channels')">Channels</button>
-    <button type="button" class="tab-btn active" role="tab" id="tab-desktop-discover" aria-controls="content-discover" aria-selected="true" tabindex="0" data-tab="discover" onclick="switchTab('discover')">Discover</button>
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-search" aria-controls="content-search" aria-selected="false" tabindex="-1" data-tab="search" onclick="switchTab('search')">Search</button>
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-settings" aria-controls="content-settings" aria-selected="false" tabindex="-1" data-tab="settings" onclick="switchTab('settings')">Settings</button>
+    <button type="button" class="tab-btn" role="tab" id="tab-desktop-catalogs" aria-controls="content-catalogs" aria-selected="false" tabindex="-1" data-tab="catalogs" data-act="switchTab" data-act-args="[&quot;catalogs&quot;]">Catalogs</button>
+    <button type="button" class="tab-btn" role="tab" id="tab-desktop-lists" aria-controls="content-lists" aria-selected="false" tabindex="-1" data-tab="lists" data-act="switchTab" data-act-args="[&quot;lists&quot;]">Lists</button>
+    <button type="button" class="tab-btn" role="tab" id="tab-desktop-channels" aria-controls="content-channels" aria-selected="false" tabindex="-1" data-tab="channels" data-act="switchTab" data-act-args="[&quot;channels&quot;]">Channels</button>
+    <button type="button" class="tab-btn active" role="tab" id="tab-desktop-discover" aria-controls="content-discover" aria-selected="true" tabindex="0" data-tab="discover" data-act="switchTab" data-act-args="[&quot;discover&quot;]">Discover</button>
+    <button type="button" class="tab-btn" role="tab" id="tab-desktop-search" aria-controls="content-search" aria-selected="false" tabindex="-1" data-tab="search" data-act="switchTab" data-act-args="[&quot;search&quot;]">Search</button>
+    <button type="button" class="tab-btn" role="tab" id="tab-desktop-settings" aria-controls="content-settings" aria-selected="false" tabindex="-1" data-tab="settings" data-act="switchTab" data-act-args="[&quot;settings&quot;]">Settings</button>
   </div>`}
 
   <!-- Unsaved Changes Floating Banner -->
   <div id="unsavedInstallBanner" class="unsaved-install-banner">
     <span id="unsavedInstallText" style="font-weight:600;">Unsaved changes to install link</span>
-    <button type="button" class="unsaved-install-banner-btn" id="unsavedInstallBtn" onclick="updateInstallLinkFromBanner()">Update Link</button>
+    <button type="button" class="unsaved-install-banner-btn" id="unsavedInstallBtn" data-act="updateInstallLinkFromBanner">Update Link</button>
   </div>
 
   <!-- Bottom Nav Bar (Mobile View - Persistent Glassmorphism) -->
 ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria-label="Main navigation">
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-catalogs" aria-controls="content-catalogs" aria-selected="false" tabindex="-1" data-tab="catalogs" onclick="switchTab('catalogs')" title="Catalogs">
+    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-catalogs" aria-controls="content-catalogs" aria-selected="false" tabindex="-1" data-tab="catalogs" data-act="switchTab" data-act-args="[&quot;catalogs&quot;]" title="Catalogs">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
       </svg>
       Catalogs
     </button>
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-lists" aria-controls="content-lists" aria-selected="false" tabindex="-1" data-tab="lists" onclick="switchTab('lists')" title="Lists">
+    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-lists" aria-controls="content-lists" aria-selected="false" tabindex="-1" data-tab="lists" data-act="switchTab" data-act-args="[&quot;lists&quot;]" title="Lists">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line>
         <line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line>
@@ -3975,27 +3985,27 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
       </svg>
       Lists
     </button>
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-channels" aria-controls="content-channels" aria-selected="false" tabindex="-1" data-tab="channels" onclick="switchTab('channels')" title="Channels">
+    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-channels" aria-controls="content-channels" aria-selected="false" tabindex="-1" data-tab="channels" data-act="switchTab" data-act-args="[&quot;channels&quot;]" title="Channels">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>
         <polyline points="17 2 12 7 7 2"></polyline>
       </svg>
       Channels
     </button>
-    <button type="button" class="bottom-nav-item active" role="tab" id="tab-mobile-discover" aria-controls="content-discover" aria-selected="true" tabindex="0" data-tab="discover" onclick="switchTab('discover')" title="Discover">
+    <button type="button" class="bottom-nav-item active" role="tab" id="tab-mobile-discover" aria-controls="content-discover" aria-selected="true" tabindex="0" data-tab="discover" data-act="switchTab" data-act-args="[&quot;discover&quot;]" title="Discover">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect>
         <rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect>
       </svg>
       Discover
     </button>
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-search" aria-controls="content-search" aria-selected="false" tabindex="-1" data-tab="search" onclick="switchTab('search')" title="Search">
+    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-search" aria-controls="content-search" aria-selected="false" tabindex="-1" data-tab="search" data-act="switchTab" data-act-args="[&quot;search&quot;]" title="Search">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
       </svg>
       Search
     </button>
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-settings" aria-controls="content-settings" aria-selected="false" tabindex="-1" data-tab="settings" onclick="switchTab('settings')" title="Settings">
+    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-settings" aria-controls="content-settings" aria-selected="false" tabindex="-1" data-tab="settings" data-act="switchTab" data-act-args="[&quot;settings&quot;]" title="Settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="12" cy="12" r="3"></circle>
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
@@ -4031,9 +4041,9 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
         var cBar = document.getElementById('creatorProfileBar');
         if (cBar) {
           if (cName && cKey) {
-            cBar.innerHTML = '<div style="display:flex; align-items:center; gap:8px;"><button type="button" class="subnav-pill active" style="margin:0; font-size:0.85rem; padding:8px 14px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px; border-radius:var(--radius-pill);" onclick="switchTab(&quot;account&quot;)">&#x1F464; ' + String(cDisp || cName || '').replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}) + '</button></div>';
+            cBar.innerHTML = '<div style="display:flex; align-items:center; gap:8px;"><button type="button" class="subnav-pill active" style="margin:0; font-size:0.85rem; padding:8px 14px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px; border-radius:var(--radius-pill);" data-act="switchTab" data-act-args="[&quot;account&quot;]">&#x1F464; ' + String(cDisp || cName || '').replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}) + '</button></div>';
           } else {
-            cBar.innerHTML = '<div style="display:flex; align-items:center; gap:6px;"><button type="button" class="lc-btn primary" onclick="openRestoreModal()" style="padding:8px 16px; font-size:0.85rem; font-weight:700; border-radius:var(--radius-pill);">Login</button></div>';
+            cBar.innerHTML = '<div style="display:flex; align-items:center; gap:6px;"><button type="button" class="lc-btn primary" data-act="openRestoreModal" style="padding:8px 16px; font-size:0.85rem; font-weight:700; border-radius:var(--radius-pill);">Login</button></div>';
           }
         }
       } catch (e) {}
@@ -4046,7 +4056,7 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
   <!-- List Details page ("See All" full list view) -->
   <div class="tab-panel list-details-page" data-tab-panel="list-details" id="content-list-details" hidden>
     <div style="margin-bottom: 20px;">
-      <button type="button" class="lc-btn secondary" onclick="navigateBackFromDetail()" style="padding: 6px 12px; font-size: 0.9rem;">&larr; Back</button>
+      <button type="button" class="lc-btn secondary" data-act="navigateBackFromDetail" style="padding: 6px 12px; font-size: 0.9rem;">&larr; Back</button>
     </div>
     <div class="detail-header-info" style="margin-bottom:14px;">
       <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
@@ -4068,24 +4078,24 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
     </div>
     <div id="detailFilterBar" class="detail-filter-bar" style="display:none;">
       <div id="whFilterControls" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; width:100%;">
-        <button type="button" class="subnav-pill active wh-filter-pill" data-wh-filter="all" onclick="setWatchHistoryFilter('all', this)">All</button>
-        <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="movie" onclick="setWatchHistoryFilter('movie', this)">Movies</button>
-        <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="series" onclick="setWatchHistoryFilter('series', this)">Shows</button>
+        <button type="button" class="subnav-pill active wh-filter-pill" data-wh-filter="all" data-act="setWatchHistoryFilter" data-act-args="[&quot;all&quot;,&quot;@self&quot;]">All</button>
+        <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="movie" data-act="setWatchHistoryFilter" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]">Movies</button>
+        <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="series" data-act="setWatchHistoryFilter" data-act-args="[&quot;series&quot;,&quot;@self&quot;]">Shows</button>
         <label class="wh-group-shows-toggle" style="display:inline-flex; align-items:center; gap:6px; margin-left:8px; cursor:pointer; font-size:0.84rem; color:var(--text); user-select:none;">
-          <input type="checkbox" id="whGroupShowsCheckbox" onchange="toggleWatchHistoryGroupShows(this.checked)" style="accent-color:var(--accent); cursor:pointer;">
+          <input type="checkbox" id="whGroupShowsCheckbox" data-act="toggleWatchHistoryGroupShows" data-act-args="[&quot;@checked&quot;]" style="accent-color:var(--accent); cursor:pointer;">
           <span>Shows instead of episodes</span>
         </label>
-        <button type="button" class="subnav-pill" id="whClearHistoryBtn" onclick="clearWatchHistoryAll()" style="color:var(--danger); border-color:rgba(255,59,48,0.35); margin-left:auto; font-weight:600;">Clear History</button>
+        <button type="button" class="subnav-pill" id="whClearHistoryBtn" data-act="clearWatchHistoryAll" style="color:var(--danger); border-color:rgba(255,59,48,0.35); margin-left:auto; font-weight:600;">Clear History</button>
       </div>
       <div id="genericTypeFilterControls" style="display:none; gap:6px; flex-wrap:wrap; align-items:center; width:100%;">
-        <button type="button" class="subnav-pill active generic-type-pill" id="detailTypeAllBtn" onclick="switchListDetailsType('all')">All</button>
-        <button type="button" class="subnav-pill generic-type-pill" id="detailTypeMovieBtn" onclick="switchListDetailsType('movie')">Movies</button>
-        <button type="button" class="subnav-pill generic-type-pill" id="detailTypeSeriesBtn" onclick="switchListDetailsType('series')">Shows</button>
-        <button type="button" class="subnav-pill" id="cwClearHistoryBtn" onclick="clearContinueWatchingAll()" style="display:none; color:var(--danger); border-color:rgba(255,59,48,0.35); margin-left:auto; font-weight:600;">Clear All</button>
+        <button type="button" class="subnav-pill active generic-type-pill" id="detailTypeAllBtn" data-act="switchListDetailsType" data-act-args="[&quot;all&quot;]">All</button>
+        <button type="button" class="subnav-pill generic-type-pill" id="detailTypeMovieBtn" data-act="switchListDetailsType" data-act-args="[&quot;movie&quot;]">Movies</button>
+        <button type="button" class="subnav-pill generic-type-pill" id="detailTypeSeriesBtn" data-act="switchListDetailsType" data-act-args="[&quot;series&quot;]">Shows</button>
+        <button type="button" class="subnav-pill" id="cwClearHistoryBtn" data-act="clearContinueWatchingAll" style="display:none; color:var(--danger); border-color:rgba(255,59,48,0.35); margin-left:auto; font-weight:600;">Clear All</button>
       </div>
       <div id="whSortControls" style="display:flex; align-items:center; gap:8px;">
         <label for="whSortSelect" style="font-size:0.75rem; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.02em;">Sort</label>
-        <select id="whSortSelect" class="detail-sort-select" onchange="setWatchHistorySort(this.value)">
+        <select id="whSortSelect" class="detail-sort-select" data-act="setWatchHistorySort" data-act-args="[&quot;@value&quot;]">
           <option value="recent">Recently Watched</option>
           <option value="oldest">Oldest Watched</option>
           <option value="title-asc">Title (A-Z)</option>
@@ -4099,7 +4109,7 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
 
   <div class="tab-panel" data-tab-panel="item-details" id="content-item-details" hidden>
     <div style="margin-bottom: 20px;">
-      <button type="button" class="lc-btn secondary" onclick="navigateBackFromDetail()" style="padding: 6px 12px; font-size: 0.9rem;">&larr; Back</button>
+      <button type="button" class="lc-btn secondary" data-act="navigateBackFromDetail" style="padding: 6px 12px; font-size: 0.9rem;">&larr; Back</button>
     </div>
     <div id="itemDetailsBody" style="display: flex; flex-direction: column; gap: 24px;">
       <!-- Filled dynamically -->
@@ -4110,12 +4120,12 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
     <div class="modal-card" style="width: 100%; max-width: 380px; padding: 22px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow); display: flex; flex-direction: column;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
         <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);" id="createListModalTitle">Create List</h2>
-        <button type="button" class="modal-close-x" aria-label="Close" onclick="closeCreateListModal()">&#x2715;</button>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeCreateListModal">&#x2715;</button>
       </div>
 
       <div style="margin-bottom: 12px;">
         <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Destination</label>
-        <select id="createListModalDestination" aria-label="Destination" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.95rem;" onchange="onChangeCreateListDestination()">
+        <select id="createListModalDestination" aria-label="Destination" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.95rem;" data-act="onChangeCreateListDestination">
           <option value="custom">Custom List</option>
           <option value="trakt">Trakt List</option>
           <option value="tmdb">TMDB List</option>
@@ -4126,7 +4136,7 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
       
       <div style="margin-bottom: 12px;">
         <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">List Name *</label>
-        <input type="text" id="createListModalName" placeholder="e.g. My Favorite Sci-Fi" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.95rem;" oninput="document.getElementById('createListModalBtn').disabled = !this.value.trim(); document.getElementById('createListModalBtn').style.opacity = this.value.trim() ? '1' : '0.5';">
+        <input type="text" id="createListModalName" placeholder="e.g. My Favorite Sci-Fi" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="appActValidateCreateListName" data-act-args="[&quot;@value&quot;]">
       </div>
 
       <div style="margin-bottom: 12px;">
@@ -4152,8 +4162,8 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
       </div>
       
       <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
-        <button type="button" class="lc-btn secondary" onclick="closeCreateListModal()">Cancel</button>
-        <button type="button" class="lc-btn primary" id="createListModalBtn" style="opacity: 0.5; min-width: 80px;" disabled onclick="submitCreateListModal()">Create</button>
+        <button type="button" class="lc-btn secondary" data-act="closeCreateListModal">Cancel</button>
+        <button type="button" class="lc-btn primary" id="createListModalBtn" style="opacity: 0.5; min-width: 80px;" disabled data-act="submitCreateListModal">Create</button>
       </div>
     </div>
   </div>
@@ -4164,25 +4174,25 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
       <h2 style="margin-top:0; font-size:1.3rem; font-weight:600; color:var(--text);">Add Catalog</h2>
       
       <div style="margin: 16px 0;">
-        <input type="text" id="addShelfModalName" placeholder="Catalog name" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem; margin-bottom:12px;" oninput="validateAddShelfModal()">
+        <input type="text" id="addShelfModalName" placeholder="Catalog name" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem; margin-bottom:12px;" data-act-on="input" data-act="validateAddShelfModal">
         
         <div id="addShelfModalLinksContainer">
           <div class="add-shelf-link-row" style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
-            <input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd)" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" oninput="onAddShelfModalLinkInput(this); validateAddShelfModal()">
+            <input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd)" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">
           </div>
         </div>
         
-        <button type="button" class="lc-btn secondary" style="width: 100%; margin-bottom: 12px; font-size: 0.9rem;" onclick="addShelfModalAddLink()">+ Add another link (Combined List)</button>
+        <button type="button" class="lc-btn secondary" style="width: 100%; margin-bottom: 12px; font-size: 0.9rem;" data-act="addShelfModalAddLink">+ Add another link (Combined List)</button>
         
-        <select id="addShelfModalType" aria-label="Catalog type" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem; margin-bottom:12px;" onchange="validateAddShelfModal()">
+        <select id="addShelfModalType" aria-label="Catalog type" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem; margin-bottom:12px;" data-act="validateAddShelfModal">
           <option value="movie">Movies</option>
           <option value="series">Shows</option>
         </select>
       </div>
       
       <div style="display:flex; justify-content:flex-end; gap:16px; margin-top: 8px;">
-        <button type="button" style="background:none; border:none; color:var(--text); font-weight:600; font-size:1rem; cursor:pointer;" onclick="document.getElementById('addShelfModal').style.display = 'none'">Cancel</button>
-        <button type="button" id="addShelfModalBtn" style="background:none; border:none; color:var(--accent); font-weight:600; font-size:1rem; cursor:pointer; opacity: 0.5;" disabled onclick="submitAddShelfModal()">Add</button>
+        <button type="button" style="background:none; border:none; color:var(--text); font-weight:600; font-size:1rem; cursor:pointer;" data-act="appActHideAddShelfModal">Cancel</button>
+        <button type="button" id="addShelfModalBtn" style="background:none; border:none; color:var(--accent); font-weight:600; font-size:1rem; cursor:pointer; opacity: 0.5;" disabled data-act="submitAddShelfModal">Add</button>
       </div>
     </div>
   </div>
@@ -4200,7 +4210,7 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
         <!-- Filled dynamically -->
       </div>
       <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
-        <button type="button" class="lc-btn secondary" id="selectListModalCancelBtn" onclick="closeSelectListModal()">Cancel</button>
+        <button type="button" class="lc-btn secondary" id="selectListModalCancelBtn" data-act="closeSelectListModal">Cancel</button>
         <button type="button" class="lc-btn primary" id="addSelectedListsBtn" style="min-width: 90px;">Done</button>
       </div>
     </div>
@@ -4211,7 +4221,7 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
     <div class="modal-card" style="width: 100%; max-width: 420px; padding: 24px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow); display: flex; flex-direction: column; text-align: center;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
         <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);">Connect Trakt</h2>
-        <button type="button" class="modal-close-x" aria-label="Close" onclick="closeTraktDeviceModal()">&#x2715;</button>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeTraktDeviceModal">&#x2715;</button>
       </div>
       <p style="margin: 0 0 16px; color: var(--muted); font-size: 0.9rem;">To authorize your Trakt account without redirects or rate limits, enter the code below on Trakt:</p>
       
@@ -4230,7 +4240,7 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
       </div>
 
       <div style="margin-top: 18px; border-top: 1px solid var(--border); padding-top: 14px;">
-        <button type="button" class="lc-btn secondary" style="width: 100%;" onclick="closeTraktDeviceModal()">Cancel</button>
+        <button type="button" class="lc-btn secondary" style="width: 100%;" data-act="closeTraktDeviceModal">Cancel</button>
       </div>
     </div>
   </div>

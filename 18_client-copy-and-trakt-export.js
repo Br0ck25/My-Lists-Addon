@@ -276,13 +276,13 @@ async function copyListToCustomList(name, listUrl, contentType, btn, historyMode
       if (typeof showAppAlert === 'function') {
         showAppAlert('Copy Incomplete', errMsg, false);
       } else {
-        alert(errMsg);
+        showToast(errMsg, 'error');
       }
     } else {
       if (typeof showAppAlert === 'function') {
         showAppAlert('No Items', 'That list has no items to copy.', false);
       } else {
-        alert('That list has no items to copy.');
+        showToast('That list has no items to copy.', 'error');
       }
     }
     return;
@@ -319,7 +319,7 @@ async function copyListToCustomList(name, listUrl, contentType, btn, historyMode
     if (typeof showAppAlert === 'function') {
       showAppAlert('No Items', 'That list has no items to copy.', false);
     } else {
-      alert('That list has no items to copy.');
+      showToast('That list has no items to copy.', 'error');
     }
     return;
   }
@@ -351,7 +351,7 @@ async function copyListToCustomList(name, listUrl, contentType, btn, historyMode
   if (typeof showAppAlert === 'function') {
     showAppAlert(failed.length ? 'Copy Incomplete' : 'List Copied', msg, !failed.length);
   } else {
-    alert(msg);
+    showToast(msg, 'error');
   }
 }
 
@@ -374,7 +374,7 @@ async function syncCustomListWithExternalSource(slug, btn, options) {
   if (!listMeta) {
     if (!isSilent) {
       if (typeof showAppAlert === 'function') showAppAlert('Sync Error', 'Could not find list: ' + slug, false);
-      else alert('Could not find list: ' + slug);
+      else showToast('Could not find list: ' + slug, 'error');
     }
     return { ok: false, error: 'list-not-found' };
   }
@@ -383,7 +383,7 @@ async function syncCustomListWithExternalSource(slug, btn, options) {
   if (!sourceUrl) {
     if (!isSilent) {
       if (typeof showAppAlert === 'function') showAppAlert('Sync Error', 'This list does not have an external source URL.', false);
-      else alert('This list does not have an external source URL.');
+      else showToast('This list does not have an external source URL.', 'error');
     }
     return { ok: false, error: 'no-source-url' };
   }
@@ -495,7 +495,7 @@ async function syncCustomListWithExternalSource(slug, btn, options) {
       } else if (typeof showAppAlert === 'function') {
         showAppAlert('List Synced', msg, false);
       } else {
-        alert(msg);
+        showToast(msg, 'error');
       }
     }
 
@@ -505,7 +505,7 @@ async function syncCustomListWithExternalSource(slug, btn, options) {
     if (!isSilent) {
       const errMsg = 'Could not sync list: ' + (err.message || 'network error');
       if (typeof showAppAlert === 'function') showAppAlert('Sync Error', errMsg, false);
-      else alert(errMsg);
+      else showToast(errMsg, 'error');
     }
     return { ok: false, error: err.message || 'sync-failed' };
   } finally {
@@ -530,7 +530,7 @@ async function markTraktHistoryAllWatched(btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Trakt Not Connected', 'Please connect your Trakt account in Settings first.', false);
     } else {
-      alert('Connect Trakt first.');
+      showToast('Connect Trakt first.', 'error');
     }
     return;
   }
@@ -559,7 +559,7 @@ async function markTraktHistoryAllWatched(btn) {
         if (typeof showAppAlert === 'function') {
           showAppAlert('Network Error', 'Network error fetching Trakt history.', false);
         } else {
-          alert('Network error fetching Trakt history.');
+          showToast('Network error fetching Trakt history.', 'error');
         }
         if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
         return;
@@ -568,7 +568,7 @@ async function markTraktHistoryAllWatched(btn) {
         if (typeof showAppAlert === 'function') {
           showAppAlert('Error', data.error || 'Could not fetch Trakt history.', false);
         } else {
-          alert(data.error || 'Could not fetch Trakt history.');
+          showToast(data.error || 'Could not fetch Trakt history.', 'error');
         }
         if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
         return;
@@ -591,7 +591,7 @@ async function markTraktHistoryAllWatched(btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('No History', 'No watch history found on your Trakt account.', false);
     } else {
-      alert('No watch history found on your Trakt account.');
+      showToast('No watch history found on your Trakt account.', 'error');
     }
     if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
     return;
@@ -604,7 +604,7 @@ async function markTraktHistoryAllWatched(btn) {
   if (whResult.quotaExceeded) {
     const msg = 'Not enough local storage space to save your history. Your browser limits storage to ~5MB. Please delete some large custom lists and try again.';
     if (typeof showAppAlert === 'function') showAppAlert('Storage Full', msg, false);
-    else alert(msg);
+    else showToast(msg, 'error');
     return;
   }
 
@@ -619,7 +619,7 @@ async function markTraktHistoryAllWatched(btn) {
   if (typeof showAppAlert === 'function') {
     showAppAlert('Trakt History Synced', msg, true);
   } else {
-    alert(msg);
+    showToast(msg, 'error');
   }
 }
 
@@ -760,7 +760,7 @@ async function markMdblistHistoryAllWatched(btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('MDBList Not Connected', 'Please connect your MDBList account or enter an API key in Settings first.', false);
     } else {
-      alert('Connect MDBList first.');
+      showToast('Connect MDBList first.', 'error');
     }
     return;
   }
@@ -786,7 +786,7 @@ async function markMdblistHistoryAllWatched(btn) {
       if (typeof showAppAlert === 'function') {
         showAppAlert('Network Error', 'Network error fetching MDBList history (page ' + page + ').', false);
       } else {
-        alert('Network error fetching MDBList history.');
+        showToast('Network error fetching MDBList history.', 'error');
       }
       if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
       return;
@@ -795,7 +795,7 @@ async function markMdblistHistoryAllWatched(btn) {
       if (typeof showAppAlert === 'function') {
         showAppAlert('Error', data.error || 'Could not fetch MDBList history.', false);
       } else {
-        alert(data.error || 'Could not fetch MDBList history.');
+        showToast(data.error || 'Could not fetch MDBList history.', 'error');
       }
       if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
       return;
@@ -813,7 +813,7 @@ async function markMdblistHistoryAllWatched(btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('No History', detailMsg, false);
     } else {
-      alert(detailMsg);
+      showToast(detailMsg, 'error');
     }
     if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
     return;
@@ -826,7 +826,7 @@ async function markMdblistHistoryAllWatched(btn) {
   if (whResult.quotaExceeded) {
     const msg = 'Not enough local storage space to save your history. Your browser limits storage to ~5MB. Please delete some large custom lists and try again.';
     if (typeof showAppAlert === 'function') showAppAlert('Storage Full', msg, false);
-    else alert(msg);
+    else showToast(msg, 'error');
     return;
   }
 
@@ -838,17 +838,17 @@ async function markMdblistHistoryAllWatched(btn) {
   if (typeof showAppAlert === 'function') {
     showAppAlert('MDBList History Synced', msg, true);
   } else {
-    alert(msg);
+    showToast(msg, 'error');
   }
 }
 
 async function markSimklListAllWatched(btn) {
-  const token = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
+  const token = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
   if (!token) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Simkl Not Connected', 'Please connect your Simkl account in Settings first.', false);
     } else {
-      alert('Connect Simkl first.');
+      showToast('Connect Simkl first.', 'error');
     }
     return;
   }
@@ -865,7 +865,7 @@ async function markSimklListAllWatched(btn) {
       if (typeof showAppAlert === 'function') {
         showAppAlert('No Items', 'No items found in ' + listName + '.', false);
       } else {
-        alert('No items found in ' + listName + '.');
+        showToast('No items found in ' + listName + '.', 'error');
       }
       if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
       return;
@@ -930,7 +930,7 @@ async function markSimklListAllWatched(btn) {
     if (whResult.quotaExceeded) {
       const msg = 'Not enough local storage space to save your history. Your browser limits storage to ~5MB. Please delete some large custom lists and try again.';
       if (typeof showAppAlert === 'function') showAppAlert('Storage Full', msg, false);
-      else alert(msg);
+      else showToast(msg, 'error');
       return;
     }
 
@@ -941,14 +941,14 @@ async function markSimklListAllWatched(btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Simkl Completed Synced', msg, true);
     } else {
-      alert(msg);
+      showToast(msg, 'error');
     }
   } catch (err) {
     if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
     if (typeof showAppAlert === 'function') {
       showAppAlert('Error', 'Could not mark items as watched: ' + (err.message || 'network error'), false);
     } else {
-      alert('Could not mark items as watched: ' + (err.message || 'network error'));
+      showToast('Could not mark items as watched: ' + (err.message || 'network error'), 'error');
     }
   }
 }
@@ -1558,14 +1558,14 @@ async function runUnifiedListImport() {
 
   if (!discoveredImportCategories.length) {
     if (typeof showAppAlert === 'function') showAppAlert('File Required', 'Please select at least one file to import.', false);
-    else alert('Please select at least one file to import.');
+    else showToast('Please select at least one file to import.', 'error');
     return;
   }
 
   const checkedCatCards = Array.from(document.querySelectorAll('.importCatCheck:checked'));
   if (!checkedCatCards.length) {
     if (typeof showAppAlert === 'function') showAppAlert('Selection Required', 'Please select at least one category/list to import.', false);
-    else alert('Please select at least one category/list to import.');
+    else showToast('Please select at least one category/list to import.', 'error');
     return;
   }
 

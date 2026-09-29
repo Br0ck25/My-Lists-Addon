@@ -25978,15 +25978,15 @@ function buildStreamingRowsHtml(list, labelSuffix, group) {
     // every other "See All" in the app.
     let seeAllLink = '';
     if (p.movieUrl && p.showUrl) {
-      seeAllLink = `<a href="javascript:void(0)" class="discover-chart-seeall" onclick="openListDetailsPage('${label}', 'movie', '${p.movieUrl}')">See All &rsaquo;</a>`;
+      seeAllLink = `<a href="javascript:void(0)" class="discover-chart-seeall" data-act="openListDetailsPage" data-act-args="${appActArgsServer([label, "movie", p.movieUrl])}">See All &rsaquo;</a>`;
       btns = `
-        <button type="button" class="lc-btn secondary" onclick="addRow('${label}', '${p.movieUrl}', 'movie', true, '${group}')">+ Movies</button>
-        <button type="button" class="lc-btn secondary" onclick="addRow('${label}', '${p.showUrl}', 'series', true, '${group}')">+ Shows</button>`;
+        <button type="button" class="lc-btn secondary" data-act="addRow" data-act-args="${appActArgsServer([label, p.movieUrl, "movie", true, group])}">+ Movies</button>
+        <button type="button" class="lc-btn secondary" data-act="addRow" data-act-args="${appActArgsServer([label, p.showUrl, "series", true, group])}">+ Shows</button>`;
     } else if (p.url && p.type) {
       const btnText = p.type === 'movie' ? '+ Movies' : '+ Shows';
-      seeAllLink = `<a href="javascript:void(0)" class="discover-chart-seeall" onclick="openListDetailsPage('${p.name}', '${p.type}', '${p.url}')">See All &rsaquo;</a>`;
+      seeAllLink = `<a href="javascript:void(0)" class="discover-chart-seeall" data-act="openListDetailsPage" data-act-args="${appActArgsServer([p.name, p.type, p.url])}">See All &rsaquo;</a>`;
       btns = `
-        <button type="button" class="lc-btn secondary" onclick="addRow('${p.name}', '${p.url}', '${p.type}', true, '${group}')">${btnText}</button>`;
+        <button type="button" class="lc-btn secondary" data-act="addRow" data-act-args="${appActArgsServer([p.name, p.url, p.type, true, group])}">${btnText}</button>`;
     }
     return `
     <div class="discover-chart-card">
@@ -26193,11 +26193,11 @@ function buildCombinedChartsHtml() {
           <div class="discover-chart-title">${p.name}</div>
           <div class="discover-chart-sub">Blended Multi-Source Catalog</div>
         </div>
-        <a href="javascript:void(0)" class="discover-chart-seeall" onclick="openListDetailsPage('${p.name}', 'movie', '${movieUrlsJoined}')">See All &rsaquo;</a>
+        <a href="javascript:void(0)" class="discover-chart-seeall" data-act="openListDetailsPage" data-act-args="${appActArgsServer([p.name, "movie", movieUrlsJoined])}">See All &rsaquo;</a>
       </div>
       <div class="discover-chart-btns">
-        <button type="button" class="lc-btn secondary" onclick="addCombinedRow('${p.name}', ${jsStringArrayLiteral(p.movieUrls)}, 'movie', 'Combined Charts')">+ Movies</button>
-        <button type="button" class="lc-btn secondary" onclick="addCombinedRow('${p.name}', ${jsStringArrayLiteral(p.showUrls)}, 'series', 'Combined Charts')">+ Shows</button>
+        <button type="button" class="lc-btn secondary" data-act="addCombinedRow" data-act-args="${appActArgsServer([p.name, jsStringArrayLiteral(p.movieUrls), "movie", "Combined Charts"])}">+ Movies</button>
+        <button type="button" class="lc-btn secondary" data-act="addCombinedRow" data-act-args="${appActArgsServer([p.name, jsStringArrayLiteral(p.showUrls), "series", "Combined Charts"])}">+ Shows</button>
       </div>
     </div>`;
   }).join("");
@@ -26524,6 +26524,16 @@ const APP_SHELL_INSTALL_BAR_HTML = `<div id="appShellInstallBar" class="app-shel
     <span class="app-shell-install-text" id="appShellInstallText">Not installed yet</span>
     <button type="button" class="app-shell-install-action" id="appShellInstallBtn" data-action="install">Get install link</button>
   </div>`;
+
+// The Worker-side twin of appActArgs (16_client-row-core.js). 08_quickadd-chart-data.js
+// builds some of the page's markup here in the Worker rather than in the
+// browser (see buildCombinedChartsHtml), so its data-act arguments need the
+// same JSON-then-HTML escaping at render time. Kept next to renderBuilder so
+// it is obviously server-side code: the client's own copy is inside the
+// template literal below and is not in scope here.
+function appActArgsServer(values) {
+  return escapeHtmlServer(JSON.stringify(values || []));
+}
 
 function renderBuilder(
   origin,
@@ -30364,7 +30374,7 @@ ${seoHeadHtml}
       </div>
     </div>
     <div class="app-header-actions">
-      <button type="button" class="theme-toggle-btn dark-mode-toggle" id="themeToggleBtn" onclick="toggleTheme()" aria-label="Toggle Light or Dark Mode" title="Toggle Light / Dark Mode">
+      <button type="button" class="theme-toggle-btn dark-mode-toggle" id="themeToggleBtn" data-act="toggleTheme" aria-label="Toggle Light or Dark Mode" title="Toggle Light / Dark Mode">
         <svg class="theme-icon-sun" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="12" cy="12" r="4" fill="currentColor"></circle>
           <line x1="12" y1="2" x2="12" y2="4.5"></line>
@@ -30390,29 +30400,29 @@ ${newUi ? "  " + APP_SHELL_INSTALL_BAR_HTML : ""}
 
   <!-- Top Tab Bar (Desktop View) -->
 ${newUi ? appShellDesktopNavHtml : `  <div class="tab-bar" role="tablist" aria-label="Main navigation">
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-catalogs" aria-controls="content-catalogs" aria-selected="false" tabindex="-1" data-tab="catalogs" onclick="switchTab('catalogs')">Catalogs</button>
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-lists" aria-controls="content-lists" aria-selected="false" tabindex="-1" data-tab="lists" onclick="switchTab('lists')">Lists</button>
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-channels" aria-controls="content-channels" aria-selected="false" tabindex="-1" data-tab="channels" onclick="switchTab('channels')">Channels</button>
-    <button type="button" class="tab-btn active" role="tab" id="tab-desktop-discover" aria-controls="content-discover" aria-selected="true" tabindex="0" data-tab="discover" onclick="switchTab('discover')">Discover</button>
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-search" aria-controls="content-search" aria-selected="false" tabindex="-1" data-tab="search" onclick="switchTab('search')">Search</button>
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-settings" aria-controls="content-settings" aria-selected="false" tabindex="-1" data-tab="settings" onclick="switchTab('settings')">Settings</button>
+    <button type="button" class="tab-btn" role="tab" id="tab-desktop-catalogs" aria-controls="content-catalogs" aria-selected="false" tabindex="-1" data-tab="catalogs" data-act="switchTab" data-act-args="[&quot;catalogs&quot;]">Catalogs</button>
+    <button type="button" class="tab-btn" role="tab" id="tab-desktop-lists" aria-controls="content-lists" aria-selected="false" tabindex="-1" data-tab="lists" data-act="switchTab" data-act-args="[&quot;lists&quot;]">Lists</button>
+    <button type="button" class="tab-btn" role="tab" id="tab-desktop-channels" aria-controls="content-channels" aria-selected="false" tabindex="-1" data-tab="channels" data-act="switchTab" data-act-args="[&quot;channels&quot;]">Channels</button>
+    <button type="button" class="tab-btn active" role="tab" id="tab-desktop-discover" aria-controls="content-discover" aria-selected="true" tabindex="0" data-tab="discover" data-act="switchTab" data-act-args="[&quot;discover&quot;]">Discover</button>
+    <button type="button" class="tab-btn" role="tab" id="tab-desktop-search" aria-controls="content-search" aria-selected="false" tabindex="-1" data-tab="search" data-act="switchTab" data-act-args="[&quot;search&quot;]">Search</button>
+    <button type="button" class="tab-btn" role="tab" id="tab-desktop-settings" aria-controls="content-settings" aria-selected="false" tabindex="-1" data-tab="settings" data-act="switchTab" data-act-args="[&quot;settings&quot;]">Settings</button>
   </div>`}
 
   <!-- Unsaved Changes Floating Banner -->
   <div id="unsavedInstallBanner" class="unsaved-install-banner">
     <span id="unsavedInstallText" style="font-weight:600;">Unsaved changes to install link</span>
-    <button type="button" class="unsaved-install-banner-btn" id="unsavedInstallBtn" onclick="updateInstallLinkFromBanner()">Update Link</button>
+    <button type="button" class="unsaved-install-banner-btn" id="unsavedInstallBtn" data-act="updateInstallLinkFromBanner">Update Link</button>
   </div>
 
   <!-- Bottom Nav Bar (Mobile View - Persistent Glassmorphism) -->
 ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria-label="Main navigation">
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-catalogs" aria-controls="content-catalogs" aria-selected="false" tabindex="-1" data-tab="catalogs" onclick="switchTab('catalogs')" title="Catalogs">
+    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-catalogs" aria-controls="content-catalogs" aria-selected="false" tabindex="-1" data-tab="catalogs" data-act="switchTab" data-act-args="[&quot;catalogs&quot;]" title="Catalogs">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
       </svg>
       Catalogs
     </button>
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-lists" aria-controls="content-lists" aria-selected="false" tabindex="-1" data-tab="lists" onclick="switchTab('lists')" title="Lists">
+    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-lists" aria-controls="content-lists" aria-selected="false" tabindex="-1" data-tab="lists" data-act="switchTab" data-act-args="[&quot;lists&quot;]" title="Lists">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line>
         <line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line>
@@ -30420,27 +30430,27 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
       </svg>
       Lists
     </button>
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-channels" aria-controls="content-channels" aria-selected="false" tabindex="-1" data-tab="channels" onclick="switchTab('channels')" title="Channels">
+    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-channels" aria-controls="content-channels" aria-selected="false" tabindex="-1" data-tab="channels" data-act="switchTab" data-act-args="[&quot;channels&quot;]" title="Channels">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>
         <polyline points="17 2 12 7 7 2"></polyline>
       </svg>
       Channels
     </button>
-    <button type="button" class="bottom-nav-item active" role="tab" id="tab-mobile-discover" aria-controls="content-discover" aria-selected="true" tabindex="0" data-tab="discover" onclick="switchTab('discover')" title="Discover">
+    <button type="button" class="bottom-nav-item active" role="tab" id="tab-mobile-discover" aria-controls="content-discover" aria-selected="true" tabindex="0" data-tab="discover" data-act="switchTab" data-act-args="[&quot;discover&quot;]" title="Discover">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect>
         <rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect>
       </svg>
       Discover
     </button>
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-search" aria-controls="content-search" aria-selected="false" tabindex="-1" data-tab="search" onclick="switchTab('search')" title="Search">
+    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-search" aria-controls="content-search" aria-selected="false" tabindex="-1" data-tab="search" data-act="switchTab" data-act-args="[&quot;search&quot;]" title="Search">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
       </svg>
       Search
     </button>
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-settings" aria-controls="content-settings" aria-selected="false" tabindex="-1" data-tab="settings" onclick="switchTab('settings')" title="Settings">
+    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-settings" aria-controls="content-settings" aria-selected="false" tabindex="-1" data-tab="settings" data-act="switchTab" data-act-args="[&quot;settings&quot;]" title="Settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="12" cy="12" r="3"></circle>
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
@@ -30476,9 +30486,9 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
         var cBar = document.getElementById('creatorProfileBar');
         if (cBar) {
           if (cName && cKey) {
-            cBar.innerHTML = '<div style="display:flex; align-items:center; gap:8px;"><button type="button" class="subnav-pill active" style="margin:0; font-size:0.85rem; padding:8px 14px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px; border-radius:var(--radius-pill);" onclick="switchTab(&quot;account&quot;)">&#x1F464; ' + String(cDisp || cName || '').replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}) + '</button></div>';
+            cBar.innerHTML = '<div style="display:flex; align-items:center; gap:8px;"><button type="button" class="subnav-pill active" style="margin:0; font-size:0.85rem; padding:8px 14px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px; border-radius:var(--radius-pill);" data-act="switchTab" data-act-args="[&quot;account&quot;]">&#x1F464; ' + String(cDisp || cName || '').replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}) + '</button></div>';
           } else {
-            cBar.innerHTML = '<div style="display:flex; align-items:center; gap:6px;"><button type="button" class="lc-btn primary" onclick="openRestoreModal()" style="padding:8px 16px; font-size:0.85rem; font-weight:700; border-radius:var(--radius-pill);">Login</button></div>';
+            cBar.innerHTML = '<div style="display:flex; align-items:center; gap:6px;"><button type="button" class="lc-btn primary" data-act="openRestoreModal" style="padding:8px 16px; font-size:0.85rem; font-weight:700; border-radius:var(--radius-pill);">Login</button></div>';
           }
         }
       } catch (e) {}
@@ -30491,7 +30501,7 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
   <!-- List Details page ("See All" full list view) -->
   <div class="tab-panel list-details-page" data-tab-panel="list-details" id="content-list-details" hidden>
     <div style="margin-bottom: 20px;">
-      <button type="button" class="lc-btn secondary" onclick="navigateBackFromDetail()" style="padding: 6px 12px; font-size: 0.9rem;">&larr; Back</button>
+      <button type="button" class="lc-btn secondary" data-act="navigateBackFromDetail" style="padding: 6px 12px; font-size: 0.9rem;">&larr; Back</button>
     </div>
     <div class="detail-header-info" style="margin-bottom:14px;">
       <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
@@ -30513,24 +30523,24 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
     </div>
     <div id="detailFilterBar" class="detail-filter-bar" style="display:none;">
       <div id="whFilterControls" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; width:100%;">
-        <button type="button" class="subnav-pill active wh-filter-pill" data-wh-filter="all" onclick="setWatchHistoryFilter('all', this)">All</button>
-        <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="movie" onclick="setWatchHistoryFilter('movie', this)">Movies</button>
-        <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="series" onclick="setWatchHistoryFilter('series', this)">Shows</button>
+        <button type="button" class="subnav-pill active wh-filter-pill" data-wh-filter="all" data-act="setWatchHistoryFilter" data-act-args="[&quot;all&quot;,&quot;@self&quot;]">All</button>
+        <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="movie" data-act="setWatchHistoryFilter" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]">Movies</button>
+        <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="series" data-act="setWatchHistoryFilter" data-act-args="[&quot;series&quot;,&quot;@self&quot;]">Shows</button>
         <label class="wh-group-shows-toggle" style="display:inline-flex; align-items:center; gap:6px; margin-left:8px; cursor:pointer; font-size:0.84rem; color:var(--text); user-select:none;">
-          <input type="checkbox" id="whGroupShowsCheckbox" onchange="toggleWatchHistoryGroupShows(this.checked)" style="accent-color:var(--accent); cursor:pointer;">
+          <input type="checkbox" id="whGroupShowsCheckbox" data-act="toggleWatchHistoryGroupShows" data-act-args="[&quot;@checked&quot;]" style="accent-color:var(--accent); cursor:pointer;">
           <span>Shows instead of episodes</span>
         </label>
-        <button type="button" class="subnav-pill" id="whClearHistoryBtn" onclick="clearWatchHistoryAll()" style="color:var(--danger); border-color:rgba(255,59,48,0.35); margin-left:auto; font-weight:600;">Clear History</button>
+        <button type="button" class="subnav-pill" id="whClearHistoryBtn" data-act="clearWatchHistoryAll" style="color:var(--danger); border-color:rgba(255,59,48,0.35); margin-left:auto; font-weight:600;">Clear History</button>
       </div>
       <div id="genericTypeFilterControls" style="display:none; gap:6px; flex-wrap:wrap; align-items:center; width:100%;">
-        <button type="button" class="subnav-pill active generic-type-pill" id="detailTypeAllBtn" onclick="switchListDetailsType('all')">All</button>
-        <button type="button" class="subnav-pill generic-type-pill" id="detailTypeMovieBtn" onclick="switchListDetailsType('movie')">Movies</button>
-        <button type="button" class="subnav-pill generic-type-pill" id="detailTypeSeriesBtn" onclick="switchListDetailsType('series')">Shows</button>
-        <button type="button" class="subnav-pill" id="cwClearHistoryBtn" onclick="clearContinueWatchingAll()" style="display:none; color:var(--danger); border-color:rgba(255,59,48,0.35); margin-left:auto; font-weight:600;">Clear All</button>
+        <button type="button" class="subnav-pill active generic-type-pill" id="detailTypeAllBtn" data-act="switchListDetailsType" data-act-args="[&quot;all&quot;]">All</button>
+        <button type="button" class="subnav-pill generic-type-pill" id="detailTypeMovieBtn" data-act="switchListDetailsType" data-act-args="[&quot;movie&quot;]">Movies</button>
+        <button type="button" class="subnav-pill generic-type-pill" id="detailTypeSeriesBtn" data-act="switchListDetailsType" data-act-args="[&quot;series&quot;]">Shows</button>
+        <button type="button" class="subnav-pill" id="cwClearHistoryBtn" data-act="clearContinueWatchingAll" style="display:none; color:var(--danger); border-color:rgba(255,59,48,0.35); margin-left:auto; font-weight:600;">Clear All</button>
       </div>
       <div id="whSortControls" style="display:flex; align-items:center; gap:8px;">
         <label for="whSortSelect" style="font-size:0.75rem; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.02em;">Sort</label>
-        <select id="whSortSelect" class="detail-sort-select" onchange="setWatchHistorySort(this.value)">
+        <select id="whSortSelect" class="detail-sort-select" data-act="setWatchHistorySort" data-act-args="[&quot;@value&quot;]">
           <option value="recent">Recently Watched</option>
           <option value="oldest">Oldest Watched</option>
           <option value="title-asc">Title (A-Z)</option>
@@ -30544,7 +30554,7 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
 
   <div class="tab-panel" data-tab-panel="item-details" id="content-item-details" hidden>
     <div style="margin-bottom: 20px;">
-      <button type="button" class="lc-btn secondary" onclick="navigateBackFromDetail()" style="padding: 6px 12px; font-size: 0.9rem;">&larr; Back</button>
+      <button type="button" class="lc-btn secondary" data-act="navigateBackFromDetail" style="padding: 6px 12px; font-size: 0.9rem;">&larr; Back</button>
     </div>
     <div id="itemDetailsBody" style="display: flex; flex-direction: column; gap: 24px;">
       <!-- Filled dynamically -->
@@ -30555,12 +30565,12 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
     <div class="modal-card" style="width: 100%; max-width: 380px; padding: 22px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow); display: flex; flex-direction: column;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
         <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);" id="createListModalTitle">Create List</h2>
-        <button type="button" class="modal-close-x" aria-label="Close" onclick="closeCreateListModal()">&#x2715;</button>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeCreateListModal">&#x2715;</button>
       </div>
 
       <div style="margin-bottom: 12px;">
         <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Destination</label>
-        <select id="createListModalDestination" aria-label="Destination" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.95rem;" onchange="onChangeCreateListDestination()">
+        <select id="createListModalDestination" aria-label="Destination" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.95rem;" data-act="onChangeCreateListDestination">
           <option value="custom">Custom List</option>
           <option value="trakt">Trakt List</option>
           <option value="tmdb">TMDB List</option>
@@ -30571,7 +30581,7 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
       
       <div style="margin-bottom: 12px;">
         <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">List Name *</label>
-        <input type="text" id="createListModalName" placeholder="e.g. My Favorite Sci-Fi" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.95rem;" oninput="document.getElementById('createListModalBtn').disabled = !this.value.trim(); document.getElementById('createListModalBtn').style.opacity = this.value.trim() ? '1' : '0.5';">
+        <input type="text" id="createListModalName" placeholder="e.g. My Favorite Sci-Fi" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="appActValidateCreateListName" data-act-args="[&quot;@value&quot;]">
       </div>
 
       <div style="margin-bottom: 12px;">
@@ -30597,8 +30607,8 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
       </div>
       
       <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
-        <button type="button" class="lc-btn secondary" onclick="closeCreateListModal()">Cancel</button>
-        <button type="button" class="lc-btn primary" id="createListModalBtn" style="opacity: 0.5; min-width: 80px;" disabled onclick="submitCreateListModal()">Create</button>
+        <button type="button" class="lc-btn secondary" data-act="closeCreateListModal">Cancel</button>
+        <button type="button" class="lc-btn primary" id="createListModalBtn" style="opacity: 0.5; min-width: 80px;" disabled data-act="submitCreateListModal">Create</button>
       </div>
     </div>
   </div>
@@ -30609,25 +30619,25 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
       <h2 style="margin-top:0; font-size:1.3rem; font-weight:600; color:var(--text);">Add Catalog</h2>
       
       <div style="margin: 16px 0;">
-        <input type="text" id="addShelfModalName" placeholder="Catalog name" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem; margin-bottom:12px;" oninput="validateAddShelfModal()">
+        <input type="text" id="addShelfModalName" placeholder="Catalog name" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem; margin-bottom:12px;" data-act-on="input" data-act="validateAddShelfModal">
         
         <div id="addShelfModalLinksContainer">
           <div class="add-shelf-link-row" style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
-            <input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd)" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" oninput="onAddShelfModalLinkInput(this); validateAddShelfModal()">
+            <input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd)" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">
           </div>
         </div>
         
-        <button type="button" class="lc-btn secondary" style="width: 100%; margin-bottom: 12px; font-size: 0.9rem;" onclick="addShelfModalAddLink()">+ Add another link (Combined List)</button>
+        <button type="button" class="lc-btn secondary" style="width: 100%; margin-bottom: 12px; font-size: 0.9rem;" data-act="addShelfModalAddLink">+ Add another link (Combined List)</button>
         
-        <select id="addShelfModalType" aria-label="Catalog type" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem; margin-bottom:12px;" onchange="validateAddShelfModal()">
+        <select id="addShelfModalType" aria-label="Catalog type" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem; margin-bottom:12px;" data-act="validateAddShelfModal">
           <option value="movie">Movies</option>
           <option value="series">Shows</option>
         </select>
       </div>
       
       <div style="display:flex; justify-content:flex-end; gap:16px; margin-top: 8px;">
-        <button type="button" style="background:none; border:none; color:var(--text); font-weight:600; font-size:1rem; cursor:pointer;" onclick="document.getElementById('addShelfModal').style.display = 'none'">Cancel</button>
-        <button type="button" id="addShelfModalBtn" style="background:none; border:none; color:var(--accent); font-weight:600; font-size:1rem; cursor:pointer; opacity: 0.5;" disabled onclick="submitAddShelfModal()">Add</button>
+        <button type="button" style="background:none; border:none; color:var(--text); font-weight:600; font-size:1rem; cursor:pointer;" data-act="appActHideAddShelfModal">Cancel</button>
+        <button type="button" id="addShelfModalBtn" style="background:none; border:none; color:var(--accent); font-weight:600; font-size:1rem; cursor:pointer; opacity: 0.5;" disabled data-act="submitAddShelfModal">Add</button>
       </div>
     </div>
   </div>
@@ -30645,7 +30655,7 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
         <!-- Filled dynamically -->
       </div>
       <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
-        <button type="button" class="lc-btn secondary" id="selectListModalCancelBtn" onclick="closeSelectListModal()">Cancel</button>
+        <button type="button" class="lc-btn secondary" id="selectListModalCancelBtn" data-act="closeSelectListModal">Cancel</button>
         <button type="button" class="lc-btn primary" id="addSelectedListsBtn" style="min-width: 90px;">Done</button>
       </div>
     </div>
@@ -30656,7 +30666,7 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
     <div class="modal-card" style="width: 100%; max-width: 420px; padding: 24px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow); display: flex; flex-direction: column; text-align: center;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
         <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);">Connect Trakt</h2>
-        <button type="button" class="modal-close-x" aria-label="Close" onclick="closeTraktDeviceModal()">&#x2715;</button>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeTraktDeviceModal">&#x2715;</button>
       </div>
       <p style="margin: 0 0 16px; color: var(--muted); font-size: 0.9rem;">To authorize your Trakt account without redirects or rate limits, enter the code below on Trakt:</p>
       
@@ -30675,7 +30685,7 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
       </div>
 
       <div style="margin-top: 18px; border-top: 1px solid var(--border); padding-top: 14px;">
-        <button type="button" class="lc-btn secondary" style="width: 100%;" onclick="closeTraktDeviceModal()">Cancel</button>
+        <button type="button" class="lc-btn secondary" style="width: 100%;" data-act="closeTraktDeviceModal">Cancel</button>
       </div>
     </div>
   </div>
@@ -30702,9 +30712,9 @@ if ('serviceWorker' in navigator) {
 <div class="tab-panel" data-tab-panel="catalogs" id="content-catalogs" role="tabpanel" aria-labelledby="tab-desktop-catalogs" hidden>
   <!-- Top Submenu Pills for Catalogs -->
   <div class="subnav-pills-bar" id="catalogsFilterBar">
-    <button type="button" class="subnav-pill active" data-sub="all" onclick="switchCatalogsSubmenu('all', this)"><span class="check-icon">&#x2713;</span> My Catalogs</button>
-    <button type="button" class="subnav-pill" data-sub="quickadd" onclick="switchCatalogsSubmenu('quickadd', this)">Quick Add</button>
-    <button type="button" class="subnav-pill" data-sub="bulk" onclick="switchCatalogsSubmenu('bulk', this)">Bulk Add</button>
+    <button type="button" class="subnav-pill active" data-sub="all" data-act="switchCatalogsSubmenu" data-act-args="[&quot;all&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> My Catalogs</button>
+    <button type="button" class="subnav-pill" data-sub="quickadd" data-act="switchCatalogsSubmenu" data-act-args="[&quot;quickadd&quot;,&quot;@self&quot;]">Quick Add</button>
+    <button type="button" class="subnav-pill" data-sub="bulk" data-act="switchCatalogsSubmenu" data-act-args="[&quot;bulk&quot;,&quot;@self&quot;]">Bulk Add</button>
   </div>
 
   <div class="lists-subpanel" id="catalogsSubShelves">
@@ -30713,16 +30723,16 @@ if ('serviceWorker' in navigator) {
     <div class="shelf-header" style="margin-bottom:12px;">
       <h2 class="shelf-title">Live Preview &amp; Editor</h2>
       <div class="actions" style="flex-direction:row; flex-wrap:wrap; align-items:center; gap:6px;">
-        <button type="button" class="primary lc-btn" onclick="openAddShelfModal()">+ New Catalog</button>
-        <button type="button" class="secondary lc-btn" id="livePreviewEditBtn" onclick="toggleLivePreviewEdit()">Edit</button>
-        <button type="button" class="secondary lc-btn" onclick="renderLivePreview()">Refresh Preview</button>
+        <button type="button" class="primary lc-btn" data-act="openAddShelfModal">+ New Catalog</button>
+        <button type="button" class="secondary lc-btn" id="livePreviewEditBtn" data-act="toggleLivePreviewEdit">Edit</button>
+        <button type="button" class="secondary lc-btn" data-act="renderLivePreview">Refresh Preview</button>
       </div>
     </div>
     <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Catalogs and lists you've added to your add-on. Reorder, edit, and preview your active shelves.</p>
 
     <div class="row" style="margin-bottom:12px; gap:8px;">
-      <input type="text" id="listFilterInput" aria-label="Filter catalogs by name" placeholder="Filter catalogs by name..." oninput="filterLists()">
-      <select id="listGroupFilterSelect" aria-label="Filter catalogs by group" onchange="filterLists()" style="flex:none; width:auto;">
+      <input type="text" id="listFilterInput" aria-label="Filter catalogs by name" placeholder="Filter catalogs by name..." data-act-on="input" data-act="filterLists">
+      <select id="listGroupFilterSelect" aria-label="Filter catalogs by group" data-act="filterLists" style="flex:none; width:auto;">
         <option value="">All groups</option>
       </select>
     </div>
@@ -30743,26 +30753,26 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ''}
       </div>
       <div style="display:flex; flex-direction:column; gap:8px;">
         <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.88rem; margin:0; user-select:none;">
-          <input type="checkbox" id="shuffleShelvesCheckbox" onchange="saveState()" style="cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="shuffleShelvesCheckbox" data-act="saveState" style="cursor:pointer; width:16px; height:16px;">
           <span>Shuffle Catalogs daily (every 24h)</span>
         </label>
         <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.88rem; margin:0; user-select:none;">
-          <input type="checkbox" id="shuffleItemsCheckbox" onchange="saveState()" style="cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="shuffleItemsCheckbox" data-act="saveState" style="cursor:pointer; width:16px; height:16px;">
           <span>Shuffle items in Catalogs daily (every 24h)</span>
         </label>
       </div>
     </div>
 
     <div class="actions" style="margin-top:16px;">
-      <button type="button" onclick="removeAllLists()" class="secondary" style="color:var(--danger); border-color:rgba(255,59,48,0.25);">Remove All</button>
-      <button type="button" class="primary" onclick="generate()">${isConfigureMode ? "Update Add-on" : "Generate Install Link"}</button>
+      <button type="button" data-act="removeAllLists" class="secondary" style="color:var(--danger); border-color:rgba(255,59,48,0.25);">Remove All</button>
+      <button type="button" class="primary" data-act="generate">${isConfigureMode ? "Update Add-on" : "Generate Install Link"}</button>
     </div>
   </div>
 
   <!-- Undo Toast -->
   <div id="undoToast" class="undo-toast" style="display:none;">
     <span id="undoToastMsg"></span>
-    <button type="button" class="secondary" onclick="performUndo()">Undo</button>
+    <button type="button" class="secondary" data-act="performUndo">Undo</button>
   </div>
 
   <!-- Generated Install Link Result Box -->
@@ -30776,7 +30786,7 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ''}
     <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Paste multiple list URLs at once, one per line. Each list is automatically detected and added to your catalogs.</p>
     <textarea id="bulkPasteBox" rows="5" style="width:100%;font-family:monospace;font-size:15px;" placeholder="https://mdblist.com/lists/user/list-one&#10;https://trakt.tv/users/user/lists/list-two&#10;https://www.themoviedb.org/list/12345"></textarea>
     <div class="actions" style="margin-top:12px;">
-      <button type="button" class="primary" onclick="bulkAddLists(this)">Add All Lines as Catalogs</button>
+      <button type="button" class="primary" data-act="bulkAddLists" data-act-args="[&quot;@self&quot;]">Add All Lines as Catalogs</button>
     </div>
   </div>
   </div>
@@ -30900,15 +30910,15 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ''}
 <div class="tab-panel" data-tab-panel="discover" id="content-discover" role="tabpanel" aria-labelledby="tab-desktop-discover">
   <!-- Discover Top Submenu Pills -->
   <div class="subnav-pills-bar" id="discoverSubnavBar">
-    <button type="button" class="subnav-pill" data-sub="all" onclick="filterDiscoverShelves('all', this)">All</button>
-    <button type="button" class="subnav-pill active" data-sub="movie" onclick="filterDiscoverShelves('movie', this)"><span class="check-icon">&#x2713;</span> Movies</button>
-    <button type="button" class="subnav-pill" data-sub="series" onclick="filterDiscoverShelves('series', this)">Shows</button>
-    <button type="button" class="subnav-pill" data-sub="popular" onclick="filterDiscoverShelves('popular', this)">Popular Lists</button>
-    <button type="button" class="subnav-pill" data-sub="curated" onclick="filterDiscoverShelves('curated', this)">Curated</button>
-    <button type="button" class="subnav-pill" data-sub="gems" onclick="filterDiscoverShelves('gems', this)">Hidden Gems</button>
-    <button type="button" class="subnav-pill" data-sub="kids" onclick="filterDiscoverShelves('kids', this)">Kids</button>
-    <button type="button" class="subnav-pill" data-sub="holidays" onclick="filterDiscoverShelves('holidays', this)">Holidays</button>
-    <button type="button" class="subnav-pill" data-sub="genres" onclick="filterDiscoverShelves('genres', this)">Genres</button>
+    <button type="button" class="subnav-pill" data-sub="all" data-act="filterDiscoverShelves" data-act-args="[&quot;all&quot;,&quot;@self&quot;]">All</button>
+    <button type="button" class="subnav-pill active" data-sub="movie" data-act="filterDiscoverShelves" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> Movies</button>
+    <button type="button" class="subnav-pill" data-sub="series" data-act="filterDiscoverShelves" data-act-args="[&quot;series&quot;,&quot;@self&quot;]">Shows</button>
+    <button type="button" class="subnav-pill" data-sub="popular" data-act="filterDiscoverShelves" data-act-args="[&quot;popular&quot;,&quot;@self&quot;]">Popular Lists</button>
+    <button type="button" class="subnav-pill" data-sub="curated" data-act="filterDiscoverShelves" data-act-args="[&quot;curated&quot;,&quot;@self&quot;]">Curated</button>
+    <button type="button" class="subnav-pill" data-sub="gems" data-act="filterDiscoverShelves" data-act-args="[&quot;gems&quot;,&quot;@self&quot;]">Hidden Gems</button>
+    <button type="button" class="subnav-pill" data-sub="kids" data-act="filterDiscoverShelves" data-act-args="[&quot;kids&quot;,&quot;@self&quot;]">Kids</button>
+    <button type="button" class="subnav-pill" data-sub="holidays" data-act="filterDiscoverShelves" data-act-args="[&quot;holidays&quot;,&quot;@self&quot;]">Holidays</button>
+    <button type="button" class="subnav-pill" data-sub="genres" data-act="filterDiscoverShelves" data-act-args="[&quot;genres&quot;,&quot;@self&quot;]">Genres</button>
   </div>
 
   <!-- The shell's Explore section (P6-5): community lists from this site and
@@ -30961,7 +30971,7 @@ ${newUi ? '  <div id="appShellExplore"></div>' : ''}
     <div class="panel">
       <div class="shelf-header" id="discoverListsFeedHeader" style="margin-bottom:10px;">
         <h2 class="shelf-title" id="discoverListsFeedTitle">Movies</h2>
-        <button type="button" class="secondary lc-btn" onclick="if (typeof renderDiscoverChartsList === 'function') renderDiscoverChartsList(window._currentDiscoverFilter || 'movie', true);">Refresh</button>
+        <button type="button" class="secondary lc-btn" data-act="appActRefreshDiscoverCharts">Refresh</button>
       </div>
       <p id="discoverListsFeedDesc" style="margin:0 0 14px; color:var(--muted); font-size:0.85rem; line-height:1.45;">Top charts, new releases, and popular movie collections across streaming platforms.</p>
       <div id="discoverListsFeed"></div>
@@ -30973,7 +30983,7 @@ ${newUi ? '  <div id="appShellExplore"></div>' : ''}
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">Popular Community Lists</h2>
-        <button type="button" class="secondary lc-btn" onclick="loadPopularListsFeed(true)">Refresh</button>
+        <button type="button" class="secondary lc-btn" data-act="loadPopularListsFeed" data-act-args="[true]">Refresh</button>
       </div>
       <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem; line-height:1.45;">Top trending and highly-rated community lists shared by creators and viewers.</p>
       <div id="popularListsFeed"></div>
@@ -30985,7 +30995,7 @@ ${newUi ? '  <div id="appShellExplore"></div>' : ''}
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">Curated For You</h2>
-        <button type="button" class="secondary lc-btn" onclick="loadCuratedListsFeed(true)">Refresh</button>
+        <button type="button" class="secondary lc-btn" data-act="loadCuratedListsFeed" data-act-args="[true]">Refresh</button>
       </div>
       <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem; line-height:1.45;">Personalized recommendations and curated lists tailored to your watch history and tastes.</p>
       <div id="curatedListsFeed"></div>
@@ -30995,9 +31005,9 @@ ${newUi ? '  <div id="appShellExplore"></div>' : ''}
 <div class="tab-panel" data-tab-panel="lists" id="content-lists" role="tabpanel" aria-labelledby="tab-desktop-lists" hidden>
   <!-- Top Submenu Pills for Lists -->
   <div class="subnav-pills-bar" id="listsSubnavBar">
-    <button type="button" class="subnav-pill active" data-sub="my-lists" onclick="switchListsSubmenu('my-lists', this)"><span class="check-icon">&#x2713;</span> My Lists</button>
-    <button type="button" class="subnav-pill" data-sub="liked" onclick="switchListsSubmenu('liked', this)">Liked</button>
-    <button type="button" class="subnav-pill" data-sub="import" onclick="switchListsSubmenu('import', this)">Import</button>
+    <button type="button" class="subnav-pill active" data-sub="my-lists" data-act="switchListsSubmenu" data-act-args="[&quot;my-lists&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> My Lists</button>
+    <button type="button" class="subnav-pill" data-sub="liked" data-act="switchListsSubmenu" data-act-args="[&quot;liked&quot;,&quot;@self&quot;]">Liked</button>
+    <button type="button" class="subnav-pill" data-sub="import" data-act="switchListsSubmenu" data-act-args="[&quot;import&quot;,&quot;@self&quot;]">Import</button>
   </div>
 
   <!-- Submenu 1: User's Connected Account & Custom Lists -->
@@ -31012,8 +31022,8 @@ ${newUi ? '    <div id="appShellListsHome"></div>' : ''}
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">Your Custom Lists</h2>
         <div style="display:flex; gap:8px;">
-          <button type="button" class="primary lc-btn" onclick="openCreateListModal('custom')">+ New List</button>
-          <button type="button" class="secondary lc-btn" onclick="(async()=>{await loadCreatorSync();renderCreatorDashboard();})()">Refresh</button>
+          <button type="button" class="primary lc-btn" data-act="openCreateListModal" data-act-args="[&quot;custom&quot;]">+ New List</button>
+          <button type="button" class="secondary lc-btn" data-act="appActRefreshCreatorDashboard">Refresh</button>
         </div>
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Custom lists you've created locally or on your profile.</p>
@@ -31024,7 +31034,7 @@ ${newUi ? '    <div id="appShellListsHome"></div>' : ''}
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="panel-title" style="margin-bottom:0;">Your MDBList Lists</h2>
         <div style="display:flex; gap:8px;">
-          <button type="button" class="secondary lc-btn" id="listsMdblistConnectBtn" onclick="toggleListsMdblistConnection()">Connect MDBList</button>
+          <button type="button" class="secondary lc-btn" id="listsMdblistConnectBtn" data-act="toggleListsMdblistConnection">Connect MDBList</button>
         </div>
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Lists, Watchlist, and Watch History from your connected MDBList account.</p>
@@ -31035,7 +31045,7 @@ ${newUi ? '    <div id="appShellListsHome"></div>' : ''}
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="panel-title" style="margin-bottom:0;">Your Trakt Lists</h2>
         <div style="display:flex; gap:8px;">
-          <button type="button" class="secondary lc-btn" id="listsTraktConnectBtn" onclick="toggleListsTraktConnection()">Connect Trakt</button>
+          <button type="button" class="secondary lc-btn" id="listsTraktConnectBtn" data-act="toggleListsTraktConnection">Connect Trakt</button>
         </div>
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Lists, Watchlist, and Watch History from your connected Trakt account.</p>
@@ -31047,7 +31057,7 @@ ${newUi ? '    <div id="appShellListsHome"></div>' : ''}
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="panel-title" style="margin-bottom:0;">Your TMDB Lists</h2>
         <div style="display:flex; gap:8px;">
-          <button type="button" class="secondary lc-btn" id="listsTmdbConnectBtn" onclick="toggleListsTmdbConnection()">Connect TMDB</button>
+          <button type="button" class="secondary lc-btn" id="listsTmdbConnectBtn" data-act="toggleListsTmdbConnection">Connect TMDB</button>
         </div>
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Lists, Watchlist, and Favorites from your connected TMDB account.</p>
@@ -31058,7 +31068,7 @@ ${newUi ? '    <div id="appShellListsHome"></div>' : ''}
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="panel-title" style="margin-bottom:0;">Your Simkl Lists</h2>
         <div style="display:flex; gap:8px;">
-          <button type="button" class="secondary lc-btn" id="listsSimklConnectBtn" onclick="toggleListsSimklConnection()">Connect Simkl</button>
+          <button type="button" class="secondary lc-btn" id="listsSimklConnectBtn" data-act="toggleListsSimklConnection">Connect Simkl</button>
         </div>
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Lists, Watchlist, and Watch History from your connected Simkl account.</p>
@@ -31071,7 +31081,7 @@ ${newUi ? '    <div id="appShellListsHome"></div>' : ''}
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">Lists You Liked</h2>
-        <button type="button" class="secondary lc-btn" onclick="renderLikedListsFeed(true)">Refresh</button>
+        <button type="button" class="secondary lc-btn" data-act="renderLikedListsFeed" data-act-args="[true]">Refresh</button>
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Lists you've saved with the heart, from the community directory and from your connected accounts.</p>
       <!-- The placeholder here is the pre-JS state only. renderLikedListsFeed
@@ -31097,8 +31107,8 @@ ${newUi ? '    <div id="appShellAddTitles"></div>' : ''}
       <p style="margin-top:14px; margin-bottom:6px; font-weight:600; font-size:0.85rem;">Picks in this list:</p>
       <div id="customListDraftList"><p style="color:var(--muted); font-size:0.85rem;"><small>No items in this list yet &mdash; tap + on any movie or show across Discover, Search, or Charts to add it.</small></p></div>
       <div class="actions" style="margin-top:8px; justify-content:flex-start; gap:8px;">
-        <button type="button" class="secondary lc-btn" onclick="shuffleCustomListDraft()">Shuffle Picks Now</button>
-        <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" onclick="removeAllCustomListDraftPicks()">Remove All</button>
+        <button type="button" class="secondary lc-btn" data-act="shuffleCustomListDraft">Shuffle Picks Now</button>
+        <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" data-act="removeAllCustomListDraftPicks">Remove All</button>
       </div>
       <div id="customListVisibilityRow" style="margin-top:12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; max-width:280px;">
         <span style="font-size:0.95rem; font-weight:500; color:var(--text);">Public</span>
@@ -31117,7 +31127,7 @@ ${newUi ? '    <div id="appShellAddTitles"></div>' : ''}
         <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px;">
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
             <label for="customListPlayOrderSelect" style="font-size:0.85rem; font-weight:600; white-space:nowrap;">Play order:</label>
-            <select id="customListPlayOrderSelect" onchange="applyCustomListPlayOrder(this.value)" style="flex:1; min-width:210px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+            <select id="customListPlayOrderSelect" data-act="applyCustomListPlayOrder" data-act-args="[&quot;@value&quot;]" style="flex:1; min-width:210px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
               <option value="as-listed">Creation order (as listed)</option>
               <option value="aired-asc">Air date &mdash; oldest first</option>
               <option value="aired-desc">Air date &mdash; newest first</option>
@@ -31136,22 +31146,22 @@ ${newUi ? '    <div id="appShellAddTitles"></div>' : ''}
       </details>
       <div id="customListTypeToggles" style="margin-top:8px; display:flex; gap:16px; flex-wrap:wrap;">
         <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-          <input type="radio" name="customListTypeRadio" value="movie" onchange="setCustomListDraftTypeToggle('movie')" checked>
+          <input type="radio" name="customListTypeRadio" value="movie" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;movie&quot;]" checked>
           <span style="font-size:0.85rem;">Movies</span>
         </label>
         <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-          <input type="radio" name="customListTypeRadio" value="series" onchange="setCustomListDraftTypeToggle('series')">
+          <input type="radio" name="customListTypeRadio" value="series" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;series&quot;]">
           <span style="font-size:0.85rem;">Shows</span>
         </label>
         <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-          <input type="radio" name="customListTypeRadio" value="mixed" onchange="setCustomListDraftTypeToggle('mixed')">
+          <input type="radio" name="customListTypeRadio" value="mixed" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;mixed&quot;]">
           <span style="font-size:0.85rem;">Mixed (Movies &amp; Shows)</span>
         </label>
       </div>
       <div class="row" style="margin-top:10px;">
         <input type="text" id="customListNameInput" placeholder="List name (e.g. My Favorites)">
-        <button type="button" class="primary" id="customListSaveBtn" onclick="saveCustomList()">Save</button>
-        <button type="button" id="customListCancelEditBtn" class="secondary" style="display:none;" onclick="cancelEditCustomList()">Cancel</button>
+        <button type="button" class="primary" id="customListSaveBtn" data-act="saveCustomList">Save</button>
+        <button type="button" id="customListCancelEditBtn" class="secondary" style="display:none;" data-act="cancelEditCustomList">Cancel</button>
       </div>
     </div>
   </div>
@@ -31174,7 +31184,7 @@ ${newUi ? '    <div id="appShellImports"></div>' : ''}
       </div>
       <div class="row" style="margin-top:8px;">
         <input type="text" id="customListImportNameInput" placeholder="Name (e.g. My Favorites)">
-        <button type="button" class="secondary" id="customListImportBtn" onclick="importCustomListFromLink(this)">Import list</button>
+        <button type="button" class="secondary" id="customListImportBtn" data-act="importCustomListFromLink" data-act-args="[&quot;@self&quot;]">Import list</button>
       </div>
       <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-top:10px;">
         <input type="checkbox" id="customListImportSyncCheck" checked>
@@ -31189,11 +31199,11 @@ ${newUi ? '    <div id="appShellImports"></div>' : ''}
 <div class="tab-panel" data-tab-panel="channels" id="content-channels" role="tabpanel" aria-labelledby="tab-desktop-channels" hidden>
   <!-- Top Submenu Pills for Channels -->
   <div class="subnav-pills-bar" id="channelsSubnavBar">
-    <button type="button" class="subnav-pill active" data-sub="my-channels" onclick="switchChannelsSubmenu('my-channels', this)"><span class="check-icon">&#x2713;</span> My Channels</button>
-    <button type="button" class="subnav-pill" data-sub="storylines" onclick="switchChannelsSubmenu('storylines', this)">Storylines &amp; Universes</button>
-    <button type="button" class="subnav-pill" data-sub="quickadd" onclick="switchChannelsSubmenu('quickadd', this)">Quick Add</button>
-    <button type="button" class="subnav-pill" data-sub="explore" onclick="switchChannelsSubmenu('explore', this)">Explore Channels</button>
-    <button type="button" class="subnav-pill" data-sub="import" onclick="switchChannelsSubmenu('import', this)">Import</button>
+    <button type="button" class="subnav-pill active" data-sub="my-channels" data-act="switchChannelsSubmenu" data-act-args="[&quot;my-channels&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> My Channels</button>
+    <button type="button" class="subnav-pill" data-sub="storylines" data-act="switchChannelsSubmenu" data-act-args="[&quot;storylines&quot;,&quot;@self&quot;]">Storylines &amp; Universes</button>
+    <button type="button" class="subnav-pill" data-sub="quickadd" data-act="switchChannelsSubmenu" data-act-args="[&quot;quickadd&quot;,&quot;@self&quot;]">Quick Add</button>
+    <button type="button" class="subnav-pill" data-sub="explore" data-act="switchChannelsSubmenu" data-act-args="[&quot;explore&quot;,&quot;@self&quot;]">Explore Channels</button>
+    <button type="button" class="subnav-pill" data-sub="import" data-act="switchChannelsSubmenu" data-act-args="[&quot;import&quot;,&quot;@self&quot;]">Import</button>
   </div>
 
   <!-- Submenu: Storylines & Universes (Canon Timelines, Sagas & Bridges) -->
@@ -31208,12 +31218,12 @@ ${newUi ? '    <div id="appShellImports"></div>' : ''}
 
       <!-- Category Filter Tabs -->
       <div class="subnav-pills-bar" id="storylineCategoryFilterBar" style="margin-bottom:16px; flex-wrap:wrap;">
-        <button type="button" class="subnav-pill active" onclick="filterStorylinesCategory('all', this)"><span class="check-icon">&#x2713;</span> All Sagas</button>
-        <button type="button" class="subnav-pill" onclick="filterStorylinesCategory('moviesagas', this)">Movie Sagas (3+ Films)</button>
-        <button type="button" class="subnav-pill" onclick="filterStorylinesCategory('tvuniverses', this)">TV Universes &amp; Bridges</button>
-        <button type="button" class="subnav-pill" onclick="filterStorylinesCategory('scifi', this)">Sci-Fi &amp; Fantasy</button>
-        <button type="button" class="subnav-pill" onclick="filterStorylinesCategory('action', this)">Action &amp; Crime</button>
-        <button type="button" class="subnav-pill" onclick="filterStorylinesCategory('animation', this)">Animation &amp; Anime</button>
+        <button type="button" class="subnav-pill active" data-act="filterStorylinesCategory" data-act-args="[&quot;all&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> All Sagas</button>
+        <button type="button" class="subnav-pill" data-act="filterStorylinesCategory" data-act-args="[&quot;moviesagas&quot;,&quot;@self&quot;]">Movie Sagas (3+ Films)</button>
+        <button type="button" class="subnav-pill" data-act="filterStorylinesCategory" data-act-args="[&quot;tvuniverses&quot;,&quot;@self&quot;]">TV Universes &amp; Bridges</button>
+        <button type="button" class="subnav-pill" data-act="filterStorylinesCategory" data-act-args="[&quot;scifi&quot;,&quot;@self&quot;]">Sci-Fi &amp; Fantasy</button>
+        <button type="button" class="subnav-pill" data-act="filterStorylinesCategory" data-act-args="[&quot;action&quot;,&quot;@self&quot;]">Action &amp; Crime</button>
+        <button type="button" class="subnav-pill" data-act="filterStorylinesCategory" data-act-args="[&quot;animation&quot;,&quot;@self&quot;]">Animation &amp; Anime</button>
       </div>
 
       <div id="storylinesUniverseList" style="display:flex; flex-direction:column; gap:16px;"></div>
@@ -31232,15 +31242,15 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">My Channels</h2>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <button type="button" class="secondary lc-btn" onclick="createNextUpChannel(this)" title="A channel that always plays the next episode of everything you have on the go">+ Next Up Channel</button>
-          <button type="button" class="primary lc-btn" onclick="openBuildCustomChannel()">+ New Channel</button>
+          <button type="button" class="secondary lc-btn" data-act="createNextUpChannel" data-act-args="[&quot;@self&quot;]" title="A channel that always plays the next episode of everything you have on the go">+ Next Up Channel</button>
+          <button type="button" class="primary lc-btn" data-act="openBuildCustomChannel">+ New Channel</button>
         </div>
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Your custom built and saved 24/7 TV channels. Play episodes continuously in broadcast order or daily shuffle.</p>
       <div id="channelNextUpStatus" style="margin-bottom:8px;"></div>
       <div class="row" id="myChannelsToolbar" style="margin-bottom:10px; gap:8px;">
-        <input type="text" id="myChannelsSearchInput" aria-label="Search your channels" placeholder="Search your channels..." oninput="setMyChannelsSearch(this.value)">
-        <select id="myChannelsSortSelect" aria-label="Order your channels" onchange="setMyChannelsSort(this.value)" style="flex:none; width:auto;">
+        <input type="text" id="myChannelsSearchInput" aria-label="Search your channels" placeholder="Search your channels..." data-act-on="input" data-act="setMyChannelsSearch" data-act-args="[&quot;@value&quot;]">
+        <select id="myChannelsSortSelect" aria-label="Order your channels" data-act="setMyChannelsSort" data-act-args="[&quot;@value&quot;]" style="flex:none; width:auto;">
           <option value="recent">Recently updated</option>
           <option value="created">Recently created</option>
           <option value="name">Name (A&ndash;Z)</option>
@@ -31267,16 +31277,16 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
           <h3 style="font-size:0.95rem; font-weight:700; margin:0;">Create Merged Catalog</h3>
         </div>
         <div class="actions" style="margin-bottom:8px; justify-content:space-between;">
-          <button type="button" class="secondary lc-btn" onclick="renderChannelMergeList()">Refresh list</button>
+          <button type="button" class="secondary lc-btn" data-act="renderChannelMergeList">Refresh list</button>
           <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:0.85rem; user-select:none;">
-            <input type="checkbox" id="channelMergeSelectAllCheck" onchange="toggleAllChannelMergeChecks(this)">
+            <input type="checkbox" id="channelMergeSelectAllCheck" data-act="toggleAllChannelMergeChecks" data-act-args="[&quot;@self&quot;]">
             <span>Select all</span>
           </label>
         </div>
         <div id="channelMergeList"><p style="color:var(--muted); font-size:0.85rem;"><small>No saved channels yet.</small></p></div>
         <div class="row" style="margin-top:8px;">
           <input type="text" id="channelMergeNameInput" aria-label="Combined catalog name" placeholder="Combined catalog name (e.g. Live TV)">
-          <button type="button" class="secondary" onclick="mergeChannelsIntoRow()">Merge into catalog</button>
+          <button type="button" class="secondary" data-act="mergeChannelsIntoRow">Merge into catalog</button>
         </div>
       </div>
     </div>
@@ -31328,14 +31338,14 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Explore Channels</h2>
-        <button type="button" class="secondary lc-btn" onclick="loadChannelDirectory(true)">Refresh</button>
+        <button type="button" class="secondary lc-btn" data-act="loadChannelDirectory" data-act-args="[true]">Refresh</button>
       </div>
       <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">
         24/7 channels built and published by other people &mdash; &ldquo;Saturday Morning 90s&rdquo;, &ldquo;80s VHS Sci-Fi Vault&rdquo;, whatever anyone has put together. Add one to your own setup in a single click, then edit it however you like.
       </p>
       <div class="row" style="margin-bottom:10px; gap:8px;">
-        <input type="text" id="channelDirectorySearchInput" aria-label="Filter published channels" placeholder="Filter by name, description or creator..." oninput="renderChannelDirectory()">
-        <select id="channelDirectorySortSelect" aria-label="Order published channels" onchange="setChannelDirectorySort(this.value)" style="flex:none; width:auto;">
+        <input type="text" id="channelDirectorySearchInput" aria-label="Filter published channels" placeholder="Filter by name, description or creator..." data-act-on="input" data-act="renderChannelDirectory">
+        <select id="channelDirectorySortSelect" aria-label="Order published channels" data-act="setChannelDirectorySort" data-act-args="[&quot;@value&quot;]" style="flex:none; width:auto;">
           <option value="newest">Newest</option>
           <option value="added">Most added</option>
           <option value="liked">Most liked</option>
@@ -31358,7 +31368,7 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
       </div>
       <div class="row">
         <input type="text" id="channelImportNameInput" placeholder="Channel name (e.g. Sitcom Central)">
-        <button type="button" class="secondary" onclick="importChannelFromLink(this)">Import channel</button>
+        <button type="button" class="secondary" data-act="importChannelFromLink" data-act-args="[&quot;@self&quot;]">Import channel</button>
       </div>
       <label class="channel-rule-row" style="margin-top:10px;">
         <input type="checkbox" id="channelImportLiveSyncCheck" checked>
@@ -31373,8 +31383,8 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
       </div>
       <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Paste a channel share link (or just its code) to rebuild that exact channel here &mdash; every pick, its play order and its broadcast schedule.</p>
       <div class="row">
-        <input type="text" id="channelShareCodeInput" placeholder="https://... /channel/AbC123 &mdash; or the code on its own" onkeydown="if(event.key==='Enter'){event.preventDefault();importSharedChannel(this);}">
-        <button type="button" class="secondary" onclick="importSharedChannel(this)">Add channel</button>
+        <input type="text" id="channelShareCodeInput" placeholder="https://... /channel/AbC123 &mdash; or the code on its own" data-act-on="keydown" data-act="importSharedChannel" data-act-keys="Enter" data-act-prevent data-act-args="[&quot;@self&quot;]">
+        <button type="button" class="secondary" data-act="importSharedChannel" data-act-args="[&quot;@self&quot;]">Add channel</button>
       </div>
       <div id="channelShareImportStatus" style="margin-top:8px;"></div>
     </div>
@@ -31388,13 +31398,13 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
       </div>
       <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Search any TV show or movie to add to your channel, and reorder or remove picks:</p>
       <div class="subnav-pills-bar" id="channelSearchTypeChips" style="margin-bottom:10px;">
-        <button type="button" class="subnav-pill active" id="channelSearchTypeShowsBtn" onclick="setChannelSearchType('tv', this)"><span class="check-icon">&#x2713;</span> Shows</button>
-        <button type="button" class="subnav-pill" id="channelSearchTypeMoviesBtn" onclick="setChannelSearchType('movie', this)">Movies</button>
-        <button type="button" class="subnav-pill" id="channelSearchTypePeopleBtn" onclick="setChannelSearchType('person', this)">Actors &amp; Directors</button>
+        <button type="button" class="subnav-pill active" id="channelSearchTypeShowsBtn" data-act="setChannelSearchType" data-act-args="[&quot;tv&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> Shows</button>
+        <button type="button" class="subnav-pill" id="channelSearchTypeMoviesBtn" data-act="setChannelSearchType" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]">Movies</button>
+        <button type="button" class="subnav-pill" id="channelSearchTypePeopleBtn" data-act="setChannelSearchType" data-act-args="[&quot;person&quot;,&quot;@self&quot;]">Actors &amp; Directors</button>
       </div>
       <div class="row">
-        <input type="text" id="channelSearchInput" placeholder="Search a show by name..." onkeydown="if(event.key==='Enter'){event.preventDefault();runChannelTitleSearch();}">
-        <button type="button" class="secondary" onclick="runChannelTitleSearch()">Search</button>
+        <input type="text" id="channelSearchInput" placeholder="Search a show by name..." data-act-on="keydown" data-act="runChannelTitleSearch" data-act-keys="Enter" data-act-prevent>
+        <button type="button" class="secondary" data-act="runChannelTitleSearch">Search</button>
       </div>
       <div id="channelSearchResult"></div>
       <div id="channelEpisodePicker"></div>
@@ -31404,27 +31414,27 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
       <p style="margin-top:14px; margin-bottom:6px; font-weight:600; font-size:0.85rem;">Picks in this channel: <span id="channelDraftCountBadge" style="color:var(--muted); font-weight:500;"></span></p>
       <div id="channelDraftStats" style="margin:0 0 8px; color:var(--muted); font-size:0.78rem;"></div>
       <div class="row" style="margin-bottom:8px; gap:8px;">
-        <input type="text" id="channelDraftFilterInput" aria-label="Filter these picks" placeholder="Filter these picks by show or episode name..." oninput="setChannelDraftFilter(this.value)">
-        <button type="button" class="secondary lc-btn" id="channelDraftSelectModeBtn" style="flex:none; width:auto; white-space:nowrap;" onclick="toggleChannelDraftSelectMode()">Select</button>
+        <input type="text" id="channelDraftFilterInput" aria-label="Filter these picks" placeholder="Filter these picks by show or episode name..." data-act-on="input" data-act="setChannelDraftFilter" data-act-args="[&quot;@value&quot;]">
+        <button type="button" class="secondary lc-btn" id="channelDraftSelectModeBtn" style="flex:none; width:auto; white-space:nowrap;" data-act="toggleChannelDraftSelectMode">Select</button>
       </div>
       <div id="channelDraftBulkBar" style="display:none; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:8px; padding:8px; border:1px solid var(--border); border-radius:8px; background:var(--surface);">
         <span id="channelDraftSelectionCount" style="font-size:0.8rem; font-weight:600;">0 selected</span>
-        <button type="button" class="secondary lc-btn" onclick="selectAllChannelDraftShown(true)">Select shown</button>
-        <button type="button" class="secondary lc-btn" onclick="selectAllChannelDraftShown(false)">Clear</button>
-        <select id="channelDraftSelectShowSelect" onchange="selectChannelDraftByGroup(this.value); this.selectedIndex = 0;" style="font-size:0.82rem; padding:5px 8px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+        <button type="button" class="secondary lc-btn" data-act="selectAllChannelDraftShown" data-act-args="[true]">Select shown</button>
+        <button type="button" class="secondary lc-btn" data-act="selectAllChannelDraftShown" data-act-args="[false]">Clear</button>
+        <select id="channelDraftSelectShowSelect" data-act="appActSelectChannelDraftGroup" data-act-args="[&quot;@self&quot;,&quot;@value&quot;]" style="font-size:0.82rem; padding:5px 8px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px;">
           <option value="">Select a whole show or season&hellip;</option>
         </select>
         <span style="flex:1;"></span>
-        <button type="button" class="secondary lc-btn" onclick="pairChannelDraftSelection()" title="Play these picks back to back, in this order">Pair</button>
-        <button type="button" class="secondary lc-btn" onclick="unpairChannelDraftSelection()" title="Drop any hand-made pairing on these picks">Unpair</button>
-        <button type="button" class="secondary lc-btn" onclick="moveChannelDraftSelection('top')">To top</button>
-        <button type="button" class="secondary lc-btn" onclick="moveChannelDraftSelection('bottom')">To bottom</button>
-        <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" onclick="removeChannelDraftSelection()">Remove selected</button>
+        <button type="button" class="secondary lc-btn" data-act="pairChannelDraftSelection" title="Play these picks back to back, in this order">Pair</button>
+        <button type="button" class="secondary lc-btn" data-act="unpairChannelDraftSelection" title="Drop any hand-made pairing on these picks">Unpair</button>
+        <button type="button" class="secondary lc-btn" data-act="moveChannelDraftSelection" data-act-args="[&quot;top&quot;]">To top</button>
+        <button type="button" class="secondary lc-btn" data-act="moveChannelDraftSelection" data-act-args="[&quot;bottom&quot;]">To bottom</button>
+        <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" data-act="removeChannelDraftSelection">Remove selected</button>
       </div>
       <div id="channelDraftList"><p style="color:var(--muted); font-size:0.85rem;"><small>Nothing added yet &mdash; search above to get started.</small></p></div>
       <div class="actions" style="margin-top:8px; justify-content:flex-start; gap:8px;">
-        <button type="button" class="secondary lc-btn" onclick="shuffleChannelDraft(); showAddedToast('Channel picks shuffled.');">Shuffle Picks Now</button>
-        <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" onclick="removeAllChannelDraftPicks()">Remove All</button>
+        <button type="button" class="secondary lc-btn" data-act="appActShuffleChannelPicks">Shuffle Picks Now</button>
+        <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" data-act="removeAllChannelDraftPicks">Remove All</button>
       </div>
       <div id="channelVisibilityRow" style="margin-top:12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; max-width:280px;">
         <span style="font-size:0.95rem; font-weight:500; color:var(--text);">Public</span>
@@ -31442,7 +31452,7 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
         <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px;">
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
             <label for="channelPlayOrderSelect" style="font-size:0.85rem; font-weight:600; white-space:nowrap;">Play order:</label>
-            <select id="channelPlayOrderSelect" onchange="applyChannelPlayOrder(this.value)" style="flex:1; min-width:210px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+            <select id="channelPlayOrderSelect" data-act="applyChannelPlayOrder" data-act-args="[&quot;@value&quot;]" style="flex:1; min-width:210px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
               <option value="as-listed">Creation order (as listed)</option>
               <option value="aired-asc">Air date &mdash; oldest first</option>
               <option value="aired-desc">Air date &mdash; newest first</option>
@@ -31458,21 +31468,21 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
           <div style="border-top:1px solid var(--border); padding-top:12px;">
             <p style="margin:0 0 8px; font-weight:600; font-size:0.85rem;">Broadcast schedule</p>
             <label class="channel-rule-row">
-              <input type="checkbox" id="channelDailyRotateCheck" onchange="updateChannelBroadcastControls()">
+              <input type="checkbox" id="channelDailyRotateCheck" data-act="updateChannelBroadcastControls">
               <span>Daily Broadcast Schedule &mdash; run a fresh lineup out of these picks every day</span>
             </label>
             <div id="channelDailyRotateDials" style="display:none; margin:8px 0 0 24px; flex-wrap:wrap; gap:10px;">
               <label class="channel-dial">Shows per day
-                <input type="number" id="channelRotateShowsInput" min="1" max="48" step="1" value="24" onchange="updateChannelBroadcastControls()">
+                <input type="number" id="channelRotateShowsInput" min="1" max="48" step="1" value="24" data-act="updateChannelBroadcastControls">
               </label>
               <label class="channel-dial">Episodes per block
-                <input type="number" id="channelRotateEpisodesInput" min="1" max="12" step="1" value="3" onchange="updateChannelBroadcastControls()">
+                <input type="number" id="channelRotateEpisodesInput" min="1" max="12" step="1" value="3" data-act="updateChannelBroadcastControls">
               </label>
               <label class="channel-dial">Turns over at
-                <input type="time" id="channelRotateTurnoverTime" value="00:00" onchange="updateChannelBroadcastControls()">
+                <input type="time" id="channelRotateTurnoverTime" value="00:00" data-act="updateChannelBroadcastControls">
               </label>
               <label class="channel-dial">In
-                <select id="channelRotateTurnoverZone" onchange="updateChannelBroadcastControls()">
+                <select id="channelRotateTurnoverZone" data-act="updateChannelBroadcastControls">
                   <option value="utc">UTC</option>
                   <option value="local">my local time</option>
                 </select>
@@ -31487,13 +31497,13 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
             <p style="margin:2px 0 0 24px; color:var(--muted); font-size:0.78rem;">Needs Auto-track playback signed in. Once every pick has been seen, the whole channel comes back rather than going dark. Leave it off to keep watched episodes in the rotation.</p>
 
             <label class="channel-rule-row" style="margin-top:10px;">
-              <input type="checkbox" id="channelPairPartsCheck" onchange="updateChannelBroadcastControls()">
+              <input type="checkbox" id="channelPairPartsCheck" data-act="updateChannelBroadcastControls">
               <span>Keep multi-part episodes together</span>
             </label>
             <p id="channelPairPartsHint" style="margin:2px 0 0 24px; color:var(--muted); font-size:0.78rem;">Finds &ldquo;Part 1&rdquo; / &ldquo;Pt. II&rdquo; / &ldquo;(2)&rdquo; in episode titles. Whenever one part is on today, the rest play straight after it instead of turning up tomorrow.</p>
 
             <label class="channel-rule-row" style="margin-top:10px;">
-              <input type="checkbox" id="channelAutoNewEpisodesCheck" onchange="updateChannelBroadcastControls()">
+              <input type="checkbox" id="channelAutoNewEpisodesCheck" data-act="updateChannelBroadcastControls">
               <span>Automatically add new episodes</span>
             </label>
             <div id="channelNewEpisodesRow" style="display:none; margin:6px 0 0 24px;">
@@ -31526,7 +31536,7 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
           <p style="margin:0 0 6px; font-size:0.8rem; font-weight:600; color:var(--muted);">Or use a custom image URL (JPEG, PNG, WebP, GIF):</p>
           <div class="row" style="gap:8px;">
             <input type="url" id="channelPosterUrlInput" placeholder="https://example.com/poster.jpg" style="flex:1; font-size:0.82rem;">
-            <button type="button" class="secondary" style="white-space:nowrap; font-size:0.82rem;" onclick="applyChannelPosterUrl()">Use This</button>
+            <button type="button" class="secondary" style="white-space:nowrap; font-size:0.82rem;" data-act="applyChannelPosterUrl">Use This</button>
           </div>
           <div id="channelPosterUrlPreview" style="margin-top:8px; align-items:center; gap:10px; display:none;">
             <img id="channelPosterUrlImg" src="" alt="Poster preview" style="width:54px; height:80px; object-fit:cover; border-radius:4px; border:2px solid var(--accent);" loading="lazy">
@@ -31537,8 +31547,8 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
 
       <div class="row" style="margin-top:12px;">
         <input type="text" id="channelNameInput" placeholder="Channel name (e.g. Comedy Night)" style="flex:1;">
-        <button type="button" class="primary" id="channelSaveBtn" onclick="saveChannel()">Save</button>
-        <button type="button" id="channelCancelEditBtn" class="secondary" style="display:none;" onclick="cancelEditChannel()">Cancel</button>
+        <button type="button" class="primary" id="channelSaveBtn" data-act="saveChannel">Save</button>
+        <button type="button" id="channelCancelEditBtn" class="secondary" style="display:none;" data-act="cancelEditChannel">Cancel</button>
       </div>
     </div>
   </div>
@@ -31552,19 +31562,19 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
     <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Search to find movies, shows and lists to add to your lists.</p>
     
     <div class="row">
-      <input type="text" id="catalogSearchInput" aria-label="Search by title or list name" placeholder="Search by title or list name..." oninput="handleCatalogSearchInput(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();runCatalogSearch();}">
-      <button type="button" class="primary" onclick="runCatalogSearch()">Search</button>
+      <input type="text" id="catalogSearchInput" aria-label="Search by title or list name" placeholder="Search by title or list name..." data-act="appActCatalogSearchInput" data-act-on="input,keydown" data-act-args="[&quot;@self&quot;,&quot;@event&quot;]">
+      <button type="button" class="primary" data-act="runCatalogSearch">Search</button>
     </div>
 
     <div class="subnav-pills-bar" id="catalogSearchTypeChips" style="margin-top:10px;">
-      <button type="button" class="subnav-pill active" onclick="setCatalogSearchFilter('movie', this)"><span class="check-icon">&#x2713;</span> Movies</button>
-      <button type="button" class="subnav-pill" onclick="setCatalogSearchFilter('tv', this)">Shows</button>
-      <button type="button" class="subnav-pill" onclick="setCatalogSearchFilter('lists', this)">Lists</button>
+      <button type="button" class="subnav-pill active" data-act="setCatalogSearchFilter" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> Movies</button>
+      <button type="button" class="subnav-pill" data-act="setCatalogSearchFilter" data-act-args="[&quot;tv&quot;,&quot;@self&quot;]">Shows</button>
+      <button type="button" class="subnav-pill" data-act="setCatalogSearchFilter" data-act-args="[&quot;lists&quot;,&quot;@self&quot;]">Lists</button>
     </div>
 
     <!-- Quick Filter Dropdowns for Movies & Shows -->
     <div id="catalogSearchFiltersRow" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; align-items:center;">
-      <select id="catalogSearchGenreSelect" aria-label="Filter by genre" onchange="applySearchFilters()" style="flex:1; min-width:130px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+      <select id="catalogSearchGenreSelect" aria-label="Filter by genre" data-act="applySearchFilters" style="flex:1; min-width:130px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
         <option value="">All Genres</option>
         <option value="28,10759">Action &amp; Adventure</option>
         <option value="16">Animation</option>
@@ -31584,7 +31594,7 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
         <option value="37">Western</option>
       </select>
 
-      <select id="catalogSearchYearSelect" aria-label="Filter by year" onchange="applySearchFilters()" style="flex:1; min-width:115px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+      <select id="catalogSearchYearSelect" aria-label="Filter by year" data-act="applySearchFilters" style="flex:1; min-width:115px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
         <option value="">All Years</option>
         <option value="2026">2026</option>
         <option value="2025">2025</option>
@@ -31597,7 +31607,7 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
         <option value="<1990">1980s &amp; Older</option>
       </select>
 
-      <select id="catalogSearchRatingSelect" aria-label="Filter by minimum rating" onchange="applySearchFilters()" style="flex:1; min-width:115px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+      <select id="catalogSearchRatingSelect" aria-label="Filter by minimum rating" data-act="applySearchFilters" style="flex:1; min-width:115px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
         <option value="">All Ratings</option>
         <option value="8.0">8.0+ ⭐</option>
         <option value="7.0">7.0+ ⭐</option>
@@ -31605,7 +31615,7 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
         <option value="5.0">5.0+ ⭐</option>
       </select>
 
-      <button type="button" id="catalogSearchResetFiltersBtn" class="secondary lc-btn" onclick="resetSearchFilters()" style="font-size:0.8rem; padding:6px 10px; height:auto; display:none;">Reset</button>
+      <button type="button" id="catalogSearchResetFiltersBtn" class="secondary lc-btn" data-act="resetSearchFilters" style="font-size:0.8rem; padding:6px 10px; height:auto; display:none;">Reset</button>
     </div>
 
     <div id="catalogSearchResult" style="margin-top:14px;"></div>
@@ -31614,10 +31624,10 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
 <div class="tab-panel" data-tab-panel="settings" id="content-settings" role="tabpanel" aria-labelledby="tab-desktop-settings" hidden>
   <!-- Settings Top Submenu Pills -->
   <div class="subnav-pills-bar" id="settingsSubnavBar">
-    <button type="button" class="subnav-pill active" data-sub="account" onclick="switchSettingsSubmenu('account', this)"><span class="check-icon">&#x2713;</span> Account &amp; Sync</button>
-    <button type="button" class="subnav-pill" data-sub="external" onclick="switchSettingsSubmenu('external', this)">External Accounts &amp; API Keys</button>
-    <button type="button" class="subnav-pill" data-sub="backup" onclick="switchSettingsSubmenu('backup', this)">Presets &amp; Backup</button>
-    <button type="button" class="subnav-pill" data-sub="feedback" onclick="switchSettingsSubmenu('feedback', this)">Feedback and Support</button>
+    <button type="button" class="subnav-pill active" data-sub="account" data-act="switchSettingsSubmenu" data-act-args="[&quot;account&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> Account &amp; Sync</button>
+    <button type="button" class="subnav-pill" data-sub="external" data-act="switchSettingsSubmenu" data-act-args="[&quot;external&quot;,&quot;@self&quot;]">External Accounts &amp; API Keys</button>
+    <button type="button" class="subnav-pill" data-sub="backup" data-act="switchSettingsSubmenu" data-act-args="[&quot;backup&quot;,&quot;@self&quot;]">Presets &amp; Backup</button>
+    <button type="button" class="subnav-pill" data-sub="feedback" data-act="switchSettingsSubmenu" data-act-args="[&quot;feedback&quot;,&quot;@self&quot;]">Feedback and Support</button>
   </div>
 
   <!-- Submenu 2: Presets & Backup -->
@@ -31629,11 +31639,11 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
       <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Save your current setup as a named preset to reuse or download as a file.</p>
       <div class="row">
         <input type="text" id="presetNameInput" placeholder="Preset name (e.g. Home Cinema)">
-        <button type="button" class="secondary lc-btn" onclick="saveCurrentAsPreset()">Save preset</button>
+        <button type="button" class="secondary lc-btn" data-act="saveCurrentAsPreset">Save preset</button>
       </div>
       <div class="actions" style="margin-top:8px;">
-        <button type="button" class="secondary lc-btn" onclick="document.getElementById('presetFileInput').click()">Upload preset file</button>
-        <input type="file" id="presetFileInput" aria-label="Choose a preset file to upload" accept="application/json,.json" style="display:none;" onchange="uploadPresetFile(this)">
+        <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;presetFileInput&quot;]">Upload preset file</button>
+        <input type="file" id="presetFileInput" aria-label="Choose a preset file to upload" accept="application/json,.json" style="display:none;" data-act="uploadPresetFile" data-act-args="[&quot;@self&quot;]">
       </div>
       <div id="presetsList" style="margin-top:10px;"></div>
     </div>
@@ -31643,11 +31653,11 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
       <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Export a complete backup snapshot of your catalogs, custom lists, watchlist, watch history, continue watching, channels, presets, and settings &mdash; or restore from a previous JSON backup.</p>
       <textarea id="configJsonBox" rows="5" style="width:100%;font-family:monospace;font-size:14px;" placeholder="Paste config JSON here to restore..."></textarea>
       <div class="backup-actions-grid" style="margin-top:8px;">
-        <button type="button" class="secondary lc-btn" onclick="exportConfigJson()">Export current</button>
-        <button type="button" class="secondary lc-btn" onclick="importConfigJson()">Import JSON</button>
-        <button type="button" class="secondary lc-btn" onclick="downloadConfigJson()">Download file</button>
-        <button type="button" class="secondary lc-btn" onclick="document.getElementById('configFileInput').click()">Upload file</button>
-        <input type="file" id="configFileInput" aria-label="Choose a backup file to restore" accept="application/json,.json" style="display:none;" onchange="uploadConfigFile(this)">
+        <button type="button" class="secondary lc-btn" data-act="exportConfigJson">Export current</button>
+        <button type="button" class="secondary lc-btn" data-act="importConfigJson">Import JSON</button>
+        <button type="button" class="secondary lc-btn" data-act="downloadConfigJson">Download file</button>
+        <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;configFileInput&quot;]">Upload file</button>
+        <input type="file" id="configFileInput" aria-label="Choose a backup file to restore" accept="application/json,.json" style="display:none;" data-act="uploadConfigFile" data-act-args="[&quot;@self&quot;]">
       </div>
 
       <!-- Importing from an install link is not offered in the new UI: an
@@ -31659,8 +31669,8 @@ ${newUi ? '' : `      <div style="margin-top:16px; border-top:1px solid var(--bo
         <p style="margin:0 0 6px; font-weight:700; font-size:0.88rem;">Import from Install / Configure Link:</p>
         <div class="row">
           <input type="text" id="importLinkInput" placeholder="Paste an install or configure link here">
-          <button type="button" class="secondary lc-btn" onclick="importFromLink()">Import link</button>
-          <button type="button" class="secondary lc-btn" onclick="restoreListsFromLink()" title="Rebuild and restore custom lists &amp; channels from this link into My Lists without altering your catalog shelves">Restore Lists</button>
+          <button type="button" class="secondary lc-btn" data-act="importFromLink">Import link</button>
+          <button type="button" class="secondary lc-btn" data-act="restoreListsFromLink" title="Rebuild and restore custom lists &amp; channels from this link into My Lists without altering your catalog shelves">Restore Lists</button>
         </div>
       </div>
 `}
@@ -31678,9 +31688,9 @@ ${newUi ? '' : `      <div style="margin-top:16px; border-top:1px solid var(--bo
             <div style="font-size:0.8rem; color:var(--muted);">All watched movies, shows, and episodes with timestamps</div>
           </div>
           <div class="export-actions-grid">
-            <button type="button" class="secondary lc-btn" onclick="exportDataToCsv('watch-history', 'trakt')">CSV (Trakt / Simkl)</button>
-            <button type="button" class="secondary lc-btn" onclick="exportDataToCsv('watch-history', 'letterboxd')">CSV (Letterboxd)</button>
-            <button type="button" class="secondary lc-btn" onclick="exportDataToCsv('watch-history', 'standard')">Universal CSV</button>
+            <button type="button" class="secondary lc-btn" data-act="exportDataToCsv" data-act-args="[&quot;watch-history&quot;,&quot;trakt&quot;]">CSV (Trakt / Simkl)</button>
+            <button type="button" class="secondary lc-btn" data-act="exportDataToCsv" data-act-args="[&quot;watch-history&quot;,&quot;letterboxd&quot;]">CSV (Letterboxd)</button>
+            <button type="button" class="secondary lc-btn" data-act="exportDataToCsv" data-act-args="[&quot;watch-history&quot;,&quot;standard&quot;]">Universal CSV</button>
           </div>
         </div>
 
@@ -31690,8 +31700,8 @@ ${newUi ? '' : `      <div style="margin-top:16px; border-top:1px solid var(--bo
             <div style="font-size:0.8rem; color:var(--muted);">Export all created lists, watchlist, and continue watching items</div>
           </div>
           <div class="export-actions-grid">
-            <button type="button" class="secondary lc-btn" onclick="exportDataToCsv('all-custom-lists', 'standard')">Export All (CSV)</button>
-            <button type="button" class="secondary lc-btn" onclick="exportDataToJson('full-library')">Full Library (JSON)</button>
+            <button type="button" class="secondary lc-btn" data-act="exportDataToCsv" data-act-args="[&quot;all-custom-lists&quot;,&quot;standard&quot;]">Export All (CSV)</button>
+            <button type="button" class="secondary lc-btn" data-act="exportDataToJson" data-act-args="[&quot;full-library&quot;]">Full Library (JSON)</button>
           </div>
         </div>
       </div>
@@ -31724,7 +31734,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
     <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Region</h2>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Used for streaming-availability catalogs (Netflix, Disney+, etc.), Stream Releases, and content ratings -- so what shows up actually matches what's available where you are.</p>
-      <select id="regionSelect" aria-label="Streaming region" onchange="localStorage.setItem('myListAddon:region', this.value); saveState();" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+      <select id="regionSelect" aria-label="Streaming region" data-act="appActStoreSettingValue" data-act-args="[&quot;myListAddon:region&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
         ${buildRegionOptionsHtml(initialRegion)}
       </select>
     </div>
@@ -31732,7 +31742,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
     <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Trending &amp; Popular Catalogs</h2>
       <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">
-        <input type="checkbox" id="hideNonDigitalReleasesCheckbox" ${initialHideNonDigitalReleases ? 'checked' : ''} onchange="localStorage.setItem('myListAddon:hideNonDigitalReleases', this.checked ? '1' : '0'); saveState()" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+        <input type="checkbox" id="hideNonDigitalReleasesCheckbox" ${initialHideNonDigitalReleases ? 'checked' : ''} data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:hideNonDigitalReleases&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
         <div>
           <span style="font-weight:600;">Hide items with no digital release</span>
           <p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Removes movies with no known digital or physical release from TMDB Trending Movies and Popular Movies catalogs -- useful for skipping still-in-theaters titles you can't stream or buy yet. Shows aren't affected (no equivalent release-type data exists for TV). Requires Save/Update to take effect on an existing install link.</p>
@@ -31743,7 +31753,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
     <div class="panel" style="margin-top:12px;" id="legacyDedupePanel">
       <h2 class="panel-title">Duplicate Items Across Lists</h2>
       <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">
-        <input type="checkbox" id="dedupeAcrossListsCheckbox" ${initialDedupeAcrossLists ? 'checked' : ''} onchange="localStorage.setItem('myListAddon:dedupeAcrossLists', this.checked ? '1' : '0'); saveState()" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+        <input type="checkbox" id="dedupeAcrossListsCheckbox" ${initialDedupeAcrossLists ? 'checked' : ''} data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:dedupeAcrossLists&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
         <div>
           <span style="font-weight:600;">Remove duplicate items across lists</span>
           <p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Keeps your top list exactly as it is; every list below it has anything already shown in an earlier list removed. Order is whatever order your lists are in here -- drag a list to change which one keeps a shared title. Applies to Live Preview &amp; Editor and to the real catalogs Stremio/Nuvio see once you Save/Update. Requires Save/Update to take effect on an existing install link.</p>
@@ -31754,7 +31764,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
     <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Adult Content &amp; Poster Safety</h2>
       <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">
-        <input type="checkbox" id="adultContentFilterCheckbox" ${initialAdultContentFilter ? 'checked' : ''} onchange="localStorage.setItem('myListAddon:adultContentFilter', this.checked ? '1' : '0'); if (window._listPreviewCache) window._listPreviewCache.clear(); saveState()" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+        <input type="checkbox" id="adultContentFilterCheckbox" ${initialAdultContentFilter ? 'checked' : ''} data-act="appActToggleAdultFilter" data-act-args="[&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
         <div>
           <span style="font-weight:600;">Adult Content Filter</span>
           <p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Filter NSFW posters and replace default unfiltered posters with safe, age-appropriate ones across your catalogs, search, continue watching, and Stremio/Nuvio.</p>
@@ -31766,7 +31776,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       <h2 class="panel-title">Better Posters</h2>
       <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Swap plain poster artwork for <a href="https://btttr.cc/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">BetterPosters</a> &mdash; posters with the genre, rating and tags drawn into the image itself. No API key or account needed. Only movies and shows with an IMDb id are affected; anything else keeps the poster it already had.</p>
       <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-        <input type="checkbox" id="betterPostersCheckbox" ${initialBetterPosters ? 'checked' : ''} onchange="toggleBetterPostersSetting('betterPosters', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+        <input type="checkbox" id="betterPostersCheckbox" ${initialBetterPosters ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPosters&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
         <div>
           <span style="font-weight:600;">Use Better Posters artwork</span>
           <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Applies everywhere: Live Preview, Search, Discover, My Lists, creator profiles and the builders here on the website, and the catalog rows and title pages Stremio and Nuvio request from the add-on. The website updates as soon as you tick this; Stremio/Nuvio need a Save/Update on an existing install link. Poster badges, if you have them on, are drawn over this artwork rather than replacing it, and the Adult Content Filter still overrides it. TV Channel artwork and episode stills are left as they are.</p>
@@ -31775,35 +31785,35 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       <div id="betterPostersOptions" style="display:${initialBetterPosters ? 'flex' : 'none'}; flex-direction:column; gap:10px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
         <div style="font-size:0.85rem; font-weight:700; color:var(--text);">What to draw on the poster</div>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersGenreCheckbox" ${initialBetterPostersGenre ? 'checked' : ''} onchange="toggleBetterPostersSetting('betterPostersGenre', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="betterPostersGenreCheckbox" ${initialBetterPostersGenre ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersGenre&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Genre</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Genre label along the bottom of the poster.</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersRatingCheckbox" ${initialBetterPostersRating ? 'checked' : ''} onchange="toggleBetterPostersSetting('betterPostersRating', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="betterPostersRatingCheckbox" ${initialBetterPostersRating ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRating&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Rating</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Star rating along the bottom of the poster.</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersTrendTagsCheckbox" ${initialBetterPostersTrendTags ? 'checked' : ''} onchange="toggleBetterPostersSetting('betterPostersTrendTags', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="betterPostersTrendTagsCheckbox" ${initialBetterPostersTrendTags ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersTrendTags&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Trend tags</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">A corner tag on titles that are currently trending or newly released.</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersQualityCheckbox" ${initialBetterPostersQuality ? 'checked' : ''} onchange="toggleBetterPostersSetting('betterPostersQuality', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="betterPostersQualityCheckbox" ${initialBetterPostersQuality ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersQuality&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Quality tags</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">4K, Dolby Vision and Atmos badges, where BetterPosters knows them.</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersAgeCheckbox" ${initialBetterPostersAge ? 'checked' : ''} onchange="toggleBetterPostersSetting('betterPostersAge', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="betterPostersAgeCheckbox" ${initialBetterPostersAge ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersAge&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Age rating</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Certification chip (PG-13, TV-MA, and so on).</p>
@@ -31811,14 +31821,14 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
         </label>
         <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
           <label for="betterPostersRatingSourceSelect" style="font-size:0.85rem; font-weight:600; color:var(--text);">Rating source</label>
-          <select id="betterPostersRatingSourceSelect" onchange="toggleBetterPostersSetting('betterPostersRatingSource', this.value)" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+          <select id="betterPostersRatingSourceSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRatingSource&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
             ${betterPostersRatingSourceOptionsHtml}
           </select>
           <p style="margin:0; color:var(--muted); font-size:0.8rem;">Which score the rating is taken from. Only used when Rating is on above.</p>
         </div>
         <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
           <label for="betterPostersLangSelect" style="font-size:0.85rem; font-weight:600; color:var(--text);">Poster language</label>
-          <select id="betterPostersLangSelect" onchange="toggleBetterPostersSetting('betterPostersLang', this.value)" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+          <select id="betterPostersLangSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersLang&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
             ${betterPostersLangOptionsHtml}
           </select>
           <p style="margin:0; color:var(--muted); font-size:0.8rem;">Language BetterPosters draws the title and labels in, where it has artwork for it.</p>
@@ -31833,42 +31843,42 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
         <div style="border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:4px; display:flex; flex-direction:column; gap:10px;">
           <div style="font-size:0.85rem; font-weight:700; color:var(--text);">Website &amp; Dashboard</div>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeAiringNextCheckbox" checked onchange="toggleBadgeSetting('showBadgesAiringNext', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeAiringNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesAiringNext&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Airing Next (Dashboard)</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show premiere, finale, and upcoming air date badges on the Airing Next shelf and provider lists.</p>
             </div>
           </label>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeContinueWatchingCheckbox" checked onchange="toggleBadgeSetting('showBadgesContinueWatching', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesContinueWatching&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Continue Watching (Dashboard)</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show premiere, finale, and air date badges on your in-progress Continue Watching series.</p>
             </div>
           </label>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeWatchlistCheckbox" checked onchange="toggleBadgeSetting('showBadgesWatchlist', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeWatchlistCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesWatchlist&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Watchlist (Dashboard)</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show premiere, finale, and air date badges on shows in your Watchlist that have an episode coming.</p>
             </div>
           </label>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeTraktContinueWatchingCheckbox" checked onchange="toggleBadgeSetting('showBadgesTraktContinueWatching', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeTraktContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesTraktContinueWatching&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Continue Watching (Trakt)</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show premiere, finale, and air date badges on your Trakt Continue Watching series.</p>
             </div>
           </label>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeMdblistUpNextCheckbox" checked onchange="toggleBadgeSetting('showBadgesMdblistUpNext', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeMdblistUpNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesMdblistUpNext&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Up Next (MDBList)</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show premiere, finale, and air date badges on your MDBList Up Next series.</p>
             </div>
           </label>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeCatalogsCheckbox" checked onchange="toggleBadgeSetting('showBadgesCatalogs', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeCatalogsCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesCatalogs&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Catalogs &amp; Live Preview</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show badges on catalog rows, the Catalogs Live Preview &amp; Editor, and catalog See All views.</p>
@@ -31879,28 +31889,28 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
         <div style="border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:4px; display:flex; flex-direction:column; gap:10px;">
           <div style="font-size:0.85rem; font-weight:700; color:var(--text);">Stremio &amp; Nuvio (Artwork Overlays)</div>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeStremioAiringNextCheckbox" checked onchange="toggleBadgeSetting('showBadgesStremioAiringNext', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeStremioAiringNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioAiringNext&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Airing Next Catalogs in Stremio &amp; Nuvio</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Overlay premiere, finale, and date chips on Airing Next poster artwork in Stremio and Nuvio.</p>
             </div>
           </label>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeStremioContinueWatchingCheckbox" checked onchange="toggleBadgeSetting('showBadgesStremioContinueWatching', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeStremioContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioContinueWatching&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Continue Watching Catalogs in Stremio &amp; Nuvio</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Overlay premiere, finale, and date chips on Continue Watching poster artwork in Stremio and Nuvio.</p>
             </div>
           </label>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeStremioWatchlistCheckbox" checked onchange="toggleBadgeSetting('showBadgesStremioWatchlist', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeStremioWatchlistCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioWatchlist&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Watchlist Catalogs in Stremio &amp; Nuvio</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Overlay premiere, finale, and date chips on Watchlist poster artwork in Stremio and Nuvio.</p>
             </div>
           </label>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeStremioCatalogsCheckbox" checked onchange="toggleBadgeSetting('showBadgesStremioCatalogs', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeStremioCatalogsCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioCatalogs&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Other Custom &amp; Provider Catalogs in Stremio &amp; Nuvio</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Overlay badges on MDBList, Trakt, Simkl, and Custom list catalog rows in Stremio and Nuvio.</p>
@@ -31910,42 +31920,42 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
 
         <div style="font-size:0.85rem; font-weight:700; color:var(--text); margin-top:2px;">Badge Types</div>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeAirDateCheckbox" checked onchange="toggleBadgeSetting('showBadgeAirDate', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="badgeAirDateCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeAirDate&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Upcoming Air Date</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Shows the upcoming air date tag (e.g. <code>TODAY</code>, <code>TOMORROW</code>, <code>WED</code>, <code>SEP 4</code>) on upcoming episode posters.</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeSeasonPremiereCheckbox" checked onchange="toggleBadgeSetting('showBadgeSeasonPremiere', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="badgeSeasonPremiereCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonPremiere&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Season Premiere Badge</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Shows the green <code>Season Premiere</code> badge on upcoming Episode 1s (only when the episode has not yet aired).</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeSeasonFinaleCheckbox" checked onchange="toggleBadgeSetting('showBadgeSeasonFinale', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="badgeSeasonFinaleCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonFinale&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Season Finale Badge</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Shows the orange <code>Season Finale</code> badge when the upcoming episode is the final episode of that season.</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeSeasonFinaleDateCheckbox" checked onchange="toggleBadgeSetting('showBadgeSeasonFinaleDate', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="badgeSeasonFinaleDateCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonFinaleDate&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Season Finale Date Badge</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Shows when the season finale will air (e.g. <code>Finale: Nov 12</code>) on mid-season episodes (Episodes 2–9).</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeTmdbRatingCheckbox" checked onchange="toggleTmdbRatingSetting(this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="badgeTmdbRatingCheckbox" checked data-act="toggleTmdbRatingSetting" data-act-args="[&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">TMDb Ratings</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show TMDb star ratings (e.g. <span style="color:#f5c518; font-weight:700;">★ 7.9</span>) beside the year/subtitle across the app (except in Live Preview).</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeWatchedCheckbox" checked onchange="toggleBadgeSetting('showBadgeWatched', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="badgeWatchedCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeWatched&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Watched Status Badges</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Shows the watched badge on movies and shows you've already watched.</p>
@@ -31958,7 +31968,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       <h2 class="panel-title">Watch History &amp; Continue Watching</h2>
       <div style="border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:12px;">
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="autoRecommendCompanionsCheckbox" checked onchange="toggleCompanionRecommendationSetting(this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="autoRecommendCompanionsCheckbox" checked data-act="toggleCompanionRecommendationSetting" data-act-args="[&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Storyline &amp; Companion Recommendations</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Automatically recommend canon bridge movies between seasons (e.g. <em>Demon Slayer: Mugen Train</em>) and sequel films or spin-off series when a show concludes (e.g. <em>Breaking Bad &rarr; El Camino &rarr; Better Call Saul</em>).</p>
@@ -31967,8 +31977,8 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Reset or clear all recorded movies and episodes from your personal Watch History or in-progress Continue Watching.</p>
       <div id="watchHistorySettingsSection" style="display:flex; gap:10px; flex-wrap:wrap;">
-        <button type="button" class="secondary lc-btn" onclick="clearWatchHistoryAll()" style="color:var(--danger); border-color:rgba(255,59,48,0.3); font-weight:600; padding:8px 16px;">Clear Watch History</button>
-        <button type="button" class="secondary lc-btn" onclick="clearContinueWatchingAll()" style="color:var(--danger); border-color:rgba(255,59,48,0.3); font-weight:600; padding:8px 16px;">Clear Continue Watching</button>
+        <button type="button" class="secondary lc-btn" data-act="clearWatchHistoryAll" style="color:var(--danger); border-color:rgba(255,59,48,0.3); font-weight:600; padding:8px 16px;">Clear Watch History</button>
+        <button type="button" class="secondary lc-btn" data-act="clearContinueWatchingAll" style="color:var(--danger); border-color:rgba(255,59,48,0.3); font-weight:600; padding:8px 16px;">Clear Continue Watching</button>
       </div>
     </div>
 
@@ -31990,14 +32000,14 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
         <p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">The Movie Database (TMDB)</p>
         <p style="margin:0 0 10px; color:var(--muted); font-size:0.83rem;">Connect your TMDB account to import your personal lists, watchlist, and favorites, or use a custom API key / Token.</p>
         <div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-          <button type="button" class="secondary" id="tmdbConnectBtn" onclick="startTmdbConnect()">Connect TMDB Account</button>
-          <button type="button" class="secondary" id="tmdbDisconnectBtn" style="display:none;" onclick="disconnectTmdb()">Disconnect</button>
+          <button type="button" class="secondary" id="tmdbConnectBtn" data-act="startTmdbConnect">Connect TMDB Account</button>
+          <button type="button" class="secondary" id="tmdbDisconnectBtn" style="display:none;" data-act="disconnectTmdb">Disconnect</button>
         </div>
         <p id="tmdbConnectStatus" style="margin:0 0 10px; font-size:0.85rem;"></p>
         <details style="font-size:0.85rem; color:var(--muted);">
           <summary style="cursor:pointer; color:var(--text);">Advanced: Custom TMDB API Key / Token</summary>
           <div style="margin-top:8px;">
-            <input type="text" id="tmdbKeyInput" placeholder="Optional: TMDB API Key (v3) or Read Access Token (v4)" value="${escapeHtmlServer(initialTmdbKey)}" oninput="if(this.value.trim()){try{localStorage.removeItem('myListAddon:tmdbDisconnected');}catch(e){}} saveState(); onTmdbKeyInputChanged();" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+            <input type="text" id="tmdbKeyInput" placeholder="Optional: TMDB API Key (v3) or Read Access Token (v4)" value="${escapeHtmlServer(initialTmdbKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;tmdb&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
             <p style="margin-top:4px;"><small>Get a free TMDB API key at <a href="https://www.themoviedb.org/settings/api" target="_blank" style="color:var(--accent-2);">themoviedb.org/settings/api</a>.</small></p>
           </div>
         </details>
@@ -32008,29 +32018,29 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
         <p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">Trakt</p>
         <p style="margin:0 0 10px; color:var(--muted); font-size:0.83rem;">Connect your Trakt account to import your personal lists, watchlist, and collection, or use a custom Client ID.</p>
         <div class="actions trakt-connect-actions">
-          <button type="button" class="secondary" id="traktConnectBtn" onclick="startTraktConnect()">Connect Trakt Account</button>
-          <button type="button" class="secondary" id="traktDeviceBtn" onclick="startTraktDeviceLogin()">Connect with PIN / Code</button>
-          <button type="button" class="secondary" id="traktDisconnectBtn" style="display:none;" onclick="disconnectTrakt()">Disconnect</button>
+          <button type="button" class="secondary" id="traktConnectBtn" data-act="startTraktConnect">Connect Trakt Account</button>
+          <button type="button" class="secondary" id="traktDeviceBtn" data-act="startTraktDeviceLogin">Connect with PIN / Code</button>
+          <button type="button" class="secondary" id="traktDisconnectBtn" style="display:none;" data-act="disconnectTrakt">Disconnect</button>
         </div>
         <p id="traktConnectStatus" style="margin:0 0 10px; font-size:0.85rem;"></p>
         <div id="traktSyncHistoryWrap" style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.04); border-radius:8px; border:1px solid var(--border);">
           <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0;">
-            <input type="checkbox" id="syncTraktHistoryCheckbox" onchange="toggleProviderHistorySync('trakt', this.checked)" style="width:16px; height:16px; cursor:pointer;">
+            <input type="checkbox" id="syncTraktHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;trakt&quot;,&quot;@checked&quot;]" style="width:16px; height:16px; cursor:pointer;">
             <span style="font-weight:600;">Sync Watch History to Trakt</span>
           </label>
           <p style="margin:4px 0 8px 24px; color:var(--muted); font-size:0.78rem;">Automatically sync items marked as watched or played to your Trakt account history.</p>
           <div style="margin-left:24px;">
-            <button type="button" class="secondary lc-btn" id="syncTraktHistoryNowBtn" onclick="syncWatchHistoryToProviderNow('trakt', this)" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
+            <button type="button" class="secondary lc-btn" id="syncTraktHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;trakt&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
           </div>
         </div>
         <details style="font-size:0.85rem; color:var(--muted);">
           <summary style="cursor:pointer; color:var(--text);">Advanced: Custom Trakt Client ID & Username</summary>
           <div style="margin-top:8px;">
             <div class="row">
-              <input type="text" id="traktKeyInput" placeholder="Optional: Trakt Client ID" value="${escapeHtmlServer(initialTraktKey)}" oninput="if(this.value.trim()){try{localStorage.removeItem('myListAddon:traktDisconnected');}catch(e){}} saveState(); scheduleMyTraktListsRefresh();" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+              <input type="text" id="traktKeyInput" placeholder="Optional: Trakt Client ID" value="${escapeHtmlServer(initialTraktKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
             </div>
             <div class="row" style="margin-top:8px;">
-              <input type="text" id="traktUsernameInput" placeholder="Optional: Trakt username" value="${escapeHtmlServer(initialTraktUsername)}" oninput="if(this.value.trim()){try{localStorage.removeItem('myListAddon:traktDisconnected');}catch(e){}} saveState(); scheduleMyTraktListsRefresh();" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+              <input type="text" id="traktUsernameInput" placeholder="Optional: Trakt username" value="${escapeHtmlServer(initialTraktUsername)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
             </div>
             <p style="margin-top:4px;"><small>Create a free Trakt Client ID at <a href="https://trakt.tv/oauth/applications" target="_blank" style="color:var(--accent-2);">trakt.tv/oauth/applications</a>.</small></p>
           </div>
@@ -32042,24 +32052,24 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
         <p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">MDBList</p>
         <p style="margin:0 0 10px; color:var(--muted); font-size:0.83rem;">Connect your MDBList account to import your personal lists, watchlist, and watch history, or use a custom API key.</p>
         <div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-          <button type="button" class="secondary" id="mdblistConnectBtn" onclick="startMdblistConnect()">Connect MDBList Account</button>
-          <button type="button" class="secondary" id="mdblistDisconnectBtn" style="display:none;" onclick="disconnectMdblist()">Disconnect</button>
+          <button type="button" class="secondary" id="mdblistConnectBtn" data-act="startMdblistConnect">Connect MDBList Account</button>
+          <button type="button" class="secondary" id="mdblistDisconnectBtn" style="display:none;" data-act="disconnectMdblist">Disconnect</button>
         </div>
         <p id="mdblistConnectStatus" style="margin:0 0 10px; font-size:0.85rem;"></p>
         <div id="mdblistSyncHistoryWrap" style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.04); border-radius:8px; border:1px solid var(--border);">
           <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0;">
-            <input type="checkbox" id="syncMdblistHistoryCheckbox" onchange="toggleProviderHistorySync('mdblist', this.checked)" style="width:16px; height:16px; cursor:pointer;">
+            <input type="checkbox" id="syncMdblistHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;mdblist&quot;,&quot;@checked&quot;]" style="width:16px; height:16px; cursor:pointer;">
             <span style="font-weight:600;">Sync Watch History to MDBList</span>
           </label>
           <p style="margin:4px 0 8px 24px; color:var(--muted); font-size:0.78rem;">Automatically sync items marked as watched or played to your MDBList account history.</p>
           <div style="margin-left:24px;">
-            <button type="button" class="secondary lc-btn" id="syncMdblistHistoryNowBtn" onclick="syncWatchHistoryToProviderNow('mdblist', this)" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
+            <button type="button" class="secondary lc-btn" id="syncMdblistHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;mdblist&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
           </div>
         </div>
         <details style="font-size:0.85rem; color:var(--muted);">
           <summary style="cursor:pointer; color:var(--text);">Advanced: Custom MDBList API Key</summary>
           <div style="margin-top:8px;">
-            <input type="text" id="mdblistKeyInput" placeholder="Optional: MDBList API key" value="${escapeHtmlServer(initialMdblistKey)}" oninput="if(this.value.trim()){try{localStorage.removeItem('myListAddon:mdblistDisconnected');}catch(e){}} saveState(); scheduleMyMdblistListsRefresh();" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+            <input type="text" id="mdblistKeyInput" placeholder="Optional: MDBList API key" value="${escapeHtmlServer(initialMdblistKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;mdblist&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
             <p style="margin-top:4px;"><small>Get a free MDBList key at <a href="https://mdblist.com/preferences" target="_blank" style="color:var(--accent-2);">mdblist.com/preferences</a>.</small></p>
           </div>
         </details>
@@ -32070,24 +32080,24 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
         <p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">Simkl</p>
         <p style="margin:0 0 10px; color:var(--muted); font-size:0.83rem;">Connect your Simkl account to import your personal lists, watchlist, and history, or use a custom Client ID.</p>
         <div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-          <button type="button" class="secondary" id="simklConnectBtn" onclick="startSimklConnect()">Connect Simkl Account</button>
-          <button type="button" class="secondary" id="simklDisconnectBtn" style="display:none;" onclick="disconnectSimkl()">Disconnect</button>
+          <button type="button" class="secondary" id="simklConnectBtn" data-act="startSimklConnect">Connect Simkl Account</button>
+          <button type="button" class="secondary" id="simklDisconnectBtn" style="display:none;" data-act="disconnectSimkl">Disconnect</button>
         </div>
         <p id="simklConnectStatus" style="margin:0 0 10px; font-size:0.85rem;"></p>
         <div id="simklSyncHistoryWrap" style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.04); border-radius:8px; border:1px solid var(--border);">
           <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0;">
-            <input type="checkbox" id="syncSimklHistoryCheckbox" onchange="toggleProviderHistorySync('simkl', this.checked)" style="width:16px; height:16px; cursor:pointer;">
+            <input type="checkbox" id="syncSimklHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;simkl&quot;,&quot;@checked&quot;]" style="width:16px; height:16px; cursor:pointer;">
             <span style="font-weight:600;">Sync Watch History to Simkl</span>
           </label>
           <p style="margin:4px 0 8px 24px; color:var(--muted); font-size:0.78rem;">Automatically sync items marked as watched or played to your Simkl account history.</p>
           <div style="margin-left:24px;">
-            <button type="button" class="secondary lc-btn" id="syncSimklHistoryNowBtn" onclick="syncWatchHistoryToProviderNow('simkl', this)" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
+            <button type="button" class="secondary lc-btn" id="syncSimklHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;simkl&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
           </div>
         </div>
         <details style="font-size:0.85rem; color:var(--muted);">
           <summary style="cursor:pointer; color:var(--text);">Advanced: Custom Simkl Client ID</summary>
           <div style="margin-top:8px;">
-            <input type="text" id="simklKeyInput" placeholder="Optional: Simkl Client ID" value="${escapeHtmlServer(initialSimklKey)}" oninput="if(this.value.trim()){try{localStorage.removeItem('myListAddon:simklDisconnected');}catch(e){}} saveState(); scheduleMySimklListsRefresh();" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+            <input type="text" id="simklKeyInput" placeholder="Optional: Simkl Client ID" value="${escapeHtmlServer(initialSimklKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;simkl&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
             <p style="margin-top:4px;"><small>Create a free Simkl Client ID at <a href="https://simkl.com/settings/developer/" target="_blank" style="color:var(--accent-2);">simkl.com/settings/developer/</a>.</small></p>
           </div>
         </details>
@@ -32115,7 +32125,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
 
       <div style="margin-bottom:12px;">
         <label for="importTargetListSelect" style="display:block; font-weight:600; font-size:0.88rem; margin-bottom:6px; color:var(--text);">Import to which list?</label>
-        <select id="importTargetListSelect" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.95rem;" onchange="onImportTargetListChange()">
+        <select id="importTargetListSelect" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.95rem;" data-act="onImportTargetListChange">
           <!-- Populated dynamically -->
         </select>
       </div>
@@ -32128,8 +32138,8 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       <div style="margin-bottom:14px;">
         <label style="display:block; font-weight:600; font-size:0.88rem; margin-bottom:6px; color:var(--text);">Select file(s)</label>
         <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-          <button type="button" class="secondary lc-btn" onclick="document.getElementById('unifiedImportFileInput').click()" style="padding:8px 16px;">Select files&hellip;</button>
-          <input type="file" id="unifiedImportFileInput" aria-label="Choose a file to import" multiple accept=".csv,.json,.zip,.txt" style="display:none;" onchange="onUnifiedImportFilesSelected(this)">
+          <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;unifiedImportFileInput&quot;]" style="padding:8px 16px;">Select files&hellip;</button>
+          <input type="file" id="unifiedImportFileInput" aria-label="Choose a file to import" multiple accept=".csv,.json,.zip,.txt" style="display:none;" data-act="onUnifiedImportFilesSelected" data-act-args="[&quot;@self&quot;]">
           <span id="unifiedImportSelectedCount" style="font-size:0.85rem; color:var(--muted);">No files selected</span>
         </div>
       </div>
@@ -32142,7 +32152,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       </div>
 
       <div class="actions" style="margin-top:6px;">
-        <button type="button" class="secondary lc-btn" id="btnUnifiedImport" style="padding:10px 24px; font-size:0.95rem;" onclick="runUnifiedListImport()">Import</button>
+        <button type="button" class="secondary lc-btn" id="btnUnifiedImport" style="padding:10px 24px; font-size:0.95rem;" data-act="runUnifiedListImport">Import</button>
       </div>
 
       <div id="unifiedImportResult" style="margin-top:12px;"></div>
@@ -32157,7 +32167,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
           <h2 class="panel-title" style="margin:0;">Support &amp; Developer Chat</h2>
           <p style="margin:4px 0 0; color:var(--muted); font-size:0.85rem;">Have a question, found a bug, or have a suggestion? Chat directly with the developer.</p>
         </div>
-        <button type="button" class="secondary lc-btn" id="btnNewFeedbackTicket" onclick="toggleNewFeedbackForm(true)" style="padding:6px 14px; font-size:0.85rem;">+ New Message</button>
+        <button type="button" class="secondary lc-btn" id="btnNewFeedbackTicket" data-act="toggleNewFeedbackForm" data-act-args="[true]" style="padding:6px 14px; font-size:0.85rem;">+ New Message</button>
       </div>
 
       <!-- Active Threads Selector -->
@@ -32167,12 +32177,12 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       <div id="supportChatView" style="display:none;">
         <div id="supportMessagesStream" class="support-messages-stream"></div>
         <div class="support-reply-composer" style="margin-top:10px;">
-          <textarea id="supportReplyInput" placeholder="Type a reply to the developer..." onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendUserFeedbackReply();}"></textarea>
-          <button type="button" class="primary lc-btn" id="supportReplySendBtn" onclick="sendUserFeedbackReply()" style="min-height:44px; padding:0 20px;">Send</button>
+          <textarea id="supportReplyInput" placeholder="Type a reply to the developer..." data-act-on="keydown" data-act="appActFeedbackReplyOnEnter" data-act-args="[&quot;@event&quot;]"></textarea>
+          <button type="button" class="primary lc-btn" id="supportReplySendBtn" data-act="sendUserFeedbackReply" style="min-height:44px; padding:0 20px;">Send</button>
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
           <span id="supportChatStatus" style="font-size:0.8rem; color:var(--muted);"></span>
-          <button type="button" class="secondary lc-btn" onclick="refreshUserFeedbackThreads()" style="padding:2px 8px; font-size:0.75rem; border:none; background:none; color:var(--muted); cursor:pointer;">&#x21BB; Refresh</button>
+          <button type="button" class="secondary lc-btn" data-act="refreshUserFeedbackThreads" style="padding:2px 8px; font-size:0.75rem; border:none; background:none; color:var(--muted); cursor:pointer;">&#x21BB; Refresh</button>
         </div>
       </div>
 
@@ -32196,8 +32206,8 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
           <input type="text" id="feedbackContactInput" placeholder="Email, Discord username, etc. (optional)">
         </div>
         <div class="actions" style="margin-top:10px; gap:8px; justify-content:flex-start;">
-          <button type="button" class="primary lc-btn" id="feedbackSubmitBtn" onclick="submitFeedback()">Send Message</button>
-          <button type="button" class="secondary lc-btn" id="feedbackCancelNewBtn" style="display:none;" onclick="toggleNewFeedbackForm(false)">Cancel</button>
+          <button type="button" class="primary lc-btn" id="feedbackSubmitBtn" data-act="submitFeedback">Send Message</button>
+          <button type="button" class="secondary lc-btn" id="feedbackCancelNewBtn" style="display:none;" data-act="toggleNewFeedbackForm" data-act-args="[false]">Cancel</button>
         </div>
         <p id="feedbackStatus" style="margin-top:8px; font-size:0.85rem;"></p>
       </div>
@@ -32340,7 +32350,7 @@ function normalizeListsSubmenu(raw) {
     var catBar = document.getElementById('catalogsFilterBar');
     if (catBar) {
       catBar.querySelectorAll('.subnav-pill').forEach(function(p) {
-        var match = p.getAttribute('data-sub') === catSub || (p.getAttribute('onclick') || '').indexOf("'" + catSub + "'") !== -1;
+        var match = p.getAttribute('data-sub') === catSub;
         p.classList.toggle('active', match);
         var c = p.querySelector('.check-icon'); if (c) c.remove();
         if (match) p.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
@@ -32358,7 +32368,7 @@ function normalizeListsSubmenu(raw) {
     var listBar = document.getElementById('listsSubnavBar');
     if (listBar) {
       listBar.querySelectorAll('.subnav-pill').forEach(function(p) {
-        var match = p.getAttribute('data-sub') === listSub || (p.getAttribute('onclick') || '').indexOf("'" + listSub + "'") !== -1;
+        var match = p.getAttribute('data-sub') === listSub;
         p.classList.toggle('active', match);
         var c = p.querySelector('.check-icon'); if (c) c.remove();
         if (match) p.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
@@ -32378,7 +32388,7 @@ function normalizeListsSubmenu(raw) {
     var chBar = document.getElementById('channelsSubnavBar');
     if (chBar) {
       chBar.querySelectorAll('.subnav-pill').forEach(function(p) {
-        var match = p.getAttribute('data-sub') === chSub || (p.getAttribute('onclick') || '').indexOf("'" + chSub + "'") !== -1;
+        var match = p.getAttribute('data-sub') === chSub;
         p.classList.toggle('active', match);
         var c = p.querySelector('.check-icon'); if (c) c.remove();
         if (match) p.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
@@ -32400,7 +32410,7 @@ function normalizeListsSubmenu(raw) {
     var setBar = document.getElementById('settingsSubnavBar');
     if (setBar) {
       setBar.querySelectorAll('.subnav-pill').forEach(function(p) {
-        var match = p.getAttribute('data-sub') === setSub || (p.getAttribute('onclick') || '').indexOf("'" + setSub + "'") !== -1;
+        var match = p.getAttribute('data-sub') === setSub;
         p.classList.toggle('active', match);
         var c = p.querySelector('.check-icon'); if (c) c.remove();
         if (match) p.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
@@ -32421,7 +32431,7 @@ function normalizeListsSubmenu(raw) {
     var discBar = document.getElementById('discoverSubnavBar');
     if (discBar) {
       discBar.querySelectorAll('.subnav-pill').forEach(function(p) {
-        var match = p.getAttribute('data-sub') === discSub || (p.getAttribute('onclick') || '').indexOf("'" + discSub + "'") !== -1;
+        var match = p.getAttribute('data-sub') === discSub;
         p.classList.toggle('active', match);
         var c = p.querySelector('.check-icon'); if (c) c.remove();
         if (match) p.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
@@ -32590,6 +32600,410 @@ function getListCleanPath(listUrl, name) {
   }
 
   return null;
+}
+
+// --- Provider credentials (P6-8) ---------------------------------------------
+//
+// The keys and tokens for Trakt, MDBList, Simkl and TMDB belong to the
+// account: every config push already sends them up (/api/creator/sync/save,
+// 23_) and every load hands them back. Keeping a second copy in localStorage
+// meant a bearer token for somebody's watch history sat in the browser for
+// any script on the page to read -- SECURITY_AUDIT S-05, and FE-3's "about
+// 80 keys including credentials". From P6-8 the page holds them in memory
+// for the tab's own calls and never writes them to storage again.
+//
+// Reads still fall back to localStorage, so a browser that has been signed in
+// since before P6-8 keeps working; the old copy is dropped only once the
+// account has handed the same credential back (see loadCreatorSync, 22_),
+// never on a guess. myListAddon:creatorKey is deliberately NOT in this list:
+// it is what signs this browser in, and it moves with the new sign-in in
+// P6-9 rather than here.
+const PROVIDER_SECRET_KEYS = [
+  'myListAddon:tmdbKey',
+  'myListAddon:tmdbSessionId',
+  'myListAddon:mdblistKey',
+  'myListAddon:mdblistAccessToken',
+  'myListAddon:traktKey',
+  'myListAddon:traktAccessToken',
+  'myListAddon:simklKey',
+  'myListAddon:simklAccessToken'
+];
+
+// This page's own copy, for as long as the tab is open.
+var _providerSecretsInMemory = {};
+
+function isProviderSecretKey(key) {
+  return PROVIDER_SECRET_KEYS.indexOf(String(key || '')) !== -1;
+}
+
+// Memory first (what this tab knows), then whatever a browser wrote before
+// P6-8. Never null, so callers that compare or trim keep working.
+function readProviderSecret(key) {
+  if (isProviderSecretKey(key) && _providerSecretsInMemory[key]) return _providerSecretsInMemory[key];
+  try { return localStorage.getItem(key) || ''; } catch (e) { return ''; }
+}
+
+// Keeps a credential for this tab. Deliberately does not write storage: that
+// is the whole point of the three functions around this one.
+function rememberProviderSecret(key, value) {
+  if (!isProviderSecretKey(key)) return false;
+  _providerSecretsInMemory[key] = String(value === null || value === undefined ? '' : value);
+  return true;
+}
+
+// Disconnecting, or the account saying we are disconnected: both copies go.
+function forgetProviderSecret(key) {
+  if (!isProviderSecretKey(key)) return false;
+  delete _providerSecretsInMemory[key];
+  try { localStorage.removeItem(key); } catch (e) {}
+  return true;
+}
+
+// The account has just handed the same credential back, so a pre-P6-8 copy in
+// this browser is redundant (and is exactly what P6-8 is removing).
+function dropLegacyProviderSecret(key) {
+  if (!isProviderSecretKey(key)) return false;
+  try { localStorage.removeItem(key); } catch (e) {}
+  return true;
+}
+
+// --- One dispatcher for every control on the page (P6-8) ---------------------
+//
+// Up to P6-8 every button, select and input in this app carried an inline
+// on*= attribute that called a global function by name -- about 470 of them.
+// That is why script-src has to allow 'unsafe-inline' (SECURITY_AUDIT), why
+// the arguments had to be escaped into a JavaScript string *inside* an
+// attribute (the shape escapeAttr gets wrong -- see the FE-02 note in
+// 19_client-search-and-likes.js), and why FE-2 calls the whole client "hidden
+// coupling":
+// a renamed function, or a list name with a quote in it, was a page that
+// silently stopped responding.
+//
+// A control now says what it does in data attributes and one listener per
+// event type, on document, runs it:
+//
+//   data-act          the name of the global function to call
+//   data-act-args     JSON array of arguments. "@self", "@checked", "@value"
+//                     and "@event" stand for the element, its checked state,
+//                     its value, the event; anything else is a literal
+//   data-act-on       the event it answers to, when the element's own tag does
+//                     not say (a text input that searches as you type rather
+//                     than on blur: data-act-on="input"). A comma-separated
+//                     list is allowed; the handler then reads @event to tell
+//                     which one fired -- the catalog search box does.
+//   data-act-stop     stopPropagation() before the call
+//   data-act-prevent  preventDefault() before the call
+//   data-act-keys     a keydown only, and only for that key -- "Enter"
+//   data-act-then     call that function afterwards, with no arguments
+//
+// Which event a control answers to, when it does not say. The tag is enough
+// for all but one shape: a button, a link, a div, a span answer a click; an
+// image answers an error (the poster fallbacks); and a checkbox, select,
+// textarea or file input answers a change. Input events and clicks on a form
+// control are the exceptions, and those carry data-act-on explicitly -- 17
+// text inputs that search as you type, and one readonly field that selects its
+// own text. Getting this wrong is not cosmetic: a file input that answered
+// both input and change would upload the same backup twice.
+//
+// The arguments live in one JSON attribute because appActArgs() escapes them
+// once, for both JSON and HTML, at the point where the markup is built -- so a
+// title carrying a quote is a string in an array rather than a way out of the
+// attribute. 08_quickadd-chart-data.js builds its markup inside the Worker
+// instead (see buildCombinedChartsHtml), and uses appActArgsServer, its
+// server-side twin (09_page-shell.js).
+const APP_ACT_EVENT_TYPES = ['click', 'change', 'input', 'keydown'];
+
+// What a call site writes: appActArgs([name, id, 3, true]) -> the attribute
+// value. undefined/null become '' the way the deleted attribute escaper did,
+// so a call site that passed an absent value keeps passing an empty string.
+function appActArgs(values) {
+  const out = [];
+  const list = values || [];
+  for (let i = 0; i < list.length; i++) {
+    const v = list[i];
+    out.push(v === undefined || v === null ? '' : v);
+  }
+  return escapeAttr(JSON.stringify(out));
+}
+
+// The element an event belongs to: the target itself, or the nearest ancestor
+// carrying data-act. A card with a button in it has a click action on both, so
+// the walk in appActDispatch continues upwards until something stops it.
+function appActElement(node) {
+  let el = node;
+  while (el && typeof el.getAttribute === 'function') {
+    if (el.getAttribute('data-act')) return el;
+    el = el.parentNode || el.parentElement || null;
+  }
+  return null;
+}
+
+function appActReadArgs(el, ev) {
+  const raw = el.getAttribute('data-act-args');
+  if (!raw) return [];
+  let values = null;
+  try {
+    values = JSON.parse(raw);
+  } catch (e) {
+    return [];
+  }
+  if (!Array.isArray(values)) return [];
+  const out = [];
+  for (let i = 0; i < values.length; i++) {
+    const v = values[i];
+    if (v === '@self') out.push(el);
+    else if (v === '@checked') out.push(!!el.checked);
+    else if (v === '@value') out.push(el.value);
+    else if (v === '@event') out.push(ev);
+    else out.push(v);
+  }
+  return out;
+}
+
+// Whether this event is the one the control answers to. See the note above
+// APP_ACT_EVENT_TYPES for where each answer comes from.
+function appActAnswers(el, ev) {
+  if (!ev) return false;
+  const explicit = el.getAttribute('data-act-on');
+  if (explicit) {
+    const list = String(explicit).split(',');
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].trim() === ev.type) return true;
+    }
+    return false;
+  }
+  if (el.hasAttribute('data-act-keys')) return ev.type === 'keydown';
+  const tag = String((el.tagName || el.nodeName || '')).toUpperCase();
+  if (tag === 'IMG') return ev.type === 'error';
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return ev.type === 'change';
+  return ev.type === 'click';
+}
+
+var _appActMissingReported = {};
+
+function appActRunOne(el, ev) {
+  const name = el.getAttribute('data-act') || '';
+  if (!name) return false;
+  if (!appActAnswers(el, ev)) return false;
+  if (el.hasAttribute('data-act-keys')) {
+    const wanted = el.getAttribute('data-act-keys') || '';
+    if (String(ev.key || '') !== wanted) return false;
+  }
+  const fn = window[name];
+  if (typeof fn !== 'function') {
+    // A renamed or misspelled action fails loudly once per name. The inline
+    // handlers it replaced failed silently -- html_checks.py exists because
+    // of exactly that, and now checks these names the same way.
+    if (!_appActMissingReported[name]) {
+      _appActMissingReported[name] = true;
+      console.warn('Delegated action not found: ' + name);
+    }
+    return false;
+  }
+  if (ev && el.hasAttribute('data-act-stop') && typeof ev.stopPropagation === 'function') ev.stopPropagation();
+  if (ev && el.hasAttribute('data-act-prevent') && typeof ev.preventDefault === 'function') ev.preventDefault();
+  fn.apply(null, appActReadArgs(el, ev));
+  const then = el.getAttribute('data-act-then');
+  if (then && typeof window[then] === 'function') window[then]();
+  return true;
+}
+
+function appActDispatch(ev) {
+  if (!ev) return false;
+  let el = appActElement(ev.target || null);
+  let ran = false;
+  // Innermost first, the order the inline handlers ran in. stopPropagation on
+  // a control means "this one, not the card behind it", which is what the
+  // walk honours by stopping rather than by relying on the event's own path.
+  while (el) {
+    const stops = el.hasAttribute('data-act-stop');
+    if (appActRunOne(el, ev)) ran = true;
+    if (stops) break;
+    el = appActElement(el.parentNode || el.parentElement || null);
+  }
+  return ran;
+}
+
+function initDelegatedActions() {
+  if (window._appActBound) return false;
+  window._appActBound = true;
+  const handler = function (ev) { appActDispatch(ev); };
+  for (let i = 0; i < APP_ACT_EVENT_TYPES.length; i++) {
+    document.addEventListener(APP_ACT_EVENT_TYPES[i], handler, false);
+  }
+  // A broken poster fires an error event that does not bubble, so the
+  // fallbacks (handlePosterImgError and friends) are caught in the capture
+  // phase instead.
+  window.addEventListener('error', handler, true);
+  return true;
+}
+
+if (typeof document !== 'undefined' && document.addEventListener) initDelegatedActions();
+
+// --- The handful of behaviours that used to be written inline ---------------
+//
+// Everything else is a plain call to a function that already existed. These
+// are the sites whose inline bodies did something of their own -- write a
+// setting, open a file picker, clear a select -- which is now a named
+// function, so the markup never carries JavaScript again.
+
+// A decorative stop (a drag handle inside a clickable card): stop, do nothing.
+function appActNothing() {
+  return false;
+}
+
+function appActHideAddShelfModal() {
+  const modal = document.getElementById('addShelfModal');
+  if (modal) modal.style.display = 'none';
+  return true;
+}
+
+function appActValidateCreateListName(value) {
+  const btn = document.getElementById('createListModalBtn');
+  if (!btn) return false;
+  const text = String(value === null || value === undefined ? '' : value).trim();
+  btn.disabled = !text;
+  btn.style.opacity = text ? '1' : '0.5';
+  return true;
+}
+
+function appActRefreshDiscoverCharts() {
+  if (typeof renderDiscoverChartsList === 'function') {
+    renderDiscoverChartsList(window._currentDiscoverFilter || 'movie', true);
+  }
+  return true;
+}
+
+function appActRefreshCreatorDashboard() {
+  return (async function () {
+    await loadCreatorSync();
+    renderCreatorDashboard();
+    return true;
+  })();
+}
+
+function appActOpenFilePicker(id) {
+  const input = document.getElementById(String(id || ''));
+  if (!input) return false;
+  input.click();
+  return true;
+}
+
+// The catalog search box is the one control in the app that answered two
+// events: it searches as you type (350ms behind the last keystroke), and Enter
+// runs the same search immediately instead of waiting. Both are one action
+// here, because one element gets one data-act; @event is which one happened.
+function appActCatalogSearchInput(el, ev) {
+  if (ev && ev.type === 'keydown') {
+    if (ev.key !== 'Enter') return false;
+    if (typeof ev.preventDefault === 'function') ev.preventDefault();
+    runCatalogSearch();
+    return true;
+  }
+  handleCatalogSearchInput(el);
+  return true;
+}
+
+function appActSelectChannelDraftGroup(el, value) {
+  selectChannelDraftByGroup(value);
+  if (el) el.selectedIndex = 0;
+  return true;
+}
+
+function appActShuffleChannelPicks() {
+  shuffleChannelDraft();
+  if (typeof showAddedToast === 'function') showAddedToast('Channel picks shuffled.');
+  return true;
+}
+
+function appActStoreSettingValue(key, value) {
+  try { localStorage.setItem(String(key), String(value === null || value === undefined ? '' : value)); } catch (e) {}
+  saveState();
+  return true;
+}
+
+function appActStoreSettingChecked(key, checked) {
+  try { localStorage.setItem(String(key), checked ? '1' : '0'); } catch (e) {}
+  saveState();
+  return true;
+}
+
+// The adult filter is the one preference whose change has to drop the poster
+// preview cache, or the titles it was hiding stay on screen.
+function appActToggleAdultFilter(checked) {
+  try { localStorage.setItem('myListAddon:adultContentFilter', checked ? '1' : '0'); } catch (e) {}
+  if (window._listPreviewCache) window._listPreviewCache.clear();
+  saveState();
+  return true;
+}
+
+// Typing into a provider's key box: the "you disconnected this" flag goes, the
+// state is saved (which is what sends the key up to the account), and that
+// provider's lists are refreshed.
+function appActProviderKeyTyped(provider, value) {
+  const name = String(provider || '');
+  const typed = String(value === null || value === undefined ? '' : value).trim();
+  if (typed) {
+    try { localStorage.removeItem('myListAddon:' + name + 'Disconnected'); } catch (e) {}
+  }
+  saveState();
+  if (name === 'trakt') {
+    if (typeof scheduleMyTraktListsRefresh === 'function') scheduleMyTraktListsRefresh();
+  } else if (name === 'mdblist') {
+    if (typeof scheduleMyMdblistListsRefresh === 'function') scheduleMyMdblistListsRefresh();
+  } else if (name === 'simkl') {
+    if (typeof scheduleMySimklListsRefresh === 'function') scheduleMySimklListsRefresh();
+  } else if (name === 'tmdb') {
+    if (typeof onTmdbKeyInputChanged === 'function') onTmdbKeyInputChanged();
+  }
+  return true;
+}
+
+// Enter in the feedback reply box sends it; Shift+Enter is a new line.
+function appActFeedbackReplyOnEnter(ev) {
+  if (!ev || ev.key !== 'Enter' || ev.shiftKey) return false;
+  if (typeof ev.preventDefault === 'function') ev.preventDefault();
+  if (typeof sendUserFeedbackReply === 'function') sendUserFeedbackReply();
+  return true;
+}
+
+function appActRemoveShelfLinkRow(el) {
+  if (el && typeof el.closest === 'function') {
+    const row = el.closest('.add-shelf-link-row');
+    if (row) row.remove();
+  }
+  if (typeof validateAddShelfModal === 'function') validateAddShelfModal();
+  return true;
+}
+
+function appActScrollToTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  return true;
+}
+
+function appActSelectChannelPosterFromEl(el) {
+  const data = (el && el.dataset) || {};
+  selectChannelPoster(data.poster || '', data.backdrop || '');
+  return true;
+}
+
+function appActSelectText(el) {
+  if (el && typeof el.select === 'function') el.select();
+  return true;
+}
+
+function appActAddChannelToMerge(id, el) {
+  addChannelToMerge(id, el ? el.value : '');
+  if (el) el.value = '';
+  return true;
+}
+
+// The channel builder's "make a Quick Add network channel" shortcut.
+function appActGoToQuickAdd() {
+  const bar = document.getElementById('channelsSubnavBar');
+  const pill = bar && bar.querySelector ? bar.querySelector('button:nth-child(2)') : null;
+  switchChannelsSubmenu('quickadd', pill || null);
+  return true;
 }
 
 function isListAddedToConfig(url, type, slug) {
@@ -33046,8 +33460,7 @@ function switchTab(name) {
       const pills = document.querySelectorAll('#listsSubnavBar .subnav-pill');
       let targetBtn = null;
       pills.forEach((p) => {
-        const oc = p.getAttribute('onclick') || '';
-        if (oc.indexOf("'" + savedSub + "'") !== -1 || oc.indexOf('"' + savedSub + '"') !== -1) {
+        if (p.getAttribute('data-sub') === savedSub) {
           targetBtn = p;
         }
       });
@@ -33064,8 +33477,7 @@ function switchTab(name) {
       const pills = document.querySelectorAll('#settingsSubnavBar .subnav-pill');
       let targetBtn = null;
       pills.forEach((p) => {
-        const oc = p.getAttribute('onclick') || '';
-        if (oc.indexOf("'" + savedSub + "'") !== -1 || oc.indexOf('"' + savedSub + '"') !== -1) {
+        if (p.getAttribute('data-sub') === savedSub) {
           targetBtn = p;
         }
       });
@@ -33082,8 +33494,7 @@ function switchTab(name) {
       const pills = document.querySelectorAll('#channelsSubnavBar .subnav-pill');
       let targetBtn = null;
       pills.forEach((p) => {
-        const oc = p.getAttribute('onclick') || '';
-        if (oc.indexOf("'" + savedSub + "'") !== -1 || oc.indexOf('"' + savedSub + '"') !== -1) {
+        if (p.getAttribute('data-sub') === savedSub) {
           targetBtn = p;
         }
       });
@@ -33121,8 +33532,7 @@ function switchTab(name) {
       const pills = document.querySelectorAll('#discoverSubnavBar .subnav-pill');
       let targetBtn = null;
       pills.forEach((p) => {
-        const oc = p.getAttribute('onclick') || '';
-        if (oc.indexOf("'" + activeFilter + "'") !== -1 || oc.indexOf('"' + activeFilter + '"') !== -1) {
+        if (p.getAttribute('data-sub') === activeFilter) {
           targetBtn = p;
         }
       });
@@ -33346,7 +33756,7 @@ function renderMediaCard(item, options = {}) {
   const styleStr = options.style ? ' style="' + options.style + '"' : '';
 
   const posterImg = poster
-    ? '<img class="live-preview-poster" src="' + escapeAttr(poster) + '" alt="" loading="lazy" onerror="handlePosterImgError(this)">'
+    ? '<img class="live-preview-poster" src="' + escapeAttr(poster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
     : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
 
   const topLeft = options.topLeftHtml !== undefined ? options.topLeftHtml : '';
@@ -33975,15 +34385,20 @@ function showAppAlert(title, message, isSuccess = false) {
         '<span style="color:' + iconColor + '; font-weight:bold; font-size:1.2rem;">' + icon + '</span> ' +
         escapeHtml(title) +
       '</h3>' +
-      '<button type="button" class="action-btn" aria-label="Close" onclick="closeModal()" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
     '</div>' +
     '<p style="margin:0 0 16px; color:var(--muted); font-size:0.9rem; line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;">' + escapeHtml(message) + '</p>' +
     '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
-      '<button type="button" class="primary" onclick="closeModal()" style="min-width:80px; padding:8px 16px;">OK</button>' +
+      '<button type="button" class="primary" data-act="closeModal" style="min-width:80px; padding:8px 16px;">OK</button>' +
     '</div>';
   showModal(html);
 }
 
+// Nothing in this page calls alert() any more (P6-8 replaced every one of
+// them with showToast -- a dialog that blocks the tab, has no styling and
+// cannot be read by the rest of the app is not a notification). This stands
+// only as a net for a call that reaches the window from somewhere this file
+// cannot see, such as a browser extension or an old cached inline script.
 if (typeof window !== 'undefined') {
   window.alert = function(message) {
     if (typeof showToast === 'function') {
@@ -34030,11 +34445,11 @@ function showAppConfirm(title, message, confirmBtnText, onConfirm, isDanger = tr
         '<span style="color:' + iconColor + '; font-weight:bold; font-size:1.2rem;">' + icon + '</span> ' +
         escapeHtml(title) +
       '</h3>' +
-      '<button type="button" class="action-btn" aria-label="Close" onclick="closeModal()" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
     '</div>' +
     '<p style="margin:0 0 16px; color:var(--muted); font-size:0.9rem; line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;">' + escapeHtml(message) + '</p>' +
     '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
-      '<button type="button" class="secondary" onclick="closeModal()" style="min-width:80px; padding:8px 16px;">Cancel</button>' +
+      '<button type="button" class="secondary" data-act="closeModal" style="min-width:80px; padding:8px 16px;">Cancel</button>' +
       '<button type="button" class="primary" id="appConfirmBtn" style="min-width:80px; padding:8px 16px; ' + confirmBtnStyle + '">' + escapeHtml(confirmBtnText || 'Confirm') + '</button>' +
     '</div>';
   showModal(html);
@@ -34200,12 +34615,12 @@ function showAppPrompt(title, message, defaultValue, onConfirm) {
   const html =
     '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">' +
       '<h3 style="margin:0; font-size:1.1rem;">' + escapeHtml(title) + '</h3>' +
-      '<button type="button" class="action-btn" aria-label="Close" onclick="closeModal()" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
     '</div>' +
     (message ? '<p style="margin:0 0 12px; color:var(--muted); font-size:0.9rem;">' + escapeHtml(message) + '</p>' : '') +
     '<input type="text" id="appPromptInput" class="input" style="width:100%; margin-bottom:16px;" value="' + escapeAttr(defaultValue || '') + '" />' +
     '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
-      '<button type="button" class="secondary" onclick="closeModal()" style="min-width:80px; padding:8px 16px;">Cancel</button>' +
+      '<button type="button" class="secondary" data-act="closeModal" style="min-width:80px; padding:8px 16px;">Cancel</button>' +
       '<button type="button" class="primary" id="appPromptBtn" style="min-width:80px; padding:8px 16px;">OK</button>' +
     '</div>';
   showModal(html);
@@ -34522,7 +34937,7 @@ function renderUserFeedbackThreadsUI() {
       const catLabel = t.category ? (t.category.charAt(0).toUpperCase() + t.category.slice(1)) : 'Support';
       const hasAdminReply = Array.isArray(t.messages) && t.messages.some((m) => m.sender === 'admin');
       const badge = hasAdminReply ? ' \uD83D\uDCAC' : '';
-      return '<button type="button" class="support-thread-pill ' + (isActive ? 'active' : '') + '" onclick="selectFeedbackThread(&quot;' + escapeJsAttr(t.id) + '&quot;)">' +
+      return '<button type="button" class="support-thread-pill ' + (isActive ? 'active' : '') + '" data-act="selectFeedbackThread" data-act-args="' + appActArgs([t.id]) + '">' +
         escapeHtml(catLabel) + badge +
       '</button>';
     }).join('');
@@ -35042,19 +35457,19 @@ function sourceRowHtml(u, readonly) {
       '<input type="text" class="url" value="mdblist:watchlist" readonly style="opacity:0.75;">' +
       '</div>' +
       '<div class="testrow">' +
-      '<button type="button" class="btn-test secondary" onclick="testSourceRow(this)">Test</button>' +
+      '<button type="button" class="btn-test secondary" data-act="testSourceRow" data-act-args="[&quot;@self&quot;]">Test</button>' +
       '<div class="testresult"></div>' +
       '</div>' +
       '</div>';
   }
   return '<div class="source-row">' +
     '<div class="row field-row">' +
-    '<input type="text" placeholder="mdblist.com, trakt.tv, or themoviedb.org list URL" class="url" value="' + escapeAttr(u) + '" oninput="checkDuplicateUrl(this)">' +
-    '<button type="button" class="movebtn removebtn remove-source-btn" aria-label="Remove this source" onclick="removeSourceRow(this)" style="display:none;">\u2715</button>' +
+    '<input type="text" placeholder="mdblist.com, trakt.tv, or themoviedb.org list URL" class="url" value="' + escapeAttr(u) + '" data-act-on="input" data-act="checkDuplicateUrl" data-act-args="[&quot;@self&quot;]">' +
+    '<button type="button" class="movebtn removebtn remove-source-btn" aria-label="Remove this source" data-act="removeSourceRow" data-act-args="[&quot;@self&quot;]" style="display:none;">\u2715</button>' +
     '</div>' +
     '<small class="dup-warning" style="display:none;">\u26a0 Already added elsewhere in this list.</small>' +
     '<div class="testrow">' +
-    '<button type="button" class="btn-test secondary" onclick="testSourceRow(this)">Test</button>' +
+    '<button type="button" class="btn-test secondary" data-act="testSourceRow" data-act-args="[&quot;@self&quot;]">Test</button>' +
     '<div class="testresult"></div>' +
     '</div>' +
     '</div>';
@@ -35098,7 +35513,7 @@ function channelSourceRowHtml(u) {
   }
   return '<div class="source-row">' +
     '<p style="margin:0;"><small>' + escapeHtml(summary) + ' \u2014 built with the Channels panel above.</small> ' +
-    '<button type="button" class="secondary channelEditBtn" style="padding:4px 10px; min-height:unset;" onclick="editChannel(this)">Edit</button></p>' +
+    '<button type="button" class="secondary channelEditBtn" style="padding:4px 10px; min-height:unset;" data-act="editChannel" data-act-args="[&quot;@self&quot;]">Edit</button></p>' +
     '<input type="hidden" class="url" value="' + escapeAttr(u) + '">' +
     '</div>';
 }
@@ -35196,8 +35611,8 @@ function customListSourceRowHtml(u) {
   }
   return '<div class="source-row">' +
     '<p style="margin:0;"><small>' + escapeHtml(summary) + ' \u2014 built with the Custom List panel above.</small> ' +
-    '<button type="button" class="secondary customListEditBtn" style="padding:4px 10px; min-height:unset;" onclick="editCustomList(this)">Edit</button> ' +
-    '<button type="button" class="secondary customListShareBtn" style="padding:4px 10px; min-height:unset;" onclick="startSaveListFlow(this)">Save List</button></p>' +
+    '<button type="button" class="secondary customListEditBtn" style="padding:4px 10px; min-height:unset;" data-act="editCustomList" data-act-args="[&quot;@self&quot;]">Edit</button> ' +
+    '<button type="button" class="secondary customListShareBtn" style="padding:4px 10px; min-height:unset;" data-act="startSaveListFlow" data-act-args="[&quot;@self&quot;]">Save List</button></p>' +
     publishedLinkHtml +
     '<input type="hidden" class="url" value="' + escapeAttr(u) + '">' +
     '</div>';
@@ -35296,7 +35711,7 @@ function openAddShelfModal() {
   document.getElementById('addShelfModalName').value = '';
   document.getElementById('addShelfModalLinksContainer').innerHTML = 
     '<div class="add-shelf-link-row" style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">' +
-      '<input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd)" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" oninput="onAddShelfModalLinkInput(this); validateAddShelfModal()">' +
+      '<input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd)" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
     '</div>';
   document.getElementById('addShelfModalType').value = 'movie';
   validateAddShelfModal();
@@ -35313,8 +35728,8 @@ function addShelfModalAddLink() {
   div.style.gap = '8px';
   div.style.marginBottom = '12px';
   div.innerHTML = 
-    '<input type="url" class="addShelfModalLinkInput" placeholder="Additional URL" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" oninput="onAddShelfModalLinkInput(this); validateAddShelfModal()">' +
-    '<button type="button" class="lc-btn secondary" aria-label="Remove this URL" style="padding: 12px;" onclick="this.closest(&quot;.add-shelf-link-row&quot;).remove(); validateAddShelfModal()">\u2715</button>';
+    '<input type="url" class="addShelfModalLinkInput" placeholder="Additional URL" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
+    '<button type="button" class="lc-btn secondary" aria-label="Remove this URL" style="padding: 12px;" data-act="appActRemoveShelfLinkRow" data-act-args="[&quot;@self&quot;]">\u2715</button>';
   container.appendChild(div);
   validateAddShelfModal();
 }
@@ -35439,13 +35854,13 @@ function addRow(name, url, type, enabled, group, channelId) {
     '<div class="entry-card-top" style="flex-direction: column;">' +
       '<div class="entry-ctrl-row" style="width: 100%; justify-content: flex-start; margin-bottom: 2px;">' +
         '<div class="entry-pos-wrap" style="display:flex; align-items:center;">' +
-          '<input type="number" class="pos" min="1" title="Type a position number to move this list there" onchange="movePosTo(this)">' +
+          '<input type="number" class="pos" min="1" title="Type a position number to move this list there" data-act="movePosTo" data-act-args="[&quot;@self&quot;]">' +
         '</div>' +
         '<span class="drag-handle ec-btn" title="Drag to reorder" style="cursor:grab; font-size:1rem;">&#9776;</span>' +
-        '<button type="button" class="ec-btn movebtn secondary" onclick="moveRow(this, -1)" title="Move up">&#8593;</button>' +
-        '<button type="button" class="ec-btn movebtn secondary" onclick="moveRow(this, 1)" title="Move down">&#8595;</button>' +
-        ((isCustomList || isChannel) ? ('<button type="button" class="ec-btn secondary" style="margin-left: auto; margin-right: 6px; font-weight:600; padding: 2px 10px;" onclick="' + (isCustomList ? 'editEntryCustomList(this)' : 'editEntryChannel(this)') + '">Edit</button>') : '') +
-        '<button type="button" class="ec-btn movebtn removebtn danger" onclick="removeEntryWithUndo(this)" title="Remove this list" aria-label="Remove this list" style="' + (!(isCustomList || isChannel) ? 'margin-left: auto;' : '') + '">' +
+        '<button type="button" class="ec-btn movebtn secondary" data-act="moveRow" data-act-args="[&quot;@self&quot;,-1]" title="Move up">&#8593;</button>' +
+        '<button type="button" class="ec-btn movebtn secondary" data-act="moveRow" data-act-args="[&quot;@self&quot;,1]" title="Move down">&#8595;</button>' +
+        ((isCustomList || isChannel) ? ('<button type="button" class="ec-btn secondary" style="margin-left: auto; margin-right: 6px; font-weight:600; padding: 2px 10px;" data-act="' + (isCustomList ? 'editEntryCustomList' : 'editEntryChannel') + '" data-act-args="[&quot;@self&quot;]">Edit</button>') : '') +
+        '<button type="button" class="ec-btn movebtn removebtn danger" data-act="removeEntryWithUndo" data-act-args="[&quot;@self&quot;]" title="Remove this list" aria-label="Remove this list" style="' + (!(isCustomList || isChannel) ? 'margin-left: auto;' : '') + '">' +
           '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none;">' +
             '<polyline points="3 6 5 6 21 6"></polyline>' +
             '<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>' +
@@ -35473,7 +35888,7 @@ function addRow(name, url, type, enabled, group, channelId) {
       ? '<p class="watchlist-note"><small>Uses the MDBList API key from Settings.</small></p>'
       : (isChannel || isCustomList || isPremade)
         ? ''
-        : '<button type="button" class="secondary add-source-btn" onclick="addSourceRow(this)">+ Add another source (merge into one catalog)</button>') +
+        : '<button type="button" class="secondary add-source-btn" data-act="addSourceRow" data-act-args="[&quot;@self&quot;]">+ Add another source (merge into one catalog)</button>') +
     '<div class="live-preview-shelf" style="padding:0; margin:0; border:none; background:transparent;"><div class="live-preview-shelf-title"><span class="shelf-drag-handle" title="Drag to reorder catalog">&#x2630;</span><span class="shelf-title-text">' + escapeHtml(name || 'Unnamed') + ' - ' + (type === 'series' ? 'Series' : 'Movies') + '</span><span class="live-preview-shelf-status"></span><button type="button" class="text-action-btn" disabled>See All &rsaquo;</button></div><div class="live-preview-posters"><p style="color:var(--muted); font-size:0.88rem; text-align:center; padding: 20px;"><small>Click "Refresh Preview" above to load posters.</small></p></div></div>';
   container.appendChild(div);
   updateSourceRemoveButtons(div);
@@ -35687,8 +36102,8 @@ async function runMyMdblistLists() {
   const isDisc = localStorage.getItem('myListAddon:mdblistDisconnected') === 'true';
   const keyInput = document.getElementById('mdblistKeyInput');
   const manualKey = keyInput ? keyInput.value.trim() : '';
-  const token = isDisc ? '' : (mdblistAccessToken || localStorage.getItem('myListAddon:mdblistAccessToken') || '');
-  const key = isDisc ? '' : (manualKey || token || localStorage.getItem('myListAddon:mdblistKey') || '');
+  const token = isDisc ? '' : (mdblistAccessToken || readProviderSecret('myListAddon:mdblistAccessToken') || '');
+  const key = isDisc ? '' : (manualKey || token || readProviderSecret('myListAddon:mdblistKey') || '');
   if (!key) {
     box.innerHTML = '<p style="margin-top:10px; color:var(--muted);"><small>Connect your MDBList account in Settings or click <strong>Connect MDBList</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
     return;
@@ -35731,7 +36146,7 @@ async function enrichMdblistAiringNextDates(list) {
   _mdblistAiringNextEnriching = true;
 
   const tkInput = document.getElementById('tmdbKeyInput');
-  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
 
   try {
     const rawCandidates = (window._mdblistRawAiringCandidates && window._mdblistRawAiringCandidates.length)
@@ -35960,7 +36375,7 @@ function renderMyMdblistLists(lists) {
 
     const copyBtn = isHistory
       ? '<button type="button" class="lc-btn secondary myListCopyToCustomBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="mixed">Copy</button>' +
-        '<button type="button" class="lc-btn secondary" onclick="markMdblistHistoryAllWatched(this)">Mark all as Watched</button>'
+        '<button type="button" class="lc-btn secondary" data-act="markMdblistHistoryAllWatched" data-act-args="[&quot;@self&quot;]">Mark all as Watched</button>'
       : (isUpNext
           ? '<button type="button" class="lc-btn secondary myListCopyToCustomBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="series">Copy</button>'
           : (isAiringNext
@@ -35989,8 +36404,8 @@ function renderMyMdblistLists(lists) {
             const isMobileEnd = (i === 2 && previewItems.length > 3);
             const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
             let overlays = '';
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" onclick="event.stopPropagation(); openMdblistUpNextDetailsPage();">' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" onclick="event.stopPropagation(); openMdblistUpNextDetailsPage();">' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="openMdblistUpNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="openMdblistUpNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
             const showMdbUpNextBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesMdblistUpNext') : true;
             const showAirDate = showMdbUpNextBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
@@ -36033,10 +36448,10 @@ function renderMyMdblistLists(lists) {
             const poster = resolveListCardItemPoster(it);
             const epSubtitle = it.episodeTitle || (it.seasonNum != null && it.episodeNum != null ? ('S' + it.seasonNum + 'E' + it.episodeNum) : '');
 
-            const mdbUpNextRemoveBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="mdblist" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from MDBList Watchlist" aria-label="Remove from MDBList Watchlist">\u2715</button>';
+            const mdbUpNextRemoveBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="mdblist" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from MDBList Watchlist" aria-label="Remove from MDBList Watchlist">\u2715</button>';
             return '<div class="list-card-mini-poster-tile mdblist-up-next-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="series">' +
               '<div class="list-card-mini-poster-img-wrap">' +
-                (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="series" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" onerror="handlePosterImgError(this)">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
+                (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="series" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
                 (dateBadge + bottomBadge) +
                 mdbUpNextRemoveBtn +
                 overlays +
@@ -36057,8 +36472,8 @@ function renderMyMdblistLists(lists) {
             const isMobileEnd = (i === 2 && previewItems.length > 3);
             const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
             let overlays = '';
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" onclick="event.stopPropagation(); openMdblistAiringNextDetailsPage();">' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" onclick="event.stopPropagation(); openMdblistAiringNextDetailsPage();">' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="openMdblistAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="openMdblistAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
             const showAiringBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesAiringNext') : true;
             const showAirDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
@@ -36095,10 +36510,10 @@ function renderMyMdblistLists(lists) {
                 };
 
             const poster = resolveListCardItemPoster(it);
-            const mdbAiringNextRemoveBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="mdblist" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from MDBList Watchlist" aria-label="Remove from MDBList Watchlist">\u2715</button>';
+            const mdbAiringNextRemoveBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="mdblist" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from MDBList Watchlist" aria-label="Remove from MDBList Watchlist">\u2715</button>';
             return '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '">' +
               '<div class="list-card-mini-poster-img-wrap">' +
-                (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" onerror="handlePosterImgError(this)">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
+                (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
                 (dateBadge + bottomBadge) +
                 mdbAiringNextRemoveBtn +
                 overlays +
@@ -36117,7 +36532,7 @@ function renderMyMdblistLists(lists) {
       postersHtml = '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + viewType + '"></div>';
     }
 
-    const titleClick = isUpNext ? 'onclick="openMdblistUpNextDetailsPage()"' : (isAiringNext ? 'onclick="openMdblistAiringNextDetailsPage()"' : '');
+    const titleClick = isUpNext ? 'data-act="openMdblistUpNextDetailsPage"' : (isAiringNext ? 'data-act="openMdblistAiringNextDetailsPage"' : '');
 
     return '<div class="list-card" data-list-type="' + (isSingleType ? type : 'mixed') + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(viewType) + '" data-creator="MDBList" data-items="' + escapeAttr(totalCount) + '">' +
       '<div class="list-card-header">' +
@@ -36196,7 +36611,7 @@ document.getElementById('myMdblistListsResult').addEventListener('click', (e) =>
 async function runMyTraktLists() {
   const box = document.getElementById('myTraktListsResult');
   const isDisc = localStorage.getItem('myListAddon:traktDisconnected') === 'true';
-  const token = isDisc ? '' : (traktAccessToken || localStorage.getItem('myListAddon:traktAccessToken') || '');
+  const token = isDisc ? '' : (traktAccessToken || readProviderSecret('myListAddon:traktAccessToken') || '');
   const neutralMsg = '<p style="margin-top:10px; color:var(--muted);"><small>Connect your Trakt account in Settings or click <strong>Connect Trakt</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
 
   if (!token) {
@@ -36246,9 +36661,9 @@ function disconnectMdblist() {
   mdblistAccessToken = '';
   try { window.mdblistAccessToken = ''; } catch (e) {}
   try {
-    localStorage.removeItem('myListAddon:mdblistAccessToken');
+    forgetProviderSecret('myListAddon:mdblistAccessToken');
     localStorage.removeItem('myListAddon:mdblistUsername');
-    localStorage.removeItem('myListAddon:mdblistKey');
+    forgetProviderSecret('myListAddon:mdblistKey');
     localStorage.setItem('myListAddon:mdblistDisconnected', 'true');
   } catch (e) {}
   saveState();
@@ -36259,7 +36674,7 @@ function disconnectMdblist() {
 
 function toggleListsMdblistConnection() {
   const isDisc = localStorage.getItem('myListAddon:mdblistDisconnected') === 'true';
-  const token = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken');
+  const token = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken');
   if (token && !isDisc) {
     disconnectMdblist();
   } else {
@@ -36274,10 +36689,10 @@ function renderMdblistConnectStatus() {
   const disconnectBtn = document.getElementById('mdblistDisconnectBtn');
   const listsBtn = document.getElementById('listsMdblistConnectBtn');
   const isDisc = localStorage.getItem('myListAddon:mdblistDisconnected') === 'true';
-  const token = isDisc ? '' : ((typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '');
+  const token = isDisc ? '' : ((typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '');
   if (!isDisc && token) mdblistAccessToken = token;
   const user = (typeof mdblistUsername !== 'undefined' && mdblistUsername) || (isDisc ? '' : (localStorage.getItem('myListAddon:mdblistUsername') || ''));
-  const key = (input ? input.value.trim() : '') || (isDisc ? '' : (localStorage.getItem('myListAddon:mdblistKey') || ''));
+  const key = (input ? input.value.trim() : '') || (isDisc ? '' : (readProviderSecret('myListAddon:mdblistKey') || ''));
   const isAccountConnected = !isDisc && !!token;
   const hasKey = !isDisc && !!key;
 
@@ -36331,14 +36746,14 @@ function applyMdblistConnection(token, username) {
     } catch (e) {}
   }
   try {
-    localStorage.setItem('myListAddon:mdblistAccessToken', mdblistAccessToken);
+    rememberProviderSecret('myListAddon:mdblistAccessToken', mdblistAccessToken);
   } catch (e) {}
   saveState();
   if (typeof pushCreatorSync === 'function') pushCreatorSync();
   if (typeof showAppAlert === 'function') {
     showAppAlert('MDBList Connected', 'Connected to MDBList.', true);
   } else {
-    alert('Connected to MDBList.');
+    showToast('Connected to MDBList.', 'success');
   }
   renderMdblistConnectStatus();
   scheduleMyMdblistListsRefresh();
@@ -36369,7 +36784,7 @@ function pickUpMdblistTokenFromUrl() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('MDBList Connection Error', msg + (detail ? '\\n\\nDetails: ' + detail : ''), false);
     } else {
-      alert(msg + (detail ? '\\n' + detail : ''));
+      showToast(msg + (detail ? '\\n' + detail : ''), 'error');
     }
     params.delete('mdblist_error');
     params.delete('mdblist_error_detail');
@@ -36401,9 +36816,9 @@ function disconnectTrakt() {
   try { window.traktAccessToken = ''; } catch (e) {}
   if (typeof activeTraktToken !== 'undefined') activeTraktToken = null;
   try {
-    localStorage.removeItem('myListAddon:traktAccessToken');
+    forgetProviderSecret('myListAddon:traktAccessToken');
     localStorage.removeItem('myListAddon:traktUsername');
-    localStorage.removeItem('myListAddon:traktKey');
+    forgetProviderSecret('myListAddon:traktKey');
     localStorage.setItem('myListAddon:traktDisconnected', 'true');
   } catch (e) {}
   saveState();
@@ -36417,7 +36832,7 @@ function disconnectTrakt() {
 
 function toggleListsTraktConnection() {
   const isDisc = localStorage.getItem('myListAddon:traktDisconnected') === 'true';
-  const token = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken');
+  const token = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken');
   if (token && !isDisc) {
     disconnectTrakt();
   } else {
@@ -36433,10 +36848,10 @@ function renderTraktConnectStatus() {
   const disconnectBtn = document.getElementById('traktDisconnectBtn');
   const listsBtn = document.getElementById('listsTraktConnectBtn');
   const isDisc = localStorage.getItem('myListAddon:traktDisconnected') === 'true';
-  const token = isDisc ? '' : ((typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '');
+  const token = isDisc ? '' : ((typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '');
   if (!isDisc && token) traktAccessToken = token;
   const user = (userInput ? userInput.value.trim() : '') || (isDisc ? '' : (localStorage.getItem('myListAddon:traktUsername') || ''));
-  const key = (keyInput ? keyInput.value.trim() : '') || (isDisc ? '' : (localStorage.getItem('myListAddon:traktKey') || ''));
+  const key = (keyInput ? keyInput.value.trim() : '') || (isDisc ? '' : (readProviderSecret('myListAddon:traktKey') || ''));
   const isAccountConnected = !isDisc && !!token;
   const hasKey = !isDisc && !!(key || user);
   
@@ -36483,7 +36898,7 @@ function renderTraktConnectStatus() {
 function applyTraktConnection(token, user) {
   traktAccessToken = token;
   try {
-    localStorage.setItem('myListAddon:traktAccessToken', traktAccessToken);
+    rememberProviderSecret('myListAddon:traktAccessToken', traktAccessToken);
     localStorage.removeItem('myListAddon:traktDisconnected');
   } catch (e) {}
   if (user) {
@@ -36498,7 +36913,7 @@ function applyTraktConnection(token, user) {
   if (typeof showAppAlert === 'function') {
     showAppAlert('Trakt Connected', 'Connected to Trakt.', true);
   } else {
-    alert('Connected to Trakt.');
+    showToast('Connected to Trakt.', 'success');
   }
   renderTraktConnectStatus();
   scheduleMyTraktListsRefresh();
@@ -36530,7 +36945,7 @@ function pickUpTraktTokenFromUrl() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Trakt Connection', msg, !isRateLimit);
     } else {
-      alert(msg);
+      showToast(msg, 'error');
     }
     params.delete('trakt_error');
     params.delete('trakt_error_detail');
@@ -36562,7 +36977,7 @@ async function startTraktDeviceLogin(retried) {
   const codeEl = document.getElementById('traktDeviceUserCode');
   const statusEl = document.getElementById('traktDevicePollingStatus');
   const linkEl = document.getElementById('traktDeviceActivateLink');
-  const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:traktKey') || '';
+  const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || readProviderSecret('myListAddon:traktKey') || '';
   
   if (modal) modal.style.display = 'flex';
   if (codeEl) codeEl.innerText = 'LOADING...';
@@ -36587,7 +37002,7 @@ async function startTraktDeviceLogin(retried) {
     if (!data.ok || !data.user_code) {
       if (codeEl) codeEl.innerText = 'ERROR';
       if (statusEl) {
-        statusEl.innerHTML = '<span style="color:var(--danger);">' + escapeHtml(data.error || 'Could not get device code.') + '</span> <button type="button" class="lc-btn secondary" style="margin-left:8px; padding:3px 8px; font-size:0.75rem;" onclick="startTraktDeviceLogin()">Try Again</button>';
+        statusEl.innerHTML = '<span style="color:var(--danger);">' + escapeHtml(data.error || 'Could not get device code.') + '</span> <button type="button" class="lc-btn secondary" style="margin-left:8px; padding:3px 8px; font-size:0.75rem;" data-act="startTraktDeviceLogin">Try Again</button>';
       }
       return;
     }
@@ -36610,7 +37025,7 @@ async function startTraktDeviceLogin(retried) {
       if (Date.now() > expiresAt) {
         clearInterval(_traktDevicePollTimer);
         _traktDevicePollTimer = null;
-        if (statusEl) statusEl.innerHTML = 'Activation code expired. <button type="button" class="lc-btn secondary" style="margin-left:8px; padding:3px 8px; font-size:0.75rem;" onclick="startTraktDeviceLogin()">Get New Code</button>';
+        if (statusEl) statusEl.innerHTML = 'Activation code expired. <button type="button" class="lc-btn secondary" style="margin-left:8px; padding:3px 8px; font-size:0.75rem;" data-act="startTraktDeviceLogin">Get New Code</button>';
         return;
       }
 
@@ -36627,7 +37042,7 @@ async function startTraktDeviceLogin(retried) {
           _traktDevicePollTimer = null;
           traktAccessToken = pollData.access_token;
           try {
-            localStorage.setItem('myListAddon:traktAccessToken', traktAccessToken);
+            rememberProviderSecret('myListAddon:traktAccessToken', traktAccessToken);
           } catch(e) {}
           if (pollData.username) {
             try {
@@ -36658,7 +37073,7 @@ async function startTraktDeviceLogin(retried) {
 
   } catch (err) {
     if (codeEl) codeEl.innerText = 'ERROR';
-    if (statusEl) statusEl.innerHTML = 'Network error requesting device code. <button type="button" class="lc-btn secondary" style="margin-left:8px; padding:3px 8px; font-size:0.75rem;" onclick="startTraktDeviceLogin()">Try Again</button>';
+    if (statusEl) statusEl.innerHTML = 'Network error requesting device code. <button type="button" class="lc-btn secondary" style="margin-left:8px; padding:3px 8px; font-size:0.75rem;" data-act="startTraktDeviceLogin">Try Again</button>';
   }
 }
 
@@ -36708,7 +37123,7 @@ async function enrichTraktAiringNextDates(list) {
   _traktAiringNextEnriching = true;
 
   const tkInput = document.getElementById('tmdbKeyInput');
-  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
 
   try {
     const rawCandidates = (window._traktRawAiringCandidates && window._traktRawAiringCandidates.length)
@@ -36929,7 +37344,7 @@ function renderMyPrivateTraktLists(lists) {
 
     const copyBtn = isHistory
       ? '<button type="button" class="lc-btn secondary myPrivateListCopyToCustomBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="mixed">Copy</button>' +
-        '<button type="button" class="lc-btn secondary" onclick="markTraktHistoryAllWatched(this)">Mark all as Watched</button>'
+        '<button type="button" class="lc-btn secondary" data-act="markTraktHistoryAllWatched" data-act-args="[&quot;@self&quot;]">Mark all as Watched</button>'
       : (isContinueWatching
           ? '<button type="button" class="lc-btn secondary myPrivateListCopyToCustomBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="mixed">Copy</button>'
           : (isAiringNext
@@ -36959,8 +37374,8 @@ function renderMyPrivateTraktLists(lists) {
             const isMobileEnd = (i === 2 && previewItems.length > 3);
             const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
             let overlays = '';
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" onclick="event.stopPropagation(); openTraktContinueWatchingDetailsPage();">' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" onclick="event.stopPropagation(); openTraktContinueWatchingDetailsPage();">' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="openTraktContinueWatchingDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="openTraktContinueWatchingDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
             const showTraktCwBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesTraktContinueWatching') : true;
             const showAirDate = showTraktCwBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
@@ -37010,10 +37425,10 @@ function renderMyPrivateTraktLists(lists) {
 
             return '<div class="list-card-mini-poster-tile trakt-continue-watching-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(it.type || 'mixed') + '">' +
               '<div class="list-card-mini-poster-img-wrap">' +
-                (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || 'series') + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" onerror="handlePosterImgError(this)">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
+                (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || 'series') + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
                 progressOverlay +
                 (dateBadge + bottomBadge) +
-                '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="history" data-list-id="history" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from Trakt History" aria-label="Remove from Trakt History">\u2715</button>' +
+                '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="history" data-list-id="history" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Trakt History" aria-label="Remove from Trakt History">\u2715</button>' +
                 overlays +
               '</div>' +
               '<div class="list-card-mini-poster-name">' + escapeHtml(it.name || it.title || 'Untitled') + '</div>' +
@@ -37032,8 +37447,8 @@ function renderMyPrivateTraktLists(lists) {
             const isMobileEnd = (i === 2 && previewItems.length > 3);
             const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
             let overlays = '';
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" onclick="event.stopPropagation(); openTraktAiringNextDetailsPage();">' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" onclick="event.stopPropagation(); openTraktAiringNextDetailsPage();">' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="openTraktAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="openTraktAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
             const showAiringBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesAiringNext') : true;
             const showAirDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
@@ -37072,9 +37487,9 @@ function renderMyPrivateTraktLists(lists) {
             const traktPoster = resolveListCardItemPoster(it);
             return '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '">' +
               '<div class="list-card-mini-poster-img-wrap">' +
-                (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" onerror="handlePosterImgError(this)">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
+                (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
                 (dateBadge + bottomBadge) +
-                '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from Trakt Watchlist" aria-label="Remove from Trakt Watchlist">\u2715</button>' +
+                '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Trakt Watchlist" aria-label="Remove from Trakt Watchlist">\u2715</button>' +
                 overlays +
               '</div>' +
               '<div class="list-card-mini-poster-name">' + escapeHtml(label.title) + '</div>' +
@@ -37091,7 +37506,7 @@ function renderMyPrivateTraktLists(lists) {
       postersHtml = '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + viewType + '"></div>';
     }
 
-    const titleClick = isContinueWatching ? 'onclick="openTraktContinueWatchingDetailsPage()"' : (isAiringNext ? 'onclick="openTraktAiringNextDetailsPage()"' : '');
+    const titleClick = isContinueWatching ? 'data-act="openTraktContinueWatchingDetailsPage"' : (isAiringNext ? 'data-act="openTraktAiringNextDetailsPage"' : '');
 
     return '<div class="list-card" data-list-type="' + (isSingleType ? type : 'mixed') + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(viewType) + '" data-creator="Trakt" data-items="' + escapeAttr(totalCount) + '">' +
       '<div class="list-card-header">' +
@@ -37145,9 +37560,9 @@ function onTmdbKeyInputChanged() {
   const input = document.getElementById('tmdbKeyInput');
   const val = input ? input.value.trim() : '';
   if (val) {
-    localStorage.setItem('myListAddon:tmdbKey', val);
+    rememberProviderSecret('myListAddon:tmdbKey', val);
   } else {
-    localStorage.removeItem('myListAddon:tmdbKey');
+    forgetProviderSecret('myListAddon:tmdbKey');
   }
   renderTmdbConnectStatus();
   scheduleMyTmdbListsRefresh();
@@ -37161,7 +37576,7 @@ function startTmdbConnect() {
 
 function toggleListsTmdbConnection() {
   const isDisc = localStorage.getItem('myListAddon:tmdbDisconnected') === 'true';
-  const sess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || localStorage.getItem('myListAddon:tmdbSessionId');
+  const sess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || readProviderSecret('myListAddon:tmdbSessionId');
   if (sess && !isDisc) {
     disconnectTmdb();
   } else {
@@ -37180,8 +37595,8 @@ function disconnectTmdb() {
   tmdbUsername = '';
   try { window.tmdbUsername = ''; } catch (e) {}
   try {
-    localStorage.removeItem('myListAddon:tmdbKey');
-    localStorage.removeItem('myListAddon:tmdbSessionId');
+    forgetProviderSecret('myListAddon:tmdbKey');
+    forgetProviderSecret('myListAddon:tmdbSessionId');
     localStorage.removeItem('myListAddon:tmdbAccountId');
     localStorage.removeItem('myListAddon:tmdbUsername');
     localStorage.setItem('myListAddon:tmdbDisconnected', 'true');
@@ -37200,7 +37615,7 @@ function applyTmdbConnection(sess, acc, user) {
   tmdbUsername = user || '';
   try {
     localStorage.removeItem('myListAddon:tmdbDisconnected');
-    localStorage.setItem('myListAddon:tmdbSessionId', tmdbSessionId);
+    rememberProviderSecret('myListAddon:tmdbSessionId', tmdbSessionId);
     if (tmdbAccountId) localStorage.setItem('myListAddon:tmdbAccountId', tmdbAccountId);
     if (tmdbUsername) localStorage.setItem('myListAddon:tmdbUsername', tmdbUsername);
   } catch (e) {}
@@ -37235,7 +37650,7 @@ function pickUpTmdbTokenFromUrl() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('TMDB Connection Error', msg, false);
     } else {
-      alert(msg);
+      showToast(msg, 'error');
     }
     search.delete('tmdb_error');
     search.delete('tmdb_error_detail');
@@ -37252,9 +37667,9 @@ function renderTmdbConnectStatus() {
   const listsConnectBtn = document.getElementById('listsTmdbConnectBtn');
 
   const isDisc = localStorage.getItem('myListAddon:tmdbDisconnected') === 'true';
-  const sess = isDisc ? '' : (tmdbSessionId || localStorage.getItem('myListAddon:tmdbSessionId') || '');
+  const sess = isDisc ? '' : (tmdbSessionId || readProviderSecret('myListAddon:tmdbSessionId') || '');
   const user = isDisc ? '' : (tmdbUsername || localStorage.getItem('myListAddon:tmdbUsername') || '');
-  const key = (input ? input.value.trim() : '') || (isDisc ? '' : (localStorage.getItem('myListAddon:tmdbKey') || ''));
+  const key = (input ? input.value.trim() : '') || (isDisc ? '' : (readProviderSecret('myListAddon:tmdbKey') || ''));
   const isAccountConnected = !isDisc && !!sess;
   const hasKey = !isDisc && !!key;
 
@@ -37289,10 +37704,10 @@ function scheduleMyTmdbListsRefresh() {
 async function runMyTmdbLists() {
   const box = document.getElementById('myTmdbListsResult');
   if (!box) return;
-  const sess = tmdbSessionId || localStorage.getItem('myListAddon:tmdbSessionId') || '';
+  const sess = tmdbSessionId || readProviderSecret('myListAddon:tmdbSessionId') || '';
   const acc = tmdbAccountId || localStorage.getItem('myListAddon:tmdbAccountId') || '';
   const input = document.getElementById('tmdbKeyInput');
-  const key = (input ? input.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const key = (input ? input.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
 
   if (!sess && !acc) {
     box.innerHTML = '<p style="margin-top:10px; color:var(--muted);"><small>Connect your TMDB account in Settings or click <strong>Connect TMDB</strong> above to see your personal lists, watchlist, and favorites here.</small></p>';
@@ -37394,7 +37809,7 @@ function renderMyTmdbLists(lists) {
           const posterType = it.type || (l.contentType === 'series' ? 'series' : 'movie');
           const tmdbTarget = isWatchlist ? 'watchlist' : (isFavorites ? 'favorite' : 'custom');
           const tmdbListId = isWatchlist ? 'watchlist' : (isFavorites ? 'favorite' : listIdStr);
-          const removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="tmdb" data-target="' + tmdbTarget + '" data-list-id="' + escapeAttr(tmdbListId) + '" data-remove-id="' + escapeAttr(it.id) + '" data-media-type="' + escapeAttr(posterType) + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from TMDB" aria-label="Remove from TMDB">\u2715</button>';
+          const removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="tmdb" data-target="' + tmdbTarget + '" data-list-id="' + escapeAttr(tmdbListId) + '" data-remove-id="' + escapeAttr(it.id) + '" data-media-type="' + escapeAttr(posterType) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from TMDB" aria-label="Remove from TMDB">\u2715</button>';
           const tmdbPoster = typeof resolveClientPoster === 'function' ? resolveClientPoster(it, it.poster) : it.poster;
           const ratingSpan = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(it) : '';
           return '<div class="list-card-mini-poster-tile">' +
@@ -37470,9 +37885,9 @@ function disconnectSimkl() {
   try { window.simklUsername = ''; } catch (e) {}
   window._mySimklLists = [];
   try {
-    localStorage.removeItem('myListAddon:simklAccessToken');
+    forgetProviderSecret('myListAddon:simklAccessToken');
     localStorage.removeItem('myListAddon:simklUsername');
-    localStorage.removeItem('myListAddon:simklKey');
+    forgetProviderSecret('myListAddon:simklKey');
     localStorage.setItem('myListAddon:simklDisconnected', 'true');
   } catch (e) {}
   saveState();
@@ -37483,7 +37898,7 @@ function disconnectSimkl() {
 
 function toggleListsSimklConnection() {
   const isDisc = localStorage.getItem('myListAddon:simklDisconnected') === 'true';
-  const token = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken');
+  const token = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken');
   if (token && !isDisc) {
     disconnectSimkl();
   } else {
@@ -37497,7 +37912,7 @@ function applySimklConnection(token, username) {
   simklAccessToken = token;
   try {
     localStorage.removeItem('myListAddon:simklDisconnected');
-    localStorage.setItem('myListAddon:simklAccessToken', simklAccessToken);
+    rememberProviderSecret('myListAddon:simklAccessToken', simklAccessToken);
   } catch (e) {}
   if (username) {
     simklUsername = username;
@@ -37510,7 +37925,7 @@ function applySimklConnection(token, username) {
   if (typeof showAppAlert === 'function') {
     showAppAlert('Simkl Connected', 'Your Simkl account was successfully connected.', true);
   } else {
-    alert('Connected to Simkl.');
+    showToast('Connected to Simkl.', 'success');
   }
   renderSimklConnectStatus();
   scheduleMySimklListsRefresh();
@@ -37550,7 +37965,7 @@ async function pickUpServerConnection() {
       ? 'That account could not be loaded. Please connect it again from Settings.'
       : 'Your account was connected, but this page could not load it. Reload the page to try again.';
     if (typeof showAppAlert === 'function') showAppAlert('Connection', msg, false);
-    else alert(msg);
+    else showToast(msg, 'error');
     return;
   }
   if (provider === 'trakt') applyTraktConnection(data.accessToken, data.username || '');
@@ -37654,7 +38069,7 @@ function pickUpSimklTokenFromUrl() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Simkl Connection Error', msg + (detail ? '\\n\\nDetails: ' + detail : ''), false);
     } else {
-      alert(msg + (detail ? '\\n' + detail : ''));
+      showToast(msg + (detail ? '\\n' + detail : ''), 'error');
     }
     params.delete('simkl_error');
     params.delete('simkl_error_detail');
@@ -37671,10 +38086,10 @@ function renderSimklConnectStatus() {
   const listsBtn = document.getElementById('listsSimklConnectBtn');
 
   const isDisc = localStorage.getItem('myListAddon:simklDisconnected') === 'true';
-  const token = isDisc ? '' : ((typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '');
+  const token = isDisc ? '' : ((typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '');
   if (!isDisc && token) simklAccessToken = token;
   const user = (typeof simklUsername !== 'undefined' && simklUsername) || (isDisc ? '' : (localStorage.getItem('myListAddon:simklUsername') || ''));
-  const key = (input ? input.value.trim() : '') || (isDisc ? '' : (localStorage.getItem('myListAddon:simklKey') || ''));
+  const key = (input ? input.value.trim() : '') || (isDisc ? '' : (readProviderSecret('myListAddon:simklKey') || ''));
   const isAccountConnected = !isDisc && !!token;
   const hasKey = !isDisc && !!key;
 
@@ -37717,9 +38132,9 @@ function scheduleMySimklListsRefresh() {
 async function runMySimklLists() {
   const box = document.getElementById('mySimklListsResult');
   if (!box) return;
-  const token = simklAccessToken || localStorage.getItem('myListAddon:simklAccessToken') || '';
+  const token = simklAccessToken || readProviderSecret('myListAddon:simklAccessToken') || '';
   const input = document.getElementById('simklKeyInput');
-  const key = (input ? input.value.trim() : '') || localStorage.getItem('myListAddon:simklKey') || '';
+  const key = (input ? input.value.trim() : '') || readProviderSecret('myListAddon:simklKey') || '';
 
   const neutralMsg = '<p style="margin-top:10px; color:var(--muted);"><small>Connect your Simkl account in Settings or click <strong>Connect Simkl</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
 
@@ -37768,7 +38183,7 @@ async function enrichSimklAiringNextDates(list) {
   _simklAiringNextEnriching = true;
 
   const tkInput = document.getElementById('tmdbKeyInput');
-  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
 
   try {
     const rawCandidates = (window._simklRawAiringCandidates && window._simklRawAiringCandidates.length)
@@ -37949,7 +38364,7 @@ function renderMySimklLists(lists) {
     const copyBtn = '<button type="button" class="lc-btn secondary myListCopyToCustomBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '">Copy</button>';
 
     const markWatchedBtn = isCompleted
-      ? '<button type="button" class="lc-btn secondary" data-url="' + escapeAttr(l.url) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(type) + '" onclick="markSimklListAllWatched(this)">Mark all as Watched</button>'
+      ? '<button type="button" class="lc-btn secondary" data-url="' + escapeAttr(l.url) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(type) + '" data-act="markSimklListAllWatched" data-act-args="[&quot;@self&quot;]">Mark all as Watched</button>'
       : '';
     const addBtn = '<button type="button" class="lc-btn ' + (added ? 'secondary is-added' : 'primary') + ' myListAddBtn" ' + (added ? 'style="color:var(--danger);"' : '') + ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + type + '">' + (added ? 'Remove' : '+ Add') + '</button>';
 
@@ -37962,14 +38377,14 @@ function renderMySimklLists(lists) {
           const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
           let overlays = '';
           if (isAiringNext) {
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only simklAiringNextViewBtn" style="cursor:pointer;" onclick="event.stopPropagation(); openSimklAiringNextDetailsPage();">' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only simklAiringNextViewBtn" style="cursor:pointer;" onclick="event.stopPropagation(); openSimklAiringNextDetailsPage();">' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only simklAiringNextViewBtn" style="cursor:pointer;" data-act="openSimklAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only simklAiringNextViewBtn" style="cursor:pointer;" data-act="openSimklAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
           } else {
             if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only searchViewListBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-items="' + escapeAttr(totalCount) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
             if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only searchViewListBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-items="' + escapeAttr(totalCount) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
           }
           const simklStatus = isAiringNext ? (it.status || 'watching') : (l.statusKey || (l.url ? l.url.split(':')[3] : 'plantowatch'));
-          const removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="simkl" data-target="status" data-list-id="' + escapeAttr(simklStatus) + '" data-remove-id="' + escapeAttr(it.id) + '" data-media-type="' + escapeAttr(it.type || type) + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from Simkl" aria-label="Remove from Simkl">\u2715</button>';
+          const removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="simkl" data-target="status" data-list-id="' + escapeAttr(simklStatus) + '" data-remove-id="' + escapeAttr(it.id) + '" data-media-type="' + escapeAttr(it.type || type) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Simkl" aria-label="Remove from Simkl">\u2715</button>';
           const showAiringBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesAiringNext') : true;
           const showAirDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
           const showPremiere = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonPremiere') : true);
@@ -38023,7 +38438,7 @@ function renderMySimklLists(lists) {
       posterThumbs = '<p style="margin-top:8px; color:var(--muted);"><small>Nothing scheduled yet.</small></p>';
     }
 
-    const titleClick = isAiringNext ? 'onclick="openSimklAiringNextDetailsPage()"' : '';
+    const titleClick = isAiringNext ? 'data-act="openSimklAiringNextDetailsPage"' : '';
 
     return '<div class="list-card" data-list-type="' + type + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-items="' + escapeAttr(totalCount) + '">' +
       '<div class="list-card-header">' +
@@ -38090,7 +38505,7 @@ async function syncWatchHistoryToProviderNow(provider, btn) {
   
   if (!items.length) {
     if (typeof showAppAlert === 'function') showAppAlert('Empty Watch History', 'Your Watch History is currently empty.', false);
-    else alert('Your Watch History is currently empty.');
+    else showToast('Your Watch History is currently empty.', 'error');
     return;
   }
 
@@ -38100,12 +38515,12 @@ async function syncWatchHistoryToProviderNow(provider, btn) {
     btn.textContent = 'Syncing ' + items.length + ' items\u2026';
   }
 
-  const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
-  const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:traktKey') || '';
-  const mdblistToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
-  const mdblistKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:mdblistKey') || '';
-  const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
-  const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:simklKey') || '';
+  const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
+  const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || readProviderSecret('myListAddon:traktKey') || '';
+  const mdblistToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
+  const mdblistKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || readProviderSecret('myListAddon:mdblistKey') || '';
+  const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
+  const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || readProviderSecret('myListAddon:simklKey') || '';
 
   try {
     const res = await fetch(ORIGIN + '/api/external-sync/history', {
@@ -38130,27 +38545,27 @@ async function syncWatchHistoryToProviderNow(provider, btn) {
     if (!res.ok || !data.ok) {
       const err = data.error || 'Unknown error';
       if (typeof showAppAlert === 'function') showAppAlert(cap + ' Sync Failed', 'Failed to sync to ' + cap + ': ' + err, false);
-      else alert('Failed to sync to ' + cap + ': ' + err);
+      else showToast('Failed to sync to ' + cap + ': ' + err, 'error');
       return;
     }
     const count = data.syncedCount != null ? data.syncedCount : items.length;
     const msg = 'Successfully synced ' + count + ' item' + (count === 1 ? '' : 's') + ' to ' + cap + ' Watch History.';
     if (typeof showAppAlert === 'function') showAppAlert(cap + ' Sync Complete', msg, true);
-    else alert(msg);
+    else showToast(msg, 'error');
   } catch (err) {
     if (btn) {
       btn.disabled = false;
       btn.textContent = origText;
     }
     if (typeof showAppAlert === 'function') showAppAlert(cap + ' Sync Failed', 'Network error syncing to ' + cap + '.', false);
-    else alert('Network error syncing to ' + cap + '.');
+    else showToast('Network error syncing to ' + cap + '.', 'error');
   }
 }
 
 async function syncAllConnectedAccountsNow(btn) {
-  const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
-  const mdblistToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
-  const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
+  const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
+  const mdblistToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
+  const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
 
   const connectedProviders = [];
   if (traktToken) connectedProviders.push('trakt');
@@ -38160,7 +38575,7 @@ async function syncAllConnectedAccountsNow(btn) {
   if (!connectedProviders.length) {
     const msg = 'No external accounts (Trakt, MDBList, Simkl) are connected yet. Connect them under Settings \u2192 External Accounts & API Keys.';
     if (typeof showAppAlert === 'function') showAppAlert('No Accounts Connected', msg, false);
-    else alert(msg);
+    else showToast(msg, 'error');
     return;
   }
 
@@ -38176,15 +38591,15 @@ async function syncSingleItemToConnectedProviders(item, action) {
   const mdblistSync = localStorage.getItem('myListAddon:syncMdblistHistory') === 'true';
   const simklSync = localStorage.getItem('myListAddon:syncSimklHistory') === 'true';
 
-  const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
+  const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
   const traktKeyEl = document.getElementById('traktKeyInput');
-  const traktKey = (traktKeyEl ? traktKeyEl.value.trim() : '') || localStorage.getItem('myListAddon:traktKey') || '';
-  const mdblistToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
+  const traktKey = (traktKeyEl ? traktKeyEl.value.trim() : '') || readProviderSecret('myListAddon:traktKey') || '';
+  const mdblistToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
   const mdblistKeyEl = document.getElementById('mdblistKeyInput');
-  const mdblistKey = (mdblistKeyEl ? mdblistKeyEl.value.trim() : '') || localStorage.getItem('myListAddon:mdblistKey') || '';
-  const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
+  const mdblistKey = (mdblistKeyEl ? mdblistKeyEl.value.trim() : '') || readProviderSecret('myListAddon:mdblistKey') || '';
+  const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
   const simklKeyEl = document.getElementById('simklKeyInput');
-  const simklKey = (simklKeyEl ? simklKeyEl.value.trim() : '') || localStorage.getItem('myListAddon:simklKey') || '';
+  const simklKey = (simklKeyEl ? simklKeyEl.value.trim() : '') || readProviderSecret('myListAddon:simklKey') || '';
 
   const isMovie = item.type === 'movie' || item.kind === 'movie';
   const mediaType = isMovie ? 'movie' : 'series';
@@ -38562,13 +38977,13 @@ async function copyListToCustomList(name, listUrl, contentType, btn, historyMode
       if (typeof showAppAlert === 'function') {
         showAppAlert('Copy Incomplete', errMsg, false);
       } else {
-        alert(errMsg);
+        showToast(errMsg, 'error');
       }
     } else {
       if (typeof showAppAlert === 'function') {
         showAppAlert('No Items', 'That list has no items to copy.', false);
       } else {
-        alert('That list has no items to copy.');
+        showToast('That list has no items to copy.', 'error');
       }
     }
     return;
@@ -38605,7 +39020,7 @@ async function copyListToCustomList(name, listUrl, contentType, btn, historyMode
     if (typeof showAppAlert === 'function') {
       showAppAlert('No Items', 'That list has no items to copy.', false);
     } else {
-      alert('That list has no items to copy.');
+      showToast('That list has no items to copy.', 'error');
     }
     return;
   }
@@ -38637,7 +39052,7 @@ async function copyListToCustomList(name, listUrl, contentType, btn, historyMode
   if (typeof showAppAlert === 'function') {
     showAppAlert(failed.length ? 'Copy Incomplete' : 'List Copied', msg, !failed.length);
   } else {
-    alert(msg);
+    showToast(msg, 'error');
   }
 }
 
@@ -38660,7 +39075,7 @@ async function syncCustomListWithExternalSource(slug, btn, options) {
   if (!listMeta) {
     if (!isSilent) {
       if (typeof showAppAlert === 'function') showAppAlert('Sync Error', 'Could not find list: ' + slug, false);
-      else alert('Could not find list: ' + slug);
+      else showToast('Could not find list: ' + slug, 'error');
     }
     return { ok: false, error: 'list-not-found' };
   }
@@ -38669,7 +39084,7 @@ async function syncCustomListWithExternalSource(slug, btn, options) {
   if (!sourceUrl) {
     if (!isSilent) {
       if (typeof showAppAlert === 'function') showAppAlert('Sync Error', 'This list does not have an external source URL.', false);
-      else alert('This list does not have an external source URL.');
+      else showToast('This list does not have an external source URL.', 'error');
     }
     return { ok: false, error: 'no-source-url' };
   }
@@ -38781,7 +39196,7 @@ async function syncCustomListWithExternalSource(slug, btn, options) {
       } else if (typeof showAppAlert === 'function') {
         showAppAlert('List Synced', msg, false);
       } else {
-        alert(msg);
+        showToast(msg, 'error');
       }
     }
 
@@ -38791,7 +39206,7 @@ async function syncCustomListWithExternalSource(slug, btn, options) {
     if (!isSilent) {
       const errMsg = 'Could not sync list: ' + (err.message || 'network error');
       if (typeof showAppAlert === 'function') showAppAlert('Sync Error', errMsg, false);
-      else alert(errMsg);
+      else showToast(errMsg, 'error');
     }
     return { ok: false, error: err.message || 'sync-failed' };
   } finally {
@@ -38816,7 +39231,7 @@ async function markTraktHistoryAllWatched(btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Trakt Not Connected', 'Please connect your Trakt account in Settings first.', false);
     } else {
-      alert('Connect Trakt first.');
+      showToast('Connect Trakt first.', 'error');
     }
     return;
   }
@@ -38845,7 +39260,7 @@ async function markTraktHistoryAllWatched(btn) {
         if (typeof showAppAlert === 'function') {
           showAppAlert('Network Error', 'Network error fetching Trakt history.', false);
         } else {
-          alert('Network error fetching Trakt history.');
+          showToast('Network error fetching Trakt history.', 'error');
         }
         if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
         return;
@@ -38854,7 +39269,7 @@ async function markTraktHistoryAllWatched(btn) {
         if (typeof showAppAlert === 'function') {
           showAppAlert('Error', data.error || 'Could not fetch Trakt history.', false);
         } else {
-          alert(data.error || 'Could not fetch Trakt history.');
+          showToast(data.error || 'Could not fetch Trakt history.', 'error');
         }
         if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
         return;
@@ -38877,7 +39292,7 @@ async function markTraktHistoryAllWatched(btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('No History', 'No watch history found on your Trakt account.', false);
     } else {
-      alert('No watch history found on your Trakt account.');
+      showToast('No watch history found on your Trakt account.', 'error');
     }
     if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
     return;
@@ -38890,7 +39305,7 @@ async function markTraktHistoryAllWatched(btn) {
   if (whResult.quotaExceeded) {
     const msg = 'Not enough local storage space to save your history. Your browser limits storage to ~5MB. Please delete some large custom lists and try again.';
     if (typeof showAppAlert === 'function') showAppAlert('Storage Full', msg, false);
-    else alert(msg);
+    else showToast(msg, 'error');
     return;
   }
 
@@ -38905,7 +39320,7 @@ async function markTraktHistoryAllWatched(btn) {
   if (typeof showAppAlert === 'function') {
     showAppAlert('Trakt History Synced', msg, true);
   } else {
-    alert(msg);
+    showToast(msg, 'error');
   }
 }
 
@@ -39046,7 +39461,7 @@ async function markMdblistHistoryAllWatched(btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('MDBList Not Connected', 'Please connect your MDBList account or enter an API key in Settings first.', false);
     } else {
-      alert('Connect MDBList first.');
+      showToast('Connect MDBList first.', 'error');
     }
     return;
   }
@@ -39072,7 +39487,7 @@ async function markMdblistHistoryAllWatched(btn) {
       if (typeof showAppAlert === 'function') {
         showAppAlert('Network Error', 'Network error fetching MDBList history (page ' + page + ').', false);
       } else {
-        alert('Network error fetching MDBList history.');
+        showToast('Network error fetching MDBList history.', 'error');
       }
       if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
       return;
@@ -39081,7 +39496,7 @@ async function markMdblistHistoryAllWatched(btn) {
       if (typeof showAppAlert === 'function') {
         showAppAlert('Error', data.error || 'Could not fetch MDBList history.', false);
       } else {
-        alert(data.error || 'Could not fetch MDBList history.');
+        showToast(data.error || 'Could not fetch MDBList history.', 'error');
       }
       if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
       return;
@@ -39099,7 +39514,7 @@ async function markMdblistHistoryAllWatched(btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('No History', detailMsg, false);
     } else {
-      alert(detailMsg);
+      showToast(detailMsg, 'error');
     }
     if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
     return;
@@ -39112,7 +39527,7 @@ async function markMdblistHistoryAllWatched(btn) {
   if (whResult.quotaExceeded) {
     const msg = 'Not enough local storage space to save your history. Your browser limits storage to ~5MB. Please delete some large custom lists and try again.';
     if (typeof showAppAlert === 'function') showAppAlert('Storage Full', msg, false);
-    else alert(msg);
+    else showToast(msg, 'error');
     return;
   }
 
@@ -39124,17 +39539,17 @@ async function markMdblistHistoryAllWatched(btn) {
   if (typeof showAppAlert === 'function') {
     showAppAlert('MDBList History Synced', msg, true);
   } else {
-    alert(msg);
+    showToast(msg, 'error');
   }
 }
 
 async function markSimklListAllWatched(btn) {
-  const token = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
+  const token = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
   if (!token) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Simkl Not Connected', 'Please connect your Simkl account in Settings first.', false);
     } else {
-      alert('Connect Simkl first.');
+      showToast('Connect Simkl first.', 'error');
     }
     return;
   }
@@ -39151,7 +39566,7 @@ async function markSimklListAllWatched(btn) {
       if (typeof showAppAlert === 'function') {
         showAppAlert('No Items', 'No items found in ' + listName + '.', false);
       } else {
-        alert('No items found in ' + listName + '.');
+        showToast('No items found in ' + listName + '.', 'error');
       }
       if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
       return;
@@ -39216,7 +39631,7 @@ async function markSimklListAllWatched(btn) {
     if (whResult.quotaExceeded) {
       const msg = 'Not enough local storage space to save your history. Your browser limits storage to ~5MB. Please delete some large custom lists and try again.';
       if (typeof showAppAlert === 'function') showAppAlert('Storage Full', msg, false);
-      else alert(msg);
+      else showToast(msg, 'error');
       return;
     }
 
@@ -39227,14 +39642,14 @@ async function markSimklListAllWatched(btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Simkl Completed Synced', msg, true);
     } else {
-      alert(msg);
+      showToast(msg, 'error');
     }
   } catch (err) {
     if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
     if (typeof showAppAlert === 'function') {
       showAppAlert('Error', 'Could not mark items as watched: ' + (err.message || 'network error'), false);
     } else {
-      alert('Could not mark items as watched: ' + (err.message || 'network error'));
+      showToast('Could not mark items as watched: ' + (err.message || 'network error'), 'error');
     }
   }
 }
@@ -39844,14 +40259,14 @@ async function runUnifiedListImport() {
 
   if (!discoveredImportCategories.length) {
     if (typeof showAppAlert === 'function') showAppAlert('File Required', 'Please select at least one file to import.', false);
-    else alert('Please select at least one file to import.');
+    else showToast('Please select at least one file to import.', 'error');
     return;
   }
 
   const checkedCatCards = Array.from(document.querySelectorAll('.importCatCheck:checked'));
   if (!checkedCatCards.length) {
     if (typeof showAppAlert === 'function') showAppAlert('Selection Required', 'Please select at least one category/list to import.', false);
-    else alert('Please select at least one category/list to import.');
+    else showToast('Please select at least one category/list to import.', 'error');
     return;
   }
 
@@ -40105,7 +40520,7 @@ async function bulkAddLists(btn) {
   const lines = box.value.split('\\n').map((s) => s.trim()).filter(Boolean);
   if (!lines.length) {
     if (typeof showAppAlert === 'function') showAppAlert('URL Required', 'Paste at least one list URL first, one per line.', false);
-    else alert('Paste at least one list URL first, one per line.');
+    else showToast('Paste at least one list URL first, one per line.', 'error');
     return;
   }
   const mdblistKey = document.getElementById('mdblistKeyInput').value.trim();
@@ -40152,7 +40567,7 @@ let traktPopularCache = null;
 async function ensureTraktPopularLoaded() {
   if (traktPopularCache) return traktPopularCache;
   try {
-    const key = (document.getElementById('traktKeyInput') ? document.getElementById('traktKeyInput').value.trim() : '') || localStorage.getItem('myListAddon:traktKey') || '';
+    const key = (document.getElementById('traktKeyInput') ? document.getElementById('traktKeyInput').value.trim() : '') || readProviderSecret('myListAddon:traktKey') || '';
     const res = await fetch(ORIGIN + '/api/trakt-popular-lists' + (key ? '?traktKey=' + encodeURIComponent(key) : ''));
     if (!res.ok) return [];
     const ct = res.headers.get('content-type') || '';
@@ -40176,42 +40591,35 @@ function escapeHtml(s) {
 }
 function escapeAttr(s) { return escapeHtml(s); }
 
-// escapeAttr is right for a plain attribute and WRONG for a JavaScript string
-// inside one, which is what every onclick="fn(&quot;VALUE&quot;)" handler in
-// this app builds. The HTML parser decodes attribute entities BEFORE the JS
-// parser runs, so escapeHtml's own output re-forms the delimiter it was meant
-// to neutralise -- escaping becomes the delivery mechanism:
+// --- The trap this page no longer has (FE-02, P6-8) ------------------------
 //
-//   value       ");alert(1);//
-//   escapeAttr  &quot;);alert(1);//
-//   markup      onclick="fn(&quot;&quot;);alert(1);//&quot;)"
-//   executed    fn("");alert(1);//")        <- the payload runs
+// Kept as a note rather than as code, because the shape it describes is what
+// P6-8 removed and the tempting fix would be to reach for an escaper again.
+//
+// escapeAttr is right for a plain attribute and WRONG for a JavaScript string
+// inside one, which is what every handler attribute in this app used to build
+// -- fn(&quot;VALUE&quot;). The HTML parser decodes attribute entities BEFORE
+// the JS parser runs, so escapeHtml's own output re-forms the delimiter it was
+// meant to neutralise and escaping becomes the delivery mechanism:
+//
+//   value       ");run(1);//
+//   escapeAttr  &quot;);run(1);//
+//   attribute   fn(&quot;&quot;);run(1);//&quot;)
+//   executed    fn("");run(1);          <- the payload runs
 //
 // Measured, not theorised: a channel id carrying that shape, arriving through
 // a restored backup or a pasted install link, ran script and read the victim's
-// Creator Key out of localStorage.
+// Creator Key out of localStorage. A value that has to survive two decodings
+// needs escaping for both, in that order (JS string first, then HTML), which
+// is what the deleted escapeJsAttr did -- 16_ had a copy too, for the same
+// reason.
 //
-// The value has to survive two decodings, so it needs escaping for both, in
-// that order: JS-string first, then HTML. Backslash-escaping the quote makes
-// the HTML decode yield \\\\" rather than ", which the JS parser reads as a
-// literal quote inside the string instead of the end of it.
-//
-// Not a replacement for escapeAttr -- a plain data-* or title attribute still
-// wants escapeAttr, and running this on one would leave visible backslashes.
-// Use this one only where the value lands inside quotes the browser will
-// execute.
-function escapeJsAttr(s) {
-  return escapeHtml(
-    String(s == null ? '' : s)
-      .replace(/\\\\/g, '\\\\\\\\')
-      .replace(/"/g, '\\\\"')
-      .replace(/'/g, "\\\\'")
-      .replace(/\\r/g, '\\\\r')
-      .replace(/\\n/g, '\\\\n')
-      .replace(/\\u2028/g, '\\\\u2028')
-      .replace(/\\u2029/g, '\\\\u2029')
-  );
-}
+// Nothing in the app builds one any more. A control names its action and hands
+// its arguments over as one JSON attribute (appActArgs, 16_); the dispatcher
+// JSON.parses that attribute and never evaluates it, so the worst a hostile
+// value can be is a string in an array -- see the FE-02 tests in
+// tests/client.test.mjs, which dispatch the old payload through the new path.
+// A plain data-* or title attribute still wants escapeAttr.
 
 function escapeRegex(s) {
   return String(s).replace(/[.*+?^\x24\x7B\x7D()|[\]\\]/g, '\\$&');
@@ -40793,7 +41201,7 @@ async function executeUnifiedListSearch(rawQuery, targetBox) {
   const intent = parseListSearchIntent(q);
   const searchTerm = intent.term || q;
   const tkInput = document.getElementById('tmdbKeyInput');
-  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
   const traktKey = (document.getElementById('traktKeyInput')?.value || '').trim();
 
   const fetches = [
@@ -41098,24 +41506,24 @@ async function fetchListPreviewOnce(listUrl, type, sample) {
   Object.assign(payload, previewCreatorAuth());
   if (isAdultFilterOn) payload.adultContentFilter = true;
   const mkInput = document.getElementById('mdblistKeyInput');
-  payload.mdblistKey = (mkInput && mkInput.value ? mkInput.value.trim() : '') || localStorage.getItem('myListAddon:mdblistKey') || '';
+  payload.mdblistKey = (mkInput && mkInput.value ? mkInput.value.trim() : '') || readProviderSecret('myListAddon:mdblistKey') || '';
   const tkInput = document.getElementById('tmdbKeyInput');
-  payload.tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  payload.tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
   const trkInput = document.getElementById('traktKeyInput');
-  payload.traktKey = (trkInput && trkInput.value ? trkInput.value.trim() : '') || localStorage.getItem('myListAddon:traktKey') || '';
+  payload.traktKey = (trkInput && trkInput.value ? trkInput.value.trim() : '') || readProviderSecret('myListAddon:traktKey') || '';
 
-  const trkToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
+  const trkToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
   if (trkToken) {
     const myTraktUser = (typeof traktUsername !== 'undefined' && traktUsername) || localStorage.getItem('myListAddon:traktUsername') || '';
     const isOwnList = !listUrl || listUrl.startsWith('trakt:') || (myTraktUser && listUrl.toLowerCase().includes('/users/' + myTraktUser.toLowerCase() + '/'));
     if (isOwnList) payload.traktAccessToken = trkToken;
   }
-  const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
+  const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
   if (mdbToken) payload.mdblistAccessToken = mdbToken;
-  const smkToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
+  const smkToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
   if (smkToken) payload.simklAccessToken = smkToken;
   const skInput = document.getElementById('simklKeyInput');
-  payload.simklKey = (skInput && skInput.value ? skInput.value.trim() : '') || localStorage.getItem('myListAddon:simklKey') || '';
+  payload.simklKey = (skInput && skInput.value ? skInput.value.trim() : '') || readProviderSecret('myListAddon:simklKey') || '';
 
   try {
     const res = await fetch(ORIGIN + '/api/preview', {
@@ -41289,20 +41697,20 @@ async function loadPosterSlot(slot) {
               const traktTarget = listUrl === 'trakt:watchlist' ? 'watchlist' : (listUrl === 'trakt:history' ? 'history' : 'custom');
               const slugMatch = listUrl.match(new RegExp('lists/([^/?#]+)'));
               const traktListId = traktTarget === 'custom' ? (slugMatch ? slugMatch[1] : listUrl) : traktTarget;
-              removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="' + escapeAttr(traktTarget) + '" data-list-id="' + escapeAttr(traktListId) + '" data-remove-id="' + escapeAttr(s.id || '') + '" data-media-type="' + escapeAttr(s.type || type || 'movie') + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from Trakt" aria-label="Remove from Trakt">\u2715</button>';
+              removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="' + escapeAttr(traktTarget) + '" data-list-id="' + escapeAttr(traktListId) + '" data-remove-id="' + escapeAttr(s.id || '') + '" data-media-type="' + escapeAttr(s.type || type || 'movie') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Trakt" aria-label="Remove from Trakt">\u2715</button>';
             } else if (isMdblistSlot) {
               const isMdbHist = listUrl === 'mdblist:history' || String(listUrl || '').includes('mdblist.com/history') || (String(listUrl || '').includes('mdblist.com/lists/') && String(listUrl || '').includes('/history'));
               const mdbTarget = listUrl === 'mdblist:watchlist' ? 'watchlist' : (isMdbHist ? 'history' : 'custom');
               const mdbMatch = listUrl.match(new RegExp('lists/[^/]+/([^/?#]+)'));
               const mdbListId = mdbTarget === 'custom' ? (mdbMatch ? mdbMatch[1] : listUrl) : mdbTarget;
-              removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="mdblist" data-target="' + escapeAttr(mdbTarget) + '" data-list-id="' + escapeAttr(mdbListId) + '" data-remove-id="' + escapeAttr(s.id || '') + '" data-media-type="' + escapeAttr(s.type || type || 'movie') + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from MDBList" aria-label="Remove from MDBList">\u2715</button>';
+              removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="mdblist" data-target="' + escapeAttr(mdbTarget) + '" data-list-id="' + escapeAttr(mdbListId) + '" data-remove-id="' + escapeAttr(s.id || '') + '" data-media-type="' + escapeAttr(s.type || type || 'movie') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from MDBList" aria-label="Remove from MDBList">\u2715</button>';
             }
 
             const itemPoster = resolveClientPoster(Object.assign({}, s, { listName, listUrl }), s.poster);
             const ratingSpan = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(s) : '';
             inner += '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(listUrl) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(cardCreator) + '" data-items="' + escapeAttr(exactCount) + '" data-likes="' + escapeAttr(cardLikes) + '">' +
               '<div class="list-card-mini-poster-img-wrap clickable-poster" data-id="' + escapeAttr(s.id || '') + '" data-type="' + escapeAttr(s.type || type || '') + '" data-title="' + escapeAttr(s.name || '') + '" data-poster="' + escapeAttr(itemPoster || '') + '">' +
-                '<img src="' + escapeAttr(itemPoster) + '" alt="" loading="lazy" onerror="handlePosterImgError(this)">' +
+                '<img src="' + escapeAttr(itemPoster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' +
                 removeBtn +
                 '<div class="poster-add-overlay">+</div>' +
                 overlays +
@@ -41330,11 +41738,11 @@ async function loadPosterSlot(slot) {
     // both failed (data.ok is false or rejected)
     slot.className = 'list-card-posters poster-preview-error';
     slot.innerHTML = '<p class="poster-preview-error-msg">Couldn’t load previews for this list.' +
-      ' <button type="button" class="lc-btn secondary" onclick="retryPosterSlot(this)">Retry</button></p>';
+      ' <button type="button" class="lc-btn secondary" data-act="retryPosterSlot" data-act-args="[&quot;@self&quot;]">Retry</button></p>';
   } catch (e) {
     slot.className = 'list-card-posters poster-preview-error';
     slot.innerHTML = '<p class="poster-preview-error-msg">Couldn’t load previews for this list.' +
-      ' <button type="button" class="lc-btn secondary" onclick="retryPosterSlot(this)">Retry</button></p>';
+      ' <button type="button" class="lc-btn secondary" data-act="retryPosterSlot" data-act-args="[&quot;@self&quot;]">Retry</button></p>';
   }
 }
 
@@ -41551,7 +41959,7 @@ document.addEventListener('click', async (e) => {
         if (typeof showAppAlert === 'function') {
           showAppAlert('Could Not Update Like', data.error || 'Unknown error.', false);
         } else {
-          alert('Could not update this like: ' + (data.error || 'unknown error'));
+          showToast('Could not update this like: ' + (data.error || 'unknown error'), 'error');
         }
         return;
       }
@@ -41589,7 +41997,7 @@ document.addEventListener('click', async (e) => {
       if (typeof showAppAlert === 'function') {
         showAppAlert('Network Error', 'Network error while updating this like.', false);
       } else {
-        alert('Network error while updating this like.');
+        showToast('Network error while updating this like.', 'error');
       }
     } finally {
       likeBtn.disabled = false;
@@ -41624,7 +42032,7 @@ document.addEventListener('click', async (e) => {
         if (typeof showAppAlert === 'function') {
           showAppAlert('Could Not Update Like', data.error || 'Unknown error.', false);
         } else {
-          alert('Could not update this like: ' + (data.error || 'unknown error'));
+          showToast('Could not update this like: ' + (data.error || 'unknown error'), 'error');
         }
         return;
       }
@@ -41670,7 +42078,7 @@ document.addEventListener('click', async (e) => {
       if (typeof showAppAlert === 'function') {
         showAppAlert('Network Error', 'Network error while updating this like.', false);
       } else {
-        alert('Network error while updating this like.');
+        showToast('Network error while updating this like.', 'error');
       }
     } finally {
       likeExternalBtn.disabled = false;
@@ -41874,7 +42282,7 @@ async function loadCuratedListsFeed(forceRefresh) {
     }
 
     const likedUrls = [...getLikedListsSet()];
-    const tmdbKey = (document.getElementById('tmdbKeyInput') ? document.getElementById('tmdbKeyInput').value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+    const tmdbKey = (document.getElementById('tmdbKeyInput') ? document.getElementById('tmdbKeyInput').value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
     
     // Pass recent movie IDs and show IDs for rich recommendations
     const sampleMovieIds = movieIds.slice(0, 12);
@@ -42126,7 +42534,7 @@ async function loadCuratedListsFeed(forceRefresh) {
     container.innerHTML =
       '<div style="text-align:center; padding:24px 16px; background:var(--card-bg); border:1px solid var(--border); border-radius:14px;">' +
         '<p style="margin:0 0 10px; font-size:0.88rem; color:var(--muted);">Watch more items or like community lists to build personalized recommendations.</p>' +
-        '<button type="button" class="lc-btn primary" onclick="filterDiscoverShelves(&quot;movie&quot;)">Explore Discover</button>' +
+        '<button type="button" class="lc-btn primary" data-act="filterDiscoverShelves" data-act-args="[&quot;movie&quot;]">Explore Discover</button>' +
       '</div>';
   }
 }
@@ -42522,7 +42930,7 @@ function applySeasonWatchedButton(btn, state) {
 function episodeWatchButtonHtml(ep, isWatched) {
   const hasAired = typeof isEpisodeAired !== 'function' || isEpisodeAired(ep);
   if (hasAired || isWatched) {
-    return '<button type="button" id="btnMarkWatched" class="lc-btn ' + (isWatched ? 'secondary' : 'primary') + '" onclick="toggleEpisodeWatchStatusFromModal()">' +
+    return '<button type="button" id="btnMarkWatched" class="lc-btn ' + (isWatched ? 'secondary' : 'primary') + '" data-act="toggleEpisodeWatchStatusFromModal">' +
       (isWatched ? '<span style="margin-right:4px;">&#x2713;</span> Mark as unwatched' : 'Mark as Watched') +
       '</button>';
   }
@@ -42760,7 +43168,7 @@ function openEpisodeDetails(epNum) {
   const watchBtnHtml = episodeWatchButtonHtml(ep, isWatched);
 
   const innerHtml = 
-    '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+    '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
     '<div style="display:flex; flex-direction:row; gap:32px; flex-wrap:wrap; margin-top:20px;">' +
       '<div style="flex: 0 0 300px; max-width: 100%;">' +
         (still ? '<img src="' + still + '" style="width:100%; border-radius:8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">' : '') +
@@ -42965,7 +43373,7 @@ window.markSeasonWatched = async function(seasonNum, btn) {
   }
 
   const tkInput = document.getElementById('tmdbKeyInput');
-  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
 
   try {
     const res = await fetch(ORIGIN + '/api/season?imdbId=' + encodeURIComponent(d.id) +
@@ -43194,8 +43602,8 @@ function renderItemStorylinesWatchOrder(d, type) {
         (ep.imdbId && typeof isItemWatched === 'function' && isItemWatched(ep.imdbId, ep.tmdbId, ep.imdbId));
 
       const clickHandler = (!isCurrent && partId) ?
-        ' onclick="event.stopPropagation(); openItemDetailsModal(&quot;' + escapeJsAttr(partId) + '&quot;, &quot;' + partType + '&quot;)"' :
-        (isCurrent ? ' onclick="event.stopPropagation(); window.scrollTo({ top: 0, behavior: &quot;smooth&quot; });"' : '');
+        ' data-act="openItemDetailsModal" data-act-stop data-act-args="' + appActArgs([partId, partType]) + '"' :
+        (isCurrent ? ' data-act="appActScrollToTop" data-act-stop"' : '');
 
       // Skipped on the card for the title already open in this modal -- its
       // rating is already shown up in the main info block, so repeating it
@@ -43208,7 +43616,7 @@ function renderItemStorylinesWatchOrder(d, type) {
       return '<div class="item-storyline-card' + (isCurrent ? ' is-current' : '') + '"' + clickHandler + ' title="' + escapeAttr(displayTitle + (isCurrent ? ' (Currently Viewing)' : '')) + '">' +
         '<div class="item-storyline-poster-wrap">' +
           (posterUrl ?
-            '<img src="' + escapeAttr(resolveClientPoster(ep, posterUrl)) + '" alt="" loading="lazy" data-tmdb-id="' + escapeAttr(String(ep.tmdbId || '')) + '" data-poster-kind="' + (isMovie ? 'movie' : 'show') + '" data-poster-title="' + escapeAttr(displayTitle) + '" onerror="handleStorylinePosterError(this)">' :
+            '<img src="' + escapeAttr(resolveClientPoster(ep, posterUrl)) + '" alt="" loading="lazy" data-tmdb-id="' + escapeAttr(String(ep.tmdbId || '')) + '" data-poster-kind="' + (isMovie ? 'movie' : 'show') + '" data-poster-title="' + escapeAttr(displayTitle) + '" data-act="handleStorylinePosterError" data-act-args="[&quot;@self&quot;]">' :
             '<div class="season-header-poster-placeholder"></div>') +
           '<span class="item-storyline-part-badge">Part ' + (ep.part != null ? ep.part : (i + 1)) + '</span>' +
           (isCurrent ? '<span class="item-storyline-current-pill">Current</span>' : '') +
@@ -43234,7 +43642,7 @@ function renderItemStorylinesWatchOrder(d, type) {
           (event.description ? '<p class="item-storyline-saga-desc">' + escapeHtml(event.description) + '</p>' : '') +
         '</div>' +
         '<div class="item-storyline-header-actions">' +
-          '<button type="button" class="lc-btn secondary" onclick="event.stopPropagation(); openStorylineDetails(&quot;' + escapeJsAttr(event.id) + '&quot;)" title="Open complete saga in catalog view">Open Saga</button>' +
+          '<button type="button" class="lc-btn secondary" data-act="openStorylineDetails" data-act-stop data-act-args="' + appActArgs([event.id]) + '" title="Open complete saga in catalog view">Open Saga</button>' +
         '</div>' +
       '</div>' +
       '<div class="storyline-posters-scroll item-storyline-scroll">' +
@@ -43246,7 +43654,7 @@ function renderItemStorylinesWatchOrder(d, type) {
   const pillsHtml = (matchingEvents.length > 1) ?
     '<div class="subnav-pills-bar" style="margin-bottom:16px; flex-wrap:wrap;">' +
       matchingEvents.map((ev, idx) =>
-        '<button type="button" class="subnav-pill' + (idx === 0 ? ' active' : '') + '" onclick="switchItemStorylineTab(&quot;' + escapeJsAttr(ev.id) + '&quot;, this)">' +
+        '<button type="button" class="subnav-pill' + (idx === 0 ? ' active' : '') + '" data-act="switchItemStorylineTab" data-act-args="' + appActArgs([ev.id, "@self"]) + '">' +
           (idx === 0 ? '<span class="check-icon">&#x2713;</span> ' : '') + escapeHtml(ev.name) +
         '</button>'
       ).join('') +
@@ -43331,7 +43739,7 @@ async function openItemDetailsModal(id, type, opts) {
   body.innerHTML = '<p style="color:var(--muted); text-align:center; padding: 40px;">Fetching information from TMDB...</p>';
   
   const tkInput = document.getElementById('tmdbKeyInput');
-  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
   const regionEl = document.getElementById('regionSelect');
   const region = (regionEl && regionEl.value) || localStorage.getItem('myListAddon:region') || 'US';
   
@@ -43422,7 +43830,7 @@ async function openItemDetailsModal(id, type, opts) {
         const seasonCount = seasonEpisodeCountState(d, season);
         seasonsHtml +=
           '<div class="season-card">' +
-            '<div class="season-header" onclick="toggleSeasonEpisodes(this, ' + season.season_number + ', &quot;' + escapeJsAttr(d.id) + '&quot;)">' +
+            '<div class="season-header" data-act="toggleSeasonEpisodes" data-act-args="' + appActArgs(["@self", season.season_number, d.id]) + '">' +
               '<div class="season-header-main">' +
                 (sPoster ? '<img src="' + escapeAttr(sPoster) + '" class="season-header-poster" alt="">' : '<div class="season-header-poster-placeholder"></div>') +
                 '<div class="season-header-info">' +
@@ -43434,7 +43842,7 @@ async function openItemDetailsModal(id, type, opts) {
                 '<button type="button" class="lc-btn ' + seasonBtnState.className + ' btn-mark-season-watched" data-season="' + season.season_number + '"' +
                   (seasonBtnState.upcoming ? ' disabled' : '') +
                   (seasonBtnState.title ? ' title="' + escapeAttr(seasonBtnState.title) + '"' : '') +
-                  ' onclick="event.stopPropagation(); markSeasonWatched(' + season.season_number + ', this)">' +
+                  ' data-act="markSeasonWatched" data-act-stop data-act-args="' + appActArgs([season.season_number, "@self"]) + '">' +
                   seasonBtnState.label +
                 '</button>' +
               '</div>' +
@@ -43464,13 +43872,13 @@ async function openItemDetailsModal(id, type, opts) {
           '<div style="margin-bottom:16px; color:var(--text); font-size:1.05rem;">' + infoHtml + '</div>' +
           '<p style="font-size:1.05rem; line-height:1.6; color:var(--text); margin-bottom: 24px;">' + escapeHtml(d.overview || 'No overview available.') + '</p>' +
           '<div style="display:flex; gap:16px; flex-wrap:wrap; align-items:center; margin-top:20px;">' +
-            '<button type="button" class="lc-btn primary" onclick="openSelectListModalFromItemModal()">+ Add to list</button>' +
+            '<button type="button" class="lc-btn primary" data-act="openSelectListModalFromItemModal">+ Add to list</button>' +
             (((d.seasonsData && d.seasonsData.length > 0) || type === 'series') ?
-              '<button type="button" id="btnMarkShowWatched" class="lc-btn ' + showBtnState.className + '" onclick="markShowWatched(&quot;' + escapeJsAttr(d.id) + '&quot;)">' +
+              '<button type="button" id="btnMarkShowWatched" class="lc-btn ' + showBtnState.className + '" data-act="markShowWatched" data-act-args="' + appActArgs([d.id]) + '">' +
                 showBtnState.label +
               '</button>'
               :
-              '<button type="button" id="btnMarkWatched" class="lc-btn ' + (isItemWatched(d.id, d.tmdbId, d.imdbId) ? 'secondary' : 'primary') + '" onclick="toggleMovieWatchStatusFromModal()">' +
+              '<button type="button" id="btnMarkWatched" class="lc-btn ' + (isItemWatched(d.id, d.tmdbId, d.imdbId) ? 'secondary' : 'primary') + '" data-act="toggleMovieWatchStatusFromModal">' +
                 (isItemWatched(d.id, d.tmdbId, d.imdbId) ? '<span style="margin-right:4px;">&#x2713;</span> Mark as unwatched' : 'Mark as Watched') +
               '</button>') +
           '</div>' +
@@ -43506,7 +43914,7 @@ async function toggleSeasonEpisodes(headerEl, seasonNum, imdbId) {
   grid.innerHTML = '<div style="grid-column: 1 / -1; text-align:center; padding: 20px; color:var(--muted);">Loading episodes...</div>';
   
   const tkInput = document.getElementById('tmdbKeyInput');
-  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
   
   try {
     const d = window._currentItemDetails;
@@ -43531,7 +43939,7 @@ async function toggleSeasonEpisodes(headerEl, seasonNum, imdbId) {
       window._episodeDataCache[ep.episode_number] = ep;
       const still = ep.still_path ? escapeAttr(ep.still_path) : (fallbackStill ? escapeAttr(fallbackStill) : '');
       epsHtml +=
-        '<div class="clickable-episode" data-id="' + ep.id + '" data-season="' + seasonNum + '" data-episode="' + ep.episode_number + '" data-show-id="' + escapeAttr(imdbId || '') + '" style="display:flex; flex-direction:column; gap:4px; cursor:pointer;" onclick="openEpisodeDetails(' + ep.episode_number + ')">' +
+        '<div class="clickable-episode" data-id="' + ep.id + '" data-season="' + seasonNum + '" data-episode="' + ep.episode_number + '" data-show-id="' + escapeAttr(imdbId || '') + '" style="display:flex; flex-direction:column; gap:4px; cursor:pointer;" data-act="openEpisodeDetails" data-act-args="' + appActArgs([ep.episode_number]) + '">' +
           '<div style="width:100%; aspect-ratio:16/9; background:#222; border-radius:6px; overflow:hidden; position:relative; box-shadow:0 2px 6px rgba(0,0,0,0.4);">' +
             (still ? '<img src="' + still + '" style="width:100%; height:100%; object-fit:cover;">' : '') +
             '<div class="episode-num-badge" style="position:absolute; bottom:4px; left:4px; background:var(--accent); color:#ffffff; padding:2px 6px; border-radius:4px; font-weight:bold; font-size:0.8rem; box-shadow:0 1px 4px rgba(0,0,0,0.4);">E' + ep.episode_number + '</div>' +
@@ -43626,16 +44034,16 @@ async function removeSingleExternalItemDirect(provider, target, listId, id, type
   const key2 = makeExternalKey(provider, target, listId, String(id).replace(/^tmdb:/, ''));
   const row = btn ? btn.closest('.select-list-row') : null;
 
-  const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
-  const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:traktKey') || '';
+  const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
+  const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || readProviderSecret('myListAddon:traktKey') || '';
   const traktUser = (typeof traktUsername !== 'undefined' && traktUsername) || localStorage.getItem('myListAddon:traktUsername') || '';
-  const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
-  const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:simklKey') || '';
-  const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || localStorage.getItem('myListAddon:tmdbSessionId') || '';
+  const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
+  const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || readProviderSecret('myListAddon:simklKey') || '';
+  const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || readProviderSecret('myListAddon:tmdbSessionId') || '';
   const tmdbAcc = (typeof tmdbAccountId !== 'undefined' && tmdbAccountId) || localStorage.getItem('myListAddon:tmdbAccountId') || '';
-  const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:tmdbKey') || '';
-  const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
-  const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:mdblistKey') || '';
+  const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || readProviderSecret('myListAddon:tmdbKey') || '';
+  const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
+  const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || readProviderSecret('myListAddon:mdblistKey') || '';
 
   let mutateError = null;
   try {
@@ -43818,24 +44226,24 @@ function openSelectListModal(id, type, title, poster) {
 
   // 2. External Provider Lists
   const traktUser = (typeof traktUsername !== 'undefined' && traktUsername) || localStorage.getItem('myListAddon:traktUsername') || '';
-  const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
-  const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:traktKey') || '';
+  const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
+  const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || readProviderSecret('myListAddon:traktKey') || '';
   const hasTrakt = !!traktToken;
 
   const simklUser = (typeof simklUsername !== 'undefined' && simklUsername) || localStorage.getItem('myListAddon:simklUsername') || '';
-  const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
-  const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:simklKey') || '';
+  const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
+  const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || readProviderSecret('myListAddon:simklKey') || '';
   const hasSimkl = !!simklToken;
 
-  const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || localStorage.getItem('myListAddon:tmdbSessionId') || '';
+  const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || readProviderSecret('myListAddon:tmdbSessionId') || '';
   const tmdbAcc = (typeof tmdbAccountId !== 'undefined' && tmdbAccountId) || localStorage.getItem('myListAddon:tmdbAccountId') || '';
   const tmdbUser = (typeof tmdbUsername !== 'undefined' && tmdbUsername) || localStorage.getItem('myListAddon:tmdbUsername') || '';
-  const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || readProviderSecret('myListAddon:tmdbKey') || '';
   const hasTmdb = !!(tmdbSess || tmdbAcc || tmdbKey);
 
   const mdbUser = (typeof mdblistUsername !== 'undefined' && mdblistUsername) || localStorage.getItem('myListAddon:mdblistUsername') || '';
-  const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
-  const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:mdblistKey') || '';
+  const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
+  const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || readProviderSecret('myListAddon:mdblistKey') || '';
   const hasMdblist = !!(mdbToken || mdbKey);
 
   // Store globally so submitCreateListModal and addSelectedListsBtn can access it
@@ -43867,7 +44275,7 @@ function openSelectListModal(id, type, title, poster) {
             '<span style="font-weight:500;">' + escapeHtml(displayName) + '</span>' +
             (isChecked ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
           '</label>' +
-          (isChecked ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" onclick="removeSingleCustomItemDirect(' + idx + ', &quot;' + escapeJsAttr(id) + '&quot;, &quot;' + escapeJsAttr(type) + '&quot;, this)">Remove</button>' : '') +
+          (isChecked ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleCustomItemDirect" data-act-args="' + appActArgs([idx, id, type, "@self"]) + '">Remove</button>' : '') +
         '</div>';
     });
   }
@@ -43887,7 +44295,7 @@ function openSelectListModal(id, type, title, poster) {
           '<span>Trakt Watchlist</span>' +
           (inTraktWatchlist ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
         '</label>' +
-        (inTraktWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" onclick="removeSingleExternalItemDirect(&quot;trakt&quot;, &quot;watchlist&quot;, &quot;watchlist&quot;, &quot;' + escapeJsAttr(id) + '&quot;, &quot;' + escapeJsAttr(type) + '&quot;, this)">Remove</button>' : '') +
+        (inTraktWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
 
     if (Array.isArray(window._myTraktLists)) {
@@ -43901,7 +44309,7 @@ function openSelectListModal(id, type, title, poster) {
               '<span>' + escapeHtml(tl.name || 'Trakt List') + '</span>' +
               (inList ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
             '</label>' +
-            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" onclick="removeSingleExternalItemDirect(&quot;trakt&quot;, &quot;custom&quot;, &quot;' + escapeJsAttr(tl.id || tl.slug || '') + '&quot;, &quot;' + escapeJsAttr(id) + '&quot;, &quot;' + escapeJsAttr(type) + '&quot;, this)">Remove</button>' : '') +
+            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", "custom", tl.id || tl.slug || '', id, type, "@self"]) + '">Remove</button>' : '') +
           '</div>';
       });
     }
@@ -43931,7 +44339,7 @@ function openSelectListModal(id, type, title, poster) {
             '<span>' + escapeHtml(st.label) + '</span>' +
             (isPresent ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
           '</label>' +
-          (isPresent ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" onclick="removeSingleExternalItemDirect(&quot;simkl&quot;, &quot;status&quot;, &quot;' + st.key + '&quot;, &quot;' + escapeJsAttr(id) + '&quot;, &quot;' + escapeJsAttr(type) + '&quot;, this)">Remove</button>' : '') +
+          (isPresent ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["simkl", "status", st.key, id, type, "@self"]) + '">Remove</button>' : '') +
         '</div>';
     });
   }
@@ -43951,7 +44359,7 @@ function openSelectListModal(id, type, title, poster) {
           '<span>TMDB Watchlist</span>' +
           (inTmdbWatchlist ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
         '</label>' +
-        (inTmdbWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" onclick="removeSingleExternalItemDirect(&quot;tmdb&quot;, &quot;watchlist&quot;, &quot;watchlist&quot;, &quot;' + escapeJsAttr(id) + '&quot;, &quot;' + escapeJsAttr(type) + '&quot;, this)">Remove</button>' : '') +
+        (inTmdbWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
 
     const tmdbFav = Array.isArray(window._myTmdbLists) ? window._myTmdbLists.find(l => l.url && l.url.includes('favorites')) : null;
@@ -43963,7 +44371,7 @@ function openSelectListModal(id, type, title, poster) {
           '<span>TMDB Favorites</span>' +
           (inTmdbFav ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
         '</label>' +
-        (inTmdbFav ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" onclick="removeSingleExternalItemDirect(&quot;tmdb&quot;, &quot;favorite&quot;, &quot;favorite&quot;, &quot;' + escapeJsAttr(id) + '&quot;, &quot;' + escapeJsAttr(type) + '&quot;, this)">Remove</button>' : '') +
+        (inTmdbFav ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "favorite", "favorite", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
 
     if (Array.isArray(window._myTmdbLists)) {
@@ -43977,7 +44385,7 @@ function openSelectListModal(id, type, title, poster) {
               '<span>' + escapeHtml(tml.name || 'TMDB List') + '</span>' +
               (inList ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
             '</label>' +
-            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" onclick="removeSingleExternalItemDirect(&quot;tmdb&quot;, &quot;custom&quot;, &quot;' + escapeJsAttr(tml.id || '') + '&quot;, &quot;' + escapeJsAttr(id) + '&quot;, &quot;' + escapeJsAttr(type) + '&quot;, this)">Remove</button>' : '') +
+            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "custom", tml.id || '', id, type, "@self"]) + '">Remove</button>' : '') +
           '</div>';
       });
     }
@@ -43998,7 +44406,7 @@ function openSelectListModal(id, type, title, poster) {
           '<span>MDBList Watchlist</span>' +
           (inMdbWatchlist ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
         '</label>' +
-        (inMdbWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" onclick="removeSingleExternalItemDirect(&quot;mdblist&quot;, &quot;watchlist&quot;, &quot;watchlist&quot;, &quot;' + escapeJsAttr(id) + '&quot;, &quot;' + escapeJsAttr(type) + '&quot;, this)">Remove</button>' : '') +
+        (inMdbWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
 
     if (Array.isArray(window._myMdblistLists)) {
@@ -44012,7 +44420,7 @@ function openSelectListModal(id, type, title, poster) {
               '<span>' + escapeHtml(ml.name || 'MDBList List') + '</span>' +
               (inList ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
             '</label>' +
-            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" onclick="removeSingleExternalItemDirect(&quot;mdblist&quot;, &quot;custom&quot;, &quot;' + escapeJsAttr(ml.id || ml.slug || '') + '&quot;, &quot;' + escapeJsAttr(id) + '&quot;, &quot;' + escapeJsAttr(type) + '&quot;, this)">Remove</button>' : '') +
+            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", "custom", ml.id || ml.slug || '', id, type, "@self"]) + '">Remove</button>' : '') +
           '</div>';
       });
     }
@@ -44020,7 +44428,7 @@ function openSelectListModal(id, type, title, poster) {
 
   if (html) {
     html += '<div style="margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--border); text-align: center;">' +
-      '<button type="button" class="lc-btn secondary" style="width:100%; font-size:0.9rem;" onclick="closeSelectListModal(); openCreateListModal();">+ Create New List</button>' +
+      '<button type="button" class="lc-btn secondary" style="width:100%; font-size:0.9rem;" data-act="closeSelectListModal" data-act-then="openCreateListModal">+ Create New List</button>' +
     '</div>';
   }
 
@@ -44078,7 +44486,7 @@ function openSelectListModal(id, type, title, poster) {
                 const label = row.querySelector('label');
                 if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>');
                 if (!row.querySelector('button')) {
-                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" onclick="removeSingleExternalItemDirect(&quot;simkl&quot;, &quot;status&quot;, &quot;' + st + '&quot;, &quot;' + escapeJsAttr(id) + '&quot;, &quot;' + escapeJsAttr(type) + '&quot;, this)">Remove</button>');
+                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["simkl", "status", st, id, type, "@self"]) + '">Remove</button>');
                 }
               }
             }
@@ -44108,7 +44516,7 @@ function openSelectListModal(id, type, title, poster) {
                 const label = row.querySelector('label');
                 if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>');
                 if (!row.querySelector('button')) {
-                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" onclick="removeSingleExternalItemDirect(&quot;trakt&quot;, &quot;' + target + '&quot;, &quot;' + escapeJsAttr(listId) + '&quot;, &quot;' + escapeJsAttr(id) + '&quot;, &quot;' + escapeJsAttr(type) + '&quot;, this)">Remove</button>');
+                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", target, listId, id, type, "@self"]) + '">Remove</button>');
                 }
               }
             }
@@ -44142,7 +44550,7 @@ function openSelectListModal(id, type, title, poster) {
                 const label = row.querySelector('label');
                 if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>');
                 if (!row.querySelector('button')) {
-                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" onclick="removeSingleExternalItemDirect(&quot;tmdb&quot;, &quot;' + target + '&quot;, &quot;' + escapeJsAttr(listId) + '&quot;, &quot;' + escapeJsAttr(id) + '&quot;, &quot;' + escapeJsAttr(type) + '&quot;, this)">Remove</button>');
+                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", target, listId, id, type, "@self"]) + '">Remove</button>');
                 }
               }
             }
@@ -44179,7 +44587,7 @@ function openSelectListModal(id, type, title, poster) {
                 const label = row.querySelector('label');
                 if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>');
                 if (!row.querySelector('button')) {
-                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" onclick="removeSingleExternalItemDirect(&quot;mdblist&quot;, &quot;' + target + '&quot;, &quot;' + escapeJsAttr(listId) + '&quot;, &quot;' + escapeJsAttr(id) + '&quot;, &quot;' + escapeJsAttr(type) + '&quot;, this)">Remove</button>');
+                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", target, listId, id, type, "@self"]) + '">Remove</button>');
                 }
               }
             }
@@ -44264,19 +44672,19 @@ document.getElementById('addSelectedListsBtn').addEventListener('click', async (
   // Execute external modifications concurrently
   let externalMutateFailures = [];
   if (changedExternalOperations.length > 0) {
-    const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
-    const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:traktKey') || '';
+    const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
+    const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || readProviderSecret('myListAddon:traktKey') || '';
     const traktUser = (typeof traktUsername !== 'undefined' && traktUsername) || localStorage.getItem('myListAddon:traktUsername') || '';
 
-    const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
-    const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:simklKey') || '';
+    const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
+    const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || readProviderSecret('myListAddon:simklKey') || '';
 
-    const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || localStorage.getItem('myListAddon:tmdbSessionId') || '';
+    const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || readProviderSecret('myListAddon:tmdbSessionId') || '';
     const tmdbAcc = (typeof tmdbAccountId !== 'undefined' && tmdbAccountId) || localStorage.getItem('myListAddon:tmdbAccountId') || '';
-    const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:tmdbKey') || '';
+    const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || readProviderSecret('myListAddon:tmdbKey') || '';
 
-    const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
-    const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:mdblistKey') || '';
+    const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
+    const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || readProviderSecret('myListAddon:mdblistKey') || '';
 
     // allSettled's results used to be discarded, so "Added X to lists." was
     // shown whether the providers accepted the change or refused every one of
@@ -44754,7 +45162,7 @@ function renderTitlePosterCards(items, totalCount, resEl) {
     }
 
     const posterEl = resolvedCardPoster
-      ? '<img class="live-preview-poster" src="' + escapeAttr(resolvedCardPoster) + '" alt="" loading="lazy" onerror="handlePosterImgError(this)">'
+      ? '<img class="live-preview-poster" src="' + escapeAttr(resolvedCardPoster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
       : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
     
     return '<div class="live-preview-poster-card clickable-poster" ' +
@@ -45272,7 +45680,7 @@ async function addAllSeasonsToChannel(tmdbId, imdbId, showName, showPoster, show
     if (typeof showAppAlert === 'function') {
       showAppAlert('Channel Builder', 'Something went wrong adding every season -- try again, or add seasons one at a time.');
     } else {
-      alert('Something went wrong adding every season -- try again, or add seasons one at a time.');
+      showToast('Something went wrong adding every season -- try again, or add seasons one at a time.', 'error');
     }
     if (btn) {
       btn.disabled = false;
@@ -45327,7 +45735,7 @@ function addCheckedEpisodesToChannel(imdbId, showName, showPoster, showBackdrop,
     if (typeof showAppAlert === 'function') {
       showAppAlert('Channel Builder', 'Check at least one episode first.');
     } else {
-      alert('Check at least one episode first.');
+      showToast('Check at least one episode first.', 'error');
     }
     return;
   }
@@ -45787,7 +46195,7 @@ function renderChannelUndoBar() {
   bar.style.display = 'block';
   bar.innerHTML = '<div class="row" style="gap:8px; align-items:center; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--surface);">' +
     '<span style="flex:1; font-size:0.85rem;">Deleted &ldquo;' + escapeHtml(name) + '&rdquo;.</span>' +
-    '<button type="button" class="secondary lc-btn" onclick="undoChannelDelete()">Undo</button>' +
+    '<button type="button" class="secondary lc-btn" data-act="undoChannelDelete">Undo</button>' +
     '</div>';
 }
 
@@ -46209,7 +46617,7 @@ function renderChannelPosterPicker() {
   const isCustomSelected = (channelDraftPoster === 'custom' || !channelDraftPoster || channelDraftPoster.includes('/api/channel-poster'));
 
   // 1. Custom Channel Poster Option
-  let html = '<div class="channel-poster-choice' + (isCustomSelected ? ' selected' : '') + '" data-poster="custom" data-backdrop="" onclick="selectChannelPoster(&quot;custom&quot;, &quot;&quot;)">' +
+  let html = '<div class="channel-poster-choice' + (isCustomSelected ? ' selected' : '') + '" data-poster="custom" data-backdrop="" data-act="selectChannelPoster" data-act-args="[&quot;custom&quot;,&quot;&quot;]">' +
     '<div class="channel-poster-thumb-wrap custom-preview" style="background:linear-gradient(135deg,#0b0d14 0%,#131726 50%,#06070a 100%); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:6px; border:1px solid rgba(0,122,255,0.3);">' +
       '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#007AFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
         '<rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>' +
@@ -46226,7 +46634,7 @@ function renderChannelPosterPicker() {
   shows.forEach((s) => {
     const isSelected = !isCustomSelected && (channelDraftPoster === s.poster);
     const countLabel = s.count + ' ep' + (s.count === 1 ? '' : 's');
-    html += '<div class="channel-poster-choice' + (isSelected ? ' selected' : '') + '" data-poster="' + escapeAttr(s.poster) + '" data-backdrop="' + escapeAttr(s.backdrop || '') + '" onclick="selectChannelPoster(this.dataset.poster, this.dataset.backdrop)">' +
+    html += '<div class="channel-poster-choice' + (isSelected ? ' selected' : '') + '" data-poster="' + escapeAttr(s.poster) + '" data-backdrop="' + escapeAttr(s.backdrop || '') + '" data-act="appActSelectChannelPosterFromEl" data-act-args="[&quot;@self&quot;]">' +
       '<div class="channel-poster-thumb-wrap">' +
         '<img src="' + escapeAttr(s.poster) + '" alt="' + escapeAttr(s.name) + '" loading="lazy">' +
       '</div>' +
@@ -52742,7 +53150,7 @@ function renderChannelCrossoverSuggestions() {
       '<p class="channel-crossover-desc">' + escapeHtml(event.description) + '</p>' +
       '<div class="channel-crossover-parts">' + chipsHtml + '</div>' +
       '<div class="channel-crossover-actions">' +
-        '<button type="button" class="primary lc-btn" onclick="spliceCrossoverEvent(&quot;' + escapeJsAttr(event.id) + '&quot;, this)" style="padding:6px 14px; font-size:0.82rem;">' + escapeHtml(btnLabel) + '</button>' +
+        '<button type="button" class="primary lc-btn" data-act="spliceCrossoverEvent" data-act-args="' + appActArgs([event.id, "@self"]) + '" style="padding:6px 14px; font-size:0.82rem;">' + escapeHtml(btnLabel) + '</button>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -52791,7 +53199,7 @@ async function spliceCrossoverEvent(eventId, btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Crossover Splicer', 'Could not add crossover items: ' + (err.message || err));
     } else {
-      alert('Could not add crossover items: ' + (err.message || err));
+      showToast('Could not add crossover items: ' + (err.message || err), 'error');
     }
   }
   if (btn) {
@@ -53325,7 +53733,7 @@ function renderChannelStoryLock() {
     const id = 'channelStoryLock_' + encodeURIComponent(g.key).replace(/[^A-Za-z0-9]/g, '_');
     return '<label class="channel-rule-row" for="' + escapeAttr(id) + '">' +
       '<input type="checkbox" id="' + escapeAttr(id) + '"' + (isChannelShowStoryLocked(g.key) ? ' checked' : '') +
-        ' onchange="toggleChannelStoryLock(&quot;' + escapeJsAttr(g.key) + '&quot;, this.checked)">' +
+        ' data-act="toggleChannelStoryLock" data-act-args="' + appActArgs([g.key, "@checked"]) + '">' +
       '<span>' + escapeHtml(g.name) + ' <small style="color:var(--muted);">(' + g.count + ')</small></span>' +
     '</label>';
   }).join('');
@@ -54069,7 +54477,7 @@ async function saveChannel() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Channel Builder', 'Name this channel first.');
     } else {
-      alert('Name this channel first.');
+      showToast('Name this channel first.', 'error');
     }
     return;
   }
@@ -54077,7 +54485,7 @@ async function saveChannel() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Channel Builder', 'Add at least one episode or movie first.');
     } else {
-      alert('Add at least one episode or movie first.');
+      showToast('Add at least one episode or movie first.', 'error');
     }
     return;
   }
@@ -54450,10 +54858,10 @@ function renderStorylinesUniverseList(category = activeStorylineCategory) {
       const isDesktopEnd = (i === previewPosters.length - 1 && totalCount >= 4);
       let overlays = '';
       if (isMobileEnd) {
-        overlays += '<div class="list-card-count-overlay mobile-only" onclick="openStorylineDetails(&quot;' + escapeJsAttr(event.id) + '&quot;)" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+        overlays += '<div class="list-card-count-overlay mobile-only" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
       }
       if (isDesktopEnd) {
-        overlays += '<div class="list-card-count-overlay desktop-only" onclick="openStorylineDetails(&quot;' + escapeJsAttr(event.id) + '&quot;)" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+        overlays += '<div class="list-card-count-overlay desktop-only" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
       }
 
       // The registry hands each entry a poster but never a rating -- these are
@@ -54470,8 +54878,8 @@ function renderStorylinesUniverseList(category = activeStorylineCategory) {
         : '';
 
       return '<div class="list-card-mini-poster-tile">' +
-        '<div class="list-card-mini-poster-img-wrap" style="position:relative; cursor:pointer;" onclick="openStorylineDetails(&quot;' + escapeJsAttr(event.id) + '&quot;)">' +
-          '<img src="' + escapeAttr(typeof resolveClientPoster === 'function' ? resolveClientPoster(ep, posterUrl) : (posterUrl)) + '" alt="" loading="lazy" data-tmdb-id="' + escapeAttr(String(ep.tmdbId || '')) + '" data-poster-kind="' + (isMovie ? 'movie' : 'show') + '" data-poster-title="' + escapeAttr(itemTitle) + '" onerror="handleStorylinePosterError(this)">' +
+        '<div class="list-card-mini-poster-img-wrap" style="position:relative; cursor:pointer;" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '">' +
+          '<img src="' + escapeAttr(typeof resolveClientPoster === 'function' ? resolveClientPoster(ep, posterUrl) : (posterUrl)) + '" alt="" loading="lazy" data-tmdb-id="' + escapeAttr(String(ep.tmdbId || '')) + '" data-poster-kind="' + (isMovie ? 'movie' : 'show') + '" data-poster-title="' + escapeAttr(itemTitle) + '" data-act="handleStorylinePosterError" data-act-args="[&quot;@self&quot;]">' +
           overlays +
         '</div>' +
         '<div class="list-card-mini-poster-name" title="' + escapeAttr(itemTitle) + '">' + escapeHtml(itemTitle) + '</div>' +
@@ -54482,7 +54890,7 @@ function renderStorylinesUniverseList(category = activeStorylineCategory) {
     return '<div class="list-card" data-universe-id="' + escapeAttr(event.id) + '">' +
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
-          '<div class="list-card-title" onclick="openStorylineDetails(&quot;' + escapeJsAttr(event.id) + '&quot;)" style="cursor:pointer;">' + escapeHtml(event.name) + '</div>' +
+          '<div class="list-card-title" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '" style="cursor:pointer;">' + escapeHtml(event.name) + '</div>' +
           '<div class="list-card-meta">' +
             '<span>' + escapeHtml(event.franchise) + '</span>' +
             '<span class="list-card-meta-sep">&middot;</span>' +
@@ -54492,8 +54900,8 @@ function renderStorylinesUniverseList(category = activeStorylineCategory) {
           '</div>' +
         '</div>' +
         '<div class="list-card-actions">' +
-          '<button type="button" class="lc-btn ' + (isAdded ? 'secondary is-added' : 'primary') + '" onclick="createInstantStorylineChannel(&quot;' + escapeJsAttr(event.id) + '&quot;, this)" ' + (isAdded ? 'style="color:var(--danger);"' : '') + '>' + (isAdded ? 'Remove' : '+ Add') + '</button>' +
-          '<button type="button" class="lc-btn secondary" onclick="loadStorylineToDraft(&quot;' + escapeJsAttr(event.id) + '&quot;, this)" title="Customize in Channel Builder">Customize</button>' +
+          '<button type="button" class="lc-btn ' + (isAdded ? 'secondary is-added' : 'primary') + '" data-act="createInstantStorylineChannel" data-act-args="' + appActArgs([event.id, "@self"]) + '" ' + (isAdded ? 'style="color:var(--danger);"' : '') + '>' + (isAdded ? 'Remove' : '+ Add') + '</button>' +
+          '<button type="button" class="lc-btn secondary" data-act="loadStorylineToDraft" data-act-args="' + appActArgs([event.id, "@self"]) + '" title="Customize in Channel Builder">Customize</button>' +
         '</div>' +
       '</div>' +
       '<div class="list-card-posters">' +
@@ -55095,7 +55503,7 @@ function editChannelById(channelId) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Channel Builder', 'Channel not found.');
     } else {
-      alert('Channel not found.');
+      showToast('Channel not found.', 'error');
     }
     return;
   }
@@ -55139,7 +55547,7 @@ function editChannel(btnOrRow) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Channel Builder', 'Could not read this channel to edit it.');
     } else {
-      alert('Could not read this channel to edit it.');
+      showToast('Could not read this channel to edit it.', 'error');
     }
     return;
   }
@@ -55148,7 +55556,7 @@ function editChannel(btnOrRow) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Channel Builder', 'Could not read this channel to edit it.');
     } else {
-      alert('Could not read this channel to edit it.');
+      showToast('Could not read this channel to edit it.', 'error');
     }
     return;
   }
@@ -55490,10 +55898,10 @@ function renderMyCreatedChannelsList() {
       const isDesktopEnd = (i === allPosters.length - 1 && allItems.length >= 4);
       let overlays = '';
       if (isMobileEnd) {
-        overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" onclick="event.stopPropagation(); openChannelDetailsPage(&quot;' + escapeJsAttr(ch.channelId) + '&quot;)">' + totalEpisodes + ' &rsaquo;</div>';
+        overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="openChannelDetailsPage" data-act-stop data-act-args="' + appActArgs([ch.channelId]) + '">' + totalEpisodes + ' &rsaquo;</div>';
       }
       if (isDesktopEnd) {
-        overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" onclick="event.stopPropagation(); openChannelDetailsPage(&quot;' + escapeJsAttr(ch.channelId) + '&quot;)">' + totalEpisodes + ' &rsaquo;</div>';
+        overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="openChannelDetailsPage" data-act-stop data-act-args="' + appActArgs([ch.channelId]) + '">' + totalEpisodes + ' &rsaquo;</div>';
       }
 
       const p = it.thumbnail || it.poster || it.showPoster || it.backdrop || ch.poster || ch.backdrop || '';
@@ -55559,7 +55967,7 @@ function renderMyCreatedChannelsList() {
       const itemId = it.imdbId || it.id || '';
       const itemType = (it.kind === 'movie' || it.type === 'movie') ? 'movie' : 'series';
       const posterClickAttr = itemId
-        ? ' style="cursor:pointer;" onclick="event.stopPropagation(); openItemDetailsModal(&quot;' + escapeJsAttr(itemId) + '&quot;, &quot;' + itemType + '&quot;)"'
+        ? ' style="cursor:pointer;" data-act="openItemDetailsModal" data-act-stop data-act-args="' + appActArgs([itemId, itemType]) + '"'
         : '';
       
       return '<div class="list-card-mini-poster-tile">' +
@@ -55572,15 +55980,15 @@ function renderMyCreatedChannelsList() {
       '</div>';
     }).join('');
     
-    const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" onclick="toggleChannelInCatalog(&quot;' + escapeJsAttr(ch.channelId) + '&quot;)">' +
+    const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleChannelInCatalog" data-act-args="' + appActArgs([ch.channelId]) + '">' +
       (isAdded ? 'Remove' : '+ Add') +
     '</button>';
 
     return '<div class="list-card" style="margin-bottom:12px;" data-channel-id="' + escapeAttr(ch.channelId) + '">' +
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
-          '<div class="list-card-title" style="cursor:pointer;" onclick="openChannelDetailsPage(&quot;' + escapeJsAttr(ch.channelId) + '&quot;)" title="Open ' + escapeAttr(ch.name) + '">' +
-            '<span class="drag-handle-list channel-drag-handle" title="Drag to reorder" onclick="event.stopPropagation();">&#x2630;</span>' +
+          '<div class="list-card-title" style="cursor:pointer;" data-act="openChannelDetailsPage" data-act-args="' + appActArgs([ch.channelId]) + '" title="Open ' + escapeAttr(ch.name) + '">' +
+            '<span class="drag-handle-list channel-drag-handle" title="Drag to reorder" data-act="appActNothing" data-act-stop>&#x2630;</span>' +
             escapeHtml(ch.name) +
           '</div>' +
           (ch.description ? '<div style="font-size:0.8rem; color:var(--text); margin-top:2px;">' + escapeHtml(ch.description) + '</div>' : '') +
@@ -55590,10 +55998,10 @@ function renderMyCreatedChannelsList() {
           (summaryLine ? '<div class="list-card-meta"><span>' + escapeHtml(summaryLine) + '</span></div>' : '') +
         '</div>' +
         '<div class="list-card-actions">' +
-          '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" onclick="editChannelById(&quot;' + escapeJsAttr(ch.channelId) + '&quot;)">Edit</button>' +
-          '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" onclick="deleteLocalChannel(&quot;' + escapeJsAttr(ch.channelId) + '&quot;, &quot;' + escapeJsAttr(ch.name) + '&quot;)">Delete</button>' +
+          '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="editChannelById" data-act-args="' + appActArgs([ch.channelId]) + '">Edit</button>' +
+          '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="deleteLocalChannel" data-act-args="' + appActArgs([ch.channelId, ch.name]) + '">Delete</button>' +
           ((ch.sharePublished || ch.visibility === 'public')
-            ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" onclick="shareChannelById(&quot;' + escapeJsAttr(ch.channelId) + '&quot;, this)" title="Share this channel">Share</button>'
+            ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="shareChannelById" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '" title="Share this channel">Share</button>'
             : '') +
           addBtnHtml +
         '</div>' +
@@ -55996,7 +56404,7 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
       if (typeof showAppAlert === 'function') {
         showAppAlert('Could Not Build Channel', 'Could not build ' + name + ': ' + (data.error || 'unknown error'));
       } else {
-        alert('Could not build ' + name + ': ' + (data.error || 'unknown error'));
+        showToast('Could not build ' + name + ': ' + (data.error || 'unknown error'), 'error');
       }
       return;
     }
@@ -56027,7 +56435,7 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
       if (typeof showAppAlert === 'function') {
         showAppAlert('Could Not Build Channel', 'Could not build ' + name + ' -- no episodes were found.');
       } else {
-        alert('Could not build ' + name + ' -- no episodes were found.');
+        showToast('Could not build ' + name + ' -- no episodes were found.', 'error');
       }
       return;
     }
@@ -56066,7 +56474,7 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Network Error', 'Network error while adding ' + name + '.');
     } else {
-      alert('Network error while adding ' + name + '.');
+      showToast('Network error while adding ' + name + '.', 'error');
     }
     return null;
   } finally {
@@ -56092,7 +56500,7 @@ async function importChannelFromLink(btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Import Channel', 'Paste a list URL first.');
     } else {
-      alert('Paste a list URL first.');
+      showToast('Paste a list URL first.', 'error');
     }
     return;
   }
@@ -56100,7 +56508,7 @@ async function importChannelFromLink(btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Import Channel', 'Name this channel first.');
     } else {
-      alert('Name this channel first.');
+      showToast('Name this channel first.', 'error');
     }
     return;
   }
@@ -56661,7 +57069,7 @@ function renderChannelPersonCredits() {
         (c.shows.length ? ' and ' + c.shows.length + ' show' + (c.shows.length === 1 ? '' : 's') : '') +
       '</p>' +
       '<label for="channelSpotlightSortSelect" style="font-size:0.8rem; font-weight:600;">Order:</label>' +
-      '<select id="channelSpotlightSortSelect" onchange="setChannelSpotlightSortAndReload(this.value)" style="font-size:0.82rem; padding:5px 8px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">' +
+      '<select id="channelSpotlightSortSelect" data-act="setChannelSpotlightSortAndReload" data-act-args="[&quot;@value&quot;]" style="font-size:0.82rem; padding:5px 8px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">' +
         '<option value="chronological"' + (channelSpotlightSort === 'chronological' ? ' selected' : '') + '>Career order</option>' +
         '<option value="rating"' + (channelSpotlightSort === 'rating' ? ' selected' : '') + '>Best first</option>' +
       '</select>' +
@@ -57096,7 +57504,7 @@ function showSavedChannelModal(channelName, visibility, url) {
   const isPrivate = visibility === 'private';
   showModal(
     '<div class="modal-body">' +
-      '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+      '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
       '<h2 class="panel-title" style="margin-top:0;">\u2713 Channel Saved</h2>' +
       '<p style="margin:8px 0 16px; font-size:0.9rem; color:var(--text);">' +
         '<strong>' + escapeHtml(channelName || 'Channel') + '</strong> has been saved to your Profile as a <strong>' + (isPrivate ? 'private' : 'public') + '</strong> channel.' +
@@ -57109,13 +57517,13 @@ function showSavedChannelModal(channelName, visibility, url) {
             '<p style="margin:0 0 8px; font-size:0.84rem; color:var(--muted);">Public share link:</p>' +
             '<div style="display:flex; gap:8px; align-items:center;">' +
               '<input type="text" id="savedChannelUrlInput" value="' + escapeAttr(url || '') + '" readonly style="flex:1; padding:10px 12px; font-size:0.88rem; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text);">' +
-              '<button type="button" class="lc-btn primary" id="savedChannelCopyBtn" onclick="copyShareUrlById(&quot;savedChannelUrlInput&quot;, this)" style="white-space:nowrap; padding:10px 14px;">Copy Link</button>' +
+              '<button type="button" class="lc-btn primary" id="savedChannelCopyBtn" data-act="copyShareUrlById" data-act-args="[&quot;savedChannelUrlInput&quot;,&quot;@self&quot;]" style="white-space:nowrap; padding:10px 14px;">Copy Link</button>' +
             '</div>' +
           '</div>'
       ) +
       '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end; gap:8px;">' +
         (!isPrivate && url ? '<a href="' + escapeAttr(url) + '" target="_blank" class="button secondary lc-btn" style="text-decoration:none; display:inline-flex; align-items:center;">Open Link &nearr;</a>' : '') +
-        '<button type="button" class="primary lc-btn" onclick="closeModal()">Done</button>' +
+        '<button type="button" class="primary lc-btn" data-act="closeModal">Done</button>' +
       '</div>' +
     '</div>'
   );
@@ -57390,16 +57798,16 @@ function renderChannelDirectory() {
   feed.innerHTML = shown.map((e) => {
     const isAdded = isDirectoryChannelAdded(e.code);
     const actionBtn = isAdded
-      ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger); border-color:var(--danger);" onclick="removeDirectoryChannel(&quot;' + escapeJsAttr(e.code) + '&quot;, this)">Remove</button>'
-      : '<button type="button" class="lc-btn primary" style="padding:6px 12px; font-size:0.8rem;" onclick="addDirectoryChannel(&quot;' + escapeJsAttr(e.code) + '&quot;, this)">+ Add</button>';
+      ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger); border-color:var(--danger);" data-act="removeDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">Remove</button>'
+      : '<button type="button" class="lc-btn primary" style="padding:6px 12px; font-size:0.8rem;" data-act="addDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">+ Add</button>';
     return channelListingCardHtml(
       e,
       '<button type="button" class="lc-btn searchLikeExternalBtn' + (_channelDirectoryLiked[e.code] ? ' liked' : '') + '"' +
         ' aria-label="Like this channel" title="Like this channel"' +
-        ' onclick="toggleChannelDirectoryLike(&quot;' + escapeJsAttr(e.code) + '&quot;, this)">' +
+        ' data-act="toggleChannelDirectoryLike" data-act-args="' + appActArgs([e.code, "@self"]) + '">' +
         (_channelDirectoryLiked[e.code] ? '\u2665' : '\u2661') + (e.likes ? ' ' + e.likes : '') +
       '</button>' +
-      '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" onclick="previewDirectoryChannel(&quot;' + escapeJsAttr(e.code) + '&quot;, this)">See all</button>' +
+      '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="previewDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">See all</button>' +
       actionBtn,
       ''
     );
@@ -57658,8 +58066,8 @@ function channelListingCardHtml(entry, actionsHtml, extraHtml) {
         const isDesktopEnd = (i === sampleItems.length - 1 && sampleItems.length >= 4);
         let overlays = '';
         if (entry.code) {
-          if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" onclick="event.stopPropagation(); previewDirectoryChannel(&quot;' + escapeJsAttr(entry.code) + '&quot;, this)">' + totalCount + ' &rsaquo;</div>';
-          if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" onclick="event.stopPropagation(); previewDirectoryChannel(&quot;' + escapeJsAttr(entry.code) + '&quot;, this)">' + totalCount + ' &rsaquo;</div>';
+          if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="previewDirectoryChannel" data-act-stop data-act-args="' + appActArgs([entry.code, "@self"]) + '">' + totalCount + ' &rsaquo;</div>';
+          if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="previewDirectoryChannel" data-act-stop data-act-args="' + appActArgs([entry.code, "@self"]) + '">' + totalCount + ' &rsaquo;</div>';
         }
         const p = it.poster || it.thumbnail || it.showPoster || it.backdrop || entry.poster || entry.backdrop || '';
         const imgHtml = p
@@ -57668,8 +58076,8 @@ function channelListingCardHtml(entry, actionsHtml, extraHtml) {
         const itemId = it.id || it.imdbId || '';
         const itemType = (it.kind === 'movie' || it.type === 'movie') ? 'movie' : 'series';
         const posterClickAttr = itemId
-          ? ' style="cursor:pointer;" onclick="event.stopPropagation(); openItemDetailsModal(&quot;' + escapeJsAttr(itemId) + '&quot;, &quot;' + itemType + '&quot;)"'
-          : (entry.code ? ' style="cursor:pointer;" onclick="event.stopPropagation(); previewDirectoryChannel(&quot;' + escapeJsAttr(entry.code) + '&quot;, this)"' : '');
+          ? ' style="cursor:pointer;" data-act="openItemDetailsModal" data-act-stop data-act-args="' + appActArgs([itemId, itemType]) + '"'
+          : (entry.code ? ' style="cursor:pointer;" data-act="previewDirectoryChannel" data-act-stop data-act-args="' + appActArgs([entry.code, "@self"]) + '"' : '');
         const title = it.name || it.title || entry.name || 'Channel';
         const subtitle = it.subtitle || it.epName || '';
         return '<div class="list-card-mini-poster-tile">' +
@@ -57692,7 +58100,7 @@ function channelListingCardHtml(entry, actionsHtml, extraHtml) {
     ? '<img src="' + escapeAttr(art) + '" alt="" loading="lazy" style="width:88px; height:56px; object-fit:cover; border-radius:6px; border:1px solid var(--border); flex:0 0 auto;">'
     : '';
   const openAttr = entry.code
-    ? ' style="cursor:pointer;" onclick="previewDirectoryChannel(&quot;' + escapeJsAttr(entry.code) + '&quot;, this)" title="See everything in this channel"'
+    ? ' style="cursor:pointer;" data-act="previewDirectoryChannel" data-act-args="' + appActArgs([entry.code, "@self"]) + '" title="See everything in this channel"'
     : '';
   return '<div class="list-card" style="margin-bottom:10px;">' +
     '<div class="list-card-header" style="gap:10px; align-items:center;">' +
@@ -57802,16 +58210,16 @@ function renderChannelPublishList() {
 
   const mine = channels.map((ch) => {
     const action = ch.sharePublished
-      ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger);" onclick="unpublishChannelFromDirectory(&quot;' + escapeJsAttr(ch.channelId) + '&quot;, this)">Unpublish</button>'
-      : '<button type="button" class="lc-btn primary" style="padding:6px 12px; font-size:0.8rem;" onclick="publishChannelToDirectory(&quot;' + escapeJsAttr(ch.channelId) + '&quot;, this)">Publish</button>';
+      ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger);" data-act="unpublishChannelFromDirectory" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Unpublish</button>'
+      : '<button type="button" class="lc-btn primary" style="padding:6px 12px; font-size:0.8rem;" data-act="publishChannelToDirectory" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Publish</button>';
     const extra =
       // A published channel's link lives here, on screen, rather than only
       // in the modal that announced it -- that modal closes and takes the
       // link with it.
       (ch.shareCode
         ? '<div class="row" style="margin-top:8px; gap:8px;">' +
-            '<input type="text" readonly value="' + escapeAttr(channelShareUrl(ch.shareCode)) + '" onclick="this.select()" style="font-size:0.8rem;">' +
-            '<button type="button" class="secondary lc-btn" style="flex:none; width:auto; white-space:nowrap;" onclick="copyChannelShareLink(&quot;' + escapeJsAttr(ch.channelId) + '&quot;, this)">Copy</button>' +
+            '<input type="text" readonly value="' + escapeAttr(channelShareUrl(ch.shareCode)) + '" data-act-on="click" data-act="appActSelectText" data-act-args="[&quot;@self&quot;]" style="font-size:0.8rem;">' +
+            '<button type="button" class="secondary lc-btn" style="flex:none; width:auto; white-space:nowrap;" data-act="copyChannelShareLink" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Copy</button>' +
           '</div>'
         : '');
     return channelListingCardHtml(channelAsListingEntry(ch), action, extra);
@@ -57821,7 +58229,7 @@ function renderChannelPublishList() {
   // because there is nothing to edit, publish or copy -- only to withdraw.
   const orphans = _orphanedPublishedChannels.map((entry) => channelListingCardHtml(
     entry,
-    '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger);" onclick="unpublishOrphanedChannel(&quot;' + escapeJsAttr(entry.code) + '&quot;, this)">Unpublish</button>',
+    '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger);" data-act="unpublishOrphanedChannel" data-act-args="' + appActArgs([entry.code, "@self"]) + '">Unpublish</button>',
     ''
   )).join('');
 
@@ -58128,7 +58536,7 @@ function toggleMergedChannelInCatalog(mergedId) {
       if (typeof showAppAlert === 'function') {
         showAppAlert('Merge Channels', 'Could not find the channels for this merged catalog.');
       } else {
-        alert('Could not find the channels for this merged catalog.');
+        showToast('Could not find the channels for this merged catalog.', 'error');
       }
       return;
     }
@@ -58146,7 +58554,7 @@ function mergeChannelsIntoRow() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Merge Channels', 'Check at least two channels to merge.');
     } else {
-      alert('Check at least two channels to merge.');
+      showToast('Check at least two channels to merge.', 'error');
     }
     return;
   }
@@ -58156,7 +58564,7 @@ function mergeChannelsIntoRow() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Merge Channels', 'Name the combined catalog first.');
     } else {
-      alert('Name the combined catalog first.');
+      showToast('Name the combined catalog first.', 'error');
     }
     return;
   }
@@ -58172,7 +58580,7 @@ function mergeChannelsIntoRow() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Merge Channels', 'Could not read the selected channels. Please try again.');
     } else {
-      alert('Could not read the selected channels. Please try again.');
+      showToast('Could not read the selected channels. Please try again.', 'error');
     }
     return;
   }
@@ -58246,7 +58654,7 @@ function renderChannelMergeList() {
           if (ch && Array.isArray(ch.items)) totalEpisodes += ch.items.length;
           return '<span class="badge" style="display:inline-flex; align-items:center; gap:5px; padding:3px 8px; font-size:0.8rem; background:var(--panel-strong); border:1px solid var(--border); border-radius:6px; margin:2px 4px 2px 0;">' +
             escapeHtml(chName) +
-            '<button type="button" class="merge-chip-remove-btn" title="Remove ' + escapeAttr(chName) + ' from merge" aria-label="Remove ' + escapeAttr(chName) + ' from merge" onclick="removeChannelFromMerge(&quot;' + escapeJsAttr(merged.mergedId) + '&quot;, &quot;' + escapeJsAttr(chId) + '&quot;)">\u2715</button>' +
+            '<button type="button" class="merge-chip-remove-btn" title="Remove ' + escapeAttr(chName) + ' from merge" aria-label="Remove ' + escapeAttr(chName) + ' from merge" data-act="removeChannelFromMerge" data-act-args="' + appActArgs([merged.mergedId, chId]) + '">\u2715</button>' +
           '</span>';
         }).join('');
         
@@ -58255,7 +58663,7 @@ function renderChannelMergeList() {
         if (remainingChannels.length) {
           remainingChannels.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
           const options = remainingChannels.map((c) => '<option value="' + escapeAttr(c.channelId) + '">' + escapeHtml(c.name) + ' (' + (c.items ? c.items.length : 0) + ' ep)</option>').join('');
-          addSelectHtml = '<select class="merge-add-channel-select" onchange="addChannelToMerge(&quot;' + escapeJsAttr(merged.mergedId) + '&quot;, this.value); this.value=&quot;&quot;;">' +
+          addSelectHtml = '<select class="merge-add-channel-select" data-act="appActAddChannelToMerge" data-act-args="' + appActArgs([merged.mergedId, '@self']) + '">' +
             '<option value="">+ Add channel...</option>' +
             options +
           '</select>';
@@ -58263,12 +58671,12 @@ function renderChannelMergeList() {
           addSelectHtml = '<select class="merge-add-channel-select" disabled title="All your current saved channels are already in this merge. Build or Quick Add more channels to add them here." style="opacity:0.65; cursor:not-allowed;">' +
             '<option value="">All saved channels added</option>' +
           '</select>' +
-          ' <button type="button" class="lc-btn secondary" style="padding:2px 8px; font-size:0.75rem; margin-left:4px;" onclick="switchChannelsSubmenu(&quot;quickadd&quot;, document.querySelector(&quot;#channelsSubnavBar button:nth-child(2)&quot;))">+ Quick Add</button>';
+          ' <button type="button" class="lc-btn secondary" style="padding:2px 8px; font-size:0.75rem; margin-left:4px;" data-act="appActGoToQuickAdd">+ Quick Add</button>';
         }
         
         const countText = (merged.channelIds ? merged.channelIds.length : 0) + ' channels &middot; ' + totalEpisodes + ' episodes';
         
-        const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" onclick="toggleMergedChannelInCatalog(&quot;' + escapeJsAttr(merged.mergedId) + '&quot;)">' +
+        const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleMergedChannelInCatalog" data-act-args="' + appActArgs([merged.mergedId]) + '">' +
           (isAdded ? 'Remove' : '+ Add') +
         '</button>';
 
@@ -58284,7 +58692,7 @@ function renderChannelMergeList() {
               '</div>' +
             '</div>' +
             '<div class="list-card-actions">' +
-              '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger);" onclick="deleteLocalMergedChannel(&quot;' + escapeJsAttr(merged.mergedId) + '&quot;)">Delete</button>' +
+              '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger);" data-act="deleteLocalMergedChannel" data-act-args="' + appActArgs([merged.mergedId]) + '">Delete</button>' +
               addBtnHtml +
             '</div>' +
           '</div>' +
@@ -58343,7 +58751,7 @@ async function importCustomListFromLink(btn) {
   const syncCheck = document.getElementById('customListImportSyncCheck');
   const listUrl = urlInput.value.trim();
   if (!listUrl) {
-    alert('Paste a list URL first.');
+    showToast('Paste a list URL first.', 'error');
     return;
   }
   const name = nameInput.value.trim() || guessNameFromUrl(listUrl);
@@ -58409,7 +58817,7 @@ async function loadListToCustomListDraft(name, listUrl, contentType, btn) {
       if (typeof showAppAlert === 'function') {
         showAppAlert('Customize List', 'Could not load items for this list.');
       } else {
-        alert('Could not load items for this list.');
+        showToast('Could not load items for this list.', 'error');
       }
       return;
     }
@@ -58437,7 +58845,7 @@ async function loadListToCustomListDraft(name, listUrl, contentType, btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Customize List', 'Error loading list: ' + (err.message || err));
     } else {
-      alert('Error loading list: ' + (err.message || err));
+      showToast('Error loading list: ' + (err.message || err), 'error');
     }
   }
   if (btn) {
@@ -58475,7 +58883,7 @@ async function addToCustomListDraft(searchType, tmdbId, title, year, poster, btn
     const res = await fetch(ORIGIN + endpoint + encodeURIComponent(tmdbId), { cache: 'no-store' });
     const data = await res.json();
     if (!data.ok) {
-      alert('Could not add "' + title + '": ' + (data.error || 'unknown error'));
+      showToast('Could not add "' + title + '": ' + (data.error || 'unknown error'), 'error');
       if (btn) {
         btn.disabled = false;
         btn.textContent = '+ Add';
@@ -58494,7 +58902,7 @@ async function addToCustomListDraft(searchType, tmdbId, title, year, poster, btn
     if (btn) btn.textContent = 'Added \u2713';
     if (typeof trackEvent === 'function') trackEvent('list-add', data.imdbId, title, itemType);
   } catch (e) {
-    alert('Network error adding "' + title + '".');
+    showToast('Network error adding "' + title + '".', 'error');
     if (btn) {
       btn.disabled = false;
       btn.textContent = '+ Add';
@@ -58744,7 +59152,7 @@ function saveCustomList() {
   const nameInput = document.getElementById('customListNameInput');
   const name = nameInput.value.trim();
   if (!name) {
-    alert('Name this list first.');
+    showToast('Name this list first.', 'error');
     return;
   }
 
@@ -58812,7 +59220,7 @@ function saveCustomList() {
       }).then(async (res) => {
         const data = await res.json();
         if (!data.ok) {
-          alert('Could not save list: ' + (data.error || 'unknown error'));
+          showToast('Could not save list: ' + (data.error || 'unknown error'), 'error');
           return;
         }
         const slug = data.slug;
@@ -58837,7 +59245,7 @@ function saveCustomList() {
           showAddedToast('"' + name + '" saved \u2713');
         }
       }).catch(() => {
-        alert('Network error while saving list.');
+        showToast('Network error while saving list.', 'error');
       });
     } else {
       const map = loadLocalCustomLists();
@@ -58898,7 +59306,7 @@ function saveCustomList() {
 // the one on the server, not a row in this particular install link.
 async function saveCreatorListEdit(name) {
   if (!activeCreator) {
-    alert('Your Profile session expired -- please restore it again.');
+    showToast('Your Profile session expired -- please restore it again.', 'error');
     editingCreatorListSlug = null;
     updateCustomListSaveButtonLabel();
     return;
@@ -58972,7 +59380,7 @@ async function saveCreatorListEdit(name) {
       if (typeof showAppNoticeModal === 'function') {
         showAppNoticeModal('This List Changed Elsewhere', msg, true);
       } else {
-        alert(msg);
+        showToast(msg, 'error');
       }
       return;
     }
@@ -58981,7 +59389,7 @@ async function saveCreatorListEdit(name) {
       if (typeof showAppNoticeModal === 'function') {
         showAppNoticeModal('Could Not Save Changes', data.error || 'Unknown error occurred.', true);
       } else {
-        alert('Could not save changes: ' + (data.error || 'unknown error'));
+        showToast('Could not save changes: ' + (data.error || 'unknown error'), 'error');
       }
       return;
     }
@@ -59012,7 +59420,7 @@ async function saveCreatorListEdit(name) {
     if (typeof showAppNoticeModal === 'function') {
       showAppNoticeModal('Network Error', 'A network error occurred while saving. Please try again.', true);
     } else {
-      alert('Network error while saving.');
+      showToast('Network error while saving.', 'error');
     }
   } finally {
     endSubmit();
@@ -59145,7 +59553,7 @@ async function saveLocalCustomListEdit(name) {
     if (typeof showAppNoticeModal === 'function') {
       showAppNoticeModal(title, msg, true);
     } else {
-      alert(msg);
+      showToast(msg, 'error');
     }
     cancelEditCustomList();
     renderCreatorDashboard();
@@ -59168,7 +59576,7 @@ function openEditCustomListDraft(urlInput) {
   if (!urlInput) return;
   const payload = parseCustomListPayloadClient(urlInput.value);
   if (!payload) {
-    alert('Could not read this list to edit it.');
+    showToast('Could not read this list to edit it.', 'error');
     return;
   }
   customListDraftItems = (payload.items || []).slice();
@@ -59203,7 +59611,7 @@ function editCustomList(btn) {
   const sourceRow = btn.closest('.source-row');
   const urlInput = sourceRow && sourceRow.querySelector('.url');
   if (!urlInput) {
-    alert('Could not read this list to edit it.');
+    showToast('Could not read this list to edit it.', 'error');
     return;
   }
   openEditCustomListDraft(urlInput);
@@ -59290,7 +59698,7 @@ function setCustomListDraftTypeToggle(type) {
       return itType !== type;
     });
     if (hasOpposite) {
-      alert('This list contains both movies and shows -- keep it set to "Mixed" or remove incompatible items first.');
+      showToast('This list contains both movies and shows -- keep it set to "Mixed" or remove incompatible items first.', 'error');
       updateCustomListTypeRadio(customListDraftType);
       return;
     }
@@ -60336,7 +60744,7 @@ window.markShowWatched = async function(imdbId) {
   }
 
   const tkInput = document.getElementById('tmdbKeyInput');
-  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
 
   const allEpisodes = [];
   const CONCURRENCY = 4;
@@ -61045,7 +61453,7 @@ async function updateContinueWatching(showId) {
   if (!showId) return { ok: false };
 
   const tkInput = document.getElementById('tmdbKeyInput');
-  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || (typeof localStorage !== 'undefined' ? (localStorage.getItem('myListAddon:tmdbKey') || '') : '');
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || (typeof localStorage !== 'undefined' ? (readProviderSecret('myListAddon:tmdbKey') || '') : '');
 
   // Reading Watch History here (outside the commit lock) is safe: nothing
   // concurrently writes to Watch History during a Continue Watching batch
@@ -62202,7 +62610,7 @@ async function backfillWatchHistoryEpisodeStills() {
   // Sort season 1 first so missing shows are detected before checking later seasons
   pending.sort((a, b) => (Number(a[1].seasonNum) || 0) - (Number(b[1].seasonNum) || 0));
   const tkInput = document.getElementById('tmdbKeyInput');
-  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
 
   let changed = 0;
   const inFlightShows = new Set();
@@ -62361,7 +62769,7 @@ function buildAiringNextCardHtml() {
           subtitle: it.name || it.episodeTitle || (it.isSeasonPremiere ? 'Season Premiere' : (it.episodeNum != null ? ('Episode ' + it.episodeNum) : ''))
         };
     const removeBtn = it.showId
-      ? '<button type="button" class="cw-remove-btn" onclick="event.stopPropagation(); removeAiringNextShow(&quot;' + escapeJsAttr(it.showId) + '&quot;, this)" title="Remove from Airing Next" aria-label="Remove from Airing Next">\u2715</button>'
+      ? '<button type="button" class="cw-remove-btn" data-act="removeAiringNextShow" data-act-stop data-act-args="' + appActArgs([it.showId, "@self"]) + '" title="Remove from Airing Next" aria-label="Remove from Airing Next">\u2715</button>'
       : '';
     const ratingSpan = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(it) : '';
     return '<div class="list-card-mini-poster-tile">' +
@@ -63032,11 +63440,11 @@ async function migrateLocalCustomListsToAccount() {
     renderCreatorDashboard();
   }
   if (failedCount) {
-    alert(
+    showToast(
       migratedCount
         ? migratedCount + ' list' + (migratedCount === 1 ? '' : 's') + " moved to your account, but " + failedCount + " couldn't be moved -- they're still saved locally, try again from this browser."
         : "Could not move your local lists to your account -- they're still saved locally, try again from this browser."
-    );
+    , 'error');
   }
 }
 
@@ -63054,12 +63462,12 @@ function renderCreatorProfileBar() {
   if (activeCreator) {
     bar.innerHTML =
       '<div style="display:flex; align-items:center; gap:8px;">' +
-      '<button type="button" class="subnav-pill active" style="margin:0; font-size:0.85rem; padding:8px 14px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px; border-radius:var(--radius-pill);" onclick="switchTab(&quot;account&quot;)">&#x1F464; ' + escapeHtml(activeCreator.displayName) + '</button>' +
+      '<button type="button" class="subnav-pill active" style="margin:0; font-size:0.85rem; padding:8px 14px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px; border-radius:var(--radius-pill);" data-act="switchTab" data-act-args="[&quot;account&quot;]">&#x1F464; ' + escapeHtml(activeCreator.displayName) + '</button>' +
       '</div>';
   } else {
     bar.innerHTML =
       '<div style="display:flex; align-items:center; gap:6px;">' +
-      '<button type="button" class="lc-btn primary" onclick="openRestoreModal()" style="padding:8px 16px; font-size:0.85rem; font-weight:700; border-radius:var(--radius-pill);">Login</button>' +
+      '<button type="button" class="lc-btn primary" data-act="openRestoreModal" style="padding:8px 16px; font-size:0.85rem; font-weight:700; border-radius:var(--radius-pill);">Login</button>' +
       '</div>';
   }
 }
@@ -63072,8 +63480,8 @@ function renderAccountKeySection() {
     box.innerHTML =
       '<p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Save and sync your lists, channels, presets, likes, and settings across all your devices automatically. No email or password needed &mdash; just a username and key.</p>' +
       '<div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-top:12px;">' +
-      '<button type="button" class="primary" onclick="openCreateProfileModal()">Create Free Account</button>' +
-      '<button type="button" class="secondary" onclick="openRestoreModal()">Login</button>' +
+      '<button type="button" class="primary" data-act="openCreateProfileModal">Create Free Account</button>' +
+      '<button type="button" class="secondary" data-act="openRestoreModal">Login</button>' +
       '</div>';
     return;
   }
@@ -63085,13 +63493,13 @@ function renderAccountKeySection() {
     '<span style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); font-weight:700;">Signed in as</span>' +
     '<h3 style="margin:2px 0 0; font-size:1.1rem; font-weight:800; color:var(--text);">&#x1F464; ' + escapeHtml(activeCreator.displayName) + '</h3>' +
     '</div>' +
-    '<button type="button" class="secondary lc-btn" onclick="switchCreatorProfile()">Sign Out / Switch</button>' +
+    '<button type="button" class="secondary lc-btn" data-act="switchCreatorProfile">Sign Out / Switch</button>' +
     '</div>' +
     '<p style="margin:0 0 4px;"><small>Account Key</small></p>' +
     '<div class="creator-key-display" id="accountKeyDisplay">' + '\u2022'.repeat(Math.max(8, key.length)) + '</div>' +
     '<div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-top:10px;">' +
-    '<button type="button" class="secondary" id="accountKeyToggleBtn" onclick="toggleAccountKeyVisibility()">Show Key</button>' +
-    '<button type="button" class="secondary" onclick="copyAccountKey()">Copy Key</button>' +
+    '<button type="button" class="secondary" id="accountKeyToggleBtn" data-act="toggleAccountKeyVisibility">Show Key</button>' +
+    '<button type="button" class="secondary" data-act="copyAccountKey">Copy Key</button>' +
     '</div>' +
     '<p style="margin-top:10px;"><small>Anyone with this key can sign in as you and edit your lists &mdash; keep it somewhere safe, and don&apos;t share it.</small></p>' +
     '<div class="recovery-section" style="margin-top:16px; padding:14px 16px; border:1px solid rgba(255,255,255,0.12); border-radius:12px; background:rgba(255,255,255,0.03);">' +
@@ -63106,34 +63514,34 @@ function renderAccountKeySection() {
           ? 'Your recovery answer is active. It can reset your key if lost, or find your username.'
           : 'You have not set a recovery answer. Add one so you can recover your username or reset your key if you ever lose them.') +
       '</p>' +
-      '<button type="button" class="secondary lc-btn" onclick="openSetRecoveryAnswerModal()">' +
+      '<button type="button" class="secondary lc-btn" data-act="openSetRecoveryAnswerModal">' +
         (hasRecovery ? 'Update Recovery Answer' : 'Set Recovery Answer') +
       '</button>' +
     '</div>' +
     '<div class="danger-zone" style="margin-top:20px; padding:14px 16px; border:1px solid rgba(255,149,0,0.35); border-radius:12px; background:rgba(255,149,0,0.06);">' +
       '<div style="font-weight:700; font-size:0.9rem; color:#ff9500; margin-bottom:4px;">Reset Account</div>' +
       '<p style="margin:0 0 10px; font-size:0.82rem; color:var(--muted);">Delete every list, channel, preset, watch history entry and catalog row on this account, returning it to how it was when you created it. Your account and key stay the same, and you stay signed in.</p>' +
-      '<button type="button" class="lc-btn" style="background:#ff9500; color:#fff; border:none; padding:7px 14px; font-weight:700; border-radius:8px; cursor:pointer;" onclick="openResetAccountModal()">Reset Account Data</button>' +
+      '<button type="button" class="lc-btn" style="background:#ff9500; color:#fff; border:none; padding:7px 14px; font-weight:700; border-radius:8px; cursor:pointer;" data-act="openResetAccountModal">Reset Account Data</button>' +
     '</div>' +
     '<div class="danger-zone" style="margin-top:12px; padding:14px 16px; border:1px solid rgba(255,59,48,0.3); border-radius:12px; background:rgba(255,59,48,0.05);">' +
       '<div style="font-weight:700; font-size:0.9rem; color:var(--danger, #ff3b30); margin-bottom:4px;">Delete Account</div>' +
       '<p style="margin:0 0 10px; font-size:0.82rem; color:var(--muted);">Permanently delete your account, all published lists, and all synced data from the server.</p>' +
-      '<button type="button" class="lc-btn" style="background:#ff3b30; color:#fff; border:none; padding:7px 14px; font-weight:700; border-radius:8px; cursor:pointer;" onclick="openDeleteAccountModal()">Delete Account &amp; All Data</button>' +
+      '<button type="button" class="lc-btn" style="background:#ff3b30; color:#fff; border:none; padding:7px 14px; font-weight:700; border-radius:8px; cursor:pointer;" data-act="openDeleteAccountModal">Delete Account &amp; All Data</button>' +
     '</div>';
 }
 
 function openSetRecoveryAnswerModal() {
   const hasRecovery = localStorage.getItem('myListAddon:hasRecoveryAnswer') === '1';
   showModal(
-    '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+    '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
     '<h2>' + (hasRecovery ? 'Update Recovery Answer' : 'Set Recovery Answer') + '</h2>' +
     '<p class="modal-sub">Choose an answer you will remember (e.g. your childhood pet, first school, or a passphrase). Must be at least 8 characters.</p>' +
     '<div class="row" style="margin-top:8px;"><input type="text" id="setRecoveryAnswerInput" placeholder="Recovery Answer (8+ characters)" minlength="8"></div>' +
     '<div class="row" style="margin-top:8px;"><input type="text" id="setRecoveryAnswerConfirmInput" placeholder="Confirm Recovery Answer" minlength="8"></div>' +
     '<div id="setRecoveryAnswerError"></div>' +
     '<div class="actions" style="margin-top:14px;">' +
-    '<button type="button" class="primary" id="setRecoveryAnswerBtn" onclick="submitSetRecoveryAnswer()">Save Recovery Answer</button>' +
-    '<button type="button" class="secondary" onclick="closeModal()">Cancel</button>' +
+    '<button type="button" class="primary" id="setRecoveryAnswerBtn" data-act="submitSetRecoveryAnswer">Save Recovery Answer</button>' +
+    '<button type="button" class="secondary" data-act="closeModal">Cancel</button>' +
     '</div>'
   );
 }
@@ -63241,7 +63649,7 @@ async function openResetAccountModal() {
           if (typeof showAppAlert === 'function') showAppAlert('Reset Failed', msg + ' Your local data has been cleared; sign in again to restore it from your account.', false);
           // Nothing replaces the busy dialog on this branch, so take it down
           // rather than leave a spinner turning over a finished request.
-          else { if (typeof closeModal === 'function') closeModal(); alert(msg); }
+          else { if (typeof closeModal === 'function') closeModal(); showToast(msg, 'error'); }
           return;
         }
 
@@ -63291,8 +63699,8 @@ function openDeleteAccountModal() {
       '</div>' +
       '<div id="deleteAccountStatus"></div>' +
       '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end; gap:8px;">' +
-        '<button type="button" class="secondary" onclick="closeModal()">Cancel</button>' +
-        '<button type="button" id="confirmDeleteAccountBtn" class="primary" style="background:#ff3b30; border-color:#ff3b30; color:#fff;" onclick="handleDeleteAccount()">Permanently Delete Everything</button>' +
+        '<button type="button" class="secondary" data-act="closeModal">Cancel</button>' +
+        '<button type="button" id="confirmDeleteAccountBtn" class="primary" style="background:#ff3b30; border-color:#ff3b30; color:#fff;" data-act="handleDeleteAccount">Permanently Delete Everything</button>' +
       '</div>' +
     '</div>'
   );
@@ -63339,11 +63747,11 @@ function openShareListModal(listName, listUrl) {
       '<p style="margin:0 0 14px; font-size:0.88rem; color:var(--muted);">Share <strong>' + escapeHtml(listName || 'Custom List') + '</strong> with others or open it in your browser.</p>' +
       '<div style="display:flex; gap:8px; align-items:center; margin-bottom:14px;">' +
         '<input type="text" id="shareListUrlInput" value="' + escapeAttr(listUrl) + '" readonly style="flex:1; padding:10px 12px; font-size:0.9rem; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text);">' +
-        '<button type="button" class="lc-btn primary" id="shareListCopyBtn" onclick="copyShareListUrl()" style="white-space:nowrap; padding:10px 16px;">Copy Link</button>' +
+        '<button type="button" class="lc-btn primary" id="shareListCopyBtn" data-act="copyShareListUrl" style="white-space:nowrap; padding:10px 16px;">Copy Link</button>' +
       '</div>' +
       '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end; gap:8px;">' +
         '<a href="' + escapeAttr(listUrl) + '" target="_blank" class="button secondary lc-btn" style="text-decoration:none; display:inline-flex; align-items:center;">Open Link &nearr;</a>' +
-        '<button type="button" class="secondary lc-btn" onclick="closeModal()">Close</button>' +
+        '<button type="button" class="secondary lc-btn" data-act="closeModal">Close</button>' +
       '</div>' +
     '</div>'
   );
@@ -63404,7 +63812,7 @@ function renderWatchlistPreferencesSection() {
   } catch (e) {}
   box.innerHTML =
     '<label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">' +
-      '<input type="checkbox" id="removeWatchedFromWatchlistCheck" ' + (autoClean ? 'checked' : '') + ' onchange="onRemoveWatchedFromWatchlistToggle(this)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">' +
+      '<input type="checkbox" id="removeWatchedFromWatchlistCheck" ' + (autoClean ? 'checked' : '') + ' data-act="onRemoveWatchedFromWatchlistToggle" data-act-args="[&quot;@self&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">' +
       '<div>' +
         '<span style="font-weight:600;">Automatically remove watched items from Watchlist</span>' +
         '<p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Movies are removed once watched. TV shows are only removed after every episode has been watched.</p>' +
@@ -63481,17 +63889,17 @@ function renderHiddenListsSettingsSection() {
   }
 
   // If provider lists are not loaded yet but credentials exist, trigger background fetch so this panel populates
-  if (!window._myPrivateTraktLists && !window._myTraktLists && ((typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken'))) {
+  if (!window._myPrivateTraktLists && !window._myTraktLists && ((typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken'))) {
     if (typeof runMyPrivateTraktLists === 'function') runMyPrivateTraktLists();
     else if (typeof runMyTraktLists === 'function') runMyTraktLists();
   }
-  if (!window._myMdblistLists && ((typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || localStorage.getItem('myListAddon:mdblistKey'))) {
+  if (!window._myMdblistLists && ((typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || readProviderSecret('myListAddon:mdblistKey'))) {
     if (typeof runMyMdblistLists === 'function') runMyMdblistLists();
   }
-  if (!window._mySimklLists && ((typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || localStorage.getItem('myListAddon:simklKey'))) {
+  if (!window._mySimklLists && ((typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || readProviderSecret('myListAddon:simklKey'))) {
     if (typeof runMySimklLists === 'function') runMySimklLists();
   }
-  if (!window._myTmdbLists && ((typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || localStorage.getItem('myListAddon:tmdbSessionId') || localStorage.getItem('myListAddon:tmdbKey'))) {
+  if (!window._myTmdbLists && ((typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || readProviderSecret('myListAddon:tmdbSessionId') || readProviderSecret('myListAddon:tmdbKey'))) {
     if (typeof runMyTmdbLists === 'function') runMyTmdbLists();
   }
 
@@ -63536,7 +63944,7 @@ function renderHiddenListsSettingsSection() {
   const sectionsHtml = Object.keys(sectionLabels).map((section) => {
     const checked = hiddenSections.has(section);
     return '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none; padding:6px 0; border-bottom:1px solid var(--border);">' +
-      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-section-id="' + escapeAttr(section) + '" onchange="onHiddenSectionToggle(this)" style="cursor:pointer; width:16px; height:16px; flex-shrink:0;">' +
+      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-section-id="' + escapeAttr(section) + '" data-act="onHiddenSectionToggle" data-act-args="[&quot;@self&quot;]" style="cursor:pointer; width:16px; height:16px; flex-shrink:0;">' +
       '<span style="font-weight:600;">' + escapeHtml(sectionLabels[section]) + '</span>' +
     '</label>';
   }).join('');
@@ -63544,7 +63952,7 @@ function renderHiddenListsSettingsSection() {
   const rowsHtml = rows.length ? rows.map((r) => {
     const checked = hiddenIds.has(String(r.id));
     return '<label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none; padding:6px 0; border-bottom:1px solid var(--border);">' +
-      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-list-id="' + escapeAttr(r.id) + '" onchange="onHiddenListToggle(this)" style="margin-top:2px; cursor:pointer; width:16px; height:16px; flex-shrink:0;">' +
+      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-list-id="' + escapeAttr(r.id) + '" data-act="onHiddenListToggle" data-act-args="[&quot;@self&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px; flex-shrink:0;">' +
       '<div style="min-width:0;">' +
         '<span style="font-weight:600; overflow-wrap:anywhere;">' + escapeHtml(r.name) + '</span>' +
         '<div style="color:var(--muted); font-size:0.78rem; margin-top:2px;">' + escapeHtml(r.source) + '</div>' +
@@ -63626,7 +64034,7 @@ function renderTrackPlaybackSection() {
     '<div style="margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid var(--border);">' +
       '<p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">Streaming Apps &amp; Addon Players (Stremio, Nuvio, Wako, etc.)</p>' +
       '<label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.9rem;">' +
-        '<input type="checkbox" id="trackPlaybackCheck" ' + (enabled ? 'checked' : '') + ' onchange="onTrackPlaybackToggle(this)">' +
+        '<input type="checkbox" id="trackPlaybackCheck" ' + (enabled ? 'checked' : '') + ' data-act="onTrackPlaybackToggle" data-act-args="[&quot;@self&quot;]">' +
         '<span>Enable In-App Playback Auto-Tracking</span>' +
       '</label>' +
       '<p style="margin:6px 0 0; color:var(--muted); font-size:0.8rem;">Automatically marks movies and episodes as watched whenever playback starts in any supported streaming app or addon player (Stremio, Nuvio, Wako, etc.) via the built-in playback hook. Takes effect on your next install link.</p>' +
@@ -63637,26 +64045,26 @@ function renderTrackPlaybackSection() {
       '<p style="margin:0 0 8px; color:var(--muted); font-size:0.82rem;">Automatically scrobble watched movies and TV episodes from your Plex, Jellyfin, or Emby media servers directly into your personal Watch History and Continue Watching lists.</p>' +
       '<div class="webhook-input-group">' +
         '<input type="text" readonly id="scrobbleWebhookInput" value="Loading\u2026" style="padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:rgba(0,0,0,0.3); color:var(--text); font-family:monospace; font-size:0.82rem;">' +
-        '<button type="button" class="secondary lc-btn" onclick="copyScrobbleWebhookUrl()" style="padding:8px 14px; font-size:0.84rem;">Copy Webhook URL</button>' +
-        '<button type="button" class="secondary lc-btn" onclick="regenerateScrobbleWebhookUrl()" title="Issues a new webhook URL and stops the old one working. Use this if the URL has been shared or logged somewhere it should not have been." style="padding:8px 14px; font-size:0.84rem;">Regenerate</button>' +
+        '<button type="button" class="secondary lc-btn" data-act="copyScrobbleWebhookUrl" style="padding:8px 14px; font-size:0.84rem;">Copy Webhook URL</button>' +
+        '<button type="button" class="secondary lc-btn" data-act="regenerateScrobbleWebhookUrl" title="Issues a new webhook URL and stops the old one working. Use this if the URL has been shared or logged somewhere it should not have been." style="padding:8px 14px; font-size:0.84rem;">Regenerate</button>' +
       '</div>' +
 
       '<div style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
         '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0 0 4px;">' +
-          '<input type="checkbox" id="scrobbleFilterUsersCb" ' + (filterUsers ? 'checked' : '') + ' onchange="onScrobbleFilterUsersToggle(this)" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
+          '<input type="checkbox" id="scrobbleFilterUsersCb" ' + (filterUsers ? 'checked' : '') + ' data-act="onScrobbleFilterUsersToggle" data-act-args="[&quot;@self&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
           '<span style="font-weight:600;">Enable Media Server User Filtering</span>' +
         '</label>' +
         '<p style="margin:0 0 8px; color:var(--muted); font-size:0.8rem;">When enabled, only selected or specified media server user profiles will scrobble into your lists. Unselected users will be ignored.</p>' +
         '<div id="scrobbleFilterDetails" style="' + (filterUsers ? '' : 'display:none;') + ' margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.06);">' +
           '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">' +
             '<p style="margin:0; font-size:0.8rem; font-weight:600; color:var(--text);">Select Allowed Users:</p>' +
-            '<button type="button" class="secondary lc-btn" onclick="loadScrobbleSeenUsers()" style="padding:3px 8px; font-size:0.75rem;">Refresh Users</button>' +
+            '<button type="button" class="secondary lc-btn" data-act="loadScrobbleSeenUsers" style="padding:3px 8px; font-size:0.75rem;">Refresh Users</button>' +
           '</div>' +
           '<div id="scrobbleSeenUsersBox" style="font-size:0.82rem; color:var(--muted); margin-bottom:10px;"><small>Loading\u2026</small></div>' +
           '<p style="margin:0 0 4px; font-size:0.8rem; color:var(--muted);">Additional / Manual Usernames (comma-separated):</p>' +
-          '<input type="text" id="scrobbleAllowedUsersInput" placeholder="e.g. James, Alice" value="' + escapeHtml(allowedUsers) + '" oninput="onScrobbleAllowedUsersChange()" style="width:100%; box-sizing:border-box; margin-bottom:8px; font-size:0.84rem;">' +
+          '<input type="text" id="scrobbleAllowedUsersInput" placeholder="e.g. James, Alice" value="' + escapeHtml(allowedUsers) + '" data-act-on="input" data-act="onScrobbleAllowedUsersChange" style="width:100%; box-sizing:border-box; margin-bottom:8px; font-size:0.84rem;">' +
           '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:0.84rem; user-select:none; margin:0;">' +
-            '<input type="checkbox" id="scrobbleBlockAnonCb" ' + (blockAnon ? 'checked' : '') + ' onchange="onScrobbleBlockAnonChange(this)" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
+            '<input type="checkbox" id="scrobbleBlockAnonCb" ' + (blockAnon ? 'checked' : '') + ' data-act="onScrobbleBlockAnonChange" data-act-args="[&quot;@self&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
             '<span>Block scrobbles with no username in the payload</span>' +
           '</label>' +
         '</div>' +
@@ -63664,15 +64072,15 @@ function renderTrackPlaybackSection() {
 
       '<div style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
         '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0 0 8px;">' +
-          '<input type="checkbox" id="syncMediaServerHistoryCb" checked onchange="toggleMediaServerSync(this.checked)" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
+          '<input type="checkbox" id="syncMediaServerHistoryCb" checked data-act="toggleMediaServerSync" data-act-args="[&quot;@checked&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
           '<span style="font-weight:600;">Automatically sync media server scrobbles to your Watch History list</span>' +
         '</label>' +
         '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0 0 10px;">' +
-          '<input type="checkbox" id="forwardScrobbleToProvidersCb" checked onchange="toggleForwardScrobbles(this.checked)" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
+          '<input type="checkbox" id="forwardScrobbleToProvidersCb" checked data-act="toggleForwardScrobbles" data-act-args="[&quot;@checked&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
           '<span style="font-weight:600;">Forward scrobbles to connected external accounts (Trakt, Simkl, MDBList)</span>' +
         '</label>' +
         '<div>' +
-          '<button type="button" class="secondary lc-btn" onclick="syncAllConnectedAccountsNow(this)" style="padding:8px 14px; font-size:0.82rem; white-space:normal; line-height:1.35; text-align:center; max-width:100%; width:100%; box-sizing:border-box;">Sync Current Watch History to Connected Accounts Now</button>' +
+          '<button type="button" class="secondary lc-btn" data-act="syncAllConnectedAccountsNow" data-act-args="[&quot;@self&quot;]" style="padding:8px 14px; font-size:0.82rem; white-space:normal; line-height:1.35; text-align:center; max-width:100%; width:100%; box-sizing:border-box;">Sync Current Watch History to Connected Accounts Now</button>' +
         '</div>' +
       '</div>' +
 
@@ -63864,7 +64272,7 @@ async function loadScrobbleSeenUsers() {
       const serverName = (info && info.server) || 'Media Server';
       html +=
         '<label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.84rem; padding:3px 0;">' +
-          '<input type="checkbox" class="scrobble-user-cb" value="' + escapeHtml(username) + '" ' + (isChecked ? 'checked' : '') + ' onchange="onScrobbleUserCheckboxToggle()" style="width:15px; height:15px; cursor:pointer; flex:none;">' +
+          '<input type="checkbox" class="scrobble-user-cb" value="' + escapeHtml(username) + '" ' + (isChecked ? 'checked' : '') + ' data-act="onScrobbleUserCheckboxToggle" style="width:15px; height:15px; cursor:pointer; flex:none;">' +
           '<span><strong>' + escapeHtml(username) + '</strong> <span style="color:var(--muted); font-size:0.78rem;">(' + escapeHtml(serverName) + timeStr + ')</span></span>' +
         '</label>';
     }
@@ -63881,7 +64289,7 @@ function copyScrobbleWebhookUrl() {
   navigator.clipboard.writeText(input.value).then(() => {
     if (typeof showAddedToast === 'function') showAddedToast('Webhook URL copied to clipboard! \u2713');
     else if (typeof showAppAlert === 'function') showAppAlert('Copied', 'Scrobble Webhook URL copied to clipboard! Paste this URL into Plex, Jellyfin, or Emby webhooks settings.', true);
-    else alert('Scrobble Webhook URL copied to clipboard! Paste this URL into Plex, Jellyfin, or Emby webhooks settings.');
+    else showToast('Scrobble Webhook URL copied to clipboard! Paste this URL into Plex, Jellyfin, or Emby webhooks settings.', 'success');
   }).catch(() => {
     if (typeof showAppPrompt === 'function') {
       showAppPrompt('Scrobble Webhook URL', 'Copy your Scrobble Webhook URL below:', input.value);
@@ -63949,7 +64357,7 @@ function copyAccountKey() {
   if (!key) return;
   navigator.clipboard.writeText(key).then(() => {
     if (typeof showAddedToast === 'function') showAddedToast('Key copied to clipboard! \u2713');
-    else alert('Key copied to your clipboard.');
+    else showToast('Key copied to your clipboard.', 'success');
   }).catch(() => {
     if (typeof showAppPrompt === 'function') {
       showAppPrompt('Account Key', 'Copy your key below:', key);
@@ -64133,19 +64541,19 @@ function switchCreatorProfile() {
 
 function openRestoreModal() {
   showModal(
-    '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+    '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
     '<h2>Login</h2>' +
     '<p class="modal-sub">Enter your Username and Account Key to login and sync your lists.</p>' +
     '<div class="row"><input type="text" id="restoreNameInput" placeholder="Username"></div>' +
     '<div class="row" style="margin-top:8px;"><input type="text" id="restoreKeyInput" placeholder="Key (e.g. MYL-XXXX-XXXX-XXXX)"></div>' +
     '<div id="restoreModalError"></div>' +
     '<div class="actions" style="margin-top:14px;">' +
-    '<button type="button" class="primary" id="restoreSubmitBtn" onclick="submitRestoreProfile()">Login</button>' +
-    '<button type="button" class="secondary" onclick="closeModal(); openCreateProfileModal();">Need an account? Create one</button>' +
+    '<button type="button" class="primary" id="restoreSubmitBtn" data-act="submitRestoreProfile">Login</button>' +
+    '<button type="button" class="secondary" data-act="closeModal" data-act-then="openCreateProfileModal">Need an account? Create one</button>' +
     '</div>' +
     '<div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px; font-size:0.85rem;">' +
-    '<a href="#" onclick="event.preventDefault(); closeModal(); openForgotKeyModal();">Forgot key?</a>' +
-    '<a href="#" onclick="event.preventDefault(); closeModal(); openForgotUsernameModal();">Forgot username?</a>' +
+    '<a href="#" data-act="closeModal" data-act-prevent data-act-then="openForgotKeyModal">Forgot key?</a>' +
+    '<a href="#" data-act="closeModal" data-act-prevent data-act-then="openForgotUsernameModal">Forgot username?</a>' +
     '</div>'
   );
 }
@@ -64212,15 +64620,15 @@ async function submitRestoreProfile() {
 // person has fully proven who they are.
 function openForgotKeyModal() {
   showModal(
-    '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+    '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
     '<h2>Reset Your Key</h2>' +
     '<p class="modal-sub">Enter your Username and the recovery answer you set when you created your account.</p>' +
     '<div class="row"><input type="text" id="forgotKeyNameInput" placeholder="Username"></div>' +
     '<div class="row" style="margin-top:8px;"><input type="text" id="forgotKeyAnswerInput" placeholder="Recovery Answer"></div>' +
     '<div id="forgotKeyModalError"></div>' +
     '<div class="actions" style="margin-top:14px;">' +
-    '<button type="button" class="primary" id="forgotKeySubmitBtn" onclick="submitForgotKey()">Reset Key</button>' +
-    '<button type="button" class="secondary" onclick="closeModal(); openRestoreModal();">Back to Login</button>' +
+    '<button type="button" class="primary" id="forgotKeySubmitBtn" data-act="submitForgotKey">Reset Key</button>' +
+    '<button type="button" class="secondary" data-act="closeModal" data-act-then="openRestoreModal">Back to Login</button>' +
     '</div>' +
     '<p class="modal-sub" style="margin-top:14px;">Didn\\'t set a recovery answer, or don\\'t remember it? Reach out via Settings &gt; Feedback &amp; Support.</p>'
   );
@@ -64278,15 +64686,15 @@ async function submitForgotKey() {
 // (and Recovery Answer if configured on their account).
 function openForgotUsernameModal() {
   showModal(
-    '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+    '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
     '<h2>Find Your Username</h2>' +
     '<p class="modal-sub">Enter your Account Key and Recovery Answer (if you set one) to retrieve your username.</p>' +
     '<div class="row"><input type="text" id="forgotUsernameKeyInput" placeholder="Key (e.g. MYL-XXXX-XXXX-XXXX)"></div>' +
     '<div class="row" style="margin-top:8px;"><input type="text" id="forgotUsernameAnswerInput" placeholder="Recovery Answer (if set)"></div>' +
     '<div id="forgotUsernameModalError"></div>' +
     '<div class="actions" style="margin-top:14px;">' +
-    '<button type="button" class="primary" id="forgotUsernameSubmitBtn" onclick="submitForgotUsername()">Find Username</button>' +
-    '<button type="button" class="secondary" onclick="closeModal(); openRestoreModal();">Back to Login</button>' +
+    '<button type="button" class="primary" id="forgotUsernameSubmitBtn" data-act="submitForgotUsername">Find Username</button>' +
+    '<button type="button" class="secondary" data-act="closeModal" data-act-then="openRestoreModal">Back to Login</button>' +
     '</div>'
   );
 }
@@ -64315,14 +64723,14 @@ async function submitForgotUsername() {
     }
     const username = data.username;
     showModal(
-      '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+      '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
       '<h2>Account Found</h2>' +
       '<p class="modal-sub" style="margin-bottom:6px;">Your Username is:</p>' +
       '<div class="creator-key-display" style="font-size:1.1rem; font-weight:700; user-select:all;">' + escapeHtml(username) + '</div>' +
       (data.displayName && data.displayName !== username ? '<p class="modal-sub" style="margin-top:8px;">Display Name: <strong>' + escapeHtml(data.displayName) + '</strong></p>' : '') +
       '<div class="actions" style="margin-top:18px;">' +
       '<button type="button" class="primary" id="loginWithFoundUserBtn">Login with this Username</button>' +
-      '<button type="button" class="secondary" onclick="closeModal()">Done</button>' +
+      '<button type="button" class="secondary" data-act="closeModal">Done</button>' +
       '</div>'
     );
     const loginBtn = document.getElementById('loginWithFoundUserBtn');
@@ -65520,26 +65928,30 @@ async function loadCreatorSync(opts) {
         let needPushSync = false;
 
         if (synced.keys.tmdbKey && !tmdbDisc) {
-          localStorage.setItem('myListAddon:tmdbKey', synced.keys.tmdbKey);
+          rememberProviderSecret('myListAddon:tmdbKey', synced.keys.tmdbKey);
+          // The account has it; a pre-P6-8 copy here is redundant.
+          dropLegacyProviderSecret('myListAddon:tmdbKey');
           const el = document.getElementById('tmdbKeyInput');
           if (el) el.value = synced.keys.tmdbKey;
         } else if (tmdbDisc) {
-          localStorage.removeItem('myListAddon:tmdbKey');
+          forgetProviderSecret('myListAddon:tmdbKey');
           const el = document.getElementById('tmdbKeyInput');
           if (el) el.value = '';
-        } else if (localStorage.getItem('myListAddon:tmdbKey')) {
+        } else if (readProviderSecret('myListAddon:tmdbKey')) {
           needPushSync = true;
         }
 
         if (synced.keys.tmdbSessionId && !tmdbDisc) {
-          localStorage.setItem('myListAddon:tmdbSessionId', synced.keys.tmdbSessionId);
+          rememberProviderSecret('myListAddon:tmdbSessionId', synced.keys.tmdbSessionId);
+          // The account has it; a pre-P6-8 copy here is redundant.
+          dropLegacyProviderSecret('myListAddon:tmdbSessionId');
           window.tmdbSessionId = synced.keys.tmdbSessionId;
           tmdbSessionId = synced.keys.tmdbSessionId;
         } else if (tmdbDisc) {
-          localStorage.removeItem('myListAddon:tmdbSessionId');
+          forgetProviderSecret('myListAddon:tmdbSessionId');
           window.tmdbSessionId = '';
           tmdbSessionId = '';
-        } else if (localStorage.getItem('myListAddon:tmdbSessionId')) {
+        } else if (readProviderSecret('myListAddon:tmdbSessionId')) {
           needPushSync = true;
         }
 
@@ -65568,26 +65980,30 @@ async function loadCreatorSync(opts) {
         }
 
         if (synced.keys.mdblistKey && !mdblistDisc) {
-          localStorage.setItem('myListAddon:mdblistKey', synced.keys.mdblistKey);
+          rememberProviderSecret('myListAddon:mdblistKey', synced.keys.mdblistKey);
+          // The account has it; a pre-P6-8 copy here is redundant.
+          dropLegacyProviderSecret('myListAddon:mdblistKey');
           const el = document.getElementById('mdblistKeyInput');
           if (el) el.value = synced.keys.mdblistKey;
         } else if (mdblistDisc) {
-          localStorage.removeItem('myListAddon:mdblistKey');
+          forgetProviderSecret('myListAddon:mdblistKey');
           const el = document.getElementById('mdblistKeyInput');
           if (el) el.value = '';
-        } else if (localStorage.getItem('myListAddon:mdblistKey')) {
+        } else if (readProviderSecret('myListAddon:mdblistKey')) {
           needPushSync = true;
         }
 
         if (synced.keys.mdblistAccessToken && !mdblistDisc) {
-          localStorage.setItem('myListAddon:mdblistAccessToken', synced.keys.mdblistAccessToken);
+          rememberProviderSecret('myListAddon:mdblistAccessToken', synced.keys.mdblistAccessToken);
+          // The account has it; a pre-P6-8 copy here is redundant.
+          dropLegacyProviderSecret('myListAddon:mdblistAccessToken');
           window.mdblistAccessToken = synced.keys.mdblistAccessToken;
           mdblistAccessToken = synced.keys.mdblistAccessToken;
         } else if (mdblistDisc) {
-          localStorage.removeItem('myListAddon:mdblistAccessToken');
+          forgetProviderSecret('myListAddon:mdblistAccessToken');
           window.mdblistAccessToken = '';
           mdblistAccessToken = '';
-        } else if (localStorage.getItem('myListAddon:mdblistAccessToken')) {
+        } else if (readProviderSecret('myListAddon:mdblistAccessToken')) {
           needPushSync = true;
         }
 
@@ -65604,14 +66020,16 @@ async function loadCreatorSync(opts) {
         }
 
         if (synced.keys.traktKey && !traktDisc) {
-          localStorage.setItem('myListAddon:traktKey', synced.keys.traktKey);
+          rememberProviderSecret('myListAddon:traktKey', synced.keys.traktKey);
+          // The account has it; a pre-P6-8 copy here is redundant.
+          dropLegacyProviderSecret('myListAddon:traktKey');
           const el = document.getElementById('traktKeyInput');
           if (el) el.value = synced.keys.traktKey;
         } else if (traktDisc) {
-          localStorage.removeItem('myListAddon:traktKey');
+          forgetProviderSecret('myListAddon:traktKey');
           const el = document.getElementById('traktKeyInput');
           if (el) el.value = '';
-        } else if (localStorage.getItem('myListAddon:traktKey')) {
+        } else if (readProviderSecret('myListAddon:traktKey')) {
           needPushSync = true;
         }
 
@@ -65630,38 +66048,44 @@ async function loadCreatorSync(opts) {
         }
 
         if (synced.keys.traktAccessToken && !traktDisc) {
-          localStorage.setItem('myListAddon:traktAccessToken', synced.keys.traktAccessToken);
+          rememberProviderSecret('myListAddon:traktAccessToken', synced.keys.traktAccessToken);
+          // The account has it; a pre-P6-8 copy here is redundant.
+          dropLegacyProviderSecret('myListAddon:traktAccessToken');
           window.traktAccessToken = synced.keys.traktAccessToken;
           traktAccessToken = synced.keys.traktAccessToken;
         } else if (traktDisc) {
-          localStorage.removeItem('myListAddon:traktAccessToken');
+          forgetProviderSecret('myListAddon:traktAccessToken');
           window.traktAccessToken = '';
           traktAccessToken = '';
-        } else if (localStorage.getItem('myListAddon:traktAccessToken')) {
+        } else if (readProviderSecret('myListAddon:traktAccessToken')) {
           needPushSync = true;
         }
 
         if (synced.keys.simklKey && !simklDisc) {
-          localStorage.setItem('myListAddon:simklKey', synced.keys.simklKey);
+          rememberProviderSecret('myListAddon:simklKey', synced.keys.simklKey);
+          // The account has it; a pre-P6-8 copy here is redundant.
+          dropLegacyProviderSecret('myListAddon:simklKey');
           const el = document.getElementById('simklKeyInput');
           if (el) el.value = synced.keys.simklKey;
         } else if (simklDisc) {
-          localStorage.removeItem('myListAddon:simklKey');
+          forgetProviderSecret('myListAddon:simklKey');
           const el = document.getElementById('simklKeyInput');
           if (el) el.value = '';
-        } else if (localStorage.getItem('myListAddon:simklKey')) {
+        } else if (readProviderSecret('myListAddon:simklKey')) {
           needPushSync = true;
         }
 
         if (synced.keys.simklAccessToken && !simklDisc) {
-          localStorage.setItem('myListAddon:simklAccessToken', synced.keys.simklAccessToken);
+          rememberProviderSecret('myListAddon:simklAccessToken', synced.keys.simklAccessToken);
+          // The account has it; a pre-P6-8 copy here is redundant.
+          dropLegacyProviderSecret('myListAddon:simklAccessToken');
           window.simklAccessToken = synced.keys.simklAccessToken;
           simklAccessToken = synced.keys.simklAccessToken;
         } else if (simklDisc) {
-          localStorage.removeItem('myListAddon:simklAccessToken');
+          forgetProviderSecret('myListAddon:simklAccessToken');
           window.simklAccessToken = '';
           simklAccessToken = '';
-        } else if (localStorage.getItem('myListAddon:simklAccessToken')) {
+        } else if (readProviderSecret('myListAddon:simklAccessToken')) {
           needPushSync = true;
         }
 
@@ -66060,7 +66484,7 @@ async function loadCreatorSync(opts) {
 function beginSaveListFlow(sourceRow, urlInput, name) {
   const payload = parseCustomListPayloadClient(urlInput.value);
   if (!payload) {
-    alert('Could not read this list.');
+    showToast('Could not read this list.', 'error');
     return;
   }
   if (activeCreator) {
@@ -66078,13 +66502,13 @@ function startSaveListFlow(btn) {
   const sourceRow = btn.closest('.source-row');
   const urlInput = sourceRow && sourceRow.querySelector('.url');
   if (!urlInput) {
-    alert('Could not read this list.');
+    showToast('Could not read this list.', 'error');
     return;
   }
   const rowDiv = urlInput.closest('.entry');
   const name = rowDiv && rowDiv.querySelector('.name') ? rowDiv.querySelector('.name').value.trim() : '';
   if (!name) {
-    alert('Name this list first (in the row above), then try again.');
+    showToast('Name this list first (in the row above), then try again.', 'error');
     return;
   }
   beginSaveListFlow(sourceRow, urlInput, name);
@@ -66092,7 +66516,7 @@ function startSaveListFlow(btn) {
 
 function openCreateProfileModal() {
   showModal(
-    '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+    '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
     '<h2>Create a Free Account</h2>' +
     '<p class="modal-sub">Save and sync your custom lists, presets, and channels from any device.<br>No email. No password. Just a username and key.</p>' +
     '<div class="row"><input type="text" id="createProfileNameInput" placeholder="Choose a Username" maxlength="25"></div>' +
@@ -66101,8 +66525,8 @@ function openCreateProfileModal() {
     '<p class="modal-sub" style="font-size:0.78rem; margin-top:4px;">If you ever lose your key, this is the only way back in besides contacting us. It can reset your key on its own, so treat it like a password: at least 8 characters, something only you know -- not a public username or anything someone could look up.</p>' +
     '<div id="createProfileError"></div>' +
     '<div class="actions" style="margin-top:14px;">' +
-    '<button type="button" class="primary" id="createProfileSubmitBtn" onclick="submitCreateProfile()">Create Account</button>' +
-    '<button type="button" class="secondary" onclick="closeModal(); openRestoreModal();">Already have one? Login</button>' +
+    '<button type="button" class="primary" id="createProfileSubmitBtn" data-act="submitCreateProfile">Create Account</button>' +
+    '<button type="button" class="secondary" data-act="closeModal" data-act-then="openRestoreModal">Already have one? Login</button>' +
     '</div>'
   );
 }
@@ -66238,8 +66662,8 @@ function showKeyRevealModal(displayName, creatorKey) {
     '<div class="creator-key-display" id="revealedCreatorKey">' + escapeHtml(creatorKey) + '</div>' +
     '<p class="modal-sub">Save this key somewhere safe. You\\'ll need it to edit your lists from another browser. You can view it again later from Settings.</p>' +
     '<div class="actions">' +
-    '<button type="button" class="secondary" id="copyRevealedKeyBtn" onclick="copyRevealedCreatorKey()">Copy Key</button>' +
-    '<button type="button" onclick="continueAfterKeyReveal()">Continue</button>' +
+    '<button type="button" class="secondary" id="copyRevealedKeyBtn" data-act="copyRevealedCreatorKey">Copy Key</button>' +
+    '<button type="button" data-act="continueAfterKeyReveal">Continue</button>' +
     '</div>'
   );
 }
@@ -66279,7 +66703,7 @@ function openVisibilityModal() {
   if (!ctx) return;
   showModal(
     '<div class="modal-body">' +
-      '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+      '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
       '<h2 class="panel-title" style="margin-top:0;">Save Custom List</h2>' +
       '<p style="margin:0 0 16px; font-size:0.88rem; color:var(--muted);">Choose visibility for <strong>' + escapeHtml(ctx.name || 'Custom List') + '</strong> on your Profile.</p>' +
       '<div class="visibility-choice" style="display:flex; flex-direction:column; gap:12px; margin: 16px 0 20px;">' +
@@ -66293,8 +66717,8 @@ function openVisibilityModal() {
         '</label>' +
       '</div>' +
       '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end; gap:8px;">' +
-        '<button type="button" class="secondary lc-btn" onclick="closeModal()">Cancel</button>' +
-        '<button type="button" class="primary lc-btn" onclick="confirmSaveAsCreator()">Save List</button>' +
+        '<button type="button" class="secondary lc-btn" data-act="closeModal">Cancel</button>' +
+        '<button type="button" class="primary lc-btn" data-act="confirmSaveAsCreator">Save List</button>' +
       '</div>' +
     '</div>'
   );
@@ -66304,7 +66728,7 @@ function showSavedCustomListModal(listName, visibility, url) {
   const isPrivate = visibility === 'private';
   showModal(
     '<div class="modal-body">' +
-      '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+      '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
       '<h2 class="panel-title" style="margin-top:0;">\u2713 List Saved</h2>' +
       '<p style="margin:8px 0 16px; font-size:0.9rem; color:var(--text);">' +
         '<strong>' + escapeHtml(listName || 'Custom List') + '</strong> has been saved to your Profile as a <strong>' + (isPrivate ? 'private' : 'public') + '</strong> list.' +
@@ -66317,13 +66741,13 @@ function showSavedCustomListModal(listName, visibility, url) {
             '<p style="margin:0 0 8px; font-size:0.84rem; color:var(--muted);">Public share link:</p>' +
             '<div style="display:flex; gap:8px; align-items:center;">' +
               '<input type="text" id="savedListUrlInput" value="' + escapeAttr(url || '') + '" readonly style="flex:1; padding:10px 12px; font-size:0.88rem; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text);">' +
-              '<button type="button" class="lc-btn primary" id="savedListCopyBtn" onclick="copyShareUrlById(&quot;savedListUrlInput&quot;, this)" style="white-space:nowrap; padding:10px 14px;">Copy Link</button>' +
+              '<button type="button" class="lc-btn primary" id="savedListCopyBtn" data-act="copyShareUrlById" data-act-args="[&quot;savedListUrlInput&quot;,&quot;@self&quot;]" style="white-space:nowrap; padding:10px 14px;">Copy Link</button>' +
             '</div>' +
           '</div>'
       ) +
       '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end; gap:8px;">' +
         (!isPrivate && url ? '<a href="' + escapeAttr(url) + '" target="_blank" class="button secondary lc-btn" style="text-decoration:none; display:inline-flex; align-items:center;">Open Link &nearr;</a>' : '') +
-        '<button type="button" class="primary lc-btn" onclick="closeModal()">Done</button>' +
+        '<button type="button" class="primary lc-btn" data-act="closeModal">Done</button>' +
       '</div>' +
     '</div>'
   );
@@ -66399,11 +66823,11 @@ async function confirmSaveAsCreator() {
 function showAppNoticeModal(title, message, isError) {
   showModal(
     '<div class="modal-body">' +
-      '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+      '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
       '<h2 class="panel-title" style="margin-top:0;' + (isError ? ' color:var(--danger);' : '') + '">' + escapeHtml(title || 'Notice') + '</h2>' +
       '<p style="margin:12px 0 20px; font-size:0.9rem; color:var(--text); line-height:1.4;">' + escapeHtml(message || '') + '</p>' +
       '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end;">' +
-        '<button type="button" class="primary lc-btn" onclick="closeModal()">OK</button>' +
+        '<button type="button" class="primary lc-btn" data-act="closeModal">OK</button>' +
       '</div>' +
     '</div>'
   );
@@ -67096,13 +67520,13 @@ async function renderCreatorDashboard(options) {
           overlays += '<div class="list-card-count-overlay desktop-only creatorListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
         }
         const removeBtn = isWatchlist
-          ? '<button type="button" class="cw-remove-btn" onclick="event.stopPropagation(); removeWatchlistItemDirect(&quot;' + escapeJsAttr(it.imdbId || it.id) + '&quot;, this)" title="Remove from Watchlist" aria-label="Remove from Watchlist">\u2715</button>'
+          ? '<button type="button" class="cw-remove-btn" data-act="removeWatchlistItemDirect" data-act-stop data-act-args="' + appActArgs([it.imdbId || it.id, "@self"]) + '" title="Remove from Watchlist" aria-label="Remove from Watchlist">\u2715</button>'
           : '';
         const posterType = it.kind || (it.type !== 'mixed' ? (it.type || '') : '') || (it.showId ? 'series' : (l.type === 'mixed' ? '' : (l.type || '')));
         const itemPoster = resolveItemPoster(it);
         const label = formatWatchItemLabel(it);
         const posterEl = itemPoster
-          ? '<img src="' + escapeAttr(itemPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.showId || it.imdbId || it.id || (it.tmdbId ? ('tmdb:' + it.tmdbId) : '')) + '" data-type="' + escapeAttr(posterType) + '" data-title="' + escapeAttr(label.title || it.showTitle || it.title || it.name || '') + '" alt="" loading="lazy" onerror="handlePosterImgError(this)">'
+          ? '<img src="' + escapeAttr(itemPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.showId || it.imdbId || it.id || (it.tmdbId ? ('tmdb:' + it.tmdbId) : '')) + '" data-type="' + escapeAttr(posterType) + '" data-title="' + escapeAttr(label.title || it.showTitle || it.title || it.name || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
           : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
           const ratingSpan = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(it) : '';
           return '<div class="list-card-mini-poster-tile" data-id="' + escapeAttr(it.showId || it.imdbId || it.id || '') + '" data-type="' + escapeAttr(posterType) + '" data-title="' + escapeAttr(label.title || it.showTitle || it.title || it.name || '') + '">' +
@@ -67125,7 +67549,7 @@ async function renderCreatorDashboard(options) {
         '<div class="list-card-header">' +
           '<div class="list-card-body creatorListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' +
             '<div class="list-card-title">' +
-              '<span class="drag-handle-list" title="Drag to reorder" onclick="event.stopPropagation();">&#x2630;</span>' +
+              '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop>&#x2630;</span>' +
               escapeHtml(l.name) +
             '</div>' +
             '<div class="list-card-meta">' +
@@ -67371,18 +67795,18 @@ function buildLocalListCardHtml(l) {
     let removeBtn = '';
     const cwRemoveId = it.showId || it.imdbId || it.id;
     if (l.slug === 'continue-watching' && cwRemoveId) {
-      removeBtn = '<button type="button" class="cw-remove-btn" onclick="event.stopPropagation(); dismissContinueWatchingShow(&quot;' + escapeJsAttr(cwRemoveId) + '&quot;, this)" title="Remove from Continue Watching" aria-label="Remove from Continue Watching">\u2715</button>';
+      removeBtn = '<button type="button" class="cw-remove-btn" data-act="dismissContinueWatchingShow" data-act-stop data-act-args="' + appActArgs([cwRemoveId, "@self"]) + '" title="Remove from Continue Watching" aria-label="Remove from Continue Watching">\u2715</button>';
     } else if (l.slug === 'airing-next' && cwRemoveId) {
       // The dashboard renders Airing Next through buildAiringNextCardHtml
       // (21_client-custom-list-builder.js), which has its own copy of this
       // button. This branch is for anything that reaches the generic card
       // with the airing-next slug, so the shelf never renders an "x" that
       // removes the wrong thing -- or, worse, none at all.
-      removeBtn = '<button type="button" class="cw-remove-btn" onclick="event.stopPropagation(); removeAiringNextShow(&quot;' + escapeJsAttr(cwRemoveId) + '&quot;, this)" title="Remove from Airing Next" aria-label="Remove from Airing Next">\u2715</button>';
+      removeBtn = '<button type="button" class="cw-remove-btn" data-act="removeAiringNextShow" data-act-stop data-act-args="' + appActArgs([cwRemoveId, "@self"]) + '" title="Remove from Airing Next" aria-label="Remove from Airing Next">\u2715</button>';
     } else if (isWatchlist) {
-      removeBtn = '<button type="button" class="cw-remove-btn" onclick="event.stopPropagation(); removeWatchlistItemDirect(&quot;' + escapeJsAttr(it.imdbId || it.id) + '&quot;, this)" title="Remove from Watchlist" aria-label="Remove from Watchlist">\u2715</button>';
+      removeBtn = '<button type="button" class="cw-remove-btn" data-act="removeWatchlistItemDirect" data-act-stop data-act-args="' + appActArgs([it.imdbId || it.id, "@self"]) + '" title="Remove from Watchlist" aria-label="Remove from Watchlist">\u2715</button>';
     } else if (l.slug === 'watch-history') {
-      removeBtn = '<button type="button" class="cw-remove-btn" onclick="event.stopPropagation(); removeWatchHistoryItemDirect(&quot;' + escapeJsAttr(it.id || it.imdbId) + '&quot;, this)" title="Remove from Watch History" aria-label="Remove from Watch History">\u2715</button>';
+      removeBtn = '<button type="button" class="cw-remove-btn" data-act="removeWatchHistoryItemDirect" data-act-stop data-act-args="' + appActArgs([it.id || it.imdbId, "@self"]) + '" title="Remove from Watch History" aria-label="Remove from Watch History">\u2715</button>';
     }
     const itemPoster = resolveItemPoster(it);
     const isAiringList = l.slug === 'airing-next' || l.statusKey === 'airing-next';
@@ -67465,7 +67889,7 @@ function buildLocalListCardHtml(l) {
     }
 
     const posterEl = itemPoster
-      ? '<img src="' + escapeAttr(itemPoster) + '" class="clickable-poster" data-id="' + escapeAttr(posterId) + '" data-type="' + escapeAttr(posterType) + '" data-title="' + escapeAttr(label.title || it.showTitle || it.title || it.name || '') + '" alt="" loading="lazy" onerror="handlePosterImgError(this)">'
+      ? '<img src="' + escapeAttr(itemPoster) + '" class="clickable-poster" data-id="' + escapeAttr(posterId) + '" data-type="' + escapeAttr(posterType) + '" data-title="' + escapeAttr(label.title || it.showTitle || it.title || it.name || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
       : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
     const ratingSpan = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(it) : '';
     return '<div class="list-card-mini-poster-tile" data-id="' + escapeAttr(posterId) + '" data-type="' + escapeAttr(posterType) + '" data-title="' + escapeAttr(label.title || it.showTitle || it.title || it.name || '') + '">' +
@@ -67527,7 +67951,7 @@ function buildLocalListCardHtml(l) {
     '<div class="list-card-header">' +
       '<div class="list-card-body localListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type || 'movie') + '" style="cursor:pointer;">' +
         '<div class="list-card-title">' +
-          '<span class="drag-handle-list" title="Drag to reorder" onclick="event.stopPropagation();">&#x2630;</span>' +
+          '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop>&#x2630;</span>' +
           escapeHtml(l.name) +
         '</div>' +
         '<div class="list-card-meta">' +
@@ -67792,7 +68216,7 @@ if (_creatorDashEl) {
           if (typeof showAppAlert === 'function') {
             showAppAlert('Error', 'Could not delete: ' + (data.error || 'unknown error'), false);
           } else {
-            alert('Could not delete: ' + (data.error || 'unknown error'));
+            showToast('Could not delete: ' + (data.error || 'unknown error'), 'error');
           }
           return;
         }
@@ -67826,7 +68250,7 @@ if (_creatorDashEl) {
         if (typeof showAppAlert === 'function') {
           showAppAlert('Network Error', 'Network error while deleting.', false);
         } else {
-          alert('Network error while deleting.');
+          showToast('Network error while deleting.', 'error');
         }
       }
     }, true);
@@ -67850,7 +68274,7 @@ if (_creatorDashEl) {
     const slug = addToConfigBtn.dataset.slug;
     const listMeta = (lastCreatorListsData || []).find((l) => l.slug === slug);
     if (!listMeta) {
-      alert('Could not find that list -- try refreshing.');
+      showToast('Could not find that list -- try refreshing.', 'error');
       return;
     }
     const isAdded = addToConfigBtn.classList.contains('is-added') || (typeof isListAddedToConfig === 'function' && isListAddedToConfig(null, listMeta.type, slug));
@@ -67955,7 +68379,7 @@ if (_creatorDashEl) {
     const slug = localAddToConfigBtn.dataset.slug;
     const listMeta = (lastLocalCustomListsData || []).find((l) => l.slug === slug);
     if (!listMeta) {
-      alert('Could not find that list -- try refreshing.');
+      showToast('Could not find that list -- try refreshing.', 'error');
       return;
     }
     
@@ -68096,7 +68520,7 @@ function normalizeSnapshotItemsForCatalog(items) {
 function editCreatorList(slug) {
   const listMeta = (lastCreatorListsData || []).find((l) => l.slug === slug);
   if (!listMeta) {
-    alert('Could not find that list -- try refreshing.');
+    showToast('Could not find that list -- try refreshing.', 'error');
     return;
   }
   const isWatchlist = slug === 'watchlist' || listMeta.isWatchlist || (listMeta.name && listMeta.name.toLowerCase() === 'watchlist');
@@ -68144,7 +68568,7 @@ function editLocalCustomList(slug) {
   const map = loadLocalCustomLists();
   const listMeta = map[slug];
   if (!listMeta) {
-    alert('Could not find that list -- try refreshing.');
+    showToast('Could not find that list -- try refreshing.', 'error');
     return;
   }
   const isWatchlist = slug === 'watchlist' || listMeta.isWatchlist || (listMeta.name && listMeta.name.toLowerCase() === 'watchlist');
@@ -68284,12 +68708,12 @@ function openCreateListModal(presetDestination) {
   if (!requireSignedInFor('create custom lists')) return; // docs/DECISIONS.md D-8
   const destEl = document.getElementById('createListModalDestination');
   if (destEl) {
-    const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
-    const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || localStorage.getItem('myListAddon:tmdbSessionId') || '';
+    const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
+    const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || readProviderSecret('myListAddon:tmdbSessionId') || '';
     const tmdbAcc = (typeof tmdbAccountId !== 'undefined' && tmdbAccountId) || localStorage.getItem('myListAddon:tmdbAccountId') || '';
-    const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
-    const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:mdblistKey') || '';
-    const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
+    const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
+    const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || readProviderSecret('myListAddon:mdblistKey') || '';
+    const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
 
     let optsHtml = '<option value="custom">Custom List (Local / Creator)</option>';
     if (traktToken) optsHtml += '<option value="trakt">Trakt List</option>';
@@ -68372,7 +68796,7 @@ async function submitCreateListModal() {
           if (data.ok && data.imdbId) finalImdbId = data.imdbId;
         } catch(e) {}
       } else if (finalImdbId && String(finalImdbId).startsWith('tt')) {
-        const apiKeyTmdb = (document.getElementById('tmdbKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:tmdbKey') || '';
+        const apiKeyTmdb = (document.getElementById('tmdbKeyInput')?.value.trim()) || readProviderSecret('myListAddon:tmdbKey') || '';
         if (apiKeyTmdb) {
           try {
             const findRes = await fetch('https://api.themoviedb.org/3/find/' + encodeURIComponent(finalImdbId) + '?api_key=' + encodeURIComponent(apiKeyTmdb) + '&external_source=imdb_id');
@@ -68465,16 +68889,16 @@ async function submitCreateListModal() {
       }
     } else {
       // External Provider Creation (Trakt, TMDB, MDBList)
-      const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
-      const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:traktKey') || '';
+      const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
+      const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || readProviderSecret('myListAddon:traktKey') || '';
       const traktUser = (typeof traktUsername !== 'undefined' && traktUsername) || localStorage.getItem('myListAddon:traktUsername') || '';
-      const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || localStorage.getItem('myListAddon:tmdbSessionId') || '';
-      const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:tmdbKey') || '';
-      const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
-      const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:mdblistKey') || '';
+      const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || readProviderSecret('myListAddon:tmdbSessionId') || '';
+      const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || readProviderSecret('myListAddon:tmdbKey') || '';
+      const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
+      const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || readProviderSecret('myListAddon:mdblistKey') || '';
       const mdbUser = (typeof mdblistUsername !== 'undefined' && mdblistUsername) || localStorage.getItem('myListAddon:mdblistUsername') || '';
-      const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
-      const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:simklKey') || '';
+      const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
+      const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || readProviderSecret('myListAddon:simklKey') || '';
 
       const res = await fetch(ORIGIN + '/api/external-list/create', {
         method: 'POST',
@@ -68587,12 +69011,12 @@ function deleteExternalListDirect(provider, listId, listName, btn) {
         btn.textContent = 'Deleting...';
       }
 
-      const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
-      const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:traktKey') || '';
-      const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || localStorage.getItem('myListAddon:tmdbSessionId') || '';
-      const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:tmdbKey') || '';
-      const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
-      const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:mdblistKey') || '';
+      const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
+      const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || readProviderSecret('myListAddon:traktKey') || '';
+      const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || readProviderSecret('myListAddon:tmdbSessionId') || '';
+      const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || readProviderSecret('myListAddon:tmdbKey') || '';
+      const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
+      const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || readProviderSecret('myListAddon:mdblistKey') || '';
 
       try {
         const res = await fetch(ORIGIN + '/api/external-list/delete', {
@@ -69612,11 +70036,11 @@ function collectKeys() {
   const tmdbKeyEl = document.getElementById('tmdbKeyInput');
   let tmdbKey = tmdbKeyEl ? tmdbKeyEl.value.trim() : '';
   if (!tmdbKey && !tmdbDisc) {
-    try { tmdbKey = localStorage.getItem('myListAddon:tmdbKey') || ''; } catch (e) {}
+    try { tmdbKey = readProviderSecret('myListAddon:tmdbKey') || ''; } catch (e) {}
   }
   let tmdbSession = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || '';
   if (!tmdbSession && !tmdbDisc) {
-    try { tmdbSession = localStorage.getItem('myListAddon:tmdbSessionId') || ''; } catch (e) {}
+    try { tmdbSession = readProviderSecret('myListAddon:tmdbSessionId') || ''; } catch (e) {}
   }
   let tmdbAcc = (typeof tmdbAccountId !== 'undefined' && tmdbAccountId) || '';
   if (!tmdbAcc && !tmdbDisc) {
@@ -69630,11 +70054,11 @@ function collectKeys() {
   const mdblistKeyEl = document.getElementById('mdblistKeyInput');
   let mdblistKey = mdblistKeyEl ? mdblistKeyEl.value.trim() : '';
   if (!mdblistKey && !mdblistDisc) {
-    try { mdblistKey = localStorage.getItem('myListAddon:mdblistKey') || ''; } catch (e) {}
+    try { mdblistKey = readProviderSecret('myListAddon:mdblistKey') || ''; } catch (e) {}
   }
   let mdblistToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || '';
   if (!mdblistToken && !mdblistDisc) {
-    try { mdblistToken = localStorage.getItem('myListAddon:mdblistAccessToken') || ''; } catch (e) {}
+    try { mdblistToken = readProviderSecret('myListAddon:mdblistAccessToken') || ''; } catch (e) {}
   }
   let mdblistUser = (typeof mdblistUsername !== 'undefined' && mdblistUsername) || '';
   if (!mdblistUser && !mdblistDisc) {
@@ -69644,7 +70068,7 @@ function collectKeys() {
   const traktKeyEl = document.getElementById('traktKeyInput');
   let traktKey = traktKeyEl ? traktKeyEl.value.trim() : '';
   if (!traktKey && !traktDisc) {
-    try { traktKey = localStorage.getItem('myListAddon:traktKey') || ''; } catch (e) {}
+    try { traktKey = readProviderSecret('myListAddon:traktKey') || ''; } catch (e) {}
   }
   const traktUserEl = document.getElementById('traktUsernameInput');
   let traktUser = traktUserEl ? traktUserEl.value.trim() : '';
@@ -69653,17 +70077,17 @@ function collectKeys() {
   }
   let traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || '';
   if (!traktToken && !traktDisc) {
-    try { traktToken = localStorage.getItem('myListAddon:traktAccessToken') || ''; } catch (e) {}
+    try { traktToken = readProviderSecret('myListAddon:traktAccessToken') || ''; } catch (e) {}
   }
 
   const simklKeyEl = document.getElementById('simklKeyInput');
   let simklKey = simklKeyEl ? simklKeyEl.value.trim() : '';
   if (!simklKey && !simklDisc) {
-    try { simklKey = localStorage.getItem('myListAddon:simklKey') || ''; } catch (e) {}
+    try { simklKey = readProviderSecret('myListAddon:simklKey') || ''; } catch (e) {}
   }
   let simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || '';
   if (!simklToken && !simklDisc) {
-    try { simklToken = localStorage.getItem('myListAddon:simklAccessToken') || ''; } catch (e) {}
+    try { simklToken = readProviderSecret('myListAddon:simklAccessToken') || ''; } catch (e) {}
   }
   let simklUser = (typeof simklUsername !== 'undefined' && simklUsername) || '';
   if (!simklUser && !simklDisc) {
@@ -70842,7 +71266,7 @@ function livePreviewPosterHtml(m) {
   const landscape = m.posterShape === 'landscape';
   const posterClass = 'live-preview-poster' + (landscape ? ' landscape' : '');
   const posterEl = resolvedPoster
-    ? '<img class="' + posterClass + '" src="' + escapeAttr(resolvedPoster) + '" alt="" loading="lazy" onerror="handlePosterImgError(this)" data-imdb="' + escapeAttr(m.id || '') + '"><div class="' + posterClass + ' live-preview-poster-placeholder" style="display:none;"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>'
+    ? '<img class="' + posterClass + '" src="' + escapeAttr(resolvedPoster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]" data-imdb="' + escapeAttr(m.id || '') + '"><div class="' + posterClass + ' live-preview-poster-placeholder" style="display:none;"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>'
     : '<div class="' + posterClass + ' live-preview-poster-placeholder"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
   
   const parentUrl = (m.listUrl || (window._currentListDetailsParams ? window._currentListDetailsParams.listUrl : '') || '').toLowerCase();
@@ -70873,19 +71297,19 @@ function livePreviewPosterHtml(m) {
   let removeBtn = '';
   if (!m.isLivePreviewShelf && !m.hideRemoveBtn) {
     if (m.removeExternalProvider) {
-      removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="' + escapeAttr(m.removeExternalProvider) + '" data-target="' + escapeAttr(m.removeExternalTarget || '') + '" data-list-id="' + escapeAttr(m.removeExternalListId || '') + '" data-remove-id="' + escapeAttr(m.id) + '" data-media-type="' + escapeAttr(m.type || 'movie') + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from ' + escapeAttr(m.removeExternalProvider) + '" aria-label="Remove from ' + escapeAttr(m.removeExternalProvider) + '">\u2715</button>';
+      removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="' + escapeAttr(m.removeExternalProvider) + '" data-target="' + escapeAttr(m.removeExternalTarget || '') + '" data-list-id="' + escapeAttr(m.removeExternalListId || '') + '" data-remove-id="' + escapeAttr(m.id) + '" data-media-type="' + escapeAttr(m.type || 'movie') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from ' + escapeAttr(m.removeExternalProvider) + '" aria-label="Remove from ' + escapeAttr(m.removeExternalProvider) + '">\u2715</button>';
     } else {
       const cwRemoveTarget = m.removeShowId || (isCwItem ? (m.showId || m.id || m.imdbId) : null);
       if (cwRemoveTarget) {
-        removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="cw" data-remove-id="' + escapeAttr(cwRemoveTarget) + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from Continue Watching" aria-label="Remove from Continue Watching">\u2715</button>';
+        removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="cw" data-remove-id="' + escapeAttr(cwRemoveTarget) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Continue Watching" aria-label="Remove from Continue Watching">\u2715</button>';
       } else if (m.removeAiringShowId) {
-        removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="airing" data-remove-id="' + escapeAttr(m.removeAiringShowId) + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from Airing Next" aria-label="Remove from Airing Next">\u2715</button>';
+        removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="airing" data-remove-id="' + escapeAttr(m.removeAiringShowId) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Airing Next" aria-label="Remove from Airing Next">\u2715</button>';
       } else if (m.removeWatchlistId) {
-        removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="watchlist" data-remove-id="' + escapeAttr(m.removeWatchlistId) + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from Watchlist" aria-label="Remove from Watchlist">\u2715</button>';
+        removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="watchlist" data-remove-id="' + escapeAttr(m.removeWatchlistId) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Watchlist" aria-label="Remove from Watchlist">\u2715</button>';
       } else if (m.removeHistoryId) {
-        removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="history" data-remove-id="' + escapeAttr(m.removeHistoryId) + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from Watch History" aria-label="Remove from Watch History">\u2715</button>';
+        removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="history" data-remove-id="' + escapeAttr(m.removeHistoryId) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Watch History" aria-label="Remove from Watch History">\u2715</button>';
       } else if (m.removeCustomListSlug) {
-        removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="custom" data-remove-id="' + escapeAttr(m.id) + '" data-remove-slug="' + escapeAttr(m.removeCustomListSlug) + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from List" aria-label="Remove from List">\u2715</button>';
+        removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="custom" data-remove-id="' + escapeAttr(m.id) + '" data-remove-slug="' + escapeAttr(m.removeCustomListSlug) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from List" aria-label="Remove from List">\u2715</button>';
       }
     }
   }
@@ -71094,16 +71518,16 @@ function removeListItemFromDetails(btn) {
       }
     }
 
-    const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
-    const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:traktKey') || '';
+    const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
+    const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || readProviderSecret('myListAddon:traktKey') || '';
     const traktUser = (typeof traktUsername !== 'undefined' && traktUsername) || localStorage.getItem('myListAddon:traktUsername') || '';
-    const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
-    const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:simklKey') || '';
-    const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || localStorage.getItem('myListAddon:tmdbSessionId') || '';
+    const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
+    const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || readProviderSecret('myListAddon:simklKey') || '';
+    const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || readProviderSecret('myListAddon:tmdbSessionId') || '';
     const tmdbAcc = (typeof tmdbAccountId !== 'undefined' && tmdbAccountId) || localStorage.getItem('myListAddon:tmdbAccountId') || '';
-    const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:tmdbKey') || '';
-    const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
-    const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:mdblistKey') || '';
+    const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || readProviderSecret('myListAddon:tmdbKey') || '';
+    const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
+    const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || readProviderSecret('myListAddon:mdblistKey') || '';
 
     fetch(ORIGIN + '/api/external-list/item-mutate', {
       method: 'POST',
@@ -72944,7 +73368,7 @@ function importConfigJson() {
   const raw = document.getElementById('configJsonBox').value.trim();
   if (!raw) {
     if (typeof showAppAlert === 'function') showAppAlert('Input Required', 'Paste a config JSON blob into the box first.', false);
-    else alert('Paste a config JSON blob into the box first.');
+    else showToast('Paste a config JSON blob into the box first.', 'error');
     return;
   }
   let data;
@@ -72952,7 +73376,7 @@ function importConfigJson() {
     data = JSON.parse(raw);
   } catch (e) {
     if (typeof showAppAlert === 'function') showAppAlert('Invalid JSON', 'That is not valid JSON.', false);
-    else alert('That is not valid JSON.');
+    else showToast('That is not valid JSON.', 'error');
     return;
   }
   runImport(data);
@@ -72981,7 +73405,7 @@ function runImport(data) {
         false
       );
     } else {
-      alert('Import failed part-way: ' + detail);
+      showToast('Import failed part-way: ' + detail, 'error');
     }
   }
 }
@@ -73008,8 +73432,8 @@ function looksLikeTmdbKey(v) {
 
 // Ids and slugs that arrived from somewhere else.
 //
-// escapeJsAttr (19_client-search-and-likes.js) is what actually stops an
-// imported id executing; this is the second layer, and it is here because an
+// The action attributes (P6-8) are what actually stop an imported id
+// executing; this is the second layer, and it is here because an
 // id is not free text. Every id this app produces is a slug, a "ch_<time>_<rand>",
 // a "tt…" or a "tmdb:…" -- none of which can contain a quote, an angle bracket,
 // a backslash or a control character. A value that does was not produced by
@@ -73181,13 +73605,13 @@ function showImportReport(report) {
   const title = report.warnings.length ? 'Restored with warnings' : 'Restored';
   const body = lines.map((l) => '\\u2022 ' + l).join('\\n');
   if (typeof showAppAlert === 'function') showAppAlert(title, body, false);
-  else alert(title + '\\n\\n' + body);
+  else showToast(title + '\\n\\n' + body, 'error');
 }
 
 function applyImportedConfig(data) {
   if (!data || (!Array.isArray(data.entries) && !data.customLists && !data.configuredCatalogs)) {
     if (typeof showAppAlert === 'function') showAppAlert('Invalid Config', 'That JSON does not look like a valid My Lists backup.', false);
-    else alert('That JSON does not look like a valid My Lists backup.');
+    else showToast('That JSON does not look like a valid My Lists backup.', 'error');
     return;
   }
 
@@ -73219,13 +73643,13 @@ function applyImportedConfig(data) {
   if (tmdbKey) {
     const el = document.getElementById('tmdbKeyInput');
     if (el) el.value = tmdbKey;
-    try { localStorage.setItem('myListAddon:tmdbKey', tmdbKey); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:tmdbKey', tmdbKey); } catch (e) {}
   }
   const tmdbSessionIdVal = data.tmdbSessionId || keys.tmdbSessionId;
   if (tmdbSessionIdVal) {
     tmdbSessionId = tmdbSessionIdVal;
     window.tmdbSessionId = tmdbSessionIdVal;
-    try { localStorage.setItem('myListAddon:tmdbSessionId', tmdbSessionIdVal); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:tmdbSessionId', tmdbSessionIdVal); } catch (e) {}
   }
   const tmdbAccountIdVal = data.tmdbAccountId || keys.tmdbAccountId;
   if (tmdbAccountIdVal) {
@@ -73243,13 +73667,13 @@ function applyImportedConfig(data) {
   if (mdblistKey) {
     const el = document.getElementById('mdblistKeyInput');
     if (el) el.value = mdblistKey;
-    try { localStorage.setItem('myListAddon:mdblistKey', mdblistKey); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:mdblistKey', mdblistKey); } catch (e) {}
   }
   const mdblistAccessTokenVal = data.mdblistAccessToken || keys.mdblistAccessToken;
   if (mdblistAccessTokenVal) {
     mdblistAccessToken = mdblistAccessTokenVal;
     window.mdblistAccessToken = mdblistAccessTokenVal;
-    try { localStorage.setItem('myListAddon:mdblistAccessToken', mdblistAccessTokenVal); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:mdblistAccessToken', mdblistAccessTokenVal); } catch (e) {}
     if (typeof renderMdblistConnectStatus === 'function') renderMdblistConnectStatus();
   }
   const mdblistUsernameVal = data.mdblistUsername || keys.mdblistUsername;
@@ -73263,7 +73687,7 @@ function applyImportedConfig(data) {
   if (traktKey) {
     const el = document.getElementById('traktKeyInput');
     if (el) el.value = traktKey;
-    try { localStorage.setItem('myListAddon:traktKey', traktKey); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:traktKey', traktKey); } catch (e) {}
   }
   const traktUsernameVal = data.traktUsername || keys.traktUsername;
   if (traktUsernameVal) {
@@ -73276,7 +73700,7 @@ function applyImportedConfig(data) {
   if (traktAccessTokenVal) {
     traktAccessToken = traktAccessTokenVal;
     window.traktAccessToken = traktAccessTokenVal;
-    try { localStorage.setItem('myListAddon:traktAccessToken', traktAccessTokenVal); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:traktAccessToken', traktAccessTokenVal); } catch (e) {}
     if (typeof renderTraktConnectStatus === 'function') renderTraktConnectStatus();
   }
 
@@ -73284,13 +73708,13 @@ function applyImportedConfig(data) {
   if (simklKey) {
     const el = document.getElementById('simklKeyInput');
     if (el) el.value = simklKey;
-    try { localStorage.setItem('myListAddon:simklKey', simklKey); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:simklKey', simklKey); } catch (e) {}
   }
   const simklAccessTokenVal = data.simklAccessToken || keys.simklAccessToken;
   if (simklAccessTokenVal) {
     simklAccessToken = simklAccessTokenVal;
     window.simklAccessToken = simklAccessTokenVal;
-    try { localStorage.setItem('myListAddon:simklAccessToken', simklAccessTokenVal); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:simklAccessToken', simklAccessTokenVal); } catch (e) {}
   }
   const simklUsernameVal = data.simklUsername || keys.simklUsername;
   if (simklUsernameVal) {
@@ -73452,7 +73876,7 @@ function applyImportedConfig(data) {
   } else if (typeof showAppAlert === 'function') {
     showAppAlert('Restore Complete', 'Your setup, lists, watch history, channels, and settings have been restored successfully.', true);
   }
-  else alert('Your setup, lists, watch history, channels, and settings have been restored successfully.');
+  else showToast('Your setup, lists, watch history, channels, and settings have been restored successfully.', 'success');
 }
 
 // --- import from an existing link -------------------------------------------
@@ -73509,14 +73933,14 @@ async function importFromLink() {
   const raw = document.getElementById('importLinkInput').value.trim();
   if (!raw) {
     if (typeof showAppAlert === 'function') showAppAlert('Link Required', 'Paste an install link, configure link, or stremio:// / wako:// link first.', false);
-    else alert('Paste an install link, configure link, or stremio://\\/wako:// link first.');
+    else showToast('Paste an install link, configure link, or stremio://\\/wako:// link first.', 'error');
     return;
   }
   try {
     const data = await resolveInstallLinkData(raw);
     if (!data || !data.ok) {
       if (typeof showAppAlert === 'function') showAppAlert('Link Error', 'Could not load that link: ' + ((data && data.error) || 'unknown error'), false);
-      else alert('Could not load that link: ' + ((data && data.error) || 'unknown error'));
+      else showToast('Could not load that link: ' + ((data && data.error) || 'unknown error'), 'error');
       return;
     }
     restoreRows(data.entries);
@@ -73621,10 +74045,10 @@ async function importFromLink() {
       msg += '\\n\\nSkipped ' + unsafeFromLink.length + ' item(s) whose id contained characters this app never produces. A link from this app cannot contain those.';
     }
     if (typeof showAppAlert === 'function') showAppAlert('Import Complete', msg, true);
-    else alert(msg);
+    else showToast(msg, 'error');
   } catch (e) {
     if (typeof showAppAlert === 'function') showAppAlert('Network Error', 'Network error while resolving that link.', false);
-    else alert('Network error while resolving that link.');
+    else showToast('Network error while resolving that link.', 'error');
   }
 }
 
@@ -73632,14 +74056,14 @@ async function restoreListsFromLink() {
   const raw = document.getElementById('importLinkInput').value.trim();
   if (!raw) {
     if (typeof showAppAlert === 'function') showAppAlert('Link Required', 'Paste an install link, configure link, or stremio:// / wako:// link first.', false);
-    else alert('Paste an install link, configure link, or stremio://\\/wako:// link first.');
+    else showToast('Paste an install link, configure link, or stremio://\\/wako:// link first.', 'error');
     return;
   }
   try {
     const data = await resolveInstallLinkData(raw);
     if (!data || !data.ok) {
       if (typeof showAppAlert === 'function') showAppAlert('Link Error', 'Could not load that link: ' + ((data && data.error) || 'unknown error'), false);
-      else alert('Could not load that link: ' + ((data && data.error) || 'unknown error'));
+      else showToast('Could not load that link: ' + ((data && data.error) || 'unknown error'), 'error');
       return;
     }
 
@@ -73653,7 +74077,7 @@ async function restoreListsFromLink() {
 
     if (!listSlugs.length && !channelIds.length) {
       if (typeof showAppAlert === 'function') showAppAlert('No Custom Lists Found', 'That link does not contain any custom lists or custom channels.', false);
-      else alert('That link does not contain any custom lists or custom channels.');
+      else showToast('That link does not contain any custom lists or custom channels.', 'error');
       return;
     }
 
@@ -73736,10 +74160,10 @@ async function restoreListsFromLink() {
       msg += '\\n\\nSkipped ' + unsafeFromLink.length + ' item(s) whose id contained characters this app never produces. A link from this app cannot contain those.';
     }
     if (typeof showAppAlert === 'function') showAppAlert('Custom Lists Rebuilt', msg, true);
-    else alert(msg);
+    else showToast(msg, 'error');
   } catch (e) {
     if (typeof showAppAlert === 'function') showAppAlert('Network Error', 'Network error while resolving that link.', false);
-    else alert('Network error while resolving that link.');
+    else showToast('Network error while resolving that link.', 'error');
   }
 }
 
@@ -73996,13 +74420,13 @@ async function saveCurrentAsPreset() {
   const name = nameInput.value.trim();
   if (!name) {
     if (typeof showAppAlert === 'function') showAppAlert('Preset Name Required', 'Name this preset first.', false);
-    else alert('Name this preset first.');
+    else showToast('Name this preset first.', 'error');
     return;
   }
   const entries = collectEntries();
   if (!entries.length) {
     if (typeof showAppAlert === 'function') showAppAlert('Empty Catalogs', 'Add at least one list first.', false);
-    else alert('Add at least one list first.');
+    else showToast('Add at least one list first.', 'error');
     return;
   }
   const customListsMap = (typeof loadLocalCustomLists === 'function') ? loadLocalCustomLists() : {};
@@ -74057,7 +74481,7 @@ async function saveCurrentAsPreset() {
       if (typeof showAppAlert === 'function') {
         showAppAlert('Preset Save Error', errMsg, false);
       } else {
-        alert(errMsg);
+        showToast(errMsg, 'error');
       }
       return;
     }
@@ -74219,7 +74643,7 @@ function rebuildCustomListsFromPreset(name, isSilent = false) {
   if (!preset) {
     if (!isSilent) {
       if (typeof showAppAlert === 'function') showAppAlert('Preset Not Found', 'Could not find preset "' + name + '".', false);
-      else alert('Could not find preset "' + name + '".');
+      else showToast('Could not find preset "' + name + '".', 'error');
     }
     return { restoredLists: 0, restoredChannels: 0, listNames: [] };
   }
@@ -74254,7 +74678,7 @@ function rebuildCustomListsFromPreset(name, isSilent = false) {
         ? 'Preset "' + name + '" has no custom lists or channels to restore. It does carry Continue Watching / Airing Next / Watch History / Watchlist, but those always follow your account rather than the preset, so they were left as they are.'
         : 'Preset "' + name + '" does not contain any custom lists or channels.';
       if (typeof showAppAlert === 'function') showAppAlert('No Custom Lists Found', msg, false);
-      else alert(msg);
+      else showToast(msg, 'error');
     }
     return { restoredLists: 0, restoredChannels: 0, listNames: [], skippedTrackedSlugs: skippedTrackedSlugs };
   }
@@ -74354,7 +74778,7 @@ function rebuildCustomListsFromPreset(name, isSilent = false) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Custom Lists Rebuilt', msg, true);
     } else {
-      alert(msg);
+      showToast(msg, 'error');
     }
   }
 
@@ -74453,7 +74877,7 @@ function sharePreset(name) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Preset Copied', '"' + name + '" copied to your clipboard as JSON -- paste it into the Backup/Restore box above (on this device or another) to import it.', true);
     } else {
-      alert('"' + name + '" copied to your clipboard as JSON -- paste it into the Backup/Restore box above (on this device or another) to import it.');
+      showToast('"' + name + '" copied to your clipboard as JSON -- paste it into the Backup/Restore box above (on this device or another) to import it.', 'success');
     }
   }).catch(() => {
     if (typeof showAppPrompt === 'function') {
@@ -74506,7 +74930,7 @@ function readJsonFile(input, onParsed) {
       data = JSON.parse(reader.result);
     } catch (e) {
       if (typeof showAppAlert === 'function') showAppAlert('Invalid File', 'That file is not valid JSON.', false);
-      else alert('That file is not valid JSON.');
+      else showToast('That file is not valid JSON.', 'error');
       input.value = '';
       return;
     }
@@ -74515,7 +74939,7 @@ function readJsonFile(input, onParsed) {
   };
   reader.onerror = () => {
     if (typeof showAppAlert === 'function') showAppAlert('Read Error', 'Could not read that file.', false);
-    else alert('Could not read that file.');
+    else showToast('Could not read that file.', 'error');
     input.value = '';
   };
   reader.readAsText(file);
@@ -74545,7 +74969,7 @@ function uploadPresetFile(input) {
   readJsonFile(input, (data, file) => {
     if (!data || (!Array.isArray(data.entries) && !Array.isArray(data))) {
       if (typeof showAppAlert === 'function') showAppAlert('Invalid Preset', 'That file does not look like a preset -- expected an "entries" array.', false);
-      else alert('That file does not look like a preset -- expected an "entries" array.');
+      else showToast('That file does not look like a preset -- expected an "entries" array.', 'error');
       return;
     }
     const suggested = (file.name || 'Preset').replace(/\.json$/i, '');
@@ -74646,7 +75070,7 @@ function exportDataToCsv(target, format) {
     const items = (historyList && Array.isArray(historyList.items)) ? historyList.items : [];
     if (!items.length) {
       if (typeof showAppAlert === 'function') showAppAlert('Empty Watch History', 'Your Watch History is currently empty.', false);
-      else alert('Your Watch History is currently empty.');
+      else showToast('Your Watch History is currently empty.', 'error');
       return;
     }
 
@@ -74726,7 +75150,7 @@ function exportDataToCsv(target, format) {
     });
     if (totalItems === 0) {
       if (typeof showAppAlert === 'function') showAppAlert('No Saved Lists', 'You do not have any saved list items to export.', false);
-      else alert('You do not have any saved list items to export.');
+      else showToast('You do not have any saved list items to export.', 'error');
       return;
     }
   }
@@ -74872,7 +75296,7 @@ function copyLink(url) {
       selection.removeAllRanges();
       selection.addRange(range);
     }
-    alert('Manifest URL: ' + url);
+    showToast('Manifest URL: ' + url, 'error');
   });
 }
 
@@ -74917,13 +75341,13 @@ function signInToInstallHtml(message, entries) {
     + '<p class="testresult err" style="margin:0 0 12px;">' + escapeHtml(message)
     + (names.length ? (' Sign in, or remove ' + (names.length === 1 ? 'this row' : 'these rows') + ' first: ' + escapeHtml(names.join(', ')) + '.') : '')
     + '</p>'
-    + '<button type="button" class="btn btn-primary" onclick="openRestoreModal()">Log in or sign up</button>'
+    + '<button type="button" class="btn btn-primary" data-act="openRestoreModal">Log in or sign up</button>'
     + '</div>';
 }
 
 async function generate() {
   const entries = collectEntries();
-  if (!entries.length) { alert('Add at least one list.'); return; }
+  if (!entries.length) { showToast('Add at least one list.', 'error'); return; }
   const keys = collectKeys();
 
   const box = document.getElementById('result');
@@ -74977,7 +75401,7 @@ async function generate() {
     const errTxt = escapeHtml(saveErrorMessage || 'Unknown error');
     box.innerHTML = '<div class="install-result-card" style="padding:18px;">'
       + '<p class="testresult err" style="margin:0 0 12px;">Could not create your install link just now (' + errTxt + '). Nothing was lost - please try again.</p>'
-      + '<button type="button" class="btn btn-primary" onclick="generate()">Try again</button>'
+      + '<button type="button" class="btn btn-primary" data-act="generate">Try again</button>'
       + '</div>';
     return;
   }
@@ -75035,12 +75459,12 @@ async function generate() {
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
             <span>Manifest Link</span>
           </div>
-          <button type="button" class="install-url-copy-btn" id="copyUrlBtn" onclick="copyLink('\${installUrl}')" title="Copy manifest link">
+          <button type="button" class="install-url-copy-btn" id="copyUrlBtn" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Copy manifest link">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
             <span>Copy Link</span>
           </button>
         </div>
-        <div class="install-url-box" id="manifestLinkDisplay" onclick="copyLink('\${installUrl}')" title="Click to copy">\${installUrl}</div>
+        <div class="install-url-box" id="manifestLinkDisplay" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Click to copy">\${installUrl}</div>
       </div>
 
       <div class="install-hint-box">
@@ -75227,7 +75651,7 @@ if (localStorage.getItem('myListAddon:mdblistDisconnected') === 'true') {
   if (savedForMdblist && savedForMdblist.keys && savedForMdblist.keys.mdblistAccessToken) {
     mdblistAccessToken = savedForMdblist.keys.mdblistAccessToken;
   } else {
-    try { mdblistAccessToken = localStorage.getItem('myListAddon:mdblistAccessToken') || ''; } catch (e) {}
+    try { mdblistAccessToken = readProviderSecret('myListAddon:mdblistAccessToken') || ''; } catch (e) {}
   }
 }
 
@@ -75244,7 +75668,7 @@ if (localStorage.getItem('myListAddon:traktDisconnected') === 'true') {
   if (savedForTrakt && savedForTrakt.keys && savedForTrakt.keys.traktAccessToken) {
     traktAccessToken = savedForTrakt.keys.traktAccessToken;
   } else {
-    try { traktAccessToken = localStorage.getItem('myListAddon:traktAccessToken') || ''; } catch (e) {}
+    try { traktAccessToken = readProviderSecret('myListAddon:traktAccessToken') || ''; } catch (e) {}
   }
 }
 
@@ -75260,7 +75684,7 @@ if (localStorage.getItem('myListAddon:simklDisconnected') === 'true') {
   if (savedForSimkl && savedForSimkl.keys && savedForSimkl.keys.simklAccessToken) {
     simklAccessToken = savedForSimkl.keys.simklAccessToken;
   } else {
-    try { simklAccessToken = localStorage.getItem('myListAddon:simklAccessToken') || ''; } catch (e) {}
+    try { simklAccessToken = readProviderSecret('myListAddon:simklAccessToken') || ''; } catch (e) {}
   }
 }
 
@@ -77354,14 +77778,14 @@ async function appShellExploreMyListsSearch(q) {
 }
 
 async function appShellExploreTraktSearch(q) {
-  const key = (document.getElementById('traktKeyInput') ? document.getElementById('traktKeyInput').value.trim() : '') || localStorage.getItem('myListAddon:traktKey') || '';
+  const key = (document.getElementById('traktKeyInput') ? document.getElementById('traktKeyInput').value.trim() : '') || readProviderSecret('myListAddon:traktKey') || '';
   const res = await appShellApiFetch('/api/trakt-search?q=' + encodeURIComponent(q) + (key ? '&traktKey=' + encodeURIComponent(key) : ''));
   if (!res.ok) return null;
   return ((res.data && res.data.lists) || []).map(function (r) { return appShellExploreNormalize(r, 'trakt'); });
 }
 
 async function appShellExploreTmdbSearch(q) {
-  const key = (document.getElementById('tmdbKeyInput') ? document.getElementById('tmdbKeyInput').value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const key = (document.getElementById('tmdbKeyInput') ? document.getElementById('tmdbKeyInput').value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
   const adult = (typeof isAdultContentFilterEnabled === 'function' && isAdultContentFilterEnabled()) ? '&adultContentFilter=1' : '';
   const res = await appShellApiFetch('/api/tmdb-search-lists?q=' + encodeURIComponent(q) + (key ? '&tmdbKey=' + encodeURIComponent(key) : '') + adult);
   if (!res.ok) return null;
@@ -79881,7 +80305,7 @@ function renderGuidePage(origin) {
       <span class="brand-text">${ADDON_NAME}</span>
     </a>
     <div class="nav-actions">
-      <button type="button" class="theme-toggle-btn" onclick="toggleTheme()" aria-label="Toggle Dark/Light Mode">
+      <button type="button" class="theme-toggle-btn" data-act="toggleTheme" aria-label="Toggle Dark/Light Mode">
         <svg class="theme-icon icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="5" fill="currentColor"></circle>
           <line x1="12" y1="1" x2="12" y2="3"></line>

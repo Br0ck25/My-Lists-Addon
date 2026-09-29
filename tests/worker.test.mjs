@@ -4450,7 +4450,7 @@ describe("Lists -> Liked: the feed loads without being asked twice", () => {
     // Without the argument the button hit the loader's early return the
     // moment the feed had rendered once, so it refreshed nothing -- the same
     // shape as Discover's own Refresh buttons, which pass true.
-    assert.match(markup, /onclick="renderLikedListsFeed\(true\)"/,
+    assert.match(markup, /data-act="renderLikedListsFeed" data-act-args="\[true\]"/,
       "the Refresh button must force a refresh");
   });
 
@@ -9575,7 +9575,11 @@ describe("Discover: every sub-nav pill gets a header and a Refresh button", () =
     const header = before.slice(before.indexOf('<div class="shelf-header" id="discoverListsFeedHeader"'));
     assert.match(header, /class="shelf-header"/, "same header shape as Popular Lists and Curated");
     assert.match(header, /id="discoverListsFeedTitle"/, "a title element filterDiscoverShelves can update");
-    assert.match(header, /onclick="[^"]*renderDiscoverChartsList\([^)]*true\)/,
+    assert.match(header, /data-act="appActRefreshDiscoverCharts"/,
+      "Refresh is the delegated action (P6-8)");
+    // ... and that action is what passes the force flag to the loader.
+    const action = core.slice(core.indexOf("function appActRefreshDiscoverCharts"));
+    assert.match(action.slice(0, 400), /renderDiscoverChartsList\(window\._currentDiscoverFilter \|\| 'movie', true\)/,
       "Refresh must force a real refresh, not hit the cache/loaded guard");
   });
 

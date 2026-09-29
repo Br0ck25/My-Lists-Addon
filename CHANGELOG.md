@@ -27,6 +27,18 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 8. **Recommended: set up the background jobs queue** (Phase 5, `docs/OPERATIONS.md` §18): create the queues `mylists-jobs` and `mylists-jobs-dlq`, make this Worker the consumer of `mylists-jobs` (batch size 25, 5 retries, dead-letter queue `mylists-jobs-dlq`), bind `mylists-jobs` to the Worker as `JOBS`, then press **Send a test job** in `/admin` → Maintenance. Without it everything works as before.
 
+### 🧹 Buttons say what they do, and the browser stops keeping your keys (P6-8)
+
+- **Not behind the new-interface cookie: this one is the page's own markup and this browser's own storage, so it reaches everyone once it is deployed.** Nothing to configure (`docs/OPERATIONS.md` §21).
+- **Every control in the builder now names its action instead of carrying a line of code.** 447 inline `onclick=` / `onchange=` / `oninput=` attributes are gone from the page's markup: a button carries `data-act="fnName"` and its arguments as one value, and a single listener for the whole page runs it (`appActDispatch`, `16_client-row-core.js`). This is the shape fix, not tidying:
+  - The old `onclick="fn(&quot;…&quot;)"` was the bug from the last audit — the browser decodes an attribute before JavaScript sees it, so the escaping *re-formed* the quote it was meant to hide, and an id from a restored backup or a pasted install link was enough to run code (FE-02). Arguments are now escaped once, for both the data and the markup, so a title like `O'Brien & Sons "Best"` is a string in an array rather than a way out of the attribute.
+  - A renamed function used to be a button that silently did nothing. The name is now checked the same way the old handlers were: the build resolves every `data-act` (234 distinct actions over 867 controls) against the bundle, and fails if an inline handler comes back on the builder page. The `/admin` dashboard keeps its own until P6-10.
+  - A control says which event it answers to whenever its tag does not (`data-act-on="input"` for the boxes that search as you type). File inputs answer **change** only — answering both would upload the same backup twice — and the one control that used to have two handlers, the catalog search box (search as you type *and* Enter), is one action that reads the event it was given.
+  - `escapeJsAttr`, the helper that double-escaped those old attributes, is deleted along with the shape it existed for. Its three tests now dispatch the same payload through the new path and prove it arrives as a string.
+- **Provider keys and tokens are no longer stored in the browser.** Trakt, MDBList, Simkl and TMDB keys, tokens and session ids are held for the visit only; your account already has them (every save sends them up), and a browser that has a copy from before keeps working — the old copy is dropped once the account hands the same credential back. **One consequence to know:** if you are *not* signed in and paste a key, it lasts for that visit and is saved when you sign in — signing in is what keeps it.
+- **No more pop-up boxes.** Nothing in the app's page uses the browser's own alert/confirm/prompt dialogs any more; messages are the app's toast, and the ones that need an answer are the app's own dialog.
+- The **Creator Key** is deliberately untouched: it is what signs this browser in, and it moves with the signed-in sessions in P6-9 rather than here.
+
 ### 📺 Building a channel starts with a template (P6-7, new UI only)
 
 - **Only for a browser on the new interface** (`?ff_new_ui=1`). Channels opens with **New channel** above the panels that were there before: pick a template, look at what is playing today, then add it to your home screen.

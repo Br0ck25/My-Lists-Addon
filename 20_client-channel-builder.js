@@ -380,7 +380,7 @@ async function addAllSeasonsToChannel(tmdbId, imdbId, showName, showPoster, show
     if (typeof showAppAlert === 'function') {
       showAppAlert('Channel Builder', 'Something went wrong adding every season -- try again, or add seasons one at a time.');
     } else {
-      alert('Something went wrong adding every season -- try again, or add seasons one at a time.');
+      showToast('Something went wrong adding every season -- try again, or add seasons one at a time.', 'error');
     }
     if (btn) {
       btn.disabled = false;
@@ -435,7 +435,7 @@ function addCheckedEpisodesToChannel(imdbId, showName, showPoster, showBackdrop,
     if (typeof showAppAlert === 'function') {
       showAppAlert('Channel Builder', 'Check at least one episode first.');
     } else {
-      alert('Check at least one episode first.');
+      showToast('Check at least one episode first.', 'error');
     }
     return;
   }
@@ -895,7 +895,7 @@ function renderChannelUndoBar() {
   bar.style.display = 'block';
   bar.innerHTML = '<div class="row" style="gap:8px; align-items:center; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--surface);">' +
     '<span style="flex:1; font-size:0.85rem;">Deleted &ldquo;' + escapeHtml(name) + '&rdquo;.</span>' +
-    '<button type="button" class="secondary lc-btn" onclick="undoChannelDelete()">Undo</button>' +
+    '<button type="button" class="secondary lc-btn" data-act="undoChannelDelete">Undo</button>' +
     '</div>';
 }
 
@@ -1317,7 +1317,7 @@ function renderChannelPosterPicker() {
   const isCustomSelected = (channelDraftPoster === 'custom' || !channelDraftPoster || channelDraftPoster.includes('/api/channel-poster'));
 
   // 1. Custom Channel Poster Option
-  let html = '<div class="channel-poster-choice' + (isCustomSelected ? ' selected' : '') + '" data-poster="custom" data-backdrop="" onclick="selectChannelPoster(&quot;custom&quot;, &quot;&quot;)">' +
+  let html = '<div class="channel-poster-choice' + (isCustomSelected ? ' selected' : '') + '" data-poster="custom" data-backdrop="" data-act="selectChannelPoster" data-act-args="[&quot;custom&quot;,&quot;&quot;]">' +
     '<div class="channel-poster-thumb-wrap custom-preview" style="background:linear-gradient(135deg,#0b0d14 0%,#131726 50%,#06070a 100%); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:6px; border:1px solid rgba(0,122,255,0.3);">' +
       '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#007AFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
         '<rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>' +
@@ -1334,7 +1334,7 @@ function renderChannelPosterPicker() {
   shows.forEach((s) => {
     const isSelected = !isCustomSelected && (channelDraftPoster === s.poster);
     const countLabel = s.count + ' ep' + (s.count === 1 ? '' : 's');
-    html += '<div class="channel-poster-choice' + (isSelected ? ' selected' : '') + '" data-poster="' + escapeAttr(s.poster) + '" data-backdrop="' + escapeAttr(s.backdrop || '') + '" onclick="selectChannelPoster(this.dataset.poster, this.dataset.backdrop)">' +
+    html += '<div class="channel-poster-choice' + (isSelected ? ' selected' : '') + '" data-poster="' + escapeAttr(s.poster) + '" data-backdrop="' + escapeAttr(s.backdrop || '') + '" data-act="appActSelectChannelPosterFromEl" data-act-args="[&quot;@self&quot;]">' +
       '<div class="channel-poster-thumb-wrap">' +
         '<img src="' + escapeAttr(s.poster) + '" alt="' + escapeAttr(s.name) + '" loading="lazy">' +
       '</div>' +
@@ -7850,7 +7850,7 @@ function renderChannelCrossoverSuggestions() {
       '<p class="channel-crossover-desc">' + escapeHtml(event.description) + '</p>' +
       '<div class="channel-crossover-parts">' + chipsHtml + '</div>' +
       '<div class="channel-crossover-actions">' +
-        '<button type="button" class="primary lc-btn" onclick="spliceCrossoverEvent(&quot;' + escapeJsAttr(event.id) + '&quot;, this)" style="padding:6px 14px; font-size:0.82rem;">' + escapeHtml(btnLabel) + '</button>' +
+        '<button type="button" class="primary lc-btn" data-act="spliceCrossoverEvent" data-act-args="' + appActArgs([event.id, "@self"]) + '" style="padding:6px 14px; font-size:0.82rem;">' + escapeHtml(btnLabel) + '</button>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -7899,7 +7899,7 @@ async function spliceCrossoverEvent(eventId, btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Crossover Splicer', 'Could not add crossover items: ' + (err.message || err));
     } else {
-      alert('Could not add crossover items: ' + (err.message || err));
+      showToast('Could not add crossover items: ' + (err.message || err), 'error');
     }
   }
   if (btn) {
@@ -8433,7 +8433,7 @@ function renderChannelStoryLock() {
     const id = 'channelStoryLock_' + encodeURIComponent(g.key).replace(/[^A-Za-z0-9]/g, '_');
     return '<label class="channel-rule-row" for="' + escapeAttr(id) + '">' +
       '<input type="checkbox" id="' + escapeAttr(id) + '"' + (isChannelShowStoryLocked(g.key) ? ' checked' : '') +
-        ' onchange="toggleChannelStoryLock(&quot;' + escapeJsAttr(g.key) + '&quot;, this.checked)">' +
+        ' data-act="toggleChannelStoryLock" data-act-args="' + appActArgs([g.key, "@checked"]) + '">' +
       '<span>' + escapeHtml(g.name) + ' <small style="color:var(--muted);">(' + g.count + ')</small></span>' +
     '</label>';
   }).join('');
@@ -9177,7 +9177,7 @@ async function saveChannel() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Channel Builder', 'Name this channel first.');
     } else {
-      alert('Name this channel first.');
+      showToast('Name this channel first.', 'error');
     }
     return;
   }
@@ -9185,7 +9185,7 @@ async function saveChannel() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Channel Builder', 'Add at least one episode or movie first.');
     } else {
-      alert('Add at least one episode or movie first.');
+      showToast('Add at least one episode or movie first.', 'error');
     }
     return;
   }
@@ -9558,10 +9558,10 @@ function renderStorylinesUniverseList(category = activeStorylineCategory) {
       const isDesktopEnd = (i === previewPosters.length - 1 && totalCount >= 4);
       let overlays = '';
       if (isMobileEnd) {
-        overlays += '<div class="list-card-count-overlay mobile-only" onclick="openStorylineDetails(&quot;' + escapeJsAttr(event.id) + '&quot;)" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+        overlays += '<div class="list-card-count-overlay mobile-only" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
       }
       if (isDesktopEnd) {
-        overlays += '<div class="list-card-count-overlay desktop-only" onclick="openStorylineDetails(&quot;' + escapeJsAttr(event.id) + '&quot;)" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+        overlays += '<div class="list-card-count-overlay desktop-only" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
       }
 
       // The registry hands each entry a poster but never a rating -- these are
@@ -9578,8 +9578,8 @@ function renderStorylinesUniverseList(category = activeStorylineCategory) {
         : '';
 
       return '<div class="list-card-mini-poster-tile">' +
-        '<div class="list-card-mini-poster-img-wrap" style="position:relative; cursor:pointer;" onclick="openStorylineDetails(&quot;' + escapeJsAttr(event.id) + '&quot;)">' +
-          '<img src="' + escapeAttr(typeof resolveClientPoster === 'function' ? resolveClientPoster(ep, posterUrl) : (posterUrl)) + '" alt="" loading="lazy" data-tmdb-id="' + escapeAttr(String(ep.tmdbId || '')) + '" data-poster-kind="' + (isMovie ? 'movie' : 'show') + '" data-poster-title="' + escapeAttr(itemTitle) + '" onerror="handleStorylinePosterError(this)">' +
+        '<div class="list-card-mini-poster-img-wrap" style="position:relative; cursor:pointer;" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '">' +
+          '<img src="' + escapeAttr(typeof resolveClientPoster === 'function' ? resolveClientPoster(ep, posterUrl) : (posterUrl)) + '" alt="" loading="lazy" data-tmdb-id="' + escapeAttr(String(ep.tmdbId || '')) + '" data-poster-kind="' + (isMovie ? 'movie' : 'show') + '" data-poster-title="' + escapeAttr(itemTitle) + '" data-act="handleStorylinePosterError" data-act-args="[&quot;@self&quot;]">' +
           overlays +
         '</div>' +
         '<div class="list-card-mini-poster-name" title="' + escapeAttr(itemTitle) + '">' + escapeHtml(itemTitle) + '</div>' +
@@ -9590,7 +9590,7 @@ function renderStorylinesUniverseList(category = activeStorylineCategory) {
     return '<div class="list-card" data-universe-id="' + escapeAttr(event.id) + '">' +
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
-          '<div class="list-card-title" onclick="openStorylineDetails(&quot;' + escapeJsAttr(event.id) + '&quot;)" style="cursor:pointer;">' + escapeHtml(event.name) + '</div>' +
+          '<div class="list-card-title" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '" style="cursor:pointer;">' + escapeHtml(event.name) + '</div>' +
           '<div class="list-card-meta">' +
             '<span>' + escapeHtml(event.franchise) + '</span>' +
             '<span class="list-card-meta-sep">&middot;</span>' +
@@ -9600,8 +9600,8 @@ function renderStorylinesUniverseList(category = activeStorylineCategory) {
           '</div>' +
         '</div>' +
         '<div class="list-card-actions">' +
-          '<button type="button" class="lc-btn ' + (isAdded ? 'secondary is-added' : 'primary') + '" onclick="createInstantStorylineChannel(&quot;' + escapeJsAttr(event.id) + '&quot;, this)" ' + (isAdded ? 'style="color:var(--danger);"' : '') + '>' + (isAdded ? 'Remove' : '+ Add') + '</button>' +
-          '<button type="button" class="lc-btn secondary" onclick="loadStorylineToDraft(&quot;' + escapeJsAttr(event.id) + '&quot;, this)" title="Customize in Channel Builder">Customize</button>' +
+          '<button type="button" class="lc-btn ' + (isAdded ? 'secondary is-added' : 'primary') + '" data-act="createInstantStorylineChannel" data-act-args="' + appActArgs([event.id, "@self"]) + '" ' + (isAdded ? 'style="color:var(--danger);"' : '') + '>' + (isAdded ? 'Remove' : '+ Add') + '</button>' +
+          '<button type="button" class="lc-btn secondary" data-act="loadStorylineToDraft" data-act-args="' + appActArgs([event.id, "@self"]) + '" title="Customize in Channel Builder">Customize</button>' +
         '</div>' +
       '</div>' +
       '<div class="list-card-posters">' +
@@ -10203,7 +10203,7 @@ function editChannelById(channelId) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Channel Builder', 'Channel not found.');
     } else {
-      alert('Channel not found.');
+      showToast('Channel not found.', 'error');
     }
     return;
   }
@@ -10247,7 +10247,7 @@ function editChannel(btnOrRow) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Channel Builder', 'Could not read this channel to edit it.');
     } else {
-      alert('Could not read this channel to edit it.');
+      showToast('Could not read this channel to edit it.', 'error');
     }
     return;
   }
@@ -10256,7 +10256,7 @@ function editChannel(btnOrRow) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Channel Builder', 'Could not read this channel to edit it.');
     } else {
-      alert('Could not read this channel to edit it.');
+      showToast('Could not read this channel to edit it.', 'error');
     }
     return;
   }
@@ -10598,10 +10598,10 @@ function renderMyCreatedChannelsList() {
       const isDesktopEnd = (i === allPosters.length - 1 && allItems.length >= 4);
       let overlays = '';
       if (isMobileEnd) {
-        overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" onclick="event.stopPropagation(); openChannelDetailsPage(&quot;' + escapeJsAttr(ch.channelId) + '&quot;)">' + totalEpisodes + ' &rsaquo;</div>';
+        overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="openChannelDetailsPage" data-act-stop data-act-args="' + appActArgs([ch.channelId]) + '">' + totalEpisodes + ' &rsaquo;</div>';
       }
       if (isDesktopEnd) {
-        overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" onclick="event.stopPropagation(); openChannelDetailsPage(&quot;' + escapeJsAttr(ch.channelId) + '&quot;)">' + totalEpisodes + ' &rsaquo;</div>';
+        overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="openChannelDetailsPage" data-act-stop data-act-args="' + appActArgs([ch.channelId]) + '">' + totalEpisodes + ' &rsaquo;</div>';
       }
 
       const p = it.thumbnail || it.poster || it.showPoster || it.backdrop || ch.poster || ch.backdrop || '';
@@ -10667,7 +10667,7 @@ function renderMyCreatedChannelsList() {
       const itemId = it.imdbId || it.id || '';
       const itemType = (it.kind === 'movie' || it.type === 'movie') ? 'movie' : 'series';
       const posterClickAttr = itemId
-        ? ' style="cursor:pointer;" onclick="event.stopPropagation(); openItemDetailsModal(&quot;' + escapeJsAttr(itemId) + '&quot;, &quot;' + itemType + '&quot;)"'
+        ? ' style="cursor:pointer;" data-act="openItemDetailsModal" data-act-stop data-act-args="' + appActArgs([itemId, itemType]) + '"'
         : '';
       
       return '<div class="list-card-mini-poster-tile">' +
@@ -10680,15 +10680,15 @@ function renderMyCreatedChannelsList() {
       '</div>';
     }).join('');
     
-    const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" onclick="toggleChannelInCatalog(&quot;' + escapeJsAttr(ch.channelId) + '&quot;)">' +
+    const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleChannelInCatalog" data-act-args="' + appActArgs([ch.channelId]) + '">' +
       (isAdded ? 'Remove' : '+ Add') +
     '</button>';
 
     return '<div class="list-card" style="margin-bottom:12px;" data-channel-id="' + escapeAttr(ch.channelId) + '">' +
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
-          '<div class="list-card-title" style="cursor:pointer;" onclick="openChannelDetailsPage(&quot;' + escapeJsAttr(ch.channelId) + '&quot;)" title="Open ' + escapeAttr(ch.name) + '">' +
-            '<span class="drag-handle-list channel-drag-handle" title="Drag to reorder" onclick="event.stopPropagation();">&#x2630;</span>' +
+          '<div class="list-card-title" style="cursor:pointer;" data-act="openChannelDetailsPage" data-act-args="' + appActArgs([ch.channelId]) + '" title="Open ' + escapeAttr(ch.name) + '">' +
+            '<span class="drag-handle-list channel-drag-handle" title="Drag to reorder" data-act="appActNothing" data-act-stop>&#x2630;</span>' +
             escapeHtml(ch.name) +
           '</div>' +
           (ch.description ? '<div style="font-size:0.8rem; color:var(--text); margin-top:2px;">' + escapeHtml(ch.description) + '</div>' : '') +
@@ -10698,10 +10698,10 @@ function renderMyCreatedChannelsList() {
           (summaryLine ? '<div class="list-card-meta"><span>' + escapeHtml(summaryLine) + '</span></div>' : '') +
         '</div>' +
         '<div class="list-card-actions">' +
-          '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" onclick="editChannelById(&quot;' + escapeJsAttr(ch.channelId) + '&quot;)">Edit</button>' +
-          '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" onclick="deleteLocalChannel(&quot;' + escapeJsAttr(ch.channelId) + '&quot;, &quot;' + escapeJsAttr(ch.name) + '&quot;)">Delete</button>' +
+          '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="editChannelById" data-act-args="' + appActArgs([ch.channelId]) + '">Edit</button>' +
+          '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="deleteLocalChannel" data-act-args="' + appActArgs([ch.channelId, ch.name]) + '">Delete</button>' +
           ((ch.sharePublished || ch.visibility === 'public')
-            ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" onclick="shareChannelById(&quot;' + escapeJsAttr(ch.channelId) + '&quot;, this)" title="Share this channel">Share</button>'
+            ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="shareChannelById" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '" title="Share this channel">Share</button>'
             : '') +
           addBtnHtml +
         '</div>' +
@@ -11104,7 +11104,7 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
       if (typeof showAppAlert === 'function') {
         showAppAlert('Could Not Build Channel', 'Could not build ' + name + ': ' + (data.error || 'unknown error'));
       } else {
-        alert('Could not build ' + name + ': ' + (data.error || 'unknown error'));
+        showToast('Could not build ' + name + ': ' + (data.error || 'unknown error'), 'error');
       }
       return;
     }
@@ -11135,7 +11135,7 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
       if (typeof showAppAlert === 'function') {
         showAppAlert('Could Not Build Channel', 'Could not build ' + name + ' -- no episodes were found.');
       } else {
-        alert('Could not build ' + name + ' -- no episodes were found.');
+        showToast('Could not build ' + name + ' -- no episodes were found.', 'error');
       }
       return;
     }
@@ -11174,7 +11174,7 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Network Error', 'Network error while adding ' + name + '.');
     } else {
-      alert('Network error while adding ' + name + '.');
+      showToast('Network error while adding ' + name + '.', 'error');
     }
     return null;
   } finally {
@@ -11200,7 +11200,7 @@ async function importChannelFromLink(btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Import Channel', 'Paste a list URL first.');
     } else {
-      alert('Paste a list URL first.');
+      showToast('Paste a list URL first.', 'error');
     }
     return;
   }
@@ -11208,7 +11208,7 @@ async function importChannelFromLink(btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Import Channel', 'Name this channel first.');
     } else {
-      alert('Name this channel first.');
+      showToast('Name this channel first.', 'error');
     }
     return;
   }
@@ -11769,7 +11769,7 @@ function renderChannelPersonCredits() {
         (c.shows.length ? ' and ' + c.shows.length + ' show' + (c.shows.length === 1 ? '' : 's') : '') +
       '</p>' +
       '<label for="channelSpotlightSortSelect" style="font-size:0.8rem; font-weight:600;">Order:</label>' +
-      '<select id="channelSpotlightSortSelect" onchange="setChannelSpotlightSortAndReload(this.value)" style="font-size:0.82rem; padding:5px 8px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">' +
+      '<select id="channelSpotlightSortSelect" data-act="setChannelSpotlightSortAndReload" data-act-args="[&quot;@value&quot;]" style="font-size:0.82rem; padding:5px 8px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">' +
         '<option value="chronological"' + (channelSpotlightSort === 'chronological' ? ' selected' : '') + '>Career order</option>' +
         '<option value="rating"' + (channelSpotlightSort === 'rating' ? ' selected' : '') + '>Best first</option>' +
       '</select>' +
@@ -12204,7 +12204,7 @@ function showSavedChannelModal(channelName, visibility, url) {
   const isPrivate = visibility === 'private';
   showModal(
     '<div class="modal-body">' +
-      '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+      '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
       '<h2 class="panel-title" style="margin-top:0;">\u2713 Channel Saved</h2>' +
       '<p style="margin:8px 0 16px; font-size:0.9rem; color:var(--text);">' +
         '<strong>' + escapeHtml(channelName || 'Channel') + '</strong> has been saved to your Profile as a <strong>' + (isPrivate ? 'private' : 'public') + '</strong> channel.' +
@@ -12217,13 +12217,13 @@ function showSavedChannelModal(channelName, visibility, url) {
             '<p style="margin:0 0 8px; font-size:0.84rem; color:var(--muted);">Public share link:</p>' +
             '<div style="display:flex; gap:8px; align-items:center;">' +
               '<input type="text" id="savedChannelUrlInput" value="' + escapeAttr(url || '') + '" readonly style="flex:1; padding:10px 12px; font-size:0.88rem; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text);">' +
-              '<button type="button" class="lc-btn primary" id="savedChannelCopyBtn" onclick="copyShareUrlById(&quot;savedChannelUrlInput&quot;, this)" style="white-space:nowrap; padding:10px 14px;">Copy Link</button>' +
+              '<button type="button" class="lc-btn primary" id="savedChannelCopyBtn" data-act="copyShareUrlById" data-act-args="[&quot;savedChannelUrlInput&quot;,&quot;@self&quot;]" style="white-space:nowrap; padding:10px 14px;">Copy Link</button>' +
             '</div>' +
           '</div>'
       ) +
       '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end; gap:8px;">' +
         (!isPrivate && url ? '<a href="' + escapeAttr(url) + '" target="_blank" class="button secondary lc-btn" style="text-decoration:none; display:inline-flex; align-items:center;">Open Link &nearr;</a>' : '') +
-        '<button type="button" class="primary lc-btn" onclick="closeModal()">Done</button>' +
+        '<button type="button" class="primary lc-btn" data-act="closeModal">Done</button>' +
       '</div>' +
     '</div>'
   );
@@ -12498,16 +12498,16 @@ function renderChannelDirectory() {
   feed.innerHTML = shown.map((e) => {
     const isAdded = isDirectoryChannelAdded(e.code);
     const actionBtn = isAdded
-      ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger); border-color:var(--danger);" onclick="removeDirectoryChannel(&quot;' + escapeJsAttr(e.code) + '&quot;, this)">Remove</button>'
-      : '<button type="button" class="lc-btn primary" style="padding:6px 12px; font-size:0.8rem;" onclick="addDirectoryChannel(&quot;' + escapeJsAttr(e.code) + '&quot;, this)">+ Add</button>';
+      ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger); border-color:var(--danger);" data-act="removeDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">Remove</button>'
+      : '<button type="button" class="lc-btn primary" style="padding:6px 12px; font-size:0.8rem;" data-act="addDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">+ Add</button>';
     return channelListingCardHtml(
       e,
       '<button type="button" class="lc-btn searchLikeExternalBtn' + (_channelDirectoryLiked[e.code] ? ' liked' : '') + '"' +
         ' aria-label="Like this channel" title="Like this channel"' +
-        ' onclick="toggleChannelDirectoryLike(&quot;' + escapeJsAttr(e.code) + '&quot;, this)">' +
+        ' data-act="toggleChannelDirectoryLike" data-act-args="' + appActArgs([e.code, "@self"]) + '">' +
         (_channelDirectoryLiked[e.code] ? '\u2665' : '\u2661') + (e.likes ? ' ' + e.likes : '') +
       '</button>' +
-      '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" onclick="previewDirectoryChannel(&quot;' + escapeJsAttr(e.code) + '&quot;, this)">See all</button>' +
+      '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="previewDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">See all</button>' +
       actionBtn,
       ''
     );
@@ -12766,8 +12766,8 @@ function channelListingCardHtml(entry, actionsHtml, extraHtml) {
         const isDesktopEnd = (i === sampleItems.length - 1 && sampleItems.length >= 4);
         let overlays = '';
         if (entry.code) {
-          if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" onclick="event.stopPropagation(); previewDirectoryChannel(&quot;' + escapeJsAttr(entry.code) + '&quot;, this)">' + totalCount + ' &rsaquo;</div>';
-          if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" onclick="event.stopPropagation(); previewDirectoryChannel(&quot;' + escapeJsAttr(entry.code) + '&quot;, this)">' + totalCount + ' &rsaquo;</div>';
+          if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="previewDirectoryChannel" data-act-stop data-act-args="' + appActArgs([entry.code, "@self"]) + '">' + totalCount + ' &rsaquo;</div>';
+          if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="previewDirectoryChannel" data-act-stop data-act-args="' + appActArgs([entry.code, "@self"]) + '">' + totalCount + ' &rsaquo;</div>';
         }
         const p = it.poster || it.thumbnail || it.showPoster || it.backdrop || entry.poster || entry.backdrop || '';
         const imgHtml = p
@@ -12776,8 +12776,8 @@ function channelListingCardHtml(entry, actionsHtml, extraHtml) {
         const itemId = it.id || it.imdbId || '';
         const itemType = (it.kind === 'movie' || it.type === 'movie') ? 'movie' : 'series';
         const posterClickAttr = itemId
-          ? ' style="cursor:pointer;" onclick="event.stopPropagation(); openItemDetailsModal(&quot;' + escapeJsAttr(itemId) + '&quot;, &quot;' + itemType + '&quot;)"'
-          : (entry.code ? ' style="cursor:pointer;" onclick="event.stopPropagation(); previewDirectoryChannel(&quot;' + escapeJsAttr(entry.code) + '&quot;, this)"' : '');
+          ? ' style="cursor:pointer;" data-act="openItemDetailsModal" data-act-stop data-act-args="' + appActArgs([itemId, itemType]) + '"'
+          : (entry.code ? ' style="cursor:pointer;" data-act="previewDirectoryChannel" data-act-stop data-act-args="' + appActArgs([entry.code, "@self"]) + '"' : '');
         const title = it.name || it.title || entry.name || 'Channel';
         const subtitle = it.subtitle || it.epName || '';
         return '<div class="list-card-mini-poster-tile">' +
@@ -12800,7 +12800,7 @@ function channelListingCardHtml(entry, actionsHtml, extraHtml) {
     ? '<img src="' + escapeAttr(art) + '" alt="" loading="lazy" style="width:88px; height:56px; object-fit:cover; border-radius:6px; border:1px solid var(--border); flex:0 0 auto;">'
     : '';
   const openAttr = entry.code
-    ? ' style="cursor:pointer;" onclick="previewDirectoryChannel(&quot;' + escapeJsAttr(entry.code) + '&quot;, this)" title="See everything in this channel"'
+    ? ' style="cursor:pointer;" data-act="previewDirectoryChannel" data-act-args="' + appActArgs([entry.code, "@self"]) + '" title="See everything in this channel"'
     : '';
   return '<div class="list-card" style="margin-bottom:10px;">' +
     '<div class="list-card-header" style="gap:10px; align-items:center;">' +
@@ -12910,16 +12910,16 @@ function renderChannelPublishList() {
 
   const mine = channels.map((ch) => {
     const action = ch.sharePublished
-      ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger);" onclick="unpublishChannelFromDirectory(&quot;' + escapeJsAttr(ch.channelId) + '&quot;, this)">Unpublish</button>'
-      : '<button type="button" class="lc-btn primary" style="padding:6px 12px; font-size:0.8rem;" onclick="publishChannelToDirectory(&quot;' + escapeJsAttr(ch.channelId) + '&quot;, this)">Publish</button>';
+      ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger);" data-act="unpublishChannelFromDirectory" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Unpublish</button>'
+      : '<button type="button" class="lc-btn primary" style="padding:6px 12px; font-size:0.8rem;" data-act="publishChannelToDirectory" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Publish</button>';
     const extra =
       // A published channel's link lives here, on screen, rather than only
       // in the modal that announced it -- that modal closes and takes the
       // link with it.
       (ch.shareCode
         ? '<div class="row" style="margin-top:8px; gap:8px;">' +
-            '<input type="text" readonly value="' + escapeAttr(channelShareUrl(ch.shareCode)) + '" onclick="this.select()" style="font-size:0.8rem;">' +
-            '<button type="button" class="secondary lc-btn" style="flex:none; width:auto; white-space:nowrap;" onclick="copyChannelShareLink(&quot;' + escapeJsAttr(ch.channelId) + '&quot;, this)">Copy</button>' +
+            '<input type="text" readonly value="' + escapeAttr(channelShareUrl(ch.shareCode)) + '" data-act-on="click" data-act="appActSelectText" data-act-args="[&quot;@self&quot;]" style="font-size:0.8rem;">' +
+            '<button type="button" class="secondary lc-btn" style="flex:none; width:auto; white-space:nowrap;" data-act="copyChannelShareLink" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Copy</button>' +
           '</div>'
         : '');
     return channelListingCardHtml(channelAsListingEntry(ch), action, extra);
@@ -12929,7 +12929,7 @@ function renderChannelPublishList() {
   // because there is nothing to edit, publish or copy -- only to withdraw.
   const orphans = _orphanedPublishedChannels.map((entry) => channelListingCardHtml(
     entry,
-    '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger);" onclick="unpublishOrphanedChannel(&quot;' + escapeJsAttr(entry.code) + '&quot;, this)">Unpublish</button>',
+    '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger);" data-act="unpublishOrphanedChannel" data-act-args="' + appActArgs([entry.code, "@self"]) + '">Unpublish</button>',
     ''
   )).join('');
 
@@ -13236,7 +13236,7 @@ function toggleMergedChannelInCatalog(mergedId) {
       if (typeof showAppAlert === 'function') {
         showAppAlert('Merge Channels', 'Could not find the channels for this merged catalog.');
       } else {
-        alert('Could not find the channels for this merged catalog.');
+        showToast('Could not find the channels for this merged catalog.', 'error');
       }
       return;
     }
@@ -13254,7 +13254,7 @@ function mergeChannelsIntoRow() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Merge Channels', 'Check at least two channels to merge.');
     } else {
-      alert('Check at least two channels to merge.');
+      showToast('Check at least two channels to merge.', 'error');
     }
     return;
   }
@@ -13264,7 +13264,7 @@ function mergeChannelsIntoRow() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Merge Channels', 'Name the combined catalog first.');
     } else {
-      alert('Name the combined catalog first.');
+      showToast('Name the combined catalog first.', 'error');
     }
     return;
   }
@@ -13280,7 +13280,7 @@ function mergeChannelsIntoRow() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Merge Channels', 'Could not read the selected channels. Please try again.');
     } else {
-      alert('Could not read the selected channels. Please try again.');
+      showToast('Could not read the selected channels. Please try again.', 'error');
     }
     return;
   }
@@ -13354,7 +13354,7 @@ function renderChannelMergeList() {
           if (ch && Array.isArray(ch.items)) totalEpisodes += ch.items.length;
           return '<span class="badge" style="display:inline-flex; align-items:center; gap:5px; padding:3px 8px; font-size:0.8rem; background:var(--panel-strong); border:1px solid var(--border); border-radius:6px; margin:2px 4px 2px 0;">' +
             escapeHtml(chName) +
-            '<button type="button" class="merge-chip-remove-btn" title="Remove ' + escapeAttr(chName) + ' from merge" aria-label="Remove ' + escapeAttr(chName) + ' from merge" onclick="removeChannelFromMerge(&quot;' + escapeJsAttr(merged.mergedId) + '&quot;, &quot;' + escapeJsAttr(chId) + '&quot;)">\u2715</button>' +
+            '<button type="button" class="merge-chip-remove-btn" title="Remove ' + escapeAttr(chName) + ' from merge" aria-label="Remove ' + escapeAttr(chName) + ' from merge" data-act="removeChannelFromMerge" data-act-args="' + appActArgs([merged.mergedId, chId]) + '">\u2715</button>' +
           '</span>';
         }).join('');
         
@@ -13363,7 +13363,7 @@ function renderChannelMergeList() {
         if (remainingChannels.length) {
           remainingChannels.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
           const options = remainingChannels.map((c) => '<option value="' + escapeAttr(c.channelId) + '">' + escapeHtml(c.name) + ' (' + (c.items ? c.items.length : 0) + ' ep)</option>').join('');
-          addSelectHtml = '<select class="merge-add-channel-select" onchange="addChannelToMerge(&quot;' + escapeJsAttr(merged.mergedId) + '&quot;, this.value); this.value=&quot;&quot;;">' +
+          addSelectHtml = '<select class="merge-add-channel-select" data-act="appActAddChannelToMerge" data-act-args="' + appActArgs([merged.mergedId, '@self']) + '">' +
             '<option value="">+ Add channel...</option>' +
             options +
           '</select>';
@@ -13371,12 +13371,12 @@ function renderChannelMergeList() {
           addSelectHtml = '<select class="merge-add-channel-select" disabled title="All your current saved channels are already in this merge. Build or Quick Add more channels to add them here." style="opacity:0.65; cursor:not-allowed;">' +
             '<option value="">All saved channels added</option>' +
           '</select>' +
-          ' <button type="button" class="lc-btn secondary" style="padding:2px 8px; font-size:0.75rem; margin-left:4px;" onclick="switchChannelsSubmenu(&quot;quickadd&quot;, document.querySelector(&quot;#channelsSubnavBar button:nth-child(2)&quot;))">+ Quick Add</button>';
+          ' <button type="button" class="lc-btn secondary" style="padding:2px 8px; font-size:0.75rem; margin-left:4px;" data-act="appActGoToQuickAdd">+ Quick Add</button>';
         }
         
         const countText = (merged.channelIds ? merged.channelIds.length : 0) + ' channels &middot; ' + totalEpisodes + ' episodes';
         
-        const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" onclick="toggleMergedChannelInCatalog(&quot;' + escapeJsAttr(merged.mergedId) + '&quot;)">' +
+        const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleMergedChannelInCatalog" data-act-args="' + appActArgs([merged.mergedId]) + '">' +
           (isAdded ? 'Remove' : '+ Add') +
         '</button>';
 
@@ -13392,7 +13392,7 @@ function renderChannelMergeList() {
               '</div>' +
             '</div>' +
             '<div class="list-card-actions">' +
-              '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger);" onclick="deleteLocalMergedChannel(&quot;' + escapeJsAttr(merged.mergedId) + '&quot;)">Delete</button>' +
+              '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger);" data-act="deleteLocalMergedChannel" data-act-args="' + appActArgs([merged.mergedId]) + '">Delete</button>' +
               addBtnHtml +
             '</div>' +
           '</div>' +

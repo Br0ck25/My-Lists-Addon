@@ -196,7 +196,7 @@ function importConfigJson() {
   const raw = document.getElementById('configJsonBox').value.trim();
   if (!raw) {
     if (typeof showAppAlert === 'function') showAppAlert('Input Required', 'Paste a config JSON blob into the box first.', false);
-    else alert('Paste a config JSON blob into the box first.');
+    else showToast('Paste a config JSON blob into the box first.', 'error');
     return;
   }
   let data;
@@ -204,7 +204,7 @@ function importConfigJson() {
     data = JSON.parse(raw);
   } catch (e) {
     if (typeof showAppAlert === 'function') showAppAlert('Invalid JSON', 'That is not valid JSON.', false);
-    else alert('That is not valid JSON.');
+    else showToast('That is not valid JSON.', 'error');
     return;
   }
   runImport(data);
@@ -233,7 +233,7 @@ function runImport(data) {
         false
       );
     } else {
-      alert('Import failed part-way: ' + detail);
+      showToast('Import failed part-way: ' + detail, 'error');
     }
   }
 }
@@ -260,8 +260,8 @@ function looksLikeTmdbKey(v) {
 
 // Ids and slugs that arrived from somewhere else.
 //
-// escapeJsAttr (19_client-search-and-likes.js) is what actually stops an
-// imported id executing; this is the second layer, and it is here because an
+// The action attributes (P6-8) are what actually stop an imported id
+// executing; this is the second layer, and it is here because an
 // id is not free text. Every id this app produces is a slug, a "ch_<time>_<rand>",
 // a "tt…" or a "tmdb:…" -- none of which can contain a quote, an angle bracket,
 // a backslash or a control character. A value that does was not produced by
@@ -433,13 +433,13 @@ function showImportReport(report) {
   const title = report.warnings.length ? 'Restored with warnings' : 'Restored';
   const body = lines.map((l) => '\\u2022 ' + l).join('\\n');
   if (typeof showAppAlert === 'function') showAppAlert(title, body, false);
-  else alert(title + '\\n\\n' + body);
+  else showToast(title + '\\n\\n' + body, 'error');
 }
 
 function applyImportedConfig(data) {
   if (!data || (!Array.isArray(data.entries) && !data.customLists && !data.configuredCatalogs)) {
     if (typeof showAppAlert === 'function') showAppAlert('Invalid Config', 'That JSON does not look like a valid My Lists backup.', false);
-    else alert('That JSON does not look like a valid My Lists backup.');
+    else showToast('That JSON does not look like a valid My Lists backup.', 'error');
     return;
   }
 
@@ -471,13 +471,13 @@ function applyImportedConfig(data) {
   if (tmdbKey) {
     const el = document.getElementById('tmdbKeyInput');
     if (el) el.value = tmdbKey;
-    try { localStorage.setItem('myListAddon:tmdbKey', tmdbKey); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:tmdbKey', tmdbKey); } catch (e) {}
   }
   const tmdbSessionIdVal = data.tmdbSessionId || keys.tmdbSessionId;
   if (tmdbSessionIdVal) {
     tmdbSessionId = tmdbSessionIdVal;
     window.tmdbSessionId = tmdbSessionIdVal;
-    try { localStorage.setItem('myListAddon:tmdbSessionId', tmdbSessionIdVal); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:tmdbSessionId', tmdbSessionIdVal); } catch (e) {}
   }
   const tmdbAccountIdVal = data.tmdbAccountId || keys.tmdbAccountId;
   if (tmdbAccountIdVal) {
@@ -495,13 +495,13 @@ function applyImportedConfig(data) {
   if (mdblistKey) {
     const el = document.getElementById('mdblistKeyInput');
     if (el) el.value = mdblistKey;
-    try { localStorage.setItem('myListAddon:mdblistKey', mdblistKey); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:mdblistKey', mdblistKey); } catch (e) {}
   }
   const mdblistAccessTokenVal = data.mdblistAccessToken || keys.mdblistAccessToken;
   if (mdblistAccessTokenVal) {
     mdblistAccessToken = mdblistAccessTokenVal;
     window.mdblistAccessToken = mdblistAccessTokenVal;
-    try { localStorage.setItem('myListAddon:mdblistAccessToken', mdblistAccessTokenVal); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:mdblistAccessToken', mdblistAccessTokenVal); } catch (e) {}
     if (typeof renderMdblistConnectStatus === 'function') renderMdblistConnectStatus();
   }
   const mdblistUsernameVal = data.mdblistUsername || keys.mdblistUsername;
@@ -515,7 +515,7 @@ function applyImportedConfig(data) {
   if (traktKey) {
     const el = document.getElementById('traktKeyInput');
     if (el) el.value = traktKey;
-    try { localStorage.setItem('myListAddon:traktKey', traktKey); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:traktKey', traktKey); } catch (e) {}
   }
   const traktUsernameVal = data.traktUsername || keys.traktUsername;
   if (traktUsernameVal) {
@@ -528,7 +528,7 @@ function applyImportedConfig(data) {
   if (traktAccessTokenVal) {
     traktAccessToken = traktAccessTokenVal;
     window.traktAccessToken = traktAccessTokenVal;
-    try { localStorage.setItem('myListAddon:traktAccessToken', traktAccessTokenVal); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:traktAccessToken', traktAccessTokenVal); } catch (e) {}
     if (typeof renderTraktConnectStatus === 'function') renderTraktConnectStatus();
   }
 
@@ -536,13 +536,13 @@ function applyImportedConfig(data) {
   if (simklKey) {
     const el = document.getElementById('simklKeyInput');
     if (el) el.value = simklKey;
-    try { localStorage.setItem('myListAddon:simklKey', simklKey); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:simklKey', simklKey); } catch (e) {}
   }
   const simklAccessTokenVal = data.simklAccessToken || keys.simklAccessToken;
   if (simklAccessTokenVal) {
     simklAccessToken = simklAccessTokenVal;
     window.simklAccessToken = simklAccessTokenVal;
-    try { localStorage.setItem('myListAddon:simklAccessToken', simklAccessTokenVal); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:simklAccessToken', simklAccessTokenVal); } catch (e) {}
   }
   const simklUsernameVal = data.simklUsername || keys.simklUsername;
   if (simklUsernameVal) {
@@ -704,7 +704,7 @@ function applyImportedConfig(data) {
   } else if (typeof showAppAlert === 'function') {
     showAppAlert('Restore Complete', 'Your setup, lists, watch history, channels, and settings have been restored successfully.', true);
   }
-  else alert('Your setup, lists, watch history, channels, and settings have been restored successfully.');
+  else showToast('Your setup, lists, watch history, channels, and settings have been restored successfully.', 'success');
 }
 
 // --- import from an existing link -------------------------------------------
@@ -761,14 +761,14 @@ async function importFromLink() {
   const raw = document.getElementById('importLinkInput').value.trim();
   if (!raw) {
     if (typeof showAppAlert === 'function') showAppAlert('Link Required', 'Paste an install link, configure link, or stremio:// / wako:// link first.', false);
-    else alert('Paste an install link, configure link, or stremio://\\/wako:// link first.');
+    else showToast('Paste an install link, configure link, or stremio://\\/wako:// link first.', 'error');
     return;
   }
   try {
     const data = await resolveInstallLinkData(raw);
     if (!data || !data.ok) {
       if (typeof showAppAlert === 'function') showAppAlert('Link Error', 'Could not load that link: ' + ((data && data.error) || 'unknown error'), false);
-      else alert('Could not load that link: ' + ((data && data.error) || 'unknown error'));
+      else showToast('Could not load that link: ' + ((data && data.error) || 'unknown error'), 'error');
       return;
     }
     restoreRows(data.entries);
@@ -873,10 +873,10 @@ async function importFromLink() {
       msg += '\\n\\nSkipped ' + unsafeFromLink.length + ' item(s) whose id contained characters this app never produces. A link from this app cannot contain those.';
     }
     if (typeof showAppAlert === 'function') showAppAlert('Import Complete', msg, true);
-    else alert(msg);
+    else showToast(msg, 'error');
   } catch (e) {
     if (typeof showAppAlert === 'function') showAppAlert('Network Error', 'Network error while resolving that link.', false);
-    else alert('Network error while resolving that link.');
+    else showToast('Network error while resolving that link.', 'error');
   }
 }
 
@@ -884,14 +884,14 @@ async function restoreListsFromLink() {
   const raw = document.getElementById('importLinkInput').value.trim();
   if (!raw) {
     if (typeof showAppAlert === 'function') showAppAlert('Link Required', 'Paste an install link, configure link, or stremio:// / wako:// link first.', false);
-    else alert('Paste an install link, configure link, or stremio://\\/wako:// link first.');
+    else showToast('Paste an install link, configure link, or stremio://\\/wako:// link first.', 'error');
     return;
   }
   try {
     const data = await resolveInstallLinkData(raw);
     if (!data || !data.ok) {
       if (typeof showAppAlert === 'function') showAppAlert('Link Error', 'Could not load that link: ' + ((data && data.error) || 'unknown error'), false);
-      else alert('Could not load that link: ' + ((data && data.error) || 'unknown error'));
+      else showToast('Could not load that link: ' + ((data && data.error) || 'unknown error'), 'error');
       return;
     }
 
@@ -905,7 +905,7 @@ async function restoreListsFromLink() {
 
     if (!listSlugs.length && !channelIds.length) {
       if (typeof showAppAlert === 'function') showAppAlert('No Custom Lists Found', 'That link does not contain any custom lists or custom channels.', false);
-      else alert('That link does not contain any custom lists or custom channels.');
+      else showToast('That link does not contain any custom lists or custom channels.', 'error');
       return;
     }
 
@@ -988,10 +988,10 @@ async function restoreListsFromLink() {
       msg += '\\n\\nSkipped ' + unsafeFromLink.length + ' item(s) whose id contained characters this app never produces. A link from this app cannot contain those.';
     }
     if (typeof showAppAlert === 'function') showAppAlert('Custom Lists Rebuilt', msg, true);
-    else alert(msg);
+    else showToast(msg, 'error');
   } catch (e) {
     if (typeof showAppAlert === 'function') showAppAlert('Network Error', 'Network error while resolving that link.', false);
-    else alert('Network error while resolving that link.');
+    else showToast('Network error while resolving that link.', 'error');
   }
 }
 
@@ -1248,13 +1248,13 @@ async function saveCurrentAsPreset() {
   const name = nameInput.value.trim();
   if (!name) {
     if (typeof showAppAlert === 'function') showAppAlert('Preset Name Required', 'Name this preset first.', false);
-    else alert('Name this preset first.');
+    else showToast('Name this preset first.', 'error');
     return;
   }
   const entries = collectEntries();
   if (!entries.length) {
     if (typeof showAppAlert === 'function') showAppAlert('Empty Catalogs', 'Add at least one list first.', false);
-    else alert('Add at least one list first.');
+    else showToast('Add at least one list first.', 'error');
     return;
   }
   const customListsMap = (typeof loadLocalCustomLists === 'function') ? loadLocalCustomLists() : {};
@@ -1309,7 +1309,7 @@ async function saveCurrentAsPreset() {
       if (typeof showAppAlert === 'function') {
         showAppAlert('Preset Save Error', errMsg, false);
       } else {
-        alert(errMsg);
+        showToast(errMsg, 'error');
       }
       return;
     }
@@ -1471,7 +1471,7 @@ function rebuildCustomListsFromPreset(name, isSilent = false) {
   if (!preset) {
     if (!isSilent) {
       if (typeof showAppAlert === 'function') showAppAlert('Preset Not Found', 'Could not find preset "' + name + '".', false);
-      else alert('Could not find preset "' + name + '".');
+      else showToast('Could not find preset "' + name + '".', 'error');
     }
     return { restoredLists: 0, restoredChannels: 0, listNames: [] };
   }
@@ -1506,7 +1506,7 @@ function rebuildCustomListsFromPreset(name, isSilent = false) {
         ? 'Preset "' + name + '" has no custom lists or channels to restore. It does carry Continue Watching / Airing Next / Watch History / Watchlist, but those always follow your account rather than the preset, so they were left as they are.'
         : 'Preset "' + name + '" does not contain any custom lists or channels.';
       if (typeof showAppAlert === 'function') showAppAlert('No Custom Lists Found', msg, false);
-      else alert(msg);
+      else showToast(msg, 'error');
     }
     return { restoredLists: 0, restoredChannels: 0, listNames: [], skippedTrackedSlugs: skippedTrackedSlugs };
   }
@@ -1606,7 +1606,7 @@ function rebuildCustomListsFromPreset(name, isSilent = false) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Custom Lists Rebuilt', msg, true);
     } else {
-      alert(msg);
+      showToast(msg, 'error');
     }
   }
 
@@ -1705,7 +1705,7 @@ function sharePreset(name) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Preset Copied', '"' + name + '" copied to your clipboard as JSON -- paste it into the Backup/Restore box above (on this device or another) to import it.', true);
     } else {
-      alert('"' + name + '" copied to your clipboard as JSON -- paste it into the Backup/Restore box above (on this device or another) to import it.');
+      showToast('"' + name + '" copied to your clipboard as JSON -- paste it into the Backup/Restore box above (on this device or another) to import it.', 'success');
     }
   }).catch(() => {
     if (typeof showAppPrompt === 'function') {
@@ -1758,7 +1758,7 @@ function readJsonFile(input, onParsed) {
       data = JSON.parse(reader.result);
     } catch (e) {
       if (typeof showAppAlert === 'function') showAppAlert('Invalid File', 'That file is not valid JSON.', false);
-      else alert('That file is not valid JSON.');
+      else showToast('That file is not valid JSON.', 'error');
       input.value = '';
       return;
     }
@@ -1767,7 +1767,7 @@ function readJsonFile(input, onParsed) {
   };
   reader.onerror = () => {
     if (typeof showAppAlert === 'function') showAppAlert('Read Error', 'Could not read that file.', false);
-    else alert('Could not read that file.');
+    else showToast('Could not read that file.', 'error');
     input.value = '';
   };
   reader.readAsText(file);
@@ -1797,7 +1797,7 @@ function uploadPresetFile(input) {
   readJsonFile(input, (data, file) => {
     if (!data || (!Array.isArray(data.entries) && !Array.isArray(data))) {
       if (typeof showAppAlert === 'function') showAppAlert('Invalid Preset', 'That file does not look like a preset -- expected an "entries" array.', false);
-      else alert('That file does not look like a preset -- expected an "entries" array.');
+      else showToast('That file does not look like a preset -- expected an "entries" array.', 'error');
       return;
     }
     const suggested = (file.name || 'Preset').replace(/\.json$/i, '');
@@ -1898,7 +1898,7 @@ function exportDataToCsv(target, format) {
     const items = (historyList && Array.isArray(historyList.items)) ? historyList.items : [];
     if (!items.length) {
       if (typeof showAppAlert === 'function') showAppAlert('Empty Watch History', 'Your Watch History is currently empty.', false);
-      else alert('Your Watch History is currently empty.');
+      else showToast('Your Watch History is currently empty.', 'error');
       return;
     }
 
@@ -1978,7 +1978,7 @@ function exportDataToCsv(target, format) {
     });
     if (totalItems === 0) {
       if (typeof showAppAlert === 'function') showAppAlert('No Saved Lists', 'You do not have any saved list items to export.', false);
-      else alert('You do not have any saved list items to export.');
+      else showToast('You do not have any saved list items to export.', 'error');
       return;
     }
   }
@@ -2124,7 +2124,7 @@ function copyLink(url) {
       selection.removeAllRanges();
       selection.addRange(range);
     }
-    alert('Manifest URL: ' + url);
+    showToast('Manifest URL: ' + url, 'error');
   });
 }
 
@@ -2169,13 +2169,13 @@ function signInToInstallHtml(message, entries) {
     + '<p class="testresult err" style="margin:0 0 12px;">' + escapeHtml(message)
     + (names.length ? (' Sign in, or remove ' + (names.length === 1 ? 'this row' : 'these rows') + ' first: ' + escapeHtml(names.join(', ')) + '.') : '')
     + '</p>'
-    + '<button type="button" class="btn btn-primary" onclick="openRestoreModal()">Log in or sign up</button>'
+    + '<button type="button" class="btn btn-primary" data-act="openRestoreModal">Log in or sign up</button>'
     + '</div>';
 }
 
 async function generate() {
   const entries = collectEntries();
-  if (!entries.length) { alert('Add at least one list.'); return; }
+  if (!entries.length) { showToast('Add at least one list.', 'error'); return; }
   const keys = collectKeys();
 
   const box = document.getElementById('result');
@@ -2229,7 +2229,7 @@ async function generate() {
     const errTxt = escapeHtml(saveErrorMessage || 'Unknown error');
     box.innerHTML = '<div class="install-result-card" style="padding:18px;">'
       + '<p class="testresult err" style="margin:0 0 12px;">Could not create your install link just now (' + errTxt + '). Nothing was lost - please try again.</p>'
-      + '<button type="button" class="btn btn-primary" onclick="generate()">Try again</button>'
+      + '<button type="button" class="btn btn-primary" data-act="generate">Try again</button>'
       + '</div>';
     return;
   }
@@ -2287,12 +2287,12 @@ async function generate() {
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
             <span>Manifest Link</span>
           </div>
-          <button type="button" class="install-url-copy-btn" id="copyUrlBtn" onclick="copyLink('\${installUrl}')" title="Copy manifest link">
+          <button type="button" class="install-url-copy-btn" id="copyUrlBtn" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Copy manifest link">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
             <span>Copy Link</span>
           </button>
         </div>
-        <div class="install-url-box" id="manifestLinkDisplay" onclick="copyLink('\${installUrl}')" title="Click to copy">\${installUrl}</div>
+        <div class="install-url-box" id="manifestLinkDisplay" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Click to copy">\${installUrl}</div>
       </div>
 
       <div class="install-hint-box">
@@ -2479,7 +2479,7 @@ if (localStorage.getItem('myListAddon:mdblistDisconnected') === 'true') {
   if (savedForMdblist && savedForMdblist.keys && savedForMdblist.keys.mdblistAccessToken) {
     mdblistAccessToken = savedForMdblist.keys.mdblistAccessToken;
   } else {
-    try { mdblistAccessToken = localStorage.getItem('myListAddon:mdblistAccessToken') || ''; } catch (e) {}
+    try { mdblistAccessToken = readProviderSecret('myListAddon:mdblistAccessToken') || ''; } catch (e) {}
   }
 }
 
@@ -2496,7 +2496,7 @@ if (localStorage.getItem('myListAddon:traktDisconnected') === 'true') {
   if (savedForTrakt && savedForTrakt.keys && savedForTrakt.keys.traktAccessToken) {
     traktAccessToken = savedForTrakt.keys.traktAccessToken;
   } else {
-    try { traktAccessToken = localStorage.getItem('myListAddon:traktAccessToken') || ''; } catch (e) {}
+    try { traktAccessToken = readProviderSecret('myListAddon:traktAccessToken') || ''; } catch (e) {}
   }
 }
 
@@ -2512,7 +2512,7 @@ if (localStorage.getItem('myListAddon:simklDisconnected') === 'true') {
   if (savedForSimkl && savedForSimkl.keys && savedForSimkl.keys.simklAccessToken) {
     simklAccessToken = savedForSimkl.keys.simklAccessToken;
   } else {
-    try { simklAccessToken = localStorage.getItem('myListAddon:simklAccessToken') || ''; } catch (e) {}
+    try { simklAccessToken = readProviderSecret('myListAddon:simklAccessToken') || ''; } catch (e) {}
   }
 }
 
@@ -4606,14 +4606,14 @@ async function appShellExploreMyListsSearch(q) {
 }
 
 async function appShellExploreTraktSearch(q) {
-  const key = (document.getElementById('traktKeyInput') ? document.getElementById('traktKeyInput').value.trim() : '') || localStorage.getItem('myListAddon:traktKey') || '';
+  const key = (document.getElementById('traktKeyInput') ? document.getElementById('traktKeyInput').value.trim() : '') || readProviderSecret('myListAddon:traktKey') || '';
   const res = await appShellApiFetch('/api/trakt-search?q=' + encodeURIComponent(q) + (key ? '&traktKey=' + encodeURIComponent(key) : ''));
   if (!res.ok) return null;
   return ((res.data && res.data.lists) || []).map(function (r) { return appShellExploreNormalize(r, 'trakt'); });
 }
 
 async function appShellExploreTmdbSearch(q) {
-  const key = (document.getElementById('tmdbKeyInput') ? document.getElementById('tmdbKeyInput').value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const key = (document.getElementById('tmdbKeyInput') ? document.getElementById('tmdbKeyInput').value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
   const adult = (typeof isAdultContentFilterEnabled === 'function' && isAdultContentFilterEnabled()) ? '&adultContentFilter=1' : '';
   const res = await appShellApiFetch('/api/tmdb-search-lists?q=' + encodeURIComponent(q) + (key ? '&tmdbKey=' + encodeURIComponent(key) : '') + adult);
   if (!res.ok) return null;
@@ -7133,7 +7133,7 @@ function renderGuidePage(origin) {
       <span class="brand-text">${ADDON_NAME}</span>
     </a>
     <div class="nav-actions">
-      <button type="button" class="theme-toggle-btn" onclick="toggleTheme()" aria-label="Toggle Dark/Light Mode">
+      <button type="button" class="theme-toggle-btn" data-act="toggleTheme" aria-label="Toggle Dark/Light Mode">
         <svg class="theme-icon icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="5" fill="currentColor"></circle>
           <line x1="12" y1="1" x2="12" y2="3"></line>

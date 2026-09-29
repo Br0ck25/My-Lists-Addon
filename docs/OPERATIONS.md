@@ -411,3 +411,13 @@ You are bounced back to the page you asked for, without the parameter, and the c
 **Turning it off:** `https://mylistsaddon.com/?ff_new_ui=0` — same bounce, cookie cleared. Nothing is stored server-side either way, so no data is affected and nothing has to be undone.
 
 **For everyone at once** (later, when Phase 6 is finished): the plan is a Worker variable, `FF_NEW_UI=1`, defaulting off, once the whole frontend is behind it. Until then the cookie is the only switch, and nobody without it sees any change at all — the shell's paths still 404 for them, exactly as before.
+
+## 21. What P6-8 changed for everyone
+
+**Nothing to configure.** Unlike P6-1 to P6-7, this one is not behind the new-UI cookie: it is the page's own markup and this browser's own storage, so it reaches every visitor once the new `worker_entry_combined.js` is deployed. Nothing in the dashboard, no migration and no variable.
+
+- **Every control names its action.** The buttons, boxes and lists in the builder no longer carry a line of JavaScript in the markup; a single listener runs them (`appActDispatch`, `16_client-row-core.js`). If a control ever "does nothing" in the new build, the browser console says `Action failed: <name>` (once per name) instead of failing silently, and `verify.sh`/`html_checks.py` fail the build if a name does not exist in the bundle.
+- **No more browser pop-ups.** A message that used to be an `alert()` is now the app's own toast, bottom centre; anything that needed a yes/no is the app's own dialog.
+- **Provider keys are no longer re-saved in the browser.** A Trakt, MDBList, Simkl or TMDB key or token lives in memory while the page is open, is read from the old stored copy if one is there, and the stored copy is cleaned up once the account (signed in) hands the same value back. Consequence to know: if a visitor is **not signed in** and pastes a key, it works for that visit but is not kept for the next one — signing in is what saves it. The Creator Key itself is untouched (it is what signs this browser in; it moves in P6-9).
+- **Nothing to undo** if the deploy has to be rolled back: the previous file re-stores what the old page stored.
+

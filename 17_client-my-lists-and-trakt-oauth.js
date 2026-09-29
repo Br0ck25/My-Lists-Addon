@@ -22,8 +22,8 @@ async function runMyMdblistLists() {
   const isDisc = localStorage.getItem('myListAddon:mdblistDisconnected') === 'true';
   const keyInput = document.getElementById('mdblistKeyInput');
   const manualKey = keyInput ? keyInput.value.trim() : '';
-  const token = isDisc ? '' : (mdblistAccessToken || localStorage.getItem('myListAddon:mdblistAccessToken') || '');
-  const key = isDisc ? '' : (manualKey || token || localStorage.getItem('myListAddon:mdblistKey') || '');
+  const token = isDisc ? '' : (mdblistAccessToken || readProviderSecret('myListAddon:mdblistAccessToken') || '');
+  const key = isDisc ? '' : (manualKey || token || readProviderSecret('myListAddon:mdblistKey') || '');
   if (!key) {
     box.innerHTML = '<p style="margin-top:10px; color:var(--muted);"><small>Connect your MDBList account in Settings or click <strong>Connect MDBList</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
     return;
@@ -66,7 +66,7 @@ async function enrichMdblistAiringNextDates(list) {
   _mdblistAiringNextEnriching = true;
 
   const tkInput = document.getElementById('tmdbKeyInput');
-  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
 
   try {
     const rawCandidates = (window._mdblistRawAiringCandidates && window._mdblistRawAiringCandidates.length)
@@ -295,7 +295,7 @@ function renderMyMdblistLists(lists) {
 
     const copyBtn = isHistory
       ? '<button type="button" class="lc-btn secondary myListCopyToCustomBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="mixed">Copy</button>' +
-        '<button type="button" class="lc-btn secondary" onclick="markMdblistHistoryAllWatched(this)">Mark all as Watched</button>'
+        '<button type="button" class="lc-btn secondary" data-act="markMdblistHistoryAllWatched" data-act-args="[&quot;@self&quot;]">Mark all as Watched</button>'
       : (isUpNext
           ? '<button type="button" class="lc-btn secondary myListCopyToCustomBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="series">Copy</button>'
           : (isAiringNext
@@ -324,8 +324,8 @@ function renderMyMdblistLists(lists) {
             const isMobileEnd = (i === 2 && previewItems.length > 3);
             const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
             let overlays = '';
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" onclick="event.stopPropagation(); openMdblistUpNextDetailsPage();">' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" onclick="event.stopPropagation(); openMdblistUpNextDetailsPage();">' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="openMdblistUpNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="openMdblistUpNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
             const showMdbUpNextBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesMdblistUpNext') : true;
             const showAirDate = showMdbUpNextBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
@@ -368,10 +368,10 @@ function renderMyMdblistLists(lists) {
             const poster = resolveListCardItemPoster(it);
             const epSubtitle = it.episodeTitle || (it.seasonNum != null && it.episodeNum != null ? ('S' + it.seasonNum + 'E' + it.episodeNum) : '');
 
-            const mdbUpNextRemoveBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="mdblist" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from MDBList Watchlist" aria-label="Remove from MDBList Watchlist">\u2715</button>';
+            const mdbUpNextRemoveBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="mdblist" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from MDBList Watchlist" aria-label="Remove from MDBList Watchlist">\u2715</button>';
             return '<div class="list-card-mini-poster-tile mdblist-up-next-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="series">' +
               '<div class="list-card-mini-poster-img-wrap">' +
-                (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="series" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" onerror="handlePosterImgError(this)">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
+                (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="series" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
                 (dateBadge + bottomBadge) +
                 mdbUpNextRemoveBtn +
                 overlays +
@@ -392,8 +392,8 @@ function renderMyMdblistLists(lists) {
             const isMobileEnd = (i === 2 && previewItems.length > 3);
             const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
             let overlays = '';
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" onclick="event.stopPropagation(); openMdblistAiringNextDetailsPage();">' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" onclick="event.stopPropagation(); openMdblistAiringNextDetailsPage();">' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="openMdblistAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="openMdblistAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
             const showAiringBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesAiringNext') : true;
             const showAirDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
@@ -430,10 +430,10 @@ function renderMyMdblistLists(lists) {
                 };
 
             const poster = resolveListCardItemPoster(it);
-            const mdbAiringNextRemoveBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="mdblist" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from MDBList Watchlist" aria-label="Remove from MDBList Watchlist">\u2715</button>';
+            const mdbAiringNextRemoveBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="mdblist" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from MDBList Watchlist" aria-label="Remove from MDBList Watchlist">\u2715</button>';
             return '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '">' +
               '<div class="list-card-mini-poster-img-wrap">' +
-                (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" onerror="handlePosterImgError(this)">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
+                (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
                 (dateBadge + bottomBadge) +
                 mdbAiringNextRemoveBtn +
                 overlays +
@@ -452,7 +452,7 @@ function renderMyMdblistLists(lists) {
       postersHtml = '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + viewType + '"></div>';
     }
 
-    const titleClick = isUpNext ? 'onclick="openMdblistUpNextDetailsPage()"' : (isAiringNext ? 'onclick="openMdblistAiringNextDetailsPage()"' : '');
+    const titleClick = isUpNext ? 'data-act="openMdblistUpNextDetailsPage"' : (isAiringNext ? 'data-act="openMdblistAiringNextDetailsPage"' : '');
 
     return '<div class="list-card" data-list-type="' + (isSingleType ? type : 'mixed') + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(viewType) + '" data-creator="MDBList" data-items="' + escapeAttr(totalCount) + '">' +
       '<div class="list-card-header">' +
@@ -531,7 +531,7 @@ document.getElementById('myMdblistListsResult').addEventListener('click', (e) =>
 async function runMyTraktLists() {
   const box = document.getElementById('myTraktListsResult');
   const isDisc = localStorage.getItem('myListAddon:traktDisconnected') === 'true';
-  const token = isDisc ? '' : (traktAccessToken || localStorage.getItem('myListAddon:traktAccessToken') || '');
+  const token = isDisc ? '' : (traktAccessToken || readProviderSecret('myListAddon:traktAccessToken') || '');
   const neutralMsg = '<p style="margin-top:10px; color:var(--muted);"><small>Connect your Trakt account in Settings or click <strong>Connect Trakt</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
 
   if (!token) {
@@ -581,9 +581,9 @@ function disconnectMdblist() {
   mdblistAccessToken = '';
   try { window.mdblistAccessToken = ''; } catch (e) {}
   try {
-    localStorage.removeItem('myListAddon:mdblistAccessToken');
+    forgetProviderSecret('myListAddon:mdblistAccessToken');
     localStorage.removeItem('myListAddon:mdblistUsername');
-    localStorage.removeItem('myListAddon:mdblistKey');
+    forgetProviderSecret('myListAddon:mdblistKey');
     localStorage.setItem('myListAddon:mdblistDisconnected', 'true');
   } catch (e) {}
   saveState();
@@ -594,7 +594,7 @@ function disconnectMdblist() {
 
 function toggleListsMdblistConnection() {
   const isDisc = localStorage.getItem('myListAddon:mdblistDisconnected') === 'true';
-  const token = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken');
+  const token = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken');
   if (token && !isDisc) {
     disconnectMdblist();
   } else {
@@ -609,10 +609,10 @@ function renderMdblistConnectStatus() {
   const disconnectBtn = document.getElementById('mdblistDisconnectBtn');
   const listsBtn = document.getElementById('listsMdblistConnectBtn');
   const isDisc = localStorage.getItem('myListAddon:mdblistDisconnected') === 'true';
-  const token = isDisc ? '' : ((typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '');
+  const token = isDisc ? '' : ((typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '');
   if (!isDisc && token) mdblistAccessToken = token;
   const user = (typeof mdblistUsername !== 'undefined' && mdblistUsername) || (isDisc ? '' : (localStorage.getItem('myListAddon:mdblistUsername') || ''));
-  const key = (input ? input.value.trim() : '') || (isDisc ? '' : (localStorage.getItem('myListAddon:mdblistKey') || ''));
+  const key = (input ? input.value.trim() : '') || (isDisc ? '' : (readProviderSecret('myListAddon:mdblistKey') || ''));
   const isAccountConnected = !isDisc && !!token;
   const hasKey = !isDisc && !!key;
 
@@ -666,14 +666,14 @@ function applyMdblistConnection(token, username) {
     } catch (e) {}
   }
   try {
-    localStorage.setItem('myListAddon:mdblistAccessToken', mdblistAccessToken);
+    rememberProviderSecret('myListAddon:mdblistAccessToken', mdblistAccessToken);
   } catch (e) {}
   saveState();
   if (typeof pushCreatorSync === 'function') pushCreatorSync();
   if (typeof showAppAlert === 'function') {
     showAppAlert('MDBList Connected', 'Connected to MDBList.', true);
   } else {
-    alert('Connected to MDBList.');
+    showToast('Connected to MDBList.', 'success');
   }
   renderMdblistConnectStatus();
   scheduleMyMdblistListsRefresh();
@@ -704,7 +704,7 @@ function pickUpMdblistTokenFromUrl() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('MDBList Connection Error', msg + (detail ? '\\n\\nDetails: ' + detail : ''), false);
     } else {
-      alert(msg + (detail ? '\\n' + detail : ''));
+      showToast(msg + (detail ? '\\n' + detail : ''), 'error');
     }
     params.delete('mdblist_error');
     params.delete('mdblist_error_detail');
@@ -736,9 +736,9 @@ function disconnectTrakt() {
   try { window.traktAccessToken = ''; } catch (e) {}
   if (typeof activeTraktToken !== 'undefined') activeTraktToken = null;
   try {
-    localStorage.removeItem('myListAddon:traktAccessToken');
+    forgetProviderSecret('myListAddon:traktAccessToken');
     localStorage.removeItem('myListAddon:traktUsername');
-    localStorage.removeItem('myListAddon:traktKey');
+    forgetProviderSecret('myListAddon:traktKey');
     localStorage.setItem('myListAddon:traktDisconnected', 'true');
   } catch (e) {}
   saveState();
@@ -752,7 +752,7 @@ function disconnectTrakt() {
 
 function toggleListsTraktConnection() {
   const isDisc = localStorage.getItem('myListAddon:traktDisconnected') === 'true';
-  const token = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken');
+  const token = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken');
   if (token && !isDisc) {
     disconnectTrakt();
   } else {
@@ -768,10 +768,10 @@ function renderTraktConnectStatus() {
   const disconnectBtn = document.getElementById('traktDisconnectBtn');
   const listsBtn = document.getElementById('listsTraktConnectBtn');
   const isDisc = localStorage.getItem('myListAddon:traktDisconnected') === 'true';
-  const token = isDisc ? '' : ((typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '');
+  const token = isDisc ? '' : ((typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '');
   if (!isDisc && token) traktAccessToken = token;
   const user = (userInput ? userInput.value.trim() : '') || (isDisc ? '' : (localStorage.getItem('myListAddon:traktUsername') || ''));
-  const key = (keyInput ? keyInput.value.trim() : '') || (isDisc ? '' : (localStorage.getItem('myListAddon:traktKey') || ''));
+  const key = (keyInput ? keyInput.value.trim() : '') || (isDisc ? '' : (readProviderSecret('myListAddon:traktKey') || ''));
   const isAccountConnected = !isDisc && !!token;
   const hasKey = !isDisc && !!(key || user);
   
@@ -818,7 +818,7 @@ function renderTraktConnectStatus() {
 function applyTraktConnection(token, user) {
   traktAccessToken = token;
   try {
-    localStorage.setItem('myListAddon:traktAccessToken', traktAccessToken);
+    rememberProviderSecret('myListAddon:traktAccessToken', traktAccessToken);
     localStorage.removeItem('myListAddon:traktDisconnected');
   } catch (e) {}
   if (user) {
@@ -833,7 +833,7 @@ function applyTraktConnection(token, user) {
   if (typeof showAppAlert === 'function') {
     showAppAlert('Trakt Connected', 'Connected to Trakt.', true);
   } else {
-    alert('Connected to Trakt.');
+    showToast('Connected to Trakt.', 'success');
   }
   renderTraktConnectStatus();
   scheduleMyTraktListsRefresh();
@@ -865,7 +865,7 @@ function pickUpTraktTokenFromUrl() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Trakt Connection', msg, !isRateLimit);
     } else {
-      alert(msg);
+      showToast(msg, 'error');
     }
     params.delete('trakt_error');
     params.delete('trakt_error_detail');
@@ -897,7 +897,7 @@ async function startTraktDeviceLogin(retried) {
   const codeEl = document.getElementById('traktDeviceUserCode');
   const statusEl = document.getElementById('traktDevicePollingStatus');
   const linkEl = document.getElementById('traktDeviceActivateLink');
-  const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:traktKey') || '';
+  const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || readProviderSecret('myListAddon:traktKey') || '';
   
   if (modal) modal.style.display = 'flex';
   if (codeEl) codeEl.innerText = 'LOADING...';
@@ -922,7 +922,7 @@ async function startTraktDeviceLogin(retried) {
     if (!data.ok || !data.user_code) {
       if (codeEl) codeEl.innerText = 'ERROR';
       if (statusEl) {
-        statusEl.innerHTML = '<span style="color:var(--danger);">' + escapeHtml(data.error || 'Could not get device code.') + '</span> <button type="button" class="lc-btn secondary" style="margin-left:8px; padding:3px 8px; font-size:0.75rem;" onclick="startTraktDeviceLogin()">Try Again</button>';
+        statusEl.innerHTML = '<span style="color:var(--danger);">' + escapeHtml(data.error || 'Could not get device code.') + '</span> <button type="button" class="lc-btn secondary" style="margin-left:8px; padding:3px 8px; font-size:0.75rem;" data-act="startTraktDeviceLogin">Try Again</button>';
       }
       return;
     }
@@ -945,7 +945,7 @@ async function startTraktDeviceLogin(retried) {
       if (Date.now() > expiresAt) {
         clearInterval(_traktDevicePollTimer);
         _traktDevicePollTimer = null;
-        if (statusEl) statusEl.innerHTML = 'Activation code expired. <button type="button" class="lc-btn secondary" style="margin-left:8px; padding:3px 8px; font-size:0.75rem;" onclick="startTraktDeviceLogin()">Get New Code</button>';
+        if (statusEl) statusEl.innerHTML = 'Activation code expired. <button type="button" class="lc-btn secondary" style="margin-left:8px; padding:3px 8px; font-size:0.75rem;" data-act="startTraktDeviceLogin">Get New Code</button>';
         return;
       }
 
@@ -962,7 +962,7 @@ async function startTraktDeviceLogin(retried) {
           _traktDevicePollTimer = null;
           traktAccessToken = pollData.access_token;
           try {
-            localStorage.setItem('myListAddon:traktAccessToken', traktAccessToken);
+            rememberProviderSecret('myListAddon:traktAccessToken', traktAccessToken);
           } catch(e) {}
           if (pollData.username) {
             try {
@@ -993,7 +993,7 @@ async function startTraktDeviceLogin(retried) {
 
   } catch (err) {
     if (codeEl) codeEl.innerText = 'ERROR';
-    if (statusEl) statusEl.innerHTML = 'Network error requesting device code. <button type="button" class="lc-btn secondary" style="margin-left:8px; padding:3px 8px; font-size:0.75rem;" onclick="startTraktDeviceLogin()">Try Again</button>';
+    if (statusEl) statusEl.innerHTML = 'Network error requesting device code. <button type="button" class="lc-btn secondary" style="margin-left:8px; padding:3px 8px; font-size:0.75rem;" data-act="startTraktDeviceLogin">Try Again</button>';
   }
 }
 
@@ -1043,7 +1043,7 @@ async function enrichTraktAiringNextDates(list) {
   _traktAiringNextEnriching = true;
 
   const tkInput = document.getElementById('tmdbKeyInput');
-  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
 
   try {
     const rawCandidates = (window._traktRawAiringCandidates && window._traktRawAiringCandidates.length)
@@ -1264,7 +1264,7 @@ function renderMyPrivateTraktLists(lists) {
 
     const copyBtn = isHistory
       ? '<button type="button" class="lc-btn secondary myPrivateListCopyToCustomBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="mixed">Copy</button>' +
-        '<button type="button" class="lc-btn secondary" onclick="markTraktHistoryAllWatched(this)">Mark all as Watched</button>'
+        '<button type="button" class="lc-btn secondary" data-act="markTraktHistoryAllWatched" data-act-args="[&quot;@self&quot;]">Mark all as Watched</button>'
       : (isContinueWatching
           ? '<button type="button" class="lc-btn secondary myPrivateListCopyToCustomBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="mixed">Copy</button>'
           : (isAiringNext
@@ -1294,8 +1294,8 @@ function renderMyPrivateTraktLists(lists) {
             const isMobileEnd = (i === 2 && previewItems.length > 3);
             const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
             let overlays = '';
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" onclick="event.stopPropagation(); openTraktContinueWatchingDetailsPage();">' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" onclick="event.stopPropagation(); openTraktContinueWatchingDetailsPage();">' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="openTraktContinueWatchingDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="openTraktContinueWatchingDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
             const showTraktCwBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesTraktContinueWatching') : true;
             const showAirDate = showTraktCwBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
@@ -1345,10 +1345,10 @@ function renderMyPrivateTraktLists(lists) {
 
             return '<div class="list-card-mini-poster-tile trakt-continue-watching-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(it.type || 'mixed') + '">' +
               '<div class="list-card-mini-poster-img-wrap">' +
-                (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || 'series') + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" onerror="handlePosterImgError(this)">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
+                (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || 'series') + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
                 progressOverlay +
                 (dateBadge + bottomBadge) +
-                '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="history" data-list-id="history" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from Trakt History" aria-label="Remove from Trakt History">\u2715</button>' +
+                '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="history" data-list-id="history" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Trakt History" aria-label="Remove from Trakt History">\u2715</button>' +
                 overlays +
               '</div>' +
               '<div class="list-card-mini-poster-name">' + escapeHtml(it.name || it.title || 'Untitled') + '</div>' +
@@ -1367,8 +1367,8 @@ function renderMyPrivateTraktLists(lists) {
             const isMobileEnd = (i === 2 && previewItems.length > 3);
             const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
             let overlays = '';
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" onclick="event.stopPropagation(); openTraktAiringNextDetailsPage();">' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" onclick="event.stopPropagation(); openTraktAiringNextDetailsPage();">' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="openTraktAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="openTraktAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
             const showAiringBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesAiringNext') : true;
             const showAirDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
@@ -1407,9 +1407,9 @@ function renderMyPrivateTraktLists(lists) {
             const traktPoster = resolveListCardItemPoster(it);
             return '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '">' +
               '<div class="list-card-mini-poster-img-wrap">' +
-                (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" onerror="handlePosterImgError(this)">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
+                (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
                 (dateBadge + bottomBadge) +
-                '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from Trakt Watchlist" aria-label="Remove from Trakt Watchlist">\u2715</button>' +
+                '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Trakt Watchlist" aria-label="Remove from Trakt Watchlist">\u2715</button>' +
                 overlays +
               '</div>' +
               '<div class="list-card-mini-poster-name">' + escapeHtml(label.title) + '</div>' +
@@ -1426,7 +1426,7 @@ function renderMyPrivateTraktLists(lists) {
       postersHtml = '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + viewType + '"></div>';
     }
 
-    const titleClick = isContinueWatching ? 'onclick="openTraktContinueWatchingDetailsPage()"' : (isAiringNext ? 'onclick="openTraktAiringNextDetailsPage()"' : '');
+    const titleClick = isContinueWatching ? 'data-act="openTraktContinueWatchingDetailsPage"' : (isAiringNext ? 'data-act="openTraktAiringNextDetailsPage"' : '');
 
     return '<div class="list-card" data-list-type="' + (isSingleType ? type : 'mixed') + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(viewType) + '" data-creator="Trakt" data-items="' + escapeAttr(totalCount) + '">' +
       '<div class="list-card-header">' +
@@ -1480,9 +1480,9 @@ function onTmdbKeyInputChanged() {
   const input = document.getElementById('tmdbKeyInput');
   const val = input ? input.value.trim() : '';
   if (val) {
-    localStorage.setItem('myListAddon:tmdbKey', val);
+    rememberProviderSecret('myListAddon:tmdbKey', val);
   } else {
-    localStorage.removeItem('myListAddon:tmdbKey');
+    forgetProviderSecret('myListAddon:tmdbKey');
   }
   renderTmdbConnectStatus();
   scheduleMyTmdbListsRefresh();
@@ -1496,7 +1496,7 @@ function startTmdbConnect() {
 
 function toggleListsTmdbConnection() {
   const isDisc = localStorage.getItem('myListAddon:tmdbDisconnected') === 'true';
-  const sess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || localStorage.getItem('myListAddon:tmdbSessionId');
+  const sess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || readProviderSecret('myListAddon:tmdbSessionId');
   if (sess && !isDisc) {
     disconnectTmdb();
   } else {
@@ -1515,8 +1515,8 @@ function disconnectTmdb() {
   tmdbUsername = '';
   try { window.tmdbUsername = ''; } catch (e) {}
   try {
-    localStorage.removeItem('myListAddon:tmdbKey');
-    localStorage.removeItem('myListAddon:tmdbSessionId');
+    forgetProviderSecret('myListAddon:tmdbKey');
+    forgetProviderSecret('myListAddon:tmdbSessionId');
     localStorage.removeItem('myListAddon:tmdbAccountId');
     localStorage.removeItem('myListAddon:tmdbUsername');
     localStorage.setItem('myListAddon:tmdbDisconnected', 'true');
@@ -1535,7 +1535,7 @@ function applyTmdbConnection(sess, acc, user) {
   tmdbUsername = user || '';
   try {
     localStorage.removeItem('myListAddon:tmdbDisconnected');
-    localStorage.setItem('myListAddon:tmdbSessionId', tmdbSessionId);
+    rememberProviderSecret('myListAddon:tmdbSessionId', tmdbSessionId);
     if (tmdbAccountId) localStorage.setItem('myListAddon:tmdbAccountId', tmdbAccountId);
     if (tmdbUsername) localStorage.setItem('myListAddon:tmdbUsername', tmdbUsername);
   } catch (e) {}
@@ -1570,7 +1570,7 @@ function pickUpTmdbTokenFromUrl() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('TMDB Connection Error', msg, false);
     } else {
-      alert(msg);
+      showToast(msg, 'error');
     }
     search.delete('tmdb_error');
     search.delete('tmdb_error_detail');
@@ -1587,9 +1587,9 @@ function renderTmdbConnectStatus() {
   const listsConnectBtn = document.getElementById('listsTmdbConnectBtn');
 
   const isDisc = localStorage.getItem('myListAddon:tmdbDisconnected') === 'true';
-  const sess = isDisc ? '' : (tmdbSessionId || localStorage.getItem('myListAddon:tmdbSessionId') || '');
+  const sess = isDisc ? '' : (tmdbSessionId || readProviderSecret('myListAddon:tmdbSessionId') || '');
   const user = isDisc ? '' : (tmdbUsername || localStorage.getItem('myListAddon:tmdbUsername') || '');
-  const key = (input ? input.value.trim() : '') || (isDisc ? '' : (localStorage.getItem('myListAddon:tmdbKey') || ''));
+  const key = (input ? input.value.trim() : '') || (isDisc ? '' : (readProviderSecret('myListAddon:tmdbKey') || ''));
   const isAccountConnected = !isDisc && !!sess;
   const hasKey = !isDisc && !!key;
 
@@ -1624,10 +1624,10 @@ function scheduleMyTmdbListsRefresh() {
 async function runMyTmdbLists() {
   const box = document.getElementById('myTmdbListsResult');
   if (!box) return;
-  const sess = tmdbSessionId || localStorage.getItem('myListAddon:tmdbSessionId') || '';
+  const sess = tmdbSessionId || readProviderSecret('myListAddon:tmdbSessionId') || '';
   const acc = tmdbAccountId || localStorage.getItem('myListAddon:tmdbAccountId') || '';
   const input = document.getElementById('tmdbKeyInput');
-  const key = (input ? input.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const key = (input ? input.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
 
   if (!sess && !acc) {
     box.innerHTML = '<p style="margin-top:10px; color:var(--muted);"><small>Connect your TMDB account in Settings or click <strong>Connect TMDB</strong> above to see your personal lists, watchlist, and favorites here.</small></p>';
@@ -1729,7 +1729,7 @@ function renderMyTmdbLists(lists) {
           const posterType = it.type || (l.contentType === 'series' ? 'series' : 'movie');
           const tmdbTarget = isWatchlist ? 'watchlist' : (isFavorites ? 'favorite' : 'custom');
           const tmdbListId = isWatchlist ? 'watchlist' : (isFavorites ? 'favorite' : listIdStr);
-          const removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="tmdb" data-target="' + tmdbTarget + '" data-list-id="' + escapeAttr(tmdbListId) + '" data-remove-id="' + escapeAttr(it.id) + '" data-media-type="' + escapeAttr(posterType) + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from TMDB" aria-label="Remove from TMDB">\u2715</button>';
+          const removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="tmdb" data-target="' + tmdbTarget + '" data-list-id="' + escapeAttr(tmdbListId) + '" data-remove-id="' + escapeAttr(it.id) + '" data-media-type="' + escapeAttr(posterType) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from TMDB" aria-label="Remove from TMDB">\u2715</button>';
           const tmdbPoster = typeof resolveClientPoster === 'function' ? resolveClientPoster(it, it.poster) : it.poster;
           const ratingSpan = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(it) : '';
           return '<div class="list-card-mini-poster-tile">' +
@@ -1805,9 +1805,9 @@ function disconnectSimkl() {
   try { window.simklUsername = ''; } catch (e) {}
   window._mySimklLists = [];
   try {
-    localStorage.removeItem('myListAddon:simklAccessToken');
+    forgetProviderSecret('myListAddon:simklAccessToken');
     localStorage.removeItem('myListAddon:simklUsername');
-    localStorage.removeItem('myListAddon:simklKey');
+    forgetProviderSecret('myListAddon:simklKey');
     localStorage.setItem('myListAddon:simklDisconnected', 'true');
   } catch (e) {}
   saveState();
@@ -1818,7 +1818,7 @@ function disconnectSimkl() {
 
 function toggleListsSimklConnection() {
   const isDisc = localStorage.getItem('myListAddon:simklDisconnected') === 'true';
-  const token = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken');
+  const token = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken');
   if (token && !isDisc) {
     disconnectSimkl();
   } else {
@@ -1832,7 +1832,7 @@ function applySimklConnection(token, username) {
   simklAccessToken = token;
   try {
     localStorage.removeItem('myListAddon:simklDisconnected');
-    localStorage.setItem('myListAddon:simklAccessToken', simklAccessToken);
+    rememberProviderSecret('myListAddon:simklAccessToken', simklAccessToken);
   } catch (e) {}
   if (username) {
     simklUsername = username;
@@ -1845,7 +1845,7 @@ function applySimklConnection(token, username) {
   if (typeof showAppAlert === 'function') {
     showAppAlert('Simkl Connected', 'Your Simkl account was successfully connected.', true);
   } else {
-    alert('Connected to Simkl.');
+    showToast('Connected to Simkl.', 'success');
   }
   renderSimklConnectStatus();
   scheduleMySimklListsRefresh();
@@ -1885,7 +1885,7 @@ async function pickUpServerConnection() {
       ? 'That account could not be loaded. Please connect it again from Settings.'
       : 'Your account was connected, but this page could not load it. Reload the page to try again.';
     if (typeof showAppAlert === 'function') showAppAlert('Connection', msg, false);
-    else alert(msg);
+    else showToast(msg, 'error');
     return;
   }
   if (provider === 'trakt') applyTraktConnection(data.accessToken, data.username || '');
@@ -1989,7 +1989,7 @@ function pickUpSimklTokenFromUrl() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Simkl Connection Error', msg + (detail ? '\\n\\nDetails: ' + detail : ''), false);
     } else {
-      alert(msg + (detail ? '\\n' + detail : ''));
+      showToast(msg + (detail ? '\\n' + detail : ''), 'error');
     }
     params.delete('simkl_error');
     params.delete('simkl_error_detail');
@@ -2006,10 +2006,10 @@ function renderSimklConnectStatus() {
   const listsBtn = document.getElementById('listsSimklConnectBtn');
 
   const isDisc = localStorage.getItem('myListAddon:simklDisconnected') === 'true';
-  const token = isDisc ? '' : ((typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '');
+  const token = isDisc ? '' : ((typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '');
   if (!isDisc && token) simklAccessToken = token;
   const user = (typeof simklUsername !== 'undefined' && simklUsername) || (isDisc ? '' : (localStorage.getItem('myListAddon:simklUsername') || ''));
-  const key = (input ? input.value.trim() : '') || (isDisc ? '' : (localStorage.getItem('myListAddon:simklKey') || ''));
+  const key = (input ? input.value.trim() : '') || (isDisc ? '' : (readProviderSecret('myListAddon:simklKey') || ''));
   const isAccountConnected = !isDisc && !!token;
   const hasKey = !isDisc && !!key;
 
@@ -2052,9 +2052,9 @@ function scheduleMySimklListsRefresh() {
 async function runMySimklLists() {
   const box = document.getElementById('mySimklListsResult');
   if (!box) return;
-  const token = simklAccessToken || localStorage.getItem('myListAddon:simklAccessToken') || '';
+  const token = simklAccessToken || readProviderSecret('myListAddon:simklAccessToken') || '';
   const input = document.getElementById('simklKeyInput');
-  const key = (input ? input.value.trim() : '') || localStorage.getItem('myListAddon:simklKey') || '';
+  const key = (input ? input.value.trim() : '') || readProviderSecret('myListAddon:simklKey') || '';
 
   const neutralMsg = '<p style="margin-top:10px; color:var(--muted);"><small>Connect your Simkl account in Settings or click <strong>Connect Simkl</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
 
@@ -2103,7 +2103,7 @@ async function enrichSimklAiringNextDates(list) {
   _simklAiringNextEnriching = true;
 
   const tkInput = document.getElementById('tmdbKeyInput');
-  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
 
   try {
     const rawCandidates = (window._simklRawAiringCandidates && window._simklRawAiringCandidates.length)
@@ -2284,7 +2284,7 @@ function renderMySimklLists(lists) {
     const copyBtn = '<button type="button" class="lc-btn secondary myListCopyToCustomBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '">Copy</button>';
 
     const markWatchedBtn = isCompleted
-      ? '<button type="button" class="lc-btn secondary" data-url="' + escapeAttr(l.url) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(type) + '" onclick="markSimklListAllWatched(this)">Mark all as Watched</button>'
+      ? '<button type="button" class="lc-btn secondary" data-url="' + escapeAttr(l.url) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(type) + '" data-act="markSimklListAllWatched" data-act-args="[&quot;@self&quot;]">Mark all as Watched</button>'
       : '';
     const addBtn = '<button type="button" class="lc-btn ' + (added ? 'secondary is-added' : 'primary') + ' myListAddBtn" ' + (added ? 'style="color:var(--danger);"' : '') + ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + type + '">' + (added ? 'Remove' : '+ Add') + '</button>';
 
@@ -2297,14 +2297,14 @@ function renderMySimklLists(lists) {
           const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
           let overlays = '';
           if (isAiringNext) {
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only simklAiringNextViewBtn" style="cursor:pointer;" onclick="event.stopPropagation(); openSimklAiringNextDetailsPage();">' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only simklAiringNextViewBtn" style="cursor:pointer;" onclick="event.stopPropagation(); openSimklAiringNextDetailsPage();">' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only simklAiringNextViewBtn" style="cursor:pointer;" data-act="openSimklAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only simklAiringNextViewBtn" style="cursor:pointer;" data-act="openSimklAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
           } else {
             if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only searchViewListBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-items="' + escapeAttr(totalCount) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
             if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only searchViewListBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-items="' + escapeAttr(totalCount) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
           }
           const simklStatus = isAiringNext ? (it.status || 'watching') : (l.statusKey || (l.url ? l.url.split(':')[3] : 'plantowatch'));
-          const removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="simkl" data-target="status" data-list-id="' + escapeAttr(simklStatus) + '" data-remove-id="' + escapeAttr(it.id) + '" data-media-type="' + escapeAttr(it.type || type) + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from Simkl" aria-label="Remove from Simkl">\u2715</button>';
+          const removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="simkl" data-target="status" data-list-id="' + escapeAttr(simklStatus) + '" data-remove-id="' + escapeAttr(it.id) + '" data-media-type="' + escapeAttr(it.type || type) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Simkl" aria-label="Remove from Simkl">\u2715</button>';
           const showAiringBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesAiringNext') : true;
           const showAirDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
           const showPremiere = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonPremiere') : true);
@@ -2358,7 +2358,7 @@ function renderMySimklLists(lists) {
       posterThumbs = '<p style="margin-top:8px; color:var(--muted);"><small>Nothing scheduled yet.</small></p>';
     }
 
-    const titleClick = isAiringNext ? 'onclick="openSimklAiringNextDetailsPage()"' : '';
+    const titleClick = isAiringNext ? 'data-act="openSimklAiringNextDetailsPage"' : '';
 
     return '<div class="list-card" data-list-type="' + type + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-items="' + escapeAttr(totalCount) + '">' +
       '<div class="list-card-header">' +
@@ -2425,7 +2425,7 @@ async function syncWatchHistoryToProviderNow(provider, btn) {
   
   if (!items.length) {
     if (typeof showAppAlert === 'function') showAppAlert('Empty Watch History', 'Your Watch History is currently empty.', false);
-    else alert('Your Watch History is currently empty.');
+    else showToast('Your Watch History is currently empty.', 'error');
     return;
   }
 
@@ -2435,12 +2435,12 @@ async function syncWatchHistoryToProviderNow(provider, btn) {
     btn.textContent = 'Syncing ' + items.length + ' items\u2026';
   }
 
-  const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
-  const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:traktKey') || '';
-  const mdblistToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
-  const mdblistKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:mdblistKey') || '';
-  const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
-  const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:simklKey') || '';
+  const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
+  const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || readProviderSecret('myListAddon:traktKey') || '';
+  const mdblistToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
+  const mdblistKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || readProviderSecret('myListAddon:mdblistKey') || '';
+  const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
+  const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || readProviderSecret('myListAddon:simklKey') || '';
 
   try {
     const res = await fetch(ORIGIN + '/api/external-sync/history', {
@@ -2465,27 +2465,27 @@ async function syncWatchHistoryToProviderNow(provider, btn) {
     if (!res.ok || !data.ok) {
       const err = data.error || 'Unknown error';
       if (typeof showAppAlert === 'function') showAppAlert(cap + ' Sync Failed', 'Failed to sync to ' + cap + ': ' + err, false);
-      else alert('Failed to sync to ' + cap + ': ' + err);
+      else showToast('Failed to sync to ' + cap + ': ' + err, 'error');
       return;
     }
     const count = data.syncedCount != null ? data.syncedCount : items.length;
     const msg = 'Successfully synced ' + count + ' item' + (count === 1 ? '' : 's') + ' to ' + cap + ' Watch History.';
     if (typeof showAppAlert === 'function') showAppAlert(cap + ' Sync Complete', msg, true);
-    else alert(msg);
+    else showToast(msg, 'error');
   } catch (err) {
     if (btn) {
       btn.disabled = false;
       btn.textContent = origText;
     }
     if (typeof showAppAlert === 'function') showAppAlert(cap + ' Sync Failed', 'Network error syncing to ' + cap + '.', false);
-    else alert('Network error syncing to ' + cap + '.');
+    else showToast('Network error syncing to ' + cap + '.', 'error');
   }
 }
 
 async function syncAllConnectedAccountsNow(btn) {
-  const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
-  const mdblistToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
-  const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
+  const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
+  const mdblistToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
+  const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
 
   const connectedProviders = [];
   if (traktToken) connectedProviders.push('trakt');
@@ -2495,7 +2495,7 @@ async function syncAllConnectedAccountsNow(btn) {
   if (!connectedProviders.length) {
     const msg = 'No external accounts (Trakt, MDBList, Simkl) are connected yet. Connect them under Settings \u2192 External Accounts & API Keys.';
     if (typeof showAppAlert === 'function') showAppAlert('No Accounts Connected', msg, false);
-    else alert(msg);
+    else showToast(msg, 'error');
     return;
   }
 
@@ -2511,15 +2511,15 @@ async function syncSingleItemToConnectedProviders(item, action) {
   const mdblistSync = localStorage.getItem('myListAddon:syncMdblistHistory') === 'true';
   const simklSync = localStorage.getItem('myListAddon:syncSimklHistory') === 'true';
 
-  const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
+  const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
   const traktKeyEl = document.getElementById('traktKeyInput');
-  const traktKey = (traktKeyEl ? traktKeyEl.value.trim() : '') || localStorage.getItem('myListAddon:traktKey') || '';
-  const mdblistToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
+  const traktKey = (traktKeyEl ? traktKeyEl.value.trim() : '') || readProviderSecret('myListAddon:traktKey') || '';
+  const mdblistToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
   const mdblistKeyEl = document.getElementById('mdblistKeyInput');
-  const mdblistKey = (mdblistKeyEl ? mdblistKeyEl.value.trim() : '') || localStorage.getItem('myListAddon:mdblistKey') || '';
-  const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
+  const mdblistKey = (mdblistKeyEl ? mdblistKeyEl.value.trim() : '') || readProviderSecret('myListAddon:mdblistKey') || '';
+  const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
   const simklKeyEl = document.getElementById('simklKeyInput');
-  const simklKey = (simklKeyEl ? simklKeyEl.value.trim() : '') || localStorage.getItem('myListAddon:simklKey') || '';
+  const simklKey = (simklKeyEl ? simklKeyEl.value.trim() : '') || readProviderSecret('myListAddon:simklKey') || '';
 
   const isMovie = item.type === 'movie' || item.kind === 'movie';
   const mediaType = isMovie ? 'movie' : 'series';

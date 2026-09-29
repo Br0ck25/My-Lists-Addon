@@ -129,15 +129,15 @@ function buildStreamingRowsHtml(list, labelSuffix, group) {
     // every other "See All" in the app.
     let seeAllLink = '';
     if (p.movieUrl && p.showUrl) {
-      seeAllLink = `<a href="javascript:void(0)" class="discover-chart-seeall" onclick="openListDetailsPage('${label}', 'movie', '${p.movieUrl}')">See All &rsaquo;</a>`;
+      seeAllLink = `<a href="javascript:void(0)" class="discover-chart-seeall" data-act="openListDetailsPage" data-act-args="${appActArgsServer([label, "movie", p.movieUrl])}">See All &rsaquo;</a>`;
       btns = `
-        <button type="button" class="lc-btn secondary" onclick="addRow('${label}', '${p.movieUrl}', 'movie', true, '${group}')">+ Movies</button>
-        <button type="button" class="lc-btn secondary" onclick="addRow('${label}', '${p.showUrl}', 'series', true, '${group}')">+ Shows</button>`;
+        <button type="button" class="lc-btn secondary" data-act="addRow" data-act-args="${appActArgsServer([label, p.movieUrl, "movie", true, group])}">+ Movies</button>
+        <button type="button" class="lc-btn secondary" data-act="addRow" data-act-args="${appActArgsServer([label, p.showUrl, "series", true, group])}">+ Shows</button>`;
     } else if (p.url && p.type) {
       const btnText = p.type === 'movie' ? '+ Movies' : '+ Shows';
-      seeAllLink = `<a href="javascript:void(0)" class="discover-chart-seeall" onclick="openListDetailsPage('${p.name}', '${p.type}', '${p.url}')">See All &rsaquo;</a>`;
+      seeAllLink = `<a href="javascript:void(0)" class="discover-chart-seeall" data-act="openListDetailsPage" data-act-args="${appActArgsServer([p.name, p.type, p.url])}">See All &rsaquo;</a>`;
       btns = `
-        <button type="button" class="lc-btn secondary" onclick="addRow('${p.name}', '${p.url}', '${p.type}', true, '${group}')">${btnText}</button>`;
+        <button type="button" class="lc-btn secondary" data-act="addRow" data-act-args="${appActArgsServer([p.name, p.url, p.type, true, group])}">${btnText}</button>`;
     }
     return `
     <div class="discover-chart-card">
@@ -344,11 +344,11 @@ function buildCombinedChartsHtml() {
           <div class="discover-chart-title">${p.name}</div>
           <div class="discover-chart-sub">Blended Multi-Source Catalog</div>
         </div>
-        <a href="javascript:void(0)" class="discover-chart-seeall" onclick="openListDetailsPage('${p.name}', 'movie', '${movieUrlsJoined}')">See All &rsaquo;</a>
+        <a href="javascript:void(0)" class="discover-chart-seeall" data-act="openListDetailsPage" data-act-args="${appActArgsServer([p.name, "movie", movieUrlsJoined])}">See All &rsaquo;</a>
       </div>
       <div class="discover-chart-btns">
-        <button type="button" class="lc-btn secondary" onclick="addCombinedRow('${p.name}', ${jsStringArrayLiteral(p.movieUrls)}, 'movie', 'Combined Charts')">+ Movies</button>
-        <button type="button" class="lc-btn secondary" onclick="addCombinedRow('${p.name}', ${jsStringArrayLiteral(p.showUrls)}, 'series', 'Combined Charts')">+ Shows</button>
+        <button type="button" class="lc-btn secondary" data-act="addCombinedRow" data-act-args="${appActArgsServer([p.name, jsStringArrayLiteral(p.movieUrls), "movie", "Combined Charts"])}">+ Movies</button>
+        <button type="button" class="lc-btn secondary" data-act="addCombinedRow" data-act-args="${appActArgsServer([p.name, jsStringArrayLiteral(p.showUrls), "series", "Combined Charts"])}">+ Shows</button>
       </div>
     </div>`;
   }).join("");

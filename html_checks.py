@@ -125,6 +125,45 @@ if unresolved:
 print(f"  inline handlers resolve ({len(handler_calls)} distinct functions, "
       f"{sum(handler_calls.values())} call sites)")
 
+# The builder page has none left (P6-8), and this is the check that keeps it
+# that way -- the whole point of the phase is that the attribute shape cannot
+# come back one button at a time. /admin is excluded because converting it is
+# P6-10's task; it carries its own inline handlers until then.
+if 'admin' not in tag and handler_calls:
+    print("FAIL: the builder page still carries inline on*= handlers:")
+    for fn_, n in sorted(handler_calls.items(), key=lambda x: -x[1]):
+        print(f"    {fn_}()  referenced {n}x")
+    print("  P6-8 moved every one of them to data-act + appActDispatch (16_).")
+    sys.exit(1)
+
+# --- P6-8: every data-act names a function that exists ---
+#
+# The builder page's controls no longer carry inline on*= handlers: each one
+# names its action in data-act and a single delegated listener runs it
+# (appActDispatch, 16_client-row-core.js). That removes the last reason
+# script-src needed 'unsafe-inline' for the client half, but it also moves the
+# failure mode rather than deleting it -- a renamed function used to be a
+# button that silently did nothing, and a renamed action is exactly the same
+# button. So the check the handlers used to get now runs against the names.
+#
+# Only literal names are checked. A handful of controls build their name from
+# an expression at render time (the entry editor's custom-list/channel pair),
+# and those are covered by tests/client-actions.test.mjs, which asserts every
+# literal name in the sources resolves too.
+ACT_ATTR = re.compile(r'data-act(?:-then)?="([A-Za-z_$][\w$]*)"')
+act_calls = collections.Counter()
+for _m in ACT_ATTR.finditer(html):
+    act_calls[_m.group(1)] += 1
+
+missing_actions = {name: n for name, n in act_calls.items() if name not in defined}
+if missing_actions:
+    print("FAIL: data-act names a function that does not exist in the bundle:")
+    for name, n in sorted(missing_actions.items(), key=lambda x: -x[1]):
+        print(f"    data-act=\"{name}\"  on {n} control(s)  -> dead button")
+    sys.exit(1)
+print(f"  data-act actions resolve ({len(act_calls)} distinct actions, "
+      f"{sum(act_calls.values())} controls)")
+
 
 # --- XSS: no caller-supplied value may terminate the inline <script> ---
 #

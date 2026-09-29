@@ -42,8 +42,10 @@ describe("the new UI shell is opt-in through a cookie", () => {
     // still where it always was on the legacy page.
     assert.equal(legacy.text.includes('id="appShellSettingsHome"'), false);
     assert.ok(legacy.text.includes('id="importLinkInput"'), "the legacy page keeps its install-link import for now");
-    // The legacy nav is still buttons driven by inline handlers.
-    assert.ok(legacy.text.includes(`onclick="switchTab('catalogs')"`), "the legacy tabs should be unchanged");
+    // The legacy nav is still buttons, wired through the delegated actions
+    // (P6-8) rather than a link.
+    assert.ok(legacy.text.includes(`data-act="switchTab" data-act-args="[&quot;catalogs&quot;]"`),
+      "the legacy tabs should be delegated actions");
   });
 
   it("serves the shell -- real nav links, the install bar, NEW_UI on -- to a browser with it", async () => {
@@ -67,8 +69,9 @@ describe("the new UI shell is opt-in through a cookie", () => {
     assert.ok(shell.text.includes('id="appShellSettingsHome"'), "the shell's Settings cards have a home");
     assert.equal(shell.text.includes('id="importLinkInput"'), false, "no install-link import in the new UI");
 
-    // A shell nav does not need the inline handlers at all.
-    assert.equal(shell.text.includes(`onclick="switchTab('catalogs')"`), false, "the shell nav is links, not inline handlers");
+    // A shell nav does not need the delegated actions at all.
+    assert.equal(shell.text.includes(`data-act="switchTab" data-act-args="[&quot;catalogs&quot;]"`), false,
+      "the shell nav is links, not delegated tab buttons");
     // The head script (which runs before the body exists) gets the same routes.
     assert.ok(shell.text.includes("var APP_SHELL_HEAD_ROUTES ="), "the head script needs the route table");
     for (const view of VIEWS) {

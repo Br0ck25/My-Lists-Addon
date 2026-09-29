@@ -25,7 +25,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
     <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Region</h2>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Used for streaming-availability catalogs (Netflix, Disney+, etc.), Stream Releases, and content ratings -- so what shows up actually matches what's available where you are.</p>
-      <select id="regionSelect" aria-label="Streaming region" onchange="localStorage.setItem('myListAddon:region', this.value); saveState();" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+      <select id="regionSelect" aria-label="Streaming region" data-act="appActStoreSettingValue" data-act-args="[&quot;myListAddon:region&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
         ${buildRegionOptionsHtml(initialRegion)}
       </select>
     </div>
@@ -33,7 +33,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
     <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Trending &amp; Popular Catalogs</h2>
       <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">
-        <input type="checkbox" id="hideNonDigitalReleasesCheckbox" ${initialHideNonDigitalReleases ? 'checked' : ''} onchange="localStorage.setItem('myListAddon:hideNonDigitalReleases', this.checked ? '1' : '0'); saveState()" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+        <input type="checkbox" id="hideNonDigitalReleasesCheckbox" ${initialHideNonDigitalReleases ? 'checked' : ''} data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:hideNonDigitalReleases&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
         <div>
           <span style="font-weight:600;">Hide items with no digital release</span>
           <p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Removes movies with no known digital or physical release from TMDB Trending Movies and Popular Movies catalogs -- useful for skipping still-in-theaters titles you can't stream or buy yet. Shows aren't affected (no equivalent release-type data exists for TV). Requires Save/Update to take effect on an existing install link.</p>
@@ -44,7 +44,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
     <div class="panel" style="margin-top:12px;" id="legacyDedupePanel">
       <h2 class="panel-title">Duplicate Items Across Lists</h2>
       <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">
-        <input type="checkbox" id="dedupeAcrossListsCheckbox" ${initialDedupeAcrossLists ? 'checked' : ''} onchange="localStorage.setItem('myListAddon:dedupeAcrossLists', this.checked ? '1' : '0'); saveState()" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+        <input type="checkbox" id="dedupeAcrossListsCheckbox" ${initialDedupeAcrossLists ? 'checked' : ''} data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:dedupeAcrossLists&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
         <div>
           <span style="font-weight:600;">Remove duplicate items across lists</span>
           <p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Keeps your top list exactly as it is; every list below it has anything already shown in an earlier list removed. Order is whatever order your lists are in here -- drag a list to change which one keeps a shared title. Applies to Live Preview &amp; Editor and to the real catalogs Stremio/Nuvio see once you Save/Update. Requires Save/Update to take effect on an existing install link.</p>
@@ -55,7 +55,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
     <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Adult Content &amp; Poster Safety</h2>
       <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">
-        <input type="checkbox" id="adultContentFilterCheckbox" ${initialAdultContentFilter ? 'checked' : ''} onchange="localStorage.setItem('myListAddon:adultContentFilter', this.checked ? '1' : '0'); if (window._listPreviewCache) window._listPreviewCache.clear(); saveState()" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+        <input type="checkbox" id="adultContentFilterCheckbox" ${initialAdultContentFilter ? 'checked' : ''} data-act="appActToggleAdultFilter" data-act-args="[&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
         <div>
           <span style="font-weight:600;">Adult Content Filter</span>
           <p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Filter NSFW posters and replace default unfiltered posters with safe, age-appropriate ones across your catalogs, search, continue watching, and Stremio/Nuvio.</p>
@@ -67,7 +67,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       <h2 class="panel-title">Better Posters</h2>
       <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Swap plain poster artwork for <a href="https://btttr.cc/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">BetterPosters</a> &mdash; posters with the genre, rating and tags drawn into the image itself. No API key or account needed. Only movies and shows with an IMDb id are affected; anything else keeps the poster it already had.</p>
       <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-        <input type="checkbox" id="betterPostersCheckbox" ${initialBetterPosters ? 'checked' : ''} onchange="toggleBetterPostersSetting('betterPosters', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+        <input type="checkbox" id="betterPostersCheckbox" ${initialBetterPosters ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPosters&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
         <div>
           <span style="font-weight:600;">Use Better Posters artwork</span>
           <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Applies everywhere: Live Preview, Search, Discover, My Lists, creator profiles and the builders here on the website, and the catalog rows and title pages Stremio and Nuvio request from the add-on. The website updates as soon as you tick this; Stremio/Nuvio need a Save/Update on an existing install link. Poster badges, if you have them on, are drawn over this artwork rather than replacing it, and the Adult Content Filter still overrides it. TV Channel artwork and episode stills are left as they are.</p>
@@ -76,35 +76,35 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       <div id="betterPostersOptions" style="display:${initialBetterPosters ? 'flex' : 'none'}; flex-direction:column; gap:10px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
         <div style="font-size:0.85rem; font-weight:700; color:var(--text);">What to draw on the poster</div>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersGenreCheckbox" ${initialBetterPostersGenre ? 'checked' : ''} onchange="toggleBetterPostersSetting('betterPostersGenre', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="betterPostersGenreCheckbox" ${initialBetterPostersGenre ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersGenre&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Genre</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Genre label along the bottom of the poster.</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersRatingCheckbox" ${initialBetterPostersRating ? 'checked' : ''} onchange="toggleBetterPostersSetting('betterPostersRating', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="betterPostersRatingCheckbox" ${initialBetterPostersRating ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRating&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Rating</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Star rating along the bottom of the poster.</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersTrendTagsCheckbox" ${initialBetterPostersTrendTags ? 'checked' : ''} onchange="toggleBetterPostersSetting('betterPostersTrendTags', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="betterPostersTrendTagsCheckbox" ${initialBetterPostersTrendTags ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersTrendTags&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Trend tags</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">A corner tag on titles that are currently trending or newly released.</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersQualityCheckbox" ${initialBetterPostersQuality ? 'checked' : ''} onchange="toggleBetterPostersSetting('betterPostersQuality', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="betterPostersQualityCheckbox" ${initialBetterPostersQuality ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersQuality&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Quality tags</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">4K, Dolby Vision and Atmos badges, where BetterPosters knows them.</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersAgeCheckbox" ${initialBetterPostersAge ? 'checked' : ''} onchange="toggleBetterPostersSetting('betterPostersAge', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="betterPostersAgeCheckbox" ${initialBetterPostersAge ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersAge&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Age rating</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Certification chip (PG-13, TV-MA, and so on).</p>
@@ -112,14 +112,14 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
         </label>
         <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
           <label for="betterPostersRatingSourceSelect" style="font-size:0.85rem; font-weight:600; color:var(--text);">Rating source</label>
-          <select id="betterPostersRatingSourceSelect" onchange="toggleBetterPostersSetting('betterPostersRatingSource', this.value)" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+          <select id="betterPostersRatingSourceSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRatingSource&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
             ${betterPostersRatingSourceOptionsHtml}
           </select>
           <p style="margin:0; color:var(--muted); font-size:0.8rem;">Which score the rating is taken from. Only used when Rating is on above.</p>
         </div>
         <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
           <label for="betterPostersLangSelect" style="font-size:0.85rem; font-weight:600; color:var(--text);">Poster language</label>
-          <select id="betterPostersLangSelect" onchange="toggleBetterPostersSetting('betterPostersLang', this.value)" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+          <select id="betterPostersLangSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersLang&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
             ${betterPostersLangOptionsHtml}
           </select>
           <p style="margin:0; color:var(--muted); font-size:0.8rem;">Language BetterPosters draws the title and labels in, where it has artwork for it.</p>
@@ -134,42 +134,42 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
         <div style="border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:4px; display:flex; flex-direction:column; gap:10px;">
           <div style="font-size:0.85rem; font-weight:700; color:var(--text);">Website &amp; Dashboard</div>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeAiringNextCheckbox" checked onchange="toggleBadgeSetting('showBadgesAiringNext', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeAiringNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesAiringNext&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Airing Next (Dashboard)</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show premiere, finale, and upcoming air date badges on the Airing Next shelf and provider lists.</p>
             </div>
           </label>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeContinueWatchingCheckbox" checked onchange="toggleBadgeSetting('showBadgesContinueWatching', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesContinueWatching&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Continue Watching (Dashboard)</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show premiere, finale, and air date badges on your in-progress Continue Watching series.</p>
             </div>
           </label>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeWatchlistCheckbox" checked onchange="toggleBadgeSetting('showBadgesWatchlist', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeWatchlistCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesWatchlist&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Watchlist (Dashboard)</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show premiere, finale, and air date badges on shows in your Watchlist that have an episode coming.</p>
             </div>
           </label>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeTraktContinueWatchingCheckbox" checked onchange="toggleBadgeSetting('showBadgesTraktContinueWatching', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeTraktContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesTraktContinueWatching&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Continue Watching (Trakt)</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show premiere, finale, and air date badges on your Trakt Continue Watching series.</p>
             </div>
           </label>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeMdblistUpNextCheckbox" checked onchange="toggleBadgeSetting('showBadgesMdblistUpNext', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeMdblistUpNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesMdblistUpNext&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Up Next (MDBList)</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show premiere, finale, and air date badges on your MDBList Up Next series.</p>
             </div>
           </label>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeCatalogsCheckbox" checked onchange="toggleBadgeSetting('showBadgesCatalogs', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeCatalogsCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesCatalogs&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Catalogs &amp; Live Preview</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show badges on catalog rows, the Catalogs Live Preview &amp; Editor, and catalog See All views.</p>
@@ -180,28 +180,28 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
         <div style="border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:4px; display:flex; flex-direction:column; gap:10px;">
           <div style="font-size:0.85rem; font-weight:700; color:var(--text);">Stremio &amp; Nuvio (Artwork Overlays)</div>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeStremioAiringNextCheckbox" checked onchange="toggleBadgeSetting('showBadgesStremioAiringNext', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeStremioAiringNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioAiringNext&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Airing Next Catalogs in Stremio &amp; Nuvio</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Overlay premiere, finale, and date chips on Airing Next poster artwork in Stremio and Nuvio.</p>
             </div>
           </label>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeStremioContinueWatchingCheckbox" checked onchange="toggleBadgeSetting('showBadgesStremioContinueWatching', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeStremioContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioContinueWatching&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Continue Watching Catalogs in Stremio &amp; Nuvio</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Overlay premiere, finale, and date chips on Continue Watching poster artwork in Stremio and Nuvio.</p>
             </div>
           </label>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeStremioWatchlistCheckbox" checked onchange="toggleBadgeSetting('showBadgesStremioWatchlist', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeStremioWatchlistCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioWatchlist&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Watchlist Catalogs in Stremio &amp; Nuvio</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Overlay premiere, finale, and date chips on Watchlist poster artwork in Stremio and Nuvio.</p>
             </div>
           </label>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeStremioCatalogsCheckbox" checked onchange="toggleBadgeSetting('showBadgesStremioCatalogs', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeStremioCatalogsCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioCatalogs&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Other Custom &amp; Provider Catalogs in Stremio &amp; Nuvio</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Overlay badges on MDBList, Trakt, Simkl, and Custom list catalog rows in Stremio and Nuvio.</p>
@@ -211,42 +211,42 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
 
         <div style="font-size:0.85rem; font-weight:700; color:var(--text); margin-top:2px;">Badge Types</div>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeAirDateCheckbox" checked onchange="toggleBadgeSetting('showBadgeAirDate', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="badgeAirDateCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeAirDate&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Upcoming Air Date</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Shows the upcoming air date tag (e.g. <code>TODAY</code>, <code>TOMORROW</code>, <code>WED</code>, <code>SEP 4</code>) on upcoming episode posters.</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeSeasonPremiereCheckbox" checked onchange="toggleBadgeSetting('showBadgeSeasonPremiere', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="badgeSeasonPremiereCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonPremiere&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Season Premiere Badge</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Shows the green <code>Season Premiere</code> badge on upcoming Episode 1s (only when the episode has not yet aired).</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeSeasonFinaleCheckbox" checked onchange="toggleBadgeSetting('showBadgeSeasonFinale', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="badgeSeasonFinaleCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonFinale&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Season Finale Badge</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Shows the orange <code>Season Finale</code> badge when the upcoming episode is the final episode of that season.</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeSeasonFinaleDateCheckbox" checked onchange="toggleBadgeSetting('showBadgeSeasonFinaleDate', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="badgeSeasonFinaleDateCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonFinaleDate&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Season Finale Date Badge</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Shows when the season finale will air (e.g. <code>Finale: Nov 12</code>) on mid-season episodes (Episodes 2–9).</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeTmdbRatingCheckbox" checked onchange="toggleTmdbRatingSetting(this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="badgeTmdbRatingCheckbox" checked data-act="toggleTmdbRatingSetting" data-act-args="[&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">TMDb Ratings</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show TMDb star ratings (e.g. <span style="color:#f5c518; font-weight:700;">★ 7.9</span>) beside the year/subtitle across the app (except in Live Preview).</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeWatchedCheckbox" checked onchange="toggleBadgeSetting('showBadgeWatched', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="badgeWatchedCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeWatched&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Watched Status Badges</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Shows the watched badge on movies and shows you've already watched.</p>
@@ -259,7 +259,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       <h2 class="panel-title">Watch History &amp; Continue Watching</h2>
       <div style="border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:12px;">
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="autoRecommendCompanionsCheckbox" checked onchange="toggleCompanionRecommendationSetting(this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="autoRecommendCompanionsCheckbox" checked data-act="toggleCompanionRecommendationSetting" data-act-args="[&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Storyline &amp; Companion Recommendations</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Automatically recommend canon bridge movies between seasons (e.g. <em>Demon Slayer: Mugen Train</em>) and sequel films or spin-off series when a show concludes (e.g. <em>Breaking Bad &rarr; El Camino &rarr; Better Call Saul</em>).</p>
@@ -268,8 +268,8 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Reset or clear all recorded movies and episodes from your personal Watch History or in-progress Continue Watching.</p>
       <div id="watchHistorySettingsSection" style="display:flex; gap:10px; flex-wrap:wrap;">
-        <button type="button" class="secondary lc-btn" onclick="clearWatchHistoryAll()" style="color:var(--danger); border-color:rgba(255,59,48,0.3); font-weight:600; padding:8px 16px;">Clear Watch History</button>
-        <button type="button" class="secondary lc-btn" onclick="clearContinueWatchingAll()" style="color:var(--danger); border-color:rgba(255,59,48,0.3); font-weight:600; padding:8px 16px;">Clear Continue Watching</button>
+        <button type="button" class="secondary lc-btn" data-act="clearWatchHistoryAll" style="color:var(--danger); border-color:rgba(255,59,48,0.3); font-weight:600; padding:8px 16px;">Clear Watch History</button>
+        <button type="button" class="secondary lc-btn" data-act="clearContinueWatchingAll" style="color:var(--danger); border-color:rgba(255,59,48,0.3); font-weight:600; padding:8px 16px;">Clear Continue Watching</button>
       </div>
     </div>
 
@@ -291,14 +291,14 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
         <p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">The Movie Database (TMDB)</p>
         <p style="margin:0 0 10px; color:var(--muted); font-size:0.83rem;">Connect your TMDB account to import your personal lists, watchlist, and favorites, or use a custom API key / Token.</p>
         <div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-          <button type="button" class="secondary" id="tmdbConnectBtn" onclick="startTmdbConnect()">Connect TMDB Account</button>
-          <button type="button" class="secondary" id="tmdbDisconnectBtn" style="display:none;" onclick="disconnectTmdb()">Disconnect</button>
+          <button type="button" class="secondary" id="tmdbConnectBtn" data-act="startTmdbConnect">Connect TMDB Account</button>
+          <button type="button" class="secondary" id="tmdbDisconnectBtn" style="display:none;" data-act="disconnectTmdb">Disconnect</button>
         </div>
         <p id="tmdbConnectStatus" style="margin:0 0 10px; font-size:0.85rem;"></p>
         <details style="font-size:0.85rem; color:var(--muted);">
           <summary style="cursor:pointer; color:var(--text);">Advanced: Custom TMDB API Key / Token</summary>
           <div style="margin-top:8px;">
-            <input type="text" id="tmdbKeyInput" placeholder="Optional: TMDB API Key (v3) or Read Access Token (v4)" value="${escapeHtmlServer(initialTmdbKey)}" oninput="if(this.value.trim()){try{localStorage.removeItem('myListAddon:tmdbDisconnected');}catch(e){}} saveState(); onTmdbKeyInputChanged();" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+            <input type="text" id="tmdbKeyInput" placeholder="Optional: TMDB API Key (v3) or Read Access Token (v4)" value="${escapeHtmlServer(initialTmdbKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;tmdb&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
             <p style="margin-top:4px;"><small>Get a free TMDB API key at <a href="https://www.themoviedb.org/settings/api" target="_blank" style="color:var(--accent-2);">themoviedb.org/settings/api</a>.</small></p>
           </div>
         </details>
@@ -309,29 +309,29 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
         <p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">Trakt</p>
         <p style="margin:0 0 10px; color:var(--muted); font-size:0.83rem;">Connect your Trakt account to import your personal lists, watchlist, and collection, or use a custom Client ID.</p>
         <div class="actions trakt-connect-actions">
-          <button type="button" class="secondary" id="traktConnectBtn" onclick="startTraktConnect()">Connect Trakt Account</button>
-          <button type="button" class="secondary" id="traktDeviceBtn" onclick="startTraktDeviceLogin()">Connect with PIN / Code</button>
-          <button type="button" class="secondary" id="traktDisconnectBtn" style="display:none;" onclick="disconnectTrakt()">Disconnect</button>
+          <button type="button" class="secondary" id="traktConnectBtn" data-act="startTraktConnect">Connect Trakt Account</button>
+          <button type="button" class="secondary" id="traktDeviceBtn" data-act="startTraktDeviceLogin">Connect with PIN / Code</button>
+          <button type="button" class="secondary" id="traktDisconnectBtn" style="display:none;" data-act="disconnectTrakt">Disconnect</button>
         </div>
         <p id="traktConnectStatus" style="margin:0 0 10px; font-size:0.85rem;"></p>
         <div id="traktSyncHistoryWrap" style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.04); border-radius:8px; border:1px solid var(--border);">
           <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0;">
-            <input type="checkbox" id="syncTraktHistoryCheckbox" onchange="toggleProviderHistorySync('trakt', this.checked)" style="width:16px; height:16px; cursor:pointer;">
+            <input type="checkbox" id="syncTraktHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;trakt&quot;,&quot;@checked&quot;]" style="width:16px; height:16px; cursor:pointer;">
             <span style="font-weight:600;">Sync Watch History to Trakt</span>
           </label>
           <p style="margin:4px 0 8px 24px; color:var(--muted); font-size:0.78rem;">Automatically sync items marked as watched or played to your Trakt account history.</p>
           <div style="margin-left:24px;">
-            <button type="button" class="secondary lc-btn" id="syncTraktHistoryNowBtn" onclick="syncWatchHistoryToProviderNow('trakt', this)" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
+            <button type="button" class="secondary lc-btn" id="syncTraktHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;trakt&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
           </div>
         </div>
         <details style="font-size:0.85rem; color:var(--muted);">
           <summary style="cursor:pointer; color:var(--text);">Advanced: Custom Trakt Client ID & Username</summary>
           <div style="margin-top:8px;">
             <div class="row">
-              <input type="text" id="traktKeyInput" placeholder="Optional: Trakt Client ID" value="${escapeHtmlServer(initialTraktKey)}" oninput="if(this.value.trim()){try{localStorage.removeItem('myListAddon:traktDisconnected');}catch(e){}} saveState(); scheduleMyTraktListsRefresh();" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+              <input type="text" id="traktKeyInput" placeholder="Optional: Trakt Client ID" value="${escapeHtmlServer(initialTraktKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
             </div>
             <div class="row" style="margin-top:8px;">
-              <input type="text" id="traktUsernameInput" placeholder="Optional: Trakt username" value="${escapeHtmlServer(initialTraktUsername)}" oninput="if(this.value.trim()){try{localStorage.removeItem('myListAddon:traktDisconnected');}catch(e){}} saveState(); scheduleMyTraktListsRefresh();" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+              <input type="text" id="traktUsernameInput" placeholder="Optional: Trakt username" value="${escapeHtmlServer(initialTraktUsername)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
             </div>
             <p style="margin-top:4px;"><small>Create a free Trakt Client ID at <a href="https://trakt.tv/oauth/applications" target="_blank" style="color:var(--accent-2);">trakt.tv/oauth/applications</a>.</small></p>
           </div>
@@ -343,24 +343,24 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
         <p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">MDBList</p>
         <p style="margin:0 0 10px; color:var(--muted); font-size:0.83rem;">Connect your MDBList account to import your personal lists, watchlist, and watch history, or use a custom API key.</p>
         <div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-          <button type="button" class="secondary" id="mdblistConnectBtn" onclick="startMdblistConnect()">Connect MDBList Account</button>
-          <button type="button" class="secondary" id="mdblistDisconnectBtn" style="display:none;" onclick="disconnectMdblist()">Disconnect</button>
+          <button type="button" class="secondary" id="mdblistConnectBtn" data-act="startMdblistConnect">Connect MDBList Account</button>
+          <button type="button" class="secondary" id="mdblistDisconnectBtn" style="display:none;" data-act="disconnectMdblist">Disconnect</button>
         </div>
         <p id="mdblistConnectStatus" style="margin:0 0 10px; font-size:0.85rem;"></p>
         <div id="mdblistSyncHistoryWrap" style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.04); border-radius:8px; border:1px solid var(--border);">
           <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0;">
-            <input type="checkbox" id="syncMdblistHistoryCheckbox" onchange="toggleProviderHistorySync('mdblist', this.checked)" style="width:16px; height:16px; cursor:pointer;">
+            <input type="checkbox" id="syncMdblistHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;mdblist&quot;,&quot;@checked&quot;]" style="width:16px; height:16px; cursor:pointer;">
             <span style="font-weight:600;">Sync Watch History to MDBList</span>
           </label>
           <p style="margin:4px 0 8px 24px; color:var(--muted); font-size:0.78rem;">Automatically sync items marked as watched or played to your MDBList account history.</p>
           <div style="margin-left:24px;">
-            <button type="button" class="secondary lc-btn" id="syncMdblistHistoryNowBtn" onclick="syncWatchHistoryToProviderNow('mdblist', this)" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
+            <button type="button" class="secondary lc-btn" id="syncMdblistHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;mdblist&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
           </div>
         </div>
         <details style="font-size:0.85rem; color:var(--muted);">
           <summary style="cursor:pointer; color:var(--text);">Advanced: Custom MDBList API Key</summary>
           <div style="margin-top:8px;">
-            <input type="text" id="mdblistKeyInput" placeholder="Optional: MDBList API key" value="${escapeHtmlServer(initialMdblistKey)}" oninput="if(this.value.trim()){try{localStorage.removeItem('myListAddon:mdblistDisconnected');}catch(e){}} saveState(); scheduleMyMdblistListsRefresh();" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+            <input type="text" id="mdblistKeyInput" placeholder="Optional: MDBList API key" value="${escapeHtmlServer(initialMdblistKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;mdblist&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
             <p style="margin-top:4px;"><small>Get a free MDBList key at <a href="https://mdblist.com/preferences" target="_blank" style="color:var(--accent-2);">mdblist.com/preferences</a>.</small></p>
           </div>
         </details>
@@ -371,24 +371,24 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
         <p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">Simkl</p>
         <p style="margin:0 0 10px; color:var(--muted); font-size:0.83rem;">Connect your Simkl account to import your personal lists, watchlist, and history, or use a custom Client ID.</p>
         <div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-          <button type="button" class="secondary" id="simklConnectBtn" onclick="startSimklConnect()">Connect Simkl Account</button>
-          <button type="button" class="secondary" id="simklDisconnectBtn" style="display:none;" onclick="disconnectSimkl()">Disconnect</button>
+          <button type="button" class="secondary" id="simklConnectBtn" data-act="startSimklConnect">Connect Simkl Account</button>
+          <button type="button" class="secondary" id="simklDisconnectBtn" style="display:none;" data-act="disconnectSimkl">Disconnect</button>
         </div>
         <p id="simklConnectStatus" style="margin:0 0 10px; font-size:0.85rem;"></p>
         <div id="simklSyncHistoryWrap" style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.04); border-radius:8px; border:1px solid var(--border);">
           <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0;">
-            <input type="checkbox" id="syncSimklHistoryCheckbox" onchange="toggleProviderHistorySync('simkl', this.checked)" style="width:16px; height:16px; cursor:pointer;">
+            <input type="checkbox" id="syncSimklHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;simkl&quot;,&quot;@checked&quot;]" style="width:16px; height:16px; cursor:pointer;">
             <span style="font-weight:600;">Sync Watch History to Simkl</span>
           </label>
           <p style="margin:4px 0 8px 24px; color:var(--muted); font-size:0.78rem;">Automatically sync items marked as watched or played to your Simkl account history.</p>
           <div style="margin-left:24px;">
-            <button type="button" class="secondary lc-btn" id="syncSimklHistoryNowBtn" onclick="syncWatchHistoryToProviderNow('simkl', this)" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
+            <button type="button" class="secondary lc-btn" id="syncSimklHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;simkl&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
           </div>
         </div>
         <details style="font-size:0.85rem; color:var(--muted);">
           <summary style="cursor:pointer; color:var(--text);">Advanced: Custom Simkl Client ID</summary>
           <div style="margin-top:8px;">
-            <input type="text" id="simklKeyInput" placeholder="Optional: Simkl Client ID" value="${escapeHtmlServer(initialSimklKey)}" oninput="if(this.value.trim()){try{localStorage.removeItem('myListAddon:simklDisconnected');}catch(e){}} saveState(); scheduleMySimklListsRefresh();" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+            <input type="text" id="simklKeyInput" placeholder="Optional: Simkl Client ID" value="${escapeHtmlServer(initialSimklKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;simkl&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
             <p style="margin-top:4px;"><small>Create a free Simkl Client ID at <a href="https://simkl.com/settings/developer/" target="_blank" style="color:var(--accent-2);">simkl.com/settings/developer/</a>.</small></p>
           </div>
         </details>
@@ -416,7 +416,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
 
       <div style="margin-bottom:12px;">
         <label for="importTargetListSelect" style="display:block; font-weight:600; font-size:0.88rem; margin-bottom:6px; color:var(--text);">Import to which list?</label>
-        <select id="importTargetListSelect" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.95rem;" onchange="onImportTargetListChange()">
+        <select id="importTargetListSelect" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.95rem;" data-act="onImportTargetListChange">
           <!-- Populated dynamically -->
         </select>
       </div>
@@ -429,8 +429,8 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       <div style="margin-bottom:14px;">
         <label style="display:block; font-weight:600; font-size:0.88rem; margin-bottom:6px; color:var(--text);">Select file(s)</label>
         <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-          <button type="button" class="secondary lc-btn" onclick="document.getElementById('unifiedImportFileInput').click()" style="padding:8px 16px;">Select files&hellip;</button>
-          <input type="file" id="unifiedImportFileInput" aria-label="Choose a file to import" multiple accept=".csv,.json,.zip,.txt" style="display:none;" onchange="onUnifiedImportFilesSelected(this)">
+          <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;unifiedImportFileInput&quot;]" style="padding:8px 16px;">Select files&hellip;</button>
+          <input type="file" id="unifiedImportFileInput" aria-label="Choose a file to import" multiple accept=".csv,.json,.zip,.txt" style="display:none;" data-act="onUnifiedImportFilesSelected" data-act-args="[&quot;@self&quot;]">
           <span id="unifiedImportSelectedCount" style="font-size:0.85rem; color:var(--muted);">No files selected</span>
         </div>
       </div>
@@ -443,7 +443,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       </div>
 
       <div class="actions" style="margin-top:6px;">
-        <button type="button" class="secondary lc-btn" id="btnUnifiedImport" style="padding:10px 24px; font-size:0.95rem;" onclick="runUnifiedListImport()">Import</button>
+        <button type="button" class="secondary lc-btn" id="btnUnifiedImport" style="padding:10px 24px; font-size:0.95rem;" data-act="runUnifiedListImport">Import</button>
       </div>
 
       <div id="unifiedImportResult" style="margin-top:12px;"></div>
@@ -458,7 +458,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
           <h2 class="panel-title" style="margin:0;">Support &amp; Developer Chat</h2>
           <p style="margin:4px 0 0; color:var(--muted); font-size:0.85rem;">Have a question, found a bug, or have a suggestion? Chat directly with the developer.</p>
         </div>
-        <button type="button" class="secondary lc-btn" id="btnNewFeedbackTicket" onclick="toggleNewFeedbackForm(true)" style="padding:6px 14px; font-size:0.85rem;">+ New Message</button>
+        <button type="button" class="secondary lc-btn" id="btnNewFeedbackTicket" data-act="toggleNewFeedbackForm" data-act-args="[true]" style="padding:6px 14px; font-size:0.85rem;">+ New Message</button>
       </div>
 
       <!-- Active Threads Selector -->
@@ -468,12 +468,12 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       <div id="supportChatView" style="display:none;">
         <div id="supportMessagesStream" class="support-messages-stream"></div>
         <div class="support-reply-composer" style="margin-top:10px;">
-          <textarea id="supportReplyInput" placeholder="Type a reply to the developer..." onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendUserFeedbackReply();}"></textarea>
-          <button type="button" class="primary lc-btn" id="supportReplySendBtn" onclick="sendUserFeedbackReply()" style="min-height:44px; padding:0 20px;">Send</button>
+          <textarea id="supportReplyInput" placeholder="Type a reply to the developer..." data-act-on="keydown" data-act="appActFeedbackReplyOnEnter" data-act-args="[&quot;@event&quot;]"></textarea>
+          <button type="button" class="primary lc-btn" id="supportReplySendBtn" data-act="sendUserFeedbackReply" style="min-height:44px; padding:0 20px;">Send</button>
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
           <span id="supportChatStatus" style="font-size:0.8rem; color:var(--muted);"></span>
-          <button type="button" class="secondary lc-btn" onclick="refreshUserFeedbackThreads()" style="padding:2px 8px; font-size:0.75rem; border:none; background:none; color:var(--muted); cursor:pointer;">&#x21BB; Refresh</button>
+          <button type="button" class="secondary lc-btn" data-act="refreshUserFeedbackThreads" style="padding:2px 8px; font-size:0.75rem; border:none; background:none; color:var(--muted); cursor:pointer;">&#x21BB; Refresh</button>
         </div>
       </div>
 
@@ -497,8 +497,8 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
           <input type="text" id="feedbackContactInput" placeholder="Email, Discord username, etc. (optional)">
         </div>
         <div class="actions" style="margin-top:10px; gap:8px; justify-content:flex-start;">
-          <button type="button" class="primary lc-btn" id="feedbackSubmitBtn" onclick="submitFeedback()">Send Message</button>
-          <button type="button" class="secondary lc-btn" id="feedbackCancelNewBtn" style="display:none;" onclick="toggleNewFeedbackForm(false)">Cancel</button>
+          <button type="button" class="primary lc-btn" id="feedbackSubmitBtn" data-act="submitFeedback">Send Message</button>
+          <button type="button" class="secondary lc-btn" id="feedbackCancelNewBtn" style="display:none;" data-act="toggleNewFeedbackForm" data-act-args="[false]">Cancel</button>
         </div>
         <p id="feedbackStatus" style="margin-top:8px; font-size:0.85rem;"></p>
       </div>
