@@ -434,8 +434,10 @@ function dropLegacyProviderSecret(key) {
 // --- One dispatcher for every control on the page (P6-8) ---------------------
 //
 // Up to P6-8 every button, select and input in this app carried an inline
-// on*= attribute that called a global function by name -- about 470 of them.
-// That is why script-src has to allow 'unsafe-inline' (SECURITY_AUDIT), why
+// on*= attribute that called a global function by name -- about 470 of them
+// (and 77 more on /admin, which P6-10 converted with its own copy of this
+// runtime). That is why script-src has to allow 'unsafe-inline' (SECURITY_AUDIT),
+// why
 // the arguments had to be escaped into a JavaScript string *inside* an
 // attribute (the shape escapeAttr gets wrong -- see the FE-02 note in
 // 19_client-search-and-likes.js), and why FE-2 calls the whole client "hidden

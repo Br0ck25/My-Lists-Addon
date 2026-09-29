@@ -1727,6 +1727,29 @@ function renderAdminLoginPage(errorMsg) {
 </body></html>`;
 }
 
+// The arguments of a delegated control on /admin, as one attribute value.
+//
+// Same contract as the builder page's appActArgs (16_client-row-core.js) and
+// the same pair of functions: this one runs in the Worker, while the page's
+// own script carries adminActAttr, its browser-side twin, for the markup that
+// script builds itself. /admin does not load the builder's bundle -- it is its
+// own document with its own script -- so it carries its own copy of the
+// contract (P6-10).
+//
+// Encoded once, escaped once: JSON.stringify makes the arguments data (a
+// display name with a quote in it is a string in an array, not a way out of
+// the attribute) and escapeHtmlServer makes them markup. The dispatcher
+// JSON.parses the attribute and never evaluates it.
+function adminActArgs(values) {
+  const out = [];
+  const list = values || [];
+  for (let i = 0; i < list.length; i++) {
+    const v = list[i];
+    out.push(v === undefined || v === null ? "" : v);
+  }
+  return escapeHtmlServer(JSON.stringify(out));
+}
+
 async function renderAdminDashboard(env) {
   if (!env || !env.CONFIGS) {
     return `<!DOCTYPE html><html><body style="background:#F2F2F7;color:#1C1C1E;font-family:sans-serif;padding:40px;">This Worker has no CONFIGS KV namespace bound, so there's no stats to show.</body></html>`;
@@ -1853,13 +1876,13 @@ async function renderAdminDashboard(env) {
         // the onclick string -- displayName is arbitrary creator-chosen text
         // (only .trim()'d server-side, not restricted to safe characters the
         // way the normalized username is), so splicing it directly into an
-        // onclick="..." attribute would both break on a display name
+        // attribute would both break on a display name
         // containing a quote and, worse, let a crafted display name inject
         // script into this admin page. escapeHtmlServer handles the HTML-
         // attribute escaping here the same way it already does for the two
         // <td> values above; resetCreatorKey reads the values back off the
         // element at click time instead of receiving them as literals.
-        `<td><button type="button" class="lc-btn secondary" style="padding:4px 10px; font-size:0.8rem;" data-username="${escapeHtmlServer(c.username)}" data-displayname="${escapeHtmlServer(c.displayName)}" onclick="resetCreatorKey(this)">Reset Key</button></td></tr>`
+        `<td><button type="button" class="lc-btn secondary" style="padding:4px 10px; font-size:0.8rem;" data-username="${escapeHtmlServer(c.username)}" data-displayname="${escapeHtmlServer(c.displayName)}" data-act="resetCreatorKey" data-act-args="${adminActArgs(['@self'])}">Reset Key</button></td></tr>`
     )
     .join("");
   const creatorTruncatedNote = shownCreatorCount < totalCreatorCount
@@ -2043,29 +2066,29 @@ async function renderAdminDashboard(env) {
        told assistive technology to expect tabs and hand it none, so this
        is a labelled group of toggle buttons, which is what it is. -->
   <div class="admin-main-tab-bar" role="group" aria-label="Dashboard sections">
-    <button type="button" class="admin-main-tab-btn active" aria-pressed="true" data-main-tab="overview" onclick="switchAdminMainTab('overview')">Overview &amp; Traffic</button>
-    <button type="button" class="admin-main-tab-btn" aria-pressed="false" data-main-tab="discovery" onclick="switchAdminMainTab('discovery')">Analytics &amp; Discovery</button>
-    <button type="button" class="admin-main-tab-btn" aria-pressed="false" data-main-tab="management" onclick="switchAdminMainTab('management')">Management &amp; Tools</button>
+    <button type="button" class="admin-main-tab-btn active" aria-pressed="true" data-main-tab="overview" data-act="switchAdminMainTab" data-act-args="${adminActArgs(['overview'])}">Overview &amp; Traffic</button>
+    <button type="button" class="admin-main-tab-btn" aria-pressed="false" data-main-tab="discovery" data-act="switchAdminMainTab" data-act-args="${adminActArgs(['discovery'])}">Analytics &amp; Discovery</button>
+    <button type="button" class="admin-main-tab-btn" aria-pressed="false" data-main-tab="management" data-act="switchAdminMainTab" data-act-args="${adminActArgs(['management'])}">Management &amp; Tools</button>
   </div>
 
   <div class="admin-subnav-bar" id="adminSubnavOverview">
-    <button type="button" class="subnav-pill active" data-sub-tab="last30" onclick="switchAdminSubTab('last30')">Last 30 Days</button>
-    <button type="button" class="subnav-pill" data-sub-tab="sources" onclick="switchAdminSubTab('sources')">Sources people use</button>
-    <button type="button" class="subnav-pill" data-sub-tab="apiusage" onclick="switchAdminSubTab('apiusage')">API Usage</button>
+    <button type="button" class="subnav-pill active" data-sub-tab="last30" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['last30'])}">Last 30 Days</button>
+    <button type="button" class="subnav-pill" data-sub-tab="sources" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['sources'])}">Sources people use</button>
+    <button type="button" class="subnav-pill" data-sub-tab="apiusage" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['apiusage'])}">API Usage</button>
   </div>
   <div class="admin-subnav-bar" id="adminSubnavDiscovery" style="display:none;">
-    <button type="button" class="subnav-pill" data-sub-tab="trending" onclick="switchAdminSubTab('trending')">Trending Data</button>
-    <button type="button" class="subnav-pill" data-sub-tab="search" onclick="switchAdminSubTab('search')">Search &amp; Queries</button>
-    <button type="button" class="subnav-pill" data-sub-tab="catalogs_lists" onclick="switchAdminSubTab('catalogs_lists')">Catalogs &amp; Lists</button>
-    <button type="button" class="subnav-pill" data-sub-tab="audience" onclick="switchAdminSubTab('audience')">Playback &amp; Audience</button>
+    <button type="button" class="subnav-pill" data-sub-tab="trending" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['trending'])}">Trending Data</button>
+    <button type="button" class="subnav-pill" data-sub-tab="search" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['search'])}">Search &amp; Queries</button>
+    <button type="button" class="subnav-pill" data-sub-tab="catalogs_lists" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['catalogs_lists'])}">Catalogs &amp; Lists</button>
+    <button type="button" class="subnav-pill" data-sub-tab="audience" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['audience'])}">Playback &amp; Audience</button>
   </div>
   <div class="admin-subnav-bar" id="adminSubnavManagement" style="display:none;">
-    <button type="button" class="subnav-pill" data-sub-tab="creators" onclick="switchAdminSubTab('creators')">Creator Accounts</button>
-    <button type="button" class="subnav-pill" data-sub-tab="feedback" onclick="switchAdminSubTab('feedback')">Feedback</button>
-    <button type="button" class="subnav-pill" data-sub-tab="netflixpreview" onclick="switchAdminSubTab('netflixpreview')">Provider Preview</button>
-    <button type="button" class="subnav-pill" data-sub-tab="newonstreaming" onclick="switchAdminSubTab('newonstreaming')">New on Streaming</button>
-    <button type="button" class="subnav-pill" data-sub-tab="channelpresets" onclick="switchAdminSubTab('channelpresets')">Channel Presets</button>
-    <button type="button" class="subnav-pill" data-sub-tab="maintenance" onclick="switchAdminSubTab('maintenance')">Maintenance</button>
+    <button type="button" class="subnav-pill" data-sub-tab="creators" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['creators'])}">Creator Accounts</button>
+    <button type="button" class="subnav-pill" data-sub-tab="feedback" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['feedback'])}">Feedback</button>
+    <button type="button" class="subnav-pill" data-sub-tab="netflixpreview" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['netflixpreview'])}">Provider Preview</button>
+    <button type="button" class="subnav-pill" data-sub-tab="newonstreaming" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['newonstreaming'])}">New on Streaming</button>
+    <button type="button" class="subnav-pill" data-sub-tab="channelpresets" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['channelpresets'])}">Channel Presets</button>
+    <button type="button" class="subnav-pill" data-sub-tab="maintenance" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['maintenance'])}">Maintenance</button>
   </div>
 
   <div class="admin-tab-panel active" data-admin-panel="last30">
@@ -2110,28 +2133,28 @@ async function renderAdminDashboard(env) {
   <div class="admin-tab-panel" data-admin-panel="trending">
     <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">How many times each title has been marked watched or added to a list, across everyone using this add-on. The <strong>Most Watched</strong> counts for Today, Last 7 Days and Last 30 Days are what the public <strong>Most Watched Today / 7 Days / 30 Days</strong> charts show (top 25; Quick Add &rarr; My Lists Addon Charts, and Discover); those refresh hourly for Today and daily for 7/30 days. Entries recorded without a real title id (such as "null") are left out of both this table and those charts.</p>
     <div style="margin:12px 0;">
-      <select class="admin-select" id="trendingTypeSelect" onchange="loadTrendingData()">
+      <select class="admin-select" id="trendingTypeSelect" data-act="loadTrendingData">
         <option value="watched">Most Watched</option>
         <option value="list-add">Most Added to Lists</option>
       </select>
-      <select class="admin-select" id="trendingWindowSelect" onchange="loadTrendingData()">
+      <select class="admin-select" id="trendingWindowSelect" data-act="loadTrendingData">
         <option value="today">Today</option>
         <option value="7" selected>Last 7 Days</option>
         <option value="30">Last 30 Days</option>
         <option value="90">Last 90 Days</option>
         <option value="alltime">All Time</option>
       </select>
-      <select class="admin-select" id="trendingMediaTypeSelect" onchange="loadTrendingData()">
+      <select class="admin-select" id="trendingMediaTypeSelect" data-act="loadTrendingData">
         <option value="">Movies + Shows</option>
         <option value="movie">Movies Only</option>
         <option value="series">Shows Only</option>
       </select>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="backfillTrendingBtn" onclick="runBackfillTrending()">Backfill Existing Data</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="backfillTrendingBtn" data-act="runBackfillTrending">Backfill Existing Data</button>
       <span id="backfillTrendingStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
     </div>
     <p style="color:#8E8E93; margin:0 0 12px; font-size:0.8rem;">Backfill only adds to the <strong>All Time</strong> window (there's no historical date to bucket existing data into 7/30/90-day windows) -- it seeds counts from Watch History and Custom Lists that already existed before this feature shipped. Safe to run more than once; it only adds, never resets anything. Processes accounts a few at a time, so it may take a minute for larger sites.</p>
     <div style="margin:0 0 12px;">
-      <button type="button" class="admin-select" style="cursor:pointer;" id="migrateDayCountsBtn" onclick="runMigrateDayCounts()">Migrate Historical Day Counts</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="migrateDayCountsBtn" data-act="runMigrateDayCounts">Migrate Historical Day Counts</button>
       <span id="migrateDayCountsStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
       <p style="color:#8E8E93; margin:6px 0 0; font-size:0.8rem;">One-time migration for the switch from one KV key per day to one JSON blob per title -- reads every old per-day count still sitting in KV and folds it into the new format, so 7/30/90-day windows reflect activity from before that switch instead of only counting forward from it. Safe to run more than once (adds, never subtracts); old keys are deleted once folded in, so re-running just confirms there's nothing left. Also covers the Search &amp; Queries leaderboard.</p>
     </div>
@@ -2146,7 +2169,7 @@ async function renderAdminDashboard(env) {
   <div class="admin-tab-panel" data-admin-panel="search">
     <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">Anonymous queries and search terms users have entered in the Discover and Search tabs.</p>
     <div style="margin:12px 0;">
-      <select class="admin-select" id="searchWindowSelect" onchange="loadSearchData()">
+      <select class="admin-select" id="searchWindowSelect" data-act="loadSearchData">
         <option value="today">Today</option>
         <option value="7" selected>Last 7 Days</option>
         <option value="30">Last 30 Days</option>
@@ -2221,7 +2244,7 @@ async function renderAdminDashboard(env) {
       </select>
       <textarea id="newFeedbackMessage" placeholder="What did you find?" style="width:100%; min-height:70px; box-sizing:border-box; padding:10px 12px; border-radius:8px; border:1px solid rgba(0,0,0,0.15); font-family:inherit; font-size:0.9rem; resize:vertical;"></textarea>
       <div style="margin-top:8px; display:flex; align-items:center; gap:10px;">
-        <button type="button" class="admin-select" style="cursor:pointer;" id="newFeedbackSubmitBtn" onclick="submitAdminFeedback()">Add to list</button>
+        <button type="button" class="admin-select" style="cursor:pointer;" id="newFeedbackSubmitBtn" data-act="submitAdminFeedback">Add to list</button>
         <span id="newFeedbackStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
       </div>
     </div>
@@ -2233,7 +2256,7 @@ async function renderAdminDashboard(env) {
     <div class="modal-card" style="max-width:500px;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
         <h3 style="margin:0; font-size:1.15rem; font-weight:700; color:var(--text);">Edit Feedback</h3>
-        <button type="button" class="modal-close-x" aria-label="Close" onclick="closeEditFeedbackModal()">&#x2715;</button>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeEditFeedbackModal">&#x2715;</button>
       </div>
       <input type="hidden" id="editFeedbackId">
       <label style="display:block; font-size:0.82rem; font-weight:600; color:var(--muted); margin-bottom:6px;">Category</label>
@@ -2246,8 +2269,8 @@ async function renderAdminDashboard(env) {
       <label style="display:block; font-size:0.82rem; font-weight:600; color:var(--muted); margin-bottom:6px;">Message</label>
       <textarea id="editFeedbackMessage" style="width:100%; min-height:120px; box-sizing:border-box; padding:10px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-family:inherit; font-size:0.92rem; resize:vertical; margin-bottom:16px; outline:none;"></textarea>
       <div style="display:flex; justify-content:flex-end; gap:10px;">
-        <button type="button" class="lc-btn secondary" onclick="closeEditFeedbackModal()">Cancel</button>
-        <button type="button" class="lc-btn primary" id="editFeedbackSaveBtn" onclick="saveEditFeedback()">Save Changes</button>
+        <button type="button" class="lc-btn secondary" data-act="closeEditFeedbackModal">Cancel</button>
+        <button type="button" class="lc-btn primary" id="editFeedbackSaveBtn" data-act="saveEditFeedback">Save Changes</button>
       </div>
     </div>
   </div>
@@ -2270,8 +2293,8 @@ async function renderAdminDashboard(env) {
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Find a provider's id</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">TMDB sometimes has more than one entry for the same service (e.g. two separate "Disney Plus" ids) -- look the name up here rather than guessing, since a wrong id fails silently: it just quietly shows the wrong catalog under the right label.</p>
       <div style="display:flex; gap:8px; align-items:center;">
-        <input type="text" id="providerLookupQueryInput" class="admin-select" style="margin-right:0; flex:1; max-width:220px;" placeholder="e.g. disney, max, hulu" onkeydown="if(event.key==='Enter'){event.preventDefault();lookupProviderIds();}">
-        <button type="button" class="secondary lc-btn" onclick="lookupProviderIds()">Search</button>
+        <input type="text" id="providerLookupQueryInput" class="admin-select" style="margin-right:0; flex:1; max-width:220px;" placeholder="e.g. disney, max, hulu" data-act="lookupProviderIds" data-act-keys="Enter" data-act-prevent>
+        <button type="button" class="secondary lc-btn" data-act="lookupProviderIds">Search</button>
         <span id="providerLookupStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
       </div>
       <div id="providerLookupResults" style="margin-top:10px;"></div>
@@ -2284,7 +2307,7 @@ async function renderAdminDashboard(env) {
       <label style="font-size:0.85rem; color:#8E8E93;">Region
         <input type="text" id="netflixPreviewRegionInput" class="admin-select" style="margin-right:0; width:70px; text-transform:uppercase;" value="US" maxlength="2" placeholder="US">
       </label>
-      <button type="button" class="secondary lc-btn" onclick="loadNetflixPreview()">Load Preview</button>
+      <button type="button" class="secondary lc-btn" data-act="loadNetflixPreview">Load Preview</button>
       <span id="netflixPreviewStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
     </div>
     <div id="netflixPreviewMovies"></div>
@@ -2299,12 +2322,12 @@ async function renderAdminDashboard(env) {
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Sweep status</div>
       <div id="nosStatus" style="font-size:0.85rem; color:#8E8E93;">Loading&hellip;</div>
       <div style="margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <button type="button" class="secondary lc-btn" onclick="loadNewOnStreaming()">Refresh</button>
+        <button type="button" class="secondary lc-btn" data-act="loadNewOnStreaming">Refresh</button>
         <label style="font-size:0.85rem; color:#8E8E93;">Pages
           <input type="number" id="nosSweepUnits" class="admin-select" style="margin-right:0; width:70px;" value="30" min="1" max="100">
         </label>
-        <button type="button" class="admin-select" style="cursor:pointer;" id="nosSweepBtn" onclick="runNewOnStreamingSweep(false)">Run a sweep now</button>
-        <button type="button" class="secondary lc-btn" style="cursor:pointer; color:#FF9500; border-color:rgba(255,149,0,0.4);" id="nosResetBtn" onclick="runNewOnStreamingSweep(true)">Clear &amp; pull fresh data</button>
+        <button type="button" class="admin-select" style="cursor:pointer;" id="nosSweepBtn" data-act="runNewOnStreamingSweep" data-act-args="${adminActArgs([false])}">Run a sweep now</button>
+        <button type="button" class="secondary lc-btn" style="cursor:pointer; color:#FF9500; border-color:rgba(255,149,0,0.4);" id="nosResetBtn" data-act="runNewOnStreamingSweep" data-act-args="${adminActArgs([true])}">Clear &amp; pull fresh data</button>
         <span id="nosSweepStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
       </div>
       <p style="color:#8E8E93; margin:10px 0 0; font-size:0.8rem;">Each page fetches up to 25 changes from RapidAPI. Automated sweeps run every 6 hours via cron and read each change stream (new titles, new seasons, new episodes, removals) oldest-first from where the last sweep stopped, so a busy day is finished on the next run instead of being cut off. The per-run budget is the month&#39;s remaining quota spread over the runs left; a safety cap halts sweeps at 950 calls to ensure zero overages. "Run a sweep now" continues the same streams with the page count given. Older titles (&gt;30 days) are pruned automatically each sweep.</p>
@@ -2340,7 +2363,7 @@ async function renderAdminDashboard(env) {
           <option value="movie">Movie</option>
         </select>
         <input type="date" id="nosAddDateInput" class="admin-select" style="width:130px;" title="Optional arrival date (defaults to episode air date or today)">
-        <button type="button" class="admin-select" style="cursor:pointer;" id="nosAddBtn" onclick="nosAddTitle()">Add / Sync Title</button>
+        <button type="button" class="admin-select" style="cursor:pointer;" id="nosAddBtn" data-act="nosAddTitle">Add / Sync Title</button>
         <span id="nosAddStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
       </div>
     </div>
@@ -2349,19 +2372,19 @@ async function renderAdminDashboard(env) {
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Preview the catalog</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Read through the same code that serves the row to Stremio, so this is the actual shelf and not a second implementation of it. Order is always most recently arrived first.</p>
       <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap;">
-        <select class="admin-select" id="nosPreviewType" onchange="nosResetAndPreview()">
+        <select class="admin-select" id="nosPreviewType" data-act="nosResetAndPreview">
           <option value="all" selected>All (Movies &amp; Shows)</option>
           <option value="movie">Movies</option>
           <option value="series">Shows</option>
         </select>
-        <select class="admin-select" id="nosPreviewService" onchange="nosResetAndPreview()">
+        <select class="admin-select" id="nosPreviewService" data-act="nosResetAndPreview">
           <option value="">All services</option>
         </select>
-        <input type="text" id="nosPreviewSearch" class="admin-select" placeholder="Filter by title or ID…" style="width:180px;" oninput="onNosPreviewSearchInput()">
-        <button type="button" class="secondary lc-btn" onclick="nosResetAndPreview()">Load preview</button>
-        <button type="button" class="secondary lc-btn" id="nosPrevBtn" onclick="nosChangePage(-1)" disabled>&larr; Prev</button>
+        <input type="text" id="nosPreviewSearch" class="admin-select" placeholder="Filter by title or ID…" style="width:180px;" data-act="onNosPreviewSearchInput" data-act-on="input">
+        <button type="button" class="secondary lc-btn" data-act="nosResetAndPreview">Load preview</button>
+        <button type="button" class="secondary lc-btn" id="nosPrevBtn" data-act="nosChangePage" data-act-args="${adminActArgs([-1])}" disabled>&larr; Prev</button>
         <span id="nosPageLabel" style="font-size:0.85rem; color:#8E8E93; font-weight:600;">Page 1</span>
-        <button type="button" class="secondary lc-btn" id="nosNextBtn" onclick="nosChangePage(1)" disabled>Next &rarr;</button>
+        <button type="button" class="secondary lc-btn" id="nosNextBtn" data-act="nosChangePage" data-act-args="${adminActArgs([1])}" disabled>Next &rarr;</button>
         <span id="nosPreviewStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
       </div>
       <div style="margin-bottom:12px; font-size:0.82rem; color:#8E8E93;">Catalog URL: <code id="nosPreviewSource">tmdb:new-on-streaming</code> &mdash; paste this into <strong>Catalogs &rarr; + New Catalog</strong> on the main site to install this exact row into Stremio or Nuvio while it is still hidden.</div>
@@ -2374,8 +2397,8 @@ async function renderAdminDashboard(env) {
 
     <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <button type="button" class="secondary lc-btn" onclick="loadChannelPresets()">Refresh</button>
-        <button type="button" class="secondary lc-btn" style="cursor:pointer; color:#FF3B30; border-color:rgba(255,59,48,0.4);" id="cpClearAllBtn" onclick="clearAllChannelPresets()">Clear all caches</button>
+        <button type="button" class="secondary lc-btn" data-act="loadChannelPresets">Refresh</button>
+        <button type="button" class="secondary lc-btn" style="cursor:pointer; color:#FF3B30; border-color:rgba(255,59,48,0.4);" id="cpClearAllBtn" data-act="clearAllChannelPresets">Clear all caches</button>
         <span id="cpStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
       </div>
       <p style="color:#8E8E93; margin:10px 0 0; font-size:0.8rem;">Clearing never touches anyone's already-saved channels -- each saved row carries its own small item sample as a fallback, so a cleared cache just means the next Quick Add click (or the cron rotation) rebuilds it fresh instead of serving what was cached before.</p>
@@ -2401,7 +2424,7 @@ async function renderAdminDashboard(env) {
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">${isD1Bound
         ? 'This Worker has a D1 database bound as <code>DB</code>. Use the button below to backfill existing KV records into D1.'
         : 'This Worker has no D1 database bound (Settings &rarr; Bindings). D1 is required for authoritative accounts, lists, search, likes, feedback, and tracking. Bind a D1 database as <code>DB</code> to enable full functionality.'}</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="migrateD1Btn" onclick="runMigrateD1()" ${isD1Bound ? '' : 'disabled'}>Migrate KV &rarr; D1</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="migrateD1Btn" data-act="runMigrateD1" ${isD1Bound ? '' : 'disabled'}>Migrate KV &rarr; D1</button>
       <span id="migrateD1Status" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
       <p style="color:#8E8E93; margin:10px 0 0; font-size:0.8rem;">Copies existing Creator Profiles, Custom Lists, likes, feedback, and tracking records from KV into D1. Safe to run more than once.</p>
     </div>
@@ -2409,26 +2432,26 @@ async function renderAdminDashboard(env) {
     <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Unified accounts table (v2 identity)</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Backfills existing creator identities from D1 <code>creators</code> and KV <code>creator:*</code> into the unified <code>accounts</code> table. Newest key hash wins; D1 wins ties. Copies data only &mdash; safe to run more than once.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="migrateAccountsBtn" onclick="runMigrateAccounts()" ${isD1Bound ? '' : 'disabled'}>Migrate Accounts</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="migrateAccountsBtn" data-act="runMigrateAccounts" ${isD1Bound ? '' : 'disabled'}>Migrate Accounts</button>
       <span id="migrateAccountsStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
     </div>
 
     <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Install links: keys moving to encrypted storage</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">The first time an existing install link is used, its provider keys, tokens and Creator Key move out of its KV record into encrypted D1 storage, for the share of links set in <code>INSTALL_MIGRATION_PERCENT</code>. Links keep their URL and serve exactly as before. Needs <code>TOKEN_ENCRYPTION_KEY</code> and migration 0015. Read-only: this button only reports progress.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="installsStatusBtn" onclick="runInstallsStatus()" ${isD1Bound ? '' : 'disabled'}>Check progress</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="installsStatusBtn" data-act="runInstallsStatus" ${isD1Bound ? '' : 'disabled'}>Check progress</button>
       <span id="installsStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
       <p style="color:#8E8E93; margin:12px 0 8px; font-size:0.8rem;">Emergency only: puts every moved link's keys back into its KV record, exactly as they were, and empties the table. Set <code>INSTALL_MIGRATION_PERCENT</code> to <code>0</code> first. Links removed from an account stay removed.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="installsRestoreBtn" onclick="runInstallsRestore()" ${isD1Bound ? '' : 'disabled'}>Undo the move</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="installsRestoreBtn" data-act="runInstallsRestore" ${isD1Bound ? '' : 'disabled'}>Undo the move</button>
       <span id="installsRestoreStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
     </div>
 
     <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Lists v2: copy existing lists</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Copies every account&rsquo;s lists, the old anonymous lists, shared and published channels (their episode lists go to the <code>BLOBS</code> R2 bucket when it is bound), and their likes into the new tables (migration 0016). It only copies: the lists and channels people use today are not changed, and nothing reads the copies until <code>FF_V2_LISTS_READ</code> is on. Run <strong>Migrate Accounts</strong> first, and back up D1 before the first run. It works in small steps and can be stopped and carried on; <strong>Start over</strong> runs it again from the first account, copying only what changed.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillBtn" onclick="runListsBackfill(false)" ${isD1Bound ? '' : 'disabled'}>Copy lists</button>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillRestartBtn" onclick="runListsBackfill(true)" ${isD1Bound ? '' : 'disabled'}>Start over</button>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillStatusBtn" onclick="runListsBackfillStatus()" ${isD1Bound ? '' : 'disabled'}>Check results</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillBtn" data-act="runListsBackfill" data-act-args="${adminActArgs([false])}" ${isD1Bound ? '' : 'disabled'}>Copy lists</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillRestartBtn" data-act="runListsBackfill" data-act-args="${adminActArgs([true])}" ${isD1Bound ? '' : 'disabled'}>Start over</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillStatusBtn" data-act="runListsBackfillStatus" ${isD1Bound ? '' : 'disabled'}>Check results</button>
       <span id="listsBackfillStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
       <div id="listsBackfillResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
     </div>
@@ -2436,9 +2459,9 @@ async function renderAdminDashboard(env) {
     <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Activity: copy watch history</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Copies every account&rsquo;s Watch History, and where each show is up to (finished, hidden from Continue Watching or Airing Next, storyline suggestions), into the activity database (<code>DB_ACTIVITY</code>, migration A0001). It only copies: the history people see today is not changed, and nothing reads the copy yet. Needs <code>DB_ACTIVITY</code> bound, and <strong>Migrate Accounts</strong> and migration 0016 first. It works in small steps and can be stopped and carried on; <strong>Start over</strong> copies every account again from the start.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillBtn" onclick="runActivityBackfill(false)" ${isActivityBound ? '' : 'disabled'}>Copy history</button>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillRestartBtn" onclick="runActivityBackfill(true)" ${isActivityBound ? '' : 'disabled'}>Start over</button>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillStatusBtn" onclick="runActivityBackfillStatus()" ${isActivityBound ? '' : 'disabled'}>Check results</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillBtn" data-act="runActivityBackfill" data-act-args="${adminActArgs([false])}" ${isActivityBound ? '' : 'disabled'}>Copy history</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillRestartBtn" data-act="runActivityBackfill" data-act-args="${adminActArgs([true])}" ${isActivityBound ? '' : 'disabled'}>Start over</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillStatusBtn" data-act="runActivityBackfillStatus" ${isActivityBound ? '' : 'disabled'}>Check results</button>
       <span id="activityBackfillStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;">${isActivityBound ? '' : 'DB_ACTIVITY is not bound.'}</span>
       <div id="activityBackfillResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
     </div>
@@ -2448,10 +2471,10 @@ async function renderAdminDashboard(env) {
         ? '<span style="color:#30d158;">bound</span>'
         : '<span style="color:#8E8E93;">not bound yet</span>'}</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Background work moves onto the Cloudflare Queue <code>mylists-jobs</code>, which this Worker also reads (Phase 5). Setting it up: create the queues <code>mylists-jobs</code> and <code>mylists-jobs-dlq</code>, add this Worker as the consumer of <code>mylists-jobs</code> (batch size 25, 5 retries, dead-letter queue <code>mylists-jobs-dlq</code>), and bind <code>mylists-jobs</code> to this Worker as <code>JOBS</code>. See docs/OPERATIONS.md section 18. <strong>Send a test job</strong> puts one job on the queue and waits for this Worker to pick it up, which proves all three steps worked.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="jobsPingBtn" onclick="runJobsPing()" ${isJobsBound ? '' : 'disabled'}>Send a test job</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="jobsPingBtn" data-act="runJobsPing" ${isJobsBound ? '' : 'disabled'}>Send a test job</button>
       <span id="jobsPingStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;">${isJobsBound ? '' : 'JOBS is not bound.'}</span>
       <p style="color:#8E8E93; margin:12px 0 8px; font-size:0.8rem;">Once the queue is bound, every cron tick only hands out the work that is due (the Continue Watching and Airing Next sweeps, New on Streaming, chart and poster warming, channel presets, housekeeping), and the queue does it. Without it, the tick does the work itself, as before. <strong>Check jobs</strong> shows when each one last ran. Needs migration 0016.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="jobsStatusBtn" onclick="runJobsStatus()" ${isD1Bound ? '' : 'disabled'}>Check jobs</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="jobsStatusBtn" data-act="runJobsStatus" ${isD1Bound ? '' : 'disabled'}>Check jobs</button>
       <span id="jobsStatusStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
       <div id="jobsStatusResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
     </div>
@@ -2459,7 +2482,7 @@ async function renderAdminDashboard(env) {
     <div class="panel" style="margin:0; padding:14px 16px;">
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Database schema</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Migrations are applied by hand and nothing records that it happened, so this Worker can end up running ahead of its own database. It degrades quietly when that happens rather than refusing to start &mdash; which is why this check exists. Run it after any deploy that shipped a new file under <code>migrations/</code>.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="schemaCheckBtn" onclick="runSchemaCheck()">Check schema</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="schemaCheckBtn" data-act="runSchemaCheck">Check schema</button>
       <span id="schemaCheckStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
       <div id="schemaCheckResult" style="margin-top:10px;"></div>
     </div>
@@ -2467,7 +2490,7 @@ async function renderAdminDashboard(env) {
     <div class="panel" style="margin:0; padding:14px 16px;">
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Public list directory &amp; search index</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">The public list directory and in-app search query D1 tables and the full-text search index (lists_fts). This button rebuilds the search index directly from creator_lists &mdash; useful after importing data or to recreate the index after a D1 database export.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="rebuildIndexBtn" onclick="runRebuildPublicIndex()">Rebuild Search Index</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="rebuildIndexBtn" data-act="runRebuildPublicIndex">Rebuild Search Index</button>
       <span id="rebuildIndexStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
     </div>
 
@@ -2478,20 +2501,20 @@ async function renderAdminDashboard(env) {
       <p style="color:#FF9500; margin:0 0 10px; font-size:0.82rem;"><strong>This cannot be undone.</strong> There is no backup of a deleted list. Prefer &ldquo;Rebuild Public List Index&rdquo; above first &mdash; if the lists are only phantom directory entries, that fixes them without deleting anything.</p>
       <div class="row" style="margin-bottom:8px;">
         <input type="text" id="deleteListUserInput" class="admin-select" placeholder="Creator username" style="margin-right:6px;">
-        <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="browseCreatorListsBtn" onclick="loadCreatorLists(true)">Browse this creator&rsquo;s lists</button>
-        <button type="button" class="admin-select" style="cursor:pointer;" id="browseCreatorListsMoreBtn" onclick="loadCreatorLists(false)" hidden>Load more</button>
+        <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="browseCreatorListsBtn" data-act="loadCreatorLists" data-act-args="${adminActArgs([true])}">Browse this creator&rsquo;s lists</button>
+        <button type="button" class="admin-select" style="cursor:pointer;" id="browseCreatorListsMoreBtn" data-act="loadCreatorLists" data-act-args="${adminActArgs([false])}" hidden>Load more</button>
         <span id="creatorListsStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
       </div>
       <div class="row" style="margin-bottom:8px;">
-        <input type="text" id="creatorListsFilterInput" class="admin-select" placeholder="Filter by name or slug (e.g. coming of age)" style="min-width:280px; margin-right:6px;" oninput="renderCreatorListsTable()">
-        <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="selectShownListsBtn" onclick="selectShownCreatorLists()">Select all shown</button>
-        <button type="button" class="admin-select" style="cursor:pointer;" id="clearSelectedListsBtn" onclick="clearSelectedCreatorLists()">Clear selection</button>
+        <input type="text" id="creatorListsFilterInput" class="admin-select" placeholder="Filter by name or slug (e.g. coming of age)" style="min-width:280px; margin-right:6px;" data-act="renderCreatorListsTable" data-act-on="input">
+        <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="selectShownListsBtn" data-act="selectShownCreatorLists">Select all shown</button>
+        <button type="button" class="admin-select" style="cursor:pointer;" id="clearSelectedListsBtn" data-act="clearSelectedCreatorLists">Clear selection</button>
       </div>
       <div id="creatorListsResults" style="margin-bottom:8px; max-height:340px; overflow:auto;"></div>
       <div class="row" style="margin-bottom:8px;">
         <input type="text" id="deleteListSlugsInput" class="admin-select" placeholder="Slugs, comma or newline separated" style="min-width:320px;">
       </div>
-      <button type="button" class="admin-select" style="cursor:pointer; color:#FF3B30; border-color:rgba(255,59,48,0.35);" id="deleteListBtn" onclick="runDeleteCreatorLists()">Delete these lists</button>
+      <button type="button" class="admin-select" style="cursor:pointer; color:#FF3B30; border-color:rgba(255,59,48,0.35);" id="deleteListBtn" data-act="runDeleteCreatorLists">Delete these lists</button>
       <span id="deleteListStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
     </div>
 
@@ -2500,15 +2523,15 @@ async function renderAdminDashboard(env) {
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Lists published without a Creator Profile, under the shared <code>user</code> namespace. Anyone can create one and no owner exists to ask, so this is the only way to remove one. Browse to find a list, or type slugs directly if you already know them.</p>
       <p style="color:#FF9500; margin:0 0 10px; font-size:0.82rem;"><strong>This cannot be undone.</strong> There is no backup of a deleted list.</p>
       <div class="row" style="margin-bottom:8px;">
-        <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="browseAnonBtn" onclick="loadPublishedLists(true)">Browse</button>
-        <button type="button" class="admin-select" style="cursor:pointer;" id="browseAnonMoreBtn" onclick="loadPublishedLists(false)" hidden>Load more</button>
+        <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="browseAnonBtn" data-act="loadPublishedLists" data-act-args="${adminActArgs([true])}">Browse</button>
+        <button type="button" class="admin-select" style="cursor:pointer;" id="browseAnonMoreBtn" data-act="loadPublishedLists" data-act-args="${adminActArgs([false])}" hidden>Load more</button>
         <span id="anonListStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
       </div>
       <div id="anonListResults" style="margin-bottom:8px;"></div>
       <div class="row" style="margin-bottom:8px;">
         <input type="text" id="deleteAnonSlugsInput" class="admin-select" placeholder="Slugs, comma or newline separated" style="min-width:320px;">
       </div>
-      <button type="button" class="admin-select" style="cursor:pointer; color:#FF3B30; border-color:rgba(255,59,48,0.35);" id="deleteAnonBtn" onclick="runDeletePublishedLists()">Delete these lists</button>
+      <button type="button" class="admin-select" style="cursor:pointer; color:#FF3B30; border-color:rgba(255,59,48,0.35);" id="deleteAnonBtn" data-act="runDeletePublishedLists">Delete these lists</button>
       <span id="deleteAnonStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
     </div>
 
@@ -2522,8 +2545,8 @@ async function renderAdminDashboard(env) {
         so every link to it stops working.
       </p>
       <div class="row" style="margin-bottom:8px;">
-        <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="browseChannelsBtn" onclick="loadPublishedChannels('listed')">Browse the directory</button>
-        <button type="button" class="admin-select" style="cursor:pointer;" id="browseChannelsAllBtn" onclick="loadPublishedChannels('all')">Browse every stored channel</button>
+        <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="browseChannelsBtn" data-act="loadPublishedChannels" data-act-args="${adminActArgs(['listed'])}">Browse the directory</button>
+        <button type="button" class="admin-select" style="cursor:pointer;" id="browseChannelsAllBtn" data-act="loadPublishedChannels" data-act-args="${adminActArgs(['all'])}">Browse every stored channel</button>
         <span id="publishedChannelStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
       </div>
       <div id="publishedChannelResults"></div>
@@ -2656,12 +2679,12 @@ async function renderAdminDashboard(env) {
         });
         const data = await res.json();
         if (!data.ok) {
-          alert('Could not reset key: ' + (data.error || 'unknown error'));
+          showAdminAlert('Reset Failed', 'Could not reset key: ' + (data.error || 'unknown error'), false);
           return;
         }
         showResetKeyModal(displayName, data.creatorKey);
       } catch (e) {
-        alert('Network error -- could not reset key. Try again.');
+        showAdminAlert('Network Error', 'Could not reset the key -- check your connection and try again.', false);
       }
     }
 
@@ -2675,11 +2698,35 @@ async function renderAdminDashboard(env) {
           '<p style="color:#8E8E93; font-size:0.9rem;">This is shown once. Copy it now and send it to the creator yourself -- their old key no longer works.</p>' +
           '<div id="resetKeyDisplay" style="font-family:monospace; font-size:1.1rem; background:#F2F2F7; border-radius:8px; padding:10px; text-align:center; margin:12px 0; user-select:all;">' + escapeHtmlAdmin(creatorKey) + '</div>' +
           '<div style="display:flex; gap:8px;">' +
-            '<button type="button" class="lc-btn secondary" style="flex:1;" onclick="navigator.clipboard.writeText(\\'' + creatorKey + '\\'); this.textContent=\\'Copied!\\';">Copy Key</button>' +
-            '<button type="button" class="lc-btn" style="flex:1;" onclick="document.getElementById(\\'resetKeyOverlay\\').remove();">Done</button>' +
+            '<button type="button" class="lc-btn secondary" style="flex:1;" data-act="copyResetKey" data-act-args="' + adminActAttr(['@self', creatorKey]) + '">Copy Key</button>' +
+            '<button type="button" class="lc-btn" style="flex:1;" data-act="closeResetKeyOverlay">Done</button>' +
           '</div>' +
         '</div>';
       document.body.appendChild(overlay);
+    }
+
+    // The two buttons inside that box. The key used to be written into a
+    // JavaScript string inside the button's own handler; it arrives as data
+    // now, through the same delegated args every other control uses (P6-10).
+    function copyResetKey(btn, key) {
+      const text = String(key == null ? '' : key);
+      const done = function () {
+        if (btn) btn.textContent = 'Copied!';
+      };
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done, done);
+        } else {
+          done();
+        }
+      } catch (e) {
+        done();
+      }
+    }
+
+    function closeResetKeyOverlay() {
+      const overlay = document.getElementById('resetKeyOverlay');
+      if (overlay && overlay.remove) overlay.remove();
     }
 
     async function loadSearchData() {
@@ -2779,6 +2826,142 @@ async function renderAdminDashboard(env) {
     function escapeHtmlAdmin(s) {
       return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     }
+
+    // --- the delegated actions (P6-10) ---------------------------------------
+    //
+    // Every control on this page used to carry its action in an inline on*=
+    // attribute -- 76 of them. That is what kept script-src on 'unsafe-inline'
+    // for this page and what made a display name spliced into a handler a way
+    // into it. A control now names its action the way the builder page's do
+    // (P6-8, appActDispatch in 16_client-row-core.js): data-act, arguments as
+    // one JSON attribute, one listener per event type. /admin does not load
+    // that bundle -- it is its own document with its own script -- so this page
+    // carries its own copy of the contract, and the attribute names match on
+    // purpose.
+    //
+    // adminActAttr is the browser-side twin of adminActArgs (the Worker-side
+    // one above renderAdminDashboard): this one is for the markup built here,
+    // in the page, from data the server sent.
+    function adminActAttr(values) {
+      const out = [];
+      const list = values || [];
+      for (let i = 0; i < list.length; i++) {
+        const v = list[i];
+        out.push(v === undefined || v === null ? '' : v);
+      }
+      return escapeHtmlAdmin(JSON.stringify(out));
+    }
+
+    const ADMIN_ACT_EVENT_TYPES = ['click', 'change', 'input', 'keydown'];
+    const _adminActMissing = {};
+
+    function adminActElement(node) {
+      let el = node;
+      while (el && typeof el.getAttribute === 'function') {
+        if (el.getAttribute('data-act')) return el;
+        el = el.parentNode || el.parentElement || null;
+      }
+      return null;
+    }
+
+    function adminActReadArgs(el, ev) {
+      const raw = el.getAttribute('data-act-args');
+      if (!raw) return [];
+      let values = null;
+      try {
+        values = JSON.parse(raw);
+      } catch (e) {
+        return [];
+      }
+      if (!Array.isArray(values)) return [];
+      const out = [];
+      for (let i = 0; i < values.length; i++) {
+        const v = values[i];
+        if (v === '@self') out.push(el);
+        else if (v === '@checked') out.push(!!el.checked);
+        else if (v === '@value') out.push(el.value);
+        else if (v === '@event') out.push(ev);
+        else out.push(v);
+      }
+      return out;
+    }
+
+    // Which event a control answers to: what it says, or its tag. A select
+    // answers change, a button click, and an input that searches as you type
+    // says data-act-on="input" -- an input answering both would run twice.
+    function adminActAnswers(el, ev) {
+      if (!ev) return false;
+      const explicit = el.getAttribute('data-act-on');
+      if (explicit) {
+        const list = String(explicit).split(',');
+        for (let i = 0; i < list.length; i++) {
+          if (list[i].trim() === ev.type) return true;
+        }
+        return false;
+      }
+      if (el.hasAttribute('data-act-keys')) return ev.type === 'keydown';
+      const tag = String(el.tagName || el.nodeName || '').toUpperCase();
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return ev.type === 'change';
+      return ev.type === 'click';
+    }
+
+    function adminActRunOne(el, ev) {
+      const name = el.getAttribute('data-act') || '';
+      if (!name) return false;
+      if (!adminActAnswers(el, ev)) return false;
+      if (el.hasAttribute('data-act-keys')) {
+        const wanted = el.getAttribute('data-act-keys') || '';
+        if (String(ev.key || '') !== wanted) return false;
+      }
+      const fn = window[name];
+      if (typeof fn !== 'function') {
+        // A renamed or misspelled action fails loudly once per name, instead of
+        // being a button that silently does nothing -- the same net the builder
+        // page has, and html_checks.py checks these names the same way.
+        if (!_adminActMissing[name]) {
+          _adminActMissing[name] = true;
+          console.warn('Admin action not found: ' + name);
+        }
+        return false;
+      }
+      if (ev && el.hasAttribute('data-act-stop') && typeof ev.stopPropagation === 'function') ev.stopPropagation();
+      if (ev && el.hasAttribute('data-act-prevent') && typeof ev.preventDefault === 'function') ev.preventDefault();
+      fn.apply(null, adminActReadArgs(el, ev));
+      const then = el.getAttribute('data-act-then');
+      if (then && typeof window[then] === 'function') window[then]();
+      return true;
+    }
+
+    function adminActDispatch(ev) {
+      if (!ev) return false;
+      let el = adminActElement(ev.target || null);
+      let ran = false;
+      // Innermost first, the order nested inline handlers ran in; a control
+      // that says data-act-stop ends the walk.
+      while (el) {
+        const stops = el.hasAttribute('data-act-stop');
+        if (adminActRunOne(el, ev)) ran = true;
+        if (stops) break;
+        el = adminActElement(el.parentNode || el.parentElement || null);
+      }
+      return ran;
+    }
+
+    function initAdminDelegatedActions() {
+      if (window._adminActBound) return false;
+      window._adminActBound = true;
+      const handler = function (ev) { adminActDispatch(ev); };
+      for (let i = 0; i < ADMIN_ACT_EVENT_TYPES.length; i++) {
+        document.addEventListener(ADMIN_ACT_EVENT_TYPES[i], handler, false);
+      }
+      return true;
+    }
+
+    // Bound here, right after the block that declares ADMIN_ACT_EVENT_TYPES --
+    // not up with restoreAdminActiveTab() further down the file, which runs
+    // EARLIER than this point in the script and would hit the const's
+    // temporal dead zone and take the whole dashboard down with it.
+    initAdminDelegatedActions();
 
     async function loadTrendingData() {
       const body = document.getElementById('trendingTableBody');
@@ -3958,7 +4141,7 @@ async function renderAdminDashboard(env) {
           return;
         }
         resultsEl.innerHTML = data.results.map((p) =>
-          '<button type="button" class="admin-select" style="cursor:pointer; margin:0 6px 6px 0;" onclick="pickProviderId(' + p.id + ')">' +
+          '<button type="button" class="admin-select" style="cursor:pointer; margin:0 6px 6px 0;" data-act="pickProviderId" data-act-args="' + adminActAttr([p.id]) + '">' +
             escapeHtmlAdmin(p.name) + ' <span style="color:#8E8E93;">(' + p.id + ')</span>' +
           '</button>'
         ).join('');
@@ -4298,8 +4481,8 @@ async function renderAdminDashboard(env) {
             '<td>' + (net.cached ? net.itemCount : '--') + '</td>' +
             '<td style="white-space:nowrap;">' + cpAgoText(net.builtAt) + '</td>' +
             '<td style="white-space:nowrap;">' +
-              '<button type="button" class="secondary lc-btn" style="padding:4px 10px; font-size:0.8rem;" onclick="rebuildOneChannelPreset(' + "'" + net.id + "'" + ', this)">Rebuild</button> ' +
-              '<button type="button" class="secondary lc-btn" style="padding:4px 10px; font-size:0.8rem; color:#FF3B30;" onclick="clearOneChannelPreset(' + "'" + net.id + "'" + ', this)"' + (net.cached ? '' : ' disabled') + '>Clear</button>' +
+              '<button type="button" class="secondary lc-btn" style="padding:4px 10px; font-size:0.8rem;" data-act="rebuildOneChannelPreset" data-act-args="' + adminActAttr([net.id, '@self']) + '">Rebuild</button> ' +
+              '<button type="button" class="secondary lc-btn" style="padding:4px 10px; font-size:0.8rem; color:#FF3B30;" data-act="clearOneChannelPreset" data-act-args="' + adminActAttr([net.id, '@self']) + '"' + (net.cached ? '' : ' disabled') + '>Clear</button>' +
             '</td>' +
           '</tr>';
         }).join('');
@@ -4318,10 +4501,10 @@ async function renderAdminDashboard(env) {
         });
         const data = await res.json();
         if (!data.ok) {
-          alert(data.error || 'Could not clear.');
+          showAdminAlert('Clear Failed', data.error || 'Could not clear the cached preset.', false);
         }
       } catch (e) {
-        alert('Could not clear -- check your connection.');
+        showAdminAlert('Network Error', 'Could not clear the cached preset -- check your connection.', false);
       }
       loadChannelPresets();
     }
@@ -4337,10 +4520,10 @@ async function renderAdminDashboard(env) {
         });
         const data = await res.json();
         if (!data.ok) {
-          alert(data.error || 'Could not rebuild.');
+          showAdminAlert('Rebuild Failed', data.error || 'Could not rebuild the cached preset.', false);
         }
       } catch (e) {
-        alert('Could not rebuild -- check your connection.');
+        showAdminAlert('Network Error', 'Could not rebuild the cached preset -- check your connection.', false);
       }
       if (btn) btn.textContent = originalLabel;
       loadChannelPresets();
@@ -4358,10 +4541,10 @@ async function renderAdminDashboard(env) {
         });
         const data = await res.json();
         if (!data.ok) {
-          alert(data.error || 'Could not clear.');
+          showAdminAlert('Clear Failed', data.error || 'Could not clear the cached presets.', false);
         }
       } catch (e) {
-        alert('Could not clear -- check your connection.');
+        showAdminAlert('Network Error', 'Could not clear the cached presets -- check your connection.', false);
       }
       if (btn) btn.disabled = false;
       loadChannelPresets();
@@ -4658,11 +4841,11 @@ async function renderAdminDashboard(env) {
             '<span style="color:' + iconColor + '; font-weight:bold; font-size:1.2rem;">' + icon + '</span> ' +
             escapeHtmlAdmin(title) +
           '</h3>' +
-          '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeAdminModal()">\u2715</button>' +
+          '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeAdminModal">\u2715</button>' +
         '</div>' +
         '<p style="margin:0 0 18px; color:var(--muted); font-size:0.92rem; line-height:1.45; white-space:pre-wrap;">' + escapeHtmlAdmin(message) + '</p>' +
         '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
-          '<button type="button" class="lc-btn primary" onclick="closeAdminModal()" style="min-width:80px;">OK</button>' +
+          '<button type="button" class="lc-btn primary" data-act="closeAdminModal" style="min-width:80px;">OK</button>' +
         '</div>';
       showAdminModal(html);
     }
@@ -4677,11 +4860,11 @@ async function renderAdminDashboard(env) {
             '<span style="color:' + iconColor + '; font-weight:bold; font-size:1.2rem;">' + icon + '</span> ' +
             escapeHtmlAdmin(title) +
           '</h3>' +
-          '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeAdminModal()">\u2715</button>' +
+          '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeAdminModal">\u2715</button>' +
         '</div>' +
         '<p style="margin:0 0 18px; color:var(--muted); font-size:0.92rem; line-height:1.45; white-space:pre-wrap;">' + escapeHtmlAdmin(message) + '</p>' +
         '<div style="display:flex; justify-content:flex-end; gap:10px;">' +
-          '<button type="button" class="lc-btn secondary" onclick="closeAdminModal()">Cancel</button>' +
+          '<button type="button" class="lc-btn secondary" data-act="closeAdminModal">Cancel</button>' +
           '<button type="button" class="' + btnClass + '" id="adminConfirmOkBtn">' + escapeHtmlAdmin(confirmBtnText || 'Confirm') + '</button>' +
         '</div>';
       showAdminModal(html);

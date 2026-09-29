@@ -79,15 +79,17 @@ function isPrivateApiPath(path) {
 // set a more specific value for one of these (none do today) would still
 // win, rather than this clobbering it.
 //
-// CSP is deliberately not the strict, script-src-locked-down kind: this
-// app relies on plenty of inline <script> blocks and inline onclick=/
-// onchange= handlers throughout the builder/admin pages, which only work
-// with 'unsafe-inline' on script-src. (That trade is only reasonable if the
-// handlers actually resolve, which html_checks.py now verifies across all
-// 733 of them -- for a long time this comment cited that step before it
-// existed.) Tightening
-// that further would mean a nonce- or hash-based rewrite of every inline
-// handler -- a real project of its own, not a header tweak. What this CSP
+// CSP is deliberately not the strict, script-src-locked-down kind: this app
+// still serves its page as inline <script> blocks (the builder bundle and the
+// per-request preamble, and /admin's own script), which only work with
+// 'unsafe-inline' on script-src. That half is P7-1's, and it is what is left:
+// the inline on*= handlers this comment used to cite are gone from both pages
+// -- P6-8 on the builder, P6-10 on /admin -- and are now data-act attributes
+// run by a delegated listener instead, checked the same way (html_checks.py
+// resolves every action name against the page that declares it, and fails the
+// build on an inline handler, whatever it is called). Removing the handlers is
+// what makes a nonce/hash for the <script> blocks a header change away rather
+// than part of a much larger rewrite. What this CSP
 // still buys, even with 'unsafe-inline' allowed: no loading of scripts/
 // styles/fonts from any origin except the ones this app actually uses
 // (jsDelivr for fflate, Google Fonts, YouTube for trailer embeds), no

@@ -82,9 +82,10 @@ def _blank_handler_strings(code):
         i += 1
     return ''.join(out)
 
-HANDLER_ATTR = re.compile(
-    r'\son(?:click|change|input|submit|keyup|keydown|keypress|blur|focus'
-    r'|load|error|mouseenter|mouseleave|toggle)\s*=\s*"([^"]*)"')
+# Every inline handler shape, not a list of the event names this app happened
+# to use: P6-8 removed them from the builder page and P6-10 from /admin, so
+# what this matches now is a regression whatever the event is called.
+HANDLER_ATTR = re.compile(r'\son[a-z]+\s*=\s*"([^"]*)"')
 JS_KEYWORDS = {'if', 'for', 'while', 'switch', 'catch', 'return', 'typeof', 'new', 'async',
                'await', 'function', 'do', 'else', 'in', 'of', 'delete', 'void', 'throw', 'case'}
 JS_GLOBALS = {'alert', 'confirm', 'prompt', 'open', 'close', 'print', 'Number', 'String',
@@ -125,31 +126,39 @@ if unresolved:
 print(f"  inline handlers resolve ({len(handler_calls)} distinct functions, "
       f"{sum(handler_calls.values())} call sites)")
 
-# The builder page has none left (P6-8), and this is the check that keeps it
-# that way -- the whole point of the phase is that the attribute shape cannot
-# come back one button at a time. /admin is excluded because converting it is
-# P6-10's task; it carries its own inline handlers until then.
-if 'admin' not in tag and handler_calls:
-    print("FAIL: the builder page still carries inline on*= handlers:")
+# Both pages converted. The builder page's controls are run by appActDispatch
+# (16_client-row-core.js, P6-8); /admin does not load that bundle, so it
+# carries its own copy of the same contract -- adminActDispatch and
+# adminActAttr in its own script (P6-10). The attribute names match on
+# purpose, so this check and the data-act one below cover both pages.
+if handler_calls:
+    print("FAIL: this page still carries inline on*= handlers:")
     for fn_, n in sorted(handler_calls.items(), key=lambda x: -x[1]):
         print(f"    {fn_}()  referenced {n}x")
-    print("  P6-8 moved every one of them to data-act + appActDispatch (16_).")
+    print("  The builder page moved every one to data-act + appActDispatch (P6-8),")
+    print("  and /admin to data-act + adminActDispatch (P6-10).")
     sys.exit(1)
 
-# --- P6-8: every data-act names a function that exists ---
+# --- P6-8/P6-10: every data-act names a function that exists ---
 #
-# The builder page's controls no longer carry inline on*= handlers: each one
-# names its action in data-act and a single delegated listener runs it
-# (appActDispatch, 16_client-row-core.js). That removes the last reason
-# script-src needed 'unsafe-inline' for the client half, but it also moves the
-# failure mode rather than deleting it -- a renamed function used to be a
-# button that silently did nothing, and a renamed action is exactly the same
-# button. So the check the handlers used to get now runs against the names.
+# Neither page carries inline on*= handlers any more: each control names its
+# action in data-act and a single delegated listener runs it -- appActDispatch
+# (16_client-row-core.js) on the builder page, adminActDispatch in the admin
+# page's own script, which does not load that bundle. That removes the last
+# reason script-src needed 'unsafe-inline' for the client half, but it also
+# moves the failure mode rather than deleting it -- a renamed function used to
+# be a button that silently did nothing, and a renamed action is exactly the
+# same button. So the check the handlers used to get now runs against the names.
+#
+# The names are resolved against THIS page's own scripts (see `defined` above),
+# so the same attribute means the same thing on both pages and neither page's
+# names leak into the other's check.
 #
 # Only literal names are checked. A handful of controls build their name from
 # an expression at render time (the entry editor's custom-list/channel pair),
-# and those are covered by tests/client-actions.test.mjs, which asserts every
-# literal name in the sources resolves too.
+# and those are covered by tests/client-actions.test.mjs and
+# tests/admin-actions.test.mjs, which assert every literal name in the sources
+# resolves too.
 ACT_ATTR = re.compile(r'data-act(?:-then)?="([A-Za-z_$][\w$]*)"')
 act_calls = collections.Counter()
 for _m in ACT_ATTR.finditer(html):
@@ -157,7 +166,7 @@ for _m in ACT_ATTR.finditer(html):
 
 missing_actions = {name: n for name, n in act_calls.items() if name not in defined}
 if missing_actions:
-    print("FAIL: data-act names a function that does not exist in the bundle:")
+    print("FAIL: data-act names a function that does not exist on this page:")
     for name, n in sorted(missing_actions.items(), key=lambda x: -x[1]):
         print(f"    data-act=\"{name}\"  on {n} control(s)  -> dead button")
     sys.exit(1)

@@ -436,3 +436,14 @@ You are bounced back to the page you asked for, without the parameter, and the c
 - **Nothing to undo** if the deploy is rolled back: the browser's store is the same store the old page uses, and a list moves only when someone presses the button.
 
 **If something looks wrong:** the console names the action that failed (`Action failed: <name>`), and a list that did not move is still in this browser — reload Lists and it is there.
+## 23. What P6-10 changed for the admin dashboard
+
+**Nothing to configure.** The `/admin` page is the dashboard you use, not something visitors see: it is its own document, its own script and its own menu `/admin`, and none of it is behind a cookie, a variable or a migration. Deploying the new `worker_entry_combined.js` is the whole change.
+
+- **The dashboard's buttons name their action.** 76 inline `onclick` / `onchange` / `oninput` / `onkeydown` attributes are gone; each control carries `data-act` (plus `data-act-args` for its arguments) and one listener per event type runs it (`adminActDispatch`, in the dashboard's own script — the page does not load the builder's bundle, so it carries its own copy of that runtime). **What you should notice: nothing.** Every button does what it did.
+- **The two boxes that filter as you type** (Provider Preview's, Creator Accounts') still filter as you type — they say so with `data-act-on="input"`. **The provider search box** still searches when you press Enter, and only when you press Enter.
+- **A creator's display name cannot reach the markup as code.** The Reset Key button already kept the name in a `data-` attribute; the Copy Key button in the "new key" box used to have the key written into its own handler, and now takes it as an argument. A test renders a display name containing a quote and a `<script>` tag and proves it stays text.
+- **The dashboard's messages are its own dialog now** (`showAdminAlert`), not the browser's pop-up: 8 `alert()` calls became it. The ten yes/no `confirm()` prompts (delete lists, undo the installs move, restart a copy, reset a key) are **unchanged for now** — each one is inside a flow that has to be restructured around a callback, which is a change of its own.
+- **If something looks wrong:** the browser console says `Admin action not found: <name>` (once per name) if a control ever names a function that is not there, instead of the button silently doing nothing. `html_checks.py` fails the build on any inline handler on any page, so that shape cannot come back quietly.
+- **Nothing to undo** if you roll back the deploy: the previous file is the previous dashboard.
+- **The CSP is unchanged** (`docs/DECISIONS.md` D-18): the dashboard still serves an inline `<script>` block, so `'unsafe-inline'` stays until P7-1 moves the page's scripts into files. Removing the handlers is what makes that a header change rather than a rewrite.
