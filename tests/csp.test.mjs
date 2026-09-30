@@ -222,8 +222,8 @@ describe("P7-1: script-src is nonce-only", () => {
 });
 
 describe("P7-1: Trusted Types in report-only mode", () => {
-  it("asks for reports on HTML pages and names the endpoint", async () => {
-    const env = makeEnv();
+  it("asks for reports on HTML pages and names the endpoint, when FF_CSP_TT_REPORT=1", async () => {
+    const env = makeEnv({ FF_CSP_TT_REPORT: "1" });
     const res = await call(env, "/");
     assert.match(res.headers.get("content-security-policy-report-only") || "",
       /require-trusted-types-for 'script'/);
@@ -234,12 +234,16 @@ describe("P7-1: Trusted Types in report-only mode", () => {
     assert.equal(/trusted-types/.test(res.headers.get("content-security-policy") || ""), false);
   });
 
-  it("can be turned off with FF_CSP_TT_REPORT=0 without touching enforcement", async () => {
-    const env = makeEnv({ FF_CSP_TT_REPORT: "0" });
-    const res = await call(env, "/");
-    assert.equal(res.headers.get("content-security-policy-report-only"), null);
-    assert.equal(res.headers.get("reporting-endpoints"), null);
-    assert.match(res.headers.get("content-security-policy") || "", /script-src 'self' 'nonce-/);
+  // Off by default on the release branch: every report is a browser POST and,
+  // since P7-3, a D1 rate-limit write, and a page view can send dozens.
+  it("is off unless FF_CSP_TT_REPORT=1, without touching enforcement", async () => {
+    for (const value of [undefined, "0", ""]) {
+      const env = makeEnv(value === undefined ? {} : { FF_CSP_TT_REPORT: value });
+      const res = await call(env, "/");
+      assert.equal(res.headers.get("content-security-policy-report-only"), null, `reports on with ${value}`);
+      assert.equal(res.headers.get("reporting-endpoints"), null);
+      assert.match(res.headers.get("content-security-policy") || "", /script-src 'self' 'nonce-/);
+    }
   });
 });
 

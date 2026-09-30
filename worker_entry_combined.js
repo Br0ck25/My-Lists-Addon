@@ -3225,9 +3225,12 @@ const CSP_REPORT_MAX_PER_MINUTE = 60;
 // reports posted to CSP_REPORT_PATH (25_api-catalog-routes.js). The app
 // assigns to innerHTML in ~300 places, so enforcement would break the UI
 // today; report-only is how the remaining sinks are found before that changes.
-// `FF_CSP_TT_REPORT=0` (dashboard variable) drops the report-only header for a
-// deployment that does not want the traffic; it does not affect enforcement of
-// the policy above.
+// Off unless `FF_CSP_TT_REPORT=1` (dashboard variable), and it never affects
+// enforcement of the policy above. The reports are browser POSTs, one per
+// innerHTML assignment a page makes -- a page view can send dozens -- and since
+// P7-3 each one also spends a D1 rate-limit write. That is a developer's to-do
+// list, worth turning on for an hour while working through the sinks, not on
+// every visitor's page by default.
 function securityHeaders(nonce, env) {
   const scriptSrc = nonce ? "'self' 'nonce-" + nonce + "'" : "'self'";
   const styleElemSrc = nonce ? "'self' 'nonce-" + nonce + "'" : "'self'";
@@ -3262,7 +3265,7 @@ function securityHeaders(nonce, env) {
   // Report-only, and only where a browser will actually send something: an
   // HTML document. The endpoint is same-origin, so no outbound connection is
   // added.
-  if (!env || env.FF_CSP_TT_REPORT !== "0") {
+  if (env && (env.FF_CSP_TT_REPORT === "1" || env.FF_CSP_TT_REPORT === "true" || env.FF_CSP_TT_REPORT === true)) {
     headers["Content-Security-Policy-Report-Only"] =
       "require-trusted-types-for 'script'; report-uri " + CSP_REPORT_PATH + "; report-to csp-endpoint";
     headers["Reporting-Endpoints"] = "csp-endpoint=\"" + CSP_REPORT_PATH + "\"";

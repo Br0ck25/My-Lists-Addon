@@ -13,7 +13,8 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Release 7** (as 7b) went live on 2026-09-30, with the queue set up: *Round trip works: picked up after 6.3 s*, and every periodic job running with none failing (under Release 7).
 - **Release 8** went live on 2026-09-30. The owner reports everything working, and asked for changes to the new interface and for five older bugs to be fixed: that is Release 9.
 - **Release 9** went live on 2026-09-30. The owner found two problems, fixed in Release 9b (prepared, not yet live): the red x on a list card's poster opened the list instead of removing the title, and ticking *Enable media server user filtering* did not stick.
-- **Next:** sign-in sessions (`FF_SESSIONS`), with the two secrets they use. Steps under Release 9b.
+- **Release 9b** went live on 2026-09-30, followed by the sign-in sessions step (steps under Release 9b). The owner reports everything looks good.
+- **Release 10** (Phase 7 so far, PR #9) is prepared and not yet live.
 
 The owner decided to release the new version **one phase at a time, straight to the live site**, with no separate test site. Each release waits until the one before it has run cleanly for at least a day.
 
@@ -38,7 +39,7 @@ The owner decided to release the new version **one phase at a time, straight to 
 | 7 | Phase 5: jobs | `be96c22` | none | two Queues, the consumer, the `JOBS` binding |
 | 8 | Phase 6: new interface | `eee71a7` | none | none (the new interface is behind a cookie) |
 | 9 | Five bug fixes and the owner's new-interface changes (this branch only) | none | none | none |
-| 10 | Phase 7 so far ([PR #9](https://github.com/Br0ck25/My-Lists-Addon/pull/9)) | after it merges | per PR | per PR |
+| 10 | Phase 7 so far ([PR #9](https://github.com/Br0ck25/My-Lists-Addon/pull/9), not yet merged into `main`) | `243340a` (the PR's head) | `0018`, `0019` (optional) | none required; Cloudflare Access for `/admin` optional |
 
 Each release gets its own section below when it is prepared, with its steps in plain words.
 
@@ -749,3 +750,50 @@ Both secrets are random values made once and **never changed or deleted** afterw
 4. **Watch for 30 minutes**: Metrics and Logs.
 
 **To undo:** delete `FF_SESSIONS` (or set it to `0`) and deploy. The two secrets stay: removing `TOKEN_ENCRYPTION_KEY` would lose any connection saved with it.
+
+---
+
+## Release 10: Phase 7 so far (PR #9: security)
+
+**Branch point:** `60e48eb` on `claude/elegant-ride-o7m8fh`, which merges [PR #9](https://github.com/Br0ck25/My-Lists-Addon/pull/9)'s head, `243340a`, into Release 9b. PR #9 is built on `main` at `eee71a7`, which this branch already holds, so it came in with no source conflict (only the generated `FUNCTION-MAP.md`). PR #9 itself is still open; it goes into `main` with the rest of this branch.
+
+One change on top of it (`docs/OPERATIONS.md` §24): the Trusted Types reports are **off unless `FF_CSP_TT_REPORT=1`**. In the PR they were on unless turned off. Each report is a browser POST, a page view can send dozens (one per `innerHTML` write, of which the site has about 300), and since P7-3 each one also spends a D1 rate-limit write. They are a to-do list for whoever works on those sinks, not something every visit should pay for.
+
+`bash verify.sh` passes (1,952 tests, 0 failed), and so does the suite with `MLA_TEST_V2_LISTS_READ=1`.
+
+### What changes for everyone
+
+- **A strict Content-Security-Policy** (P7-1). The browser now runs only the scripts this Worker put in the page, each stamped with a one-time value, so an injected script is refused. Nothing should look or work differently, with one exception:
+  - **the fonts are each device's own** (San Francisco on Apple, Segoe UI on Windows, Roboto on Android) instead of Google Fonts. The page makes no request to anyone else when it opens;
+  - the zip reader used by *Import a file* is served by this Worker instead of a CDN.
+- **Rate limits count exactly** (P7-3). Every limit the Worker applies (sign-in guesses, profile creation, saves, previews, searches and so on) is now a counter in D1 instead of KV. A burst of requests can no longer all slip under a limit at once. There is no setting to change; it replaces a KV write with a cheaper D1 write.
+
+### What changes for `/admin` (P7-2)
+
+- **Every admin sign-in is a session you can see and end:** Maintenance → **Signed-in admin browsers**, each with its IP and browser, and **Sign out** per row or for all. Needs migration `0018`.
+- **An audit log** of every admin action that changes something (Maintenance → **Audit log**): who, what, when, from where. Keys and passwords are never recorded. Needs migration `0018`.
+- Your current admin sign-in keeps working, and the admin key works as before.
+- **Optional, later:** Cloudflare Access in front of `/admin`, so signing in needs your email (a one-time code) instead of only the key. It is dashboard work in Cloudflare Zero Trust (`docs/OPERATIONS.md` §25); nothing changes until it is set up.
+
+### Steps, in order
+
+1. **Keep Release 9b's file** (`release-9b-NEW-worker.js`) as the rollback file.
+2. **Deploy** Release 10's file (`release-10-NEW-worker.js`) the usual way.
+3. **D1 → `my-lists-db` (the main database, not `mylists-activity`) → Console:**
+   - paste `release-10-migration-0018-MAIN-database.sql` → **Execute**;
+   - paste `release-10-migration-0019-MAIN-database.sql` → **Execute**.
+   Both only add tables and an index, and are safe to run twice.
+4. **Check the site:**
+   - it opens and works as before, in the system font; sign in, change something, refresh;
+   - a trailer plays (Discover → a title → Trailer);
+   - Lists → Import → Import a file with a small export (the zip reader is now this Worker's);
+   - in Stremio or Nuvio, rows load.
+5. **Check `/admin`:**
+   - sign in (sign in again with the key if it asks);
+   - Maintenance → **Check schema**: the ledger ends at `0019`;
+   - Maintenance → **Signed-in admin browsers** lists this browser, and **Audit log** shows the sign-in.
+6. **Watch for 30 minutes**: Metrics and Logs. `[ratelimit]` lines mean a limit refused something, which is normal in small numbers.
+
+### Rollback
+
+Paste Release 9b's file and Deploy. The two new tables stay and are ignored by the older code; the admin sign-in goes back to the key-only cookie.
