@@ -557,6 +557,9 @@
               }
               qObj.watchHistory = qObj.watchHistory.slice(0, 20);
               qObj.continueWatching = qObj.continueWatching.slice(0, 20);
+              // The record version this queue is a copy of -- see
+              // 56_scrobble-queue.js for why readers need it.
+              qObj.recordUpdatedAt = blob.updatedAt;
               await env.CONFIGS.put(queueKey, JSON.stringify(qObj));
             } catch {}
 
@@ -1227,6 +1230,8 @@
           }
           qObj.watchHistory = qObj.watchHistory.slice(0, 20);
           qObj.continueWatching = qObj.continueWatching.slice(0, 20);
+          // See 56_scrobble-queue.js.
+          qObj.recordUpdatedAt = blob.updatedAt;
           await env.CONFIGS.put(queueKey, JSON.stringify(qObj));
         } catch {}
       } catch (err) {
@@ -3919,23 +3924,17 @@
           // Merge is best-effort -- never block the save over it.
         }
 
-        // SECONDARY MERGE: always read the dedicated scrobble-queue key.
-        // This is written by handleSubtitlesTrack immediately after each
-        // scrobble and is tiny (≤20 items), so it propagates faster and
-        // independently from the large tracking blob. This catches the case
-        // where the large blob hasn't propagated across Cloudflare edges yet.
+        // SECONDARY MERGE: the dedicated scrobble-queue key. It is written by
+        // both scrobble paths right after the tracking record and is tiny
+        // (≤20 items), so it covers the case where the record read above
+        // does not have the latest plays yet. Only then: a record at least as
+        // new as the queue already holds them, or has had them removed on
+        // purpose since -- see 56_scrobble-queue.js.
         try {
-          const queueRaw = await env.CONFIGS.get(`creatorscrobblequeue:${auth.username}`);
-          if (queueRaw) {
-            const queue = JSON.parse(queueRaw);
-            let queueWh = [];
-            let queueCw = [];
-            if (Array.isArray(queue)) {
-              queueWh = queue;
-            } else if (queue && typeof queue === "object") {
-              queueWh = Array.isArray(queue.watchHistory) ? queue.watchHistory : [];
-              queueCw = Array.isArray(queue.continueWatching) ? queue.continueWatching : [];
-            }
+          const queue = parseScrobbleQueue(await env.CONFIGS.get(`creatorscrobblequeue:${auth.username}`));
+          if (scrobbleQueueIsAhead(queue, existingBlob)) {
+            const queueWh = queue.watchHistory;
+            const queueCw = queue.continueWatching;
             if (queueWh.length) {
               const currentIds = new Set(
                 (Array.isArray(body.watchHistory) ? body.watchHistory : []).map((it) => String(it && it.id))
@@ -3950,7 +3949,7 @@
             if (queueCw.length) {
               const fullyWatchedSet = new Set([
                 ...(Array.isArray(body.fullyWatchedShowIds) ? body.fullyWatchedShowIds.map(String) : []),
-                ...(Array.isArray(existingBlob.fullyWatchedShowIds) ? existingBlob.fullyWatchedShowIds.map(String) : [])
+                ...(existingBlob && Array.isArray(existingBlob.fullyWatchedShowIds) ? existingBlob.fullyWatchedShowIds.map(String) : [])
               ]);
               const mergedCw = [];
               const handledShows = new Set();
@@ -3982,6 +3981,43 @@
           }
         } catch {
           // Best-effort
+        }
+      } else {
+        // An intentional removal skips both merges above: it is the browser
+        // saying "exactly this". Except for plays a scrobble recorded after
+        // that browser last loaded the account, which it cannot have meant to
+        // remove because it never had them -- see scrobblePlaysUnseenBy.
+        // Those, and the Continue Watching entry the same scrobble computed
+        // for the show, are kept.
+        try {
+          const queue = parseScrobbleQueue(await env.CONFIGS.get(`creatorscrobblequeue:${auth.username}`));
+          const incomingWh = Array.isArray(body.watchHistory) ? body.watchHistory : [];
+          const unseen = scrobblePlaysUnseenBy(
+            queue,
+            existingBlob,
+            body.baseTrackingUpdatedAt,
+            new Set(incomingWh.map((it) => String(it && it.id)))
+          );
+          if (unseen.length) {
+            body.watchHistory = [...unseen, ...incomingWh];
+            rescuedCount = unseen.length;
+            const fullyWatchedSet = new Set(Array.isArray(body.fullyWatchedShowIds) ? body.fullyWatchedShowIds.map(String) : []);
+            const unseenShows = new Set(unseen.filter((it) => it.showId).map((it) => trackingShowKey(it.showId)));
+            const storedCw = Array.isArray(existingBlob.continueWatching) ? existingBlob.continueWatching : [];
+            const keptCw = storedCw.filter((it) => it && it.showId &&
+              unseenShows.has(trackingShowKey(it.showId)) &&
+              !scrobbleCwIsFullyWatched(it, fullyWatchedSet));
+            if (keptCw.length) {
+              const keptShows = new Set(keptCw.map((it) => trackingShowKey(it.showId)));
+              const incomingCw = Array.isArray(body.continueWatching) ? body.continueWatching : [];
+              body.continueWatching = [
+                ...keptCw,
+                ...incomingCw.filter((it) => !(it && it.showId && keptShows.has(trackingShowKey(it.showId)))),
+              ];
+            }
+          }
+        } catch {
+          // Best-effort, like the merges above.
         }
       }
 
@@ -4647,23 +4683,23 @@
           data.scrobbleBlockAnonymous = typeof trackingBlob.scrobbleBlockAnonymous === "boolean" ? trackingBlob.scrobbleBlockAnonymous : false;
         }
       }
-      // Merge dedicated scrobble-queue key into watchHistory so that recent
-      // scrobbles are always visible even if the large tracking blob hasn't
-      // propagated across Cloudflare edges yet (KV eventual consistency).
+      // Merge the dedicated scrobble-queue key in, so that recent scrobbles
+      // are visible even when the tracking record read above does not have
+      // them yet (KV eventual consistency, or a D1 write that failed). Only
+      // then: merged unconditionally, it brought back every recent play the
+      // owner had removed -- see 56_scrobble-queue.js.
       try {
-        const sqRaw = await env.CONFIGS.get(`creatorscrobblequeue:${auth.username}`);
-        if (sqRaw) {
-          const sq = JSON.parse(sqRaw);
-          let queueWh = [];
-          let queueCw = [];
-          if (Array.isArray(sq)) {
-            queueWh = sq;
-          } else if (sq && typeof sq === "object") {
-            queueWh = Array.isArray(sq.watchHistory) ? sq.watchHistory : [];
-            queueCw = Array.isArray(sq.continueWatching) ? sq.continueWatching : [];
-          }
+        const sq = parseScrobbleQueue(await env.CONFIGS.get(`creatorscrobblequeue:${auth.username}`));
+        const trackingRecord = data && data.trackingUpdatedAt !== undefined ? { updatedAt: data.trackingUpdatedAt } : null;
+        if (scrobbleQueueIsAhead(sq, trackingRecord)) {
+          const queueWh = sq.watchHistory;
+          const queueCw = sq.continueWatching;
           if (queueWh.length || queueCw.length) {
             if (!data) data = { config: [], collapsedPanels: {}, likedLists: [], updatedAt: Date.now() };
+            // This response now reflects the record as of the queue's write,
+            // and a later removal is judged against what the browser was
+            // shown (scrobblePlaysUnseenBy).
+            if (sq.recordUpdatedAt > (Number(data.trackingUpdatedAt) || 0)) data.trackingUpdatedAt = sq.recordUpdatedAt;
             if (queueWh.length) {
               const existingWhIds = new Set((Array.isArray(data.watchHistory) ? data.watchHistory : []).map((it) => String(it && it.id)));
               const queueWhOnly = queueWh.filter((it) => it && it.id && !existingWhIds.has(String(it.id)));
@@ -4673,10 +4709,12 @@
               }
             }
             if (queueCw.length) {
+              const fullyWatchedSet = new Set(Array.isArray(data.fullyWatchedShowIds) ? data.fullyWatchedShowIds.map(String) : []);
               const mergedCw = [];
               const handledShows = new Set();
               for (const qItem of queueCw) {
                 if (qItem && (qItem.showId || qItem.id)) {
+                  if (scrobbleCwIsFullyWatched(qItem, fullyWatchedSet)) continue;
                   mergedCw.push(qItem);
                   handledShows.add(String(qItem.showId || qItem.id));
                 }

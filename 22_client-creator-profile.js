@@ -1213,7 +1213,13 @@ function renderTrackPlaybackSection() {
   let blockAnon = false;
   try {
     allowedUsers = localStorage.getItem('myListAddon:scrobbleAllowedUsers') || '';
-    filterUsers = localStorage.getItem('myListAddon:scrobbleFilterUsers') === '1' || (allowedUsers.trim().length > 0);
+    // The saved choice wins. Having names in the list used to switch the box
+    // on regardless, so unticking it with names saved came straight back on
+    // the next redraw (every sync load redraws this section) -- while the
+    // server, which reads the saved choice, had filtering off. The names only
+    // decide it for a browser that has never had a choice saved.
+    const filterChoice = localStorage.getItem('myListAddon:scrobbleFilterUsers');
+    filterUsers = filterChoice === '1' || (filterChoice === null && allowedUsers.trim().length > 0);
     blockAnon = localStorage.getItem('myListAddon:scrobbleBlockAnonymous') === '1';
   } catch (e) {}
 
@@ -2801,6 +2807,11 @@ async function pushTrackingSync(opts) {
         // rather than updatedAt (a scrobble moves updatedAt and must not
         // start a conflict).
         expectedClientVersion: window._serverTrackingClientVersion,
+        // The tracking record this browser last loaded. An intentional
+        // removal still keeps a play scrobbled since then -- this browser
+        // never had it, so it cannot be what was removed. See
+        // scrobblePlaysUnseenBy (56_scrobble-queue.js).
+        baseTrackingUpdatedAt: window._serverTrackingUpdatedAt,
       }),
     });
     if (res && res.status === 409) {
