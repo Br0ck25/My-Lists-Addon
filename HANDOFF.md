@@ -13,11 +13,11 @@
 ## Current Status
 - **Last Updated**: 2026-09-28
 - **Last Active AI**: Claude Code (Opus 5.5)
-- **Active Task**: Phase 3b (lists, likes, channels). P3b-1 (migration `0016_lists_v2.sql`) is written and tested, waiting for the owner to apply it. P3b-2 (the media resolver, `29_media.js`) is done. P3b-3 (the list backfill, `30_lists-backfill.js`) is written and tested; the owner runs it from `/admin` after deploying. P3b-4 (the list API, `31_lists-api.js`) and P3b-5 (the likes API, `32_likes-api.js`), both behind `FF_V2_LISTS_API`, are done. P3b-6 (the directory and search on v2, `33_lists-directory.js`, behind `FF_V2_LISTS_READ`) is done. P3b-7 (the legacy list routes over v2 and the rest of the read switch, `34_lists-v2-bridge.js`) is done. P1-C5 (imported lists losing their sync settings) is fixed in this PR, at the owner's request. P3b-8 (shared channels as rows plus R2 pools, `35_channels-v2.js`) is done. P3b-9 (stopping the legacy writes, behind the one-way flag `FF_V2_LISTS_ONLY`) is done in code. **All of Phase 3b is written**; the PR waits for the owner's review and deploy.
-- **Task State**: All tests passing (1,495 passed, 0 failed, 1 skipped: the opt-in network test), both as they are and with `MLA_TEST_V2_LISTS_READ=1` (every test with lists read from v2). `verify.sh` checks pass. CI on GitHub runs the suite both ways on Node 22.
+- **Active Task**: Phase 3c (activity). Phase 3b is merged into `main` (PR #3). **P3c-1** (the activity database: `migrations/activity/A0001_activity.sql`, `schema_activity.sql`, `36_activity-db.js`) is written and tested; creating and binding `DB_ACTIVITY` is the owner's (OPERATIONS §2, §4). **P3c-2** (`migrations/0017_show_schedule.sql` in the main database: `show_schedule`, `account_recommendations`, `title_daily_stats`) is written and tested. **P3c-3** (the history copy, `37_activity-backfill.js`, run from `/admin`) is written and tested; running it is the owner's (OPERATIONS §12). **P3c-4** (recording plays, `38_activity-scrobble.js`, from the ping and the webhook) is done. **P3c-5** (the shelves, `39_activity-shelves.js`) is done; 0017 gained `season_finale_season` and `season_episode_counts` (applied nowhere yet). **P3c-6** (`40_event-tracking.js`, behind `FF_EVENT_TRACKING`, off) is written: **all of Phase 3c is written**. The PR waits for the owner's review and deploy; turning the flags on is the owner's (OPERATIONS §12, §13).
+- **Task State**: 1,544 tests pass, 0 fail, 1 skipped, both as they are and with `MLA_TEST_V2_LISTS_READ=1`. Build, sync, syntax, scope, render and HTML checks pass.
 - **Git State**:
-  - Phase 3a is merged into `main` (PR #1 and PR #2).
-  - **All of Phase 3b goes on the branch `claude/beautiful-lamport-kx261g`**, in one draft PR into `main`. The owner deploys Phase 3b from that PR when it is done. Keep adding each P3b task to this branch as its own commit.
+  - Phases 3a and 3b are merged into `main` (PRs #1, #2, #3).
+  - **Phase 3c goes on the branch `claude/wizardly-faraday-3ptdw1`**, in one draft PR into `main`, one commit per P3c task.
 - **The owner is not a programmer.** Explain in plain words, do the git work for them, and ask before anything that changes stored user data or needs a dashboard change.
 
 ---
@@ -70,7 +70,7 @@ These are deliberate. Several are "one place" mechanisms that cover the whole Wo
    - `\n` in client code must be written `\\n`.
 3. **All numbered files share one scope.**
    - Top-level names must be unique across files.
-   - New server-only code goes in a new numbered file **after `26_`** (the next is `36_...`), never between `09_` and `24_`.
+   - New server-only code goes in a new numbered file **after `26_`** (the next is `41_...`), never between `09_` and `24_`.
    - `25_` and `26_` are the **inside** of `handleFetch` (they share `request`, `env`, `path`, `authenticateCreator`). `27_installs.js` and `28_connections.js` come after the `export default` block, at module level, so they cannot see those; pass what they need. `tests/client-harness.mjs` renders the page from the code **before** `export default`, so page rendering must never depend on `27_`+.
    - Tests that load source files into a sandbox (`loadSourceFunctions`) and call `resolveConfig` must include `27_installs.js`.
 4. **In `27_` onward, never write the words `export default` together, even in a comment.** Those files come after the Worker's real export, and `render_check.js` (a CI step) cuts the combined file at the *last* place the words appear, so the page checks break.
@@ -147,7 +147,7 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
     - `POST /api/connections/import-local` (checked with each provider, once, rate-limited), `GET /api/connections`, and `DELETE /api/connections/:provider` (which revokes at Trakt and TMDB).
     - Page changes: the `apply*Connection` helpers, `pickUpServerConnection`, `forgetServerConnection` and `importLocalConnectionsOnce` in `17_`, with hooks in `22_` and `24_`.
 
-- **Phase 3b (in progress, branch `claude/beautiful-lamport-kx261g`):**
+- **Phase 3b (merged, PR #3):**
   - **P3b-1 (Claude):** migration `migrations/0016_lists_v2.sql` adds `media`, `lists`, `list_items`, `list_slug_history`, `likes`, `channels`, `account_list_prefs`, `presets`, `lists_fts2` and `jobs`. Also in `schema.sql` and `D1_SCHEMA_MANIFEST`. Tests in `tests/lists-v2.test.mjs`; the manifest drift test in `tests/worker.test.mjs` now also catches `UNIQUE` indexes. Nothing reads or writes the tables yet, and `REQUIRED_SCHEMA_VERSION` stays `0014`.
     - Where it differs from the architecture sketch, and why, is listed under P3b-1 in `NEXT_VERSION_TASKS.md`. The ones the next tasks must know:
       - a list entry is `(list, media, season, episode)`: storyline lists hold single episodes. `extra_json` keeps item fields with no column;
@@ -194,10 +194,19 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
 
 ---
 
+- **Phase 3c (in progress, branch `claude/wizardly-faraday-3ptdw1`):**
+  - **P3c-1 (Claude):** the activity database. Its migrations live in `migrations/activity/` with an `A` prefix and its own ledger (never put one in `migrations/`: the main drift test would apply it to `DB`). `schema_activity.sql` must stay identical to running them (a test checks). Always reach the database through `activityDb(env, accountId)` (`36_`), which returns null without the binding. Details under P3c-1 in `NEXT_VERSION_TASKS.md`.
+  - **P3c-2 (Claude):** `migrations/0017_show_schedule.sql` in `DB`. Nothing uses it yet, so `REQUIRED_SCHEMA_VERSION` stays `0014`; raise it to `0017` in the change that first depends on it. The schema-status drift test in `worker.test.mjs` drops every table by name, so add new tables to its list (children before parents: foreign keys are on).
+  - **P3c-6 (Claude):** `40_event-tracking.js`. With `FF_EVENT_TRACKING`, `eventTrackingEnv` (wrapped around `env` in the fetch and scheduled handlers) serves a copied account's tracking keys from v2 and drops the scrobble queue and behind-marker keys. The D1 tracking helpers in `02_` return early for such an account. **Any new code that reads or writes `creatorsynctracking:` must go through `env.CONFIGS` (never a raw binding) so the switch applies.**
+  - **P3c-3 (Claude):** the history copy `migrate.activity`, in `37_activity-backfill.js` (module level). Same shape as P3b-3. Details and deviations under P3c-3 in `NEXT_VERSION_TASKS.md`.
+    - **It must never write the legacy store.** Everything goes through `activityBackfillEnv`; a test enforces it.
+    - `show_progress` `(S, 0)` means "nothing of season S yet" (a Continue Watching show with no history). P3c-5's shelves must read it so.
+    - A fresh account copy deletes that account's `source = 'migrated'` events and rebuilds `show_progress` and `user_media_state` from all its events. When P3c-4 starts writing live plays, they must use `activityDedupeKey` and the ten-minute window (`36_`), so a play in both stores is one row.
+
 ## Owner Actions Still Open (not code)
 1. **Deploy what is on `main`:**
    1. back up D1;
-   2. run `migrations/0014_add_schema_migrations.sql`, then `migrations/0015_accounts_sessions_installs.sql`, in the D1 console. Both only add tables and are safe to run twice. When Phase 3b is deployed, `migrations/0016_lists_v2.sql` follows them (same: only adds tables, safe to run twice);
+   2. run `migrations/0014_add_schema_migrations.sql`, then `migrations/0015_accounts_sessions_installs.sql`, in the D1 console. Both only add tables and are safe to run twice. When Phase 3b is deployed, `migrations/0016_lists_v2.sql` follows them, and `0017_show_schedule.sql` after it (same: only add tables, safe to run twice);
    3. add the `ANALYTICS` Analytics Engine binding (dataset `mylists_events`);
    4. paste `worker_entry_combined.js` and deploy;
    5. delete the retired variables `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET` and `CRON_SUBREQUEST_BUDGET`.
@@ -216,7 +225,7 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
 ---
 
 ## Next Steps for Incoming AI
-1. **Phase 3b** (lists, likes, channels) is written, P3b-1 to P3b-9, on `claude/beautiful-lamport-kx261g` (PR #3). What is left is the owner's: review, deploy, run the copy, then turn on `FF_V2_LISTS_READ` and, later, `FF_V2_LISTS_ONLY` (OPERATIONS §9 to §11). Keep the PR green while it waits. Next in the plan is **Phase 3c** (activity); read its tasks in `NEXT_VERSION_TASKS.md`. The next server file is `36_...`.
+1. **Phase 3c is written** (P3c-1 to P3c-6, PR #4). What is left is the owner's: review, deploy, create and bind the activity database, run the copy, then `FF_EVENT_TRACKING` (one-way). Next in the plan is **Phase 4** (providers); `FF_SHOW_SCHEDULE` needs the schedule job (P5-3). The next server file is `41_...`. Phase 3b's rollout (deploy, copy, `FF_V2_LISTS_READ`, later `FF_V2_LISTS_ONLY`, OPERATIONS §9 to §11) is still the owner's.
      - `FF_V2_LISTS_API` (the v2 list and likes APIs) must stay off until P3b-9: what they write is not in the legacy store, so a flag-off rollback or a copy re-run would lose it.
      - Phase 3b rewrites how lists are stored, so it needs the owner's approval before any backfill (P3b-3) touches stored data.
      - Decide which wins when an install has its own keys in `install_secrets` and its owner also has a connection. Today `install_secrets` is the only source.

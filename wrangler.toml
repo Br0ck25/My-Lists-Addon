@@ -32,6 +32,17 @@ binding = "DB"
 database_name = "my-lists-db"
 database_id = "YOUR_DATABASE_ID"
 
+# --- Activity database (Phase 3c, not needed yet) ------------------------------
+# Watch history and progress, in their own database (36_activity-db.js).
+# Create it with:  npx wrangler d1 create mylists-activity
+# then run migrations/activity/A0001_activity.sql (or schema_activity.sql) in
+# ITS console, not the main one. Nothing uses it until later 3c tasks land.
+# Later, to split it: bind DB_ACTIVITY_1 ... and set ACTIVITY_SHARD_COUNT.
+# [[d1_databases]]
+# binding = "DB_ACTIVITY"
+# database_name = "mylists-activity"
+# database_id = "YOUR_ACTIVITY_DATABASE_ID"
+
 # --- Analytics Engine (recommended) ------------------------------------------
 # One data point per request: route, status, duration, and the KV and D1
 # operations it made. The code writes to it only when the binding exists.
@@ -78,6 +89,14 @@ bucket_name = "mylists-blobs"
 # the new tables become the only store. ONE-WAY -- see docs/OPERATIONS.md
 # section 11 before setting it.
 # FF_V2_LISTS_ONLY = "1"
+# Optional, Phase 3c: accounts whose watch history has been copied are read
+# and written in the activity database (DB_ACTIVITY), and their old tracking
+# records stop being written. ONE-WAY per account -- see docs/OPERATIONS.md
+# section 13 before setting it.
+# FF_EVENT_TRACKING = "1"
+# Optional, Phase 5: Continue Watching and Airing Next worked out from the show
+# schedule instead of served as last computed. Needs the schedule job first.
+# FF_SHOW_SCHEDULE = "1"
 # Optional, 0-100: share of existing install links whose keys and tokens are
 # moved into encrypted D1 storage on first use (needs TOKEN_ENCRYPTION_KEY)
 # INSTALL_MIGRATION_PERCENT = "0"

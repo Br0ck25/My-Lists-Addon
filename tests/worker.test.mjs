@@ -8385,7 +8385,7 @@ describe("the Worker can tell an operator it is ahead of its own database", () =
     // endpoint's report IS the manifest -- and it comes through the same code
     // path an operator would use.
     const db = makeD1();
-    for (const t of ["list_items", "list_slug_history", "lists_fts2", "likes", "channels", "account_list_prefs", "presets", "jobs", "lists", "media",
+    for (const t of ["show_schedule", "account_recommendations", "title_daily_stats", "list_items", "list_slug_history", "lists_fts2", "likes", "channels", "account_list_prefs", "presets", "jobs", "lists", "media",
       "install_secrets", "installs", "provider_connections", "sessions", "account_settings", "accounts", "rate_counters", "creators", "creator_lists", "source_groups", "stats", "creator_tombstones", "published_lists", "lists_fts", "list_tombstones", "list_likes", "feedback", "scrobble_tokens", "event_meta", "watch_history", "continue_watching", "airing_next", "creator_user_lists", "creator_show_states", "creator_tracking_meta", "streaming_events", "creator_key_lookups", "schema_migrations"]) {
       db._db.exec(`DROP TABLE IF EXISTS ${t};`);
     }
