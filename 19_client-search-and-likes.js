@@ -4746,6 +4746,11 @@ function renderTitlePosterCards(items, totalCount, resEl) {
   if (typeof resolveMissingPostersInDom === 'function') {
     resolveMissingPostersInDom(resEl);
   }
+  // Title search answers with TMDB ids only, so resolveClientPoster above
+  // had no IMDB id to build a Better Poster from and every tile kept its
+  // plain TMDB artwork. Same fix as the Curated cards -- see
+  // applyBetterPostersToTmdbTiles.
+  if (typeof applyBetterPostersToTmdbTiles === 'function') applyBetterPostersToTmdbTiles(resEl);
 }
 
 async function renderDefaultCatalogSearch(force) {
