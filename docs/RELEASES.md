@@ -643,6 +643,8 @@ Paste Release 7b's file and Deploy. Nothing to undo anywhere else. The new-inter
 
 The five bugs were all on the live site before any phase went out.
 
+`bash verify.sh` passes (1,900 tests: 1,899 passed, 0 failed, 1 skipped), and so does the suite with `MLA_TEST_V2_LISTS_READ=1`. Each fix has a test that fails on the code before it.
+
 ### What changes for everyone
 
 - **Removing a recent play from Continue Watching or Watch History now sticks.**
