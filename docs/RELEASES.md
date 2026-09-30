@@ -9,7 +9,8 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Release 4** is live, and the list copy finished with 698 accounts and none failed (results under Release 4).
 - **`FF_V2_LISTS_READ`** is on (2026-09-30). The owner reports everything looks the same.
 - **Release 5** is live, and the history copy finished: 698 accounts, 45,734 plays, none fewer than before (results under Release 5). `FF_EVENT_TRACKING` stays off (see there).
-- **Release 6** is prepared and not yet live.
+- **Release 6** went live on 2026-09-30. The owner reports it looks good, and asked to carry on without waiting days between releases.
+- **Release 7** is prepared and not yet live.
 
 The owner decided to release the new version **one phase at a time, straight to the live site**, with no separate test site. Each release waits until the one before it has run cleanly for at least a day.
 
@@ -466,6 +467,84 @@ Checked against the ported public-site code:
    - edit a list, and the change reaches the apps.
 4. **Watch for 30 minutes**: Metrics and Logs.
 
+**Live since 2026-09-30.**
+
 ### Rollback
 
 Paste Release 5's file and Deploy. Nothing to undo anywhere else.
+
+---
+
+## Release 7: Phase 5 (background jobs), plus two follow-ups
+
+**Branch point:** `fd8f59c` on `claude/elegant-ride-o7m8fh`:
+- `e1e9ff9` merges `main` at `be96c22` (the end of Phase 5, PR #6) into Release 6, with no source conflicts;
+- `fd8f59c` adds the two follow-ups below.
+
+`bash verify.sh` passes (1,722 tests passed, 0 failed, 1 skipped), and so does the suite with `MLA_TEST_V2_LISTS_READ=1`.
+
+### The two follow-ups (new in this release, not on `main`)
+
+- **`media.retry`** (`55_media-retry.js`), an hourly periodic job. It asks TMDB again about 200 titles the copies could not place (Releases 4 and 5 left 13,631 and 7,373).
+  - A title TMDB still does not know waits a week before the next try (`retryUnresolvedMedia`'s new `retryAfterMs`).
+  - Nothing called `retryUnresolvedMedia` before.
+  - Covered by `tests/media-retry.test.mjs`.
+- **The schema ledger ignores the activity database's versions:** `readSchemaLedger` reads `MAX(version)` over numbered versions only. That is the Release 5 slip: `A0001` in the main database would have hidden a main database that is behind. Covered by a test in `worker.test.mjs`.
+
+Both tests fail with their fix taken out.
+
+### What changes for everyone
+
+- **Before the queue is set up** (step 4), a cron tick does the cron's work itself, exactly as before. It also runs the new periodic jobs that are due, a few a tick:
+  - `show.watchers` and `show.refresh`, which keep the show schedule current;
+  - `shelf.shadow`, which only compares;
+  - `recs.build` and `rollup.daily`, which only write tables nothing reads yet;
+  - `token.refresh`, which does nothing without stored connections;
+  - `chart.refresh` and `channel.presets`;
+  - `media.retry`.
+
+  They spend some TMDB and TVmaze calls in the background. Nothing a visitor sees depends on them yet.
+- **After the queue is set up**, the same work runs as jobs on the queue, and a tick only hands them out.
+  - A job the queue does not pick up within 10 minutes is run by the tick itself, so a broken queue slows the work but never stops it.
+  - **Better Posters** (the `BLOBS` bucket is bound since Release 4) move to R2: they are fetched by `poster.fetch` jobs, and no request waits on btttr.cc. Posters already in KV keep being served and move over as they are used.
+- **Imports through `/api/imports`, `DELETE /api/me`, and connections** need a session, so they stay dormant while `FF_SESSIONS` is off.
+- **A personal row whose provider connection needs signing in again** shows a "Reconnect" tile instead of an empty row. That can only happen once connections are kept on the server.
+
+### What stays off
+
+`FF_MATERIALIZER` (P5-11): one build of a home screen per hour for installs with "Remove duplicate items across lists". It is reversible; turn it on later, on its own. The `FF_SHOW_SCHEDULE` shelves need `shelf.shadow`'s week of comparisons first.
+
+### Steps, in order
+
+1. **Keep Release 6's file** (`release-6-NEW-worker.js`) as the rollback file.
+2. **Deploy:** Workers & Pages → the My Lists Worker → **Edit code** → select all → paste Release 7's `worker_entry_combined.js` → **Deploy**. There is no database step.
+3. **Smoke test:**
+   - the site loads;
+   - in Stremio or Nuvio: a chart row, a custom list, Continue Watching and Airing Next load;
+   - Better Posters show where they are on;
+   - edit a list, and the change reaches the apps.
+4. **Set up the queue** (`docs/OPERATIONS.md` §18):
+   1. Storage & Databases → **Queues** → **Create queue** → `mylists-jobs`.
+   2. Create a second queue, `mylists-jobs-dlq`.
+   3. Open `mylists-jobs` → **Settings** → **Consumers** → **Add consumer**:
+      - consumer: the My Lists Worker;
+      - batch size `25`;
+      - max retries `5`;
+      - max wait time `5` seconds;
+      - dead letter queue `mylists-jobs-dlq`.
+
+      Leave `mylists-jobs-dlq` without a consumer.
+   4. The My Lists Worker → Settings → Bindings → **Add** → **Queue**, variable name `JOBS`, queue `mylists-jobs`.
+5. **Check it:**
+   - `/admin` → Maintenance → **Background jobs queue** should say *bound*;
+   - press **Send a test job**, and within a few seconds it should say *Round trip works*. If it says the job was not picked up, step 4.3 is missing or names another Worker.
+6. **After about 15 minutes:** press **Check jobs**. Every job should show a recent last run, and none should keep failing.
+7. **Optional:** Settings → Triggers → Cron: `*/5 * * * *` (the current `*/6` works the same).
+8. **Watch for 30 minutes**: Metrics and Logs, including **Queues → `mylists-jobs` → Metrics** (the backlog should not keep growing). `[Jobs] <type> failed` lines in the logs say which job.
+
+### Rollback
+
+1. Delete the `JOBS` binding **first**, so jobs do not pile up with no consumer.
+2. Paste Release 6's file and Deploy.
+
+The queues can stay; jobs already waiting expire after 4 days.
