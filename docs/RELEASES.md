@@ -8,7 +8,8 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Release 3** went live on 2026-09-29. Migrate Accounts reported: *695 accounts in table (695 D1, 658 KV, union 695). Reconciled ✓*.
 - **Release 4** is live, and the list copy finished with 698 accounts and none failed (results under Release 4).
 - **`FF_V2_LISTS_READ`** is on (2026-09-30). The owner reports everything looks the same.
-- **Release 5** is prepared and not yet live.
+- **Release 5** is live, and the history copy finished: 698 accounts, 45,734 plays, none fewer than before (results under Release 5). `FF_EVENT_TRACKING` stays off (see there).
+- **Release 6** is being prepared.
 
 The owner decided to release the new version **one phase at a time, straight to the live site**, with no separate test site. Each release waits until the one before it has run cleanly for at least a day.
 
@@ -391,3 +392,40 @@ Not a code change; a setting. **It can be turned off again at any time without l
 ### Rollback
 
 Paste Release 4's file and Deploy. Leave migration 0017, the activity database, its binding and the copy in place: the older code does not know they are there.
+
+### Live: what happened, and the history copy's results
+
+**A slip, fixed:** `A0001_activity.sql` was first run in the **main** database's console by mistake, then correctly in `mylists-activity`. In the main database it created three empty tables (`watch_events`, `show_progress`, `user_media_state`) that nothing there reads, and it added `A0001` to its `schema_migrations` ledger.
+
+The ledger row was the part that mattered. `readSchemaLedger` takes `MAX(version)`, and `'A0001'` sorts after every `'00NN'`. So the write gate would never again have noticed a main database that is behind.
+
+The owner was given the cleanup, to run in `my-lists-db`'s Console:
+- check the three tables are empty;
+- `DELETE FROM schema_migrations WHERE version = 'A0001'`;
+- drop the three tables;
+- check the ledger ends at `0017`.
+
+**Follow-up for a later release:** make `readSchemaLedger` ignore non-numeric versions (`WHERE version GLOB '[0-9]*'`), so the two ledgers can never be confused this way again.
+
+**The copy's results**, as reported by the owner:
+
+> Phase: done. Accounts: 698 done, 0 in progress, 0 waiting, 0 failed.
+> History: 45734 entries in KV, 45734 in D1, 1061 in the scrobble queue, 45734 different entries in all. 45734 plays copied; 0 were the same play twice (within ten minutes), 0 had no usable id. 7373 titles TMDB could not place yet (kept, tried again later).
+> Shows: 1566 with progress, 516 finished, 95 hidden from Continue Watching, 5 hidden from Airing Next, 24 storyline or movie suggestions kept, 0 in Continue Watching with no history. Movies watched: 12112.
+> Plays now in the activity database: 45734. Accounts with fewer plays than their old history: 0.
+
+What it means:
+- **Everything was copied.** KV and D1 agreed exactly, and the scrobble queue held nothing they did not.
+- **The 7,373 titles TMDB could not place** are the same known gap as the list copy's stubs: nothing calls `retryUnresolvedMedia` yet (see Release 4).
+
+### Why `FF_EVENT_TRACKING` waits
+
+It is one-way for every account it covers. `docs/OPERATIONS.md` §13 lists two differences visitors would see:
+- **Watch History would show an episode as "Episode N" with the show's poster**, where today it has the episode's own title and still;
+- **the website's list would be capped at the latest 5,000 plays.**
+
+Continue Watching and Airing Next would stay as last worked out until `FF_SHOW_SCHEDULE`, which needs the Phase 5 jobs.
+
+So it waits at least until Release 7 (Phase 5) is live and its shelf comparison (`shelf.shadow`) has run for a week. At that point, decide whether the "Episode N" difference should be fixed first.
+
+Nothing is lost meanwhile: every copied account's new plays are recorded in the activity database as well (P3c-4).
