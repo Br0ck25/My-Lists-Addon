@@ -548,3 +548,21 @@ Both tests fail with their fix taken out.
 2. Paste Release 6's file and Deploy.
 
 The queues can stay; jobs already waiting expire after 4 days.
+
+### Release 7b: the test-job button fixed
+
+**What happened:** with Release 7 deployed to the Worker (named `wako`), the queues created, `wako` as the consumer and `JOBS` bound, **Send a test job** said *Sent, but not picked up within a minute*.
+
+**The cause was the button, not the setup:**
+- the consumer wrote its answer to KV in another data center;
+- the admin page's first read of the not-yet-written key was cached there as missing for up to a minute, which is the page's whole wait.
+
+**Commit `0d4e20f`:** the answer is now written to D1's `jobs` table as well (type `jobs.ping`), and read from there first. Tests in `tests/jobs.test.mjs`.
+
+**Steps:**
+1. Paste `release-7b-NEW-worker.js` and Deploy.
+2. Press **Send a test job** again. It should say *Round trip works*.
+3. Whatever the button says, two other checks show whether the queue works:
+   - **Queues → `mylists-jobs` → Metrics** shows messages delivered and acknowledged, with no growing backlog;
+   - about 15 minutes after the binding, `/admin` → **Check jobs** shows recent runs.
+4. A Worker log line `[Jobs] <type> was sent to the queue and not picked up within 10 minutes; running it here` means the consumer is not receiving.
