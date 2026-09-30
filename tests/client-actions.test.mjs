@@ -169,6 +169,50 @@ describe("P6-8: controls name their action instead of carrying one", () => {
       "without a stop the card's own action runs too, the order two nested inline handlers ran in");
   });
 
+  // A browser runs document's capture listeners, then the listeners on the
+  // elements from the target up (a card's own click listener among them),
+  // then document's bubble listeners -- stopping wherever stopPropagation was
+  // called. The red x on a list card's poster (data-act-stop) sits inside the
+  // poster strip, whose click opens the list from a listener on
+  // #creatorDashboard. Handled only at document's bubble phase, the click
+  // reached that listener first: the x opened See all instead of removing.
+  function propagate(client, ev, cardListener) {
+    client.call("appActCapture", ev);
+    if (!ev.stopped) cardListener(ev);
+    if (!ev.stopped && !ev.__appActHandled) client.call("appActDispatch", ev);
+  }
+
+  it("runs a stop control before the card around it hears the click", () => {
+    const client = loadClient();
+    const calls = [];
+    client.set("__p68Remove", function () { calls.push("remove"); });
+    const strip = control({});
+    const button = control({ "data-act": "__p68Remove", "data-act-stop": "" });
+    button.parentNode = strip;
+    const ev = clickEvent(button, { stopImmediatePropagation() {} });
+    propagate(client, ev, () => calls.push("open the list"));
+    assert.deepEqual(calls, ["remove"], "the x removes, and the card never opens the list");
+    assert.equal(ev.stopped, true);
+  });
+
+  it("leaves a control without a stop to the bubble phase, card first", () => {
+    const client = loadClient();
+    const calls = [];
+    client.set("__p68Plain", function () { calls.push("plain"); });
+    const button = control({ "data-act": "__p68Plain" });
+    const ev = clickEvent(button);
+    assert.equal(client.call("appActCapture", ev), false);
+    propagate(client, ev, () => calls.push("card"));
+    assert.deepEqual(calls, ["card", "plain"], "the order it has had since P6-8");
+  });
+
+  it("does not capture an event the stop control does not answer", () => {
+    const client = loadClient();
+    const button = control({ "data-act": "__p68Remove", "data-act-stop": "" });
+    assert.equal(client.call("appActCapture", clickEvent(button, { type: "keydown", key: "Enter" })), false);
+    assert.equal(client.call("appActStopControl", clickEvent(button)), button);
+  });
+
   it("gates a keydown to the key the call site asked for, and honours data-act-then", () => {
     const client = loadClient();
     const calls = [];

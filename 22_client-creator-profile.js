@@ -1008,6 +1008,7 @@ function renderWatchlistPreferencesSection() {
 }
 
 function onRemoveWatchedFromWatchlistToggle(cb) {
+  markTrackingSettingsEdited();
   try {
     localStorage.setItem('myListAddon:removeWatchedFromWatchlist', cb.checked ? '1' : '0');
   } catch (e) {}
@@ -1358,6 +1359,7 @@ async function regenerateScrobbleWebhookUrl() {
 }
 
 function onScrobbleFilterUsersToggle(cb) {
+  markTrackingSettingsEdited();
   try { localStorage.setItem('myListAddon:scrobbleFilterUsers', cb.checked ? '1' : '0'); } catch (e) {}
   const details = document.getElementById('scrobbleFilterDetails');
   if (details) details.style.display = cb.checked ? '' : 'none';
@@ -1368,6 +1370,7 @@ function onScrobbleFilterUsersToggle(cb) {
 }
 
 function onScrobbleAllowedUsersChange() {
+  markTrackingSettingsEdited();
   try {
     const val = (document.getElementById('scrobbleAllowedUsersInput') || {}).value || '';
     localStorage.setItem('myListAddon:scrobbleAllowedUsers', val);
@@ -1384,6 +1387,7 @@ function onScrobbleAllowedUsersChange() {
 }
 
 function onScrobbleBlockAnonChange(cb) {
+  markTrackingSettingsEdited();
   try { localStorage.setItem('myListAddon:scrobbleBlockAnonymous', cb.checked ? '1' : '0'); } catch (e) {}
   if (typeof pushTrackingSync === 'function') pushTrackingSync();
 }
@@ -1402,6 +1406,7 @@ function syncScrobbleUserCheckboxes() {
 }
 
 function onScrobbleUserCheckboxToggle() {
+  markTrackingSettingsEdited();
   try {
     const currentAllowed = (localStorage.getItem('myListAddon:scrobbleAllowedUsers') || '')
       .split(',')
@@ -1501,9 +1506,13 @@ function toggleForwardScrobbles(enabled) {
 }
 
 function onTrackPlaybackToggle(cb) {
+  markTrackingSettingsEdited();
   try { localStorage.setItem('myListAddon:trackPlayback', cb.checked ? '1' : '0'); } catch (e) {}
   if (typeof saveState === 'function') saveState();
   if (typeof scheduleCreatorSyncSave === 'function') scheduleCreatorSyncSave();
+  // The account keeps this setting in its tracking record, which only the
+  // tracking push writes -- without it, the change waited for an unrelated one.
+  if (typeof pushTrackingSync === 'function') pushTrackingSync();
   if (cb.checked) {
     refreshTrackPlaybackStatus();
   }
@@ -2223,6 +2232,46 @@ function creatorSyncGateOpen() {
   return _creatorSyncLoadedFor === activeCreator.creatorName;
 }
 
+// --- Playback settings changed here and not yet on the account ----------------
+//
+// Track playback, Remove watched titles from the Watchlist and the three media
+// server filter settings travel with the tracking push, and every load writes
+// the account's copy of them back over this browser's. So a setting changed
+// here that the account did not have yet was put back by the next load: one
+// that crossed a push still in flight, or -- the common one -- the load a
+// refused push makes before it retries (409: another device or tab saved
+// since). The retry then sent the old value up. Ticking "Enable media server
+// user filtering" came back unticked after a refresh, and the server went on
+// recording every Plex play.
+//
+// So a change is marked, for this account; a load leaves the settings alone
+// while the mark is there (and sends them up again); and the push that carried
+// them clears it once the account has them.
+const TRACKING_SETTINGS_EDITED_KEY = 'myListAddon:trackingSettingsEditedAt';
+
+function markTrackingSettingsEdited() {
+  const who = (typeof activeCreator !== 'undefined' && activeCreator) ? activeCreator.creatorName : '';
+  if (!who) return;
+  try { localStorage.setItem(TRACKING_SETTINGS_EDITED_KEY, JSON.stringify({ at: Date.now(), who: who })); } catch (e) {}
+}
+
+// The mark's time for the signed-in account, or 0 (none, or another account's).
+function trackingSettingsEditedAt() {
+  const who = (typeof activeCreator !== 'undefined' && activeCreator) ? activeCreator.creatorName : '';
+  try {
+    const mark = JSON.parse(localStorage.getItem(TRACKING_SETTINGS_EDITED_KEY) || 'null');
+    return (mark && who && mark.who === who) ? (Number(mark.at) || 0) : 0;
+  } catch (e) {
+    return 0;
+  }
+}
+
+// Only the mark a push carried: a change made while it was in flight keeps its own.
+function clearTrackingSettingsEdited(at) {
+  if (!at || trackingSettingsEditedAt() !== at) return;
+  try { localStorage.removeItem(TRACKING_SETTINGS_EDITED_KEY); } catch (e) {}
+}
+
 // --- The provider credentials a push may speak for ---------------------------
 //
 // The gate above opens on a timer when the first load never lands, and that
@@ -2756,6 +2805,9 @@ async function pushTrackingSync(opts) {
     // flight must leave the list looking dirty on the next load, or that
     // edit would be judged already-agreed and dropped. See
     // recordTrackingLocalBaseline.
+    // Read before the request for the same reason: a setting changed while it
+    // is in flight keeps its mark (clearTrackingSettingsEdited).
+    const sentSettingsAt = trackingSettingsEditedAt();
     const sentStamps = {
       'watch-history': Number((localMap['watch-history'] || {}).updatedAt) || 0,
       'continue-watching': Number((localMap['continue-watching'] || {}).updatedAt) || 0,
@@ -2846,6 +2898,7 @@ async function pushTrackingSync(opts) {
       // load can tell a genuine local edit from a stale copy of something
       // removed elsewhere.
       recordTrackingLocalBaseline(sentStamps);
+      clearTrackingSettingsEdited(sentSettingsAt);
     }
     window._lastTrackingSyncPushedAt = Date.now();
     window._lastTrackingSig = sig;
@@ -3131,25 +3184,32 @@ async function loadCreatorSync(opts) {
     }
     
     applyCollapsedPanelsState(synced.collapsedPanels);
-    if (typeof synced.trackPlayback === 'boolean') {
-      try { localStorage.setItem('myListAddon:trackPlayback', synced.trackPlayback ? '1' : '0'); } catch (e) {}
-      if (typeof renderTrackPlaybackSection === 'function') renderTrackPlaybackSection();
-    }
-    if (typeof synced.removeWatchedFromWatchlist === 'boolean') {
-      try { localStorage.setItem('myListAddon:removeWatchedFromWatchlist', synced.removeWatchedFromWatchlist ? '1' : '0'); } catch (e) {}
-      if (typeof renderWatchlistPreferencesSection === 'function') renderWatchlistPreferencesSection();
-    }
-    if (typeof synced.scrobbleFilterUsers === 'boolean') {
-      try { localStorage.setItem('myListAddon:scrobbleFilterUsers', synced.scrobbleFilterUsers ? '1' : '0'); } catch (e) {}
-    }
-    if (typeof synced.scrobbleAllowedUsers === 'string') {
-      try { localStorage.setItem('myListAddon:scrobbleAllowedUsers', synced.scrobbleAllowedUsers); } catch (e) {}
-    }
-    if (typeof synced.scrobbleBlockAnonymous === 'boolean') {
-      try { localStorage.setItem('myListAddon:scrobbleBlockAnonymous', synced.scrobbleBlockAnonymous ? '1' : '0'); } catch (e) {}
-    }
-    if (synced.scrobbleFilterUsers !== undefined || synced.scrobbleAllowedUsers !== undefined || synced.scrobbleBlockAnonymous !== undefined) {
-      if (typeof renderTrackPlaybackSection === 'function') renderTrackPlaybackSection();
+    // Settings changed here that the account has not accepted yet stay as they
+    // are, and go up again -- see markTrackingSettingsEdited.
+    const keepLocalTrackingSettings = trackingSettingsEditedAt() > 0;
+    if (keepLocalTrackingSettings) {
+      if (typeof scheduleTrackingSync === 'function') scheduleTrackingSync();
+    } else {
+      if (typeof synced.trackPlayback === 'boolean') {
+        try { localStorage.setItem('myListAddon:trackPlayback', synced.trackPlayback ? '1' : '0'); } catch (e) {}
+        if (typeof renderTrackPlaybackSection === 'function') renderTrackPlaybackSection();
+      }
+      if (typeof synced.removeWatchedFromWatchlist === 'boolean') {
+        try { localStorage.setItem('myListAddon:removeWatchedFromWatchlist', synced.removeWatchedFromWatchlist ? '1' : '0'); } catch (e) {}
+        if (typeof renderWatchlistPreferencesSection === 'function') renderWatchlistPreferencesSection();
+      }
+      if (typeof synced.scrobbleFilterUsers === 'boolean') {
+        try { localStorage.setItem('myListAddon:scrobbleFilterUsers', synced.scrobbleFilterUsers ? '1' : '0'); } catch (e) {}
+      }
+      if (typeof synced.scrobbleAllowedUsers === 'string') {
+        try { localStorage.setItem('myListAddon:scrobbleAllowedUsers', synced.scrobbleAllowedUsers); } catch (e) {}
+      }
+      if (typeof synced.scrobbleBlockAnonymous === 'boolean') {
+        try { localStorage.setItem('myListAddon:scrobbleBlockAnonymous', synced.scrobbleBlockAnonymous ? '1' : '0'); } catch (e) {}
+      }
+      if (synced.scrobbleFilterUsers !== undefined || synced.scrobbleAllowedUsers !== undefined || synced.scrobbleBlockAnonymous !== undefined) {
+        if (typeof renderTrackPlaybackSection === 'function') renderTrackPlaybackSection();
+      }
     }
     if (Array.isArray(synced.likedLists)) {
       try {

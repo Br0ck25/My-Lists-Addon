@@ -12,7 +12,8 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Release 6** went live on 2026-09-30. The owner reports it looks good, and asked to carry on without waiting days between releases.
 - **Release 7** (as 7b) went live on 2026-09-30, with the queue set up: *Round trip works: picked up after 6.3 s*, and every periodic job running with none failing (under Release 7).
 - **Release 8** went live on 2026-09-30. The owner reports everything working, and asked for changes to the new interface and for five older bugs to be fixed: that is Release 9.
-- **Release 9** is prepared and not yet live.
+- **Release 9** went live on 2026-09-30. The owner found two problems, fixed in Release 9b (prepared, not yet live): the red x on a list card's poster opened the list instead of removing the title, and ticking *Enable media server user filtering* did not stick.
+- **Next:** sign-in sessions (`FF_SESSIONS`), with the two secrets they use. Steps under Release 9b.
 
 The owner decided to release the new version **one phase at a time, straight to the live site**, with no separate test site. Each release waits until the one before it has run cleanly for at least a day.
 
@@ -696,3 +697,55 @@ The classic page is unchanged, apart from the five fixes.
 ### Rollback
 
 Paste Release 8's file and Deploy. Nothing to undo anywhere else: the older code simply ignores the new stamp on the backup copy, and goes back to merging it in every time.
+
+### Release 9b: two fixes the owner found on Release 9
+
+- **The red x on a poster in Your Custom Lists** (Watch History, Continue Watching, Watchlist, Airing Next) opened the list's See all page instead of removing the title. A Release 8 regression:
+  - Release 8 moved every button onto one listener for the whole page, which hears a click last.
+  - The strip of posters opens the list with a listener of its own, which heard the click first.
+  - The x used to say "don't pass this click on" from the button itself, in time. Buttons marked that way (`data-act-stop`) now act before anything around them (`appActCapture`, 16_), as they did before Release 8.
+- **Ticking *Enable media server user filtering* did not stick**, and Plex plays kept being recorded.
+  - The setting goes up with the Watch History save. When the account had been saved from another device or tab since this page last loaded, that save is refused as a conflict; the page reloads the account and tries again.
+  - That reload wrote the account's old setting back over the one just ticked, so the retry sent "off".
+  - A changed playback setting (this one, the allowed names, blocking unnamed plays, Track playback, removing watched titles from the Watchlist) is now kept until the account has it (`markTrackingSettingsEdited`, 22_).
+  - Track playback also goes up straight away now; it used to wait for the next unrelated save.
+
+`bash verify.sh` passes, and so does the suite with `MLA_TEST_V2_LISTS_READ=1`. Both fixes have a test that fails on Release 9.
+
+**Steps:**
+1. Keep Release 9's file (`release-9-NEW-worker.js`) as the rollback file.
+2. Deploy Release 9b's file (`release-9b-NEW-worker.js`) the usual way. No database step, no binding.
+3. Check:
+   - Your Custom Lists: the red x on a poster removes it, and the page stays where it is.
+   - Settings: tick *Enable media server user filtering*, pick your Plex user, refresh: still ticked. A Plex play by a user you did not pick is not recorded. (With the box ticked and nobody picked, no Plex play is recorded at all.)
+
+### Then: sign-in sessions (`FF_SESSIONS`)
+
+What it does:
+- Signing in (or any save) also gives the browser a sign-in cookie. The classic page goes on sending the Creator Key as it does now.
+- The new interface's Settings cards (account, devices, connections, install links) and **Lists → Import → Import a file** start working. Until now they said you were not signed in.
+- With `TOKEN_ENCRYPTION_KEY` set, a signed-in person's connected accounts (Trakt, Simkl, MDBList, TMDB) are kept on the server, encrypted; without it they stay in the browser, as before.
+- With `LOOKUP_PEPPER` set, *Forgot username* also uses the safer lookup (it falls back to the old one).
+
+Both secrets are random values made once and **never changed or deleted** afterwards. Keep a copy of each outside Cloudflare (a password manager).
+
+**Steps:**
+1. **Make the two values** in your own browser (nothing is sent anywhere):
+   - open any page, press F12 (or right-click → Inspect), and open the **Console**;
+   - paste this line and press Enter:
+     `'k1:' + btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))))`
+   - copy the answer (it starts with `k1:`, without the quote marks). That is `TOKEN_ENCRYPTION_KEY`; save it in your password manager;
+   - press the up arrow, delete the `'k1:' + ` at the start, press Enter. That answer is `LOOKUP_PEPPER`; save it too.
+2. **Add them:** Worker **wako** → **Settings** → **Variables and Secrets** → **+ Add**:
+   - Type **Secret**, name `TOKEN_ENCRYPTION_KEY`, value the `k1:...` answer;
+   - Type **Secret**, name `LOOKUP_PEPPER`, value the second answer;
+   - Type **Text**, name `FF_SESSIONS`, value `1`;
+   - **Deploy**.
+3. **Check:**
+   - classic page: sign in, change something, refresh: it is still there;
+   - `/?ff_new_ui=1` → Settings: the account card shows your account, and Devices lists this browser;
+   - Lists → Import → Import a file: try a small Letterboxd or IMDb export;
+   - `/admin` → the install-link migration panel → **Check progress** no longer says `TOKEN_ENCRYPTION_KEY` is missing. It still moves nothing, because `INSTALL_MIGRATION_PERCENT` stays unset.
+4. **Watch for 30 minutes**: Metrics and Logs.
+
+**To undo:** delete `FF_SESSIONS` (or set it to `0`) and deploy. The two secrets stay: removing `TOKEN_ENCRYPTION_KEY` would lose any connection saved with it.

@@ -591,6 +591,47 @@ function appActRunOne(el, ev) {
   return true;
 }
 
+// The control an event stops at: the first data-act-stop element on the walk
+// appActDispatch takes, when it answers this event. null when the walk has no
+// stop, or its stop does not answer (a stop that answers a click does not stop
+// a keydown).
+function appActStopControl(ev) {
+  let el = appActElement((ev && ev.target) || null);
+  while (el) {
+    if (el.hasAttribute('data-act-stop')) {
+      if (!appActAnswers(el, ev)) return null;
+      if (el.hasAttribute('data-act-keys') && String(ev.key || '') !== (el.getAttribute('data-act-keys') || '')) return null;
+      return el;
+    }
+    el = appActElement(el.parentNode || el.parentElement || null);
+  }
+  return null;
+}
+
+// A control marked data-act-stop runs in the CAPTURE phase, before any
+// listener on the elements around it.
+//
+// Its inline onclick="event.stopPropagation(); ..." ran at the control itself,
+// so a card's own click listener never saw the click. Delegated to document's
+// bubble phase, the click reached the card first: the red x on a Continue
+// Watching, Watch History, Watchlist or Airing Next poster opened the list
+// (the poster strip is .localListViewTrigger, with its listener on
+// #creatorDashboard) instead of removing the title. Capturing at document runs
+// the control before the event goes down to the card, and its stop keeps it
+// from getting there at all -- what the inline call did.
+//
+// Every data-act-stop element is a small control (a remove button, a drag
+// handle, a count overlay, a poster wrapper that opens details), so nothing is
+// kept from a listener of its own children. The bubble listener skips an event
+// handled here, so no action runs twice.
+function appActCapture(ev) {
+  if (!ev || ev.__appActHandled) return false;
+  if (!appActStopControl(ev)) return false;
+  ev.__appActHandled = true;
+  appActDispatch(ev);
+  return true;
+}
+
 function appActDispatch(ev) {
   if (!ev) return false;
   let el = appActElement(ev.target || null);
@@ -610,8 +651,12 @@ function appActDispatch(ev) {
 function initDelegatedActions() {
   if (window._appActBound) return false;
   window._appActBound = true;
-  const handler = function (ev) { appActDispatch(ev); };
+  const handler = function (ev) {
+    if (ev && ev.__appActHandled) return;
+    appActDispatch(ev);
+  };
   for (let i = 0; i < APP_ACT_EVENT_TYPES.length; i++) {
+    document.addEventListener(APP_ACT_EVENT_TYPES[i], appActCapture, true);
     document.addEventListener(APP_ACT_EVENT_TYPES[i], handler, false);
   }
   // A broken poster fires an error event that does not bubble, so the
