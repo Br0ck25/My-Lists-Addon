@@ -2751,6 +2751,20 @@ describe("schema gate: a Worker ahead of its database refuses writes, not reads"
     assert.deepEqual({ ...r.body.ledger }, { version: "0013", required: "0014", readable: true, behind: true });
   });
 
+  it("is not fooled by the activity database's A0001 run in the main database", async () => {
+    // It happened on the live site (docs/RELEASES.md, Release 5): 'A0001'
+    // sorts after every 00NN version, so MAX(version) read it as the newest.
+    const w = await freshIsolate();
+    const db = makeD1();
+    db._db.exec("DELETE FROM schema_migrations WHERE version >= '0014'");
+    db._db.exec("INSERT INTO schema_migrations (version, applied_at) VALUES ('A0001', 1)");
+    const env = makeEnv({ CONFIGS: makeKv(), DB: db });
+    assert.equal((await create(w, env, "gatedagain")).status, 503, "0013 is still the main database's own version");
+    const r = await call(env, "/admin/api/schema-status", { cookie: await adminCookie(env) });
+    assert.equal(r.body.ledger.version, "0013");
+    assert.equal(r.body.ledger.behind, true);
+  });
+
   it("lets writes through on an up-to-date database", async () => {
     const w = await freshIsolate();
     const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });

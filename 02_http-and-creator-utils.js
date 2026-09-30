@@ -157,7 +157,11 @@ async function readSchemaLedger(env) {
   let version = null;
   let readable = false;
   try {
-    const row = await env.DB.prepare("SELECT MAX(version) AS v FROM schema_migrations").first();
+    // Numbered versions only. The activity database keeps its own ledger with
+    // versions A0001, ...; one of those run in the main database by mistake
+    // (it happened, 2026-09-30) sorts after every 00NN version and would
+    // leave this gate unable ever to see the main database fall behind.
+    const row = await env.DB.prepare("SELECT MAX(version) AS v FROM schema_migrations WHERE version GLOB '[0-9]*'").first();
     version = row && row.v ? String(row.v) : null;
     readable = true;
   } catch (e) {

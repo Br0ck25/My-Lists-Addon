@@ -436,12 +436,18 @@ async function resolveMedia(env, input, opts = {}) {
 // hold up the rest. A stub whose TMDB id turns out to belong to another row
 // stays a stub: merging two rows (and the list entries on them) is left to a
 // later task.
+//
+// `retryAfterMs`: a stub already tried again (updated_at moved past
+// created_at) waits this long before the next try, so titles TMDB will never
+// know are not asked about on every run. One never tried again is due at
+// once. 0 (the default) asks about any stub.
 async function retryUnresolvedMedia(env, opts = {}) {
   if (!env || !env.DB) throw new Error("retryUnresolvedMedia: no D1 database is bound");
   const limit = Math.max(1, Math.min(Number(opts.limit) || MEDIA_LOOKUP_CHUNK, MEDIA_TMDB_LOOKUP_MAX));
+  const retryAfterMs = Number(opts.retryAfterMs) > 0 ? Number(opts.retryAfterMs) : 0;
   const { results } = await env.DB.prepare(
-    `SELECT ${MEDIA_ROW_COLUMNS} FROM media WHERE resolved_at IS NULL ORDER BY updated_at LIMIT ?`
-  ).bind(limit).all();
+    `SELECT ${MEDIA_ROW_COLUMNS} FROM media WHERE resolved_at IS NULL AND (updated_at = created_at OR updated_at <= ?) ORDER BY updated_at LIMIT ?`
+  ).bind(Date.now() - retryAfterMs, limit).all();
   const rows = results || [];
   if (!rows.length) return { tried: 0, resolved: 0 };
   const refs = rows.map((r) => ({ kind: r.kind, imdbId: r.imdb_id, tmdbId: r.tmdb_id, id: r.alt_id, title: r.title, year: r.year }));
