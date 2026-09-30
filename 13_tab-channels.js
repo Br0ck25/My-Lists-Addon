@@ -373,6 +373,24 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
       <button type="button" class="subnav-pill" data-act="setCatalogSearchFilter" data-act-args="[&quot;tv&quot;,&quot;@self&quot;]">Shows</button>
       <button type="button" class="subnav-pill" data-act="setCatalogSearchFilter" data-act-args="[&quot;lists&quot;,&quot;@self&quot;]">Lists</button>
     </div>
+${newUi ? `    <!-- Where the lists come from, and in what order (new UI only): the chips
+         Discover's Explore section had, on Search's own list results. See
+         setCatalogListSearchChip (19_client-search-and-likes.js). -->
+    <div id="catalogListSearchChips" class="catalog-list-chips" style="display:none;">
+      <div class="catalog-list-chip-row" role="group" aria-label="Where the lists come from">
+        <button type="button" class="catalog-list-chip active" data-chip-kind="source" data-chip-value="all" aria-pressed="true" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;all&quot;]">All sources</button>
+        <button type="button" class="catalog-list-chip" data-chip-kind="source" data-chip-value="mylists" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;mylists&quot;]">My Lists community</button>
+        <button type="button" class="catalog-list-chip" data-chip-kind="source" data-chip-value="mdblist" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;mdblist&quot;]">MDBList</button>
+        <button type="button" class="catalog-list-chip" data-chip-kind="source" data-chip-value="trakt" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;trakt&quot;]">Trakt</button>
+        <button type="button" class="catalog-list-chip" data-chip-kind="source" data-chip-value="tmdb" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;tmdb&quot;]">TMDB</button>
+      </div>
+      <div class="catalog-list-chip-row" role="group" aria-label="Order">
+        <button type="button" class="catalog-list-chip" data-chip-kind="sort" data-chip-value="popular" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;sort&quot;,&quot;popular&quot;]">Most liked</button>
+        <button type="button" class="catalog-list-chip" data-chip-kind="sort" data-chip-value="new" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;sort&quot;,&quot;new&quot;]">Newest</button>
+        <button type="button" class="catalog-list-chip" data-chip-kind="sort" data-chip-value="added" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;sort&quot;,&quot;added&quot;]">Most added</button>
+      </div>
+    </div>
+` : ''}
 
     <!-- Quick Filter Dropdowns for Movies & Shows -->
     <div id="catalogSearchFiltersRow" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; align-items:center;">

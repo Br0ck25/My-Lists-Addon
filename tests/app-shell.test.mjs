@@ -48,12 +48,15 @@ describe("the new UI shell is opt-in through a cookie", () => {
       "the legacy tabs should be delegated actions");
   });
 
-  it("serves the shell -- real nav links, the install bar, NEW_UI on -- to a browser with it", async () => {
+  it("serves the shell -- real nav links, NEW_UI on -- to a browser with it", async () => {
     const env = makeEnv();
     const shell = await call(env, "/", { cookie: SHELL_COOKIE });
     assert.equal(shell.status, 200);
     assert.ok(shell.text.includes('<html lang="en" data-app-shell="1">'), "the shell marker");
-    assert.ok(shell.text.includes('id="appShellInstallBar"'), "the install bar's first paint is server-rendered");
+    // The install bar across the top was taken out at the owner's request;
+    // Catalogs' Generate Install Link and Settings' Install links card remain.
+    assert.equal(shell.text.includes('id="appShellInstallBar"'), false, "the install bar is back");
+    assert.ok(shell.text.includes('data-act="generate"'), "Catalogs keeps its install link button");
     assert.ok(shell.text.includes("const NEW_UI = true;"), "the preamble turns the shell on");
     // Every view is a real link, in both navs (desktop bar and mobile bar).
     for (const view of VIEWS) {
@@ -151,41 +154,36 @@ describe("the new UI shell is opt-in through a cookie", () => {
     }
   });
 
-  it("hands the home editor its rows instead of pre-filling them (P6-3)", async () => {
+  it("puts the duplicate toggle below the rows and pre-fills a first visit (P6-3)", async () => {
     const env = makeEnv();
     const legacy = await call(env, "/");
     const shell = await call(env, "/", { cookie: SHELL_COOKIE });
     // The editor's container exists only on a shell page, and the Settings copy
-    // of the duplicate toggle (which the editor now owns, directly above the
-    // rows it applies to) is hidden there rather than removed, so the legacy
-    // page keeps working.
+    // of the duplicate toggle (which the editor now owns) is hidden there
+    // rather than removed, so the legacy page keeps working.
     assert.equal(legacy.text.includes('id="appShellHomeEditor"'), false);
     assert.ok(shell.text.includes('id="appShellHomeEditor"'));
     assert.ok(legacy.text.includes('id="legacyDedupePanel"'));
     assert.ok(shell.text.includes('id="legacyDedupePanel"'));
+    // Below the rows it applies to, right above the Daily Randomizer.
+    const rowsAt = shell.text.indexOf('<div id="lists"></div>');
+    const editorAt = shell.text.indexOf('id="appShellHomeEditor"');
+    const randomizerAt = shell.text.indexOf("<span>Daily Randomizer</span>");
+    assert.ok(rowsAt > 0 && rowsAt < editorAt && editorAt < randomizerAt, "the toggle should sit between the rows and the Daily Randomizer");
     // The CSS that hides it is in the shared stylesheet (/app.css is lifted
     // out of the page -- 25_api-catalog-routes.js), not inline in the HTML.
     const css = await call(env, "/app.css");
     assert.ok(css.text.includes('#legacyDedupePanel { display: none; }'));
-    // A first-time visitor on the old page is still given the demo rows, the
-    // way that page has always worked; the shell is given none, and is offered
-    // the same eight rows as a button instead.
+    // A first-time visitor is given the demo rows on either page: the shell's
+    // starter-pack button went with the paste box it sat in.
     const demo = JSON.parse((legacy.text.match(/const serverEntries = \(?(\[[\s\S]*?\])\)?;/) || [])[1]);
     assert.equal(demo.length, 8, "the old page still pre-fills its demo rows");
     const shellEntries = JSON.parse((shell.text.match(/const serverEntries = \(?(\[[\s\S]*?\])\)?;/) || [])[1]);
-    assert.equal(shellEntries.length, 0, "the shell adds nothing you did not ask for");
-    // ...and both pages carry the starter pack where the shell's editor can
-    // read it: empty on the old page (which pre-fills instead) and the same
-    // eight rows on the shell page. It has to be in the per-request block --
-    // /app.js is one shared cached file, so a variant-specific value cannot
-    // live in the bundle.
-    const legacyPack = JSON.parse((legacy.text.match(/const APP_SHELL_STARTER_PACK = (\[[\s\S]*?\]);/) || [])[1]);
-    assert.equal(legacyPack.length, 0);
-    const pack = JSON.parse((shell.text.match(/const APP_SHELL_STARTER_PACK = (\[[\s\S]*?\]);/) || [])[1]);
-    assert.equal(JSON.stringify(pack), JSON.stringify(demo), "the pack is the same eight rows");
+    assert.equal(JSON.stringify(shellEntries), JSON.stringify(demo), "the shell pre-fills the same eight rows");
+    assert.equal(shell.text.includes("APP_SHELL_STARTER_PACK"), false);
   });
 
-  it("emits the Lists containers only for the shell (P6-4)", async () => {
+  it("no longer has a Your lists section; the add-titles search keeps its home (P6-4)", async () => {
     const env = makeEnv();
     const legacy = await call(env, "/");
     assert.equal(legacy.text.includes('id="appShellListsHome"'), false);
@@ -194,21 +192,30 @@ describe("the new UI shell is opt-in through a cookie", () => {
     assert.equal((await call(env, "/lists")).status, 404);
     const shell = await call(env, "/lists", { cookie: SHELL_COOKIE });
     assert.equal(shell.status, 200);
-    assert.ok(shell.text.includes('id="appShellListsHome"'), "the List cards need a home");
+    assert.equal(shell.text.includes('id="appShellListsHome"'), false, "Your lists was taken out at the owner's request");
     assert.ok(shell.text.includes('id="appShellAddTitles"'), "the inline search needs a home");
   });
 
-  it("emits the Explore section only for the shell (P6-5)", async () => {
+  it("moves Explore's source and sort chips from Discover to Search -> Lists (P6-5)", async () => {
     const env = makeEnv();
     const legacy = await call(env, "/");
     assert.equal(legacy.text.includes('id="appShellExplore"'), false);
+    assert.equal(legacy.text.includes('id="catalogListSearchChips"'), false, "the old page's Search is unchanged");
     const shell = await call(env, "/discover", { cookie: SHELL_COOKIE });
     assert.equal(shell.status, 200);
-    assert.ok(shell.text.includes('id="appShellExplore"'), "the Explore section needs a home");
-    // ...and for a browser that lands on a different view, it is not fetched at
-    // boot: the view is rendered when Discover is opened.
-    const elsewhere = await call(env, "/settings/account", { cookie: SHELL_COOKIE });
-    assert.ok(elsewhere.text.includes('id="appShellExplore"'), "the container is on the page");
+    assert.equal(shell.text.includes('id="appShellExplore"'), false, "Explore was taken off Discover");
+    assert.ok(shell.text.includes('id="catalogListSearchChips"'), "Search -> Lists carries the chips");
+    for (const label of ["All sources", "My Lists community", "MDBList", "Trakt", "TMDB", "Most liked", "Newest", "Most added"]) {
+      assert.ok(new RegExp(`class="catalog-list-chip[^"]*"[^>]*>${label}</button>`).test(shell.text), `${label} chip`);
+    }
+    const css = await call(env, "/app.css");
+    assert.ok(css.text.includes(".catalog-list-chip {"), "the smaller chips are styled");
+  });
+
+  it("takes the underline off the shell's tab links", async () => {
+    const env = makeEnv();
+    const css = await call(env, "/app.css");
+    assert.match(css.text, /html\[data-app-shell="1"\] a\.tab-btn,\s*html\[data-app-shell="1"\] a\.bottom-nav-item \{ text-decoration: none; \}/);
   });
 
   it("emits the Imports screen only for the shell (P6-6)", async () => {
@@ -220,6 +227,9 @@ describe("the new UI shell is opt-in through a cookie", () => {
     assert.ok(shell.text.includes('id="appShellImports"'), "the Imports screen needs a home");
     // ...inside the panel the old import from a link lives in, which stays.
     assert.ok(shell.text.includes('id="unifiedImportFileInput"'), "the old import panel should still be there");
+    // Import a file comes after Import list from a link (the owner's order).
+    assert.ok(shell.text.indexOf("Import list from a link") < shell.text.indexOf('id="appShellImports"'),
+      "Import a file should be below Import list from a link");
   });
 
   it("emits the Channels templates only for the shell (P6-7)", async () => {

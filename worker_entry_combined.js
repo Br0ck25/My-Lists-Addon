@@ -26992,16 +26992,6 @@ function buildAppShellHeadRoutes() {
   return out;
 }
 
-// The install bar. Its first paint is server-rendered so it is there before any
-// script runs, and its state (none / unsaved / live) is then kept by the client
-// -- the last install link this browser generated is browser state, so the
-// Worker cannot know it. See appShellRefreshInstallBar (24_).
-const APP_SHELL_INSTALL_BAR_HTML = `<div id="appShellInstallBar" class="app-shell-install-bar" data-state="none">
-    <span class="app-shell-install-dot" aria-hidden="true"></span>
-    <span class="app-shell-install-text" id="appShellInstallText">Not installed yet</span>
-    <button type="button" class="app-shell-install-action" id="appShellInstallBtn" data-action="install">Get install link</button>
-  </div>`;
-
 // The Worker-side twin of appActArgs (16_client-row-core.js). 08_quickadd-chart-data.js
 // builds some of the page's markup here in the Worker rather than in the
 // browser (see buildCombinedChartsHtml), so its data-act arguments need the
@@ -27105,13 +27095,12 @@ function renderBuilder(
   // apart (see the "pre-fill" block's own comment on why that distinction
   // matters for when to trust localStorage over what the server sent).
   const usingDefaultEntries = !hasInitial;
-  // A first-time visitor on the OLD page still gets the demo rows it always
-  // got. On a shell page the same rows are offered as a button in the
-  // home-screen editor instead (P6-3): nothing is added that was not asked
-  // for, and both read STARTER_PACK_ENTRIES (00_constants.js) so they cannot
-  // drift.
+  // A first-time visitor gets the demo rows, on either page. The shell used to
+  // offer them as a button in its home-screen editor instead (P6-3); that
+  // editor was taken out at the owner's request, and without the button a new
+  // visitor would have had no way to them.
   const initialEntriesJson = jsonForScript(
-    hasInitial ? initialEntries : (newUi ? [] : STARTER_PACK_ENTRIES)
+    hasInitial ? initialEntries : STARTER_PACK_ENTRIES
   );
 
   // The shell variant of the chrome. Both navs keep the legacy wrappers
@@ -30544,60 +30533,30 @@ ${seoHeadHtml}
     animation: spin 0.9s linear infinite;
   }
 
-  /* --- The new UI shell's install bar (Phase 6, P6-1) --------------------- */
+  /* --- The new UI shell (Phase 6) -------------------------------------------- */
   /* Emitted for every visitor and inert without <html data-app-shell="1">.
      That is deliberate: /app.css is one shared, content-hashed file
      (splitAppCss, 02_http-and-creator-utils.js), so a variant-dependent
      stylesheet would cost every visitor the shared cache. */
-  .app-shell-install-bar { display: none; }
-  html[data-app-shell="1"] .app-shell-install-bar {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin: 0 0 10px;
-    padding: 10px 14px;
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-sm);
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--text-2);
-    /* Sticky rather than fixed: on a phone the bottom of the screen belongs
-       to the tab bar, and the bar must not sit over the poster grid while a
-       list is being built. */
-    position: sticky;
-    top: 0;
-    z-index: 900;
+  /* The shell's tabs are links (a real path per view), and a link is
+     underlined unless told otherwise -- the line under every tab name. */
+  html[data-app-shell="1"] a.tab-btn,
+  html[data-app-shell="1"] a.bottom-nav-item { text-decoration: none; }
+  /* Search -> Lists: the source and sort chips, smaller than the Movies /
+     Shows / Lists pills above them (setCatalogListSearchChip, 19_). */
+  html[data-app-shell="1"] .catalog-list-chips { display: grid; gap: 6px; margin-top: 8px; }
+  html[data-app-shell="1"] .catalog-list-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  html[data-app-shell="1"] .catalog-list-chip {
+    flex: none; min-height: unset; cursor: pointer;
+    padding: 3px 10px; font-size: 0.75rem; font-weight: 600; line-height: 1.5;
+    border-radius: var(--radius-pill); border: 1px solid var(--border-strong);
+    background: var(--surface); color: var(--text-2);
   }
-  html[data-app-shell="1"] .app-shell-install-dot {
-    width: 9px; height: 9px; flex: none; border-radius: 50%;
-    background: var(--muted);
-  }
-  html[data-app-shell="1"] .app-shell-install-bar[data-state="none"] .app-shell-install-dot { background: var(--muted); }
-  html[data-app-shell="1"] .app-shell-install-bar[data-state="unsaved"] .app-shell-install-dot { background: var(--warn); }
-  html[data-app-shell="1"] .app-shell-install-bar[data-state="live"] .app-shell-install-dot { background: var(--success); }
-  html[data-app-shell="1"] .app-shell-install-text {
-    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  html[data-app-shell="1"] .app-shell-install-action {
-    flex: none;
-    background: var(--accent); color: #fff; border: none;
-    border-radius: var(--radius-pill);
-    padding: 7px 14px; font-size: 0.82rem; font-weight: 700;
-    min-height: unset; cursor: pointer;
-  }
-  html[data-app-shell="1"] .app-shell-install-action:hover { background: var(--accent-hover); }
-  html[data-app-shell="1"] .app-shell-install-bar[data-state="live"] .app-shell-install-action {
-    background: var(--surface); color: var(--accent);
-    border: 1.5px solid var(--border-strong);
-  }
-  html[data-app-shell="1"] .app-shell-install-bar[data-state="live"] .app-shell-install-action:hover {
-    border-color: var(--accent); color: var(--accent);
-  }
-  /* The floating "Unsaved changes to install link" banner and the install
-     bar say the same thing; showing both would be the duplication this shell
-     exists to remove. */
+  html[data-app-shell="1"] .catalog-list-chip:hover { border-color: var(--accent); color: var(--accent); }
+  html[data-app-shell="1"] .catalog-list-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  /* The floating "Unsaved changes to install link" banner is never shown on
+     a shell page: Catalogs' Generate Install Link button and Settings' Install
+     links card are where the link is made. */
   html[data-app-shell="1"] #unsavedInstallBanner { display: none !important; }
 
   /* The shell's Settings cards (P6-2). The card itself is the ordinary
@@ -30625,18 +30584,12 @@ ${seoHeadHtml}
   html[data-app-shell="1"] .app-shell-details { margin-top: 10px; font-size: 0.88rem; }
   html[data-app-shell="1"] .app-shell-details summary { cursor: pointer; color: var(--text); }
 
-  /* The home-screen editor (P6-3): the paste box, the review table and the
-     duplicate toggle that now sits directly above the rows it applies to. The
-     toggle used to live in Settings; on a shell page that copy is hidden, so
-     the same setting is described in one place (see #legacyDedupePanel). */
+  /* The duplicate toggle (P6-3), right below the rows it applies to and above
+     the Daily Randomizer. It used to live in Settings; on a shell page that
+     copy is hidden, so the same setting is described in one place (see
+     #legacyDedupePanel). The review styles below are shared with the Lists,
+     Imports and Channels views. */
   html[data-app-shell="1"] #legacyDedupePanel { display: none; }
-  html[data-app-shell="1"] .app-shell-add-box {
-    width: 100%; min-height: 92px; padding: 10px 12px; margin: 0 0 8px;
-    border: 1px solid var(--border); border-radius: 10px;
-    background: var(--bg); color: var(--text);
-    font-family: var(--font-mono, monospace); font-size: 0.86rem; line-height: 1.45;
-    resize: vertical;
-  }
   html[data-app-shell="1"] .app-shell-review { margin-top: 12px; }
   html[data-app-shell="1"] .app-shell-review-row {
     display: flex; align-items: flex-start; justify-content: space-between;
@@ -30649,10 +30602,12 @@ ${seoHeadHtml}
   html[data-app-shell="1"] .app-shell-review-bad { color: var(--danger); }
   html[data-app-shell="1"] .app-shell-dedupe {
     display: flex; align-items: flex-start; gap: 10px; cursor: pointer;
-    font-size: 0.92rem; user-select: none; margin: 14px 0 4px;
-    padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px;
+    font-size: 0.92rem; user-select: none; margin: 16px 0 0;
+    padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px;
     background: var(--surface);
   }
+  /* Sits right above the Daily Randomizer box and matches it. */
+  html[data-app-shell="1"] .app-shell-dedupe .app-shell-muted { margin: 4px 0 0; }
   html[data-app-shell="1"] .app-shell-dedupe input { margin-top: 2px; cursor: pointer; width: 16px; height: 16px; }
 
   /* A visibility choice (P6-4) is a chip you can press: Private, Unlisted,
@@ -30870,10 +30825,6 @@ ${seoHeadHtml}
       <div id="creatorProfileBar"></div>
     </div>
   </header>
-
-  <!-- The install bar (new UI shell only): what the current configuration is
-       installed as, and the one action that changes it. -->
-${newUi ? "  " + APP_SHELL_INSTALL_BAR_HTML : ""}
 
   <!-- Top Tab Bar (Desktop View) -->
 ${newUi ? appShellDesktopNavHtml : `  <div class="tab-bar" role="tablist" aria-label="Main navigation">
@@ -31214,14 +31165,13 @@ if ('serviceWorker' in navigator) {
       </select>
     </div>
 
-    <!-- The shell's paste-first home-screen editor (P6-3): add lists, the
-         duplicate toggle, the starter pack. Emitted only for a browser with the
-         FF_NEW_UI cookie; the reorderable rows below it are the same ones the
-         old page uses. -->
-${newUi ? '    <div id="appShellHomeEditor"></div>' : ''}
-
     <!-- Reorderable Catalog Shelves -->
     <div id="lists"></div>
+
+    <!-- The shell's "Hide titles already shown in rows above" toggle (P6-3),
+         right above the Daily Randomizer. Emitted only for a browser with the
+         FF_NEW_UI cookie; the old page keeps it in Settings. -->
+${newUi ? '    <div id="appShellHomeEditor"></div>' : ''}
 
     <!-- 24-Hour Randomizer Controls -->
     <div style="margin-top:16px; padding:14px 16px; background:var(--surface); border-radius:12px; border:1px solid var(--border);">
@@ -31398,12 +31348,6 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ''}
     <button type="button" class="subnav-pill" data-sub="genres" data-act="filterDiscoverShelves" data-act-args="[&quot;genres&quot;,&quot;@self&quot;]">Genres</button>
   </div>
 
-  <!-- The shell's Explore section (P6-5): community lists from this site and
-       from MDBList, Trakt and TMDB, with a preview and one button to add one to
-       the home screen. Emitted only for a browser with the FF_NEW_UI cookie;
-       the Discover feeds below are unchanged. -->
-${newUi ? '  <div id="appShellExplore"></div>' : ''}
-
   <!-- Discover Shelves Feed -->
   <div id="discoverShelvesContainer">
     <!-- My Lists Addon Charts Shelf -->
@@ -31489,12 +31433,6 @@ ${newUi ? '  <div id="appShellExplore"></div>' : ''}
 
   <!-- Submenu 1: User's Connected Account & Custom Lists -->
   <div class="lists-subpanel" id="listsSubMyLists">
-    <!-- The shell's own list cards (P6-4): open a list, add titles to it, put
-         it on the home screen, share it. Emitted only for a browser with the
-         FF_NEW_UI cookie; the dashboard below is the same one the old page
-         uses. -->
-${newUi ? '    <div id="appShellListsHome"></div>' : ''}
-
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">Your Custom Lists</h2>
@@ -31645,12 +31583,6 @@ ${newUi ? '    <div id="appShellAddTitles"></div>' : ''}
 
   <!-- Submenu 7: Import list from a Link -->
   <div class="lists-subpanel" id="listsSubImport" style="display:none;">
-    <!-- The shell's own importer (P6-6): choose a Letterboxd, IMDb or Trakt
-         file and the server does the matching, with real progress, a review
-         step, and the result saved as a list. Emitted only for a browser with
-         the FF_NEW_UI cookie; the panel below it is unchanged. -->
-${newUi ? '    <div id="appShellImports"></div>' : ''}
-
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">Import list from a link</h2>
@@ -31668,6 +31600,12 @@ ${newUi ? '    <div id="appShellImports"></div>' : ''}
         <span style="font-size:0.85rem;">Keep custom list synced with external link</span>
       </label>
     </div>
+
+    <!-- The shell's own importer (P6-6): choose a Letterboxd, IMDb or Trakt
+         file and the server does the matching, with real progress, a review
+         step, and the result saved as a list. Emitted only for a browser with
+         the FF_NEW_UI cookie, below the link importer. -->
+${newUi ? '    <div id="appShellImports"></div>' : ''}
   </div>
 
 
@@ -32048,6 +31986,24 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
       <button type="button" class="subnav-pill" data-act="setCatalogSearchFilter" data-act-args="[&quot;tv&quot;,&quot;@self&quot;]">Shows</button>
       <button type="button" class="subnav-pill" data-act="setCatalogSearchFilter" data-act-args="[&quot;lists&quot;,&quot;@self&quot;]">Lists</button>
     </div>
+${newUi ? `    <!-- Where the lists come from, and in what order (new UI only): the chips
+         Discover's Explore section had, on Search's own list results. See
+         setCatalogListSearchChip (19_client-search-and-likes.js). -->
+    <div id="catalogListSearchChips" class="catalog-list-chips" style="display:none;">
+      <div class="catalog-list-chip-row" role="group" aria-label="Where the lists come from">
+        <button type="button" class="catalog-list-chip active" data-chip-kind="source" data-chip-value="all" aria-pressed="true" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;all&quot;]">All sources</button>
+        <button type="button" class="catalog-list-chip" data-chip-kind="source" data-chip-value="mylists" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;mylists&quot;]">My Lists community</button>
+        <button type="button" class="catalog-list-chip" data-chip-kind="source" data-chip-value="mdblist" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;mdblist&quot;]">MDBList</button>
+        <button type="button" class="catalog-list-chip" data-chip-kind="source" data-chip-value="trakt" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;trakt&quot;]">Trakt</button>
+        <button type="button" class="catalog-list-chip" data-chip-kind="source" data-chip-value="tmdb" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;tmdb&quot;]">TMDB</button>
+      </div>
+      <div class="catalog-list-chip-row" role="group" aria-label="Order">
+        <button type="button" class="catalog-list-chip" data-chip-kind="sort" data-chip-value="popular" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;sort&quot;,&quot;popular&quot;]">Most liked</button>
+        <button type="button" class="catalog-list-chip" data-chip-kind="sort" data-chip-value="new" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;sort&quot;,&quot;new&quot;]">Newest</button>
+        <button type="button" class="catalog-list-chip" data-chip-kind="sort" data-chip-value="added" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;sort&quot;,&quot;added&quot;]">Most added</button>
+      </div>
+    </div>
+` : ''}
 
     <!-- Quick Filter Dropdowns for Movies & Shows -->
     <div id="catalogSearchFiltersRow" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; align-items:center;">
@@ -32769,14 +32725,6 @@ const serverEntriesAreDefaults = ${usingDefaultEntries ? 'true' : 'false'};
 const serverShuffleShelves = ${initialShuffleShelves ? 'true' : 'false'};
 const serverShuffleItems = ${initialShuffleItems ? 'true' : 'false'};
 
-// The rows the home-screen editor offers as a starter pack (P6-3), and nothing
-// else: a shell page is not pre-filled the way the old page is (FRONTEND_UX_AUDIT
-// §7, scenario 1), it is offered the same rows as a button. STARTER_PACK_ENTRIES
-// (00_constants.js) is what the old page's own fallback uses, so the two cannot
-// drift -- and this has to be declared HERE, in the per-request block, not down
-// in the bundle: /app.js is one shared, cached file built once (splitAppBundle,
-// 02_), so a value that differs between the two variants cannot live in it.
-const APP_SHELL_STARTER_PACK = ${newUi ? jsonForScript(STARTER_PACK_ENTRIES) : "[]"};
 </script>
 <script>/*MYLISTS_APP_BUNDLE_START*/
 // Every native/official chart's (slug, name, movieUrl, showUrl) -- lets
@@ -41931,6 +41879,9 @@ async function executeUnifiedListSearch(rawQuery, targetBox) {
 }
 
 function renderListSearchResults(mdblistMatches, traktMatches, traktError, myListsMatches, tmdbMatches, targetBox, queryOrIntent) {
+  // Kept so a list chip can filter and sort this answer again without asking
+  // every source a second time (setCatalogListSearchChip).
+  const renderArgs = Array.prototype.slice.call(arguments);
   let realTmdbMatches = tmdbMatches;
   let realTargetBox = targetBox;
   if (tmdbMatches && (tmdbMatches.nodeType || !Array.isArray(tmdbMatches))) {
@@ -41942,6 +41893,8 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
   if (!Array.isArray(realTmdbMatches)) realTmdbMatches = [];
   const box = realTargetBox || document.getElementById('listSearchResult') || document.getElementById('catalogSearchResult');
   if (!box) return;
+  const listChips = box.id === 'catalogSearchResult' && catalogListSearchChipsOn();
+  if (box.id === 'catalogSearchResult') _lastCatalogListSearchArgs = renderArgs;
 
   const alreadyAdded = new Set();
   document.querySelectorAll('#lists .entry').forEach((entry) => {
@@ -42015,6 +41968,9 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
       type: l.type || 'mixed',
       items: l.items || 0,
       likes: l.likes || 0,
+      createdAt: Number(l.createdAt) || 0,
+      updatedAt: Number(l.updatedAt) || 0,
+      adds: Number(l.adds) || 0,
       source: 'My Lists Addon',
     });
   });
@@ -42023,6 +41979,7 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
   const scoredCards = [];
 
   for (const item of candidates) {
+    if (listChips && !catalogListSearchKeeps(item)) continue;
     const normUrl = item.url.trim().toLowerCase().replace(new RegExp('/+$'), '');
     if (seenUrls.has(normUrl)) continue;
     seenUrls.add(normUrl);
@@ -42101,10 +42058,11 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
       '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(item.name) + '" data-url="' + escapeAttr(item.url) + '" data-type="' + escapeAttr(slotType) + '" data-creator="' + escapeAttr(item.user || '') + '" data-items="' + escapeAttr(item.items || '') + '" data-likes="' + escapeAttr(item.likes || 0) + '"></div>' +
       '</div>';
 
-    scoredCards.push({ score: matchScore, html: cardHtml });
+    scoredCards.push({ score: matchScore, html: cardHtml, item: item });
   }
 
-  scoredCards.sort((a, b) => b.score - a.score);
+  if (listChips) catalogListSearchSortCards(scoredCards);
+  else scoredCards.sort((a, b) => b.score - a.score);
   const topCards = scoredCards.slice(0, 30);
   let html = topCards.map(c => c.html).join('');
 
@@ -45663,6 +45621,101 @@ async function syncCustomListPayload(payload, name, applyEdit) {
 
 
 let currentCatalogSearchType = 'movie';
+
+// --- Search -> Lists: where from, and in what order (new UI) -----------------
+//
+// The new UI's Explore section is gone from Discover; its source and sort
+// chips are here instead, on Search's own list results -- the cards, hearts
+// and + Add buttons Search already has. The chips are emitted only on a shell
+// page (13_tab-channels.js); without them both settings stay at their
+// defaults and the results are exactly what they were.
+//
+// A sort uses what each source reports: likes everywhere; when a list was made
+// and how many people added it only for this site's own lists (v2SearchEntry,
+// 33_lists-directory.js). A list without the figure keeps its place after the
+// ones that have it rather than being guessed at. No sort chip pressed is the
+// order Search always had (best match first); pressing the pressed one again
+// goes back to it.
+let catalogListSearchSource = 'all';
+let catalogListSearchSort = '';
+let _lastCatalogListSearchArgs = null;
+const CATALOG_LIST_SEARCH_SOURCES = {
+  mylists: ['My Lists Addon', 'Profile'],
+  mdblist: ['MDBList'],
+  trakt: ['Trakt'],
+  tmdb: ['TMDB', 'Simkl'],
+};
+
+function catalogListSearchChipsOn() {
+  return !!document.getElementById('catalogListSearchChips') && typeof NEW_UI !== 'undefined' && !!NEW_UI;
+}
+
+function catalogListSearchWants(sourceId) {
+  return catalogListSearchSource === 'all' || catalogListSearchSource === sourceId;
+}
+
+function catalogListSearchKeeps(item) {
+  if (catalogListSearchSource === 'all') return true;
+  const names = CATALOG_LIST_SEARCH_SOURCES[catalogListSearchSource] || [];
+  return names.indexOf(item && item.source) >= 0;
+}
+
+// Sorts cards ({ score, item }) in place by the pressed sort chip.
+function catalogListSearchSortCards(cards) {
+  const figure = catalogListSearchSort === 'new'
+    ? function (it) { return Number(it.createdAt) || Number(it.updatedAt) || 0; }
+    : (catalogListSearchSort === 'added' ? function (it) { return Number(it.adds) || 0; } : null);
+  if (catalogListSearchSort === 'popular') {
+    cards.sort(function (a, b) { return (Number(b.item.likes) || 0) - (Number(a.item.likes) || 0) || b.score - a.score; });
+  } else if (figure) {
+    cards.sort(function (a, b) {
+      const fa = figure(a.item);
+      const fb = figure(b.item);
+      if (!!fa !== !!fb) return fa ? -1 : 1;
+      if (fa !== fb) return fb - fa;
+      return (Number(b.item.likes) || 0) - (Number(a.item.likes) || 0);
+    });
+  } else {
+    cards.sort(function (a, b) { return b.score - a.score; });
+  }
+  return cards;
+}
+
+function syncCatalogListSearchChips() {
+  const box = document.getElementById('catalogListSearchChips');
+  if (!box || !box.querySelectorAll) return;
+  box.querySelectorAll('.catalog-list-chip').forEach(function (chip) {
+    const kind = chip.getAttribute('data-chip-kind');
+    const value = chip.getAttribute('data-chip-value');
+    const on = kind === 'source' ? value === catalogListSearchSource : value === catalogListSearchSort;
+    chip.classList.toggle('active', on);
+    chip.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+}
+
+function setCatalogListSearchChip(kind, value) {
+  if (kind === 'source') {
+    catalogListSearchSource = CATALOG_LIST_SEARCH_SOURCES[value] ? value : 'all';
+  } else if (kind === 'sort') {
+    catalogListSearchSort = (value && value !== catalogListSearchSort) ? value : '';
+  } else {
+    return;
+  }
+  syncCatalogListSearchChips();
+  if (currentCatalogSearchType !== 'lists') return;
+  const q = ((document.getElementById('catalogSearchInput') || {}).value || '').trim();
+  if (!q) {
+    // The default view fetches per source (renderDefaultCatalogSearch).
+    renderDefaultCatalogSearch(true);
+    return;
+  }
+  // A search already has every source's answer: filter and sort it again.
+  if (_lastCatalogListSearchArgs) {
+    renderListSearchResults.apply(null, _lastCatalogListSearchArgs);
+    markCatalogSearchRendered();
+  }
+}
+window.setCatalogListSearchChip = setCatalogListSearchChip;
 let catalogSearchDebounceTimer = null;
 window._rawCatalogTitleItems = [];
 
@@ -45694,6 +45747,9 @@ function catalogSearchViewKey(type) {
     val('catalogSearchGenreSelect'),
     val('catalogSearchYearSelect'),
     val('catalogSearchRatingSelect'),
+    // The list chips change what a Lists view shows.
+    catalogListSearchSource,
+    catalogListSearchSort,
   ].join('|');
 }
 
@@ -45768,6 +45824,8 @@ function setCatalogSearchFilter(filter, btn) {
   if (filtersRow) {
     filtersRow.style.display = (filter === 'lists') ? 'none' : 'flex';
   }
+  const listChips = document.getElementById('catalogListSearchChips');
+  if (listChips) listChips.style.display = (filter === 'lists') ? '' : 'none';
   const q = (document.getElementById('catalogSearchInput')?.value || '').trim();
   if (q) {
     runCatalogSearch();
@@ -45925,16 +45983,37 @@ async function renderDefaultCatalogSearch(force) {
 
   if (currentCatalogSearchType === 'lists') {
     window._rawCatalogTitleItems = [];
+    // With the source chips (new UI) the lists to browse follow the chosen
+    // source: MDBList's and Trakt's popular lists as well as this site's.
+    // TMDB publishes no list directory, so it can only be searched.
+    const chips = catalogListSearchChipsOn();
+    if (chips && catalogListSearchSource === 'tmdb') {
+      resEl.innerHTML = '<p><small>TMDB has no list directory to browse. Type a search above to find TMDB lists.</small></p>';
+      markCatalogSearchRendered();
+      return;
+    }
     try {
-      const pubRes = await fetch(ORIGIN + '/api/search-published-lists?q=', { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ ok: false, lists: [] }));
+      const [pubRes, mdbPopular, traktPopular] = await Promise.all([
+        (!chips || catalogListSearchWants('mylists'))
+          ? fetch(ORIGIN + '/api/search-published-lists?q=', { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ ok: false, lists: [] }))
+          : Promise.resolve({ ok: true, lists: [] }),
+        (chips && catalogListSearchWants('mdblist') && typeof ensureMdblistPopularLoaded === 'function')
+          ? ensureMdblistPopularLoaded().catch(() => []) : Promise.resolve([]),
+        (chips && catalogListSearchWants('trakt') && typeof ensureTraktPopularLoaded === 'function')
+          ? ensureTraktPopularLoaded().catch(() => []) : Promise.resolve([]),
+      ]);
       if (thisSeq !== currentTitleSearchSequence) return;
       if (inputEl && inputEl.value.trim()) return;
       const pubLists = pubRes && pubRes.ok && Array.isArray(pubRes.lists) ? pubRes.lists : [];
-      if (!pubLists.length) {
-        resEl.innerHTML = '<p><small>No published My Lists Addon lists available yet.</small></p>';
+      const mdbLists = Array.isArray(mdbPopular) ? mdbPopular : [];
+      const traktLists = Array.isArray(traktPopular) ? traktPopular : [];
+      if (!pubLists.length && !mdbLists.length && !traktLists.length) {
+        resEl.innerHTML = (chips && catalogListSearchSource !== 'mylists' && catalogListSearchSource !== 'all')
+          ? '<p><small>No lists to show from that source right now.</small></p>'
+          : '<p><small>No published My Lists Addon lists available yet.</small></p>';
         return;
       }
-      renderListSearchResults([], [], null, pubLists, [], resEl);
+      renderListSearchResults(mdbLists, traktLists, null, pubLists, [], resEl);
       markCatalogSearchRendered();
     } catch (e) {
       resEl.innerHTML = '<p class="testresult err">✗ Could not load public lists.</p>';
@@ -77442,9 +77521,12 @@ function appShellRecordInstallLink(url) {
 }
 
 function appShellRefreshInstallBar() {
+  const info = appShellInstallLinkState();
+  // Kept whether or not the bar is on the page: the bar was taken off the
+  // shell at the owner's request, and Settings still reads this state.
+  appShellState.set({ install: { state: info.state, link: info.link } });
   const bar = document.getElementById('appShellInstallBar');
   if (!bar) return;
-  const info = appShellInstallLinkState();
   bar.setAttribute('data-state', info.state);
   const text = document.getElementById('appShellInstallText');
   const btn = document.getElementById('appShellInstallBtn');
@@ -77464,7 +77546,6 @@ function appShellRefreshInstallBar() {
     btn.setAttribute('data-action', a.action);
     btn.textContent = a.label;
   }
-  appShellState.set({ install: { state: info.state, link: info.link } });
 }
 
 // Builds the install link through the builder's own generate() (which renders
@@ -77976,88 +78057,22 @@ async function appShellSettingsAction(action, id) {
     const state = appShellInstallLinkStateSafe();
     return appShellCopyText(state.link, 'Install link copied.');
   }
-  if (what === 'home-check') return appShellHomeCheck();
-  if (what === 'home-add') return appShellHomeAddChecked();
-  if (what === 'home-clear') {
-    appShellHomeReview = null;
-    const box = document.getElementById('appShellAddBox');
-    if (box) box.value = '';
-    appShellRenderHomeEditor();
-    return true;
-  }
-  if (what === 'home-starter') return appShellAddStarterPack();
   return false;
 }
 
 // --- the home-screen editor (P6-3) -------------------------------------------
 //
-// Paste first: a box that takes one list link per line, a review table that says
-// what each line is before anything is added, and the duplicate toggle directly
-// above the rows it applies to. The rows themselves are the page's own (#lists,
-// with its drag handles, Edit and Remove) -- this is the way in, not a second
-// copy of them.
+// The duplicate toggle, right above the Daily Randomizer and below the rows it
+// applies to. The rows themselves are the page's own (#lists, with its drag
+// handles, Edit and Remove).
+//
+// The paste box, its check-links review and the starter-pack button that shared
+// this panel were taken out at the owner's request: + New Catalog and Catalogs ->
+// Bulk Add add rows, and a first-time visitor gets the starter rows pre-filled
+// on either page (renderBuilder, 09_page-shell.js).
 //
 // Everything here exists only on a shell page: the container comes from the
-// server (10_tab-search-add.js), and the starter rows it offers come from the
-// per-request preamble (APP_SHELL_STARTER_PACK, 16_client-row-core.js), which is
-// empty on a legacy page. The old page keeps pre-filling those rows for a
-// first-time visitor, exactly as it did.
-
-// How many lines one paste will check. Each line costs two /api/preview calls
-// (one per type), so this is what keeps a pasted bookmarks file from turning
-// into a hundred requests.
-const APP_SHELL_ADD_LINES_MAX = 50;
-// How many lines are checked at once. Each check is two requests, so six lines
-// in flight is twelve requests -- the same order as the page's other fan-outs.
-const APP_SHELL_ADD_CONCURRENCY = 6;
-
-let appShellHomeReview = null;
-
-function appShellHomeEscape(value) {
-  return escapeHtml(String(value === null || value === undefined ? '' : value));
-}
-
-// One line of the paste box. People paste real newlines, and a stored merged row
-// carries its sources joined by the two characters backslash + n (this page's
-// own convention -- see collectEntries, 23_client-list-management.js), so both
-// are treated as separators. Built with String.fromCharCode rather than written
-// out, because this file lives inside the page's template literal, where a
-// backslash is eaten before the browser ever sees it.
-function appShellSplitLines(text) {
-  const newline = String.fromCharCode(10);
-  const slash = String.fromCharCode(92);
-  const out = [];
-  const rows = String(text || '').split(newline);
-  for (let i = 0; i < rows.length; i++) {
-    const pieces = rows[i].split(slash + 'n');
-    for (let j = 0; j < pieces.length; j++) {
-      const line = pieces[j].trim();
-      if (line) out.push(line);
-    }
-  }
-  return out;
-}
-
-// Where a pasted line comes from, as a short label for the review table.
-function appShellSourceLabel(u) {
-  const s = String(u || '').trim().toLowerCase();
-  if (!s) return 'Empty';
-  if (s.indexOf('mdblist:') === 0 || s.indexOf('mdblist.com') !== -1) return 'MDBList';
-  if (s.indexOf('trakt:') === 0 || s.indexOf('trakt.tv') !== -1) return 'Trakt';
-  if (s.indexOf('tmdb:') === 0 || s.indexOf('themoviedb.org') !== -1) return 'TMDB';
-  if (s.indexOf('simkl:') === 0 || s.indexOf('simkl.com') !== -1) return 'Simkl';
-  if (s.indexOf('imdb.com') !== -1) return 'IMDb';
-  if (s.indexOf('customlist:') === 0 || s.indexOf('channel:') === 0 || s.indexOf('custom:') === 0) return 'My Lists';
-  if (s.indexOf('autotrack:') === 0) return 'My Lists';
-  if (s.indexOf('mylistsaddon.com') !== -1) return 'My Lists';
-  return 'List';
-}
-
-function appShellHomeRowCount() {
-  if (typeof document.querySelectorAll !== 'function') return 0;
-  const rows = document.querySelectorAll('#lists .entry');
-  return rows && rows.length ? rows.length : 0;
-}
+// server (10_tab-search-add.js).
 
 function appShellDedupeOn() {
   try {
@@ -78067,123 +78082,22 @@ function appShellDedupeOn() {
   }
 }
 
-// A tiny pool, so a 20-line paste is 6 lines in flight rather than 20 or 1.
-async function appShellMapWithConcurrency(items, limit, run) {
-  const list = items || [];
-  const out = new Array(list.length);
-  let next = 0;
-  const workers = [];
-  const size = Math.max(1, Math.min(limit || 1, list.length || 1));
-  for (let w = 0; w < size; w++) {
-    workers.push((async function () {
-      for (;;) {
-        const i = next;
-        next += 1;
-        if (i >= list.length) return;
-        out[i] = await run(list[i], i);
-      }
-    })());
-  }
-  await Promise.all(workers);
-  return out;
-}
-
-// One pasted line, asked about as both a movie list and a show list. Whichever
-// answers with more items decides the type, which is how the old page's bulk add
-// told them apart; a line that fails on both sides carries its error instead.
-async function appShellCheckOneLine(line) {
-  const url = String(line || '').trim();
-  const name = (typeof guessNameFromUrl === 'function') ? guessNameFromUrl(url) : url;
-  const auth = (typeof previewCreatorAuth === 'function') ? previewCreatorAuth() : {};
-  const askType = async function (type) {
-    // One line on purpose: the worker's CSRF scanner (tests/worker.test.mjs)
-    // looks for a mutating method and the JSON content type on the same call,
-    // and appShellApiFetch supplies the header.
-    const body = Object.assign({ url: url, type: type, sample: 1 }, auth);
-    const res = await appShellApiFetch('/api/preview', { method: 'POST', body: body });
-    const data = res.data || {};
-    const count = Number(data.totalItems) || Number(data.count) || 0;
-    return { ok: !!res.ok, type: type, count: count, error: res.ok ? '' : (res.error || 'Could not read that list.') };
-  };
-  const both = await Promise.all([askType('movie'), askType('series')]);
-  const movie = both[0];
-  const series = both[1];
-  const wanted = (series.ok && series.count > movie.count) ? series : movie;
-  const anyOk = movie.ok || series.ok;
-  return {
-    line: url,
-    name: name,
-    source: appShellSourceLabel(url),
-    type: wanted.type,
-    count: Math.max(movie.count, series.count),
-    ok: anyOk,
-    error: anyOk ? '' : (movie.error || series.error || 'Could not read that list.'),
-  };
-}
-
-function appShellReviewRowHtml(row) {
-  const mark = row.ok ? '<span class="app-shell-chip app-shell-chip-ok">Ready</span>' : '<span class="app-shell-chip app-shell-chip-warn">Skipped</span>';
-  const shape = row.ok
-    ? appShellHomeEscape(row.type === 'series' ? 'Shows' : 'Movies') + ' &middot; ' + row.count + (row.count === 1 ? ' title' : ' titles')
-    : appShellHomeEscape(row.error || 'Could not read that list.');
-  return '<div class="app-shell-review-row">' +
-    '<div class="app-shell-row-main"><strong' + (row.ok ? '' : ' class="app-shell-review-bad"') + '>' + appShellHomeEscape(row.name) + '</strong>' +
-    '<br><span class="app-shell-muted">' + appShellHomeEscape(row.source) + ' &middot; ' + shape + '</span>' +
-    '<br><span class="app-shell-muted app-shell-review-url">' + appShellHomeEscape(row.line) + '</span></div>' +
-    '<div class="app-shell-row-controls">' + mark + '</div></div>';
-}
-
-function appShellReviewHtml() {
-  const review = appShellHomeReview;
-  if (!review || !review.results || !review.results.length) return '';
-  const good = review.results.filter(function (r) { return r.ok; }).length;
-  const bad = review.results.length - good;
-  let html = '<div class="app-shell-review">' +
-    '<p class="app-shell-muted">' + review.results.length + (review.results.length === 1 ? ' line checked: ' : ' lines checked: ') +
-    good + ' ready' + (bad ? ', ' + bad + ' to look at' : '') + '.' +
-    (review.truncated ? ' (' + review.truncated + ' more line(s) were not checked.)' : '') + '</p>';
-  html += review.results.map(appShellReviewRowHtml).join('');
-  html += '<div class="app-shell-actions">' +
-    '<button type="button" class="primary lc-btn" data-app-shell-action="home-add"' + (good ? '' : ' disabled') + '>' +
-    (good === 1 ? 'Add 1 list' : 'Add ' + good + ' lists') + '</button>' +
-    '<button type="button" class="secondary lc-btn" data-app-shell-action="home-clear">Clear</button>' +
-    '</div></div>';
-  return html;
-}
-
 function appShellRenderHomeEditor() {
   const host = document.getElementById('appShellHomeEditor');
   if (!host || !NEW_UI) return false;
-  // Whatever has been typed so far survives a re-render (the box is re-created
-  // every time, and losing a pasted list on an unrelated refresh would be worse
-  // than the few lines this costs).
-  const box = document.getElementById('appShellAddBox');
-  const typed = (box && box.value) ? box.value : '';
   const dedupe = appShellDedupeOn();
-  const rows = appShellHomeRowCount();
-  const starter = (typeof APP_SHELL_STARTER_PACK !== 'undefined' && APP_SHELL_STARTER_PACK) ? APP_SHELL_STARTER_PACK : [];
 
-  let html = '<div class="panel" style="margin-top:12px;">' +
-    '<h2 class="panel-title">Add to your home screen</h2>' +
-    '<p class="app-shell-muted">Paste one list link per line -- MDBList, Trakt, TMDB, Simkl, an IMDb list, one of your own lists or a shared channel. Each line is checked first, so nothing is added that you did not see.</p>' +
-    '<label class="app-shell-muted" for="appShellAddBox" style="display:block; margin:0 0 4px;">List links, one per line</label>' +
-    '<textarea id="appShellAddBox" class="app-shell-add-box" rows="3" spellcheck="false" placeholder="https://mdblist.com/lists/you/top-horror-2026"></textarea>' +
-    '<div class="app-shell-actions">' +
-    '<button type="button" class="primary lc-btn" data-app-shell-action="home-check">Check links</button>' +
-    (starter.length && !rows ? '<button type="button" class="secondary lc-btn" data-app-shell-action="home-starter">Add a starter pack (' + starter.length + ' rows)</button>' : '') +
-    '</div>' +
-    appShellReviewHtml() +
-    '<label class="app-shell-dedupe" for="appShellDedupeToggle">' +
+  // Just the duplicate toggle now, in its own box right above the Daily
+  // Randomizer (10_tab-search-add.js). The paste box, the starter pack and
+  // the check-links review that shared this panel were taken out at the
+  // owner's request; + New Catalog and Catalogs -> Bulk Add do that job.
+  const html = '<label class="app-shell-dedupe" for="appShellDedupeToggle">' +
     '<input type="checkbox" id="appShellDedupeToggle"' + (dedupe ? ' checked' : '') + '>' +
     '<span><strong>Hide titles already shown in rows above</strong>' +
-    '<br><span class="app-shell-muted">The top row keeps everything; every row below it drops anything an earlier row already showed. Row order is what decides, so drag a row to change it. The preview below updates now, and Stremio follows once you update your install link (the install bar above does that).</span></span>' +
-    '</label>' +
-    (rows ? '<p class="app-shell-muted" style="margin-top:10px;">Your ' + rows + (rows === 1 ? ' row is' : ' rows are') + ' below: drag to reorder, Edit to change one, or Remove to take it out.</p>' : '') +
-    '</div>';
+    '<br><span class="app-shell-muted">The top row keeps everything; every row below it drops anything an earlier row already showed. Row order is what decides, so drag a row to change it. The preview updates now, and Stremio follows once you update your install link.</span></span>' +
+    '</label>';
 
   host.innerHTML = html;
-  const newBox = document.getElementById('appShellAddBox');
-  if (newBox && typed) newBox.value = typed;
   const toggle = document.getElementById('appShellDedupeToggle');
   if (toggle && toggle.addEventListener) {
     toggle.addEventListener('change', function (e) {
@@ -78193,7 +78107,7 @@ function appShellRenderHomeEditor() {
   return true;
 }
 
-// The duplicate setting, in the place it now belongs -- directly above the rows
+// The duplicate setting, in the place it now belongs -- right below the rows
 // it applies to. One value, one key: the Settings checkbox (hidden on a shell
 // page, see 09_page-shell.css) is kept in step so nothing can disagree.
 function appShellSetDedupe(on) {
@@ -78205,62 +78119,6 @@ function appShellSetDedupe(on) {
   if (typeof renderLivePreview === 'function') renderLivePreview();
   appShellRenderHomeEditor();
   return true;
-}
-
-async function appShellHomeCheck() {
-  const box = document.getElementById('appShellAddBox');
-  const lines = appShellSplitLines(box ? box.value : '');
-  if (!lines.length) {
-    showToast('Paste at least one list link first.', 'info');
-    return [];
-  }
-  const checked = lines.slice(0, APP_SHELL_ADD_LINES_MAX);
-  const results = await appShellMapWithConcurrency(checked, APP_SHELL_ADD_CONCURRENCY, appShellCheckOneLine);
-  appShellHomeReview = { results: results, truncated: lines.length - checked.length };
-  appShellRenderHomeEditor();
-  const good = results.filter(function (r) { return r.ok; }).length;
-  if (!good) showToast('None of those lines could be read. Check the links and try again.', 'error');
-  return results;
-}
-
-function appShellHomeAddChecked() {
-  const review = appShellHomeReview;
-  const good = review && review.results ? review.results.filter(function (r) { return r.ok; }) : [];
-  if (!good.length) {
-    showToast('Check the links first, then add the ones that are ready.', 'info');
-    return 0;
-  }
-  // addRow is the one door every add comes through, and it refuses a row that
-  // needs an account when nobody is signed in (D-8) -- returning null. Whatever
-  // it refuses stays in the review, so pressing the button again after signing
-  // in adds those and only those.
-  const left = [];
-  let made = 0;
-  good.forEach(function (r) {
-    if (addRow(r.name, r.line, r.type, true, 'Custom')) made += 1; else left.push(r);
-  });
-  if (!made) {
-    appShellRenderHomeEditor();
-    return 0;
-  }
-  appShellHomeReview = left.length ? { results: left, truncated: 0 } : null;
-  const box = document.getElementById('appShellAddBox');
-  if (box && !left.length) box.value = '';
-  const said = made === 1 ? 'Added to your home screen.' : made + ' lists added to your home screen.';
-  appShellAfterHomeChange(left.length ? said + ' ' + left.length + ' need an account.' : said);
-  return made;
-}
-
-function appShellAddStarterPack() {
-  const pack = (typeof APP_SHELL_STARTER_PACK !== 'undefined' && APP_SHELL_STARTER_PACK) ? APP_SHELL_STARTER_PACK : [];
-  if (!pack.length) return 0;
-  let made = 0;
-  pack.forEach(function (row) {
-    if (addRow(row.name, row.url, row.type, row.enabled !== false, row.group || 'Combined Charts')) made += 1;
-  });
-  if (!made) return 0;
-  appShellAfterHomeChange(made + ' starter rows added. Reorder them to change what keeps a shared title.');
-  return made;
 }
 
 // The preview has to follow the rows -- that is the point of it. Every change
@@ -78282,16 +78140,6 @@ function appShellSchedulePreview() {
     appShellPreviewTimer = null;
     renderLivePreview();
   }, 700);
-  return true;
-}
-
-// After anything that changes the rows: persist, refresh the preview, and put
-// the editor back in step with them.
-function appShellAfterHomeChange(message) {
-  if (typeof saveState === 'function') saveState();
-  if (typeof renderLivePreview === 'function') renderLivePreview();
-  appShellRenderHomeEditor();
-  if (message) showToast(message, 'success');
   return true;
 }
 
@@ -79297,7 +79145,10 @@ function appShellRenderExplore(scrollToResults) {
 // Opening the view: render the frame, then fetch once. Coming back to the tab
 // keeps what is already there.
 function appShellOpenExplore() {
-  if (!NEW_UI) return false;
+  // No section, no fetch: Explore was taken off Discover at the owner's
+  // request (its source and sort chips are on Search -> Lists now), and
+  // opening Discover must not ask four providers for lists nobody will see.
+  if (!NEW_UI || !appShellExploreHost()) return false;
   const first = !appShellExploreLoaded;
   appShellRenderExplore(false);
   if (first) {
@@ -101985,7 +101836,10 @@ async function v2SearchPublicLists(env, target, cap) {
   return results || [];
 }
 
-// The /api/search-published-lists entry, exactly as the legacy path builds it.
+// The /api/search-published-lists entry, as the legacy path builds it, plus
+// when the list was made and changed and how many people added it: Search's
+// Newest and Most added chips sort by those (catalogListSearchSortCards,
+// 19_client-search-and-likes.js). The legacy path has none of the three.
 function v2SearchEntry(row, origin) {
   return {
     name: row.name,
@@ -101996,6 +101850,9 @@ function v2SearchEntry(row, origin) {
     username: row.username,
     url: `${origin}/lists/${row.username}/${row.slug}`,
     source: "My Lists Addon",
+    createdAt: row.created_at || null,
+    updatedAt: row.updated_at || null,
+    adds: row.add_count || 0,
   };
 }
 

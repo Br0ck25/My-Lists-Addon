@@ -8,12 +8,6 @@
 
   <!-- Submenu 1: User's Connected Account & Custom Lists -->
   <div class="lists-subpanel" id="listsSubMyLists">
-    <!-- The shell's own list cards (P6-4): open a list, add titles to it, put
-         it on the home screen, share it. Emitted only for a browser with the
-         FF_NEW_UI cookie; the dashboard below is the same one the old page
-         uses. -->
-${newUi ? '    <div id="appShellListsHome"></div>' : ''}
-
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">Your Custom Lists</h2>
@@ -164,12 +158,6 @@ ${newUi ? '    <div id="appShellAddTitles"></div>' : ''}
 
   <!-- Submenu 7: Import list from a Link -->
   <div class="lists-subpanel" id="listsSubImport" style="display:none;">
-    <!-- The shell's own importer (P6-6): choose a Letterboxd, IMDb or Trakt
-         file and the server does the matching, with real progress, a review
-         step, and the result saved as a list. Emitted only for a browser with
-         the FF_NEW_UI cookie; the panel below it is unchanged. -->
-${newUi ? '    <div id="appShellImports"></div>' : ''}
-
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">Import list from a link</h2>
@@ -187,6 +175,12 @@ ${newUi ? '    <div id="appShellImports"></div>' : ''}
         <span style="font-size:0.85rem;">Keep custom list synced with external link</span>
       </label>
     </div>
+
+    <!-- The shell's own importer (P6-6): choose a Letterboxd, IMDb or Trakt
+         file and the server does the matching, with real progress, a review
+         step, and the result saved as a list. Emitted only for a browser with
+         the FF_NEW_UI cookie, below the link importer. -->
+${newUi ? '    <div id="appShellImports"></div>' : ''}
   </div>
 
 

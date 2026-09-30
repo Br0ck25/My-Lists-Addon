@@ -833,6 +833,9 @@ async function executeUnifiedListSearch(rawQuery, targetBox) {
 }
 
 function renderListSearchResults(mdblistMatches, traktMatches, traktError, myListsMatches, tmdbMatches, targetBox, queryOrIntent) {
+  // Kept so a list chip can filter and sort this answer again without asking
+  // every source a second time (setCatalogListSearchChip).
+  const renderArgs = Array.prototype.slice.call(arguments);
   let realTmdbMatches = tmdbMatches;
   let realTargetBox = targetBox;
   if (tmdbMatches && (tmdbMatches.nodeType || !Array.isArray(tmdbMatches))) {
@@ -844,6 +847,8 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
   if (!Array.isArray(realTmdbMatches)) realTmdbMatches = [];
   const box = realTargetBox || document.getElementById('listSearchResult') || document.getElementById('catalogSearchResult');
   if (!box) return;
+  const listChips = box.id === 'catalogSearchResult' && catalogListSearchChipsOn();
+  if (box.id === 'catalogSearchResult') _lastCatalogListSearchArgs = renderArgs;
 
   const alreadyAdded = new Set();
   document.querySelectorAll('#lists .entry').forEach((entry) => {
@@ -917,6 +922,9 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
       type: l.type || 'mixed',
       items: l.items || 0,
       likes: l.likes || 0,
+      createdAt: Number(l.createdAt) || 0,
+      updatedAt: Number(l.updatedAt) || 0,
+      adds: Number(l.adds) || 0,
       source: 'My Lists Addon',
     });
   });
@@ -925,6 +933,7 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
   const scoredCards = [];
 
   for (const item of candidates) {
+    if (listChips && !catalogListSearchKeeps(item)) continue;
     const normUrl = item.url.trim().toLowerCase().replace(new RegExp('/+$'), '');
     if (seenUrls.has(normUrl)) continue;
     seenUrls.add(normUrl);
@@ -1003,10 +1012,11 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
       '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(item.name) + '" data-url="' + escapeAttr(item.url) + '" data-type="' + escapeAttr(slotType) + '" data-creator="' + escapeAttr(item.user || '') + '" data-items="' + escapeAttr(item.items || '') + '" data-likes="' + escapeAttr(item.likes || 0) + '"></div>' +
       '</div>';
 
-    scoredCards.push({ score: matchScore, html: cardHtml });
+    scoredCards.push({ score: matchScore, html: cardHtml, item: item });
   }
 
-  scoredCards.sort((a, b) => b.score - a.score);
+  if (listChips) catalogListSearchSortCards(scoredCards);
+  else scoredCards.sort((a, b) => b.score - a.score);
   const topCards = scoredCards.slice(0, 30);
   let html = topCards.map(c => c.html).join('');
 
@@ -4565,6 +4575,101 @@ async function syncCustomListPayload(payload, name, applyEdit) {
 
 
 let currentCatalogSearchType = 'movie';
+
+// --- Search -> Lists: where from, and in what order (new UI) -----------------
+//
+// The new UI's Explore section is gone from Discover; its source and sort
+// chips are here instead, on Search's own list results -- the cards, hearts
+// and + Add buttons Search already has. The chips are emitted only on a shell
+// page (13_tab-channels.js); without them both settings stay at their
+// defaults and the results are exactly what they were.
+//
+// A sort uses what each source reports: likes everywhere; when a list was made
+// and how many people added it only for this site's own lists (v2SearchEntry,
+// 33_lists-directory.js). A list without the figure keeps its place after the
+// ones that have it rather than being guessed at. No sort chip pressed is the
+// order Search always had (best match first); pressing the pressed one again
+// goes back to it.
+let catalogListSearchSource = 'all';
+let catalogListSearchSort = '';
+let _lastCatalogListSearchArgs = null;
+const CATALOG_LIST_SEARCH_SOURCES = {
+  mylists: ['My Lists Addon', 'Profile'],
+  mdblist: ['MDBList'],
+  trakt: ['Trakt'],
+  tmdb: ['TMDB', 'Simkl'],
+};
+
+function catalogListSearchChipsOn() {
+  return !!document.getElementById('catalogListSearchChips') && typeof NEW_UI !== 'undefined' && !!NEW_UI;
+}
+
+function catalogListSearchWants(sourceId) {
+  return catalogListSearchSource === 'all' || catalogListSearchSource === sourceId;
+}
+
+function catalogListSearchKeeps(item) {
+  if (catalogListSearchSource === 'all') return true;
+  const names = CATALOG_LIST_SEARCH_SOURCES[catalogListSearchSource] || [];
+  return names.indexOf(item && item.source) >= 0;
+}
+
+// Sorts cards ({ score, item }) in place by the pressed sort chip.
+function catalogListSearchSortCards(cards) {
+  const figure = catalogListSearchSort === 'new'
+    ? function (it) { return Number(it.createdAt) || Number(it.updatedAt) || 0; }
+    : (catalogListSearchSort === 'added' ? function (it) { return Number(it.adds) || 0; } : null);
+  if (catalogListSearchSort === 'popular') {
+    cards.sort(function (a, b) { return (Number(b.item.likes) || 0) - (Number(a.item.likes) || 0) || b.score - a.score; });
+  } else if (figure) {
+    cards.sort(function (a, b) {
+      const fa = figure(a.item);
+      const fb = figure(b.item);
+      if (!!fa !== !!fb) return fa ? -1 : 1;
+      if (fa !== fb) return fb - fa;
+      return (Number(b.item.likes) || 0) - (Number(a.item.likes) || 0);
+    });
+  } else {
+    cards.sort(function (a, b) { return b.score - a.score; });
+  }
+  return cards;
+}
+
+function syncCatalogListSearchChips() {
+  const box = document.getElementById('catalogListSearchChips');
+  if (!box || !box.querySelectorAll) return;
+  box.querySelectorAll('.catalog-list-chip').forEach(function (chip) {
+    const kind = chip.getAttribute('data-chip-kind');
+    const value = chip.getAttribute('data-chip-value');
+    const on = kind === 'source' ? value === catalogListSearchSource : value === catalogListSearchSort;
+    chip.classList.toggle('active', on);
+    chip.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+}
+
+function setCatalogListSearchChip(kind, value) {
+  if (kind === 'source') {
+    catalogListSearchSource = CATALOG_LIST_SEARCH_SOURCES[value] ? value : 'all';
+  } else if (kind === 'sort') {
+    catalogListSearchSort = (value && value !== catalogListSearchSort) ? value : '';
+  } else {
+    return;
+  }
+  syncCatalogListSearchChips();
+  if (currentCatalogSearchType !== 'lists') return;
+  const q = ((document.getElementById('catalogSearchInput') || {}).value || '').trim();
+  if (!q) {
+    // The default view fetches per source (renderDefaultCatalogSearch).
+    renderDefaultCatalogSearch(true);
+    return;
+  }
+  // A search already has every source's answer: filter and sort it again.
+  if (_lastCatalogListSearchArgs) {
+    renderListSearchResults.apply(null, _lastCatalogListSearchArgs);
+    markCatalogSearchRendered();
+  }
+}
+window.setCatalogListSearchChip = setCatalogListSearchChip;
 let catalogSearchDebounceTimer = null;
 window._rawCatalogTitleItems = [];
 
@@ -4596,6 +4701,9 @@ function catalogSearchViewKey(type) {
     val('catalogSearchGenreSelect'),
     val('catalogSearchYearSelect'),
     val('catalogSearchRatingSelect'),
+    // The list chips change what a Lists view shows.
+    catalogListSearchSource,
+    catalogListSearchSort,
   ].join('|');
 }
 
@@ -4670,6 +4778,8 @@ function setCatalogSearchFilter(filter, btn) {
   if (filtersRow) {
     filtersRow.style.display = (filter === 'lists') ? 'none' : 'flex';
   }
+  const listChips = document.getElementById('catalogListSearchChips');
+  if (listChips) listChips.style.display = (filter === 'lists') ? '' : 'none';
   const q = (document.getElementById('catalogSearchInput')?.value || '').trim();
   if (q) {
     runCatalogSearch();
@@ -4827,16 +4937,37 @@ async function renderDefaultCatalogSearch(force) {
 
   if (currentCatalogSearchType === 'lists') {
     window._rawCatalogTitleItems = [];
+    // With the source chips (new UI) the lists to browse follow the chosen
+    // source: MDBList's and Trakt's popular lists as well as this site's.
+    // TMDB publishes no list directory, so it can only be searched.
+    const chips = catalogListSearchChipsOn();
+    if (chips && catalogListSearchSource === 'tmdb') {
+      resEl.innerHTML = '<p><small>TMDB has no list directory to browse. Type a search above to find TMDB lists.</small></p>';
+      markCatalogSearchRendered();
+      return;
+    }
     try {
-      const pubRes = await fetch(ORIGIN + '/api/search-published-lists?q=', { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ ok: false, lists: [] }));
+      const [pubRes, mdbPopular, traktPopular] = await Promise.all([
+        (!chips || catalogListSearchWants('mylists'))
+          ? fetch(ORIGIN + '/api/search-published-lists?q=', { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ ok: false, lists: [] }))
+          : Promise.resolve({ ok: true, lists: [] }),
+        (chips && catalogListSearchWants('mdblist') && typeof ensureMdblistPopularLoaded === 'function')
+          ? ensureMdblistPopularLoaded().catch(() => []) : Promise.resolve([]),
+        (chips && catalogListSearchWants('trakt') && typeof ensureTraktPopularLoaded === 'function')
+          ? ensureTraktPopularLoaded().catch(() => []) : Promise.resolve([]),
+      ]);
       if (thisSeq !== currentTitleSearchSequence) return;
       if (inputEl && inputEl.value.trim()) return;
       const pubLists = pubRes && pubRes.ok && Array.isArray(pubRes.lists) ? pubRes.lists : [];
-      if (!pubLists.length) {
-        resEl.innerHTML = '<p><small>No published My Lists Addon lists available yet.</small></p>';
+      const mdbLists = Array.isArray(mdbPopular) ? mdbPopular : [];
+      const traktLists = Array.isArray(traktPopular) ? traktPopular : [];
+      if (!pubLists.length && !mdbLists.length && !traktLists.length) {
+        resEl.innerHTML = (chips && catalogListSearchSource !== 'mylists' && catalogListSearchSource !== 'all')
+          ? '<p><small>No lists to show from that source right now.</small></p>'
+          : '<p><small>No published My Lists Addon lists available yet.</small></p>';
         return;
       }
-      renderListSearchResults([], [], null, pubLists, [], resEl);
+      renderListSearchResults(mdbLists, traktLists, null, pubLists, [], resEl);
       markCatalogSearchRendered();
     } catch (e) {
       resEl.innerHTML = '<p class="testresult err">✗ Could not load public lists.</p>';

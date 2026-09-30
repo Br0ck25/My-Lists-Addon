@@ -11,7 +11,8 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Release 5** is live, and the history copy finished: 698 accounts, 45,734 plays, none fewer than before (results under Release 5). `FF_EVENT_TRACKING` stays off (see there).
 - **Release 6** went live on 2026-09-30. The owner reports it looks good, and asked to carry on without waiting days between releases.
 - **Release 7** (as 7b) went live on 2026-09-30, with the queue set up: *Round trip works: picked up after 6.3 s*, and every periodic job running with none failing (under Release 7).
-- **Release 8** is prepared and not yet live.
+- **Release 8** went live on 2026-09-30. The owner reports everything working, and asked for changes to the new interface and for five older bugs to be fixed: that is Release 9.
+- **Release 9** is prepared and not yet live.
 
 The owner decided to release the new version **one phase at a time, straight to the live site**, with no separate test site. Each release waits until the one before it has run cleanly for at least a day.
 
@@ -35,7 +36,8 @@ The owner decided to release the new version **one phase at a time, straight to 
 | 6 | Phase 4 | `46a33d6` | none | optional switches (breaker, snapshots, ids) |
 | 7 | Phase 5: jobs | `be96c22` | none | two Queues, the consumer, the `JOBS` binding |
 | 8 | Phase 6: new interface | `eee71a7` | none | none (the new interface is behind a cookie) |
-| 9 | Phase 7 so far ([PR #9](https://github.com/Br0ck25/My-Lists-Addon/pull/9)) | after it merges | per PR | per PR |
+| 9 | Five bug fixes and the owner's new-interface changes (this branch only) | none | none | none |
+| 10 | Phase 7 so far ([PR #9](https://github.com/Br0ck25/My-Lists-Addon/pull/9)) | after it merges | per PR | per PR |
 
 Each release gets its own section below when it is prepared, with its steps in plain words.
 
@@ -627,3 +629,68 @@ Settings' account, devices, connections and install-link cards, and imports, wor
 ### Rollback
 
 Paste Release 7b's file and Deploy. Nothing to undo anywhere else. The new-interface cookie is harmless on the older code, which ignores it.
+
+---
+
+## Release 9: five bug fixes, and the new-interface changes the owner asked for
+
+**Branch point:** this branch after Release 8 (`1cc82a5`). Nothing here comes from `main`; these commits are this branch's own and go back to `main` with the rest of it:
+- `486d714`: removed recent plays stay removed; the filtering checkbox keeps its setting;
+- `723ef95`: Better Posters on Search's movie and TV results;
+- `b5aed82`: liking a My Lists Addon list from a Discover card or a list's page;
+- `e4c5958`: Plex episode plays get the show's poster and next episode;
+- the new-interface changes (the last commit of the release).
+
+The five bugs were all on the live site before any phase went out.
+
+### What changes for everyone
+
+- **Removing a recent play from Continue Watching or Watch History now sticks.**
+  - The cause: the server keeps a small backup copy of the last 20 plays from Stremio, Nuvio and Plex, for the minute or so before the main record can be read everywhere. That copy was merged back in on every load and every save, whatever the main record said. So anything among the last 20 plays came back after you removed it.
+  - Now the backup is used only when the main record is older than it, which is the case it exists for.
+  - A play recorded after the page last loaded is still kept when you remove something else, because the page never showed it to you.
+- **"Enable media server user filtering" stays unticked** when you untick it. The box was drawn ticked whenever any names were saved. The server already followed your choice, so filtering really was off; only the box was wrong.
+- **Search → Movies and Shows show Better Posters** when Better Posters is on. Search results carry only TMDB ids, and the step that finds the IMDb id Better Posters needs was never run on them.
+- **The heart on a My Lists Addon list works everywhere.** Discover's recommended-list cards and a list's own page sent this site's lists to the like for MDBList/Trakt/TMDB links, which refused them ("That URL can't be liked"). They now use this site's own like, as Search's heart already did.
+- **Plex episodes get the show's poster, and the next episode in Continue Watching.**
+  - For an episode, Plex sends the episode's own IMDb id and names the show only by a Plex id. The episode's id was used as if it were the show's, so TMDB found no show: no poster and no next episode.
+  - The show is now found from the episode's id through TMDB.
+  - Episodes already recorded this way keep their missing poster. Remove them from Watch History if they bother you; new plays are right.
+- The list search now also says when each of this site's lists was made and how many people added it. The new sort buttons use this.
+
+### What only you see (the new interface)
+
+- **Catalogs:**
+  - the **Add to your home screen** panel is gone (the paste box, Check links, and the starter-pack button);
+  - **Hide titles already shown in rows above** now sits just above **Daily Randomizer**, below the rows it applies to;
+  - a first-time visitor to the new interface gets the same eight starter rows the classic page gives, because the starter-pack button went with that panel.
+- **The tab names** (Catalogs, Lists, Channels, Discover, Search, Settings) no longer have a line under them. They are links, and nothing had switched off a link's underline.
+- **The install bar across the top is gone.** Your install link is made where it always was: **Generate Install Link** (or **Update Add-on**) at the bottom of Catalogs, or **Settings → Install links**.
+- **Lists:** the **Your lists** section is gone.
+- **Discover:** the **Explore** section is gone.
+- **Search → Lists** has small buttons instead:
+  - **All sources, My Lists community, MDBList, Trakt, TMDB**;
+  - **Most liked, Newest, Most added**.
+  - With no sort button pressed, results are in best-match order, as before. Pressing the pressed button again goes back to that.
+  - With nothing typed, a source button shows that source's popular lists. TMDB has no list directory, so it can only be searched.
+  - Newest and Most added know only this site's lists; lists from other sources are listed after them.
+- **Lists → Import:** **Import a file** is now below **Import list from a link**.
+
+The classic page is unchanged, apart from the five fixes.
+
+### Steps, in order
+
+1. **Keep Release 8's file** (`release-8-NEW-worker.js`) as the rollback file.
+2. **Deploy:** **Edit code** → select all → paste Release 9's `worker_entry_combined.js` → **Deploy**. There is no database step and no binding.
+3. **Check the fixes:**
+   - play something in Stremio, Nuvio or Plex, then remove it from Watch History (and a show from Continue Watching). Reload the page: it stays gone. Reload again a minute later: still gone;
+   - Settings → untick **Enable media server user filtering**, reload: still unticked;
+   - with Better Posters on, Search → Movies and Shows: Better Posters;
+   - like and unlike a My Lists Addon list from Discover's recommended cards and from a list's page;
+   - play an episode in Plex: a poster in Watch History, and the next episode in Continue Watching.
+4. **Walk the new interface** (`/?ff_new_ui=1`) through the changes listed above.
+5. **Watch for 30 minutes**: Metrics and Logs.
+
+### Rollback
+
+Paste Release 8's file and Deploy. Nothing to undo anywhere else: the older code simply ignores the new stamp on the backup copy, and goes back to merging it in every time.

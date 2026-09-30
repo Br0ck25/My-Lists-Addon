@@ -133,7 +133,10 @@ async function v2SearchPublicLists(env, target, cap) {
   return results || [];
 }
 
-// The /api/search-published-lists entry, exactly as the legacy path builds it.
+// The /api/search-published-lists entry, as the legacy path builds it, plus
+// when the list was made and changed and how many people added it: Search's
+// Newest and Most added chips sort by those (catalogListSearchSortCards,
+// 19_client-search-and-likes.js). The legacy path has none of the three.
 function v2SearchEntry(row, origin) {
   return {
     name: row.name,
@@ -144,6 +147,9 @@ function v2SearchEntry(row, origin) {
     username: row.username,
     url: `${origin}/lists/${row.username}/${row.slug}`,
     source: "My Lists Addon",
+    createdAt: row.created_at || null,
+    updatedAt: row.updated_at || null,
+    adds: row.add_count || 0,
   };
 }
 

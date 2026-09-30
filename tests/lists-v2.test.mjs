@@ -1399,7 +1399,11 @@ describe("P3b-6: the directory and search on v2", () => {
       const { legacy, v2 } = await readBoth(env, `/api/search-published-lists?q=${encodeURIComponent(q)}`);
       assert.equal(v2.body.ok, true);
       const sorted = (arr) => arr.slice().sort((a, b) => a.url.localeCompare(b.url));
-      assert.deepEqual(sorted(v2.body.lists), sorted(legacy.body.lists), `the same lists for "${q}"`);
+      // v2 also says when each list was made and changed and how many added
+      // it (Search's Newest / Most added chips); the legacy path cannot.
+      const legacyShape = (arr) => arr.map(({ createdAt, updatedAt, adds, ...rest }) => rest);
+      assert.ok(v2.body.lists.every((l) => "createdAt" in l && "updatedAt" in l && "adds" in l));
+      assert.deepEqual(sorted(legacyShape(v2.body.lists)), sorted(legacy.body.lists), `the same lists for "${q}"`);
       // Legacy orders by likes then items and leaves ties in no set order;
       // v2 gives the same order with ties broken by most recently updated.
       assert.deepEqual(v2.body.lists.map(key), legacy.body.lists.map(key), `the same order for "${q}"`);

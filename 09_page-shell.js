@@ -70,16 +70,6 @@ function buildAppShellHeadRoutes() {
   return out;
 }
 
-// The install bar. Its first paint is server-rendered so it is there before any
-// script runs, and its state (none / unsaved / live) is then kept by the client
-// -- the last install link this browser generated is browser state, so the
-// Worker cannot know it. See appShellRefreshInstallBar (24_).
-const APP_SHELL_INSTALL_BAR_HTML = `<div id="appShellInstallBar" class="app-shell-install-bar" data-state="none">
-    <span class="app-shell-install-dot" aria-hidden="true"></span>
-    <span class="app-shell-install-text" id="appShellInstallText">Not installed yet</span>
-    <button type="button" class="app-shell-install-action" id="appShellInstallBtn" data-action="install">Get install link</button>
-  </div>`;
-
 // The Worker-side twin of appActArgs (16_client-row-core.js). 08_quickadd-chart-data.js
 // builds some of the page's markup here in the Worker rather than in the
 // browser (see buildCombinedChartsHtml), so its data-act arguments need the
@@ -183,13 +173,12 @@ function renderBuilder(
   // apart (see the "pre-fill" block's own comment on why that distinction
   // matters for when to trust localStorage over what the server sent).
   const usingDefaultEntries = !hasInitial;
-  // A first-time visitor on the OLD page still gets the demo rows it always
-  // got. On a shell page the same rows are offered as a button in the
-  // home-screen editor instead (P6-3): nothing is added that was not asked
-  // for, and both read STARTER_PACK_ENTRIES (00_constants.js) so they cannot
-  // drift.
+  // A first-time visitor gets the demo rows, on either page. The shell used to
+  // offer them as a button in its home-screen editor instead (P6-3); that
+  // editor was taken out at the owner's request, and without the button a new
+  // visitor would have had no way to them.
   const initialEntriesJson = jsonForScript(
-    hasInitial ? initialEntries : (newUi ? [] : STARTER_PACK_ENTRIES)
+    hasInitial ? initialEntries : STARTER_PACK_ENTRIES
   );
 
   // The shell variant of the chrome. Both navs keep the legacy wrappers
@@ -3622,60 +3611,30 @@ ${seoHeadHtml}
     animation: spin 0.9s linear infinite;
   }
 
-  /* --- The new UI shell's install bar (Phase 6, P6-1) --------------------- */
+  /* --- The new UI shell (Phase 6) -------------------------------------------- */
   /* Emitted for every visitor and inert without <html data-app-shell="1">.
      That is deliberate: /app.css is one shared, content-hashed file
      (splitAppCss, 02_http-and-creator-utils.js), so a variant-dependent
      stylesheet would cost every visitor the shared cache. */
-  .app-shell-install-bar { display: none; }
-  html[data-app-shell="1"] .app-shell-install-bar {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin: 0 0 10px;
-    padding: 10px 14px;
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-sm);
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--text-2);
-    /* Sticky rather than fixed: on a phone the bottom of the screen belongs
-       to the tab bar, and the bar must not sit over the poster grid while a
-       list is being built. */
-    position: sticky;
-    top: 0;
-    z-index: 900;
+  /* The shell's tabs are links (a real path per view), and a link is
+     underlined unless told otherwise -- the line under every tab name. */
+  html[data-app-shell="1"] a.tab-btn,
+  html[data-app-shell="1"] a.bottom-nav-item { text-decoration: none; }
+  /* Search -> Lists: the source and sort chips, smaller than the Movies /
+     Shows / Lists pills above them (setCatalogListSearchChip, 19_). */
+  html[data-app-shell="1"] .catalog-list-chips { display: grid; gap: 6px; margin-top: 8px; }
+  html[data-app-shell="1"] .catalog-list-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  html[data-app-shell="1"] .catalog-list-chip {
+    flex: none; min-height: unset; cursor: pointer;
+    padding: 3px 10px; font-size: 0.75rem; font-weight: 600; line-height: 1.5;
+    border-radius: var(--radius-pill); border: 1px solid var(--border-strong);
+    background: var(--surface); color: var(--text-2);
   }
-  html[data-app-shell="1"] .app-shell-install-dot {
-    width: 9px; height: 9px; flex: none; border-radius: 50%;
-    background: var(--muted);
-  }
-  html[data-app-shell="1"] .app-shell-install-bar[data-state="none"] .app-shell-install-dot { background: var(--muted); }
-  html[data-app-shell="1"] .app-shell-install-bar[data-state="unsaved"] .app-shell-install-dot { background: var(--warn); }
-  html[data-app-shell="1"] .app-shell-install-bar[data-state="live"] .app-shell-install-dot { background: var(--success); }
-  html[data-app-shell="1"] .app-shell-install-text {
-    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  html[data-app-shell="1"] .app-shell-install-action {
-    flex: none;
-    background: var(--accent); color: #fff; border: none;
-    border-radius: var(--radius-pill);
-    padding: 7px 14px; font-size: 0.82rem; font-weight: 700;
-    min-height: unset; cursor: pointer;
-  }
-  html[data-app-shell="1"] .app-shell-install-action:hover { background: var(--accent-hover); }
-  html[data-app-shell="1"] .app-shell-install-bar[data-state="live"] .app-shell-install-action {
-    background: var(--surface); color: var(--accent);
-    border: 1.5px solid var(--border-strong);
-  }
-  html[data-app-shell="1"] .app-shell-install-bar[data-state="live"] .app-shell-install-action:hover {
-    border-color: var(--accent); color: var(--accent);
-  }
-  /* The floating "Unsaved changes to install link" banner and the install
-     bar say the same thing; showing both would be the duplication this shell
-     exists to remove. */
+  html[data-app-shell="1"] .catalog-list-chip:hover { border-color: var(--accent); color: var(--accent); }
+  html[data-app-shell="1"] .catalog-list-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  /* The floating "Unsaved changes to install link" banner is never shown on
+     a shell page: Catalogs' Generate Install Link button and Settings' Install
+     links card are where the link is made. */
   html[data-app-shell="1"] #unsavedInstallBanner { display: none !important; }
 
   /* The shell's Settings cards (P6-2). The card itself is the ordinary
@@ -3703,18 +3662,12 @@ ${seoHeadHtml}
   html[data-app-shell="1"] .app-shell-details { margin-top: 10px; font-size: 0.88rem; }
   html[data-app-shell="1"] .app-shell-details summary { cursor: pointer; color: var(--text); }
 
-  /* The home-screen editor (P6-3): the paste box, the review table and the
-     duplicate toggle that now sits directly above the rows it applies to. The
-     toggle used to live in Settings; on a shell page that copy is hidden, so
-     the same setting is described in one place (see #legacyDedupePanel). */
+  /* The duplicate toggle (P6-3), right below the rows it applies to and above
+     the Daily Randomizer. It used to live in Settings; on a shell page that
+     copy is hidden, so the same setting is described in one place (see
+     #legacyDedupePanel). The review styles below are shared with the Lists,
+     Imports and Channels views. */
   html[data-app-shell="1"] #legacyDedupePanel { display: none; }
-  html[data-app-shell="1"] .app-shell-add-box {
-    width: 100%; min-height: 92px; padding: 10px 12px; margin: 0 0 8px;
-    border: 1px solid var(--border); border-radius: 10px;
-    background: var(--bg); color: var(--text);
-    font-family: var(--font-mono, monospace); font-size: 0.86rem; line-height: 1.45;
-    resize: vertical;
-  }
   html[data-app-shell="1"] .app-shell-review { margin-top: 12px; }
   html[data-app-shell="1"] .app-shell-review-row {
     display: flex; align-items: flex-start; justify-content: space-between;
@@ -3727,10 +3680,12 @@ ${seoHeadHtml}
   html[data-app-shell="1"] .app-shell-review-bad { color: var(--danger); }
   html[data-app-shell="1"] .app-shell-dedupe {
     display: flex; align-items: flex-start; gap: 10px; cursor: pointer;
-    font-size: 0.92rem; user-select: none; margin: 14px 0 4px;
-    padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px;
+    font-size: 0.92rem; user-select: none; margin: 16px 0 0;
+    padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px;
     background: var(--surface);
   }
+  /* Sits right above the Daily Randomizer box and matches it. */
+  html[data-app-shell="1"] .app-shell-dedupe .app-shell-muted { margin: 4px 0 0; }
   html[data-app-shell="1"] .app-shell-dedupe input { margin-top: 2px; cursor: pointer; width: 16px; height: 16px; }
 
   /* A visibility choice (P6-4) is a chip you can press: Private, Unlisted,
@@ -3948,10 +3903,6 @@ ${seoHeadHtml}
       <div id="creatorProfileBar"></div>
     </div>
   </header>
-
-  <!-- The install bar (new UI shell only): what the current configuration is
-       installed as, and the one action that changes it. -->
-${newUi ? "  " + APP_SHELL_INSTALL_BAR_HTML : ""}
 
   <!-- Top Tab Bar (Desktop View) -->
 ${newUi ? appShellDesktopNavHtml : `  <div class="tab-bar" role="tablist" aria-label="Main navigation">
