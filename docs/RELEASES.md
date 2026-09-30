@@ -10,7 +10,8 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **`FF_V2_LISTS_READ`** is on (2026-09-30). The owner reports everything looks the same.
 - **Release 5** is live, and the history copy finished: 698 accounts, 45,734 plays, none fewer than before (results under Release 5). `FF_EVENT_TRACKING` stays off (see there).
 - **Release 6** went live on 2026-09-30. The owner reports it looks good, and asked to carry on without waiting days between releases.
-- **Release 7** is prepared and not yet live.
+- **Release 7** (as 7b) went live on 2026-09-30, with the queue set up: *Round trip works: picked up after 6.3 s*, and every periodic job running with none failing (under Release 7).
+- **Release 8** is prepared and not yet live.
 
 The owner decided to release the new version **one phase at a time, straight to the live site**, with no separate test site. Each release waits until the one before it has run cleanly for at least a day.
 
@@ -566,3 +567,63 @@ The queues can stay; jobs already waiting expire after 4 days.
    - **Queues → `mylists-jobs` → Metrics** shows messages delivered and acknowledged, with no growing backlog;
    - about 15 minutes after the binding, `/admin` → **Check jobs** shows recent runs.
 4. A Worker log line `[Jobs] <type> was sent to the queue and not picked up within 10 minutes; running it here` means the consumer is not receiving.
+
+### Live: the queue's first report
+
+Reported by the owner, 2026-09-30:
+
+> Send a test job — Round trip works: picked up after 6.3 s.
+> Check jobs — The queue does the work.
+> cron.episodes 28.4 s, cron.airing-next 6.8 s, nos.sweep 0.2 s, cron.charts 45.7 s, cron.better-posters 1.7 s, cron.housekeeping 0.3 s (2 runs each);
+> show.watchers, show.refresh, shelf.shadow 11.2 s, chart.refresh, token.refresh, channel.presets, recs.build, rollup.daily, media.retry 4.5 s (1 run each).
+> Every job: last success at its last run.
+
+---
+
+## Release 8: Phase 6 (the new interface, and every page's buttons rewired)
+
+**Branch point:** `f58bf6d` on `claude/elegant-ride-o7m8fh`, which merges `main` at `eee71a7` (the end of Phase 6, PRs #7 and #8) into Release 7b. There were no source conflicts. With this, **the branch holds everything on `main`**, plus the public-site ports and this branch's fixes.
+
+`bash verify.sh` passes (1,884 tests passed, 0 failed, 1 skipped), and so does the suite with `MLA_TEST_V2_LISTS_READ=1`. The page checks find no inline handler and no `alert()` in any page, the ported live-list code included.
+
+### What changes for everyone
+
+- **Every button, box and menu on the website and in `/admin` is wired differently** (P6-8, P6-10): one listener per page instead of a line of code in each control. It should look and behave the same.
+  - If a control ever does nothing, the browser console says `Action failed: <name>` (the site) or `Admin action not found: <name>` (`/admin`).
+- **No more browser pop-ups.** Messages are the site's own toast (bottom centre) and its own yes/no dialog. `/admin` keeps ten yes/no `confirm()` prompts for now.
+- **Provider keys and tokens are no longer re-saved in the browser.**
+  - A signed-in person's keys come back from their account.
+  - Someone signed out who pastes a key keeps it for that visit only. Since Release 1 a signed-out install cannot use one anyway.
+- **Lists that live only in one browser say so** in the new interface, with *Save to an account* and *Export* (P6-9). The classic page is unchanged.
+
+### What only you see (the new interface, per browser)
+
+Open `https://mylistsaddon.com/?ff_new_ui=1` in a browser to turn it on there; `?ff_new_ui=0` turns it off (§20). It covers:
+- Catalogs with the paste-first home-screen editor;
+- Lists as cards;
+- Explore;
+- channel templates;
+- Settings;
+- imports.
+
+Settings' account, devices, connections and install-link cards, and imports, work through a sign-in session, which is **`FF_SESSIONS`, still off**. Until then they say you are not signed in. That is expected, and it is the next step after this release.
+
+### Steps, in order
+
+1. **Keep Release 7b's file** (`release-7b-NEW-worker.js`) as the rollback file.
+2. **Deploy:** **Edit code** → select all → paste Release 8's `worker_entry_combined.js` → **Deploy**. There is no database step and no binding.
+3. **Smoke test the classic site**, clicking as much as you can:
+   - **Catalogs:** add a chart, drag to reorder, remove a row and Undo, **Update Link**;
+   - **Lists:** open a list, add and remove an item, rename it;
+   - **Channels:** add a storyline;
+   - **Discover** and **Search:** search, like and unlike;
+   - **Settings:** the Connect buttons open their sign-in pages; Backups → Export;
+   - a message should appear as the site's own toast or dialog, never a browser pop-up;
+   - in Stremio or Nuvio, rows load, and a list edit reaches them.
+4. **Smoke test `/admin`:** Maintenance → **Check schema**, **Check jobs**, **Send a test job**; the Creator Accounts filter box.
+5. **Try the new interface:** `/?ff_new_ui=1`, then walk Catalogs, Lists, Channels → Explore and templates, Discover, Search. Settings' account cards will say you are not signed in, which is expected. Turn it off with `/?ff_new_ui=0` if you want the classic page back.
+6. **Watch for 30 minutes**: Metrics and Logs.
+
+### Rollback
+
+Paste Release 7b's file and Deploy. Nothing to undo anywhere else. The new-interface cookie is harmless on the older code, which ignores it.
