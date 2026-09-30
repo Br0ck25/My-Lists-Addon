@@ -9,7 +9,7 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Release 4** is live, and the list copy finished with 698 accounts and none failed (results under Release 4).
 - **`FF_V2_LISTS_READ`** is on (2026-09-30). The owner reports everything looks the same.
 - **Release 5** is live, and the history copy finished: 698 accounts, 45,734 plays, none fewer than before (results under Release 5). `FF_EVENT_TRACKING` stays off (see there).
-- **Release 6** is being prepared.
+- **Release 6** is prepared and not yet live.
 
 The owner decided to release the new version **one phase at a time, straight to the live site**, with no separate test site. Each release waits until the one before it has run cleanly for at least a day.
 
@@ -429,3 +429,43 @@ Continue Watching and Airing Next would stay as last worked out until `FF_SHOW_S
 So it waits at least until Release 7 (Phase 5) is live and its shelf comparison (`shelf.shadow`) has run for a week. At that point, decide whether the "Episode N" difference should be fixed first.
 
 Nothing is lost meanwhile: every copied account's new plays are recorded in the activity database as well (P3c-4).
+
+---
+
+## Release 6: Phase 4 (providers: one registry, a breaker, chart snapshots, canonical ids)
+
+**Branch point:** `f85eb64` on `claude/elegant-ride-o7m8fh`, which merges `main` at `46a33d6` (the end of Phase 4, PR #5) into Release 5. There were no conflicts.
+
+`bash verify.sh` passes (1,647 tests passed, 0 failed, 1 skipped), and so does the suite with `MLA_TEST_V2_LISTS_READ=1`.
+
+Checked against the ported public-site code:
+- the new provider registry still names custom-list rows `custom-list`, which the catalog route's live-list no-store check reads (#77), and still sends them to `fetchCustomListCatalog`;
+- #77's list freshness (MDBList 10 minutes, Trakt and TMDB lists 5) and its per-key cache for private MDBList lists are unchanged.
+
+### What changes for everyone
+
+- **Nothing visible.** Every catalog row now finds its fetcher through one registry (P4-1) instead of a chain of `if`s. That is the same behavior, and it is tested source by source.
+- **The nightly provider check** (`.github/workflows/provider-live-check.yml`) runs from `main` on GitHub already. It does not depend on this deploy; `docs/OPERATIONS.md` §16 lists its optional repository secrets.
+
+### The switches it brings (all off, each reversible)
+
+| Switch | What it does | Suggested |
+|---|---|---|
+| `FF_PROVIDER_BREAKER` | After five failures in a row, a provider (TMDB, Trakt, MDBList, ...) is skipped for a minute and rows show their last good copy at once, instead of every row waiting for a timeout (§14) | Turn on a day after this release |
+| `FF_CHART_SNAPSHOTS` | Charts come from one shared copy per page, rebuilt every two hours; an empty or failed answer never replaces a good copy (§15) | Turn on a day or two after the breaker |
+| `FF_CANONICAL_IDS` | Every title in a Stremio catalog gets an id the apps can open (fixes tiles that open to "not found"). A title served as `tmdb:<n>` before is served under its IMDb id, so Stremio's own library and Continue Watching keep it under the old id (§17) | The owner decides; later, on its own |
+
+### Steps, in order
+
+1. **Keep Release 5's file** (`release-5-NEW-worker.js`) as the rollback file.
+2. **Deploy:** Workers & Pages → the My Lists Worker → **Edit code** → select all → paste Release 6's `worker_entry_combined.js` → **Deploy**. There is no database step and no binding.
+3. **Smoke test:**
+   - the site loads;
+   - in Stremio or Nuvio: a chart row, a public MDBList/Trakt/TMDB list row, a custom list row, Continue Watching and a channel all load;
+   - on the website: Discover, Search and a list preview load;
+   - edit a list, and the change reaches the apps.
+4. **Watch for 30 minutes**: Metrics and Logs.
+
+### Rollback
+
+Paste Release 5's file and Deploy. Nothing to undo anywhere else.
