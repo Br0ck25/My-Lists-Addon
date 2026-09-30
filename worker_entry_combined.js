@@ -1571,6 +1571,59 @@ const BETTER_POSTER_WARM_IDS_PER_MINUTE = 800;
 // wall-clock time: 8 at 4 at a time is two waits, not eight.
 const BETTER_POSTER_PREWARM_CHECKS_PER_TICK = 60;
 const BETTER_POSTER_PREWARM_FETCHES_PER_TICK = 8;
+
+// --- The new UI shell (Phase 6, P6-1) ----------------------------------------
+//
+// The frontend rebuild is opt-in per browser while it is being built, through a
+// cookie rather than a Worker variable: the owner can try it on their own
+// device without changing anything for anyone else, and turning it off again is
+// one cookie rather than a deploy. The Worker reads the cookie once per request
+// (isNewUiRequest, 02_http-and-creator-utils.js) and renders the same page with
+// the shell's chrome around the existing views.
+//
+// This table is the ONE list of the site's top-level views. The Worker renders
+// the shell's navigation from it (buildAppShellNavHtml, 09_page-shell.js) and
+// writes it into the client bundle (16_client-row-core.js), where the router
+// (24_client-backup-restore-presets.js) builds the same paths back from it.
+// Adding a view is one entry here, not three edits.
+//
+// `subs` are the sub-tab ids the view's own switcher already knows: the shell
+// routes /catalogs/quickadd to switchCatalogsSubmenu('quickadd') rather than
+// inventing a second set of names. The first sub is that view's default.
+// A route whose sub is not in this list falls back to the view itself, so a
+// stale URL can never open a panel that does not exist.
+const NEW_UI_COOKIE = "FF_NEW_UI";
+
+const APP_SHELL_TABS = [
+  { id: "catalogs", label: "Catalogs", path: "/catalogs", subs: ["all", "quickadd", "bulk"] },
+  { id: "lists", label: "Lists", path: "/lists", subs: ["my-lists", "liked", "create-list", "import"] },
+  { id: "channels", label: "Channels", path: "/channels", subs: ["my-channels", "storylines", "quickadd", "explore", "import", "build"] },
+  { id: "discover", label: "Discover", path: "/discover", subs: ["movie", "all", "series", "popular", "curated", "gems", "kids", "holidays", "genres"] },
+  { id: "search", label: "Search", path: "/search", subs: [] },
+  { id: "settings", label: "Settings", path: "/settings", subs: ["account", "external", "backup", "feedback"] },
+];
+
+// The paths the shell answers on. Exact matches only: /lists/<slug> and
+// /channels/<user>/<slug> are share links with their own routes, and must keep
+// working exactly as they do.
+const APP_SHELL_PATHS = new Set(APP_SHELL_TABS.map((t) => t.path));
+
+// The rows a first-time visitor used to be given silently (the page fell back
+// to these when there was no saved configuration). The new UI does not pre-fill
+// them -- "see 8 catalogs you did not add" is one of the things the frontend
+// rebuild sets out to remove (FRONTEND_UX_AUDIT §7, scenario 1) -- and offers
+// them instead, as one button in the home-screen editor (P6-3). Both the old
+// page's fallback and that button read this one list, so they cannot drift.
+const STARTER_PACK_ENTRIES = [
+  { name: "Popular", url: "https://mdblist.com/lists/official/movies/popular\ntmdb:chart:popular\ntrakt:chart:popular", type: "movie", enabled: true, group: "Combined Charts" },
+  { name: "Popular", url: "https://mdblist.com/lists/official/shows/popular\ntmdb:chart:popular\ntrakt:chart:popular", type: "series", enabled: true, group: "Combined Charts" },
+  { name: "Trending", url: "tmdb:chart:trending\ntrakt:chart:trending\nsimkl:chart:today\nsimkl:chart:week\nsimkl:chart:month", type: "movie", enabled: true, group: "Combined Charts" },
+  { name: "Trending", url: "tmdb:chart:trending\ntrakt:chart:trending\nsimkl:chart:today\nsimkl:chart:week\nsimkl:chart:month", type: "series", enabled: true, group: "Combined Charts" },
+  { name: "Streaming Top 10 (All Services)", url: "https://mdblist.com/lists/ahmed2250/apple-tv-top-10-movies-today\nhttps://mdblist.com/lists/andykai/disney-top-10-no-hulu\nhttps://mdblist.com/lists/harmes7/hbo-max-top-10-movies-m77r6mc20q\nhttps://mdblist.com/lists/hulupiv/hulu-top-10-movies\nhttps://mdblist.com/lists/hdlists/netflix-top-10-trending-movies\nhttps://mdblist.com/lists/ahmed2250/paramount-top-10-movies-today\nhttps://mdblist.com/lists/diimaan/amazon-prime-top-10-movies\nhttps://mdblist.com/lists/diimaan/peacock-top-10-movies", type: "movie", enabled: true, group: "Combined Charts" },
+  { name: "Streaming Top 10 (All Services)", url: "https://mdblist.com/lists/ahmed2250/apple-tv-top-10-tv-shows-today\nhttps://mdblist.com/lists/andykai/disney-trending-no-hulu\nhttps://mdblist.com/lists/harmes7/hbo-max-top-10-series-cp45l27nhd\nhttps://mdblist.com/lists/hulupiv/hulu-top-10-shows\nhttps://mdblist.com/lists/hdlists/netflix-top-10-trending-shows\nhttps://mdblist.com/lists/ahmed2250/paramount-top-10-tv-shows-today\nhttps://mdblist.com/lists/diimaan/amazon-prime-top-10-tv-shows\nhttps://mdblist.com/lists/peacockpiv/peacock-top-10-shows", type: "series", enabled: true, group: "Combined Charts" },
+  { name: "Streaming (All Services)", url: "tmdb:chart:appletv\ntmdb:chart:disney\ntmdb:chart:discovery\ntmdb:chart:hbomax\ntmdb:chart:hulu\ntmdb:chart:netflix\ntmdb:chart:netflixkids\ntmdb:chart:paramount\ntmdb:chart:primevideo\ntmdb:chart:peacock", type: "movie", enabled: true, group: "Combined Charts" },
+  { name: "Streaming (All Services)", url: "tmdb:chart:appletv\ntmdb:chart:disney\ntmdb:chart:discovery\ntmdb:chart:hbomax\ntmdb:chart:hulu\ntmdb:chart:netflix\ntmdb:chart:netflixkids\ntmdb:chart:paramount\ntmdb:chart:primevideo\ntmdb:chart:peacock", type: "series", enabled: true, group: "Combined Charts" }
+];
 // --- icon (placeholder, replace via /mnt/project source if needed) --------
 const ICON_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAAEAAElEQVR42rz9d9xt11Eejs/MWvu0" +
@@ -3045,15 +3098,17 @@ function isPrivateApiPath(path) {
 // set a more specific value for one of these (none do today) would still
 // win, rather than this clobbering it.
 //
-// CSP is deliberately not the strict, script-src-locked-down kind: this
-// app relies on plenty of inline <script> blocks and inline onclick=/
-// onchange= handlers throughout the builder/admin pages, which only work
-// with 'unsafe-inline' on script-src. (That trade is only reasonable if the
-// handlers actually resolve, which html_checks.py now verifies across all
-// 733 of them -- for a long time this comment cited that step before it
-// existed.) Tightening
-// that further would mean a nonce- or hash-based rewrite of every inline
-// handler -- a real project of its own, not a header tweak. What this CSP
+// CSP is deliberately not the strict, script-src-locked-down kind: this app
+// still serves its page as inline <script> blocks (the builder bundle and the
+// per-request preamble, and /admin's own script), which only work with
+// 'unsafe-inline' on script-src. That half is P7-1's, and it is what is left:
+// the inline on*= handlers this comment used to cite are gone from both pages
+// -- P6-8 on the builder, P6-10 on /admin -- and are now data-act attributes
+// run by a delegated listener instead, checked the same way (html_checks.py
+// resolves every action name against the page that declares it, and fails the
+// build on an inline handler, whatever it is called). Removing the handlers is
+// what makes a nonce/hash for the <script> blocks a header change away rather
+// than part of a much larger rewrite. What this CSP
 // still buys, even with 'unsafe-inline' allowed: no loading of scripts/
 // styles/fonts from any origin except the ones this app actually uses
 // (jsDelivr for fflate, Google Fonts, YouTube for trailer embeds), no
@@ -4684,15 +4739,101 @@ async function hashStringForKey(s) {
 // sent when the browser already holds a byte-identical copy.
 const BUILDER_PAGE_MEMO = new Map();
 
+// --- The new UI shell's cookie (Phase 6, P6-1) -------------------------------
+//
+// The shell (see APP_SHELL_TABS, 00_constants.js) is opt-in per BROWSER, not
+// per deployment: the Worker reads NEW_UI_COOKIE from the page request's own
+// headers. That is what lets the owner walk the new interface on their device
+// while everyone else keeps the page they know, and lets a rollback be a
+// cookie rather than a deploy.
+//
+// `?ff_new_ui=1` on any link sets it and `?ff_new_ui=0` clears it
+// (appShellSwitchResponse below), so nobody has to open developer tools.
+function readCookieValue(cookieHeader, name) {
+  const m = String(cookieHeader || "").match(new RegExp("(?:^|;\\s*)" + name + "=([^;]*)"));
+  if (!m) return "";
+  try {
+    return decodeURIComponent(m[1]);
+  } catch {
+    return m[1];
+  }
+}
+
+function isNewUiRequest(request) {
+  try {
+    const raw = readCookieValue(request && request.headers ? request.headers.get("Cookie") : "", NEW_UI_COOKIE).trim().toLowerCase();
+    return raw === "1" || raw === "on" || raw === "true";
+  } catch {
+    return false;
+  }
+}
+
+function appShellCookieHeader(on) {
+  return on
+    ? `${NEW_UI_COOKIE}=1; Path=/; Max-Age=31536000; SameSite=Lax`
+    : `${NEW_UI_COOKIE}=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+}
+
+// The one place the cookie is written. Returns null for every request that is
+// not asking to switch, so the caller can fall through to its normal routing.
+// The redirect drops the parameter, so the address people see and share never
+// carries it.
+function appShellSwitchResponse(url) {
+  const raw = url.searchParams.get("ff_new_ui");
+  if (raw === null) return null;
+  const on = !(raw === "0" || raw === "off" || raw === "false" || raw === "");
+  const clean = new URL(url.href);
+  clean.searchParams.delete("ff_new_ui");
+  const qs = clean.searchParams.toString();
+  // One leading slash, always. A path that starts with two (//evil.com/,
+  // which is also what /\evil.com parses to) is a protocol-relative address,
+  // and a browser follows it to that host: the switch was an open redirect.
+  const samePath = "/" + clean.pathname.replace(/^\/+/, "");
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: samePath + (qs ? "?" + qs : "") + (clean.hash || ""),
+      "Set-Cookie": appShellCookieHeader(on),
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
+// Every render of the page goes through this, so the shell and the page it
+// wraps can never disagree about which variant was asked for. A false
+// `newUi` is dropped rather than passed on, so the flag-off variants stay
+// exactly the renders they were before this existed (same memo key, same
+// bytes).
+function newUiPageOpts(request, opts) {
+  const out = Object.assign({}, opts || {});
+  if (isNewUiRequest(request)) out.newUi = true;
+  return out;
+}
+
+// Every page route renders through these two instead of calling renderBuilder
+// itself, so the variant is decided in exactly one place: the request.
+function renderPage(request, origin, opts) {
+  return renderBuilder(origin, newUiPageOpts(request, opts));
+}
+
+function renderPageCached(request, origin, opts) {
+  return renderBuilderCached(origin, newUiPageOpts(request, opts));
+}
+
 function renderBuilderCached(origin, opts) {
   // Only the argument-free variants are stable enough to memoize; anything
-  // carrying entries, keys or a deep link is rendered fresh.
-  const isDefault = !opts || Object.keys(opts).length === 0;
-  const isBareConfigure = !!(opts && opts.isConfigureMode === true && Object.keys(opts).length === 1);
+  // carrying entries, keys or a deep link is rendered fresh. The shell is a
+  // variant of the same two: same arguments otherwise, different chrome, so
+  // it is memoized under its own key rather than re-rendering 1.6MB a load.
+  const shellOpts = Object.assign({}, opts || {});
+  const isShell = shellOpts.newUi === true;
+  if (!isShell) delete shellOpts.newUi;
+  const isDefault = Object.keys(shellOpts).length === 0;
+  const isBareConfigure = !!(shellOpts.isConfigureMode === true && Object.keys(shellOpts).length === 1);
   if (!isDefault && !isBareConfigure) {
     return renderBuilder(origin, opts || {});
   }
-  const memoKey = `${origin}::${isBareConfigure ? "configure" : "default"}`;
+  const memoKey = `${origin}::${isBareConfigure ? "configure" : "default"}${isShell ? ":shell" : ""}`;
   const hit = BUILDER_PAGE_MEMO.get(memoKey);
   if (hit) return hit;
   const html = renderBuilder(origin, opts || {});
@@ -10886,6 +11027,29 @@ function renderAdminLoginPage(errorMsg) {
 </body></html>`;
 }
 
+// The arguments of a delegated control on /admin, as one attribute value.
+//
+// Same contract as the builder page's appActArgs (16_client-row-core.js) and
+// the same pair of functions: this one runs in the Worker, while the page's
+// own script carries adminActAttr, its browser-side twin, for the markup that
+// script builds itself. /admin does not load the builder's bundle -- it is its
+// own document with its own script -- so it carries its own copy of the
+// contract (P6-10).
+//
+// Encoded once, escaped once: JSON.stringify makes the arguments data (a
+// display name with a quote in it is a string in an array, not a way out of
+// the attribute) and escapeHtmlServer makes them markup. The dispatcher
+// JSON.parses the attribute and never evaluates it.
+function adminActArgs(values) {
+  const out = [];
+  const list = values || [];
+  for (let i = 0; i < list.length; i++) {
+    const v = list[i];
+    out.push(v === undefined || v === null ? "" : v);
+  }
+  return escapeHtmlServer(JSON.stringify(out));
+}
+
 async function renderAdminDashboard(env) {
   if (!env || !env.CONFIGS) {
     return `<!DOCTYPE html><html><body style="background:#F2F2F7;color:#1C1C1E;font-family:sans-serif;padding:40px;">This Worker has no CONFIGS KV namespace bound, so there's no stats to show.</body></html>`;
@@ -11012,13 +11176,13 @@ async function renderAdminDashboard(env) {
         // the onclick string -- displayName is arbitrary creator-chosen text
         // (only .trim()'d server-side, not restricted to safe characters the
         // way the normalized username is), so splicing it directly into an
-        // onclick="..." attribute would both break on a display name
+        // attribute would both break on a display name
         // containing a quote and, worse, let a crafted display name inject
         // script into this admin page. escapeHtmlServer handles the HTML-
         // attribute escaping here the same way it already does for the two
         // <td> values above; resetCreatorKey reads the values back off the
         // element at click time instead of receiving them as literals.
-        `<td><button type="button" class="lc-btn secondary" style="padding:4px 10px; font-size:0.8rem;" data-username="${escapeHtmlServer(c.username)}" data-displayname="${escapeHtmlServer(c.displayName)}" onclick="resetCreatorKey(this)">Reset Key</button></td></tr>`
+        `<td><button type="button" class="lc-btn secondary" style="padding:4px 10px; font-size:0.8rem;" data-username="${escapeHtmlServer(c.username)}" data-displayname="${escapeHtmlServer(c.displayName)}" data-act="resetCreatorKey" data-act-args="${adminActArgs(['@self'])}">Reset Key</button></td></tr>`
     )
     .join("");
   const creatorTruncatedNote = shownCreatorCount < totalCreatorCount
@@ -11202,29 +11366,29 @@ async function renderAdminDashboard(env) {
        told assistive technology to expect tabs and hand it none, so this
        is a labelled group of toggle buttons, which is what it is. -->
   <div class="admin-main-tab-bar" role="group" aria-label="Dashboard sections">
-    <button type="button" class="admin-main-tab-btn active" aria-pressed="true" data-main-tab="overview" onclick="switchAdminMainTab('overview')">Overview &amp; Traffic</button>
-    <button type="button" class="admin-main-tab-btn" aria-pressed="false" data-main-tab="discovery" onclick="switchAdminMainTab('discovery')">Analytics &amp; Discovery</button>
-    <button type="button" class="admin-main-tab-btn" aria-pressed="false" data-main-tab="management" onclick="switchAdminMainTab('management')">Management &amp; Tools</button>
+    <button type="button" class="admin-main-tab-btn active" aria-pressed="true" data-main-tab="overview" data-act="switchAdminMainTab" data-act-args="${adminActArgs(['overview'])}">Overview &amp; Traffic</button>
+    <button type="button" class="admin-main-tab-btn" aria-pressed="false" data-main-tab="discovery" data-act="switchAdminMainTab" data-act-args="${adminActArgs(['discovery'])}">Analytics &amp; Discovery</button>
+    <button type="button" class="admin-main-tab-btn" aria-pressed="false" data-main-tab="management" data-act="switchAdminMainTab" data-act-args="${adminActArgs(['management'])}">Management &amp; Tools</button>
   </div>
 
   <div class="admin-subnav-bar" id="adminSubnavOverview">
-    <button type="button" class="subnav-pill active" data-sub-tab="last30" onclick="switchAdminSubTab('last30')">Last 30 Days</button>
-    <button type="button" class="subnav-pill" data-sub-tab="sources" onclick="switchAdminSubTab('sources')">Sources people use</button>
-    <button type="button" class="subnav-pill" data-sub-tab="apiusage" onclick="switchAdminSubTab('apiusage')">API Usage</button>
+    <button type="button" class="subnav-pill active" data-sub-tab="last30" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['last30'])}">Last 30 Days</button>
+    <button type="button" class="subnav-pill" data-sub-tab="sources" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['sources'])}">Sources people use</button>
+    <button type="button" class="subnav-pill" data-sub-tab="apiusage" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['apiusage'])}">API Usage</button>
   </div>
   <div class="admin-subnav-bar" id="adminSubnavDiscovery" style="display:none;">
-    <button type="button" class="subnav-pill" data-sub-tab="trending" onclick="switchAdminSubTab('trending')">Trending Data</button>
-    <button type="button" class="subnav-pill" data-sub-tab="search" onclick="switchAdminSubTab('search')">Search &amp; Queries</button>
-    <button type="button" class="subnav-pill" data-sub-tab="catalogs_lists" onclick="switchAdminSubTab('catalogs_lists')">Catalogs &amp; Lists</button>
-    <button type="button" class="subnav-pill" data-sub-tab="audience" onclick="switchAdminSubTab('audience')">Playback &amp; Audience</button>
+    <button type="button" class="subnav-pill" data-sub-tab="trending" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['trending'])}">Trending Data</button>
+    <button type="button" class="subnav-pill" data-sub-tab="search" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['search'])}">Search &amp; Queries</button>
+    <button type="button" class="subnav-pill" data-sub-tab="catalogs_lists" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['catalogs_lists'])}">Catalogs &amp; Lists</button>
+    <button type="button" class="subnav-pill" data-sub-tab="audience" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['audience'])}">Playback &amp; Audience</button>
   </div>
   <div class="admin-subnav-bar" id="adminSubnavManagement" style="display:none;">
-    <button type="button" class="subnav-pill" data-sub-tab="creators" onclick="switchAdminSubTab('creators')">Creator Accounts</button>
-    <button type="button" class="subnav-pill" data-sub-tab="feedback" onclick="switchAdminSubTab('feedback')">Feedback</button>
-    <button type="button" class="subnav-pill" data-sub-tab="netflixpreview" onclick="switchAdminSubTab('netflixpreview')">Provider Preview</button>
-    <button type="button" class="subnav-pill" data-sub-tab="newonstreaming" onclick="switchAdminSubTab('newonstreaming')">New on Streaming</button>
-    <button type="button" class="subnav-pill" data-sub-tab="channelpresets" onclick="switchAdminSubTab('channelpresets')">Channel Presets</button>
-    <button type="button" class="subnav-pill" data-sub-tab="maintenance" onclick="switchAdminSubTab('maintenance')">Maintenance</button>
+    <button type="button" class="subnav-pill" data-sub-tab="creators" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['creators'])}">Creator Accounts</button>
+    <button type="button" class="subnav-pill" data-sub-tab="feedback" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['feedback'])}">Feedback</button>
+    <button type="button" class="subnav-pill" data-sub-tab="netflixpreview" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['netflixpreview'])}">Provider Preview</button>
+    <button type="button" class="subnav-pill" data-sub-tab="newonstreaming" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['newonstreaming'])}">New on Streaming</button>
+    <button type="button" class="subnav-pill" data-sub-tab="channelpresets" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['channelpresets'])}">Channel Presets</button>
+    <button type="button" class="subnav-pill" data-sub-tab="maintenance" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['maintenance'])}">Maintenance</button>
   </div>
 
   <div class="admin-tab-panel active" data-admin-panel="last30">
@@ -11269,28 +11433,28 @@ async function renderAdminDashboard(env) {
   <div class="admin-tab-panel" data-admin-panel="trending">
     <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">How many times each title has been marked watched or added to a list, across everyone using this add-on. The <strong>Most Watched</strong> counts for Today, Last 7 Days and Last 30 Days are what the public <strong>Most Watched Today / 7 Days / 30 Days</strong> charts show (top 25; Quick Add &rarr; My Lists Addon Charts, and Discover); those refresh hourly for Today and daily for 7/30 days. Entries recorded without a real title id (such as "null") are left out of both this table and those charts.</p>
     <div style="margin:12px 0;">
-      <select class="admin-select" id="trendingTypeSelect" onchange="loadTrendingData()">
+      <select class="admin-select" id="trendingTypeSelect" data-act="loadTrendingData">
         <option value="watched">Most Watched</option>
         <option value="list-add">Most Added to Lists</option>
       </select>
-      <select class="admin-select" id="trendingWindowSelect" onchange="loadTrendingData()">
+      <select class="admin-select" id="trendingWindowSelect" data-act="loadTrendingData">
         <option value="today">Today</option>
         <option value="7" selected>Last 7 Days</option>
         <option value="30">Last 30 Days</option>
         <option value="90">Last 90 Days</option>
         <option value="alltime">All Time</option>
       </select>
-      <select class="admin-select" id="trendingMediaTypeSelect" onchange="loadTrendingData()">
+      <select class="admin-select" id="trendingMediaTypeSelect" data-act="loadTrendingData">
         <option value="">Movies + Shows</option>
         <option value="movie">Movies Only</option>
         <option value="series">Shows Only</option>
       </select>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="backfillTrendingBtn" onclick="runBackfillTrending()">Backfill Existing Data</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="backfillTrendingBtn" data-act="runBackfillTrending">Backfill Existing Data</button>
       <span id="backfillTrendingStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
     </div>
     <p style="color:#8E8E93; margin:0 0 12px; font-size:0.8rem;">Backfill only adds to the <strong>All Time</strong> window (there's no historical date to bucket existing data into 7/30/90-day windows) -- it seeds counts from Watch History and Custom Lists that already existed before this feature shipped. Safe to run more than once; it only adds, never resets anything. Processes accounts a few at a time, so it may take a minute for larger sites.</p>
     <div style="margin:0 0 12px;">
-      <button type="button" class="admin-select" style="cursor:pointer;" id="migrateDayCountsBtn" onclick="runMigrateDayCounts()">Migrate Historical Day Counts</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="migrateDayCountsBtn" data-act="runMigrateDayCounts">Migrate Historical Day Counts</button>
       <span id="migrateDayCountsStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
       <p style="color:#8E8E93; margin:6px 0 0; font-size:0.8rem;">One-time migration for the switch from one KV key per day to one JSON blob per title -- reads every old per-day count still sitting in KV and folds it into the new format, so 7/30/90-day windows reflect activity from before that switch instead of only counting forward from it. Safe to run more than once (adds, never subtracts); old keys are deleted once folded in, so re-running just confirms there's nothing left. Also covers the Search &amp; Queries leaderboard.</p>
     </div>
@@ -11305,7 +11469,7 @@ async function renderAdminDashboard(env) {
   <div class="admin-tab-panel" data-admin-panel="search">
     <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">Anonymous queries and search terms users have entered in the Discover and Search tabs.</p>
     <div style="margin:12px 0;">
-      <select class="admin-select" id="searchWindowSelect" onchange="loadSearchData()">
+      <select class="admin-select" id="searchWindowSelect" data-act="loadSearchData">
         <option value="today">Today</option>
         <option value="7" selected>Last 7 Days</option>
         <option value="30">Last 30 Days</option>
@@ -11380,7 +11544,7 @@ async function renderAdminDashboard(env) {
       </select>
       <textarea id="newFeedbackMessage" placeholder="What did you find?" style="width:100%; min-height:70px; box-sizing:border-box; padding:10px 12px; border-radius:8px; border:1px solid rgba(0,0,0,0.15); font-family:inherit; font-size:0.9rem; resize:vertical;"></textarea>
       <div style="margin-top:8px; display:flex; align-items:center; gap:10px;">
-        <button type="button" class="admin-select" style="cursor:pointer;" id="newFeedbackSubmitBtn" onclick="submitAdminFeedback()">Add to list</button>
+        <button type="button" class="admin-select" style="cursor:pointer;" id="newFeedbackSubmitBtn" data-act="submitAdminFeedback">Add to list</button>
         <span id="newFeedbackStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
       </div>
     </div>
@@ -11392,7 +11556,7 @@ async function renderAdminDashboard(env) {
     <div class="modal-card" style="max-width:500px;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
         <h3 style="margin:0; font-size:1.15rem; font-weight:700; color:var(--text);">Edit Feedback</h3>
-        <button type="button" class="modal-close-x" aria-label="Close" onclick="closeEditFeedbackModal()">&#x2715;</button>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeEditFeedbackModal">&#x2715;</button>
       </div>
       <input type="hidden" id="editFeedbackId">
       <label style="display:block; font-size:0.82rem; font-weight:600; color:var(--muted); margin-bottom:6px;">Category</label>
@@ -11405,8 +11569,8 @@ async function renderAdminDashboard(env) {
       <label style="display:block; font-size:0.82rem; font-weight:600; color:var(--muted); margin-bottom:6px;">Message</label>
       <textarea id="editFeedbackMessage" style="width:100%; min-height:120px; box-sizing:border-box; padding:10px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-family:inherit; font-size:0.92rem; resize:vertical; margin-bottom:16px; outline:none;"></textarea>
       <div style="display:flex; justify-content:flex-end; gap:10px;">
-        <button type="button" class="lc-btn secondary" onclick="closeEditFeedbackModal()">Cancel</button>
-        <button type="button" class="lc-btn primary" id="editFeedbackSaveBtn" onclick="saveEditFeedback()">Save Changes</button>
+        <button type="button" class="lc-btn secondary" data-act="closeEditFeedbackModal">Cancel</button>
+        <button type="button" class="lc-btn primary" id="editFeedbackSaveBtn" data-act="saveEditFeedback">Save Changes</button>
       </div>
     </div>
   </div>
@@ -11429,8 +11593,8 @@ async function renderAdminDashboard(env) {
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Find a provider's id</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">TMDB sometimes has more than one entry for the same service (e.g. two separate "Disney Plus" ids) -- look the name up here rather than guessing, since a wrong id fails silently: it just quietly shows the wrong catalog under the right label.</p>
       <div style="display:flex; gap:8px; align-items:center;">
-        <input type="text" id="providerLookupQueryInput" class="admin-select" style="margin-right:0; flex:1; max-width:220px;" placeholder="e.g. disney, max, hulu" onkeydown="if(event.key==='Enter'){event.preventDefault();lookupProviderIds();}">
-        <button type="button" class="secondary lc-btn" onclick="lookupProviderIds()">Search</button>
+        <input type="text" id="providerLookupQueryInput" class="admin-select" style="margin-right:0; flex:1; max-width:220px;" placeholder="e.g. disney, max, hulu" data-act="lookupProviderIds" data-act-keys="Enter" data-act-prevent>
+        <button type="button" class="secondary lc-btn" data-act="lookupProviderIds">Search</button>
         <span id="providerLookupStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
       </div>
       <div id="providerLookupResults" style="margin-top:10px;"></div>
@@ -11443,7 +11607,7 @@ async function renderAdminDashboard(env) {
       <label style="font-size:0.85rem; color:#8E8E93;">Region
         <input type="text" id="netflixPreviewRegionInput" class="admin-select" style="margin-right:0; width:70px; text-transform:uppercase;" value="US" maxlength="2" placeholder="US">
       </label>
-      <button type="button" class="secondary lc-btn" onclick="loadNetflixPreview()">Load Preview</button>
+      <button type="button" class="secondary lc-btn" data-act="loadNetflixPreview">Load Preview</button>
       <span id="netflixPreviewStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
     </div>
     <div id="netflixPreviewMovies"></div>
@@ -11458,12 +11622,12 @@ async function renderAdminDashboard(env) {
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Sweep status</div>
       <div id="nosStatus" style="font-size:0.85rem; color:#8E8E93;">Loading&hellip;</div>
       <div style="margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <button type="button" class="secondary lc-btn" onclick="loadNewOnStreaming()">Refresh</button>
+        <button type="button" class="secondary lc-btn" data-act="loadNewOnStreaming">Refresh</button>
         <label style="font-size:0.85rem; color:#8E8E93;">Pages
           <input type="number" id="nosSweepUnits" class="admin-select" style="margin-right:0; width:70px;" value="30" min="1" max="100">
         </label>
-        <button type="button" class="admin-select" style="cursor:pointer;" id="nosSweepBtn" onclick="runNewOnStreamingSweep(false)">Run a sweep now</button>
-        <button type="button" class="secondary lc-btn" style="cursor:pointer; color:#FF9500; border-color:rgba(255,149,0,0.4);" id="nosResetBtn" onclick="runNewOnStreamingSweep(true)">Clear &amp; pull fresh data</button>
+        <button type="button" class="admin-select" style="cursor:pointer;" id="nosSweepBtn" data-act="runNewOnStreamingSweep" data-act-args="${adminActArgs([false])}">Run a sweep now</button>
+        <button type="button" class="secondary lc-btn" style="cursor:pointer; color:#FF9500; border-color:rgba(255,149,0,0.4);" id="nosResetBtn" data-act="runNewOnStreamingSweep" data-act-args="${adminActArgs([true])}">Clear &amp; pull fresh data</button>
         <span id="nosSweepStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
       </div>
       <p style="color:#8E8E93; margin:10px 0 0; font-size:0.8rem;">Each page fetches up to 25 changes from RapidAPI. Automated sweeps run every 6 hours via cron and read each change stream (new titles, new seasons, new episodes, removals) oldest-first from where the last sweep stopped, so a busy day is finished on the next run instead of being cut off. The per-run budget is the month&#39;s remaining quota spread over the runs left; a safety cap halts sweeps at 950 calls to ensure zero overages. "Run a sweep now" continues the same streams with the page count given. Older titles (&gt;30 days) are pruned automatically each sweep.</p>
@@ -11499,7 +11663,7 @@ async function renderAdminDashboard(env) {
           <option value="movie">Movie</option>
         </select>
         <input type="date" id="nosAddDateInput" class="admin-select" style="width:130px;" title="Optional arrival date (defaults to episode air date or today)">
-        <button type="button" class="admin-select" style="cursor:pointer;" id="nosAddBtn" onclick="nosAddTitle()">Add / Sync Title</button>
+        <button type="button" class="admin-select" style="cursor:pointer;" id="nosAddBtn" data-act="nosAddTitle">Add / Sync Title</button>
         <span id="nosAddStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
       </div>
     </div>
@@ -11508,19 +11672,19 @@ async function renderAdminDashboard(env) {
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Preview the catalog</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Read through the same code that serves the row to Stremio, so this is the actual shelf and not a second implementation of it. Order is always most recently arrived first.</p>
       <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap;">
-        <select class="admin-select" id="nosPreviewType" onchange="nosResetAndPreview()">
+        <select class="admin-select" id="nosPreviewType" data-act="nosResetAndPreview">
           <option value="all" selected>All (Movies &amp; Shows)</option>
           <option value="movie">Movies</option>
           <option value="series">Shows</option>
         </select>
-        <select class="admin-select" id="nosPreviewService" onchange="nosResetAndPreview()">
+        <select class="admin-select" id="nosPreviewService" data-act="nosResetAndPreview">
           <option value="">All services</option>
         </select>
-        <input type="text" id="nosPreviewSearch" class="admin-select" placeholder="Filter by title or ID…" style="width:180px;" oninput="onNosPreviewSearchInput()">
-        <button type="button" class="secondary lc-btn" onclick="nosResetAndPreview()">Load preview</button>
-        <button type="button" class="secondary lc-btn" id="nosPrevBtn" onclick="nosChangePage(-1)" disabled>&larr; Prev</button>
+        <input type="text" id="nosPreviewSearch" class="admin-select" placeholder="Filter by title or ID…" style="width:180px;" data-act="onNosPreviewSearchInput" data-act-on="input">
+        <button type="button" class="secondary lc-btn" data-act="nosResetAndPreview">Load preview</button>
+        <button type="button" class="secondary lc-btn" id="nosPrevBtn" data-act="nosChangePage" data-act-args="${adminActArgs([-1])}" disabled>&larr; Prev</button>
         <span id="nosPageLabel" style="font-size:0.85rem; color:#8E8E93; font-weight:600;">Page 1</span>
-        <button type="button" class="secondary lc-btn" id="nosNextBtn" onclick="nosChangePage(1)" disabled>Next &rarr;</button>
+        <button type="button" class="secondary lc-btn" id="nosNextBtn" data-act="nosChangePage" data-act-args="${adminActArgs([1])}" disabled>Next &rarr;</button>
         <span id="nosPreviewStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
       </div>
       <div style="margin-bottom:12px; font-size:0.82rem; color:#8E8E93;">Catalog URL: <code id="nosPreviewSource">tmdb:new-on-streaming</code> &mdash; paste this into <strong>Catalogs &rarr; + New Catalog</strong> on the main site to install this exact row into Stremio or Nuvio while it is still hidden.</div>
@@ -11533,8 +11697,8 @@ async function renderAdminDashboard(env) {
 
     <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <button type="button" class="secondary lc-btn" onclick="loadChannelPresets()">Refresh</button>
-        <button type="button" class="secondary lc-btn" style="cursor:pointer; color:#FF3B30; border-color:rgba(255,59,48,0.4);" id="cpClearAllBtn" onclick="clearAllChannelPresets()">Clear all caches</button>
+        <button type="button" class="secondary lc-btn" data-act="loadChannelPresets">Refresh</button>
+        <button type="button" class="secondary lc-btn" style="cursor:pointer; color:#FF3B30; border-color:rgba(255,59,48,0.4);" id="cpClearAllBtn" data-act="clearAllChannelPresets">Clear all caches</button>
         <span id="cpStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
       </div>
       <p style="color:#8E8E93; margin:10px 0 0; font-size:0.8rem;">Clearing never touches anyone's already-saved channels -- each saved row carries its own small item sample as a fallback, so a cleared cache just means the next Quick Add click (or the cron rotation) rebuilds it fresh instead of serving what was cached before.</p>
@@ -11560,7 +11724,7 @@ async function renderAdminDashboard(env) {
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">${isD1Bound
         ? 'This Worker has a D1 database bound as <code>DB</code>. Use the button below to backfill existing KV records into D1.'
         : 'This Worker has no D1 database bound (Settings &rarr; Bindings). D1 is required for authoritative accounts, lists, search, likes, feedback, and tracking. Bind a D1 database as <code>DB</code> to enable full functionality.'}</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="migrateD1Btn" onclick="runMigrateD1()" ${isD1Bound ? '' : 'disabled'}>Migrate KV &rarr; D1</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="migrateD1Btn" data-act="runMigrateD1" ${isD1Bound ? '' : 'disabled'}>Migrate KV &rarr; D1</button>
       <span id="migrateD1Status" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
       <p style="color:#8E8E93; margin:10px 0 0; font-size:0.8rem;">Copies existing Creator Profiles, Custom Lists, likes, feedback, and tracking records from KV into D1. Safe to run more than once.</p>
     </div>
@@ -11568,26 +11732,26 @@ async function renderAdminDashboard(env) {
     <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Unified accounts table (v2 identity)</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Backfills existing creator identities from D1 <code>creators</code> and KV <code>creator:*</code> into the unified <code>accounts</code> table. Newest key hash wins; D1 wins ties. Copies data only &mdash; safe to run more than once.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="migrateAccountsBtn" onclick="runMigrateAccounts()" ${isD1Bound ? '' : 'disabled'}>Migrate Accounts</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="migrateAccountsBtn" data-act="runMigrateAccounts" ${isD1Bound ? '' : 'disabled'}>Migrate Accounts</button>
       <span id="migrateAccountsStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
     </div>
 
     <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Install links: keys moving to encrypted storage</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">The first time an existing install link is used, its provider keys, tokens and Creator Key move out of its KV record into encrypted D1 storage, for the share of links set in <code>INSTALL_MIGRATION_PERCENT</code>. Links keep their URL and serve exactly as before. Needs <code>TOKEN_ENCRYPTION_KEY</code> and migration 0015. Read-only: this button only reports progress.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="installsStatusBtn" onclick="runInstallsStatus()" ${isD1Bound ? '' : 'disabled'}>Check progress</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="installsStatusBtn" data-act="runInstallsStatus" ${isD1Bound ? '' : 'disabled'}>Check progress</button>
       <span id="installsStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
       <p style="color:#8E8E93; margin:12px 0 8px; font-size:0.8rem;">Emergency only: puts every moved link's keys back into its KV record, exactly as they were, and empties the table. Set <code>INSTALL_MIGRATION_PERCENT</code> to <code>0</code> first. Links removed from an account stay removed.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="installsRestoreBtn" onclick="runInstallsRestore()" ${isD1Bound ? '' : 'disabled'}>Undo the move</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="installsRestoreBtn" data-act="runInstallsRestore" ${isD1Bound ? '' : 'disabled'}>Undo the move</button>
       <span id="installsRestoreStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
     </div>
 
     <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Lists v2: copy existing lists</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Copies every account&rsquo;s lists, the old anonymous lists, shared and published channels (their episode lists go to the <code>BLOBS</code> R2 bucket when it is bound), and their likes into the new tables (migration 0016). It only copies: the lists and channels people use today are not changed, and nothing reads the copies until <code>FF_V2_LISTS_READ</code> is on. Run <strong>Migrate Accounts</strong> first, and back up D1 before the first run. It works in small steps and can be stopped and carried on; <strong>Start over</strong> runs it again from the first account, copying only what changed.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillBtn" onclick="runListsBackfill(false)" ${isD1Bound ? '' : 'disabled'}>Copy lists</button>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillRestartBtn" onclick="runListsBackfill(true)" ${isD1Bound ? '' : 'disabled'}>Start over</button>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillStatusBtn" onclick="runListsBackfillStatus()" ${isD1Bound ? '' : 'disabled'}>Check results</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillBtn" data-act="runListsBackfill" data-act-args="${adminActArgs([false])}" ${isD1Bound ? '' : 'disabled'}>Copy lists</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillRestartBtn" data-act="runListsBackfill" data-act-args="${adminActArgs([true])}" ${isD1Bound ? '' : 'disabled'}>Start over</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillStatusBtn" data-act="runListsBackfillStatus" ${isD1Bound ? '' : 'disabled'}>Check results</button>
       <span id="listsBackfillStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
       <div id="listsBackfillResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
     </div>
@@ -11595,9 +11759,9 @@ async function renderAdminDashboard(env) {
     <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Activity: copy watch history</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Copies every account&rsquo;s Watch History, and where each show is up to (finished, hidden from Continue Watching or Airing Next, storyline suggestions), into the activity database (<code>DB_ACTIVITY</code>, migration A0001). It only copies: the history people see today is not changed, and nothing reads the copy yet. Needs <code>DB_ACTIVITY</code> bound, and <strong>Migrate Accounts</strong> and migration 0016 first. It works in small steps and can be stopped and carried on; <strong>Start over</strong> copies every account again from the start.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillBtn" onclick="runActivityBackfill(false)" ${isActivityBound ? '' : 'disabled'}>Copy history</button>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillRestartBtn" onclick="runActivityBackfill(true)" ${isActivityBound ? '' : 'disabled'}>Start over</button>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillStatusBtn" onclick="runActivityBackfillStatus()" ${isActivityBound ? '' : 'disabled'}>Check results</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillBtn" data-act="runActivityBackfill" data-act-args="${adminActArgs([false])}" ${isActivityBound ? '' : 'disabled'}>Copy history</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillRestartBtn" data-act="runActivityBackfill" data-act-args="${adminActArgs([true])}" ${isActivityBound ? '' : 'disabled'}>Start over</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillStatusBtn" data-act="runActivityBackfillStatus" ${isActivityBound ? '' : 'disabled'}>Check results</button>
       <span id="activityBackfillStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;">${isActivityBound ? '' : 'DB_ACTIVITY is not bound.'}</span>
       <div id="activityBackfillResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
     </div>
@@ -11607,10 +11771,10 @@ async function renderAdminDashboard(env) {
         ? '<span style="color:#30d158;">bound</span>'
         : '<span style="color:#8E8E93;">not bound yet</span>'}</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Background work moves onto the Cloudflare Queue <code>mylists-jobs</code>, which this Worker also reads (Phase 5). Setting it up: create the queues <code>mylists-jobs</code> and <code>mylists-jobs-dlq</code>, add this Worker as the consumer of <code>mylists-jobs</code> (batch size 25, 5 retries, dead-letter queue <code>mylists-jobs-dlq</code>), and bind <code>mylists-jobs</code> to this Worker as <code>JOBS</code>. See docs/OPERATIONS.md section 18. <strong>Send a test job</strong> puts one job on the queue and waits for this Worker to pick it up, which proves all three steps worked.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="jobsPingBtn" onclick="runJobsPing()" ${isJobsBound ? '' : 'disabled'}>Send a test job</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="jobsPingBtn" data-act="runJobsPing" ${isJobsBound ? '' : 'disabled'}>Send a test job</button>
       <span id="jobsPingStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;">${isJobsBound ? '' : 'JOBS is not bound.'}</span>
       <p style="color:#8E8E93; margin:12px 0 8px; font-size:0.8rem;">Once the queue is bound, every cron tick only hands out the work that is due (the Continue Watching and Airing Next sweeps, New on Streaming, chart and poster warming, channel presets, housekeeping), and the queue does it. Without it, the tick does the work itself, as before. <strong>Check jobs</strong> shows when each one last ran. Needs migration 0016.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="jobsStatusBtn" onclick="runJobsStatus()" ${isD1Bound ? '' : 'disabled'}>Check jobs</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="jobsStatusBtn" data-act="runJobsStatus" ${isD1Bound ? '' : 'disabled'}>Check jobs</button>
       <span id="jobsStatusStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
       <div id="jobsStatusResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
     </div>
@@ -11618,7 +11782,7 @@ async function renderAdminDashboard(env) {
     <div class="panel" style="margin:0; padding:14px 16px;">
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Database schema</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Migrations are applied by hand and nothing records that it happened, so this Worker can end up running ahead of its own database. It degrades quietly when that happens rather than refusing to start &mdash; which is why this check exists. Run it after any deploy that shipped a new file under <code>migrations/</code>.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="schemaCheckBtn" onclick="runSchemaCheck()">Check schema</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="schemaCheckBtn" data-act="runSchemaCheck">Check schema</button>
       <span id="schemaCheckStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
       <div id="schemaCheckResult" style="margin-top:10px;"></div>
     </div>
@@ -11626,7 +11790,7 @@ async function renderAdminDashboard(env) {
     <div class="panel" style="margin:0; padding:14px 16px;">
       <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Public list directory &amp; search index</div>
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">The public list directory and in-app search query D1 tables and the full-text search index (lists_fts). This button rebuilds the search index directly from creator_lists &mdash; useful after importing data or to recreate the index after a D1 database export.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="rebuildIndexBtn" onclick="runRebuildPublicIndex()">Rebuild Search Index</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="rebuildIndexBtn" data-act="runRebuildPublicIndex">Rebuild Search Index</button>
       <span id="rebuildIndexStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
     </div>
 
@@ -11637,20 +11801,20 @@ async function renderAdminDashboard(env) {
       <p style="color:#FF9500; margin:0 0 10px; font-size:0.82rem;"><strong>This cannot be undone.</strong> There is no backup of a deleted list. Prefer &ldquo;Rebuild Public List Index&rdquo; above first &mdash; if the lists are only phantom directory entries, that fixes them without deleting anything.</p>
       <div class="row" style="margin-bottom:8px;">
         <input type="text" id="deleteListUserInput" class="admin-select" placeholder="Creator username" style="margin-right:6px;">
-        <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="browseCreatorListsBtn" onclick="loadCreatorLists(true)">Browse this creator&rsquo;s lists</button>
-        <button type="button" class="admin-select" style="cursor:pointer;" id="browseCreatorListsMoreBtn" onclick="loadCreatorLists(false)" hidden>Load more</button>
+        <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="browseCreatorListsBtn" data-act="loadCreatorLists" data-act-args="${adminActArgs([true])}">Browse this creator&rsquo;s lists</button>
+        <button type="button" class="admin-select" style="cursor:pointer;" id="browseCreatorListsMoreBtn" data-act="loadCreatorLists" data-act-args="${adminActArgs([false])}" hidden>Load more</button>
         <span id="creatorListsStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
       </div>
       <div class="row" style="margin-bottom:8px;">
-        <input type="text" id="creatorListsFilterInput" class="admin-select" placeholder="Filter by name or slug (e.g. coming of age)" style="min-width:280px; margin-right:6px;" oninput="renderCreatorListsTable()">
-        <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="selectShownListsBtn" onclick="selectShownCreatorLists()">Select all shown</button>
-        <button type="button" class="admin-select" style="cursor:pointer;" id="clearSelectedListsBtn" onclick="clearSelectedCreatorLists()">Clear selection</button>
+        <input type="text" id="creatorListsFilterInput" class="admin-select" placeholder="Filter by name or slug (e.g. coming of age)" style="min-width:280px; margin-right:6px;" data-act="renderCreatorListsTable" data-act-on="input">
+        <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="selectShownListsBtn" data-act="selectShownCreatorLists">Select all shown</button>
+        <button type="button" class="admin-select" style="cursor:pointer;" id="clearSelectedListsBtn" data-act="clearSelectedCreatorLists">Clear selection</button>
       </div>
       <div id="creatorListsResults" style="margin-bottom:8px; max-height:340px; overflow:auto;"></div>
       <div class="row" style="margin-bottom:8px;">
         <input type="text" id="deleteListSlugsInput" class="admin-select" placeholder="Slugs, comma or newline separated" style="min-width:320px;">
       </div>
-      <button type="button" class="admin-select" style="cursor:pointer; color:#FF3B30; border-color:rgba(255,59,48,0.35);" id="deleteListBtn" onclick="runDeleteCreatorLists()">Delete these lists</button>
+      <button type="button" class="admin-select" style="cursor:pointer; color:#FF3B30; border-color:rgba(255,59,48,0.35);" id="deleteListBtn" data-act="runDeleteCreatorLists">Delete these lists</button>
       <span id="deleteListStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
     </div>
 
@@ -11659,15 +11823,15 @@ async function renderAdminDashboard(env) {
       <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Lists published without a Creator Profile, under the shared <code>user</code> namespace. Anyone can create one and no owner exists to ask, so this is the only way to remove one. Browse to find a list, or type slugs directly if you already know them.</p>
       <p style="color:#FF9500; margin:0 0 10px; font-size:0.82rem;"><strong>This cannot be undone.</strong> There is no backup of a deleted list.</p>
       <div class="row" style="margin-bottom:8px;">
-        <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="browseAnonBtn" onclick="loadPublishedLists(true)">Browse</button>
-        <button type="button" class="admin-select" style="cursor:pointer;" id="browseAnonMoreBtn" onclick="loadPublishedLists(false)" hidden>Load more</button>
+        <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="browseAnonBtn" data-act="loadPublishedLists" data-act-args="${adminActArgs([true])}">Browse</button>
+        <button type="button" class="admin-select" style="cursor:pointer;" id="browseAnonMoreBtn" data-act="loadPublishedLists" data-act-args="${adminActArgs([false])}" hidden>Load more</button>
         <span id="anonListStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
       </div>
       <div id="anonListResults" style="margin-bottom:8px;"></div>
       <div class="row" style="margin-bottom:8px;">
         <input type="text" id="deleteAnonSlugsInput" class="admin-select" placeholder="Slugs, comma or newline separated" style="min-width:320px;">
       </div>
-      <button type="button" class="admin-select" style="cursor:pointer; color:#FF3B30; border-color:rgba(255,59,48,0.35);" id="deleteAnonBtn" onclick="runDeletePublishedLists()">Delete these lists</button>
+      <button type="button" class="admin-select" style="cursor:pointer; color:#FF3B30; border-color:rgba(255,59,48,0.35);" id="deleteAnonBtn" data-act="runDeletePublishedLists">Delete these lists</button>
       <span id="deleteAnonStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
     </div>
 
@@ -11681,8 +11845,8 @@ async function renderAdminDashboard(env) {
         so every link to it stops working.
       </p>
       <div class="row" style="margin-bottom:8px;">
-        <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="browseChannelsBtn" onclick="loadPublishedChannels('listed')">Browse the directory</button>
-        <button type="button" class="admin-select" style="cursor:pointer;" id="browseChannelsAllBtn" onclick="loadPublishedChannels('all')">Browse every stored channel</button>
+        <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="browseChannelsBtn" data-act="loadPublishedChannels" data-act-args="${adminActArgs(['listed'])}">Browse the directory</button>
+        <button type="button" class="admin-select" style="cursor:pointer;" id="browseChannelsAllBtn" data-act="loadPublishedChannels" data-act-args="${adminActArgs(['all'])}">Browse every stored channel</button>
         <span id="publishedChannelStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
       </div>
       <div id="publishedChannelResults"></div>
@@ -11815,12 +11979,12 @@ async function renderAdminDashboard(env) {
         });
         const data = await res.json();
         if (!data.ok) {
-          alert('Could not reset key: ' + (data.error || 'unknown error'));
+          showAdminAlert('Reset Failed', 'Could not reset key: ' + (data.error || 'unknown error'), false);
           return;
         }
         showResetKeyModal(displayName, data.creatorKey);
       } catch (e) {
-        alert('Network error -- could not reset key. Try again.');
+        showAdminAlert('Network Error', 'Could not reset the key -- check your connection and try again.', false);
       }
     }
 
@@ -11834,11 +11998,35 @@ async function renderAdminDashboard(env) {
           '<p style="color:#8E8E93; font-size:0.9rem;">This is shown once. Copy it now and send it to the creator yourself -- their old key no longer works.</p>' +
           '<div id="resetKeyDisplay" style="font-family:monospace; font-size:1.1rem; background:#F2F2F7; border-radius:8px; padding:10px; text-align:center; margin:12px 0; user-select:all;">' + escapeHtmlAdmin(creatorKey) + '</div>' +
           '<div style="display:flex; gap:8px;">' +
-            '<button type="button" class="lc-btn secondary" style="flex:1;" onclick="navigator.clipboard.writeText(\\'' + creatorKey + '\\'); this.textContent=\\'Copied!\\';">Copy Key</button>' +
-            '<button type="button" class="lc-btn" style="flex:1;" onclick="document.getElementById(\\'resetKeyOverlay\\').remove();">Done</button>' +
+            '<button type="button" class="lc-btn secondary" style="flex:1;" data-act="copyResetKey" data-act-args="' + adminActAttr(['@self', creatorKey]) + '">Copy Key</button>' +
+            '<button type="button" class="lc-btn" style="flex:1;" data-act="closeResetKeyOverlay">Done</button>' +
           '</div>' +
         '</div>';
       document.body.appendChild(overlay);
+    }
+
+    // The two buttons inside that box. The key used to be written into a
+    // JavaScript string inside the button's own handler; it arrives as data
+    // now, through the same delegated args every other control uses (P6-10).
+    function copyResetKey(btn, key) {
+      const text = String(key == null ? '' : key);
+      const done = function () {
+        if (btn) btn.textContent = 'Copied!';
+      };
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done, done);
+        } else {
+          done();
+        }
+      } catch (e) {
+        done();
+      }
+    }
+
+    function closeResetKeyOverlay() {
+      const overlay = document.getElementById('resetKeyOverlay');
+      if (overlay && overlay.remove) overlay.remove();
     }
 
     async function loadSearchData() {
@@ -11938,6 +12126,142 @@ async function renderAdminDashboard(env) {
     function escapeHtmlAdmin(s) {
       return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     }
+
+    // --- the delegated actions (P6-10) ---------------------------------------
+    //
+    // Every control on this page used to carry its action in an inline on*=
+    // attribute -- 76 of them. That is what kept script-src on 'unsafe-inline'
+    // for this page and what made a display name spliced into a handler a way
+    // into it. A control now names its action the way the builder page's do
+    // (P6-8, appActDispatch in 16_client-row-core.js): data-act, arguments as
+    // one JSON attribute, one listener per event type. /admin does not load
+    // that bundle -- it is its own document with its own script -- so this page
+    // carries its own copy of the contract, and the attribute names match on
+    // purpose.
+    //
+    // adminActAttr is the browser-side twin of adminActArgs (the Worker-side
+    // one above renderAdminDashboard): this one is for the markup built here,
+    // in the page, from data the server sent.
+    function adminActAttr(values) {
+      const out = [];
+      const list = values || [];
+      for (let i = 0; i < list.length; i++) {
+        const v = list[i];
+        out.push(v === undefined || v === null ? '' : v);
+      }
+      return escapeHtmlAdmin(JSON.stringify(out));
+    }
+
+    const ADMIN_ACT_EVENT_TYPES = ['click', 'change', 'input', 'keydown'];
+    const _adminActMissing = {};
+
+    function adminActElement(node) {
+      let el = node;
+      while (el && typeof el.getAttribute === 'function') {
+        if (el.getAttribute('data-act')) return el;
+        el = el.parentNode || el.parentElement || null;
+      }
+      return null;
+    }
+
+    function adminActReadArgs(el, ev) {
+      const raw = el.getAttribute('data-act-args');
+      if (!raw) return [];
+      let values = null;
+      try {
+        values = JSON.parse(raw);
+      } catch (e) {
+        return [];
+      }
+      if (!Array.isArray(values)) return [];
+      const out = [];
+      for (let i = 0; i < values.length; i++) {
+        const v = values[i];
+        if (v === '@self') out.push(el);
+        else if (v === '@checked') out.push(!!el.checked);
+        else if (v === '@value') out.push(el.value);
+        else if (v === '@event') out.push(ev);
+        else out.push(v);
+      }
+      return out;
+    }
+
+    // Which event a control answers to: what it says, or its tag. A select
+    // answers change, a button click, and an input that searches as you type
+    // says data-act-on="input" -- an input answering both would run twice.
+    function adminActAnswers(el, ev) {
+      if (!ev) return false;
+      const explicit = el.getAttribute('data-act-on');
+      if (explicit) {
+        const list = String(explicit).split(',');
+        for (let i = 0; i < list.length; i++) {
+          if (list[i].trim() === ev.type) return true;
+        }
+        return false;
+      }
+      if (el.hasAttribute('data-act-keys')) return ev.type === 'keydown';
+      const tag = String(el.tagName || el.nodeName || '').toUpperCase();
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return ev.type === 'change';
+      return ev.type === 'click';
+    }
+
+    function adminActRunOne(el, ev) {
+      const name = el.getAttribute('data-act') || '';
+      if (!name) return false;
+      if (!adminActAnswers(el, ev)) return false;
+      if (el.hasAttribute('data-act-keys')) {
+        const wanted = el.getAttribute('data-act-keys') || '';
+        if (String(ev.key || '') !== wanted) return false;
+      }
+      const fn = window[name];
+      if (typeof fn !== 'function') {
+        // A renamed or misspelled action fails loudly once per name, instead of
+        // being a button that silently does nothing -- the same net the builder
+        // page has, and html_checks.py checks these names the same way.
+        if (!_adminActMissing[name]) {
+          _adminActMissing[name] = true;
+          console.warn('Admin action not found: ' + name);
+        }
+        return false;
+      }
+      if (ev && el.hasAttribute('data-act-stop') && typeof ev.stopPropagation === 'function') ev.stopPropagation();
+      if (ev && el.hasAttribute('data-act-prevent') && typeof ev.preventDefault === 'function') ev.preventDefault();
+      fn.apply(null, adminActReadArgs(el, ev));
+      const then = el.getAttribute('data-act-then');
+      if (then && typeof window[then] === 'function') window[then]();
+      return true;
+    }
+
+    function adminActDispatch(ev) {
+      if (!ev) return false;
+      let el = adminActElement(ev.target || null);
+      let ran = false;
+      // Innermost first, the order nested inline handlers ran in; a control
+      // that says data-act-stop ends the walk.
+      while (el) {
+        const stops = el.hasAttribute('data-act-stop');
+        if (adminActRunOne(el, ev)) ran = true;
+        if (stops) break;
+        el = adminActElement(el.parentNode || el.parentElement || null);
+      }
+      return ran;
+    }
+
+    function initAdminDelegatedActions() {
+      if (window._adminActBound) return false;
+      window._adminActBound = true;
+      const handler = function (ev) { adminActDispatch(ev); };
+      for (let i = 0; i < ADMIN_ACT_EVENT_TYPES.length; i++) {
+        document.addEventListener(ADMIN_ACT_EVENT_TYPES[i], handler, false);
+      }
+      return true;
+    }
+
+    // Bound here, right after the block that declares ADMIN_ACT_EVENT_TYPES --
+    // not up with restoreAdminActiveTab() further down the file, which runs
+    // EARLIER than this point in the script and would hit the const's
+    // temporal dead zone and take the whole dashboard down with it.
+    initAdminDelegatedActions();
 
     async function loadTrendingData() {
       const body = document.getElementById('trendingTableBody');
@@ -13117,7 +13441,7 @@ async function renderAdminDashboard(env) {
           return;
         }
         resultsEl.innerHTML = data.results.map((p) =>
-          '<button type="button" class="admin-select" style="cursor:pointer; margin:0 6px 6px 0;" onclick="pickProviderId(' + p.id + ')">' +
+          '<button type="button" class="admin-select" style="cursor:pointer; margin:0 6px 6px 0;" data-act="pickProviderId" data-act-args="' + adminActAttr([p.id]) + '">' +
             escapeHtmlAdmin(p.name) + ' <span style="color:#8E8E93;">(' + p.id + ')</span>' +
           '</button>'
         ).join('');
@@ -13457,8 +13781,8 @@ async function renderAdminDashboard(env) {
             '<td>' + (net.cached ? net.itemCount : '--') + '</td>' +
             '<td style="white-space:nowrap;">' + cpAgoText(net.builtAt) + '</td>' +
             '<td style="white-space:nowrap;">' +
-              '<button type="button" class="secondary lc-btn" style="padding:4px 10px; font-size:0.8rem;" onclick="rebuildOneChannelPreset(' + "'" + net.id + "'" + ', this)">Rebuild</button> ' +
-              '<button type="button" class="secondary lc-btn" style="padding:4px 10px; font-size:0.8rem; color:#FF3B30;" onclick="clearOneChannelPreset(' + "'" + net.id + "'" + ', this)"' + (net.cached ? '' : ' disabled') + '>Clear</button>' +
+              '<button type="button" class="secondary lc-btn" style="padding:4px 10px; font-size:0.8rem;" data-act="rebuildOneChannelPreset" data-act-args="' + adminActAttr([net.id, '@self']) + '">Rebuild</button> ' +
+              '<button type="button" class="secondary lc-btn" style="padding:4px 10px; font-size:0.8rem; color:#FF3B30;" data-act="clearOneChannelPreset" data-act-args="' + adminActAttr([net.id, '@self']) + '"' + (net.cached ? '' : ' disabled') + '>Clear</button>' +
             '</td>' +
           '</tr>';
         }).join('');
@@ -13477,10 +13801,10 @@ async function renderAdminDashboard(env) {
         });
         const data = await res.json();
         if (!data.ok) {
-          alert(data.error || 'Could not clear.');
+          showAdminAlert('Clear Failed', data.error || 'Could not clear the cached preset.', false);
         }
       } catch (e) {
-        alert('Could not clear -- check your connection.');
+        showAdminAlert('Network Error', 'Could not clear the cached preset -- check your connection.', false);
       }
       loadChannelPresets();
     }
@@ -13496,10 +13820,10 @@ async function renderAdminDashboard(env) {
         });
         const data = await res.json();
         if (!data.ok) {
-          alert(data.error || 'Could not rebuild.');
+          showAdminAlert('Rebuild Failed', data.error || 'Could not rebuild the cached preset.', false);
         }
       } catch (e) {
-        alert('Could not rebuild -- check your connection.');
+        showAdminAlert('Network Error', 'Could not rebuild the cached preset -- check your connection.', false);
       }
       if (btn) btn.textContent = originalLabel;
       loadChannelPresets();
@@ -13517,10 +13841,10 @@ async function renderAdminDashboard(env) {
         });
         const data = await res.json();
         if (!data.ok) {
-          alert(data.error || 'Could not clear.');
+          showAdminAlert('Clear Failed', data.error || 'Could not clear the cached presets.', false);
         }
       } catch (e) {
-        alert('Could not clear -- check your connection.');
+        showAdminAlert('Network Error', 'Could not clear the cached presets -- check your connection.', false);
       }
       if (btn) btn.disabled = false;
       loadChannelPresets();
@@ -13817,11 +14141,11 @@ async function renderAdminDashboard(env) {
             '<span style="color:' + iconColor + '; font-weight:bold; font-size:1.2rem;">' + icon + '</span> ' +
             escapeHtmlAdmin(title) +
           '</h3>' +
-          '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeAdminModal()">\u2715</button>' +
+          '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeAdminModal">\u2715</button>' +
         '</div>' +
         '<p style="margin:0 0 18px; color:var(--muted); font-size:0.92rem; line-height:1.45; white-space:pre-wrap;">' + escapeHtmlAdmin(message) + '</p>' +
         '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
-          '<button type="button" class="lc-btn primary" onclick="closeAdminModal()" style="min-width:80px;">OK</button>' +
+          '<button type="button" class="lc-btn primary" data-act="closeAdminModal" style="min-width:80px;">OK</button>' +
         '</div>';
       showAdminModal(html);
     }
@@ -13836,11 +14160,11 @@ async function renderAdminDashboard(env) {
             '<span style="color:' + iconColor + '; font-weight:bold; font-size:1.2rem;">' + icon + '</span> ' +
             escapeHtmlAdmin(title) +
           '</h3>' +
-          '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeAdminModal()">\u2715</button>' +
+          '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeAdminModal">\u2715</button>' +
         '</div>' +
         '<p style="margin:0 0 18px; color:var(--muted); font-size:0.92rem; line-height:1.45; white-space:pre-wrap;">' + escapeHtmlAdmin(message) + '</p>' +
         '<div style="display:flex; justify-content:flex-end; gap:10px;">' +
-          '<button type="button" class="lc-btn secondary" onclick="closeAdminModal()">Cancel</button>' +
+          '<button type="button" class="lc-btn secondary" data-act="closeAdminModal">Cancel</button>' +
           '<button type="button" class="' + btnClass + '" id="adminConfirmOkBtn">' + escapeHtmlAdmin(confirmBtnText || 'Confirm') + '</button>' +
         '</div>';
       showAdminModal(html);
@@ -26123,15 +26447,15 @@ function buildStreamingRowsHtml(list, labelSuffix, group) {
     // every other "See All" in the app.
     let seeAllLink = '';
     if (p.movieUrl && p.showUrl) {
-      seeAllLink = `<a href="javascript:void(0)" class="discover-chart-seeall" onclick="openListDetailsPage('${label}', 'movie', '${p.movieUrl}')">See All &rsaquo;</a>`;
+      seeAllLink = `<a href="javascript:void(0)" class="discover-chart-seeall" data-act="openListDetailsPage" data-act-args="${appActArgsServer([label, "movie", p.movieUrl])}">See All &rsaquo;</a>`;
       btns = `
-        <button type="button" class="lc-btn secondary" onclick="addRow('${label}', '${p.movieUrl}', 'movie', true, '${group}')">+ Movies</button>
-        <button type="button" class="lc-btn secondary" onclick="addRow('${label}', '${p.showUrl}', 'series', true, '${group}')">+ Shows</button>`;
+        <button type="button" class="lc-btn secondary" data-act="addRow" data-act-args="${appActArgsServer([label, p.movieUrl, "movie", true, group])}">+ Movies</button>
+        <button type="button" class="lc-btn secondary" data-act="addRow" data-act-args="${appActArgsServer([label, p.showUrl, "series", true, group])}">+ Shows</button>`;
     } else if (p.url && p.type) {
       const btnText = p.type === 'movie' ? '+ Movies' : '+ Shows';
-      seeAllLink = `<a href="javascript:void(0)" class="discover-chart-seeall" onclick="openListDetailsPage('${p.name}', '${p.type}', '${p.url}')">See All &rsaquo;</a>`;
+      seeAllLink = `<a href="javascript:void(0)" class="discover-chart-seeall" data-act="openListDetailsPage" data-act-args="${appActArgsServer([p.name, p.type, p.url])}">See All &rsaquo;</a>`;
       btns = `
-        <button type="button" class="lc-btn secondary" onclick="addRow('${p.name}', '${p.url}', '${p.type}', true, '${group}')">${btnText}</button>`;
+        <button type="button" class="lc-btn secondary" data-act="addRow" data-act-args="${appActArgsServer([p.name, p.url, p.type, true, group])}">${btnText}</button>`;
     }
     return `
     <div class="discover-chart-card">
@@ -26322,15 +26646,23 @@ const COMBINED_CHART_LISTS = [
 ];
 
 // Renders each source list as a single-quoted JS array literal (e.g.
-// ['a','b']) so it can sit inside an onclick="..." attribute -- which is
-// itself double-quoted -- without the two colliding.
+// ['a','b']) for the generated addAllCombinedCharts() body below, which is
+// code. Never for a data-act-args value: that is JSON, read with JSON.parse
+// and never evaluated, so this would arrive as a string (see
+// buildCombinedChartsHtml).
 function jsStringArrayLiteral(arr) {
   return "[" + arr.map((s) => "'" + String(s).replace(/'/g, "\\'") + "'").join(",") + "]";
 }
 
 function buildCombinedChartsHtml() {
   const rows = COMBINED_CHART_LISTS.map((p) => {
-    const movieUrlsJoined = p.movieUrls.join("\\n");
+    // These arguments are JSON (P6-8), not JavaScript. The inline handlers they
+    // replaced were code, so a "\\n" written here became a line break and an
+    // array literal became an array; as data the first arrives as a backslash
+    // and an n, and the second as a string -- addCombinedRow's urls.join threw
+    // and See All read one URL with backslashes in it. So: the arrays
+    // themselves, and a real line break.
+    const movieUrlsJoined = p.movieUrls.join("\n");
     return `
     <div class="discover-chart-card">
       <div class="discover-chart-header">
@@ -26338,11 +26670,11 @@ function buildCombinedChartsHtml() {
           <div class="discover-chart-title">${p.name}</div>
           <div class="discover-chart-sub">Blended Multi-Source Catalog</div>
         </div>
-        <a href="javascript:void(0)" class="discover-chart-seeall" onclick="openListDetailsPage('${p.name}', 'movie', '${movieUrlsJoined}')">See All &rsaquo;</a>
+        <a href="javascript:void(0)" class="discover-chart-seeall" data-act="openListDetailsPage" data-act-args="${appActArgsServer([p.name, "movie", movieUrlsJoined])}">See All &rsaquo;</a>
       </div>
       <div class="discover-chart-btns">
-        <button type="button" class="lc-btn secondary" onclick="addCombinedRow('${p.name}', ${jsStringArrayLiteral(p.movieUrls)}, 'movie', 'Combined Charts')">+ Movies</button>
-        <button type="button" class="lc-btn secondary" onclick="addCombinedRow('${p.name}', ${jsStringArrayLiteral(p.showUrls)}, 'series', 'Combined Charts')">+ Shows</button>
+        <button type="button" class="lc-btn secondary" data-act="addCombinedRow" data-act-args="${appActArgsServer([p.name, p.movieUrls, "movie", "Combined Charts"])}">+ Movies</button>
+        <button type="button" class="lc-btn secondary" data-act="addCombinedRow" data-act-args="${appActArgsServer([p.name, p.showUrls, "series", "Combined Charts"])}">+ Shows</button>
       </div>
     </div>`;
   }).join("");
@@ -26588,9 +26920,101 @@ function resolveCuratedSlug(slug) {
   return CURATED_LIST_REGISTRY[String(slug || "").toLowerCase()] || null;
 }
 
+// --- The new UI shell's chrome (Phase 6, P6-1) ------------------------------
+//
+// Everything here is emitted only for a browser carrying the FF_NEW_UI cookie
+// (isNewUiRequest, 02_http-and-creator-utils.js), so the page every other
+// visitor gets is byte-for-byte the page they got before. The client bundle is
+// shared by both variants -- it is one content-hashed file (splitAppBundle,
+// 02_) -- so the shell's behaviour is not emitted from here: it lives in
+// 24_client-backup-restore-presets.js and keys off the NEW_UI flag in the
+// per-request preamble.
+//
+// The tabs are real links. Middle-click, copy-link, open-in-a-new-tab and the
+// back button all work with no JavaScript at all; the client intercepts a
+// plain left click and routes in-page. The class names are the legacy ones on
+// purpose: every existing rule -- the desktop pills, the mobile bottom bar,
+// the dark theme, the safe-area padding -- then applies to them unchanged.
+const APP_SHELL_TAB_ICONS = {
+  catalogs: '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>',
+  lists: '<line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line>',
+  channels: '<rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect><polyline points="17 2 12 7 7 2"></polyline>',
+  discover: '<rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect>',
+  search: '<circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>',
+  settings: '<circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>',
+};
+
+// Which view the page opens on when it is served at a shell path. The shell's
+// own routing (24_) reads the same table, written into the bundle.
+function appShellTabForPath(pathname) {
+  const p = String(pathname || "");
+  for (const t of APP_SHELL_TABS) {
+    if (p === t.path) return t;
+    if (p.startsWith(t.path + "/")) {
+      const rest = p.slice(t.path.length + 1).replace(/\/+$/, "");
+      if (rest && t.subs.indexOf(rest) !== -1) return t;
+    }
+  }
+  return null;
+}
+
+function buildAppShellNavHtml(style) {
+  const isDesktop = style === "desktop";
+  const items = APP_SHELL_TABS.map((t) => {
+    const active = t.id === "discover";
+    const cls = (isDesktop ? "tab-btn" : "bottom-nav-item") + (active ? " active" : "");
+    // The id and aria-controls keep the panels' own aria-labelledby="tab-..."
+    // pointing at a real element: the legacy buttons carry these ids and the
+    // panels were never changed, so a nav without them leaves six references
+    // dangling (html_checks.py fails the build for exactly that).
+    const attrs = `class="${cls}" id="tab-${isDesktop ? "desktop" : "mobile"}-${t.id}" aria-controls="content-${t.id}"` +
+      ` data-tab="${t.id}" data-app-route href="${t.path}" title="${t.label}"` +
+      (active ? ' aria-current="page"' : "");
+    if (isDesktop) return `<a ${attrs}>${t.label}</a>`;
+    return `<a ${attrs}>\n      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">\n        ${APP_SHELL_TAB_ICONS[t.id] || ""}\n      </svg>\n      ${t.label}\n    </a>`;
+  }).join("\n    ");
+  if (isDesktop) {
+    return `<div class="tab-bar" id="appShellDesktopNav">\n    <nav aria-label="Main navigation" style="display:flex; gap:8px; overflow-x:auto; width:100%;">\n    ${items}\n    </nav>\n  </div>`;
+  }
+  return `<nav class="bottom-nav" id="appShellMobileNav" aria-label="Main navigation">\n    ${items}\n  </nav>`;
+}
+
+// Path -> { tab, sub } for the head script, which runs before the body exists
+// and so cannot use the client bundle's router. The bundle builds the same
+// routes from APP_SHELL_TAB_LIST (16_client-row-core.js); a test keeps the two
+// agreeing with this one table.
+function buildAppShellHeadRoutes() {
+  const out = {};
+  for (const t of APP_SHELL_TABS) {
+    out[t.path] = { tab: t.id, sub: "" };
+    for (const sub of t.subs) out[t.path + "/" + sub] = { tab: t.id, sub: sub };
+  }
+  return out;
+}
+
+// The install bar. Its first paint is server-rendered so it is there before any
+// script runs, and its state (none / unsaved / live) is then kept by the client
+// -- the last install link this browser generated is browser state, so the
+// Worker cannot know it. See appShellRefreshInstallBar (24_).
+const APP_SHELL_INSTALL_BAR_HTML = `<div id="appShellInstallBar" class="app-shell-install-bar" data-state="none">
+    <span class="app-shell-install-dot" aria-hidden="true"></span>
+    <span class="app-shell-install-text" id="appShellInstallText">Not installed yet</span>
+    <button type="button" class="app-shell-install-action" id="appShellInstallBtn" data-action="install">Get install link</button>
+  </div>`;
+
+// The Worker-side twin of appActArgs (16_client-row-core.js). 08_quickadd-chart-data.js
+// builds some of the page's markup here in the Worker rather than in the
+// browser (see buildCombinedChartsHtml), so its data-act arguments need the
+// same JSON-then-HTML escaping at render time. Kept next to renderBuilder so
+// it is obviously server-side code: the client's own copy is inside the
+// template literal below and is not in scope here.
+function appActArgsServer(values) {
+  return escapeHtmlServer(JSON.stringify(values || []));
+}
+
 function renderBuilder(
   origin,
-  { initialEntries = [], initialKeys = {}, isConfigureMode = false, deepLinkList = null } = {}
+  { initialEntries = [], initialKeys = {}, isConfigureMode = false, deepLinkList = null, newUi = false } = {}
 ) {
   const initialTmdbKey = initialKeys.tmdbKey || "";
   const initialMdblistKey = initialKeys.mdblistKey || "";
@@ -26681,33 +27105,24 @@ function renderBuilder(
   // apart (see the "pre-fill" block's own comment on why that distinction
   // matters for when to trust localStorage over what the server sent).
   const usingDefaultEntries = !hasInitial;
+  // A first-time visitor on the OLD page still gets the demo rows it always
+  // got. On a shell page the same rows are offered as a button in the
+  // home-screen editor instead (P6-3): nothing is added that was not asked
+  // for, and both read STARTER_PACK_ENTRIES (00_constants.js) so they cannot
+  // drift.
   const initialEntriesJson = jsonForScript(
-    hasInitial
-      ? initialEntries
-      : [
-          { name: "Popular", url: "https://mdblist.com/lists/official/movies/popular\ntmdb:chart:popular\ntrakt:chart:popular", type: "movie", enabled: true, group: "Combined Charts" },
-          { name: "Popular", url: "https://mdblist.com/lists/official/shows/popular\ntmdb:chart:popular\ntrakt:chart:popular", type: "series", enabled: true, group: "Combined Charts" },
-          { name: "Trending", url: "tmdb:chart:trending\ntrakt:chart:trending\nsimkl:chart:today\nsimkl:chart:week\nsimkl:chart:month", type: "movie", enabled: true, group: "Combined Charts" },
-          { name: "Trending", url: "tmdb:chart:trending\ntrakt:chart:trending\nsimkl:chart:today\nsimkl:chart:week\nsimkl:chart:month", type: "series", enabled: true, group: "Combined Charts" },
-          // Both the Top 10 and full Streaming Catalogs merged rows below
-          // use the exact same joined url string for their movie row and
-          // series row now -- unlike the old per-provider mdblist.com
-          // urls they replaced, a tmdb:chart:X source doesn't encode
-          // movie/series in the url itself; fetchCatalog picks the right
-          // side of TMDB_CHART_PATHS[chartKey] from entry.type at fetch
-          // time (see 07_source-fetchers-tmdb-simkl.js), the same way the
-          // standalone per-provider rows in 08_quickadd-chart-data.js
-          // already reuse one url for both their +Movies and +Shows
-          // buttons.
-          { name: "Streaming Top 10 (All Services)", url: "https://mdblist.com/lists/ahmed2250/apple-tv-top-10-movies-today\nhttps://mdblist.com/lists/andykai/disney-top-10-no-hulu\nhttps://mdblist.com/lists/harmes7/hbo-max-top-10-movies-m77r6mc20q\nhttps://mdblist.com/lists/hulupiv/hulu-top-10-movies\nhttps://mdblist.com/lists/hdlists/netflix-top-10-trending-movies\nhttps://mdblist.com/lists/ahmed2250/paramount-top-10-movies-today\nhttps://mdblist.com/lists/diimaan/amazon-prime-top-10-movies\nhttps://mdblist.com/lists/diimaan/peacock-top-10-movies", type: "movie", enabled: true, group: "Combined Charts" },
-          { name: "Streaming Top 10 (All Services)", url: "https://mdblist.com/lists/ahmed2250/apple-tv-top-10-tv-shows-today\nhttps://mdblist.com/lists/andykai/disney-trending-no-hulu\nhttps://mdblist.com/lists/harmes7/hbo-max-top-10-series-cp45l27nhd\nhttps://mdblist.com/lists/hulupiv/hulu-top-10-shows\nhttps://mdblist.com/lists/hdlists/netflix-top-10-trending-shows\nhttps://mdblist.com/lists/ahmed2250/paramount-top-10-tv-shows-today\nhttps://mdblist.com/lists/diimaan/amazon-prime-top-10-tv-shows\nhttps://mdblist.com/lists/peacockpiv/peacock-top-10-shows", type: "series", enabled: true, group: "Combined Charts" },
-          { name: "Streaming (All Services)", url: "tmdb:chart:appletv\ntmdb:chart:disney\ntmdb:chart:discovery\ntmdb:chart:hbomax\ntmdb:chart:hulu\ntmdb:chart:netflix\ntmdb:chart:netflixkids\ntmdb:chart:paramount\ntmdb:chart:primevideo\ntmdb:chart:peacock", type: "movie", enabled: true, group: "Combined Charts" },
-          { name: "Streaming (All Services)", url: "tmdb:chart:appletv\ntmdb:chart:disney\ntmdb:chart:discovery\ntmdb:chart:hbomax\ntmdb:chart:hulu\ntmdb:chart:netflix\ntmdb:chart:netflixkids\ntmdb:chart:paramount\ntmdb:chart:primevideo\ntmdb:chart:peacock", type: "series", enabled: true, group: "Combined Charts" }
-      ]
+    hasInitial ? initialEntries : (newUi ? [] : STARTER_PACK_ENTRIES)
   );
 
+  // The shell variant of the chrome. Both navs keep the legacy wrappers
+  // (`.tab-bar`, `.bottom-nav`) so the existing CSS -- including the mobile
+  // bottom bar -- applies to them unchanged; only the items differ, from
+  // buttons to links.
+  const appShellDesktopNavHtml = newUi ? buildAppShellNavHtml("desktop") : "";
+  const appShellMobileNavHtml = newUi ? buildAppShellNavHtml("mobile") : "";
+
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en"${newUi ? ' data-app-shell="1"' : ''}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -26722,6 +27137,7 @@ ${seoHeadHtml}
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script>
+  ${newUi ? `var APP_SHELL_HEAD_ROUTES = ${jsonForScript(buildAppShellHeadRoutes())};` : ""}
   if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
     document.documentElement.classList.add('dark-theme');
     try {
@@ -26742,8 +27158,20 @@ ${seoHeadHtml}
     var h = location.hash || '';
     var isDeep = (p.startsWith('/lists/') && p !== '/lists') || p.startsWith('/channels/') || h.startsWith('#/list?') || h.startsWith('#/item?');
     var tab = 'discover';
+    // The new UI shell routes on real paths (/catalogs, /settings, ...), so
+    // there the path -- not the last tab this browser used -- decides which
+    // view opens. Same table the Worker rendered the nav from.
+    // APP_SHELL_HEAD_ROUTES is declared just above only on a shell page; this
+    // script is shared by both variants, so it must not name it unconditionally
+    // -- scope_check.mjs catches exactly that, and a legacy page would throw.
+    var shellRoute = null;
+    if (document.documentElement.getAttribute('data-app-shell') === '1' && typeof APP_SHELL_HEAD_ROUTES !== 'undefined') {
+      shellRoute = APP_SHELL_HEAD_ROUTES[p] || null;
+    }
     if (isDeep) {
       tab = h.startsWith('#/item?') ? 'item-details' : 'list-details';
+    } else if (shellRoute) {
+      tab = shellRoute.tab;
     } else {
       try {
         var s = localStorage.getItem('myListAddon:activeTab');
@@ -26751,22 +27179,23 @@ ${seoHeadHtml}
       } catch (e) {}
     }
     document.documentElement.setAttribute('data-initial-tab', tab);
+    var shellSub = (shellRoute && shellRoute.sub) || '';
 
     try {
-      var catSub = localStorage.getItem('myListAddon:catalogsSubmenu') || 'all';
+      var catSub = shellSub || localStorage.getItem('myListAddon:catalogsSubmenu') || 'all';
       document.documentElement.setAttribute('data-initial-catalogs-sub', catSub);
-      var listSub = localStorage.getItem('myListAddon:listsSubmenu') || 'my-lists';
+      var listSub = (shellRoute && shellRoute.tab === 'lists' && shellSub) || localStorage.getItem('myListAddon:listsSubmenu') || 'my-lists';
       // Must agree with normalizeListsSubmenu (16_client-row-core.js): the rule
       // above hides every Lists panel and then un-hides the one this attribute
       // names, so a stale value naming a panel that no longer exists leaves the
       // tab blank from first paint.
       if (['my-lists', 'liked', 'import', 'create-list'].indexOf(listSub) === -1) listSub = 'my-lists';
       document.documentElement.setAttribute('data-initial-lists-sub', listSub);
-      var chSub = localStorage.getItem('myListAddon:channelsSubmenu') || 'my-channels';
+      var chSub = (shellRoute && shellRoute.tab === 'channels' && shellSub) || localStorage.getItem('myListAddon:channelsSubmenu') || 'my-channels';
       document.documentElement.setAttribute('data-initial-channels-sub', chSub);
-      var setSub = localStorage.getItem('myListAddon:settingsSubmenu') || 'account';
+      var setSub = (shellRoute && shellRoute.tab === 'settings' && shellSub) || localStorage.getItem('myListAddon:settingsSubmenu') || 'account';
       document.documentElement.setAttribute('data-initial-settings-sub', setSub);
-      var discSub = localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
+      var discSub = (shellRoute && shellRoute.tab === 'discover' && shellSub) || localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
       if (discSub === 'all') discSub = 'movie';
       document.documentElement.setAttribute('data-initial-discover-sub', discSub);
     } catch (e) {}
@@ -30115,6 +30544,197 @@ ${seoHeadHtml}
     animation: spin 0.9s linear infinite;
   }
 
+  /* --- The new UI shell's install bar (Phase 6, P6-1) --------------------- */
+  /* Emitted for every visitor and inert without <html data-app-shell="1">.
+     That is deliberate: /app.css is one shared, content-hashed file
+     (splitAppCss, 02_http-and-creator-utils.js), so a variant-dependent
+     stylesheet would cost every visitor the shared cache. */
+  .app-shell-install-bar { display: none; }
+  html[data-app-shell="1"] .app-shell-install-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 10px;
+    padding: 10px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-2);
+    /* Sticky rather than fixed: on a phone the bottom of the screen belongs
+       to the tab bar, and the bar must not sit over the poster grid while a
+       list is being built. */
+    position: sticky;
+    top: 0;
+    z-index: 900;
+  }
+  html[data-app-shell="1"] .app-shell-install-dot {
+    width: 9px; height: 9px; flex: none; border-radius: 50%;
+    background: var(--muted);
+  }
+  html[data-app-shell="1"] .app-shell-install-bar[data-state="none"] .app-shell-install-dot { background: var(--muted); }
+  html[data-app-shell="1"] .app-shell-install-bar[data-state="unsaved"] .app-shell-install-dot { background: var(--warn); }
+  html[data-app-shell="1"] .app-shell-install-bar[data-state="live"] .app-shell-install-dot { background: var(--success); }
+  html[data-app-shell="1"] .app-shell-install-text {
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  html[data-app-shell="1"] .app-shell-install-action {
+    flex: none;
+    background: var(--accent); color: #fff; border: none;
+    border-radius: var(--radius-pill);
+    padding: 7px 14px; font-size: 0.82rem; font-weight: 700;
+    min-height: unset; cursor: pointer;
+  }
+  html[data-app-shell="1"] .app-shell-install-action:hover { background: var(--accent-hover); }
+  html[data-app-shell="1"] .app-shell-install-bar[data-state="live"] .app-shell-install-action {
+    background: var(--surface); color: var(--accent);
+    border: 1.5px solid var(--border-strong);
+  }
+  html[data-app-shell="1"] .app-shell-install-bar[data-state="live"] .app-shell-install-action:hover {
+    border-color: var(--accent); color: var(--accent);
+  }
+  /* The floating "Unsaved changes to install link" banner and the install
+     bar say the same thing; showing both would be the duplication this shell
+     exists to remove. */
+  html[data-app-shell="1"] #unsavedInstallBanner { display: none !important; }
+
+  /* The shell's Settings cards (P6-2). The card itself is the ordinary
+     .panel; these are the rows, the small action row and the status chip
+     inside it, so the new panels look like the rest of the page without a
+     second stylesheet. */
+  html[data-app-shell="1"] .app-shell-muted { color: var(--muted); font-size: 0.85rem; margin: 0 0 10px; }
+  html[data-app-shell="1"] .app-shell-kv { margin: 0 0 8px; font-size: 0.92rem; }
+  html[data-app-shell="1"] .app-shell-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+  html[data-app-shell="1"] .app-shell-row {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap; padding: 12px 0;
+    border-top: 1px solid var(--border);
+  }
+  html[data-app-shell="1"] .app-shell-row-main { flex: 1 1 240px; min-width: 0; font-size: 0.9rem; }
+  html[data-app-shell="1"] .app-shell-row-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  html[data-app-shell="1"] .app-shell-chip {
+    display: inline-block; padding: 2px 10px; border-radius: var(--radius-pill);
+    font-size: 0.75rem; font-weight: 600;
+    border: 1px solid var(--border); color: var(--muted);
+  }
+  html[data-app-shell="1"] .app-shell-chip-ok { color: var(--success); border-color: rgba(52, 199, 89, 0.45); }
+  html[data-app-shell="1"] .app-shell-chip-warn { color: var(--warn); border-color: rgba(255, 149, 0, 0.45); }
+  html[data-app-shell="1"] .app-shell-danger { color: var(--danger); border-color: rgba(255, 59, 48, 0.35); }
+  html[data-app-shell="1"] .app-shell-details { margin-top: 10px; font-size: 0.88rem; }
+  html[data-app-shell="1"] .app-shell-details summary { cursor: pointer; color: var(--text); }
+
+  /* The home-screen editor (P6-3): the paste box, the review table and the
+     duplicate toggle that now sits directly above the rows it applies to. The
+     toggle used to live in Settings; on a shell page that copy is hidden, so
+     the same setting is described in one place (see #legacyDedupePanel). */
+  html[data-app-shell="1"] #legacyDedupePanel { display: none; }
+  html[data-app-shell="1"] .app-shell-add-box {
+    width: 100%; min-height: 92px; padding: 10px 12px; margin: 0 0 8px;
+    border: 1px solid var(--border); border-radius: 10px;
+    background: var(--bg); color: var(--text);
+    font-family: var(--font-mono, monospace); font-size: 0.86rem; line-height: 1.45;
+    resize: vertical;
+  }
+  html[data-app-shell="1"] .app-shell-review { margin-top: 12px; }
+  html[data-app-shell="1"] .app-shell-review-row {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); font-size: 0.88rem;
+  }
+  html[data-app-shell="1"] .app-shell-review-url {
+    color: var(--muted); font-size: 0.78rem;
+    word-break: break-all; overflow-wrap: anywhere;
+  }
+  html[data-app-shell="1"] .app-shell-review-bad { color: var(--danger); }
+  html[data-app-shell="1"] .app-shell-dedupe {
+    display: flex; align-items: flex-start; gap: 10px; cursor: pointer;
+    font-size: 0.92rem; user-select: none; margin: 14px 0 4px;
+    padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--surface);
+  }
+  html[data-app-shell="1"] .app-shell-dedupe input { margin-top: 2px; cursor: pointer; width: 16px; height: 16px; }
+
+  /* A visibility choice (P6-4) is a chip you can press: Private, Unlisted,
+     Public. The chosen one is highlighted; the one that needs the new list
+     service is disabled and says why. */
+  html[data-app-shell="1"] button.app-shell-chip {
+    background: none; font: inherit; cursor: pointer;
+  }
+  html[data-app-shell="1"] button.app-shell-chip.is-on {
+    color: var(--accent); border-color: var(--accent);
+  }
+  html[data-app-shell="1"] button.app-shell-chip[disabled] { cursor: not-allowed; opacity: 0.55; }
+
+  /* What is actually in a list, previewed before it is added (P6-5). */
+  html[data-app-shell="1"] .app-shell-explore-preview { padding: 2px 0 10px; }
+  html[data-app-shell="1"] .app-shell-explore-posters {
+    display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 8px;
+  }
+  html[data-app-shell="1"] .app-shell-explore-poster {
+    width: 58px; height: 87px; object-fit: cover; border-radius: 6px;
+    background: var(--panel-strong); border: 1px solid var(--border);
+  }
+  html[data-app-shell="1"] .app-shell-explore-poster-none { display: block; }
+
+  /* Import progress (P6-6): how far the server has got, and a heading for the
+     blocks under it. */
+  html[data-app-shell="1"] .app-shell-h3 { margin: 14px 0 6px; font-size: 1rem; }
+  html[data-app-shell="1"] .app-shell-bar {
+    height: 8px; border-radius: 999px; overflow: hidden;
+    background: var(--panel-strong); border: 1px solid var(--border); margin: 2px 0 8px;
+  }
+  html[data-app-shell="1"] .app-shell-bar > span {
+    display: block; height: 100%; background: var(--accent); transition: width 0.3s ease;
+  }
+  html[data-app-shell="1"] #appShellImportName, html[data-app-shell="1"] #appShellAddTitlesInput {
+    width: 100%; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.95rem;
+  }
+
+  /* Channels (P6-7): the template cards, the schedule panel, and the lineup
+     the server answers with. The lineup tiles are the same shape as the
+     list preview's posters (P6-5), deliberately. */
+  html[data-app-shell="1"] .app-shell-template-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px; margin: 12px 0;
+  }
+  html[data-app-shell="1"] button.app-shell-template-card {
+    display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
+    text-align: left; padding: 12px 14px; cursor: pointer; font: inherit;
+    border: 1px solid var(--border); border-radius: 10px;
+    background: var(--surface); color: var(--text);
+  }
+  html[data-app-shell="1"] button.app-shell-template-card:hover { border-color: var(--accent); }
+  html[data-app-shell="1"] .app-shell-template-card .app-shell-muted { font-size: 0.8rem; }
+  html[data-app-shell="1"] .app-shell-template-note { font-size: 0.74rem; }
+  html[data-app-shell="1"] .app-shell-schedule {
+    margin: 12px 0; padding: 10px 12px; border: 1px solid var(--border);
+    border-radius: 10px; background: var(--surface);
+  }
+  html[data-app-shell="1"] .app-shell-schedule summary { cursor: pointer; font-weight: 600; }
+  html[data-app-shell="1"] .app-shell-schedule input[type="number"] { width: 84px; }
+  html[data-app-shell="1"] .app-shell-schedule .app-shell-muted { font-size: 0.8rem; }
+  html[data-app-shell="1"] .app-shell-person-grid { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+  html[data-app-shell="1"] .app-shell-lineup {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+    gap: 8px; margin: 8px 0 10px;
+  }
+  html[data-app-shell="1"] .app-shell-lineup-tile { display: flex; flex-direction: column; gap: 4px; }
+  html[data-app-shell="1"] .app-shell-lineup-tile img,
+  html[data-app-shell="1"] .app-shell-lineup-blank {
+    width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 6px;
+    background: var(--panel-strong); border: 1px solid var(--border);
+  }
+  html[data-app-shell="1"] .app-shell-lineup-tile span {
+    font-size: 0.72rem; color: var(--muted);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  html[data-app-shell="1"] #appShellChannels input[type="text"] {
+    width: 100%; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.95rem;
+  }
+
   /* --- Floating Unsaved Changes to Install Link Banner -------------------- */
   .unsaved-install-banner {
     position: fixed;
@@ -30231,7 +30851,7 @@ ${seoHeadHtml}
       </div>
     </div>
     <div class="app-header-actions">
-      <button type="button" class="theme-toggle-btn dark-mode-toggle" id="themeToggleBtn" onclick="toggleTheme()" aria-label="Toggle Light or Dark Mode" title="Toggle Light / Dark Mode">
+      <button type="button" class="theme-toggle-btn dark-mode-toggle" id="themeToggleBtn" data-act="toggleTheme" aria-label="Toggle Light or Dark Mode" title="Toggle Light / Dark Mode">
         <svg class="theme-icon-sun" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="12" cy="12" r="4" fill="currentColor"></circle>
           <line x1="12" y1="2" x2="12" y2="4.5"></line>
@@ -30251,31 +30871,35 @@ ${seoHeadHtml}
     </div>
   </header>
 
+  <!-- The install bar (new UI shell only): what the current configuration is
+       installed as, and the one action that changes it. -->
+${newUi ? "  " + APP_SHELL_INSTALL_BAR_HTML : ""}
+
   <!-- Top Tab Bar (Desktop View) -->
-  <div class="tab-bar" role="tablist" aria-label="Main navigation">
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-catalogs" aria-controls="content-catalogs" aria-selected="false" tabindex="-1" data-tab="catalogs" onclick="switchTab('catalogs')">Catalogs</button>
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-lists" aria-controls="content-lists" aria-selected="false" tabindex="-1" data-tab="lists" onclick="switchTab('lists')">Lists</button>
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-channels" aria-controls="content-channels" aria-selected="false" tabindex="-1" data-tab="channels" onclick="switchTab('channels')">Channels</button>
-    <button type="button" class="tab-btn active" role="tab" id="tab-desktop-discover" aria-controls="content-discover" aria-selected="true" tabindex="0" data-tab="discover" onclick="switchTab('discover')">Discover</button>
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-search" aria-controls="content-search" aria-selected="false" tabindex="-1" data-tab="search" onclick="switchTab('search')">Search</button>
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-settings" aria-controls="content-settings" aria-selected="false" tabindex="-1" data-tab="settings" onclick="switchTab('settings')">Settings</button>
-  </div>
+${newUi ? appShellDesktopNavHtml : `  <div class="tab-bar" role="tablist" aria-label="Main navigation">
+    <button type="button" class="tab-btn" role="tab" id="tab-desktop-catalogs" aria-controls="content-catalogs" aria-selected="false" tabindex="-1" data-tab="catalogs" data-act="switchTab" data-act-args="[&quot;catalogs&quot;]">Catalogs</button>
+    <button type="button" class="tab-btn" role="tab" id="tab-desktop-lists" aria-controls="content-lists" aria-selected="false" tabindex="-1" data-tab="lists" data-act="switchTab" data-act-args="[&quot;lists&quot;]">Lists</button>
+    <button type="button" class="tab-btn" role="tab" id="tab-desktop-channels" aria-controls="content-channels" aria-selected="false" tabindex="-1" data-tab="channels" data-act="switchTab" data-act-args="[&quot;channels&quot;]">Channels</button>
+    <button type="button" class="tab-btn active" role="tab" id="tab-desktop-discover" aria-controls="content-discover" aria-selected="true" tabindex="0" data-tab="discover" data-act="switchTab" data-act-args="[&quot;discover&quot;]">Discover</button>
+    <button type="button" class="tab-btn" role="tab" id="tab-desktop-search" aria-controls="content-search" aria-selected="false" tabindex="-1" data-tab="search" data-act="switchTab" data-act-args="[&quot;search&quot;]">Search</button>
+    <button type="button" class="tab-btn" role="tab" id="tab-desktop-settings" aria-controls="content-settings" aria-selected="false" tabindex="-1" data-tab="settings" data-act="switchTab" data-act-args="[&quot;settings&quot;]">Settings</button>
+  </div>`}
 
   <!-- Unsaved Changes Floating Banner -->
   <div id="unsavedInstallBanner" class="unsaved-install-banner">
     <span id="unsavedInstallText" style="font-weight:600;">Unsaved changes to install link</span>
-    <button type="button" class="unsaved-install-banner-btn" id="unsavedInstallBtn" onclick="updateInstallLinkFromBanner()">Update Link</button>
+    <button type="button" class="unsaved-install-banner-btn" id="unsavedInstallBtn" data-act="updateInstallLinkFromBanner">Update Link</button>
   </div>
 
   <!-- Bottom Nav Bar (Mobile View - Persistent Glassmorphism) -->
-  <nav class="bottom-nav" role="tablist" aria-label="Main navigation">
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-catalogs" aria-controls="content-catalogs" aria-selected="false" tabindex="-1" data-tab="catalogs" onclick="switchTab('catalogs')" title="Catalogs">
+${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria-label="Main navigation">
+    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-catalogs" aria-controls="content-catalogs" aria-selected="false" tabindex="-1" data-tab="catalogs" data-act="switchTab" data-act-args="[&quot;catalogs&quot;]" title="Catalogs">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
       </svg>
       Catalogs
     </button>
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-lists" aria-controls="content-lists" aria-selected="false" tabindex="-1" data-tab="lists" onclick="switchTab('lists')" title="Lists">
+    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-lists" aria-controls="content-lists" aria-selected="false" tabindex="-1" data-tab="lists" data-act="switchTab" data-act-args="[&quot;lists&quot;]" title="Lists">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line>
         <line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line>
@@ -30283,34 +30907,34 @@ ${seoHeadHtml}
       </svg>
       Lists
     </button>
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-channels" aria-controls="content-channels" aria-selected="false" tabindex="-1" data-tab="channels" onclick="switchTab('channels')" title="Channels">
+    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-channels" aria-controls="content-channels" aria-selected="false" tabindex="-1" data-tab="channels" data-act="switchTab" data-act-args="[&quot;channels&quot;]" title="Channels">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>
         <polyline points="17 2 12 7 7 2"></polyline>
       </svg>
       Channels
     </button>
-    <button type="button" class="bottom-nav-item active" role="tab" id="tab-mobile-discover" aria-controls="content-discover" aria-selected="true" tabindex="0" data-tab="discover" onclick="switchTab('discover')" title="Discover">
+    <button type="button" class="bottom-nav-item active" role="tab" id="tab-mobile-discover" aria-controls="content-discover" aria-selected="true" tabindex="0" data-tab="discover" data-act="switchTab" data-act-args="[&quot;discover&quot;]" title="Discover">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect>
         <rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect>
       </svg>
       Discover
     </button>
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-search" aria-controls="content-search" aria-selected="false" tabindex="-1" data-tab="search" onclick="switchTab('search')" title="Search">
+    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-search" aria-controls="content-search" aria-selected="false" tabindex="-1" data-tab="search" data-act="switchTab" data-act-args="[&quot;search&quot;]" title="Search">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
       </svg>
       Search
     </button>
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-settings" aria-controls="content-settings" aria-selected="false" tabindex="-1" data-tab="settings" onclick="switchTab('settings')" title="Settings">
+    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-settings" aria-controls="content-settings" aria-selected="false" tabindex="-1" data-tab="settings" data-act="switchTab" data-act-args="[&quot;settings&quot;]" title="Settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="12" cy="12" r="3"></circle>
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
       </svg>
       Settings
     </button>
-  </nav>
+  </nav>`}
 
   <script>
     (function() {
@@ -30339,9 +30963,9 @@ ${seoHeadHtml}
         var cBar = document.getElementById('creatorProfileBar');
         if (cBar) {
           if (cName && cKey) {
-            cBar.innerHTML = '<div style="display:flex; align-items:center; gap:8px;"><button type="button" class="subnav-pill active" style="margin:0; font-size:0.85rem; padding:8px 14px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px; border-radius:var(--radius-pill);" onclick="switchTab(&quot;account&quot;)">&#x1F464; ' + String(cDisp || cName || '').replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}) + '</button></div>';
+            cBar.innerHTML = '<div style="display:flex; align-items:center; gap:8px;"><button type="button" class="subnav-pill active" style="margin:0; font-size:0.85rem; padding:8px 14px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px; border-radius:var(--radius-pill);" data-act="switchTab" data-act-args="[&quot;account&quot;]">&#x1F464; ' + String(cDisp || cName || '').replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}) + '</button></div>';
           } else {
-            cBar.innerHTML = '<div style="display:flex; align-items:center; gap:6px;"><button type="button" class="lc-btn primary" onclick="openRestoreModal()" style="padding:8px 16px; font-size:0.85rem; font-weight:700; border-radius:var(--radius-pill);">Login</button></div>';
+            cBar.innerHTML = '<div style="display:flex; align-items:center; gap:6px;"><button type="button" class="lc-btn primary" data-act="openRestoreModal" style="padding:8px 16px; font-size:0.85rem; font-weight:700; border-radius:var(--radius-pill);">Login</button></div>';
           }
         }
       } catch (e) {}
@@ -30354,7 +30978,7 @@ ${seoHeadHtml}
   <!-- List Details page ("See All" full list view) -->
   <div class="tab-panel list-details-page" data-tab-panel="list-details" id="content-list-details" hidden>
     <div style="margin-bottom: 20px;">
-      <button type="button" class="lc-btn secondary" onclick="navigateBackFromDetail()" style="padding: 6px 12px; font-size: 0.9rem;">&larr; Back</button>
+      <button type="button" class="lc-btn secondary" data-act="navigateBackFromDetail" style="padding: 6px 12px; font-size: 0.9rem;">&larr; Back</button>
     </div>
     <div class="detail-header-info" style="margin-bottom:14px;">
       <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
@@ -30376,24 +31000,24 @@ ${seoHeadHtml}
     </div>
     <div id="detailFilterBar" class="detail-filter-bar" style="display:none;">
       <div id="whFilterControls" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; width:100%;">
-        <button type="button" class="subnav-pill active wh-filter-pill" data-wh-filter="all" onclick="setWatchHistoryFilter('all', this)">All</button>
-        <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="movie" onclick="setWatchHistoryFilter('movie', this)">Movies</button>
-        <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="series" onclick="setWatchHistoryFilter('series', this)">Shows</button>
+        <button type="button" class="subnav-pill active wh-filter-pill" data-wh-filter="all" data-act="setWatchHistoryFilter" data-act-args="[&quot;all&quot;,&quot;@self&quot;]">All</button>
+        <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="movie" data-act="setWatchHistoryFilter" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]">Movies</button>
+        <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="series" data-act="setWatchHistoryFilter" data-act-args="[&quot;series&quot;,&quot;@self&quot;]">Shows</button>
         <label class="wh-group-shows-toggle" style="display:inline-flex; align-items:center; gap:6px; margin-left:8px; cursor:pointer; font-size:0.84rem; color:var(--text); user-select:none;">
-          <input type="checkbox" id="whGroupShowsCheckbox" onchange="toggleWatchHistoryGroupShows(this.checked)" style="accent-color:var(--accent); cursor:pointer;">
+          <input type="checkbox" id="whGroupShowsCheckbox" data-act="toggleWatchHistoryGroupShows" data-act-args="[&quot;@checked&quot;]" style="accent-color:var(--accent); cursor:pointer;">
           <span>Shows instead of episodes</span>
         </label>
-        <button type="button" class="subnav-pill" id="whClearHistoryBtn" onclick="clearWatchHistoryAll()" style="color:var(--danger); border-color:rgba(255,59,48,0.35); margin-left:auto; font-weight:600;">Clear History</button>
+        <button type="button" class="subnav-pill" id="whClearHistoryBtn" data-act="clearWatchHistoryAll" style="color:var(--danger); border-color:rgba(255,59,48,0.35); margin-left:auto; font-weight:600;">Clear History</button>
       </div>
       <div id="genericTypeFilterControls" style="display:none; gap:6px; flex-wrap:wrap; align-items:center; width:100%;">
-        <button type="button" class="subnav-pill active generic-type-pill" id="detailTypeAllBtn" onclick="switchListDetailsType('all')">All</button>
-        <button type="button" class="subnav-pill generic-type-pill" id="detailTypeMovieBtn" onclick="switchListDetailsType('movie')">Movies</button>
-        <button type="button" class="subnav-pill generic-type-pill" id="detailTypeSeriesBtn" onclick="switchListDetailsType('series')">Shows</button>
-        <button type="button" class="subnav-pill" id="cwClearHistoryBtn" onclick="clearContinueWatchingAll()" style="display:none; color:var(--danger); border-color:rgba(255,59,48,0.35); margin-left:auto; font-weight:600;">Clear All</button>
+        <button type="button" class="subnav-pill active generic-type-pill" id="detailTypeAllBtn" data-act="switchListDetailsType" data-act-args="[&quot;all&quot;]">All</button>
+        <button type="button" class="subnav-pill generic-type-pill" id="detailTypeMovieBtn" data-act="switchListDetailsType" data-act-args="[&quot;movie&quot;]">Movies</button>
+        <button type="button" class="subnav-pill generic-type-pill" id="detailTypeSeriesBtn" data-act="switchListDetailsType" data-act-args="[&quot;series&quot;]">Shows</button>
+        <button type="button" class="subnav-pill" id="cwClearHistoryBtn" data-act="clearContinueWatchingAll" style="display:none; color:var(--danger); border-color:rgba(255,59,48,0.35); margin-left:auto; font-weight:600;">Clear All</button>
       </div>
       <div id="whSortControls" style="display:flex; align-items:center; gap:8px;">
         <label for="whSortSelect" style="font-size:0.75rem; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.02em;">Sort</label>
-        <select id="whSortSelect" class="detail-sort-select" onchange="setWatchHistorySort(this.value)">
+        <select id="whSortSelect" class="detail-sort-select" data-act="setWatchHistorySort" data-act-args="[&quot;@value&quot;]">
           <option value="recent">Recently Watched</option>
           <option value="oldest">Oldest Watched</option>
           <option value="title-asc">Title (A-Z)</option>
@@ -30407,7 +31031,7 @@ ${seoHeadHtml}
 
   <div class="tab-panel" data-tab-panel="item-details" id="content-item-details" hidden>
     <div style="margin-bottom: 20px;">
-      <button type="button" class="lc-btn secondary" onclick="navigateBackFromDetail()" style="padding: 6px 12px; font-size: 0.9rem;">&larr; Back</button>
+      <button type="button" class="lc-btn secondary" data-act="navigateBackFromDetail" style="padding: 6px 12px; font-size: 0.9rem;">&larr; Back</button>
     </div>
     <div id="itemDetailsBody" style="display: flex; flex-direction: column; gap: 24px;">
       <!-- Filled dynamically -->
@@ -30418,12 +31042,12 @@ ${seoHeadHtml}
     <div class="modal-card" style="width: 100%; max-width: 380px; padding: 22px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow); display: flex; flex-direction: column;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
         <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);" id="createListModalTitle">Create List</h2>
-        <button type="button" class="modal-close-x" aria-label="Close" onclick="closeCreateListModal()">&#x2715;</button>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeCreateListModal">&#x2715;</button>
       </div>
 
       <div style="margin-bottom: 12px;">
         <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Destination</label>
-        <select id="createListModalDestination" aria-label="Destination" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.95rem;" onchange="onChangeCreateListDestination()">
+        <select id="createListModalDestination" aria-label="Destination" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.95rem;" data-act="onChangeCreateListDestination">
           <option value="custom">Custom List</option>
           <option value="trakt">Trakt List</option>
           <option value="tmdb">TMDB List</option>
@@ -30434,7 +31058,7 @@ ${seoHeadHtml}
       
       <div style="margin-bottom: 12px;">
         <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">List Name *</label>
-        <input type="text" id="createListModalName" placeholder="e.g. My Favorite Sci-Fi" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.95rem;" oninput="document.getElementById('createListModalBtn').disabled = !this.value.trim(); document.getElementById('createListModalBtn').style.opacity = this.value.trim() ? '1' : '0.5';">
+        <input type="text" id="createListModalName" placeholder="e.g. My Favorite Sci-Fi" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="appActValidateCreateListName" data-act-args="[&quot;@value&quot;]">
       </div>
 
       <div style="margin-bottom: 12px;">
@@ -30460,8 +31084,8 @@ ${seoHeadHtml}
       </div>
       
       <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
-        <button type="button" class="lc-btn secondary" onclick="closeCreateListModal()">Cancel</button>
-        <button type="button" class="lc-btn primary" id="createListModalBtn" style="opacity: 0.5; min-width: 80px;" disabled onclick="submitCreateListModal()">Create</button>
+        <button type="button" class="lc-btn secondary" data-act="closeCreateListModal">Cancel</button>
+        <button type="button" class="lc-btn primary" id="createListModalBtn" style="opacity: 0.5; min-width: 80px;" disabled data-act="submitCreateListModal">Create</button>
       </div>
     </div>
   </div>
@@ -30472,25 +31096,25 @@ ${seoHeadHtml}
       <h2 style="margin-top:0; font-size:1.3rem; font-weight:600; color:var(--text);">Add Catalog</h2>
       
       <div style="margin: 16px 0;">
-        <input type="text" id="addShelfModalName" placeholder="Catalog name" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem; margin-bottom:12px;" oninput="validateAddShelfModal()">
+        <input type="text" id="addShelfModalName" placeholder="Catalog name" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem; margin-bottom:12px;" data-act-on="input" data-act="validateAddShelfModal">
         
         <div id="addShelfModalLinksContainer">
           <div class="add-shelf-link-row" style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
-            <input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd)" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" oninput="onAddShelfModalLinkInput(this); validateAddShelfModal()">
+            <input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd)" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">
           </div>
         </div>
         
-        <button type="button" class="lc-btn secondary" style="width: 100%; margin-bottom: 12px; font-size: 0.9rem;" onclick="addShelfModalAddLink()">+ Add another link (Combined List)</button>
+        <button type="button" class="lc-btn secondary" style="width: 100%; margin-bottom: 12px; font-size: 0.9rem;" data-act="addShelfModalAddLink">+ Add another link (Combined List)</button>
         
-        <select id="addShelfModalType" aria-label="Catalog type" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem; margin-bottom:12px;" onchange="validateAddShelfModal()">
+        <select id="addShelfModalType" aria-label="Catalog type" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem; margin-bottom:12px;" data-act="validateAddShelfModal">
           <option value="movie">Movies</option>
           <option value="series">Shows</option>
         </select>
       </div>
       
       <div style="display:flex; justify-content:flex-end; gap:16px; margin-top: 8px;">
-        <button type="button" style="background:none; border:none; color:var(--text); font-weight:600; font-size:1rem; cursor:pointer;" onclick="document.getElementById('addShelfModal').style.display = 'none'">Cancel</button>
-        <button type="button" id="addShelfModalBtn" style="background:none; border:none; color:var(--accent); font-weight:600; font-size:1rem; cursor:pointer; opacity: 0.5;" disabled onclick="submitAddShelfModal()">Add</button>
+        <button type="button" style="background:none; border:none; color:var(--text); font-weight:600; font-size:1rem; cursor:pointer;" data-act="appActHideAddShelfModal">Cancel</button>
+        <button type="button" id="addShelfModalBtn" style="background:none; border:none; color:var(--accent); font-weight:600; font-size:1rem; cursor:pointer; opacity: 0.5;" disabled data-act="submitAddShelfModal">Add</button>
       </div>
     </div>
   </div>
@@ -30508,7 +31132,7 @@ ${seoHeadHtml}
         <!-- Filled dynamically -->
       </div>
       <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
-        <button type="button" class="lc-btn secondary" id="selectListModalCancelBtn" onclick="closeSelectListModal()">Cancel</button>
+        <button type="button" class="lc-btn secondary" id="selectListModalCancelBtn" data-act="closeSelectListModal">Cancel</button>
         <button type="button" class="lc-btn primary" id="addSelectedListsBtn" style="min-width: 90px;">Done</button>
       </div>
     </div>
@@ -30519,7 +31143,7 @@ ${seoHeadHtml}
     <div class="modal-card" style="width: 100%; max-width: 420px; padding: 24px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow); display: flex; flex-direction: column; text-align: center;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
         <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);">Connect Trakt</h2>
-        <button type="button" class="modal-close-x" aria-label="Close" onclick="closeTraktDeviceModal()">&#x2715;</button>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeTraktDeviceModal">&#x2715;</button>
       </div>
       <p style="margin: 0 0 16px; color: var(--muted); font-size: 0.9rem;">To authorize your Trakt account without redirects or rate limits, enter the code below on Trakt:</p>
       
@@ -30538,7 +31162,7 @@ ${seoHeadHtml}
       </div>
 
       <div style="margin-top: 18px; border-top: 1px solid var(--border); padding-top: 14px;">
-        <button type="button" class="lc-btn secondary" style="width: 100%;" onclick="closeTraktDeviceModal()">Cancel</button>
+        <button type="button" class="lc-btn secondary" style="width: 100%;" data-act="closeTraktDeviceModal">Cancel</button>
       </div>
     </div>
   </div>
@@ -30565,9 +31189,9 @@ if ('serviceWorker' in navigator) {
 <div class="tab-panel" data-tab-panel="catalogs" id="content-catalogs" role="tabpanel" aria-labelledby="tab-desktop-catalogs" hidden>
   <!-- Top Submenu Pills for Catalogs -->
   <div class="subnav-pills-bar" id="catalogsFilterBar">
-    <button type="button" class="subnav-pill active" data-sub="all" onclick="switchCatalogsSubmenu('all', this)"><span class="check-icon">&#x2713;</span> My Catalogs</button>
-    <button type="button" class="subnav-pill" data-sub="quickadd" onclick="switchCatalogsSubmenu('quickadd', this)">Quick Add</button>
-    <button type="button" class="subnav-pill" data-sub="bulk" onclick="switchCatalogsSubmenu('bulk', this)">Bulk Add</button>
+    <button type="button" class="subnav-pill active" data-sub="all" data-act="switchCatalogsSubmenu" data-act-args="[&quot;all&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> My Catalogs</button>
+    <button type="button" class="subnav-pill" data-sub="quickadd" data-act="switchCatalogsSubmenu" data-act-args="[&quot;quickadd&quot;,&quot;@self&quot;]">Quick Add</button>
+    <button type="button" class="subnav-pill" data-sub="bulk" data-act="switchCatalogsSubmenu" data-act-args="[&quot;bulk&quot;,&quot;@self&quot;]">Bulk Add</button>
   </div>
 
   <div class="lists-subpanel" id="catalogsSubShelves">
@@ -30576,19 +31200,25 @@ if ('serviceWorker' in navigator) {
     <div class="shelf-header" style="margin-bottom:12px;">
       <h2 class="shelf-title">Live Preview &amp; Editor</h2>
       <div class="actions" style="flex-direction:row; flex-wrap:wrap; align-items:center; gap:6px;">
-        <button type="button" class="primary lc-btn" onclick="openAddShelfModal()">+ New Catalog</button>
-        <button type="button" class="secondary lc-btn" id="livePreviewEditBtn" onclick="toggleLivePreviewEdit()">Edit</button>
-        <button type="button" class="secondary lc-btn" onclick="renderLivePreview()">Refresh Preview</button>
+        <button type="button" class="primary lc-btn" data-act="openAddShelfModal">+ New Catalog</button>
+        <button type="button" class="secondary lc-btn" id="livePreviewEditBtn" data-act="toggleLivePreviewEdit">Edit</button>
+        <button type="button" class="secondary lc-btn" data-act="renderLivePreview">Refresh Preview</button>
       </div>
     </div>
     <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Catalogs and lists you've added to your add-on. Reorder, edit, and preview your active shelves.</p>
 
     <div class="row" style="margin-bottom:12px; gap:8px;">
-      <input type="text" id="listFilterInput" aria-label="Filter catalogs by name" placeholder="Filter catalogs by name..." oninput="filterLists()">
-      <select id="listGroupFilterSelect" aria-label="Filter catalogs by group" onchange="filterLists()" style="flex:none; width:auto;">
+      <input type="text" id="listFilterInput" aria-label="Filter catalogs by name" placeholder="Filter catalogs by name..." data-act-on="input" data-act="filterLists">
+      <select id="listGroupFilterSelect" aria-label="Filter catalogs by group" data-act="filterLists" style="flex:none; width:auto;">
         <option value="">All groups</option>
       </select>
     </div>
+
+    <!-- The shell's paste-first home-screen editor (P6-3): add lists, the
+         duplicate toggle, the starter pack. Emitted only for a browser with the
+         FF_NEW_UI cookie; the reorderable rows below it are the same ones the
+         old page uses. -->
+${newUi ? '    <div id="appShellHomeEditor"></div>' : ''}
 
     <!-- Reorderable Catalog Shelves -->
     <div id="lists"></div>
@@ -30600,26 +31230,26 @@ if ('serviceWorker' in navigator) {
       </div>
       <div style="display:flex; flex-direction:column; gap:8px;">
         <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.88rem; margin:0; user-select:none;">
-          <input type="checkbox" id="shuffleShelvesCheckbox" onchange="saveState()" style="cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="shuffleShelvesCheckbox" data-act="saveState" style="cursor:pointer; width:16px; height:16px;">
           <span>Shuffle Catalogs daily (every 24h)</span>
         </label>
         <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.88rem; margin:0; user-select:none;">
-          <input type="checkbox" id="shuffleItemsCheckbox" onchange="saveState()" style="cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="shuffleItemsCheckbox" data-act="saveState" style="cursor:pointer; width:16px; height:16px;">
           <span>Shuffle items in Catalogs daily (every 24h)</span>
         </label>
       </div>
     </div>
 
     <div class="actions" style="margin-top:16px;">
-      <button type="button" onclick="removeAllLists()" class="secondary" style="color:var(--danger); border-color:rgba(255,59,48,0.25);">Remove All</button>
-      <button type="button" class="primary" onclick="generate()">${isConfigureMode ? "Update Add-on" : "Generate Install Link"}</button>
+      <button type="button" data-act="removeAllLists" class="secondary" style="color:var(--danger); border-color:rgba(255,59,48,0.25);">Remove All</button>
+      <button type="button" class="primary" data-act="generate">${isConfigureMode ? "Update Add-on" : "Generate Install Link"}</button>
     </div>
   </div>
 
   <!-- Undo Toast -->
   <div id="undoToast" class="undo-toast" style="display:none;">
     <span id="undoToastMsg"></span>
-    <button type="button" class="secondary" onclick="performUndo()">Undo</button>
+    <button type="button" class="secondary" data-act="performUndo">Undo</button>
   </div>
 
   <!-- Generated Install Link Result Box -->
@@ -30633,7 +31263,7 @@ if ('serviceWorker' in navigator) {
     <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Paste multiple list URLs at once, one per line. Each list is automatically detected and added to your catalogs.</p>
     <textarea id="bulkPasteBox" rows="5" style="width:100%;font-family:monospace;font-size:15px;" placeholder="https://mdblist.com/lists/user/list-one&#10;https://trakt.tv/users/user/lists/list-two&#10;https://www.themoviedb.org/list/12345"></textarea>
     <div class="actions" style="margin-top:12px;">
-      <button type="button" class="primary" onclick="bulkAddLists(this)">Add All Lines as Catalogs</button>
+      <button type="button" class="primary" data-act="bulkAddLists" data-act-args="[&quot;@self&quot;]">Add All Lines as Catalogs</button>
     </div>
   </div>
   </div>
@@ -30757,16 +31387,22 @@ if ('serviceWorker' in navigator) {
 <div class="tab-panel" data-tab-panel="discover" id="content-discover" role="tabpanel" aria-labelledby="tab-desktop-discover">
   <!-- Discover Top Submenu Pills -->
   <div class="subnav-pills-bar" id="discoverSubnavBar">
-    <button type="button" class="subnav-pill" data-sub="all" onclick="filterDiscoverShelves('all', this)">All</button>
-    <button type="button" class="subnav-pill active" data-sub="movie" onclick="filterDiscoverShelves('movie', this)"><span class="check-icon">&#x2713;</span> Movies</button>
-    <button type="button" class="subnav-pill" data-sub="series" onclick="filterDiscoverShelves('series', this)">Shows</button>
-    <button type="button" class="subnav-pill" data-sub="popular" onclick="filterDiscoverShelves('popular', this)">Popular Lists</button>
-    <button type="button" class="subnav-pill" data-sub="curated" onclick="filterDiscoverShelves('curated', this)">Curated</button>
-    <button type="button" class="subnav-pill" data-sub="gems" onclick="filterDiscoverShelves('gems', this)">Hidden Gems</button>
-    <button type="button" class="subnav-pill" data-sub="kids" onclick="filterDiscoverShelves('kids', this)">Kids</button>
-    <button type="button" class="subnav-pill" data-sub="holidays" onclick="filterDiscoverShelves('holidays', this)">Holidays</button>
-    <button type="button" class="subnav-pill" data-sub="genres" onclick="filterDiscoverShelves('genres', this)">Genres</button>
+    <button type="button" class="subnav-pill" data-sub="all" data-act="filterDiscoverShelves" data-act-args="[&quot;all&quot;,&quot;@self&quot;]">All</button>
+    <button type="button" class="subnav-pill active" data-sub="movie" data-act="filterDiscoverShelves" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> Movies</button>
+    <button type="button" class="subnav-pill" data-sub="series" data-act="filterDiscoverShelves" data-act-args="[&quot;series&quot;,&quot;@self&quot;]">Shows</button>
+    <button type="button" class="subnav-pill" data-sub="popular" data-act="filterDiscoverShelves" data-act-args="[&quot;popular&quot;,&quot;@self&quot;]">Popular Lists</button>
+    <button type="button" class="subnav-pill" data-sub="curated" data-act="filterDiscoverShelves" data-act-args="[&quot;curated&quot;,&quot;@self&quot;]">Curated</button>
+    <button type="button" class="subnav-pill" data-sub="gems" data-act="filterDiscoverShelves" data-act-args="[&quot;gems&quot;,&quot;@self&quot;]">Hidden Gems</button>
+    <button type="button" class="subnav-pill" data-sub="kids" data-act="filterDiscoverShelves" data-act-args="[&quot;kids&quot;,&quot;@self&quot;]">Kids</button>
+    <button type="button" class="subnav-pill" data-sub="holidays" data-act="filterDiscoverShelves" data-act-args="[&quot;holidays&quot;,&quot;@self&quot;]">Holidays</button>
+    <button type="button" class="subnav-pill" data-sub="genres" data-act="filterDiscoverShelves" data-act-args="[&quot;genres&quot;,&quot;@self&quot;]">Genres</button>
   </div>
+
+  <!-- The shell's Explore section (P6-5): community lists from this site and
+       from MDBList, Trakt and TMDB, with a preview and one button to add one to
+       the home screen. Emitted only for a browser with the FF_NEW_UI cookie;
+       the Discover feeds below are unchanged. -->
+${newUi ? '  <div id="appShellExplore"></div>' : ''}
 
   <!-- Discover Shelves Feed -->
   <div id="discoverShelvesContainer">
@@ -30812,7 +31448,7 @@ if ('serviceWorker' in navigator) {
     <div class="panel">
       <div class="shelf-header" id="discoverListsFeedHeader" style="margin-bottom:10px;">
         <h2 class="shelf-title" id="discoverListsFeedTitle">Movies</h2>
-        <button type="button" class="secondary lc-btn" onclick="if (typeof renderDiscoverChartsList === 'function') renderDiscoverChartsList(window._currentDiscoverFilter || 'movie', true);">Refresh</button>
+        <button type="button" class="secondary lc-btn" data-act="appActRefreshDiscoverCharts">Refresh</button>
       </div>
       <p id="discoverListsFeedDesc" style="margin:0 0 14px; color:var(--muted); font-size:0.85rem; line-height:1.45;">Top charts, new releases, and popular movie collections across streaming platforms.</p>
       <div id="discoverListsFeed"></div>
@@ -30824,7 +31460,7 @@ if ('serviceWorker' in navigator) {
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">Popular Community Lists</h2>
-        <button type="button" class="secondary lc-btn" onclick="loadPopularListsFeed(true)">Refresh</button>
+        <button type="button" class="secondary lc-btn" data-act="loadPopularListsFeed" data-act-args="[true]">Refresh</button>
       </div>
       <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem; line-height:1.45;">Top trending and highly-rated community lists shared by creators and viewers.</p>
       <div id="popularListsFeed"></div>
@@ -30836,7 +31472,7 @@ if ('serviceWorker' in navigator) {
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">Curated For You</h2>
-        <button type="button" class="secondary lc-btn" onclick="loadCuratedListsFeed(true)">Refresh</button>
+        <button type="button" class="secondary lc-btn" data-act="loadCuratedListsFeed" data-act-args="[true]">Refresh</button>
       </div>
       <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem; line-height:1.45;">Personalized recommendations and curated lists tailored to your watch history and tastes.</p>
       <div id="curatedListsFeed"></div>
@@ -30846,19 +31482,25 @@ if ('serviceWorker' in navigator) {
 <div class="tab-panel" data-tab-panel="lists" id="content-lists" role="tabpanel" aria-labelledby="tab-desktop-lists" hidden>
   <!-- Top Submenu Pills for Lists -->
   <div class="subnav-pills-bar" id="listsSubnavBar">
-    <button type="button" class="subnav-pill active" data-sub="my-lists" onclick="switchListsSubmenu('my-lists', this)"><span class="check-icon">&#x2713;</span> My Lists</button>
-    <button type="button" class="subnav-pill" data-sub="liked" onclick="switchListsSubmenu('liked', this)">Liked</button>
-    <button type="button" class="subnav-pill" data-sub="import" onclick="switchListsSubmenu('import', this)">Import</button>
+    <button type="button" class="subnav-pill active" data-sub="my-lists" data-act="switchListsSubmenu" data-act-args="[&quot;my-lists&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> My Lists</button>
+    <button type="button" class="subnav-pill" data-sub="liked" data-act="switchListsSubmenu" data-act-args="[&quot;liked&quot;,&quot;@self&quot;]">Liked</button>
+    <button type="button" class="subnav-pill" data-sub="import" data-act="switchListsSubmenu" data-act-args="[&quot;import&quot;,&quot;@self&quot;]">Import</button>
   </div>
 
   <!-- Submenu 1: User's Connected Account & Custom Lists -->
   <div class="lists-subpanel" id="listsSubMyLists">
+    <!-- The shell's own list cards (P6-4): open a list, add titles to it, put
+         it on the home screen, share it. Emitted only for a browser with the
+         FF_NEW_UI cookie; the dashboard below is the same one the old page
+         uses. -->
+${newUi ? '    <div id="appShellListsHome"></div>' : ''}
+
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">Your Custom Lists</h2>
         <div style="display:flex; gap:8px;">
-          <button type="button" class="primary lc-btn" onclick="openCreateListModal('custom')">+ New List</button>
-          <button type="button" class="secondary lc-btn" onclick="(async()=>{await loadCreatorSync();renderCreatorDashboard();})()">Refresh</button>
+          <button type="button" class="primary lc-btn" data-act="openCreateListModal" data-act-args="[&quot;custom&quot;]">+ New List</button>
+          <button type="button" class="secondary lc-btn" data-act="appActRefreshCreatorDashboard">Refresh</button>
         </div>
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Custom lists you've created locally or on your profile.</p>
@@ -30869,7 +31511,7 @@ if ('serviceWorker' in navigator) {
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="panel-title" style="margin-bottom:0;">Your MDBList Lists</h2>
         <div style="display:flex; gap:8px;">
-          <button type="button" class="secondary lc-btn" id="listsMdblistConnectBtn" onclick="toggleListsMdblistConnection()">Connect MDBList</button>
+          <button type="button" class="secondary lc-btn" id="listsMdblistConnectBtn" data-act="toggleListsMdblistConnection">Connect MDBList</button>
         </div>
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Lists, Watchlist, and Watch History from your connected MDBList account.</p>
@@ -30880,7 +31522,7 @@ if ('serviceWorker' in navigator) {
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="panel-title" style="margin-bottom:0;">Your Trakt Lists</h2>
         <div style="display:flex; gap:8px;">
-          <button type="button" class="secondary lc-btn" id="listsTraktConnectBtn" onclick="toggleListsTraktConnection()">Connect Trakt</button>
+          <button type="button" class="secondary lc-btn" id="listsTraktConnectBtn" data-act="toggleListsTraktConnection">Connect Trakt</button>
         </div>
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Lists, Watchlist, and Watch History from your connected Trakt account.</p>
@@ -30892,7 +31534,7 @@ if ('serviceWorker' in navigator) {
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="panel-title" style="margin-bottom:0;">Your TMDB Lists</h2>
         <div style="display:flex; gap:8px;">
-          <button type="button" class="secondary lc-btn" id="listsTmdbConnectBtn" onclick="toggleListsTmdbConnection()">Connect TMDB</button>
+          <button type="button" class="secondary lc-btn" id="listsTmdbConnectBtn" data-act="toggleListsTmdbConnection">Connect TMDB</button>
         </div>
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Lists, Watchlist, and Favorites from your connected TMDB account.</p>
@@ -30903,7 +31545,7 @@ if ('serviceWorker' in navigator) {
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="panel-title" style="margin-bottom:0;">Your Simkl Lists</h2>
         <div style="display:flex; gap:8px;">
-          <button type="button" class="secondary lc-btn" id="listsSimklConnectBtn" onclick="toggleListsSimklConnection()">Connect Simkl</button>
+          <button type="button" class="secondary lc-btn" id="listsSimklConnectBtn" data-act="toggleListsSimklConnection">Connect Simkl</button>
         </div>
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Lists, Watchlist, and Watch History from your connected Simkl account.</p>
@@ -30916,7 +31558,7 @@ if ('serviceWorker' in navigator) {
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">Lists You Liked</h2>
-        <button type="button" class="secondary lc-btn" onclick="renderLikedListsFeed(true)">Refresh</button>
+        <button type="button" class="secondary lc-btn" data-act="renderLikedListsFeed" data-act-args="[true]">Refresh</button>
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Lists you've saved with the heart, from the community directory and from your connected accounts.</p>
       <!-- The placeholder here is the pre-JS state only. renderLikedListsFeed
@@ -30929,6 +31571,10 @@ if ('serviceWorker' in navigator) {
 
   <!-- Submenu 5: Create Custom List Builder -->
   <div class="lists-subpanel" id="listsSubCreateList" style="display:none;">
+    <!-- Inline "Add titles" search (P6-4), shell only: type, tap Add, and the
+         title is in the draft this panel already saves. -->
+${newUi ? '    <div id="appShellAddTitles"></div>' : ''}
+
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title" id="customListEditorTitle">Create a Custom List</h2>
@@ -30938,8 +31584,8 @@ if ('serviceWorker' in navigator) {
       <p style="margin-top:14px; margin-bottom:6px; font-weight:600; font-size:0.85rem;">Picks in this list:</p>
       <div id="customListDraftList"><p style="color:var(--muted); font-size:0.85rem;"><small>No items in this list yet &mdash; tap + on any movie or show across Discover, Search, or Charts to add it.</small></p></div>
       <div class="actions" style="margin-top:8px; justify-content:flex-start; gap:8px;">
-        <button type="button" class="secondary lc-btn" onclick="shuffleCustomListDraft()">Shuffle Picks Now</button>
-        <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" onclick="removeAllCustomListDraftPicks()">Remove All</button>
+        <button type="button" class="secondary lc-btn" data-act="shuffleCustomListDraft">Shuffle Picks Now</button>
+        <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" data-act="removeAllCustomListDraftPicks">Remove All</button>
       </div>
       <div id="customListVisibilityRow" style="margin-top:12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; max-width:280px;">
         <span style="font-size:0.95rem; font-weight:500; color:var(--text);">Public</span>
@@ -30958,7 +31604,7 @@ if ('serviceWorker' in navigator) {
         <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px;">
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
             <label for="customListPlayOrderSelect" style="font-size:0.85rem; font-weight:600; white-space:nowrap;">Play order:</label>
-            <select id="customListPlayOrderSelect" onchange="applyCustomListPlayOrder(this.value)" style="flex:1; min-width:210px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+            <select id="customListPlayOrderSelect" data-act="applyCustomListPlayOrder" data-act-args="[&quot;@value&quot;]" style="flex:1; min-width:210px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
               <option value="as-listed">Creation order (as listed)</option>
               <option value="aired-asc">Air date &mdash; oldest first</option>
               <option value="aired-desc">Air date &mdash; newest first</option>
@@ -30977,28 +31623,34 @@ if ('serviceWorker' in navigator) {
       </details>
       <div id="customListTypeToggles" style="margin-top:8px; display:flex; gap:16px; flex-wrap:wrap;">
         <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-          <input type="radio" name="customListTypeRadio" value="movie" onchange="setCustomListDraftTypeToggle('movie')" checked>
+          <input type="radio" name="customListTypeRadio" value="movie" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;movie&quot;]" checked>
           <span style="font-size:0.85rem;">Movies</span>
         </label>
         <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-          <input type="radio" name="customListTypeRadio" value="series" onchange="setCustomListDraftTypeToggle('series')">
+          <input type="radio" name="customListTypeRadio" value="series" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;series&quot;]">
           <span style="font-size:0.85rem;">Shows</span>
         </label>
         <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-          <input type="radio" name="customListTypeRadio" value="mixed" onchange="setCustomListDraftTypeToggle('mixed')">
+          <input type="radio" name="customListTypeRadio" value="mixed" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;mixed&quot;]">
           <span style="font-size:0.85rem;">Mixed (Movies &amp; Shows)</span>
         </label>
       </div>
       <div class="row" style="margin-top:10px;">
         <input type="text" id="customListNameInput" placeholder="List name (e.g. My Favorites)">
-        <button type="button" class="primary" id="customListSaveBtn" onclick="saveCustomList()">Save</button>
-        <button type="button" id="customListCancelEditBtn" class="secondary" style="display:none;" onclick="cancelEditCustomList()">Cancel</button>
+        <button type="button" class="primary" id="customListSaveBtn" data-act="saveCustomList">Save</button>
+        <button type="button" id="customListCancelEditBtn" class="secondary" style="display:none;" data-act="cancelEditCustomList">Cancel</button>
       </div>
     </div>
   </div>
 
   <!-- Submenu 7: Import list from a Link -->
   <div class="lists-subpanel" id="listsSubImport" style="display:none;">
+    <!-- The shell's own importer (P6-6): choose a Letterboxd, IMDb or Trakt
+         file and the server does the matching, with real progress, a review
+         step, and the result saved as a list. Emitted only for a browser with
+         the FF_NEW_UI cookie; the panel below it is unchanged. -->
+${newUi ? '    <div id="appShellImports"></div>' : ''}
+
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">Import list from a link</h2>
@@ -31009,7 +31661,7 @@ if ('serviceWorker' in navigator) {
       </div>
       <div class="row" style="margin-top:8px;">
         <input type="text" id="customListImportNameInput" placeholder="Name (e.g. My Favorites)">
-        <button type="button" class="secondary" id="customListImportBtn" onclick="importCustomListFromLink(this)">Import list</button>
+        <button type="button" class="secondary" id="customListImportBtn" data-act="importCustomListFromLink" data-act-args="[&quot;@self&quot;]">Import list</button>
       </div>
       <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-top:10px;">
         <input type="checkbox" id="customListImportSyncCheck" checked>
@@ -31024,11 +31676,11 @@ if ('serviceWorker' in navigator) {
 <div class="tab-panel" data-tab-panel="channels" id="content-channels" role="tabpanel" aria-labelledby="tab-desktop-channels" hidden>
   <!-- Top Submenu Pills for Channels -->
   <div class="subnav-pills-bar" id="channelsSubnavBar">
-    <button type="button" class="subnav-pill active" data-sub="my-channels" onclick="switchChannelsSubmenu('my-channels', this)"><span class="check-icon">&#x2713;</span> My Channels</button>
-    <button type="button" class="subnav-pill" data-sub="storylines" onclick="switchChannelsSubmenu('storylines', this)">Storylines &amp; Universes</button>
-    <button type="button" class="subnav-pill" data-sub="quickadd" onclick="switchChannelsSubmenu('quickadd', this)">Quick Add</button>
-    <button type="button" class="subnav-pill" data-sub="explore" onclick="switchChannelsSubmenu('explore', this)">Explore Channels</button>
-    <button type="button" class="subnav-pill" data-sub="import" onclick="switchChannelsSubmenu('import', this)">Import</button>
+    <button type="button" class="subnav-pill active" data-sub="my-channels" data-act="switchChannelsSubmenu" data-act-args="[&quot;my-channels&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> My Channels</button>
+    <button type="button" class="subnav-pill" data-sub="storylines" data-act="switchChannelsSubmenu" data-act-args="[&quot;storylines&quot;,&quot;@self&quot;]">Storylines &amp; Universes</button>
+    <button type="button" class="subnav-pill" data-sub="quickadd" data-act="switchChannelsSubmenu" data-act-args="[&quot;quickadd&quot;,&quot;@self&quot;]">Quick Add</button>
+    <button type="button" class="subnav-pill" data-sub="explore" data-act="switchChannelsSubmenu" data-act-args="[&quot;explore&quot;,&quot;@self&quot;]">Explore Channels</button>
+    <button type="button" class="subnav-pill" data-sub="import" data-act="switchChannelsSubmenu" data-act-args="[&quot;import&quot;,&quot;@self&quot;]">Import</button>
   </div>
 
   <!-- Submenu: Storylines & Universes (Canon Timelines, Sagas & Bridges) -->
@@ -31043,12 +31695,12 @@ if ('serviceWorker' in navigator) {
 
       <!-- Category Filter Tabs -->
       <div class="subnav-pills-bar" id="storylineCategoryFilterBar" style="margin-bottom:16px; flex-wrap:wrap;">
-        <button type="button" class="subnav-pill active" onclick="filterStorylinesCategory('all', this)"><span class="check-icon">&#x2713;</span> All Sagas</button>
-        <button type="button" class="subnav-pill" onclick="filterStorylinesCategory('moviesagas', this)">Movie Sagas (3+ Films)</button>
-        <button type="button" class="subnav-pill" onclick="filterStorylinesCategory('tvuniverses', this)">TV Universes &amp; Bridges</button>
-        <button type="button" class="subnav-pill" onclick="filterStorylinesCategory('scifi', this)">Sci-Fi &amp; Fantasy</button>
-        <button type="button" class="subnav-pill" onclick="filterStorylinesCategory('action', this)">Action &amp; Crime</button>
-        <button type="button" class="subnav-pill" onclick="filterStorylinesCategory('animation', this)">Animation &amp; Anime</button>
+        <button type="button" class="subnav-pill active" data-act="filterStorylinesCategory" data-act-args="[&quot;all&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> All Sagas</button>
+        <button type="button" class="subnav-pill" data-act="filterStorylinesCategory" data-act-args="[&quot;moviesagas&quot;,&quot;@self&quot;]">Movie Sagas (3+ Films)</button>
+        <button type="button" class="subnav-pill" data-act="filterStorylinesCategory" data-act-args="[&quot;tvuniverses&quot;,&quot;@self&quot;]">TV Universes &amp; Bridges</button>
+        <button type="button" class="subnav-pill" data-act="filterStorylinesCategory" data-act-args="[&quot;scifi&quot;,&quot;@self&quot;]">Sci-Fi &amp; Fantasy</button>
+        <button type="button" class="subnav-pill" data-act="filterStorylinesCategory" data-act-args="[&quot;action&quot;,&quot;@self&quot;]">Action &amp; Crime</button>
+        <button type="button" class="subnav-pill" data-act="filterStorylinesCategory" data-act-args="[&quot;animation&quot;,&quot;@self&quot;]">Animation &amp; Anime</button>
       </div>
 
       <div id="storylinesUniverseList" style="display:flex; flex-direction:column; gap:16px;"></div>
@@ -31057,19 +31709,25 @@ if ('serviceWorker' in navigator) {
 
   <!-- Submenu 1: My Channels -->
   <div class="channels-subpanel" id="channelsSubMyChannels">
+    <!-- The shell's own channel templates (P6-7): choose a template, look at
+         what is playing today, then add the channel to the home screen.
+         Emitted only for a browser with the FF_NEW_UI cookie; every panel
+         below is unchanged, and the Custom template hands off to the legacy
+         builder itself until that is rewritten. -->
+${newUi ? '    <div id="appShellChannels"></div>' : ''}
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">My Channels</h2>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <button type="button" class="secondary lc-btn" onclick="createNextUpChannel(this)" title="A channel that always plays the next episode of everything you have on the go">+ Next Up Channel</button>
-          <button type="button" class="primary lc-btn" onclick="openBuildCustomChannel()">+ New Channel</button>
+          <button type="button" class="secondary lc-btn" data-act="createNextUpChannel" data-act-args="[&quot;@self&quot;]" title="A channel that always plays the next episode of everything you have on the go">+ Next Up Channel</button>
+          <button type="button" class="primary lc-btn" data-act="openBuildCustomChannel">+ New Channel</button>
         </div>
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Your custom built and saved 24/7 TV channels. Play episodes continuously in broadcast order or daily shuffle.</p>
       <div id="channelNextUpStatus" style="margin-bottom:8px;"></div>
       <div class="row" id="myChannelsToolbar" style="margin-bottom:10px; gap:8px;">
-        <input type="text" id="myChannelsSearchInput" aria-label="Search your channels" placeholder="Search your channels..." oninput="setMyChannelsSearch(this.value)">
-        <select id="myChannelsSortSelect" aria-label="Order your channels" onchange="setMyChannelsSort(this.value)" style="flex:none; width:auto;">
+        <input type="text" id="myChannelsSearchInput" aria-label="Search your channels" placeholder="Search your channels..." data-act-on="input" data-act="setMyChannelsSearch" data-act-args="[&quot;@value&quot;]">
+        <select id="myChannelsSortSelect" aria-label="Order your channels" data-act="setMyChannelsSort" data-act-args="[&quot;@value&quot;]" style="flex:none; width:auto;">
           <option value="recent">Recently updated</option>
           <option value="created">Recently created</option>
           <option value="name">Name (A&ndash;Z)</option>
@@ -31096,16 +31754,16 @@ if ('serviceWorker' in navigator) {
           <h3 style="font-size:0.95rem; font-weight:700; margin:0;">Create Merged Catalog</h3>
         </div>
         <div class="actions" style="margin-bottom:8px; justify-content:space-between;">
-          <button type="button" class="secondary lc-btn" onclick="renderChannelMergeList()">Refresh list</button>
+          <button type="button" class="secondary lc-btn" data-act="renderChannelMergeList">Refresh list</button>
           <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:0.85rem; user-select:none;">
-            <input type="checkbox" id="channelMergeSelectAllCheck" onchange="toggleAllChannelMergeChecks(this)">
+            <input type="checkbox" id="channelMergeSelectAllCheck" data-act="toggleAllChannelMergeChecks" data-act-args="[&quot;@self&quot;]">
             <span>Select all</span>
           </label>
         </div>
         <div id="channelMergeList"><p style="color:var(--muted); font-size:0.85rem;"><small>No saved channels yet.</small></p></div>
         <div class="row" style="margin-top:8px;">
           <input type="text" id="channelMergeNameInput" aria-label="Combined catalog name" placeholder="Combined catalog name (e.g. Live TV)">
-          <button type="button" class="secondary" onclick="mergeChannelsIntoRow()">Merge into catalog</button>
+          <button type="button" class="secondary" data-act="mergeChannelsIntoRow">Merge into catalog</button>
         </div>
       </div>
     </div>
@@ -31157,14 +31815,14 @@ if ('serviceWorker' in navigator) {
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Explore Channels</h2>
-        <button type="button" class="secondary lc-btn" onclick="loadChannelDirectory(true)">Refresh</button>
+        <button type="button" class="secondary lc-btn" data-act="loadChannelDirectory" data-act-args="[true]">Refresh</button>
       </div>
       <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">
         24/7 channels built and published by other people &mdash; &ldquo;Saturday Morning 90s&rdquo;, &ldquo;80s VHS Sci-Fi Vault&rdquo;, whatever anyone has put together. Add one to your own setup in a single click, then edit it however you like.
       </p>
       <div class="row" style="margin-bottom:10px; gap:8px;">
-        <input type="text" id="channelDirectorySearchInput" aria-label="Filter published channels" placeholder="Filter by name, description or creator..." oninput="renderChannelDirectory()">
-        <select id="channelDirectorySortSelect" aria-label="Order published channels" onchange="setChannelDirectorySort(this.value)" style="flex:none; width:auto;">
+        <input type="text" id="channelDirectorySearchInput" aria-label="Filter published channels" placeholder="Filter by name, description or creator..." data-act-on="input" data-act="renderChannelDirectory">
+        <select id="channelDirectorySortSelect" aria-label="Order published channels" data-act="setChannelDirectorySort" data-act-args="[&quot;@value&quot;]" style="flex:none; width:auto;">
           <option value="newest">Newest</option>
           <option value="added">Most added</option>
           <option value="liked">Most liked</option>
@@ -31187,7 +31845,7 @@ if ('serviceWorker' in navigator) {
       </div>
       <div class="row">
         <input type="text" id="channelImportNameInput" placeholder="Channel name (e.g. Sitcom Central)">
-        <button type="button" class="secondary" onclick="importChannelFromLink(this)">Import channel</button>
+        <button type="button" class="secondary" data-act="importChannelFromLink" data-act-args="[&quot;@self&quot;]">Import channel</button>
       </div>
       <label class="channel-rule-row" style="margin-top:10px;">
         <input type="checkbox" id="channelImportLiveSyncCheck" checked>
@@ -31202,8 +31860,8 @@ if ('serviceWorker' in navigator) {
       </div>
       <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Paste a channel share link (or just its code) to rebuild that exact channel here &mdash; every pick, its play order and its broadcast schedule.</p>
       <div class="row">
-        <input type="text" id="channelShareCodeInput" placeholder="https://... /channel/AbC123 &mdash; or the code on its own" onkeydown="if(event.key==='Enter'){event.preventDefault();importSharedChannel(this);}">
-        <button type="button" class="secondary" onclick="importSharedChannel(this)">Add channel</button>
+        <input type="text" id="channelShareCodeInput" placeholder="https://... /channel/AbC123 &mdash; or the code on its own" data-act-on="keydown" data-act="importSharedChannel" data-act-keys="Enter" data-act-prevent data-act-args="[&quot;@self&quot;]">
+        <button type="button" class="secondary" data-act="importSharedChannel" data-act-args="[&quot;@self&quot;]">Add channel</button>
       </div>
       <div id="channelShareImportStatus" style="margin-top:8px;"></div>
     </div>
@@ -31217,13 +31875,13 @@ if ('serviceWorker' in navigator) {
       </div>
       <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Search any TV show or movie to add to your channel, and reorder or remove picks:</p>
       <div class="subnav-pills-bar" id="channelSearchTypeChips" style="margin-bottom:10px;">
-        <button type="button" class="subnav-pill active" id="channelSearchTypeShowsBtn" onclick="setChannelSearchType('tv', this)"><span class="check-icon">&#x2713;</span> Shows</button>
-        <button type="button" class="subnav-pill" id="channelSearchTypeMoviesBtn" onclick="setChannelSearchType('movie', this)">Movies</button>
-        <button type="button" class="subnav-pill" id="channelSearchTypePeopleBtn" onclick="setChannelSearchType('person', this)">Actors &amp; Directors</button>
+        <button type="button" class="subnav-pill active" id="channelSearchTypeShowsBtn" data-act="setChannelSearchType" data-act-args="[&quot;tv&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> Shows</button>
+        <button type="button" class="subnav-pill" id="channelSearchTypeMoviesBtn" data-act="setChannelSearchType" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]">Movies</button>
+        <button type="button" class="subnav-pill" id="channelSearchTypePeopleBtn" data-act="setChannelSearchType" data-act-args="[&quot;person&quot;,&quot;@self&quot;]">Actors &amp; Directors</button>
       </div>
       <div class="row">
-        <input type="text" id="channelSearchInput" placeholder="Search a show by name..." onkeydown="if(event.key==='Enter'){event.preventDefault();runChannelTitleSearch();}">
-        <button type="button" class="secondary" onclick="runChannelTitleSearch()">Search</button>
+        <input type="text" id="channelSearchInput" placeholder="Search a show by name..." data-act-on="keydown" data-act="runChannelTitleSearch" data-act-keys="Enter" data-act-prevent>
+        <button type="button" class="secondary" data-act="runChannelTitleSearch">Search</button>
       </div>
       <div id="channelSearchResult"></div>
       <div id="channelEpisodePicker"></div>
@@ -31233,27 +31891,27 @@ if ('serviceWorker' in navigator) {
       <p style="margin-top:14px; margin-bottom:6px; font-weight:600; font-size:0.85rem;">Picks in this channel: <span id="channelDraftCountBadge" style="color:var(--muted); font-weight:500;"></span></p>
       <div id="channelDraftStats" style="margin:0 0 8px; color:var(--muted); font-size:0.78rem;"></div>
       <div class="row" style="margin-bottom:8px; gap:8px;">
-        <input type="text" id="channelDraftFilterInput" aria-label="Filter these picks" placeholder="Filter these picks by show or episode name..." oninput="setChannelDraftFilter(this.value)">
-        <button type="button" class="secondary lc-btn" id="channelDraftSelectModeBtn" style="flex:none; width:auto; white-space:nowrap;" onclick="toggleChannelDraftSelectMode()">Select</button>
+        <input type="text" id="channelDraftFilterInput" aria-label="Filter these picks" placeholder="Filter these picks by show or episode name..." data-act-on="input" data-act="setChannelDraftFilter" data-act-args="[&quot;@value&quot;]">
+        <button type="button" class="secondary lc-btn" id="channelDraftSelectModeBtn" style="flex:none; width:auto; white-space:nowrap;" data-act="toggleChannelDraftSelectMode">Select</button>
       </div>
       <div id="channelDraftBulkBar" style="display:none; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:8px; padding:8px; border:1px solid var(--border); border-radius:8px; background:var(--surface);">
         <span id="channelDraftSelectionCount" style="font-size:0.8rem; font-weight:600;">0 selected</span>
-        <button type="button" class="secondary lc-btn" onclick="selectAllChannelDraftShown(true)">Select shown</button>
-        <button type="button" class="secondary lc-btn" onclick="selectAllChannelDraftShown(false)">Clear</button>
-        <select id="channelDraftSelectShowSelect" onchange="selectChannelDraftByGroup(this.value); this.selectedIndex = 0;" style="font-size:0.82rem; padding:5px 8px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+        <button type="button" class="secondary lc-btn" data-act="selectAllChannelDraftShown" data-act-args="[true]">Select shown</button>
+        <button type="button" class="secondary lc-btn" data-act="selectAllChannelDraftShown" data-act-args="[false]">Clear</button>
+        <select id="channelDraftSelectShowSelect" data-act="appActSelectChannelDraftGroup" data-act-args="[&quot;@self&quot;,&quot;@value&quot;]" style="font-size:0.82rem; padding:5px 8px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px;">
           <option value="">Select a whole show or season&hellip;</option>
         </select>
         <span style="flex:1;"></span>
-        <button type="button" class="secondary lc-btn" onclick="pairChannelDraftSelection()" title="Play these picks back to back, in this order">Pair</button>
-        <button type="button" class="secondary lc-btn" onclick="unpairChannelDraftSelection()" title="Drop any hand-made pairing on these picks">Unpair</button>
-        <button type="button" class="secondary lc-btn" onclick="moveChannelDraftSelection('top')">To top</button>
-        <button type="button" class="secondary lc-btn" onclick="moveChannelDraftSelection('bottom')">To bottom</button>
-        <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" onclick="removeChannelDraftSelection()">Remove selected</button>
+        <button type="button" class="secondary lc-btn" data-act="pairChannelDraftSelection" title="Play these picks back to back, in this order">Pair</button>
+        <button type="button" class="secondary lc-btn" data-act="unpairChannelDraftSelection" title="Drop any hand-made pairing on these picks">Unpair</button>
+        <button type="button" class="secondary lc-btn" data-act="moveChannelDraftSelection" data-act-args="[&quot;top&quot;]">To top</button>
+        <button type="button" class="secondary lc-btn" data-act="moveChannelDraftSelection" data-act-args="[&quot;bottom&quot;]">To bottom</button>
+        <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" data-act="removeChannelDraftSelection">Remove selected</button>
       </div>
       <div id="channelDraftList"><p style="color:var(--muted); font-size:0.85rem;"><small>Nothing added yet &mdash; search above to get started.</small></p></div>
       <div class="actions" style="margin-top:8px; justify-content:flex-start; gap:8px;">
-        <button type="button" class="secondary lc-btn" onclick="shuffleChannelDraft(); showAddedToast('Channel picks shuffled.');">Shuffle Picks Now</button>
-        <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" onclick="removeAllChannelDraftPicks()">Remove All</button>
+        <button type="button" class="secondary lc-btn" data-act="appActShuffleChannelPicks">Shuffle Picks Now</button>
+        <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" data-act="removeAllChannelDraftPicks">Remove All</button>
       </div>
       <div id="channelVisibilityRow" style="margin-top:12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; max-width:280px;">
         <span style="font-size:0.95rem; font-weight:500; color:var(--text);">Public</span>
@@ -31271,7 +31929,7 @@ if ('serviceWorker' in navigator) {
         <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px;">
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
             <label for="channelPlayOrderSelect" style="font-size:0.85rem; font-weight:600; white-space:nowrap;">Play order:</label>
-            <select id="channelPlayOrderSelect" onchange="applyChannelPlayOrder(this.value)" style="flex:1; min-width:210px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+            <select id="channelPlayOrderSelect" data-act="applyChannelPlayOrder" data-act-args="[&quot;@value&quot;]" style="flex:1; min-width:210px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
               <option value="as-listed">Creation order (as listed)</option>
               <option value="aired-asc">Air date &mdash; oldest first</option>
               <option value="aired-desc">Air date &mdash; newest first</option>
@@ -31287,21 +31945,21 @@ if ('serviceWorker' in navigator) {
           <div style="border-top:1px solid var(--border); padding-top:12px;">
             <p style="margin:0 0 8px; font-weight:600; font-size:0.85rem;">Broadcast schedule</p>
             <label class="channel-rule-row">
-              <input type="checkbox" id="channelDailyRotateCheck" onchange="updateChannelBroadcastControls()">
+              <input type="checkbox" id="channelDailyRotateCheck" data-act="updateChannelBroadcastControls">
               <span>Daily Broadcast Schedule &mdash; run a fresh lineup out of these picks every day</span>
             </label>
             <div id="channelDailyRotateDials" style="display:none; margin:8px 0 0 24px; flex-wrap:wrap; gap:10px;">
               <label class="channel-dial">Shows per day
-                <input type="number" id="channelRotateShowsInput" min="1" max="48" step="1" value="24" onchange="updateChannelBroadcastControls()">
+                <input type="number" id="channelRotateShowsInput" min="1" max="48" step="1" value="24" data-act="updateChannelBroadcastControls">
               </label>
               <label class="channel-dial">Episodes per block
-                <input type="number" id="channelRotateEpisodesInput" min="1" max="12" step="1" value="3" onchange="updateChannelBroadcastControls()">
+                <input type="number" id="channelRotateEpisodesInput" min="1" max="12" step="1" value="3" data-act="updateChannelBroadcastControls">
               </label>
               <label class="channel-dial">Turns over at
-                <input type="time" id="channelRotateTurnoverTime" value="00:00" onchange="updateChannelBroadcastControls()">
+                <input type="time" id="channelRotateTurnoverTime" value="00:00" data-act="updateChannelBroadcastControls">
               </label>
               <label class="channel-dial">In
-                <select id="channelRotateTurnoverZone" onchange="updateChannelBroadcastControls()">
+                <select id="channelRotateTurnoverZone" data-act="updateChannelBroadcastControls">
                   <option value="utc">UTC</option>
                   <option value="local">my local time</option>
                 </select>
@@ -31316,13 +31974,13 @@ if ('serviceWorker' in navigator) {
             <p style="margin:2px 0 0 24px; color:var(--muted); font-size:0.78rem;">Needs Auto-track playback signed in. Once every pick has been seen, the whole channel comes back rather than going dark. Leave it off to keep watched episodes in the rotation.</p>
 
             <label class="channel-rule-row" style="margin-top:10px;">
-              <input type="checkbox" id="channelPairPartsCheck" onchange="updateChannelBroadcastControls()">
+              <input type="checkbox" id="channelPairPartsCheck" data-act="updateChannelBroadcastControls">
               <span>Keep multi-part episodes together</span>
             </label>
             <p id="channelPairPartsHint" style="margin:2px 0 0 24px; color:var(--muted); font-size:0.78rem;">Finds &ldquo;Part 1&rdquo; / &ldquo;Pt. II&rdquo; / &ldquo;(2)&rdquo; in episode titles. Whenever one part is on today, the rest play straight after it instead of turning up tomorrow.</p>
 
             <label class="channel-rule-row" style="margin-top:10px;">
-              <input type="checkbox" id="channelAutoNewEpisodesCheck" onchange="updateChannelBroadcastControls()">
+              <input type="checkbox" id="channelAutoNewEpisodesCheck" data-act="updateChannelBroadcastControls">
               <span>Automatically add new episodes</span>
             </label>
             <div id="channelNewEpisodesRow" style="display:none; margin:6px 0 0 24px;">
@@ -31355,7 +32013,7 @@ if ('serviceWorker' in navigator) {
           <p style="margin:0 0 6px; font-size:0.8rem; font-weight:600; color:var(--muted);">Or use a custom image URL (JPEG, PNG, WebP, GIF):</p>
           <div class="row" style="gap:8px;">
             <input type="url" id="channelPosterUrlInput" placeholder="https://example.com/poster.jpg" style="flex:1; font-size:0.82rem;">
-            <button type="button" class="secondary" style="white-space:nowrap; font-size:0.82rem;" onclick="applyChannelPosterUrl()">Use This</button>
+            <button type="button" class="secondary" style="white-space:nowrap; font-size:0.82rem;" data-act="applyChannelPosterUrl">Use This</button>
           </div>
           <div id="channelPosterUrlPreview" style="margin-top:8px; align-items:center; gap:10px; display:none;">
             <img id="channelPosterUrlImg" src="" alt="Poster preview" style="width:54px; height:80px; object-fit:cover; border-radius:4px; border:2px solid var(--accent);" loading="lazy">
@@ -31366,8 +32024,8 @@ if ('serviceWorker' in navigator) {
 
       <div class="row" style="margin-top:12px;">
         <input type="text" id="channelNameInput" placeholder="Channel name (e.g. Comedy Night)" style="flex:1;">
-        <button type="button" class="primary" id="channelSaveBtn" onclick="saveChannel()">Save</button>
-        <button type="button" id="channelCancelEditBtn" class="secondary" style="display:none;" onclick="cancelEditChannel()">Cancel</button>
+        <button type="button" class="primary" id="channelSaveBtn" data-act="saveChannel">Save</button>
+        <button type="button" id="channelCancelEditBtn" class="secondary" style="display:none;" data-act="cancelEditChannel">Cancel</button>
       </div>
     </div>
   </div>
@@ -31381,19 +32039,19 @@ if ('serviceWorker' in navigator) {
     <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Search to find movies, shows and lists to add to your lists.</p>
     
     <div class="row">
-      <input type="text" id="catalogSearchInput" aria-label="Search by title or list name" placeholder="Search by title or list name..." oninput="handleCatalogSearchInput(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();runCatalogSearch();}">
-      <button type="button" class="primary" onclick="runCatalogSearch()">Search</button>
+      <input type="text" id="catalogSearchInput" aria-label="Search by title or list name" placeholder="Search by title or list name..." data-act="appActCatalogSearchInput" data-act-on="input,keydown" data-act-args="[&quot;@self&quot;,&quot;@event&quot;]">
+      <button type="button" class="primary" data-act="runCatalogSearch">Search</button>
     </div>
 
     <div class="subnav-pills-bar" id="catalogSearchTypeChips" style="margin-top:10px;">
-      <button type="button" class="subnav-pill active" onclick="setCatalogSearchFilter('movie', this)"><span class="check-icon">&#x2713;</span> Movies</button>
-      <button type="button" class="subnav-pill" onclick="setCatalogSearchFilter('tv', this)">Shows</button>
-      <button type="button" class="subnav-pill" onclick="setCatalogSearchFilter('lists', this)">Lists</button>
+      <button type="button" class="subnav-pill active" data-act="setCatalogSearchFilter" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> Movies</button>
+      <button type="button" class="subnav-pill" data-act="setCatalogSearchFilter" data-act-args="[&quot;tv&quot;,&quot;@self&quot;]">Shows</button>
+      <button type="button" class="subnav-pill" data-act="setCatalogSearchFilter" data-act-args="[&quot;lists&quot;,&quot;@self&quot;]">Lists</button>
     </div>
 
     <!-- Quick Filter Dropdowns for Movies & Shows -->
     <div id="catalogSearchFiltersRow" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; align-items:center;">
-      <select id="catalogSearchGenreSelect" aria-label="Filter by genre" onchange="applySearchFilters()" style="flex:1; min-width:130px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+      <select id="catalogSearchGenreSelect" aria-label="Filter by genre" data-act="applySearchFilters" style="flex:1; min-width:130px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
         <option value="">All Genres</option>
         <option value="28,10759">Action &amp; Adventure</option>
         <option value="16">Animation</option>
@@ -31413,7 +32071,7 @@ if ('serviceWorker' in navigator) {
         <option value="37">Western</option>
       </select>
 
-      <select id="catalogSearchYearSelect" aria-label="Filter by year" onchange="applySearchFilters()" style="flex:1; min-width:115px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+      <select id="catalogSearchYearSelect" aria-label="Filter by year" data-act="applySearchFilters" style="flex:1; min-width:115px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
         <option value="">All Years</option>
         <option value="2026">2026</option>
         <option value="2025">2025</option>
@@ -31426,7 +32084,7 @@ if ('serviceWorker' in navigator) {
         <option value="<1990">1980s &amp; Older</option>
       </select>
 
-      <select id="catalogSearchRatingSelect" aria-label="Filter by minimum rating" onchange="applySearchFilters()" style="flex:1; min-width:115px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+      <select id="catalogSearchRatingSelect" aria-label="Filter by minimum rating" data-act="applySearchFilters" style="flex:1; min-width:115px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
         <option value="">All Ratings</option>
         <option value="8.0">8.0+ ⭐</option>
         <option value="7.0">7.0+ ⭐</option>
@@ -31434,7 +32092,7 @@ if ('serviceWorker' in navigator) {
         <option value="5.0">5.0+ ⭐</option>
       </select>
 
-      <button type="button" id="catalogSearchResetFiltersBtn" class="secondary lc-btn" onclick="resetSearchFilters()" style="font-size:0.8rem; padding:6px 10px; height:auto; display:none;">Reset</button>
+      <button type="button" id="catalogSearchResetFiltersBtn" class="secondary lc-btn" data-act="resetSearchFilters" style="font-size:0.8rem; padding:6px 10px; height:auto; display:none;">Reset</button>
     </div>
 
     <div id="catalogSearchResult" style="margin-top:14px;"></div>
@@ -31443,10 +32101,10 @@ if ('serviceWorker' in navigator) {
 <div class="tab-panel" data-tab-panel="settings" id="content-settings" role="tabpanel" aria-labelledby="tab-desktop-settings" hidden>
   <!-- Settings Top Submenu Pills -->
   <div class="subnav-pills-bar" id="settingsSubnavBar">
-    <button type="button" class="subnav-pill active" data-sub="account" onclick="switchSettingsSubmenu('account', this)"><span class="check-icon">&#x2713;</span> Account &amp; Sync</button>
-    <button type="button" class="subnav-pill" data-sub="external" onclick="switchSettingsSubmenu('external', this)">External Accounts &amp; API Keys</button>
-    <button type="button" class="subnav-pill" data-sub="backup" onclick="switchSettingsSubmenu('backup', this)">Presets &amp; Backup</button>
-    <button type="button" class="subnav-pill" data-sub="feedback" onclick="switchSettingsSubmenu('feedback', this)">Feedback and Support</button>
+    <button type="button" class="subnav-pill active" data-sub="account" data-act="switchSettingsSubmenu" data-act-args="[&quot;account&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> Account &amp; Sync</button>
+    <button type="button" class="subnav-pill" data-sub="external" data-act="switchSettingsSubmenu" data-act-args="[&quot;external&quot;,&quot;@self&quot;]">External Accounts &amp; API Keys</button>
+    <button type="button" class="subnav-pill" data-sub="backup" data-act="switchSettingsSubmenu" data-act-args="[&quot;backup&quot;,&quot;@self&quot;]">Presets &amp; Backup</button>
+    <button type="button" class="subnav-pill" data-sub="feedback" data-act="switchSettingsSubmenu" data-act-args="[&quot;feedback&quot;,&quot;@self&quot;]">Feedback and Support</button>
   </div>
 
   <!-- Submenu 2: Presets & Backup -->
@@ -31458,11 +32116,11 @@ if ('serviceWorker' in navigator) {
       <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Save your current setup as a named preset to reuse or download as a file.</p>
       <div class="row">
         <input type="text" id="presetNameInput" placeholder="Preset name (e.g. Home Cinema)">
-        <button type="button" class="secondary lc-btn" onclick="saveCurrentAsPreset()">Save preset</button>
+        <button type="button" class="secondary lc-btn" data-act="saveCurrentAsPreset">Save preset</button>
       </div>
       <div class="actions" style="margin-top:8px;">
-        <button type="button" class="secondary lc-btn" onclick="document.getElementById('presetFileInput').click()">Upload preset file</button>
-        <input type="file" id="presetFileInput" aria-label="Choose a preset file to upload" accept="application/json,.json" style="display:none;" onchange="uploadPresetFile(this)">
+        <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;presetFileInput&quot;]">Upload preset file</button>
+        <input type="file" id="presetFileInput" aria-label="Choose a preset file to upload" accept="application/json,.json" style="display:none;" data-act="uploadPresetFile" data-act-args="[&quot;@self&quot;]">
       </div>
       <div id="presetsList" style="margin-top:10px;"></div>
     </div>
@@ -31472,21 +32130,27 @@ if ('serviceWorker' in navigator) {
       <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Export a complete backup snapshot of your catalogs, custom lists, watchlist, watch history, continue watching, channels, presets, and settings &mdash; or restore from a previous JSON backup.</p>
       <textarea id="configJsonBox" rows="5" style="width:100%;font-family:monospace;font-size:14px;" placeholder="Paste config JSON here to restore..."></textarea>
       <div class="backup-actions-grid" style="margin-top:8px;">
-        <button type="button" class="secondary lc-btn" onclick="exportConfigJson()">Export current</button>
-        <button type="button" class="secondary lc-btn" onclick="importConfigJson()">Import JSON</button>
-        <button type="button" class="secondary lc-btn" onclick="downloadConfigJson()">Download file</button>
-        <button type="button" class="secondary lc-btn" onclick="document.getElementById('configFileInput').click()">Upload file</button>
-        <input type="file" id="configFileInput" aria-label="Choose a backup file to restore" accept="application/json,.json" style="display:none;" onchange="uploadConfigFile(this)">
+        <button type="button" class="secondary lc-btn" data-act="exportConfigJson">Export current</button>
+        <button type="button" class="secondary lc-btn" data-act="importConfigJson">Import JSON</button>
+        <button type="button" class="secondary lc-btn" data-act="downloadConfigJson">Download file</button>
+        <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;configFileInput&quot;]">Upload file</button>
+        <input type="file" id="configFileInput" aria-label="Choose a backup file to restore" accept="application/json,.json" style="display:none;" data-act="uploadConfigFile" data-act-args="[&quot;@self&quot;]">
       </div>
 
-      <div style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px;">
+      <!-- Importing from an install link is not offered in the new UI: an
+           install id is an unrevocable bearer credential that returns connected
+           accounts' tokens (SECURITY_AUDIT.md S-02), and a backup file does the
+           same job safely. The legacy page keeps it until P6-8 removes the old
+           markup for good. -->
+${newUi ? '' : `      <div style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px;">
         <p style="margin:0 0 6px; font-weight:700; font-size:0.88rem;">Import from Install / Configure Link:</p>
         <div class="row">
           <input type="text" id="importLinkInput" placeholder="Paste an install or configure link here">
-          <button type="button" class="secondary lc-btn" onclick="importFromLink()">Import link</button>
-          <button type="button" class="secondary lc-btn" onclick="restoreListsFromLink()" title="Rebuild and restore custom lists &amp; channels from this link into My Lists without altering your catalog shelves">Restore Lists</button>
+          <button type="button" class="secondary lc-btn" data-act="importFromLink">Import link</button>
+          <button type="button" class="secondary lc-btn" data-act="restoreListsFromLink" title="Rebuild and restore custom lists &amp; channels from this link into My Lists without altering your catalog shelves">Restore Lists</button>
         </div>
       </div>
+`}
     </div>
 
     <!-- Export Lists & History (Universal CSV / Trakt / Letterboxd / MDBList / Simkl) -->
@@ -31501,9 +32165,9 @@ if ('serviceWorker' in navigator) {
             <div style="font-size:0.8rem; color:var(--muted);">All watched movies, shows, and episodes with timestamps</div>
           </div>
           <div class="export-actions-grid">
-            <button type="button" class="secondary lc-btn" onclick="exportDataToCsv('watch-history', 'trakt')">CSV (Trakt / Simkl)</button>
-            <button type="button" class="secondary lc-btn" onclick="exportDataToCsv('watch-history', 'letterboxd')">CSV (Letterboxd)</button>
-            <button type="button" class="secondary lc-btn" onclick="exportDataToCsv('watch-history', 'standard')">Universal CSV</button>
+            <button type="button" class="secondary lc-btn" data-act="exportDataToCsv" data-act-args="[&quot;watch-history&quot;,&quot;trakt&quot;]">CSV (Trakt / Simkl)</button>
+            <button type="button" class="secondary lc-btn" data-act="exportDataToCsv" data-act-args="[&quot;watch-history&quot;,&quot;letterboxd&quot;]">CSV (Letterboxd)</button>
+            <button type="button" class="secondary lc-btn" data-act="exportDataToCsv" data-act-args="[&quot;watch-history&quot;,&quot;standard&quot;]">Universal CSV</button>
           </div>
         </div>
 
@@ -31513,8 +32177,8 @@ if ('serviceWorker' in navigator) {
             <div style="font-size:0.8rem; color:var(--muted);">Export all created lists, watchlist, and continue watching items</div>
           </div>
           <div class="export-actions-grid">
-            <button type="button" class="secondary lc-btn" onclick="exportDataToCsv('all-custom-lists', 'standard')">Export All (CSV)</button>
-            <button type="button" class="secondary lc-btn" onclick="exportDataToJson('full-library')">Full Library (JSON)</button>
+            <button type="button" class="secondary lc-btn" data-act="exportDataToCsv" data-act-args="[&quot;all-custom-lists&quot;,&quot;standard&quot;]">Export All (CSV)</button>
+            <button type="button" class="secondary lc-btn" data-act="exportDataToJson" data-act-args="[&quot;full-library&quot;]">Full Library (JSON)</button>
           </div>
         </div>
       </div>
@@ -31522,6 +32186,11 @@ if ('serviceWorker' in navigator) {
   </div>
   <!-- Submenu 1: Account & Sync -->
   <div class="settings-subpanel" id="settingsSubAccount">
+    <!-- The shell's own Settings cards (P6-2): account, devices, connections and
+         install links, filled by 24_client-backup-restore-presets.js. Emitted
+         only for a browser carrying the FF_NEW_UI cookie; the legacy panels
+         below are unchanged for everyone. -->
+${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
     <div class="panel">
       <h2 class="panel-title">Your Account</h2>
       <div id="accountKeySection"></div>
@@ -31542,7 +32211,7 @@ if ('serviceWorker' in navigator) {
     <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Region</h2>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Used for streaming-availability catalogs (Netflix, Disney+, etc.), Stream Releases, and content ratings -- so what shows up actually matches what's available where you are.</p>
-      <select id="regionSelect" aria-label="Streaming region" onchange="localStorage.setItem('myListAddon:region', this.value); saveState();" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+      <select id="regionSelect" aria-label="Streaming region" data-act="appActStoreSettingValue" data-act-args="[&quot;myListAddon:region&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
         ${buildRegionOptionsHtml(initialRegion)}
       </select>
     </div>
@@ -31550,7 +32219,7 @@ if ('serviceWorker' in navigator) {
     <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Trending &amp; Popular Catalogs</h2>
       <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">
-        <input type="checkbox" id="hideNonDigitalReleasesCheckbox" ${initialHideNonDigitalReleases ? 'checked' : ''} onchange="localStorage.setItem('myListAddon:hideNonDigitalReleases', this.checked ? '1' : '0'); saveState()" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+        <input type="checkbox" id="hideNonDigitalReleasesCheckbox" ${initialHideNonDigitalReleases ? 'checked' : ''} data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:hideNonDigitalReleases&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
         <div>
           <span style="font-weight:600;">Hide items with no digital release</span>
           <p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Removes movies with no known digital or physical release from TMDB Trending Movies and Popular Movies catalogs -- useful for skipping still-in-theaters titles you can't stream or buy yet. Shows aren't affected (no equivalent release-type data exists for TV). Requires Save/Update to take effect on an existing install link.</p>
@@ -31558,10 +32227,10 @@ if ('serviceWorker' in navigator) {
       </label>
     </div>
 
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel" style="margin-top:12px;" id="legacyDedupePanel">
       <h2 class="panel-title">Duplicate Items Across Lists</h2>
       <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">
-        <input type="checkbox" id="dedupeAcrossListsCheckbox" ${initialDedupeAcrossLists ? 'checked' : ''} onchange="localStorage.setItem('myListAddon:dedupeAcrossLists', this.checked ? '1' : '0'); saveState()" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+        <input type="checkbox" id="dedupeAcrossListsCheckbox" ${initialDedupeAcrossLists ? 'checked' : ''} data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:dedupeAcrossLists&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
         <div>
           <span style="font-weight:600;">Remove duplicate items across lists</span>
           <p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Keeps your top list exactly as it is; every list below it has anything already shown in an earlier list removed. Order is whatever order your lists are in here -- drag a list to change which one keeps a shared title. Applies to Live Preview &amp; Editor and to the real catalogs Stremio/Nuvio see once you Save/Update. Requires Save/Update to take effect on an existing install link.</p>
@@ -31572,7 +32241,7 @@ if ('serviceWorker' in navigator) {
     <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Adult Content &amp; Poster Safety</h2>
       <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">
-        <input type="checkbox" id="adultContentFilterCheckbox" ${initialAdultContentFilter ? 'checked' : ''} onchange="localStorage.setItem('myListAddon:adultContentFilter', this.checked ? '1' : '0'); if (window._listPreviewCache) window._listPreviewCache.clear(); saveState()" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+        <input type="checkbox" id="adultContentFilterCheckbox" ${initialAdultContentFilter ? 'checked' : ''} data-act="appActToggleAdultFilter" data-act-args="[&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
         <div>
           <span style="font-weight:600;">Adult Content Filter</span>
           <p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Filter NSFW posters and replace default unfiltered posters with safe, age-appropriate ones across your catalogs, search, continue watching, and Stremio/Nuvio.</p>
@@ -31584,7 +32253,7 @@ if ('serviceWorker' in navigator) {
       <h2 class="panel-title">Better Posters</h2>
       <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Swap plain poster artwork for <a href="https://btttr.cc/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">BetterPosters</a> &mdash; posters with the genre, rating and tags drawn into the image itself. No API key or account needed. Only movies and shows with an IMDb id are affected; anything else keeps the poster it already had.</p>
       <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-        <input type="checkbox" id="betterPostersCheckbox" ${initialBetterPosters ? 'checked' : ''} onchange="toggleBetterPostersSetting('betterPosters', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+        <input type="checkbox" id="betterPostersCheckbox" ${initialBetterPosters ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPosters&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
         <div>
           <span style="font-weight:600;">Use Better Posters artwork</span>
           <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Applies everywhere: Live Preview, Search, Discover, My Lists, creator profiles and the builders here on the website, and the catalog rows and title pages Stremio and Nuvio request from the add-on. The website updates as soon as you tick this; Stremio/Nuvio need a Save/Update on an existing install link. Poster badges, if you have them on, are drawn over this artwork rather than replacing it, and the Adult Content Filter still overrides it. TV Channel artwork and episode stills are left as they are.</p>
@@ -31593,35 +32262,35 @@ if ('serviceWorker' in navigator) {
       <div id="betterPostersOptions" style="display:${initialBetterPosters ? 'flex' : 'none'}; flex-direction:column; gap:10px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
         <div style="font-size:0.85rem; font-weight:700; color:var(--text);">What to draw on the poster</div>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersGenreCheckbox" ${initialBetterPostersGenre ? 'checked' : ''} onchange="toggleBetterPostersSetting('betterPostersGenre', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="betterPostersGenreCheckbox" ${initialBetterPostersGenre ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersGenre&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Genre</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Genre label along the bottom of the poster.</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersRatingCheckbox" ${initialBetterPostersRating ? 'checked' : ''} onchange="toggleBetterPostersSetting('betterPostersRating', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="betterPostersRatingCheckbox" ${initialBetterPostersRating ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRating&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Rating</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Star rating along the bottom of the poster.</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersTrendTagsCheckbox" ${initialBetterPostersTrendTags ? 'checked' : ''} onchange="toggleBetterPostersSetting('betterPostersTrendTags', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="betterPostersTrendTagsCheckbox" ${initialBetterPostersTrendTags ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersTrendTags&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Trend tags</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">A corner tag on titles that are currently trending or newly released.</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersQualityCheckbox" ${initialBetterPostersQuality ? 'checked' : ''} onchange="toggleBetterPostersSetting('betterPostersQuality', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="betterPostersQualityCheckbox" ${initialBetterPostersQuality ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersQuality&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Quality tags</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">4K, Dolby Vision and Atmos badges, where BetterPosters knows them.</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersAgeCheckbox" ${initialBetterPostersAge ? 'checked' : ''} onchange="toggleBetterPostersSetting('betterPostersAge', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="betterPostersAgeCheckbox" ${initialBetterPostersAge ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersAge&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Age rating</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Certification chip (PG-13, TV-MA, and so on).</p>
@@ -31629,14 +32298,14 @@ if ('serviceWorker' in navigator) {
         </label>
         <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
           <label for="betterPostersRatingSourceSelect" style="font-size:0.85rem; font-weight:600; color:var(--text);">Rating source</label>
-          <select id="betterPostersRatingSourceSelect" onchange="toggleBetterPostersSetting('betterPostersRatingSource', this.value)" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+          <select id="betterPostersRatingSourceSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRatingSource&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
             ${betterPostersRatingSourceOptionsHtml}
           </select>
           <p style="margin:0; color:var(--muted); font-size:0.8rem;">Which score the rating is taken from. Only used when Rating is on above.</p>
         </div>
         <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
           <label for="betterPostersLangSelect" style="font-size:0.85rem; font-weight:600; color:var(--text);">Poster language</label>
-          <select id="betterPostersLangSelect" onchange="toggleBetterPostersSetting('betterPostersLang', this.value)" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+          <select id="betterPostersLangSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersLang&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
             ${betterPostersLangOptionsHtml}
           </select>
           <p style="margin:0; color:var(--muted); font-size:0.8rem;">Language BetterPosters draws the title and labels in, where it has artwork for it.</p>
@@ -31651,42 +32320,42 @@ if ('serviceWorker' in navigator) {
         <div style="border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:4px; display:flex; flex-direction:column; gap:10px;">
           <div style="font-size:0.85rem; font-weight:700; color:var(--text);">Website &amp; Dashboard</div>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeAiringNextCheckbox" checked onchange="toggleBadgeSetting('showBadgesAiringNext', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeAiringNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesAiringNext&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Airing Next (Dashboard)</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show premiere, finale, and upcoming air date badges on the Airing Next shelf and provider lists.</p>
             </div>
           </label>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeContinueWatchingCheckbox" checked onchange="toggleBadgeSetting('showBadgesContinueWatching', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesContinueWatching&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Continue Watching (Dashboard)</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show premiere, finale, and air date badges on your in-progress Continue Watching series.</p>
             </div>
           </label>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeWatchlistCheckbox" checked onchange="toggleBadgeSetting('showBadgesWatchlist', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeWatchlistCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesWatchlist&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Watchlist (Dashboard)</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show premiere, finale, and air date badges on shows in your Watchlist that have an episode coming.</p>
             </div>
           </label>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeTraktContinueWatchingCheckbox" checked onchange="toggleBadgeSetting('showBadgesTraktContinueWatching', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeTraktContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesTraktContinueWatching&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Continue Watching (Trakt)</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show premiere, finale, and air date badges on your Trakt Continue Watching series.</p>
             </div>
           </label>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeMdblistUpNextCheckbox" checked onchange="toggleBadgeSetting('showBadgesMdblistUpNext', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeMdblistUpNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesMdblistUpNext&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Up Next (MDBList)</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show premiere, finale, and air date badges on your MDBList Up Next series.</p>
             </div>
           </label>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeCatalogsCheckbox" checked onchange="toggleBadgeSetting('showBadgesCatalogs', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeCatalogsCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesCatalogs&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Catalogs &amp; Live Preview</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show badges on catalog rows, the Catalogs Live Preview &amp; Editor, and catalog See All views.</p>
@@ -31697,28 +32366,28 @@ if ('serviceWorker' in navigator) {
         <div style="border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:4px; display:flex; flex-direction:column; gap:10px;">
           <div style="font-size:0.85rem; font-weight:700; color:var(--text);">Stremio &amp; Nuvio (Artwork Overlays)</div>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeStremioAiringNextCheckbox" checked onchange="toggleBadgeSetting('showBadgesStremioAiringNext', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeStremioAiringNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioAiringNext&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Airing Next Catalogs in Stremio &amp; Nuvio</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Overlay premiere, finale, and date chips on Airing Next poster artwork in Stremio and Nuvio.</p>
             </div>
           </label>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeStremioContinueWatchingCheckbox" checked onchange="toggleBadgeSetting('showBadgesStremioContinueWatching', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeStremioContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioContinueWatching&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Continue Watching Catalogs in Stremio &amp; Nuvio</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Overlay premiere, finale, and date chips on Continue Watching poster artwork in Stremio and Nuvio.</p>
             </div>
           </label>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeStremioWatchlistCheckbox" checked onchange="toggleBadgeSetting('showBadgesStremioWatchlist', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeStremioWatchlistCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioWatchlist&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Watchlist Catalogs in Stremio &amp; Nuvio</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Overlay premiere, finale, and date chips on Watchlist poster artwork in Stremio and Nuvio.</p>
             </div>
           </label>
           <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeStremioCatalogsCheckbox" checked onchange="toggleBadgeSetting('showBadgesStremioCatalogs', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+            <input type="checkbox" id="badgeStremioCatalogsCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioCatalogs&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
             <div>
               <span style="font-weight:600;">Other Custom &amp; Provider Catalogs in Stremio &amp; Nuvio</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Overlay badges on MDBList, Trakt, Simkl, and Custom list catalog rows in Stremio and Nuvio.</p>
@@ -31728,42 +32397,42 @@ if ('serviceWorker' in navigator) {
 
         <div style="font-size:0.85rem; font-weight:700; color:var(--text); margin-top:2px;">Badge Types</div>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeAirDateCheckbox" checked onchange="toggleBadgeSetting('showBadgeAirDate', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="badgeAirDateCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeAirDate&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Upcoming Air Date</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Shows the upcoming air date tag (e.g. <code>TODAY</code>, <code>TOMORROW</code>, <code>WED</code>, <code>SEP 4</code>) on upcoming episode posters.</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeSeasonPremiereCheckbox" checked onchange="toggleBadgeSetting('showBadgeSeasonPremiere', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="badgeSeasonPremiereCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonPremiere&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Season Premiere Badge</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Shows the green <code>Season Premiere</code> badge on upcoming Episode 1s (only when the episode has not yet aired).</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeSeasonFinaleCheckbox" checked onchange="toggleBadgeSetting('showBadgeSeasonFinale', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="badgeSeasonFinaleCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonFinale&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Season Finale Badge</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Shows the orange <code>Season Finale</code> badge when the upcoming episode is the final episode of that season.</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeSeasonFinaleDateCheckbox" checked onchange="toggleBadgeSetting('showBadgeSeasonFinaleDate', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="badgeSeasonFinaleDateCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonFinaleDate&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Season Finale Date Badge</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Shows when the season finale will air (e.g. <code>Finale: Nov 12</code>) on mid-season episodes (Episodes 2–9).</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeTmdbRatingCheckbox" checked onchange="toggleTmdbRatingSetting(this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="badgeTmdbRatingCheckbox" checked data-act="toggleTmdbRatingSetting" data-act-args="[&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">TMDb Ratings</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show TMDb star ratings (e.g. <span style="color:#f5c518; font-weight:700;">★ 7.9</span>) beside the year/subtitle across the app (except in Live Preview).</p>
           </div>
         </label>
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeWatchedCheckbox" checked onchange="toggleBadgeSetting('showBadgeWatched', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="badgeWatchedCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeWatched&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Watched Status Badges</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Shows the watched badge on movies and shows you've already watched.</p>
@@ -31776,7 +32445,7 @@ if ('serviceWorker' in navigator) {
       <h2 class="panel-title">Watch History &amp; Continue Watching</h2>
       <div style="border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:12px;">
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="autoRecommendCompanionsCheckbox" checked onchange="toggleCompanionRecommendationSetting(this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <input type="checkbox" id="autoRecommendCompanionsCheckbox" checked data-act="toggleCompanionRecommendationSetting" data-act-args="[&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
           <div>
             <span style="font-weight:600;">Storyline &amp; Companion Recommendations</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Automatically recommend canon bridge movies between seasons (e.g. <em>Demon Slayer: Mugen Train</em>) and sequel films or spin-off series when a show concludes (e.g. <em>Breaking Bad &rarr; El Camino &rarr; Better Call Saul</em>).</p>
@@ -31785,8 +32454,8 @@ if ('serviceWorker' in navigator) {
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Reset or clear all recorded movies and episodes from your personal Watch History or in-progress Continue Watching.</p>
       <div id="watchHistorySettingsSection" style="display:flex; gap:10px; flex-wrap:wrap;">
-        <button type="button" class="secondary lc-btn" onclick="clearWatchHistoryAll()" style="color:var(--danger); border-color:rgba(255,59,48,0.3); font-weight:600; padding:8px 16px;">Clear Watch History</button>
-        <button type="button" class="secondary lc-btn" onclick="clearContinueWatchingAll()" style="color:var(--danger); border-color:rgba(255,59,48,0.3); font-weight:600; padding:8px 16px;">Clear Continue Watching</button>
+        <button type="button" class="secondary lc-btn" data-act="clearWatchHistoryAll" style="color:var(--danger); border-color:rgba(255,59,48,0.3); font-weight:600; padding:8px 16px;">Clear Watch History</button>
+        <button type="button" class="secondary lc-btn" data-act="clearContinueWatchingAll" style="color:var(--danger); border-color:rgba(255,59,48,0.3); font-weight:600; padding:8px 16px;">Clear Continue Watching</button>
       </div>
     </div>
 
@@ -31808,14 +32477,14 @@ if ('serviceWorker' in navigator) {
         <p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">The Movie Database (TMDB)</p>
         <p style="margin:0 0 10px; color:var(--muted); font-size:0.83rem;">Connect your TMDB account to import your personal lists, watchlist, and favorites, or use a custom API key / Token.</p>
         <div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-          <button type="button" class="secondary" id="tmdbConnectBtn" onclick="startTmdbConnect()">Connect TMDB Account</button>
-          <button type="button" class="secondary" id="tmdbDisconnectBtn" style="display:none;" onclick="disconnectTmdb()">Disconnect</button>
+          <button type="button" class="secondary" id="tmdbConnectBtn" data-act="startTmdbConnect">Connect TMDB Account</button>
+          <button type="button" class="secondary" id="tmdbDisconnectBtn" style="display:none;" data-act="disconnectTmdb">Disconnect</button>
         </div>
         <p id="tmdbConnectStatus" style="margin:0 0 10px; font-size:0.85rem;"></p>
         <details style="font-size:0.85rem; color:var(--muted);">
           <summary style="cursor:pointer; color:var(--text);">Advanced: Custom TMDB API Key / Token</summary>
           <div style="margin-top:8px;">
-            <input type="text" id="tmdbKeyInput" placeholder="Optional: TMDB API Key (v3) or Read Access Token (v4)" value="${escapeHtmlServer(initialTmdbKey)}" oninput="if(this.value.trim()){try{localStorage.removeItem('myListAddon:tmdbDisconnected');}catch(e){}} saveState(); onTmdbKeyInputChanged();" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+            <input type="text" id="tmdbKeyInput" placeholder="Optional: TMDB API Key (v3) or Read Access Token (v4)" value="${escapeHtmlServer(initialTmdbKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;tmdb&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
             <p style="margin-top:4px;"><small>Get a free TMDB API key at <a href="https://www.themoviedb.org/settings/api" target="_blank" style="color:var(--accent-2);">themoviedb.org/settings/api</a>.</small></p>
           </div>
         </details>
@@ -31826,29 +32495,29 @@ if ('serviceWorker' in navigator) {
         <p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">Trakt</p>
         <p style="margin:0 0 10px; color:var(--muted); font-size:0.83rem;">Connect your Trakt account to import your personal lists, watchlist, and collection, or use a custom Client ID.</p>
         <div class="actions trakt-connect-actions">
-          <button type="button" class="secondary" id="traktConnectBtn" onclick="startTraktConnect()">Connect Trakt Account</button>
-          <button type="button" class="secondary" id="traktDeviceBtn" onclick="startTraktDeviceLogin()">Connect with PIN / Code</button>
-          <button type="button" class="secondary" id="traktDisconnectBtn" style="display:none;" onclick="disconnectTrakt()">Disconnect</button>
+          <button type="button" class="secondary" id="traktConnectBtn" data-act="startTraktConnect">Connect Trakt Account</button>
+          <button type="button" class="secondary" id="traktDeviceBtn" data-act="startTraktDeviceLogin">Connect with PIN / Code</button>
+          <button type="button" class="secondary" id="traktDisconnectBtn" style="display:none;" data-act="disconnectTrakt">Disconnect</button>
         </div>
         <p id="traktConnectStatus" style="margin:0 0 10px; font-size:0.85rem;"></p>
         <div id="traktSyncHistoryWrap" style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.04); border-radius:8px; border:1px solid var(--border);">
           <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0;">
-            <input type="checkbox" id="syncTraktHistoryCheckbox" onchange="toggleProviderHistorySync('trakt', this.checked)" style="width:16px; height:16px; cursor:pointer;">
+            <input type="checkbox" id="syncTraktHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;trakt&quot;,&quot;@checked&quot;]" style="width:16px; height:16px; cursor:pointer;">
             <span style="font-weight:600;">Sync Watch History to Trakt</span>
           </label>
           <p style="margin:4px 0 8px 24px; color:var(--muted); font-size:0.78rem;">Automatically sync items marked as watched or played to your Trakt account history.</p>
           <div style="margin-left:24px;">
-            <button type="button" class="secondary lc-btn" id="syncTraktHistoryNowBtn" onclick="syncWatchHistoryToProviderNow('trakt', this)" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
+            <button type="button" class="secondary lc-btn" id="syncTraktHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;trakt&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
           </div>
         </div>
         <details style="font-size:0.85rem; color:var(--muted);">
           <summary style="cursor:pointer; color:var(--text);">Advanced: Custom Trakt Client ID & Username</summary>
           <div style="margin-top:8px;">
             <div class="row">
-              <input type="text" id="traktKeyInput" placeholder="Optional: Trakt Client ID" value="${escapeHtmlServer(initialTraktKey)}" oninput="if(this.value.trim()){try{localStorage.removeItem('myListAddon:traktDisconnected');}catch(e){}} saveState(); scheduleMyTraktListsRefresh();" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+              <input type="text" id="traktKeyInput" placeholder="Optional: Trakt Client ID" value="${escapeHtmlServer(initialTraktKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
             </div>
             <div class="row" style="margin-top:8px;">
-              <input type="text" id="traktUsernameInput" placeholder="Optional: Trakt username" value="${escapeHtmlServer(initialTraktUsername)}" oninput="if(this.value.trim()){try{localStorage.removeItem('myListAddon:traktDisconnected');}catch(e){}} saveState(); scheduleMyTraktListsRefresh();" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+              <input type="text" id="traktUsernameInput" placeholder="Optional: Trakt username" value="${escapeHtmlServer(initialTraktUsername)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
             </div>
             <p style="margin-top:4px;"><small>Create a free Trakt Client ID at <a href="https://trakt.tv/oauth/applications" target="_blank" style="color:var(--accent-2);">trakt.tv/oauth/applications</a>.</small></p>
           </div>
@@ -31860,24 +32529,24 @@ if ('serviceWorker' in navigator) {
         <p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">MDBList</p>
         <p style="margin:0 0 10px; color:var(--muted); font-size:0.83rem;">Connect your MDBList account to import your personal lists, watchlist, and watch history, or use a custom API key.</p>
         <div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-          <button type="button" class="secondary" id="mdblistConnectBtn" onclick="startMdblistConnect()">Connect MDBList Account</button>
-          <button type="button" class="secondary" id="mdblistDisconnectBtn" style="display:none;" onclick="disconnectMdblist()">Disconnect</button>
+          <button type="button" class="secondary" id="mdblistConnectBtn" data-act="startMdblistConnect">Connect MDBList Account</button>
+          <button type="button" class="secondary" id="mdblistDisconnectBtn" style="display:none;" data-act="disconnectMdblist">Disconnect</button>
         </div>
         <p id="mdblistConnectStatus" style="margin:0 0 10px; font-size:0.85rem;"></p>
         <div id="mdblistSyncHistoryWrap" style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.04); border-radius:8px; border:1px solid var(--border);">
           <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0;">
-            <input type="checkbox" id="syncMdblistHistoryCheckbox" onchange="toggleProviderHistorySync('mdblist', this.checked)" style="width:16px; height:16px; cursor:pointer;">
+            <input type="checkbox" id="syncMdblistHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;mdblist&quot;,&quot;@checked&quot;]" style="width:16px; height:16px; cursor:pointer;">
             <span style="font-weight:600;">Sync Watch History to MDBList</span>
           </label>
           <p style="margin:4px 0 8px 24px; color:var(--muted); font-size:0.78rem;">Automatically sync items marked as watched or played to your MDBList account history.</p>
           <div style="margin-left:24px;">
-            <button type="button" class="secondary lc-btn" id="syncMdblistHistoryNowBtn" onclick="syncWatchHistoryToProviderNow('mdblist', this)" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
+            <button type="button" class="secondary lc-btn" id="syncMdblistHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;mdblist&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
           </div>
         </div>
         <details style="font-size:0.85rem; color:var(--muted);">
           <summary style="cursor:pointer; color:var(--text);">Advanced: Custom MDBList API Key</summary>
           <div style="margin-top:8px;">
-            <input type="text" id="mdblistKeyInput" placeholder="Optional: MDBList API key" value="${escapeHtmlServer(initialMdblistKey)}" oninput="if(this.value.trim()){try{localStorage.removeItem('myListAddon:mdblistDisconnected');}catch(e){}} saveState(); scheduleMyMdblistListsRefresh();" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+            <input type="text" id="mdblistKeyInput" placeholder="Optional: MDBList API key" value="${escapeHtmlServer(initialMdblistKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;mdblist&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
             <p style="margin-top:4px;"><small>Get a free MDBList key at <a href="https://mdblist.com/preferences" target="_blank" style="color:var(--accent-2);">mdblist.com/preferences</a>.</small></p>
           </div>
         </details>
@@ -31888,24 +32557,24 @@ if ('serviceWorker' in navigator) {
         <p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">Simkl</p>
         <p style="margin:0 0 10px; color:var(--muted); font-size:0.83rem;">Connect your Simkl account to import your personal lists, watchlist, and history, or use a custom Client ID.</p>
         <div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-          <button type="button" class="secondary" id="simklConnectBtn" onclick="startSimklConnect()">Connect Simkl Account</button>
-          <button type="button" class="secondary" id="simklDisconnectBtn" style="display:none;" onclick="disconnectSimkl()">Disconnect</button>
+          <button type="button" class="secondary" id="simklConnectBtn" data-act="startSimklConnect">Connect Simkl Account</button>
+          <button type="button" class="secondary" id="simklDisconnectBtn" style="display:none;" data-act="disconnectSimkl">Disconnect</button>
         </div>
         <p id="simklConnectStatus" style="margin:0 0 10px; font-size:0.85rem;"></p>
         <div id="simklSyncHistoryWrap" style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.04); border-radius:8px; border:1px solid var(--border);">
           <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0;">
-            <input type="checkbox" id="syncSimklHistoryCheckbox" onchange="toggleProviderHistorySync('simkl', this.checked)" style="width:16px; height:16px; cursor:pointer;">
+            <input type="checkbox" id="syncSimklHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;simkl&quot;,&quot;@checked&quot;]" style="width:16px; height:16px; cursor:pointer;">
             <span style="font-weight:600;">Sync Watch History to Simkl</span>
           </label>
           <p style="margin:4px 0 8px 24px; color:var(--muted); font-size:0.78rem;">Automatically sync items marked as watched or played to your Simkl account history.</p>
           <div style="margin-left:24px;">
-            <button type="button" class="secondary lc-btn" id="syncSimklHistoryNowBtn" onclick="syncWatchHistoryToProviderNow('simkl', this)" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
+            <button type="button" class="secondary lc-btn" id="syncSimklHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;simkl&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
           </div>
         </div>
         <details style="font-size:0.85rem; color:var(--muted);">
           <summary style="cursor:pointer; color:var(--text);">Advanced: Custom Simkl Client ID</summary>
           <div style="margin-top:8px;">
-            <input type="text" id="simklKeyInput" placeholder="Optional: Simkl Client ID" value="${escapeHtmlServer(initialSimklKey)}" oninput="if(this.value.trim()){try{localStorage.removeItem('myListAddon:simklDisconnected');}catch(e){}} saveState(); scheduleMySimklListsRefresh();" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+            <input type="text" id="simklKeyInput" placeholder="Optional: Simkl Client ID" value="${escapeHtmlServer(initialSimklKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;simkl&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
             <p style="margin-top:4px;"><small>Create a free Simkl Client ID at <a href="https://simkl.com/settings/developer/" target="_blank" style="color:var(--accent-2);">simkl.com/settings/developer/</a>.</small></p>
           </div>
         </details>
@@ -31933,7 +32602,7 @@ if ('serviceWorker' in navigator) {
 
       <div style="margin-bottom:12px;">
         <label for="importTargetListSelect" style="display:block; font-weight:600; font-size:0.88rem; margin-bottom:6px; color:var(--text);">Import to which list?</label>
-        <select id="importTargetListSelect" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.95rem;" onchange="onImportTargetListChange()">
+        <select id="importTargetListSelect" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.95rem;" data-act="onImportTargetListChange">
           <!-- Populated dynamically -->
         </select>
       </div>
@@ -31946,8 +32615,8 @@ if ('serviceWorker' in navigator) {
       <div style="margin-bottom:14px;">
         <label style="display:block; font-weight:600; font-size:0.88rem; margin-bottom:6px; color:var(--text);">Select file(s)</label>
         <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-          <button type="button" class="secondary lc-btn" onclick="document.getElementById('unifiedImportFileInput').click()" style="padding:8px 16px;">Select files&hellip;</button>
-          <input type="file" id="unifiedImportFileInput" aria-label="Choose a file to import" multiple accept=".csv,.json,.zip,.txt" style="display:none;" onchange="onUnifiedImportFilesSelected(this)">
+          <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;unifiedImportFileInput&quot;]" style="padding:8px 16px;">Select files&hellip;</button>
+          <input type="file" id="unifiedImportFileInput" aria-label="Choose a file to import" multiple accept=".csv,.json,.zip,.txt" style="display:none;" data-act="onUnifiedImportFilesSelected" data-act-args="[&quot;@self&quot;]">
           <span id="unifiedImportSelectedCount" style="font-size:0.85rem; color:var(--muted);">No files selected</span>
         </div>
       </div>
@@ -31960,7 +32629,7 @@ if ('serviceWorker' in navigator) {
       </div>
 
       <div class="actions" style="margin-top:6px;">
-        <button type="button" class="secondary lc-btn" id="btnUnifiedImport" style="padding:10px 24px; font-size:0.95rem;" onclick="runUnifiedListImport()">Import</button>
+        <button type="button" class="secondary lc-btn" id="btnUnifiedImport" style="padding:10px 24px; font-size:0.95rem;" data-act="runUnifiedListImport">Import</button>
       </div>
 
       <div id="unifiedImportResult" style="margin-top:12px;"></div>
@@ -31975,7 +32644,7 @@ if ('serviceWorker' in navigator) {
           <h2 class="panel-title" style="margin:0;">Support &amp; Developer Chat</h2>
           <p style="margin:4px 0 0; color:var(--muted); font-size:0.85rem;">Have a question, found a bug, or have a suggestion? Chat directly with the developer.</p>
         </div>
-        <button type="button" class="secondary lc-btn" id="btnNewFeedbackTicket" onclick="toggleNewFeedbackForm(true)" style="padding:6px 14px; font-size:0.85rem;">+ New Message</button>
+        <button type="button" class="secondary lc-btn" id="btnNewFeedbackTicket" data-act="toggleNewFeedbackForm" data-act-args="[true]" style="padding:6px 14px; font-size:0.85rem;">+ New Message</button>
       </div>
 
       <!-- Active Threads Selector -->
@@ -31985,12 +32654,12 @@ if ('serviceWorker' in navigator) {
       <div id="supportChatView" style="display:none;">
         <div id="supportMessagesStream" class="support-messages-stream"></div>
         <div class="support-reply-composer" style="margin-top:10px;">
-          <textarea id="supportReplyInput" placeholder="Type a reply to the developer..." onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendUserFeedbackReply();}"></textarea>
-          <button type="button" class="primary lc-btn" id="supportReplySendBtn" onclick="sendUserFeedbackReply()" style="min-height:44px; padding:0 20px;">Send</button>
+          <textarea id="supportReplyInput" placeholder="Type a reply to the developer..." data-act-on="keydown" data-act="appActFeedbackReplyOnEnter" data-act-args="[&quot;@event&quot;]"></textarea>
+          <button type="button" class="primary lc-btn" id="supportReplySendBtn" data-act="sendUserFeedbackReply" style="min-height:44px; padding:0 20px;">Send</button>
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
           <span id="supportChatStatus" style="font-size:0.8rem; color:var(--muted);"></span>
-          <button type="button" class="secondary lc-btn" onclick="refreshUserFeedbackThreads()" style="padding:2px 8px; font-size:0.75rem; border:none; background:none; color:var(--muted); cursor:pointer;">&#x21BB; Refresh</button>
+          <button type="button" class="secondary lc-btn" data-act="refreshUserFeedbackThreads" style="padding:2px 8px; font-size:0.75rem; border:none; background:none; color:var(--muted); cursor:pointer;">&#x21BB; Refresh</button>
         </div>
       </div>
 
@@ -32014,8 +32683,8 @@ if ('serviceWorker' in navigator) {
           <input type="text" id="feedbackContactInput" placeholder="Email, Discord username, etc. (optional)">
         </div>
         <div class="actions" style="margin-top:10px; gap:8px; justify-content:flex-start;">
-          <button type="button" class="primary lc-btn" id="feedbackSubmitBtn" onclick="submitFeedback()">Send Message</button>
-          <button type="button" class="secondary lc-btn" id="feedbackCancelNewBtn" style="display:none;" onclick="toggleNewFeedbackForm(false)">Cancel</button>
+          <button type="button" class="primary lc-btn" id="feedbackSubmitBtn" data-act="submitFeedback">Send Message</button>
+          <button type="button" class="secondary lc-btn" id="feedbackCancelNewBtn" style="display:none;" data-act="toggleNewFeedbackForm" data-act-args="[false]">Cancel</button>
         </div>
         <p id="feedbackStatus" style="margin-top:8px; font-size:0.85rem;"></p>
       </div>
@@ -32067,6 +32736,11 @@ if ('serviceWorker' in navigator) {
 <script>
 const ORIGIN = (typeof location !== 'undefined' && location.origin) ? location.origin : ${jsonForScript(origin)};
 const IS_CONFIGURE = ${isConfigureMode};
+// Whether this page was served as the new UI shell (Phase 6, P6-1). It is a
+// cookie, so it differs per browser rather than per deploy -- everything that
+// depends on it lives in the bundle and reads this flag, because the bundle
+// itself is one shared, content-hashed file (splitAppBundle, 02_).
+const NEW_UI = ${newUi ? "true" : "false"};
 // Populated by the /lists/<slug> route (25_api-catalog-routes.js) when this
 // exact page load resolved a known chart slug -- e.g. loading
 // /lists/TMDB-Trending directly (a bookmark, a shared link, a refresh)
@@ -32094,6 +32768,15 @@ const serverEntries = (${initialEntriesJson});
 const serverEntriesAreDefaults = ${usingDefaultEntries ? 'true' : 'false'};
 const serverShuffleShelves = ${initialShuffleShelves ? 'true' : 'false'};
 const serverShuffleItems = ${initialShuffleItems ? 'true' : 'false'};
+
+// The rows the home-screen editor offers as a starter pack (P6-3), and nothing
+// else: a shell page is not pre-filled the way the old page is (FRONTEND_UX_AUDIT
+// §7, scenario 1), it is offered the same rows as a button. STARTER_PACK_ENTRIES
+// (00_constants.js) is what the old page's own fallback uses, so the two cannot
+// drift -- and this has to be declared HERE, in the per-request block, not down
+// in the bundle: /app.js is one shared, cached file built once (splitAppBundle,
+// 02_), so a value that differs between the two variants cannot live in it.
+const APP_SHELL_STARTER_PACK = ${newUi ? jsonForScript(STARTER_PACK_ENTRIES) : "[]"};
 </script>
 <script>/*MYLISTS_APP_BUNDLE_START*/
 // Every native/official chart's (slug, name, movieUrl, showUrl) -- lets
@@ -32107,6 +32790,11 @@ const CHART_SLUG_ENTRIES = ${jsonForScript(CHART_SLUG_ENTRIES)};
 // route had nothing to look a slug up in and guessed the name and type
 // instead -- and guessed wrong for "true-crime-mystery", which is a series.
 const CURATED_LIST_ENTRIES = ${jsonForScript(CURATED_LIST_ENTRIES)};
+// The site's views, as the Worker's one table describes them (APP_SHELL_TABS,
+// 00_constants.js). The shell's router (24_client-backup-restore-presets.js)
+// builds its paths from this and the Worker rendered the nav from the same
+// table, so the two cannot drift.
+const APP_SHELL_TAB_LIST = ${jsonForScript(APP_SHELL_TABS)};
 
 // The Lists tab remembers which sub-tab you were last on, in localStorage, and
 // that value outlives the release that wrote it -- so it can name a panel this
@@ -32139,7 +32827,7 @@ function normalizeListsSubmenu(raw) {
     var catBar = document.getElementById('catalogsFilterBar');
     if (catBar) {
       catBar.querySelectorAll('.subnav-pill').forEach(function(p) {
-        var match = p.getAttribute('data-sub') === catSub || (p.getAttribute('onclick') || '').indexOf("'" + catSub + "'") !== -1;
+        var match = p.getAttribute('data-sub') === catSub;
         p.classList.toggle('active', match);
         var c = p.querySelector('.check-icon'); if (c) c.remove();
         if (match) p.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
@@ -32157,7 +32845,7 @@ function normalizeListsSubmenu(raw) {
     var listBar = document.getElementById('listsSubnavBar');
     if (listBar) {
       listBar.querySelectorAll('.subnav-pill').forEach(function(p) {
-        var match = p.getAttribute('data-sub') === listSub || (p.getAttribute('onclick') || '').indexOf("'" + listSub + "'") !== -1;
+        var match = p.getAttribute('data-sub') === listSub;
         p.classList.toggle('active', match);
         var c = p.querySelector('.check-icon'); if (c) c.remove();
         if (match) p.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
@@ -32177,7 +32865,7 @@ function normalizeListsSubmenu(raw) {
     var chBar = document.getElementById('channelsSubnavBar');
     if (chBar) {
       chBar.querySelectorAll('.subnav-pill').forEach(function(p) {
-        var match = p.getAttribute('data-sub') === chSub || (p.getAttribute('onclick') || '').indexOf("'" + chSub + "'") !== -1;
+        var match = p.getAttribute('data-sub') === chSub;
         p.classList.toggle('active', match);
         var c = p.querySelector('.check-icon'); if (c) c.remove();
         if (match) p.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
@@ -32199,7 +32887,7 @@ function normalizeListsSubmenu(raw) {
     var setBar = document.getElementById('settingsSubnavBar');
     if (setBar) {
       setBar.querySelectorAll('.subnav-pill').forEach(function(p) {
-        var match = p.getAttribute('data-sub') === setSub || (p.getAttribute('onclick') || '').indexOf("'" + setSub + "'") !== -1;
+        var match = p.getAttribute('data-sub') === setSub;
         p.classList.toggle('active', match);
         var c = p.querySelector('.check-icon'); if (c) c.remove();
         if (match) p.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
@@ -32220,7 +32908,7 @@ function normalizeListsSubmenu(raw) {
     var discBar = document.getElementById('discoverSubnavBar');
     if (discBar) {
       discBar.querySelectorAll('.subnav-pill').forEach(function(p) {
-        var match = p.getAttribute('data-sub') === discSub || (p.getAttribute('onclick') || '').indexOf("'" + discSub + "'") !== -1;
+        var match = p.getAttribute('data-sub') === discSub;
         p.classList.toggle('active', match);
         var c = p.querySelector('.check-icon'); if (c) c.remove();
         if (match) p.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
@@ -32389,6 +33077,437 @@ function getListCleanPath(listUrl, name) {
   }
 
   return null;
+}
+
+// --- Provider credentials (P6-8) ---------------------------------------------
+//
+// The keys and tokens for Trakt, MDBList, Simkl and TMDB belong to the
+// account: every config push already sends them up (/api/creator/sync/save,
+// 23_) and every load hands them back. Keeping a second copy in localStorage
+// meant a bearer token for somebody's watch history sat in the browser for
+// any script on the page to read -- SECURITY_AUDIT S-05, and FE-3's "about
+// 80 keys including credentials". From P6-8 the page holds them in memory
+// for the tab's own calls and never writes them to storage again.
+//
+// Reads still fall back to localStorage, so a browser that has been signed in
+// since before P6-8 keeps working; the old copy is dropped only once the
+// account has handed the same credential back (see loadCreatorSync, 22_),
+// never on a guess. myListAddon:creatorKey is deliberately NOT in this list:
+// it is what signs this browser in, and it moves with the new sign-in in
+// P6-9 rather than here.
+const PROVIDER_SECRET_KEYS = [
+  'myListAddon:tmdbKey',
+  'myListAddon:tmdbSessionId',
+  'myListAddon:mdblistKey',
+  'myListAddon:mdblistAccessToken',
+  'myListAddon:traktKey',
+  'myListAddon:traktAccessToken',
+  'myListAddon:simklKey',
+  'myListAddon:simklAccessToken'
+];
+
+// The same eight under the names collectKeys (23_) and the account's sync
+// record give them, each with the provider whose Disconnect clears it.
+const PROVIDER_SECRET_FIELDS = {
+  tmdbKey: 'tmdb', tmdbSessionId: 'tmdb',
+  mdblistKey: 'mdblist', mdblistAccessToken: 'mdblist',
+  traktKey: 'trakt', traktAccessToken: 'trakt',
+  simklKey: 'simkl', simklAccessToken: 'simkl'
+};
+
+function isProviderDisconnected(provider) {
+  try { return localStorage.getItem('myListAddon:' + provider + 'Disconnected') === 'true'; } catch (e) { return false; }
+}
+
+// This page's own copy, for as long as the tab is open. Emptied by
+// clearLocalAccountData (22_): the storage sweep there cannot reach it.
+var _providerSecretsInMemory = {};
+
+function isProviderSecretKey(key) {
+  return PROVIDER_SECRET_KEYS.indexOf(String(key || '')) !== -1;
+}
+
+// Memory first (what this tab knows), then whatever a browser wrote before
+// P6-8. Never null, so callers that compare or trim keep working.
+function readProviderSecret(key) {
+  if (isProviderSecretKey(key) && _providerSecretsInMemory[key]) return _providerSecretsInMemory[key];
+  try { return localStorage.getItem(key) || ''; } catch (e) { return ''; }
+}
+
+// Keeps a credential for this tab. Deliberately does not write storage: that
+// is the whole point of the three functions around this one.
+function rememberProviderSecret(key, value) {
+  if (!isProviderSecretKey(key)) return false;
+  _providerSecretsInMemory[key] = String(value === null || value === undefined ? '' : value);
+  return true;
+}
+
+// Disconnecting, or the account saying we are disconnected: both copies go.
+function forgetProviderSecret(key) {
+  if (!isProviderSecretKey(key)) return false;
+  delete _providerSecretsInMemory[key];
+  try { localStorage.removeItem(key); } catch (e) {}
+  return true;
+}
+
+// The account has just handed the same credential back, so a pre-P6-8 copy in
+// this browser is redundant (and is exactly what P6-8 is removing).
+function dropLegacyProviderSecret(key) {
+  if (!isProviderSecretKey(key)) return false;
+  try { localStorage.removeItem(key); } catch (e) {}
+  return true;
+}
+
+// --- One dispatcher for every control on the page (P6-8) ---------------------
+//
+// Up to P6-8 every button, select and input in this app carried an inline
+// on*= attribute that called a global function by name -- about 470 of them
+// (and 77 more on /admin, which P6-10 converted with its own copy of this
+// runtime). That is why script-src has to allow 'unsafe-inline' (SECURITY_AUDIT),
+// why
+// the arguments had to be escaped into a JavaScript string *inside* an
+// attribute (the shape escapeAttr gets wrong -- see the FE-02 note in
+// 19_client-search-and-likes.js), and why FE-2 calls the whole client "hidden
+// coupling":
+// a renamed function, or a list name with a quote in it, was a page that
+// silently stopped responding.
+//
+// A control now says what it does in data attributes and one listener per
+// event type, on document, runs it:
+//
+//   data-act          the name of the global function to call
+//   data-act-args     JSON array of arguments. "@self", "@checked", "@value"
+//                     and "@event" stand for the element, its checked state,
+//                     its value, the event; anything else is a literal
+//   data-act-on       the event it answers to, when the element's own tag does
+//                     not say (a text input that searches as you type rather
+//                     than on blur: data-act-on="input"). A comma-separated
+//                     list is allowed; the handler then reads @event to tell
+//                     which one fired -- the catalog search box does.
+//   data-act-stop     stopPropagation() before the call
+//   data-act-prevent  preventDefault() before the call
+//   data-act-keys     a keydown only, and only for that key -- "Enter"
+//   data-act-then     call that function afterwards, with no arguments
+//
+// Which event a control answers to, when it does not say. The tag is enough
+// for all but one shape: a button, a link, a div, a span answer a click; an
+// image answers an error (the poster fallbacks); and a checkbox, select,
+// textarea or file input answers a change. Input events and clicks on a form
+// control are the exceptions, and those carry data-act-on explicitly -- 17
+// text inputs that search as you type, and one readonly field that selects its
+// own text. Getting this wrong is not cosmetic: a file input that answered
+// both input and change would upload the same backup twice.
+//
+// The arguments live in one JSON attribute because appActArgs() escapes them
+// once, for both JSON and HTML, at the point where the markup is built -- so a
+// title carrying a quote is a string in an array rather than a way out of the
+// attribute. 08_quickadd-chart-data.js builds its markup inside the Worker
+// instead (see buildCombinedChartsHtml), and uses appActArgsServer, its
+// server-side twin (09_page-shell.js).
+const APP_ACT_EVENT_TYPES = ['click', 'change', 'input', 'keydown'];
+
+// What a call site writes: appActArgs([name, id, 3, true]) -> the attribute
+// value. undefined/null become '' the way the deleted attribute escaper did,
+// so a call site that passed an absent value keeps passing an empty string.
+function appActArgs(values) {
+  const out = [];
+  const list = values || [];
+  for (let i = 0; i < list.length; i++) {
+    const v = list[i];
+    out.push(v === undefined || v === null ? '' : v);
+  }
+  return escapeAttr(JSON.stringify(out));
+}
+
+// The element an event belongs to: the target itself, or the nearest ancestor
+// carrying data-act. A card with a button in it has a click action on both, so
+// the walk in appActDispatch continues upwards until something stops it.
+function appActElement(node) {
+  let el = node;
+  while (el && typeof el.getAttribute === 'function') {
+    if (el.getAttribute('data-act')) return el;
+    el = el.parentNode || el.parentElement || null;
+  }
+  return null;
+}
+
+function appActReadArgs(el, ev) {
+  const raw = el.getAttribute('data-act-args');
+  if (!raw) return [];
+  let values = null;
+  try {
+    values = JSON.parse(raw);
+  } catch (e) {
+    return [];
+  }
+  if (!Array.isArray(values)) return [];
+  const out = [];
+  for (let i = 0; i < values.length; i++) {
+    const v = values[i];
+    if (v === '@self') out.push(el);
+    else if (v === '@checked') out.push(!!el.checked);
+    else if (v === '@value') out.push(el.value);
+    else if (v === '@event') out.push(ev);
+    else out.push(v);
+  }
+  return out;
+}
+
+// Whether this event is the one the control answers to. See the note above
+// APP_ACT_EVENT_TYPES for where each answer comes from.
+function appActAnswers(el, ev) {
+  if (!ev) return false;
+  const explicit = el.getAttribute('data-act-on');
+  if (explicit) {
+    const list = String(explicit).split(',');
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].trim() === ev.type) return true;
+    }
+    return false;
+  }
+  if (el.hasAttribute('data-act-keys')) return ev.type === 'keydown';
+  const tag = String((el.tagName || el.nodeName || '')).toUpperCase();
+  if (tag === 'IMG') return ev.type === 'error';
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return ev.type === 'change';
+  return ev.type === 'click';
+}
+
+var _appActMissingReported = {};
+
+function appActRunOne(el, ev) {
+  const name = el.getAttribute('data-act') || '';
+  if (!name) return false;
+  if (!appActAnswers(el, ev)) return false;
+  if (el.hasAttribute('data-act-keys')) {
+    const wanted = el.getAttribute('data-act-keys') || '';
+    if (String(ev.key || '') !== wanted) return false;
+  }
+  const fn = window[name];
+  if (typeof fn !== 'function') {
+    // A renamed or misspelled action fails loudly once per name. The inline
+    // handlers it replaced failed silently -- html_checks.py exists because
+    // of exactly that, and now checks these names the same way.
+    if (!_appActMissingReported[name]) {
+      _appActMissingReported[name] = true;
+      console.warn('Delegated action not found: ' + name);
+    }
+    return false;
+  }
+  if (ev && el.hasAttribute('data-act-stop')) {
+    if (typeof ev.stopPropagation === 'function') ev.stopPropagation();
+    // An inline stopPropagation() kept the event from every listener above the
+    // control, the page's own document-level ones included -- the poster click
+    // that opens a title's details (19_) is one. This listener is on document
+    // too, registered before all of them (initDelegatedActions runs as 16_
+    // loads), so stopping propagation alone no longer reached them: a channel
+    // card's mini-poster opened the details and the poster listener closed
+    // them again at once. Stopping the rest of document's listeners here is
+    // what the inline call used to do.
+    if (typeof ev.stopImmediatePropagation === 'function') ev.stopImmediatePropagation();
+  }
+  if (ev && el.hasAttribute('data-act-prevent') && typeof ev.preventDefault === 'function') ev.preventDefault();
+  fn.apply(null, appActReadArgs(el, ev));
+  const then = el.getAttribute('data-act-then');
+  if (then && typeof window[then] === 'function') window[then]();
+  return true;
+}
+
+function appActDispatch(ev) {
+  if (!ev) return false;
+  let el = appActElement(ev.target || null);
+  let ran = false;
+  // Innermost first, the order the inline handlers ran in. stopPropagation on
+  // a control means "this one, not the card behind it", which is what the
+  // walk honours by stopping rather than by relying on the event's own path.
+  while (el) {
+    const stops = el.hasAttribute('data-act-stop');
+    if (appActRunOne(el, ev)) ran = true;
+    if (stops) break;
+    el = appActElement(el.parentNode || el.parentElement || null);
+  }
+  return ran;
+}
+
+function initDelegatedActions() {
+  if (window._appActBound) return false;
+  window._appActBound = true;
+  const handler = function (ev) { appActDispatch(ev); };
+  for (let i = 0; i < APP_ACT_EVENT_TYPES.length; i++) {
+    document.addEventListener(APP_ACT_EVENT_TYPES[i], handler, false);
+  }
+  // A broken poster fires an error event that does not bubble, so the
+  // fallbacks (handlePosterImgError and friends) are caught in the capture
+  // phase instead.
+  window.addEventListener('error', handler, true);
+  return true;
+}
+
+if (typeof document !== 'undefined' && document.addEventListener) initDelegatedActions();
+
+// --- The handful of behaviours that used to be written inline ---------------
+//
+// Everything else is a plain call to a function that already existed. These
+// are the sites whose inline bodies did something of their own -- write a
+// setting, open a file picker, clear a select -- which is now a named
+// function, so the markup never carries JavaScript again.
+
+// A decorative stop (a drag handle inside a clickable card): stop, do nothing.
+function appActNothing() {
+  return false;
+}
+
+function appActHideAddShelfModal() {
+  const modal = document.getElementById('addShelfModal');
+  if (modal) modal.style.display = 'none';
+  return true;
+}
+
+function appActValidateCreateListName(value) {
+  const btn = document.getElementById('createListModalBtn');
+  if (!btn) return false;
+  const text = String(value === null || value === undefined ? '' : value).trim();
+  btn.disabled = !text;
+  btn.style.opacity = text ? '1' : '0.5';
+  return true;
+}
+
+function appActRefreshDiscoverCharts() {
+  if (typeof renderDiscoverChartsList === 'function') {
+    renderDiscoverChartsList(window._currentDiscoverFilter || 'movie', true);
+  }
+  return true;
+}
+
+function appActRefreshCreatorDashboard() {
+  return (async function () {
+    await loadCreatorSync();
+    renderCreatorDashboard();
+    return true;
+  })();
+}
+
+function appActOpenFilePicker(id) {
+  const input = document.getElementById(String(id || ''));
+  if (!input) return false;
+  input.click();
+  return true;
+}
+
+// The catalog search box is the one control in the app that answered two
+// events: it searches as you type (350ms behind the last keystroke), and Enter
+// runs the same search immediately instead of waiting. Both are one action
+// here, because one element gets one data-act; @event is which one happened.
+function appActCatalogSearchInput(el, ev) {
+  if (ev && ev.type === 'keydown') {
+    if (ev.key !== 'Enter') return false;
+    if (typeof ev.preventDefault === 'function') ev.preventDefault();
+    runCatalogSearch();
+    return true;
+  }
+  handleCatalogSearchInput(el);
+  return true;
+}
+
+function appActSelectChannelDraftGroup(el, value) {
+  selectChannelDraftByGroup(value);
+  if (el) el.selectedIndex = 0;
+  return true;
+}
+
+function appActShuffleChannelPicks() {
+  shuffleChannelDraft();
+  if (typeof showAddedToast === 'function') showAddedToast('Channel picks shuffled.');
+  return true;
+}
+
+function appActStoreSettingValue(key, value) {
+  try { localStorage.setItem(String(key), String(value === null || value === undefined ? '' : value)); } catch (e) {}
+  saveState();
+  return true;
+}
+
+function appActStoreSettingChecked(key, checked) {
+  try { localStorage.setItem(String(key), checked ? '1' : '0'); } catch (e) {}
+  saveState();
+  return true;
+}
+
+// The adult filter is the one preference whose change has to drop the poster
+// preview cache, or the titles it was hiding stay on screen.
+function appActToggleAdultFilter(checked) {
+  try { localStorage.setItem('myListAddon:adultContentFilter', checked ? '1' : '0'); } catch (e) {}
+  if (window._listPreviewCache) window._listPreviewCache.clear();
+  saveState();
+  return true;
+}
+
+// Typing into a provider's key box: the "you disconnected this" flag goes, the
+// state is saved (which is what sends the key up to the account), and that
+// provider's lists are refreshed.
+function appActProviderKeyTyped(provider, value) {
+  const name = String(provider || '');
+  const typed = String(value === null || value === undefined ? '' : value).trim();
+  if (typed) {
+    try { localStorage.removeItem('myListAddon:' + name + 'Disconnected'); } catch (e) {}
+  }
+  saveState();
+  if (name === 'trakt') {
+    if (typeof scheduleMyTraktListsRefresh === 'function') scheduleMyTraktListsRefresh();
+  } else if (name === 'mdblist') {
+    if (typeof scheduleMyMdblistListsRefresh === 'function') scheduleMyMdblistListsRefresh();
+  } else if (name === 'simkl') {
+    if (typeof scheduleMySimklListsRefresh === 'function') scheduleMySimklListsRefresh();
+  } else if (name === 'tmdb') {
+    if (typeof onTmdbKeyInputChanged === 'function') onTmdbKeyInputChanged();
+  }
+  return true;
+}
+
+// Enter in the feedback reply box sends it; Shift+Enter is a new line.
+function appActFeedbackReplyOnEnter(ev) {
+  if (!ev || ev.key !== 'Enter' || ev.shiftKey) return false;
+  if (typeof ev.preventDefault === 'function') ev.preventDefault();
+  if (typeof sendUserFeedbackReply === 'function') sendUserFeedbackReply();
+  return true;
+}
+
+function appActRemoveShelfLinkRow(el) {
+  if (el && typeof el.closest === 'function') {
+    const row = el.closest('.add-shelf-link-row');
+    if (row) row.remove();
+  }
+  if (typeof validateAddShelfModal === 'function') validateAddShelfModal();
+  return true;
+}
+
+function appActScrollToTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  return true;
+}
+
+function appActSelectChannelPosterFromEl(el) {
+  const data = (el && el.dataset) || {};
+  selectChannelPoster(data.poster || '', data.backdrop || '');
+  return true;
+}
+
+function appActSelectText(el) {
+  if (el && typeof el.select === 'function') el.select();
+  return true;
+}
+
+function appActAddChannelToMerge(id, el) {
+  addChannelToMerge(id, el ? el.value : '');
+  if (el) el.value = '';
+  return true;
+}
+
+// The channel builder's "make a Quick Add network channel" shortcut.
+function appActGoToQuickAdd() {
+  const bar = document.getElementById('channelsSubnavBar');
+  const pill = bar && bar.querySelector ? bar.querySelector('button:nth-child(2)') : null;
+  switchChannelsSubmenu('quickadd', pill || null);
+  return true;
 }
 
 function isListAddedToConfig(url, type, slug) {
@@ -32609,7 +33728,7 @@ function navigateBackFromDetail() {
   } else {
     const targetTab = window._originTab || window._previousTab || localStorage.getItem('myListAddon:activeTab') || 'discover';
     const cleanTab = (targetTab === 'list-details' || targetTab === 'item-details') ? 'discover' : targetTab;
-    if (location.pathname.startsWith('/lists/') || location.pathname.startsWith('/channels/')) {
+    if (!appShellActive && (location.pathname.startsWith('/lists/') || location.pathname.startsWith('/channels/'))) {
       try {
         history.replaceState({ view: 'tab', tab: cleanTab }, '', '/');
       } catch (e) {}
@@ -32637,6 +33756,13 @@ function navigateBackFromDetail() {
 
 // Global state variables
 var suppressSave = false;
+// True once initAppShell (24_client-backup-restore-presets.js) has taken over
+// navigation on a shell page. While it is true the shell's router owns the
+// address bar: the legacy tab and sub-tab switchers still do all their DOM
+// work, but they route through the shell (appShellHandleNav) and skip their own
+// history writes, which all point at "/". Declared here because 16_ is the
+// first file whose functions read it.
+var appShellActive = false;
 var activeCreator = (function() {
   try {
     const name = localStorage.getItem('myListAddon:creatorName');
@@ -32720,6 +33846,11 @@ if (typeof document !== 'undefined') {
 }
 
 function switchTab(name) {
+  // On a shell page the router owns navigation, including the aliases below
+  // (see appShellRouteForName, 24_client-backup-restore-presets.js). A name it
+  // does not know -- list-details, item-details -- comes back false and takes
+  // the legacy path untouched.
+  if (appShellHandleNav('tab', name)) return;
   if (name === 'backup') {
     switchTab('settings');
     switchSettingsSubmenu('backup', document.querySelector('#settingsSubnavBar button:nth-child(4)'));
@@ -32769,6 +33900,14 @@ function switchTab(name) {
     const b = tabBtns[i];
     const on = b.getAttribute('data-tab') === name;
     b.classList.toggle('active', on);
+    // A shell nav item is a link, not a tab: it keeps its place in the tab
+    // order (every view is reachable by keyboard) and says which page it is
+    // with aria-current, instead of taking the roving tabindex a tablist
+    // would give it.
+    if (b.tagName === 'A') {
+      if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+      continue;
+    }
     b.setAttribute('aria-selected', on ? 'true' : 'false');
     b.setAttribute('tabindex', on ? '0' : '-1');
   }
@@ -32777,6 +33916,10 @@ function switchTab(name) {
     const b = navItems[i];
     const on = b.getAttribute('data-tab') === name;
     b.classList.toggle('active', on);
+    if (b.tagName === 'A') {
+      if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+      continue;
+    }
     b.setAttribute('aria-selected', on ? 'true' : 'false');
     b.setAttribute('tabindex', on ? '0' : '-1');
   }
@@ -32787,15 +33930,19 @@ function switchTab(name) {
     try {
       localStorage.setItem('myListAddon:activeTab', name);
     } catch (e) {}
-    const hash = location.hash || '';
-    const isDetailUrl = hash.startsWith('#/item?') || hash.startsWith('#/list?') || (location.pathname.startsWith('/lists/') && location.pathname !== '/lists');
-    try {
-      if (isDetailUrl) {
-        history.pushState({ view: 'tab', tab: name, fromCatalogsSubmenu: window._currentCatalogsSubmenu }, '', '/');
-      } else {
-        history.replaceState({ view: 'tab', tab: name, fromCatalogsSubmenu: window._currentCatalogsSubmenu }, '', '/');
-      }
-    } catch (e) {}
+    // On a shell page the router wrote the URL (a real path per view) before
+    // calling this, so rewriting it to "/" here would undo that.
+    if (!appShellActive) {
+      const hash = location.hash || '';
+      const isDetailUrl = hash.startsWith('#/item?') || hash.startsWith('#/list?') || (location.pathname.startsWith('/lists/') && location.pathname !== '/lists');
+      try {
+        if (isDetailUrl) {
+          history.pushState({ view: 'tab', tab: name, fromCatalogsSubmenu: window._currentCatalogsSubmenu }, '', '/');
+        } else {
+          history.replaceState({ view: 'tab', tab: name, fromCatalogsSubmenu: window._currentCatalogsSubmenu }, '', '/');
+        }
+      } catch (e) {}
+    }
   }
 
   if (name === 'catalogs') {
@@ -32817,8 +33964,7 @@ function switchTab(name) {
       const pills = document.querySelectorAll('#listsSubnavBar .subnav-pill');
       let targetBtn = null;
       pills.forEach((p) => {
-        const oc = p.getAttribute('onclick') || '';
-        if (oc.indexOf("'" + savedSub + "'") !== -1 || oc.indexOf('"' + savedSub + '"') !== -1) {
+        if (p.getAttribute('data-sub') === savedSub) {
           targetBtn = p;
         }
       });
@@ -32835,8 +33981,7 @@ function switchTab(name) {
       const pills = document.querySelectorAll('#settingsSubnavBar .subnav-pill');
       let targetBtn = null;
       pills.forEach((p) => {
-        const oc = p.getAttribute('onclick') || '';
-        if (oc.indexOf("'" + savedSub + "'") !== -1 || oc.indexOf('"' + savedSub + '"') !== -1) {
+        if (p.getAttribute('data-sub') === savedSub) {
           targetBtn = p;
         }
       });
@@ -32853,8 +33998,7 @@ function switchTab(name) {
       const pills = document.querySelectorAll('#channelsSubnavBar .subnav-pill');
       let targetBtn = null;
       pills.forEach((p) => {
-        const oc = p.getAttribute('onclick') || '';
-        if (oc.indexOf("'" + savedSub + "'") !== -1 || oc.indexOf('"' + savedSub + '"') !== -1) {
+        if (p.getAttribute('data-sub') === savedSub) {
           targetBtn = p;
         }
       });
@@ -32892,8 +34036,7 @@ function switchTab(name) {
       const pills = document.querySelectorAll('#discoverSubnavBar .subnav-pill');
       let targetBtn = null;
       pills.forEach((p) => {
-        const oc = p.getAttribute('onclick') || '';
-        if (oc.indexOf("'" + activeFilter + "'") !== -1 || oc.indexOf('"' + activeFilter + '"') !== -1) {
+        if (p.getAttribute('data-sub') === activeFilter) {
           targetBtn = p;
         }
       });
@@ -33117,7 +34260,7 @@ function renderMediaCard(item, options = {}) {
   const styleStr = options.style ? ' style="' + options.style + '"' : '';
 
   const posterImg = poster
-    ? '<img class="live-preview-poster" src="' + escapeAttr(poster) + '" alt="" loading="lazy" onerror="handlePosterImgError(this)">'
+    ? '<img class="live-preview-poster" src="' + escapeAttr(poster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
     : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
 
   const topLeft = options.topLeftHtml !== undefined ? options.topLeftHtml : '';
@@ -33722,6 +34865,15 @@ function closeModal() {
   existing.remove();
   document.removeEventListener('keydown', handleModalKeydown, true);
   lockBackgroundScroll(false);
+  // An appShellDialog (24_client-backup-restore-presets.js) that was dismissed
+  // rather than answered -- Escape, or a click on the backdrop -- resolves as
+  // false here, so its promise never hangs. That marker is a var for exactly
+  // this check: typeof on a let in the temporal dead zone would throw.
+  if (typeof appShellDialogClose === 'function') {
+    const settle = appShellDialogClose;
+    appShellDialogClose = null;
+    settle(false);
+  }
   if (_modalReturnFocus && typeof _modalReturnFocus.focus === 'function') {
     try { _modalReturnFocus.focus(); } catch (e) {}
   }
@@ -33737,15 +34889,20 @@ function showAppAlert(title, message, isSuccess = false) {
         '<span style="color:' + iconColor + '; font-weight:bold; font-size:1.2rem;">' + icon + '</span> ' +
         escapeHtml(title) +
       '</h3>' +
-      '<button type="button" class="action-btn" aria-label="Close" onclick="closeModal()" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
     '</div>' +
     '<p style="margin:0 0 16px; color:var(--muted); font-size:0.9rem; line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;">' + escapeHtml(message) + '</p>' +
     '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
-      '<button type="button" class="primary" onclick="closeModal()" style="min-width:80px; padding:8px 16px;">OK</button>' +
+      '<button type="button" class="primary" data-act="closeModal" style="min-width:80px; padding:8px 16px;">OK</button>' +
     '</div>';
   showModal(html);
 }
 
+// Nothing in this page calls alert() any more (P6-8 replaced every one of
+// them with showToast -- a dialog that blocks the tab, has no styling and
+// cannot be read by the rest of the app is not a notification). This stands
+// only as a net for a call that reaches the window from somewhere this file
+// cannot see, such as a browser extension or an old cached inline script.
 if (typeof window !== 'undefined') {
   window.alert = function(message) {
     if (typeof showToast === 'function') {
@@ -33792,11 +34949,11 @@ function showAppConfirm(title, message, confirmBtnText, onConfirm, isDanger = tr
         '<span style="color:' + iconColor + '; font-weight:bold; font-size:1.2rem;">' + icon + '</span> ' +
         escapeHtml(title) +
       '</h3>' +
-      '<button type="button" class="action-btn" aria-label="Close" onclick="closeModal()" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
     '</div>' +
     '<p style="margin:0 0 16px; color:var(--muted); font-size:0.9rem; line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;">' + escapeHtml(message) + '</p>' +
     '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
-      '<button type="button" class="secondary" onclick="closeModal()" style="min-width:80px; padding:8px 16px;">Cancel</button>' +
+      '<button type="button" class="secondary" data-act="closeModal" style="min-width:80px; padding:8px 16px;">Cancel</button>' +
       '<button type="button" class="primary" id="appConfirmBtn" style="min-width:80px; padding:8px 16px; ' + confirmBtnStyle + '">' + escapeHtml(confirmBtnText || 'Confirm') + '</button>' +
     '</div>';
   showModal(html);
@@ -33962,12 +35119,12 @@ function showAppPrompt(title, message, defaultValue, onConfirm) {
   const html =
     '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">' +
       '<h3 style="margin:0; font-size:1.1rem;">' + escapeHtml(title) + '</h3>' +
-      '<button type="button" class="action-btn" aria-label="Close" onclick="closeModal()" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
     '</div>' +
     (message ? '<p style="margin:0 0 12px; color:var(--muted); font-size:0.9rem;">' + escapeHtml(message) + '</p>' : '') +
     '<input type="text" id="appPromptInput" class="input" style="width:100%; margin-bottom:16px;" value="' + escapeAttr(defaultValue || '') + '" />' +
     '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
-      '<button type="button" class="secondary" onclick="closeModal()" style="min-width:80px; padding:8px 16px;">Cancel</button>' +
+      '<button type="button" class="secondary" data-act="closeModal" style="min-width:80px; padding:8px 16px;">Cancel</button>' +
       '<button type="button" class="primary" id="appPromptBtn" style="min-width:80px; padding:8px 16px;">OK</button>' +
     '</div>';
   showModal(html);
@@ -34038,6 +35195,7 @@ function restoreActiveTab() {
 }
 
 function switchListsSubmenu(name, btn) {
+  if (appShellHandleNav('sub', 'lists', name)) return;
   try {
     document.documentElement.removeAttribute('data-initial-lists-sub');
     localStorage.setItem('myListAddon:listsSubmenu', name);
@@ -34115,6 +35273,7 @@ function switchListsSubmenu(name, btn) {
 }
 
 function switchSettingsSubmenu(name, btn) {
+  if (appShellHandleNav('sub', 'settings', name)) return;
   try {
     document.documentElement.removeAttribute('data-initial-settings-sub');
     localStorage.setItem('myListAddon:settingsSubmenu', name);
@@ -34282,7 +35441,7 @@ function renderUserFeedbackThreadsUI() {
       const catLabel = t.category ? (t.category.charAt(0).toUpperCase() + t.category.slice(1)) : 'Support';
       const hasAdminReply = Array.isArray(t.messages) && t.messages.some((m) => m.sender === 'admin');
       const badge = hasAdminReply ? ' \uD83D\uDCAC' : '';
-      return '<button type="button" class="support-thread-pill ' + (isActive ? 'active' : '') + '" onclick="selectFeedbackThread(&quot;' + escapeJsAttr(t.id) + '&quot;)">' +
+      return '<button type="button" class="support-thread-pill ' + (isActive ? 'active' : '') + '" data-act="selectFeedbackThread" data-act-args="' + appActArgs([t.id]) + '">' +
         escapeHtml(catLabel) + badge +
       '</button>';
     }).join('');
@@ -34457,6 +35616,7 @@ function trackEventsBatch(eventType, items) {
 }
 
 function filterDiscoverShelves(filter, btn) {
+  if (appShellHandleNav('sub', 'discover', filter)) return;
   try {
     document.documentElement.removeAttribute('data-initial-discover-sub');
   } catch (e) {}
@@ -34697,6 +35857,7 @@ function switchCatalogsSubmenu(filter, btn) {
     switchTab('channels');
     return;
   }
+  if (appShellHandleNav('sub', 'catalogs', filter)) return;
   try {
     document.documentElement.removeAttribute('data-initial-catalogs-sub');
   } catch (e) {}
@@ -34706,7 +35867,7 @@ function switchCatalogsSubmenu(filter, btn) {
   } catch (e) {}
   const hash = location.hash || '';
   const isDetailUrl = hash.startsWith('#/item?') || hash.startsWith('#/list?') || (location.pathname.startsWith('/lists/') && location.pathname !== '/lists');
-  if (!isDetailUrl) {
+  if (!isDetailUrl && !appShellActive) {
     try {
       history.replaceState({ view: 'tab', tab: 'catalogs', fromCatalogsSubmenu: filter || 'all' }, '', '/');
     } catch (e) {}
@@ -34800,19 +35961,19 @@ function sourceRowHtml(u, readonly) {
       '<input type="text" class="url" value="mdblist:watchlist" readonly style="opacity:0.75;">' +
       '</div>' +
       '<div class="testrow">' +
-      '<button type="button" class="btn-test secondary" onclick="testSourceRow(this)">Test</button>' +
+      '<button type="button" class="btn-test secondary" data-act="testSourceRow" data-act-args="[&quot;@self&quot;]">Test</button>' +
       '<div class="testresult"></div>' +
       '</div>' +
       '</div>';
   }
   return '<div class="source-row">' +
     '<div class="row field-row">' +
-    '<input type="text" placeholder="mdblist.com, trakt.tv, or themoviedb.org list URL" class="url" value="' + escapeAttr(u) + '" oninput="checkDuplicateUrl(this)">' +
-    '<button type="button" class="movebtn removebtn remove-source-btn" aria-label="Remove this source" onclick="removeSourceRow(this)" style="display:none;">\u2715</button>' +
+    '<input type="text" placeholder="mdblist.com, trakt.tv, or themoviedb.org list URL" class="url" value="' + escapeAttr(u) + '" data-act-on="input" data-act="checkDuplicateUrl" data-act-args="[&quot;@self&quot;]">' +
+    '<button type="button" class="movebtn removebtn remove-source-btn" aria-label="Remove this source" data-act="removeSourceRow" data-act-args="[&quot;@self&quot;]" style="display:none;">\u2715</button>' +
     '</div>' +
     '<small class="dup-warning" style="display:none;">\u26a0 Already added elsewhere in this list.</small>' +
     '<div class="testrow">' +
-    '<button type="button" class="btn-test secondary" onclick="testSourceRow(this)">Test</button>' +
+    '<button type="button" class="btn-test secondary" data-act="testSourceRow" data-act-args="[&quot;@self&quot;]">Test</button>' +
     '<div class="testresult"></div>' +
     '</div>' +
     '</div>';
@@ -34856,7 +36017,7 @@ function channelSourceRowHtml(u) {
   }
   return '<div class="source-row">' +
     '<p style="margin:0;"><small>' + escapeHtml(summary) + ' \u2014 built with the Channels panel above.</small> ' +
-    '<button type="button" class="secondary channelEditBtn" style="padding:4px 10px; min-height:unset;" onclick="editChannel(this)">Edit</button></p>' +
+    '<button type="button" class="secondary channelEditBtn" style="padding:4px 10px; min-height:unset;" data-act="editChannel" data-act-args="[&quot;@self&quot;]">Edit</button></p>' +
     '<input type="hidden" class="url" value="' + escapeAttr(u) + '">' +
     '</div>';
 }
@@ -35077,8 +36238,8 @@ function customListSourceRowHtml(u) {
   }
   return '<div class="source-row">' +
     '<p style="margin:0;"><small>' + escapeHtml(summary) + ' \u2014 built with the Custom List panel above.</small> ' +
-    '<button type="button" class="secondary customListEditBtn" style="padding:4px 10px; min-height:unset;" onclick="editCustomList(this)">Edit</button> ' +
-    '<button type="button" class="secondary customListShareBtn" style="padding:4px 10px; min-height:unset;" onclick="startSaveListFlow(this)">Save List</button></p>' +
+    '<button type="button" class="secondary customListEditBtn" style="padding:4px 10px; min-height:unset;" data-act="editCustomList" data-act-args="[&quot;@self&quot;]">Edit</button> ' +
+    '<button type="button" class="secondary customListShareBtn" style="padding:4px 10px; min-height:unset;" data-act="startSaveListFlow" data-act-args="[&quot;@self&quot;]">Save List</button></p>' +
     publishedLinkHtml +
     '<input type="hidden" class="url" value="' + escapeAttr(u) + '">' +
     '</div>';
@@ -35199,7 +36360,7 @@ function openAddShelfModal() {
   document.getElementById('addShelfModalName').value = '';
   document.getElementById('addShelfModalLinksContainer').innerHTML = 
     '<div class="add-shelf-link-row" style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">' +
-      '<input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd)" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" oninput="onAddShelfModalLinkInput(this); validateAddShelfModal()">' +
+      '<input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd)" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
     '</div>';
   document.getElementById('addShelfModalType').value = 'movie';
   validateAddShelfModal();
@@ -35216,8 +36377,8 @@ function addShelfModalAddLink() {
   div.style.gap = '8px';
   div.style.marginBottom = '12px';
   div.innerHTML = 
-    '<input type="url" class="addShelfModalLinkInput" placeholder="Additional URL" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" oninput="onAddShelfModalLinkInput(this); validateAddShelfModal()">' +
-    '<button type="button" class="lc-btn secondary" aria-label="Remove this URL" style="padding: 12px;" onclick="this.closest(&quot;.add-shelf-link-row&quot;).remove(); validateAddShelfModal()">\u2715</button>';
+    '<input type="url" class="addShelfModalLinkInput" placeholder="Additional URL" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
+    '<button type="button" class="lc-btn secondary" aria-label="Remove this URL" style="padding: 12px;" data-act="appActRemoveShelfLinkRow" data-act-args="[&quot;@self&quot;]">\u2715</button>';
   container.appendChild(div);
   validateAddShelfModal();
 }
@@ -35342,13 +36503,13 @@ function addRow(name, url, type, enabled, group, channelId) {
     '<div class="entry-card-top" style="flex-direction: column;">' +
       '<div class="entry-ctrl-row" style="width: 100%; justify-content: flex-start; margin-bottom: 2px;">' +
         '<div class="entry-pos-wrap" style="display:flex; align-items:center;">' +
-          '<input type="number" class="pos" min="1" title="Type a position number to move this list there" onchange="movePosTo(this)">' +
+          '<input type="number" class="pos" min="1" title="Type a position number to move this list there" data-act="movePosTo" data-act-args="[&quot;@self&quot;]">' +
         '</div>' +
         '<span class="drag-handle ec-btn" title="Drag to reorder" style="cursor:grab; font-size:1rem;">&#9776;</span>' +
-        '<button type="button" class="ec-btn movebtn secondary" onclick="moveRow(this, -1)" title="Move up">&#8593;</button>' +
-        '<button type="button" class="ec-btn movebtn secondary" onclick="moveRow(this, 1)" title="Move down">&#8595;</button>' +
-        ((isCustomList || isChannel) ? ('<button type="button" class="ec-btn secondary" style="margin-left: auto; margin-right: 6px; font-weight:600; padding: 2px 10px;" onclick="' + (isCustomList ? 'editEntryCustomList(this)' : 'editEntryChannel(this)') + '">Edit</button>') : '') +
-        '<button type="button" class="ec-btn movebtn removebtn danger" onclick="removeEntryWithUndo(this)" title="Remove this list" aria-label="Remove this list" style="' + (!(isCustomList || isChannel) ? 'margin-left: auto;' : '') + '">' +
+        '<button type="button" class="ec-btn movebtn secondary" data-act="moveRow" data-act-args="[&quot;@self&quot;,-1]" title="Move up">&#8593;</button>' +
+        '<button type="button" class="ec-btn movebtn secondary" data-act="moveRow" data-act-args="[&quot;@self&quot;,1]" title="Move down">&#8595;</button>' +
+        ((isCustomList || isChannel) ? ('<button type="button" class="ec-btn secondary" style="margin-left: auto; margin-right: 6px; font-weight:600; padding: 2px 10px;" data-act="' + (isCustomList ? 'editEntryCustomList' : 'editEntryChannel') + '" data-act-args="[&quot;@self&quot;]">Edit</button>') : '') +
+        '<button type="button" class="ec-btn movebtn removebtn danger" data-act="removeEntryWithUndo" data-act-args="[&quot;@self&quot;]" title="Remove this list" aria-label="Remove this list" style="' + (!(isCustomList || isChannel) ? 'margin-left: auto;' : '') + '">' +
           '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none;">' +
             '<polyline points="3 6 5 6 21 6"></polyline>' +
             '<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>' +
@@ -35376,7 +36537,7 @@ function addRow(name, url, type, enabled, group, channelId) {
       ? '<p class="watchlist-note"><small>Uses the MDBList API key from Settings.</small></p>'
       : (isChannel || isCustomList || isPremade)
         ? ''
-        : '<button type="button" class="secondary add-source-btn" onclick="addSourceRow(this)">+ Add another source (merge into one catalog)</button>') +
+        : '<button type="button" class="secondary add-source-btn" data-act="addSourceRow" data-act-args="[&quot;@self&quot;]">+ Add another source (merge into one catalog)</button>') +
     '<div class="live-preview-shelf" style="padding:0; margin:0; border:none; background:transparent;"><div class="live-preview-shelf-title"><span class="shelf-drag-handle" title="Drag to reorder catalog">&#x2630;</span><span class="shelf-title-text">' + escapeHtml(name || 'Unnamed') + ' - ' + (type === 'series' ? 'Series' : 'Movies') + '</span><span class="live-preview-shelf-status"></span><button type="button" class="text-action-btn" disabled>See All &rsaquo;</button></div><div class="live-preview-posters"><p style="color:var(--muted); font-size:0.88rem; text-align:center; padding: 20px;"><small>Click "Refresh Preview" above to load posters.</small></p></div></div>';
   container.appendChild(div);
   // Every custom-list row this browser owns gets a live server-side copy
@@ -35601,8 +36762,8 @@ async function runMyMdblistLists() {
   const isDisc = localStorage.getItem('myListAddon:mdblistDisconnected') === 'true';
   const keyInput = document.getElementById('mdblistKeyInput');
   const manualKey = keyInput ? keyInput.value.trim() : '';
-  const token = isDisc ? '' : (mdblistAccessToken || localStorage.getItem('myListAddon:mdblistAccessToken') || '');
-  const key = isDisc ? '' : (manualKey || token || localStorage.getItem('myListAddon:mdblistKey') || '');
+  const token = isDisc ? '' : (mdblistAccessToken || readProviderSecret('myListAddon:mdblistAccessToken') || '');
+  const key = isDisc ? '' : (manualKey || token || readProviderSecret('myListAddon:mdblistKey') || '');
   if (!key) {
     box.innerHTML = '<p style="margin-top:10px; color:var(--muted);"><small>Connect your MDBList account in Settings or click <strong>Connect MDBList</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
     return;
@@ -35645,7 +36806,7 @@ async function enrichMdblistAiringNextDates(list) {
   _mdblistAiringNextEnriching = true;
 
   const tkInput = document.getElementById('tmdbKeyInput');
-  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
 
   try {
     const rawCandidates = (window._mdblistRawAiringCandidates && window._mdblistRawAiringCandidates.length)
@@ -35874,7 +37035,7 @@ function renderMyMdblistLists(lists) {
 
     const copyBtn = isHistory
       ? '<button type="button" class="lc-btn secondary myListCopyToCustomBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="mixed">Copy</button>' +
-        '<button type="button" class="lc-btn secondary" onclick="markMdblistHistoryAllWatched(this)">Mark all as Watched</button>'
+        '<button type="button" class="lc-btn secondary" data-act="markMdblistHistoryAllWatched" data-act-args="[&quot;@self&quot;]">Mark all as Watched</button>'
       : (isUpNext
           ? '<button type="button" class="lc-btn secondary myListCopyToCustomBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="series">Copy</button>'
           : (isAiringNext
@@ -35903,8 +37064,8 @@ function renderMyMdblistLists(lists) {
             const isMobileEnd = (i === 2 && previewItems.length > 3);
             const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
             let overlays = '';
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" onclick="event.stopPropagation(); openMdblistUpNextDetailsPage();">' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" onclick="event.stopPropagation(); openMdblistUpNextDetailsPage();">' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="openMdblistUpNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="openMdblistUpNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
             const showMdbUpNextBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesMdblistUpNext') : true;
             const showAirDate = showMdbUpNextBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
@@ -35947,10 +37108,10 @@ function renderMyMdblistLists(lists) {
             const poster = resolveListCardItemPoster(it);
             const epSubtitle = it.episodeTitle || (it.seasonNum != null && it.episodeNum != null ? ('S' + it.seasonNum + 'E' + it.episodeNum) : '');
 
-            const mdbUpNextRemoveBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="mdblist" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from MDBList Watchlist" aria-label="Remove from MDBList Watchlist">\u2715</button>';
+            const mdbUpNextRemoveBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="mdblist" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from MDBList Watchlist" aria-label="Remove from MDBList Watchlist">\u2715</button>';
             return '<div class="list-card-mini-poster-tile mdblist-up-next-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="series">' +
               '<div class="list-card-mini-poster-img-wrap">' +
-                (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="series" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" onerror="handlePosterImgError(this)">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
+                (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="series" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
                 (dateBadge + bottomBadge) +
                 mdbUpNextRemoveBtn +
                 overlays +
@@ -35971,8 +37132,8 @@ function renderMyMdblistLists(lists) {
             const isMobileEnd = (i === 2 && previewItems.length > 3);
             const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
             let overlays = '';
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" onclick="event.stopPropagation(); openMdblistAiringNextDetailsPage();">' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" onclick="event.stopPropagation(); openMdblistAiringNextDetailsPage();">' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="openMdblistAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="openMdblistAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
             const showAiringBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesAiringNext') : true;
             const showAirDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
@@ -36009,10 +37170,10 @@ function renderMyMdblistLists(lists) {
                 };
 
             const poster = resolveListCardItemPoster(it);
-            const mdbAiringNextRemoveBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="mdblist" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from MDBList Watchlist" aria-label="Remove from MDBList Watchlist">\u2715</button>';
+            const mdbAiringNextRemoveBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="mdblist" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from MDBList Watchlist" aria-label="Remove from MDBList Watchlist">\u2715</button>';
             return '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '">' +
               '<div class="list-card-mini-poster-img-wrap">' +
-                (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" onerror="handlePosterImgError(this)">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
+                (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
                 (dateBadge + bottomBadge) +
                 mdbAiringNextRemoveBtn +
                 overlays +
@@ -36031,7 +37192,7 @@ function renderMyMdblistLists(lists) {
       postersHtml = '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + viewType + '"></div>';
     }
 
-    const titleClick = isUpNext ? 'onclick="openMdblistUpNextDetailsPage()"' : (isAiringNext ? 'onclick="openMdblistAiringNextDetailsPage()"' : '');
+    const titleClick = isUpNext ? 'data-act="openMdblistUpNextDetailsPage"' : (isAiringNext ? 'data-act="openMdblistAiringNextDetailsPage"' : '');
 
     return '<div class="list-card" data-list-type="' + (isSingleType ? type : 'mixed') + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(viewType) + '" data-creator="MDBList" data-items="' + escapeAttr(totalCount) + '">' +
       '<div class="list-card-header">' +
@@ -36110,7 +37271,7 @@ document.getElementById('myMdblistListsResult').addEventListener('click', (e) =>
 async function runMyTraktLists() {
   const box = document.getElementById('myTraktListsResult');
   const isDisc = localStorage.getItem('myListAddon:traktDisconnected') === 'true';
-  const token = isDisc ? '' : (traktAccessToken || localStorage.getItem('myListAddon:traktAccessToken') || '');
+  const token = isDisc ? '' : (traktAccessToken || readProviderSecret('myListAddon:traktAccessToken') || '');
   const neutralMsg = '<p style="margin-top:10px; color:var(--muted);"><small>Connect your Trakt account in Settings or click <strong>Connect Trakt</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
 
   if (!token) {
@@ -36160,9 +37321,9 @@ function disconnectMdblist() {
   mdblistAccessToken = '';
   try { window.mdblistAccessToken = ''; } catch (e) {}
   try {
-    localStorage.removeItem('myListAddon:mdblistAccessToken');
+    forgetProviderSecret('myListAddon:mdblistAccessToken');
     localStorage.removeItem('myListAddon:mdblistUsername');
-    localStorage.removeItem('myListAddon:mdblistKey');
+    forgetProviderSecret('myListAddon:mdblistKey');
     localStorage.setItem('myListAddon:mdblistDisconnected', 'true');
   } catch (e) {}
   saveState();
@@ -36173,7 +37334,7 @@ function disconnectMdblist() {
 
 function toggleListsMdblistConnection() {
   const isDisc = localStorage.getItem('myListAddon:mdblistDisconnected') === 'true';
-  const token = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken');
+  const token = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken');
   if (token && !isDisc) {
     disconnectMdblist();
   } else {
@@ -36188,10 +37349,10 @@ function renderMdblistConnectStatus() {
   const disconnectBtn = document.getElementById('mdblistDisconnectBtn');
   const listsBtn = document.getElementById('listsMdblistConnectBtn');
   const isDisc = localStorage.getItem('myListAddon:mdblistDisconnected') === 'true';
-  const token = isDisc ? '' : ((typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '');
+  const token = isDisc ? '' : ((typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '');
   if (!isDisc && token) mdblistAccessToken = token;
   const user = (typeof mdblistUsername !== 'undefined' && mdblistUsername) || (isDisc ? '' : (localStorage.getItem('myListAddon:mdblistUsername') || ''));
-  const key = (input ? input.value.trim() : '') || (isDisc ? '' : (localStorage.getItem('myListAddon:mdblistKey') || ''));
+  const key = (input ? input.value.trim() : '') || (isDisc ? '' : (readProviderSecret('myListAddon:mdblistKey') || ''));
   const isAccountConnected = !isDisc && !!token;
   const hasKey = !isDisc && !!key;
 
@@ -36245,14 +37406,14 @@ function applyMdblistConnection(token, username) {
     } catch (e) {}
   }
   try {
-    localStorage.setItem('myListAddon:mdblistAccessToken', mdblistAccessToken);
+    rememberProviderSecret('myListAddon:mdblistAccessToken', mdblistAccessToken);
   } catch (e) {}
   saveState();
   if (typeof pushCreatorSync === 'function') pushCreatorSync();
   if (typeof showAppAlert === 'function') {
     showAppAlert('MDBList Connected', 'Connected to MDBList.', true);
   } else {
-    alert('Connected to MDBList.');
+    showToast('Connected to MDBList.', 'success');
   }
   renderMdblistConnectStatus();
   scheduleMyMdblistListsRefresh();
@@ -36283,7 +37444,7 @@ function pickUpMdblistTokenFromUrl() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('MDBList Connection Error', msg + (detail ? '\\n\\nDetails: ' + detail : ''), false);
     } else {
-      alert(msg + (detail ? '\\n' + detail : ''));
+      showToast(msg + (detail ? '\\n' + detail : ''), 'error');
     }
     params.delete('mdblist_error');
     params.delete('mdblist_error_detail');
@@ -36315,9 +37476,9 @@ function disconnectTrakt() {
   try { window.traktAccessToken = ''; } catch (e) {}
   if (typeof activeTraktToken !== 'undefined') activeTraktToken = null;
   try {
-    localStorage.removeItem('myListAddon:traktAccessToken');
+    forgetProviderSecret('myListAddon:traktAccessToken');
     localStorage.removeItem('myListAddon:traktUsername');
-    localStorage.removeItem('myListAddon:traktKey');
+    forgetProviderSecret('myListAddon:traktKey');
     localStorage.setItem('myListAddon:traktDisconnected', 'true');
   } catch (e) {}
   saveState();
@@ -36331,7 +37492,7 @@ function disconnectTrakt() {
 
 function toggleListsTraktConnection() {
   const isDisc = localStorage.getItem('myListAddon:traktDisconnected') === 'true';
-  const token = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken');
+  const token = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken');
   if (token && !isDisc) {
     disconnectTrakt();
   } else {
@@ -36347,10 +37508,10 @@ function renderTraktConnectStatus() {
   const disconnectBtn = document.getElementById('traktDisconnectBtn');
   const listsBtn = document.getElementById('listsTraktConnectBtn');
   const isDisc = localStorage.getItem('myListAddon:traktDisconnected') === 'true';
-  const token = isDisc ? '' : ((typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '');
+  const token = isDisc ? '' : ((typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '');
   if (!isDisc && token) traktAccessToken = token;
   const user = (userInput ? userInput.value.trim() : '') || (isDisc ? '' : (localStorage.getItem('myListAddon:traktUsername') || ''));
-  const key = (keyInput ? keyInput.value.trim() : '') || (isDisc ? '' : (localStorage.getItem('myListAddon:traktKey') || ''));
+  const key = (keyInput ? keyInput.value.trim() : '') || (isDisc ? '' : (readProviderSecret('myListAddon:traktKey') || ''));
   const isAccountConnected = !isDisc && !!token;
   const hasKey = !isDisc && !!(key || user);
   
@@ -36397,7 +37558,7 @@ function renderTraktConnectStatus() {
 function applyTraktConnection(token, user) {
   traktAccessToken = token;
   try {
-    localStorage.setItem('myListAddon:traktAccessToken', traktAccessToken);
+    rememberProviderSecret('myListAddon:traktAccessToken', traktAccessToken);
     localStorage.removeItem('myListAddon:traktDisconnected');
   } catch (e) {}
   if (user) {
@@ -36412,7 +37573,7 @@ function applyTraktConnection(token, user) {
   if (typeof showAppAlert === 'function') {
     showAppAlert('Trakt Connected', 'Connected to Trakt.', true);
   } else {
-    alert('Connected to Trakt.');
+    showToast('Connected to Trakt.', 'success');
   }
   renderTraktConnectStatus();
   scheduleMyTraktListsRefresh();
@@ -36444,7 +37605,7 @@ function pickUpTraktTokenFromUrl() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Trakt Connection', msg, !isRateLimit);
     } else {
-      alert(msg);
+      showToast(msg, 'error');
     }
     params.delete('trakt_error');
     params.delete('trakt_error_detail');
@@ -36476,7 +37637,7 @@ async function startTraktDeviceLogin(retried) {
   const codeEl = document.getElementById('traktDeviceUserCode');
   const statusEl = document.getElementById('traktDevicePollingStatus');
   const linkEl = document.getElementById('traktDeviceActivateLink');
-  const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:traktKey') || '';
+  const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || readProviderSecret('myListAddon:traktKey') || '';
   
   if (modal) modal.style.display = 'flex';
   if (codeEl) codeEl.innerText = 'LOADING...';
@@ -36501,7 +37662,7 @@ async function startTraktDeviceLogin(retried) {
     if (!data.ok || !data.user_code) {
       if (codeEl) codeEl.innerText = 'ERROR';
       if (statusEl) {
-        statusEl.innerHTML = '<span style="color:var(--danger);">' + escapeHtml(data.error || 'Could not get device code.') + '</span> <button type="button" class="lc-btn secondary" style="margin-left:8px; padding:3px 8px; font-size:0.75rem;" onclick="startTraktDeviceLogin()">Try Again</button>';
+        statusEl.innerHTML = '<span style="color:var(--danger);">' + escapeHtml(data.error || 'Could not get device code.') + '</span> <button type="button" class="lc-btn secondary" style="margin-left:8px; padding:3px 8px; font-size:0.75rem;" data-act="startTraktDeviceLogin">Try Again</button>';
       }
       return;
     }
@@ -36524,7 +37685,7 @@ async function startTraktDeviceLogin(retried) {
       if (Date.now() > expiresAt) {
         clearInterval(_traktDevicePollTimer);
         _traktDevicePollTimer = null;
-        if (statusEl) statusEl.innerHTML = 'Activation code expired. <button type="button" class="lc-btn secondary" style="margin-left:8px; padding:3px 8px; font-size:0.75rem;" onclick="startTraktDeviceLogin()">Get New Code</button>';
+        if (statusEl) statusEl.innerHTML = 'Activation code expired. <button type="button" class="lc-btn secondary" style="margin-left:8px; padding:3px 8px; font-size:0.75rem;" data-act="startTraktDeviceLogin">Get New Code</button>';
         return;
       }
 
@@ -36541,7 +37702,7 @@ async function startTraktDeviceLogin(retried) {
           _traktDevicePollTimer = null;
           traktAccessToken = pollData.access_token;
           try {
-            localStorage.setItem('myListAddon:traktAccessToken', traktAccessToken);
+            rememberProviderSecret('myListAddon:traktAccessToken', traktAccessToken);
           } catch(e) {}
           if (pollData.username) {
             try {
@@ -36572,7 +37733,7 @@ async function startTraktDeviceLogin(retried) {
 
   } catch (err) {
     if (codeEl) codeEl.innerText = 'ERROR';
-    if (statusEl) statusEl.innerHTML = 'Network error requesting device code. <button type="button" class="lc-btn secondary" style="margin-left:8px; padding:3px 8px; font-size:0.75rem;" onclick="startTraktDeviceLogin()">Try Again</button>';
+    if (statusEl) statusEl.innerHTML = 'Network error requesting device code. <button type="button" class="lc-btn secondary" style="margin-left:8px; padding:3px 8px; font-size:0.75rem;" data-act="startTraktDeviceLogin">Try Again</button>';
   }
 }
 
@@ -36622,7 +37783,7 @@ async function enrichTraktAiringNextDates(list) {
   _traktAiringNextEnriching = true;
 
   const tkInput = document.getElementById('tmdbKeyInput');
-  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
 
   try {
     const rawCandidates = (window._traktRawAiringCandidates && window._traktRawAiringCandidates.length)
@@ -36843,7 +38004,7 @@ function renderMyPrivateTraktLists(lists) {
 
     const copyBtn = isHistory
       ? '<button type="button" class="lc-btn secondary myPrivateListCopyToCustomBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="mixed">Copy</button>' +
-        '<button type="button" class="lc-btn secondary" onclick="markTraktHistoryAllWatched(this)">Mark all as Watched</button>'
+        '<button type="button" class="lc-btn secondary" data-act="markTraktHistoryAllWatched" data-act-args="[&quot;@self&quot;]">Mark all as Watched</button>'
       : (isContinueWatching
           ? '<button type="button" class="lc-btn secondary myPrivateListCopyToCustomBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="mixed">Copy</button>'
           : (isAiringNext
@@ -36873,8 +38034,8 @@ function renderMyPrivateTraktLists(lists) {
             const isMobileEnd = (i === 2 && previewItems.length > 3);
             const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
             let overlays = '';
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" onclick="event.stopPropagation(); openTraktContinueWatchingDetailsPage();">' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" onclick="event.stopPropagation(); openTraktContinueWatchingDetailsPage();">' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="openTraktContinueWatchingDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="openTraktContinueWatchingDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
             const showTraktCwBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesTraktContinueWatching') : true;
             const showAirDate = showTraktCwBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
@@ -36924,10 +38085,10 @@ function renderMyPrivateTraktLists(lists) {
 
             return '<div class="list-card-mini-poster-tile trakt-continue-watching-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(it.type || 'mixed') + '">' +
               '<div class="list-card-mini-poster-img-wrap">' +
-                (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || 'series') + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" onerror="handlePosterImgError(this)">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
+                (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || 'series') + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
                 progressOverlay +
                 (dateBadge + bottomBadge) +
-                '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="history" data-list-id="history" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from Trakt History" aria-label="Remove from Trakt History">\u2715</button>' +
+                '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="history" data-list-id="history" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Trakt History" aria-label="Remove from Trakt History">\u2715</button>' +
                 overlays +
               '</div>' +
               '<div class="list-card-mini-poster-name">' + escapeHtml(it.name || it.title || 'Untitled') + '</div>' +
@@ -36946,8 +38107,8 @@ function renderMyPrivateTraktLists(lists) {
             const isMobileEnd = (i === 2 && previewItems.length > 3);
             const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
             let overlays = '';
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" onclick="event.stopPropagation(); openTraktAiringNextDetailsPage();">' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" onclick="event.stopPropagation(); openTraktAiringNextDetailsPage();">' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="openTraktAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="openTraktAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
             const showAiringBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesAiringNext') : true;
             const showAirDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
@@ -36986,9 +38147,9 @@ function renderMyPrivateTraktLists(lists) {
             const traktPoster = resolveListCardItemPoster(it);
             return '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '">' +
               '<div class="list-card-mini-poster-img-wrap">' +
-                (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" onerror="handlePosterImgError(this)">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
+                (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
                 (dateBadge + bottomBadge) +
-                '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from Trakt Watchlist" aria-label="Remove from Trakt Watchlist">\u2715</button>' +
+                '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Trakt Watchlist" aria-label="Remove from Trakt Watchlist">\u2715</button>' +
                 overlays +
               '</div>' +
               '<div class="list-card-mini-poster-name">' + escapeHtml(label.title) + '</div>' +
@@ -37005,7 +38166,7 @@ function renderMyPrivateTraktLists(lists) {
       postersHtml = '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + viewType + '"></div>';
     }
 
-    const titleClick = isContinueWatching ? 'onclick="openTraktContinueWatchingDetailsPage()"' : (isAiringNext ? 'onclick="openTraktAiringNextDetailsPage()"' : '');
+    const titleClick = isContinueWatching ? 'data-act="openTraktContinueWatchingDetailsPage"' : (isAiringNext ? 'data-act="openTraktAiringNextDetailsPage"' : '');
 
     return '<div class="list-card" data-list-type="' + (isSingleType ? type : 'mixed') + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(viewType) + '" data-creator="Trakt" data-items="' + escapeAttr(totalCount) + '">' +
       '<div class="list-card-header">' +
@@ -37059,9 +38220,9 @@ function onTmdbKeyInputChanged() {
   const input = document.getElementById('tmdbKeyInput');
   const val = input ? input.value.trim() : '';
   if (val) {
-    localStorage.setItem('myListAddon:tmdbKey', val);
+    rememberProviderSecret('myListAddon:tmdbKey', val);
   } else {
-    localStorage.removeItem('myListAddon:tmdbKey');
+    forgetProviderSecret('myListAddon:tmdbKey');
   }
   renderTmdbConnectStatus();
   scheduleMyTmdbListsRefresh();
@@ -37075,7 +38236,7 @@ function startTmdbConnect() {
 
 function toggleListsTmdbConnection() {
   const isDisc = localStorage.getItem('myListAddon:tmdbDisconnected') === 'true';
-  const sess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || localStorage.getItem('myListAddon:tmdbSessionId');
+  const sess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || readProviderSecret('myListAddon:tmdbSessionId');
   if (sess && !isDisc) {
     disconnectTmdb();
   } else {
@@ -37094,8 +38255,8 @@ function disconnectTmdb() {
   tmdbUsername = '';
   try { window.tmdbUsername = ''; } catch (e) {}
   try {
-    localStorage.removeItem('myListAddon:tmdbKey');
-    localStorage.removeItem('myListAddon:tmdbSessionId');
+    forgetProviderSecret('myListAddon:tmdbKey');
+    forgetProviderSecret('myListAddon:tmdbSessionId');
     localStorage.removeItem('myListAddon:tmdbAccountId');
     localStorage.removeItem('myListAddon:tmdbUsername');
     localStorage.setItem('myListAddon:tmdbDisconnected', 'true');
@@ -37114,7 +38275,7 @@ function applyTmdbConnection(sess, acc, user) {
   tmdbUsername = user || '';
   try {
     localStorage.removeItem('myListAddon:tmdbDisconnected');
-    localStorage.setItem('myListAddon:tmdbSessionId', tmdbSessionId);
+    rememberProviderSecret('myListAddon:tmdbSessionId', tmdbSessionId);
     if (tmdbAccountId) localStorage.setItem('myListAddon:tmdbAccountId', tmdbAccountId);
     if (tmdbUsername) localStorage.setItem('myListAddon:tmdbUsername', tmdbUsername);
   } catch (e) {}
@@ -37149,7 +38310,7 @@ function pickUpTmdbTokenFromUrl() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('TMDB Connection Error', msg, false);
     } else {
-      alert(msg);
+      showToast(msg, 'error');
     }
     search.delete('tmdb_error');
     search.delete('tmdb_error_detail');
@@ -37166,9 +38327,9 @@ function renderTmdbConnectStatus() {
   const listsConnectBtn = document.getElementById('listsTmdbConnectBtn');
 
   const isDisc = localStorage.getItem('myListAddon:tmdbDisconnected') === 'true';
-  const sess = isDisc ? '' : (tmdbSessionId || localStorage.getItem('myListAddon:tmdbSessionId') || '');
+  const sess = isDisc ? '' : (tmdbSessionId || readProviderSecret('myListAddon:tmdbSessionId') || '');
   const user = isDisc ? '' : (tmdbUsername || localStorage.getItem('myListAddon:tmdbUsername') || '');
-  const key = (input ? input.value.trim() : '') || (isDisc ? '' : (localStorage.getItem('myListAddon:tmdbKey') || ''));
+  const key = (input ? input.value.trim() : '') || (isDisc ? '' : (readProviderSecret('myListAddon:tmdbKey') || ''));
   const isAccountConnected = !isDisc && !!sess;
   const hasKey = !isDisc && !!key;
 
@@ -37203,10 +38364,10 @@ function scheduleMyTmdbListsRefresh() {
 async function runMyTmdbLists() {
   const box = document.getElementById('myTmdbListsResult');
   if (!box) return;
-  const sess = tmdbSessionId || localStorage.getItem('myListAddon:tmdbSessionId') || '';
+  const sess = tmdbSessionId || readProviderSecret('myListAddon:tmdbSessionId') || '';
   const acc = tmdbAccountId || localStorage.getItem('myListAddon:tmdbAccountId') || '';
   const input = document.getElementById('tmdbKeyInput');
-  const key = (input ? input.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const key = (input ? input.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
 
   if (!sess && !acc) {
     box.innerHTML = '<p style="margin-top:10px; color:var(--muted);"><small>Connect your TMDB account in Settings or click <strong>Connect TMDB</strong> above to see your personal lists, watchlist, and favorites here.</small></p>';
@@ -37308,7 +38469,7 @@ function renderMyTmdbLists(lists) {
           const posterType = it.type || (l.contentType === 'series' ? 'series' : 'movie');
           const tmdbTarget = isWatchlist ? 'watchlist' : (isFavorites ? 'favorite' : 'custom');
           const tmdbListId = isWatchlist ? 'watchlist' : (isFavorites ? 'favorite' : listIdStr);
-          const removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="tmdb" data-target="' + tmdbTarget + '" data-list-id="' + escapeAttr(tmdbListId) + '" data-remove-id="' + escapeAttr(it.id) + '" data-media-type="' + escapeAttr(posterType) + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from TMDB" aria-label="Remove from TMDB">\u2715</button>';
+          const removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="tmdb" data-target="' + tmdbTarget + '" data-list-id="' + escapeAttr(tmdbListId) + '" data-remove-id="' + escapeAttr(it.id) + '" data-media-type="' + escapeAttr(posterType) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from TMDB" aria-label="Remove from TMDB">\u2715</button>';
           const tmdbPoster = typeof resolveClientPoster === 'function' ? resolveClientPoster(it, it.poster) : it.poster;
           const ratingSpan = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(it) : '';
           return '<div class="list-card-mini-poster-tile">' +
@@ -37384,9 +38545,9 @@ function disconnectSimkl() {
   try { window.simklUsername = ''; } catch (e) {}
   window._mySimklLists = [];
   try {
-    localStorage.removeItem('myListAddon:simklAccessToken');
+    forgetProviderSecret('myListAddon:simklAccessToken');
     localStorage.removeItem('myListAddon:simklUsername');
-    localStorage.removeItem('myListAddon:simklKey');
+    forgetProviderSecret('myListAddon:simklKey');
     localStorage.setItem('myListAddon:simklDisconnected', 'true');
   } catch (e) {}
   saveState();
@@ -37397,7 +38558,7 @@ function disconnectSimkl() {
 
 function toggleListsSimklConnection() {
   const isDisc = localStorage.getItem('myListAddon:simklDisconnected') === 'true';
-  const token = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken');
+  const token = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken');
   if (token && !isDisc) {
     disconnectSimkl();
   } else {
@@ -37411,7 +38572,7 @@ function applySimklConnection(token, username) {
   simklAccessToken = token;
   try {
     localStorage.removeItem('myListAddon:simklDisconnected');
-    localStorage.setItem('myListAddon:simklAccessToken', simklAccessToken);
+    rememberProviderSecret('myListAddon:simklAccessToken', simklAccessToken);
   } catch (e) {}
   if (username) {
     simklUsername = username;
@@ -37424,7 +38585,7 @@ function applySimklConnection(token, username) {
   if (typeof showAppAlert === 'function') {
     showAppAlert('Simkl Connected', 'Your Simkl account was successfully connected.', true);
   } else {
-    alert('Connected to Simkl.');
+    showToast('Connected to Simkl.', 'success');
   }
   renderSimklConnectStatus();
   scheduleMySimklListsRefresh();
@@ -37464,7 +38625,7 @@ async function pickUpServerConnection() {
       ? 'That account could not be loaded. Please connect it again from Settings.'
       : 'Your account was connected, but this page could not load it. Reload the page to try again.';
     if (typeof showAppAlert === 'function') showAppAlert('Connection', msg, false);
-    else alert(msg);
+    else showToast(msg, 'error');
     return;
   }
   if (provider === 'trakt') applyTraktConnection(data.accessToken, data.username || '');
@@ -37568,7 +38729,7 @@ function pickUpSimklTokenFromUrl() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Simkl Connection Error', msg + (detail ? '\\n\\nDetails: ' + detail : ''), false);
     } else {
-      alert(msg + (detail ? '\\n' + detail : ''));
+      showToast(msg + (detail ? '\\n' + detail : ''), 'error');
     }
     params.delete('simkl_error');
     params.delete('simkl_error_detail');
@@ -37585,10 +38746,10 @@ function renderSimklConnectStatus() {
   const listsBtn = document.getElementById('listsSimklConnectBtn');
 
   const isDisc = localStorage.getItem('myListAddon:simklDisconnected') === 'true';
-  const token = isDisc ? '' : ((typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '');
+  const token = isDisc ? '' : ((typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '');
   if (!isDisc && token) simklAccessToken = token;
   const user = (typeof simklUsername !== 'undefined' && simklUsername) || (isDisc ? '' : (localStorage.getItem('myListAddon:simklUsername') || ''));
-  const key = (input ? input.value.trim() : '') || (isDisc ? '' : (localStorage.getItem('myListAddon:simklKey') || ''));
+  const key = (input ? input.value.trim() : '') || (isDisc ? '' : (readProviderSecret('myListAddon:simklKey') || ''));
   const isAccountConnected = !isDisc && !!token;
   const hasKey = !isDisc && !!key;
 
@@ -37631,9 +38792,9 @@ function scheduleMySimklListsRefresh() {
 async function runMySimklLists() {
   const box = document.getElementById('mySimklListsResult');
   if (!box) return;
-  const token = simklAccessToken || localStorage.getItem('myListAddon:simklAccessToken') || '';
+  const token = simklAccessToken || readProviderSecret('myListAddon:simklAccessToken') || '';
   const input = document.getElementById('simklKeyInput');
-  const key = (input ? input.value.trim() : '') || localStorage.getItem('myListAddon:simklKey') || '';
+  const key = (input ? input.value.trim() : '') || readProviderSecret('myListAddon:simklKey') || '';
 
   const neutralMsg = '<p style="margin-top:10px; color:var(--muted);"><small>Connect your Simkl account in Settings or click <strong>Connect Simkl</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
 
@@ -37682,7 +38843,7 @@ async function enrichSimklAiringNextDates(list) {
   _simklAiringNextEnriching = true;
 
   const tkInput = document.getElementById('tmdbKeyInput');
-  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
 
   try {
     const rawCandidates = (window._simklRawAiringCandidates && window._simklRawAiringCandidates.length)
@@ -37863,7 +39024,7 @@ function renderMySimklLists(lists) {
     const copyBtn = '<button type="button" class="lc-btn secondary myListCopyToCustomBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '">Copy</button>';
 
     const markWatchedBtn = isCompleted
-      ? '<button type="button" class="lc-btn secondary" data-url="' + escapeAttr(l.url) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(type) + '" onclick="markSimklListAllWatched(this)">Mark all as Watched</button>'
+      ? '<button type="button" class="lc-btn secondary" data-url="' + escapeAttr(l.url) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(type) + '" data-act="markSimklListAllWatched" data-act-args="[&quot;@self&quot;]">Mark all as Watched</button>'
       : '';
     const addBtn = '<button type="button" class="lc-btn ' + (added ? 'secondary is-added' : 'primary') + ' myListAddBtn" ' + (added ? 'style="color:var(--danger);"' : '') + ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + type + '">' + (added ? 'Remove' : '+ Add') + '</button>';
 
@@ -37876,14 +39037,14 @@ function renderMySimklLists(lists) {
           const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
           let overlays = '';
           if (isAiringNext) {
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only simklAiringNextViewBtn" style="cursor:pointer;" onclick="event.stopPropagation(); openSimklAiringNextDetailsPage();">' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only simklAiringNextViewBtn" style="cursor:pointer;" onclick="event.stopPropagation(); openSimklAiringNextDetailsPage();">' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only simklAiringNextViewBtn" style="cursor:pointer;" data-act="openSimklAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only simklAiringNextViewBtn" style="cursor:pointer;" data-act="openSimklAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
           } else {
             if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only searchViewListBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-items="' + escapeAttr(totalCount) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
             if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only searchViewListBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-items="' + escapeAttr(totalCount) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
           }
           const simklStatus = isAiringNext ? (it.status || 'watching') : (l.statusKey || (l.url ? l.url.split(':')[3] : 'plantowatch'));
-          const removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="simkl" data-target="status" data-list-id="' + escapeAttr(simklStatus) + '" data-remove-id="' + escapeAttr(it.id) + '" data-media-type="' + escapeAttr(it.type || type) + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from Simkl" aria-label="Remove from Simkl">\u2715</button>';
+          const removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="simkl" data-target="status" data-list-id="' + escapeAttr(simklStatus) + '" data-remove-id="' + escapeAttr(it.id) + '" data-media-type="' + escapeAttr(it.type || type) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Simkl" aria-label="Remove from Simkl">\u2715</button>';
           const showAiringBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesAiringNext') : true;
           const showAirDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
           const showPremiere = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonPremiere') : true);
@@ -37937,7 +39098,7 @@ function renderMySimklLists(lists) {
       posterThumbs = '<p style="margin-top:8px; color:var(--muted);"><small>Nothing scheduled yet.</small></p>';
     }
 
-    const titleClick = isAiringNext ? 'onclick="openSimklAiringNextDetailsPage()"' : '';
+    const titleClick = isAiringNext ? 'data-act="openSimklAiringNextDetailsPage"' : '';
 
     return '<div class="list-card" data-list-type="' + type + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-items="' + escapeAttr(totalCount) + '">' +
       '<div class="list-card-header">' +
@@ -38004,7 +39165,7 @@ async function syncWatchHistoryToProviderNow(provider, btn) {
   
   if (!items.length) {
     if (typeof showAppAlert === 'function') showAppAlert('Empty Watch History', 'Your Watch History is currently empty.', false);
-    else alert('Your Watch History is currently empty.');
+    else showToast('Your Watch History is currently empty.', 'error');
     return;
   }
 
@@ -38014,12 +39175,12 @@ async function syncWatchHistoryToProviderNow(provider, btn) {
     btn.textContent = 'Syncing ' + items.length + ' items\u2026';
   }
 
-  const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
-  const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:traktKey') || '';
-  const mdblistToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
-  const mdblistKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:mdblistKey') || '';
-  const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
-  const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:simklKey') || '';
+  const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
+  const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || readProviderSecret('myListAddon:traktKey') || '';
+  const mdblistToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
+  const mdblistKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || readProviderSecret('myListAddon:mdblistKey') || '';
+  const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
+  const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || readProviderSecret('myListAddon:simklKey') || '';
 
   try {
     const res = await fetch(ORIGIN + '/api/external-sync/history', {
@@ -38044,27 +39205,27 @@ async function syncWatchHistoryToProviderNow(provider, btn) {
     if (!res.ok || !data.ok) {
       const err = data.error || 'Unknown error';
       if (typeof showAppAlert === 'function') showAppAlert(cap + ' Sync Failed', 'Failed to sync to ' + cap + ': ' + err, false);
-      else alert('Failed to sync to ' + cap + ': ' + err);
+      else showToast('Failed to sync to ' + cap + ': ' + err, 'error');
       return;
     }
     const count = data.syncedCount != null ? data.syncedCount : items.length;
     const msg = 'Successfully synced ' + count + ' item' + (count === 1 ? '' : 's') + ' to ' + cap + ' Watch History.';
     if (typeof showAppAlert === 'function') showAppAlert(cap + ' Sync Complete', msg, true);
-    else alert(msg);
+    else showToast(msg, 'error');
   } catch (err) {
     if (btn) {
       btn.disabled = false;
       btn.textContent = origText;
     }
     if (typeof showAppAlert === 'function') showAppAlert(cap + ' Sync Failed', 'Network error syncing to ' + cap + '.', false);
-    else alert('Network error syncing to ' + cap + '.');
+    else showToast('Network error syncing to ' + cap + '.', 'error');
   }
 }
 
 async function syncAllConnectedAccountsNow(btn) {
-  const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
-  const mdblistToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
-  const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
+  const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
+  const mdblistToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
+  const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
 
   const connectedProviders = [];
   if (traktToken) connectedProviders.push('trakt');
@@ -38074,7 +39235,7 @@ async function syncAllConnectedAccountsNow(btn) {
   if (!connectedProviders.length) {
     const msg = 'No external accounts (Trakt, MDBList, Simkl) are connected yet. Connect them under Settings \u2192 External Accounts & API Keys.';
     if (typeof showAppAlert === 'function') showAppAlert('No Accounts Connected', msg, false);
-    else alert(msg);
+    else showToast(msg, 'error');
     return;
   }
 
@@ -38090,15 +39251,15 @@ async function syncSingleItemToConnectedProviders(item, action) {
   const mdblistSync = localStorage.getItem('myListAddon:syncMdblistHistory') === 'true';
   const simklSync = localStorage.getItem('myListAddon:syncSimklHistory') === 'true';
 
-  const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
+  const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
   const traktKeyEl = document.getElementById('traktKeyInput');
-  const traktKey = (traktKeyEl ? traktKeyEl.value.trim() : '') || localStorage.getItem('myListAddon:traktKey') || '';
-  const mdblistToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
+  const traktKey = (traktKeyEl ? traktKeyEl.value.trim() : '') || readProviderSecret('myListAddon:traktKey') || '';
+  const mdblistToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
   const mdblistKeyEl = document.getElementById('mdblistKeyInput');
-  const mdblistKey = (mdblistKeyEl ? mdblistKeyEl.value.trim() : '') || localStorage.getItem('myListAddon:mdblistKey') || '';
-  const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
+  const mdblistKey = (mdblistKeyEl ? mdblistKeyEl.value.trim() : '') || readProviderSecret('myListAddon:mdblistKey') || '';
+  const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
   const simklKeyEl = document.getElementById('simklKeyInput');
-  const simklKey = (simklKeyEl ? simklKeyEl.value.trim() : '') || localStorage.getItem('myListAddon:simklKey') || '';
+  const simklKey = (simklKeyEl ? simklKeyEl.value.trim() : '') || readProviderSecret('myListAddon:simklKey') || '';
 
   const isMovie = item.type === 'movie' || item.kind === 'movie';
   const mediaType = isMovie ? 'movie' : 'series';
@@ -38476,13 +39637,13 @@ async function copyListToCustomList(name, listUrl, contentType, btn, historyMode
       if (typeof showAppAlert === 'function') {
         showAppAlert('Copy Incomplete', errMsg, false);
       } else {
-        alert(errMsg);
+        showToast(errMsg, 'error');
       }
     } else {
       if (typeof showAppAlert === 'function') {
         showAppAlert('No Items', 'That list has no items to copy.', false);
       } else {
-        alert('That list has no items to copy.');
+        showToast('That list has no items to copy.', 'error');
       }
     }
     return;
@@ -38519,7 +39680,7 @@ async function copyListToCustomList(name, listUrl, contentType, btn, historyMode
     if (typeof showAppAlert === 'function') {
       showAppAlert('No Items', 'That list has no items to copy.', false);
     } else {
-      alert('That list has no items to copy.');
+      showToast('That list has no items to copy.', 'error');
     }
     return;
   }
@@ -38551,7 +39712,7 @@ async function copyListToCustomList(name, listUrl, contentType, btn, historyMode
   if (typeof showAppAlert === 'function') {
     showAppAlert(failed.length ? 'Copy Incomplete' : 'List Copied', msg, !failed.length);
   } else {
-    alert(msg);
+    showToast(msg, 'error');
   }
 }
 
@@ -38574,7 +39735,7 @@ async function syncCustomListWithExternalSource(slug, btn, options) {
   if (!listMeta) {
     if (!isSilent) {
       if (typeof showAppAlert === 'function') showAppAlert('Sync Error', 'Could not find list: ' + slug, false);
-      else alert('Could not find list: ' + slug);
+      else showToast('Could not find list: ' + slug, 'error');
     }
     return { ok: false, error: 'list-not-found' };
   }
@@ -38583,7 +39744,7 @@ async function syncCustomListWithExternalSource(slug, btn, options) {
   if (!sourceUrl) {
     if (!isSilent) {
       if (typeof showAppAlert === 'function') showAppAlert('Sync Error', 'This list does not have an external source URL.', false);
-      else alert('This list does not have an external source URL.');
+      else showToast('This list does not have an external source URL.', 'error');
     }
     return { ok: false, error: 'no-source-url' };
   }
@@ -38695,7 +39856,7 @@ async function syncCustomListWithExternalSource(slug, btn, options) {
       } else if (typeof showAppAlert === 'function') {
         showAppAlert('List Synced', msg, false);
       } else {
-        alert(msg);
+        showToast(msg, 'error');
       }
     }
 
@@ -38705,7 +39866,7 @@ async function syncCustomListWithExternalSource(slug, btn, options) {
     if (!isSilent) {
       const errMsg = 'Could not sync list: ' + (err.message || 'network error');
       if (typeof showAppAlert === 'function') showAppAlert('Sync Error', errMsg, false);
-      else alert(errMsg);
+      else showToast(errMsg, 'error');
     }
     return { ok: false, error: err.message || 'sync-failed' };
   } finally {
@@ -38730,7 +39891,7 @@ async function markTraktHistoryAllWatched(btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Trakt Not Connected', 'Please connect your Trakt account in Settings first.', false);
     } else {
-      alert('Connect Trakt first.');
+      showToast('Connect Trakt first.', 'error');
     }
     return;
   }
@@ -38759,7 +39920,7 @@ async function markTraktHistoryAllWatched(btn) {
         if (typeof showAppAlert === 'function') {
           showAppAlert('Network Error', 'Network error fetching Trakt history.', false);
         } else {
-          alert('Network error fetching Trakt history.');
+          showToast('Network error fetching Trakt history.', 'error');
         }
         if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
         return;
@@ -38768,7 +39929,7 @@ async function markTraktHistoryAllWatched(btn) {
         if (typeof showAppAlert === 'function') {
           showAppAlert('Error', data.error || 'Could not fetch Trakt history.', false);
         } else {
-          alert(data.error || 'Could not fetch Trakt history.');
+          showToast(data.error || 'Could not fetch Trakt history.', 'error');
         }
         if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
         return;
@@ -38791,7 +39952,7 @@ async function markTraktHistoryAllWatched(btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('No History', 'No watch history found on your Trakt account.', false);
     } else {
-      alert('No watch history found on your Trakt account.');
+      showToast('No watch history found on your Trakt account.', 'error');
     }
     if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
     return;
@@ -38804,7 +39965,7 @@ async function markTraktHistoryAllWatched(btn) {
   if (whResult.quotaExceeded) {
     const msg = 'Not enough local storage space to save your history. Your browser limits storage to ~5MB. Please delete some large custom lists and try again.';
     if (typeof showAppAlert === 'function') showAppAlert('Storage Full', msg, false);
-    else alert(msg);
+    else showToast(msg, 'error');
     return;
   }
 
@@ -38819,7 +39980,7 @@ async function markTraktHistoryAllWatched(btn) {
   if (typeof showAppAlert === 'function') {
     showAppAlert('Trakt History Synced', msg, true);
   } else {
-    alert(msg);
+    showToast(msg, 'error');
   }
 }
 
@@ -38960,7 +40121,7 @@ async function markMdblistHistoryAllWatched(btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('MDBList Not Connected', 'Please connect your MDBList account or enter an API key in Settings first.', false);
     } else {
-      alert('Connect MDBList first.');
+      showToast('Connect MDBList first.', 'error');
     }
     return;
   }
@@ -38986,7 +40147,7 @@ async function markMdblistHistoryAllWatched(btn) {
       if (typeof showAppAlert === 'function') {
         showAppAlert('Network Error', 'Network error fetching MDBList history (page ' + page + ').', false);
       } else {
-        alert('Network error fetching MDBList history.');
+        showToast('Network error fetching MDBList history.', 'error');
       }
       if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
       return;
@@ -38995,7 +40156,7 @@ async function markMdblistHistoryAllWatched(btn) {
       if (typeof showAppAlert === 'function') {
         showAppAlert('Error', data.error || 'Could not fetch MDBList history.', false);
       } else {
-        alert(data.error || 'Could not fetch MDBList history.');
+        showToast(data.error || 'Could not fetch MDBList history.', 'error');
       }
       if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
       return;
@@ -39013,7 +40174,7 @@ async function markMdblistHistoryAllWatched(btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('No History', detailMsg, false);
     } else {
-      alert(detailMsg);
+      showToast(detailMsg, 'error');
     }
     if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
     return;
@@ -39026,7 +40187,7 @@ async function markMdblistHistoryAllWatched(btn) {
   if (whResult.quotaExceeded) {
     const msg = 'Not enough local storage space to save your history. Your browser limits storage to ~5MB. Please delete some large custom lists and try again.';
     if (typeof showAppAlert === 'function') showAppAlert('Storage Full', msg, false);
-    else alert(msg);
+    else showToast(msg, 'error');
     return;
   }
 
@@ -39038,17 +40199,17 @@ async function markMdblistHistoryAllWatched(btn) {
   if (typeof showAppAlert === 'function') {
     showAppAlert('MDBList History Synced', msg, true);
   } else {
-    alert(msg);
+    showToast(msg, 'error');
   }
 }
 
 async function markSimklListAllWatched(btn) {
-  const token = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
+  const token = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
   if (!token) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Simkl Not Connected', 'Please connect your Simkl account in Settings first.', false);
     } else {
-      alert('Connect Simkl first.');
+      showToast('Connect Simkl first.', 'error');
     }
     return;
   }
@@ -39065,7 +40226,7 @@ async function markSimklListAllWatched(btn) {
       if (typeof showAppAlert === 'function') {
         showAppAlert('No Items', 'No items found in ' + listName + '.', false);
       } else {
-        alert('No items found in ' + listName + '.');
+        showToast('No items found in ' + listName + '.', 'error');
       }
       if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
       return;
@@ -39130,7 +40291,7 @@ async function markSimklListAllWatched(btn) {
     if (whResult.quotaExceeded) {
       const msg = 'Not enough local storage space to save your history. Your browser limits storage to ~5MB. Please delete some large custom lists and try again.';
       if (typeof showAppAlert === 'function') showAppAlert('Storage Full', msg, false);
-      else alert(msg);
+      else showToast(msg, 'error');
       return;
     }
 
@@ -39141,14 +40302,14 @@ async function markSimklListAllWatched(btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Simkl Completed Synced', msg, true);
     } else {
-      alert(msg);
+      showToast(msg, 'error');
     }
   } catch (err) {
     if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
     if (typeof showAppAlert === 'function') {
       showAppAlert('Error', 'Could not mark items as watched: ' + (err.message || 'network error'), false);
     } else {
-      alert('Could not mark items as watched: ' + (err.message || 'network error'));
+      showToast('Could not mark items as watched: ' + (err.message || 'network error'), 'error');
     }
   }
 }
@@ -39420,9 +40581,9 @@ async function onUnifiedImportFilesSelected(input) {
           if (!items.length) continue;
 
           // Categorization & chunk grouping logic for Trakt, Letterboxd, Simkl, and custom lists
-          const noExt = baseName.replace(/\.[^.]+$/, '');
+          const noExt = baseName.replace(/\\.[^.]+$/, '');
           // Strip chunk number suffixes e.g. -1, -2, _1, .part1, (1)
-          const cleanBase = noExt.replace(/[-_ ]\d+$/, '').replace(/\.part\d+$/, '');
+          const cleanBase = noExt.replace(/[-_ ]\\d+$/, '').replace(/\\.part\\d+$/, '');
           const lowerClean = cleanBase.toLowerCase();
 
           let catKey = lowerClean;
@@ -39553,7 +40714,7 @@ async function onUnifiedImportFilesSelected(input) {
           if (lowerName.includes('history') || lowerName.includes('watched') || lowerName.includes('diary')) {
             defaultTarget = 'watch-history';
           }
-          const defaultNewName = file.name.replace(/\.[^.]+$/, '');
+          const defaultNewName = file.name.replace(/\\.[^.]+$/, '');
           discovered.push({
             id: 'file_' + file.name,
             label: file.name,
@@ -39699,7 +40860,7 @@ function extractItemsFromFileContent(filename, text, source) {
     const lf = String.fromCharCode(10);
     const cleanText = text ? text.split(cr).join('') : '';
     const lines = cleanText.split(lf);
-    const ttRgx = new RegExp('\\b(tt\\d{7,10})\\b');
+    const ttRgx = new RegExp('\\\\b(tt\\\\d{7,10})\\\\b');
     const sepRgx = new RegExp('[,\\t]', 'g');
     lines.forEach(l => {
       const match = l.match(ttRgx);
@@ -39719,7 +40880,7 @@ function extractItemsFromFileContent(filename, text, source) {
     return items;
   }
 
-  const digitRgx = new RegExp('^\\d+$');
+  const digitRgx = new RegExp('^\\\\d+$');
   rows.forEach(r => {
     let imdbId = r.const || r.tconst || r.imdbid || r.imdb_id || '';
     if (imdbId && !imdbId.startsWith('tt') && digitRgx.test(imdbId)) {
@@ -39758,14 +40919,14 @@ async function runUnifiedListImport() {
 
   if (!discoveredImportCategories.length) {
     if (typeof showAppAlert === 'function') showAppAlert('File Required', 'Please select at least one file to import.', false);
-    else alert('Please select at least one file to import.');
+    else showToast('Please select at least one file to import.', 'error');
     return;
   }
 
   const checkedCatCards = Array.from(document.querySelectorAll('.importCatCheck:checked'));
   if (!checkedCatCards.length) {
     if (typeof showAppAlert === 'function') showAppAlert('Selection Required', 'Please select at least one category/list to import.', false);
-    else alert('Please select at least one category/list to import.');
+    else showToast('Please select at least one category/list to import.', 'error');
     return;
   }
 
@@ -40019,7 +41180,7 @@ async function bulkAddLists(btn) {
   const lines = box.value.split('\\n').map((s) => s.trim()).filter(Boolean);
   if (!lines.length) {
     if (typeof showAppAlert === 'function') showAppAlert('URL Required', 'Paste at least one list URL first, one per line.', false);
-    else alert('Paste at least one list URL first, one per line.');
+    else showToast('Paste at least one list URL first, one per line.', 'error');
     return;
   }
   const mdblistKey = document.getElementById('mdblistKeyInput').value.trim();
@@ -40066,7 +41227,7 @@ let traktPopularCache = null;
 async function ensureTraktPopularLoaded() {
   if (traktPopularCache) return traktPopularCache;
   try {
-    const key = (document.getElementById('traktKeyInput') ? document.getElementById('traktKeyInput').value.trim() : '') || localStorage.getItem('myListAddon:traktKey') || '';
+    const key = (document.getElementById('traktKeyInput') ? document.getElementById('traktKeyInput').value.trim() : '') || readProviderSecret('myListAddon:traktKey') || '';
     const res = await fetch(ORIGIN + '/api/trakt-popular-lists' + (key ? '?traktKey=' + encodeURIComponent(key) : ''));
     if (!res.ok) return [];
     const ct = res.headers.get('content-type') || '';
@@ -40090,45 +41251,38 @@ function escapeHtml(s) {
 }
 function escapeAttr(s) { return escapeHtml(s); }
 
-// escapeAttr is right for a plain attribute and WRONG for a JavaScript string
-// inside one, which is what every onclick="fn(&quot;VALUE&quot;)" handler in
-// this app builds. The HTML parser decodes attribute entities BEFORE the JS
-// parser runs, so escapeHtml's own output re-forms the delimiter it was meant
-// to neutralise -- escaping becomes the delivery mechanism:
+// --- The trap this page no longer has (FE-02, P6-8) ------------------------
 //
-//   value       ");alert(1);//
-//   escapeAttr  &quot;);alert(1);//
-//   markup      onclick="fn(&quot;&quot;);alert(1);//&quot;)"
-//   executed    fn("");alert(1);//")        <- the payload runs
+// Kept as a note rather than as code, because the shape it describes is what
+// P6-8 removed and the tempting fix would be to reach for an escaper again.
+//
+// escapeAttr is right for a plain attribute and WRONG for a JavaScript string
+// inside one, which is what every handler attribute in this app used to build
+// -- fn(&quot;VALUE&quot;). The HTML parser decodes attribute entities BEFORE
+// the JS parser runs, so escapeHtml's own output re-forms the delimiter it was
+// meant to neutralise and escaping becomes the delivery mechanism:
+//
+//   value       ");run(1);//
+//   escapeAttr  &quot;);run(1);//
+//   attribute   fn(&quot;&quot;);run(1);//&quot;)
+//   executed    fn("");run(1);          <- the payload runs
 //
 // Measured, not theorised: a channel id carrying that shape, arriving through
 // a restored backup or a pasted install link, ran script and read the victim's
-// Creator Key out of localStorage.
+// Creator Key out of localStorage. A value that has to survive two decodings
+// needs escaping for both, in that order (JS string first, then HTML), which
+// is what the deleted escapeJsAttr did -- 16_ had a copy too, for the same
+// reason.
 //
-// The value has to survive two decodings, so it needs escaping for both, in
-// that order: JS-string first, then HTML. Backslash-escaping the quote makes
-// the HTML decode yield \\\\" rather than ", which the JS parser reads as a
-// literal quote inside the string instead of the end of it.
-//
-// Not a replacement for escapeAttr -- a plain data-* or title attribute still
-// wants escapeAttr, and running this on one would leave visible backslashes.
-// Use this one only where the value lands inside quotes the browser will
-// execute.
-function escapeJsAttr(s) {
-  return escapeHtml(
-    String(s == null ? '' : s)
-      .replace(/\\\\/g, '\\\\\\\\')
-      .replace(/"/g, '\\\\"')
-      .replace(/'/g, "\\\\'")
-      .replace(/\\r/g, '\\\\r')
-      .replace(/\\n/g, '\\\\n')
-      .replace(/\\u2028/g, '\\\\u2028')
-      .replace(/\\u2029/g, '\\\\u2029')
-  );
-}
+// Nothing in the app builds one any more. A control names its action and hands
+// its arguments over as one JSON attribute (appActArgs, 16_); the dispatcher
+// JSON.parses that attribute and never evaluates it, so the worst a hostile
+// value can be is a string in an array -- see the FE-02 tests in
+// tests/client.test.mjs, which dispatch the old payload through the new path.
+// A plain data-* or title attribute still wants escapeAttr.
 
 function escapeRegex(s) {
-  return String(s).replace(/[.*+?^\x24\x7B\x7D()|[\]\\]/g, '\\$&');
+  return String(s).replace(/[.*+?^\\x24\\x7B\\x7D()|[\\]\\\\]/g, '\\\\$&');
 }
 
 function isAdultContentFilterEnabled() {
@@ -40594,7 +41748,7 @@ function scoreListSearchMatch(list, rawQuery, intent) {
   }
 
   // Check if anything matched title, user, source, or url
-  const tokens = targetTerm.split(/\s+/).filter(Boolean);
+  const tokens = targetTerm.split(/\\s+/).filter(Boolean);
   let matchedTokensInName = 0;
   let matchedTokensInUser = 0;
   for (const token of tokens) {
@@ -40642,7 +41796,7 @@ function scoreListSearchMatch(list, rawQuery, intent) {
 
   // 4. Word boundary matches
   try {
-    const rx = new RegExp('\\b' + escapeRegex(targetTerm) + '\\b', 'i');
+    const rx = new RegExp('\\\\b' + escapeRegex(targetTerm) + '\\\\b', 'i');
     if (rx.test(listName)) score += 400;
     if (rx.test(listUser)) score += 400;
   } catch (e) {}
@@ -40707,7 +41861,7 @@ async function executeUnifiedListSearch(rawQuery, targetBox) {
   const intent = parseListSearchIntent(q);
   const searchTerm = intent.term || q;
   const tkInput = document.getElementById('tmdbKeyInput');
-  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
   const traktKey = (document.getElementById('traktKeyInput')?.value || '').trim();
 
   const fetches = [
@@ -41012,24 +42166,24 @@ async function fetchListPreviewOnce(listUrl, type, sample) {
   Object.assign(payload, previewCreatorAuth());
   if (isAdultFilterOn) payload.adultContentFilter = true;
   const mkInput = document.getElementById('mdblistKeyInput');
-  payload.mdblistKey = (mkInput && mkInput.value ? mkInput.value.trim() : '') || localStorage.getItem('myListAddon:mdblistKey') || '';
+  payload.mdblistKey = (mkInput && mkInput.value ? mkInput.value.trim() : '') || readProviderSecret('myListAddon:mdblistKey') || '';
   const tkInput = document.getElementById('tmdbKeyInput');
-  payload.tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  payload.tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
   const trkInput = document.getElementById('traktKeyInput');
-  payload.traktKey = (trkInput && trkInput.value ? trkInput.value.trim() : '') || localStorage.getItem('myListAddon:traktKey') || '';
+  payload.traktKey = (trkInput && trkInput.value ? trkInput.value.trim() : '') || readProviderSecret('myListAddon:traktKey') || '';
 
-  const trkToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
+  const trkToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
   if (trkToken) {
     const myTraktUser = (typeof traktUsername !== 'undefined' && traktUsername) || localStorage.getItem('myListAddon:traktUsername') || '';
     const isOwnList = !listUrl || listUrl.startsWith('trakt:') || (myTraktUser && listUrl.toLowerCase().includes('/users/' + myTraktUser.toLowerCase() + '/'));
     if (isOwnList) payload.traktAccessToken = trkToken;
   }
-  const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
+  const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
   if (mdbToken) payload.mdblistAccessToken = mdbToken;
-  const smkToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
+  const smkToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
   if (smkToken) payload.simklAccessToken = smkToken;
   const skInput = document.getElementById('simklKeyInput');
-  payload.simklKey = (skInput && skInput.value ? skInput.value.trim() : '') || localStorage.getItem('myListAddon:simklKey') || '';
+  payload.simklKey = (skInput && skInput.value ? skInput.value.trim() : '') || readProviderSecret('myListAddon:simklKey') || '';
 
   try {
     const res = await fetch(ORIGIN + '/api/preview', {
@@ -41203,20 +42357,20 @@ async function loadPosterSlot(slot) {
               const traktTarget = listUrl === 'trakt:watchlist' ? 'watchlist' : (listUrl === 'trakt:history' ? 'history' : 'custom');
               const slugMatch = listUrl.match(new RegExp('lists/([^/?#]+)'));
               const traktListId = traktTarget === 'custom' ? (slugMatch ? slugMatch[1] : listUrl) : traktTarget;
-              removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="' + escapeAttr(traktTarget) + '" data-list-id="' + escapeAttr(traktListId) + '" data-remove-id="' + escapeAttr(s.id || '') + '" data-media-type="' + escapeAttr(s.type || type || 'movie') + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from Trakt" aria-label="Remove from Trakt">\u2715</button>';
+              removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="' + escapeAttr(traktTarget) + '" data-list-id="' + escapeAttr(traktListId) + '" data-remove-id="' + escapeAttr(s.id || '') + '" data-media-type="' + escapeAttr(s.type || type || 'movie') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Trakt" aria-label="Remove from Trakt">\u2715</button>';
             } else if (isMdblistSlot) {
               const isMdbHist = listUrl === 'mdblist:history' || String(listUrl || '').includes('mdblist.com/history') || (String(listUrl || '').includes('mdblist.com/lists/') && String(listUrl || '').includes('/history'));
               const mdbTarget = listUrl === 'mdblist:watchlist' ? 'watchlist' : (isMdbHist ? 'history' : 'custom');
               const mdbMatch = listUrl.match(new RegExp('lists/[^/]+/([^/?#]+)'));
               const mdbListId = mdbTarget === 'custom' ? (mdbMatch ? mdbMatch[1] : listUrl) : mdbTarget;
-              removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="mdblist" data-target="' + escapeAttr(mdbTarget) + '" data-list-id="' + escapeAttr(mdbListId) + '" data-remove-id="' + escapeAttr(s.id || '') + '" data-media-type="' + escapeAttr(s.type || type || 'movie') + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from MDBList" aria-label="Remove from MDBList">\u2715</button>';
+              removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="mdblist" data-target="' + escapeAttr(mdbTarget) + '" data-list-id="' + escapeAttr(mdbListId) + '" data-remove-id="' + escapeAttr(s.id || '') + '" data-media-type="' + escapeAttr(s.type || type || 'movie') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from MDBList" aria-label="Remove from MDBList">\u2715</button>';
             }
 
             const itemPoster = resolveClientPoster(Object.assign({}, s, { listName, listUrl }), s.poster);
             const ratingSpan = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(s) : '';
             inner += '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(listUrl) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(cardCreator) + '" data-items="' + escapeAttr(exactCount) + '" data-likes="' + escapeAttr(cardLikes) + '">' +
               '<div class="list-card-mini-poster-img-wrap clickable-poster" data-id="' + escapeAttr(s.id || '') + '" data-type="' + escapeAttr(s.type || type || '') + '" data-title="' + escapeAttr(s.name || '') + '" data-poster="' + escapeAttr(itemPoster || '') + '">' +
-                '<img src="' + escapeAttr(itemPoster) + '" alt="" loading="lazy" onerror="handlePosterImgError(this)">' +
+                '<img src="' + escapeAttr(itemPoster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' +
                 removeBtn +
                 '<div class="poster-add-overlay">+</div>' +
                 overlays +
@@ -41244,11 +42398,11 @@ async function loadPosterSlot(slot) {
     // both failed (data.ok is false or rejected)
     slot.className = 'list-card-posters poster-preview-error';
     slot.innerHTML = '<p class="poster-preview-error-msg">Couldn’t load previews for this list.' +
-      ' <button type="button" class="lc-btn secondary" onclick="retryPosterSlot(this)">Retry</button></p>';
+      ' <button type="button" class="lc-btn secondary" data-act="retryPosterSlot" data-act-args="[&quot;@self&quot;]">Retry</button></p>';
   } catch (e) {
     slot.className = 'list-card-posters poster-preview-error';
     slot.innerHTML = '<p class="poster-preview-error-msg">Couldn’t load previews for this list.' +
-      ' <button type="button" class="lc-btn secondary" onclick="retryPosterSlot(this)">Retry</button></p>';
+      ' <button type="button" class="lc-btn secondary" data-act="retryPosterSlot" data-act-args="[&quot;@self&quot;]">Retry</button></p>';
   }
 }
 
@@ -41465,7 +42619,7 @@ document.addEventListener('click', async (e) => {
         if (typeof showAppAlert === 'function') {
           showAppAlert('Could Not Update Like', data.error || 'Unknown error.', false);
         } else {
-          alert('Could not update this like: ' + (data.error || 'unknown error'));
+          showToast('Could not update this like: ' + (data.error || 'unknown error'), 'error');
         }
         return;
       }
@@ -41503,7 +42657,7 @@ document.addEventListener('click', async (e) => {
       if (typeof showAppAlert === 'function') {
         showAppAlert('Network Error', 'Network error while updating this like.', false);
       } else {
-        alert('Network error while updating this like.');
+        showToast('Network error while updating this like.', 'error');
       }
     } finally {
       likeBtn.disabled = false;
@@ -41538,7 +42692,7 @@ document.addEventListener('click', async (e) => {
         if (typeof showAppAlert === 'function') {
           showAppAlert('Could Not Update Like', data.error || 'Unknown error.', false);
         } else {
-          alert('Could not update this like: ' + (data.error || 'unknown error'));
+          showToast('Could not update this like: ' + (data.error || 'unknown error'), 'error');
         }
         return;
       }
@@ -41584,7 +42738,7 @@ document.addEventListener('click', async (e) => {
       if (typeof showAppAlert === 'function') {
         showAppAlert('Network Error', 'Network error while updating this like.', false);
       } else {
-        alert('Network error while updating this like.');
+        showToast('Network error while updating this like.', 'error');
       }
     } finally {
       likeExternalBtn.disabled = false;
@@ -41788,7 +42942,7 @@ async function loadCuratedListsFeed(forceRefresh) {
     }
 
     const likedUrls = [...getLikedListsSet()];
-    const tmdbKey = (document.getElementById('tmdbKeyInput') ? document.getElementById('tmdbKeyInput').value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+    const tmdbKey = (document.getElementById('tmdbKeyInput') ? document.getElementById('tmdbKeyInput').value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
     
     // Pass recent movie IDs and show IDs for rich recommendations
     const sampleMovieIds = movieIds.slice(0, 12);
@@ -41861,7 +43015,7 @@ async function loadCuratedListsFeed(forceRefresh) {
         const title = (it.title || it.name || it.showTitle || it.showName || '').trim();
         if (title) {
           historyTitles.push(title.toLowerCase());
-          title.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).forEach(function(w) {
+          title.toLowerCase().replace(/[^a-z0-9\\s]/g, ' ').split(/\\s+/).forEach(function(w) {
             if (w.length > 3 && !['episode', 'season', 'movie', 'series', 'show', 'part'].includes(w)) {
               watchHistoryKeywords.add(w);
             }
@@ -41875,7 +43029,7 @@ async function loadCuratedListsFeed(forceRefresh) {
         likedUrls.forEach(function(u) {
           const parts = u.split('/').filter(Boolean);
           const last = parts[parts.length - 1] ? parts[parts.length - 1].replace(/[-_]/g, ' ').toLowerCase() : '';
-          last.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).forEach(function(w) {
+          last.replace(/[^a-z0-9\\s]/g, ' ').split(/\\s+/).forEach(function(w) {
             if (w.length > 3 && !['list', 'lists', 'user', 'collection'].includes(w)) {
               likedKeywords.add(w);
             }
@@ -42040,7 +43194,7 @@ async function loadCuratedListsFeed(forceRefresh) {
     container.innerHTML =
       '<div style="text-align:center; padding:24px 16px; background:var(--card-bg); border:1px solid var(--border); border-radius:14px;">' +
         '<p style="margin:0 0 10px; font-size:0.88rem; color:var(--muted);">Watch more items or like community lists to build personalized recommendations.</p>' +
-        '<button type="button" class="lc-btn primary" onclick="filterDiscoverShelves(&quot;movie&quot;)">Explore Discover</button>' +
+        '<button type="button" class="lc-btn primary" data-act="filterDiscoverShelves" data-act-args="[&quot;movie&quot;]">Explore Discover</button>' +
       '</div>';
   }
 }
@@ -42250,7 +43404,7 @@ function isEpisodeAired(ep) {
   if (!ep) return false;
   const dateStr = (typeof ep === 'string') ? ep : (ep.air_date || ep.airDate || '');
   if (!dateStr) return false;
-  const parts = String(dateStr).split(/[-T\s]/);
+  const parts = String(dateStr).split(/[-T\\s]/);
   if (parts.length < 3) return false;
   const year = parseInt(parts[0], 10);
   const month = parseInt(parts[1], 10) - 1;
@@ -42436,7 +43590,7 @@ function applySeasonWatchedButton(btn, state) {
 function episodeWatchButtonHtml(ep, isWatched) {
   const hasAired = typeof isEpisodeAired !== 'function' || isEpisodeAired(ep);
   if (hasAired || isWatched) {
-    return '<button type="button" id="btnMarkWatched" class="lc-btn ' + (isWatched ? 'secondary' : 'primary') + '" onclick="toggleEpisodeWatchStatusFromModal()">' +
+    return '<button type="button" id="btnMarkWatched" class="lc-btn ' + (isWatched ? 'secondary' : 'primary') + '" data-act="toggleEpisodeWatchStatusFromModal">' +
       (isWatched ? '<span style="margin-right:4px;">&#x2713;</span> Mark as unwatched' : 'Mark as Watched') +
       '</button>';
   }
@@ -42596,7 +43750,7 @@ window.watchItemAirDateBadgeHtml = watchItemAirDateBadgeHtml;
 
 function formatAirDateBadge(airDateStr) {
   if (!airDateStr) return '';
-  const parts = String(airDateStr).split(/[-T\s]/);
+  const parts = String(airDateStr).split(/[-T\\s]/);
   if (parts.length < 3) return '';
   const year = parseInt(parts[0], 10);
   const month = parseInt(parts[1], 10) - 1;
@@ -42674,7 +43828,7 @@ function openEpisodeDetails(epNum) {
   const watchBtnHtml = episodeWatchButtonHtml(ep, isWatched);
 
   const innerHtml = 
-    '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+    '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
     '<div style="display:flex; flex-direction:row; gap:32px; flex-wrap:wrap; margin-top:20px;">' +
       '<div style="flex: 0 0 300px; max-width: 100%;">' +
         (still ? '<img src="' + still + '" style="width:100%; border-radius:8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">' : '') +
@@ -42879,7 +44033,7 @@ window.markSeasonWatched = async function(seasonNum, btn) {
   }
 
   const tkInput = document.getElementById('tmdbKeyInput');
-  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
 
   try {
     const res = await fetch(ORIGIN + '/api/season?imdbId=' + encodeURIComponent(d.id) +
@@ -43108,8 +44262,8 @@ function renderItemStorylinesWatchOrder(d, type) {
         (ep.imdbId && typeof isItemWatched === 'function' && isItemWatched(ep.imdbId, ep.tmdbId, ep.imdbId));
 
       const clickHandler = (!isCurrent && partId) ?
-        ' onclick="event.stopPropagation(); openItemDetailsModal(&quot;' + escapeJsAttr(partId) + '&quot;, &quot;' + partType + '&quot;)"' :
-        (isCurrent ? ' onclick="event.stopPropagation(); window.scrollTo({ top: 0, behavior: &quot;smooth&quot; });"' : '');
+        ' data-act="openItemDetailsModal" data-act-stop data-act-args="' + appActArgs([partId, partType]) + '"' :
+        (isCurrent ? ' data-act="appActScrollToTop" data-act-stop' : '');
 
       // Skipped on the card for the title already open in this modal -- its
       // rating is already shown up in the main info block, so repeating it
@@ -43122,7 +44276,7 @@ function renderItemStorylinesWatchOrder(d, type) {
       return '<div class="item-storyline-card' + (isCurrent ? ' is-current' : '') + '"' + clickHandler + ' title="' + escapeAttr(displayTitle + (isCurrent ? ' (Currently Viewing)' : '')) + '">' +
         '<div class="item-storyline-poster-wrap">' +
           (posterUrl ?
-            '<img src="' + escapeAttr(resolveClientPoster(ep, posterUrl)) + '" alt="" loading="lazy" data-tmdb-id="' + escapeAttr(String(ep.tmdbId || '')) + '" data-poster-kind="' + (isMovie ? 'movie' : 'show') + '" data-poster-title="' + escapeAttr(displayTitle) + '" onerror="handleStorylinePosterError(this)">' :
+            '<img src="' + escapeAttr(resolveClientPoster(ep, posterUrl)) + '" alt="" loading="lazy" data-tmdb-id="' + escapeAttr(String(ep.tmdbId || '')) + '" data-poster-kind="' + (isMovie ? 'movie' : 'show') + '" data-poster-title="' + escapeAttr(displayTitle) + '" data-act="handleStorylinePosterError" data-act-args="[&quot;@self&quot;]">' :
             '<div class="season-header-poster-placeholder"></div>') +
           '<span class="item-storyline-part-badge">Part ' + (ep.part != null ? ep.part : (i + 1)) + '</span>' +
           (isCurrent ? '<span class="item-storyline-current-pill">Current</span>' : '') +
@@ -43148,7 +44302,7 @@ function renderItemStorylinesWatchOrder(d, type) {
           (event.description ? '<p class="item-storyline-saga-desc">' + escapeHtml(event.description) + '</p>' : '') +
         '</div>' +
         '<div class="item-storyline-header-actions">' +
-          '<button type="button" class="lc-btn secondary" onclick="event.stopPropagation(); openStorylineDetails(&quot;' + escapeJsAttr(event.id) + '&quot;)" title="Open complete saga in catalog view">Open Saga</button>' +
+          '<button type="button" class="lc-btn secondary" data-act="openStorylineDetails" data-act-stop data-act-args="' + appActArgs([event.id]) + '" title="Open complete saga in catalog view">Open Saga</button>' +
         '</div>' +
       '</div>' +
       '<div class="storyline-posters-scroll item-storyline-scroll">' +
@@ -43160,7 +44314,7 @@ function renderItemStorylinesWatchOrder(d, type) {
   const pillsHtml = (matchingEvents.length > 1) ?
     '<div class="subnav-pills-bar" style="margin-bottom:16px; flex-wrap:wrap;">' +
       matchingEvents.map((ev, idx) =>
-        '<button type="button" class="subnav-pill' + (idx === 0 ? ' active' : '') + '" onclick="switchItemStorylineTab(&quot;' + escapeJsAttr(ev.id) + '&quot;, this)">' +
+        '<button type="button" class="subnav-pill' + (idx === 0 ? ' active' : '') + '" data-act="switchItemStorylineTab" data-act-args="' + appActArgs([ev.id, "@self"]) + '">' +
           (idx === 0 ? '<span class="check-icon">&#x2713;</span> ' : '') + escapeHtml(ev.name) +
         '</button>'
       ).join('') +
@@ -43245,7 +44399,7 @@ async function openItemDetailsModal(id, type, opts) {
   body.innerHTML = '<p style="color:var(--muted); text-align:center; padding: 40px;">Fetching information from TMDB...</p>';
   
   const tkInput = document.getElementById('tmdbKeyInput');
-  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
   const regionEl = document.getElementById('regionSelect');
   const region = (regionEl && regionEl.value) || localStorage.getItem('myListAddon:region') || 'US';
   
@@ -43336,7 +44490,7 @@ async function openItemDetailsModal(id, type, opts) {
         const seasonCount = seasonEpisodeCountState(d, season);
         seasonsHtml +=
           '<div class="season-card">' +
-            '<div class="season-header" onclick="toggleSeasonEpisodes(this, ' + season.season_number + ', &quot;' + escapeJsAttr(d.id) + '&quot;)">' +
+            '<div class="season-header" data-act="toggleSeasonEpisodes" data-act-args="' + appActArgs(["@self", season.season_number, d.id]) + '">' +
               '<div class="season-header-main">' +
                 (sPoster ? '<img src="' + escapeAttr(sPoster) + '" class="season-header-poster" alt="">' : '<div class="season-header-poster-placeholder"></div>') +
                 '<div class="season-header-info">' +
@@ -43348,7 +44502,7 @@ async function openItemDetailsModal(id, type, opts) {
                 '<button type="button" class="lc-btn ' + seasonBtnState.className + ' btn-mark-season-watched" data-season="' + season.season_number + '"' +
                   (seasonBtnState.upcoming ? ' disabled' : '') +
                   (seasonBtnState.title ? ' title="' + escapeAttr(seasonBtnState.title) + '"' : '') +
-                  ' onclick="event.stopPropagation(); markSeasonWatched(' + season.season_number + ', this)">' +
+                  ' data-act="markSeasonWatched" data-act-stop data-act-args="' + appActArgs([season.season_number, "@self"]) + '">' +
                   seasonBtnState.label +
                 '</button>' +
               '</div>' +
@@ -43378,13 +44532,13 @@ async function openItemDetailsModal(id, type, opts) {
           '<div style="margin-bottom:16px; color:var(--text); font-size:1.05rem;">' + infoHtml + '</div>' +
           '<p style="font-size:1.05rem; line-height:1.6; color:var(--text); margin-bottom: 24px;">' + escapeHtml(d.overview || 'No overview available.') + '</p>' +
           '<div style="display:flex; gap:16px; flex-wrap:wrap; align-items:center; margin-top:20px;">' +
-            '<button type="button" class="lc-btn primary" onclick="openSelectListModalFromItemModal()">+ Add to list</button>' +
+            '<button type="button" class="lc-btn primary" data-act="openSelectListModalFromItemModal">+ Add to list</button>' +
             (((d.seasonsData && d.seasonsData.length > 0) || type === 'series') ?
-              '<button type="button" id="btnMarkShowWatched" class="lc-btn ' + showBtnState.className + '" onclick="markShowWatched(&quot;' + escapeJsAttr(d.id) + '&quot;)">' +
+              '<button type="button" id="btnMarkShowWatched" class="lc-btn ' + showBtnState.className + '" data-act="markShowWatched" data-act-args="' + appActArgs([d.id]) + '">' +
                 showBtnState.label +
               '</button>'
               :
-              '<button type="button" id="btnMarkWatched" class="lc-btn ' + (isItemWatched(d.id, d.tmdbId, d.imdbId) ? 'secondary' : 'primary') + '" onclick="toggleMovieWatchStatusFromModal()">' +
+              '<button type="button" id="btnMarkWatched" class="lc-btn ' + (isItemWatched(d.id, d.tmdbId, d.imdbId) ? 'secondary' : 'primary') + '" data-act="toggleMovieWatchStatusFromModal">' +
                 (isItemWatched(d.id, d.tmdbId, d.imdbId) ? '<span style="margin-right:4px;">&#x2713;</span> Mark as unwatched' : 'Mark as Watched') +
               '</button>') +
           '</div>' +
@@ -43420,7 +44574,7 @@ async function toggleSeasonEpisodes(headerEl, seasonNum, imdbId) {
   grid.innerHTML = '<div style="grid-column: 1 / -1; text-align:center; padding: 20px; color:var(--muted);">Loading episodes...</div>';
   
   const tkInput = document.getElementById('tmdbKeyInput');
-  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
   
   try {
     const d = window._currentItemDetails;
@@ -43445,7 +44599,7 @@ async function toggleSeasonEpisodes(headerEl, seasonNum, imdbId) {
       window._episodeDataCache[ep.episode_number] = ep;
       const still = ep.still_path ? escapeAttr(ep.still_path) : (fallbackStill ? escapeAttr(fallbackStill) : '');
       epsHtml +=
-        '<div class="clickable-episode" data-id="' + ep.id + '" data-season="' + seasonNum + '" data-episode="' + ep.episode_number + '" data-show-id="' + escapeAttr(imdbId || '') + '" style="display:flex; flex-direction:column; gap:4px; cursor:pointer;" onclick="openEpisodeDetails(' + ep.episode_number + ')">' +
+        '<div class="clickable-episode" data-id="' + ep.id + '" data-season="' + seasonNum + '" data-episode="' + ep.episode_number + '" data-show-id="' + escapeAttr(imdbId || '') + '" style="display:flex; flex-direction:column; gap:4px; cursor:pointer;" data-act="openEpisodeDetails" data-act-args="' + appActArgs([ep.episode_number]) + '">' +
           '<div style="width:100%; aspect-ratio:16/9; background:#222; border-radius:6px; overflow:hidden; position:relative; box-shadow:0 2px 6px rgba(0,0,0,0.4);">' +
             (still ? '<img src="' + still + '" style="width:100%; height:100%; object-fit:cover;">' : '') +
             '<div class="episode-num-badge" style="position:absolute; bottom:4px; left:4px; background:var(--accent); color:#ffffff; padding:2px 6px; border-radius:4px; font-weight:bold; font-size:0.8rem; box-shadow:0 1px 4px rgba(0,0,0,0.4);">E' + ep.episode_number + '</div>' +
@@ -43540,16 +44694,16 @@ async function removeSingleExternalItemDirect(provider, target, listId, id, type
   const key2 = makeExternalKey(provider, target, listId, String(id).replace(/^tmdb:/, ''));
   const row = btn ? btn.closest('.select-list-row') : null;
 
-  const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
-  const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:traktKey') || '';
+  const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
+  const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || readProviderSecret('myListAddon:traktKey') || '';
   const traktUser = (typeof traktUsername !== 'undefined' && traktUsername) || localStorage.getItem('myListAddon:traktUsername') || '';
-  const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
-  const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:simklKey') || '';
-  const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || localStorage.getItem('myListAddon:tmdbSessionId') || '';
+  const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
+  const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || readProviderSecret('myListAddon:simklKey') || '';
+  const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || readProviderSecret('myListAddon:tmdbSessionId') || '';
   const tmdbAcc = (typeof tmdbAccountId !== 'undefined' && tmdbAccountId) || localStorage.getItem('myListAddon:tmdbAccountId') || '';
-  const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:tmdbKey') || '';
-  const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
-  const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:mdblistKey') || '';
+  const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || readProviderSecret('myListAddon:tmdbKey') || '';
+  const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
+  const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || readProviderSecret('myListAddon:mdblistKey') || '';
 
   let mutateError = null;
   try {
@@ -43685,7 +44839,7 @@ function openSelectListModal(id, type, title, poster) {
         }
         const nameInput = row.querySelector('.name');
         let listName = nameInput ? nameInput.value : (payload.listName || 'Unnamed List');
-        if (/^watchlist\s*\((movies|shows|series)\)$/i.test(String(listName).trim())) {
+        if (/^watchlist\\s*\\((movies|shows|series)\\)$/i.test(String(listName).trim())) {
           listName = 'Watchlist';
         }
         customLists.push({
@@ -43732,24 +44886,24 @@ function openSelectListModal(id, type, title, poster) {
 
   // 2. External Provider Lists
   const traktUser = (typeof traktUsername !== 'undefined' && traktUsername) || localStorage.getItem('myListAddon:traktUsername') || '';
-  const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
-  const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:traktKey') || '';
+  const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
+  const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || readProviderSecret('myListAddon:traktKey') || '';
   const hasTrakt = !!traktToken;
 
   const simklUser = (typeof simklUsername !== 'undefined' && simklUsername) || localStorage.getItem('myListAddon:simklUsername') || '';
-  const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
-  const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:simklKey') || '';
+  const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
+  const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || readProviderSecret('myListAddon:simklKey') || '';
   const hasSimkl = !!simklToken;
 
-  const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || localStorage.getItem('myListAddon:tmdbSessionId') || '';
+  const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || readProviderSecret('myListAddon:tmdbSessionId') || '';
   const tmdbAcc = (typeof tmdbAccountId !== 'undefined' && tmdbAccountId) || localStorage.getItem('myListAddon:tmdbAccountId') || '';
   const tmdbUser = (typeof tmdbUsername !== 'undefined' && tmdbUsername) || localStorage.getItem('myListAddon:tmdbUsername') || '';
-  const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || readProviderSecret('myListAddon:tmdbKey') || '';
   const hasTmdb = !!(tmdbSess || tmdbAcc || tmdbKey);
 
   const mdbUser = (typeof mdblistUsername !== 'undefined' && mdblistUsername) || localStorage.getItem('myListAddon:mdblistUsername') || '';
-  const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
-  const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:mdblistKey') || '';
+  const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
+  const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || readProviderSecret('myListAddon:mdblistKey') || '';
   const hasMdblist = !!(mdbToken || mdbKey);
 
   // Store globally so submitCreateListModal and addSelectedListsBtn can access it
@@ -43770,7 +44924,7 @@ function openSelectListModal(id, type, title, poster) {
       } catch(e) {}
       
       let displayName = list.name || 'Custom List';
-      if (/^watchlist(\s*\((movies|shows|series)\))?$/i.test(String(displayName).trim())) {
+      if (/^watchlist(\\s*\\((movies|shows|series)\\))?$/i.test(String(displayName).trim())) {
         displayName = 'Watchlist';
       }
       
@@ -43781,7 +44935,7 @@ function openSelectListModal(id, type, title, poster) {
             '<span style="font-weight:500;">' + escapeHtml(displayName) + '</span>' +
             (isChecked ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
           '</label>' +
-          (isChecked ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" onclick="removeSingleCustomItemDirect(' + idx + ', &quot;' + escapeJsAttr(id) + '&quot;, &quot;' + escapeJsAttr(type) + '&quot;, this)">Remove</button>' : '') +
+          (isChecked ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleCustomItemDirect" data-act-args="' + appActArgs([idx, id, type, "@self"]) + '">Remove</button>' : '') +
         '</div>';
     });
   }
@@ -43801,7 +44955,7 @@ function openSelectListModal(id, type, title, poster) {
           '<span>Trakt Watchlist</span>' +
           (inTraktWatchlist ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
         '</label>' +
-        (inTraktWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" onclick="removeSingleExternalItemDirect(&quot;trakt&quot;, &quot;watchlist&quot;, &quot;watchlist&quot;, &quot;' + escapeJsAttr(id) + '&quot;, &quot;' + escapeJsAttr(type) + '&quot;, this)">Remove</button>' : '') +
+        (inTraktWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
 
     if (Array.isArray(window._myTraktLists)) {
@@ -43815,7 +44969,7 @@ function openSelectListModal(id, type, title, poster) {
               '<span>' + escapeHtml(tl.name || 'Trakt List') + '</span>' +
               (inList ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
             '</label>' +
-            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" onclick="removeSingleExternalItemDirect(&quot;trakt&quot;, &quot;custom&quot;, &quot;' + escapeJsAttr(tl.id || tl.slug || '') + '&quot;, &quot;' + escapeJsAttr(id) + '&quot;, &quot;' + escapeJsAttr(type) + '&quot;, this)">Remove</button>' : '') +
+            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", "custom", tl.id || tl.slug || '', id, type, "@self"]) + '">Remove</button>' : '') +
           '</div>';
       });
     }
@@ -43845,7 +44999,7 @@ function openSelectListModal(id, type, title, poster) {
             '<span>' + escapeHtml(st.label) + '</span>' +
             (isPresent ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
           '</label>' +
-          (isPresent ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" onclick="removeSingleExternalItemDirect(&quot;simkl&quot;, &quot;status&quot;, &quot;' + st.key + '&quot;, &quot;' + escapeJsAttr(id) + '&quot;, &quot;' + escapeJsAttr(type) + '&quot;, this)">Remove</button>' : '') +
+          (isPresent ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["simkl", "status", st.key, id, type, "@self"]) + '">Remove</button>' : '') +
         '</div>';
     });
   }
@@ -43865,7 +45019,7 @@ function openSelectListModal(id, type, title, poster) {
           '<span>TMDB Watchlist</span>' +
           (inTmdbWatchlist ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
         '</label>' +
-        (inTmdbWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" onclick="removeSingleExternalItemDirect(&quot;tmdb&quot;, &quot;watchlist&quot;, &quot;watchlist&quot;, &quot;' + escapeJsAttr(id) + '&quot;, &quot;' + escapeJsAttr(type) + '&quot;, this)">Remove</button>' : '') +
+        (inTmdbWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
 
     const tmdbFav = Array.isArray(window._myTmdbLists) ? window._myTmdbLists.find(l => l.url && l.url.includes('favorites')) : null;
@@ -43877,7 +45031,7 @@ function openSelectListModal(id, type, title, poster) {
           '<span>TMDB Favorites</span>' +
           (inTmdbFav ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
         '</label>' +
-        (inTmdbFav ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" onclick="removeSingleExternalItemDirect(&quot;tmdb&quot;, &quot;favorite&quot;, &quot;favorite&quot;, &quot;' + escapeJsAttr(id) + '&quot;, &quot;' + escapeJsAttr(type) + '&quot;, this)">Remove</button>' : '') +
+        (inTmdbFav ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "favorite", "favorite", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
 
     if (Array.isArray(window._myTmdbLists)) {
@@ -43891,7 +45045,7 @@ function openSelectListModal(id, type, title, poster) {
               '<span>' + escapeHtml(tml.name || 'TMDB List') + '</span>' +
               (inList ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
             '</label>' +
-            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" onclick="removeSingleExternalItemDirect(&quot;tmdb&quot;, &quot;custom&quot;, &quot;' + escapeJsAttr(tml.id || '') + '&quot;, &quot;' + escapeJsAttr(id) + '&quot;, &quot;' + escapeJsAttr(type) + '&quot;, this)">Remove</button>' : '') +
+            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "custom", tml.id || '', id, type, "@self"]) + '">Remove</button>' : '') +
           '</div>';
       });
     }
@@ -43912,7 +45066,7 @@ function openSelectListModal(id, type, title, poster) {
           '<span>MDBList Watchlist</span>' +
           (inMdbWatchlist ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
         '</label>' +
-        (inMdbWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" onclick="removeSingleExternalItemDirect(&quot;mdblist&quot;, &quot;watchlist&quot;, &quot;watchlist&quot;, &quot;' + escapeJsAttr(id) + '&quot;, &quot;' + escapeJsAttr(type) + '&quot;, this)">Remove</button>' : '') +
+        (inMdbWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
 
     if (Array.isArray(window._myMdblistLists)) {
@@ -43926,7 +45080,7 @@ function openSelectListModal(id, type, title, poster) {
               '<span>' + escapeHtml(ml.name || 'MDBList List') + '</span>' +
               (inList ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
             '</label>' +
-            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" onclick="removeSingleExternalItemDirect(&quot;mdblist&quot;, &quot;custom&quot;, &quot;' + escapeJsAttr(ml.id || ml.slug || '') + '&quot;, &quot;' + escapeJsAttr(id) + '&quot;, &quot;' + escapeJsAttr(type) + '&quot;, this)">Remove</button>' : '') +
+            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", "custom", ml.id || ml.slug || '', id, type, "@self"]) + '">Remove</button>' : '') +
           '</div>';
       });
     }
@@ -43934,7 +45088,7 @@ function openSelectListModal(id, type, title, poster) {
 
   if (html) {
     html += '<div style="margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--border); text-align: center;">' +
-      '<button type="button" class="lc-btn secondary" style="width:100%; font-size:0.9rem;" onclick="closeSelectListModal(); openCreateListModal();">+ Create New List</button>' +
+      '<button type="button" class="lc-btn secondary" style="width:100%; font-size:0.9rem;" data-act="closeSelectListModal" data-act-then="openCreateListModal">+ Create New List</button>' +
     '</div>';
   }
 
@@ -43992,7 +45146,7 @@ function openSelectListModal(id, type, title, poster) {
                 const label = row.querySelector('label');
                 if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>');
                 if (!row.querySelector('button')) {
-                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" onclick="removeSingleExternalItemDirect(&quot;simkl&quot;, &quot;status&quot;, &quot;' + st + '&quot;, &quot;' + escapeJsAttr(id) + '&quot;, &quot;' + escapeJsAttr(type) + '&quot;, this)">Remove</button>');
+                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["simkl", "status", st, id, type, "@self"]) + '">Remove</button>');
                 }
               }
             }
@@ -44022,7 +45176,7 @@ function openSelectListModal(id, type, title, poster) {
                 const label = row.querySelector('label');
                 if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>');
                 if (!row.querySelector('button')) {
-                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" onclick="removeSingleExternalItemDirect(&quot;trakt&quot;, &quot;' + target + '&quot;, &quot;' + escapeJsAttr(listId) + '&quot;, &quot;' + escapeJsAttr(id) + '&quot;, &quot;' + escapeJsAttr(type) + '&quot;, this)">Remove</button>');
+                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", target, listId, id, type, "@self"]) + '">Remove</button>');
                 }
               }
             }
@@ -44056,7 +45210,7 @@ function openSelectListModal(id, type, title, poster) {
                 const label = row.querySelector('label');
                 if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>');
                 if (!row.querySelector('button')) {
-                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" onclick="removeSingleExternalItemDirect(&quot;tmdb&quot;, &quot;' + target + '&quot;, &quot;' + escapeJsAttr(listId) + '&quot;, &quot;' + escapeJsAttr(id) + '&quot;, &quot;' + escapeJsAttr(type) + '&quot;, this)">Remove</button>');
+                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", target, listId, id, type, "@self"]) + '">Remove</button>');
                 }
               }
             }
@@ -44093,7 +45247,7 @@ function openSelectListModal(id, type, title, poster) {
                 const label = row.querySelector('label');
                 if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>');
                 if (!row.querySelector('button')) {
-                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" onclick="removeSingleExternalItemDirect(&quot;mdblist&quot;, &quot;' + target + '&quot;, &quot;' + escapeJsAttr(listId) + '&quot;, &quot;' + escapeJsAttr(id) + '&quot;, &quot;' + escapeJsAttr(type) + '&quot;, this)">Remove</button>');
+                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", target, listId, id, type, "@self"]) + '">Remove</button>');
                 }
               }
             }
@@ -44178,19 +45332,19 @@ document.getElementById('addSelectedListsBtn').addEventListener('click', async (
   // Execute external modifications concurrently
   let externalMutateFailures = [];
   if (changedExternalOperations.length > 0) {
-    const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
-    const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:traktKey') || '';
+    const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
+    const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || readProviderSecret('myListAddon:traktKey') || '';
     const traktUser = (typeof traktUsername !== 'undefined' && traktUsername) || localStorage.getItem('myListAddon:traktUsername') || '';
 
-    const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
-    const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:simklKey') || '';
+    const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
+    const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || readProviderSecret('myListAddon:simklKey') || '';
 
-    const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || localStorage.getItem('myListAddon:tmdbSessionId') || '';
+    const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || readProviderSecret('myListAddon:tmdbSessionId') || '';
     const tmdbAcc = (typeof tmdbAccountId !== 'undefined' && tmdbAccountId) || localStorage.getItem('myListAddon:tmdbAccountId') || '';
-    const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:tmdbKey') || '';
+    const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || readProviderSecret('myListAddon:tmdbKey') || '';
 
-    const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
-    const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:mdblistKey') || '';
+    const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
+    const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || readProviderSecret('myListAddon:mdblistKey') || '';
 
     // allSettled's results used to be discarded, so "Added X to lists." was
     // shown whether the providers accepted the change or refused every one of
@@ -44391,7 +45545,7 @@ async function syncCustomListPayload(payload, name, applyEdit) {
         // the other device actually saved.
         const target = {
           slug: payload.creatorSlug,
-          name: name.replace(/\s*\((?:Movies|Shows)\)$/i, ''),
+          name: name.replace(/\\s*\\((?:Movies|Shows)\\)$/i, ''),
           type: finalType,
           items: combinedItems,
           visibility: payload.visibility || (creatorListMeta ? creatorListMeta.visibility : 'private'),
@@ -44434,7 +45588,7 @@ async function syncCustomListPayload(payload, name, applyEdit) {
       } else {
         map[payload.localSlug] = {
           slug: payload.localSlug,
-          name: (name || payload.localSlug).replace(/\s*\((?:Movies|Shows)\)$/i, ''),
+          name: (name || payload.localSlug).replace(/\\s*\\((?:Movies|Shows)\\)$/i, ''),
           type: finalType,
           isWatchlist: payload.localSlug === 'watchlist',
           items: combinedItems,
@@ -44668,7 +45822,7 @@ function renderTitlePosterCards(items, totalCount, resEl) {
     }
 
     const posterEl = resolvedCardPoster
-      ? '<img class="live-preview-poster" src="' + escapeAttr(resolvedCardPoster) + '" alt="" loading="lazy" onerror="handlePosterImgError(this)">'
+      ? '<img class="live-preview-poster" src="' + escapeAttr(resolvedCardPoster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
       : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
     
     return '<div class="live-preview-poster-card clickable-poster" ' +
@@ -45186,7 +46340,7 @@ async function addAllSeasonsToChannel(tmdbId, imdbId, showName, showPoster, show
     if (typeof showAppAlert === 'function') {
       showAppAlert('Channel Builder', 'Something went wrong adding every season -- try again, or add seasons one at a time.');
     } else {
-      alert('Something went wrong adding every season -- try again, or add seasons one at a time.');
+      showToast('Something went wrong adding every season -- try again, or add seasons one at a time.', 'error');
     }
     if (btn) {
       btn.disabled = false;
@@ -45241,7 +46395,7 @@ function addCheckedEpisodesToChannel(imdbId, showName, showPoster, showBackdrop,
     if (typeof showAppAlert === 'function') {
       showAppAlert('Channel Builder', 'Check at least one episode first.');
     } else {
-      alert('Check at least one episode first.');
+      showToast('Check at least one episode first.', 'error');
     }
     return;
   }
@@ -45701,7 +46855,7 @@ function renderChannelUndoBar() {
   bar.style.display = 'block';
   bar.innerHTML = '<div class="row" style="gap:8px; align-items:center; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--surface);">' +
     '<span style="flex:1; font-size:0.85rem;">Deleted &ldquo;' + escapeHtml(name) + '&rdquo;.</span>' +
-    '<button type="button" class="secondary lc-btn" onclick="undoChannelDelete()">Undo</button>' +
+    '<button type="button" class="secondary lc-btn" data-act="undoChannelDelete">Undo</button>' +
     '</div>';
 }
 
@@ -46123,7 +47277,7 @@ function renderChannelPosterPicker() {
   const isCustomSelected = (channelDraftPoster === 'custom' || !channelDraftPoster || channelDraftPoster.includes('/api/channel-poster'));
 
   // 1. Custom Channel Poster Option
-  let html = '<div class="channel-poster-choice' + (isCustomSelected ? ' selected' : '') + '" data-poster="custom" data-backdrop="" onclick="selectChannelPoster(&quot;custom&quot;, &quot;&quot;)">' +
+  let html = '<div class="channel-poster-choice' + (isCustomSelected ? ' selected' : '') + '" data-poster="custom" data-backdrop="" data-act="selectChannelPoster" data-act-args="[&quot;custom&quot;,&quot;&quot;]">' +
     '<div class="channel-poster-thumb-wrap custom-preview" style="background:linear-gradient(135deg,#0b0d14 0%,#131726 50%,#06070a 100%); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:6px; border:1px solid rgba(0,122,255,0.3);">' +
       '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#007AFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
         '<rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>' +
@@ -46140,7 +47294,7 @@ function renderChannelPosterPicker() {
   shows.forEach((s) => {
     const isSelected = !isCustomSelected && (channelDraftPoster === s.poster);
     const countLabel = s.count + ' ep' + (s.count === 1 ? '' : 's');
-    html += '<div class="channel-poster-choice' + (isSelected ? ' selected' : '') + '" data-poster="' + escapeAttr(s.poster) + '" data-backdrop="' + escapeAttr(s.backdrop || '') + '" onclick="selectChannelPoster(this.dataset.poster, this.dataset.backdrop)">' +
+    html += '<div class="channel-poster-choice' + (isSelected ? ' selected' : '') + '" data-poster="' + escapeAttr(s.poster) + '" data-backdrop="' + escapeAttr(s.backdrop || '') + '" data-act="appActSelectChannelPosterFromEl" data-act-args="[&quot;@self&quot;]">' +
       '<div class="channel-poster-thumb-wrap">' +
         '<img src="' + escapeAttr(s.poster) + '" alt="' + escapeAttr(s.name) + '" loading="lazy">' +
       '</div>' +
@@ -52656,7 +53810,7 @@ function renderChannelCrossoverSuggestions() {
       '<p class="channel-crossover-desc">' + escapeHtml(event.description) + '</p>' +
       '<div class="channel-crossover-parts">' + chipsHtml + '</div>' +
       '<div class="channel-crossover-actions">' +
-        '<button type="button" class="primary lc-btn" onclick="spliceCrossoverEvent(&quot;' + escapeJsAttr(event.id) + '&quot;, this)" style="padding:6px 14px; font-size:0.82rem;">' + escapeHtml(btnLabel) + '</button>' +
+        '<button type="button" class="primary lc-btn" data-act="spliceCrossoverEvent" data-act-args="' + appActArgs([event.id, "@self"]) + '" style="padding:6px 14px; font-size:0.82rem;">' + escapeHtml(btnLabel) + '</button>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -52705,7 +53859,7 @@ async function spliceCrossoverEvent(eventId, btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Crossover Splicer', 'Could not add crossover items: ' + (err.message || err));
     } else {
-      alert('Could not add crossover items: ' + (err.message || err));
+      showToast('Could not add crossover items: ' + (err.message || err), 'error');
     }
   }
   if (btn) {
@@ -53239,7 +54393,7 @@ function renderChannelStoryLock() {
     const id = 'channelStoryLock_' + encodeURIComponent(g.key).replace(/[^A-Za-z0-9]/g, '_');
     return '<label class="channel-rule-row" for="' + escapeAttr(id) + '">' +
       '<input type="checkbox" id="' + escapeAttr(id) + '"' + (isChannelShowStoryLocked(g.key) ? ' checked' : '') +
-        ' onchange="toggleChannelStoryLock(&quot;' + escapeJsAttr(g.key) + '&quot;, this.checked)">' +
+        ' data-act="toggleChannelStoryLock" data-act-args="' + appActArgs([g.key, "@checked"]) + '">' +
       '<span>' + escapeHtml(g.name) + ' <small style="color:var(--muted);">(' + g.count + ')</small></span>' +
     '</label>';
   }).join('');
@@ -53983,7 +55137,7 @@ async function saveChannel() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Channel Builder', 'Name this channel first.');
     } else {
-      alert('Name this channel first.');
+      showToast('Name this channel first.', 'error');
     }
     return;
   }
@@ -53991,7 +55145,7 @@ async function saveChannel() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Channel Builder', 'Add at least one episode or movie first.');
     } else {
-      alert('Add at least one episode or movie first.');
+      showToast('Add at least one episode or movie first.', 'error');
     }
     return;
   }
@@ -54364,10 +55518,10 @@ function renderStorylinesUniverseList(category = activeStorylineCategory) {
       const isDesktopEnd = (i === previewPosters.length - 1 && totalCount >= 4);
       let overlays = '';
       if (isMobileEnd) {
-        overlays += '<div class="list-card-count-overlay mobile-only" onclick="openStorylineDetails(&quot;' + escapeJsAttr(event.id) + '&quot;)" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+        overlays += '<div class="list-card-count-overlay mobile-only" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
       }
       if (isDesktopEnd) {
-        overlays += '<div class="list-card-count-overlay desktop-only" onclick="openStorylineDetails(&quot;' + escapeJsAttr(event.id) + '&quot;)" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+        overlays += '<div class="list-card-count-overlay desktop-only" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
       }
 
       // The registry hands each entry a poster but never a rating -- these are
@@ -54384,8 +55538,8 @@ function renderStorylinesUniverseList(category = activeStorylineCategory) {
         : '';
 
       return '<div class="list-card-mini-poster-tile">' +
-        '<div class="list-card-mini-poster-img-wrap" style="position:relative; cursor:pointer;" onclick="openStorylineDetails(&quot;' + escapeJsAttr(event.id) + '&quot;)">' +
-          '<img src="' + escapeAttr(typeof resolveClientPoster === 'function' ? resolveClientPoster(ep, posterUrl) : (posterUrl)) + '" alt="" loading="lazy" data-tmdb-id="' + escapeAttr(String(ep.tmdbId || '')) + '" data-poster-kind="' + (isMovie ? 'movie' : 'show') + '" data-poster-title="' + escapeAttr(itemTitle) + '" onerror="handleStorylinePosterError(this)">' +
+        '<div class="list-card-mini-poster-img-wrap" style="position:relative; cursor:pointer;" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '">' +
+          '<img src="' + escapeAttr(typeof resolveClientPoster === 'function' ? resolveClientPoster(ep, posterUrl) : (posterUrl)) + '" alt="" loading="lazy" data-tmdb-id="' + escapeAttr(String(ep.tmdbId || '')) + '" data-poster-kind="' + (isMovie ? 'movie' : 'show') + '" data-poster-title="' + escapeAttr(itemTitle) + '" data-act="handleStorylinePosterError" data-act-args="[&quot;@self&quot;]">' +
           overlays +
         '</div>' +
         '<div class="list-card-mini-poster-name" title="' + escapeAttr(itemTitle) + '">' + escapeHtml(itemTitle) + '</div>' +
@@ -54396,7 +55550,7 @@ function renderStorylinesUniverseList(category = activeStorylineCategory) {
     return '<div class="list-card" data-universe-id="' + escapeAttr(event.id) + '">' +
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
-          '<div class="list-card-title" onclick="openStorylineDetails(&quot;' + escapeJsAttr(event.id) + '&quot;)" style="cursor:pointer;">' + escapeHtml(event.name) + '</div>' +
+          '<div class="list-card-title" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '" style="cursor:pointer;">' + escapeHtml(event.name) + '</div>' +
           '<div class="list-card-meta">' +
             '<span>' + escapeHtml(event.franchise) + '</span>' +
             '<span class="list-card-meta-sep">&middot;</span>' +
@@ -54406,8 +55560,8 @@ function renderStorylinesUniverseList(category = activeStorylineCategory) {
           '</div>' +
         '</div>' +
         '<div class="list-card-actions">' +
-          '<button type="button" class="lc-btn ' + (isAdded ? 'secondary is-added' : 'primary') + '" onclick="createInstantStorylineChannel(&quot;' + escapeJsAttr(event.id) + '&quot;, this)" ' + (isAdded ? 'style="color:var(--danger);"' : '') + '>' + (isAdded ? 'Remove' : '+ Add') + '</button>' +
-          '<button type="button" class="lc-btn secondary" onclick="loadStorylineToDraft(&quot;' + escapeJsAttr(event.id) + '&quot;, this)" title="Customize in Channel Builder">Customize</button>' +
+          '<button type="button" class="lc-btn ' + (isAdded ? 'secondary is-added' : 'primary') + '" data-act="createInstantStorylineChannel" data-act-args="' + appActArgs([event.id, "@self"]) + '" ' + (isAdded ? 'style="color:var(--danger);"' : '') + '>' + (isAdded ? 'Remove' : '+ Add') + '</button>' +
+          '<button type="button" class="lc-btn secondary" data-act="loadStorylineToDraft" data-act-args="' + appActArgs([event.id, "@self"]) + '" title="Customize in Channel Builder">Customize</button>' +
         '</div>' +
       '</div>' +
       '<div class="list-card-posters">' +
@@ -54740,14 +55894,21 @@ async function fetchStorylineOrderedItems(eventId) {
   return { event, items: fullOrderedItems };
 }
 
-// Whether a storyline's channel is in the Live Preview. "+ Add" puts a
-// catalog row there and nothing in My Channels, so the rows are what to ask --
-// isListAddedToConfig only recognizes list rows, never a channel:v1: one. The
-// exact "channelId" key, not a substring: one storyline's id can be the start
-// of another's.
-function isStorylineChannelInCatalog(chId) {
-  const needle = '"channelId":"' + chId + '"';
+// Whether a channel is in the Live Preview -- the one answer every channel
+// button reads. "+ Add" puts a catalog row there and nothing in My Channels,
+// so the rows are what to ask: isListAddedToConfig only recognizes list rows,
+// never a channel:v1: one. The exact "channelId" key, not a substring: one
+// channel's id can be the start of another's.
+function isChannelInConfig(channelId) {
+  const wanted = String(channelId == null ? '' : channelId);
+  if (!wanted) return false;
+  const needle = '"channelId":"' + wanted + '"';
   return [...document.querySelectorAll('#lists .entry .url')].some((u) => String(u.value || '').includes(needle));
+}
+
+// The Storylines tab's own question, in terms of the one helper above.
+function isStorylineChannelInCatalog(chId) {
+  return isChannelInConfig(chId);
 }
 
 async function createInstantStorylineChannel(eventId, btn) {
@@ -54916,6 +56077,7 @@ async function loadStorylineToDraft(eventId, btn) {
 }
 
 function switchChannelsSubmenu(name, btn) {
+  if (appShellHandleNav('sub', 'channels', name)) return;
   try {
     document.documentElement.removeAttribute('data-initial-channels-sub');
   } catch (e) {}
@@ -55001,7 +56163,7 @@ function editChannelById(channelId) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Channel Builder', 'Channel not found.');
     } else {
-      alert('Channel not found.');
+      showToast('Channel not found.', 'error');
     }
     return;
   }
@@ -55045,7 +56207,7 @@ function editChannel(btnOrRow) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Channel Builder', 'Could not read this channel to edit it.');
     } else {
-      alert('Could not read this channel to edit it.');
+      showToast('Could not read this channel to edit it.', 'error');
     }
     return;
   }
@@ -55054,7 +56216,7 @@ function editChannel(btnOrRow) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Channel Builder', 'Could not read this channel to edit it.');
     } else {
-      alert('Could not read this channel to edit it.');
+      showToast('Could not read this channel to edit it.', 'error');
     }
     return;
   }
@@ -55361,7 +56523,7 @@ function renderMyCreatedChannelsList() {
   }
 
   box.innerHTML = shown.map((ch) => {
-    const isAdded = [...document.querySelectorAll('#lists .entry .url')].some((u) => u.value.includes(ch.channelId));
+    const isAdded = isChannelInConfig(ch.channelId);
     const allItems = ch.items || [];
     const totalEpisodes = allItems.length;
     // Every rule a channel carries, spelled out on its card -- a channel
@@ -55396,10 +56558,10 @@ function renderMyCreatedChannelsList() {
       const isDesktopEnd = (i === allPosters.length - 1 && allItems.length >= 4);
       let overlays = '';
       if (isMobileEnd) {
-        overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" onclick="event.stopPropagation(); openChannelDetailsPage(&quot;' + escapeJsAttr(ch.channelId) + '&quot;)">' + totalEpisodes + ' &rsaquo;</div>';
+        overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="openChannelDetailsPage" data-act-stop data-act-args="' + appActArgs([ch.channelId]) + '">' + totalEpisodes + ' &rsaquo;</div>';
       }
       if (isDesktopEnd) {
-        overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" onclick="event.stopPropagation(); openChannelDetailsPage(&quot;' + escapeJsAttr(ch.channelId) + '&quot;)">' + totalEpisodes + ' &rsaquo;</div>';
+        overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="openChannelDetailsPage" data-act-stop data-act-args="' + appActArgs([ch.channelId]) + '">' + totalEpisodes + ' &rsaquo;</div>';
       }
 
       const p = it.thumbnail || it.poster || it.showPoster || it.backdrop || ch.poster || ch.backdrop || '';
@@ -55465,7 +56627,7 @@ function renderMyCreatedChannelsList() {
       const itemId = it.imdbId || it.id || '';
       const itemType = (it.kind === 'movie' || it.type === 'movie') ? 'movie' : 'series';
       const posterClickAttr = itemId
-        ? ' style="cursor:pointer;" onclick="event.stopPropagation(); openItemDetailsModal(&quot;' + escapeJsAttr(itemId) + '&quot;, &quot;' + itemType + '&quot;)"'
+        ? ' style="cursor:pointer;" data-act="openItemDetailsModal" data-act-stop data-act-args="' + appActArgs([itemId, itemType]) + '"'
         : '';
       
       return '<div class="list-card-mini-poster-tile">' +
@@ -55478,15 +56640,15 @@ function renderMyCreatedChannelsList() {
       '</div>';
     }).join('');
     
-    const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" onclick="toggleChannelInCatalog(&quot;' + escapeJsAttr(ch.channelId) + '&quot;)">' +
+    const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleChannelInCatalog" data-act-args="' + appActArgs([ch.channelId]) + '">' +
       (isAdded ? 'Remove' : '+ Add') +
     '</button>';
 
     return '<div class="list-card" style="margin-bottom:12px;" data-channel-id="' + escapeAttr(ch.channelId) + '">' +
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
-          '<div class="list-card-title" style="cursor:pointer;" onclick="openChannelDetailsPage(&quot;' + escapeJsAttr(ch.channelId) + '&quot;)" title="Open ' + escapeAttr(ch.name) + '">' +
-            '<span class="drag-handle-list channel-drag-handle" title="Drag to reorder" onclick="event.stopPropagation();">&#x2630;</span>' +
+          '<div class="list-card-title" style="cursor:pointer;" data-act="openChannelDetailsPage" data-act-args="' + appActArgs([ch.channelId]) + '" title="Open ' + escapeAttr(ch.name) + '">' +
+            '<span class="drag-handle-list channel-drag-handle" title="Drag to reorder" data-act="appActNothing" data-act-stop>&#x2630;</span>' +
             escapeHtml(ch.name) +
           '</div>' +
           (ch.description ? '<div style="font-size:0.8rem; color:var(--text); margin-top:2px;">' + escapeHtml(ch.description) + '</div>' : '') +
@@ -55496,10 +56658,10 @@ function renderMyCreatedChannelsList() {
           (summaryLine ? '<div class="list-card-meta"><span>' + escapeHtml(summaryLine) + '</span></div>' : '') +
         '</div>' +
         '<div class="list-card-actions">' +
-          '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" onclick="editChannelById(&quot;' + escapeJsAttr(ch.channelId) + '&quot;)">Edit</button>' +
-          '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" onclick="deleteLocalChannel(&quot;' + escapeJsAttr(ch.channelId) + '&quot;, &quot;' + escapeJsAttr(ch.name) + '&quot;)">Delete</button>' +
+          '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="editChannelById" data-act-args="' + appActArgs([ch.channelId]) + '">Edit</button>' +
+          '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="deleteLocalChannel" data-act-args="' + appActArgs([ch.channelId, ch.name]) + '">Delete</button>' +
           ((ch.sharePublished || ch.visibility === 'public')
-            ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" onclick="shareChannelById(&quot;' + escapeJsAttr(ch.channelId) + '&quot;, this)" title="Share this channel">Share</button>'
+            ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="shareChannelById" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '" title="Share this channel">Share</button>'
             : '') +
           addBtnHtml +
         '</div>' +
@@ -55789,8 +56951,35 @@ async function buildChannelItemsFromShows(shows, opts) {
   return { items: items, poster: poster, backdrop: backdrop };
 }
 
+// Builds a channel out of a network id or a pasted list URL. Every caller --
+// Quick Add's own buttons, the Import tab, and the shell's TV network / From a
+// list templates (P6-7) -- comes through here, so there is one traversal, one
+// preset lookup and one saved row shape.
+//
+// options, all optional and all defaulting to what this function has always
+// done:
+//   liveSync            keep the channel following a pasted list
+//   schedule            the P6-7 Schedule options as payload fields
+//                       (dailyRotate, rotateShows, rotateEpisodes, autoSort,
+//                       sortByAired, shuffle, hideWatched), applied on top of
+//                       what the preset or this function would otherwise set
+//   addToCatalog        false builds and saves the channel in this browser
+//                       without putting a row in the config, so a screen can
+//                       show the lineup first; the row is added afterwards by
+//                       toggleChannelInCatalog, from the same saved record
+//   preferPreset        false skips the server's network preset, for when the
+//                       Schedule options ask for a channel the preset is not
+//                       (it is 24 shows x 3 episodes a day, rotating)
+//   maxEpisodesPerShow  how many episodes of one show the traversal keeps
+//   onProgress          called with a plain sentence as the pool is built
+//
+// Returns the saved channel record, or null when nothing was built.
 async function quickAddChannel(name, listUrl, networkId, btn, options) {
-  if (!requireSignedInFor('build channels')) return; // docs/DECISIONS.md D-8
+  if (!requireSignedInFor('build channels')) return null; // docs/DECISIONS.md D-8
+  const o = options || {};
+  const sched = (o.schedule && typeof o.schedule === 'object') ? o.schedule : null;
+  const addToCatalog = o.addToCatalog !== false;
+  const note = (typeof o.onProgress === 'function') ? o.onProgress : null;
   const statusBox = document.getElementById('channelQuickAddStatus');
   const originalLabel = btn ? btn.textContent : '';
   if (btn) {
@@ -55799,7 +56988,7 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
   }
   if (statusBox) statusBox.innerHTML = '<p><small>Adding ' + escapeHtml(name) + '\u2026</small></p>';
   try {
-    if (networkId) {
+    if (networkId && o.preferPreset !== false) {
       try {
         const res = await fetch(ORIGIN + '/api/channel-preset?networkId=' + encodeURIComponent(networkId) + '&name=' + encodeURIComponent(name), { cache: 'no-store' });
         const data = await res.json();
@@ -55824,9 +57013,9 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
           // account's cloud channels blob (which has its own, much smaller
           // 24MB cap -- easy to blow past once a few of these 5,000-item
           // pools are all kept in full).
-          const payload = Object.assign({}, data.channel, { channelId: channelId, name: name, liveSync: false, sourceUrl: '', presetNetworkId: networkId });
+          const payload = Object.assign({}, data.channel, { channelId: channelId, name: name, liveSync: false, sourceUrl: '', presetNetworkId: networkId }, sched || {});
           saveLocalChannel(payload);
-          const pointerPayload = {
+          const pointerPayload = Object.assign({
             channelId: channelId,
             name: name,
             poster: data.channel.poster,
@@ -55837,18 +57026,21 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
             dailyRotate: true,
             liveSync: false,
             sourceUrl: '',
-          };
-          addRow(name, 'channel:v1:' + JSON.stringify(pointerPayload), 'series', true, 'Channels', channelId);
-          renderMyCreatedChannelsList();
-          renderChannelMergeList();
-          showAddedToast('Channel "' + name + '" added to your Catalogs.');
+          }, sched || {});
+          if (addToCatalog) {
+            addRow(name, 'channel:v1:' + JSON.stringify(pointerPayload), 'series', true, 'Channels', channelId);
+            renderMyCreatedChannelsList();
+            renderChannelMergeList();
+            showAddedToast('Channel "' + name + '" added to your Catalogs.');
+          }
           if (statusBox) {
             statusBox.innerHTML = '<p class="testresult ok" style="margin:4px 0 0;">\u2713 Channel "' + escapeHtml(name) + '" added (' + (payload.items ? payload.items.length : 0) + ' episodes with daily rotation)!</p>';
             setTimeout(() => {
               if (statusBox) statusBox.innerHTML = '';
             }, 4000);
           }
-          return;
+          if (note) note('');
+          return payload;
         }
       } catch (e) {}
     }
@@ -55872,7 +57064,7 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
       if (typeof showAppAlert === 'function') {
         showAppAlert('Could Not Build Channel', 'Could not build ' + name + ': ' + (data.error || 'unknown error'));
       } else {
-        alert('Could not build ' + name + ': ' + (data.error || 'unknown error'));
+        showToast('Could not build ' + name + ': ' + (data.error || 'unknown error'), 'error');
       }
       return;
     }
@@ -55884,13 +57076,16 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
       shows[i] = shows[j];
       shows[j] = tmp;
     }
+    if (note) note('Building the pool from ' + shows.length + ' shows\u2026');
     const built = await buildChannelItemsFromShows(shows, {
       poster: data.networkLogo || null,
+      maxEpisodesPerShow: o.maxEpisodesPerShow || undefined,
       onProgress: function (i, total, show) {
         if (statusBox) {
           statusBox.innerHTML = '<p><small>Building ' + escapeHtml(name) + '\u2026 show ' + (i + 1) + ' of ' + total +
             ' (' + escapeHtml(show.name) + ')</small></p>';
         }
+        if (note) note('Building ' + name + '\u2026 show ' + (i + 1) + ' of ' + total + ' (' + show.name + ')');
       },
     });
     const items = built.items;
@@ -55900,12 +57095,12 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
       if (typeof showAppAlert === 'function') {
         showAppAlert('Could Not Build Channel', 'Could not build ' + name + ' -- no episodes were found.');
       } else {
-        alert('Could not build ' + name + ' -- no episodes were found.');
+        showToast('Could not build ' + name + ' -- no episodes were found.', 'error');
       }
       return;
     }
     const channelId = generateChannelId();
-    const payload = {
+    const payload = Object.assign({
       channelId: channelId,
       name: name,
       poster: poster,
@@ -55917,26 +57112,31 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
       // Import tab's toggle was left on: the channel keeps the URL, and the
       // Worker rebuilds its pool from that list in the background instead of
       // this staying the one-time snapshot it used to be.
-      liveSync: !!(options && options.liveSync && listUrl),
-      sourceUrl: (options && options.liveSync && listUrl) ? listUrl : '',
-    };
+      liveSync: !!(o.liveSync && listUrl),
+      sourceUrl: (o.liveSync && listUrl) ? listUrl : '',
+    }, sched || {});
     saveLocalChannel(payload);
-    addRow(name, 'channel:v1:' + JSON.stringify(payload), 'series', true, 'Channels', channelId);
-    renderMyCreatedChannelsList();
-    renderChannelMergeList();
-    showAddedToast('Channel "' + name + '" added to your Catalogs.');
+    if (addToCatalog) {
+      addRow(name, 'channel:v1:' + JSON.stringify(payload), 'series', true, 'Channels', channelId);
+      renderMyCreatedChannelsList();
+      renderChannelMergeList();
+      showAddedToast('Channel "' + name + '" added to your Catalogs.');
+    }
     if (statusBox) {
       statusBox.innerHTML = '<p class="testresult ok" style="margin:4px 0 0;">\u2713 Channel "' + escapeHtml(name) + '" added (' + items.length + ' episodes with daily rotation)!</p>';
       setTimeout(function() {
         if (statusBox) statusBox.innerHTML = '';
       }, 4000);
     }
+    if (note) note('');
+    return payload;
   } catch (e) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Network Error', 'Network error while adding ' + name + '.');
     } else {
-      alert('Network error while adding ' + name + '.');
+      showToast('Network error while adding ' + name + '.', 'error');
     }
+    return null;
   } finally {
     if (btn) {
       btn.disabled = false;
@@ -55960,7 +57160,7 @@ async function importChannelFromLink(btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Import Channel', 'Paste a list URL first.');
     } else {
-      alert('Paste a list URL first.');
+      showToast('Paste a list URL first.', 'error');
     }
     return;
   }
@@ -55968,7 +57168,7 @@ async function importChannelFromLink(btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Import Channel', 'Name this channel first.');
     } else {
-      alert('Name this channel first.');
+      showToast('Name this channel first.', 'error');
     }
     return;
   }
@@ -56529,7 +57729,7 @@ function renderChannelPersonCredits() {
         (c.shows.length ? ' and ' + c.shows.length + ' show' + (c.shows.length === 1 ? '' : 's') : '') +
       '</p>' +
       '<label for="channelSpotlightSortSelect" style="font-size:0.8rem; font-weight:600;">Order:</label>' +
-      '<select id="channelSpotlightSortSelect" onchange="setChannelSpotlightSortAndReload(this.value)" style="font-size:0.82rem; padding:5px 8px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">' +
+      '<select id="channelSpotlightSortSelect" data-act="setChannelSpotlightSortAndReload" data-act-args="[&quot;@value&quot;]" style="font-size:0.82rem; padding:5px 8px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">' +
         '<option value="chronological"' + (channelSpotlightSort === 'chronological' ? ' selected' : '') + '>Career order</option>' +
         '<option value="rating"' + (channelSpotlightSort === 'rating' ? ' selected' : '') + '>Best first</option>' +
       '</select>' +
@@ -56654,6 +57854,114 @@ async function addPersonShowEpisodes(tmdbId, showTitle, showPoster, btn, duplica
   }
 }
 
+// Builds a Spotlight channel's picks out of one person's credits: their films
+// and the episodes of theirs the server could place.
+//
+// Pulled out of addWholeSpotlightToDraft below so the legacy builder's "Add
+// whole spotlight" and the shell's Actor or creator template (P6-7) build the
+// SAME channel rather than two that look alike. Two details are why it is
+// written once:
+//
+//   - a film needs its IMDB id resolved one at a time, because a channel
+//     item's id IS the stream request (channelItemStreamId, server side), so
+//     a film with no id would play as nothing;
+//   - an episode list comes from /api/person-show-episodes, which also says
+//     whether that show is a regular credit or a guest appearance -- a
+//     distinction the note under the picks is built from.
+//
+// Never throws: a credit that cannot be read is skipped and the rest of the
+// channel is still built. onProgress(stage, index, total, label) is called
+// once per credit, before the request, with stage 'movies' or 'shows' -- the
+// two callers word the sentence their own way.
+async function buildSpotlightItemsFromCredits(credits, opts) {
+  const o = opts || {};
+  const c = credits || {};
+  const movies = Array.isArray(c.movies) ? c.movies : [];
+  const shows = Array.isArray(c.shows) ? c.shows : [];
+  const onProgress = (typeof o.onProgress === 'function') ? o.onProgress : null;
+  const movieItems = [];
+  const episodeItems = [];
+  let guestShows = 0;
+  let poster = c.poster || null;
+  let backdrop = c.backdrop || null;
+
+  for (let i = 0; i < movies.length; i++) {
+    const m = movies[i];
+    if (!m) continue;
+    if (onProgress) onProgress('movies', i, movies.length, m.title || '');
+    try {
+      const r = await fetch(ORIGIN + '/api/resolve-movie?tmdbId=' + encodeURIComponent(m.tmdbId), { cache: 'no-store' });
+      const d = await r.json();
+      if (!d.ok || !d.imdbId) continue;
+      if (!poster && m.poster) poster = m.poster;
+      if (!backdrop && m.backdrop) backdrop = m.backdrop;
+      movieItems.push({
+        kind: 'movie',
+        imdbId: d.imdbId,
+        tmdbId: m.tmdbId,
+        title: m.title,
+        year: m.year || '',
+        showName: m.title,
+        epName: 'Movie',
+        released: m.released || (m.year ? m.year + '-01-01' : ''),
+        runtime: d.runtime || 0,
+        thumbnail: m.backdrop || m.poster || '',
+        poster: m.poster || '',
+        showPoster: m.poster || '',
+        backdrop: m.backdrop || '',
+        spotlightRating: m.rating || 0,
+      });
+    } catch (e) {
+      continue;
+    }
+  }
+
+  for (let i = 0; i < shows.length; i++) {
+    const sh = shows[i];
+    if (!sh) continue;
+    if (onProgress) onProgress('shows', i, shows.length, sh.title || '');
+    try {
+      const r = await fetch(ORIGIN + '/api/person-show-episodes?personId=' + encodeURIComponent(c.personId) +
+        '&tmdbId=' + encodeURIComponent(sh.tmdbId), { cache: 'no-store' });
+      const d = await r.json();
+      if (!d.ok || !Array.isArray(d.episodes) || !d.episodes.length) continue;
+      if (!d.regular) guestShows++;
+      const showPoster = d.poster || sh.poster || '';
+      const showName = d.showName || sh.title || '';
+      if (!poster && showPoster) poster = showPoster;
+      if (!backdrop && d.backdrop) backdrop = d.backdrop;
+      d.episodes.forEach((ep) => {
+        episodeItems.push({
+          kind: 'episode',
+          imdbId: channelStreamShowId(d.imdbId, sh.tmdbId),
+          season: ep.season,
+          episode: ep.episode,
+          showName: showName,
+          epName: ep.name,
+          title: showName + ' S' + ep.season + 'E' + ep.episode + ' \u2014 ' + ep.name,
+          released: ep.released || '',
+          runtime: ep.runtime || 0,
+          thumbnail: ep.thumbnail || showPoster,
+          poster: showPoster || ep.thumbnail || '',
+          showPoster: showPoster,
+          spotlightRating: sh.rating || 0,
+        });
+      });
+    } catch (e) {
+      continue;
+    }
+  }
+
+  return {
+    items: movieItems.concat(episodeItems),
+    movieItems: movieItems,
+    episodeItems: episodeItems,
+    guestShows: guestShows,
+    poster: poster,
+    backdrop: backdrop,
+  };
+}
+
 async function addWholeSpotlightToDraft(btn) {
   if (!channelPersonCredits) return;
   const c = channelPersonCredits;
@@ -56665,75 +57973,20 @@ async function addWholeSpotlightToDraft(btn) {
     btn.textContent = 'Building\u2026';
   }
   try {
-    // A film needs its IMDB id resolved one by one: a channel item's id IS
-    // the stream request (see channelItemStreamId server-side), so a movie
-    // with no id would play as nothing.
-    const movieItems = [];
-    for (let i = 0; i < c.movies.length; i++) {
-      const m = c.movies[i];
-      say('<p><small>Resolving films\u2026 ' + (i + 1) + ' of ' + c.movies.length + ' (' + escapeHtml(m.title) + ')</small></p>');
-      try {
-        const r = await fetch(ORIGIN + '/api/resolve-movie?tmdbId=' + encodeURIComponent(m.tmdbId), { cache: 'no-store' });
-        const d = await r.json();
-        if (!d.ok || !d.imdbId) continue;
-        movieItems.push({
-          kind: 'movie',
-          imdbId: d.imdbId,
-          tmdbId: m.tmdbId,
-          title: m.title,
-          year: m.year || '',
-          showName: m.title,
-          epName: 'Movie',
-          released: m.released || (m.year ? m.year + '-01-01' : ''),
-          runtime: d.runtime || 0,
-          thumbnail: m.backdrop || m.poster || '',
-          poster: m.poster || '',
-          showPoster: m.poster || '',
-          backdrop: m.backdrop || '',
-          spotlightRating: m.rating || 0,
-        });
-      } catch (e) {
-        continue;
-      }
-    }
-
-    const episodeItems = [];
-    let guestShows = 0;
-    for (let i = 0; i < c.shows.length; i++) {
-      const sh = c.shows[i];
-      say('<p><small>Finding ' + escapeHtml(c.name) + '\u2019s episodes\u2026 show ' + (i + 1) + ' of ' + c.shows.length +
-        ' (' + escapeHtml(sh.title) + ')</small></p>');
-      try {
-        const r = await fetch(ORIGIN + '/api/person-show-episodes?personId=' + encodeURIComponent(c.personId) +
-          '&tmdbId=' + encodeURIComponent(sh.tmdbId), { cache: 'no-store' });
-        const d = await r.json();
-        if (!d.ok || !Array.isArray(d.episodes) || !d.episodes.length) continue;
-        if (!d.regular) guestShows++;
-        const showPoster = d.poster || sh.poster || '';
-        const showName = d.showName || sh.title || '';
-        d.episodes.forEach((ep) => {
-          episodeItems.push({
-            kind: 'episode',
-            imdbId: channelStreamShowId(d.imdbId, sh.tmdbId),
-            season: ep.season,
-            episode: ep.episode,
-            showName: showName,
-            epName: ep.name,
-            title: showName + ' S' + ep.season + 'E' + ep.episode + ' \u2014 ' + ep.name,
-            released: ep.released || '',
-            runtime: ep.runtime || 0,
-            thumbnail: ep.thumbnail || showPoster,
-            poster: showPoster || ep.thumbnail || '',
-            showPoster: showPoster,
-            spotlightRating: sh.rating || 0,
-          });
-        });
-      } catch (e) {
-        continue;
-      }
-    }
-
-    const items = sortSpotlightItems(movieItems.concat(episodeItems), channelSpotlightSort);
+    const built = await buildSpotlightItemsFromCredits(c, {
+      onProgress: function (stage, i, total, label) {
+        if (stage === 'movies') {
+          say('<p><small>Resolving films\u2026 ' + (i + 1) + ' of ' + total + ' (' + escapeHtml(label) + ')</small></p>');
+        } else {
+          say('<p><small>Finding ' + escapeHtml(c.name) + '\u2019s episodes\u2026 show ' + (i + 1) + ' of ' + total +
+            ' (' + escapeHtml(label) + ')</small></p>');
+        }
+      },
+    });
+    const movieItems = built.movieItems;
+    const episodeItems = built.episodeItems;
+    const guestShows = built.guestShows;
+    const items = sortSpotlightItems(built.items, channelSpotlightSort);
     if (!items.length) {
       say('<p class="testresult err">\u2717 Could not resolve any of ' + escapeHtml(c.name) + '\u2019s credits to something playable.</p>');
       return;
@@ -56911,7 +58164,7 @@ function showSavedChannelModal(channelName, visibility, url) {
   const isPrivate = visibility === 'private';
   showModal(
     '<div class="modal-body">' +
-      '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+      '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
       '<h2 class="panel-title" style="margin-top:0;">\u2713 Channel Saved</h2>' +
       '<p style="margin:8px 0 16px; font-size:0.9rem; color:var(--text);">' +
         '<strong>' + escapeHtml(channelName || 'Channel') + '</strong> has been saved to your Profile as a <strong>' + (isPrivate ? 'private' : 'public') + '</strong> channel.' +
@@ -56924,13 +58177,13 @@ function showSavedChannelModal(channelName, visibility, url) {
             '<p style="margin:0 0 8px; font-size:0.84rem; color:var(--muted);">Public share link:</p>' +
             '<div style="display:flex; gap:8px; align-items:center;">' +
               '<input type="text" id="savedChannelUrlInput" value="' + escapeAttr(url || '') + '" readonly style="flex:1; padding:10px 12px; font-size:0.88rem; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text);">' +
-              '<button type="button" class="lc-btn primary" id="savedChannelCopyBtn" onclick="copyShareUrlById(&quot;savedChannelUrlInput&quot;, this)" style="white-space:nowrap; padding:10px 14px;">Copy Link</button>' +
+              '<button type="button" class="lc-btn primary" id="savedChannelCopyBtn" data-act="copyShareUrlById" data-act-args="[&quot;savedChannelUrlInput&quot;,&quot;@self&quot;]" style="white-space:nowrap; padding:10px 14px;">Copy Link</button>' +
             '</div>' +
           '</div>'
       ) +
       '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end; gap:8px;">' +
         (!isPrivate && url ? '<a href="' + escapeAttr(url) + '" target="_blank" class="button secondary lc-btn" style="text-decoration:none; display:inline-flex; align-items:center;">Open Link &nearr;</a>' : '') +
-        '<button type="button" class="primary lc-btn" onclick="closeModal()">Done</button>' +
+        '<button type="button" class="primary lc-btn" data-act="closeModal">Done</button>' +
       '</div>' +
     '</div>'
   );
@@ -57205,16 +58458,16 @@ function renderChannelDirectory() {
   feed.innerHTML = shown.map((e) => {
     const isAdded = isDirectoryChannelAdded(e.code);
     const actionBtn = isAdded
-      ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger); border-color:var(--danger);" onclick="removeDirectoryChannel(&quot;' + escapeJsAttr(e.code) + '&quot;, this)">Remove</button>'
-      : '<button type="button" class="lc-btn primary" style="padding:6px 12px; font-size:0.8rem;" onclick="addDirectoryChannel(&quot;' + escapeJsAttr(e.code) + '&quot;, this)">+ Add</button>';
+      ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger); border-color:var(--danger);" data-act="removeDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">Remove</button>'
+      : '<button type="button" class="lc-btn primary" style="padding:6px 12px; font-size:0.8rem;" data-act="addDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">+ Add</button>';
     return channelListingCardHtml(
       e,
       '<button type="button" class="lc-btn searchLikeExternalBtn' + (_channelDirectoryLiked[e.code] ? ' liked' : '') + '"' +
         ' aria-label="Like this channel" title="Like this channel"' +
-        ' onclick="toggleChannelDirectoryLike(&quot;' + escapeJsAttr(e.code) + '&quot;, this)">' +
+        ' data-act="toggleChannelDirectoryLike" data-act-args="' + appActArgs([e.code, "@self"]) + '">' +
         (_channelDirectoryLiked[e.code] ? '\u2665' : '\u2661') + (e.likes ? ' ' + e.likes : '') +
       '</button>' +
-      '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" onclick="previewDirectoryChannel(&quot;' + escapeJsAttr(e.code) + '&quot;, this)">See all</button>' +
+      '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="previewDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">See all</button>' +
       actionBtn,
       ''
     );
@@ -57473,8 +58726,8 @@ function channelListingCardHtml(entry, actionsHtml, extraHtml) {
         const isDesktopEnd = (i === sampleItems.length - 1 && sampleItems.length >= 4);
         let overlays = '';
         if (entry.code) {
-          if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" onclick="event.stopPropagation(); previewDirectoryChannel(&quot;' + escapeJsAttr(entry.code) + '&quot;, this)">' + totalCount + ' &rsaquo;</div>';
-          if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" onclick="event.stopPropagation(); previewDirectoryChannel(&quot;' + escapeJsAttr(entry.code) + '&quot;, this)">' + totalCount + ' &rsaquo;</div>';
+          if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="previewDirectoryChannel" data-act-stop data-act-args="' + appActArgs([entry.code, "@self"]) + '">' + totalCount + ' &rsaquo;</div>';
+          if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="previewDirectoryChannel" data-act-stop data-act-args="' + appActArgs([entry.code, "@self"]) + '">' + totalCount + ' &rsaquo;</div>';
         }
         const p = it.poster || it.thumbnail || it.showPoster || it.backdrop || entry.poster || entry.backdrop || '';
         const imgHtml = p
@@ -57483,8 +58736,8 @@ function channelListingCardHtml(entry, actionsHtml, extraHtml) {
         const itemId = it.id || it.imdbId || '';
         const itemType = (it.kind === 'movie' || it.type === 'movie') ? 'movie' : 'series';
         const posterClickAttr = itemId
-          ? ' style="cursor:pointer;" onclick="event.stopPropagation(); openItemDetailsModal(&quot;' + escapeJsAttr(itemId) + '&quot;, &quot;' + itemType + '&quot;)"'
-          : (entry.code ? ' style="cursor:pointer;" onclick="event.stopPropagation(); previewDirectoryChannel(&quot;' + escapeJsAttr(entry.code) + '&quot;, this)"' : '');
+          ? ' style="cursor:pointer;" data-act="openItemDetailsModal" data-act-stop data-act-args="' + appActArgs([itemId, itemType]) + '"'
+          : (entry.code ? ' style="cursor:pointer;" data-act="previewDirectoryChannel" data-act-stop data-act-args="' + appActArgs([entry.code, "@self"]) + '"' : '');
         const title = it.name || it.title || entry.name || 'Channel';
         const subtitle = it.subtitle || it.epName || '';
         return '<div class="list-card-mini-poster-tile">' +
@@ -57507,7 +58760,7 @@ function channelListingCardHtml(entry, actionsHtml, extraHtml) {
     ? '<img src="' + escapeAttr(art) + '" alt="" loading="lazy" style="width:88px; height:56px; object-fit:cover; border-radius:6px; border:1px solid var(--border); flex:0 0 auto;">'
     : '';
   const openAttr = entry.code
-    ? ' style="cursor:pointer;" onclick="previewDirectoryChannel(&quot;' + escapeJsAttr(entry.code) + '&quot;, this)" title="See everything in this channel"'
+    ? ' style="cursor:pointer;" data-act="previewDirectoryChannel" data-act-args="' + appActArgs([entry.code, "@self"]) + '" title="See everything in this channel"'
     : '';
   return '<div class="list-card" style="margin-bottom:10px;">' +
     '<div class="list-card-header" style="gap:10px; align-items:center;">' +
@@ -57617,16 +58870,16 @@ function renderChannelPublishList() {
 
   const mine = channels.map((ch) => {
     const action = ch.sharePublished
-      ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger);" onclick="unpublishChannelFromDirectory(&quot;' + escapeJsAttr(ch.channelId) + '&quot;, this)">Unpublish</button>'
-      : '<button type="button" class="lc-btn primary" style="padding:6px 12px; font-size:0.8rem;" onclick="publishChannelToDirectory(&quot;' + escapeJsAttr(ch.channelId) + '&quot;, this)">Publish</button>';
+      ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger);" data-act="unpublishChannelFromDirectory" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Unpublish</button>'
+      : '<button type="button" class="lc-btn primary" style="padding:6px 12px; font-size:0.8rem;" data-act="publishChannelToDirectory" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Publish</button>';
     const extra =
       // A published channel's link lives here, on screen, rather than only
       // in the modal that announced it -- that modal closes and takes the
       // link with it.
       (ch.shareCode
         ? '<div class="row" style="margin-top:8px; gap:8px;">' +
-            '<input type="text" readonly value="' + escapeAttr(channelShareUrl(ch.shareCode)) + '" onclick="this.select()" style="font-size:0.8rem;">' +
-            '<button type="button" class="secondary lc-btn" style="flex:none; width:auto; white-space:nowrap;" onclick="copyChannelShareLink(&quot;' + escapeJsAttr(ch.channelId) + '&quot;, this)">Copy</button>' +
+            '<input type="text" readonly value="' + escapeAttr(channelShareUrl(ch.shareCode)) + '" data-act-on="click" data-act="appActSelectText" data-act-args="[&quot;@self&quot;]" style="font-size:0.8rem;">' +
+            '<button type="button" class="secondary lc-btn" style="flex:none; width:auto; white-space:nowrap;" data-act="copyChannelShareLink" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Copy</button>' +
           '</div>'
         : '');
     return channelListingCardHtml(channelAsListingEntry(ch), action, extra);
@@ -57636,7 +58889,7 @@ function renderChannelPublishList() {
   // because there is nothing to edit, publish or copy -- only to withdraw.
   const orphans = _orphanedPublishedChannels.map((entry) => channelListingCardHtml(
     entry,
-    '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger);" onclick="unpublishOrphanedChannel(&quot;' + escapeJsAttr(entry.code) + '&quot;, this)">Unpublish</button>',
+    '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger);" data-act="unpublishOrphanedChannel" data-act-args="' + appActArgs([entry.code, "@self"]) + '">Unpublish</button>',
     ''
   )).join('');
 
@@ -57943,7 +59196,7 @@ function toggleMergedChannelInCatalog(mergedId) {
       if (typeof showAppAlert === 'function') {
         showAppAlert('Merge Channels', 'Could not find the channels for this merged catalog.');
       } else {
-        alert('Could not find the channels for this merged catalog.');
+        showToast('Could not find the channels for this merged catalog.', 'error');
       }
       return;
     }
@@ -57961,7 +59214,7 @@ function mergeChannelsIntoRow() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Merge Channels', 'Check at least two channels to merge.');
     } else {
-      alert('Check at least two channels to merge.');
+      showToast('Check at least two channels to merge.', 'error');
     }
     return;
   }
@@ -57971,7 +59224,7 @@ function mergeChannelsIntoRow() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Merge Channels', 'Name the combined catalog first.');
     } else {
-      alert('Name the combined catalog first.');
+      showToast('Name the combined catalog first.', 'error');
     }
     return;
   }
@@ -57987,7 +59240,7 @@ function mergeChannelsIntoRow() {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Merge Channels', 'Could not read the selected channels. Please try again.');
     } else {
-      alert('Could not read the selected channels. Please try again.');
+      showToast('Could not read the selected channels. Please try again.', 'error');
     }
     return;
   }
@@ -58061,7 +59314,7 @@ function renderChannelMergeList() {
           if (ch && Array.isArray(ch.items)) totalEpisodes += ch.items.length;
           return '<span class="badge" style="display:inline-flex; align-items:center; gap:5px; padding:3px 8px; font-size:0.8rem; background:var(--panel-strong); border:1px solid var(--border); border-radius:6px; margin:2px 4px 2px 0;">' +
             escapeHtml(chName) +
-            '<button type="button" class="merge-chip-remove-btn" title="Remove ' + escapeAttr(chName) + ' from merge" aria-label="Remove ' + escapeAttr(chName) + ' from merge" onclick="removeChannelFromMerge(&quot;' + escapeJsAttr(merged.mergedId) + '&quot;, &quot;' + escapeJsAttr(chId) + '&quot;)">\u2715</button>' +
+            '<button type="button" class="merge-chip-remove-btn" title="Remove ' + escapeAttr(chName) + ' from merge" aria-label="Remove ' + escapeAttr(chName) + ' from merge" data-act="removeChannelFromMerge" data-act-args="' + appActArgs([merged.mergedId, chId]) + '">\u2715</button>' +
           '</span>';
         }).join('');
         
@@ -58070,7 +59323,7 @@ function renderChannelMergeList() {
         if (remainingChannels.length) {
           remainingChannels.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
           const options = remainingChannels.map((c) => '<option value="' + escapeAttr(c.channelId) + '">' + escapeHtml(c.name) + ' (' + (c.items ? c.items.length : 0) + ' ep)</option>').join('');
-          addSelectHtml = '<select class="merge-add-channel-select" onchange="addChannelToMerge(&quot;' + escapeJsAttr(merged.mergedId) + '&quot;, this.value); this.value=&quot;&quot;;">' +
+          addSelectHtml = '<select class="merge-add-channel-select" data-act="appActAddChannelToMerge" data-act-args="' + appActArgs([merged.mergedId, '@self']) + '">' +
             '<option value="">+ Add channel...</option>' +
             options +
           '</select>';
@@ -58078,12 +59331,12 @@ function renderChannelMergeList() {
           addSelectHtml = '<select class="merge-add-channel-select" disabled title="All your current saved channels are already in this merge. Build or Quick Add more channels to add them here." style="opacity:0.65; cursor:not-allowed;">' +
             '<option value="">All saved channels added</option>' +
           '</select>' +
-          ' <button type="button" class="lc-btn secondary" style="padding:2px 8px; font-size:0.75rem; margin-left:4px;" onclick="switchChannelsSubmenu(&quot;quickadd&quot;, document.querySelector(&quot;#channelsSubnavBar button:nth-child(2)&quot;))">+ Quick Add</button>';
+          ' <button type="button" class="lc-btn secondary" style="padding:2px 8px; font-size:0.75rem; margin-left:4px;" data-act="appActGoToQuickAdd">+ Quick Add</button>';
         }
         
         const countText = (merged.channelIds ? merged.channelIds.length : 0) + ' channels &middot; ' + totalEpisodes + ' episodes';
         
-        const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" onclick="toggleMergedChannelInCatalog(&quot;' + escapeJsAttr(merged.mergedId) + '&quot;)">' +
+        const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleMergedChannelInCatalog" data-act-args="' + appActArgs([merged.mergedId]) + '">' +
           (isAdded ? 'Remove' : '+ Add') +
         '</button>';
 
@@ -58099,7 +59352,7 @@ function renderChannelMergeList() {
               '</div>' +
             '</div>' +
             '<div class="list-card-actions">' +
-              '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger);" onclick="deleteLocalMergedChannel(&quot;' + escapeJsAttr(merged.mergedId) + '&quot;)">Delete</button>' +
+              '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger);" data-act="deleteLocalMergedChannel" data-act-args="' + appActArgs([merged.mergedId]) + '">Delete</button>' +
               addBtnHtml +
             '</div>' +
           '</div>' +
@@ -58158,7 +59411,7 @@ async function importCustomListFromLink(btn) {
   const syncCheck = document.getElementById('customListImportSyncCheck');
   const listUrl = urlInput.value.trim();
   if (!listUrl) {
-    alert('Paste a list URL first.');
+    showToast('Paste a list URL first.', 'error');
     return;
   }
   const name = nameInput.value.trim() || guessNameFromUrl(listUrl);
@@ -58224,7 +59477,7 @@ async function loadListToCustomListDraft(name, listUrl, contentType, btn) {
       if (typeof showAppAlert === 'function') {
         showAppAlert('Customize List', 'Could not load items for this list.');
       } else {
-        alert('Could not load items for this list.');
+        showToast('Could not load items for this list.', 'error');
       }
       return;
     }
@@ -58252,7 +59505,7 @@ async function loadListToCustomListDraft(name, listUrl, contentType, btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Customize List', 'Error loading list: ' + (err.message || err));
     } else {
-      alert('Error loading list: ' + (err.message || err));
+      showToast('Error loading list: ' + (err.message || err), 'error');
     }
   }
   if (btn) {
@@ -58290,7 +59543,7 @@ async function addToCustomListDraft(searchType, tmdbId, title, year, poster, btn
     const res = await fetch(ORIGIN + endpoint + encodeURIComponent(tmdbId), { cache: 'no-store' });
     const data = await res.json();
     if (!data.ok) {
-      alert('Could not add "' + title + '": ' + (data.error || 'unknown error'));
+      showToast('Could not add "' + title + '": ' + (data.error || 'unknown error'), 'error');
       if (btn) {
         btn.disabled = false;
         btn.textContent = '+ Add';
@@ -58309,7 +59562,7 @@ async function addToCustomListDraft(searchType, tmdbId, title, year, poster, btn
     if (btn) btn.textContent = 'Added \u2713';
     if (typeof trackEvent === 'function') trackEvent('list-add', data.imdbId, title, itemType);
   } catch (e) {
-    alert('Network error adding "' + title + '".');
+    showToast('Network error adding "' + title + '".', 'error');
     if (btn) {
       btn.disabled = false;
       btn.textContent = '+ Add';
@@ -58559,7 +59812,7 @@ function saveCustomList() {
   const nameInput = document.getElementById('customListNameInput');
   const name = nameInput.value.trim();
   if (!name) {
-    alert('Name this list first.');
+    showToast('Name this list first.', 'error');
     return;
   }
 
@@ -58627,7 +59880,7 @@ function saveCustomList() {
       }).then(async (res) => {
         const data = await res.json();
         if (!data.ok) {
-          alert('Could not save list: ' + (data.error || 'unknown error'));
+          showToast('Could not save list: ' + (data.error || 'unknown error'), 'error');
           return;
         }
         const slug = data.slug;
@@ -58652,7 +59905,7 @@ function saveCustomList() {
           showAddedToast('"' + name + '" saved \u2713');
         }
       }).catch(() => {
-        alert('Network error while saving list.');
+        showToast('Network error while saving list.', 'error');
       });
     } else {
       const map = loadLocalCustomLists();
@@ -58713,7 +59966,7 @@ function saveCustomList() {
 // the one on the server, not a row in this particular install link.
 async function saveCreatorListEdit(name) {
   if (!activeCreator) {
-    alert('Your Profile session expired -- please restore it again.');
+    showToast('Your Profile session expired -- please restore it again.', 'error');
     editingCreatorListSlug = null;
     updateCustomListSaveButtonLabel();
     return;
@@ -58787,7 +60040,7 @@ async function saveCreatorListEdit(name) {
       if (typeof showAppNoticeModal === 'function') {
         showAppNoticeModal('This List Changed Elsewhere', msg, true);
       } else {
-        alert(msg);
+        showToast(msg, 'error');
       }
       return;
     }
@@ -58796,7 +60049,7 @@ async function saveCreatorListEdit(name) {
       if (typeof showAppNoticeModal === 'function') {
         showAppNoticeModal('Could Not Save Changes', data.error || 'Unknown error occurred.', true);
       } else {
-        alert('Could not save changes: ' + (data.error || 'unknown error'));
+        showToast('Could not save changes: ' + (data.error || 'unknown error'), 'error');
       }
       return;
     }
@@ -58827,7 +60080,7 @@ async function saveCreatorListEdit(name) {
     if (typeof showAppNoticeModal === 'function') {
       showAppNoticeModal('Network Error', 'A network error occurred while saving. Please try again.', true);
     } else {
-      alert('Network error while saving.');
+      showToast('Network error while saving.', 'error');
     }
   } finally {
     endSubmit();
@@ -58960,7 +60213,7 @@ async function saveLocalCustomListEdit(name) {
     if (typeof showAppNoticeModal === 'function') {
       showAppNoticeModal(title, msg, true);
     } else {
-      alert(msg);
+      showToast(msg, 'error');
     }
     cancelEditCustomList();
     renderCreatorDashboard();
@@ -58983,7 +60236,7 @@ function openEditCustomListDraft(urlInput) {
   if (!urlInput) return;
   const payload = parseCustomListPayloadClient(urlInput.value);
   if (!payload) {
-    alert('Could not read this list to edit it.');
+    showToast('Could not read this list to edit it.', 'error');
     return;
   }
   customListDraftItems = (payload.items || []).slice();
@@ -59018,7 +60271,7 @@ function editCustomList(btn) {
   const sourceRow = btn.closest('.source-row');
   const urlInput = sourceRow && sourceRow.querySelector('.url');
   if (!urlInput) {
-    alert('Could not read this list to edit it.');
+    showToast('Could not read this list to edit it.', 'error');
     return;
   }
   openEditCustomListDraft(urlInput);
@@ -59105,7 +60358,7 @@ function setCustomListDraftTypeToggle(type) {
       return itType !== type;
     });
     if (hasOpposite) {
-      alert('This list contains both movies and shows -- keep it set to "Mixed" or remove incompatible items first.');
+      showToast('This list contains both movies and shows -- keep it set to "Mixed" or remove incompatible items first.', 'error');
       updateCustomListTypeRadio(customListDraftType);
       return;
     }
@@ -59546,7 +60799,7 @@ function removeWatchedItemFromWatchlist(id, showId, extraIds) {
     if (!s) return;
     targetIds.add(s);
     if (s.startsWith('tmdb:')) targetIds.add(s.slice(5));
-    else if (/^\d+$/.test(s)) targetIds.add('tmdb:' + s);
+    else if (/^\\d+$/.test(s)) targetIds.add('tmdb:' + s);
   };
   addId(id);
   if (Array.isArray(extraIds)) extraIds.forEach(addId);
@@ -59582,11 +60835,11 @@ function removeWatchedItemFromWatchlist(id, showId, extraIds) {
         if (itShowId && fullyWatchedShowIds.has(itShowId)) return false;
         if (itTmdbId && fullyWatchedShowIds.has(itTmdbId)) return false;
         if (itId && itId.startsWith('tmdb:') && fullyWatchedShowIds.has(itId.slice(5))) return false;
-        if (itId && /^\d+$/.test(itId) && fullyWatchedShowIds.has('tmdb:' + itId)) return false;
+        if (itId && /^\\d+$/.test(itId) && fullyWatchedShowIds.has('tmdb:' + itId)) return false;
         return true;
       }
 
-      if (itId && (targetIds.has(itId) || (/^\d+$/.test(itId) && targetIds.has('tmdb:' + itId)) || (itId.startsWith('tmdb:') && targetIds.has(itId.slice(5))))) return false;
+      if (itId && (targetIds.has(itId) || (/^\\d+$/.test(itId) && targetIds.has('tmdb:' + itId)) || (itId.startsWith('tmdb:') && targetIds.has(itId.slice(5))))) return false;
       if (itImdbId && targetIds.has(itImdbId)) return false;
       if (itTmdbId && (targetIds.has(itTmdbId) || targetIds.has('tmdb:' + itTmdbId))) return false;
       return true;
@@ -59655,11 +60908,11 @@ function removeWatchedItemFromWatchlist(id, showId, extraIds) {
           if (itShowId && fullyWatchedShowIds.has(itShowId)) return false;
           if (itTmdbId && fullyWatchedShowIds.has(itTmdbId)) return false;
           if (itId && itId.startsWith('tmdb:') && fullyWatchedShowIds.has(itId.slice(5))) return false;
-          if (itId && /^\d+$/.test(itId) && fullyWatchedShowIds.has('tmdb:' + itId)) return false;
+          if (itId && /^\\d+$/.test(itId) && fullyWatchedShowIds.has('tmdb:' + itId)) return false;
           return true;
         }
 
-        if (itId && (targetIds.has(itId) || (/^\d+$/.test(itId) && targetIds.has('tmdb:' + itId)) || (itId.startsWith('tmdb:') && targetIds.has(itId.slice(5))))) return false;
+        if (itId && (targetIds.has(itId) || (/^\\d+$/.test(itId) && targetIds.has('tmdb:' + itId)) || (itId.startsWith('tmdb:') && targetIds.has(itId.slice(5))))) return false;
         if (itImdbId && targetIds.has(itImdbId)) return false;
         if (itTmdbId && (targetIds.has(itTmdbId) || targetIds.has('tmdb:' + itTmdbId))) return false;
         return true;
@@ -59704,7 +60957,7 @@ function cleanWatchedFromWatchlists() {
       const s = String(w.id);
       watchedIds.add(s);
       if (s.startsWith('tmdb:')) watchedIds.add(s.slice(5));
-      else if (/^\d+$/.test(s)) watchedIds.add('tmdb:' + s);
+      else if (/^\\d+$/.test(s)) watchedIds.add('tmdb:' + s);
     }
     if (w.imdbId) watchedIds.add(String(w.imdbId));
     if (w.tmdbId) {
@@ -59740,11 +60993,11 @@ function cleanWatchedFromWatchlists() {
         if (itImdbId && fullyWatchedShowIds.has(itImdbId)) return false;
         if (itTmdbId && fullyWatchedShowIds.has(itTmdbId)) return false;
         if (itId && itId.startsWith('tmdb:') && fullyWatchedShowIds.has(itId.slice(5))) return false;
-        if (itId && /^\d+$/.test(itId) && fullyWatchedShowIds.has('tmdb:' + itId)) return false;
+        if (itId && /^\\d+$/.test(itId) && fullyWatchedShowIds.has('tmdb:' + itId)) return false;
         return true;
       } else {
         // Movies: remove as soon as they appear in Watch History.
-        if (itId && (watchedIds.has(itId) || (/^\d+$/.test(itId) && watchedIds.has('tmdb:' + itId)) || (itId.startsWith('tmdb:') && watchedIds.has(itId.slice(5))))) return false;
+        if (itId && (watchedIds.has(itId) || (/^\\d+$/.test(itId) && watchedIds.has('tmdb:' + itId)) || (itId.startsWith('tmdb:') && watchedIds.has(itId.slice(5))))) return false;
         if (itImdbId && watchedIds.has(itImdbId)) return false;
         if (itTmdbId && (watchedIds.has(itTmdbId) || watchedIds.has('tmdb:' + itTmdbId))) return false;
         return true;
@@ -60151,7 +61404,7 @@ window.markShowWatched = async function(imdbId) {
   }
 
   const tkInput = document.getElementById('tmdbKeyInput');
-  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
 
   const allEpisodes = [];
   const CONCURRENCY = 4;
@@ -60860,7 +62113,7 @@ async function updateContinueWatching(showId) {
   if (!showId) return { ok: false };
 
   const tkInput = document.getElementById('tmdbKeyInput');
-  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || (typeof localStorage !== 'undefined' ? (localStorage.getItem('myListAddon:tmdbKey') || '') : '');
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || (typeof localStorage !== 'undefined' ? (readProviderSecret('myListAddon:tmdbKey') || '') : '');
 
   // Reading Watch History here (outside the commit lock) is safe: nothing
   // concurrently writes to Watch History during a Continue Watching batch
@@ -62017,7 +63270,7 @@ async function backfillWatchHistoryEpisodeStills() {
   // Sort season 1 first so missing shows are detected before checking later seasons
   pending.sort((a, b) => (Number(a[1].seasonNum) || 0) - (Number(b[1].seasonNum) || 0));
   const tkInput = document.getElementById('tmdbKeyInput');
-  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
 
   let changed = 0;
   const inFlightShows = new Set();
@@ -62176,7 +63429,7 @@ function buildAiringNextCardHtml() {
           subtitle: it.name || it.episodeTitle || (it.isSeasonPremiere ? 'Season Premiere' : (it.episodeNum != null ? ('Episode ' + it.episodeNum) : ''))
         };
     const removeBtn = it.showId
-      ? '<button type="button" class="cw-remove-btn" onclick="event.stopPropagation(); removeAiringNextShow(&quot;' + escapeJsAttr(it.showId) + '&quot;, this)" title="Remove from Airing Next" aria-label="Remove from Airing Next">\u2715</button>'
+      ? '<button type="button" class="cw-remove-btn" data-act="removeAiringNextShow" data-act-stop data-act-args="' + appActArgs([it.showId, "@self"]) + '" title="Remove from Airing Next" aria-label="Remove from Airing Next">\u2715</button>'
       : '';
     const ratingSpan = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(it) : '';
     return '<div class="list-card-mini-poster-tile">' +
@@ -62761,6 +64014,209 @@ function saveLocalCustomList(sourceRow, urlInput, payload, name) {
 // place. Best-effort per list -- one failing (e.g. a dropped connection
 // partway through) doesn't lose the others; anything that didn't migrate
 // stays in the local store rather than being deleted, so it isn't lost.
+// --- Browser-only lists, and how one gets to an account (P6-9) --------------
+//
+// A list made while signed out lives in this browser alone (D-8). That is a
+// deliberate mode, not a bug -- but it is invisible, which is UX-H10, and
+// nothing in the old UI would move one to an account afterwards. The shell's
+// Lists view now says "Saved in this browser only" on every one of them and
+// offers two ways out: **Save to an account** and **Export** (a small JSON
+// file the same page can restore -- see appShellExportList in 24_).
+//
+// What "browser only" means in code: an entry in the local custom-lists map
+// with no creatorSlug. Every list the account owns gets one -- it is stamped on
+// the way up (here and in uploadMissingLocalListsToAccount) and on the way
+// down (backfillCreatorListsIntoLocalMap) -- so a missing one is the honest
+// answer to "does the account have this list".
+//
+// The push itself is the same request migrateLocalCustomListsToAccount has
+// always made; it is one function now so the sign-up migration and the per-list
+// button cannot drift apart.
+
+// The request, and nothing else: hand this list's payload to the account. The
+// caller decides what happens to the browser's copy afterwards, because the two
+// callers differ -- sign-up deletes it, the sign-in flush has nothing to delete
+// (signing in already cleared this browser's store).
+async function uploadLocalListPayloadToAccount(payload) {
+  if (!activeCreator || !activeCreator.creatorName) return { ok: false, error: 'signed-out' };
+  const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
+  if (!creatorKey) return { ok: false, error: 'signed-out' };
+  const list = payload || {};
+  const body = {
+    creatorName: activeCreator.creatorName,
+    creatorKey: creatorKey,
+    slug: list.creatorSlug || list.slug,
+    name: list.name || list.slug,
+    type: list.type || 'movie',
+    items: Array.isArray(list.items) ? list.items : [],
+    visibility: list.visibility || 'private',
+  };
+  if (list.sourceUrl) body.sourceUrl = list.sourceUrl;
+  if (list.synced != null) body.synced = list.synced;
+  if (list.lastSyncedAt != null) body.lastSyncedAt = list.lastSyncedAt;
+  if (list.baseItemIds) body.baseItemIds = list.baseItemIds;
+  try {
+    const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!data || !data.ok || !data.slug) {
+      return { ok: false, error: (data && data.error) || 'save-failed' };
+    }
+    return { ok: true, slug: data.slug, url: data.url || '', visibility: body.visibility };
+  } catch (e) {
+    return { ok: false, error: 'network' };
+  }
+}
+
+// Every catalog row built from this local list now points at the account's
+// copy, so a later edit or re-save targets the list rather than re-creating a
+// second local one.
+function repointLocalListRowsToCreator(localSlug, result, visibility) {
+  const slug = String(localSlug || '');
+  const data = result || {};
+  const vis = visibility || 'private';
+  document.querySelectorAll('#lists .url').forEach((urlInput) => {
+    const rowPayload = parseCustomListPayloadClient(urlInput.value);
+    if (!rowPayload || rowPayload.localSlug !== slug) return;
+    const updatedPayload = Object.assign({}, rowPayload, {
+      publishedUrl: data.url,
+      creatorSlug: data.slug,
+      creatorOwner: (activeCreator && activeCreator.creatorName) || '',
+      visibility: vis,
+    });
+    delete updatedPayload.localSlug;
+    const sourceRow = urlInput.closest('.source-row');
+    if (sourceRow) sourceRow.outerHTML = customListSourceRowHtml('customlist:v1:' + JSON.stringify(updatedPayload));
+  });
+}
+
+// One list, by the slug it has in this browser's store. Used by the shell's
+// "Save to an account" button (signed in) -- the signed-out path remembers the
+// payload instead, because signing in clears this browser's store before the
+// push can happen.
+async function saveLocalListToAccount(slug, opts) {
+  const want = String(slug || '');
+  const map = loadLocalCustomLists();
+  const list = map[want];
+  if (!list || typeof list !== 'object') return { ok: false, error: 'missing' };
+  const options = opts || {};
+  const visibility = (options.visibility === 'public' || options.visibility === 'unlisted') ? options.visibility : 'private';
+  const payload = Object.assign({}, list, {
+    slug: list.creatorSlug || want,
+    name: list.name || want,
+    type: list.type || 'movie',
+    visibility: visibility,
+  });
+  const result = await uploadLocalListPayloadToAccount(payload);
+  if (!result.ok) return result;
+  repointLocalListRowsToCreator(want, result, visibility);
+  // Only now does the browser's copy go: the account has answered that it has
+  // the list, so there is nothing here that is not on the account.
+  const latest = loadLocalCustomLists();
+  if (latest && latest[want]) {
+    delete latest[want];
+    saveLocalCustomListsMap(latest);
+  }
+  // The account's list cache no longer describes reality (this list was not in
+  // it). Re-fetching is the caller's job: the migration below moves several
+  // lists and refreshes once at the end, and the shell's card refreshes before
+  // it re-renders, so neither shows a list that has just moved as missing.
+  if (typeof resetCreatorListsCache === 'function') resetCreatorListsCache();
+  return result;
+}
+
+// A press of "Save to an account" while signed out. The payload is copied here
+// rather than looked up later on purpose: signing in calls
+// clearLocalAccountData(), which empties this browser's list store, so by the
+// time there is an account to save to there would be nothing left to read.
+let _pendingListSaves = [];
+function rememberPendingListSave(slug) {
+  const want = String(slug || '');
+  const map = loadLocalCustomLists();
+  const list = map[want];
+  if (!list || typeof list !== 'object') return false;
+  if (_pendingListSaves.some((p) => p && p.slug === want)) return true;
+  _pendingListSaves.push({
+    slug: want,
+    name: list.name || want,
+    type: list.type || 'movie',
+    items: Array.isArray(list.items) ? list.items : [],
+    visibility: 'private',
+  });
+  return true;
+}
+
+function pendingListSaves() {
+  return _pendingListSaves.slice();
+}
+
+// Runs right after a sign-in completes (submitRestoreProfile) and after an
+// account is created (submitCreateProfile -- where the whole-store migration
+// has usually already taken them, so this finds nothing to do). Every list
+// somebody asked to save is pushed, and the result is said out loud: a silent
+// failure here would leave a list in a store this page no longer shows.
+//
+// Signing in to an account that already has lists (opts.avoidExistingSlugs,
+// submitRestoreProfile) is the one case where a queued list's slug can already
+// be taken -- by a DIFFERENT list: the queue only ever holds lists the account
+// had never been told about, and /api/creator/lists/save treats a named slug as
+// "edit that list". A "Favorites" built signed out would have replaced the
+// account's own "Favorites". Such a list goes up without a slug and gets a free
+// one; and if the account's lists cannot be read, every one does -- a second
+// list can be deleted, an overwritten one cannot be brought back. Sign-up keeps
+// the slug: the account is new, and the migration has just uploaded the same
+// list under it, so re-using it is what keeps the flush from adding a copy.
+async function accountListSlugsForFlush() {
+  try {
+    const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
+    if (!creatorKey || typeof fetchCreatorListsOnce !== 'function') return null;
+    const data = await fetchCreatorListsOnce(creatorKey);
+    if (!data || !data.ok || !Array.isArray(data.lists)) return null;
+    const taken = {};
+    data.lists.forEach((l) => { if (l && l.slug) taken[String(l.slug)] = true; });
+    return taken;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function flushPendingListSaves(opts) {
+  if (!_pendingListSaves.length) return 0;
+  if (!activeCreator || !activeCreator.creatorName) return 0;
+  const waiting = _pendingListSaves;
+  _pendingListSaves = [];
+  const avoidExisting = !!(opts && opts.avoidExistingSlugs);
+  const taken = avoidExisting ? await accountListSlugsForFlush() : null;
+  let saved = 0;
+  let failed = 0;
+  for (const pending of waiting) {
+    const clash = avoidExisting && (!taken || taken[String(pending.slug)]);
+    const result = await uploadLocalListPayloadToAccount(clash ? Object.assign({}, pending, { slug: '' }) : pending);
+    if (result.ok) saved++; else failed++;
+  }
+  if (saved && typeof showToast === 'function') {
+    showToast(saved === 1
+      ? 'Saved "' + (waiting[0].name || 'your list') + '" to your account.'
+      : 'Saved ' + saved + ' lists to your account.', 'success');
+  }
+  if (failed && typeof showToast === 'function') {
+    showToast(failed === 1
+      ? 'One list could not be saved to your account -- press Save to an account on it to try again.'
+      : failed + ' lists could not be saved to your account -- press Save to an account on each to try again.', 'error');
+  }
+  if (saved && typeof resetCreatorListsCache === 'function') resetCreatorListsCache();
+  if (saved && typeof renderCreatorDashboard === 'function') { try { renderCreatorDashboard({ silent: true }); } catch (e) {} }
+  // The shell's Lists view is showing these as browser-only; it needs to hear
+  // that they moved.
+  if (saved && typeof appShellRenderListsHome === 'function') {
+    try { appShellRenderListsHome(); } catch (e) {}
+  }
+  return saved;
+}
+
 async function migrateLocalCustomListsToAccount() {
   if (!activeCreator) return;
   const localMap = loadLocalCustomLists();
@@ -62769,9 +64225,9 @@ async function migrateLocalCustomListsToAccount() {
   // here would silently turn private watch history into a public server
   // list (see visibility: 'public' below) and then delete the local copy.
   // They do still get synced to the account, just privately and through
-  // pushCreatorSync/loadCreatorSync's own blob instead of this endpoint --
-  // that already runs right after this function returns (see
-  // submitCreateProfile), so nothing here needs to push them itself.
+  // pushCreatorSync/loadCreatorSync's own blob instead -- that already runs
+  // right after this function returns (see submitCreateProfile), so nothing
+  // here needs to push them itself.
   const AUTO_TRACKED_SLUGS = ['watch-history', 'continue-watching'];
   // The Watchlist migrates, but privately.
   //
@@ -62795,63 +64251,35 @@ async function migrateLocalCustomListsToAccount() {
       || (typeof list.name === 'string' && list.name.toLowerCase() === 'watchlist')));
   const slugs = Object.keys(localMap).filter((slug) => !AUTO_TRACKED_SLUGS.includes(slug));
   if (!slugs.length) return;
-  const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
   let migratedCount = 0;
   let failedCount = 0;
   for (const slug of slugs) {
-    const list = localMap[slug];
-    try {
-      const res = await fetch(ORIGIN + '/api/creator/lists/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          creatorName: activeCreator.creatorName,
-          creatorKey: creatorKey,
-          name: list.name,
-          type: list.type,
-          items: list.items,
-          visibility: isWatchlistSlug(slug, list) ? 'private' : 'public',
-        }),
-      });
-      const data = await res.json();
-      if (!data.ok) {
-        failedCount++;
-        continue;
-      }
-      migratedCount++;
-      delete localMap[slug];
-      // Repoint any row already in #lists that was built from this local
-      // list so it now saves/edits against the account instead.
-      document.querySelectorAll('#lists .url').forEach((urlInput) => {
-        const rowPayload = parseCustomListPayloadClient(urlInput.value);
-        if (!rowPayload || rowPayload.localSlug !== slug) return;
-        const updatedPayload = Object.assign({}, rowPayload, {
-          publishedUrl: data.url,
-          creatorSlug: data.slug,
-          creatorOwner: activeCreator.creatorName,
-          visibility: 'public',
-        });
-        delete updatedPayload.localSlug;
-        const sourceRow = urlInput.closest('.source-row');
-        if (sourceRow) sourceRow.outerHTML = customListSourceRowHtml('customlist:v1:' + JSON.stringify(updatedPayload));
-      });
-    } catch (e) {
+    const list = localMap[slug] || {};
+    const visibility = isWatchlistSlug(slug, list) ? 'private' : 'public';
+    // saveLocalListToAccount reads the store itself (the map object above is
+    // replaced by every save), so read the one field this loop needs first
+    // and let it do the rest.
+    const label = list.name || slug;
+    const result = await saveLocalListToAccount(slug, { visibility: visibility });
+    if (!result || !result.ok) {
       failedCount++;
+      continue;
     }
+    migratedCount++;
+    console.info('Migrated local list "' + label + '" to ' + slug + '.');
   }
-  saveLocalCustomListsMap(localMap);
   if (migratedCount) {
-    renumber();
-    checkAllDuplicateUrls();
+    if (typeof renumber === 'function') renumber();
+    if (typeof checkAllDuplicateUrls === 'function') checkAllDuplicateUrls();
     saveState();
-    renderCreatorDashboard();
+    if (typeof renderCreatorDashboard === 'function') renderCreatorDashboard();
   }
   if (failedCount) {
-    alert(
+    showToast(
       migratedCount
         ? migratedCount + ' list' + (migratedCount === 1 ? '' : 's') + " moved to your account, but " + failedCount + " couldn't be moved -- they're still saved locally, try again from this browser."
         : "Could not move your local lists to your account -- they're still saved locally, try again from this browser."
-    );
+    , 'error');
   }
 }
 
@@ -62869,12 +64297,12 @@ function renderCreatorProfileBar() {
   if (activeCreator) {
     bar.innerHTML =
       '<div style="display:flex; align-items:center; gap:8px;">' +
-      '<button type="button" class="subnav-pill active" style="margin:0; font-size:0.85rem; padding:8px 14px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px; border-radius:var(--radius-pill);" onclick="switchTab(&quot;account&quot;)">&#x1F464; ' + escapeHtml(activeCreator.displayName) + '</button>' +
+      '<button type="button" class="subnav-pill active" style="margin:0; font-size:0.85rem; padding:8px 14px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px; border-radius:var(--radius-pill);" data-act="switchTab" data-act-args="[&quot;account&quot;]">&#x1F464; ' + escapeHtml(activeCreator.displayName) + '</button>' +
       '</div>';
   } else {
     bar.innerHTML =
       '<div style="display:flex; align-items:center; gap:6px;">' +
-      '<button type="button" class="lc-btn primary" onclick="openRestoreModal()" style="padding:8px 16px; font-size:0.85rem; font-weight:700; border-radius:var(--radius-pill);">Login</button>' +
+      '<button type="button" class="lc-btn primary" data-act="openRestoreModal" style="padding:8px 16px; font-size:0.85rem; font-weight:700; border-radius:var(--radius-pill);">Login</button>' +
       '</div>';
   }
 }
@@ -62887,8 +64315,8 @@ function renderAccountKeySection() {
     box.innerHTML =
       '<p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Save and sync your lists, channels, presets, likes, and settings across all your devices automatically. No email or password needed &mdash; just a username and key.</p>' +
       '<div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-top:12px;">' +
-      '<button type="button" class="primary" onclick="openCreateProfileModal()">Create Free Account</button>' +
-      '<button type="button" class="secondary" onclick="openRestoreModal()">Login</button>' +
+      '<button type="button" class="primary" data-act="openCreateProfileModal">Create Free Account</button>' +
+      '<button type="button" class="secondary" data-act="openRestoreModal">Login</button>' +
       '</div>';
     return;
   }
@@ -62900,13 +64328,13 @@ function renderAccountKeySection() {
     '<span style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); font-weight:700;">Signed in as</span>' +
     '<h3 style="margin:2px 0 0; font-size:1.1rem; font-weight:800; color:var(--text);">&#x1F464; ' + escapeHtml(activeCreator.displayName) + '</h3>' +
     '</div>' +
-    '<button type="button" class="secondary lc-btn" onclick="switchCreatorProfile()">Sign Out / Switch</button>' +
+    '<button type="button" class="secondary lc-btn" data-act="switchCreatorProfile">Sign Out / Switch</button>' +
     '</div>' +
     '<p style="margin:0 0 4px;"><small>Account Key</small></p>' +
     '<div class="creator-key-display" id="accountKeyDisplay">' + '\u2022'.repeat(Math.max(8, key.length)) + '</div>' +
     '<div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-top:10px;">' +
-    '<button type="button" class="secondary" id="accountKeyToggleBtn" onclick="toggleAccountKeyVisibility()">Show Key</button>' +
-    '<button type="button" class="secondary" onclick="copyAccountKey()">Copy Key</button>' +
+    '<button type="button" class="secondary" id="accountKeyToggleBtn" data-act="toggleAccountKeyVisibility">Show Key</button>' +
+    '<button type="button" class="secondary" data-act="copyAccountKey">Copy Key</button>' +
     '</div>' +
     '<p style="margin-top:10px;"><small>Anyone with this key can sign in as you and edit your lists &mdash; keep it somewhere safe, and don&apos;t share it.</small></p>' +
     '<div class="recovery-section" style="margin-top:16px; padding:14px 16px; border:1px solid rgba(255,255,255,0.12); border-radius:12px; background:rgba(255,255,255,0.03);">' +
@@ -62921,34 +64349,34 @@ function renderAccountKeySection() {
           ? 'Your recovery answer is active. It can reset your key if lost, or find your username.'
           : 'You have not set a recovery answer. Add one so you can recover your username or reset your key if you ever lose them.') +
       '</p>' +
-      '<button type="button" class="secondary lc-btn" onclick="openSetRecoveryAnswerModal()">' +
+      '<button type="button" class="secondary lc-btn" data-act="openSetRecoveryAnswerModal">' +
         (hasRecovery ? 'Update Recovery Answer' : 'Set Recovery Answer') +
       '</button>' +
     '</div>' +
     '<div class="danger-zone" style="margin-top:20px; padding:14px 16px; border:1px solid rgba(255,149,0,0.35); border-radius:12px; background:rgba(255,149,0,0.06);">' +
       '<div style="font-weight:700; font-size:0.9rem; color:#ff9500; margin-bottom:4px;">Reset Account</div>' +
       '<p style="margin:0 0 10px; font-size:0.82rem; color:var(--muted);">Delete every list, channel, preset, watch history entry and catalog row on this account, returning it to how it was when you created it. Your account and key stay the same, and you stay signed in.</p>' +
-      '<button type="button" class="lc-btn" style="background:#ff9500; color:#fff; border:none; padding:7px 14px; font-weight:700; border-radius:8px; cursor:pointer;" onclick="openResetAccountModal()">Reset Account Data</button>' +
+      '<button type="button" class="lc-btn" style="background:#ff9500; color:#fff; border:none; padding:7px 14px; font-weight:700; border-radius:8px; cursor:pointer;" data-act="openResetAccountModal">Reset Account Data</button>' +
     '</div>' +
     '<div class="danger-zone" style="margin-top:12px; padding:14px 16px; border:1px solid rgba(255,59,48,0.3); border-radius:12px; background:rgba(255,59,48,0.05);">' +
       '<div style="font-weight:700; font-size:0.9rem; color:var(--danger, #ff3b30); margin-bottom:4px;">Delete Account</div>' +
       '<p style="margin:0 0 10px; font-size:0.82rem; color:var(--muted);">Permanently delete your account, all published lists, and all synced data from the server.</p>' +
-      '<button type="button" class="lc-btn" style="background:#ff3b30; color:#fff; border:none; padding:7px 14px; font-weight:700; border-radius:8px; cursor:pointer;" onclick="openDeleteAccountModal()">Delete Account &amp; All Data</button>' +
+      '<button type="button" class="lc-btn" style="background:#ff3b30; color:#fff; border:none; padding:7px 14px; font-weight:700; border-radius:8px; cursor:pointer;" data-act="openDeleteAccountModal">Delete Account &amp; All Data</button>' +
     '</div>';
 }
 
 function openSetRecoveryAnswerModal() {
   const hasRecovery = localStorage.getItem('myListAddon:hasRecoveryAnswer') === '1';
   showModal(
-    '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+    '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
     '<h2>' + (hasRecovery ? 'Update Recovery Answer' : 'Set Recovery Answer') + '</h2>' +
     '<p class="modal-sub">Choose an answer you will remember (e.g. your childhood pet, first school, or a passphrase). Must be at least 8 characters.</p>' +
     '<div class="row" style="margin-top:8px;"><input type="text" id="setRecoveryAnswerInput" placeholder="Recovery Answer (8+ characters)" minlength="8"></div>' +
     '<div class="row" style="margin-top:8px;"><input type="text" id="setRecoveryAnswerConfirmInput" placeholder="Confirm Recovery Answer" minlength="8"></div>' +
     '<div id="setRecoveryAnswerError"></div>' +
     '<div class="actions" style="margin-top:14px;">' +
-    '<button type="button" class="primary" id="setRecoveryAnswerBtn" onclick="submitSetRecoveryAnswer()">Save Recovery Answer</button>' +
-    '<button type="button" class="secondary" onclick="closeModal()">Cancel</button>' +
+    '<button type="button" class="primary" id="setRecoveryAnswerBtn" data-act="submitSetRecoveryAnswer">Save Recovery Answer</button>' +
+    '<button type="button" class="secondary" data-act="closeModal">Cancel</button>' +
     '</div>'
   );
 }
@@ -63056,7 +64484,7 @@ async function openResetAccountModal() {
           if (typeof showAppAlert === 'function') showAppAlert('Reset Failed', msg + ' Your local data has been cleared; sign in again to restore it from your account.', false);
           // Nothing replaces the busy dialog on this branch, so take it down
           // rather than leave a spinner turning over a finished request.
-          else { if (typeof closeModal === 'function') closeModal(); alert(msg); }
+          else { if (typeof closeModal === 'function') closeModal(); showToast(msg, 'error'); }
           return;
         }
 
@@ -63106,8 +64534,8 @@ function openDeleteAccountModal() {
       '</div>' +
       '<div id="deleteAccountStatus"></div>' +
       '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end; gap:8px;">' +
-        '<button type="button" class="secondary" onclick="closeModal()">Cancel</button>' +
-        '<button type="button" id="confirmDeleteAccountBtn" class="primary" style="background:#ff3b30; border-color:#ff3b30; color:#fff;" onclick="handleDeleteAccount()">Permanently Delete Everything</button>' +
+        '<button type="button" class="secondary" data-act="closeModal">Cancel</button>' +
+        '<button type="button" id="confirmDeleteAccountBtn" class="primary" style="background:#ff3b30; border-color:#ff3b30; color:#fff;" data-act="handleDeleteAccount">Permanently Delete Everything</button>' +
       '</div>' +
     '</div>'
   );
@@ -63154,11 +64582,11 @@ function openShareListModal(listName, listUrl) {
       '<p style="margin:0 0 14px; font-size:0.88rem; color:var(--muted);">Share <strong>' + escapeHtml(listName || 'Custom List') + '</strong> with others or open it in your browser.</p>' +
       '<div style="display:flex; gap:8px; align-items:center; margin-bottom:14px;">' +
         '<input type="text" id="shareListUrlInput" value="' + escapeAttr(listUrl) + '" readonly style="flex:1; padding:10px 12px; font-size:0.9rem; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text);">' +
-        '<button type="button" class="lc-btn primary" id="shareListCopyBtn" onclick="copyShareListUrl()" style="white-space:nowrap; padding:10px 16px;">Copy Link</button>' +
+        '<button type="button" class="lc-btn primary" id="shareListCopyBtn" data-act="copyShareListUrl" style="white-space:nowrap; padding:10px 16px;">Copy Link</button>' +
       '</div>' +
       '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end; gap:8px;">' +
         '<a href="' + escapeAttr(listUrl) + '" target="_blank" class="button secondary lc-btn" style="text-decoration:none; display:inline-flex; align-items:center;">Open Link &nearr;</a>' +
-        '<button type="button" class="secondary lc-btn" onclick="closeModal()">Close</button>' +
+        '<button type="button" class="secondary lc-btn" data-act="closeModal">Close</button>' +
       '</div>' +
     '</div>'
   );
@@ -63219,7 +64647,7 @@ function renderWatchlistPreferencesSection() {
   } catch (e) {}
   box.innerHTML =
     '<label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">' +
-      '<input type="checkbox" id="removeWatchedFromWatchlistCheck" ' + (autoClean ? 'checked' : '') + ' onchange="onRemoveWatchedFromWatchlistToggle(this)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">' +
+      '<input type="checkbox" id="removeWatchedFromWatchlistCheck" ' + (autoClean ? 'checked' : '') + ' data-act="onRemoveWatchedFromWatchlistToggle" data-act-args="[&quot;@self&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">' +
       '<div>' +
         '<span style="font-weight:600;">Automatically remove watched items from Watchlist</span>' +
         '<p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Movies are removed once watched. TV shows are only removed after every episode has been watched.</p>' +
@@ -63296,17 +64724,17 @@ function renderHiddenListsSettingsSection() {
   }
 
   // If provider lists are not loaded yet but credentials exist, trigger background fetch so this panel populates
-  if (!window._myPrivateTraktLists && !window._myTraktLists && ((typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken'))) {
+  if (!window._myPrivateTraktLists && !window._myTraktLists && ((typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken'))) {
     if (typeof runMyPrivateTraktLists === 'function') runMyPrivateTraktLists();
     else if (typeof runMyTraktLists === 'function') runMyTraktLists();
   }
-  if (!window._myMdblistLists && ((typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || localStorage.getItem('myListAddon:mdblistKey'))) {
+  if (!window._myMdblistLists && ((typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || readProviderSecret('myListAddon:mdblistKey'))) {
     if (typeof runMyMdblistLists === 'function') runMyMdblistLists();
   }
-  if (!window._mySimklLists && ((typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || localStorage.getItem('myListAddon:simklKey'))) {
+  if (!window._mySimklLists && ((typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || readProviderSecret('myListAddon:simklKey'))) {
     if (typeof runMySimklLists === 'function') runMySimklLists();
   }
-  if (!window._myTmdbLists && ((typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || localStorage.getItem('myListAddon:tmdbSessionId') || localStorage.getItem('myListAddon:tmdbKey'))) {
+  if (!window._myTmdbLists && ((typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || readProviderSecret('myListAddon:tmdbSessionId') || readProviderSecret('myListAddon:tmdbKey'))) {
     if (typeof runMyTmdbLists === 'function') runMyTmdbLists();
   }
 
@@ -63351,7 +64779,7 @@ function renderHiddenListsSettingsSection() {
   const sectionsHtml = Object.keys(sectionLabels).map((section) => {
     const checked = hiddenSections.has(section);
     return '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none; padding:6px 0; border-bottom:1px solid var(--border);">' +
-      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-section-id="' + escapeAttr(section) + '" onchange="onHiddenSectionToggle(this)" style="cursor:pointer; width:16px; height:16px; flex-shrink:0;">' +
+      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-section-id="' + escapeAttr(section) + '" data-act="onHiddenSectionToggle" data-act-args="[&quot;@self&quot;]" style="cursor:pointer; width:16px; height:16px; flex-shrink:0;">' +
       '<span style="font-weight:600;">' + escapeHtml(sectionLabels[section]) + '</span>' +
     '</label>';
   }).join('');
@@ -63359,7 +64787,7 @@ function renderHiddenListsSettingsSection() {
   const rowsHtml = rows.length ? rows.map((r) => {
     const checked = hiddenIds.has(String(r.id));
     return '<label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none; padding:6px 0; border-bottom:1px solid var(--border);">' +
-      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-list-id="' + escapeAttr(r.id) + '" onchange="onHiddenListToggle(this)" style="margin-top:2px; cursor:pointer; width:16px; height:16px; flex-shrink:0;">' +
+      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-list-id="' + escapeAttr(r.id) + '" data-act="onHiddenListToggle" data-act-args="[&quot;@self&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px; flex-shrink:0;">' +
       '<div style="min-width:0;">' +
         '<span style="font-weight:600; overflow-wrap:anywhere;">' + escapeHtml(r.name) + '</span>' +
         '<div style="color:var(--muted); font-size:0.78rem; margin-top:2px;">' + escapeHtml(r.source) + '</div>' +
@@ -63441,7 +64869,7 @@ function renderTrackPlaybackSection() {
     '<div style="margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid var(--border);">' +
       '<p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">Streaming Apps &amp; Addon Players (Stremio, Nuvio, Wako, etc.)</p>' +
       '<label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.9rem;">' +
-        '<input type="checkbox" id="trackPlaybackCheck" ' + (enabled ? 'checked' : '') + ' onchange="onTrackPlaybackToggle(this)">' +
+        '<input type="checkbox" id="trackPlaybackCheck" ' + (enabled ? 'checked' : '') + ' data-act="onTrackPlaybackToggle" data-act-args="[&quot;@self&quot;]">' +
         '<span>Enable In-App Playback Auto-Tracking</span>' +
       '</label>' +
       '<p style="margin:6px 0 0; color:var(--muted); font-size:0.8rem;">Automatically marks movies and episodes as watched whenever playback starts in any supported streaming app or addon player (Stremio, Nuvio, Wako, etc.) via the built-in playback hook. Takes effect on your next install link.</p>' +
@@ -63452,26 +64880,26 @@ function renderTrackPlaybackSection() {
       '<p style="margin:0 0 8px; color:var(--muted); font-size:0.82rem;">Automatically scrobble watched movies and TV episodes from your Plex, Jellyfin, or Emby media servers directly into your personal Watch History and Continue Watching lists.</p>' +
       '<div class="webhook-input-group">' +
         '<input type="text" readonly id="scrobbleWebhookInput" value="Loading\u2026" style="padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:rgba(0,0,0,0.3); color:var(--text); font-family:monospace; font-size:0.82rem;">' +
-        '<button type="button" class="secondary lc-btn" onclick="copyScrobbleWebhookUrl()" style="padding:8px 14px; font-size:0.84rem;">Copy Webhook URL</button>' +
-        '<button type="button" class="secondary lc-btn" onclick="regenerateScrobbleWebhookUrl()" title="Issues a new webhook URL and stops the old one working. Use this if the URL has been shared or logged somewhere it should not have been." style="padding:8px 14px; font-size:0.84rem;">Regenerate</button>' +
+        '<button type="button" class="secondary lc-btn" data-act="copyScrobbleWebhookUrl" style="padding:8px 14px; font-size:0.84rem;">Copy Webhook URL</button>' +
+        '<button type="button" class="secondary lc-btn" data-act="regenerateScrobbleWebhookUrl" title="Issues a new webhook URL and stops the old one working. Use this if the URL has been shared or logged somewhere it should not have been." style="padding:8px 14px; font-size:0.84rem;">Regenerate</button>' +
       '</div>' +
 
       '<div style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
         '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0 0 4px;">' +
-          '<input type="checkbox" id="scrobbleFilterUsersCb" ' + (filterUsers ? 'checked' : '') + ' onchange="onScrobbleFilterUsersToggle(this)" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
+          '<input type="checkbox" id="scrobbleFilterUsersCb" ' + (filterUsers ? 'checked' : '') + ' data-act="onScrobbleFilterUsersToggle" data-act-args="[&quot;@self&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
           '<span style="font-weight:600;">Enable Media Server User Filtering</span>' +
         '</label>' +
         '<p style="margin:0 0 8px; color:var(--muted); font-size:0.8rem;">When enabled, only selected or specified media server user profiles will scrobble into your lists. Unselected users will be ignored.</p>' +
         '<div id="scrobbleFilterDetails" style="' + (filterUsers ? '' : 'display:none;') + ' margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.06);">' +
           '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">' +
             '<p style="margin:0; font-size:0.8rem; font-weight:600; color:var(--text);">Select Allowed Users:</p>' +
-            '<button type="button" class="secondary lc-btn" onclick="loadScrobbleSeenUsers()" style="padding:3px 8px; font-size:0.75rem;">Refresh Users</button>' +
+            '<button type="button" class="secondary lc-btn" data-act="loadScrobbleSeenUsers" style="padding:3px 8px; font-size:0.75rem;">Refresh Users</button>' +
           '</div>' +
           '<div id="scrobbleSeenUsersBox" style="font-size:0.82rem; color:var(--muted); margin-bottom:10px;"><small>Loading\u2026</small></div>' +
           '<p style="margin:0 0 4px; font-size:0.8rem; color:var(--muted);">Additional / Manual Usernames (comma-separated):</p>' +
-          '<input type="text" id="scrobbleAllowedUsersInput" placeholder="e.g. James, Alice" value="' + escapeHtml(allowedUsers) + '" oninput="onScrobbleAllowedUsersChange()" style="width:100%; box-sizing:border-box; margin-bottom:8px; font-size:0.84rem;">' +
+          '<input type="text" id="scrobbleAllowedUsersInput" placeholder="e.g. James, Alice" value="' + escapeHtml(allowedUsers) + '" data-act-on="input" data-act="onScrobbleAllowedUsersChange" style="width:100%; box-sizing:border-box; margin-bottom:8px; font-size:0.84rem;">' +
           '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:0.84rem; user-select:none; margin:0;">' +
-            '<input type="checkbox" id="scrobbleBlockAnonCb" ' + (blockAnon ? 'checked' : '') + ' onchange="onScrobbleBlockAnonChange(this)" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
+            '<input type="checkbox" id="scrobbleBlockAnonCb" ' + (blockAnon ? 'checked' : '') + ' data-act="onScrobbleBlockAnonChange" data-act-args="[&quot;@self&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
             '<span>Block scrobbles with no username in the payload</span>' +
           '</label>' +
         '</div>' +
@@ -63479,15 +64907,15 @@ function renderTrackPlaybackSection() {
 
       '<div style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
         '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0 0 8px;">' +
-          '<input type="checkbox" id="syncMediaServerHistoryCb" checked onchange="toggleMediaServerSync(this.checked)" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
+          '<input type="checkbox" id="syncMediaServerHistoryCb" checked data-act="toggleMediaServerSync" data-act-args="[&quot;@checked&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
           '<span style="font-weight:600;">Automatically sync media server scrobbles to your Watch History list</span>' +
         '</label>' +
         '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0 0 10px;">' +
-          '<input type="checkbox" id="forwardScrobbleToProvidersCb" checked onchange="toggleForwardScrobbles(this.checked)" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
+          '<input type="checkbox" id="forwardScrobbleToProvidersCb" checked data-act="toggleForwardScrobbles" data-act-args="[&quot;@checked&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
           '<span style="font-weight:600;">Forward scrobbles to connected external accounts (Trakt, Simkl, MDBList)</span>' +
         '</label>' +
         '<div>' +
-          '<button type="button" class="secondary lc-btn" onclick="syncAllConnectedAccountsNow(this)" style="padding:8px 14px; font-size:0.82rem; white-space:normal; line-height:1.35; text-align:center; max-width:100%; width:100%; box-sizing:border-box;">Sync Current Watch History to Connected Accounts Now</button>' +
+          '<button type="button" class="secondary lc-btn" data-act="syncAllConnectedAccountsNow" data-act-args="[&quot;@self&quot;]" style="padding:8px 14px; font-size:0.82rem; white-space:normal; line-height:1.35; text-align:center; max-width:100%; width:100%; box-sizing:border-box;">Sync Current Watch History to Connected Accounts Now</button>' +
         '</div>' +
       '</div>' +
 
@@ -63679,7 +65107,7 @@ async function loadScrobbleSeenUsers() {
       const serverName = (info && info.server) || 'Media Server';
       html +=
         '<label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.84rem; padding:3px 0;">' +
-          '<input type="checkbox" class="scrobble-user-cb" value="' + escapeHtml(username) + '" ' + (isChecked ? 'checked' : '') + ' onchange="onScrobbleUserCheckboxToggle()" style="width:15px; height:15px; cursor:pointer; flex:none;">' +
+          '<input type="checkbox" class="scrobble-user-cb" value="' + escapeHtml(username) + '" ' + (isChecked ? 'checked' : '') + ' data-act="onScrobbleUserCheckboxToggle" style="width:15px; height:15px; cursor:pointer; flex:none;">' +
           '<span><strong>' + escapeHtml(username) + '</strong> <span style="color:var(--muted); font-size:0.78rem;">(' + escapeHtml(serverName) + timeStr + ')</span></span>' +
         '</label>';
     }
@@ -63696,7 +65124,7 @@ function copyScrobbleWebhookUrl() {
   navigator.clipboard.writeText(input.value).then(() => {
     if (typeof showAddedToast === 'function') showAddedToast('Webhook URL copied to clipboard! \u2713');
     else if (typeof showAppAlert === 'function') showAppAlert('Copied', 'Scrobble Webhook URL copied to clipboard! Paste this URL into Plex, Jellyfin, or Emby webhooks settings.', true);
-    else alert('Scrobble Webhook URL copied to clipboard! Paste this URL into Plex, Jellyfin, or Emby webhooks settings.');
+    else showToast('Scrobble Webhook URL copied to clipboard! Paste this URL into Plex, Jellyfin, or Emby webhooks settings.', 'success');
   }).catch(() => {
     if (typeof showAppPrompt === 'function') {
       showAppPrompt('Scrobble Webhook URL', 'Copy your Scrobble Webhook URL below:', input.value);
@@ -63743,7 +65171,7 @@ async function refreshTrackPlaybackStatus() {
     const serverLabel = data.lastServer ? '<strong>' + escapeHtml(data.lastServer) + '</strong>' : '<strong>In-App Streaming Player</strong>';
     const userLabel = data.lastUser ? ' &bull; User: <strong>' + escapeHtml(data.lastUser) + '</strong>' : '';
     const rawMatched = data.matched || data.lastPingId || 'OK';
-    const displayMatched = rawMatched.replace(/^(yes|no|error)\b/i, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+    const displayMatched = rawMatched.replace(/^(yes|no|error)\\b/i, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
     statusBox.innerHTML =
       '<div style="padding:10px 12px; background:rgba(0,122,255,0.08); border:1px solid rgba(0,122,255,0.25); border-radius:8px; font-size:0.84rem;">' +
         '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">' +
@@ -63764,7 +65192,7 @@ function copyAccountKey() {
   if (!key) return;
   navigator.clipboard.writeText(key).then(() => {
     if (typeof showAddedToast === 'function') showAddedToast('Key copied to clipboard! \u2713');
-    else alert('Key copied to your clipboard.');
+    else showToast('Key copied to your clipboard.', 'success');
   }).catch(() => {
     if (typeof showAppPrompt === 'function') {
       showAppPrompt('Account Key', 'Copy your key below:', key);
@@ -63788,6 +65216,12 @@ function clearLocalAccountData() {
   tmdbSessionId = '';
   tmdbAccountId = '';
   tmdbUsername = '';
+  // Since P6-8 the provider keys and tokens live in memory, not localStorage,
+  // so the storage sweep below no longer reaches them. Left in place, the next
+  // account signed in on this tab inherited the last one's -- and the first
+  // load of an account with none of its own pushed them up to it.
+  _providerSecretsInMemory = {};
+  _creatorKeysAppliedFor = null;
 
   // Clear personal list arrays & tracking sets
   window._myTraktLists = [];
@@ -63948,19 +65382,19 @@ function switchCreatorProfile() {
 
 function openRestoreModal() {
   showModal(
-    '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+    '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
     '<h2>Login</h2>' +
     '<p class="modal-sub">Enter your Username and Account Key to login and sync your lists.</p>' +
     '<div class="row"><input type="text" id="restoreNameInput" placeholder="Username"></div>' +
     '<div class="row" style="margin-top:8px;"><input type="text" id="restoreKeyInput" placeholder="Key (e.g. MYL-XXXX-XXXX-XXXX)"></div>' +
     '<div id="restoreModalError"></div>' +
     '<div class="actions" style="margin-top:14px;">' +
-    '<button type="button" class="primary" id="restoreSubmitBtn" onclick="submitRestoreProfile()">Login</button>' +
-    '<button type="button" class="secondary" onclick="closeModal(); openCreateProfileModal();">Need an account? Create one</button>' +
+    '<button type="button" class="primary" id="restoreSubmitBtn" data-act="submitRestoreProfile">Login</button>' +
+    '<button type="button" class="secondary" data-act="closeModal" data-act-then="openCreateProfileModal">Need an account? Create one</button>' +
     '</div>' +
     '<div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px; font-size:0.85rem;">' +
-    '<a href="#" onclick="event.preventDefault(); closeModal(); openForgotKeyModal();">Forgot key?</a>' +
-    '<a href="#" onclick="event.preventDefault(); closeModal(); openForgotUsernameModal();">Forgot username?</a>' +
+    '<a href="#" data-act="closeModal" data-act-prevent data-act-then="openForgotKeyModal">Forgot key?</a>' +
+    '<a href="#" data-act="closeModal" data-act-prevent data-act-then="openForgotUsernameModal">Forgot username?</a>' +
     '</div>'
   );
 }
@@ -64012,6 +65446,11 @@ async function submitRestoreProfile() {
     await loadCreatorSync();
     // After the sync load, so tokens this account keeps in sync are included.
     if (data.session && typeof importLocalConnectionsOnce === 'function') importLocalConnectionsOnce(data.creatorName);
+    // P6-9: a list marked "Save to an account" while signed out was copied out
+    // of the store before this sign-in (clearLocalAccountData empties it), and
+    // is pushed now -- which is the only moment it can be. This account may
+    // already have lists, so a clashing slug is not re-used (see the function).
+    await flushPendingListSaves({ avoidExistingSlugs: true });
   } catch (e) {
     errBox.innerHTML = '<p class="testresult err">Network error.</p>';
   } finally {
@@ -64027,15 +65466,15 @@ async function submitRestoreProfile() {
 // person has fully proven who they are.
 function openForgotKeyModal() {
   showModal(
-    '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+    '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
     '<h2>Reset Your Key</h2>' +
     '<p class="modal-sub">Enter your Username and the recovery answer you set when you created your account.</p>' +
     '<div class="row"><input type="text" id="forgotKeyNameInput" placeholder="Username"></div>' +
     '<div class="row" style="margin-top:8px;"><input type="text" id="forgotKeyAnswerInput" placeholder="Recovery Answer"></div>' +
     '<div id="forgotKeyModalError"></div>' +
     '<div class="actions" style="margin-top:14px;">' +
-    '<button type="button" class="primary" id="forgotKeySubmitBtn" onclick="submitForgotKey()">Reset Key</button>' +
-    '<button type="button" class="secondary" onclick="closeModal(); openRestoreModal();">Back to Login</button>' +
+    '<button type="button" class="primary" id="forgotKeySubmitBtn" data-act="submitForgotKey">Reset Key</button>' +
+    '<button type="button" class="secondary" data-act="closeModal" data-act-then="openRestoreModal">Back to Login</button>' +
     '</div>' +
     '<p class="modal-sub" style="margin-top:14px;">Didn\\'t set a recovery answer, or don\\'t remember it? Reach out via Settings &gt; Feedback &amp; Support.</p>'
   );
@@ -64093,15 +65532,15 @@ async function submitForgotKey() {
 // (and Recovery Answer if configured on their account).
 function openForgotUsernameModal() {
   showModal(
-    '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+    '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
     '<h2>Find Your Username</h2>' +
     '<p class="modal-sub">Enter your Account Key and Recovery Answer (if you set one) to retrieve your username.</p>' +
     '<div class="row"><input type="text" id="forgotUsernameKeyInput" placeholder="Key (e.g. MYL-XXXX-XXXX-XXXX)"></div>' +
     '<div class="row" style="margin-top:8px;"><input type="text" id="forgotUsernameAnswerInput" placeholder="Recovery Answer (if set)"></div>' +
     '<div id="forgotUsernameModalError"></div>' +
     '<div class="actions" style="margin-top:14px;">' +
-    '<button type="button" class="primary" id="forgotUsernameSubmitBtn" onclick="submitForgotUsername()">Find Username</button>' +
-    '<button type="button" class="secondary" onclick="closeModal(); openRestoreModal();">Back to Login</button>' +
+    '<button type="button" class="primary" id="forgotUsernameSubmitBtn" data-act="submitForgotUsername">Find Username</button>' +
+    '<button type="button" class="secondary" data-act="closeModal" data-act-then="openRestoreModal">Back to Login</button>' +
     '</div>'
   );
 }
@@ -64130,14 +65569,14 @@ async function submitForgotUsername() {
     }
     const username = data.username;
     showModal(
-      '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+      '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
       '<h2>Account Found</h2>' +
       '<p class="modal-sub" style="margin-bottom:6px;">Your Username is:</p>' +
       '<div class="creator-key-display" style="font-size:1.1rem; font-weight:700; user-select:all;">' + escapeHtml(username) + '</div>' +
       (data.displayName && data.displayName !== username ? '<p class="modal-sub" style="margin-top:8px;">Display Name: <strong>' + escapeHtml(data.displayName) + '</strong></p>' : '') +
       '<div class="actions" style="margin-top:18px;">' +
       '<button type="button" class="primary" id="loginWithFoundUserBtn">Login with this Username</button>' +
-      '<button type="button" class="secondary" onclick="closeModal()">Done</button>' +
+      '<button type="button" class="secondary" data-act="closeModal">Done</button>' +
       '</div>'
     );
     const loginBtn = document.getElementById('loginWithFoundUserBtn');
@@ -64426,6 +65865,37 @@ function creatorSyncGateOpen() {
   return _creatorSyncLoadedFor === activeCreator.creatorName;
 }
 
+// --- The provider credentials a push may speak for ---------------------------
+//
+// The gate above opens on a timer when the first load never lands, and that
+// used to be safe for the credentials because this browser kept its own copy
+// of them. Since P6-8 it does not: a tab knows the account's keys and tokens
+// only once a load has handed them back. A push from a tab that never got that
+// far would send every one of them blank, and sync/save stores what it is sent
+// -- one failed load, then any autosave, and the account's Trakt, MDBList,
+// Simkl and TMDB connections were gone.
+//
+// So until the account's own credentials have been applied, a blank one is
+// left out of the push rather than sent, and the server keeps what it has for
+// anything a push leaves out (see /api/creator/sync/save, 26_). A credential
+// this tab does have still goes up, and so does a blank for a provider that
+// was disconnected on purpose: that blank is the disconnect.
+var _creatorKeysAppliedFor = null;
+
+function accountProviderSecretsApplied() {
+  if (typeof activeCreator === 'undefined' || !activeCreator) return false;
+  return _creatorKeysAppliedFor === activeCreator.creatorName;
+}
+
+function creatorSyncKeysForPush() {
+  const keys = (typeof collectKeys === 'function') ? collectKeys() : {};
+  if (accountProviderSecretsApplied()) return keys;
+  Object.keys(PROVIDER_SECRET_FIELDS).forEach((field) => {
+    if (!keys[field] && !isProviderDisconnected(PROVIDER_SECRET_FIELDS[field])) delete keys[field];
+  });
+  return keys;
+}
+
 // Remembers that a push was wanted. Which kind is all that needs keeping --
 // every push reads the current state out of localStorage/the DOM when it
 // runs, so one deferred push covers any number of changes made while the gate
@@ -64695,7 +66165,8 @@ async function pushCreatorSync() {
         creatorName: activeCreator.creatorName,
         creatorKey: creatorKey,
         config: collectEntries(),
-        keys: (typeof collectKeys === 'function') ? collectKeys() : {},
+        // Not collectKeys() as it stands: see creatorSyncKeysForPush.
+        keys: creatorSyncKeysForPush(),
         // Presets and tracking data (watchHistory/continueWatching/etc)
         // deliberately NOT included here -- both are pieces of this state
         // that can genuinely grow large, while everything else in this
@@ -65116,6 +66587,8 @@ async function loadCreatorSync(opts) {
     // account emptied while this browser was asleep? If so its copy is stale by
     // definition, and uploading it is exactly how a reset used to undo itself.
     if (shouldApplyAccountReset(data.resetAt)) {
+      // An emptied account has no credentials to lose: blank is the truth.
+      _creatorKeysAppliedFor = loadingFor;
       markCreatorSyncLoaded();
       applyRemoteAccountReset(data.resetAt);
       return;
@@ -65124,6 +66597,7 @@ async function loadCreatorSync(opts) {
       // This account has nothing stored, so there is nothing to be stale
       // against and this browser's state becomes its first save -- open the
       // gate first, or the pushes below would defer against themselves.
+      _creatorKeysAppliedFor = loadingFor;
       markCreatorSyncLoaded();
       pushCreatorSync();
       const localPresets = loadPresetsMap();
@@ -65335,26 +66809,30 @@ async function loadCreatorSync(opts) {
         let needPushSync = false;
 
         if (synced.keys.tmdbKey && !tmdbDisc) {
-          localStorage.setItem('myListAddon:tmdbKey', synced.keys.tmdbKey);
+          rememberProviderSecret('myListAddon:tmdbKey', synced.keys.tmdbKey);
+          // The account has it; a pre-P6-8 copy here is redundant.
+          dropLegacyProviderSecret('myListAddon:tmdbKey');
           const el = document.getElementById('tmdbKeyInput');
           if (el) el.value = synced.keys.tmdbKey;
         } else if (tmdbDisc) {
-          localStorage.removeItem('myListAddon:tmdbKey');
+          forgetProviderSecret('myListAddon:tmdbKey');
           const el = document.getElementById('tmdbKeyInput');
           if (el) el.value = '';
-        } else if (localStorage.getItem('myListAddon:tmdbKey')) {
+        } else if (readProviderSecret('myListAddon:tmdbKey')) {
           needPushSync = true;
         }
 
         if (synced.keys.tmdbSessionId && !tmdbDisc) {
-          localStorage.setItem('myListAddon:tmdbSessionId', synced.keys.tmdbSessionId);
+          rememberProviderSecret('myListAddon:tmdbSessionId', synced.keys.tmdbSessionId);
+          // The account has it; a pre-P6-8 copy here is redundant.
+          dropLegacyProviderSecret('myListAddon:tmdbSessionId');
           window.tmdbSessionId = synced.keys.tmdbSessionId;
           tmdbSessionId = synced.keys.tmdbSessionId;
         } else if (tmdbDisc) {
-          localStorage.removeItem('myListAddon:tmdbSessionId');
+          forgetProviderSecret('myListAddon:tmdbSessionId');
           window.tmdbSessionId = '';
           tmdbSessionId = '';
-        } else if (localStorage.getItem('myListAddon:tmdbSessionId')) {
+        } else if (readProviderSecret('myListAddon:tmdbSessionId')) {
           needPushSync = true;
         }
 
@@ -65383,26 +66861,30 @@ async function loadCreatorSync(opts) {
         }
 
         if (synced.keys.mdblistKey && !mdblistDisc) {
-          localStorage.setItem('myListAddon:mdblistKey', synced.keys.mdblistKey);
+          rememberProviderSecret('myListAddon:mdblistKey', synced.keys.mdblistKey);
+          // The account has it; a pre-P6-8 copy here is redundant.
+          dropLegacyProviderSecret('myListAddon:mdblistKey');
           const el = document.getElementById('mdblistKeyInput');
           if (el) el.value = synced.keys.mdblistKey;
         } else if (mdblistDisc) {
-          localStorage.removeItem('myListAddon:mdblistKey');
+          forgetProviderSecret('myListAddon:mdblistKey');
           const el = document.getElementById('mdblistKeyInput');
           if (el) el.value = '';
-        } else if (localStorage.getItem('myListAddon:mdblistKey')) {
+        } else if (readProviderSecret('myListAddon:mdblistKey')) {
           needPushSync = true;
         }
 
         if (synced.keys.mdblistAccessToken && !mdblistDisc) {
-          localStorage.setItem('myListAddon:mdblistAccessToken', synced.keys.mdblistAccessToken);
+          rememberProviderSecret('myListAddon:mdblistAccessToken', synced.keys.mdblistAccessToken);
+          // The account has it; a pre-P6-8 copy here is redundant.
+          dropLegacyProviderSecret('myListAddon:mdblistAccessToken');
           window.mdblistAccessToken = synced.keys.mdblistAccessToken;
           mdblistAccessToken = synced.keys.mdblistAccessToken;
         } else if (mdblistDisc) {
-          localStorage.removeItem('myListAddon:mdblistAccessToken');
+          forgetProviderSecret('myListAddon:mdblistAccessToken');
           window.mdblistAccessToken = '';
           mdblistAccessToken = '';
-        } else if (localStorage.getItem('myListAddon:mdblistAccessToken')) {
+        } else if (readProviderSecret('myListAddon:mdblistAccessToken')) {
           needPushSync = true;
         }
 
@@ -65419,14 +66901,16 @@ async function loadCreatorSync(opts) {
         }
 
         if (synced.keys.traktKey && !traktDisc) {
-          localStorage.setItem('myListAddon:traktKey', synced.keys.traktKey);
+          rememberProviderSecret('myListAddon:traktKey', synced.keys.traktKey);
+          // The account has it; a pre-P6-8 copy here is redundant.
+          dropLegacyProviderSecret('myListAddon:traktKey');
           const el = document.getElementById('traktKeyInput');
           if (el) el.value = synced.keys.traktKey;
         } else if (traktDisc) {
-          localStorage.removeItem('myListAddon:traktKey');
+          forgetProviderSecret('myListAddon:traktKey');
           const el = document.getElementById('traktKeyInput');
           if (el) el.value = '';
-        } else if (localStorage.getItem('myListAddon:traktKey')) {
+        } else if (readProviderSecret('myListAddon:traktKey')) {
           needPushSync = true;
         }
 
@@ -65445,38 +66929,44 @@ async function loadCreatorSync(opts) {
         }
 
         if (synced.keys.traktAccessToken && !traktDisc) {
-          localStorage.setItem('myListAddon:traktAccessToken', synced.keys.traktAccessToken);
+          rememberProviderSecret('myListAddon:traktAccessToken', synced.keys.traktAccessToken);
+          // The account has it; a pre-P6-8 copy here is redundant.
+          dropLegacyProviderSecret('myListAddon:traktAccessToken');
           window.traktAccessToken = synced.keys.traktAccessToken;
           traktAccessToken = synced.keys.traktAccessToken;
         } else if (traktDisc) {
-          localStorage.removeItem('myListAddon:traktAccessToken');
+          forgetProviderSecret('myListAddon:traktAccessToken');
           window.traktAccessToken = '';
           traktAccessToken = '';
-        } else if (localStorage.getItem('myListAddon:traktAccessToken')) {
+        } else if (readProviderSecret('myListAddon:traktAccessToken')) {
           needPushSync = true;
         }
 
         if (synced.keys.simklKey && !simklDisc) {
-          localStorage.setItem('myListAddon:simklKey', synced.keys.simklKey);
+          rememberProviderSecret('myListAddon:simklKey', synced.keys.simklKey);
+          // The account has it; a pre-P6-8 copy here is redundant.
+          dropLegacyProviderSecret('myListAddon:simklKey');
           const el = document.getElementById('simklKeyInput');
           if (el) el.value = synced.keys.simklKey;
         } else if (simklDisc) {
-          localStorage.removeItem('myListAddon:simklKey');
+          forgetProviderSecret('myListAddon:simklKey');
           const el = document.getElementById('simklKeyInput');
           if (el) el.value = '';
-        } else if (localStorage.getItem('myListAddon:simklKey')) {
+        } else if (readProviderSecret('myListAddon:simklKey')) {
           needPushSync = true;
         }
 
         if (synced.keys.simklAccessToken && !simklDisc) {
-          localStorage.setItem('myListAddon:simklAccessToken', synced.keys.simklAccessToken);
+          rememberProviderSecret('myListAddon:simklAccessToken', synced.keys.simklAccessToken);
+          // The account has it; a pre-P6-8 copy here is redundant.
+          dropLegacyProviderSecret('myListAddon:simklAccessToken');
           window.simklAccessToken = synced.keys.simklAccessToken;
           simklAccessToken = synced.keys.simklAccessToken;
         } else if (simklDisc) {
-          localStorage.removeItem('myListAddon:simklAccessToken');
+          forgetProviderSecret('myListAddon:simklAccessToken');
           window.simklAccessToken = '';
           simklAccessToken = '';
-        } else if (localStorage.getItem('myListAddon:simklAccessToken')) {
+        } else if (readProviderSecret('myListAddon:simklAccessToken')) {
           needPushSync = true;
         }
 
@@ -65851,6 +67341,7 @@ async function loadCreatorSync(opts) {
     // The account's state is applied, so anything this browser wants to send
     // is now built on it rather than on nothing. Releases whatever was held
     // back while this load was in flight -- see creatorSyncGateOpen.
+    _creatorKeysAppliedFor = loadingFor;
     markCreatorSyncLoaded();
   } catch (e) {
     // Network hiccup -- stay with whatever's already on this browser
@@ -65875,7 +67366,7 @@ async function loadCreatorSync(opts) {
 function beginSaveListFlow(sourceRow, urlInput, name) {
   const payload = parseCustomListPayloadClient(urlInput.value);
   if (!payload) {
-    alert('Could not read this list.');
+    showToast('Could not read this list.', 'error');
     return;
   }
   if (activeCreator) {
@@ -65893,13 +67384,13 @@ function startSaveListFlow(btn) {
   const sourceRow = btn.closest('.source-row');
   const urlInput = sourceRow && sourceRow.querySelector('.url');
   if (!urlInput) {
-    alert('Could not read this list.');
+    showToast('Could not read this list.', 'error');
     return;
   }
   const rowDiv = urlInput.closest('.entry');
   const name = rowDiv && rowDiv.querySelector('.name') ? rowDiv.querySelector('.name').value.trim() : '';
   if (!name) {
-    alert('Name this list first (in the row above), then try again.');
+    showToast('Name this list first (in the row above), then try again.', 'error');
     return;
   }
   beginSaveListFlow(sourceRow, urlInput, name);
@@ -65907,7 +67398,7 @@ function startSaveListFlow(btn) {
 
 function openCreateProfileModal() {
   showModal(
-    '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+    '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
     '<h2>Create a Free Account</h2>' +
     '<p class="modal-sub">Save and sync your custom lists, presets, and channels from any device.<br>No email. No password. Just a username and key.</p>' +
     '<div class="row"><input type="text" id="createProfileNameInput" placeholder="Choose a Username" maxlength="25"></div>' +
@@ -65916,8 +67407,8 @@ function openCreateProfileModal() {
     '<p class="modal-sub" style="font-size:0.78rem; margin-top:4px;">If you ever lose your key, this is the only way back in besides contacting us. It can reset your key on its own, so treat it like a password: at least 8 characters, something only you know -- not a public username or anything someone could look up.</p>' +
     '<div id="createProfileError"></div>' +
     '<div class="actions" style="margin-top:14px;">' +
-    '<button type="button" class="primary" id="createProfileSubmitBtn" onclick="submitCreateProfile()">Create Account</button>' +
-    '<button type="button" class="secondary" onclick="closeModal(); openRestoreModal();">Already have one? Login</button>' +
+    '<button type="button" class="primary" id="createProfileSubmitBtn" data-act="submitCreateProfile">Create Account</button>' +
+    '<button type="button" class="secondary" data-act="closeModal" data-act-then="openRestoreModal">Already have one? Login</button>' +
     '</div>'
   );
 }
@@ -66027,7 +67518,15 @@ async function submitCreateProfile() {
     renderTrackPlaybackSection();
     showKeyRevealModal(data.displayName, data.creatorKey);
     loadCreatorSync();
-    migrateLocalCustomListsToAccount();
+    // A list somebody pressed "Save to an account" on while signed out is in
+    // the queue. The whole-store migration above uploads every hand-built list
+    // and usually takes it first, so the flush waits for the migration (which
+    // is not awaited here) and then clears the queue either way -- see
+    // flushPendingListSaves.
+    Promise.resolve()
+      .then(function () { return migrateLocalCustomListsToAccount(); })
+      .catch(function () {})
+      .then(function () { return flushPendingListSaves(); });
   } catch (e) {
     errBox.innerHTML = '<p class="testresult err">Network error.</p>';
   } finally {
@@ -66053,8 +67552,8 @@ function showKeyRevealModal(displayName, creatorKey) {
     '<div class="creator-key-display" id="revealedCreatorKey">' + escapeHtml(creatorKey) + '</div>' +
     '<p class="modal-sub">Save this key somewhere safe. You\\'ll need it to edit your lists from another browser. You can view it again later from Settings.</p>' +
     '<div class="actions">' +
-    '<button type="button" class="secondary" id="copyRevealedKeyBtn" onclick="copyRevealedCreatorKey()">Copy Key</button>' +
-    '<button type="button" onclick="continueAfterKeyReveal()">Continue</button>' +
+    '<button type="button" class="secondary" id="copyRevealedKeyBtn" data-act="copyRevealedCreatorKey">Copy Key</button>' +
+    '<button type="button" data-act="continueAfterKeyReveal">Continue</button>' +
     '</div>'
   );
 }
@@ -66094,7 +67593,7 @@ function openVisibilityModal() {
   if (!ctx) return;
   showModal(
     '<div class="modal-body">' +
-      '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+      '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
       '<h2 class="panel-title" style="margin-top:0;">Save Custom List</h2>' +
       '<p style="margin:0 0 16px; font-size:0.88rem; color:var(--muted);">Choose visibility for <strong>' + escapeHtml(ctx.name || 'Custom List') + '</strong> on your Profile.</p>' +
       '<div class="visibility-choice" style="display:flex; flex-direction:column; gap:12px; margin: 16px 0 20px;">' +
@@ -66108,8 +67607,8 @@ function openVisibilityModal() {
         '</label>' +
       '</div>' +
       '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end; gap:8px;">' +
-        '<button type="button" class="secondary lc-btn" onclick="closeModal()">Cancel</button>' +
-        '<button type="button" class="primary lc-btn" onclick="confirmSaveAsCreator()">Save List</button>' +
+        '<button type="button" class="secondary lc-btn" data-act="closeModal">Cancel</button>' +
+        '<button type="button" class="primary lc-btn" data-act="confirmSaveAsCreator">Save List</button>' +
       '</div>' +
     '</div>'
   );
@@ -66119,7 +67618,7 @@ function showSavedCustomListModal(listName, visibility, url) {
   const isPrivate = visibility === 'private';
   showModal(
     '<div class="modal-body">' +
-      '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+      '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
       '<h2 class="panel-title" style="margin-top:0;">\u2713 List Saved</h2>' +
       '<p style="margin:8px 0 16px; font-size:0.9rem; color:var(--text);">' +
         '<strong>' + escapeHtml(listName || 'Custom List') + '</strong> has been saved to your Profile as a <strong>' + (isPrivate ? 'private' : 'public') + '</strong> list.' +
@@ -66132,13 +67631,13 @@ function showSavedCustomListModal(listName, visibility, url) {
             '<p style="margin:0 0 8px; font-size:0.84rem; color:var(--muted);">Public share link:</p>' +
             '<div style="display:flex; gap:8px; align-items:center;">' +
               '<input type="text" id="savedListUrlInput" value="' + escapeAttr(url || '') + '" readonly style="flex:1; padding:10px 12px; font-size:0.88rem; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text);">' +
-              '<button type="button" class="lc-btn primary" id="savedListCopyBtn" onclick="copyShareUrlById(&quot;savedListUrlInput&quot;, this)" style="white-space:nowrap; padding:10px 14px;">Copy Link</button>' +
+              '<button type="button" class="lc-btn primary" id="savedListCopyBtn" data-act="copyShareUrlById" data-act-args="[&quot;savedListUrlInput&quot;,&quot;@self&quot;]" style="white-space:nowrap; padding:10px 14px;">Copy Link</button>' +
             '</div>' +
           '</div>'
       ) +
       '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end; gap:8px;">' +
         (!isPrivate && url ? '<a href="' + escapeAttr(url) + '" target="_blank" class="button secondary lc-btn" style="text-decoration:none; display:inline-flex; align-items:center;">Open Link &nearr;</a>' : '') +
-        '<button type="button" class="primary lc-btn" onclick="closeModal()">Done</button>' +
+        '<button type="button" class="primary lc-btn" data-act="closeModal">Done</button>' +
       '</div>' +
     '</div>'
   );
@@ -66214,11 +67713,11 @@ async function confirmSaveAsCreator() {
 function showAppNoticeModal(title, message, isError) {
   showModal(
     '<div class="modal-body">' +
-      '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+      '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
       '<h2 class="panel-title" style="margin-top:0;' + (isError ? ' color:var(--danger);' : '') + '">' + escapeHtml(title || 'Notice') + '</h2>' +
       '<p style="margin:12px 0 20px; font-size:0.9rem; color:var(--text); line-height:1.4;">' + escapeHtml(message || '') + '</p>' +
       '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end;">' +
-        '<button type="button" class="primary lc-btn" onclick="closeModal()">OK</button>' +
+        '<button type="button" class="primary lc-btn" data-act="closeModal">OK</button>' +
       '</div>' +
     '</div>'
   );
@@ -66911,13 +68410,13 @@ async function renderCreatorDashboard(options) {
           overlays += '<div class="list-card-count-overlay desktop-only creatorListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
         }
         const removeBtn = isWatchlist
-          ? '<button type="button" class="cw-remove-btn" onclick="event.stopPropagation(); removeWatchlistItemDirect(&quot;' + escapeJsAttr(it.imdbId || it.id) + '&quot;, this)" title="Remove from Watchlist" aria-label="Remove from Watchlist">\u2715</button>'
+          ? '<button type="button" class="cw-remove-btn" data-act="removeWatchlistItemDirect" data-act-stop data-act-args="' + appActArgs([it.imdbId || it.id, "@self"]) + '" title="Remove from Watchlist" aria-label="Remove from Watchlist">\u2715</button>'
           : '';
         const posterType = it.kind || (it.type !== 'mixed' ? (it.type || '') : '') || (it.showId ? 'series' : (l.type === 'mixed' ? '' : (l.type || '')));
         const itemPoster = resolveItemPoster(it);
         const label = formatWatchItemLabel(it);
         const posterEl = itemPoster
-          ? '<img src="' + escapeAttr(itemPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.showId || it.imdbId || it.id || (it.tmdbId ? ('tmdb:' + it.tmdbId) : '')) + '" data-type="' + escapeAttr(posterType) + '" data-title="' + escapeAttr(label.title || it.showTitle || it.title || it.name || '') + '" alt="" loading="lazy" onerror="handlePosterImgError(this)">'
+          ? '<img src="' + escapeAttr(itemPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.showId || it.imdbId || it.id || (it.tmdbId ? ('tmdb:' + it.tmdbId) : '')) + '" data-type="' + escapeAttr(posterType) + '" data-title="' + escapeAttr(label.title || it.showTitle || it.title || it.name || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
           : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
           const ratingSpan = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(it) : '';
           return '<div class="list-card-mini-poster-tile" data-id="' + escapeAttr(it.showId || it.imdbId || it.id || '') + '" data-type="' + escapeAttr(posterType) + '" data-title="' + escapeAttr(label.title || it.showTitle || it.title || it.name || '') + '">' +
@@ -66940,7 +68439,7 @@ async function renderCreatorDashboard(options) {
         '<div class="list-card-header">' +
           '<div class="list-card-body creatorListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' +
             '<div class="list-card-title">' +
-              '<span class="drag-handle-list" title="Drag to reorder" onclick="event.stopPropagation();">&#x2630;</span>' +
+              '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop>&#x2630;</span>' +
               escapeHtml(l.name) +
             '</div>' +
             '<div class="list-card-meta">' +
@@ -67186,18 +68685,18 @@ function buildLocalListCardHtml(l) {
     let removeBtn = '';
     const cwRemoveId = it.showId || it.imdbId || it.id;
     if (l.slug === 'continue-watching' && cwRemoveId) {
-      removeBtn = '<button type="button" class="cw-remove-btn" onclick="event.stopPropagation(); dismissContinueWatchingShow(&quot;' + escapeJsAttr(cwRemoveId) + '&quot;, this)" title="Remove from Continue Watching" aria-label="Remove from Continue Watching">\u2715</button>';
+      removeBtn = '<button type="button" class="cw-remove-btn" data-act="dismissContinueWatchingShow" data-act-stop data-act-args="' + appActArgs([cwRemoveId, "@self"]) + '" title="Remove from Continue Watching" aria-label="Remove from Continue Watching">\u2715</button>';
     } else if (l.slug === 'airing-next' && cwRemoveId) {
       // The dashboard renders Airing Next through buildAiringNextCardHtml
       // (21_client-custom-list-builder.js), which has its own copy of this
       // button. This branch is for anything that reaches the generic card
       // with the airing-next slug, so the shelf never renders an "x" that
       // removes the wrong thing -- or, worse, none at all.
-      removeBtn = '<button type="button" class="cw-remove-btn" onclick="event.stopPropagation(); removeAiringNextShow(&quot;' + escapeJsAttr(cwRemoveId) + '&quot;, this)" title="Remove from Airing Next" aria-label="Remove from Airing Next">\u2715</button>';
+      removeBtn = '<button type="button" class="cw-remove-btn" data-act="removeAiringNextShow" data-act-stop data-act-args="' + appActArgs([cwRemoveId, "@self"]) + '" title="Remove from Airing Next" aria-label="Remove from Airing Next">\u2715</button>';
     } else if (isWatchlist) {
-      removeBtn = '<button type="button" class="cw-remove-btn" onclick="event.stopPropagation(); removeWatchlistItemDirect(&quot;' + escapeJsAttr(it.imdbId || it.id) + '&quot;, this)" title="Remove from Watchlist" aria-label="Remove from Watchlist">\u2715</button>';
+      removeBtn = '<button type="button" class="cw-remove-btn" data-act="removeWatchlistItemDirect" data-act-stop data-act-args="' + appActArgs([it.imdbId || it.id, "@self"]) + '" title="Remove from Watchlist" aria-label="Remove from Watchlist">\u2715</button>';
     } else if (l.slug === 'watch-history') {
-      removeBtn = '<button type="button" class="cw-remove-btn" onclick="event.stopPropagation(); removeWatchHistoryItemDirect(&quot;' + escapeJsAttr(it.id || it.imdbId) + '&quot;, this)" title="Remove from Watch History" aria-label="Remove from Watch History">\u2715</button>';
+      removeBtn = '<button type="button" class="cw-remove-btn" data-act="removeWatchHistoryItemDirect" data-act-stop data-act-args="' + appActArgs([it.id || it.imdbId, "@self"]) + '" title="Remove from Watch History" aria-label="Remove from Watch History">\u2715</button>';
     }
     const itemPoster = resolveItemPoster(it);
     const isAiringList = l.slug === 'airing-next' || l.statusKey === 'airing-next';
@@ -67280,7 +68779,7 @@ function buildLocalListCardHtml(l) {
     }
 
     const posterEl = itemPoster
-      ? '<img src="' + escapeAttr(itemPoster) + '" class="clickable-poster" data-id="' + escapeAttr(posterId) + '" data-type="' + escapeAttr(posterType) + '" data-title="' + escapeAttr(label.title || it.showTitle || it.title || it.name || '') + '" alt="" loading="lazy" onerror="handlePosterImgError(this)">'
+      ? '<img src="' + escapeAttr(itemPoster) + '" class="clickable-poster" data-id="' + escapeAttr(posterId) + '" data-type="' + escapeAttr(posterType) + '" data-title="' + escapeAttr(label.title || it.showTitle || it.title || it.name || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
       : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
     const ratingSpan = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(it) : '';
     return '<div class="list-card-mini-poster-tile" data-id="' + escapeAttr(posterId) + '" data-type="' + escapeAttr(posterType) + '" data-title="' + escapeAttr(label.title || it.showTitle || it.title || it.name || '') + '">' +
@@ -67342,7 +68841,7 @@ function buildLocalListCardHtml(l) {
     '<div class="list-card-header">' +
       '<div class="list-card-body localListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type || 'movie') + '" style="cursor:pointer;">' +
         '<div class="list-card-title">' +
-          '<span class="drag-handle-list" title="Drag to reorder" onclick="event.stopPropagation();">&#x2630;</span>' +
+          '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop>&#x2630;</span>' +
           escapeHtml(l.name) +
         '</div>' +
         '<div class="list-card-meta">' +
@@ -67607,7 +69106,7 @@ if (_creatorDashEl) {
           if (typeof showAppAlert === 'function') {
             showAppAlert('Error', 'Could not delete: ' + (data.error || 'unknown error'), false);
           } else {
-            alert('Could not delete: ' + (data.error || 'unknown error'));
+            showToast('Could not delete: ' + (data.error || 'unknown error'), 'error');
           }
           return;
         }
@@ -67641,7 +69140,7 @@ if (_creatorDashEl) {
         if (typeof showAppAlert === 'function') {
           showAppAlert('Network Error', 'Network error while deleting.', false);
         } else {
-          alert('Network error while deleting.');
+          showToast('Network error while deleting.', 'error');
         }
       }
     }, true);
@@ -67665,7 +69164,7 @@ if (_creatorDashEl) {
     const slug = addToConfigBtn.dataset.slug;
     const listMeta = (lastCreatorListsData || []).find((l) => l.slug === slug);
     if (!listMeta) {
-      alert('Could not find that list -- try refreshing.');
+      showToast('Could not find that list -- try refreshing.', 'error');
       return;
     }
     const isAdded = addToConfigBtn.classList.contains('is-added') || (typeof isListAddedToConfig === 'function' && isListAddedToConfig(null, listMeta.type, slug));
@@ -67773,7 +69272,7 @@ if (_creatorDashEl) {
     const slug = localAddToConfigBtn.dataset.slug;
     const listMeta = (lastLocalCustomListsData || []).find((l) => l.slug === slug);
     if (!listMeta) {
-      alert('Could not find that list -- try refreshing.');
+      showToast('Could not find that list -- try refreshing.', 'error');
       return;
     }
     
@@ -67921,7 +69420,7 @@ function normalizeSnapshotItemsForCatalog(items) {
 function editCreatorList(slug) {
   const listMeta = (lastCreatorListsData || []).find((l) => l.slug === slug);
   if (!listMeta) {
-    alert('Could not find that list -- try refreshing.');
+    showToast('Could not find that list -- try refreshing.', 'error');
     return;
   }
   const isWatchlist = slug === 'watchlist' || listMeta.isWatchlist || (listMeta.name && listMeta.name.toLowerCase() === 'watchlist');
@@ -67969,7 +69468,7 @@ function editLocalCustomList(slug) {
   const map = loadLocalCustomLists();
   const listMeta = map[slug];
   if (!listMeta) {
-    alert('Could not find that list -- try refreshing.');
+    showToast('Could not find that list -- try refreshing.', 'error');
     return;
   }
   const isWatchlist = slug === 'watchlist' || listMeta.isWatchlist || (listMeta.name && listMeta.name.toLowerCase() === 'watchlist');
@@ -68109,12 +69608,12 @@ function openCreateListModal(presetDestination) {
   if (!requireSignedInFor('create custom lists')) return; // docs/DECISIONS.md D-8
   const destEl = document.getElementById('createListModalDestination');
   if (destEl) {
-    const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
-    const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || localStorage.getItem('myListAddon:tmdbSessionId') || '';
+    const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
+    const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || readProviderSecret('myListAddon:tmdbSessionId') || '';
     const tmdbAcc = (typeof tmdbAccountId !== 'undefined' && tmdbAccountId) || localStorage.getItem('myListAddon:tmdbAccountId') || '';
-    const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
-    const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:mdblistKey') || '';
-    const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
+    const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
+    const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || readProviderSecret('myListAddon:mdblistKey') || '';
+    const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
 
     let optsHtml = '<option value="custom">Custom List (Local / Creator)</option>';
     if (traktToken) optsHtml += '<option value="trakt">Trakt List</option>';
@@ -68197,7 +69696,7 @@ async function submitCreateListModal() {
           if (data.ok && data.imdbId) finalImdbId = data.imdbId;
         } catch(e) {}
       } else if (finalImdbId && String(finalImdbId).startsWith('tt')) {
-        const apiKeyTmdb = (document.getElementById('tmdbKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:tmdbKey') || '';
+        const apiKeyTmdb = (document.getElementById('tmdbKeyInput')?.value.trim()) || readProviderSecret('myListAddon:tmdbKey') || '';
         if (apiKeyTmdb) {
           try {
             const findRes = await fetch('https://api.themoviedb.org/3/find/' + encodeURIComponent(finalImdbId) + '?api_key=' + encodeURIComponent(apiKeyTmdb) + '&external_source=imdb_id');
@@ -68290,16 +69789,16 @@ async function submitCreateListModal() {
       }
     } else {
       // External Provider Creation (Trakt, TMDB, MDBList)
-      const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
-      const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:traktKey') || '';
+      const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
+      const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || readProviderSecret('myListAddon:traktKey') || '';
       const traktUser = (typeof traktUsername !== 'undefined' && traktUsername) || localStorage.getItem('myListAddon:traktUsername') || '';
-      const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || localStorage.getItem('myListAddon:tmdbSessionId') || '';
-      const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:tmdbKey') || '';
-      const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
-      const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:mdblistKey') || '';
+      const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || readProviderSecret('myListAddon:tmdbSessionId') || '';
+      const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || readProviderSecret('myListAddon:tmdbKey') || '';
+      const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
+      const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || readProviderSecret('myListAddon:mdblistKey') || '';
       const mdbUser = (typeof mdblistUsername !== 'undefined' && mdblistUsername) || localStorage.getItem('myListAddon:mdblistUsername') || '';
-      const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
-      const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:simklKey') || '';
+      const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
+      const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || readProviderSecret('myListAddon:simklKey') || '';
 
       const res = await fetch(ORIGIN + '/api/external-list/create', {
         method: 'POST',
@@ -68412,12 +69911,12 @@ function deleteExternalListDirect(provider, listId, listName, btn) {
         btn.textContent = 'Deleting...';
       }
 
-      const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
-      const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:traktKey') || '';
-      const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || localStorage.getItem('myListAddon:tmdbSessionId') || '';
-      const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:tmdbKey') || '';
-      const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
-      const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:mdblistKey') || '';
+      const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
+      const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || readProviderSecret('myListAddon:traktKey') || '';
+      const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || readProviderSecret('myListAddon:tmdbSessionId') || '';
+      const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || readProviderSecret('myListAddon:tmdbKey') || '';
+      const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
+      const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || readProviderSecret('myListAddon:mdblistKey') || '';
 
       try {
         const res = await fetch(ORIGIN + '/api/external-list/delete', {
@@ -69525,11 +71024,11 @@ function collectKeys() {
   const tmdbKeyEl = document.getElementById('tmdbKeyInput');
   let tmdbKey = tmdbKeyEl ? tmdbKeyEl.value.trim() : '';
   if (!tmdbKey && !tmdbDisc) {
-    try { tmdbKey = localStorage.getItem('myListAddon:tmdbKey') || ''; } catch (e) {}
+    try { tmdbKey = readProviderSecret('myListAddon:tmdbKey') || ''; } catch (e) {}
   }
   let tmdbSession = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || '';
   if (!tmdbSession && !tmdbDisc) {
-    try { tmdbSession = localStorage.getItem('myListAddon:tmdbSessionId') || ''; } catch (e) {}
+    try { tmdbSession = readProviderSecret('myListAddon:tmdbSessionId') || ''; } catch (e) {}
   }
   let tmdbAcc = (typeof tmdbAccountId !== 'undefined' && tmdbAccountId) || '';
   if (!tmdbAcc && !tmdbDisc) {
@@ -69543,11 +71042,11 @@ function collectKeys() {
   const mdblistKeyEl = document.getElementById('mdblistKeyInput');
   let mdblistKey = mdblistKeyEl ? mdblistKeyEl.value.trim() : '';
   if (!mdblistKey && !mdblistDisc) {
-    try { mdblistKey = localStorage.getItem('myListAddon:mdblistKey') || ''; } catch (e) {}
+    try { mdblistKey = readProviderSecret('myListAddon:mdblistKey') || ''; } catch (e) {}
   }
   let mdblistToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || '';
   if (!mdblistToken && !mdblistDisc) {
-    try { mdblistToken = localStorage.getItem('myListAddon:mdblistAccessToken') || ''; } catch (e) {}
+    try { mdblistToken = readProviderSecret('myListAddon:mdblistAccessToken') || ''; } catch (e) {}
   }
   let mdblistUser = (typeof mdblistUsername !== 'undefined' && mdblistUsername) || '';
   if (!mdblistUser && !mdblistDisc) {
@@ -69557,7 +71056,7 @@ function collectKeys() {
   const traktKeyEl = document.getElementById('traktKeyInput');
   let traktKey = traktKeyEl ? traktKeyEl.value.trim() : '';
   if (!traktKey && !traktDisc) {
-    try { traktKey = localStorage.getItem('myListAddon:traktKey') || ''; } catch (e) {}
+    try { traktKey = readProviderSecret('myListAddon:traktKey') || ''; } catch (e) {}
   }
   const traktUserEl = document.getElementById('traktUsernameInput');
   let traktUser = traktUserEl ? traktUserEl.value.trim() : '';
@@ -69566,17 +71065,17 @@ function collectKeys() {
   }
   let traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || '';
   if (!traktToken && !traktDisc) {
-    try { traktToken = localStorage.getItem('myListAddon:traktAccessToken') || ''; } catch (e) {}
+    try { traktToken = readProviderSecret('myListAddon:traktAccessToken') || ''; } catch (e) {}
   }
 
   const simklKeyEl = document.getElementById('simklKeyInput');
   let simklKey = simklKeyEl ? simklKeyEl.value.trim() : '';
   if (!simklKey && !simklDisc) {
-    try { simklKey = localStorage.getItem('myListAddon:simklKey') || ''; } catch (e) {}
+    try { simklKey = readProviderSecret('myListAddon:simklKey') || ''; } catch (e) {}
   }
   let simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || '';
   if (!simklToken && !simklDisc) {
-    try { simklToken = localStorage.getItem('myListAddon:simklAccessToken') || ''; } catch (e) {}
+    try { simklToken = readProviderSecret('myListAddon:simklAccessToken') || ''; } catch (e) {}
   }
   let simklUser = (typeof simklUsername !== 'undefined' && simklUsername) || '';
   if (!simklUser && !simklDisc) {
@@ -70428,9 +71927,9 @@ function handlePosterImgError(img) {
   const betterPosterId = typeof betterPosterImdbFromUrl === 'function' ? betterPosterImdbFromUrl(failedSrc) : '';
 
   // Clean episode indicators from show title for fallback lookup, e.g. "Ted Lasso S03E01" -> "Ted Lasso"
-  const cleanTitle = title.replace(/\s+S\d+E\d+.*$/i, '').trim();
+  const cleanTitle = title.replace(/\\s+S\\d+E\\d+.*$/i, '').trim();
 
-  const tmdbId = betterPosterId ? '' : (id.startsWith('tmdb:') ? id.slice(5).split(':')[0] : (/^\d+/.test(id) ? id.split(':')[0] : ''));
+  const tmdbId = betterPosterId ? '' : (id.startsWith('tmdb:') ? id.slice(5).split(':')[0] : (/^\\d+/.test(id) ? id.split(':')[0] : ''));
   const imdbId = betterPosterId || (id.startsWith('tt') ? id.split(':')[0] : '');
 
   if (cleanTitle || tmdbId || imdbId) {
@@ -70786,7 +72285,7 @@ function livePreviewPosterHtml(m) {
   const landscape = m.posterShape === 'landscape';
   const posterClass = 'live-preview-poster' + (landscape ? ' landscape' : '');
   const posterEl = resolvedPoster
-    ? '<img class="' + posterClass + '" src="' + escapeAttr(resolvedPoster) + '" alt="" loading="lazy" onerror="handlePosterImgError(this)" data-imdb="' + escapeAttr(m.id || '') + '"><div class="' + posterClass + ' live-preview-poster-placeholder" style="display:none;"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>'
+    ? '<img class="' + posterClass + '" src="' + escapeAttr(resolvedPoster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]" data-imdb="' + escapeAttr(m.id || '') + '"><div class="' + posterClass + ' live-preview-poster-placeholder" style="display:none;"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>'
     : '<div class="' + posterClass + ' live-preview-poster-placeholder"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
   
   const parentUrl = (m.listUrl || (window._currentListDetailsParams ? window._currentListDetailsParams.listUrl : '') || '').toLowerCase();
@@ -70817,19 +72316,19 @@ function livePreviewPosterHtml(m) {
   let removeBtn = '';
   if (!m.isLivePreviewShelf && !m.hideRemoveBtn) {
     if (m.removeExternalProvider) {
-      removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="' + escapeAttr(m.removeExternalProvider) + '" data-target="' + escapeAttr(m.removeExternalTarget || '') + '" data-list-id="' + escapeAttr(m.removeExternalListId || '') + '" data-remove-id="' + escapeAttr(m.id) + '" data-media-type="' + escapeAttr(m.type || 'movie') + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from ' + escapeAttr(m.removeExternalProvider) + '" aria-label="Remove from ' + escapeAttr(m.removeExternalProvider) + '">\u2715</button>';
+      removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="' + escapeAttr(m.removeExternalProvider) + '" data-target="' + escapeAttr(m.removeExternalTarget || '') + '" data-list-id="' + escapeAttr(m.removeExternalListId || '') + '" data-remove-id="' + escapeAttr(m.id) + '" data-media-type="' + escapeAttr(m.type || 'movie') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from ' + escapeAttr(m.removeExternalProvider) + '" aria-label="Remove from ' + escapeAttr(m.removeExternalProvider) + '">\u2715</button>';
     } else {
       const cwRemoveTarget = m.removeShowId || (isCwItem ? (m.showId || m.id || m.imdbId) : null);
       if (cwRemoveTarget) {
-        removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="cw" data-remove-id="' + escapeAttr(cwRemoveTarget) + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from Continue Watching" aria-label="Remove from Continue Watching">\u2715</button>';
+        removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="cw" data-remove-id="' + escapeAttr(cwRemoveTarget) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Continue Watching" aria-label="Remove from Continue Watching">\u2715</button>';
       } else if (m.removeAiringShowId) {
-        removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="airing" data-remove-id="' + escapeAttr(m.removeAiringShowId) + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from Airing Next" aria-label="Remove from Airing Next">\u2715</button>';
+        removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="airing" data-remove-id="' + escapeAttr(m.removeAiringShowId) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Airing Next" aria-label="Remove from Airing Next">\u2715</button>';
       } else if (m.removeWatchlistId) {
-        removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="watchlist" data-remove-id="' + escapeAttr(m.removeWatchlistId) + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from Watchlist" aria-label="Remove from Watchlist">\u2715</button>';
+        removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="watchlist" data-remove-id="' + escapeAttr(m.removeWatchlistId) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Watchlist" aria-label="Remove from Watchlist">\u2715</button>';
       } else if (m.removeHistoryId) {
-        removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="history" data-remove-id="' + escapeAttr(m.removeHistoryId) + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from Watch History" aria-label="Remove from Watch History">\u2715</button>';
+        removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="history" data-remove-id="' + escapeAttr(m.removeHistoryId) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Watch History" aria-label="Remove from Watch History">\u2715</button>';
       } else if (m.removeCustomListSlug) {
-        removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="custom" data-remove-id="' + escapeAttr(m.id) + '" data-remove-slug="' + escapeAttr(m.removeCustomListSlug) + '" onclick="event.stopPropagation(); removeListItemFromDetails(this)" title="Remove from List" aria-label="Remove from List">\u2715</button>';
+        removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="custom" data-remove-id="' + escapeAttr(m.id) + '" data-remove-slug="' + escapeAttr(m.removeCustomListSlug) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from List" aria-label="Remove from List">\u2715</button>';
       }
     }
   }
@@ -71038,16 +72537,16 @@ function removeListItemFromDetails(btn) {
       }
     }
 
-    const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
-    const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:traktKey') || '';
+    const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
+    const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || readProviderSecret('myListAddon:traktKey') || '';
     const traktUser = (typeof traktUsername !== 'undefined' && traktUsername) || localStorage.getItem('myListAddon:traktUsername') || '';
-    const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
-    const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:simklKey') || '';
-    const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || localStorage.getItem('myListAddon:tmdbSessionId') || '';
+    const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
+    const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || readProviderSecret('myListAddon:simklKey') || '';
+    const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || readProviderSecret('myListAddon:tmdbSessionId') || '';
     const tmdbAcc = (typeof tmdbAccountId !== 'undefined' && tmdbAccountId) || localStorage.getItem('myListAddon:tmdbAccountId') || '';
-    const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:tmdbKey') || '';
-    const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
-    const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:mdblistKey') || '';
+    const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || readProviderSecret('myListAddon:tmdbKey') || '';
+    const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
+    const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || readProviderSecret('myListAddon:mdblistKey') || '';
 
     fetch(ORIGIN + '/api/external-list/item-mutate', {
       method: 'POST',
@@ -72901,7 +74400,7 @@ function importConfigJson() {
   const raw = document.getElementById('configJsonBox').value.trim();
   if (!raw) {
     if (typeof showAppAlert === 'function') showAppAlert('Input Required', 'Paste a config JSON blob into the box first.', false);
-    else alert('Paste a config JSON blob into the box first.');
+    else showToast('Paste a config JSON blob into the box first.', 'error');
     return;
   }
   let data;
@@ -72909,7 +74408,7 @@ function importConfigJson() {
     data = JSON.parse(raw);
   } catch (e) {
     if (typeof showAppAlert === 'function') showAppAlert('Invalid JSON', 'That is not valid JSON.', false);
-    else alert('That is not valid JSON.');
+    else showToast('That is not valid JSON.', 'error');
     return;
   }
   runImport(data);
@@ -72938,7 +74437,7 @@ function runImport(data) {
         false
       );
     } else {
-      alert('Import failed part-way: ' + detail);
+      showToast('Import failed part-way: ' + detail, 'error');
     }
   }
 }
@@ -72965,8 +74464,8 @@ function looksLikeTmdbKey(v) {
 
 // Ids and slugs that arrived from somewhere else.
 //
-// escapeJsAttr (19_client-search-and-likes.js) is what actually stops an
-// imported id executing; this is the second layer, and it is here because an
+// The action attributes (P6-8) are what actually stop an imported id
+// executing; this is the second layer, and it is here because an
 // id is not free text. Every id this app produces is a slug, a "ch_<time>_<rand>",
 // a "tt…" or a "tmdb:…" -- none of which can contain a quote, an angle bracket,
 // a backslash or a control character. A value that does was not produced by
@@ -73138,13 +74637,13 @@ function showImportReport(report) {
   const title = report.warnings.length ? 'Restored with warnings' : 'Restored';
   const body = lines.map((l) => '\\u2022 ' + l).join('\\n');
   if (typeof showAppAlert === 'function') showAppAlert(title, body, false);
-  else alert(title + '\\n\\n' + body);
+  else showToast(title + '\\n\\n' + body, 'error');
 }
 
 function applyImportedConfig(data) {
   if (!data || (!Array.isArray(data.entries) && !data.customLists && !data.configuredCatalogs)) {
     if (typeof showAppAlert === 'function') showAppAlert('Invalid Config', 'That JSON does not look like a valid My Lists backup.', false);
-    else alert('That JSON does not look like a valid My Lists backup.');
+    else showToast('That JSON does not look like a valid My Lists backup.', 'error');
     return;
   }
 
@@ -73176,13 +74675,13 @@ function applyImportedConfig(data) {
   if (tmdbKey) {
     const el = document.getElementById('tmdbKeyInput');
     if (el) el.value = tmdbKey;
-    try { localStorage.setItem('myListAddon:tmdbKey', tmdbKey); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:tmdbKey', tmdbKey); } catch (e) {}
   }
   const tmdbSessionIdVal = data.tmdbSessionId || keys.tmdbSessionId;
   if (tmdbSessionIdVal) {
     tmdbSessionId = tmdbSessionIdVal;
     window.tmdbSessionId = tmdbSessionIdVal;
-    try { localStorage.setItem('myListAddon:tmdbSessionId', tmdbSessionIdVal); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:tmdbSessionId', tmdbSessionIdVal); } catch (e) {}
   }
   const tmdbAccountIdVal = data.tmdbAccountId || keys.tmdbAccountId;
   if (tmdbAccountIdVal) {
@@ -73200,13 +74699,13 @@ function applyImportedConfig(data) {
   if (mdblistKey) {
     const el = document.getElementById('mdblistKeyInput');
     if (el) el.value = mdblistKey;
-    try { localStorage.setItem('myListAddon:mdblistKey', mdblistKey); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:mdblistKey', mdblistKey); } catch (e) {}
   }
   const mdblistAccessTokenVal = data.mdblistAccessToken || keys.mdblistAccessToken;
   if (mdblistAccessTokenVal) {
     mdblistAccessToken = mdblistAccessTokenVal;
     window.mdblistAccessToken = mdblistAccessTokenVal;
-    try { localStorage.setItem('myListAddon:mdblistAccessToken', mdblistAccessTokenVal); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:mdblistAccessToken', mdblistAccessTokenVal); } catch (e) {}
     if (typeof renderMdblistConnectStatus === 'function') renderMdblistConnectStatus();
   }
   const mdblistUsernameVal = data.mdblistUsername || keys.mdblistUsername;
@@ -73220,7 +74719,7 @@ function applyImportedConfig(data) {
   if (traktKey) {
     const el = document.getElementById('traktKeyInput');
     if (el) el.value = traktKey;
-    try { localStorage.setItem('myListAddon:traktKey', traktKey); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:traktKey', traktKey); } catch (e) {}
   }
   const traktUsernameVal = data.traktUsername || keys.traktUsername;
   if (traktUsernameVal) {
@@ -73233,7 +74732,7 @@ function applyImportedConfig(data) {
   if (traktAccessTokenVal) {
     traktAccessToken = traktAccessTokenVal;
     window.traktAccessToken = traktAccessTokenVal;
-    try { localStorage.setItem('myListAddon:traktAccessToken', traktAccessTokenVal); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:traktAccessToken', traktAccessTokenVal); } catch (e) {}
     if (typeof renderTraktConnectStatus === 'function') renderTraktConnectStatus();
   }
 
@@ -73241,13 +74740,13 @@ function applyImportedConfig(data) {
   if (simklKey) {
     const el = document.getElementById('simklKeyInput');
     if (el) el.value = simklKey;
-    try { localStorage.setItem('myListAddon:simklKey', simklKey); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:simklKey', simklKey); } catch (e) {}
   }
   const simklAccessTokenVal = data.simklAccessToken || keys.simklAccessToken;
   if (simklAccessTokenVal) {
     simklAccessToken = simklAccessTokenVal;
     window.simklAccessToken = simklAccessTokenVal;
-    try { localStorage.setItem('myListAddon:simklAccessToken', simklAccessTokenVal); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:simklAccessToken', simklAccessTokenVal); } catch (e) {}
   }
   const simklUsernameVal = data.simklUsername || keys.simklUsername;
   if (simklUsernameVal) {
@@ -73409,7 +74908,7 @@ function applyImportedConfig(data) {
   } else if (typeof showAppAlert === 'function') {
     showAppAlert('Restore Complete', 'Your setup, lists, watch history, channels, and settings have been restored successfully.', true);
   }
-  else alert('Your setup, lists, watch history, channels, and settings have been restored successfully.');
+  else showToast('Your setup, lists, watch history, channels, and settings have been restored successfully.', 'success');
 }
 
 // --- import from an existing link -------------------------------------------
@@ -73466,14 +74965,14 @@ async function importFromLink() {
   const raw = document.getElementById('importLinkInput').value.trim();
   if (!raw) {
     if (typeof showAppAlert === 'function') showAppAlert('Link Required', 'Paste an install link, configure link, or stremio:// / wako:// link first.', false);
-    else alert('Paste an install link, configure link, or stremio://\\/wako:// link first.');
+    else showToast('Paste an install link, configure link, or stremio://\\/wako:// link first.', 'error');
     return;
   }
   try {
     const data = await resolveInstallLinkData(raw);
     if (!data || !data.ok) {
       if (typeof showAppAlert === 'function') showAppAlert('Link Error', 'Could not load that link: ' + ((data && data.error) || 'unknown error'), false);
-      else alert('Could not load that link: ' + ((data && data.error) || 'unknown error'));
+      else showToast('Could not load that link: ' + ((data && data.error) || 'unknown error'), 'error');
       return;
     }
     restoreRows(data.entries);
@@ -73578,10 +75077,10 @@ async function importFromLink() {
       msg += '\\n\\nSkipped ' + unsafeFromLink.length + ' item(s) whose id contained characters this app never produces. A link from this app cannot contain those.';
     }
     if (typeof showAppAlert === 'function') showAppAlert('Import Complete', msg, true);
-    else alert(msg);
+    else showToast(msg, 'error');
   } catch (e) {
     if (typeof showAppAlert === 'function') showAppAlert('Network Error', 'Network error while resolving that link.', false);
-    else alert('Network error while resolving that link.');
+    else showToast('Network error while resolving that link.', 'error');
   }
 }
 
@@ -73589,14 +75088,14 @@ async function restoreListsFromLink() {
   const raw = document.getElementById('importLinkInput').value.trim();
   if (!raw) {
     if (typeof showAppAlert === 'function') showAppAlert('Link Required', 'Paste an install link, configure link, or stremio:// / wako:// link first.', false);
-    else alert('Paste an install link, configure link, or stremio://\\/wako:// link first.');
+    else showToast('Paste an install link, configure link, or stremio://\\/wako:// link first.', 'error');
     return;
   }
   try {
     const data = await resolveInstallLinkData(raw);
     if (!data || !data.ok) {
       if (typeof showAppAlert === 'function') showAppAlert('Link Error', 'Could not load that link: ' + ((data && data.error) || 'unknown error'), false);
-      else alert('Could not load that link: ' + ((data && data.error) || 'unknown error'));
+      else showToast('Could not load that link: ' + ((data && data.error) || 'unknown error'), 'error');
       return;
     }
 
@@ -73610,7 +75109,7 @@ async function restoreListsFromLink() {
 
     if (!listSlugs.length && !channelIds.length) {
       if (typeof showAppAlert === 'function') showAppAlert('No Custom Lists Found', 'That link does not contain any custom lists or custom channels.', false);
-      else alert('That link does not contain any custom lists or custom channels.');
+      else showToast('That link does not contain any custom lists or custom channels.', 'error');
       return;
     }
 
@@ -73693,10 +75192,10 @@ async function restoreListsFromLink() {
       msg += '\\n\\nSkipped ' + unsafeFromLink.length + ' item(s) whose id contained characters this app never produces. A link from this app cannot contain those.';
     }
     if (typeof showAppAlert === 'function') showAppAlert('Custom Lists Rebuilt', msg, true);
-    else alert(msg);
+    else showToast(msg, 'error');
   } catch (e) {
     if (typeof showAppAlert === 'function') showAppAlert('Network Error', 'Network error while resolving that link.', false);
-    else alert('Network error while resolving that link.');
+    else showToast('Network error while resolving that link.', 'error');
   }
 }
 
@@ -73953,13 +75452,13 @@ async function saveCurrentAsPreset() {
   const name = nameInput.value.trim();
   if (!name) {
     if (typeof showAppAlert === 'function') showAppAlert('Preset Name Required', 'Name this preset first.', false);
-    else alert('Name this preset first.');
+    else showToast('Name this preset first.', 'error');
     return;
   }
   const entries = collectEntries();
   if (!entries.length) {
     if (typeof showAppAlert === 'function') showAppAlert('Empty Catalogs', 'Add at least one list first.', false);
-    else alert('Add at least one list first.');
+    else showToast('Add at least one list first.', 'error');
     return;
   }
   const customListsMap = (typeof loadLocalCustomLists === 'function') ? loadLocalCustomLists() : {};
@@ -74014,7 +75513,7 @@ async function saveCurrentAsPreset() {
       if (typeof showAppAlert === 'function') {
         showAppAlert('Preset Save Error', errMsg, false);
       } else {
-        alert(errMsg);
+        showToast(errMsg, 'error');
       }
       return;
     }
@@ -74117,7 +75616,7 @@ function extractCustomListsAndChannelsFromPreset(preset) {
         try {
           const payload = JSON.parse(u.slice('customlist:v1:'.length));
           if (payload && Array.isArray(payload.items)) {
-            const cleanName = (e.name || payload.name || 'Custom List').replace(/\s*\((Movies|Shows)\)$/i, '').trim();
+            const cleanName = (e.name || payload.name || 'Custom List').replace(/\\s*\\((Movies|Shows)\\)$/i, '').trim();
             const slug = payload.localSlug || payload.listSlug || payload.creatorSlug || payload.slug || (typeof slugify === 'function' ? slugify(cleanName) : cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '-')) || 'list';
             const itemType = payload.type || e.type || 'movie';
 
@@ -74176,7 +75675,7 @@ function rebuildCustomListsFromPreset(name, isSilent = false) {
   if (!preset) {
     if (!isSilent) {
       if (typeof showAppAlert === 'function') showAppAlert('Preset Not Found', 'Could not find preset "' + name + '".', false);
-      else alert('Could not find preset "' + name + '".');
+      else showToast('Could not find preset "' + name + '".', 'error');
     }
     return { restoredLists: 0, restoredChannels: 0, listNames: [] };
   }
@@ -74211,7 +75710,7 @@ function rebuildCustomListsFromPreset(name, isSilent = false) {
         ? 'Preset "' + name + '" has no custom lists or channels to restore. It does carry Continue Watching / Airing Next / Watch History / Watchlist, but those always follow your account rather than the preset, so they were left as they are.'
         : 'Preset "' + name + '" does not contain any custom lists or channels.';
       if (typeof showAppAlert === 'function') showAppAlert('No Custom Lists Found', msg, false);
-      else alert(msg);
+      else showToast(msg, 'error');
     }
     return { restoredLists: 0, restoredChannels: 0, listNames: [], skippedTrackedSlugs: skippedTrackedSlugs };
   }
@@ -74311,7 +75810,7 @@ function rebuildCustomListsFromPreset(name, isSilent = false) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Custom Lists Rebuilt', msg, true);
     } else {
-      alert(msg);
+      showToast(msg, 'error');
     }
   }
 
@@ -74410,7 +75909,7 @@ function sharePreset(name) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Preset Copied', '"' + name + '" copied to your clipboard as JSON -- paste it into the Backup/Restore box above (on this device or another) to import it.', true);
     } else {
-      alert('"' + name + '" copied to your clipboard as JSON -- paste it into the Backup/Restore box above (on this device or another) to import it.');
+      showToast('"' + name + '" copied to your clipboard as JSON -- paste it into the Backup/Restore box above (on this device or another) to import it.', 'success');
     }
   }).catch(() => {
     if (typeof showAppPrompt === 'function') {
@@ -74463,7 +75962,7 @@ function readJsonFile(input, onParsed) {
       data = JSON.parse(reader.result);
     } catch (e) {
       if (typeof showAppAlert === 'function') showAppAlert('Invalid File', 'That file is not valid JSON.', false);
-      else alert('That file is not valid JSON.');
+      else showToast('That file is not valid JSON.', 'error');
       input.value = '';
       return;
     }
@@ -74472,7 +75971,7 @@ function readJsonFile(input, onParsed) {
   };
   reader.onerror = () => {
     if (typeof showAppAlert === 'function') showAppAlert('Read Error', 'Could not read that file.', false);
-    else alert('Could not read that file.');
+    else showToast('Could not read that file.', 'error');
     input.value = '';
   };
   reader.readAsText(file);
@@ -74502,10 +76001,10 @@ function uploadPresetFile(input) {
   readJsonFile(input, (data, file) => {
     if (!data || (!Array.isArray(data.entries) && !Array.isArray(data))) {
       if (typeof showAppAlert === 'function') showAppAlert('Invalid Preset', 'That file does not look like a preset -- expected an "entries" array.', false);
-      else alert('That file does not look like a preset -- expected an "entries" array.');
+      else showToast('That file does not look like a preset -- expected an "entries" array.', 'error');
       return;
     }
-    const suggested = (file.name || 'Preset').replace(/\.json$/i, '');
+    const suggested = (file.name || 'Preset').replace(/\\.json$/i, '');
     const saveWithGivenName = (rawName) => {
       const name = (rawName || '').trim();
       if (!name) return;
@@ -74603,7 +76102,7 @@ function exportDataToCsv(target, format) {
     const items = (historyList && Array.isArray(historyList.items)) ? historyList.items : [];
     if (!items.length) {
       if (typeof showAppAlert === 'function') showAppAlert('Empty Watch History', 'Your Watch History is currently empty.', false);
-      else alert('Your Watch History is currently empty.');
+      else showToast('Your Watch History is currently empty.', 'error');
       return;
     }
 
@@ -74683,7 +76182,7 @@ function exportDataToCsv(target, format) {
     });
     if (totalItems === 0) {
       if (typeof showAppAlert === 'function') showAppAlert('No Saved Lists', 'You do not have any saved list items to export.', false);
-      else alert('You do not have any saved list items to export.');
+      else showToast('You do not have any saved list items to export.', 'error');
       return;
     }
   }
@@ -74752,16 +76251,46 @@ function computeConfigStateHash() {
   }
 }
 
-function checkUnsavedInstallLink() {}
+// Called by saveState() after every change to the rows or the settings. On a
+// shell page this is what keeps the install bar honest; on the legacy page the
+// call stays the no-op it has been (the shell replaces the floating banner).
+function checkUnsavedInstallLink() {
+  if (typeof appShellActive !== 'undefined' && appShellActive) appShellRefreshInstallBar();
+}
 
-function updateInstallLinkFromBanner() {}
+// The legacy banner's Update Link button. The shell's bar uses the same work.
+function updateInstallLinkFromBanner() {
+  if (typeof appShellActive !== 'undefined' && appShellActive) appShellInstallBarAction();
+}
+
+// myListAddon:state is this browser's copy of the rows and settings, and it
+// carried the provider keys and tokens too: collectKeys() returns them, and
+// saveState wrote the whole object on every change -- so moving the
+// credentials into memory (P6-8) still left a full copy of them here. They are
+// left out now. A copy written before this is carried forward only until this
+// tab has the account's own (the rule the separately stored keys follow, see
+// dropLegacyProviderSecret, 16_), and never for a provider disconnected since.
+// Nothing new is ever written: a key typed in this visit lives in memory.
+function stateKeysForStorage(keys) {
+  const out = Object.assign({}, keys || {});
+  const fields = Object.keys(PROVIDER_SECRET_FIELDS);
+  fields.forEach((field) => { delete out[field]; });
+  if (typeof accountProviderSecretsApplied === 'function' && accountProviderSecretsApplied()) return out;
+  const previous = loadSavedState();
+  if (!previous || !previous.keys) return out;
+  fields.forEach((field) => {
+    const value = previous.keys[field];
+    if (value && !isProviderDisconnected(PROVIDER_SECRET_FIELDS[field])) out[field] = value;
+  });
+  return out;
+}
 
 function saveState() {
   if (suppressSave) return;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       entries: collectEntries(),
-      keys: collectKeys(),
+      keys: stateKeysForStorage(collectKeys()),
       shuffleShelves: document.getElementById('shuffleShelvesCheckbox') ? document.getElementById('shuffleShelvesCheckbox').checked : false,
       shuffleItems: document.getElementById('shuffleItemsCheckbox') ? document.getElementById('shuffleItemsCheckbox').checked : false,
     }));
@@ -74772,6 +76301,11 @@ function saveState() {
   if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
   scheduleCreatorSyncSave();
   checkUnsavedInstallLink();
+  // The new UI's live preview follows the rows (see appShellSchedulePreview,
+  // spliced in below). Guarded because saveState also runs from the legacy
+  // page, where the shell's module is not loaded... it is the same script, so
+  // this is a plain typeof check against a definition further down.
+  if (typeof appShellSchedulePreview === 'function') appShellSchedulePreview();
 }
 
 function loadSavedState() {
@@ -74816,7 +76350,7 @@ function copyLink(url) {
       selection.removeAllRanges();
       selection.addRange(range);
     }
-    alert('Manifest URL: ' + url);
+    showToast('Manifest URL: ' + url, 'error');
   });
 }
 
@@ -74861,13 +76395,13 @@ function signInToInstallHtml(message, entries) {
     + '<p class="testresult err" style="margin:0 0 12px;">' + escapeHtml(message)
     + (names.length ? (' Sign in, or remove ' + (names.length === 1 ? 'this row' : 'these rows') + ' first: ' + escapeHtml(names.join(', ')) + '.') : '')
     + '</p>'
-    + '<button type="button" class="btn btn-primary" onclick="openRestoreModal()">Log in or sign up</button>'
+    + '<button type="button" class="btn btn-primary" data-act="openRestoreModal">Log in or sign up</button>'
     + '</div>';
 }
 
 async function generate() {
   const entries = collectEntries();
-  if (!entries.length) { alert('Add at least one list.'); return; }
+  if (!entries.length) { showToast('Add at least one list.', 'error'); return; }
   const keys = collectKeys();
 
   const box = document.getElementById('result');
@@ -74921,7 +76455,7 @@ async function generate() {
     const errTxt = escapeHtml(saveErrorMessage || 'Unknown error');
     box.innerHTML = '<div class="install-result-card" style="padding:18px;">'
       + '<p class="testresult err" style="margin:0 0 12px;">Could not create your install link just now (' + errTxt + '). Nothing was lost - please try again.</p>'
-      + '<button type="button" class="btn btn-primary" onclick="generate()">Try again</button>'
+      + '<button type="button" class="btn btn-primary" data-act="generate">Try again</button>'
       + '</div>';
     return;
   }
@@ -74979,12 +76513,12 @@ async function generate() {
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
             <span>Manifest Link</span>
           </div>
-          <button type="button" class="install-url-copy-btn" id="copyUrlBtn" onclick="copyLink('\${installUrl}')" title="Copy manifest link">
+          <button type="button" class="install-url-copy-btn" id="copyUrlBtn" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Copy manifest link">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
             <span>Copy Link</span>
           </button>
         </div>
-        <div class="install-url-box" id="manifestLinkDisplay" onclick="copyLink('\${installUrl}')" title="Click to copy">\${installUrl}</div>
+        <div class="install-url-box" id="manifestLinkDisplay" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Click to copy">\${installUrl}</div>
       </div>
 
       <div class="install-hint-box">
@@ -75171,7 +76705,7 @@ if (localStorage.getItem('myListAddon:mdblistDisconnected') === 'true') {
   if (savedForMdblist && savedForMdblist.keys && savedForMdblist.keys.mdblistAccessToken) {
     mdblistAccessToken = savedForMdblist.keys.mdblistAccessToken;
   } else {
-    try { mdblistAccessToken = localStorage.getItem('myListAddon:mdblistAccessToken') || ''; } catch (e) {}
+    try { mdblistAccessToken = readProviderSecret('myListAddon:mdblistAccessToken') || ''; } catch (e) {}
   }
 }
 
@@ -75188,7 +76722,7 @@ if (localStorage.getItem('myListAddon:traktDisconnected') === 'true') {
   if (savedForTrakt && savedForTrakt.keys && savedForTrakt.keys.traktAccessToken) {
     traktAccessToken = savedForTrakt.keys.traktAccessToken;
   } else {
-    try { traktAccessToken = localStorage.getItem('myListAddon:traktAccessToken') || ''; } catch (e) {}
+    try { traktAccessToken = readProviderSecret('myListAddon:traktAccessToken') || ''; } catch (e) {}
   }
 }
 
@@ -75204,7 +76738,7 @@ if (localStorage.getItem('myListAddon:simklDisconnected') === 'true') {
   if (savedForSimkl && savedForSimkl.keys && savedForSimkl.keys.simklAccessToken) {
     simklAccessToken = savedForSimkl.keys.simklAccessToken;
   } else {
-    try { simklAccessToken = localStorage.getItem('myListAddon:simklAccessToken') || ''; } catch (e) {}
+    try { simklAccessToken = readProviderSecret('myListAddon:simklAccessToken') || ''; } catch (e) {}
   }
 }
 
@@ -75492,6 +77026,13 @@ window.addEventListener('popstate', (e) => {
     const itemType = (state && state.type) || (new URLSearchParams(hash.slice('#/item?'.length)).get('type')) || 'movie';
     openItemDetailsModal(itemId, itemType, { skipPushState: true });
   } else {
+    // On a shell page the address bar is a real path and the shell's own
+    // popstate listener (appShellOnPopState) opens the view it names. This
+    // branch's own rewrite of the URL to "/" would undo that.
+    if (typeof appShellActive !== 'undefined' && appShellActive) {
+      if (typeof appShellRenderFromLocation === 'function') appShellRenderFromLocation();
+      return;
+    }
     const targetTab = (state && (state.fromTab || (state.view === 'tab' && state.tab))) || window._originTab || window._previousTab || localStorage.getItem('myListAddon:activeTab') || 'discover';
     const cleanTab = (targetTab === 'list-details' || targetTab === 'item-details') ? 'discover' : targetTab;
     if (location.pathname.startsWith('/lists/')) {
@@ -75517,6 +77058,3897 @@ window.addEventListener('popstate', (e) => {
     }
   }
 });
+// --- The new UI shell (Phase 6, P6-1) ----------------------------------------
+//
+// The pieces the frontend rebuild is built out of, all of them here so the
+// route table, the state object and the API client stay in one place:
+//
+//   * real-path routing for the six views (APP_SHELL_TAB_LIST, injected from
+//     APP_SHELL_TABS in 00_constants.js): /catalogs, /catalogs/quickadd,
+//     /settings/connections and so on. The server renders the same table into
+//     the nav (buildAppShellNavHtml, 09_page-shell.js), so the two cannot
+//     drift;
+//   * appShellState, one small observable object instead of the globals the
+//     legacy views pass around;
+//   * appShellApiFetch, one way to talk to the API: same-origin cookies, JSON
+//     in and out, and one place that turns a status into a sentence;
+//   * appShellDialog, one accessible dialog for new code (it rides on
+//     showModal, which owns Escape, the focus trap and focus restore);
+//   * the install bar: what this browser's install link currently is, and the
+//     one action that changes it.
+//
+// Everything here is inert unless NEW_UI (the per-request preamble flag) is
+// true, so a browser without the cookie runs the legacy page exactly as it did.
+// The bundle itself is shared and content-hashed (splitAppBundle, 02_), which
+// is why this lives in the bundle and branches on NEW_UI rather than being
+// emitted from the server.
+
+// The last install link this browser generated, and the configuration it was
+// generated from. Browser state, not account state: the Worker cannot know it,
+// which is why the bar's first paint says "not installed yet" and this refines
+// it as soon as the bundle runs.
+const APP_SHELL_INSTALL_KEY = 'myListAddon:installLink';
+
+// The sub-tab bars, by view, and the pill that names a sub-tab inside one.
+// These are the legacy bars' own ids; the shell routes to them rather than
+// rendering a second set of controls.
+const APP_SHELL_SUB_BARS = {
+  catalogs: 'catalogsFilterBar',
+  lists: 'listsSubnavBar',
+  channels: 'channelsSubnavBar',
+  discover: 'discoverSubnavBar',
+  settings: 'settingsSubnavBar',
+};
+
+// The names the legacy switchers accept that are not view ids (see switchTab,
+// 16_client-row-core.js). They mean a view plus a sub-tab, so the shell routes
+// them as one path rather than two history entries.
+const APP_SHELL_TAB_ALIASES = {
+  'backup': { tab: 'settings', sub: 'backup' },
+  'keys': { tab: 'settings', sub: 'account' },
+  'account': { tab: 'settings', sub: 'account' },
+  'quick-add': { tab: 'catalogs', sub: 'quickadd' },
+  'toplists': { tab: 'catalogs', sub: 'quickadd' },
+};
+
+// True while the router is applying a route. The legacy switchers it calls
+// check this (through appShellHandleNav) so they do their DOM work without
+// asking the router to route again.
+let appShellApplyingRoute = false;
+// Set while one appShellDialog is open, so Escape or a backdrop click resolves
+// its promise instead of leaving it hanging. A var, not a let: closeModal
+// (16_client-row-core.js) reads it with typeof, and a let in the temporal dead
+// zone would throw there rather than read as undefined.
+var appShellDialogClose = null;
+
+function appShellTab(id) {
+  const want = String(id || '');
+  for (let i = 0; i < APP_SHELL_TAB_LIST.length; i++) {
+    if (APP_SHELL_TAB_LIST[i].id === want) return APP_SHELL_TAB_LIST[i];
+  }
+  return null;
+}
+
+function appShellTrimSlashes(s) {
+  let out = String(s || '');
+  while (out.length > 1 && out.charAt(out.length - 1) === '/') out = out.slice(0, -1);
+  return out;
+}
+
+// '/lists/liked' -> { tab: 'lists', sub: 'liked' }. A path the shell does not
+// own (a shared list, a channel, a configure link) comes back null, so those
+// keep their own routes and handlers.
+function appShellRouteFromPath(pathname) {
+  const p = appShellTrimSlashes(pathname);
+  for (let i = 0; i < APP_SHELL_TAB_LIST.length; i++) {
+    const t = APP_SHELL_TAB_LIST[i];
+    if (p === t.path) return { tab: t.id, sub: '' };
+    if (p.indexOf(t.path + '/') === 0) {
+      const rest = p.slice(t.path.length + 1);
+      if (rest && t.subs.indexOf(rest) !== -1) return { tab: t.id, sub: rest };
+    }
+  }
+  return null;
+}
+
+function appShellPathFor(tabId, subId) {
+  const t = appShellTab(tabId) || APP_SHELL_TAB_LIST[0];
+  if (!t) return '/';
+  const sub = (subId && t.subs.indexOf(subId) !== -1) ? String(subId) : '';
+  return sub ? t.path + '/' + sub : t.path;
+}
+
+// A tab name, including the legacy aliases, as a route.
+function appShellRouteForName(name) {
+  const id = String(name || '');
+  const alias = APP_SHELL_TAB_ALIASES[id];
+  if (alias) return { tab: alias.tab, sub: alias.sub };
+  const t = appShellTab(id);
+  if (!t) return null;
+  return { tab: t.id, sub: '' };
+}
+
+// --- shared state ------------------------------------------------------------
+//
+// One small observable object for the facts the shell itself owns: the current
+// route, the account it has confirmed over its session cookie, and the install
+// bar's state. Views subscribe instead of polling, and an update only notifies
+// when something really changed, so a view can re-render on every notification
+// without ever re-rendering for nothing.
+const appShellState = (function () {
+  const listeners = new Set();
+  const state = { ready: false, route: null, account: null, install: { state: 'none', link: '' } };
+
+  function get(key) {
+    if (key === undefined) return Object.assign({}, state);
+    return state[key];
+  }
+
+  function set(patch) {
+    let changed = false;
+    Object.keys(patch || {}).forEach(function (k) {
+      const next = patch[k];
+      if (JSON.stringify(state[k]) !== JSON.stringify(next)) {
+        state[k] = next;
+        changed = true;
+      }
+    });
+    if (!changed) return Object.assign({}, state);
+    const snapshot = Object.assign({}, state);
+    listeners.forEach(function (fn) {
+      try { fn(snapshot); } catch (e) {}
+    });
+    return snapshot;
+  }
+
+  function subscribe(fn) {
+    listeners.add(fn);
+    return function () { listeners.delete(fn); };
+  }
+
+  return { get: get, set: set, subscribe: subscribe };
+})();
+
+// --- the API client ----------------------------------------------------------
+//
+// Same-origin cookies (the mla_session cookie the session routes set), JSON in
+// and out, and never a throw: every failure comes back as { ok: false, error }
+// with a sentence a person can read. A caller that wants to branch on the
+// status still has it.
+async function appShellApiFetch(path, options) {
+  const o = options || {};
+  const method = String(o.method || 'GET').toUpperCase();
+  const init = {
+    method: method,
+    // Cookies, not a token in the body: this is what lets the same call work
+    // from any signed-in device.
+    credentials: 'same-origin',
+    cache: 'no-store',
+    headers: Object.assign({ 'Accept': 'application/json' }, o.headers || {}),
+  };
+  // Every mutating request carries this, body or not: verifyCsrf (02_) refuses
+  // anything else with 403, and a DELETE with nothing in it is still a
+  // mutation. (It was learned the hard way: signing out and revoking an install
+  // link sent no body, so the header was left off and the server answered 403.)
+  if (method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE') {
+    init.headers['Content-Type'] = 'application/json';
+    if (o.body !== undefined && o.body !== null) {
+      init.body = (typeof o.body === 'string') ? o.body : JSON.stringify(o.body);
+    }
+  }
+  if (o.signal) init.signal = o.signal;
+
+  let res;
+  try {
+    res = await fetch(ORIGIN + path, init);
+  } catch (e) {
+    return { ok: false, status: 0, error: appShellApiMessage(0), data: null, signInRequired: false };
+  }
+
+  let data = null;
+  try { data = await res.json(); } catch (e) { data = null; }
+  if (res.ok && (!data || data.ok !== false)) {
+    return { ok: true, status: res.status, data: data || { ok: true }, signInRequired: false };
+  }
+  const message = (data && (data.error || data.message)) || appShellApiMessage(res.status);
+  return {
+    ok: false,
+    status: res.status,
+    error: String(message),
+    data: data,
+    signInRequired: !!(data && data.signInRequired) || res.status === 401,
+  };
+}
+
+// A status, as something worth showing somebody.
+function appShellApiMessage(status) {
+  const s = Number(status) || 0;
+  if (s === 0) return 'You appear to be offline. Check your connection and try again.';
+  if (s === 400) return 'That request was not understood.';
+  if (s === 401) return 'Please sign in to continue.';
+  if (s === 403) return 'That is not allowed here.';
+  if (s === 404) return 'Not found.';
+  if (s === 409) return 'This changed somewhere else. Reload and try again.';
+  if (s === 413) return 'That is too large to send.';
+  if (s === 429) return 'Too many requests just now. Please wait a moment.';
+  if (s >= 500) return 'Something went wrong on our side. Please try again.';
+  return 'Something went wrong. Please try again.';
+}
+
+// --- one accessible dialog ---------------------------------------------------
+//
+// For new code: a title, a message and buttons that resolve. It rides on
+// showModal/closeModal (16_client-row-core.js), which already move focus in,
+// trap Tab, close on Escape, restore focus and lock the page behind it.
+function appShellDialog(options) {
+  const o = options || {};
+  const confirmLabel = o.confirmLabel || 'OK';
+  const cancelLabel = o.cancelLabel;
+  let html = '';
+  if (o.title) html += '<h3 style="margin:0 0 10px; font-size:1.08rem;">' + escapeHtml(o.title) + '</h3>';
+  if (o.message) html += '<p style="margin:0 0 16px; color:var(--muted); font-size:0.9rem; line-height:1.45; white-space:pre-wrap;">' + escapeHtml(o.message) + '</p>';
+  html += '<div style="display:flex; justify-content:flex-end; gap:8px;">';
+  if (cancelLabel) html += '<button type="button" class="secondary" id="appShellDialogCancel" style="min-width:80px; padding:8px 16px;">' + escapeHtml(cancelLabel) + '</button>';
+  html += '<button type="button" class="primary" id="appShellDialogConfirm" style="min-width:80px; padding:8px 16px;">' + escapeHtml(confirmLabel) + '</button>';
+  html += '</div>';
+
+  return new Promise(function (resolve) {
+    let settled = false;
+    const settle = function (value) {
+      if (settled) return;
+      settled = true;
+      appShellDialogClose = null;
+      resolve(value);
+    };
+    // After showModal, not before: showModal opens by calling closeModal,
+    // which resolves whatever dialog was open -- and that would be this one,
+    // as dismissed, before it had been seen.
+    showModal(html);
+    appShellDialogClose = settle;
+    const confirmBtn = document.getElementById('appShellDialogConfirm');
+    if (confirmBtn) {
+      // The marker is cleared before closeModal: that is what tells closeModal
+      // this dialog is being answered rather than dismissed, so it does not
+      // resolve it as false on the way out.
+      confirmBtn.addEventListener('click', function () {
+        appShellDialogClose = null;
+        closeModal();
+        settle(true);
+      });
+    }
+    const cancelBtn = document.getElementById('appShellDialogCancel');
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', function () {
+        appShellDialogClose = null;
+        closeModal();
+        settle(false);
+      });
+    }
+  });
+}
+
+// --- the install bar ---------------------------------------------------------
+//
+// Three states, all of them about this browser's own install link:
+//   none    -- nothing generated here yet
+//   unsaved -- a link exists, and the rows/settings have changed since
+//   live    -- the link matches what the builder currently holds
+function appShellReadInstallLink() {
+  try {
+    const raw = localStorage.getItem(APP_SHELL_INSTALL_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || !parsed.url) return null;
+    return { url: String(parsed.url), hash: String(parsed.hash || '') };
+  } catch (e) {
+    return null;
+  }
+}
+
+function appShellInstallLinkState() {
+  const saved = appShellReadInstallLink();
+  if (!saved) return { state: 'none', link: '' };
+  let current = '';
+  try {
+    if (typeof computeConfigStateHash === 'function') current = computeConfigStateHash();
+  } catch (e) {
+    current = '';
+  }
+  // No hash stored (an older link, or a stubbed environment): treat it as
+  // current rather than telling somebody their up-to-date link is stale.
+  const live = !saved.hash || !current || saved.hash === current;
+  return { state: live ? 'live' : 'unsaved', link: saved.url };
+}
+
+function appShellRecordInstallLink(url) {
+  const link = String(url || '').trim();
+  if (!link) return;
+  let hash = '';
+  try {
+    if (typeof computeConfigStateHash === 'function') hash = computeConfigStateHash();
+  } catch (e) {
+    hash = '';
+  }
+  try {
+    localStorage.setItem(APP_SHELL_INSTALL_KEY, JSON.stringify({ url: link, hash: hash }));
+  } catch (e) {}
+}
+
+function appShellRefreshInstallBar() {
+  const bar = document.getElementById('appShellInstallBar');
+  if (!bar) return;
+  const info = appShellInstallLinkState();
+  bar.setAttribute('data-state', info.state);
+  const text = document.getElementById('appShellInstallText');
+  const btn = document.getElementById('appShellInstallBtn');
+  const words = {
+    none: 'Not installed yet',
+    unsaved: 'Unsaved changes to your install link',
+    live: 'Install link up to date',
+  };
+  const actions = {
+    none: { action: 'install', label: 'Get install link' },
+    unsaved: { action: 'update', label: 'Update link' },
+    live: { action: 'copy', label: 'Copy link' },
+  };
+  const a = actions[info.state] || actions.none;
+  if (text) text.textContent = words[info.state] || words.none;
+  if (btn) {
+    btn.setAttribute('data-action', a.action);
+    btn.textContent = a.label;
+  }
+  appShellState.set({ install: { state: info.state, link: info.link } });
+}
+
+// Builds the install link through the builder's own generate() (which renders
+// the result card), then remembers it here. The link is read back out of the
+// card rather than duplicated from generate(), so there is still one place that
+// knows how a link is made.
+async function appShellGenerateInstallLink() {
+  if (typeof collectEntries === 'function' && !collectEntries().length) {
+    showToast('Add at least one list first.', 'info');
+    appShellGo(appShellPathFor('catalogs', ''));
+    return false;
+  }
+  try {
+    if (typeof generate === 'function') await generate();
+  } catch (e) {
+    showToast('Could not make the install link. Please try again.', 'error');
+    return false;
+  }
+  const display = document.getElementById('manifestLinkDisplay');
+  const link = display ? String(display.textContent || '').trim() : '';
+  if (!link) return false;   // generate() showed its own reason (for example: sign in)
+  appShellRecordInstallLink(link);
+  appShellRefreshInstallBar();
+  showToast('Install link ready.', 'success');
+  return true;
+}
+
+async function appShellInstallBarAction() {
+  const info = appShellInstallLinkState();
+  if (info.state === 'live' && info.link) {
+    try {
+      if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(info.link);
+        showToast('Install link copied.', 'success');
+        return;
+      }
+    } catch (e) {}
+  }
+  await appShellGenerateInstallLink();
+}
+
+// The signed-in account, over the session cookie (GET /api/me). Kept in
+// appShellState so the Settings views can read it without asking twice.
+async function appShellRefreshAccount() {
+  const res = await appShellApiFetch('/api/me');
+  const account = (res.ok && res.data && res.data.account) ? res.data.account : null;
+  appShellState.set({
+    account: account ? { username: account.username, displayName: account.displayName || account.username } : null,
+  });
+  return account;
+}
+
+// --- Settings (P6-2) ---------------------------------------------------------
+//
+// The Settings view in the shell, in one place: the account, its devices, its
+// connected accounts and its install links. It is additive -- the legacy panels
+// below it are untouched -- and it exists only on a shell page: the container it
+// renders into is emitted by the server (15_tab-settings-html.js) when, and only
+// when, the request carries the FF_NEW_UI cookie.
+//
+// Everything here talks to the account APIs over the session cookie
+// (appShellApiFetch), and every control is wired with a data-app-shell-action
+// attribute instead of an inline handler: new UI code adds none of those
+// (P6-8 removes the rest of the page's).
+
+// The providers the site can hold a sign-in for. The start and stop entries are
+// the legacy functions that already do the OAuth dance and the local clean-up,
+// so this screen cannot drift from the rest of the page about how a connection
+// is made, or dropped.
+const APP_SHELL_CONNECTIONS = [
+  { id: 'trakt', label: 'Trakt', what: 'Watchlist, history and your personal Trakt rows.', start: startTraktConnect, stop: disconnectTrakt },
+  { id: 'mdblist', label: 'MDBList', what: 'Your MDBList lists, watchlist and charts.', start: startMdblistConnect, stop: disconnectMdblist },
+  { id: 'simkl', label: 'Simkl', what: 'Watchlist, history and Airing Next.', start: startSimklConnect, stop: disconnectSimkl },
+  { id: 'tmdb', label: 'TMDB', what: 'Personal lists, favorites and watchlist, plus unlimited requests.', start: startTmdbConnect, stop: disconnectTmdb },
+];
+
+function appShellSettingsHost() {
+  return document.getElementById('appShellSettingsHome');
+}
+
+function appShellSettingsEscape(value) {
+  return escapeHtml(String(value === null || value === undefined ? '' : value));
+}
+
+function appShellSettingsButton(action, label, id, cls) {
+  return '<button type="button" class="' + (cls || 'secondary lc-btn') + '" data-app-shell-action="' + action + '"' +
+    (id ? ' data-app-shell-id="' + appShellSettingsEscape(id) + '"' : '') + '>' + appShellSettingsEscape(label) + '</button>';
+}
+
+function appShellSettingsPanel(role, title, body) {
+  return '<div class="panel" style="margin-top:12px;">' +
+    '<h2 class="panel-title">' + title + '</h2>' +
+    '<div id="appShellSettingsBody-' + role + '">' + body + '</div>' +
+    '</div>';
+}
+
+function appShellSettingsBody(role, html) {
+  const el = document.getElementById('appShellSettingsBody-' + role);
+  if (el) el.innerHTML = html;
+}
+
+function appShellSettingsRow(main, controls, chip) {
+  return '<div class="app-shell-row"><div class="app-shell-row-main">' + main + '</div>' +
+    '<div class="app-shell-row-controls">' + (chip || '') + (controls || '') + '</div></div>';
+}
+
+function appShellChip(text, tone) {
+  return '<span class="app-shell-chip' + (tone ? ' app-shell-chip-' + tone : '') + '">' + appShellSettingsEscape(text) + '</span>';
+}
+
+// A date, or "never". Kept short and forgiving: a session row whose timestamp
+// is missing must not print "Invalid Date".
+function appShellWhen(ms) {
+  const n = Number(ms);
+  if (!n || !isFinite(n)) return 'never';
+  try {
+    return new Date(n).toLocaleDateString();
+  } catch (e) {
+    return 'recently';
+  }
+}
+
+function appShellProvider(id) {
+  const want = String(id || '');
+  for (let i = 0; i < APP_SHELL_CONNECTIONS.length; i++) {
+    if (APP_SHELL_CONNECTIONS[i].id === want) return APP_SHELL_CONNECTIONS[i];
+  }
+  return null;
+}
+
+function appShellConnectionWords(conn) {
+  const status = String((conn && conn.status) || '');
+  const who = conn && conn.username ? '@' + conn.username : '';
+  if (status === 'ok') return who ? 'Connected as ' + who : 'Connected';
+  if (status === 'reauth_required') return who ? 'Reconnect as ' + who : 'Reconnect needed';
+  if (status === 'invalid') return who ? 'Sign-in expired (' + who + ')' : 'Sign-in expired';
+  if (status === 'unreachable') return 'Could not be checked';
+  return 'Not connected';
+}
+
+function appShellConnectionTone(conn) {
+  const status = String((conn && conn.status) || '');
+  if (status === 'ok') return 'ok';
+  if (status === 'reauth_required' || status === 'invalid' || status === 'unreachable') return 'warn';
+  return '';
+}
+
+function appShellDeviceLabel(session) {
+  const ua = String((session && session.userAgent) || '');
+  if (!ua) return 'Unknown device';
+  const browser = ua.indexOf('Firefox/') !== -1 ? 'Firefox'
+    : ua.indexOf('Edg/') !== -1 ? 'Edge'
+      : ua.indexOf('Chrome/') !== -1 ? 'Chrome'
+        : ua.indexOf('Safari/') !== -1 ? 'Safari' : 'Browser';
+  const os = ua.indexOf('Windows') !== -1 ? 'Windows'
+    : ua.indexOf('Android') !== -1 ? 'Android'
+      : ua.indexOf('iPhone') !== -1 || ua.indexOf('iPad') !== -1 ? 'iOS'
+        : ua.indexOf('Mac OS') !== -1 ? 'macOS'
+          : ua.indexOf('Linux') !== -1 ? 'Linux' : '';
+  return os ? browser + ' on ' + os : browser;
+}
+
+// 'https://host/abc/manifest.json' -> 'stremio://host/abc/manifest.json'. Split
+// rather than a regex: this file lives inside the page's template literal, where
+// backslashes are eaten before the browser ever sees them.
+function appShellSchemeUrl(link, scheme) {
+  const s = String(link || '');
+  const i = s.indexOf('://');
+  return i === -1 ? s : scheme + s.slice(i);
+}
+
+function appShellInstallLinkStateSafe() {
+  try {
+    return appShellInstallLinkState();
+  } catch (e) {
+    return { state: 'none', link: '' };
+  }
+}
+
+// --- the panels --------------------------------------------------------------
+
+function appShellAccountBody(account) {
+  if (!account) {
+    return '<p class="app-shell-muted">You are not signed in. What you build right now is kept in this browser only.</p>' +
+      '<div class="app-shell-actions">' +
+      appShellSettingsButton('account-signin', 'Sign in or restore') +
+      appShellSettingsButton('account-import-backup', 'Import a backup file') +
+      '</div>' +
+      '<p class="app-shell-muted">Signing in restores your lists, channels, connections and install links from your account. Lost your Account Key? Use "Forgot your key?" under Your Account below: the site has no email recovery, so keep the key somewhere safe.</p>';
+  }
+  const name = account.displayName || account.username || '';
+  return '<p class="app-shell-kv"><strong>' + appShellSettingsEscape(name) + '</strong>' +
+    (account.username ? ' <span class="app-shell-muted">@' + appShellSettingsEscape(account.username) + '</span>' : '') + '</p>' +
+    '<p class="app-shell-muted">Signed in. Your lists, channels, connections and install links are kept on your account and follow you to any device.</p>' +
+    '<div class="app-shell-actions">' +
+    appShellSettingsButton('account-signout', 'Sign out') +
+    appShellSettingsButton('account-delete', 'Delete account', '', 'secondary lc-btn app-shell-danger') +
+    '</div>';
+}
+
+function appShellDevicesBody(res, sessions) {
+  if (!res || !res.ok) {
+    if (res && res.signInRequired) return '<p class="app-shell-muted">Sign in to see the devices using your account.</p>';
+    return '<p class="app-shell-muted">' + appShellSettingsEscape((res && res.error) || 'Could not load your devices.') + '</p>' +
+      '<div class="app-shell-actions">' + appShellSettingsButton('settings-refresh', 'Try again') + '</div>';
+  }
+  const list = sessions || [];
+  if (!list.length) return '<p class="app-shell-muted">No devices are signed in.</p>';
+  let html = list.map(function (s) {
+    const label = appShellDeviceLabel(s);
+    return appShellSettingsRow(
+      '<strong>' + appShellSettingsEscape(label) + '</strong><br><span class="app-shell-muted">Last used ' + appShellSettingsEscape(appShellWhen(s.lastSeenAt)) + '</span>',
+      s.current ? '' : appShellSettingsButton('device-signout', 'Sign out', s.id),
+      s.current ? appShellChip('This device', 'ok') : ''
+    );
+  }).join('');
+  if (list.length > 1) {
+    html += '<div class="app-shell-actions">' + appShellSettingsButton('devices-signout-others', 'Sign out my other devices') + '</div>';
+  }
+  return html;
+}
+
+function appShellConnectionsBody(res, byProvider) {
+  if (res && res.signInRequired) {
+    return '<p class="app-shell-muted">Sign in to connect Trakt, MDBList, Simkl or TMDB. A connection is kept on your account, so your personal rows keep working without a new install link.</p>';
+  }
+  if (res && !res.ok) {
+    return '<p class="app-shell-muted">' + appShellSettingsEscape(res.error || 'Could not load your connected accounts.') + '</p>' +
+      '<div class="app-shell-actions">' + appShellSettingsButton('settings-refresh', 'Try again') + '</div>';
+  }
+  const map = byProvider || {};
+  let html = APP_SHELL_CONNECTIONS.map(function (p) {
+    const conn = map[p.id] || null;
+    const connected = Boolean(conn) && conn.status === 'ok';
+    const control = (connected || conn)
+      ? appShellSettingsButton('connection-disconnect', connected ? 'Disconnect' : 'Reconnect', p.id)
+      : appShellSettingsButton('connection-connect', 'Connect', p.id);
+    const who = conn && conn.username ? ' <span class="app-shell-muted">@' + appShellSettingsEscape(conn.username) + '</span>' : '';
+    return appShellSettingsRow(
+      '<strong>' + appShellSettingsEscape(p.label) + '</strong>' + who + '<br><span class="app-shell-muted">' + appShellSettingsEscape(p.what) + '</span>',
+      control,
+      appShellChip(appShellConnectionWords(conn), appShellConnectionTone(conn))
+    );
+  }).join('');
+  html += '<div class="app-shell-actions">' + appShellSettingsButton('settings-refresh', 'Refresh') + '</div>';
+  return html;
+}
+
+function appShellInstallsBody(linkState, res, installs) {
+  const link = linkState && linkState.link ? String(linkState.link) : '';
+  let html = '';
+  if (!link) {
+    html += '<p class="app-shell-muted">Nothing is installed from this browser yet. Build the home screen you want, then get the install link here.</p>' +
+      '<div class="app-shell-actions">' + appShellSettingsButton('install-get', 'Get install link') + '</div>';
+  } else {
+    const live = (linkState && linkState.state === 'live');
+    html += appShellSettingsRow(
+      '<strong>Install link for this browser</strong><br><span class="app-shell-muted" style="word-break:break-all;">' + appShellSettingsEscape(link) + '</span>',
+      '<a class="secondary lc-btn" href="' + appShellSettingsEscape(appShellSchemeUrl(link, 'stremio')) + '">Install in Stremio</a>' +
+      '<a class="secondary lc-btn" href="' + appShellSettingsEscape(appShellSchemeUrl(link, 'nuvio')) + '">Install in Nuvio</a>' +
+      appShellSettingsButton('install-copy', 'Copy link') +
+      appShellSettingsButton('install-get', live ? 'Update link' : 'Update link'),
+      appShellChip(live ? 'Up to date' : 'Changed since', live ? 'ok' : 'warn')
+    );
+    html += '<details class="app-shell-details"><summary>Other apps (Wako, and anything else)</summary>' +
+      '<p class="app-shell-muted">In Wako, open Settings, then Add-ons, Add, and paste this manifest URL. The same URL works in any app that takes a Stremio add-on manifest.</p>' +
+      '<p class="app-shell-kv" style="word-break:break-all;">' + appShellSettingsEscape(link) + '</p></details>';
+  }
+
+  if (res && res.ok && Array.isArray(installs)) {
+    if (!installs.length) {
+      html += '<p class="app-shell-muted">No install links are saved on your account yet.</p>';
+    } else {
+      html += installs.map(function (inst) {
+        const name = inst && inst.name ? inst.name : 'Install link';
+        const rows = inst && inst.rows !== null && inst.rows !== undefined ? ' &middot; ' + inst.rows + ' rows' : '';
+        const used = ' <span class="app-shell-muted">Last used ' + appShellSettingsEscape(appShellWhen(inst && inst.lastUsedAt)) + '</span>';
+        const revoked = inst && inst.revokedAt ? appShellChip('Revoked', 'warn') : '';
+        return appShellSettingsRow(
+          '<strong>' + appShellSettingsEscape(name) + '</strong>' + rows + '<br>' + used,
+          inst && inst.revokedAt ? '' : appShellSettingsButton('install-revoke', 'Revoke', String(inst && inst.id)),
+          revoked
+        );
+      }).join('');
+    }
+  } else if (res && res.signInRequired) {
+    html += '<p class="app-shell-muted">Sign in to keep named install links on your account, and to revoke one from here.</p>';
+  } else if (res && res.status === 404) {
+    html += '<p class="app-shell-muted">Saved install links are not switched on for this site yet.</p>';
+  } else if (res) {
+    html += '<p class="app-shell-muted">' + appShellSettingsEscape(res.error || 'Could not load your install links.') + '</p>';
+  }
+  return html;
+}
+
+// --- loading -----------------------------------------------------------------
+
+function appShellSettingsHeadline() {
+  return {
+    account: 'Loading...',
+    devices: 'Loading...',
+    connections: 'Loading...',
+    installs: 'Loading...',
+  };
+}
+
+function appShellRenderSettingsSkeleton() {
+  const loading = '<p class="app-shell-muted">Loading...</p>';
+  appShellSettingsBody('account', loading);
+  appShellSettingsBody('devices', loading);
+  appShellSettingsBody('connections', loading);
+  appShellSettingsBody('installs', loading);
+}
+
+async function appShellRefreshSettingsHome() {
+  const host = appShellSettingsHost();
+  if (!host || !NEW_UI) return false;
+  appShellRenderSettingsSkeleton();
+  const account = await appShellRefreshAccount();
+  appShellSettingsBody('account', appShellAccountBody(account));
+  if (!account) {
+    const signedOut = { ok: false, status: 401, error: 'Sign in first.', signInRequired: true, data: null };
+    appShellSettingsBody('devices', appShellDevicesBody(signedOut, []));
+    appShellSettingsBody('connections', appShellConnectionsBody(signedOut, {}));
+    appShellSettingsBody('installs', appShellInstallsBody(appShellInstallLinkStateSafe(), signedOut, []));
+    return true;
+  }
+  const sessionsRes = await appShellApiFetch('/api/me/sessions');
+  appShellSettingsBody('devices', appShellDevicesBody(sessionsRes, (sessionsRes.data && sessionsRes.data.sessions) || []));
+  const connectionsRes = await appShellApiFetch('/api/connections');
+  const byProvider = {};
+  ((connectionsRes.data && connectionsRes.data.connections) || []).forEach(function (c) {
+    if (c && c.provider) byProvider[c.provider] = c;
+  });
+  appShellSettingsBody('connections', appShellConnectionsBody(connectionsRes, byProvider));
+  const installsRes = await appShellApiFetch('/api/installs');
+  appShellSettingsBody('installs', appShellInstallsBody(appShellInstallLinkStateSafe(), installsRes, (installsRes.data && installsRes.data.installs) || []));
+  return true;
+}
+
+// Called when the Settings view is opened (appShellApplyRoute) and after any
+// action that changes what it shows.
+function appShellRenderSettingsHome() {
+  const host = appShellSettingsHost();
+  if (!host || !NEW_UI) return false;
+  host.innerHTML =
+    appShellSettingsPanel('account', 'Account', '<p class="app-shell-muted">Loading...</p>') +
+    appShellSettingsPanel('devices', 'Devices', '<p class="app-shell-muted">Loading...</p>') +
+    appShellSettingsPanel('connections', 'Connections', '<p class="app-shell-muted">Loading...</p>') +
+    appShellSettingsPanel('installs', 'Install links', '<p class="app-shell-muted">Loading...</p>');
+  appShellRefreshSettingsHome();
+  return true;
+}
+
+// --- actions -----------------------------------------------------------------
+
+function appShellFocusSignIn() {
+  const section = document.getElementById('accountKeySection');
+  if (section && section.scrollIntoView) {
+    try { section.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+  }
+  const first = document.getElementById('creatorNameInput') || document.getElementById('creatorKeyInput');
+  if (first && first.focus) {
+    try { first.focus(); } catch (e) {}
+  }
+  showToast('Sign in under Your Account to restore everything.', 'info');
+  return true;
+}
+
+function appShellImportBackup() {
+  const input = document.getElementById('configFileInput');
+  if (input && input.click) {
+    input.click();
+    return true;
+  }
+  appShellGo(appShellPathFor('settings', 'backup'));
+  return true;
+}
+
+async function appShellCopyText(text, message) {
+  const value = String(text || '');
+  if (!value) return false;
+  try {
+    if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(value);
+      showToast(message || 'Copied.', 'success');
+      return true;
+    }
+  } catch (e) {}
+  showToast('Select the link and copy it by hand.', 'info');
+  return false;
+}
+
+async function appShellSignOut() {
+  const res = await appShellApiFetch('/api/session', { method: 'DELETE' });
+  if (!res.ok) {
+    showToast(res.error || 'Could not sign out just now.', 'error');
+    return false;
+  }
+  if (typeof clearLocalAccountData === 'function') {
+    try { clearLocalAccountData(); } catch (e) {}
+  }
+  appShellState.set({ account: null });
+  showToast('Signed out.', 'success');
+  await appShellRefreshSettingsHome();
+  return true;
+}
+
+async function appShellDeleteAccount() {
+  const confirmed = await appShellDialog({
+    title: 'Delete your account?',
+    message: 'Everything on your account is deleted: your lists, channels, connections and install links. This cannot be undone.',
+    confirmLabel: 'Delete everything',
+    cancelLabel: 'Keep my account',
+  });
+  if (!confirmed) return false;
+  const res = await appShellApiFetch('/api/me', { method: 'DELETE', body: { confirm: 'DELETE' } });
+  if (!res.ok) {
+    showToast(res.error || 'Could not delete the account just now.', 'error');
+    return false;
+  }
+  if (typeof clearLocalAccountData === 'function') {
+    try { clearLocalAccountData(); } catch (e) {}
+  }
+  appShellState.set({ account: null });
+  showToast('Your account and its data have been deleted.', 'success');
+  await appShellRefreshSettingsHome();
+  return true;
+}
+
+function appShellConnectProvider(id) {
+  const provider = appShellProvider(id);
+  if (!provider || typeof provider.start !== 'function') return false;
+  provider.start();
+  return true;
+}
+
+async function appShellDisconnectProvider(id) {
+  const provider = appShellProvider(id);
+  if (!provider || typeof provider.stop !== 'function') return false;
+  try {
+    provider.stop();
+  } catch (e) {}
+  showToast(provider.label + ' disconnected.', 'success');
+  await appShellRefreshSettingsHome();
+  return true;
+}
+
+async function appShellRevokeSession(id) {
+  const res = await appShellApiFetch('/api/me/sessions', { method: 'DELETE', body: { id: String(id || '') } });
+  if (!res.ok) {
+    showToast(res.error || 'Could not sign that device out.', 'error');
+    return false;
+  }
+  showToast('That device was signed out.', 'success');
+  await appShellRefreshSettingsHome();
+  return true;
+}
+
+async function appShellRevokeOtherSessions() {
+  const res = await appShellApiFetch('/api/me/sessions', { method: 'DELETE', body: { allExceptCurrent: true } });
+  if (!res.ok) {
+    showToast(res.error || 'Could not sign the other devices out.', 'error');
+    return false;
+  }
+  showToast('Your other devices were signed out.', 'success');
+  await appShellRefreshSettingsHome();
+  return true;
+}
+
+async function appShellRevokeInstall(id) {
+  const confirmed = await appShellDialog({
+    title: 'Revoke this install link?',
+    message: 'Apps using it stop getting the add-on right away. You can install again from here at any time.',
+    confirmLabel: 'Revoke',
+    cancelLabel: 'Keep it',
+  });
+  if (!confirmed) return false;
+  const res = await appShellApiFetch('/api/installs/' + encodeURIComponent(String(id || '')), { method: 'DELETE' });
+  if (!res.ok) {
+    showToast(res.error || 'Could not revoke that install link.', 'error');
+    return false;
+  }
+  showToast('Install link revoked.', 'success');
+  await appShellRefreshSettingsHome();
+  return true;
+}
+
+// One dispatcher for the panel's controls. The attribute is on the button in
+// the markup above, and appShellOnClick routes it here -- so the panels contain
+// no inline handlers.
+async function appShellSettingsAction(action, id) {
+  const what = String(action || '');
+  if (what === 'account-signin') return appShellFocusSignIn();
+  if (what === 'account-import-backup') return appShellImportBackup();
+  if (what === 'account-signout') return appShellSignOut();
+  if (what === 'account-delete') return appShellDeleteAccount();
+  if (what === 'settings-refresh') return appShellRefreshSettingsHome();
+  if (what === 'connection-connect') return appShellConnectProvider(id);
+  if (what === 'connection-disconnect') return appShellDisconnectProvider(id);
+  if (what === 'device-signout') return appShellRevokeSession(id);
+  if (what === 'devices-signout-others') return appShellRevokeOtherSessions();
+  if (what === 'install-revoke') return appShellRevokeInstall(id);
+  if (what === 'install-get') {
+    await appShellInstallBarAction();
+    return appShellRefreshSettingsHome();
+  }
+  if (what === 'install-copy') {
+    const state = appShellInstallLinkStateSafe();
+    return appShellCopyText(state.link, 'Install link copied.');
+  }
+  if (what === 'home-check') return appShellHomeCheck();
+  if (what === 'home-add') return appShellHomeAddChecked();
+  if (what === 'home-clear') {
+    appShellHomeReview = null;
+    const box = document.getElementById('appShellAddBox');
+    if (box) box.value = '';
+    appShellRenderHomeEditor();
+    return true;
+  }
+  if (what === 'home-starter') return appShellAddStarterPack();
+  return false;
+}
+
+// --- the home-screen editor (P6-3) -------------------------------------------
+//
+// Paste first: a box that takes one list link per line, a review table that says
+// what each line is before anything is added, and the duplicate toggle directly
+// above the rows it applies to. The rows themselves are the page's own (#lists,
+// with its drag handles, Edit and Remove) -- this is the way in, not a second
+// copy of them.
+//
+// Everything here exists only on a shell page: the container comes from the
+// server (10_tab-search-add.js), and the starter rows it offers come from the
+// per-request preamble (APP_SHELL_STARTER_PACK, 16_client-row-core.js), which is
+// empty on a legacy page. The old page keeps pre-filling those rows for a
+// first-time visitor, exactly as it did.
+
+// How many lines one paste will check. Each line costs two /api/preview calls
+// (one per type), so this is what keeps a pasted bookmarks file from turning
+// into a hundred requests.
+const APP_SHELL_ADD_LINES_MAX = 50;
+// How many lines are checked at once. Each check is two requests, so six lines
+// in flight is twelve requests -- the same order as the page's other fan-outs.
+const APP_SHELL_ADD_CONCURRENCY = 6;
+
+let appShellHomeReview = null;
+
+function appShellHomeEscape(value) {
+  return escapeHtml(String(value === null || value === undefined ? '' : value));
+}
+
+// One line of the paste box. People paste real newlines, and a stored merged row
+// carries its sources joined by the two characters backslash + n (this page's
+// own convention -- see collectEntries, 23_client-list-management.js), so both
+// are treated as separators. Built with String.fromCharCode rather than written
+// out, because this file lives inside the page's template literal, where a
+// backslash is eaten before the browser ever sees it.
+function appShellSplitLines(text) {
+  const newline = String.fromCharCode(10);
+  const slash = String.fromCharCode(92);
+  const out = [];
+  const rows = String(text || '').split(newline);
+  for (let i = 0; i < rows.length; i++) {
+    const pieces = rows[i].split(slash + 'n');
+    for (let j = 0; j < pieces.length; j++) {
+      const line = pieces[j].trim();
+      if (line) out.push(line);
+    }
+  }
+  return out;
+}
+
+// Where a pasted line comes from, as a short label for the review table.
+function appShellSourceLabel(u) {
+  const s = String(u || '').trim().toLowerCase();
+  if (!s) return 'Empty';
+  if (s.indexOf('mdblist:') === 0 || s.indexOf('mdblist.com') !== -1) return 'MDBList';
+  if (s.indexOf('trakt:') === 0 || s.indexOf('trakt.tv') !== -1) return 'Trakt';
+  if (s.indexOf('tmdb:') === 0 || s.indexOf('themoviedb.org') !== -1) return 'TMDB';
+  if (s.indexOf('simkl:') === 0 || s.indexOf('simkl.com') !== -1) return 'Simkl';
+  if (s.indexOf('imdb.com') !== -1) return 'IMDb';
+  if (s.indexOf('customlist:') === 0 || s.indexOf('channel:') === 0 || s.indexOf('custom:') === 0) return 'My Lists';
+  if (s.indexOf('autotrack:') === 0) return 'My Lists';
+  if (s.indexOf('mylistsaddon.com') !== -1) return 'My Lists';
+  return 'List';
+}
+
+function appShellHomeRowCount() {
+  if (typeof document.querySelectorAll !== 'function') return 0;
+  const rows = document.querySelectorAll('#lists .entry');
+  return rows && rows.length ? rows.length : 0;
+}
+
+function appShellDedupeOn() {
+  try {
+    return localStorage.getItem('myListAddon:dedupeAcrossLists') === '1';
+  } catch (e) {
+    return false;
+  }
+}
+
+// A tiny pool, so a 20-line paste is 6 lines in flight rather than 20 or 1.
+async function appShellMapWithConcurrency(items, limit, run) {
+  const list = items || [];
+  const out = new Array(list.length);
+  let next = 0;
+  const workers = [];
+  const size = Math.max(1, Math.min(limit || 1, list.length || 1));
+  for (let w = 0; w < size; w++) {
+    workers.push((async function () {
+      for (;;) {
+        const i = next;
+        next += 1;
+        if (i >= list.length) return;
+        out[i] = await run(list[i], i);
+      }
+    })());
+  }
+  await Promise.all(workers);
+  return out;
+}
+
+// One pasted line, asked about as both a movie list and a show list. Whichever
+// answers with more items decides the type, which is how the old page's bulk add
+// told them apart; a line that fails on both sides carries its error instead.
+async function appShellCheckOneLine(line) {
+  const url = String(line || '').trim();
+  const name = (typeof guessNameFromUrl === 'function') ? guessNameFromUrl(url) : url;
+  const auth = (typeof previewCreatorAuth === 'function') ? previewCreatorAuth() : {};
+  const askType = async function (type) {
+    // One line on purpose: the worker's CSRF scanner (tests/worker.test.mjs)
+    // looks for a mutating method and the JSON content type on the same call,
+    // and appShellApiFetch supplies the header.
+    const body = Object.assign({ url: url, type: type, sample: 1 }, auth);
+    const res = await appShellApiFetch('/api/preview', { method: 'POST', body: body });
+    const data = res.data || {};
+    const count = Number(data.totalItems) || Number(data.count) || 0;
+    return { ok: !!res.ok, type: type, count: count, error: res.ok ? '' : (res.error || 'Could not read that list.') };
+  };
+  const both = await Promise.all([askType('movie'), askType('series')]);
+  const movie = both[0];
+  const series = both[1];
+  const wanted = (series.ok && series.count > movie.count) ? series : movie;
+  const anyOk = movie.ok || series.ok;
+  return {
+    line: url,
+    name: name,
+    source: appShellSourceLabel(url),
+    type: wanted.type,
+    count: Math.max(movie.count, series.count),
+    ok: anyOk,
+    error: anyOk ? '' : (movie.error || series.error || 'Could not read that list.'),
+  };
+}
+
+function appShellReviewRowHtml(row) {
+  const mark = row.ok ? '<span class="app-shell-chip app-shell-chip-ok">Ready</span>' : '<span class="app-shell-chip app-shell-chip-warn">Skipped</span>';
+  const shape = row.ok
+    ? appShellHomeEscape(row.type === 'series' ? 'Shows' : 'Movies') + ' &middot; ' + row.count + (row.count === 1 ? ' title' : ' titles')
+    : appShellHomeEscape(row.error || 'Could not read that list.');
+  return '<div class="app-shell-review-row">' +
+    '<div class="app-shell-row-main"><strong' + (row.ok ? '' : ' class="app-shell-review-bad"') + '>' + appShellHomeEscape(row.name) + '</strong>' +
+    '<br><span class="app-shell-muted">' + appShellHomeEscape(row.source) + ' &middot; ' + shape + '</span>' +
+    '<br><span class="app-shell-muted app-shell-review-url">' + appShellHomeEscape(row.line) + '</span></div>' +
+    '<div class="app-shell-row-controls">' + mark + '</div></div>';
+}
+
+function appShellReviewHtml() {
+  const review = appShellHomeReview;
+  if (!review || !review.results || !review.results.length) return '';
+  const good = review.results.filter(function (r) { return r.ok; }).length;
+  const bad = review.results.length - good;
+  let html = '<div class="app-shell-review">' +
+    '<p class="app-shell-muted">' + review.results.length + (review.results.length === 1 ? ' line checked: ' : ' lines checked: ') +
+    good + ' ready' + (bad ? ', ' + bad + ' to look at' : '') + '.' +
+    (review.truncated ? ' (' + review.truncated + ' more line(s) were not checked.)' : '') + '</p>';
+  html += review.results.map(appShellReviewRowHtml).join('');
+  html += '<div class="app-shell-actions">' +
+    '<button type="button" class="primary lc-btn" data-app-shell-action="home-add"' + (good ? '' : ' disabled') + '>' +
+    (good === 1 ? 'Add 1 list' : 'Add ' + good + ' lists') + '</button>' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="home-clear">Clear</button>' +
+    '</div></div>';
+  return html;
+}
+
+function appShellRenderHomeEditor() {
+  const host = document.getElementById('appShellHomeEditor');
+  if (!host || !NEW_UI) return false;
+  // Whatever has been typed so far survives a re-render (the box is re-created
+  // every time, and losing a pasted list on an unrelated refresh would be worse
+  // than the few lines this costs).
+  const box = document.getElementById('appShellAddBox');
+  const typed = (box && box.value) ? box.value : '';
+  const dedupe = appShellDedupeOn();
+  const rows = appShellHomeRowCount();
+  const starter = (typeof APP_SHELL_STARTER_PACK !== 'undefined' && APP_SHELL_STARTER_PACK) ? APP_SHELL_STARTER_PACK : [];
+
+  let html = '<div class="panel" style="margin-top:12px;">' +
+    '<h2 class="panel-title">Add to your home screen</h2>' +
+    '<p class="app-shell-muted">Paste one list link per line -- MDBList, Trakt, TMDB, Simkl, an IMDb list, one of your own lists or a shared channel. Each line is checked first, so nothing is added that you did not see.</p>' +
+    '<label class="app-shell-muted" for="appShellAddBox" style="display:block; margin:0 0 4px;">List links, one per line</label>' +
+    '<textarea id="appShellAddBox" class="app-shell-add-box" rows="3" spellcheck="false" placeholder="https://mdblist.com/lists/you/top-horror-2026"></textarea>' +
+    '<div class="app-shell-actions">' +
+    '<button type="button" class="primary lc-btn" data-app-shell-action="home-check">Check links</button>' +
+    (starter.length && !rows ? '<button type="button" class="secondary lc-btn" data-app-shell-action="home-starter">Add a starter pack (' + starter.length + ' rows)</button>' : '') +
+    '</div>' +
+    appShellReviewHtml() +
+    '<label class="app-shell-dedupe" for="appShellDedupeToggle">' +
+    '<input type="checkbox" id="appShellDedupeToggle"' + (dedupe ? ' checked' : '') + '>' +
+    '<span><strong>Hide titles already shown in rows above</strong>' +
+    '<br><span class="app-shell-muted">The top row keeps everything; every row below it drops anything an earlier row already showed. Row order is what decides, so drag a row to change it. The preview below updates now, and Stremio follows once you update your install link (the install bar above does that).</span></span>' +
+    '</label>' +
+    (rows ? '<p class="app-shell-muted" style="margin-top:10px;">Your ' + rows + (rows === 1 ? ' row is' : ' rows are') + ' below: drag to reorder, Edit to change one, or Remove to take it out.</p>' : '') +
+    '</div>';
+
+  host.innerHTML = html;
+  const newBox = document.getElementById('appShellAddBox');
+  if (newBox && typed) newBox.value = typed;
+  const toggle = document.getElementById('appShellDedupeToggle');
+  if (toggle && toggle.addEventListener) {
+    toggle.addEventListener('change', function (e) {
+      appShellSetDedupe(!!(e && e.target ? e.target.checked : toggle.checked));
+    });
+  }
+  return true;
+}
+
+// The duplicate setting, in the place it now belongs -- directly above the rows
+// it applies to. One value, one key: the Settings checkbox (hidden on a shell
+// page, see 09_page-shell.css) is kept in step so nothing can disagree.
+function appShellSetDedupe(on) {
+  const value = on ? '1' : '0';
+  try { localStorage.setItem('myListAddon:dedupeAcrossLists', value); } catch (e) {}
+  const legacy = document.getElementById('dedupeAcrossListsCheckbox');
+  if (legacy) legacy.checked = !!on;
+  if (typeof saveState === 'function') saveState();
+  if (typeof renderLivePreview === 'function') renderLivePreview();
+  appShellRenderHomeEditor();
+  return true;
+}
+
+async function appShellHomeCheck() {
+  const box = document.getElementById('appShellAddBox');
+  const lines = appShellSplitLines(box ? box.value : '');
+  if (!lines.length) {
+    showToast('Paste at least one list link first.', 'info');
+    return [];
+  }
+  const checked = lines.slice(0, APP_SHELL_ADD_LINES_MAX);
+  const results = await appShellMapWithConcurrency(checked, APP_SHELL_ADD_CONCURRENCY, appShellCheckOneLine);
+  appShellHomeReview = { results: results, truncated: lines.length - checked.length };
+  appShellRenderHomeEditor();
+  const good = results.filter(function (r) { return r.ok; }).length;
+  if (!good) showToast('None of those lines could be read. Check the links and try again.', 'error');
+  return results;
+}
+
+function appShellHomeAddChecked() {
+  const review = appShellHomeReview;
+  const good = review && review.results ? review.results.filter(function (r) { return r.ok; }) : [];
+  if (!good.length) {
+    showToast('Check the links first, then add the ones that are ready.', 'info');
+    return 0;
+  }
+  // addRow is the one door every add comes through, and it refuses a row that
+  // needs an account when nobody is signed in (D-8) -- returning null. Whatever
+  // it refuses stays in the review, so pressing the button again after signing
+  // in adds those and only those.
+  const left = [];
+  let made = 0;
+  good.forEach(function (r) {
+    if (addRow(r.name, r.line, r.type, true, 'Custom')) made += 1; else left.push(r);
+  });
+  if (!made) {
+    appShellRenderHomeEditor();
+    return 0;
+  }
+  appShellHomeReview = left.length ? { results: left, truncated: 0 } : null;
+  const box = document.getElementById('appShellAddBox');
+  if (box && !left.length) box.value = '';
+  const said = made === 1 ? 'Added to your home screen.' : made + ' lists added to your home screen.';
+  appShellAfterHomeChange(left.length ? said + ' ' + left.length + ' need an account.' : said);
+  return made;
+}
+
+function appShellAddStarterPack() {
+  const pack = (typeof APP_SHELL_STARTER_PACK !== 'undefined' && APP_SHELL_STARTER_PACK) ? APP_SHELL_STARTER_PACK : [];
+  if (!pack.length) return 0;
+  let made = 0;
+  pack.forEach(function (row) {
+    if (addRow(row.name, row.url, row.type, row.enabled !== false, row.group || 'Combined Charts')) made += 1;
+  });
+  if (!made) return 0;
+  appShellAfterHomeChange(made + ' starter rows added. Reorder them to change what keeps a shared title.');
+  return made;
+}
+
+// The preview has to follow the rows -- that is the point of it. Every change
+// to them (typing a name, pasting a url, dragging a row, removing one) already
+// runs through saveState, which fires on every keystroke, so the refresh is
+// scheduled here with a short delay rather than run on each one. New UI only:
+// the old page has its own Refresh Preview button and does not want 40 poster
+// requests after a rename.
+// Declared with var, not let, on purpose: this module sits after the code that
+// runs at boot, and a shell page's first saveState (the pre-fill) reaches here
+// before a let would have been initialised -- "Cannot access before
+// initialization". Same trap, same fix, as appShellDialogClose.
+var appShellPreviewTimer = null;
+function appShellSchedulePreview() {
+  if (!NEW_UI) return false;
+  if (typeof renderLivePreview !== 'function') return false;
+  if (appShellPreviewTimer) clearTimeout(appShellPreviewTimer);
+  appShellPreviewTimer = setTimeout(function () {
+    appShellPreviewTimer = null;
+    renderLivePreview();
+  }, 700);
+  return true;
+}
+
+// After anything that changes the rows: persist, refresh the preview, and put
+// the editor back in step with them.
+function appShellAfterHomeChange(message) {
+  if (typeof saveState === 'function') saveState();
+  if (typeof renderLivePreview === 'function') renderLivePreview();
+  appShellRenderHomeEditor();
+  if (message) showToast(message, 'success');
+  return true;
+}
+
+// --- the Lists view (P6-4) ---------------------------------------------------
+//
+// Your lists, as cards you can act on: open one, add titles to it without
+// leaving the page, put it on the home screen, and share it. It is additive --
+// the dashboard the page already has stays underneath -- and it exists only on
+// a shell page: the containers it fills are emitted by the server (12_) when,
+// and only when, the request carries the FF_NEW_UI cookie.
+//
+// Everything reuses the page's own machinery rather than re-implementing it:
+// editing a list is editCreatorList(slug)/editLocalCustomList(slug) (the same
+// entry points the dashboard's Edit button uses), adding a title is
+// addToCustomListDraft (21_), putting a list on the home screen builds the same
+// customlist:v1: snapshot the dashboard's "+ Add" builds, and the search is
+// /api/title-search -- the same endpoint the Search tab uses.
+
+// E2E 7 wants one share control with three states. The legacy list store only
+// knows private and public: normalizeListVisibility (02_) maps anything that is
+// not "public" to "private", so offering Unlisted there would quietly save a
+// private list. Unlisted is part of the next list service (31_lists-api.js,
+// PUT /api/lists/:publicId/visibility), which is behind FF_V2_LISTS_API and is
+// off until reads move to the new tables. It is therefore shown, with what it
+// means, and disabled with the reason -- and turning it on is this one flag.
+const APP_SHELL_UNLISTED_READY = false;
+
+const APP_SHELL_LIST_VISIBILITIES = [
+  { id: 'private', label: 'Private', what: 'Only you can open it. Not reachable by link.' },
+  { id: 'unlisted', label: 'Unlisted', what: 'Anyone with the link can open it; it is not listed in Explore.' },
+  { id: 'public', label: 'Public', what: 'Anyone can find it in Explore, and it can be liked.' },
+];
+
+// Which list's share panel is open, and the results of the last title search.
+let appShellShareSlug = null;
+let appShellTitleResults = [];
+let appShellTitleSearchSeq = 0;
+var appShellTitleSearchTimer = null;
+
+function appShellListsHomeHost() {
+  return document.getElementById('appShellListsHome');
+}
+
+function appShellListsEscape(value) {
+  return escapeHtml(String(value === null || value === undefined ? '' : value));
+}
+
+// The lists this browser can act on: the account's, when it is signed in, and
+// the ones kept in this browser on their own (D-8).
+//
+// P6-9: both, not either. Until this task the signed-in branch returned the
+// account's lists and nothing else, so a list built while signed out -- which
+// survives signing in, because nothing migrates it then -- was simply not on
+// screen anywhere in the new UI, and there was no way to save it. A list the
+// account does not have is marked local, which is what the card's "Saved in
+// this browser only" line, its Save/Export buttons and the Share control all
+// read.
+function appShellOwnLists() {
+  const out = [];
+  const signedIn = (typeof activeCreator !== 'undefined' && !!activeCreator && !!activeCreator.creatorName);
+  const accountSlugs = {};
+  if (signedIn && typeof lastCreatorListsData !== 'undefined' && Array.isArray(lastCreatorListsData)) {
+    lastCreatorListsData.forEach(function (l) {
+      if (l && l.slug) {
+        out.push(l);
+        accountSlugs[String(l.slug)] = true;
+      }
+    });
+  }
+  const map = (typeof loadLocalCustomLists === 'function') ? (loadLocalCustomLists() || {}) : {};
+  Object.keys(map).forEach(function (key) {
+    const l = map[key];
+    if (!l) return;
+    // The auto-tracked lists are not hand-built ones and are not "browser
+    // only" in the sense this view means: their content travels in the
+    // account's own tracking record (pushTrackingSync, 22_), and the sign-up
+    // migration deliberately leaves them out of the per-list upload for that
+    // reason. Offering "Save to an account" on one would either duplicate it
+    // as a second list or, signed out, pretend a generated shelf is something
+    // the person built.
+    if (APP_SHELL_AUTO_TRACKED_SLUGS.indexOf(String(l.slug || key)) !== -1) return;
+    const slug = String(l.slug || key);
+    // While signed in, this store is also the account's own copy: every list
+    // the account has is mirrored into it with a creatorSlug (backfill /
+    // upload), so an entry carrying one is not browser-only, it is the
+    // account's list seen through the cache. An entry without one is a list
+    // the account has never been told about.
+    if (signedIn && (l.creatorSlug || accountSlugs[slug])) return;
+    out.push(Object.assign({}, l, { slug: slug, local: true }));
+  });
+  return out;
+}
+
+// The generated lists that live in the same browser store but are not
+// browser-only lists -- see appShellOwnLists.
+const APP_SHELL_AUTO_TRACKED_SLUGS = ['watchlist', 'watch-history', 'continue-watching', 'airing-next'];
+
+// A list the account does not have. See appShellOwnLists.
+function appShellListIsLocal(list) {
+  return !!(list && list.local);
+}
+
+function appShellListBySlug(slug) {
+  const want = String(slug || '');
+  const all = appShellOwnLists();
+  for (let i = 0; i < all.length; i++) {
+    if (String(all[i].slug) === want) return all[i];
+  }
+  return null;
+}
+
+function appShellListCount(list) {
+  if (!list) return 0;
+  if (Array.isArray(list.items)) return list.items.length;
+  if (typeof list.itemCount === 'number') return list.itemCount;
+  if (typeof list.count === 'number') return list.count;
+  return 0;
+}
+
+function appShellListKind(list) {
+  const t = list && list.type;
+  if (t === 'series') return 'Shows';
+  if (t === 'movie') return 'Movies';
+  return 'Movies and Shows';
+}
+
+function appShellListVisibility(list) {
+  const v = list && list.visibility;
+  if (v === 'public' || v === 'unlisted' || v === 'private') return v;
+  return 'private';
+}
+
+// The link to a list as other people would open it: the published address when
+// the list has one, otherwise the account's own /lists/<you>/<slug>.
+function appShellListShareUrl(list) {
+  if (!list) return '';
+  if (list.url) return String(list.url);
+  const who = (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) ? activeCreator.creatorName : '';
+  const slug = String(list.slug || '');
+  if (who && slug) return location.origin + '/lists/' + encodeURIComponent(who) + '/' + encodeURIComponent(slug);
+  return location.origin + '/lists/' + encodeURIComponent(slug);
+}
+
+function appShellListOnHomeScreen(slug) {
+  const want = String(slug || '');
+  // The page's own answer first: isListAddedToConfig (16_) is what the
+  // dashboard's own "+ Add" / "Remove" buttons read, so the card and those
+  // buttons can never disagree about whether a list is on the home screen.
+  const list = appShellListBySlug(slug);
+  if (typeof isListAddedToConfig === 'function' && list) {
+    if (isListAddedToConfig(null, list.type, want)) return true;
+    if (isListAddedToConfig(null, 'movie', want) || isListAddedToConfig(null, 'series', want)) return true;
+  }
+  const rows = document.querySelectorAll('#lists .entry');
+  for (let i = 0; i < rows.length; i++) {
+    const urlInput = rows[i].querySelector ? rows[i].querySelector('.url') : null;
+    if (!urlInput) continue;
+    const payload = (typeof parseCustomListPayloadClient === 'function') ? parseCustomListPayloadClient(urlInput.value) : null;
+    if (payload && (String(payload.localSlug || '') === want || String(payload.listSlug || '') === want)) return true;
+  }
+  return false;
+}
+
+// The card's home-screen button, doing exactly what the dashboard's own
+// "+ Add" / "Remove" does for the same list (see 22_client-creator-profile.js).
+function appShellListToggleHomeScreen(slug) {
+  const list = appShellListBySlug(slug);
+  if (!list) {
+    showToast('Could not find that list -- try refreshing.', 'error');
+    return false;
+  }
+  if (appShellListOnHomeScreen(slug)) {
+    if (typeof removeListFromConfig === 'function') {
+      removeListFromConfig(null, list.type, slug);
+      removeListFromConfig(null, 'movie', slug);
+      removeListFromConfig(null, 'series', slug);
+    }
+    const rows = document.querySelectorAll('#lists .entry');
+    for (let i = 0; i < rows.length; i++) {
+      const urlInput = rows[i].querySelector ? rows[i].querySelector('.url') : null;
+      if (!urlInput) continue;
+      const payload = (typeof parseCustomListPayloadClient === 'function') ? parseCustomListPayloadClient(urlInput.value) : null;
+      if (payload && (String(payload.localSlug || '') === String(slug) || String(payload.listSlug || '') === String(slug))) rows[i].remove();
+    }
+    if (typeof renumber === 'function') renumber();
+    if (typeof saveState === 'function') saveState();
+    appShellRenderListsHome();
+    showToast('"' + list.name + '" removed from your home screen.', 'success');
+    return true;
+  }
+  const items = (typeof normalizeSnapshotItemsForCatalog === 'function') ? normalizeSnapshotItemsForCatalog(list.items || []) : (list.items || []);
+  const snapshot = { listId: generateChannelId(), localSlug: slug, listSlug: slug, type: list.type || 'movie', items: items, shuffle: false };
+  addRow(list.name, 'customlist:v1:' + JSON.stringify(snapshot), list.type || 'movie', true, 'My Lists');
+  if (typeof renumber === 'function') renumber();
+  if (typeof saveState === 'function') saveState();
+  appShellRenderListsHome();
+  showToast('"' + list.name + '" added to your home screen.', 'success');
+  return true;
+}
+
+function appShellListChoiceHtml(slug, choice, current) {
+  const on = choice.id === current;
+  const ready = choice.id !== 'unlisted' || APP_SHELL_UNLISTED_READY;
+  return '<button type="button" class="app-shell-chip' + (on ? ' is-on' : '') + '"' +
+    ' data-app-shell-action="list-visibility" data-app-shell-id="' + appShellListsEscape(slug) + '|' + choice.id + '"' +
+    (ready ? '' : ' disabled title="' + appShellListsEscape(choice.what + ' This needs the new list service, which is not switched on yet.') + '"') +
+    '>' + appShellListsEscape(choice.label) + '</button>';
+}
+
+function appShellListShareHtml(list) {
+  const slug = String(list.slug || '');
+  const current = appShellListVisibility(list);
+  let html = '<div class="app-shell-actions" style="margin:6px 0 6px;">';
+  APP_SHELL_LIST_VISIBILITIES.forEach(function (choice) {
+    html += appShellListChoiceHtml(slug, choice, current);
+  });
+  html += '</div>';
+  const chosen = APP_SHELL_LIST_VISIBILITIES.filter(function (c) { return c.id === current; })[0];
+  if (chosen) html += '<p class="app-shell-muted">' + appShellListsEscape(chosen.what) + '</p>';
+  if (!APP_SHELL_UNLISTED_READY) {
+    html += '<p class="app-shell-muted">Unlisted needs the new list service, which is not switched on yet -- until then a list is private or public.</p>';
+  }
+  const url = appShellListShareUrl(list);
+  html += '<p class="app-shell-kv"><span class="app-shell-review-url">' + appShellListsEscape(url) + '</span></p>';
+  html += '<div class="app-shell-actions">' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="list-copy" data-app-shell-id="' + appShellListsEscape(slug) + '">Copy link</button>' +
+    (current === 'private' ? '' : '<button type="button" class="secondary lc-btn" data-app-shell-action="list-preview" data-app-shell-id="' + appShellListsEscape(slug) + '">Open the page</button>') +
+    '</div>';
+  return html;
+}
+
+function appShellListCardHtml(list) {
+  const slug = String(list.slug || '');
+  const onHome = appShellListOnHomeScreen(slug);
+  const vis = appShellListVisibility(list);
+  const local = appShellListIsLocal(list);
+  const count = appShellListCount(list);
+  const meta = (local ? 'Saved in this browser only' : appShellListsEscape(vis.charAt(0).toUpperCase() + vis.slice(1))) +
+    ' &middot; ' + appShellListsEscape(appShellListKind(list)) + ' &middot; ' + count + (count === 1 ? ' title' : ' titles');
+  let html = '<div class="app-shell-row">' +
+    '<div class="app-shell-row-main"><strong>' + appShellListsEscape(list.name || slug) + '</strong>' +
+    '<br><span class="app-shell-muted">' + meta + '</span>' +
+    (local ? '<br><span class="app-shell-muted">It lives in this browser alone, so clearing this browser\u2019s data loses it. Save it to an account to keep it, or Export a copy.</span>' : '') +
+    '</div>' +
+    '<div class="app-shell-row-controls">' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="list-open" data-app-shell-id="' + appShellListsEscape(slug) + '">Open</button>' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="list-edit" data-app-shell-id="' + appShellListsEscape(slug) + '">Add titles</button>' +
+    '<button type="button" class="' + (onHome ? 'secondary lc-btn' : 'primary lc-btn') + '" data-app-shell-action="list-home" data-app-shell-id="' + appShellListsEscape(slug) + '">' +
+    (onHome ? 'On your home screen' : 'Show on home screen') + '</button>' +
+    (local
+      ? '<button type="button" class="primary lc-btn" data-app-shell-action="list-save-account" data-app-shell-id="' + appShellListsEscape(slug) + '">Save to an account</button>' +
+        '<button type="button" class="secondary lc-btn" data-app-shell-action="list-export" data-app-shell-id="' + appShellListsEscape(slug) + '">Export</button>'
+      : '<button type="button" class="secondary lc-btn" data-app-shell-action="list-share" data-app-shell-id="' + appShellListsEscape(slug) + '">Share</button>') +
+    '</div></div>';
+  if (!local && appShellShareSlug === slug) html += appShellListShareHtml(list);
+  return html;
+}
+
+// --- browser-only lists (P6-9) ----------------------------------------------
+//
+// The Lists view shows the lists this browser keeps on its own (D-8) beside the
+// account's, says which is which, and gives each of those two ways out. Both
+// end up in 22_client-creator-profile.js: the push is the same request the
+// sign-up migration makes (saveLocalListToAccount), and the export is a file
+// this same page can restore.
+
+// The button on a card. Signed in, it saves the list and the browser's copy
+// goes (the account has it now). Signed out, it copies the list out of the
+// store first and asks the person to sign in -- signing in empties this
+// browser's store (clearLocalAccountData), so the push happens right after it
+// completes, from that copy (flushPendingListSaves). Without the copy the list
+// would be gone by the time there was an account to save it to.
+async function appShellSaveLocalListToAccount(slug) {
+  const list = appShellListBySlug(slug);
+  if (!list) {
+    showToast('Could not find that list -- try refreshing.', 'error');
+    return false;
+  }
+  const signedIn = (typeof activeCreator !== 'undefined' && !!activeCreator && !!activeCreator.creatorName);
+  if (!signedIn) {
+    if (typeof rememberPendingListSave !== 'function' || !rememberPendingListSave(slug)) {
+      showToast('Could not read that list -- try refreshing.', 'error');
+      return false;
+    }
+    showToast('"' + (list.name || slug) + '" will be saved to the account you sign in to.', 'info', { duration: 8000 });
+    if (typeof openRestoreModal === 'function') openRestoreModal();
+    return true;
+  }
+  if (typeof saveLocalListToAccount !== 'function') return false;
+  const result = await saveLocalListToAccount(slug, { visibility: 'private' });
+  if (!result || !result.ok) {
+    showToast(result && result.error === 'signed-out'
+      ? 'Sign in to save this list to an account.'
+      : 'Could not save that list to your account -- try again.', 'error');
+    return false;
+  }
+  // Ask the account what it has before re-rendering: the list has just changed
+  // hands, and the card must come back from the account's own answer rather
+  // than flicker out because the cache predates the save.
+  if (typeof renderCreatorDashboard === 'function') {
+    try { await renderCreatorDashboard({ silent: true }); } catch (e) {}
+  }
+  showToast('"' + (list.name || slug) + '" is saved to your account now. It is private until you share it.', 'success');
+  appShellRenderListsHome();
+  return true;
+}
+
+// Export one list as the small JSON file this page's own restore reads
+// (Settings -> Backups -> Restore, which merges customLists into the browser's
+// store). Deliberately not the whole-library file: the point of the button is
+// that one list is only in this browser, and the person wants a copy of it.
+function appShellExportList(slug) {
+  const list = appShellListBySlug(slug);
+  if (!list) {
+    showToast('Could not find that list -- try refreshing.', 'error');
+    return false;
+  }
+  const key = String(list.slug || slug);
+  const payload = {
+    version: BACKUP_FORMAT_VERSION,
+    exportedAt: new Date().toISOString(),
+    exportedFrom: 'My Lists Addon (a list saved in one browser)',
+    customLists: {},
+  };
+  payload.customLists[key] = {
+    slug: key,
+    name: list.name || key,
+    type: list.type || 'movie',
+    items: Array.isArray(list.items) ? list.items : [],
+    visibility: appShellListVisibility(list),
+    updatedAt: Number(list.updatedAt) || Date.now(),
+  };
+  const filename = (slugify(list.name || key) || key) + '-list.json';
+  if (typeof downloadJsonFile !== 'function') return false;
+  downloadJsonFile(filename, payload);
+  showToast('Exported "' + (list.name || key) + '" as ' + filename + '.', 'success');
+  return true;
+}
+
+// Whether this view has already asked the page to fetch the account's lists.
+// One ask only: an account with no lists must end up on the empty state, not
+// on a loop of requests.
+var appShellListsLoadRequested = false;
+
+function appShellRenderListsHome() {
+  const host = appShellListsHomeHost();
+  if (!host || !NEW_UI) return false;
+  const lists = appShellOwnLists();
+  const signedIn = (typeof activeCreator !== 'undefined' && !!activeCreator && !!activeCreator.creatorName);
+  // P6-9: "no lists" and "the account's lists have not arrived yet" are
+  // different states, and only the second one is worth waiting for. The
+  // browser's own store is a *cache* of the account's lists while signed in, so
+  // rendering from it before the account answers would label an account list as
+  // browser-only for as long as the request takes.
+  const accountKnown = !signedIn || (typeof lastCreatorListsData !== 'undefined' && Array.isArray(lastCreatorListsData));
+  if (!accountKnown && !appShellListsLoadRequested) {
+    appShellListsLoadRequested = true;
+    host.innerHTML = '<div class="panel" style="margin-bottom:12px;">' +
+      '<h2 class="panel-title">Your lists</h2>' +
+      '<p class="app-shell-muted">Loading your lists...</p></div>';
+    appShellListsRefresh();
+    return true;
+  }
+  if (!lists.length) {
+    host.innerHTML = '<div class="panel" style="margin-bottom:12px;">' +
+      '<h2 class="panel-title">Your lists</h2>' +
+      '<p class="app-shell-muted">' + (signedIn
+        ? 'No lists yet. Start one below, then add titles to it right here.'
+        : 'No lists in this browser yet. Sign in to keep them on your account, or start one below -- it is saved in this browser until then.') + '</p>' +
+      '<div class="app-shell-actions"><button type="button" class="primary lc-btn" data-app-shell-action="list-new">+ New list</button></div>' +
+      '</div>';
+    return true;
+  }
+  let html = '<div class="panel" style="margin-bottom:12px;">' +
+    '<h2 class="panel-title">Your lists</h2>' +
+    '<p class="app-shell-muted">Open one, add titles to it, put it on your home screen, or share it. ' +
+    (signedIn
+      ? 'Each list says where it is saved. Anything marked "Saved in this browser only" is not on your account yet.'
+      : 'Everything here is saved in this browser only. Save a list to an account to keep it, or export a copy.') + '</p>';
+  lists.forEach(function (list) {
+    html += appShellListCardHtml(list);
+  });
+  html += '<div class="app-shell-actions" style="margin-top:10px;">' +
+    '<button type="button" class="primary lc-btn" data-app-shell-action="list-new">+ New list</button>' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="lists-refresh">Refresh</button></div></div>';
+  host.innerHTML = html;
+  return true;
+}
+
+// --- the inline "Add titles" search -----------------------------------------
+//
+// In the list editor (12_), so creating a list and editing one are the same
+// thing: type, tap Add, and the title is in the draft. Save (the panel's own
+// button) writes it, which is where "Saved" comes from.
+
+function appShellAddTitlesHost() {
+  return document.getElementById('appShellAddTitles');
+}
+
+function appShellTitleResultHtml(result, index) {
+  const year = result && result.year ? ' &middot; ' + appShellListsEscape(result.year) : '';
+  return '<div class="app-shell-row"><div class="app-shell-row-main">' +
+    '<strong>' + appShellListsEscape((result && result.title) || 'Untitled') + '</strong>' +
+    '<br><span class="app-shell-muted">' + (result && result.type === 'tv' ? 'Show' : 'Movie') + year + '</span></div>' +
+    '<div class="app-shell-row-controls"><button type="button" class="primary lc-btn" data-app-shell-action="title-add" data-app-shell-id="' + index + '">Add</button></div></div>';
+}
+
+function appShellRenderAddTitles(message) {
+  const host = appShellAddTitlesHost();
+  if (!host || !NEW_UI) return false;
+  let html = '<div class="panel" style="margin-bottom:12px;">' +
+    '<h2 class="panel-title">Add titles</h2>' +
+    '<p class="app-shell-muted">Search for a movie or a show and add it straight to this list.</p>' +
+    '<div class="row"><input type="text" id="appShellAddTitlesInput" placeholder="Add titles\u2026" aria-label="Search for a title to add" spellcheck="false"></div>';
+  if (message) html += '<p class="app-shell-muted">' + appShellListsEscape(message) + '</p>';
+  if (appShellTitleResults.length) {
+    html += '<div class="app-shell-review">' + appShellTitleResults.map(appShellTitleResultHtml).join('') + '</div>';
+  }
+  html += '</div>';
+  host.innerHTML = html;
+  const input = document.getElementById('appShellAddTitlesInput');
+  if (input && input.addEventListener) {
+    input.addEventListener('input', function () {
+      const value = input.value || '';
+      if (appShellTitleSearchTimer) clearTimeout(appShellTitleSearchTimer);
+      appShellTitleSearchTimer = setTimeout(function () {
+        appShellTitleSearchTimer = null;
+        appShellSearchTitles(value);
+      }, 300);
+    });
+  }
+  return true;
+}
+
+async function appShellSearchTitles(query) {
+  const q = String(query || '').trim();
+  if (!q) {
+    appShellTitleResults = [];
+    appShellRenderAddTitles('');
+    return [];
+  }
+  const seq = ++appShellTitleSearchSeq;
+  const kind = (typeof customListDraftType !== 'undefined' && customListDraftType === 'series') ? 'tv' : 'movie';
+  const res = await appShellApiFetch('/api/title-search?q=' + encodeURIComponent(q) + '&type=' + kind);
+  if (seq !== appShellTitleSearchSeq) return [];
+  if (!res.ok) {
+    appShellTitleResults = [];
+    appShellRenderAddTitles(res.error || 'Could not search just now.');
+    return [];
+  }
+  const results = (res.data && res.data.results) || [];
+  appShellTitleResults = results.slice(0, 8);
+  const input = document.getElementById('appShellAddTitlesInput');
+  if (input) input.value = q;
+  appShellRenderAddTitles(appShellTitleResults.length ? '' : 'Nothing found for that.');
+  return appShellTitleResults;
+}
+
+async function appShellAddTitle(index) {
+  const item = appShellTitleResults[Number(index)];
+  if (!item) return false;
+  if (typeof addToCustomListDraft !== 'function') return false;
+  const kind = (typeof customListDraftType !== 'undefined' && customListDraftType === 'series') ? 'tv' : 'movie';
+  await addToCustomListDraft(kind, item.tmdbId, item.title, item.year, item.poster, null);
+  showToast('Added "' + (item.title || 'that title') + '" to the list. Save it when you are done.', 'success');
+  return true;
+}
+
+// --- actions -----------------------------------------------------------------
+
+function appShellStartListEdit(slug) {
+  const list = appShellListBySlug(slug);
+  if (!list) {
+    showToast('Could not find that list -- try refreshing.', 'error');
+    return false;
+  }
+  if (list.local && typeof editLocalCustomList === 'function') {
+    editLocalCustomList(slug);
+  } else if (typeof editCreatorList === 'function') {
+    editCreatorList(slug);
+  }
+  if (typeof switchListsSubmenu === 'function') switchListsSubmenu('create-list');
+  appShellRenderAddTitles('');
+  const input = document.getElementById('appShellAddTitlesInput');
+  if (input && input.focus) {
+    try { input.focus(); } catch (e) {}
+  }
+  return true;
+}
+
+async function appShellSetListVisibility(slug, visibility) {
+  const list = appShellListBySlug(slug);
+  if (!list) return false;
+  const want = String(visibility || '');
+  if (want !== 'private' && want !== 'public') {
+    showToast('Unlisted is not switched on yet -- a list is private or public for now.', 'info');
+    return false;
+  }
+  if (appShellListVisibility(list) === want) {
+    appShellRenderListsHome();
+    return true;
+  }
+  const body = {
+    creatorName: (activeCreator && activeCreator.creatorName) || '',
+    creatorKey: localStorage.getItem('myListAddon:creatorKey') || '',
+    name: list.name,
+    type: list.type || 'movie',
+    items: list.items || [],
+    visibility: want,
+  };
+  const res = await appShellApiFetch('/api/creator/lists/save', { method: 'POST', body: body });
+  if (!res.ok) {
+    showToast(res.error || 'Could not save that change.', 'error');
+    return false;
+  }
+  list.visibility = want;
+  appShellRenderListsHome();
+  showToast(want === 'public' ? 'Anyone with the link can open it, and it is listed in Explore.' : 'Now private -- only you can open it.', 'success');
+  return true;
+}
+
+async function appShellListsRefresh() {
+  if (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) {
+    if (typeof loadCreatorSync === 'function') {
+      try { await loadCreatorSync(); } catch (e) {}
+    } else if (typeof renderCreatorDashboard === 'function') {
+      try { await renderCreatorDashboard(); } catch (e) {}
+    }
+  }
+  return appShellRenderListsHome();
+}
+
+// Which of the three dispatchers an action belongs to (see appShellOnClick).
+const APP_SHELL_LISTS_ACTION = /^(list-|lists-|title-)/;
+const APP_SHELL_EXPLORE_ACTION = /^explore-/;
+const APP_SHELL_IMPORTS_ACTION = /^import-/;
+
+async function appShellListsAction(action, id) {
+  const what = String(action || '');
+  const slug = String(id || '');
+  if (what === 'list-new') {
+    if (typeof openCreateListModal === 'function') openCreateListModal('custom');
+    return true;
+  }
+  if (what === 'lists-refresh') return appShellListsRefresh();
+  if (what === 'list-open') {
+    const list = appShellListBySlug(slug);
+    if (!list) return false;
+    if (typeof openListDetailsPage === 'function') {
+      openListDetailsPage(list.name, list.type || 'movie', 'custom:' + slug);
+      return true;
+    }
+    return false;
+  }
+  if (what === 'list-edit') return appShellStartListEdit(slug);
+  if (what === 'list-home') return appShellListToggleHomeScreen(slug);
+  if (what === 'list-share') {
+    appShellShareSlug = (appShellShareSlug === slug) ? null : slug;
+    appShellRenderListsHome();
+    return true;
+  }
+  if (what === 'list-copy') {
+    const list = appShellListBySlug(slug);
+    if (!list) return false;
+    return appShellCopyText(appShellListShareUrl(list), 'List link copied.');
+  }
+  if (what === 'list-preview') {
+    const list = appShellListBySlug(slug);
+    if (!list) return false;
+    if (typeof openListDetailsPage === 'function') {
+      openListDetailsPage(list.name, list.type || 'movie', 'custom:' + slug);
+      return true;
+    }
+    return false;
+  }
+  if (what === 'list-visibility') {
+    const parts = slug.split('|');
+    return appShellSetListVisibility(parts[0], parts[1]);
+  }
+  if (what === 'list-save-account') return appShellSaveLocalListToAccount(slug);
+  if (what === 'list-export') return appShellExportList(slug);
+  if (what === 'title-add') return appShellAddTitle(id);
+  return false;
+}
+
+// --- Explore (P6-5) ----------------------------------------------------------
+//
+// Somebody else's public lists, in one place: pick where to look, type, and see
+// what comes back with one button to put it on your home screen. It is additive
+// -- the Discover feeds underneath are untouched -- and it exists only on a
+// shell page: the container comes from the server (11_tab-quick-add.js) when,
+// and only when, the request carries the FF_NEW_UI cookie.
+//
+// Every source here is one the page already talks to, with the page's own
+// helpers where they exist:
+//
+//   My Lists community   /lists/public.json (browse) and
+//                        /api/search-published-lists (search)
+//   MDBList              /api/toplists -- cached by ensureMdblistPopularLoaded
+//                        (19_), which is also what the legacy list search
+//                        matches MDBList against: MDBList has no list search of
+//                        its own, so this filters the popular set by name.
+//   Trakt                /api/trakt-popular-lists (browse) and
+//                        /api/trakt-search (search)
+//   TMDB                 /api/tmdb-search-lists -- search only; TMDB publishes
+//                        no list directory to browse.
+
+// What the sort chips can honestly do today. Most liked works everywhere: it is
+// the order the server sends and every source reports likes. Newest works for
+// the lists that report when they changed, which is this site's own; the
+// providers do not, so those are kept and shown after the dated ones rather
+// than pretending they are new. "Most added" counts how many people put a list
+// on a home screen -- a column that exists only in the next list service
+// (add_count, 33_lists-directory.js, /lists/public.json?sort=added), which is
+// behind FF_V2_LISTS_READ and must stay off until reads move to the new tables.
+const APP_SHELL_EXPLORE_SORTS = [
+  { id: 'popular', label: 'Most liked', ready: true },
+  { id: 'new', label: 'Newest', ready: true },
+  { id: 'added', label: 'Most added', ready: false, why: 'Counting how many people put a list on their home screen needs the new list service, which is not switched on yet.' },
+];
+
+const APP_SHELL_EXPLORE_SOURCES = [
+  { id: 'mylists', label: 'My Lists community' },
+  { id: 'mdblist', label: 'MDBList' },
+  { id: 'trakt', label: 'Trakt' },
+  { id: 'tmdb', label: 'TMDB' },
+];
+
+const APP_SHELL_EXPLORE_MAX = 24;
+
+let appShellExploreSource = 'all';
+let appShellExploreSort = 'popular';
+let appShellExploreQuery = '';
+let appShellExploreResults = [];
+let appShellExploreNote = '';
+let appShellExplorePreview = -1;
+let appShellExplorePreviewData = null;
+let appShellExploreSeq = 0;
+var appShellExploreTimer = null;
+var appShellExploreLoaded = false;
+
+function appShellExploreHost() {
+  return document.getElementById('appShellExplore');
+}
+
+// Whether the Discover view is the one currently on screen. A shell page can be
+// served straight at /discover (or at /, which is Discover), and then the view
+// is worth its fetch at boot; served at any other view it is not, and the fetch
+// waits until somebody opens Discover.
+function appShellDiscoverIsOpen() {
+  const panel = document.getElementById('content-discover');
+  return !!(panel && !panel.hidden);
+}
+
+function appShellExploreEscape(value) {
+  return escapeHtml(String(value === null || value === undefined ? '' : value));
+}
+
+// Every source's own idea of a list, in one shape. The timestamp field is
+// only ever set by a source that actually reports one.
+function appShellExploreNormalize(entry, source) {
+  const e = entry || {};
+  const items = (typeof e.items === 'number') ? e.items : (typeof e.itemCount === 'number' ? e.itemCount : 0);
+  return {
+    name: e.name || 'Untitled list',
+    url: e.url || '',
+    type: e.type || e.contentType || 'movie',
+    items: items,
+    likes: Number(e.likes) || 0,
+    by: e.creatorName || e.creator || e.user || '',
+    source: source,
+    when: Number(e.updatedAt) || 0,
+  };
+}
+
+function appShellExploreSortRows(rows) {
+  const list = rows.slice();
+  if (appShellExploreSort === 'new') {
+    // Dated first, newest first; a source that does not say when a list
+    // changed keeps its place after them rather than being guessed at.
+    list.sort(function (a, b) {
+      if (!!a.when !== !!b.when) return a.when ? -1 : 1;
+      if (a.when !== b.when) return b.when - a.when;
+      return b.likes - a.likes;
+    });
+    return list;
+  }
+  list.sort(function (a, b) {
+    if (b.likes !== a.likes) return b.likes - a.likes;
+    return b.items - a.items;
+  });
+  return list;
+}
+
+function appShellExploreDedupe(rows) {
+  const seen = {};
+  const out = [];
+  rows.forEach(function (row) {
+    const key = String(row.url || '').toLowerCase() || (String(row.name).toLowerCase() + '|' + row.source);
+    if (seen[key]) return;
+    seen[key] = true;
+    out.push(row);
+  });
+  return out;
+}
+
+function appShellExploreWants(source) {
+  return appShellExploreSource === 'all' || appShellExploreSource === source;
+}
+
+// --- fetching ----------------------------------------------------------------
+
+async function appShellExploreMdbList() {
+  if (typeof ensureMdblistPopularLoaded !== 'function') return [];
+  const rows = await ensureMdblistPopularLoaded();
+  return (Array.isArray(rows) ? rows : []).map(function (r) { return appShellExploreNormalize(r, 'mdblist'); });
+}
+
+async function appShellExploreTraktBrowse() {
+  if (typeof ensureTraktPopularLoaded !== 'function') return [];
+  const rows = await ensureTraktPopularLoaded();
+  return (Array.isArray(rows) ? rows : []).map(function (r) { return appShellExploreNormalize(r, 'trakt'); });
+}
+
+async function appShellExploreMyListsBrowse() {
+  const res = await appShellApiFetch('/lists/public.json?limit=' + APP_SHELL_EXPLORE_MAX);
+  if (!res.ok) return null;
+  const rows = (res.data && res.data.lists) || [];
+  return rows.map(function (r) { return appShellExploreNormalize(r, 'mylists'); });
+}
+
+async function appShellExploreMyListsSearch(q) {
+  const res = await appShellApiFetch('/api/search-published-lists?q=' + encodeURIComponent(q));
+  if (!res.ok) return null;
+  const rows = (res.data && res.data.lists) || [];
+  return rows.map(function (r) { return appShellExploreNormalize(r, 'mylists'); });
+}
+
+async function appShellExploreTraktSearch(q) {
+  const key = (document.getElementById('traktKeyInput') ? document.getElementById('traktKeyInput').value.trim() : '') || readProviderSecret('myListAddon:traktKey') || '';
+  const res = await appShellApiFetch('/api/trakt-search?q=' + encodeURIComponent(q) + (key ? '&traktKey=' + encodeURIComponent(key) : ''));
+  if (!res.ok) return null;
+  return ((res.data && res.data.lists) || []).map(function (r) { return appShellExploreNormalize(r, 'trakt'); });
+}
+
+async function appShellExploreTmdbSearch(q) {
+  const key = (document.getElementById('tmdbKeyInput') ? document.getElementById('tmdbKeyInput').value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
+  const adult = (typeof isAdultContentFilterEnabled === 'function' && isAdultContentFilterEnabled()) ? '&adultContentFilter=1' : '';
+  const res = await appShellApiFetch('/api/tmdb-search-lists?q=' + encodeURIComponent(q) + (key ? '&tmdbKey=' + encodeURIComponent(key) : '') + adult);
+  if (!res.ok) return null;
+  return ((res.data && res.data.lists) || []).map(function (r) { return appShellExploreNormalize(r, 'tmdb'); });
+}
+
+// The provider lists in the popular sets, narrowed to the words somebody typed.
+// MDBList has no list search (see the note at the top of this module), so this
+// is what the legacy search does too -- said out loud in the note below.
+function appShellExploreFilterByName(rows, q) {
+  const words = String(q || '').toLowerCase().split(/\\s+/).filter(Boolean);
+  if (!words.length) return rows;
+  return rows.filter(function (row) {
+    const text = (String(row.name) + ' ' + String(row.by)).toLowerCase();
+    return words.every(function (w) { return text.indexOf(w) !== -1; });
+  });
+}
+
+async function appShellExploreRun() {
+  const q = String(appShellExploreQuery || '').trim();
+  const seq = ++appShellExploreSeq;
+  const want = appShellExploreSource;
+  const results = [];
+  const notes = [];
+  const jobs = [];
+
+  // This site's own lists: the directory when nothing has been typed, its
+  // search when something has.
+  if (appShellExploreWants('mylists')) {
+    jobs.push((q ? appShellExploreMyListsSearch(q) : appShellExploreMyListsBrowse()).then(function (rows) {
+      if (rows) results.push.apply(results, rows);
+      else notes.push('The My Lists directory could not be reached.');
+    }));
+  }
+  if (appShellExploreWants('mdblist')) {
+    jobs.push(appShellExploreMdbList().then(function (rows) {
+      const matching = appShellExploreFilterByName(rows, q);
+      results.push.apply(results, q ? matching.slice(0, APP_SHELL_EXPLORE_MAX) : matching);
+      if (q && want !== 'mylists') notes.push('MDBList has no list search of its own, so the MDBList results are the popular ones matching your words.');
+    }));
+  }
+  if (appShellExploreWants('trakt')) {
+    jobs.push((q ? appShellExploreTraktSearch(q) : appShellExploreTraktBrowse()).then(function (rows) {
+      if (rows) results.push.apply(results, rows);
+      else if (q) notes.push('trakt.tv could not be searched just now.');
+    }));
+  }
+  if (appShellExploreWants('tmdb')) {
+    jobs.push((q ? appShellExploreTmdbSearch(q) : Promise.resolve(null)).then(function (rows) {
+      if (rows) results.push.apply(results, rows);
+      else if (q) notes.push('TMDB could not be searched just now.');
+      else if (want === 'tmdb') notes.push('TMDB publishes no list directory to browse -- search for one by name.');
+    }));
+  }
+
+  await Promise.all(jobs);
+  // A newer search already went out while this one was running: drop this
+  // answer rather than landing it on top of the newer one.
+  if (seq !== appShellExploreSeq) return appShellExploreResults;
+
+  appShellExploreResults = appShellExploreSortRows(appShellExploreDedupe(results)).slice(0, APP_SHELL_EXPLORE_MAX);
+  appShellExploreNote = notes.join(' ');
+  appShellExploreLoaded = true;
+  appShellExplorePreview = -1;
+  appShellExplorePreviewData = null;
+  appShellRenderExplore(true);
+  return appShellExploreResults;
+}
+
+// The preview: what is actually in the list, fetched the way the home editor
+// fetches it, so nothing is added before it has been seen.
+async function appShellExplorePreviewRow(index) {
+  const row = appShellExploreResults[Number(index)];
+  if (!row) return null;
+  if (appShellExplorePreview === Number(index)) {
+    appShellExplorePreview = -1;
+    appShellExploreRenderPreview();
+    return null;
+  }
+  appShellExplorePreview = Number(index);
+  appShellExplorePreviewData = { loading: true };
+  appShellExploreRenderPreview();
+  const auth = (typeof previewCreatorAuth === 'function') ? previewCreatorAuth() : {};
+  const body = Object.assign({ url: row.url, type: row.type === 'series' ? 'series' : 'movie', sample: 6 }, auth);
+  const res = await appShellApiFetch('/api/preview', { method: 'POST', body: body });
+  if (appShellExplorePreview !== Number(index)) return null;
+  appShellExplorePreviewData = res.ok
+    ? { sample: (res.data && res.data.sample) || [], count: Number(res.data && (res.data.totalItems || res.data.count)) || 0, error: '' }
+    : { sample: [], count: 0, error: res.error || 'That list could not be read.' };
+  appShellExploreRenderPreview();
+  return appShellExplorePreviewData;
+}
+
+function appShellExplorePosterHtml(item) {
+  const poster = item && (item.poster || item.showPoster);
+  if (!poster) return '<div class="app-shell-explore-poster app-shell-explore-poster-none"></div>';
+  return '<img class="app-shell-explore-poster" loading="lazy" alt="" src="' + appShellExploreEscape(poster) + '">';
+}
+
+function appShellExploreOnHomeScreen(row) {
+  if (typeof isListAddedToConfig !== 'function') return false;
+  const type = row.type === 'series' ? 'series' : (row.type === 'movie' ? 'movie' : null);
+  if (isListAddedToConfig(row.url, type)) return true;
+  return isListAddedToConfig(row.url, 'movie') || isListAddedToConfig(row.url, 'series');
+}
+
+// Exactly what the legacy search's own "+ Add" does for a result list (19_,
+// the .searchAddBtn handler), including the two rows a mixed list becomes.
+function appShellExploreToggleHomeScreen(index) {
+  const row = appShellExploreResults[Number(index)];
+  if (!row) return false;
+  if (appShellExploreOnHomeScreen(row)) {
+    if (typeof removeListFromConfig === 'function') {
+      removeListFromConfig(row.url, row.type);
+      removeListFromConfig(row.url, 'movie');
+      removeListFromConfig(row.url, 'series');
+      removeListFromConfig(row.url, null);
+    }
+    const rows = document.querySelectorAll('#lists .entry');
+    for (let i = 0; i < rows.length; i++) {
+      const urlInput = rows[i].querySelector ? rows[i].querySelector('.url') : null;
+      if (urlInput && String(urlInput.value).indexOf(row.url) !== -1) rows[i].remove();
+    }
+    if (typeof renumber === 'function') renumber();
+    if (typeof saveState === 'function') saveState();
+    appShellRenderExplore(false);
+    showToast('Removed "' + row.name + '" from your Catalogs.', 'success');
+    return true;
+  }
+  if (row.type === 'mixed' || row.type === 'unknown') {
+    addRow(row.name + ' (Movies)', row.url, 'movie', true, 'Custom');
+    addRow(row.name + ' (Shows)', row.url, 'series', true, 'Custom');
+  } else {
+    addRow(row.name, row.url, row.type, true, 'Custom');
+  }
+  if (typeof renumber === 'function') renumber();
+  if (typeof saveState === 'function') saveState();
+  appShellRenderExplore(false);
+  showToast('Added "' + row.name + '" to your home screen.', 'success');
+  return true;
+}
+
+function appShellExploreSourceLabel(id) {
+  for (let i = 0; i < APP_SHELL_EXPLORE_SOURCES.length; i++) {
+    if (APP_SHELL_EXPLORE_SOURCES[i].id === id) return APP_SHELL_EXPLORE_SOURCES[i].label;
+  }
+  return id === 'mylists' ? 'My Lists community' : id;
+}
+
+function appShellExploreCardHtml(row, index) {
+  const meta = appShellExploreEscape(appShellExploreSourceLabel(row.source)) +
+    ' &middot; ' + appShellExploreEscape(row.type === 'series' ? 'Shows' : (row.type === 'movie' ? 'Movies' : 'Movies and Shows')) +
+    (row.items ? ' &middot; ' + row.items + (row.items === 1 ? ' title' : ' titles') : '') +
+    (row.likes ? ' &middot; &#9829; ' + row.likes : '') +
+    (row.by ? ' &middot; ' + appShellExploreEscape(row.by) : '');
+  const onHome = appShellExploreOnHomeScreen(row);
+  const open = appShellExplorePreview === index;
+  return '<div class="app-shell-row">' +
+    '<div class="app-shell-row-main"><strong>' + appShellExploreEscape(row.name) + '</strong>' +
+    '<br><span class="app-shell-muted">' + meta + '</span>' +
+    '<br><span class="app-shell-muted app-shell-review-url">' + appShellExploreEscape(row.url) + '</span></div>' +
+    '<div class="app-shell-row-controls">' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="explore-preview" data-app-shell-id="' + index + '">' + (open ? 'Hide preview' : 'Preview') + '</button>' +
+    '<button type="button" class="' + (onHome ? 'secondary lc-btn' : 'primary lc-btn') + '" data-app-shell-action="explore-add" data-app-shell-id="' + index + '">' + (onHome ? 'On your home screen' : 'Add to home screen') + '</button>' +
+    '</div></div>' +
+    (open ? '<div class="app-shell-explore-preview" id="appShellExplorePreviewArea-' + index + '"></div>' : '');
+}
+
+function appShellExplorePreviewInnerHtml(index) {
+  const row = appShellExploreResults[index];
+  const data = appShellExplorePreviewData;
+  if (!row || !data) return '';
+  if (data.loading) return '<p class="app-shell-muted">Looking inside...</p>';
+  if (data.error) return '<p class="app-shell-muted app-shell-review-bad">' + appShellExploreEscape(data.error) + '</p>';
+  const sample = data.sample || [];
+  const count = data.count || sample.length;
+  let html = '<div class="app-shell-explore-posters">' + sample.map(appShellExplorePosterHtml).join('') + '</div>';
+  html += '<p class="app-shell-muted">' + (count ? 'First ' + Math.min(sample.length, count) + ' of ' + count + (count === 1 ? ' title' : ' titles') : 'This list is empty.') + '</p>';
+  html += '<div class="app-shell-actions">' +
+    '<button type="button" class="primary lc-btn" data-app-shell-action="explore-add" data-app-shell-id="' + index + '">Add to home screen</button>' +
+    '</div>';
+  return html;
+}
+
+// Rewrites just the open preview in place, the same way the settings panels
+// refresh without rebuilding the screen around them.
+function appShellExploreRenderPreview() {
+  const area = document.getElementById('appShellExplorePreviewArea-' + appShellExplorePreview);
+  if (!area) return false;
+  area.innerHTML = appShellExplorePreviewInnerHtml(appShellExplorePreview);
+  return true;
+}
+
+function appShellExploreChips(rows, current, action) {
+  return rows.map(function (row) {
+    const on = row.id === current;
+    const ready = row.ready !== false;
+    return '<button type="button" class="app-shell-chip' + (on ? ' is-on' : '') + '"' +
+      ' data-app-shell-action="' + action + '" data-app-shell-id="' + appShellExploreEscape(row.id) + '"' +
+      (ready ? '' : ' disabled title="' + appShellExploreEscape(row.why || '') + '"') +
+      '>' + appShellExploreEscape(row.label) + '</button>';
+  }).join('');
+}
+
+function appShellRenderExplore(scrollToResults) {
+  const host = appShellExploreHost();
+  if (!host || !NEW_UI) return false;
+  const sources = [{ id: 'all', label: 'All sources', ready: true }].concat(APP_SHELL_EXPLORE_SOURCES);
+  let html = '<div class="panel" style="margin-bottom:12px;">' +
+    '<h2 class="panel-title">Explore</h2>' +
+    '<p class="app-shell-muted">Community lists from this site and from MDBList, Trakt and TMDB. Preview one, then put it on your home screen.</p>' +
+    '<div class="app-shell-actions" style="margin-bottom:8px;">' + appShellExploreChips(sources, appShellExploreSource, 'explore-source') + '</div>' +
+    '<div class="app-shell-actions" style="margin-bottom:8px;">' + appShellExploreChips(APP_SHELL_EXPLORE_SORTS, appShellExploreSort, 'explore-sort') + '</div>' +
+    '<div class="row"><input type="text" id="appShellExploreSearch" placeholder="Search lists\u2026" aria-label="Search public lists" spellcheck="false" value="' + appShellExploreEscape(appShellExploreQuery) + '"></div>';
+
+  if (!appShellExploreLoaded) {
+    html += '<p class="app-shell-muted" id="appShellExploreStatus">Loading\u2026</p>';
+  } else if (!appShellExploreResults.length) {
+    html += '<p class="app-shell-muted" id="appShellExploreStatus">' +
+      (appShellExploreQuery ? 'Nothing found for those words.' : 'Nothing to show right now.') + '</p>';
+  } else {
+    html += '<p class="app-shell-muted" id="appShellExploreStatus">' + appShellExploreResults.length +
+      (appShellExploreResults.length === 1 ? ' list' : ' lists') +
+      (appShellExploreQuery ? ' matching "' + appShellExploreEscape(appShellExploreQuery) + '"' : '') + '.</p>';
+    html += '<div class="app-shell-review" id="appShellExploreResults">' +
+      appShellExploreResults.map(appShellExploreCardHtml).join('') + '</div>';
+  }
+  if (appShellExploreNote) html += '<p class="app-shell-muted" id="appShellExploreNote">' + appShellExploreEscape(appShellExploreNote) + '</p>';
+  html += '<p class="app-shell-muted">Most added is not offered yet: it counts how many people put a list on their home screen, which the new list service keeps and which is not switched on yet.</p>';
+  html += '</div>';
+  host.innerHTML = html;
+
+  const input = document.getElementById('appShellExploreSearch');
+  if (input && input.addEventListener) {
+    input.addEventListener('input', function () {
+      appShellExploreQuery = input.value || '';
+      if (appShellExploreTimer) clearTimeout(appShellExploreTimer);
+      appShellExploreTimer = setTimeout(function () {
+        appShellExploreTimer = null;
+        appShellExploreRun();
+      }, 300);
+    });
+  }
+  // Results are fetched in full, so a card's own re-render keeps the open
+  // preview; only its placeholder needs filling.
+  if (appShellExplorePreview >= 0) appShellExploreRenderPreview();
+  if (scrollToResults) {
+    const box = document.getElementById('appShellExploreResults');
+    if (box && box.scrollIntoView) {
+      try { box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {}
+    }
+  }
+  return true;
+}
+
+// Opening the view: render the frame, then fetch once. Coming back to the tab
+// keeps what is already there.
+function appShellOpenExplore() {
+  if (!NEW_UI) return false;
+  const first = !appShellExploreLoaded;
+  appShellRenderExplore(false);
+  if (first) {
+    appShellExploreRun();
+  } else {
+    appShellRenderExplore(false);
+  }
+  return true;
+}
+
+async function appShellExploreAction(action, id) {
+  const what = String(action || '');
+  if (what === 'explore-source') {
+    appShellExploreSource = String(id || 'all');
+    return appShellExploreRun();
+  }
+  if (what === 'explore-sort') {
+    const want = String(id || 'popular');
+    const sort = APP_SHELL_EXPLORE_SORTS.filter(function (s) { return s.id === want && s.ready !== false; })[0];
+    if (!sort) {
+      showToast('That order is not switched on yet.', 'info');
+      return false;
+    }
+    appShellExploreSort = sort.id;
+    appShellExploreResults = appShellExploreSortRows(appShellExploreResults);
+    appShellRenderExplore(false);
+    return true;
+  }
+  if (what === 'explore-preview') return appShellExplorePreviewRow(id);
+  if (what === 'explore-add') return appShellExploreToggleHomeScreen(id);
+  if (what === 'explore-refresh') {
+    appShellExploreLoaded = false;
+    return appShellExploreRun();
+  }
+  return false;
+}
+
+// --- Imports (P6-6) ----------------------------------------------------------
+//
+// "I want to import a Letterboxd list": pick the file your other site exported,
+// and the matching happens on the server (49_imports.js) instead of in this tab.
+// That is what makes the rest of this screen possible -- the job keeps running
+// when the page is closed, the progress it reports is real, and the titles TMDB
+// could not place are shown for a person to decide about rather than dropped.
+//
+//   POST /api/imports                    hand the rows over once
+//   GET  /api/imports/:id                { status, total, done, matched,
+//                                          ambiguous, unmatched }
+//   GET  /api/imports/:id/review         the ambiguous rows and their candidates
+//   POST /api/imports/:id/review         { choices: [{ row, tmdbId | null }] }
+//   GET  /api/imports/:id/result         the matched titles, in the file's order
+//
+// The file itself is read here, in the browser, because it has to be: the rows
+// are what get posted. The reading reuses the page's own importer
+// (extractItemsFromFileContent, and the fflate zip reader the page already
+// loads, 18_) rather than a second parser with its own bugs.
+//
+// Everything needs an account -- the API is per account, and one import at a
+// time -- so a signed-out browser gets a card pointing at Settings.
+
+// The server's own ceiling: IMPORT_ROWS_MAX in 49_imports.js. A literal rather
+// than an interpolation because 49_ is declared after the Worker's exports and
+// so is not in scope where this page is built; the two are checked together by
+// the imports test, and the server refuses anything over its own limit anyway.
+const APP_SHELL_IMPORT_ROWS_MAX = 5000;
+const APP_SHELL_IMPORT_POLL_MS = 1500;
+
+var appShellImportPollTimer = null;
+var appShellImportsResumed = false;
+var appShellImportFileNote = '';
+var appShellImportFile = null;   // { name, byKind: { movie: [], series: [] }, counts, truncated }
+var appShellImportKind = 'movie';
+var appShellImportJob = null;    // the last status the server gave us
+var appShellImportReview = [];   // the ambiguous rows still to decide
+var appShellImportItems = [];    // the matched titles, once the job is done
+var appShellImportSaved = null;  // { name, slug, type } -- the saved list, once there is one
+
+function appShellImportsHost() {
+  return document.getElementById('appShellImports');
+}
+
+// Whether the Lists > Import panel is the one on screen (the container exists
+// on every shell page; the panel does not).
+function appShellImportsIsOpen() {
+  const panel = document.getElementById('listsSubImport');
+  return !!(panel && panel.style && panel.style.display !== 'none');
+}
+
+function appShellImportsEscape(value) {
+  return escapeHtml(String(value === null || value === undefined ? '' : value));
+}
+
+function appShellImportsNumber(n) {
+  return Number(n) || 0;
+}
+
+// What a file's name would be as a list name: "letterboxd-watchlist.csv" ->
+// "Letterboxd Watchlist".
+function appShellImportNameFromFile(fileName) {
+  const base = String(fileName || '').replace(/\\.[^.]+$/, '').replace(/[-_]+/g, ' ').replace(/\\s+/g, ' ').trim();
+  if (!base) return 'Imported list';
+  return base.replace(/(^|\\s)([a-z])/g, function (m, sp, ch) { return sp + ch.toUpperCase(); }).slice(0, 80);
+}
+
+// --- reading the file --------------------------------------------------------
+
+// One file's text through the page's own extractor, which knows Letterboxd,
+// IMDb, Trakt, Simkl, MovieLens and TMDB export shapes.
+function appShellImportItemsFromText(fileName, text) {
+  if (typeof extractItemsFromFileContent !== 'function') return [];
+  try {
+    const items = extractItemsFromFileContent(fileName, String(text || ''), 'auto');
+    return Array.isArray(items) ? items : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+// The rows the import API takes ({ title, year?, imdbId?, tmdbId? }), grouped
+// by kind: one import is one kind (that is the server's model), so a file that
+// holds both is two imports and the screen picks which one it is sending.
+function appShellImportRowsFromItems(items) {
+  const byKind = { movie: [], series: [] };
+  (items || []).forEach(function (it) {
+    if (!it) return;
+    const title = String(it.title || it.name || '').trim();
+    const imdbId = /^tt\\d{1,10}$/.test(String(it.imdbId || '')) ? String(it.imdbId) : '';
+    const tmdbId = Number(it.tmdbId) > 0 ? Number(it.tmdbId) : 0;
+    if (!title && !imdbId && !tmdbId) return;
+    const year = /^\\d{4}$/.test(String(it.year || '').trim()) ? Number(String(it.year).trim()) : null;
+    const kind = (it.type === 'series' || it.type === 'show' || it.type === 'tv') ? 'series' : 'movie';
+    byKind[kind].push({ title: title, year: year, imdbId: imdbId || null, tmdbId: tmdbId || null });
+  });
+  return { byKind: byKind, counts: { movie: byKind.movie.length, series: byKind.series.length } };
+}
+
+// One chosen file: a zip (a Trakt or Letterboxd export holds several CSVs) or a
+// single CSV/JSON. Returns { name, byKind, counts, truncated } or { error }.
+async function appShellImportReadFile(file) {
+  const name = String((file && file.name) || 'file');
+  let items = [];
+  if (/\\.zip$/i.test(name)) {
+    if (typeof fflate === 'undefined' || !fflate || typeof fflate.unzipSync !== 'function') {
+      return { error: 'The zip reader is still loading. Try again in a moment, or unzip the file and choose the CSV inside it.' };
+    }
+    let unzipped = null;
+    try {
+      const buf = await file.arrayBuffer();
+      unzipped = fflate.unzipSync(new Uint8Array(buf));
+    } catch (e) {
+      return { error: 'That zip could not be read. Try unzipping it and choosing the CSV inside.' };
+    }
+    const entryNames = Object.keys(unzipped || {}).sort();
+    for (let i = 0; i < entryNames.length; i++) {
+      const entryName = entryNames[i];
+      if (entryName.slice(-1) === '/' || entryName.indexOf('__MACOSX') === 0) continue;
+      if (!/\\.(csv|json|txt)$/i.test(entryName)) continue;
+      const text = (typeof fflate.strFromU8 === 'function') ? fflate.strFromU8(unzipped[entryName]) : '';
+      const parts = entryName.split('/');
+      items = items.concat(appShellImportItemsFromText(parts[parts.length - 1] || entryName, text));
+      if (items.length > APP_SHELL_IMPORT_ROWS_MAX) break;
+    }
+  } else {
+    let text = '';
+    try {
+      text = await file.text();
+    } catch (e) {
+      return { error: 'That file could not be read.' };
+    }
+    items = appShellImportItemsFromText(name, text);
+  }
+  if (!items.length) {
+    return { error: 'No titles were found in that file. CSV, JSON, and Trakt or Letterboxd exports inside a zip are all supported.' };
+  }
+  const read = appShellImportRowsFromItems(items.slice(0, APP_SHELL_IMPORT_ROWS_MAX));
+  if (!read.counts.movie && !read.counts.series) return { error: 'No titles were found in that file.' };
+  return { name: name, byKind: read.byKind, counts: read.counts, truncated: items.length > APP_SHELL_IMPORT_ROWS_MAX };
+}
+
+// --- the job -----------------------------------------------------------------
+
+function appShellImportRemember(id) {
+  try { localStorage.setItem('myListAddon:lastImport', String(id)); } catch (e) {}
+}
+
+function appShellImportRemembered() {
+  try { return localStorage.getItem('myListAddon:lastImport') || ''; } catch (e) { return ''; }
+}
+
+function appShellImportMarkSeen(id) {
+  try { localStorage.setItem('myListAddon:lastImportSeen', String(id)); } catch (e) {}
+}
+
+function appShellImportSeen(id) {
+  try { return (localStorage.getItem('myListAddon:lastImportSeen') || '') === String(id); } catch (e) { return true; }
+}
+
+function appShellImportStopPolling() {
+  if (appShellImportPollTimer) {
+    clearTimeout(appShellImportPollTimer);
+    appShellImportPollTimer = null;
+  }
+}
+
+function appShellImportIsRunning() {
+  return !!(appShellImportJob && (appShellImportJob.status === 'queued' || appShellImportJob.status === 'running'));
+}
+
+async function appShellImportStart() {
+  const file = appShellImportFile;
+  if (!file) return false;
+  const kind = appShellImportKind === 'series' ? 'series' : 'movie';
+  const rows = (file.byKind && file.byKind[kind]) ? file.byKind[kind] : [];
+  if (!rows.length) {
+    showToast(kind === 'series' ? 'That file has no shows in it -- pick Movies, or a different file.' : 'That file has no movies in it -- pick Shows, or a different file.', 'info');
+    return false;
+  }
+  const name = appShellImportListName();
+  // One line per mutating call: the CSRF scanner reads this file and calls an
+  // appShellApiFetch( on the same line as method: 'POST' exempt.
+  const startBody = { rows: rows, kind: kind, source: 'file', name: name };
+  const res = await appShellApiFetch('/api/imports', { method: 'POST', body: startBody });
+  if (!res.ok) {
+    // "An import is already running" answers 409 with the id of the one that
+    // is -- that is something to pick up, not a failure to report.
+    const busyId = res.data && res.data.id;
+    if (res.status === 409 && busyId) {
+      appShellImportRemember(busyId);
+      appShellImportFile = null;
+      await appShellImportRefresh();
+      showToast('An import was already running, so this screen picked it up.', 'info');
+      return true;
+    }
+    showToast(res.error || 'The import could not be started.', 'error');
+    return false;
+  }
+  const id = (res.data && res.data.id) || null;
+  if (!id) {
+    showToast('The import could not be started.', 'error');
+    return false;
+  }
+  appShellImportRemember(id);
+  appShellImportFile = null;
+  appShellImportReview = [];
+  appShellImportItems = [];
+  appShellImportSaved = null;
+  appShellImportJob = {
+    id: id,
+    status: 'queued',
+    kind: kind,
+    name: name,
+    total: appShellImportsNumber(res.data.total),
+    done: 0, matched: 0, ambiguous: 0, unmatched: 0, error: null,
+  };
+  appShellRenderImports();
+  appShellImportSchedulePoll();
+  showToast('Import started. You can leave this page -- it keeps going.', 'success');
+  return true;
+}
+
+function appShellImportSchedulePoll() {
+  appShellImportStopPolling();
+  if (!appShellImportIsRunning()) return false;
+  appShellImportPollTimer = setTimeout(function () {
+    appShellImportPollTimer = null;
+    appShellImportRefresh();
+  }, APP_SHELL_IMPORT_POLL_MS);
+  return true;
+}
+
+// Reads the job's status, and -- once it has finished -- the review rows and
+// the titles behind them.
+async function appShellImportRefresh() {
+  const id = (appShellImportJob && appShellImportJob.id) || appShellImportRemembered();
+  if (!id) return false;
+  const res = await appShellApiFetch('/api/imports/' + encodeURIComponent(id));
+  if (!res.ok) {
+    if (res.status === 404) {
+      // The remembered import is gone -- a different account, or a job the
+      // store no longer keeps. Forget it rather than showing a stuck screen.
+      try { localStorage.removeItem('myListAddon:lastImport'); } catch (e) {}
+      appShellImportJob = null;
+      appShellRenderImports();
+      return false;
+    }
+    showToast(res.error || 'Could not read the import just now.', 'error');
+    appShellImportSchedulePoll();
+    return false;
+  }
+  const data = res.data || {};
+  appShellImportJob = {
+    id: data.id || id,
+    status: data.status || 'queued',
+    kind: data.kind === 'series' ? 'series' : 'movie',
+    name: data.name || (appShellImportJob && appShellImportJob.name) || null,
+    total: appShellImportsNumber(data.total),
+    done: appShellImportsNumber(data.done),
+    matched: appShellImportsNumber(data.matched),
+    ambiguous: appShellImportsNumber(data.ambiguous),
+    unmatched: appShellImportsNumber(data.unmatched),
+    error: data.error || null,
+  };
+  if (appShellImportJob.status === 'done') {
+    await appShellImportLoadDone(true);
+    // Said once per import, which is the point of the job running on the
+    // server: it can finish while nobody is watching.
+    if (!appShellImportSeen(appShellImportJob.id)) {
+      appShellImportMarkSeen(appShellImportJob.id);
+      showToast('Your import finished: ' + appShellImportJob.matched + ' of ' + appShellImportJob.total +
+        (appShellImportJob.total === 1 ? ' title matched.' : ' titles matched.'), 'success');
+    }
+  } else if (appShellImportJob.status === 'failed') {
+    appShellImportMarkSeen(appShellImportJob.id);
+  }
+  appShellRenderImports();
+  if (appShellImportIsRunning()) appShellImportSchedulePoll();
+  return true;
+}
+
+// The review rows, and the titles that came out of the import. reloadItems
+// is false only when the titles already on screen are known to be current.
+async function appShellImportLoadDone(reloadItems) {
+  const job = appShellImportJob;
+  if (!job) return false;
+  const reviewRes = await appShellApiFetch('/api/imports/' + encodeURIComponent(job.id) + '/review');
+  appShellImportReview = (reviewRes.ok && reviewRes.data && reviewRes.data.review) ? reviewRes.data.review : [];
+  if (reloadItems === false && appShellImportItems.length) return true;
+  const resultRes = await appShellApiFetch('/api/imports/' + encodeURIComponent(job.id) + '/result');
+  appShellImportItems = (resultRes.ok && resultRes.data && resultRes.data.items) ? resultRes.data.items : [];
+  return true;
+}
+
+// Picking a candidate, or skipping the row. One choice per press: the row
+// leaves the review as soon as the server has taken it, so there is nothing
+// half-decided to lose.
+async function appShellImportChoose(choiceId) {
+  const job = appShellImportJob;
+  if (!job || job.status !== 'done') return false;
+  const parts = String(choiceId || '').split('|');
+  const rowIndex = Number(parts[0]);
+  const tmdbId = parts[1] === 'skip' ? null : Number(parts[1]);
+  if (!Number.isInteger(rowIndex)) return false;
+  if (tmdbId !== null && !(tmdbId > 0)) return false;
+  const res = await appShellApiFetch('/api/imports/' + encodeURIComponent(job.id) + '/review', { method: 'POST', body: { choices: [{ row: rowIndex, tmdbId: tmdbId }] } });
+  if (!res.ok) {
+    showToast(res.error || 'That choice could not be saved.', 'error');
+    return false;
+  }
+  appShellImportJob.matched = appShellImportsNumber(res.data && res.data.matched);
+  appShellImportJob.ambiguous = appShellImportsNumber(res.data && res.data.ambiguous);
+  appShellImportJob.unmatched = appShellImportsNumber(res.data && res.data.unmatched);
+  appShellImportReview = appShellImportReview.filter(function (r) { return Number(r.row) !== rowIndex; });
+  // The titles are the server's answer, so they are re-read rather than guessed
+  // at here: a chosen row's id is the server's to decide.
+  await appShellImportLoadDone(true);
+  appShellRenderImports();
+  showToast(tmdbId === null ? 'Skipped.' : 'Added to the import.', 'success');
+  return true;
+}
+
+// --- turning the result into a list -----------------------------------------
+
+// The same item shape the page's own importer writes into a list (18_): the id
+// under both names, the title under both names, and the poster metahub serves
+// for an IMDb id when the file did not carry one.
+function appShellImportListItems() {
+  return appShellImportItems.map(function (it) {
+    const id = String(it.id || '');
+    const imdbId = /^tt\\d+$/.test(id) ? id : '';
+    return {
+      id: id,
+      imdbId: imdbId,
+      tmdbId: imdbId ? '' : (id.indexOf('tmdb:') === 0 ? id.slice(5) : ''),
+      type: (it.type === 'series') ? 'series' : 'movie',
+      name: it.name || it.title || '',
+      title: it.name || it.title || '',
+      poster: imdbId ? ('https://images.metahub.space/poster/medium/' + imdbId + '/img') : '',
+      year: it.year || '',
+    };
+  });
+}
+
+function appShellImportListName() {
+  const input = document.getElementById('appShellImportName');
+  const typed = (input && input.value ? input.value : '').trim();
+  if (typed) return typed.slice(0, 120);
+  if (appShellImportJob && appShellImportJob.name) return String(appShellImportJob.name).slice(0, 120);
+  if (appShellImportFile) return appShellImportNameFromFile(appShellImportFile.name);
+  return 'Imported list';
+}
+
+async function appShellImportSaveList() {
+  const items = appShellImportItems;
+  if (!items.length) {
+    showToast('There is nothing matched to save yet.', 'info');
+    return false;
+  }
+  const name = appShellImportListName();
+  const type = (appShellImportJob && appShellImportJob.kind === 'series') ? 'series' : (appShellImportKind === 'series' ? 'series' : 'movie');
+  // Same authentication as the Lists view's own save (appShellSetListVisibility):
+  // the route checks creatorName + creatorKey, and empty strings let a session
+  // cookie stand in for them when the browser has one.
+  const saveBody = {
+    creatorName: (typeof activeCreator !== 'undefined' && activeCreator) ? activeCreator.creatorName : '',
+    creatorKey: localStorage.getItem('myListAddon:creatorKey') || '',
+    name: name,
+    type: type,
+    items: appShellImportListItems(),
+    visibility: 'private',
+  };
+  const res = await appShellApiFetch('/api/creator/lists/save', { method: 'POST', body: saveBody });
+  if (!res.ok) {
+    showToast(res.error || 'The list could not be saved.', 'error');
+    return false;
+  }
+  const slug = (res.data && res.data.slug) || '';
+  appShellImportSaved = { name: name, slug: slug, type: type };
+  // The checkbox beside the button decides whether it belongs on the home
+  // screen: "the result is a list, and one toggle adds it".
+  const toggle = document.getElementById('appShellImportHomeToggle');
+  const wantsHome = !toggle || !!toggle.checked;
+  if (wantsHome) {
+    appShellImportSetHome(true, true);
+  } else {
+    appShellRenderImports();
+  }
+  appShellRenderImports();
+  showToast('Saved "' + name + '" with ' + items.length + ' titles. It is on your account -- My Lists shows it.', 'success');
+  return true;
+}
+
+// Whether the row for a saved import is on the home screen. The page's own
+// answer counts first -- isListAddedToConfig is what the dashboard's buttons
+// read -- and the #lists scan catches a row this screen did not add.
+function appShellImportOnHome() {
+  const saved = appShellImportSaved;
+  if (!saved || !saved.slug) return false;
+  if (typeof isListAddedToConfig === 'function') {
+    if (isListAddedToConfig(null, saved.type, saved.slug)) return true;
+    if (isListAddedToConfig(null, 'movie', saved.slug) || isListAddedToConfig(null, 'series', saved.slug)) return true;
+  }
+  const rows = document.querySelectorAll('#lists .entry');
+  for (let i = 0; i < rows.length; i++) {
+    const urlInput = rows[i].querySelector ? rows[i].querySelector('.url') : null;
+    if (!urlInput) continue;
+    const payload = (typeof parseCustomListPayloadClient === 'function') ? parseCustomListPayloadClient(urlInput.value) : null;
+    if (payload && (String(payload.localSlug || '') === String(saved.slug) || String(payload.listSlug || '') === String(saved.slug))) return true;
+  }
+  return false;
+}
+
+// On or off the home screen, with exactly the snapshot the Lists view's own
+// toggle builds (P6-4), so the row behaves like every other one: the same
+// customlist:v1 payload, the same group, and a name the rest of the page
+// already knows how to play.
+function appShellImportSetHome(on, quiet) {
+  const saved = appShellImportSaved;
+  if (!saved) return false;
+  if (!on) {
+    if (typeof removeListFromConfig === 'function') {
+      removeListFromConfig(null, saved.type, saved.slug);
+      removeListFromConfig(null, 'movie', saved.slug);
+      removeListFromConfig(null, 'series', saved.slug);
+    }
+    const rows = document.querySelectorAll('#lists .entry');
+    for (let i = 0; i < rows.length; i++) {
+      const urlInput = rows[i].querySelector ? rows[i].querySelector('.url') : null;
+      if (!urlInput) continue;
+      const payload = (typeof parseCustomListPayloadClient === 'function') ? parseCustomListPayloadClient(urlInput.value) : null;
+      if (payload && (String(payload.localSlug || '') === String(saved.slug) || String(payload.listSlug || '') === String(saved.slug))) rows[i].remove();
+    }
+    if (typeof renumber === 'function') renumber();
+    if (typeof saveState === 'function') saveState();
+    appShellRenderImports();
+    if (!quiet) showToast('"' + saved.name + '" removed from your home screen.', 'success');
+    return true;
+  }
+  const items = (typeof normalizeSnapshotItemsForCatalog === 'function')
+    ? normalizeSnapshotItemsForCatalog(appShellImportListItems())
+    : appShellImportListItems();
+  const snapshot = { listId: generateChannelId(), localSlug: saved.slug, listSlug: saved.slug, type: saved.type, items: items, shuffle: false };
+  addRow(saved.name, 'customlist:v1:' + JSON.stringify(snapshot), saved.type, true, 'My Lists');
+  if (typeof renumber === 'function') renumber();
+  if (typeof saveState === 'function') saveState();
+  appShellRenderImports();
+  if (!quiet) showToast('"' + saved.name + '" added to your home screen.', 'success');
+  return true;
+}
+
+// --- the screen --------------------------------------------------------------
+
+function appShellImportProgressHtml(job) {
+  const total = job.total || 0;
+  const done = Math.min(job.done || 0, total);
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  const parts = [];
+  if (job.ambiguous) parts.push(job.ambiguous + ' to review');
+  if (job.unmatched) parts.push(job.unmatched + ' not found');
+  let html = '<p class="app-shell-kv" id="appShellImportProgress">Matched <strong>' + job.matched + '</strong> of ' + total +
+    (parts.length ? ' &middot; ' + parts.join(' &middot; ') : '') + '</p>' +
+    '<div class="app-shell-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '"><span style="width:' + pct + '%"></span></div>';
+  if (job.status === 'running' || job.status === 'queued') {
+    html += '<p class="app-shell-muted">The server is working through it. You can close this page -- it keeps going, and this screen picks it up when you come back.</p>' +
+      '<div class="app-shell-actions"><button type="button" class="secondary lc-btn" data-app-shell-action="import-refresh">Check again</button></div>';
+  }
+  return html;
+}
+
+function appShellImportReviewHtml() {
+  if (!appShellImportReview.length) return '';
+  let html = '<h3 class="app-shell-h3">Review ' + appShellImportReview.length + (appShellImportReview.length === 1 ? ' title' : ' titles') + '</h3>' +
+    '<p class="app-shell-muted">These look like more than one title. Pick the right one, or skip it -- the rest of the import is already matched and does not wait for this.</p>';
+  appShellImportReview.slice(0, 50).forEach(function (r) {
+    html += '<div class="app-shell-review-row"><div class="app-shell-row-main"><strong>' +
+      appShellImportsEscape(r.title || '(untitled)') + '</strong>' +
+      (r.year ? '<br><span class="app-shell-muted">' + appShellImportsEscape(r.year) + '</span>' : '') +
+      '</div><div class="app-shell-row-controls">';
+    (r.candidates || []).forEach(function (c) {
+      html += '<button type="button" class="secondary lc-btn" data-app-shell-action="import-choose" data-app-shell-id="' +
+        Number(r.row) + '|' + Number(c.tmdbId) + '">' + appShellImportsEscape(c.title || 'Untitled') +
+        (c.year ? ' (' + Number(c.year) + ')' : '') + '</button>';
+    });
+    html += '<button type="button" class="secondary lc-btn" data-app-shell-action="import-choose" data-app-shell-id="' +
+      Number(r.row) + '|skip">Skip</button></div></div>';
+  });
+  if (appShellImportReview.length > 50) {
+    html += '<p class="app-shell-muted">Showing the first 50 of ' + appShellImportReview.length + '. Decide these and the rest follow.</p>';
+  }
+  return html;
+}
+
+function appShellImportUnmatchedHtml() {
+  if (!appShellImportJob || !appShellImportJob.unmatched) return '';
+  return '<p class="app-shell-muted">' + appShellImportJob.unmatched + (appShellImportJob.unmatched === 1 ? ' title was' : ' titles were') +
+    ' not found on TMDB and ' + (appShellImportJob.unmatched === 1 ? 'is' : 'are') + ' left out. Search for them in the Search tab, or fix the spelling in the file and import it again.</p>';
+}
+
+function appShellImportFinishedHtml() {
+  const job = appShellImportJob;
+  const items = appShellImportItems;
+  let html = '<h3 class="app-shell-h3">Import finished</h3>' + appShellImportProgressHtml(job);
+  if (!items.length) {
+    return html + '<p class="app-shell-muted">Nothing matched, so there is no list to save.</p>' + appShellImportUnmatchedHtml() +
+      '<div class="app-shell-actions"><button type="button" class="secondary lc-btn" data-app-shell-action="import-forget">Import another file</button></div>';
+  }
+  if (appShellImportSaved) {
+    const onHome = appShellImportOnHome();
+    html += '<p class="app-shell-kv">Saved as <strong>' + appShellImportsEscape(appShellImportSaved.name) + '</strong> with ' + items.length + ' titles.</p>' +
+      '<div class="app-shell-actions">' +
+      '<button type="button" class="' + (onHome ? 'secondary' : 'primary') + ' lc-btn" data-app-shell-action="import-home" data-app-shell-id="' + (onHome ? 'off' : 'on') + '">' +
+      (onHome ? 'On your home screen' : 'Show it on my home screen') + '</button>' +
+      '<button type="button" class="secondary lc-btn" data-app-shell-action="import-forget">Import another file</button>' +
+      '</div>' + appShellImportUnmatchedHtml();
+    return html;
+  }
+  html += '<label class="app-shell-muted" for="appShellImportName" style="display:block; margin:6px 0 4px;">List name</label>' +
+    '<input type="text" id="appShellImportName" value="' + appShellImportsEscape(appShellImportListName()) + '">' +
+    '<label class="app-shell-dedupe" for="appShellImportHomeToggle">' +
+    '<input type="checkbox" id="appShellImportHomeToggle" checked>' +
+    '<span><strong>Show it on my home screen</strong><br><span class="app-shell-muted">The list is saved either way; this decides whether a row for it goes into your rows above.</span></span></label>' +
+    '<div class="app-shell-actions"><button type="button" class="primary lc-btn" data-app-shell-action="import-save">Save ' + items.length + ' titles as a list</button></div>' +
+    appShellImportUnmatchedHtml();
+  return html;
+}
+
+// One kind of import the chosen file holds. Disabled when it holds none: the
+// server takes one kind per import, so an empty chip is nothing to send.
+function appShellImportKindChip(kind, label, count) {
+  const on = (appShellImportKind === 'series' ? 'series' : 'movie') === kind;
+  return '<button type="button" class="app-shell-chip' + (on ? ' is-on' : '') + '"' +
+    ' data-app-shell-action="import-kind" data-app-shell-id="' + kind + '"' +
+    (count ? '' : ' disabled title="The chosen file has none of these."') + '>' +
+    label + ' (' + count + ')</button>';
+}
+
+function appShellRenderImports() {
+  const host = appShellImportsHost();
+  if (!host || !NEW_UI) return false;
+  const typed = document.getElementById('appShellImportName');
+  const typedValue = typed ? typed.value : '';
+  let html = '<div class="panel" style="margin-bottom:12px;">' +
+    '<h2 class="panel-title">Import a file</h2>' +
+    '<p class="app-shell-muted">A Letterboxd zip or CSV, an IMDb CSV, a Trakt export. Matching happens on the server, so you can close this page and come back.</p>';
+
+  const account = appShellState.get().account;
+  if (!account) {
+    html += '<p class="app-shell-muted">Sign in first: an import is kept on your account and matched against your own library.</p>' +
+      '<div class="app-shell-actions"><button type="button" class="primary lc-btn" data-app-shell-action="import-account">Go to Settings to sign in</button></div></div>';
+    host.innerHTML = html;
+    return true;
+  }
+
+  if (appShellImportJob) {
+    if (appShellImportJob.status === 'failed') {
+      html += '<p class="app-shell-review-bad">' + appShellImportsEscape(appShellImportJob.error || 'The import stopped. Please try again.') + '</p>' +
+        '<div class="app-shell-actions"><button type="button" class="secondary lc-btn" data-app-shell-action="import-forget">Start a new import</button></div>';
+    } else if (appShellImportJob.status === 'done') {
+      html += appShellImportReviewHtml() + appShellImportFinishedHtml();
+    } else {
+      html += '<p class="app-shell-muted">Import #' + appShellImportsNumber(appShellImportJob.id) +
+        (appShellImportJob.name ? ' &middot; ' + appShellImportsEscape(appShellImportJob.name) : '') + '</p>' +
+        appShellImportProgressHtml(appShellImportJob);
+    }
+  } else if (appShellImportFile) {
+    const counts = appShellImportFile.counts || { movie: 0, series: 0 };
+    const chosen = appShellImportKind === 'series' ? 'series' : 'movie';
+    const sending = counts[chosen];
+    html += '<p class="app-shell-kv"><strong>' + appShellImportsEscape(appShellImportFile.name) + '</strong> &middot; ' +
+      (counts.movie + counts.series) + ' titles' +
+      (appShellImportFile.truncated ? ' (the first ' + APP_SHELL_IMPORT_ROWS_MAX + ')' : '') + '</p>' +
+      '<div class="app-shell-actions" style="margin-bottom:8px;">' + appShellImportKindChip('movie', 'Movies', counts.movie) +
+      appShellImportKindChip('series', 'Shows', counts.series) + '</div>';
+    if (counts.movie && counts.series) {
+      html += '<p class="app-shell-muted">That file has both. One import is one kind, so this sends the ' + sending + ' ' +
+        (chosen === 'movie' ? 'movies' : 'shows') + ' -- pick the other chip afterwards for the rest.</p>';
+    }
+    html += '<label class="app-shell-muted" for="appShellImportName" style="display:block; margin:6px 0 4px;">List name</label>' +
+      '<input type="text" id="appShellImportName" value="' + appShellImportsEscape(typedValue || appShellImportNameFromFile(appShellImportFile.name)) + '">' +
+      '<div class="app-shell-actions" style="margin-top:10px;">' +
+      '<button type="button" class="primary lc-btn" data-app-shell-action="import-start"' + (sending ? '' : ' disabled title="There are none of these in the chosen file."') + '>Start the import' + (sending ? ' (' + sending + (sending === 1 ? ' title)' : ' titles)') : '') + '</button>' +
+      '<button type="button" class="secondary lc-btn" data-app-shell-action="import-clear">Choose another file</button>' +
+      '</div>';
+  } else {
+    html += '<div class="app-shell-actions"><button type="button" class="primary lc-btn" data-app-shell-action="import-pick">Choose a file\\u2026</button></div>' +
+      '<p class="app-shell-muted" id="appShellImportStatus">' + appShellImportsEscape(appShellImportFileNote || 'Nothing chosen yet.') + '</p>';
+  }
+
+  html += '<input type="file" id="appShellImportFileInput" accept=".csv,.json,.zip,.txt" style="display:none" aria-label="Choose a file to import">' +
+    '</div>';
+  host.innerHTML = html;
+
+  const nameInput = document.getElementById('appShellImportName');
+  if (nameInput && typedValue && nameInput.value !== typedValue) nameInput.value = typedValue;
+  const input = document.getElementById('appShellImportFileInput');
+  if (input && input.addEventListener) input.addEventListener('change', appShellImportFileChosen);
+  return true;
+}
+
+function appShellImportFileChosen(e) {
+  const input = (e && e.target) || document.getElementById('appShellImportFileInput');
+  const list = (input && input.files) ? input.files : null;
+  if (!list || !list.length) return false;
+  const files = [];
+  for (let i = 0; i < list.length; i++) files.push(list[i]);
+  appShellImportReadFiles(files);
+  return true;
+}
+
+async function appShellImportReadFiles(files) {
+  appShellImportFileNote = 'Reading ' + files.length + (files.length === 1 ? ' file\\u2026' : ' files\\u2026');
+  appShellRenderImports();
+  const byKind = { movie: [], series: [] };
+  let truncated = false;
+  let error = '';
+  for (let i = 0; i < files.length; i++) {
+    const read = await appShellImportReadFile(files[i]);
+    if (read.error) { error = read.error; continue; }
+    ['movie', 'series'].forEach(function (kind) {
+      const room = APP_SHELL_IMPORT_ROWS_MAX - byKind.movie.length - byKind.series.length;
+      const rows = read.byKind[kind] || [];
+      if (rows.length > room) truncated = true;
+      rows.slice(0, Math.max(0, room)).forEach(function (r) { byKind[kind].push(r); });
+    });
+  }
+  const counts = { movie: byKind.movie.length, series: byKind.series.length };
+  appShellImportFileNote = '';
+  if (!counts.movie && !counts.series) {
+    showToast(error || 'No titles were found in that file.', 'error');
+    appShellRenderImports();
+    return false;
+  }
+  appShellImportFile = {
+    name: files.length === 1 ? files[0].name : files.length + ' files',
+    byKind: byKind,
+    counts: counts,
+    truncated: truncated || (counts.movie + counts.series) >= APP_SHELL_IMPORT_ROWS_MAX,
+  };
+  appShellImportKind = counts.series > counts.movie ? 'series' : 'movie';
+  appShellRenderImports();
+  return true;
+}
+
+// Called when the view is opened, and once at boot for a page served straight
+// at it. The remembered import is looked up only for a screen that is actually
+// being shown, and only once per page load.
+async function appShellResumeImport() {
+  if (!NEW_UI) return false;
+  if (appShellImportsResumed) return true;
+  appShellImportsResumed = true;
+  const id = appShellImportRemembered();
+  if (!id || appShellImportJob) return false;
+  await appShellImportRefresh();
+  return true;
+}
+
+async function appShellImportsAction(action, id) {
+  const what = String(action || '');
+  if (what === 'import-pick') {
+    const input = document.getElementById('appShellImportFileInput');
+    if (input && input.click) input.click();
+    return true;
+  }
+  if (what === 'import-kind') {
+    appShellImportKind = String(id) === 'series' ? 'series' : 'movie';
+    appShellRenderImports();
+    return true;
+  }
+  if (what === 'import-start') return appShellImportStart();
+  if (what === 'import-clear') {
+    appShellImportFile = null;
+    appShellImportFileNote = '';
+    appShellRenderImports();
+    return true;
+  }
+  if (what === 'import-refresh') return appShellImportRefresh();
+  if (what === 'import-choose') return appShellImportChoose(id);
+  if (what === 'import-save') return appShellImportSaveList();
+  if (what === 'import-home') return appShellImportSetHome(String(id) !== 'off');
+  if (what === 'import-account') {
+    appShellGo('/settings/account');
+    if (typeof appShellFocusSignIn === 'function') appShellFocusSignIn();
+    return true;
+  }
+  if (what === 'import-forget') {
+    try { localStorage.removeItem('myListAddon:lastImport'); } catch (e) {}
+    appShellImportJob = null;
+    appShellImportReview = [];
+    appShellImportItems = [];
+    appShellImportSaved = null;
+    appShellRenderImports();
+    return true;
+  }
+  return false;
+}
+
+// --- Channels: the template flow (P6-7) --------------------------------------
+//
+// "I want to create a channel": choose a template, look at today's lineup,
+// then put it on the home screen. The five templates FRONTEND_UX_AUDIT
+// scenario 6 names, and what each one is underneath -- none of them builds a
+// channel a second way, which is what "wrap the legacy builder until it is
+// rewritten" means for this task:
+//
+//   TV network          quickAddChannel (20_), which prefers the server-built
+//                       network preset and falls back to the page's own
+//                       traversal with visible progress
+//   Franchise/universe  the saga registry the page already carries
+//                       (TV_CROSSOVER_EVENTS), through the same ordered-items
+//                       fetch the Storylines tab uses
+//   Actor or creator    /api/person-search -> /api/person-credits, then the
+//                       same pick builder the legacy Spotlight uses
+//                       (buildSpotlightItemsFromCredits, 20_)
+//   From a list         quickAddChannel with a pasted list URL
+//   Custom              openBuildCustomChannel -- the legacy builder itself
+//
+// The lineup in the preview is the server's answer (POST /api/channel-lineup),
+// not an arrangement made here: it is the same resolveChannelLineup that
+// answers a Stremio request, so what the preview shows is what plays. The two
+// rules that route cannot honour (Hide watched and a dynamic channel need an
+// account it has no way to prove) come back named, and are said rather than
+// quietly shown as if they applied.
+//
+// Nothing goes into the config until "Add to home screen" is pressed: the
+// channel is built and saved to this browser first (saveLocalChannel), so the
+// preview and the row that follows cannot describe two different channels.
+// Adding and removing is toggleChannelInCatalog (20_) -- the same button the
+// My Channels cards use -- except for a saga, which is a catalog-only row and
+// goes through createInstantStorylineChannel, exactly as the Storylines tab
+// adds one.
+//
+// Signed out: a saga can still be added (docs/DECISIONS.md D-8 -- a storyline
+// row is public and needs no account), and everything else asks for an account
+// the way every other builder button already does (requireSignedInFor).
+
+// The tiles a lineup preview draws. The rest of the lineup is counted, not
+// listed -- a day's block is 24 shows x 3 episodes and nobody reads that as a
+// poster grid.
+const APP_SHELL_CHANNEL_LINEUP_TILES = 12;
+const APP_SHELL_CHANNELS_ACTION = /^chan-/;
+
+// The five templates, in the order the audit lists them. needsAccount mirrors
+// rowNeedsAccount (16_): a saga is the one that works signed out.
+const APP_SHELL_CHANNEL_TEMPLATES = [
+  { id: 'network', title: 'TV network', blurb: 'A&E, HBO, NBC, Cartoon Network and the rest -- a rotating 24/7 channel for a whole network.', needsAccount: true },
+  { id: 'saga', title: 'Franchise or universe', blurb: 'A saga in its canon order: the Marvel Infinity Saga, a trilogy, a TV universe. Works without an account.', needsAccount: false },
+  { id: 'person', title: 'Actor or creator', blurb: 'Everything someone was in, as episodes -- a Christopher Lloyd marathon in one channel.', needsAccount: true },
+  { id: 'list', title: 'From a list', blurb: 'A TV list from MDBList, Trakt, TMDB or this site, kept in step with the list if you want.', needsAccount: true },
+  { id: 'custom', title: 'Custom', blurb: 'Pick the shows and episodes yourself, with the full builder. Nothing is decided for you.', needsAccount: true }
+];
+
+var appShellChannelTemplate = '';        // '' = the gallery, otherwise a template id
+var appShellChannelDraft = null;         // the built channel: { template, channelId, eventId, name, url, poolSize }
+var appShellChannelLineup = null;        // the last POST /api/channel-lineup answer
+var appShellChannelLineupFor = '';       // the url that answer belongs to
+var appShellChannelBusy = '';            // the sentence shown while something runs
+var appShellChannelNotice = '';          // the last thing that happened, in words
+var appShellChannelBuildInFlight = false;
+var appShellChannelPersonResults = [];
+var appShellChannelPersonPick = null;    // { personId, name }
+var appShellChannelSagaPick = '';
+var appShellChannelListName = '';        // the name field's last value, so a re-render keeps it
+
+// Schedule options (the details panel under every template except a saga,
+// which has a fixed canon order). The two toggles are buttons carrying their
+// state, so a re-render cannot lose it; the numbers are read from their inputs
+// when a build starts, with the same defaults the legacy builder starts from.
+var appShellChannelSchedule = { rotate: true, hideWatched: false, shows: 24, episodes: 3, order: 'listed', perShow: 50 };
+
+function appShellChannelsHost() {
+  return document.getElementById('appShellChannels');
+}
+
+// Whether Channels > My Channels is the sub on screen (the container is
+// emitted on every shell page; the panel is not).
+function appShellChannelsIsOpen() {
+  const panel = document.getElementById('channelsSubMyChannels');
+  return !!(panel && panel.style && panel.style.display !== 'none');
+}
+
+function appShellChannelEscape(value) {
+  return escapeHtml(String(value === null || value === undefined ? '' : value));
+}
+
+function appShellChannelAttr(value) {
+  return escapeAttr(String(value === null || value === undefined ? '' : value));
+}
+
+function appShellChannelNumber(n) {
+  return Number(n) || 0;
+}
+
+// The networks the Quick Add tab offers, read from that tab's own buttons
+// rather than a second list that could drift from it.
+function appShellChannelNetworks() {
+  const out = [];
+  const buttons = document.querySelectorAll('#channelsSubQuickAdd .channelQuickAddBtn');
+  for (let i = 0; i < buttons.length; i++) {
+    const b = buttons[i];
+    if (!b || !b.getAttribute) continue;
+    const networkId = b.getAttribute('data-networkid') || '';
+    const name = b.getAttribute('data-name') || '';
+    if (networkId && name) out.push({ networkId: networkId, name: name });
+  }
+  return out;
+}
+
+// The sagas and universes worth a channel: the same filter the Storylines grid
+// uses, so a single-episode crossover (which only ever lands on its parent
+// show's page) is not offered as a channel here either.
+function appShellChannelSagas() {
+  const events = (typeof TV_CROSSOVER_EVENTS === 'undefined' || !Array.isArray(TV_CROSSOVER_EVENTS)) ? [] : TV_CROSSOVER_EVENTS;
+  const out = [];
+  events.forEach(function (ev) {
+    if (!ev || !ev.id || !Array.isArray(ev.episodes) || !ev.episodes.length) return;
+    const episodeOnly = ev.episodes.every(function (ep) { return ep && ep.type === 'episode'; });
+    if (episodeOnly) return;
+    out.push({ id: String(ev.id), name: ev.name || String(ev.id), parts: ev.episodes.length, category: ev.category || '' });
+  });
+  return out;
+}
+
+// The schedule, as the payload fields the Worker reads (05_catalog_core):
+// dailyRotate + rotateShows/rotateEpisodes for a broadcast schedule, autoSort
+// for the one static arrangement it acts on, sortByAired, shuffle, hideWatched.
+function appShellChannelSchedulePayload() {
+  const s = appShellChannelSchedule;
+  const order = String(s.order || 'listed');
+  const shows = Math.max(1, Math.min(48, parseInt(s.shows, 10) || 24));
+  const episodes = Math.max(1, Math.min(12, parseInt(s.episodes, 10) || 3));
+  const payload = {
+    dailyRotate: !!s.rotate,
+    rotateShows: s.rotate ? shows : 0,
+    rotateEpisodes: s.rotate ? episodes : 0,
+    autoSort: order === 'interleave' ? 'interleave' : '',
+    sortByAired: order === 'aired',
+    shuffle: order === 'shuffle',
+    hideWatched: !!s.hideWatched
+  };
+  return payload;
+}
+
+// The inputs are the source of truth for the three numbers, read at build
+// time; a blank or missing input keeps the default above.
+function appShellChannelReadSchedule() {
+  const readNumber = function (id, fallback) {
+    const el = document.getElementById(id);
+    const n = el && el.value !== undefined && el.value !== null ? parseInt(el.value, 10) : NaN;
+    return (n > 0) ? n : fallback;
+  };
+  const orderSel = document.getElementById('appShellChannelOrderSelect');
+  const typedOrder = (orderSel && orderSel.value) ? String(orderSel.value) : '';
+  appShellChannelSchedule.shows = readNumber('appShellChannelRotateShows', appShellChannelSchedule.shows || 24);
+  appShellChannelSchedule.episodes = readNumber('appShellChannelRotateEpisodes', appShellChannelSchedule.episodes || 3);
+  appShellChannelSchedule.perShow = readNumber('appShellChannelPerShow', appShellChannelSchedule.perShow || 50);
+  if (typedOrder) appShellChannelSchedule.order = typedOrder;
+  return appShellChannelSchedule;
+}
+
+// Whether the schedule is still the one the server's network preset is built
+// with (rotation on, 24 shows x 3 episodes a day, no re-ordering, watched
+// kept). The preset is one request instead of a traversal, so it is worth
+// using -- but only while it would produce the same channel the options ask
+// for, never as a silent override of them.
+function appShellChannelScheduleIsDefault() {
+  const s = appShellChannelSchedule;
+  const order = String(s.order || 'listed');
+  return !!s.rotate &&
+    (parseInt(s.shows, 10) || 24) === 24 &&
+    (parseInt(s.episodes, 10) || 3) === 3 &&
+    !s.hideWatched &&
+    order === 'listed';
+}
+
+function appShellChannelSetNotice(text) {
+  appShellChannelNotice = String(text || '');
+}
+
+// Progress during a build touches one line, never a whole re-render: a
+// re-render would wipe out whatever the person had typed in the template's
+// own fields.
+function appShellChannelProgress(text) {
+  appShellChannelBusy = String(text || '');
+  const box = document.getElementById('appShellChannelProgress');
+  if (box) box.innerHTML = text ? appShellChannelEscape(text) : '';
+}
+
+// --- what the flow is doing --------------------------------------------------
+
+function appShellChannelPickTemplate(id) {
+  const wanted = String(id || '');
+  const known = APP_SHELL_CHANNEL_TEMPLATES.some(function (t) { return t.id === wanted; });
+  appShellChannelTemplate = known ? wanted : '';
+  appShellChannelDraft = null;
+  appShellChannelLineup = null;
+  appShellChannelLineupFor = '';
+  appShellChannelBusy = '';
+  appShellChannelNotice = '';
+  appShellChannelPersonPick = null;
+  appShellChannelPersonResults = [];
+  if (known && wanted !== 'saga') appShellChannelSchedule.rotate = true;
+  if (known && wanted === 'saga') appShellChannelSchedule.rotate = false;
+  appShellRenderChannels();
+  return true;
+}
+
+// The channel was built and saved to this browser -- the preview and the row
+// that may follow both come from this one record.
+function appShellChannelSetDraft(draft) {
+  appShellChannelDraft = draft;
+  appShellChannelBusy = '';
+  appShellChannelLineup = null;
+  appShellChannelLineupFor = '';
+  appShellRenderChannels();
+  return true;
+}
+
+function appShellChannelOnHome() {
+  const draft = appShellChannelDraft;
+  if (!draft || !draft.channelId) return false;
+  return (typeof isChannelInConfig === 'function') ? !!isChannelInConfig(String(draft.channelId)) : false;
+}
+
+async function appShellChannelBuild() {
+  const template = appShellChannelTemplate;
+  if (!template) return false;
+  if (appShellChannelBuildInFlight) return false;
+  appShellChannelReadSchedule();
+  appShellChannelNotice = '';
+  appShellChannelBuildInFlight = true;
+  appShellChannelProgress('Getting started\\u2026');
+  let built = false;
+  try {
+    if (template === 'network') built = await appShellChannelBuildNetwork();
+    else if (template === 'list') built = await appShellChannelBuildList();
+    else if (template === 'person') built = await appShellChannelBuildPerson();
+    else if (template === 'saga') built = await appShellChannelBuildSaga();
+  } finally {
+    appShellChannelBuildInFlight = false;
+  }
+  // Nothing built: the form has to come back with its button live again, and
+  // the sentence saying what happened is already in the notice above.
+  if (!built) {
+    appShellChannelProgress('');
+    appShellRenderChannels();
+  }
+  return built;
+}
+
+// TV network and From a list are the same journey -- a name, and either a
+// network id or a pasted list URL -- so both go through the page's own
+// quickAddChannel. addToCatalog is false because this screen shows the lineup
+// first: the channel is saved to this browser, and the row is added when
+// somebody presses the button under the preview.
+async function appShellChannelBuildNetwork() {
+  const sel = document.getElementById('appShellChannelNetworkSelect');
+  const networkId = (sel && sel.value) ? String(sel.value) : '';
+  const networks = appShellChannelNetworks();
+  let name = '';
+  networks.forEach(function (n) { if (n.networkId === networkId) name = n.name; });
+  if (!networkId || !name) {
+    appShellChannelSetNotice('Pick a network first.');
+    return false;
+  }
+  const typed = appShellChannelTypedName();
+  const channelName = typed || name;
+  const built = await quickAddChannel(channelName, null, networkId, null, {
+    schedule: appShellChannelSchedulePayload(),
+    addToCatalog: false,
+    preferPreset: appShellChannelScheduleIsDefault(),
+    maxEpisodesPerShow: appShellChannelSchedule.perShow,
+    onProgress: appShellChannelProgress
+  });
+  if (!built || !built.channelId) return false;
+  appShellChannelListName = channelName;
+  return appShellChannelFinishBuild(channelName, built, { template: 'network', networkId: networkId });
+}
+
+async function appShellChannelBuildList() {
+  const urlInput = document.getElementById('appShellChannelListUrl');
+  const listUrl = (urlInput && urlInput.value ? urlInput.value : '').trim();
+  if (!listUrl) {
+    appShellChannelSetNotice('Paste a list link first.');
+    return false;
+  }
+  const liveCheck = document.getElementById('appShellChannelLiveSyncCheck');
+  const liveSync = liveCheck ? liveCheck.checked !== false : true;
+  const channelName = appShellChannelTypedName() || appShellChannelListNameFromUrl(listUrl);
+  const built = await quickAddChannel(channelName, listUrl, null, null, {
+    liveSync: liveSync,
+    schedule: appShellChannelSchedulePayload(),
+    addToCatalog: false,
+    maxEpisodesPerShow: appShellChannelSchedule.perShow,
+    onProgress: appShellChannelProgress
+  });
+  if (!built || !built.channelId) return false;
+  appShellChannelListName = channelName;
+  return appShellChannelFinishBuild(channelName, built, { template: 'list', liveSync: liveSync });
+}
+
+// "https://mdblist.com/lists/kit/sitcoms" -> "Sitcoms". A name is asked for on
+// the screen; this is only what a blank one falls back to.
+function appShellChannelListNameFromUrl(url) {
+  let path = '';
+  try {
+    path = new URL(String(url), ORIGIN).pathname;
+  } catch (e) {
+    path = String(url || '');
+  }
+  const parts = path.split('/').filter(function (p) { return !!p; });
+  const last = parts.length ? parts[parts.length - 1] : 'My channel';
+  const words = last.replace(/[-_]+/g, ' ').trim();
+  if (!words) return 'My channel';
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+function appShellChannelTypedName() {
+  const input = document.getElementById('appShellChannelNameInput');
+  const typed = (input && input.value ? String(input.value) : '').trim();
+  return typed ? typed.slice(0, 120) : '';
+}
+
+// --- Actor or creator --------------------------------------------------------
+
+async function appShellChannelPersonSearch() {
+  const input = document.getElementById('appShellChannelPersonQuery');
+  const q = (input && input.value ? String(input.value) : '').trim();
+  if (!q) {
+    appShellChannelSetNotice('Type a name first.');
+    appShellRenderChannels();
+    return false;
+  }
+  appShellChannelSetNotice('Searching\\u2026');
+  appShellRenderChannels();
+  const res = await appShellApiFetch('/api/person-search?q=' + encodeURIComponent(q));
+  if (!res.ok) {
+    appShellChannelPersonResults = [];
+    appShellChannelSetNotice(res.error || 'That search did not work.');
+    appShellRenderChannels();
+    return false;
+  }
+  appShellChannelPersonResults = (res.data && Array.isArray(res.data.results)) ? res.data.results : [];
+  appShellChannelSetNotice(appShellChannelPersonResults.length ? '' : 'No one by that name.');
+  appShellRenderChannels();
+  return true;
+}
+
+function appShellChannelPersonPickResult(personId) {
+  const wanted = String(personId || '');
+  let picked = null;
+  appShellChannelPersonResults.forEach(function (p) {
+    if (p && String(p.personId) === wanted) picked = p;
+  });
+  if (!picked) return false;
+  appShellChannelPersonPick = { personId: wanted, name: picked.name || '', knownFor: picked.knownFor || picked.department || '' };
+  appShellChannelSetNotice('');
+  appShellRenderChannels();
+  return true;
+}
+
+// Their credits, then the same pick builder the legacy Spotlight uses --
+// one implementation of "what does this person's channel hold".
+async function appShellChannelBuildPerson() {
+  const pick = appShellChannelPersonPick;
+  if (!pick) {
+    appShellChannelSetNotice('Pick someone first.');
+    return false;
+  }
+  const res = await appShellApiFetch('/api/person-credits?personId=' + encodeURIComponent(pick.personId) +
+    '&sort=chronological&movies=120&shows=60');
+  if (!res.ok || !res.data) {
+    appShellChannelSetNotice(res.error || 'Could not read that filmography.');
+    return false;
+  }
+  const credits = {
+    personId: pick.personId,
+    name: res.data.name || pick.name || '',
+    poster: res.data.poster || null,
+    backdrop: res.data.backdrop || null,
+    movies: Array.isArray(res.data.movies) ? res.data.movies : [],
+    shows: Array.isArray(res.data.shows) ? res.data.shows : []
+  };
+  const built = await buildSpotlightItemsFromCredits(credits, { onProgress: appShellChannelPersonProgress(credits.name) });
+  if (!built || !built.items.length) {
+    appShellChannelSetNotice('Nothing in that filmography resolved to something playable.');
+    return false;
+  }
+  const channelName = appShellChannelTypedName() || ((credits.name || pick.name || 'Spotlight') + ' Spotlight');
+  appShellChannelListName = channelName;
+  return appShellChannelFinishBuild(channelName, appShellChannelSaveLocal(credits, built, channelName), { template: 'person' });
+}
+
+// The legacy builder's own two progress sentences, so a build reads the same
+// wherever it was started from.
+function appShellChannelPersonProgress(personName) {
+  return function (stage, i, total, label) {
+    const who = appShellChannelEscape(personName || '');
+    if (stage === 'movies') {
+      appShellChannelProgress('Resolving films\\u2026 ' + (i + 1) + ' of ' + total + ' (' + appShellChannelEscape(label) + ')');
+    } else {
+      appShellChannelProgress('Finding ' + who + '\\u2019s episodes\\u2026 show ' + (i + 1) + ' of ' + total + ' (' + appShellChannelEscape(label) + ')');
+    }
+  };
+}
+
+function appShellChannelSaveLocal(credits, built, channelName) {
+  const channelId = generateChannelId();
+  const sched = appShellChannelSchedulePayload();
+  const payload = Object.assign({
+    channelId: channelId,
+    name: channelName,
+    poster: built.poster || credits.poster || null,
+    backdrop: built.backdrop || credits.backdrop || null,
+    items: built.items,
+    shuffle: !!sched.shuffle
+  }, sched);
+  saveLocalChannel(payload);
+  return payload;
+}
+
+// --- Franchise or universe ---------------------------------------------------
+
+async function appShellChannelBuildSaga() {
+  const sel = document.getElementById('appShellChannelSagaSelect');
+  const eventId = (sel && sel.value) ? String(sel.value) : appShellChannelSagaPick;
+  if (!eventId) {
+    appShellChannelSetNotice('Pick a saga first.');
+    return false;
+  }
+  appShellChannelSagaPick = eventId;
+  const found = await fetchStorylineOrderedItems(eventId);
+  if (!found || !found.items || !found.items.length) {
+    appShellChannelSetNotice('That saga has nothing the page could resolve.');
+    return false;
+  }
+  const event = found.event || {};
+  const firstWithPoster = found.items.filter(function (it) { return it && (it.poster || it.thumbnail); })[0];
+  const firstWithBackdrop = found.items.filter(function (it) { return it && (it.backdrop || it.showBackdrop); })[0];
+  // The same payload createInstantStorylineChannel builds when the + Add
+  // button on the Storylines tab is pressed: the stable channel-<event id>,
+  // storylineId (that is what makes the row public and account-free
+  // server-side) and catalogOnly, so it stays a row rather than a copy in
+  // My Channels.
+  const payload = {
+    channelId: 'channel-' + eventId,
+    storylineId: eventId,
+    catalogOnly: true,
+    name: event.name || eventId,
+    poster: firstWithPoster ? (firstWithPoster.poster || firstWithPoster.thumbnail) : null,
+    backdrop: firstWithBackdrop ? (firstWithBackdrop.backdrop || firstWithBackdrop.showBackdrop) : null,
+    items: found.items,
+    shuffle: false,
+    dailyRotate: false
+  };
+  return appShellChannelFinishBuild(payload.name, payload, { template: 'saga', eventId: eventId });
+}
+
+// --- the built channel --------------------------------------------------------
+
+function appShellChannelFinishBuild(name, channel, extra) {
+  const draft = Object.assign({
+    template: appShellChannelTemplate,
+    channelId: String(channel.channelId || ''),
+    name: name || channel.name || 'Channel',
+    url: 'channel:v1:' + JSON.stringify(channel),
+    poolSize: (channel.items || []).length
+  }, extra || {});
+  // The preview asks the server about exactly the url a row would carry, so
+  // it cannot describe a different channel from the one that gets added.
+  if (typeof channelRowUrl === 'function') draft.url = channelRowUrl(channel);
+  appShellChannelSetDraft(draft);
+  appShellChannelSetNotice('Built. This is what is playing today -- nothing is on your home screen until you say so.');
+  appShellRenderChannels();
+  appShellChannelLoadLineup();
+  return true;
+}
+
+async function appShellChannelLoadLineup() {
+  const draft = appShellChannelDraft;
+  if (!draft) return false;
+  appShellChannelLineupFor = draft.url;
+  const res = await appShellApiFetch('/api/channel-lineup', { method: 'POST', body: { url: draft.url } });
+  if (appShellChannelLineupFor !== draft.url) return false;   // a newer build won the race
+  if (!res.ok) {
+    appShellChannelLineup = { error: res.error || 'The lineup could not be read just now.' };
+  } else {
+    appShellChannelLineup = res.data || {};
+  }
+  appShellRenderChannels();
+  return true;
+}
+
+// Adding and removing is the page's own toggle (20_), so the button under the
+// preview, the My Channels card and the Storylines tab cannot disagree about
+// what is in the config.
+function appShellChannelSetHome(on) {
+  const draft = appShellChannelDraft;
+  if (!draft) return false;
+  const wants = String(on) !== 'off';
+  if (draft.template === 'saga' && draft.eventId && typeof createInstantStorylineChannel === 'function') {
+    createInstantStorylineChannel(draft.eventId, null);
+    if (typeof renderMyCreatedChannelsList === 'function') renderMyCreatedChannelsList();
+  } else if (draft.channelId && typeof toggleChannelInCatalog === 'function') {
+    toggleChannelInCatalog(draft.channelId);
+  } else {
+    return false;
+  }
+  appShellChannelSetNotice(wants ? 'On your home screen.' : 'Off your home screen. The channel is still saved in My Channels.');
+  appShellRenderChannels();
+  return true;
+}
+
+// --- drawing -----------------------------------------------------------------
+
+function appShellChannelGalleryHtml() {
+  let html = '<div class="app-shell-template-grid">';
+  APP_SHELL_CHANNEL_TEMPLATES.forEach(function (t) {
+    html += '<button type="button" class="app-shell-template-card" data-app-shell-action="chan-template" data-app-shell-id="' + appShellChannelAttr(t.id) + '">' +
+      '<strong>' + appShellChannelEscape(t.title) + '</strong>' +
+      '<span class="app-shell-muted">' + appShellChannelEscape(t.blurb) + '</span>' +
+      (t.needsAccount ? '<span class="app-shell-muted app-shell-template-note">Needs a free account</span>' : '') +
+      '</button>';
+  });
+  html += '</div>';
+  html += '<p class="app-shell-muted">A saga can be added without signing in. Everything that becomes a channel of your own asks for an account first, the same as the builder does.</p>';
+  return html;
+}
+
+function appShellChannelNetworkFormHtml() {
+  const networks = appShellChannelNetworks();
+  let html = '<label class="app-shell-muted" for="appShellChannelNetworkSelect">Which network?</label>';
+  if (!networks.length) {
+    return html + '<p class="app-shell-muted">The network list is not on this page yet. Reload, or use the Quick Add tab below.</p>' +
+      '<div class="app-shell-actions"><button type="button" class="secondary lc-btn" data-app-shell-action="chan-template" data-app-shell-id="">Back</button></div>';
+  }
+  html += '<select id="appShellChannelNetworkSelect">';
+  networks.forEach(function (n) {
+    html += '<option value="' + appShellChannelAttr(n.networkId) + '">' + appShellChannelEscape(n.name) + '</option>';
+  });
+  html += '</select>';
+  html += '<label class="app-shell-muted" for="appShellChannelNameInput">Channel name (optional)</label>' +
+    '<input type="text" id="appShellChannelNameInput" value="' + appShellChannelAttr(appShellChannelListName) + '" placeholder="Uses the network name">';
+  return html;
+}
+
+function appShellChannelSagaFormHtml() {
+  const sagas = appShellChannelSagas();
+  if (!sagas.length) {
+    return '<p class="app-shell-muted">The saga list is not on this page yet. Reload, or use Storylines &amp; Universes below.</p>';
+  }
+  let html = '<label class="app-shell-muted" for="appShellChannelSagaSelect">Which saga or universe?</label><select id="appShellChannelSagaSelect">';
+  sagas.forEach(function (s) {
+    html += '<option value="' + appShellChannelAttr(s.id) + '"' + (s.id === appShellChannelSagaPick ? ' selected' : '') + '>' +
+      appShellChannelEscape(s.name) + ' (' + appShellChannelNumber(s.parts) + ' parts)</option>';
+  });
+  html += '</select><p class="app-shell-muted">A saga plays in its canon order, so it has no schedule to set here.</p>';
+  return html;
+}
+
+function appShellChannelPersonFormHtml() {
+  let html = '<label class="app-shell-muted" for="appShellChannelPersonQuery">Who?</label>' +
+    '<div class="app-shell-row-controls"><input type="text" id="appShellChannelPersonQuery" placeholder="Actor or director name">' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="chan-person-search">Search</button></div>';
+  if (appShellChannelPersonResults.length) {
+    html += '<div class="app-shell-person-grid">';
+    appShellChannelPersonResults.slice(0, 12).forEach(function (p) {
+      const on = appShellChannelPersonPick && String(appShellChannelPersonPick.personId) === String(p.personId);
+      html += '<button type="button" class="' + (on ? 'primary' : 'secondary') + ' lc-btn" data-app-shell-action="chan-person-pick" data-app-shell-id="' + appShellChannelAttr(String(p.personId)) + '">' +
+        appShellChannelEscape(p.name || 'Unknown') +
+        (on ? '' : '<br><span class="app-shell-muted">' + appShellChannelEscape(p.knownFor || p.department || '') + '</span>') +
+        '</button>';
+    });
+    html += '</div>';
+  }
+  if (appShellChannelPersonPick) {
+    html += '<p class="app-shell-kv">Building from <strong>' + appShellChannelEscape(appShellChannelPersonPick.name) + '</strong>. Their films and the episodes they were in.</p>' +
+      '<label class="app-shell-muted" for="appShellChannelNameInput">Channel name (optional)</label>' +
+      '<input type="text" id="appShellChannelNameInput" value="' + appShellChannelAttr(appShellChannelListName) + '" placeholder="Uses their name">';
+  }
+  return html;
+}
+
+function appShellChannelListFormHtml() {
+  return '<label class="app-shell-muted" for="appShellChannelListUrl">The list</label>' +
+    '<input type="text" id="appShellChannelListUrl" placeholder="A MDBList, Trakt or TMDB show list link">' +
+    '<label class="app-shell-muted" for="appShellChannelNameInput">Channel name (optional)</label>' +
+    '<input type="text" id="appShellChannelNameInput" value="' + appShellChannelAttr(appShellChannelListName) + '" placeholder="Named after the list">' +
+    '<label class="app-shell-dedupe" for="appShellChannelLiveSyncCheck">' +
+    '<input type="checkbox" id="appShellChannelLiveSyncCheck" checked>' +
+    '<span><strong>Keep it in step with the list</strong><br><span class="app-shell-muted">The channel remembers the link and picks up titles the list gains. Off, it is a one-time snapshot.</span></span></label>' +
+    '<p class="app-shell-muted">A list link is read as shows: films mixed into it are left out, because a channel plays episodes.</p>';
+}
+
+function appShellChannelCustomHtml() {
+  return '<p class="app-shell-muted">The full builder is still the page\\u2019s own: search shows and films, add a season at a time, choose the poster, lock a story, set the play order. It opens right below.</p>' +
+    '<div class="app-shell-actions">' +
+    '<button type="button" class="primary lc-btn" data-app-shell-action="chan-custom">Open the full builder</button>' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="chan-template" data-app-shell-id="">Back</button>' +
+    '</div>';
+}
+
+function appShellChannelScheduleHtml() {
+  const s = appShellChannelSchedule;
+  const order = String(s.order || 'listed');
+  const option = function (value, label) {
+    return '<option value="' + appShellChannelAttr(value) + '"' + (order === value ? ' selected' : '') + '>' + label + '</option>';
+  };
+  return '<details class="app-shell-schedule" id="appShellChannelScheduleDetails">' +
+    '<summary>Schedule options</summary>' +
+    '<button type="button" class="app-shell-chip' + (s.rotate ? ' is-on' : '') + '" data-app-shell-action="chan-rotate" data-app-shell-id="' + (s.rotate ? 'off' : 'on') + '">' +
+    'Daily rotation: ' + (s.rotate ? 'on' : 'off') + '</button>' +
+    '<p class="app-shell-muted">On, the channel keeps a pool and deals a fresh day\\u2019s lineup out of it every day. Off, everything in the pool plays in the order below.</p>' +
+    '<div class="app-shell-row-controls">' +
+    '<label class="app-shell-muted" for="appShellChannelRotateShows">Shows a day</label>' +
+    '<input type="number" id="appShellChannelRotateShows" min="1" max="48" value="' + appShellChannelNumber(s.shows || 24) + '">' +
+    '<label class="app-shell-muted" for="appShellChannelRotateEpisodes">Episodes a block</label>' +
+    '<input type="number" id="appShellChannelRotateEpisodes" min="1" max="12" value="' + appShellChannelNumber(s.episodes || 3) + '">' +
+    '</div>' +
+    '<label class="app-shell-muted" for="appShellChannelOrderSelect">Play order</label>' +
+    '<select id="appShellChannelOrderSelect">' +
+    option('listed', 'As the channel is') +
+    option('interleave', 'Interleaved -- one episode per show, in turn') +
+    option('aired', 'Air date -- oldest first') +
+    option('shuffle', 'Shuffled') +
+    '</select>' +
+    '<div class="app-shell-row-controls">' +
+    '<label class="app-shell-muted" for="appShellChannelPerShow">Episodes kept per show</label>' +
+    '<input type="number" id="appShellChannelPerShow" min="1" max="200" value="' + appShellChannelNumber(s.perShow || 50) + '">' +
+    '</div>' +
+    '<button type="button" class="app-shell-chip' + (s.hideWatched ? ' is-on' : '') + '" data-app-shell-action="chan-hide-watched" data-app-shell-id="' + (s.hideWatched ? 'off' : 'on') + '">' +
+    'Hide watched: ' + (s.hideWatched ? 'on' : 'off') + '</button>' +
+    '<p class="app-shell-muted">Hide watched needs Auto-track playback signed in. The preview below says when the server cannot apply it.</p>' +
+    '</details>';
+}
+
+function appShellChannelLineupHtml() {
+  const draft = appShellChannelDraft;
+  if (!draft) return '';
+  if (!appShellChannelLineup) {
+    return '<h3 class="app-shell-h3">Today\\u2019s lineup</h3><p class="app-shell-muted">Asking the server what is playing\\u2026</p>';
+  }
+  if (appShellChannelLineup.error) {
+    return '<h3 class="app-shell-h3">Today\\u2019s lineup</h3><p class="app-shell-review-bad">' + appShellChannelEscape(appShellChannelLineup.error) + '</p>' +
+      '<div class="app-shell-actions"><button type="button" class="secondary lc-btn" data-app-shell-action="chan-preview">Try again</button></div>';
+  }
+  const items = Array.isArray(appShellChannelLineup.items) ? appShellChannelLineup.items : [];
+  // plan is channelRotationPlan's answer, the same numbers the Worker clamped
+  // the channel to -- { shows, episodes, turnover } -- so the sentence under
+  // the posters describes the channel that will actually play.
+  const plan = appShellChannelLineup.plan;
+  const pool = appShellChannelNumber(appShellChannelLineup.poolSize) || draft.poolSize;
+  const bits = [];
+  if (plan && plan.shows) bits.push(plan.shows + ' shows a day');
+  if (plan && plan.episodes) bits.push(plan.episodes + ' episodes a block');
+  if (pool) bits.push(pool + ' episode' + (pool === 1 ? '' : 's') + ' in the pool');
+  if (appShellChannelLineup.rotating) bits.push('rotates daily');
+  const bitsHtml = bits.map(appShellChannelEscape).join(' &middot; ');
+  let html = '<h3 class="app-shell-h3">Today\\u2019s lineup</h3>';
+  html += '<p class="app-shell-kv">' + (bitsHtml || 'Ready') + '</p>';
+  if (Array.isArray(appShellChannelLineup.unappliedRules) && appShellChannelLineup.unappliedRules.length) {
+    const named = appShellChannelLineup.unappliedRules.map(function (r) { return r === 'hideWatched' ? 'Hide watched' : 'This channel fills itself in from your account'; });
+    html += '<p class="app-shell-muted">A preview cannot prove which account is asking, so ' + appShellChannelEscape(named.join(' and ')) +
+      ' ' + (named.length === 1 ? 'is' : 'are') + ' not applied here. In Stremio they are.</p>';
+  }
+  if (!items.length) {
+    html += '<p class="app-shell-muted">The server has no lineup for this channel yet. A rotating channel needs its pool first -- try again in a moment.</p>';
+  } else {
+    html += '<div class="app-shell-lineup">';
+    items.slice(0, APP_SHELL_CHANNEL_LINEUP_TILES).forEach(function (it) {
+      const poster = it.thumbnail || it.poster || it.showPoster || '';
+      const label = it.showName ? (it.showName + (it.season != null && it.episode != null ? ' S' + it.season + 'E' + it.episode : '')) : (it.title || it.epName || '');
+      html += '<div class="app-shell-lineup-tile">' +
+        (poster ? '<img src="' + appShellChannelAttr(poster) + '" alt="" loading="lazy">' : '<div class="app-shell-lineup-blank"></div>') +
+        '<span title="' + appShellChannelAttr(label) + '">' + appShellChannelEscape(label) + '</span>' +
+        '</div>';
+    });
+    html += '</div>';
+    if (items.length > APP_SHELL_CHANNEL_LINEUP_TILES) {
+      html += '<p class="app-shell-muted">Showing the first ' + APP_SHELL_CHANNEL_LINEUP_TILES + ' of ' + items.length + ' in today\\u2019s lineup.</p>';
+    }
+  }
+  const onHome = appShellChannelOnHome();
+  html += '<div class="app-shell-actions">' +
+    '<button type="button" class="' + (onHome ? 'secondary' : 'primary') + ' lc-btn" data-app-shell-action="chan-home" data-app-shell-id="' + (onHome ? 'off' : 'on') + '">' +
+    (onHome ? 'On your home screen' : 'Add to home screen') + '</button>' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="chan-preview">New lineup</button>' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="chan-reset">Build another channel</button>' +
+    '</div>';
+  html += '<p class="app-shell-muted">It is saved in My Channels either way. Removing it from the home screen leaves it there to edit or add back.</p>';
+  return html;
+}
+
+function appShellChannelFlowHtml() {
+  const template = appShellChannelTemplate;
+  const found = APP_SHELL_CHANNEL_TEMPLATES.filter(function (t) { return t.id === template; })[0];
+  if (!found) return appShellChannelGalleryHtml();
+  let html = '<div class="app-shell-row-controls"><button type="button" class="secondary lc-btn" data-app-shell-action="chan-template" data-app-shell-id="">All templates</button>' +
+    '<strong>' + appShellChannelEscape(found.title) + '</strong></div>' +
+    '<p class="app-shell-muted">' + appShellChannelEscape(found.blurb) + '</p>';
+  if (template === 'custom') return html + appShellChannelCustomHtml();
+  if (appShellChannelDraft && appShellChannelDraft.template === template) {
+    html += '<p class="app-shell-kv">' + appShellChannelEscape(appShellChannelDraft.name) + ' &middot; ' +
+      appShellChannelNumber(appShellChannelDraft.poolSize) + ' episodes in the pool</p>' + appShellChannelLineupHtml();
+    return html;
+  }
+  if (template === 'network') html += appShellChannelNetworkFormHtml();
+  else if (template === 'saga') html += appShellChannelSagaFormHtml();
+  else if (template === 'person') html += appShellChannelPersonFormHtml();
+  else if (template === 'list') html += appShellChannelListFormHtml();
+  if (template !== 'saga') html += appShellChannelScheduleHtml();
+  html += '<div class="app-shell-actions">' +
+    '<button type="button" class="primary lc-btn"' + (appShellChannelBuildInFlight ? ' disabled' : '') + ' data-app-shell-action="chan-build">' +
+    (appShellChannelBuildInFlight ? 'Building\\u2026' : 'Build this channel') + '</button>' +
+    '</div>';
+  return html;
+}
+
+function appShellRenderChannels() {
+  const host = appShellChannelsHost();
+  if (!host || !NEW_UI) return false;
+  let html = '<div class="panel">' +
+    '<h2 class="panel-title">New channel</h2>' +
+    '<p class="app-shell-muted">Choose a template, look at what is playing today, then add it to your home screen. The full builder is still there under Custom.</p>';
+  if (appShellChannelNotice) html += '<p class="app-shell-kv" id="appShellChannelNotice">' + appShellChannelEscape(appShellChannelNotice) + '</p>';
+  html += '<p class="app-shell-muted" id="appShellChannelProgress">' + appShellChannelEscape(appShellChannelBusy) + '</p>';
+  const account = appShellState.get().account;
+  if (!account && appShellChannelTemplate && appShellChannelTemplate !== 'saga') {
+    html += '<p class="app-shell-muted">Sign in first: a channel of your own is kept on your account, so it follows you to another device.</p>' +
+      '<div class="app-shell-actions"><button type="button" class="primary lc-btn" data-app-shell-action="chan-account">Go to Settings to sign in</button></div>' +
+      '<div class="app-shell-actions"><button type="button" class="secondary lc-btn" data-app-shell-action="chan-template" data-app-shell-id="">All templates</button></div></div>';
+    host.innerHTML = html;
+    return true;
+  }
+  html += appShellChannelFlowHtml() + '</div>';
+  host.innerHTML = html;
+  return true;
+}
+
+// --- the one click listener's handler ----------------------------------------
+
+async function appShellChannelsAction(action, id) {
+  const what = String(action || '');
+  if (what === 'chan-template') return appShellChannelPickTemplate(id);
+  if (what === 'chan-build') return appShellChannelBuild();
+  if (what === 'chan-rotate') {
+    appShellChannelSchedule.rotate = String(id) !== 'off';
+    appShellRenderChannels();
+    return true;
+  }
+  if (what === 'chan-hide-watched') {
+    appShellChannelSchedule.hideWatched = String(id) !== 'off';
+    appShellRenderChannels();
+    return true;
+  }
+  if (what === 'chan-person-search') return appShellChannelPersonSearch();
+  if (what === 'chan-person-pick') return appShellChannelPersonPickResult(id);
+  if (what === 'chan-preview') return appShellChannelLoadLineup();
+  if (what === 'chan-home') return appShellChannelSetHome(id);
+  if (what === 'chan-reset') {
+    appShellChannelDraft = null;
+    appShellChannelLineup = null;
+    appShellChannelLineupFor = '';
+    appShellChannelNotice = '';
+    appShellChannelBusy = '';
+    appShellRenderChannels();
+    return true;
+  }
+  if (what === 'chan-custom') {
+    if (typeof openBuildCustomChannel === 'function') openBuildCustomChannel();
+    return true;
+  }
+  if (what === 'chan-account') {
+    appShellGo('/settings/account');
+    if (typeof appShellFocusSignIn === 'function') appShellFocusSignIn();
+    return true;
+  }
+  return false;
+}
+
+// Called when the view is opened, and once at boot for a page served straight
+// at Channels.
+function appShellOpenChannels() {
+  if (!NEW_UI) return false;
+  if (!appShellChannelsHost() || !appShellChannelsIsOpen()) return false;
+  return appShellRenderChannels();
+}
+
+// --- routing -----------------------------------------------------------------
+
+function appShellFindSubPill(tabId, sub) {
+  const barId = APP_SHELL_SUB_BARS[tabId];
+  if (!barId) return null;
+  const bar = document.getElementById(barId);
+  if (!bar || !bar.querySelectorAll) return null;
+  const pills = bar.querySelectorAll('.subnav-pill');
+  for (let i = 0; i < pills.length; i++) {
+    const p = pills[i];
+    if (p.getAttribute && p.getAttribute('data-sub') === sub) return p;
+    const oc = (p.getAttribute && p.getAttribute('onclick')) || '';
+    if (oc.indexOf("'" + sub + "'") !== -1 || oc.indexOf('"' + sub + '"') !== -1) return p;
+  }
+  return null;
+}
+
+// Opens a view (and sub-tab) using the legacy switchers for everything inside
+// it. appShellApplyingRoute stops those switchers from routing again: this
+// function is the only thing that writes the URL.
+function appShellApplyRoute(route) {
+  if (!route) return false;
+  const tab = appShellTab(route.tab);
+  if (!tab) return false;
+  const sub = (route.sub && tab.subs.indexOf(route.sub) !== -1) ? String(route.sub) : '';
+  appShellApplyingRoute = true;
+  try {
+    if (typeof switchTab === 'function') switchTab(tab.id);
+    if (sub) {
+      const pill = appShellFindSubPill(tab.id, sub);
+      if (tab.id === 'catalogs' && typeof switchCatalogsSubmenu === 'function') switchCatalogsSubmenu(sub, pill);
+      else if (tab.id === 'lists' && typeof switchListsSubmenu === 'function') switchListsSubmenu(sub, pill);
+      else if (tab.id === 'channels' && typeof switchChannelsSubmenu === 'function') switchChannelsSubmenu(sub, pill);
+      else if (tab.id === 'settings' && typeof switchSettingsSubmenu === 'function') switchSettingsSubmenu(sub, pill);
+      else if (tab.id === 'discover' && typeof filterDiscoverShelves === 'function') filterDiscoverShelves(sub, pill);
+    }
+  } finally {
+    appShellApplyingRoute = false;
+  }
+  appShellState.set({ route: { tab: tab.id, sub: sub } });
+  // Settings is rendered by the shell itself (P6-2): the legacy panels below
+  // it stay, and these cards sit above them.
+  if (tab.id === 'settings') appShellRenderSettingsHome();
+  if (tab.id === 'catalogs') appShellRenderHomeEditor();
+  if (tab.id === 'lists') {
+    appShellRenderListsHome();
+    if (sub === 'create-list') appShellRenderAddTitles('');
+    if (sub === 'import') {
+      appShellRenderImports();
+      appShellResumeImport();
+    }
+  }
+  if (tab.id === 'discover') appShellOpenExplore();
+  if (tab.id === 'channels') appShellOpenChannels();
+  return true;
+}
+
+// The one way the shell moves between views: the URL first, then the view, so
+// a reload (or a shared link) opens the same thing.
+function appShellGo(path, options) {
+  const o = options || {};
+  const target = String(path || '');
+  const route = appShellRouteFromPath(target);
+  if (!route) return false;
+  const here = appShellTrimSlashes(location.pathname);
+  try {
+    if (o.replace || here === target) {
+      history.replaceState({ appShell: true }, '', target);
+    } else {
+      history.pushState({ appShell: true }, '', target);
+    }
+  } catch (e) {}
+  appShellApplyRoute(route);
+  if (!o.keepScroll) {
+    try { window.scrollTo({ top: 0, behavior: 'instant' }); } catch (e) {
+      try { window.scrollTo(0, 0); } catch (e2) {}
+    }
+  }
+  return true;
+}
+
+// Called by the legacy tab and sub-tab switchers (16_ and 20_). Returns true
+// when the shell has taken the navigation, false to leave both the switcher and
+// the address bar exactly as they were.
+function appShellHandleNav(kind, a, b) {
+  if (!appShellActive || appShellApplyingRoute || !NEW_UI) return false;
+  if (kind === 'tab') {
+    const route = appShellRouteForName(a);
+    if (!route) return false;   // list-details, item-details: not shell views
+    return appShellGo(appShellPathFor(route.tab, route.sub));
+  }
+  if (kind === 'sub') {
+    const tabId = String(a || '');
+    const sub = String(b || '');
+    if (!appShellTab(tabId)) return false;
+    if (!sub) return false;
+    return appShellGo(appShellPathFor(tabId, sub));
+  }
+  return false;
+}
+
+function appShellOnClick(e) {
+  if (!appShellActive) return;
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const target = e.target;
+  if (!target || !target.closest) return;
+  // The Settings cards wire themselves with this attribute rather than an
+  // onclick: one listener for the whole page, and no inline handlers added.
+  const actionEl = target.closest('[data-app-shell-action]');
+  if (actionEl) {
+    e.preventDefault();
+    const action = actionEl.getAttribute('data-app-shell-action');
+    const id = actionEl.getAttribute('data-app-shell-id') || '';
+    // The Lists view (P6-4) and the Settings view (P6-2) share this one
+    // listener, so the action names decide which module answers. The prefix
+    // test is here rather than a truthy return because appShellSettingsAction
+    // is async -- its promise is truthy for every action, handled or not.
+    if (APP_SHELL_LISTS_ACTION.test(action)) appShellListsAction(action, id);
+    else if (APP_SHELL_EXPLORE_ACTION.test(action)) appShellExploreAction(action, id);
+    else if (APP_SHELL_IMPORTS_ACTION.test(action)) appShellImportsAction(action, id);
+    else if (APP_SHELL_CHANNELS_ACTION.test(action)) appShellChannelsAction(action, id);
+    else appShellSettingsAction(action, id);
+    return;
+  }
+  const link = target.closest('a[data-app-route]');
+  if (!link) return;
+  if (link.target && link.target !== '_self') return;
+  const href = link.getAttribute('href') || '';
+  if (!href || href.charAt(0) !== '/') return;
+  if (!appShellRouteFromPath(href)) return;
+  e.preventDefault();
+  appShellGo(href);
+}
+
+// A popstate the shell owns: the legacy handler in this file steps aside for
+// shell paths (see the guard at the top of its final branch).
+function appShellOnPopState() {
+  if (!appShellActive) return;
+  const route = appShellRouteFromPath(location.pathname);
+  if (route) appShellApplyRoute(route);
+}
+
+function appShellRenderFromLocation() {
+  const route = appShellRouteFromPath(location.pathname);
+  if (route) appShellApplyRoute(route);
+}
+
+// --- boot --------------------------------------------------------------------
+
+function initAppShell() {
+  if (!NEW_UI) return;
+  appShellActive = true;
+  document.addEventListener('click', appShellOnClick);
+  window.addEventListener('popstate', appShellOnPopState);
+
+  const bar = document.getElementById('appShellInstallBar');
+  if (bar) {
+    bar.addEventListener('click', function (e) {
+      const target = e.target;
+      if (!target || !target.closest) return;
+      if (!target.closest('#appShellInstallBtn')) return;
+      e.preventDefault();
+      appShellInstallBarAction();
+    });
+  }
+
+  // The server already opened the right view (data-initial-tab in the head
+  // script). This only settles the address bar: a real path for the view, and
+  // "/" becomes the Discover path so every view has one.
+  const route = appShellRouteFromPath(location.pathname);
+  if (route) {
+    appShellApplyRoute(route);
+  } else if (appShellTrimSlashes(location.pathname) === '/') {
+    try { history.replaceState({ appShell: true }, '', appShellPathFor('discover', '')); } catch (e) {}
+  }
+
+  appShellRefreshInstallBar();
+  appShellRenderHomeEditor();
+  if (typeof appShellExploreHost === 'function' && appShellExploreHost() && appShellDiscoverIsOpen()) appShellOpenExplore();
+  if (typeof appShellImportsHost === 'function' && appShellImportsHost() && appShellImportsIsOpen()) {
+    appShellRenderImports();
+    appShellResumeImport();
+  }
+  if (typeof appShellChannelsHost === 'function' && appShellChannelsHost() && appShellChannelsIsOpen()) appShellRenderChannels();
+  if (typeof isSignedIn === 'function' && isSignedIn()) appShellRefreshAccount();
+  appShellState.set({ ready: true });
+}
+
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initAppShell);
+  else initAppShell();
+}
 /*MYLISTS_APP_BUNDLE_END*/</script>
 
 </body>
@@ -76059,7 +81491,7 @@ function renderGuidePage(origin) {
       <span class="brand-text">${ADDON_NAME}</span>
     </a>
     <div class="nav-actions">
-      <button type="button" class="theme-toggle-btn" onclick="toggleTheme()" aria-label="Toggle Dark/Light Mode">
+      <button type="button" class="theme-toggle-btn" data-act="toggleTheme" aria-label="Toggle Dark/Light Mode">
         <svg class="theme-icon icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="5" fill="currentColor"></circle>
           <line x1="12" y1="1" x2="12" y2="3"></line>
@@ -76679,6 +82111,14 @@ async function handleFetch(request, env, ctx) {
     // token as its config segment (see v2InstallPath, 27_installs.js).
     const path = v2InstallPath(url.pathname) || url.pathname;
 
+    // ?ff_new_ui=1 (or 0) turns the new UI shell on or off for this browser,
+    // then bounces to the same address without the parameter (P6-1). Handled
+    // before anything else so it works from any page of the site.
+    if (request.method === "GET" || request.method === "HEAD") {
+      const shellSwitch = appShellSwitchResponse(url);
+      if (shellSwitch) return shellSwitch;
+    }
+
     if (request.method === "OPTIONS") {
       if (isPublicCorsPath(path)) {
         return new Response(null, { headers: corsHeaders() });
@@ -76743,7 +82183,30 @@ async function handleFetch(request, env, ctx) {
       // rebuilt and resent ~1.6MB on every navigation, with no validator at
       // all, which also left the browser free to heuristically cache a copy
       // it had no way to check.
-      return await htmlPageResponse(request, renderBuilderCached(url.origin, {}));
+      return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
+    }
+
+    // The new UI shell's own paths (Phase 6, P6-1): /catalogs, /lists,
+    // /channels, /discover, /search, /settings and a sub-tab below any of them
+    // (/settings/connections, /catalogs/quickadd). Served only to a browser
+    // that carries the FF_NEW_UI cookie; without it these addresses keep
+    // 404ing exactly as they do today, so nothing changes for anyone else, and
+    // turning the shell off again is one cookie rather than a deploy.
+    //
+    // Exact paths only: /lists/<slug> and /channels/<user>/<slug> are share
+    // links and keep their own routes below.
+    if (APP_SHELL_PATHS.has(path) && isNewUiRequest(request)) {
+      ctx.waitUntil(bumpStat(env, "pageviews"));
+      return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
+    }
+    if (isNewUiRequest(request)) {
+      for (const shellTab of APP_SHELL_TABS) {
+        if (path.indexOf(shellTab.path + "/") !== 0) continue;
+        const shellSub = path.slice(shellTab.path.length + 1);
+        if (shellTab.subs.indexOf(shellSub) === -1) continue;
+        ctx.waitUntil(bumpStat(env, "pageviews"));
+        return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
+      }
     }
 
     // add-on icon, served straight from this Worker
@@ -77062,7 +82525,7 @@ async function handleFetch(request, env, ctx) {
       // keys stays uncacheable, while the bundle it references is the same
       // shared, immutable /app.js everyone else already has.
       return new Response(
-        await pageWithExternalBundle(renderBuilder(url.origin, {
+        await pageWithExternalBundle(renderPage(request, url.origin, {
           initialEntries: resolvedForPage.entries,
           // Every setting the link carries except its keys and tokens. This
           // used to name seven fields by hand and left Better Posters out, so
@@ -77107,7 +82570,7 @@ async function handleFetch(request, env, ctx) {
       ctx.waitUntil(bumpStat(env, "pageviews"));
       return await htmlPageResponse(
         request,
-        renderBuilderCached(url.origin, { isConfigureMode: true })
+        renderPageCached(request, url.origin, { isConfigureMode: true })
       );
     }
 
@@ -77241,8 +82704,8 @@ async function handleFetch(request, env, ctx) {
       return await htmlPageResponse(
         request,
         curated
-          ? renderBuilder(url.origin, { deepLinkList: { name: curated.name, type: curated.type, url: "custom:curated:" + curated.slug } })
-          : renderBuilderCached(url.origin, {})
+          ? renderPage(request, url.origin, { deepLinkList: { name: curated.name, type: curated.type, url: "custom:curated:" + curated.slug } })
+          : renderPageCached(request, url.origin, {})
       );
     }
 
@@ -77261,8 +82724,8 @@ async function handleFetch(request, env, ctx) {
       return await htmlPageResponse(
         request,
         chart
-          ? renderBuilder(url.origin, { deepLinkList: { name: chart.name, type: chart.type || ((chart.showUrl && chart.showUrl.includes('shows')) ? "series" : "movie"), url: chart.movieUrl } })
-          : renderBuilderCached(url.origin, {})
+          ? renderPage(request, url.origin, { deepLinkList: { name: chart.name, type: chart.type || ((chart.showUrl && chart.showUrl.includes('shows')) ? "series" : "movie"), url: chart.movieUrl } })
+          : renderPageCached(request, url.origin, {})
       );
     }
 
@@ -77270,7 +82733,7 @@ async function handleFetch(request, env, ctx) {
     // Note: Creator/user public lists (/lists/:user/:slug) and .json endpoints pass through to creator routes.
     if (path.startsWith("/lists/") && !path.endsWith(".json") && (path.startsWith("/lists/mdblist/") || path.startsWith("/lists/trakt/") || path.startsWith("/lists/tmdb/") || path.startsWith("/lists/simkl/") || path.startsWith("/lists/custom/") || path.startsWith("/lists/curated/"))) {
       ctx.waitUntil(bumpStat(env, "pageviews"));
-      return await htmlPageResponse(request, renderBuilderCached(url.origin, {}));
+      return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
     }
 
     // /channels/:username/:channelSlug -- public shareable URL for a creator's published channel
@@ -77330,7 +82793,7 @@ async function handleFetch(request, env, ctx) {
         }
       }
       ctx.waitUntil(bumpStat(env, "pageviews"));
-      return await htmlPageResponse(request, renderBuilderCached(url.origin, {}));
+      return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
     }
 
     // /:config/manifest.json
@@ -87874,10 +93337,12 @@ function generateSearchVariations(query) {
       // nextSyncVersion.
       const currentRaw = await env.CONFIGS.get(`creatorsync:${auth.username}`);
       let currentUpdatedAt = 0;
+      let currentKeys = null;
       if (currentRaw) {
         try {
           const current = JSON.parse(currentRaw);
           currentUpdatedAt = Number(current.updatedAt) || 0;
+          currentKeys = current.keys && typeof current.keys === "object" ? current.keys : null;
           if (expectedUpdatedAt !== null && currentUpdatedAt > expectedUpdatedAt) {
             // Purely for visibility -- this was previously invisible even
             // to us; now it's at least countable on the admin dashboard.
@@ -87890,9 +93355,26 @@ function generateSearchVariations(query) {
         }
       }
 
+      // A provider credential the request leaves OUT is kept as stored. Since
+      // P6-8 a browser holds the account's keys and tokens only in memory,
+      // once a load has handed them back; a tab whose load failed omits the
+      // ones it does not know instead of sending them blank (see
+      // creatorSyncKeysForPush, 22_), because a blank here used to be stored
+      // as-is and cost the account every connection. A blank that IS sent
+      // still clears the credential: that is what a disconnect sends.
+      const incomingKeys = body.keys && typeof body.keys === "object" && !Array.isArray(body.keys) ? body.keys : {};
+      const mergedKeys = Object.assign({}, incomingKeys);
+      if (currentKeys) {
+        for (const field of ["tmdbKey", "tmdbSessionId", "mdblistKey", "mdblistAccessToken", "traktKey", "traktAccessToken", "simklKey", "simklAccessToken"]) {
+          if (!Object.prototype.hasOwnProperty.call(incomingKeys, field) && typeof currentKeys[field] === "string" && currentKeys[field]) {
+            mergedKeys[field] = currentKeys[field];
+          }
+        }
+      }
+
       const blob = {
         config: Array.isArray(body.config) ? body.config : [],
-        keys: body.keys && typeof body.keys === "object" ? body.keys : {},
+        keys: mergedKeys,
         collapsedPanels: body.collapsedPanels && typeof body.collapsedPanels === "object" ? body.collapsedPanels : {},
         likedLists: Array.isArray(body.likedLists) ? body.likedLists.map(String) : [],
         hiddenLists: Array.isArray(body.hiddenLists) ? body.hiddenLists.map(String) : [],
@@ -89383,7 +94865,7 @@ function generateSearchVariations(query) {
       // 304 can only happen when the browser already holds this list.
       return await htmlPageResponse(
         request,
-        renderBuilder(url.origin, {
+        renderPage(request, url.origin, {
           deepLinkList: {
             name: deslugifyServer(mdblistSlug),
             type: "movie",
@@ -89410,7 +94892,7 @@ function generateSearchVariations(query) {
       // 304 can only happen when the browser already holds this list.
       return await htmlPageResponse(
         request,
-        renderBuilder(url.origin, {
+        renderPage(request, url.origin, {
           deepLinkList: {
             name: deslugifyServer(traktSlug),
             type: "movie",
@@ -89437,7 +94919,7 @@ function generateSearchVariations(query) {
       // 304 can only happen when the browser already holds this list.
       return await htmlPageResponse(
         request,
-        renderBuilder(url.origin, {
+        renderPage(request, url.origin, {
           deepLinkList: {
             name,
             type: "movie",
@@ -89464,7 +94946,7 @@ function generateSearchVariations(query) {
       // 304 can only happen when the browser already holds this list.
       return await htmlPageResponse(
         request,
-        renderBuilder(url.origin, {
+        renderPage(request, url.origin, {
           deepLinkList: {
             name,
             type: "movie",
@@ -89695,7 +95177,7 @@ function generateSearchVariations(query) {
       // 304 can only happen when the browser already holds this list.
       return await htmlPageResponse(
         request,
-        renderBuilder(url.origin, {
+        renderPage(request, url.origin, {
           deepLinkList: {
             name: listData.name,
             type: listData.type,

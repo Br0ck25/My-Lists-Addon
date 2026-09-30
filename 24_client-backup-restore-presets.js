@@ -196,7 +196,7 @@ function importConfigJson() {
   const raw = document.getElementById('configJsonBox').value.trim();
   if (!raw) {
     if (typeof showAppAlert === 'function') showAppAlert('Input Required', 'Paste a config JSON blob into the box first.', false);
-    else alert('Paste a config JSON blob into the box first.');
+    else showToast('Paste a config JSON blob into the box first.', 'error');
     return;
   }
   let data;
@@ -204,7 +204,7 @@ function importConfigJson() {
     data = JSON.parse(raw);
   } catch (e) {
     if (typeof showAppAlert === 'function') showAppAlert('Invalid JSON', 'That is not valid JSON.', false);
-    else alert('That is not valid JSON.');
+    else showToast('That is not valid JSON.', 'error');
     return;
   }
   runImport(data);
@@ -233,7 +233,7 @@ function runImport(data) {
         false
       );
     } else {
-      alert('Import failed part-way: ' + detail);
+      showToast('Import failed part-way: ' + detail, 'error');
     }
   }
 }
@@ -260,8 +260,8 @@ function looksLikeTmdbKey(v) {
 
 // Ids and slugs that arrived from somewhere else.
 //
-// escapeJsAttr (19_client-search-and-likes.js) is what actually stops an
-// imported id executing; this is the second layer, and it is here because an
+// The action attributes (P6-8) are what actually stop an imported id
+// executing; this is the second layer, and it is here because an
 // id is not free text. Every id this app produces is a slug, a "ch_<time>_<rand>",
 // a "tt…" or a "tmdb:…" -- none of which can contain a quote, an angle bracket,
 // a backslash or a control character. A value that does was not produced by
@@ -433,13 +433,13 @@ function showImportReport(report) {
   const title = report.warnings.length ? 'Restored with warnings' : 'Restored';
   const body = lines.map((l) => '\\u2022 ' + l).join('\\n');
   if (typeof showAppAlert === 'function') showAppAlert(title, body, false);
-  else alert(title + '\\n\\n' + body);
+  else showToast(title + '\\n\\n' + body, 'error');
 }
 
 function applyImportedConfig(data) {
   if (!data || (!Array.isArray(data.entries) && !data.customLists && !data.configuredCatalogs)) {
     if (typeof showAppAlert === 'function') showAppAlert('Invalid Config', 'That JSON does not look like a valid My Lists backup.', false);
-    else alert('That JSON does not look like a valid My Lists backup.');
+    else showToast('That JSON does not look like a valid My Lists backup.', 'error');
     return;
   }
 
@@ -471,13 +471,13 @@ function applyImportedConfig(data) {
   if (tmdbKey) {
     const el = document.getElementById('tmdbKeyInput');
     if (el) el.value = tmdbKey;
-    try { localStorage.setItem('myListAddon:tmdbKey', tmdbKey); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:tmdbKey', tmdbKey); } catch (e) {}
   }
   const tmdbSessionIdVal = data.tmdbSessionId || keys.tmdbSessionId;
   if (tmdbSessionIdVal) {
     tmdbSessionId = tmdbSessionIdVal;
     window.tmdbSessionId = tmdbSessionIdVal;
-    try { localStorage.setItem('myListAddon:tmdbSessionId', tmdbSessionIdVal); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:tmdbSessionId', tmdbSessionIdVal); } catch (e) {}
   }
   const tmdbAccountIdVal = data.tmdbAccountId || keys.tmdbAccountId;
   if (tmdbAccountIdVal) {
@@ -495,13 +495,13 @@ function applyImportedConfig(data) {
   if (mdblistKey) {
     const el = document.getElementById('mdblistKeyInput');
     if (el) el.value = mdblistKey;
-    try { localStorage.setItem('myListAddon:mdblistKey', mdblistKey); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:mdblistKey', mdblistKey); } catch (e) {}
   }
   const mdblistAccessTokenVal = data.mdblistAccessToken || keys.mdblistAccessToken;
   if (mdblistAccessTokenVal) {
     mdblistAccessToken = mdblistAccessTokenVal;
     window.mdblistAccessToken = mdblistAccessTokenVal;
-    try { localStorage.setItem('myListAddon:mdblistAccessToken', mdblistAccessTokenVal); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:mdblistAccessToken', mdblistAccessTokenVal); } catch (e) {}
     if (typeof renderMdblistConnectStatus === 'function') renderMdblistConnectStatus();
   }
   const mdblistUsernameVal = data.mdblistUsername || keys.mdblistUsername;
@@ -515,7 +515,7 @@ function applyImportedConfig(data) {
   if (traktKey) {
     const el = document.getElementById('traktKeyInput');
     if (el) el.value = traktKey;
-    try { localStorage.setItem('myListAddon:traktKey', traktKey); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:traktKey', traktKey); } catch (e) {}
   }
   const traktUsernameVal = data.traktUsername || keys.traktUsername;
   if (traktUsernameVal) {
@@ -528,7 +528,7 @@ function applyImportedConfig(data) {
   if (traktAccessTokenVal) {
     traktAccessToken = traktAccessTokenVal;
     window.traktAccessToken = traktAccessTokenVal;
-    try { localStorage.setItem('myListAddon:traktAccessToken', traktAccessTokenVal); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:traktAccessToken', traktAccessTokenVal); } catch (e) {}
     if (typeof renderTraktConnectStatus === 'function') renderTraktConnectStatus();
   }
 
@@ -536,13 +536,13 @@ function applyImportedConfig(data) {
   if (simklKey) {
     const el = document.getElementById('simklKeyInput');
     if (el) el.value = simklKey;
-    try { localStorage.setItem('myListAddon:simklKey', simklKey); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:simklKey', simklKey); } catch (e) {}
   }
   const simklAccessTokenVal = data.simklAccessToken || keys.simklAccessToken;
   if (simklAccessTokenVal) {
     simklAccessToken = simklAccessTokenVal;
     window.simklAccessToken = simklAccessTokenVal;
-    try { localStorage.setItem('myListAddon:simklAccessToken', simklAccessTokenVal); } catch (e) {}
+    try { rememberProviderSecret('myListAddon:simklAccessToken', simklAccessTokenVal); } catch (e) {}
   }
   const simklUsernameVal = data.simklUsername || keys.simklUsername;
   if (simklUsernameVal) {
@@ -704,7 +704,7 @@ function applyImportedConfig(data) {
   } else if (typeof showAppAlert === 'function') {
     showAppAlert('Restore Complete', 'Your setup, lists, watch history, channels, and settings have been restored successfully.', true);
   }
-  else alert('Your setup, lists, watch history, channels, and settings have been restored successfully.');
+  else showToast('Your setup, lists, watch history, channels, and settings have been restored successfully.', 'success');
 }
 
 // --- import from an existing link -------------------------------------------
@@ -761,14 +761,14 @@ async function importFromLink() {
   const raw = document.getElementById('importLinkInput').value.trim();
   if (!raw) {
     if (typeof showAppAlert === 'function') showAppAlert('Link Required', 'Paste an install link, configure link, or stremio:// / wako:// link first.', false);
-    else alert('Paste an install link, configure link, or stremio://\\/wako:// link first.');
+    else showToast('Paste an install link, configure link, or stremio://\\/wako:// link first.', 'error');
     return;
   }
   try {
     const data = await resolveInstallLinkData(raw);
     if (!data || !data.ok) {
       if (typeof showAppAlert === 'function') showAppAlert('Link Error', 'Could not load that link: ' + ((data && data.error) || 'unknown error'), false);
-      else alert('Could not load that link: ' + ((data && data.error) || 'unknown error'));
+      else showToast('Could not load that link: ' + ((data && data.error) || 'unknown error'), 'error');
       return;
     }
     restoreRows(data.entries);
@@ -873,10 +873,10 @@ async function importFromLink() {
       msg += '\\n\\nSkipped ' + unsafeFromLink.length + ' item(s) whose id contained characters this app never produces. A link from this app cannot contain those.';
     }
     if (typeof showAppAlert === 'function') showAppAlert('Import Complete', msg, true);
-    else alert(msg);
+    else showToast(msg, 'error');
   } catch (e) {
     if (typeof showAppAlert === 'function') showAppAlert('Network Error', 'Network error while resolving that link.', false);
-    else alert('Network error while resolving that link.');
+    else showToast('Network error while resolving that link.', 'error');
   }
 }
 
@@ -884,14 +884,14 @@ async function restoreListsFromLink() {
   const raw = document.getElementById('importLinkInput').value.trim();
   if (!raw) {
     if (typeof showAppAlert === 'function') showAppAlert('Link Required', 'Paste an install link, configure link, or stremio:// / wako:// link first.', false);
-    else alert('Paste an install link, configure link, or stremio://\\/wako:// link first.');
+    else showToast('Paste an install link, configure link, or stremio://\\/wako:// link first.', 'error');
     return;
   }
   try {
     const data = await resolveInstallLinkData(raw);
     if (!data || !data.ok) {
       if (typeof showAppAlert === 'function') showAppAlert('Link Error', 'Could not load that link: ' + ((data && data.error) || 'unknown error'), false);
-      else alert('Could not load that link: ' + ((data && data.error) || 'unknown error'));
+      else showToast('Could not load that link: ' + ((data && data.error) || 'unknown error'), 'error');
       return;
     }
 
@@ -905,7 +905,7 @@ async function restoreListsFromLink() {
 
     if (!listSlugs.length && !channelIds.length) {
       if (typeof showAppAlert === 'function') showAppAlert('No Custom Lists Found', 'That link does not contain any custom lists or custom channels.', false);
-      else alert('That link does not contain any custom lists or custom channels.');
+      else showToast('That link does not contain any custom lists or custom channels.', 'error');
       return;
     }
 
@@ -988,10 +988,10 @@ async function restoreListsFromLink() {
       msg += '\\n\\nSkipped ' + unsafeFromLink.length + ' item(s) whose id contained characters this app never produces. A link from this app cannot contain those.';
     }
     if (typeof showAppAlert === 'function') showAppAlert('Custom Lists Rebuilt', msg, true);
-    else alert(msg);
+    else showToast(msg, 'error');
   } catch (e) {
     if (typeof showAppAlert === 'function') showAppAlert('Network Error', 'Network error while resolving that link.', false);
-    else alert('Network error while resolving that link.');
+    else showToast('Network error while resolving that link.', 'error');
   }
 }
 
@@ -1248,13 +1248,13 @@ async function saveCurrentAsPreset() {
   const name = nameInput.value.trim();
   if (!name) {
     if (typeof showAppAlert === 'function') showAppAlert('Preset Name Required', 'Name this preset first.', false);
-    else alert('Name this preset first.');
+    else showToast('Name this preset first.', 'error');
     return;
   }
   const entries = collectEntries();
   if (!entries.length) {
     if (typeof showAppAlert === 'function') showAppAlert('Empty Catalogs', 'Add at least one list first.', false);
-    else alert('Add at least one list first.');
+    else showToast('Add at least one list first.', 'error');
     return;
   }
   const customListsMap = (typeof loadLocalCustomLists === 'function') ? loadLocalCustomLists() : {};
@@ -1309,7 +1309,7 @@ async function saveCurrentAsPreset() {
       if (typeof showAppAlert === 'function') {
         showAppAlert('Preset Save Error', errMsg, false);
       } else {
-        alert(errMsg);
+        showToast(errMsg, 'error');
       }
       return;
     }
@@ -1412,7 +1412,7 @@ function extractCustomListsAndChannelsFromPreset(preset) {
         try {
           const payload = JSON.parse(u.slice('customlist:v1:'.length));
           if (payload && Array.isArray(payload.items)) {
-            const cleanName = (e.name || payload.name || 'Custom List').replace(/\s*\((Movies|Shows)\)$/i, '').trim();
+            const cleanName = (e.name || payload.name || 'Custom List').replace(/\\s*\\((Movies|Shows)\\)$/i, '').trim();
             const slug = payload.localSlug || payload.listSlug || payload.creatorSlug || payload.slug || (typeof slugify === 'function' ? slugify(cleanName) : cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '-')) || 'list';
             const itemType = payload.type || e.type || 'movie';
 
@@ -1471,7 +1471,7 @@ function rebuildCustomListsFromPreset(name, isSilent = false) {
   if (!preset) {
     if (!isSilent) {
       if (typeof showAppAlert === 'function') showAppAlert('Preset Not Found', 'Could not find preset "' + name + '".', false);
-      else alert('Could not find preset "' + name + '".');
+      else showToast('Could not find preset "' + name + '".', 'error');
     }
     return { restoredLists: 0, restoredChannels: 0, listNames: [] };
   }
@@ -1506,7 +1506,7 @@ function rebuildCustomListsFromPreset(name, isSilent = false) {
         ? 'Preset "' + name + '" has no custom lists or channels to restore. It does carry Continue Watching / Airing Next / Watch History / Watchlist, but those always follow your account rather than the preset, so they were left as they are.'
         : 'Preset "' + name + '" does not contain any custom lists or channels.';
       if (typeof showAppAlert === 'function') showAppAlert('No Custom Lists Found', msg, false);
-      else alert(msg);
+      else showToast(msg, 'error');
     }
     return { restoredLists: 0, restoredChannels: 0, listNames: [], skippedTrackedSlugs: skippedTrackedSlugs };
   }
@@ -1606,7 +1606,7 @@ function rebuildCustomListsFromPreset(name, isSilent = false) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Custom Lists Rebuilt', msg, true);
     } else {
-      alert(msg);
+      showToast(msg, 'error');
     }
   }
 
@@ -1705,7 +1705,7 @@ function sharePreset(name) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Preset Copied', '"' + name + '" copied to your clipboard as JSON -- paste it into the Backup/Restore box above (on this device or another) to import it.', true);
     } else {
-      alert('"' + name + '" copied to your clipboard as JSON -- paste it into the Backup/Restore box above (on this device or another) to import it.');
+      showToast('"' + name + '" copied to your clipboard as JSON -- paste it into the Backup/Restore box above (on this device or another) to import it.', 'success');
     }
   }).catch(() => {
     if (typeof showAppPrompt === 'function') {
@@ -1758,7 +1758,7 @@ function readJsonFile(input, onParsed) {
       data = JSON.parse(reader.result);
     } catch (e) {
       if (typeof showAppAlert === 'function') showAppAlert('Invalid File', 'That file is not valid JSON.', false);
-      else alert('That file is not valid JSON.');
+      else showToast('That file is not valid JSON.', 'error');
       input.value = '';
       return;
     }
@@ -1767,7 +1767,7 @@ function readJsonFile(input, onParsed) {
   };
   reader.onerror = () => {
     if (typeof showAppAlert === 'function') showAppAlert('Read Error', 'Could not read that file.', false);
-    else alert('Could not read that file.');
+    else showToast('Could not read that file.', 'error');
     input.value = '';
   };
   reader.readAsText(file);
@@ -1797,10 +1797,10 @@ function uploadPresetFile(input) {
   readJsonFile(input, (data, file) => {
     if (!data || (!Array.isArray(data.entries) && !Array.isArray(data))) {
       if (typeof showAppAlert === 'function') showAppAlert('Invalid Preset', 'That file does not look like a preset -- expected an "entries" array.', false);
-      else alert('That file does not look like a preset -- expected an "entries" array.');
+      else showToast('That file does not look like a preset -- expected an "entries" array.', 'error');
       return;
     }
-    const suggested = (file.name || 'Preset').replace(/\.json$/i, '');
+    const suggested = (file.name || 'Preset').replace(/\\.json$/i, '');
     const saveWithGivenName = (rawName) => {
       const name = (rawName || '').trim();
       if (!name) return;
@@ -1898,7 +1898,7 @@ function exportDataToCsv(target, format) {
     const items = (historyList && Array.isArray(historyList.items)) ? historyList.items : [];
     if (!items.length) {
       if (typeof showAppAlert === 'function') showAppAlert('Empty Watch History', 'Your Watch History is currently empty.', false);
-      else alert('Your Watch History is currently empty.');
+      else showToast('Your Watch History is currently empty.', 'error');
       return;
     }
 
@@ -1978,7 +1978,7 @@ function exportDataToCsv(target, format) {
     });
     if (totalItems === 0) {
       if (typeof showAppAlert === 'function') showAppAlert('No Saved Lists', 'You do not have any saved list items to export.', false);
-      else alert('You do not have any saved list items to export.');
+      else showToast('You do not have any saved list items to export.', 'error');
       return;
     }
   }
@@ -2047,16 +2047,46 @@ function computeConfigStateHash() {
   }
 }
 
-function checkUnsavedInstallLink() {}
+// Called by saveState() after every change to the rows or the settings. On a
+// shell page this is what keeps the install bar honest; on the legacy page the
+// call stays the no-op it has been (the shell replaces the floating banner).
+function checkUnsavedInstallLink() {
+  if (typeof appShellActive !== 'undefined' && appShellActive) appShellRefreshInstallBar();
+}
 
-function updateInstallLinkFromBanner() {}
+// The legacy banner's Update Link button. The shell's bar uses the same work.
+function updateInstallLinkFromBanner() {
+  if (typeof appShellActive !== 'undefined' && appShellActive) appShellInstallBarAction();
+}
+
+// myListAddon:state is this browser's copy of the rows and settings, and it
+// carried the provider keys and tokens too: collectKeys() returns them, and
+// saveState wrote the whole object on every change -- so moving the
+// credentials into memory (P6-8) still left a full copy of them here. They are
+// left out now. A copy written before this is carried forward only until this
+// tab has the account's own (the rule the separately stored keys follow, see
+// dropLegacyProviderSecret, 16_), and never for a provider disconnected since.
+// Nothing new is ever written: a key typed in this visit lives in memory.
+function stateKeysForStorage(keys) {
+  const out = Object.assign({}, keys || {});
+  const fields = Object.keys(PROVIDER_SECRET_FIELDS);
+  fields.forEach((field) => { delete out[field]; });
+  if (typeof accountProviderSecretsApplied === 'function' && accountProviderSecretsApplied()) return out;
+  const previous = loadSavedState();
+  if (!previous || !previous.keys) return out;
+  fields.forEach((field) => {
+    const value = previous.keys[field];
+    if (value && !isProviderDisconnected(PROVIDER_SECRET_FIELDS[field])) out[field] = value;
+  });
+  return out;
+}
 
 function saveState() {
   if (suppressSave) return;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       entries: collectEntries(),
-      keys: collectKeys(),
+      keys: stateKeysForStorage(collectKeys()),
       shuffleShelves: document.getElementById('shuffleShelvesCheckbox') ? document.getElementById('shuffleShelvesCheckbox').checked : false,
       shuffleItems: document.getElementById('shuffleItemsCheckbox') ? document.getElementById('shuffleItemsCheckbox').checked : false,
     }));
@@ -2067,6 +2097,11 @@ function saveState() {
   if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
   scheduleCreatorSyncSave();
   checkUnsavedInstallLink();
+  // The new UI's live preview follows the rows (see appShellSchedulePreview,
+  // spliced in below). Guarded because saveState also runs from the legacy
+  // page, where the shell's module is not loaded... it is the same script, so
+  // this is a plain typeof check against a definition further down.
+  if (typeof appShellSchedulePreview === 'function') appShellSchedulePreview();
 }
 
 function loadSavedState() {
@@ -2111,7 +2146,7 @@ function copyLink(url) {
       selection.removeAllRanges();
       selection.addRange(range);
     }
-    alert('Manifest URL: ' + url);
+    showToast('Manifest URL: ' + url, 'error');
   });
 }
 
@@ -2156,13 +2191,13 @@ function signInToInstallHtml(message, entries) {
     + '<p class="testresult err" style="margin:0 0 12px;">' + escapeHtml(message)
     + (names.length ? (' Sign in, or remove ' + (names.length === 1 ? 'this row' : 'these rows') + ' first: ' + escapeHtml(names.join(', ')) + '.') : '')
     + '</p>'
-    + '<button type="button" class="btn btn-primary" onclick="openRestoreModal()">Log in or sign up</button>'
+    + '<button type="button" class="btn btn-primary" data-act="openRestoreModal">Log in or sign up</button>'
     + '</div>';
 }
 
 async function generate() {
   const entries = collectEntries();
-  if (!entries.length) { alert('Add at least one list.'); return; }
+  if (!entries.length) { showToast('Add at least one list.', 'error'); return; }
   const keys = collectKeys();
 
   const box = document.getElementById('result');
@@ -2216,7 +2251,7 @@ async function generate() {
     const errTxt = escapeHtml(saveErrorMessage || 'Unknown error');
     box.innerHTML = '<div class="install-result-card" style="padding:18px;">'
       + '<p class="testresult err" style="margin:0 0 12px;">Could not create your install link just now (' + errTxt + '). Nothing was lost - please try again.</p>'
-      + '<button type="button" class="btn btn-primary" onclick="generate()">Try again</button>'
+      + '<button type="button" class="btn btn-primary" data-act="generate">Try again</button>'
       + '</div>';
     return;
   }
@@ -2274,12 +2309,12 @@ async function generate() {
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
             <span>Manifest Link</span>
           </div>
-          <button type="button" class="install-url-copy-btn" id="copyUrlBtn" onclick="copyLink('\${installUrl}')" title="Copy manifest link">
+          <button type="button" class="install-url-copy-btn" id="copyUrlBtn" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Copy manifest link">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
             <span>Copy Link</span>
           </button>
         </div>
-        <div class="install-url-box" id="manifestLinkDisplay" onclick="copyLink('\${installUrl}')" title="Click to copy">\${installUrl}</div>
+        <div class="install-url-box" id="manifestLinkDisplay" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Click to copy">\${installUrl}</div>
       </div>
 
       <div class="install-hint-box">
@@ -2466,7 +2501,7 @@ if (localStorage.getItem('myListAddon:mdblistDisconnected') === 'true') {
   if (savedForMdblist && savedForMdblist.keys && savedForMdblist.keys.mdblistAccessToken) {
     mdblistAccessToken = savedForMdblist.keys.mdblistAccessToken;
   } else {
-    try { mdblistAccessToken = localStorage.getItem('myListAddon:mdblistAccessToken') || ''; } catch (e) {}
+    try { mdblistAccessToken = readProviderSecret('myListAddon:mdblistAccessToken') || ''; } catch (e) {}
   }
 }
 
@@ -2483,7 +2518,7 @@ if (localStorage.getItem('myListAddon:traktDisconnected') === 'true') {
   if (savedForTrakt && savedForTrakt.keys && savedForTrakt.keys.traktAccessToken) {
     traktAccessToken = savedForTrakt.keys.traktAccessToken;
   } else {
-    try { traktAccessToken = localStorage.getItem('myListAddon:traktAccessToken') || ''; } catch (e) {}
+    try { traktAccessToken = readProviderSecret('myListAddon:traktAccessToken') || ''; } catch (e) {}
   }
 }
 
@@ -2499,7 +2534,7 @@ if (localStorage.getItem('myListAddon:simklDisconnected') === 'true') {
   if (savedForSimkl && savedForSimkl.keys && savedForSimkl.keys.simklAccessToken) {
     simklAccessToken = savedForSimkl.keys.simklAccessToken;
   } else {
-    try { simklAccessToken = localStorage.getItem('myListAddon:simklAccessToken') || ''; } catch (e) {}
+    try { simklAccessToken = readProviderSecret('myListAddon:simklAccessToken') || ''; } catch (e) {}
   }
 }
 
@@ -2787,6 +2822,13 @@ window.addEventListener('popstate', (e) => {
     const itemType = (state && state.type) || (new URLSearchParams(hash.slice('#/item?'.length)).get('type')) || 'movie';
     openItemDetailsModal(itemId, itemType, { skipPushState: true });
   } else {
+    // On a shell page the address bar is a real path and the shell's own
+    // popstate listener (appShellOnPopState) opens the view it names. This
+    // branch's own rewrite of the URL to "/" would undo that.
+    if (typeof appShellActive !== 'undefined' && appShellActive) {
+      if (typeof appShellRenderFromLocation === 'function') appShellRenderFromLocation();
+      return;
+    }
     const targetTab = (state && (state.fromTab || (state.view === 'tab' && state.tab))) || window._originTab || window._previousTab || localStorage.getItem('myListAddon:activeTab') || 'discover';
     const cleanTab = (targetTab === 'list-details' || targetTab === 'item-details') ? 'discover' : targetTab;
     if (location.pathname.startsWith('/lists/')) {
@@ -2812,6 +2854,3897 @@ window.addEventListener('popstate', (e) => {
     }
   }
 });
+// --- The new UI shell (Phase 6, P6-1) ----------------------------------------
+//
+// The pieces the frontend rebuild is built out of, all of them here so the
+// route table, the state object and the API client stay in one place:
+//
+//   * real-path routing for the six views (APP_SHELL_TAB_LIST, injected from
+//     APP_SHELL_TABS in 00_constants.js): /catalogs, /catalogs/quickadd,
+//     /settings/connections and so on. The server renders the same table into
+//     the nav (buildAppShellNavHtml, 09_page-shell.js), so the two cannot
+//     drift;
+//   * appShellState, one small observable object instead of the globals the
+//     legacy views pass around;
+//   * appShellApiFetch, one way to talk to the API: same-origin cookies, JSON
+//     in and out, and one place that turns a status into a sentence;
+//   * appShellDialog, one accessible dialog for new code (it rides on
+//     showModal, which owns Escape, the focus trap and focus restore);
+//   * the install bar: what this browser's install link currently is, and the
+//     one action that changes it.
+//
+// Everything here is inert unless NEW_UI (the per-request preamble flag) is
+// true, so a browser without the cookie runs the legacy page exactly as it did.
+// The bundle itself is shared and content-hashed (splitAppBundle, 02_), which
+// is why this lives in the bundle and branches on NEW_UI rather than being
+// emitted from the server.
+
+// The last install link this browser generated, and the configuration it was
+// generated from. Browser state, not account state: the Worker cannot know it,
+// which is why the bar's first paint says "not installed yet" and this refines
+// it as soon as the bundle runs.
+const APP_SHELL_INSTALL_KEY = 'myListAddon:installLink';
+
+// The sub-tab bars, by view, and the pill that names a sub-tab inside one.
+// These are the legacy bars' own ids; the shell routes to them rather than
+// rendering a second set of controls.
+const APP_SHELL_SUB_BARS = {
+  catalogs: 'catalogsFilterBar',
+  lists: 'listsSubnavBar',
+  channels: 'channelsSubnavBar',
+  discover: 'discoverSubnavBar',
+  settings: 'settingsSubnavBar',
+};
+
+// The names the legacy switchers accept that are not view ids (see switchTab,
+// 16_client-row-core.js). They mean a view plus a sub-tab, so the shell routes
+// them as one path rather than two history entries.
+const APP_SHELL_TAB_ALIASES = {
+  'backup': { tab: 'settings', sub: 'backup' },
+  'keys': { tab: 'settings', sub: 'account' },
+  'account': { tab: 'settings', sub: 'account' },
+  'quick-add': { tab: 'catalogs', sub: 'quickadd' },
+  'toplists': { tab: 'catalogs', sub: 'quickadd' },
+};
+
+// True while the router is applying a route. The legacy switchers it calls
+// check this (through appShellHandleNav) so they do their DOM work without
+// asking the router to route again.
+let appShellApplyingRoute = false;
+// Set while one appShellDialog is open, so Escape or a backdrop click resolves
+// its promise instead of leaving it hanging. A var, not a let: closeModal
+// (16_client-row-core.js) reads it with typeof, and a let in the temporal dead
+// zone would throw there rather than read as undefined.
+var appShellDialogClose = null;
+
+function appShellTab(id) {
+  const want = String(id || '');
+  for (let i = 0; i < APP_SHELL_TAB_LIST.length; i++) {
+    if (APP_SHELL_TAB_LIST[i].id === want) return APP_SHELL_TAB_LIST[i];
+  }
+  return null;
+}
+
+function appShellTrimSlashes(s) {
+  let out = String(s || '');
+  while (out.length > 1 && out.charAt(out.length - 1) === '/') out = out.slice(0, -1);
+  return out;
+}
+
+// '/lists/liked' -> { tab: 'lists', sub: 'liked' }. A path the shell does not
+// own (a shared list, a channel, a configure link) comes back null, so those
+// keep their own routes and handlers.
+function appShellRouteFromPath(pathname) {
+  const p = appShellTrimSlashes(pathname);
+  for (let i = 0; i < APP_SHELL_TAB_LIST.length; i++) {
+    const t = APP_SHELL_TAB_LIST[i];
+    if (p === t.path) return { tab: t.id, sub: '' };
+    if (p.indexOf(t.path + '/') === 0) {
+      const rest = p.slice(t.path.length + 1);
+      if (rest && t.subs.indexOf(rest) !== -1) return { tab: t.id, sub: rest };
+    }
+  }
+  return null;
+}
+
+function appShellPathFor(tabId, subId) {
+  const t = appShellTab(tabId) || APP_SHELL_TAB_LIST[0];
+  if (!t) return '/';
+  const sub = (subId && t.subs.indexOf(subId) !== -1) ? String(subId) : '';
+  return sub ? t.path + '/' + sub : t.path;
+}
+
+// A tab name, including the legacy aliases, as a route.
+function appShellRouteForName(name) {
+  const id = String(name || '');
+  const alias = APP_SHELL_TAB_ALIASES[id];
+  if (alias) return { tab: alias.tab, sub: alias.sub };
+  const t = appShellTab(id);
+  if (!t) return null;
+  return { tab: t.id, sub: '' };
+}
+
+// --- shared state ------------------------------------------------------------
+//
+// One small observable object for the facts the shell itself owns: the current
+// route, the account it has confirmed over its session cookie, and the install
+// bar's state. Views subscribe instead of polling, and an update only notifies
+// when something really changed, so a view can re-render on every notification
+// without ever re-rendering for nothing.
+const appShellState = (function () {
+  const listeners = new Set();
+  const state = { ready: false, route: null, account: null, install: { state: 'none', link: '' } };
+
+  function get(key) {
+    if (key === undefined) return Object.assign({}, state);
+    return state[key];
+  }
+
+  function set(patch) {
+    let changed = false;
+    Object.keys(patch || {}).forEach(function (k) {
+      const next = patch[k];
+      if (JSON.stringify(state[k]) !== JSON.stringify(next)) {
+        state[k] = next;
+        changed = true;
+      }
+    });
+    if (!changed) return Object.assign({}, state);
+    const snapshot = Object.assign({}, state);
+    listeners.forEach(function (fn) {
+      try { fn(snapshot); } catch (e) {}
+    });
+    return snapshot;
+  }
+
+  function subscribe(fn) {
+    listeners.add(fn);
+    return function () { listeners.delete(fn); };
+  }
+
+  return { get: get, set: set, subscribe: subscribe };
+})();
+
+// --- the API client ----------------------------------------------------------
+//
+// Same-origin cookies (the mla_session cookie the session routes set), JSON in
+// and out, and never a throw: every failure comes back as { ok: false, error }
+// with a sentence a person can read. A caller that wants to branch on the
+// status still has it.
+async function appShellApiFetch(path, options) {
+  const o = options || {};
+  const method = String(o.method || 'GET').toUpperCase();
+  const init = {
+    method: method,
+    // Cookies, not a token in the body: this is what lets the same call work
+    // from any signed-in device.
+    credentials: 'same-origin',
+    cache: 'no-store',
+    headers: Object.assign({ 'Accept': 'application/json' }, o.headers || {}),
+  };
+  // Every mutating request carries this, body or not: verifyCsrf (02_) refuses
+  // anything else with 403, and a DELETE with nothing in it is still a
+  // mutation. (It was learned the hard way: signing out and revoking an install
+  // link sent no body, so the header was left off and the server answered 403.)
+  if (method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE') {
+    init.headers['Content-Type'] = 'application/json';
+    if (o.body !== undefined && o.body !== null) {
+      init.body = (typeof o.body === 'string') ? o.body : JSON.stringify(o.body);
+    }
+  }
+  if (o.signal) init.signal = o.signal;
+
+  let res;
+  try {
+    res = await fetch(ORIGIN + path, init);
+  } catch (e) {
+    return { ok: false, status: 0, error: appShellApiMessage(0), data: null, signInRequired: false };
+  }
+
+  let data = null;
+  try { data = await res.json(); } catch (e) { data = null; }
+  if (res.ok && (!data || data.ok !== false)) {
+    return { ok: true, status: res.status, data: data || { ok: true }, signInRequired: false };
+  }
+  const message = (data && (data.error || data.message)) || appShellApiMessage(res.status);
+  return {
+    ok: false,
+    status: res.status,
+    error: String(message),
+    data: data,
+    signInRequired: !!(data && data.signInRequired) || res.status === 401,
+  };
+}
+
+// A status, as something worth showing somebody.
+function appShellApiMessage(status) {
+  const s = Number(status) || 0;
+  if (s === 0) return 'You appear to be offline. Check your connection and try again.';
+  if (s === 400) return 'That request was not understood.';
+  if (s === 401) return 'Please sign in to continue.';
+  if (s === 403) return 'That is not allowed here.';
+  if (s === 404) return 'Not found.';
+  if (s === 409) return 'This changed somewhere else. Reload and try again.';
+  if (s === 413) return 'That is too large to send.';
+  if (s === 429) return 'Too many requests just now. Please wait a moment.';
+  if (s >= 500) return 'Something went wrong on our side. Please try again.';
+  return 'Something went wrong. Please try again.';
+}
+
+// --- one accessible dialog ---------------------------------------------------
+//
+// For new code: a title, a message and buttons that resolve. It rides on
+// showModal/closeModal (16_client-row-core.js), which already move focus in,
+// trap Tab, close on Escape, restore focus and lock the page behind it.
+function appShellDialog(options) {
+  const o = options || {};
+  const confirmLabel = o.confirmLabel || 'OK';
+  const cancelLabel = o.cancelLabel;
+  let html = '';
+  if (o.title) html += '<h3 style="margin:0 0 10px; font-size:1.08rem;">' + escapeHtml(o.title) + '</h3>';
+  if (o.message) html += '<p style="margin:0 0 16px; color:var(--muted); font-size:0.9rem; line-height:1.45; white-space:pre-wrap;">' + escapeHtml(o.message) + '</p>';
+  html += '<div style="display:flex; justify-content:flex-end; gap:8px;">';
+  if (cancelLabel) html += '<button type="button" class="secondary" id="appShellDialogCancel" style="min-width:80px; padding:8px 16px;">' + escapeHtml(cancelLabel) + '</button>';
+  html += '<button type="button" class="primary" id="appShellDialogConfirm" style="min-width:80px; padding:8px 16px;">' + escapeHtml(confirmLabel) + '</button>';
+  html += '</div>';
+
+  return new Promise(function (resolve) {
+    let settled = false;
+    const settle = function (value) {
+      if (settled) return;
+      settled = true;
+      appShellDialogClose = null;
+      resolve(value);
+    };
+    // After showModal, not before: showModal opens by calling closeModal,
+    // which resolves whatever dialog was open -- and that would be this one,
+    // as dismissed, before it had been seen.
+    showModal(html);
+    appShellDialogClose = settle;
+    const confirmBtn = document.getElementById('appShellDialogConfirm');
+    if (confirmBtn) {
+      // The marker is cleared before closeModal: that is what tells closeModal
+      // this dialog is being answered rather than dismissed, so it does not
+      // resolve it as false on the way out.
+      confirmBtn.addEventListener('click', function () {
+        appShellDialogClose = null;
+        closeModal();
+        settle(true);
+      });
+    }
+    const cancelBtn = document.getElementById('appShellDialogCancel');
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', function () {
+        appShellDialogClose = null;
+        closeModal();
+        settle(false);
+      });
+    }
+  });
+}
+
+// --- the install bar ---------------------------------------------------------
+//
+// Three states, all of them about this browser's own install link:
+//   none    -- nothing generated here yet
+//   unsaved -- a link exists, and the rows/settings have changed since
+//   live    -- the link matches what the builder currently holds
+function appShellReadInstallLink() {
+  try {
+    const raw = localStorage.getItem(APP_SHELL_INSTALL_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || !parsed.url) return null;
+    return { url: String(parsed.url), hash: String(parsed.hash || '') };
+  } catch (e) {
+    return null;
+  }
+}
+
+function appShellInstallLinkState() {
+  const saved = appShellReadInstallLink();
+  if (!saved) return { state: 'none', link: '' };
+  let current = '';
+  try {
+    if (typeof computeConfigStateHash === 'function') current = computeConfigStateHash();
+  } catch (e) {
+    current = '';
+  }
+  // No hash stored (an older link, or a stubbed environment): treat it as
+  // current rather than telling somebody their up-to-date link is stale.
+  const live = !saved.hash || !current || saved.hash === current;
+  return { state: live ? 'live' : 'unsaved', link: saved.url };
+}
+
+function appShellRecordInstallLink(url) {
+  const link = String(url || '').trim();
+  if (!link) return;
+  let hash = '';
+  try {
+    if (typeof computeConfigStateHash === 'function') hash = computeConfigStateHash();
+  } catch (e) {
+    hash = '';
+  }
+  try {
+    localStorage.setItem(APP_SHELL_INSTALL_KEY, JSON.stringify({ url: link, hash: hash }));
+  } catch (e) {}
+}
+
+function appShellRefreshInstallBar() {
+  const bar = document.getElementById('appShellInstallBar');
+  if (!bar) return;
+  const info = appShellInstallLinkState();
+  bar.setAttribute('data-state', info.state);
+  const text = document.getElementById('appShellInstallText');
+  const btn = document.getElementById('appShellInstallBtn');
+  const words = {
+    none: 'Not installed yet',
+    unsaved: 'Unsaved changes to your install link',
+    live: 'Install link up to date',
+  };
+  const actions = {
+    none: { action: 'install', label: 'Get install link' },
+    unsaved: { action: 'update', label: 'Update link' },
+    live: { action: 'copy', label: 'Copy link' },
+  };
+  const a = actions[info.state] || actions.none;
+  if (text) text.textContent = words[info.state] || words.none;
+  if (btn) {
+    btn.setAttribute('data-action', a.action);
+    btn.textContent = a.label;
+  }
+  appShellState.set({ install: { state: info.state, link: info.link } });
+}
+
+// Builds the install link through the builder's own generate() (which renders
+// the result card), then remembers it here. The link is read back out of the
+// card rather than duplicated from generate(), so there is still one place that
+// knows how a link is made.
+async function appShellGenerateInstallLink() {
+  if (typeof collectEntries === 'function' && !collectEntries().length) {
+    showToast('Add at least one list first.', 'info');
+    appShellGo(appShellPathFor('catalogs', ''));
+    return false;
+  }
+  try {
+    if (typeof generate === 'function') await generate();
+  } catch (e) {
+    showToast('Could not make the install link. Please try again.', 'error');
+    return false;
+  }
+  const display = document.getElementById('manifestLinkDisplay');
+  const link = display ? String(display.textContent || '').trim() : '';
+  if (!link) return false;   // generate() showed its own reason (for example: sign in)
+  appShellRecordInstallLink(link);
+  appShellRefreshInstallBar();
+  showToast('Install link ready.', 'success');
+  return true;
+}
+
+async function appShellInstallBarAction() {
+  const info = appShellInstallLinkState();
+  if (info.state === 'live' && info.link) {
+    try {
+      if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(info.link);
+        showToast('Install link copied.', 'success');
+        return;
+      }
+    } catch (e) {}
+  }
+  await appShellGenerateInstallLink();
+}
+
+// The signed-in account, over the session cookie (GET /api/me). Kept in
+// appShellState so the Settings views can read it without asking twice.
+async function appShellRefreshAccount() {
+  const res = await appShellApiFetch('/api/me');
+  const account = (res.ok && res.data && res.data.account) ? res.data.account : null;
+  appShellState.set({
+    account: account ? { username: account.username, displayName: account.displayName || account.username } : null,
+  });
+  return account;
+}
+
+// --- Settings (P6-2) ---------------------------------------------------------
+//
+// The Settings view in the shell, in one place: the account, its devices, its
+// connected accounts and its install links. It is additive -- the legacy panels
+// below it are untouched -- and it exists only on a shell page: the container it
+// renders into is emitted by the server (15_tab-settings-html.js) when, and only
+// when, the request carries the FF_NEW_UI cookie.
+//
+// Everything here talks to the account APIs over the session cookie
+// (appShellApiFetch), and every control is wired with a data-app-shell-action
+// attribute instead of an inline handler: new UI code adds none of those
+// (P6-8 removes the rest of the page's).
+
+// The providers the site can hold a sign-in for. The start and stop entries are
+// the legacy functions that already do the OAuth dance and the local clean-up,
+// so this screen cannot drift from the rest of the page about how a connection
+// is made, or dropped.
+const APP_SHELL_CONNECTIONS = [
+  { id: 'trakt', label: 'Trakt', what: 'Watchlist, history and your personal Trakt rows.', start: startTraktConnect, stop: disconnectTrakt },
+  { id: 'mdblist', label: 'MDBList', what: 'Your MDBList lists, watchlist and charts.', start: startMdblistConnect, stop: disconnectMdblist },
+  { id: 'simkl', label: 'Simkl', what: 'Watchlist, history and Airing Next.', start: startSimklConnect, stop: disconnectSimkl },
+  { id: 'tmdb', label: 'TMDB', what: 'Personal lists, favorites and watchlist, plus unlimited requests.', start: startTmdbConnect, stop: disconnectTmdb },
+];
+
+function appShellSettingsHost() {
+  return document.getElementById('appShellSettingsHome');
+}
+
+function appShellSettingsEscape(value) {
+  return escapeHtml(String(value === null || value === undefined ? '' : value));
+}
+
+function appShellSettingsButton(action, label, id, cls) {
+  return '<button type="button" class="' + (cls || 'secondary lc-btn') + '" data-app-shell-action="' + action + '"' +
+    (id ? ' data-app-shell-id="' + appShellSettingsEscape(id) + '"' : '') + '>' + appShellSettingsEscape(label) + '</button>';
+}
+
+function appShellSettingsPanel(role, title, body) {
+  return '<div class="panel" style="margin-top:12px;">' +
+    '<h2 class="panel-title">' + title + '</h2>' +
+    '<div id="appShellSettingsBody-' + role + '">' + body + '</div>' +
+    '</div>';
+}
+
+function appShellSettingsBody(role, html) {
+  const el = document.getElementById('appShellSettingsBody-' + role);
+  if (el) el.innerHTML = html;
+}
+
+function appShellSettingsRow(main, controls, chip) {
+  return '<div class="app-shell-row"><div class="app-shell-row-main">' + main + '</div>' +
+    '<div class="app-shell-row-controls">' + (chip || '') + (controls || '') + '</div></div>';
+}
+
+function appShellChip(text, tone) {
+  return '<span class="app-shell-chip' + (tone ? ' app-shell-chip-' + tone : '') + '">' + appShellSettingsEscape(text) + '</span>';
+}
+
+// A date, or "never". Kept short and forgiving: a session row whose timestamp
+// is missing must not print "Invalid Date".
+function appShellWhen(ms) {
+  const n = Number(ms);
+  if (!n || !isFinite(n)) return 'never';
+  try {
+    return new Date(n).toLocaleDateString();
+  } catch (e) {
+    return 'recently';
+  }
+}
+
+function appShellProvider(id) {
+  const want = String(id || '');
+  for (let i = 0; i < APP_SHELL_CONNECTIONS.length; i++) {
+    if (APP_SHELL_CONNECTIONS[i].id === want) return APP_SHELL_CONNECTIONS[i];
+  }
+  return null;
+}
+
+function appShellConnectionWords(conn) {
+  const status = String((conn && conn.status) || '');
+  const who = conn && conn.username ? '@' + conn.username : '';
+  if (status === 'ok') return who ? 'Connected as ' + who : 'Connected';
+  if (status === 'reauth_required') return who ? 'Reconnect as ' + who : 'Reconnect needed';
+  if (status === 'invalid') return who ? 'Sign-in expired (' + who + ')' : 'Sign-in expired';
+  if (status === 'unreachable') return 'Could not be checked';
+  return 'Not connected';
+}
+
+function appShellConnectionTone(conn) {
+  const status = String((conn && conn.status) || '');
+  if (status === 'ok') return 'ok';
+  if (status === 'reauth_required' || status === 'invalid' || status === 'unreachable') return 'warn';
+  return '';
+}
+
+function appShellDeviceLabel(session) {
+  const ua = String((session && session.userAgent) || '');
+  if (!ua) return 'Unknown device';
+  const browser = ua.indexOf('Firefox/') !== -1 ? 'Firefox'
+    : ua.indexOf('Edg/') !== -1 ? 'Edge'
+      : ua.indexOf('Chrome/') !== -1 ? 'Chrome'
+        : ua.indexOf('Safari/') !== -1 ? 'Safari' : 'Browser';
+  const os = ua.indexOf('Windows') !== -1 ? 'Windows'
+    : ua.indexOf('Android') !== -1 ? 'Android'
+      : ua.indexOf('iPhone') !== -1 || ua.indexOf('iPad') !== -1 ? 'iOS'
+        : ua.indexOf('Mac OS') !== -1 ? 'macOS'
+          : ua.indexOf('Linux') !== -1 ? 'Linux' : '';
+  return os ? browser + ' on ' + os : browser;
+}
+
+// 'https://host/abc/manifest.json' -> 'stremio://host/abc/manifest.json'. Split
+// rather than a regex: this file lives inside the page's template literal, where
+// backslashes are eaten before the browser ever sees them.
+function appShellSchemeUrl(link, scheme) {
+  const s = String(link || '');
+  const i = s.indexOf('://');
+  return i === -1 ? s : scheme + s.slice(i);
+}
+
+function appShellInstallLinkStateSafe() {
+  try {
+    return appShellInstallLinkState();
+  } catch (e) {
+    return { state: 'none', link: '' };
+  }
+}
+
+// --- the panels --------------------------------------------------------------
+
+function appShellAccountBody(account) {
+  if (!account) {
+    return '<p class="app-shell-muted">You are not signed in. What you build right now is kept in this browser only.</p>' +
+      '<div class="app-shell-actions">' +
+      appShellSettingsButton('account-signin', 'Sign in or restore') +
+      appShellSettingsButton('account-import-backup', 'Import a backup file') +
+      '</div>' +
+      '<p class="app-shell-muted">Signing in restores your lists, channels, connections and install links from your account. Lost your Account Key? Use "Forgot your key?" under Your Account below: the site has no email recovery, so keep the key somewhere safe.</p>';
+  }
+  const name = account.displayName || account.username || '';
+  return '<p class="app-shell-kv"><strong>' + appShellSettingsEscape(name) + '</strong>' +
+    (account.username ? ' <span class="app-shell-muted">@' + appShellSettingsEscape(account.username) + '</span>' : '') + '</p>' +
+    '<p class="app-shell-muted">Signed in. Your lists, channels, connections and install links are kept on your account and follow you to any device.</p>' +
+    '<div class="app-shell-actions">' +
+    appShellSettingsButton('account-signout', 'Sign out') +
+    appShellSettingsButton('account-delete', 'Delete account', '', 'secondary lc-btn app-shell-danger') +
+    '</div>';
+}
+
+function appShellDevicesBody(res, sessions) {
+  if (!res || !res.ok) {
+    if (res && res.signInRequired) return '<p class="app-shell-muted">Sign in to see the devices using your account.</p>';
+    return '<p class="app-shell-muted">' + appShellSettingsEscape((res && res.error) || 'Could not load your devices.') + '</p>' +
+      '<div class="app-shell-actions">' + appShellSettingsButton('settings-refresh', 'Try again') + '</div>';
+  }
+  const list = sessions || [];
+  if (!list.length) return '<p class="app-shell-muted">No devices are signed in.</p>';
+  let html = list.map(function (s) {
+    const label = appShellDeviceLabel(s);
+    return appShellSettingsRow(
+      '<strong>' + appShellSettingsEscape(label) + '</strong><br><span class="app-shell-muted">Last used ' + appShellSettingsEscape(appShellWhen(s.lastSeenAt)) + '</span>',
+      s.current ? '' : appShellSettingsButton('device-signout', 'Sign out', s.id),
+      s.current ? appShellChip('This device', 'ok') : ''
+    );
+  }).join('');
+  if (list.length > 1) {
+    html += '<div class="app-shell-actions">' + appShellSettingsButton('devices-signout-others', 'Sign out my other devices') + '</div>';
+  }
+  return html;
+}
+
+function appShellConnectionsBody(res, byProvider) {
+  if (res && res.signInRequired) {
+    return '<p class="app-shell-muted">Sign in to connect Trakt, MDBList, Simkl or TMDB. A connection is kept on your account, so your personal rows keep working without a new install link.</p>';
+  }
+  if (res && !res.ok) {
+    return '<p class="app-shell-muted">' + appShellSettingsEscape(res.error || 'Could not load your connected accounts.') + '</p>' +
+      '<div class="app-shell-actions">' + appShellSettingsButton('settings-refresh', 'Try again') + '</div>';
+  }
+  const map = byProvider || {};
+  let html = APP_SHELL_CONNECTIONS.map(function (p) {
+    const conn = map[p.id] || null;
+    const connected = Boolean(conn) && conn.status === 'ok';
+    const control = (connected || conn)
+      ? appShellSettingsButton('connection-disconnect', connected ? 'Disconnect' : 'Reconnect', p.id)
+      : appShellSettingsButton('connection-connect', 'Connect', p.id);
+    const who = conn && conn.username ? ' <span class="app-shell-muted">@' + appShellSettingsEscape(conn.username) + '</span>' : '';
+    return appShellSettingsRow(
+      '<strong>' + appShellSettingsEscape(p.label) + '</strong>' + who + '<br><span class="app-shell-muted">' + appShellSettingsEscape(p.what) + '</span>',
+      control,
+      appShellChip(appShellConnectionWords(conn), appShellConnectionTone(conn))
+    );
+  }).join('');
+  html += '<div class="app-shell-actions">' + appShellSettingsButton('settings-refresh', 'Refresh') + '</div>';
+  return html;
+}
+
+function appShellInstallsBody(linkState, res, installs) {
+  const link = linkState && linkState.link ? String(linkState.link) : '';
+  let html = '';
+  if (!link) {
+    html += '<p class="app-shell-muted">Nothing is installed from this browser yet. Build the home screen you want, then get the install link here.</p>' +
+      '<div class="app-shell-actions">' + appShellSettingsButton('install-get', 'Get install link') + '</div>';
+  } else {
+    const live = (linkState && linkState.state === 'live');
+    html += appShellSettingsRow(
+      '<strong>Install link for this browser</strong><br><span class="app-shell-muted" style="word-break:break-all;">' + appShellSettingsEscape(link) + '</span>',
+      '<a class="secondary lc-btn" href="' + appShellSettingsEscape(appShellSchemeUrl(link, 'stremio')) + '">Install in Stremio</a>' +
+      '<a class="secondary lc-btn" href="' + appShellSettingsEscape(appShellSchemeUrl(link, 'nuvio')) + '">Install in Nuvio</a>' +
+      appShellSettingsButton('install-copy', 'Copy link') +
+      appShellSettingsButton('install-get', live ? 'Update link' : 'Update link'),
+      appShellChip(live ? 'Up to date' : 'Changed since', live ? 'ok' : 'warn')
+    );
+    html += '<details class="app-shell-details"><summary>Other apps (Wako, and anything else)</summary>' +
+      '<p class="app-shell-muted">In Wako, open Settings, then Add-ons, Add, and paste this manifest URL. The same URL works in any app that takes a Stremio add-on manifest.</p>' +
+      '<p class="app-shell-kv" style="word-break:break-all;">' + appShellSettingsEscape(link) + '</p></details>';
+  }
+
+  if (res && res.ok && Array.isArray(installs)) {
+    if (!installs.length) {
+      html += '<p class="app-shell-muted">No install links are saved on your account yet.</p>';
+    } else {
+      html += installs.map(function (inst) {
+        const name = inst && inst.name ? inst.name : 'Install link';
+        const rows = inst && inst.rows !== null && inst.rows !== undefined ? ' &middot; ' + inst.rows + ' rows' : '';
+        const used = ' <span class="app-shell-muted">Last used ' + appShellSettingsEscape(appShellWhen(inst && inst.lastUsedAt)) + '</span>';
+        const revoked = inst && inst.revokedAt ? appShellChip('Revoked', 'warn') : '';
+        return appShellSettingsRow(
+          '<strong>' + appShellSettingsEscape(name) + '</strong>' + rows + '<br>' + used,
+          inst && inst.revokedAt ? '' : appShellSettingsButton('install-revoke', 'Revoke', String(inst && inst.id)),
+          revoked
+        );
+      }).join('');
+    }
+  } else if (res && res.signInRequired) {
+    html += '<p class="app-shell-muted">Sign in to keep named install links on your account, and to revoke one from here.</p>';
+  } else if (res && res.status === 404) {
+    html += '<p class="app-shell-muted">Saved install links are not switched on for this site yet.</p>';
+  } else if (res) {
+    html += '<p class="app-shell-muted">' + appShellSettingsEscape(res.error || 'Could not load your install links.') + '</p>';
+  }
+  return html;
+}
+
+// --- loading -----------------------------------------------------------------
+
+function appShellSettingsHeadline() {
+  return {
+    account: 'Loading...',
+    devices: 'Loading...',
+    connections: 'Loading...',
+    installs: 'Loading...',
+  };
+}
+
+function appShellRenderSettingsSkeleton() {
+  const loading = '<p class="app-shell-muted">Loading...</p>';
+  appShellSettingsBody('account', loading);
+  appShellSettingsBody('devices', loading);
+  appShellSettingsBody('connections', loading);
+  appShellSettingsBody('installs', loading);
+}
+
+async function appShellRefreshSettingsHome() {
+  const host = appShellSettingsHost();
+  if (!host || !NEW_UI) return false;
+  appShellRenderSettingsSkeleton();
+  const account = await appShellRefreshAccount();
+  appShellSettingsBody('account', appShellAccountBody(account));
+  if (!account) {
+    const signedOut = { ok: false, status: 401, error: 'Sign in first.', signInRequired: true, data: null };
+    appShellSettingsBody('devices', appShellDevicesBody(signedOut, []));
+    appShellSettingsBody('connections', appShellConnectionsBody(signedOut, {}));
+    appShellSettingsBody('installs', appShellInstallsBody(appShellInstallLinkStateSafe(), signedOut, []));
+    return true;
+  }
+  const sessionsRes = await appShellApiFetch('/api/me/sessions');
+  appShellSettingsBody('devices', appShellDevicesBody(sessionsRes, (sessionsRes.data && sessionsRes.data.sessions) || []));
+  const connectionsRes = await appShellApiFetch('/api/connections');
+  const byProvider = {};
+  ((connectionsRes.data && connectionsRes.data.connections) || []).forEach(function (c) {
+    if (c && c.provider) byProvider[c.provider] = c;
+  });
+  appShellSettingsBody('connections', appShellConnectionsBody(connectionsRes, byProvider));
+  const installsRes = await appShellApiFetch('/api/installs');
+  appShellSettingsBody('installs', appShellInstallsBody(appShellInstallLinkStateSafe(), installsRes, (installsRes.data && installsRes.data.installs) || []));
+  return true;
+}
+
+// Called when the Settings view is opened (appShellApplyRoute) and after any
+// action that changes what it shows.
+function appShellRenderSettingsHome() {
+  const host = appShellSettingsHost();
+  if (!host || !NEW_UI) return false;
+  host.innerHTML =
+    appShellSettingsPanel('account', 'Account', '<p class="app-shell-muted">Loading...</p>') +
+    appShellSettingsPanel('devices', 'Devices', '<p class="app-shell-muted">Loading...</p>') +
+    appShellSettingsPanel('connections', 'Connections', '<p class="app-shell-muted">Loading...</p>') +
+    appShellSettingsPanel('installs', 'Install links', '<p class="app-shell-muted">Loading...</p>');
+  appShellRefreshSettingsHome();
+  return true;
+}
+
+// --- actions -----------------------------------------------------------------
+
+function appShellFocusSignIn() {
+  const section = document.getElementById('accountKeySection');
+  if (section && section.scrollIntoView) {
+    try { section.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+  }
+  const first = document.getElementById('creatorNameInput') || document.getElementById('creatorKeyInput');
+  if (first && first.focus) {
+    try { first.focus(); } catch (e) {}
+  }
+  showToast('Sign in under Your Account to restore everything.', 'info');
+  return true;
+}
+
+function appShellImportBackup() {
+  const input = document.getElementById('configFileInput');
+  if (input && input.click) {
+    input.click();
+    return true;
+  }
+  appShellGo(appShellPathFor('settings', 'backup'));
+  return true;
+}
+
+async function appShellCopyText(text, message) {
+  const value = String(text || '');
+  if (!value) return false;
+  try {
+    if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(value);
+      showToast(message || 'Copied.', 'success');
+      return true;
+    }
+  } catch (e) {}
+  showToast('Select the link and copy it by hand.', 'info');
+  return false;
+}
+
+async function appShellSignOut() {
+  const res = await appShellApiFetch('/api/session', { method: 'DELETE' });
+  if (!res.ok) {
+    showToast(res.error || 'Could not sign out just now.', 'error');
+    return false;
+  }
+  if (typeof clearLocalAccountData === 'function') {
+    try { clearLocalAccountData(); } catch (e) {}
+  }
+  appShellState.set({ account: null });
+  showToast('Signed out.', 'success');
+  await appShellRefreshSettingsHome();
+  return true;
+}
+
+async function appShellDeleteAccount() {
+  const confirmed = await appShellDialog({
+    title: 'Delete your account?',
+    message: 'Everything on your account is deleted: your lists, channels, connections and install links. This cannot be undone.',
+    confirmLabel: 'Delete everything',
+    cancelLabel: 'Keep my account',
+  });
+  if (!confirmed) return false;
+  const res = await appShellApiFetch('/api/me', { method: 'DELETE', body: { confirm: 'DELETE' } });
+  if (!res.ok) {
+    showToast(res.error || 'Could not delete the account just now.', 'error');
+    return false;
+  }
+  if (typeof clearLocalAccountData === 'function') {
+    try { clearLocalAccountData(); } catch (e) {}
+  }
+  appShellState.set({ account: null });
+  showToast('Your account and its data have been deleted.', 'success');
+  await appShellRefreshSettingsHome();
+  return true;
+}
+
+function appShellConnectProvider(id) {
+  const provider = appShellProvider(id);
+  if (!provider || typeof provider.start !== 'function') return false;
+  provider.start();
+  return true;
+}
+
+async function appShellDisconnectProvider(id) {
+  const provider = appShellProvider(id);
+  if (!provider || typeof provider.stop !== 'function') return false;
+  try {
+    provider.stop();
+  } catch (e) {}
+  showToast(provider.label + ' disconnected.', 'success');
+  await appShellRefreshSettingsHome();
+  return true;
+}
+
+async function appShellRevokeSession(id) {
+  const res = await appShellApiFetch('/api/me/sessions', { method: 'DELETE', body: { id: String(id || '') } });
+  if (!res.ok) {
+    showToast(res.error || 'Could not sign that device out.', 'error');
+    return false;
+  }
+  showToast('That device was signed out.', 'success');
+  await appShellRefreshSettingsHome();
+  return true;
+}
+
+async function appShellRevokeOtherSessions() {
+  const res = await appShellApiFetch('/api/me/sessions', { method: 'DELETE', body: { allExceptCurrent: true } });
+  if (!res.ok) {
+    showToast(res.error || 'Could not sign the other devices out.', 'error');
+    return false;
+  }
+  showToast('Your other devices were signed out.', 'success');
+  await appShellRefreshSettingsHome();
+  return true;
+}
+
+async function appShellRevokeInstall(id) {
+  const confirmed = await appShellDialog({
+    title: 'Revoke this install link?',
+    message: 'Apps using it stop getting the add-on right away. You can install again from here at any time.',
+    confirmLabel: 'Revoke',
+    cancelLabel: 'Keep it',
+  });
+  if (!confirmed) return false;
+  const res = await appShellApiFetch('/api/installs/' + encodeURIComponent(String(id || '')), { method: 'DELETE' });
+  if (!res.ok) {
+    showToast(res.error || 'Could not revoke that install link.', 'error');
+    return false;
+  }
+  showToast('Install link revoked.', 'success');
+  await appShellRefreshSettingsHome();
+  return true;
+}
+
+// One dispatcher for the panel's controls. The attribute is on the button in
+// the markup above, and appShellOnClick routes it here -- so the panels contain
+// no inline handlers.
+async function appShellSettingsAction(action, id) {
+  const what = String(action || '');
+  if (what === 'account-signin') return appShellFocusSignIn();
+  if (what === 'account-import-backup') return appShellImportBackup();
+  if (what === 'account-signout') return appShellSignOut();
+  if (what === 'account-delete') return appShellDeleteAccount();
+  if (what === 'settings-refresh') return appShellRefreshSettingsHome();
+  if (what === 'connection-connect') return appShellConnectProvider(id);
+  if (what === 'connection-disconnect') return appShellDisconnectProvider(id);
+  if (what === 'device-signout') return appShellRevokeSession(id);
+  if (what === 'devices-signout-others') return appShellRevokeOtherSessions();
+  if (what === 'install-revoke') return appShellRevokeInstall(id);
+  if (what === 'install-get') {
+    await appShellInstallBarAction();
+    return appShellRefreshSettingsHome();
+  }
+  if (what === 'install-copy') {
+    const state = appShellInstallLinkStateSafe();
+    return appShellCopyText(state.link, 'Install link copied.');
+  }
+  if (what === 'home-check') return appShellHomeCheck();
+  if (what === 'home-add') return appShellHomeAddChecked();
+  if (what === 'home-clear') {
+    appShellHomeReview = null;
+    const box = document.getElementById('appShellAddBox');
+    if (box) box.value = '';
+    appShellRenderHomeEditor();
+    return true;
+  }
+  if (what === 'home-starter') return appShellAddStarterPack();
+  return false;
+}
+
+// --- the home-screen editor (P6-3) -------------------------------------------
+//
+// Paste first: a box that takes one list link per line, a review table that says
+// what each line is before anything is added, and the duplicate toggle directly
+// above the rows it applies to. The rows themselves are the page's own (#lists,
+// with its drag handles, Edit and Remove) -- this is the way in, not a second
+// copy of them.
+//
+// Everything here exists only on a shell page: the container comes from the
+// server (10_tab-search-add.js), and the starter rows it offers come from the
+// per-request preamble (APP_SHELL_STARTER_PACK, 16_client-row-core.js), which is
+// empty on a legacy page. The old page keeps pre-filling those rows for a
+// first-time visitor, exactly as it did.
+
+// How many lines one paste will check. Each line costs two /api/preview calls
+// (one per type), so this is what keeps a pasted bookmarks file from turning
+// into a hundred requests.
+const APP_SHELL_ADD_LINES_MAX = 50;
+// How many lines are checked at once. Each check is two requests, so six lines
+// in flight is twelve requests -- the same order as the page's other fan-outs.
+const APP_SHELL_ADD_CONCURRENCY = 6;
+
+let appShellHomeReview = null;
+
+function appShellHomeEscape(value) {
+  return escapeHtml(String(value === null || value === undefined ? '' : value));
+}
+
+// One line of the paste box. People paste real newlines, and a stored merged row
+// carries its sources joined by the two characters backslash + n (this page's
+// own convention -- see collectEntries, 23_client-list-management.js), so both
+// are treated as separators. Built with String.fromCharCode rather than written
+// out, because this file lives inside the page's template literal, where a
+// backslash is eaten before the browser ever sees it.
+function appShellSplitLines(text) {
+  const newline = String.fromCharCode(10);
+  const slash = String.fromCharCode(92);
+  const out = [];
+  const rows = String(text || '').split(newline);
+  for (let i = 0; i < rows.length; i++) {
+    const pieces = rows[i].split(slash + 'n');
+    for (let j = 0; j < pieces.length; j++) {
+      const line = pieces[j].trim();
+      if (line) out.push(line);
+    }
+  }
+  return out;
+}
+
+// Where a pasted line comes from, as a short label for the review table.
+function appShellSourceLabel(u) {
+  const s = String(u || '').trim().toLowerCase();
+  if (!s) return 'Empty';
+  if (s.indexOf('mdblist:') === 0 || s.indexOf('mdblist.com') !== -1) return 'MDBList';
+  if (s.indexOf('trakt:') === 0 || s.indexOf('trakt.tv') !== -1) return 'Trakt';
+  if (s.indexOf('tmdb:') === 0 || s.indexOf('themoviedb.org') !== -1) return 'TMDB';
+  if (s.indexOf('simkl:') === 0 || s.indexOf('simkl.com') !== -1) return 'Simkl';
+  if (s.indexOf('imdb.com') !== -1) return 'IMDb';
+  if (s.indexOf('customlist:') === 0 || s.indexOf('channel:') === 0 || s.indexOf('custom:') === 0) return 'My Lists';
+  if (s.indexOf('autotrack:') === 0) return 'My Lists';
+  if (s.indexOf('mylistsaddon.com') !== -1) return 'My Lists';
+  return 'List';
+}
+
+function appShellHomeRowCount() {
+  if (typeof document.querySelectorAll !== 'function') return 0;
+  const rows = document.querySelectorAll('#lists .entry');
+  return rows && rows.length ? rows.length : 0;
+}
+
+function appShellDedupeOn() {
+  try {
+    return localStorage.getItem('myListAddon:dedupeAcrossLists') === '1';
+  } catch (e) {
+    return false;
+  }
+}
+
+// A tiny pool, so a 20-line paste is 6 lines in flight rather than 20 or 1.
+async function appShellMapWithConcurrency(items, limit, run) {
+  const list = items || [];
+  const out = new Array(list.length);
+  let next = 0;
+  const workers = [];
+  const size = Math.max(1, Math.min(limit || 1, list.length || 1));
+  for (let w = 0; w < size; w++) {
+    workers.push((async function () {
+      for (;;) {
+        const i = next;
+        next += 1;
+        if (i >= list.length) return;
+        out[i] = await run(list[i], i);
+      }
+    })());
+  }
+  await Promise.all(workers);
+  return out;
+}
+
+// One pasted line, asked about as both a movie list and a show list. Whichever
+// answers with more items decides the type, which is how the old page's bulk add
+// told them apart; a line that fails on both sides carries its error instead.
+async function appShellCheckOneLine(line) {
+  const url = String(line || '').trim();
+  const name = (typeof guessNameFromUrl === 'function') ? guessNameFromUrl(url) : url;
+  const auth = (typeof previewCreatorAuth === 'function') ? previewCreatorAuth() : {};
+  const askType = async function (type) {
+    // One line on purpose: the worker's CSRF scanner (tests/worker.test.mjs)
+    // looks for a mutating method and the JSON content type on the same call,
+    // and appShellApiFetch supplies the header.
+    const body = Object.assign({ url: url, type: type, sample: 1 }, auth);
+    const res = await appShellApiFetch('/api/preview', { method: 'POST', body: body });
+    const data = res.data || {};
+    const count = Number(data.totalItems) || Number(data.count) || 0;
+    return { ok: !!res.ok, type: type, count: count, error: res.ok ? '' : (res.error || 'Could not read that list.') };
+  };
+  const both = await Promise.all([askType('movie'), askType('series')]);
+  const movie = both[0];
+  const series = both[1];
+  const wanted = (series.ok && series.count > movie.count) ? series : movie;
+  const anyOk = movie.ok || series.ok;
+  return {
+    line: url,
+    name: name,
+    source: appShellSourceLabel(url),
+    type: wanted.type,
+    count: Math.max(movie.count, series.count),
+    ok: anyOk,
+    error: anyOk ? '' : (movie.error || series.error || 'Could not read that list.'),
+  };
+}
+
+function appShellReviewRowHtml(row) {
+  const mark = row.ok ? '<span class="app-shell-chip app-shell-chip-ok">Ready</span>' : '<span class="app-shell-chip app-shell-chip-warn">Skipped</span>';
+  const shape = row.ok
+    ? appShellHomeEscape(row.type === 'series' ? 'Shows' : 'Movies') + ' &middot; ' + row.count + (row.count === 1 ? ' title' : ' titles')
+    : appShellHomeEscape(row.error || 'Could not read that list.');
+  return '<div class="app-shell-review-row">' +
+    '<div class="app-shell-row-main"><strong' + (row.ok ? '' : ' class="app-shell-review-bad"') + '>' + appShellHomeEscape(row.name) + '</strong>' +
+    '<br><span class="app-shell-muted">' + appShellHomeEscape(row.source) + ' &middot; ' + shape + '</span>' +
+    '<br><span class="app-shell-muted app-shell-review-url">' + appShellHomeEscape(row.line) + '</span></div>' +
+    '<div class="app-shell-row-controls">' + mark + '</div></div>';
+}
+
+function appShellReviewHtml() {
+  const review = appShellHomeReview;
+  if (!review || !review.results || !review.results.length) return '';
+  const good = review.results.filter(function (r) { return r.ok; }).length;
+  const bad = review.results.length - good;
+  let html = '<div class="app-shell-review">' +
+    '<p class="app-shell-muted">' + review.results.length + (review.results.length === 1 ? ' line checked: ' : ' lines checked: ') +
+    good + ' ready' + (bad ? ', ' + bad + ' to look at' : '') + '.' +
+    (review.truncated ? ' (' + review.truncated + ' more line(s) were not checked.)' : '') + '</p>';
+  html += review.results.map(appShellReviewRowHtml).join('');
+  html += '<div class="app-shell-actions">' +
+    '<button type="button" class="primary lc-btn" data-app-shell-action="home-add"' + (good ? '' : ' disabled') + '>' +
+    (good === 1 ? 'Add 1 list' : 'Add ' + good + ' lists') + '</button>' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="home-clear">Clear</button>' +
+    '</div></div>';
+  return html;
+}
+
+function appShellRenderHomeEditor() {
+  const host = document.getElementById('appShellHomeEditor');
+  if (!host || !NEW_UI) return false;
+  // Whatever has been typed so far survives a re-render (the box is re-created
+  // every time, and losing a pasted list on an unrelated refresh would be worse
+  // than the few lines this costs).
+  const box = document.getElementById('appShellAddBox');
+  const typed = (box && box.value) ? box.value : '';
+  const dedupe = appShellDedupeOn();
+  const rows = appShellHomeRowCount();
+  const starter = (typeof APP_SHELL_STARTER_PACK !== 'undefined' && APP_SHELL_STARTER_PACK) ? APP_SHELL_STARTER_PACK : [];
+
+  let html = '<div class="panel" style="margin-top:12px;">' +
+    '<h2 class="panel-title">Add to your home screen</h2>' +
+    '<p class="app-shell-muted">Paste one list link per line -- MDBList, Trakt, TMDB, Simkl, an IMDb list, one of your own lists or a shared channel. Each line is checked first, so nothing is added that you did not see.</p>' +
+    '<label class="app-shell-muted" for="appShellAddBox" style="display:block; margin:0 0 4px;">List links, one per line</label>' +
+    '<textarea id="appShellAddBox" class="app-shell-add-box" rows="3" spellcheck="false" placeholder="https://mdblist.com/lists/you/top-horror-2026"></textarea>' +
+    '<div class="app-shell-actions">' +
+    '<button type="button" class="primary lc-btn" data-app-shell-action="home-check">Check links</button>' +
+    (starter.length && !rows ? '<button type="button" class="secondary lc-btn" data-app-shell-action="home-starter">Add a starter pack (' + starter.length + ' rows)</button>' : '') +
+    '</div>' +
+    appShellReviewHtml() +
+    '<label class="app-shell-dedupe" for="appShellDedupeToggle">' +
+    '<input type="checkbox" id="appShellDedupeToggle"' + (dedupe ? ' checked' : '') + '>' +
+    '<span><strong>Hide titles already shown in rows above</strong>' +
+    '<br><span class="app-shell-muted">The top row keeps everything; every row below it drops anything an earlier row already showed. Row order is what decides, so drag a row to change it. The preview below updates now, and Stremio follows once you update your install link (the install bar above does that).</span></span>' +
+    '</label>' +
+    (rows ? '<p class="app-shell-muted" style="margin-top:10px;">Your ' + rows + (rows === 1 ? ' row is' : ' rows are') + ' below: drag to reorder, Edit to change one, or Remove to take it out.</p>' : '') +
+    '</div>';
+
+  host.innerHTML = html;
+  const newBox = document.getElementById('appShellAddBox');
+  if (newBox && typed) newBox.value = typed;
+  const toggle = document.getElementById('appShellDedupeToggle');
+  if (toggle && toggle.addEventListener) {
+    toggle.addEventListener('change', function (e) {
+      appShellSetDedupe(!!(e && e.target ? e.target.checked : toggle.checked));
+    });
+  }
+  return true;
+}
+
+// The duplicate setting, in the place it now belongs -- directly above the rows
+// it applies to. One value, one key: the Settings checkbox (hidden on a shell
+// page, see 09_page-shell.css) is kept in step so nothing can disagree.
+function appShellSetDedupe(on) {
+  const value = on ? '1' : '0';
+  try { localStorage.setItem('myListAddon:dedupeAcrossLists', value); } catch (e) {}
+  const legacy = document.getElementById('dedupeAcrossListsCheckbox');
+  if (legacy) legacy.checked = !!on;
+  if (typeof saveState === 'function') saveState();
+  if (typeof renderLivePreview === 'function') renderLivePreview();
+  appShellRenderHomeEditor();
+  return true;
+}
+
+async function appShellHomeCheck() {
+  const box = document.getElementById('appShellAddBox');
+  const lines = appShellSplitLines(box ? box.value : '');
+  if (!lines.length) {
+    showToast('Paste at least one list link first.', 'info');
+    return [];
+  }
+  const checked = lines.slice(0, APP_SHELL_ADD_LINES_MAX);
+  const results = await appShellMapWithConcurrency(checked, APP_SHELL_ADD_CONCURRENCY, appShellCheckOneLine);
+  appShellHomeReview = { results: results, truncated: lines.length - checked.length };
+  appShellRenderHomeEditor();
+  const good = results.filter(function (r) { return r.ok; }).length;
+  if (!good) showToast('None of those lines could be read. Check the links and try again.', 'error');
+  return results;
+}
+
+function appShellHomeAddChecked() {
+  const review = appShellHomeReview;
+  const good = review && review.results ? review.results.filter(function (r) { return r.ok; }) : [];
+  if (!good.length) {
+    showToast('Check the links first, then add the ones that are ready.', 'info');
+    return 0;
+  }
+  // addRow is the one door every add comes through, and it refuses a row that
+  // needs an account when nobody is signed in (D-8) -- returning null. Whatever
+  // it refuses stays in the review, so pressing the button again after signing
+  // in adds those and only those.
+  const left = [];
+  let made = 0;
+  good.forEach(function (r) {
+    if (addRow(r.name, r.line, r.type, true, 'Custom')) made += 1; else left.push(r);
+  });
+  if (!made) {
+    appShellRenderHomeEditor();
+    return 0;
+  }
+  appShellHomeReview = left.length ? { results: left, truncated: 0 } : null;
+  const box = document.getElementById('appShellAddBox');
+  if (box && !left.length) box.value = '';
+  const said = made === 1 ? 'Added to your home screen.' : made + ' lists added to your home screen.';
+  appShellAfterHomeChange(left.length ? said + ' ' + left.length + ' need an account.' : said);
+  return made;
+}
+
+function appShellAddStarterPack() {
+  const pack = (typeof APP_SHELL_STARTER_PACK !== 'undefined' && APP_SHELL_STARTER_PACK) ? APP_SHELL_STARTER_PACK : [];
+  if (!pack.length) return 0;
+  let made = 0;
+  pack.forEach(function (row) {
+    if (addRow(row.name, row.url, row.type, row.enabled !== false, row.group || 'Combined Charts')) made += 1;
+  });
+  if (!made) return 0;
+  appShellAfterHomeChange(made + ' starter rows added. Reorder them to change what keeps a shared title.');
+  return made;
+}
+
+// The preview has to follow the rows -- that is the point of it. Every change
+// to them (typing a name, pasting a url, dragging a row, removing one) already
+// runs through saveState, which fires on every keystroke, so the refresh is
+// scheduled here with a short delay rather than run on each one. New UI only:
+// the old page has its own Refresh Preview button and does not want 40 poster
+// requests after a rename.
+// Declared with var, not let, on purpose: this module sits after the code that
+// runs at boot, and a shell page's first saveState (the pre-fill) reaches here
+// before a let would have been initialised -- "Cannot access before
+// initialization". Same trap, same fix, as appShellDialogClose.
+var appShellPreviewTimer = null;
+function appShellSchedulePreview() {
+  if (!NEW_UI) return false;
+  if (typeof renderLivePreview !== 'function') return false;
+  if (appShellPreviewTimer) clearTimeout(appShellPreviewTimer);
+  appShellPreviewTimer = setTimeout(function () {
+    appShellPreviewTimer = null;
+    renderLivePreview();
+  }, 700);
+  return true;
+}
+
+// After anything that changes the rows: persist, refresh the preview, and put
+// the editor back in step with them.
+function appShellAfterHomeChange(message) {
+  if (typeof saveState === 'function') saveState();
+  if (typeof renderLivePreview === 'function') renderLivePreview();
+  appShellRenderHomeEditor();
+  if (message) showToast(message, 'success');
+  return true;
+}
+
+// --- the Lists view (P6-4) ---------------------------------------------------
+//
+// Your lists, as cards you can act on: open one, add titles to it without
+// leaving the page, put it on the home screen, and share it. It is additive --
+// the dashboard the page already has stays underneath -- and it exists only on
+// a shell page: the containers it fills are emitted by the server (12_) when,
+// and only when, the request carries the FF_NEW_UI cookie.
+//
+// Everything reuses the page's own machinery rather than re-implementing it:
+// editing a list is editCreatorList(slug)/editLocalCustomList(slug) (the same
+// entry points the dashboard's Edit button uses), adding a title is
+// addToCustomListDraft (21_), putting a list on the home screen builds the same
+// customlist:v1: snapshot the dashboard's "+ Add" builds, and the search is
+// /api/title-search -- the same endpoint the Search tab uses.
+
+// E2E 7 wants one share control with three states. The legacy list store only
+// knows private and public: normalizeListVisibility (02_) maps anything that is
+// not "public" to "private", so offering Unlisted there would quietly save a
+// private list. Unlisted is part of the next list service (31_lists-api.js,
+// PUT /api/lists/:publicId/visibility), which is behind FF_V2_LISTS_API and is
+// off until reads move to the new tables. It is therefore shown, with what it
+// means, and disabled with the reason -- and turning it on is this one flag.
+const APP_SHELL_UNLISTED_READY = false;
+
+const APP_SHELL_LIST_VISIBILITIES = [
+  { id: 'private', label: 'Private', what: 'Only you can open it. Not reachable by link.' },
+  { id: 'unlisted', label: 'Unlisted', what: 'Anyone with the link can open it; it is not listed in Explore.' },
+  { id: 'public', label: 'Public', what: 'Anyone can find it in Explore, and it can be liked.' },
+];
+
+// Which list's share panel is open, and the results of the last title search.
+let appShellShareSlug = null;
+let appShellTitleResults = [];
+let appShellTitleSearchSeq = 0;
+var appShellTitleSearchTimer = null;
+
+function appShellListsHomeHost() {
+  return document.getElementById('appShellListsHome');
+}
+
+function appShellListsEscape(value) {
+  return escapeHtml(String(value === null || value === undefined ? '' : value));
+}
+
+// The lists this browser can act on: the account's, when it is signed in, and
+// the ones kept in this browser on their own (D-8).
+//
+// P6-9: both, not either. Until this task the signed-in branch returned the
+// account's lists and nothing else, so a list built while signed out -- which
+// survives signing in, because nothing migrates it then -- was simply not on
+// screen anywhere in the new UI, and there was no way to save it. A list the
+// account does not have is marked local, which is what the card's "Saved in
+// this browser only" line, its Save/Export buttons and the Share control all
+// read.
+function appShellOwnLists() {
+  const out = [];
+  const signedIn = (typeof activeCreator !== 'undefined' && !!activeCreator && !!activeCreator.creatorName);
+  const accountSlugs = {};
+  if (signedIn && typeof lastCreatorListsData !== 'undefined' && Array.isArray(lastCreatorListsData)) {
+    lastCreatorListsData.forEach(function (l) {
+      if (l && l.slug) {
+        out.push(l);
+        accountSlugs[String(l.slug)] = true;
+      }
+    });
+  }
+  const map = (typeof loadLocalCustomLists === 'function') ? (loadLocalCustomLists() || {}) : {};
+  Object.keys(map).forEach(function (key) {
+    const l = map[key];
+    if (!l) return;
+    // The auto-tracked lists are not hand-built ones and are not "browser
+    // only" in the sense this view means: their content travels in the
+    // account's own tracking record (pushTrackingSync, 22_), and the sign-up
+    // migration deliberately leaves them out of the per-list upload for that
+    // reason. Offering "Save to an account" on one would either duplicate it
+    // as a second list or, signed out, pretend a generated shelf is something
+    // the person built.
+    if (APP_SHELL_AUTO_TRACKED_SLUGS.indexOf(String(l.slug || key)) !== -1) return;
+    const slug = String(l.slug || key);
+    // While signed in, this store is also the account's own copy: every list
+    // the account has is mirrored into it with a creatorSlug (backfill /
+    // upload), so an entry carrying one is not browser-only, it is the
+    // account's list seen through the cache. An entry without one is a list
+    // the account has never been told about.
+    if (signedIn && (l.creatorSlug || accountSlugs[slug])) return;
+    out.push(Object.assign({}, l, { slug: slug, local: true }));
+  });
+  return out;
+}
+
+// The generated lists that live in the same browser store but are not
+// browser-only lists -- see appShellOwnLists.
+const APP_SHELL_AUTO_TRACKED_SLUGS = ['watchlist', 'watch-history', 'continue-watching', 'airing-next'];
+
+// A list the account does not have. See appShellOwnLists.
+function appShellListIsLocal(list) {
+  return !!(list && list.local);
+}
+
+function appShellListBySlug(slug) {
+  const want = String(slug || '');
+  const all = appShellOwnLists();
+  for (let i = 0; i < all.length; i++) {
+    if (String(all[i].slug) === want) return all[i];
+  }
+  return null;
+}
+
+function appShellListCount(list) {
+  if (!list) return 0;
+  if (Array.isArray(list.items)) return list.items.length;
+  if (typeof list.itemCount === 'number') return list.itemCount;
+  if (typeof list.count === 'number') return list.count;
+  return 0;
+}
+
+function appShellListKind(list) {
+  const t = list && list.type;
+  if (t === 'series') return 'Shows';
+  if (t === 'movie') return 'Movies';
+  return 'Movies and Shows';
+}
+
+function appShellListVisibility(list) {
+  const v = list && list.visibility;
+  if (v === 'public' || v === 'unlisted' || v === 'private') return v;
+  return 'private';
+}
+
+// The link to a list as other people would open it: the published address when
+// the list has one, otherwise the account's own /lists/<you>/<slug>.
+function appShellListShareUrl(list) {
+  if (!list) return '';
+  if (list.url) return String(list.url);
+  const who = (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) ? activeCreator.creatorName : '';
+  const slug = String(list.slug || '');
+  if (who && slug) return location.origin + '/lists/' + encodeURIComponent(who) + '/' + encodeURIComponent(slug);
+  return location.origin + '/lists/' + encodeURIComponent(slug);
+}
+
+function appShellListOnHomeScreen(slug) {
+  const want = String(slug || '');
+  // The page's own answer first: isListAddedToConfig (16_) is what the
+  // dashboard's own "+ Add" / "Remove" buttons read, so the card and those
+  // buttons can never disagree about whether a list is on the home screen.
+  const list = appShellListBySlug(slug);
+  if (typeof isListAddedToConfig === 'function' && list) {
+    if (isListAddedToConfig(null, list.type, want)) return true;
+    if (isListAddedToConfig(null, 'movie', want) || isListAddedToConfig(null, 'series', want)) return true;
+  }
+  const rows = document.querySelectorAll('#lists .entry');
+  for (let i = 0; i < rows.length; i++) {
+    const urlInput = rows[i].querySelector ? rows[i].querySelector('.url') : null;
+    if (!urlInput) continue;
+    const payload = (typeof parseCustomListPayloadClient === 'function') ? parseCustomListPayloadClient(urlInput.value) : null;
+    if (payload && (String(payload.localSlug || '') === want || String(payload.listSlug || '') === want)) return true;
+  }
+  return false;
+}
+
+// The card's home-screen button, doing exactly what the dashboard's own
+// "+ Add" / "Remove" does for the same list (see 22_client-creator-profile.js).
+function appShellListToggleHomeScreen(slug) {
+  const list = appShellListBySlug(slug);
+  if (!list) {
+    showToast('Could not find that list -- try refreshing.', 'error');
+    return false;
+  }
+  if (appShellListOnHomeScreen(slug)) {
+    if (typeof removeListFromConfig === 'function') {
+      removeListFromConfig(null, list.type, slug);
+      removeListFromConfig(null, 'movie', slug);
+      removeListFromConfig(null, 'series', slug);
+    }
+    const rows = document.querySelectorAll('#lists .entry');
+    for (let i = 0; i < rows.length; i++) {
+      const urlInput = rows[i].querySelector ? rows[i].querySelector('.url') : null;
+      if (!urlInput) continue;
+      const payload = (typeof parseCustomListPayloadClient === 'function') ? parseCustomListPayloadClient(urlInput.value) : null;
+      if (payload && (String(payload.localSlug || '') === String(slug) || String(payload.listSlug || '') === String(slug))) rows[i].remove();
+    }
+    if (typeof renumber === 'function') renumber();
+    if (typeof saveState === 'function') saveState();
+    appShellRenderListsHome();
+    showToast('"' + list.name + '" removed from your home screen.', 'success');
+    return true;
+  }
+  const items = (typeof normalizeSnapshotItemsForCatalog === 'function') ? normalizeSnapshotItemsForCatalog(list.items || []) : (list.items || []);
+  const snapshot = { listId: generateChannelId(), localSlug: slug, listSlug: slug, type: list.type || 'movie', items: items, shuffle: false };
+  addRow(list.name, 'customlist:v1:' + JSON.stringify(snapshot), list.type || 'movie', true, 'My Lists');
+  if (typeof renumber === 'function') renumber();
+  if (typeof saveState === 'function') saveState();
+  appShellRenderListsHome();
+  showToast('"' + list.name + '" added to your home screen.', 'success');
+  return true;
+}
+
+function appShellListChoiceHtml(slug, choice, current) {
+  const on = choice.id === current;
+  const ready = choice.id !== 'unlisted' || APP_SHELL_UNLISTED_READY;
+  return '<button type="button" class="app-shell-chip' + (on ? ' is-on' : '') + '"' +
+    ' data-app-shell-action="list-visibility" data-app-shell-id="' + appShellListsEscape(slug) + '|' + choice.id + '"' +
+    (ready ? '' : ' disabled title="' + appShellListsEscape(choice.what + ' This needs the new list service, which is not switched on yet.') + '"') +
+    '>' + appShellListsEscape(choice.label) + '</button>';
+}
+
+function appShellListShareHtml(list) {
+  const slug = String(list.slug || '');
+  const current = appShellListVisibility(list);
+  let html = '<div class="app-shell-actions" style="margin:6px 0 6px;">';
+  APP_SHELL_LIST_VISIBILITIES.forEach(function (choice) {
+    html += appShellListChoiceHtml(slug, choice, current);
+  });
+  html += '</div>';
+  const chosen = APP_SHELL_LIST_VISIBILITIES.filter(function (c) { return c.id === current; })[0];
+  if (chosen) html += '<p class="app-shell-muted">' + appShellListsEscape(chosen.what) + '</p>';
+  if (!APP_SHELL_UNLISTED_READY) {
+    html += '<p class="app-shell-muted">Unlisted needs the new list service, which is not switched on yet -- until then a list is private or public.</p>';
+  }
+  const url = appShellListShareUrl(list);
+  html += '<p class="app-shell-kv"><span class="app-shell-review-url">' + appShellListsEscape(url) + '</span></p>';
+  html += '<div class="app-shell-actions">' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="list-copy" data-app-shell-id="' + appShellListsEscape(slug) + '">Copy link</button>' +
+    (current === 'private' ? '' : '<button type="button" class="secondary lc-btn" data-app-shell-action="list-preview" data-app-shell-id="' + appShellListsEscape(slug) + '">Open the page</button>') +
+    '</div>';
+  return html;
+}
+
+function appShellListCardHtml(list) {
+  const slug = String(list.slug || '');
+  const onHome = appShellListOnHomeScreen(slug);
+  const vis = appShellListVisibility(list);
+  const local = appShellListIsLocal(list);
+  const count = appShellListCount(list);
+  const meta = (local ? 'Saved in this browser only' : appShellListsEscape(vis.charAt(0).toUpperCase() + vis.slice(1))) +
+    ' &middot; ' + appShellListsEscape(appShellListKind(list)) + ' &middot; ' + count + (count === 1 ? ' title' : ' titles');
+  let html = '<div class="app-shell-row">' +
+    '<div class="app-shell-row-main"><strong>' + appShellListsEscape(list.name || slug) + '</strong>' +
+    '<br><span class="app-shell-muted">' + meta + '</span>' +
+    (local ? '<br><span class="app-shell-muted">It lives in this browser alone, so clearing this browser\u2019s data loses it. Save it to an account to keep it, or Export a copy.</span>' : '') +
+    '</div>' +
+    '<div class="app-shell-row-controls">' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="list-open" data-app-shell-id="' + appShellListsEscape(slug) + '">Open</button>' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="list-edit" data-app-shell-id="' + appShellListsEscape(slug) + '">Add titles</button>' +
+    '<button type="button" class="' + (onHome ? 'secondary lc-btn' : 'primary lc-btn') + '" data-app-shell-action="list-home" data-app-shell-id="' + appShellListsEscape(slug) + '">' +
+    (onHome ? 'On your home screen' : 'Show on home screen') + '</button>' +
+    (local
+      ? '<button type="button" class="primary lc-btn" data-app-shell-action="list-save-account" data-app-shell-id="' + appShellListsEscape(slug) + '">Save to an account</button>' +
+        '<button type="button" class="secondary lc-btn" data-app-shell-action="list-export" data-app-shell-id="' + appShellListsEscape(slug) + '">Export</button>'
+      : '<button type="button" class="secondary lc-btn" data-app-shell-action="list-share" data-app-shell-id="' + appShellListsEscape(slug) + '">Share</button>') +
+    '</div></div>';
+  if (!local && appShellShareSlug === slug) html += appShellListShareHtml(list);
+  return html;
+}
+
+// --- browser-only lists (P6-9) ----------------------------------------------
+//
+// The Lists view shows the lists this browser keeps on its own (D-8) beside the
+// account's, says which is which, and gives each of those two ways out. Both
+// end up in 22_client-creator-profile.js: the push is the same request the
+// sign-up migration makes (saveLocalListToAccount), and the export is a file
+// this same page can restore.
+
+// The button on a card. Signed in, it saves the list and the browser's copy
+// goes (the account has it now). Signed out, it copies the list out of the
+// store first and asks the person to sign in -- signing in empties this
+// browser's store (clearLocalAccountData), so the push happens right after it
+// completes, from that copy (flushPendingListSaves). Without the copy the list
+// would be gone by the time there was an account to save it to.
+async function appShellSaveLocalListToAccount(slug) {
+  const list = appShellListBySlug(slug);
+  if (!list) {
+    showToast('Could not find that list -- try refreshing.', 'error');
+    return false;
+  }
+  const signedIn = (typeof activeCreator !== 'undefined' && !!activeCreator && !!activeCreator.creatorName);
+  if (!signedIn) {
+    if (typeof rememberPendingListSave !== 'function' || !rememberPendingListSave(slug)) {
+      showToast('Could not read that list -- try refreshing.', 'error');
+      return false;
+    }
+    showToast('"' + (list.name || slug) + '" will be saved to the account you sign in to.', 'info', { duration: 8000 });
+    if (typeof openRestoreModal === 'function') openRestoreModal();
+    return true;
+  }
+  if (typeof saveLocalListToAccount !== 'function') return false;
+  const result = await saveLocalListToAccount(slug, { visibility: 'private' });
+  if (!result || !result.ok) {
+    showToast(result && result.error === 'signed-out'
+      ? 'Sign in to save this list to an account.'
+      : 'Could not save that list to your account -- try again.', 'error');
+    return false;
+  }
+  // Ask the account what it has before re-rendering: the list has just changed
+  // hands, and the card must come back from the account's own answer rather
+  // than flicker out because the cache predates the save.
+  if (typeof renderCreatorDashboard === 'function') {
+    try { await renderCreatorDashboard({ silent: true }); } catch (e) {}
+  }
+  showToast('"' + (list.name || slug) + '" is saved to your account now. It is private until you share it.', 'success');
+  appShellRenderListsHome();
+  return true;
+}
+
+// Export one list as the small JSON file this page's own restore reads
+// (Settings -> Backups -> Restore, which merges customLists into the browser's
+// store). Deliberately not the whole-library file: the point of the button is
+// that one list is only in this browser, and the person wants a copy of it.
+function appShellExportList(slug) {
+  const list = appShellListBySlug(slug);
+  if (!list) {
+    showToast('Could not find that list -- try refreshing.', 'error');
+    return false;
+  }
+  const key = String(list.slug || slug);
+  const payload = {
+    version: BACKUP_FORMAT_VERSION,
+    exportedAt: new Date().toISOString(),
+    exportedFrom: 'My Lists Addon (a list saved in one browser)',
+    customLists: {},
+  };
+  payload.customLists[key] = {
+    slug: key,
+    name: list.name || key,
+    type: list.type || 'movie',
+    items: Array.isArray(list.items) ? list.items : [],
+    visibility: appShellListVisibility(list),
+    updatedAt: Number(list.updatedAt) || Date.now(),
+  };
+  const filename = (slugify(list.name || key) || key) + '-list.json';
+  if (typeof downloadJsonFile !== 'function') return false;
+  downloadJsonFile(filename, payload);
+  showToast('Exported "' + (list.name || key) + '" as ' + filename + '.', 'success');
+  return true;
+}
+
+// Whether this view has already asked the page to fetch the account's lists.
+// One ask only: an account with no lists must end up on the empty state, not
+// on a loop of requests.
+var appShellListsLoadRequested = false;
+
+function appShellRenderListsHome() {
+  const host = appShellListsHomeHost();
+  if (!host || !NEW_UI) return false;
+  const lists = appShellOwnLists();
+  const signedIn = (typeof activeCreator !== 'undefined' && !!activeCreator && !!activeCreator.creatorName);
+  // P6-9: "no lists" and "the account's lists have not arrived yet" are
+  // different states, and only the second one is worth waiting for. The
+  // browser's own store is a *cache* of the account's lists while signed in, so
+  // rendering from it before the account answers would label an account list as
+  // browser-only for as long as the request takes.
+  const accountKnown = !signedIn || (typeof lastCreatorListsData !== 'undefined' && Array.isArray(lastCreatorListsData));
+  if (!accountKnown && !appShellListsLoadRequested) {
+    appShellListsLoadRequested = true;
+    host.innerHTML = '<div class="panel" style="margin-bottom:12px;">' +
+      '<h2 class="panel-title">Your lists</h2>' +
+      '<p class="app-shell-muted">Loading your lists...</p></div>';
+    appShellListsRefresh();
+    return true;
+  }
+  if (!lists.length) {
+    host.innerHTML = '<div class="panel" style="margin-bottom:12px;">' +
+      '<h2 class="panel-title">Your lists</h2>' +
+      '<p class="app-shell-muted">' + (signedIn
+        ? 'No lists yet. Start one below, then add titles to it right here.'
+        : 'No lists in this browser yet. Sign in to keep them on your account, or start one below -- it is saved in this browser until then.') + '</p>' +
+      '<div class="app-shell-actions"><button type="button" class="primary lc-btn" data-app-shell-action="list-new">+ New list</button></div>' +
+      '</div>';
+    return true;
+  }
+  let html = '<div class="panel" style="margin-bottom:12px;">' +
+    '<h2 class="panel-title">Your lists</h2>' +
+    '<p class="app-shell-muted">Open one, add titles to it, put it on your home screen, or share it. ' +
+    (signedIn
+      ? 'Each list says where it is saved. Anything marked "Saved in this browser only" is not on your account yet.'
+      : 'Everything here is saved in this browser only. Save a list to an account to keep it, or export a copy.') + '</p>';
+  lists.forEach(function (list) {
+    html += appShellListCardHtml(list);
+  });
+  html += '<div class="app-shell-actions" style="margin-top:10px;">' +
+    '<button type="button" class="primary lc-btn" data-app-shell-action="list-new">+ New list</button>' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="lists-refresh">Refresh</button></div></div>';
+  host.innerHTML = html;
+  return true;
+}
+
+// --- the inline "Add titles" search -----------------------------------------
+//
+// In the list editor (12_), so creating a list and editing one are the same
+// thing: type, tap Add, and the title is in the draft. Save (the panel's own
+// button) writes it, which is where "Saved" comes from.
+
+function appShellAddTitlesHost() {
+  return document.getElementById('appShellAddTitles');
+}
+
+function appShellTitleResultHtml(result, index) {
+  const year = result && result.year ? ' &middot; ' + appShellListsEscape(result.year) : '';
+  return '<div class="app-shell-row"><div class="app-shell-row-main">' +
+    '<strong>' + appShellListsEscape((result && result.title) || 'Untitled') + '</strong>' +
+    '<br><span class="app-shell-muted">' + (result && result.type === 'tv' ? 'Show' : 'Movie') + year + '</span></div>' +
+    '<div class="app-shell-row-controls"><button type="button" class="primary lc-btn" data-app-shell-action="title-add" data-app-shell-id="' + index + '">Add</button></div></div>';
+}
+
+function appShellRenderAddTitles(message) {
+  const host = appShellAddTitlesHost();
+  if (!host || !NEW_UI) return false;
+  let html = '<div class="panel" style="margin-bottom:12px;">' +
+    '<h2 class="panel-title">Add titles</h2>' +
+    '<p class="app-shell-muted">Search for a movie or a show and add it straight to this list.</p>' +
+    '<div class="row"><input type="text" id="appShellAddTitlesInput" placeholder="Add titles\u2026" aria-label="Search for a title to add" spellcheck="false"></div>';
+  if (message) html += '<p class="app-shell-muted">' + appShellListsEscape(message) + '</p>';
+  if (appShellTitleResults.length) {
+    html += '<div class="app-shell-review">' + appShellTitleResults.map(appShellTitleResultHtml).join('') + '</div>';
+  }
+  html += '</div>';
+  host.innerHTML = html;
+  const input = document.getElementById('appShellAddTitlesInput');
+  if (input && input.addEventListener) {
+    input.addEventListener('input', function () {
+      const value = input.value || '';
+      if (appShellTitleSearchTimer) clearTimeout(appShellTitleSearchTimer);
+      appShellTitleSearchTimer = setTimeout(function () {
+        appShellTitleSearchTimer = null;
+        appShellSearchTitles(value);
+      }, 300);
+    });
+  }
+  return true;
+}
+
+async function appShellSearchTitles(query) {
+  const q = String(query || '').trim();
+  if (!q) {
+    appShellTitleResults = [];
+    appShellRenderAddTitles('');
+    return [];
+  }
+  const seq = ++appShellTitleSearchSeq;
+  const kind = (typeof customListDraftType !== 'undefined' && customListDraftType === 'series') ? 'tv' : 'movie';
+  const res = await appShellApiFetch('/api/title-search?q=' + encodeURIComponent(q) + '&type=' + kind);
+  if (seq !== appShellTitleSearchSeq) return [];
+  if (!res.ok) {
+    appShellTitleResults = [];
+    appShellRenderAddTitles(res.error || 'Could not search just now.');
+    return [];
+  }
+  const results = (res.data && res.data.results) || [];
+  appShellTitleResults = results.slice(0, 8);
+  const input = document.getElementById('appShellAddTitlesInput');
+  if (input) input.value = q;
+  appShellRenderAddTitles(appShellTitleResults.length ? '' : 'Nothing found for that.');
+  return appShellTitleResults;
+}
+
+async function appShellAddTitle(index) {
+  const item = appShellTitleResults[Number(index)];
+  if (!item) return false;
+  if (typeof addToCustomListDraft !== 'function') return false;
+  const kind = (typeof customListDraftType !== 'undefined' && customListDraftType === 'series') ? 'tv' : 'movie';
+  await addToCustomListDraft(kind, item.tmdbId, item.title, item.year, item.poster, null);
+  showToast('Added "' + (item.title || 'that title') + '" to the list. Save it when you are done.', 'success');
+  return true;
+}
+
+// --- actions -----------------------------------------------------------------
+
+function appShellStartListEdit(slug) {
+  const list = appShellListBySlug(slug);
+  if (!list) {
+    showToast('Could not find that list -- try refreshing.', 'error');
+    return false;
+  }
+  if (list.local && typeof editLocalCustomList === 'function') {
+    editLocalCustomList(slug);
+  } else if (typeof editCreatorList === 'function') {
+    editCreatorList(slug);
+  }
+  if (typeof switchListsSubmenu === 'function') switchListsSubmenu('create-list');
+  appShellRenderAddTitles('');
+  const input = document.getElementById('appShellAddTitlesInput');
+  if (input && input.focus) {
+    try { input.focus(); } catch (e) {}
+  }
+  return true;
+}
+
+async function appShellSetListVisibility(slug, visibility) {
+  const list = appShellListBySlug(slug);
+  if (!list) return false;
+  const want = String(visibility || '');
+  if (want !== 'private' && want !== 'public') {
+    showToast('Unlisted is not switched on yet -- a list is private or public for now.', 'info');
+    return false;
+  }
+  if (appShellListVisibility(list) === want) {
+    appShellRenderListsHome();
+    return true;
+  }
+  const body = {
+    creatorName: (activeCreator && activeCreator.creatorName) || '',
+    creatorKey: localStorage.getItem('myListAddon:creatorKey') || '',
+    name: list.name,
+    type: list.type || 'movie',
+    items: list.items || [],
+    visibility: want,
+  };
+  const res = await appShellApiFetch('/api/creator/lists/save', { method: 'POST', body: body });
+  if (!res.ok) {
+    showToast(res.error || 'Could not save that change.', 'error');
+    return false;
+  }
+  list.visibility = want;
+  appShellRenderListsHome();
+  showToast(want === 'public' ? 'Anyone with the link can open it, and it is listed in Explore.' : 'Now private -- only you can open it.', 'success');
+  return true;
+}
+
+async function appShellListsRefresh() {
+  if (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) {
+    if (typeof loadCreatorSync === 'function') {
+      try { await loadCreatorSync(); } catch (e) {}
+    } else if (typeof renderCreatorDashboard === 'function') {
+      try { await renderCreatorDashboard(); } catch (e) {}
+    }
+  }
+  return appShellRenderListsHome();
+}
+
+// Which of the three dispatchers an action belongs to (see appShellOnClick).
+const APP_SHELL_LISTS_ACTION = /^(list-|lists-|title-)/;
+const APP_SHELL_EXPLORE_ACTION = /^explore-/;
+const APP_SHELL_IMPORTS_ACTION = /^import-/;
+
+async function appShellListsAction(action, id) {
+  const what = String(action || '');
+  const slug = String(id || '');
+  if (what === 'list-new') {
+    if (typeof openCreateListModal === 'function') openCreateListModal('custom');
+    return true;
+  }
+  if (what === 'lists-refresh') return appShellListsRefresh();
+  if (what === 'list-open') {
+    const list = appShellListBySlug(slug);
+    if (!list) return false;
+    if (typeof openListDetailsPage === 'function') {
+      openListDetailsPage(list.name, list.type || 'movie', 'custom:' + slug);
+      return true;
+    }
+    return false;
+  }
+  if (what === 'list-edit') return appShellStartListEdit(slug);
+  if (what === 'list-home') return appShellListToggleHomeScreen(slug);
+  if (what === 'list-share') {
+    appShellShareSlug = (appShellShareSlug === slug) ? null : slug;
+    appShellRenderListsHome();
+    return true;
+  }
+  if (what === 'list-copy') {
+    const list = appShellListBySlug(slug);
+    if (!list) return false;
+    return appShellCopyText(appShellListShareUrl(list), 'List link copied.');
+  }
+  if (what === 'list-preview') {
+    const list = appShellListBySlug(slug);
+    if (!list) return false;
+    if (typeof openListDetailsPage === 'function') {
+      openListDetailsPage(list.name, list.type || 'movie', 'custom:' + slug);
+      return true;
+    }
+    return false;
+  }
+  if (what === 'list-visibility') {
+    const parts = slug.split('|');
+    return appShellSetListVisibility(parts[0], parts[1]);
+  }
+  if (what === 'list-save-account') return appShellSaveLocalListToAccount(slug);
+  if (what === 'list-export') return appShellExportList(slug);
+  if (what === 'title-add') return appShellAddTitle(id);
+  return false;
+}
+
+// --- Explore (P6-5) ----------------------------------------------------------
+//
+// Somebody else's public lists, in one place: pick where to look, type, and see
+// what comes back with one button to put it on your home screen. It is additive
+// -- the Discover feeds underneath are untouched -- and it exists only on a
+// shell page: the container comes from the server (11_tab-quick-add.js) when,
+// and only when, the request carries the FF_NEW_UI cookie.
+//
+// Every source here is one the page already talks to, with the page's own
+// helpers where they exist:
+//
+//   My Lists community   /lists/public.json (browse) and
+//                        /api/search-published-lists (search)
+//   MDBList              /api/toplists -- cached by ensureMdblistPopularLoaded
+//                        (19_), which is also what the legacy list search
+//                        matches MDBList against: MDBList has no list search of
+//                        its own, so this filters the popular set by name.
+//   Trakt                /api/trakt-popular-lists (browse) and
+//                        /api/trakt-search (search)
+//   TMDB                 /api/tmdb-search-lists -- search only; TMDB publishes
+//                        no list directory to browse.
+
+// What the sort chips can honestly do today. Most liked works everywhere: it is
+// the order the server sends and every source reports likes. Newest works for
+// the lists that report when they changed, which is this site's own; the
+// providers do not, so those are kept and shown after the dated ones rather
+// than pretending they are new. "Most added" counts how many people put a list
+// on a home screen -- a column that exists only in the next list service
+// (add_count, 33_lists-directory.js, /lists/public.json?sort=added), which is
+// behind FF_V2_LISTS_READ and must stay off until reads move to the new tables.
+const APP_SHELL_EXPLORE_SORTS = [
+  { id: 'popular', label: 'Most liked', ready: true },
+  { id: 'new', label: 'Newest', ready: true },
+  { id: 'added', label: 'Most added', ready: false, why: 'Counting how many people put a list on their home screen needs the new list service, which is not switched on yet.' },
+];
+
+const APP_SHELL_EXPLORE_SOURCES = [
+  { id: 'mylists', label: 'My Lists community' },
+  { id: 'mdblist', label: 'MDBList' },
+  { id: 'trakt', label: 'Trakt' },
+  { id: 'tmdb', label: 'TMDB' },
+];
+
+const APP_SHELL_EXPLORE_MAX = 24;
+
+let appShellExploreSource = 'all';
+let appShellExploreSort = 'popular';
+let appShellExploreQuery = '';
+let appShellExploreResults = [];
+let appShellExploreNote = '';
+let appShellExplorePreview = -1;
+let appShellExplorePreviewData = null;
+let appShellExploreSeq = 0;
+var appShellExploreTimer = null;
+var appShellExploreLoaded = false;
+
+function appShellExploreHost() {
+  return document.getElementById('appShellExplore');
+}
+
+// Whether the Discover view is the one currently on screen. A shell page can be
+// served straight at /discover (or at /, which is Discover), and then the view
+// is worth its fetch at boot; served at any other view it is not, and the fetch
+// waits until somebody opens Discover.
+function appShellDiscoverIsOpen() {
+  const panel = document.getElementById('content-discover');
+  return !!(panel && !panel.hidden);
+}
+
+function appShellExploreEscape(value) {
+  return escapeHtml(String(value === null || value === undefined ? '' : value));
+}
+
+// Every source's own idea of a list, in one shape. The timestamp field is
+// only ever set by a source that actually reports one.
+function appShellExploreNormalize(entry, source) {
+  const e = entry || {};
+  const items = (typeof e.items === 'number') ? e.items : (typeof e.itemCount === 'number' ? e.itemCount : 0);
+  return {
+    name: e.name || 'Untitled list',
+    url: e.url || '',
+    type: e.type || e.contentType || 'movie',
+    items: items,
+    likes: Number(e.likes) || 0,
+    by: e.creatorName || e.creator || e.user || '',
+    source: source,
+    when: Number(e.updatedAt) || 0,
+  };
+}
+
+function appShellExploreSortRows(rows) {
+  const list = rows.slice();
+  if (appShellExploreSort === 'new') {
+    // Dated first, newest first; a source that does not say when a list
+    // changed keeps its place after them rather than being guessed at.
+    list.sort(function (a, b) {
+      if (!!a.when !== !!b.when) return a.when ? -1 : 1;
+      if (a.when !== b.when) return b.when - a.when;
+      return b.likes - a.likes;
+    });
+    return list;
+  }
+  list.sort(function (a, b) {
+    if (b.likes !== a.likes) return b.likes - a.likes;
+    return b.items - a.items;
+  });
+  return list;
+}
+
+function appShellExploreDedupe(rows) {
+  const seen = {};
+  const out = [];
+  rows.forEach(function (row) {
+    const key = String(row.url || '').toLowerCase() || (String(row.name).toLowerCase() + '|' + row.source);
+    if (seen[key]) return;
+    seen[key] = true;
+    out.push(row);
+  });
+  return out;
+}
+
+function appShellExploreWants(source) {
+  return appShellExploreSource === 'all' || appShellExploreSource === source;
+}
+
+// --- fetching ----------------------------------------------------------------
+
+async function appShellExploreMdbList() {
+  if (typeof ensureMdblistPopularLoaded !== 'function') return [];
+  const rows = await ensureMdblistPopularLoaded();
+  return (Array.isArray(rows) ? rows : []).map(function (r) { return appShellExploreNormalize(r, 'mdblist'); });
+}
+
+async function appShellExploreTraktBrowse() {
+  if (typeof ensureTraktPopularLoaded !== 'function') return [];
+  const rows = await ensureTraktPopularLoaded();
+  return (Array.isArray(rows) ? rows : []).map(function (r) { return appShellExploreNormalize(r, 'trakt'); });
+}
+
+async function appShellExploreMyListsBrowse() {
+  const res = await appShellApiFetch('/lists/public.json?limit=' + APP_SHELL_EXPLORE_MAX);
+  if (!res.ok) return null;
+  const rows = (res.data && res.data.lists) || [];
+  return rows.map(function (r) { return appShellExploreNormalize(r, 'mylists'); });
+}
+
+async function appShellExploreMyListsSearch(q) {
+  const res = await appShellApiFetch('/api/search-published-lists?q=' + encodeURIComponent(q));
+  if (!res.ok) return null;
+  const rows = (res.data && res.data.lists) || [];
+  return rows.map(function (r) { return appShellExploreNormalize(r, 'mylists'); });
+}
+
+async function appShellExploreTraktSearch(q) {
+  const key = (document.getElementById('traktKeyInput') ? document.getElementById('traktKeyInput').value.trim() : '') || readProviderSecret('myListAddon:traktKey') || '';
+  const res = await appShellApiFetch('/api/trakt-search?q=' + encodeURIComponent(q) + (key ? '&traktKey=' + encodeURIComponent(key) : ''));
+  if (!res.ok) return null;
+  return ((res.data && res.data.lists) || []).map(function (r) { return appShellExploreNormalize(r, 'trakt'); });
+}
+
+async function appShellExploreTmdbSearch(q) {
+  const key = (document.getElementById('tmdbKeyInput') ? document.getElementById('tmdbKeyInput').value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
+  const adult = (typeof isAdultContentFilterEnabled === 'function' && isAdultContentFilterEnabled()) ? '&adultContentFilter=1' : '';
+  const res = await appShellApiFetch('/api/tmdb-search-lists?q=' + encodeURIComponent(q) + (key ? '&tmdbKey=' + encodeURIComponent(key) : '') + adult);
+  if (!res.ok) return null;
+  return ((res.data && res.data.lists) || []).map(function (r) { return appShellExploreNormalize(r, 'tmdb'); });
+}
+
+// The provider lists in the popular sets, narrowed to the words somebody typed.
+// MDBList has no list search (see the note at the top of this module), so this
+// is what the legacy search does too -- said out loud in the note below.
+function appShellExploreFilterByName(rows, q) {
+  const words = String(q || '').toLowerCase().split(/\\s+/).filter(Boolean);
+  if (!words.length) return rows;
+  return rows.filter(function (row) {
+    const text = (String(row.name) + ' ' + String(row.by)).toLowerCase();
+    return words.every(function (w) { return text.indexOf(w) !== -1; });
+  });
+}
+
+async function appShellExploreRun() {
+  const q = String(appShellExploreQuery || '').trim();
+  const seq = ++appShellExploreSeq;
+  const want = appShellExploreSource;
+  const results = [];
+  const notes = [];
+  const jobs = [];
+
+  // This site's own lists: the directory when nothing has been typed, its
+  // search when something has.
+  if (appShellExploreWants('mylists')) {
+    jobs.push((q ? appShellExploreMyListsSearch(q) : appShellExploreMyListsBrowse()).then(function (rows) {
+      if (rows) results.push.apply(results, rows);
+      else notes.push('The My Lists directory could not be reached.');
+    }));
+  }
+  if (appShellExploreWants('mdblist')) {
+    jobs.push(appShellExploreMdbList().then(function (rows) {
+      const matching = appShellExploreFilterByName(rows, q);
+      results.push.apply(results, q ? matching.slice(0, APP_SHELL_EXPLORE_MAX) : matching);
+      if (q && want !== 'mylists') notes.push('MDBList has no list search of its own, so the MDBList results are the popular ones matching your words.');
+    }));
+  }
+  if (appShellExploreWants('trakt')) {
+    jobs.push((q ? appShellExploreTraktSearch(q) : appShellExploreTraktBrowse()).then(function (rows) {
+      if (rows) results.push.apply(results, rows);
+      else if (q) notes.push('trakt.tv could not be searched just now.');
+    }));
+  }
+  if (appShellExploreWants('tmdb')) {
+    jobs.push((q ? appShellExploreTmdbSearch(q) : Promise.resolve(null)).then(function (rows) {
+      if (rows) results.push.apply(results, rows);
+      else if (q) notes.push('TMDB could not be searched just now.');
+      else if (want === 'tmdb') notes.push('TMDB publishes no list directory to browse -- search for one by name.');
+    }));
+  }
+
+  await Promise.all(jobs);
+  // A newer search already went out while this one was running: drop this
+  // answer rather than landing it on top of the newer one.
+  if (seq !== appShellExploreSeq) return appShellExploreResults;
+
+  appShellExploreResults = appShellExploreSortRows(appShellExploreDedupe(results)).slice(0, APP_SHELL_EXPLORE_MAX);
+  appShellExploreNote = notes.join(' ');
+  appShellExploreLoaded = true;
+  appShellExplorePreview = -1;
+  appShellExplorePreviewData = null;
+  appShellRenderExplore(true);
+  return appShellExploreResults;
+}
+
+// The preview: what is actually in the list, fetched the way the home editor
+// fetches it, so nothing is added before it has been seen.
+async function appShellExplorePreviewRow(index) {
+  const row = appShellExploreResults[Number(index)];
+  if (!row) return null;
+  if (appShellExplorePreview === Number(index)) {
+    appShellExplorePreview = -1;
+    appShellExploreRenderPreview();
+    return null;
+  }
+  appShellExplorePreview = Number(index);
+  appShellExplorePreviewData = { loading: true };
+  appShellExploreRenderPreview();
+  const auth = (typeof previewCreatorAuth === 'function') ? previewCreatorAuth() : {};
+  const body = Object.assign({ url: row.url, type: row.type === 'series' ? 'series' : 'movie', sample: 6 }, auth);
+  const res = await appShellApiFetch('/api/preview', { method: 'POST', body: body });
+  if (appShellExplorePreview !== Number(index)) return null;
+  appShellExplorePreviewData = res.ok
+    ? { sample: (res.data && res.data.sample) || [], count: Number(res.data && (res.data.totalItems || res.data.count)) || 0, error: '' }
+    : { sample: [], count: 0, error: res.error || 'That list could not be read.' };
+  appShellExploreRenderPreview();
+  return appShellExplorePreviewData;
+}
+
+function appShellExplorePosterHtml(item) {
+  const poster = item && (item.poster || item.showPoster);
+  if (!poster) return '<div class="app-shell-explore-poster app-shell-explore-poster-none"></div>';
+  return '<img class="app-shell-explore-poster" loading="lazy" alt="" src="' + appShellExploreEscape(poster) + '">';
+}
+
+function appShellExploreOnHomeScreen(row) {
+  if (typeof isListAddedToConfig !== 'function') return false;
+  const type = row.type === 'series' ? 'series' : (row.type === 'movie' ? 'movie' : null);
+  if (isListAddedToConfig(row.url, type)) return true;
+  return isListAddedToConfig(row.url, 'movie') || isListAddedToConfig(row.url, 'series');
+}
+
+// Exactly what the legacy search's own "+ Add" does for a result list (19_,
+// the .searchAddBtn handler), including the two rows a mixed list becomes.
+function appShellExploreToggleHomeScreen(index) {
+  const row = appShellExploreResults[Number(index)];
+  if (!row) return false;
+  if (appShellExploreOnHomeScreen(row)) {
+    if (typeof removeListFromConfig === 'function') {
+      removeListFromConfig(row.url, row.type);
+      removeListFromConfig(row.url, 'movie');
+      removeListFromConfig(row.url, 'series');
+      removeListFromConfig(row.url, null);
+    }
+    const rows = document.querySelectorAll('#lists .entry');
+    for (let i = 0; i < rows.length; i++) {
+      const urlInput = rows[i].querySelector ? rows[i].querySelector('.url') : null;
+      if (urlInput && String(urlInput.value).indexOf(row.url) !== -1) rows[i].remove();
+    }
+    if (typeof renumber === 'function') renumber();
+    if (typeof saveState === 'function') saveState();
+    appShellRenderExplore(false);
+    showToast('Removed "' + row.name + '" from your Catalogs.', 'success');
+    return true;
+  }
+  if (row.type === 'mixed' || row.type === 'unknown') {
+    addRow(row.name + ' (Movies)', row.url, 'movie', true, 'Custom');
+    addRow(row.name + ' (Shows)', row.url, 'series', true, 'Custom');
+  } else {
+    addRow(row.name, row.url, row.type, true, 'Custom');
+  }
+  if (typeof renumber === 'function') renumber();
+  if (typeof saveState === 'function') saveState();
+  appShellRenderExplore(false);
+  showToast('Added "' + row.name + '" to your home screen.', 'success');
+  return true;
+}
+
+function appShellExploreSourceLabel(id) {
+  for (let i = 0; i < APP_SHELL_EXPLORE_SOURCES.length; i++) {
+    if (APP_SHELL_EXPLORE_SOURCES[i].id === id) return APP_SHELL_EXPLORE_SOURCES[i].label;
+  }
+  return id === 'mylists' ? 'My Lists community' : id;
+}
+
+function appShellExploreCardHtml(row, index) {
+  const meta = appShellExploreEscape(appShellExploreSourceLabel(row.source)) +
+    ' &middot; ' + appShellExploreEscape(row.type === 'series' ? 'Shows' : (row.type === 'movie' ? 'Movies' : 'Movies and Shows')) +
+    (row.items ? ' &middot; ' + row.items + (row.items === 1 ? ' title' : ' titles') : '') +
+    (row.likes ? ' &middot; &#9829; ' + row.likes : '') +
+    (row.by ? ' &middot; ' + appShellExploreEscape(row.by) : '');
+  const onHome = appShellExploreOnHomeScreen(row);
+  const open = appShellExplorePreview === index;
+  return '<div class="app-shell-row">' +
+    '<div class="app-shell-row-main"><strong>' + appShellExploreEscape(row.name) + '</strong>' +
+    '<br><span class="app-shell-muted">' + meta + '</span>' +
+    '<br><span class="app-shell-muted app-shell-review-url">' + appShellExploreEscape(row.url) + '</span></div>' +
+    '<div class="app-shell-row-controls">' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="explore-preview" data-app-shell-id="' + index + '">' + (open ? 'Hide preview' : 'Preview') + '</button>' +
+    '<button type="button" class="' + (onHome ? 'secondary lc-btn' : 'primary lc-btn') + '" data-app-shell-action="explore-add" data-app-shell-id="' + index + '">' + (onHome ? 'On your home screen' : 'Add to home screen') + '</button>' +
+    '</div></div>' +
+    (open ? '<div class="app-shell-explore-preview" id="appShellExplorePreviewArea-' + index + '"></div>' : '');
+}
+
+function appShellExplorePreviewInnerHtml(index) {
+  const row = appShellExploreResults[index];
+  const data = appShellExplorePreviewData;
+  if (!row || !data) return '';
+  if (data.loading) return '<p class="app-shell-muted">Looking inside...</p>';
+  if (data.error) return '<p class="app-shell-muted app-shell-review-bad">' + appShellExploreEscape(data.error) + '</p>';
+  const sample = data.sample || [];
+  const count = data.count || sample.length;
+  let html = '<div class="app-shell-explore-posters">' + sample.map(appShellExplorePosterHtml).join('') + '</div>';
+  html += '<p class="app-shell-muted">' + (count ? 'First ' + Math.min(sample.length, count) + ' of ' + count + (count === 1 ? ' title' : ' titles') : 'This list is empty.') + '</p>';
+  html += '<div class="app-shell-actions">' +
+    '<button type="button" class="primary lc-btn" data-app-shell-action="explore-add" data-app-shell-id="' + index + '">Add to home screen</button>' +
+    '</div>';
+  return html;
+}
+
+// Rewrites just the open preview in place, the same way the settings panels
+// refresh without rebuilding the screen around them.
+function appShellExploreRenderPreview() {
+  const area = document.getElementById('appShellExplorePreviewArea-' + appShellExplorePreview);
+  if (!area) return false;
+  area.innerHTML = appShellExplorePreviewInnerHtml(appShellExplorePreview);
+  return true;
+}
+
+function appShellExploreChips(rows, current, action) {
+  return rows.map(function (row) {
+    const on = row.id === current;
+    const ready = row.ready !== false;
+    return '<button type="button" class="app-shell-chip' + (on ? ' is-on' : '') + '"' +
+      ' data-app-shell-action="' + action + '" data-app-shell-id="' + appShellExploreEscape(row.id) + '"' +
+      (ready ? '' : ' disabled title="' + appShellExploreEscape(row.why || '') + '"') +
+      '>' + appShellExploreEscape(row.label) + '</button>';
+  }).join('');
+}
+
+function appShellRenderExplore(scrollToResults) {
+  const host = appShellExploreHost();
+  if (!host || !NEW_UI) return false;
+  const sources = [{ id: 'all', label: 'All sources', ready: true }].concat(APP_SHELL_EXPLORE_SOURCES);
+  let html = '<div class="panel" style="margin-bottom:12px;">' +
+    '<h2 class="panel-title">Explore</h2>' +
+    '<p class="app-shell-muted">Community lists from this site and from MDBList, Trakt and TMDB. Preview one, then put it on your home screen.</p>' +
+    '<div class="app-shell-actions" style="margin-bottom:8px;">' + appShellExploreChips(sources, appShellExploreSource, 'explore-source') + '</div>' +
+    '<div class="app-shell-actions" style="margin-bottom:8px;">' + appShellExploreChips(APP_SHELL_EXPLORE_SORTS, appShellExploreSort, 'explore-sort') + '</div>' +
+    '<div class="row"><input type="text" id="appShellExploreSearch" placeholder="Search lists\u2026" aria-label="Search public lists" spellcheck="false" value="' + appShellExploreEscape(appShellExploreQuery) + '"></div>';
+
+  if (!appShellExploreLoaded) {
+    html += '<p class="app-shell-muted" id="appShellExploreStatus">Loading\u2026</p>';
+  } else if (!appShellExploreResults.length) {
+    html += '<p class="app-shell-muted" id="appShellExploreStatus">' +
+      (appShellExploreQuery ? 'Nothing found for those words.' : 'Nothing to show right now.') + '</p>';
+  } else {
+    html += '<p class="app-shell-muted" id="appShellExploreStatus">' + appShellExploreResults.length +
+      (appShellExploreResults.length === 1 ? ' list' : ' lists') +
+      (appShellExploreQuery ? ' matching "' + appShellExploreEscape(appShellExploreQuery) + '"' : '') + '.</p>';
+    html += '<div class="app-shell-review" id="appShellExploreResults">' +
+      appShellExploreResults.map(appShellExploreCardHtml).join('') + '</div>';
+  }
+  if (appShellExploreNote) html += '<p class="app-shell-muted" id="appShellExploreNote">' + appShellExploreEscape(appShellExploreNote) + '</p>';
+  html += '<p class="app-shell-muted">Most added is not offered yet: it counts how many people put a list on their home screen, which the new list service keeps and which is not switched on yet.</p>';
+  html += '</div>';
+  host.innerHTML = html;
+
+  const input = document.getElementById('appShellExploreSearch');
+  if (input && input.addEventListener) {
+    input.addEventListener('input', function () {
+      appShellExploreQuery = input.value || '';
+      if (appShellExploreTimer) clearTimeout(appShellExploreTimer);
+      appShellExploreTimer = setTimeout(function () {
+        appShellExploreTimer = null;
+        appShellExploreRun();
+      }, 300);
+    });
+  }
+  // Results are fetched in full, so a card's own re-render keeps the open
+  // preview; only its placeholder needs filling.
+  if (appShellExplorePreview >= 0) appShellExploreRenderPreview();
+  if (scrollToResults) {
+    const box = document.getElementById('appShellExploreResults');
+    if (box && box.scrollIntoView) {
+      try { box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {}
+    }
+  }
+  return true;
+}
+
+// Opening the view: render the frame, then fetch once. Coming back to the tab
+// keeps what is already there.
+function appShellOpenExplore() {
+  if (!NEW_UI) return false;
+  const first = !appShellExploreLoaded;
+  appShellRenderExplore(false);
+  if (first) {
+    appShellExploreRun();
+  } else {
+    appShellRenderExplore(false);
+  }
+  return true;
+}
+
+async function appShellExploreAction(action, id) {
+  const what = String(action || '');
+  if (what === 'explore-source') {
+    appShellExploreSource = String(id || 'all');
+    return appShellExploreRun();
+  }
+  if (what === 'explore-sort') {
+    const want = String(id || 'popular');
+    const sort = APP_SHELL_EXPLORE_SORTS.filter(function (s) { return s.id === want && s.ready !== false; })[0];
+    if (!sort) {
+      showToast('That order is not switched on yet.', 'info');
+      return false;
+    }
+    appShellExploreSort = sort.id;
+    appShellExploreResults = appShellExploreSortRows(appShellExploreResults);
+    appShellRenderExplore(false);
+    return true;
+  }
+  if (what === 'explore-preview') return appShellExplorePreviewRow(id);
+  if (what === 'explore-add') return appShellExploreToggleHomeScreen(id);
+  if (what === 'explore-refresh') {
+    appShellExploreLoaded = false;
+    return appShellExploreRun();
+  }
+  return false;
+}
+
+// --- Imports (P6-6) ----------------------------------------------------------
+//
+// "I want to import a Letterboxd list": pick the file your other site exported,
+// and the matching happens on the server (49_imports.js) instead of in this tab.
+// That is what makes the rest of this screen possible -- the job keeps running
+// when the page is closed, the progress it reports is real, and the titles TMDB
+// could not place are shown for a person to decide about rather than dropped.
+//
+//   POST /api/imports                    hand the rows over once
+//   GET  /api/imports/:id                { status, total, done, matched,
+//                                          ambiguous, unmatched }
+//   GET  /api/imports/:id/review         the ambiguous rows and their candidates
+//   POST /api/imports/:id/review         { choices: [{ row, tmdbId | null }] }
+//   GET  /api/imports/:id/result         the matched titles, in the file's order
+//
+// The file itself is read here, in the browser, because it has to be: the rows
+// are what get posted. The reading reuses the page's own importer
+// (extractItemsFromFileContent, and the fflate zip reader the page already
+// loads, 18_) rather than a second parser with its own bugs.
+//
+// Everything needs an account -- the API is per account, and one import at a
+// time -- so a signed-out browser gets a card pointing at Settings.
+
+// The server's own ceiling: IMPORT_ROWS_MAX in 49_imports.js. A literal rather
+// than an interpolation because 49_ is declared after the Worker's exports and
+// so is not in scope where this page is built; the two are checked together by
+// the imports test, and the server refuses anything over its own limit anyway.
+const APP_SHELL_IMPORT_ROWS_MAX = 5000;
+const APP_SHELL_IMPORT_POLL_MS = 1500;
+
+var appShellImportPollTimer = null;
+var appShellImportsResumed = false;
+var appShellImportFileNote = '';
+var appShellImportFile = null;   // { name, byKind: { movie: [], series: [] }, counts, truncated }
+var appShellImportKind = 'movie';
+var appShellImportJob = null;    // the last status the server gave us
+var appShellImportReview = [];   // the ambiguous rows still to decide
+var appShellImportItems = [];    // the matched titles, once the job is done
+var appShellImportSaved = null;  // { name, slug, type } -- the saved list, once there is one
+
+function appShellImportsHost() {
+  return document.getElementById('appShellImports');
+}
+
+// Whether the Lists > Import panel is the one on screen (the container exists
+// on every shell page; the panel does not).
+function appShellImportsIsOpen() {
+  const panel = document.getElementById('listsSubImport');
+  return !!(panel && panel.style && panel.style.display !== 'none');
+}
+
+function appShellImportsEscape(value) {
+  return escapeHtml(String(value === null || value === undefined ? '' : value));
+}
+
+function appShellImportsNumber(n) {
+  return Number(n) || 0;
+}
+
+// What a file's name would be as a list name: "letterboxd-watchlist.csv" ->
+// "Letterboxd Watchlist".
+function appShellImportNameFromFile(fileName) {
+  const base = String(fileName || '').replace(/\\.[^.]+$/, '').replace(/[-_]+/g, ' ').replace(/\\s+/g, ' ').trim();
+  if (!base) return 'Imported list';
+  return base.replace(/(^|\\s)([a-z])/g, function (m, sp, ch) { return sp + ch.toUpperCase(); }).slice(0, 80);
+}
+
+// --- reading the file --------------------------------------------------------
+
+// One file's text through the page's own extractor, which knows Letterboxd,
+// IMDb, Trakt, Simkl, MovieLens and TMDB export shapes.
+function appShellImportItemsFromText(fileName, text) {
+  if (typeof extractItemsFromFileContent !== 'function') return [];
+  try {
+    const items = extractItemsFromFileContent(fileName, String(text || ''), 'auto');
+    return Array.isArray(items) ? items : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+// The rows the import API takes ({ title, year?, imdbId?, tmdbId? }), grouped
+// by kind: one import is one kind (that is the server's model), so a file that
+// holds both is two imports and the screen picks which one it is sending.
+function appShellImportRowsFromItems(items) {
+  const byKind = { movie: [], series: [] };
+  (items || []).forEach(function (it) {
+    if (!it) return;
+    const title = String(it.title || it.name || '').trim();
+    const imdbId = /^tt\\d{1,10}$/.test(String(it.imdbId || '')) ? String(it.imdbId) : '';
+    const tmdbId = Number(it.tmdbId) > 0 ? Number(it.tmdbId) : 0;
+    if (!title && !imdbId && !tmdbId) return;
+    const year = /^\\d{4}$/.test(String(it.year || '').trim()) ? Number(String(it.year).trim()) : null;
+    const kind = (it.type === 'series' || it.type === 'show' || it.type === 'tv') ? 'series' : 'movie';
+    byKind[kind].push({ title: title, year: year, imdbId: imdbId || null, tmdbId: tmdbId || null });
+  });
+  return { byKind: byKind, counts: { movie: byKind.movie.length, series: byKind.series.length } };
+}
+
+// One chosen file: a zip (a Trakt or Letterboxd export holds several CSVs) or a
+// single CSV/JSON. Returns { name, byKind, counts, truncated } or { error }.
+async function appShellImportReadFile(file) {
+  const name = String((file && file.name) || 'file');
+  let items = [];
+  if (/\\.zip$/i.test(name)) {
+    if (typeof fflate === 'undefined' || !fflate || typeof fflate.unzipSync !== 'function') {
+      return { error: 'The zip reader is still loading. Try again in a moment, or unzip the file and choose the CSV inside it.' };
+    }
+    let unzipped = null;
+    try {
+      const buf = await file.arrayBuffer();
+      unzipped = fflate.unzipSync(new Uint8Array(buf));
+    } catch (e) {
+      return { error: 'That zip could not be read. Try unzipping it and choosing the CSV inside.' };
+    }
+    const entryNames = Object.keys(unzipped || {}).sort();
+    for (let i = 0; i < entryNames.length; i++) {
+      const entryName = entryNames[i];
+      if (entryName.slice(-1) === '/' || entryName.indexOf('__MACOSX') === 0) continue;
+      if (!/\\.(csv|json|txt)$/i.test(entryName)) continue;
+      const text = (typeof fflate.strFromU8 === 'function') ? fflate.strFromU8(unzipped[entryName]) : '';
+      const parts = entryName.split('/');
+      items = items.concat(appShellImportItemsFromText(parts[parts.length - 1] || entryName, text));
+      if (items.length > APP_SHELL_IMPORT_ROWS_MAX) break;
+    }
+  } else {
+    let text = '';
+    try {
+      text = await file.text();
+    } catch (e) {
+      return { error: 'That file could not be read.' };
+    }
+    items = appShellImportItemsFromText(name, text);
+  }
+  if (!items.length) {
+    return { error: 'No titles were found in that file. CSV, JSON, and Trakt or Letterboxd exports inside a zip are all supported.' };
+  }
+  const read = appShellImportRowsFromItems(items.slice(0, APP_SHELL_IMPORT_ROWS_MAX));
+  if (!read.counts.movie && !read.counts.series) return { error: 'No titles were found in that file.' };
+  return { name: name, byKind: read.byKind, counts: read.counts, truncated: items.length > APP_SHELL_IMPORT_ROWS_MAX };
+}
+
+// --- the job -----------------------------------------------------------------
+
+function appShellImportRemember(id) {
+  try { localStorage.setItem('myListAddon:lastImport', String(id)); } catch (e) {}
+}
+
+function appShellImportRemembered() {
+  try { return localStorage.getItem('myListAddon:lastImport') || ''; } catch (e) { return ''; }
+}
+
+function appShellImportMarkSeen(id) {
+  try { localStorage.setItem('myListAddon:lastImportSeen', String(id)); } catch (e) {}
+}
+
+function appShellImportSeen(id) {
+  try { return (localStorage.getItem('myListAddon:lastImportSeen') || '') === String(id); } catch (e) { return true; }
+}
+
+function appShellImportStopPolling() {
+  if (appShellImportPollTimer) {
+    clearTimeout(appShellImportPollTimer);
+    appShellImportPollTimer = null;
+  }
+}
+
+function appShellImportIsRunning() {
+  return !!(appShellImportJob && (appShellImportJob.status === 'queued' || appShellImportJob.status === 'running'));
+}
+
+async function appShellImportStart() {
+  const file = appShellImportFile;
+  if (!file) return false;
+  const kind = appShellImportKind === 'series' ? 'series' : 'movie';
+  const rows = (file.byKind && file.byKind[kind]) ? file.byKind[kind] : [];
+  if (!rows.length) {
+    showToast(kind === 'series' ? 'That file has no shows in it -- pick Movies, or a different file.' : 'That file has no movies in it -- pick Shows, or a different file.', 'info');
+    return false;
+  }
+  const name = appShellImportListName();
+  // One line per mutating call: the CSRF scanner reads this file and calls an
+  // appShellApiFetch( on the same line as method: 'POST' exempt.
+  const startBody = { rows: rows, kind: kind, source: 'file', name: name };
+  const res = await appShellApiFetch('/api/imports', { method: 'POST', body: startBody });
+  if (!res.ok) {
+    // "An import is already running" answers 409 with the id of the one that
+    // is -- that is something to pick up, not a failure to report.
+    const busyId = res.data && res.data.id;
+    if (res.status === 409 && busyId) {
+      appShellImportRemember(busyId);
+      appShellImportFile = null;
+      await appShellImportRefresh();
+      showToast('An import was already running, so this screen picked it up.', 'info');
+      return true;
+    }
+    showToast(res.error || 'The import could not be started.', 'error');
+    return false;
+  }
+  const id = (res.data && res.data.id) || null;
+  if (!id) {
+    showToast('The import could not be started.', 'error');
+    return false;
+  }
+  appShellImportRemember(id);
+  appShellImportFile = null;
+  appShellImportReview = [];
+  appShellImportItems = [];
+  appShellImportSaved = null;
+  appShellImportJob = {
+    id: id,
+    status: 'queued',
+    kind: kind,
+    name: name,
+    total: appShellImportsNumber(res.data.total),
+    done: 0, matched: 0, ambiguous: 0, unmatched: 0, error: null,
+  };
+  appShellRenderImports();
+  appShellImportSchedulePoll();
+  showToast('Import started. You can leave this page -- it keeps going.', 'success');
+  return true;
+}
+
+function appShellImportSchedulePoll() {
+  appShellImportStopPolling();
+  if (!appShellImportIsRunning()) return false;
+  appShellImportPollTimer = setTimeout(function () {
+    appShellImportPollTimer = null;
+    appShellImportRefresh();
+  }, APP_SHELL_IMPORT_POLL_MS);
+  return true;
+}
+
+// Reads the job's status, and -- once it has finished -- the review rows and
+// the titles behind them.
+async function appShellImportRefresh() {
+  const id = (appShellImportJob && appShellImportJob.id) || appShellImportRemembered();
+  if (!id) return false;
+  const res = await appShellApiFetch('/api/imports/' + encodeURIComponent(id));
+  if (!res.ok) {
+    if (res.status === 404) {
+      // The remembered import is gone -- a different account, or a job the
+      // store no longer keeps. Forget it rather than showing a stuck screen.
+      try { localStorage.removeItem('myListAddon:lastImport'); } catch (e) {}
+      appShellImportJob = null;
+      appShellRenderImports();
+      return false;
+    }
+    showToast(res.error || 'Could not read the import just now.', 'error');
+    appShellImportSchedulePoll();
+    return false;
+  }
+  const data = res.data || {};
+  appShellImportJob = {
+    id: data.id || id,
+    status: data.status || 'queued',
+    kind: data.kind === 'series' ? 'series' : 'movie',
+    name: data.name || (appShellImportJob && appShellImportJob.name) || null,
+    total: appShellImportsNumber(data.total),
+    done: appShellImportsNumber(data.done),
+    matched: appShellImportsNumber(data.matched),
+    ambiguous: appShellImportsNumber(data.ambiguous),
+    unmatched: appShellImportsNumber(data.unmatched),
+    error: data.error || null,
+  };
+  if (appShellImportJob.status === 'done') {
+    await appShellImportLoadDone(true);
+    // Said once per import, which is the point of the job running on the
+    // server: it can finish while nobody is watching.
+    if (!appShellImportSeen(appShellImportJob.id)) {
+      appShellImportMarkSeen(appShellImportJob.id);
+      showToast('Your import finished: ' + appShellImportJob.matched + ' of ' + appShellImportJob.total +
+        (appShellImportJob.total === 1 ? ' title matched.' : ' titles matched.'), 'success');
+    }
+  } else if (appShellImportJob.status === 'failed') {
+    appShellImportMarkSeen(appShellImportJob.id);
+  }
+  appShellRenderImports();
+  if (appShellImportIsRunning()) appShellImportSchedulePoll();
+  return true;
+}
+
+// The review rows, and the titles that came out of the import. reloadItems
+// is false only when the titles already on screen are known to be current.
+async function appShellImportLoadDone(reloadItems) {
+  const job = appShellImportJob;
+  if (!job) return false;
+  const reviewRes = await appShellApiFetch('/api/imports/' + encodeURIComponent(job.id) + '/review');
+  appShellImportReview = (reviewRes.ok && reviewRes.data && reviewRes.data.review) ? reviewRes.data.review : [];
+  if (reloadItems === false && appShellImportItems.length) return true;
+  const resultRes = await appShellApiFetch('/api/imports/' + encodeURIComponent(job.id) + '/result');
+  appShellImportItems = (resultRes.ok && resultRes.data && resultRes.data.items) ? resultRes.data.items : [];
+  return true;
+}
+
+// Picking a candidate, or skipping the row. One choice per press: the row
+// leaves the review as soon as the server has taken it, so there is nothing
+// half-decided to lose.
+async function appShellImportChoose(choiceId) {
+  const job = appShellImportJob;
+  if (!job || job.status !== 'done') return false;
+  const parts = String(choiceId || '').split('|');
+  const rowIndex = Number(parts[0]);
+  const tmdbId = parts[1] === 'skip' ? null : Number(parts[1]);
+  if (!Number.isInteger(rowIndex)) return false;
+  if (tmdbId !== null && !(tmdbId > 0)) return false;
+  const res = await appShellApiFetch('/api/imports/' + encodeURIComponent(job.id) + '/review', { method: 'POST', body: { choices: [{ row: rowIndex, tmdbId: tmdbId }] } });
+  if (!res.ok) {
+    showToast(res.error || 'That choice could not be saved.', 'error');
+    return false;
+  }
+  appShellImportJob.matched = appShellImportsNumber(res.data && res.data.matched);
+  appShellImportJob.ambiguous = appShellImportsNumber(res.data && res.data.ambiguous);
+  appShellImportJob.unmatched = appShellImportsNumber(res.data && res.data.unmatched);
+  appShellImportReview = appShellImportReview.filter(function (r) { return Number(r.row) !== rowIndex; });
+  // The titles are the server's answer, so they are re-read rather than guessed
+  // at here: a chosen row's id is the server's to decide.
+  await appShellImportLoadDone(true);
+  appShellRenderImports();
+  showToast(tmdbId === null ? 'Skipped.' : 'Added to the import.', 'success');
+  return true;
+}
+
+// --- turning the result into a list -----------------------------------------
+
+// The same item shape the page's own importer writes into a list (18_): the id
+// under both names, the title under both names, and the poster metahub serves
+// for an IMDb id when the file did not carry one.
+function appShellImportListItems() {
+  return appShellImportItems.map(function (it) {
+    const id = String(it.id || '');
+    const imdbId = /^tt\\d+$/.test(id) ? id : '';
+    return {
+      id: id,
+      imdbId: imdbId,
+      tmdbId: imdbId ? '' : (id.indexOf('tmdb:') === 0 ? id.slice(5) : ''),
+      type: (it.type === 'series') ? 'series' : 'movie',
+      name: it.name || it.title || '',
+      title: it.name || it.title || '',
+      poster: imdbId ? ('https://images.metahub.space/poster/medium/' + imdbId + '/img') : '',
+      year: it.year || '',
+    };
+  });
+}
+
+function appShellImportListName() {
+  const input = document.getElementById('appShellImportName');
+  const typed = (input && input.value ? input.value : '').trim();
+  if (typed) return typed.slice(0, 120);
+  if (appShellImportJob && appShellImportJob.name) return String(appShellImportJob.name).slice(0, 120);
+  if (appShellImportFile) return appShellImportNameFromFile(appShellImportFile.name);
+  return 'Imported list';
+}
+
+async function appShellImportSaveList() {
+  const items = appShellImportItems;
+  if (!items.length) {
+    showToast('There is nothing matched to save yet.', 'info');
+    return false;
+  }
+  const name = appShellImportListName();
+  const type = (appShellImportJob && appShellImportJob.kind === 'series') ? 'series' : (appShellImportKind === 'series' ? 'series' : 'movie');
+  // Same authentication as the Lists view's own save (appShellSetListVisibility):
+  // the route checks creatorName + creatorKey, and empty strings let a session
+  // cookie stand in for them when the browser has one.
+  const saveBody = {
+    creatorName: (typeof activeCreator !== 'undefined' && activeCreator) ? activeCreator.creatorName : '',
+    creatorKey: localStorage.getItem('myListAddon:creatorKey') || '',
+    name: name,
+    type: type,
+    items: appShellImportListItems(),
+    visibility: 'private',
+  };
+  const res = await appShellApiFetch('/api/creator/lists/save', { method: 'POST', body: saveBody });
+  if (!res.ok) {
+    showToast(res.error || 'The list could not be saved.', 'error');
+    return false;
+  }
+  const slug = (res.data && res.data.slug) || '';
+  appShellImportSaved = { name: name, slug: slug, type: type };
+  // The checkbox beside the button decides whether it belongs on the home
+  // screen: "the result is a list, and one toggle adds it".
+  const toggle = document.getElementById('appShellImportHomeToggle');
+  const wantsHome = !toggle || !!toggle.checked;
+  if (wantsHome) {
+    appShellImportSetHome(true, true);
+  } else {
+    appShellRenderImports();
+  }
+  appShellRenderImports();
+  showToast('Saved "' + name + '" with ' + items.length + ' titles. It is on your account -- My Lists shows it.', 'success');
+  return true;
+}
+
+// Whether the row for a saved import is on the home screen. The page's own
+// answer counts first -- isListAddedToConfig is what the dashboard's buttons
+// read -- and the #lists scan catches a row this screen did not add.
+function appShellImportOnHome() {
+  const saved = appShellImportSaved;
+  if (!saved || !saved.slug) return false;
+  if (typeof isListAddedToConfig === 'function') {
+    if (isListAddedToConfig(null, saved.type, saved.slug)) return true;
+    if (isListAddedToConfig(null, 'movie', saved.slug) || isListAddedToConfig(null, 'series', saved.slug)) return true;
+  }
+  const rows = document.querySelectorAll('#lists .entry');
+  for (let i = 0; i < rows.length; i++) {
+    const urlInput = rows[i].querySelector ? rows[i].querySelector('.url') : null;
+    if (!urlInput) continue;
+    const payload = (typeof parseCustomListPayloadClient === 'function') ? parseCustomListPayloadClient(urlInput.value) : null;
+    if (payload && (String(payload.localSlug || '') === String(saved.slug) || String(payload.listSlug || '') === String(saved.slug))) return true;
+  }
+  return false;
+}
+
+// On or off the home screen, with exactly the snapshot the Lists view's own
+// toggle builds (P6-4), so the row behaves like every other one: the same
+// customlist:v1 payload, the same group, and a name the rest of the page
+// already knows how to play.
+function appShellImportSetHome(on, quiet) {
+  const saved = appShellImportSaved;
+  if (!saved) return false;
+  if (!on) {
+    if (typeof removeListFromConfig === 'function') {
+      removeListFromConfig(null, saved.type, saved.slug);
+      removeListFromConfig(null, 'movie', saved.slug);
+      removeListFromConfig(null, 'series', saved.slug);
+    }
+    const rows = document.querySelectorAll('#lists .entry');
+    for (let i = 0; i < rows.length; i++) {
+      const urlInput = rows[i].querySelector ? rows[i].querySelector('.url') : null;
+      if (!urlInput) continue;
+      const payload = (typeof parseCustomListPayloadClient === 'function') ? parseCustomListPayloadClient(urlInput.value) : null;
+      if (payload && (String(payload.localSlug || '') === String(saved.slug) || String(payload.listSlug || '') === String(saved.slug))) rows[i].remove();
+    }
+    if (typeof renumber === 'function') renumber();
+    if (typeof saveState === 'function') saveState();
+    appShellRenderImports();
+    if (!quiet) showToast('"' + saved.name + '" removed from your home screen.', 'success');
+    return true;
+  }
+  const items = (typeof normalizeSnapshotItemsForCatalog === 'function')
+    ? normalizeSnapshotItemsForCatalog(appShellImportListItems())
+    : appShellImportListItems();
+  const snapshot = { listId: generateChannelId(), localSlug: saved.slug, listSlug: saved.slug, type: saved.type, items: items, shuffle: false };
+  addRow(saved.name, 'customlist:v1:' + JSON.stringify(snapshot), saved.type, true, 'My Lists');
+  if (typeof renumber === 'function') renumber();
+  if (typeof saveState === 'function') saveState();
+  appShellRenderImports();
+  if (!quiet) showToast('"' + saved.name + '" added to your home screen.', 'success');
+  return true;
+}
+
+// --- the screen --------------------------------------------------------------
+
+function appShellImportProgressHtml(job) {
+  const total = job.total || 0;
+  const done = Math.min(job.done || 0, total);
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  const parts = [];
+  if (job.ambiguous) parts.push(job.ambiguous + ' to review');
+  if (job.unmatched) parts.push(job.unmatched + ' not found');
+  let html = '<p class="app-shell-kv" id="appShellImportProgress">Matched <strong>' + job.matched + '</strong> of ' + total +
+    (parts.length ? ' &middot; ' + parts.join(' &middot; ') : '') + '</p>' +
+    '<div class="app-shell-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '"><span style="width:' + pct + '%"></span></div>';
+  if (job.status === 'running' || job.status === 'queued') {
+    html += '<p class="app-shell-muted">The server is working through it. You can close this page -- it keeps going, and this screen picks it up when you come back.</p>' +
+      '<div class="app-shell-actions"><button type="button" class="secondary lc-btn" data-app-shell-action="import-refresh">Check again</button></div>';
+  }
+  return html;
+}
+
+function appShellImportReviewHtml() {
+  if (!appShellImportReview.length) return '';
+  let html = '<h3 class="app-shell-h3">Review ' + appShellImportReview.length + (appShellImportReview.length === 1 ? ' title' : ' titles') + '</h3>' +
+    '<p class="app-shell-muted">These look like more than one title. Pick the right one, or skip it -- the rest of the import is already matched and does not wait for this.</p>';
+  appShellImportReview.slice(0, 50).forEach(function (r) {
+    html += '<div class="app-shell-review-row"><div class="app-shell-row-main"><strong>' +
+      appShellImportsEscape(r.title || '(untitled)') + '</strong>' +
+      (r.year ? '<br><span class="app-shell-muted">' + appShellImportsEscape(r.year) + '</span>' : '') +
+      '</div><div class="app-shell-row-controls">';
+    (r.candidates || []).forEach(function (c) {
+      html += '<button type="button" class="secondary lc-btn" data-app-shell-action="import-choose" data-app-shell-id="' +
+        Number(r.row) + '|' + Number(c.tmdbId) + '">' + appShellImportsEscape(c.title || 'Untitled') +
+        (c.year ? ' (' + Number(c.year) + ')' : '') + '</button>';
+    });
+    html += '<button type="button" class="secondary lc-btn" data-app-shell-action="import-choose" data-app-shell-id="' +
+      Number(r.row) + '|skip">Skip</button></div></div>';
+  });
+  if (appShellImportReview.length > 50) {
+    html += '<p class="app-shell-muted">Showing the first 50 of ' + appShellImportReview.length + '. Decide these and the rest follow.</p>';
+  }
+  return html;
+}
+
+function appShellImportUnmatchedHtml() {
+  if (!appShellImportJob || !appShellImportJob.unmatched) return '';
+  return '<p class="app-shell-muted">' + appShellImportJob.unmatched + (appShellImportJob.unmatched === 1 ? ' title was' : ' titles were') +
+    ' not found on TMDB and ' + (appShellImportJob.unmatched === 1 ? 'is' : 'are') + ' left out. Search for them in the Search tab, or fix the spelling in the file and import it again.</p>';
+}
+
+function appShellImportFinishedHtml() {
+  const job = appShellImportJob;
+  const items = appShellImportItems;
+  let html = '<h3 class="app-shell-h3">Import finished</h3>' + appShellImportProgressHtml(job);
+  if (!items.length) {
+    return html + '<p class="app-shell-muted">Nothing matched, so there is no list to save.</p>' + appShellImportUnmatchedHtml() +
+      '<div class="app-shell-actions"><button type="button" class="secondary lc-btn" data-app-shell-action="import-forget">Import another file</button></div>';
+  }
+  if (appShellImportSaved) {
+    const onHome = appShellImportOnHome();
+    html += '<p class="app-shell-kv">Saved as <strong>' + appShellImportsEscape(appShellImportSaved.name) + '</strong> with ' + items.length + ' titles.</p>' +
+      '<div class="app-shell-actions">' +
+      '<button type="button" class="' + (onHome ? 'secondary' : 'primary') + ' lc-btn" data-app-shell-action="import-home" data-app-shell-id="' + (onHome ? 'off' : 'on') + '">' +
+      (onHome ? 'On your home screen' : 'Show it on my home screen') + '</button>' +
+      '<button type="button" class="secondary lc-btn" data-app-shell-action="import-forget">Import another file</button>' +
+      '</div>' + appShellImportUnmatchedHtml();
+    return html;
+  }
+  html += '<label class="app-shell-muted" for="appShellImportName" style="display:block; margin:6px 0 4px;">List name</label>' +
+    '<input type="text" id="appShellImportName" value="' + appShellImportsEscape(appShellImportListName()) + '">' +
+    '<label class="app-shell-dedupe" for="appShellImportHomeToggle">' +
+    '<input type="checkbox" id="appShellImportHomeToggle" checked>' +
+    '<span><strong>Show it on my home screen</strong><br><span class="app-shell-muted">The list is saved either way; this decides whether a row for it goes into your rows above.</span></span></label>' +
+    '<div class="app-shell-actions"><button type="button" class="primary lc-btn" data-app-shell-action="import-save">Save ' + items.length + ' titles as a list</button></div>' +
+    appShellImportUnmatchedHtml();
+  return html;
+}
+
+// One kind of import the chosen file holds. Disabled when it holds none: the
+// server takes one kind per import, so an empty chip is nothing to send.
+function appShellImportKindChip(kind, label, count) {
+  const on = (appShellImportKind === 'series' ? 'series' : 'movie') === kind;
+  return '<button type="button" class="app-shell-chip' + (on ? ' is-on' : '') + '"' +
+    ' data-app-shell-action="import-kind" data-app-shell-id="' + kind + '"' +
+    (count ? '' : ' disabled title="The chosen file has none of these."') + '>' +
+    label + ' (' + count + ')</button>';
+}
+
+function appShellRenderImports() {
+  const host = appShellImportsHost();
+  if (!host || !NEW_UI) return false;
+  const typed = document.getElementById('appShellImportName');
+  const typedValue = typed ? typed.value : '';
+  let html = '<div class="panel" style="margin-bottom:12px;">' +
+    '<h2 class="panel-title">Import a file</h2>' +
+    '<p class="app-shell-muted">A Letterboxd zip or CSV, an IMDb CSV, a Trakt export. Matching happens on the server, so you can close this page and come back.</p>';
+
+  const account = appShellState.get().account;
+  if (!account) {
+    html += '<p class="app-shell-muted">Sign in first: an import is kept on your account and matched against your own library.</p>' +
+      '<div class="app-shell-actions"><button type="button" class="primary lc-btn" data-app-shell-action="import-account">Go to Settings to sign in</button></div></div>';
+    host.innerHTML = html;
+    return true;
+  }
+
+  if (appShellImportJob) {
+    if (appShellImportJob.status === 'failed') {
+      html += '<p class="app-shell-review-bad">' + appShellImportsEscape(appShellImportJob.error || 'The import stopped. Please try again.') + '</p>' +
+        '<div class="app-shell-actions"><button type="button" class="secondary lc-btn" data-app-shell-action="import-forget">Start a new import</button></div>';
+    } else if (appShellImportJob.status === 'done') {
+      html += appShellImportReviewHtml() + appShellImportFinishedHtml();
+    } else {
+      html += '<p class="app-shell-muted">Import #' + appShellImportsNumber(appShellImportJob.id) +
+        (appShellImportJob.name ? ' &middot; ' + appShellImportsEscape(appShellImportJob.name) : '') + '</p>' +
+        appShellImportProgressHtml(appShellImportJob);
+    }
+  } else if (appShellImportFile) {
+    const counts = appShellImportFile.counts || { movie: 0, series: 0 };
+    const chosen = appShellImportKind === 'series' ? 'series' : 'movie';
+    const sending = counts[chosen];
+    html += '<p class="app-shell-kv"><strong>' + appShellImportsEscape(appShellImportFile.name) + '</strong> &middot; ' +
+      (counts.movie + counts.series) + ' titles' +
+      (appShellImportFile.truncated ? ' (the first ' + APP_SHELL_IMPORT_ROWS_MAX + ')' : '') + '</p>' +
+      '<div class="app-shell-actions" style="margin-bottom:8px;">' + appShellImportKindChip('movie', 'Movies', counts.movie) +
+      appShellImportKindChip('series', 'Shows', counts.series) + '</div>';
+    if (counts.movie && counts.series) {
+      html += '<p class="app-shell-muted">That file has both. One import is one kind, so this sends the ' + sending + ' ' +
+        (chosen === 'movie' ? 'movies' : 'shows') + ' -- pick the other chip afterwards for the rest.</p>';
+    }
+    html += '<label class="app-shell-muted" for="appShellImportName" style="display:block; margin:6px 0 4px;">List name</label>' +
+      '<input type="text" id="appShellImportName" value="' + appShellImportsEscape(typedValue || appShellImportNameFromFile(appShellImportFile.name)) + '">' +
+      '<div class="app-shell-actions" style="margin-top:10px;">' +
+      '<button type="button" class="primary lc-btn" data-app-shell-action="import-start"' + (sending ? '' : ' disabled title="There are none of these in the chosen file."') + '>Start the import' + (sending ? ' (' + sending + (sending === 1 ? ' title)' : ' titles)') : '') + '</button>' +
+      '<button type="button" class="secondary lc-btn" data-app-shell-action="import-clear">Choose another file</button>' +
+      '</div>';
+  } else {
+    html += '<div class="app-shell-actions"><button type="button" class="primary lc-btn" data-app-shell-action="import-pick">Choose a file\\u2026</button></div>' +
+      '<p class="app-shell-muted" id="appShellImportStatus">' + appShellImportsEscape(appShellImportFileNote || 'Nothing chosen yet.') + '</p>';
+  }
+
+  html += '<input type="file" id="appShellImportFileInput" accept=".csv,.json,.zip,.txt" style="display:none" aria-label="Choose a file to import">' +
+    '</div>';
+  host.innerHTML = html;
+
+  const nameInput = document.getElementById('appShellImportName');
+  if (nameInput && typedValue && nameInput.value !== typedValue) nameInput.value = typedValue;
+  const input = document.getElementById('appShellImportFileInput');
+  if (input && input.addEventListener) input.addEventListener('change', appShellImportFileChosen);
+  return true;
+}
+
+function appShellImportFileChosen(e) {
+  const input = (e && e.target) || document.getElementById('appShellImportFileInput');
+  const list = (input && input.files) ? input.files : null;
+  if (!list || !list.length) return false;
+  const files = [];
+  for (let i = 0; i < list.length; i++) files.push(list[i]);
+  appShellImportReadFiles(files);
+  return true;
+}
+
+async function appShellImportReadFiles(files) {
+  appShellImportFileNote = 'Reading ' + files.length + (files.length === 1 ? ' file\\u2026' : ' files\\u2026');
+  appShellRenderImports();
+  const byKind = { movie: [], series: [] };
+  let truncated = false;
+  let error = '';
+  for (let i = 0; i < files.length; i++) {
+    const read = await appShellImportReadFile(files[i]);
+    if (read.error) { error = read.error; continue; }
+    ['movie', 'series'].forEach(function (kind) {
+      const room = APP_SHELL_IMPORT_ROWS_MAX - byKind.movie.length - byKind.series.length;
+      const rows = read.byKind[kind] || [];
+      if (rows.length > room) truncated = true;
+      rows.slice(0, Math.max(0, room)).forEach(function (r) { byKind[kind].push(r); });
+    });
+  }
+  const counts = { movie: byKind.movie.length, series: byKind.series.length };
+  appShellImportFileNote = '';
+  if (!counts.movie && !counts.series) {
+    showToast(error || 'No titles were found in that file.', 'error');
+    appShellRenderImports();
+    return false;
+  }
+  appShellImportFile = {
+    name: files.length === 1 ? files[0].name : files.length + ' files',
+    byKind: byKind,
+    counts: counts,
+    truncated: truncated || (counts.movie + counts.series) >= APP_SHELL_IMPORT_ROWS_MAX,
+  };
+  appShellImportKind = counts.series > counts.movie ? 'series' : 'movie';
+  appShellRenderImports();
+  return true;
+}
+
+// Called when the view is opened, and once at boot for a page served straight
+// at it. The remembered import is looked up only for a screen that is actually
+// being shown, and only once per page load.
+async function appShellResumeImport() {
+  if (!NEW_UI) return false;
+  if (appShellImportsResumed) return true;
+  appShellImportsResumed = true;
+  const id = appShellImportRemembered();
+  if (!id || appShellImportJob) return false;
+  await appShellImportRefresh();
+  return true;
+}
+
+async function appShellImportsAction(action, id) {
+  const what = String(action || '');
+  if (what === 'import-pick') {
+    const input = document.getElementById('appShellImportFileInput');
+    if (input && input.click) input.click();
+    return true;
+  }
+  if (what === 'import-kind') {
+    appShellImportKind = String(id) === 'series' ? 'series' : 'movie';
+    appShellRenderImports();
+    return true;
+  }
+  if (what === 'import-start') return appShellImportStart();
+  if (what === 'import-clear') {
+    appShellImportFile = null;
+    appShellImportFileNote = '';
+    appShellRenderImports();
+    return true;
+  }
+  if (what === 'import-refresh') return appShellImportRefresh();
+  if (what === 'import-choose') return appShellImportChoose(id);
+  if (what === 'import-save') return appShellImportSaveList();
+  if (what === 'import-home') return appShellImportSetHome(String(id) !== 'off');
+  if (what === 'import-account') {
+    appShellGo('/settings/account');
+    if (typeof appShellFocusSignIn === 'function') appShellFocusSignIn();
+    return true;
+  }
+  if (what === 'import-forget') {
+    try { localStorage.removeItem('myListAddon:lastImport'); } catch (e) {}
+    appShellImportJob = null;
+    appShellImportReview = [];
+    appShellImportItems = [];
+    appShellImportSaved = null;
+    appShellRenderImports();
+    return true;
+  }
+  return false;
+}
+
+// --- Channels: the template flow (P6-7) --------------------------------------
+//
+// "I want to create a channel": choose a template, look at today's lineup,
+// then put it on the home screen. The five templates FRONTEND_UX_AUDIT
+// scenario 6 names, and what each one is underneath -- none of them builds a
+// channel a second way, which is what "wrap the legacy builder until it is
+// rewritten" means for this task:
+//
+//   TV network          quickAddChannel (20_), which prefers the server-built
+//                       network preset and falls back to the page's own
+//                       traversal with visible progress
+//   Franchise/universe  the saga registry the page already carries
+//                       (TV_CROSSOVER_EVENTS), through the same ordered-items
+//                       fetch the Storylines tab uses
+//   Actor or creator    /api/person-search -> /api/person-credits, then the
+//                       same pick builder the legacy Spotlight uses
+//                       (buildSpotlightItemsFromCredits, 20_)
+//   From a list         quickAddChannel with a pasted list URL
+//   Custom              openBuildCustomChannel -- the legacy builder itself
+//
+// The lineup in the preview is the server's answer (POST /api/channel-lineup),
+// not an arrangement made here: it is the same resolveChannelLineup that
+// answers a Stremio request, so what the preview shows is what plays. The two
+// rules that route cannot honour (Hide watched and a dynamic channel need an
+// account it has no way to prove) come back named, and are said rather than
+// quietly shown as if they applied.
+//
+// Nothing goes into the config until "Add to home screen" is pressed: the
+// channel is built and saved to this browser first (saveLocalChannel), so the
+// preview and the row that follows cannot describe two different channels.
+// Adding and removing is toggleChannelInCatalog (20_) -- the same button the
+// My Channels cards use -- except for a saga, which is a catalog-only row and
+// goes through createInstantStorylineChannel, exactly as the Storylines tab
+// adds one.
+//
+// Signed out: a saga can still be added (docs/DECISIONS.md D-8 -- a storyline
+// row is public and needs no account), and everything else asks for an account
+// the way every other builder button already does (requireSignedInFor).
+
+// The tiles a lineup preview draws. The rest of the lineup is counted, not
+// listed -- a day's block is 24 shows x 3 episodes and nobody reads that as a
+// poster grid.
+const APP_SHELL_CHANNEL_LINEUP_TILES = 12;
+const APP_SHELL_CHANNELS_ACTION = /^chan-/;
+
+// The five templates, in the order the audit lists them. needsAccount mirrors
+// rowNeedsAccount (16_): a saga is the one that works signed out.
+const APP_SHELL_CHANNEL_TEMPLATES = [
+  { id: 'network', title: 'TV network', blurb: 'A&E, HBO, NBC, Cartoon Network and the rest -- a rotating 24/7 channel for a whole network.', needsAccount: true },
+  { id: 'saga', title: 'Franchise or universe', blurb: 'A saga in its canon order: the Marvel Infinity Saga, a trilogy, a TV universe. Works without an account.', needsAccount: false },
+  { id: 'person', title: 'Actor or creator', blurb: 'Everything someone was in, as episodes -- a Christopher Lloyd marathon in one channel.', needsAccount: true },
+  { id: 'list', title: 'From a list', blurb: 'A TV list from MDBList, Trakt, TMDB or this site, kept in step with the list if you want.', needsAccount: true },
+  { id: 'custom', title: 'Custom', blurb: 'Pick the shows and episodes yourself, with the full builder. Nothing is decided for you.', needsAccount: true }
+];
+
+var appShellChannelTemplate = '';        // '' = the gallery, otherwise a template id
+var appShellChannelDraft = null;         // the built channel: { template, channelId, eventId, name, url, poolSize }
+var appShellChannelLineup = null;        // the last POST /api/channel-lineup answer
+var appShellChannelLineupFor = '';       // the url that answer belongs to
+var appShellChannelBusy = '';            // the sentence shown while something runs
+var appShellChannelNotice = '';          // the last thing that happened, in words
+var appShellChannelBuildInFlight = false;
+var appShellChannelPersonResults = [];
+var appShellChannelPersonPick = null;    // { personId, name }
+var appShellChannelSagaPick = '';
+var appShellChannelListName = '';        // the name field's last value, so a re-render keeps it
+
+// Schedule options (the details panel under every template except a saga,
+// which has a fixed canon order). The two toggles are buttons carrying their
+// state, so a re-render cannot lose it; the numbers are read from their inputs
+// when a build starts, with the same defaults the legacy builder starts from.
+var appShellChannelSchedule = { rotate: true, hideWatched: false, shows: 24, episodes: 3, order: 'listed', perShow: 50 };
+
+function appShellChannelsHost() {
+  return document.getElementById('appShellChannels');
+}
+
+// Whether Channels > My Channels is the sub on screen (the container is
+// emitted on every shell page; the panel is not).
+function appShellChannelsIsOpen() {
+  const panel = document.getElementById('channelsSubMyChannels');
+  return !!(panel && panel.style && panel.style.display !== 'none');
+}
+
+function appShellChannelEscape(value) {
+  return escapeHtml(String(value === null || value === undefined ? '' : value));
+}
+
+function appShellChannelAttr(value) {
+  return escapeAttr(String(value === null || value === undefined ? '' : value));
+}
+
+function appShellChannelNumber(n) {
+  return Number(n) || 0;
+}
+
+// The networks the Quick Add tab offers, read from that tab's own buttons
+// rather than a second list that could drift from it.
+function appShellChannelNetworks() {
+  const out = [];
+  const buttons = document.querySelectorAll('#channelsSubQuickAdd .channelQuickAddBtn');
+  for (let i = 0; i < buttons.length; i++) {
+    const b = buttons[i];
+    if (!b || !b.getAttribute) continue;
+    const networkId = b.getAttribute('data-networkid') || '';
+    const name = b.getAttribute('data-name') || '';
+    if (networkId && name) out.push({ networkId: networkId, name: name });
+  }
+  return out;
+}
+
+// The sagas and universes worth a channel: the same filter the Storylines grid
+// uses, so a single-episode crossover (which only ever lands on its parent
+// show's page) is not offered as a channel here either.
+function appShellChannelSagas() {
+  const events = (typeof TV_CROSSOVER_EVENTS === 'undefined' || !Array.isArray(TV_CROSSOVER_EVENTS)) ? [] : TV_CROSSOVER_EVENTS;
+  const out = [];
+  events.forEach(function (ev) {
+    if (!ev || !ev.id || !Array.isArray(ev.episodes) || !ev.episodes.length) return;
+    const episodeOnly = ev.episodes.every(function (ep) { return ep && ep.type === 'episode'; });
+    if (episodeOnly) return;
+    out.push({ id: String(ev.id), name: ev.name || String(ev.id), parts: ev.episodes.length, category: ev.category || '' });
+  });
+  return out;
+}
+
+// The schedule, as the payload fields the Worker reads (05_catalog_core):
+// dailyRotate + rotateShows/rotateEpisodes for a broadcast schedule, autoSort
+// for the one static arrangement it acts on, sortByAired, shuffle, hideWatched.
+function appShellChannelSchedulePayload() {
+  const s = appShellChannelSchedule;
+  const order = String(s.order || 'listed');
+  const shows = Math.max(1, Math.min(48, parseInt(s.shows, 10) || 24));
+  const episodes = Math.max(1, Math.min(12, parseInt(s.episodes, 10) || 3));
+  const payload = {
+    dailyRotate: !!s.rotate,
+    rotateShows: s.rotate ? shows : 0,
+    rotateEpisodes: s.rotate ? episodes : 0,
+    autoSort: order === 'interleave' ? 'interleave' : '',
+    sortByAired: order === 'aired',
+    shuffle: order === 'shuffle',
+    hideWatched: !!s.hideWatched
+  };
+  return payload;
+}
+
+// The inputs are the source of truth for the three numbers, read at build
+// time; a blank or missing input keeps the default above.
+function appShellChannelReadSchedule() {
+  const readNumber = function (id, fallback) {
+    const el = document.getElementById(id);
+    const n = el && el.value !== undefined && el.value !== null ? parseInt(el.value, 10) : NaN;
+    return (n > 0) ? n : fallback;
+  };
+  const orderSel = document.getElementById('appShellChannelOrderSelect');
+  const typedOrder = (orderSel && orderSel.value) ? String(orderSel.value) : '';
+  appShellChannelSchedule.shows = readNumber('appShellChannelRotateShows', appShellChannelSchedule.shows || 24);
+  appShellChannelSchedule.episodes = readNumber('appShellChannelRotateEpisodes', appShellChannelSchedule.episodes || 3);
+  appShellChannelSchedule.perShow = readNumber('appShellChannelPerShow', appShellChannelSchedule.perShow || 50);
+  if (typedOrder) appShellChannelSchedule.order = typedOrder;
+  return appShellChannelSchedule;
+}
+
+// Whether the schedule is still the one the server's network preset is built
+// with (rotation on, 24 shows x 3 episodes a day, no re-ordering, watched
+// kept). The preset is one request instead of a traversal, so it is worth
+// using -- but only while it would produce the same channel the options ask
+// for, never as a silent override of them.
+function appShellChannelScheduleIsDefault() {
+  const s = appShellChannelSchedule;
+  const order = String(s.order || 'listed');
+  return !!s.rotate &&
+    (parseInt(s.shows, 10) || 24) === 24 &&
+    (parseInt(s.episodes, 10) || 3) === 3 &&
+    !s.hideWatched &&
+    order === 'listed';
+}
+
+function appShellChannelSetNotice(text) {
+  appShellChannelNotice = String(text || '');
+}
+
+// Progress during a build touches one line, never a whole re-render: a
+// re-render would wipe out whatever the person had typed in the template's
+// own fields.
+function appShellChannelProgress(text) {
+  appShellChannelBusy = String(text || '');
+  const box = document.getElementById('appShellChannelProgress');
+  if (box) box.innerHTML = text ? appShellChannelEscape(text) : '';
+}
+
+// --- what the flow is doing --------------------------------------------------
+
+function appShellChannelPickTemplate(id) {
+  const wanted = String(id || '');
+  const known = APP_SHELL_CHANNEL_TEMPLATES.some(function (t) { return t.id === wanted; });
+  appShellChannelTemplate = known ? wanted : '';
+  appShellChannelDraft = null;
+  appShellChannelLineup = null;
+  appShellChannelLineupFor = '';
+  appShellChannelBusy = '';
+  appShellChannelNotice = '';
+  appShellChannelPersonPick = null;
+  appShellChannelPersonResults = [];
+  if (known && wanted !== 'saga') appShellChannelSchedule.rotate = true;
+  if (known && wanted === 'saga') appShellChannelSchedule.rotate = false;
+  appShellRenderChannels();
+  return true;
+}
+
+// The channel was built and saved to this browser -- the preview and the row
+// that may follow both come from this one record.
+function appShellChannelSetDraft(draft) {
+  appShellChannelDraft = draft;
+  appShellChannelBusy = '';
+  appShellChannelLineup = null;
+  appShellChannelLineupFor = '';
+  appShellRenderChannels();
+  return true;
+}
+
+function appShellChannelOnHome() {
+  const draft = appShellChannelDraft;
+  if (!draft || !draft.channelId) return false;
+  return (typeof isChannelInConfig === 'function') ? !!isChannelInConfig(String(draft.channelId)) : false;
+}
+
+async function appShellChannelBuild() {
+  const template = appShellChannelTemplate;
+  if (!template) return false;
+  if (appShellChannelBuildInFlight) return false;
+  appShellChannelReadSchedule();
+  appShellChannelNotice = '';
+  appShellChannelBuildInFlight = true;
+  appShellChannelProgress('Getting started\\u2026');
+  let built = false;
+  try {
+    if (template === 'network') built = await appShellChannelBuildNetwork();
+    else if (template === 'list') built = await appShellChannelBuildList();
+    else if (template === 'person') built = await appShellChannelBuildPerson();
+    else if (template === 'saga') built = await appShellChannelBuildSaga();
+  } finally {
+    appShellChannelBuildInFlight = false;
+  }
+  // Nothing built: the form has to come back with its button live again, and
+  // the sentence saying what happened is already in the notice above.
+  if (!built) {
+    appShellChannelProgress('');
+    appShellRenderChannels();
+  }
+  return built;
+}
+
+// TV network and From a list are the same journey -- a name, and either a
+// network id or a pasted list URL -- so both go through the page's own
+// quickAddChannel. addToCatalog is false because this screen shows the lineup
+// first: the channel is saved to this browser, and the row is added when
+// somebody presses the button under the preview.
+async function appShellChannelBuildNetwork() {
+  const sel = document.getElementById('appShellChannelNetworkSelect');
+  const networkId = (sel && sel.value) ? String(sel.value) : '';
+  const networks = appShellChannelNetworks();
+  let name = '';
+  networks.forEach(function (n) { if (n.networkId === networkId) name = n.name; });
+  if (!networkId || !name) {
+    appShellChannelSetNotice('Pick a network first.');
+    return false;
+  }
+  const typed = appShellChannelTypedName();
+  const channelName = typed || name;
+  const built = await quickAddChannel(channelName, null, networkId, null, {
+    schedule: appShellChannelSchedulePayload(),
+    addToCatalog: false,
+    preferPreset: appShellChannelScheduleIsDefault(),
+    maxEpisodesPerShow: appShellChannelSchedule.perShow,
+    onProgress: appShellChannelProgress
+  });
+  if (!built || !built.channelId) return false;
+  appShellChannelListName = channelName;
+  return appShellChannelFinishBuild(channelName, built, { template: 'network', networkId: networkId });
+}
+
+async function appShellChannelBuildList() {
+  const urlInput = document.getElementById('appShellChannelListUrl');
+  const listUrl = (urlInput && urlInput.value ? urlInput.value : '').trim();
+  if (!listUrl) {
+    appShellChannelSetNotice('Paste a list link first.');
+    return false;
+  }
+  const liveCheck = document.getElementById('appShellChannelLiveSyncCheck');
+  const liveSync = liveCheck ? liveCheck.checked !== false : true;
+  const channelName = appShellChannelTypedName() || appShellChannelListNameFromUrl(listUrl);
+  const built = await quickAddChannel(channelName, listUrl, null, null, {
+    liveSync: liveSync,
+    schedule: appShellChannelSchedulePayload(),
+    addToCatalog: false,
+    maxEpisodesPerShow: appShellChannelSchedule.perShow,
+    onProgress: appShellChannelProgress
+  });
+  if (!built || !built.channelId) return false;
+  appShellChannelListName = channelName;
+  return appShellChannelFinishBuild(channelName, built, { template: 'list', liveSync: liveSync });
+}
+
+// "https://mdblist.com/lists/kit/sitcoms" -> "Sitcoms". A name is asked for on
+// the screen; this is only what a blank one falls back to.
+function appShellChannelListNameFromUrl(url) {
+  let path = '';
+  try {
+    path = new URL(String(url), ORIGIN).pathname;
+  } catch (e) {
+    path = String(url || '');
+  }
+  const parts = path.split('/').filter(function (p) { return !!p; });
+  const last = parts.length ? parts[parts.length - 1] : 'My channel';
+  const words = last.replace(/[-_]+/g, ' ').trim();
+  if (!words) return 'My channel';
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+function appShellChannelTypedName() {
+  const input = document.getElementById('appShellChannelNameInput');
+  const typed = (input && input.value ? String(input.value) : '').trim();
+  return typed ? typed.slice(0, 120) : '';
+}
+
+// --- Actor or creator --------------------------------------------------------
+
+async function appShellChannelPersonSearch() {
+  const input = document.getElementById('appShellChannelPersonQuery');
+  const q = (input && input.value ? String(input.value) : '').trim();
+  if (!q) {
+    appShellChannelSetNotice('Type a name first.');
+    appShellRenderChannels();
+    return false;
+  }
+  appShellChannelSetNotice('Searching\\u2026');
+  appShellRenderChannels();
+  const res = await appShellApiFetch('/api/person-search?q=' + encodeURIComponent(q));
+  if (!res.ok) {
+    appShellChannelPersonResults = [];
+    appShellChannelSetNotice(res.error || 'That search did not work.');
+    appShellRenderChannels();
+    return false;
+  }
+  appShellChannelPersonResults = (res.data && Array.isArray(res.data.results)) ? res.data.results : [];
+  appShellChannelSetNotice(appShellChannelPersonResults.length ? '' : 'No one by that name.');
+  appShellRenderChannels();
+  return true;
+}
+
+function appShellChannelPersonPickResult(personId) {
+  const wanted = String(personId || '');
+  let picked = null;
+  appShellChannelPersonResults.forEach(function (p) {
+    if (p && String(p.personId) === wanted) picked = p;
+  });
+  if (!picked) return false;
+  appShellChannelPersonPick = { personId: wanted, name: picked.name || '', knownFor: picked.knownFor || picked.department || '' };
+  appShellChannelSetNotice('');
+  appShellRenderChannels();
+  return true;
+}
+
+// Their credits, then the same pick builder the legacy Spotlight uses --
+// one implementation of "what does this person's channel hold".
+async function appShellChannelBuildPerson() {
+  const pick = appShellChannelPersonPick;
+  if (!pick) {
+    appShellChannelSetNotice('Pick someone first.');
+    return false;
+  }
+  const res = await appShellApiFetch('/api/person-credits?personId=' + encodeURIComponent(pick.personId) +
+    '&sort=chronological&movies=120&shows=60');
+  if (!res.ok || !res.data) {
+    appShellChannelSetNotice(res.error || 'Could not read that filmography.');
+    return false;
+  }
+  const credits = {
+    personId: pick.personId,
+    name: res.data.name || pick.name || '',
+    poster: res.data.poster || null,
+    backdrop: res.data.backdrop || null,
+    movies: Array.isArray(res.data.movies) ? res.data.movies : [],
+    shows: Array.isArray(res.data.shows) ? res.data.shows : []
+  };
+  const built = await buildSpotlightItemsFromCredits(credits, { onProgress: appShellChannelPersonProgress(credits.name) });
+  if (!built || !built.items.length) {
+    appShellChannelSetNotice('Nothing in that filmography resolved to something playable.');
+    return false;
+  }
+  const channelName = appShellChannelTypedName() || ((credits.name || pick.name || 'Spotlight') + ' Spotlight');
+  appShellChannelListName = channelName;
+  return appShellChannelFinishBuild(channelName, appShellChannelSaveLocal(credits, built, channelName), { template: 'person' });
+}
+
+// The legacy builder's own two progress sentences, so a build reads the same
+// wherever it was started from.
+function appShellChannelPersonProgress(personName) {
+  return function (stage, i, total, label) {
+    const who = appShellChannelEscape(personName || '');
+    if (stage === 'movies') {
+      appShellChannelProgress('Resolving films\\u2026 ' + (i + 1) + ' of ' + total + ' (' + appShellChannelEscape(label) + ')');
+    } else {
+      appShellChannelProgress('Finding ' + who + '\\u2019s episodes\\u2026 show ' + (i + 1) + ' of ' + total + ' (' + appShellChannelEscape(label) + ')');
+    }
+  };
+}
+
+function appShellChannelSaveLocal(credits, built, channelName) {
+  const channelId = generateChannelId();
+  const sched = appShellChannelSchedulePayload();
+  const payload = Object.assign({
+    channelId: channelId,
+    name: channelName,
+    poster: built.poster || credits.poster || null,
+    backdrop: built.backdrop || credits.backdrop || null,
+    items: built.items,
+    shuffle: !!sched.shuffle
+  }, sched);
+  saveLocalChannel(payload);
+  return payload;
+}
+
+// --- Franchise or universe ---------------------------------------------------
+
+async function appShellChannelBuildSaga() {
+  const sel = document.getElementById('appShellChannelSagaSelect');
+  const eventId = (sel && sel.value) ? String(sel.value) : appShellChannelSagaPick;
+  if (!eventId) {
+    appShellChannelSetNotice('Pick a saga first.');
+    return false;
+  }
+  appShellChannelSagaPick = eventId;
+  const found = await fetchStorylineOrderedItems(eventId);
+  if (!found || !found.items || !found.items.length) {
+    appShellChannelSetNotice('That saga has nothing the page could resolve.');
+    return false;
+  }
+  const event = found.event || {};
+  const firstWithPoster = found.items.filter(function (it) { return it && (it.poster || it.thumbnail); })[0];
+  const firstWithBackdrop = found.items.filter(function (it) { return it && (it.backdrop || it.showBackdrop); })[0];
+  // The same payload createInstantStorylineChannel builds when the + Add
+  // button on the Storylines tab is pressed: the stable channel-<event id>,
+  // storylineId (that is what makes the row public and account-free
+  // server-side) and catalogOnly, so it stays a row rather than a copy in
+  // My Channels.
+  const payload = {
+    channelId: 'channel-' + eventId,
+    storylineId: eventId,
+    catalogOnly: true,
+    name: event.name || eventId,
+    poster: firstWithPoster ? (firstWithPoster.poster || firstWithPoster.thumbnail) : null,
+    backdrop: firstWithBackdrop ? (firstWithBackdrop.backdrop || firstWithBackdrop.showBackdrop) : null,
+    items: found.items,
+    shuffle: false,
+    dailyRotate: false
+  };
+  return appShellChannelFinishBuild(payload.name, payload, { template: 'saga', eventId: eventId });
+}
+
+// --- the built channel --------------------------------------------------------
+
+function appShellChannelFinishBuild(name, channel, extra) {
+  const draft = Object.assign({
+    template: appShellChannelTemplate,
+    channelId: String(channel.channelId || ''),
+    name: name || channel.name || 'Channel',
+    url: 'channel:v1:' + JSON.stringify(channel),
+    poolSize: (channel.items || []).length
+  }, extra || {});
+  // The preview asks the server about exactly the url a row would carry, so
+  // it cannot describe a different channel from the one that gets added.
+  if (typeof channelRowUrl === 'function') draft.url = channelRowUrl(channel);
+  appShellChannelSetDraft(draft);
+  appShellChannelSetNotice('Built. This is what is playing today -- nothing is on your home screen until you say so.');
+  appShellRenderChannels();
+  appShellChannelLoadLineup();
+  return true;
+}
+
+async function appShellChannelLoadLineup() {
+  const draft = appShellChannelDraft;
+  if (!draft) return false;
+  appShellChannelLineupFor = draft.url;
+  const res = await appShellApiFetch('/api/channel-lineup', { method: 'POST', body: { url: draft.url } });
+  if (appShellChannelLineupFor !== draft.url) return false;   // a newer build won the race
+  if (!res.ok) {
+    appShellChannelLineup = { error: res.error || 'The lineup could not be read just now.' };
+  } else {
+    appShellChannelLineup = res.data || {};
+  }
+  appShellRenderChannels();
+  return true;
+}
+
+// Adding and removing is the page's own toggle (20_), so the button under the
+// preview, the My Channels card and the Storylines tab cannot disagree about
+// what is in the config.
+function appShellChannelSetHome(on) {
+  const draft = appShellChannelDraft;
+  if (!draft) return false;
+  const wants = String(on) !== 'off';
+  if (draft.template === 'saga' && draft.eventId && typeof createInstantStorylineChannel === 'function') {
+    createInstantStorylineChannel(draft.eventId, null);
+    if (typeof renderMyCreatedChannelsList === 'function') renderMyCreatedChannelsList();
+  } else if (draft.channelId && typeof toggleChannelInCatalog === 'function') {
+    toggleChannelInCatalog(draft.channelId);
+  } else {
+    return false;
+  }
+  appShellChannelSetNotice(wants ? 'On your home screen.' : 'Off your home screen. The channel is still saved in My Channels.');
+  appShellRenderChannels();
+  return true;
+}
+
+// --- drawing -----------------------------------------------------------------
+
+function appShellChannelGalleryHtml() {
+  let html = '<div class="app-shell-template-grid">';
+  APP_SHELL_CHANNEL_TEMPLATES.forEach(function (t) {
+    html += '<button type="button" class="app-shell-template-card" data-app-shell-action="chan-template" data-app-shell-id="' + appShellChannelAttr(t.id) + '">' +
+      '<strong>' + appShellChannelEscape(t.title) + '</strong>' +
+      '<span class="app-shell-muted">' + appShellChannelEscape(t.blurb) + '</span>' +
+      (t.needsAccount ? '<span class="app-shell-muted app-shell-template-note">Needs a free account</span>' : '') +
+      '</button>';
+  });
+  html += '</div>';
+  html += '<p class="app-shell-muted">A saga can be added without signing in. Everything that becomes a channel of your own asks for an account first, the same as the builder does.</p>';
+  return html;
+}
+
+function appShellChannelNetworkFormHtml() {
+  const networks = appShellChannelNetworks();
+  let html = '<label class="app-shell-muted" for="appShellChannelNetworkSelect">Which network?</label>';
+  if (!networks.length) {
+    return html + '<p class="app-shell-muted">The network list is not on this page yet. Reload, or use the Quick Add tab below.</p>' +
+      '<div class="app-shell-actions"><button type="button" class="secondary lc-btn" data-app-shell-action="chan-template" data-app-shell-id="">Back</button></div>';
+  }
+  html += '<select id="appShellChannelNetworkSelect">';
+  networks.forEach(function (n) {
+    html += '<option value="' + appShellChannelAttr(n.networkId) + '">' + appShellChannelEscape(n.name) + '</option>';
+  });
+  html += '</select>';
+  html += '<label class="app-shell-muted" for="appShellChannelNameInput">Channel name (optional)</label>' +
+    '<input type="text" id="appShellChannelNameInput" value="' + appShellChannelAttr(appShellChannelListName) + '" placeholder="Uses the network name">';
+  return html;
+}
+
+function appShellChannelSagaFormHtml() {
+  const sagas = appShellChannelSagas();
+  if (!sagas.length) {
+    return '<p class="app-shell-muted">The saga list is not on this page yet. Reload, or use Storylines &amp; Universes below.</p>';
+  }
+  let html = '<label class="app-shell-muted" for="appShellChannelSagaSelect">Which saga or universe?</label><select id="appShellChannelSagaSelect">';
+  sagas.forEach(function (s) {
+    html += '<option value="' + appShellChannelAttr(s.id) + '"' + (s.id === appShellChannelSagaPick ? ' selected' : '') + '>' +
+      appShellChannelEscape(s.name) + ' (' + appShellChannelNumber(s.parts) + ' parts)</option>';
+  });
+  html += '</select><p class="app-shell-muted">A saga plays in its canon order, so it has no schedule to set here.</p>';
+  return html;
+}
+
+function appShellChannelPersonFormHtml() {
+  let html = '<label class="app-shell-muted" for="appShellChannelPersonQuery">Who?</label>' +
+    '<div class="app-shell-row-controls"><input type="text" id="appShellChannelPersonQuery" placeholder="Actor or director name">' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="chan-person-search">Search</button></div>';
+  if (appShellChannelPersonResults.length) {
+    html += '<div class="app-shell-person-grid">';
+    appShellChannelPersonResults.slice(0, 12).forEach(function (p) {
+      const on = appShellChannelPersonPick && String(appShellChannelPersonPick.personId) === String(p.personId);
+      html += '<button type="button" class="' + (on ? 'primary' : 'secondary') + ' lc-btn" data-app-shell-action="chan-person-pick" data-app-shell-id="' + appShellChannelAttr(String(p.personId)) + '">' +
+        appShellChannelEscape(p.name || 'Unknown') +
+        (on ? '' : '<br><span class="app-shell-muted">' + appShellChannelEscape(p.knownFor || p.department || '') + '</span>') +
+        '</button>';
+    });
+    html += '</div>';
+  }
+  if (appShellChannelPersonPick) {
+    html += '<p class="app-shell-kv">Building from <strong>' + appShellChannelEscape(appShellChannelPersonPick.name) + '</strong>. Their films and the episodes they were in.</p>' +
+      '<label class="app-shell-muted" for="appShellChannelNameInput">Channel name (optional)</label>' +
+      '<input type="text" id="appShellChannelNameInput" value="' + appShellChannelAttr(appShellChannelListName) + '" placeholder="Uses their name">';
+  }
+  return html;
+}
+
+function appShellChannelListFormHtml() {
+  return '<label class="app-shell-muted" for="appShellChannelListUrl">The list</label>' +
+    '<input type="text" id="appShellChannelListUrl" placeholder="A MDBList, Trakt or TMDB show list link">' +
+    '<label class="app-shell-muted" for="appShellChannelNameInput">Channel name (optional)</label>' +
+    '<input type="text" id="appShellChannelNameInput" value="' + appShellChannelAttr(appShellChannelListName) + '" placeholder="Named after the list">' +
+    '<label class="app-shell-dedupe" for="appShellChannelLiveSyncCheck">' +
+    '<input type="checkbox" id="appShellChannelLiveSyncCheck" checked>' +
+    '<span><strong>Keep it in step with the list</strong><br><span class="app-shell-muted">The channel remembers the link and picks up titles the list gains. Off, it is a one-time snapshot.</span></span></label>' +
+    '<p class="app-shell-muted">A list link is read as shows: films mixed into it are left out, because a channel plays episodes.</p>';
+}
+
+function appShellChannelCustomHtml() {
+  return '<p class="app-shell-muted">The full builder is still the page\\u2019s own: search shows and films, add a season at a time, choose the poster, lock a story, set the play order. It opens right below.</p>' +
+    '<div class="app-shell-actions">' +
+    '<button type="button" class="primary lc-btn" data-app-shell-action="chan-custom">Open the full builder</button>' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="chan-template" data-app-shell-id="">Back</button>' +
+    '</div>';
+}
+
+function appShellChannelScheduleHtml() {
+  const s = appShellChannelSchedule;
+  const order = String(s.order || 'listed');
+  const option = function (value, label) {
+    return '<option value="' + appShellChannelAttr(value) + '"' + (order === value ? ' selected' : '') + '>' + label + '</option>';
+  };
+  return '<details class="app-shell-schedule" id="appShellChannelScheduleDetails">' +
+    '<summary>Schedule options</summary>' +
+    '<button type="button" class="app-shell-chip' + (s.rotate ? ' is-on' : '') + '" data-app-shell-action="chan-rotate" data-app-shell-id="' + (s.rotate ? 'off' : 'on') + '">' +
+    'Daily rotation: ' + (s.rotate ? 'on' : 'off') + '</button>' +
+    '<p class="app-shell-muted">On, the channel keeps a pool and deals a fresh day\\u2019s lineup out of it every day. Off, everything in the pool plays in the order below.</p>' +
+    '<div class="app-shell-row-controls">' +
+    '<label class="app-shell-muted" for="appShellChannelRotateShows">Shows a day</label>' +
+    '<input type="number" id="appShellChannelRotateShows" min="1" max="48" value="' + appShellChannelNumber(s.shows || 24) + '">' +
+    '<label class="app-shell-muted" for="appShellChannelRotateEpisodes">Episodes a block</label>' +
+    '<input type="number" id="appShellChannelRotateEpisodes" min="1" max="12" value="' + appShellChannelNumber(s.episodes || 3) + '">' +
+    '</div>' +
+    '<label class="app-shell-muted" for="appShellChannelOrderSelect">Play order</label>' +
+    '<select id="appShellChannelOrderSelect">' +
+    option('listed', 'As the channel is') +
+    option('interleave', 'Interleaved -- one episode per show, in turn') +
+    option('aired', 'Air date -- oldest first') +
+    option('shuffle', 'Shuffled') +
+    '</select>' +
+    '<div class="app-shell-row-controls">' +
+    '<label class="app-shell-muted" for="appShellChannelPerShow">Episodes kept per show</label>' +
+    '<input type="number" id="appShellChannelPerShow" min="1" max="200" value="' + appShellChannelNumber(s.perShow || 50) + '">' +
+    '</div>' +
+    '<button type="button" class="app-shell-chip' + (s.hideWatched ? ' is-on' : '') + '" data-app-shell-action="chan-hide-watched" data-app-shell-id="' + (s.hideWatched ? 'off' : 'on') + '">' +
+    'Hide watched: ' + (s.hideWatched ? 'on' : 'off') + '</button>' +
+    '<p class="app-shell-muted">Hide watched needs Auto-track playback signed in. The preview below says when the server cannot apply it.</p>' +
+    '</details>';
+}
+
+function appShellChannelLineupHtml() {
+  const draft = appShellChannelDraft;
+  if (!draft) return '';
+  if (!appShellChannelLineup) {
+    return '<h3 class="app-shell-h3">Today\\u2019s lineup</h3><p class="app-shell-muted">Asking the server what is playing\\u2026</p>';
+  }
+  if (appShellChannelLineup.error) {
+    return '<h3 class="app-shell-h3">Today\\u2019s lineup</h3><p class="app-shell-review-bad">' + appShellChannelEscape(appShellChannelLineup.error) + '</p>' +
+      '<div class="app-shell-actions"><button type="button" class="secondary lc-btn" data-app-shell-action="chan-preview">Try again</button></div>';
+  }
+  const items = Array.isArray(appShellChannelLineup.items) ? appShellChannelLineup.items : [];
+  // plan is channelRotationPlan's answer, the same numbers the Worker clamped
+  // the channel to -- { shows, episodes, turnover } -- so the sentence under
+  // the posters describes the channel that will actually play.
+  const plan = appShellChannelLineup.plan;
+  const pool = appShellChannelNumber(appShellChannelLineup.poolSize) || draft.poolSize;
+  const bits = [];
+  if (plan && plan.shows) bits.push(plan.shows + ' shows a day');
+  if (plan && plan.episodes) bits.push(plan.episodes + ' episodes a block');
+  if (pool) bits.push(pool + ' episode' + (pool === 1 ? '' : 's') + ' in the pool');
+  if (appShellChannelLineup.rotating) bits.push('rotates daily');
+  const bitsHtml = bits.map(appShellChannelEscape).join(' &middot; ');
+  let html = '<h3 class="app-shell-h3">Today\\u2019s lineup</h3>';
+  html += '<p class="app-shell-kv">' + (bitsHtml || 'Ready') + '</p>';
+  if (Array.isArray(appShellChannelLineup.unappliedRules) && appShellChannelLineup.unappliedRules.length) {
+    const named = appShellChannelLineup.unappliedRules.map(function (r) { return r === 'hideWatched' ? 'Hide watched' : 'This channel fills itself in from your account'; });
+    html += '<p class="app-shell-muted">A preview cannot prove which account is asking, so ' + appShellChannelEscape(named.join(' and ')) +
+      ' ' + (named.length === 1 ? 'is' : 'are') + ' not applied here. In Stremio they are.</p>';
+  }
+  if (!items.length) {
+    html += '<p class="app-shell-muted">The server has no lineup for this channel yet. A rotating channel needs its pool first -- try again in a moment.</p>';
+  } else {
+    html += '<div class="app-shell-lineup">';
+    items.slice(0, APP_SHELL_CHANNEL_LINEUP_TILES).forEach(function (it) {
+      const poster = it.thumbnail || it.poster || it.showPoster || '';
+      const label = it.showName ? (it.showName + (it.season != null && it.episode != null ? ' S' + it.season + 'E' + it.episode : '')) : (it.title || it.epName || '');
+      html += '<div class="app-shell-lineup-tile">' +
+        (poster ? '<img src="' + appShellChannelAttr(poster) + '" alt="" loading="lazy">' : '<div class="app-shell-lineup-blank"></div>') +
+        '<span title="' + appShellChannelAttr(label) + '">' + appShellChannelEscape(label) + '</span>' +
+        '</div>';
+    });
+    html += '</div>';
+    if (items.length > APP_SHELL_CHANNEL_LINEUP_TILES) {
+      html += '<p class="app-shell-muted">Showing the first ' + APP_SHELL_CHANNEL_LINEUP_TILES + ' of ' + items.length + ' in today\\u2019s lineup.</p>';
+    }
+  }
+  const onHome = appShellChannelOnHome();
+  html += '<div class="app-shell-actions">' +
+    '<button type="button" class="' + (onHome ? 'secondary' : 'primary') + ' lc-btn" data-app-shell-action="chan-home" data-app-shell-id="' + (onHome ? 'off' : 'on') + '">' +
+    (onHome ? 'On your home screen' : 'Add to home screen') + '</button>' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="chan-preview">New lineup</button>' +
+    '<button type="button" class="secondary lc-btn" data-app-shell-action="chan-reset">Build another channel</button>' +
+    '</div>';
+  html += '<p class="app-shell-muted">It is saved in My Channels either way. Removing it from the home screen leaves it there to edit or add back.</p>';
+  return html;
+}
+
+function appShellChannelFlowHtml() {
+  const template = appShellChannelTemplate;
+  const found = APP_SHELL_CHANNEL_TEMPLATES.filter(function (t) { return t.id === template; })[0];
+  if (!found) return appShellChannelGalleryHtml();
+  let html = '<div class="app-shell-row-controls"><button type="button" class="secondary lc-btn" data-app-shell-action="chan-template" data-app-shell-id="">All templates</button>' +
+    '<strong>' + appShellChannelEscape(found.title) + '</strong></div>' +
+    '<p class="app-shell-muted">' + appShellChannelEscape(found.blurb) + '</p>';
+  if (template === 'custom') return html + appShellChannelCustomHtml();
+  if (appShellChannelDraft && appShellChannelDraft.template === template) {
+    html += '<p class="app-shell-kv">' + appShellChannelEscape(appShellChannelDraft.name) + ' &middot; ' +
+      appShellChannelNumber(appShellChannelDraft.poolSize) + ' episodes in the pool</p>' + appShellChannelLineupHtml();
+    return html;
+  }
+  if (template === 'network') html += appShellChannelNetworkFormHtml();
+  else if (template === 'saga') html += appShellChannelSagaFormHtml();
+  else if (template === 'person') html += appShellChannelPersonFormHtml();
+  else if (template === 'list') html += appShellChannelListFormHtml();
+  if (template !== 'saga') html += appShellChannelScheduleHtml();
+  html += '<div class="app-shell-actions">' +
+    '<button type="button" class="primary lc-btn"' + (appShellChannelBuildInFlight ? ' disabled' : '') + ' data-app-shell-action="chan-build">' +
+    (appShellChannelBuildInFlight ? 'Building\\u2026' : 'Build this channel') + '</button>' +
+    '</div>';
+  return html;
+}
+
+function appShellRenderChannels() {
+  const host = appShellChannelsHost();
+  if (!host || !NEW_UI) return false;
+  let html = '<div class="panel">' +
+    '<h2 class="panel-title">New channel</h2>' +
+    '<p class="app-shell-muted">Choose a template, look at what is playing today, then add it to your home screen. The full builder is still there under Custom.</p>';
+  if (appShellChannelNotice) html += '<p class="app-shell-kv" id="appShellChannelNotice">' + appShellChannelEscape(appShellChannelNotice) + '</p>';
+  html += '<p class="app-shell-muted" id="appShellChannelProgress">' + appShellChannelEscape(appShellChannelBusy) + '</p>';
+  const account = appShellState.get().account;
+  if (!account && appShellChannelTemplate && appShellChannelTemplate !== 'saga') {
+    html += '<p class="app-shell-muted">Sign in first: a channel of your own is kept on your account, so it follows you to another device.</p>' +
+      '<div class="app-shell-actions"><button type="button" class="primary lc-btn" data-app-shell-action="chan-account">Go to Settings to sign in</button></div>' +
+      '<div class="app-shell-actions"><button type="button" class="secondary lc-btn" data-app-shell-action="chan-template" data-app-shell-id="">All templates</button></div></div>';
+    host.innerHTML = html;
+    return true;
+  }
+  html += appShellChannelFlowHtml() + '</div>';
+  host.innerHTML = html;
+  return true;
+}
+
+// --- the one click listener's handler ----------------------------------------
+
+async function appShellChannelsAction(action, id) {
+  const what = String(action || '');
+  if (what === 'chan-template') return appShellChannelPickTemplate(id);
+  if (what === 'chan-build') return appShellChannelBuild();
+  if (what === 'chan-rotate') {
+    appShellChannelSchedule.rotate = String(id) !== 'off';
+    appShellRenderChannels();
+    return true;
+  }
+  if (what === 'chan-hide-watched') {
+    appShellChannelSchedule.hideWatched = String(id) !== 'off';
+    appShellRenderChannels();
+    return true;
+  }
+  if (what === 'chan-person-search') return appShellChannelPersonSearch();
+  if (what === 'chan-person-pick') return appShellChannelPersonPickResult(id);
+  if (what === 'chan-preview') return appShellChannelLoadLineup();
+  if (what === 'chan-home') return appShellChannelSetHome(id);
+  if (what === 'chan-reset') {
+    appShellChannelDraft = null;
+    appShellChannelLineup = null;
+    appShellChannelLineupFor = '';
+    appShellChannelNotice = '';
+    appShellChannelBusy = '';
+    appShellRenderChannels();
+    return true;
+  }
+  if (what === 'chan-custom') {
+    if (typeof openBuildCustomChannel === 'function') openBuildCustomChannel();
+    return true;
+  }
+  if (what === 'chan-account') {
+    appShellGo('/settings/account');
+    if (typeof appShellFocusSignIn === 'function') appShellFocusSignIn();
+    return true;
+  }
+  return false;
+}
+
+// Called when the view is opened, and once at boot for a page served straight
+// at Channels.
+function appShellOpenChannels() {
+  if (!NEW_UI) return false;
+  if (!appShellChannelsHost() || !appShellChannelsIsOpen()) return false;
+  return appShellRenderChannels();
+}
+
+// --- routing -----------------------------------------------------------------
+
+function appShellFindSubPill(tabId, sub) {
+  const barId = APP_SHELL_SUB_BARS[tabId];
+  if (!barId) return null;
+  const bar = document.getElementById(barId);
+  if (!bar || !bar.querySelectorAll) return null;
+  const pills = bar.querySelectorAll('.subnav-pill');
+  for (let i = 0; i < pills.length; i++) {
+    const p = pills[i];
+    if (p.getAttribute && p.getAttribute('data-sub') === sub) return p;
+    const oc = (p.getAttribute && p.getAttribute('onclick')) || '';
+    if (oc.indexOf("'" + sub + "'") !== -1 || oc.indexOf('"' + sub + '"') !== -1) return p;
+  }
+  return null;
+}
+
+// Opens a view (and sub-tab) using the legacy switchers for everything inside
+// it. appShellApplyingRoute stops those switchers from routing again: this
+// function is the only thing that writes the URL.
+function appShellApplyRoute(route) {
+  if (!route) return false;
+  const tab = appShellTab(route.tab);
+  if (!tab) return false;
+  const sub = (route.sub && tab.subs.indexOf(route.sub) !== -1) ? String(route.sub) : '';
+  appShellApplyingRoute = true;
+  try {
+    if (typeof switchTab === 'function') switchTab(tab.id);
+    if (sub) {
+      const pill = appShellFindSubPill(tab.id, sub);
+      if (tab.id === 'catalogs' && typeof switchCatalogsSubmenu === 'function') switchCatalogsSubmenu(sub, pill);
+      else if (tab.id === 'lists' && typeof switchListsSubmenu === 'function') switchListsSubmenu(sub, pill);
+      else if (tab.id === 'channels' && typeof switchChannelsSubmenu === 'function') switchChannelsSubmenu(sub, pill);
+      else if (tab.id === 'settings' && typeof switchSettingsSubmenu === 'function') switchSettingsSubmenu(sub, pill);
+      else if (tab.id === 'discover' && typeof filterDiscoverShelves === 'function') filterDiscoverShelves(sub, pill);
+    }
+  } finally {
+    appShellApplyingRoute = false;
+  }
+  appShellState.set({ route: { tab: tab.id, sub: sub } });
+  // Settings is rendered by the shell itself (P6-2): the legacy panels below
+  // it stay, and these cards sit above them.
+  if (tab.id === 'settings') appShellRenderSettingsHome();
+  if (tab.id === 'catalogs') appShellRenderHomeEditor();
+  if (tab.id === 'lists') {
+    appShellRenderListsHome();
+    if (sub === 'create-list') appShellRenderAddTitles('');
+    if (sub === 'import') {
+      appShellRenderImports();
+      appShellResumeImport();
+    }
+  }
+  if (tab.id === 'discover') appShellOpenExplore();
+  if (tab.id === 'channels') appShellOpenChannels();
+  return true;
+}
+
+// The one way the shell moves between views: the URL first, then the view, so
+// a reload (or a shared link) opens the same thing.
+function appShellGo(path, options) {
+  const o = options || {};
+  const target = String(path || '');
+  const route = appShellRouteFromPath(target);
+  if (!route) return false;
+  const here = appShellTrimSlashes(location.pathname);
+  try {
+    if (o.replace || here === target) {
+      history.replaceState({ appShell: true }, '', target);
+    } else {
+      history.pushState({ appShell: true }, '', target);
+    }
+  } catch (e) {}
+  appShellApplyRoute(route);
+  if (!o.keepScroll) {
+    try { window.scrollTo({ top: 0, behavior: 'instant' }); } catch (e) {
+      try { window.scrollTo(0, 0); } catch (e2) {}
+    }
+  }
+  return true;
+}
+
+// Called by the legacy tab and sub-tab switchers (16_ and 20_). Returns true
+// when the shell has taken the navigation, false to leave both the switcher and
+// the address bar exactly as they were.
+function appShellHandleNav(kind, a, b) {
+  if (!appShellActive || appShellApplyingRoute || !NEW_UI) return false;
+  if (kind === 'tab') {
+    const route = appShellRouteForName(a);
+    if (!route) return false;   // list-details, item-details: not shell views
+    return appShellGo(appShellPathFor(route.tab, route.sub));
+  }
+  if (kind === 'sub') {
+    const tabId = String(a || '');
+    const sub = String(b || '');
+    if (!appShellTab(tabId)) return false;
+    if (!sub) return false;
+    return appShellGo(appShellPathFor(tabId, sub));
+  }
+  return false;
+}
+
+function appShellOnClick(e) {
+  if (!appShellActive) return;
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const target = e.target;
+  if (!target || !target.closest) return;
+  // The Settings cards wire themselves with this attribute rather than an
+  // onclick: one listener for the whole page, and no inline handlers added.
+  const actionEl = target.closest('[data-app-shell-action]');
+  if (actionEl) {
+    e.preventDefault();
+    const action = actionEl.getAttribute('data-app-shell-action');
+    const id = actionEl.getAttribute('data-app-shell-id') || '';
+    // The Lists view (P6-4) and the Settings view (P6-2) share this one
+    // listener, so the action names decide which module answers. The prefix
+    // test is here rather than a truthy return because appShellSettingsAction
+    // is async -- its promise is truthy for every action, handled or not.
+    if (APP_SHELL_LISTS_ACTION.test(action)) appShellListsAction(action, id);
+    else if (APP_SHELL_EXPLORE_ACTION.test(action)) appShellExploreAction(action, id);
+    else if (APP_SHELL_IMPORTS_ACTION.test(action)) appShellImportsAction(action, id);
+    else if (APP_SHELL_CHANNELS_ACTION.test(action)) appShellChannelsAction(action, id);
+    else appShellSettingsAction(action, id);
+    return;
+  }
+  const link = target.closest('a[data-app-route]');
+  if (!link) return;
+  if (link.target && link.target !== '_self') return;
+  const href = link.getAttribute('href') || '';
+  if (!href || href.charAt(0) !== '/') return;
+  if (!appShellRouteFromPath(href)) return;
+  e.preventDefault();
+  appShellGo(href);
+}
+
+// A popstate the shell owns: the legacy handler in this file steps aside for
+// shell paths (see the guard at the top of its final branch).
+function appShellOnPopState() {
+  if (!appShellActive) return;
+  const route = appShellRouteFromPath(location.pathname);
+  if (route) appShellApplyRoute(route);
+}
+
+function appShellRenderFromLocation() {
+  const route = appShellRouteFromPath(location.pathname);
+  if (route) appShellApplyRoute(route);
+}
+
+// --- boot --------------------------------------------------------------------
+
+function initAppShell() {
+  if (!NEW_UI) return;
+  appShellActive = true;
+  document.addEventListener('click', appShellOnClick);
+  window.addEventListener('popstate', appShellOnPopState);
+
+  const bar = document.getElementById('appShellInstallBar');
+  if (bar) {
+    bar.addEventListener('click', function (e) {
+      const target = e.target;
+      if (!target || !target.closest) return;
+      if (!target.closest('#appShellInstallBtn')) return;
+      e.preventDefault();
+      appShellInstallBarAction();
+    });
+  }
+
+  // The server already opened the right view (data-initial-tab in the head
+  // script). This only settles the address bar: a real path for the view, and
+  // "/" becomes the Discover path so every view has one.
+  const route = appShellRouteFromPath(location.pathname);
+  if (route) {
+    appShellApplyRoute(route);
+  } else if (appShellTrimSlashes(location.pathname) === '/') {
+    try { history.replaceState({ appShell: true }, '', appShellPathFor('discover', '')); } catch (e) {}
+  }
+
+  appShellRefreshInstallBar();
+  appShellRenderHomeEditor();
+  if (typeof appShellExploreHost === 'function' && appShellExploreHost() && appShellDiscoverIsOpen()) appShellOpenExplore();
+  if (typeof appShellImportsHost === 'function' && appShellImportsHost() && appShellImportsIsOpen()) {
+    appShellRenderImports();
+    appShellResumeImport();
+  }
+  if (typeof appShellChannelsHost === 'function' && appShellChannelsHost() && appShellChannelsIsOpen()) appShellRenderChannels();
+  if (typeof isSignedIn === 'function' && isSignedIn()) appShellRefreshAccount();
+  appShellState.set({ ready: true });
+}
+
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initAppShell);
+  else initAppShell();
+}
 /*MYLISTS_APP_BUNDLE_END*/</script>
 
 </body>
@@ -3354,7 +7287,7 @@ function renderGuidePage(origin) {
       <span class="brand-text">${ADDON_NAME}</span>
     </a>
     <div class="nav-actions">
-      <button type="button" class="theme-toggle-btn" onclick="toggleTheme()" aria-label="Toggle Dark/Light Mode">
+      <button type="button" class="theme-toggle-btn" data-act="toggleTheme" aria-label="Toggle Dark/Light Mode">
         <svg class="theme-icon icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="5" fill="currentColor"></circle>
           <line x1="12" y1="1" x2="12" y2="3"></line>

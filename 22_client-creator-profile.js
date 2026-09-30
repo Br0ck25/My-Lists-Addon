@@ -366,6 +366,209 @@ function saveLocalCustomList(sourceRow, urlInput, payload, name) {
 // place. Best-effort per list -- one failing (e.g. a dropped connection
 // partway through) doesn't lose the others; anything that didn't migrate
 // stays in the local store rather than being deleted, so it isn't lost.
+// --- Browser-only lists, and how one gets to an account (P6-9) --------------
+//
+// A list made while signed out lives in this browser alone (D-8). That is a
+// deliberate mode, not a bug -- but it is invisible, which is UX-H10, and
+// nothing in the old UI would move one to an account afterwards. The shell's
+// Lists view now says "Saved in this browser only" on every one of them and
+// offers two ways out: **Save to an account** and **Export** (a small JSON
+// file the same page can restore -- see appShellExportList in 24_).
+//
+// What "browser only" means in code: an entry in the local custom-lists map
+// with no creatorSlug. Every list the account owns gets one -- it is stamped on
+// the way up (here and in uploadMissingLocalListsToAccount) and on the way
+// down (backfillCreatorListsIntoLocalMap) -- so a missing one is the honest
+// answer to "does the account have this list".
+//
+// The push itself is the same request migrateLocalCustomListsToAccount has
+// always made; it is one function now so the sign-up migration and the per-list
+// button cannot drift apart.
+
+// The request, and nothing else: hand this list's payload to the account. The
+// caller decides what happens to the browser's copy afterwards, because the two
+// callers differ -- sign-up deletes it, the sign-in flush has nothing to delete
+// (signing in already cleared this browser's store).
+async function uploadLocalListPayloadToAccount(payload) {
+  if (!activeCreator || !activeCreator.creatorName) return { ok: false, error: 'signed-out' };
+  const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
+  if (!creatorKey) return { ok: false, error: 'signed-out' };
+  const list = payload || {};
+  const body = {
+    creatorName: activeCreator.creatorName,
+    creatorKey: creatorKey,
+    slug: list.creatorSlug || list.slug,
+    name: list.name || list.slug,
+    type: list.type || 'movie',
+    items: Array.isArray(list.items) ? list.items : [],
+    visibility: list.visibility || 'private',
+  };
+  if (list.sourceUrl) body.sourceUrl = list.sourceUrl;
+  if (list.synced != null) body.synced = list.synced;
+  if (list.lastSyncedAt != null) body.lastSyncedAt = list.lastSyncedAt;
+  if (list.baseItemIds) body.baseItemIds = list.baseItemIds;
+  try {
+    const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!data || !data.ok || !data.slug) {
+      return { ok: false, error: (data && data.error) || 'save-failed' };
+    }
+    return { ok: true, slug: data.slug, url: data.url || '', visibility: body.visibility };
+  } catch (e) {
+    return { ok: false, error: 'network' };
+  }
+}
+
+// Every catalog row built from this local list now points at the account's
+// copy, so a later edit or re-save targets the list rather than re-creating a
+// second local one.
+function repointLocalListRowsToCreator(localSlug, result, visibility) {
+  const slug = String(localSlug || '');
+  const data = result || {};
+  const vis = visibility || 'private';
+  document.querySelectorAll('#lists .url').forEach((urlInput) => {
+    const rowPayload = parseCustomListPayloadClient(urlInput.value);
+    if (!rowPayload || rowPayload.localSlug !== slug) return;
+    const updatedPayload = Object.assign({}, rowPayload, {
+      publishedUrl: data.url,
+      creatorSlug: data.slug,
+      creatorOwner: (activeCreator && activeCreator.creatorName) || '',
+      visibility: vis,
+    });
+    delete updatedPayload.localSlug;
+    const sourceRow = urlInput.closest('.source-row');
+    if (sourceRow) sourceRow.outerHTML = customListSourceRowHtml('customlist:v1:' + JSON.stringify(updatedPayload));
+  });
+}
+
+// One list, by the slug it has in this browser's store. Used by the shell's
+// "Save to an account" button (signed in) -- the signed-out path remembers the
+// payload instead, because signing in clears this browser's store before the
+// push can happen.
+async function saveLocalListToAccount(slug, opts) {
+  const want = String(slug || '');
+  const map = loadLocalCustomLists();
+  const list = map[want];
+  if (!list || typeof list !== 'object') return { ok: false, error: 'missing' };
+  const options = opts || {};
+  const visibility = (options.visibility === 'public' || options.visibility === 'unlisted') ? options.visibility : 'private';
+  const payload = Object.assign({}, list, {
+    slug: list.creatorSlug || want,
+    name: list.name || want,
+    type: list.type || 'movie',
+    visibility: visibility,
+  });
+  const result = await uploadLocalListPayloadToAccount(payload);
+  if (!result.ok) return result;
+  repointLocalListRowsToCreator(want, result, visibility);
+  // Only now does the browser's copy go: the account has answered that it has
+  // the list, so there is nothing here that is not on the account.
+  const latest = loadLocalCustomLists();
+  if (latest && latest[want]) {
+    delete latest[want];
+    saveLocalCustomListsMap(latest);
+  }
+  // The account's list cache no longer describes reality (this list was not in
+  // it). Re-fetching is the caller's job: the migration below moves several
+  // lists and refreshes once at the end, and the shell's card refreshes before
+  // it re-renders, so neither shows a list that has just moved as missing.
+  if (typeof resetCreatorListsCache === 'function') resetCreatorListsCache();
+  return result;
+}
+
+// A press of "Save to an account" while signed out. The payload is copied here
+// rather than looked up later on purpose: signing in calls
+// clearLocalAccountData(), which empties this browser's list store, so by the
+// time there is an account to save to there would be nothing left to read.
+let _pendingListSaves = [];
+function rememberPendingListSave(slug) {
+  const want = String(slug || '');
+  const map = loadLocalCustomLists();
+  const list = map[want];
+  if (!list || typeof list !== 'object') return false;
+  if (_pendingListSaves.some((p) => p && p.slug === want)) return true;
+  _pendingListSaves.push({
+    slug: want,
+    name: list.name || want,
+    type: list.type || 'movie',
+    items: Array.isArray(list.items) ? list.items : [],
+    visibility: 'private',
+  });
+  return true;
+}
+
+function pendingListSaves() {
+  return _pendingListSaves.slice();
+}
+
+// Runs right after a sign-in completes (submitRestoreProfile) and after an
+// account is created (submitCreateProfile -- where the whole-store migration
+// has usually already taken them, so this finds nothing to do). Every list
+// somebody asked to save is pushed, and the result is said out loud: a silent
+// failure here would leave a list in a store this page no longer shows.
+//
+// Signing in to an account that already has lists (opts.avoidExistingSlugs,
+// submitRestoreProfile) is the one case where a queued list's slug can already
+// be taken -- by a DIFFERENT list: the queue only ever holds lists the account
+// had never been told about, and /api/creator/lists/save treats a named slug as
+// "edit that list". A "Favorites" built signed out would have replaced the
+// account's own "Favorites". Such a list goes up without a slug and gets a free
+// one; and if the account's lists cannot be read, every one does -- a second
+// list can be deleted, an overwritten one cannot be brought back. Sign-up keeps
+// the slug: the account is new, and the migration has just uploaded the same
+// list under it, so re-using it is what keeps the flush from adding a copy.
+async function accountListSlugsForFlush() {
+  try {
+    const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
+    if (!creatorKey || typeof fetchCreatorListsOnce !== 'function') return null;
+    const data = await fetchCreatorListsOnce(creatorKey);
+    if (!data || !data.ok || !Array.isArray(data.lists)) return null;
+    const taken = {};
+    data.lists.forEach((l) => { if (l && l.slug) taken[String(l.slug)] = true; });
+    return taken;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function flushPendingListSaves(opts) {
+  if (!_pendingListSaves.length) return 0;
+  if (!activeCreator || !activeCreator.creatorName) return 0;
+  const waiting = _pendingListSaves;
+  _pendingListSaves = [];
+  const avoidExisting = !!(opts && opts.avoidExistingSlugs);
+  const taken = avoidExisting ? await accountListSlugsForFlush() : null;
+  let saved = 0;
+  let failed = 0;
+  for (const pending of waiting) {
+    const clash = avoidExisting && (!taken || taken[String(pending.slug)]);
+    const result = await uploadLocalListPayloadToAccount(clash ? Object.assign({}, pending, { slug: '' }) : pending);
+    if (result.ok) saved++; else failed++;
+  }
+  if (saved && typeof showToast === 'function') {
+    showToast(saved === 1
+      ? 'Saved "' + (waiting[0].name || 'your list') + '" to your account.'
+      : 'Saved ' + saved + ' lists to your account.', 'success');
+  }
+  if (failed && typeof showToast === 'function') {
+    showToast(failed === 1
+      ? 'One list could not be saved to your account -- press Save to an account on it to try again.'
+      : failed + ' lists could not be saved to your account -- press Save to an account on each to try again.', 'error');
+  }
+  if (saved && typeof resetCreatorListsCache === 'function') resetCreatorListsCache();
+  if (saved && typeof renderCreatorDashboard === 'function') { try { renderCreatorDashboard({ silent: true }); } catch (e) {} }
+  // The shell's Lists view is showing these as browser-only; it needs to hear
+  // that they moved.
+  if (saved && typeof appShellRenderListsHome === 'function') {
+    try { appShellRenderListsHome(); } catch (e) {}
+  }
+  return saved;
+}
+
 async function migrateLocalCustomListsToAccount() {
   if (!activeCreator) return;
   const localMap = loadLocalCustomLists();
@@ -374,9 +577,9 @@ async function migrateLocalCustomListsToAccount() {
   // here would silently turn private watch history into a public server
   // list (see visibility: 'public' below) and then delete the local copy.
   // They do still get synced to the account, just privately and through
-  // pushCreatorSync/loadCreatorSync's own blob instead of this endpoint --
-  // that already runs right after this function returns (see
-  // submitCreateProfile), so nothing here needs to push them itself.
+  // pushCreatorSync/loadCreatorSync's own blob instead -- that already runs
+  // right after this function returns (see submitCreateProfile), so nothing
+  // here needs to push them itself.
   const AUTO_TRACKED_SLUGS = ['watch-history', 'continue-watching'];
   // The Watchlist migrates, but privately.
   //
@@ -400,63 +603,35 @@ async function migrateLocalCustomListsToAccount() {
       || (typeof list.name === 'string' && list.name.toLowerCase() === 'watchlist')));
   const slugs = Object.keys(localMap).filter((slug) => !AUTO_TRACKED_SLUGS.includes(slug));
   if (!slugs.length) return;
-  const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
   let migratedCount = 0;
   let failedCount = 0;
   for (const slug of slugs) {
-    const list = localMap[slug];
-    try {
-      const res = await fetch(ORIGIN + '/api/creator/lists/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          creatorName: activeCreator.creatorName,
-          creatorKey: creatorKey,
-          name: list.name,
-          type: list.type,
-          items: list.items,
-          visibility: isWatchlistSlug(slug, list) ? 'private' : 'public',
-        }),
-      });
-      const data = await res.json();
-      if (!data.ok) {
-        failedCount++;
-        continue;
-      }
-      migratedCount++;
-      delete localMap[slug];
-      // Repoint any row already in #lists that was built from this local
-      // list so it now saves/edits against the account instead.
-      document.querySelectorAll('#lists .url').forEach((urlInput) => {
-        const rowPayload = parseCustomListPayloadClient(urlInput.value);
-        if (!rowPayload || rowPayload.localSlug !== slug) return;
-        const updatedPayload = Object.assign({}, rowPayload, {
-          publishedUrl: data.url,
-          creatorSlug: data.slug,
-          creatorOwner: activeCreator.creatorName,
-          visibility: 'public',
-        });
-        delete updatedPayload.localSlug;
-        const sourceRow = urlInput.closest('.source-row');
-        if (sourceRow) sourceRow.outerHTML = customListSourceRowHtml('customlist:v1:' + JSON.stringify(updatedPayload));
-      });
-    } catch (e) {
+    const list = localMap[slug] || {};
+    const visibility = isWatchlistSlug(slug, list) ? 'private' : 'public';
+    // saveLocalListToAccount reads the store itself (the map object above is
+    // replaced by every save), so read the one field this loop needs first
+    // and let it do the rest.
+    const label = list.name || slug;
+    const result = await saveLocalListToAccount(slug, { visibility: visibility });
+    if (!result || !result.ok) {
       failedCount++;
+      continue;
     }
+    migratedCount++;
+    console.info('Migrated local list "' + label + '" to ' + slug + '.');
   }
-  saveLocalCustomListsMap(localMap);
   if (migratedCount) {
-    renumber();
-    checkAllDuplicateUrls();
+    if (typeof renumber === 'function') renumber();
+    if (typeof checkAllDuplicateUrls === 'function') checkAllDuplicateUrls();
     saveState();
-    renderCreatorDashboard();
+    if (typeof renderCreatorDashboard === 'function') renderCreatorDashboard();
   }
   if (failedCount) {
-    alert(
+    showToast(
       migratedCount
         ? migratedCount + ' list' + (migratedCount === 1 ? '' : 's') + " moved to your account, but " + failedCount + " couldn't be moved -- they're still saved locally, try again from this browser."
         : "Could not move your local lists to your account -- they're still saved locally, try again from this browser."
-    );
+    , 'error');
   }
 }
 
@@ -474,12 +649,12 @@ function renderCreatorProfileBar() {
   if (activeCreator) {
     bar.innerHTML =
       '<div style="display:flex; align-items:center; gap:8px;">' +
-      '<button type="button" class="subnav-pill active" style="margin:0; font-size:0.85rem; padding:8px 14px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px; border-radius:var(--radius-pill);" onclick="switchTab(&quot;account&quot;)">&#x1F464; ' + escapeHtml(activeCreator.displayName) + '</button>' +
+      '<button type="button" class="subnav-pill active" style="margin:0; font-size:0.85rem; padding:8px 14px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px; border-radius:var(--radius-pill);" data-act="switchTab" data-act-args="[&quot;account&quot;]">&#x1F464; ' + escapeHtml(activeCreator.displayName) + '</button>' +
       '</div>';
   } else {
     bar.innerHTML =
       '<div style="display:flex; align-items:center; gap:6px;">' +
-      '<button type="button" class="lc-btn primary" onclick="openRestoreModal()" style="padding:8px 16px; font-size:0.85rem; font-weight:700; border-radius:var(--radius-pill);">Login</button>' +
+      '<button type="button" class="lc-btn primary" data-act="openRestoreModal" style="padding:8px 16px; font-size:0.85rem; font-weight:700; border-radius:var(--radius-pill);">Login</button>' +
       '</div>';
   }
 }
@@ -492,8 +667,8 @@ function renderAccountKeySection() {
     box.innerHTML =
       '<p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Save and sync your lists, channels, presets, likes, and settings across all your devices automatically. No email or password needed &mdash; just a username and key.</p>' +
       '<div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-top:12px;">' +
-      '<button type="button" class="primary" onclick="openCreateProfileModal()">Create Free Account</button>' +
-      '<button type="button" class="secondary" onclick="openRestoreModal()">Login</button>' +
+      '<button type="button" class="primary" data-act="openCreateProfileModal">Create Free Account</button>' +
+      '<button type="button" class="secondary" data-act="openRestoreModal">Login</button>' +
       '</div>';
     return;
   }
@@ -505,13 +680,13 @@ function renderAccountKeySection() {
     '<span style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); font-weight:700;">Signed in as</span>' +
     '<h3 style="margin:2px 0 0; font-size:1.1rem; font-weight:800; color:var(--text);">&#x1F464; ' + escapeHtml(activeCreator.displayName) + '</h3>' +
     '</div>' +
-    '<button type="button" class="secondary lc-btn" onclick="switchCreatorProfile()">Sign Out / Switch</button>' +
+    '<button type="button" class="secondary lc-btn" data-act="switchCreatorProfile">Sign Out / Switch</button>' +
     '</div>' +
     '<p style="margin:0 0 4px;"><small>Account Key</small></p>' +
     '<div class="creator-key-display" id="accountKeyDisplay">' + '\u2022'.repeat(Math.max(8, key.length)) + '</div>' +
     '<div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-top:10px;">' +
-    '<button type="button" class="secondary" id="accountKeyToggleBtn" onclick="toggleAccountKeyVisibility()">Show Key</button>' +
-    '<button type="button" class="secondary" onclick="copyAccountKey()">Copy Key</button>' +
+    '<button type="button" class="secondary" id="accountKeyToggleBtn" data-act="toggleAccountKeyVisibility">Show Key</button>' +
+    '<button type="button" class="secondary" data-act="copyAccountKey">Copy Key</button>' +
     '</div>' +
     '<p style="margin-top:10px;"><small>Anyone with this key can sign in as you and edit your lists &mdash; keep it somewhere safe, and don&apos;t share it.</small></p>' +
     '<div class="recovery-section" style="margin-top:16px; padding:14px 16px; border:1px solid rgba(255,255,255,0.12); border-radius:12px; background:rgba(255,255,255,0.03);">' +
@@ -526,34 +701,34 @@ function renderAccountKeySection() {
           ? 'Your recovery answer is active. It can reset your key if lost, or find your username.'
           : 'You have not set a recovery answer. Add one so you can recover your username or reset your key if you ever lose them.') +
       '</p>' +
-      '<button type="button" class="secondary lc-btn" onclick="openSetRecoveryAnswerModal()">' +
+      '<button type="button" class="secondary lc-btn" data-act="openSetRecoveryAnswerModal">' +
         (hasRecovery ? 'Update Recovery Answer' : 'Set Recovery Answer') +
       '</button>' +
     '</div>' +
     '<div class="danger-zone" style="margin-top:20px; padding:14px 16px; border:1px solid rgba(255,149,0,0.35); border-radius:12px; background:rgba(255,149,0,0.06);">' +
       '<div style="font-weight:700; font-size:0.9rem; color:#ff9500; margin-bottom:4px;">Reset Account</div>' +
       '<p style="margin:0 0 10px; font-size:0.82rem; color:var(--muted);">Delete every list, channel, preset, watch history entry and catalog row on this account, returning it to how it was when you created it. Your account and key stay the same, and you stay signed in.</p>' +
-      '<button type="button" class="lc-btn" style="background:#ff9500; color:#fff; border:none; padding:7px 14px; font-weight:700; border-radius:8px; cursor:pointer;" onclick="openResetAccountModal()">Reset Account Data</button>' +
+      '<button type="button" class="lc-btn" style="background:#ff9500; color:#fff; border:none; padding:7px 14px; font-weight:700; border-radius:8px; cursor:pointer;" data-act="openResetAccountModal">Reset Account Data</button>' +
     '</div>' +
     '<div class="danger-zone" style="margin-top:12px; padding:14px 16px; border:1px solid rgba(255,59,48,0.3); border-radius:12px; background:rgba(255,59,48,0.05);">' +
       '<div style="font-weight:700; font-size:0.9rem; color:var(--danger, #ff3b30); margin-bottom:4px;">Delete Account</div>' +
       '<p style="margin:0 0 10px; font-size:0.82rem; color:var(--muted);">Permanently delete your account, all published lists, and all synced data from the server.</p>' +
-      '<button type="button" class="lc-btn" style="background:#ff3b30; color:#fff; border:none; padding:7px 14px; font-weight:700; border-radius:8px; cursor:pointer;" onclick="openDeleteAccountModal()">Delete Account &amp; All Data</button>' +
+      '<button type="button" class="lc-btn" style="background:#ff3b30; color:#fff; border:none; padding:7px 14px; font-weight:700; border-radius:8px; cursor:pointer;" data-act="openDeleteAccountModal">Delete Account &amp; All Data</button>' +
     '</div>';
 }
 
 function openSetRecoveryAnswerModal() {
   const hasRecovery = localStorage.getItem('myListAddon:hasRecoveryAnswer') === '1';
   showModal(
-    '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+    '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
     '<h2>' + (hasRecovery ? 'Update Recovery Answer' : 'Set Recovery Answer') + '</h2>' +
     '<p class="modal-sub">Choose an answer you will remember (e.g. your childhood pet, first school, or a passphrase). Must be at least 8 characters.</p>' +
     '<div class="row" style="margin-top:8px;"><input type="text" id="setRecoveryAnswerInput" placeholder="Recovery Answer (8+ characters)" minlength="8"></div>' +
     '<div class="row" style="margin-top:8px;"><input type="text" id="setRecoveryAnswerConfirmInput" placeholder="Confirm Recovery Answer" minlength="8"></div>' +
     '<div id="setRecoveryAnswerError"></div>' +
     '<div class="actions" style="margin-top:14px;">' +
-    '<button type="button" class="primary" id="setRecoveryAnswerBtn" onclick="submitSetRecoveryAnswer()">Save Recovery Answer</button>' +
-    '<button type="button" class="secondary" onclick="closeModal()">Cancel</button>' +
+    '<button type="button" class="primary" id="setRecoveryAnswerBtn" data-act="submitSetRecoveryAnswer">Save Recovery Answer</button>' +
+    '<button type="button" class="secondary" data-act="closeModal">Cancel</button>' +
     '</div>'
   );
 }
@@ -661,7 +836,7 @@ async function openResetAccountModal() {
           if (typeof showAppAlert === 'function') showAppAlert('Reset Failed', msg + ' Your local data has been cleared; sign in again to restore it from your account.', false);
           // Nothing replaces the busy dialog on this branch, so take it down
           // rather than leave a spinner turning over a finished request.
-          else { if (typeof closeModal === 'function') closeModal(); alert(msg); }
+          else { if (typeof closeModal === 'function') closeModal(); showToast(msg, 'error'); }
           return;
         }
 
@@ -711,8 +886,8 @@ function openDeleteAccountModal() {
       '</div>' +
       '<div id="deleteAccountStatus"></div>' +
       '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end; gap:8px;">' +
-        '<button type="button" class="secondary" onclick="closeModal()">Cancel</button>' +
-        '<button type="button" id="confirmDeleteAccountBtn" class="primary" style="background:#ff3b30; border-color:#ff3b30; color:#fff;" onclick="handleDeleteAccount()">Permanently Delete Everything</button>' +
+        '<button type="button" class="secondary" data-act="closeModal">Cancel</button>' +
+        '<button type="button" id="confirmDeleteAccountBtn" class="primary" style="background:#ff3b30; border-color:#ff3b30; color:#fff;" data-act="handleDeleteAccount">Permanently Delete Everything</button>' +
       '</div>' +
     '</div>'
   );
@@ -759,11 +934,11 @@ function openShareListModal(listName, listUrl) {
       '<p style="margin:0 0 14px; font-size:0.88rem; color:var(--muted);">Share <strong>' + escapeHtml(listName || 'Custom List') + '</strong> with others or open it in your browser.</p>' +
       '<div style="display:flex; gap:8px; align-items:center; margin-bottom:14px;">' +
         '<input type="text" id="shareListUrlInput" value="' + escapeAttr(listUrl) + '" readonly style="flex:1; padding:10px 12px; font-size:0.9rem; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text);">' +
-        '<button type="button" class="lc-btn primary" id="shareListCopyBtn" onclick="copyShareListUrl()" style="white-space:nowrap; padding:10px 16px;">Copy Link</button>' +
+        '<button type="button" class="lc-btn primary" id="shareListCopyBtn" data-act="copyShareListUrl" style="white-space:nowrap; padding:10px 16px;">Copy Link</button>' +
       '</div>' +
       '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end; gap:8px;">' +
         '<a href="' + escapeAttr(listUrl) + '" target="_blank" class="button secondary lc-btn" style="text-decoration:none; display:inline-flex; align-items:center;">Open Link &nearr;</a>' +
-        '<button type="button" class="secondary lc-btn" onclick="closeModal()">Close</button>' +
+        '<button type="button" class="secondary lc-btn" data-act="closeModal">Close</button>' +
       '</div>' +
     '</div>'
   );
@@ -824,7 +999,7 @@ function renderWatchlistPreferencesSection() {
   } catch (e) {}
   box.innerHTML =
     '<label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">' +
-      '<input type="checkbox" id="removeWatchedFromWatchlistCheck" ' + (autoClean ? 'checked' : '') + ' onchange="onRemoveWatchedFromWatchlistToggle(this)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">' +
+      '<input type="checkbox" id="removeWatchedFromWatchlistCheck" ' + (autoClean ? 'checked' : '') + ' data-act="onRemoveWatchedFromWatchlistToggle" data-act-args="[&quot;@self&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">' +
       '<div>' +
         '<span style="font-weight:600;">Automatically remove watched items from Watchlist</span>' +
         '<p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Movies are removed once watched. TV shows are only removed after every episode has been watched.</p>' +
@@ -901,17 +1076,17 @@ function renderHiddenListsSettingsSection() {
   }
 
   // If provider lists are not loaded yet but credentials exist, trigger background fetch so this panel populates
-  if (!window._myPrivateTraktLists && !window._myTraktLists && ((typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken'))) {
+  if (!window._myPrivateTraktLists && !window._myTraktLists && ((typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken'))) {
     if (typeof runMyPrivateTraktLists === 'function') runMyPrivateTraktLists();
     else if (typeof runMyTraktLists === 'function') runMyTraktLists();
   }
-  if (!window._myMdblistLists && ((typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || localStorage.getItem('myListAddon:mdblistKey'))) {
+  if (!window._myMdblistLists && ((typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || readProviderSecret('myListAddon:mdblistKey'))) {
     if (typeof runMyMdblistLists === 'function') runMyMdblistLists();
   }
-  if (!window._mySimklLists && ((typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || localStorage.getItem('myListAddon:simklKey'))) {
+  if (!window._mySimklLists && ((typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || readProviderSecret('myListAddon:simklKey'))) {
     if (typeof runMySimklLists === 'function') runMySimklLists();
   }
-  if (!window._myTmdbLists && ((typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || localStorage.getItem('myListAddon:tmdbSessionId') || localStorage.getItem('myListAddon:tmdbKey'))) {
+  if (!window._myTmdbLists && ((typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || readProviderSecret('myListAddon:tmdbSessionId') || readProviderSecret('myListAddon:tmdbKey'))) {
     if (typeof runMyTmdbLists === 'function') runMyTmdbLists();
   }
 
@@ -956,7 +1131,7 @@ function renderHiddenListsSettingsSection() {
   const sectionsHtml = Object.keys(sectionLabels).map((section) => {
     const checked = hiddenSections.has(section);
     return '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none; padding:6px 0; border-bottom:1px solid var(--border);">' +
-      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-section-id="' + escapeAttr(section) + '" onchange="onHiddenSectionToggle(this)" style="cursor:pointer; width:16px; height:16px; flex-shrink:0;">' +
+      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-section-id="' + escapeAttr(section) + '" data-act="onHiddenSectionToggle" data-act-args="[&quot;@self&quot;]" style="cursor:pointer; width:16px; height:16px; flex-shrink:0;">' +
       '<span style="font-weight:600;">' + escapeHtml(sectionLabels[section]) + '</span>' +
     '</label>';
   }).join('');
@@ -964,7 +1139,7 @@ function renderHiddenListsSettingsSection() {
   const rowsHtml = rows.length ? rows.map((r) => {
     const checked = hiddenIds.has(String(r.id));
     return '<label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none; padding:6px 0; border-bottom:1px solid var(--border);">' +
-      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-list-id="' + escapeAttr(r.id) + '" onchange="onHiddenListToggle(this)" style="margin-top:2px; cursor:pointer; width:16px; height:16px; flex-shrink:0;">' +
+      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-list-id="' + escapeAttr(r.id) + '" data-act="onHiddenListToggle" data-act-args="[&quot;@self&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px; flex-shrink:0;">' +
       '<div style="min-width:0;">' +
         '<span style="font-weight:600; overflow-wrap:anywhere;">' + escapeHtml(r.name) + '</span>' +
         '<div style="color:var(--muted); font-size:0.78rem; margin-top:2px;">' + escapeHtml(r.source) + '</div>' +
@@ -1046,7 +1221,7 @@ function renderTrackPlaybackSection() {
     '<div style="margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid var(--border);">' +
       '<p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">Streaming Apps &amp; Addon Players (Stremio, Nuvio, Wako, etc.)</p>' +
       '<label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.9rem;">' +
-        '<input type="checkbox" id="trackPlaybackCheck" ' + (enabled ? 'checked' : '') + ' onchange="onTrackPlaybackToggle(this)">' +
+        '<input type="checkbox" id="trackPlaybackCheck" ' + (enabled ? 'checked' : '') + ' data-act="onTrackPlaybackToggle" data-act-args="[&quot;@self&quot;]">' +
         '<span>Enable In-App Playback Auto-Tracking</span>' +
       '</label>' +
       '<p style="margin:6px 0 0; color:var(--muted); font-size:0.8rem;">Automatically marks movies and episodes as watched whenever playback starts in any supported streaming app or addon player (Stremio, Nuvio, Wako, etc.) via the built-in playback hook. Takes effect on your next install link.</p>' +
@@ -1057,26 +1232,26 @@ function renderTrackPlaybackSection() {
       '<p style="margin:0 0 8px; color:var(--muted); font-size:0.82rem;">Automatically scrobble watched movies and TV episodes from your Plex, Jellyfin, or Emby media servers directly into your personal Watch History and Continue Watching lists.</p>' +
       '<div class="webhook-input-group">' +
         '<input type="text" readonly id="scrobbleWebhookInput" value="Loading\u2026" style="padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:rgba(0,0,0,0.3); color:var(--text); font-family:monospace; font-size:0.82rem;">' +
-        '<button type="button" class="secondary lc-btn" onclick="copyScrobbleWebhookUrl()" style="padding:8px 14px; font-size:0.84rem;">Copy Webhook URL</button>' +
-        '<button type="button" class="secondary lc-btn" onclick="regenerateScrobbleWebhookUrl()" title="Issues a new webhook URL and stops the old one working. Use this if the URL has been shared or logged somewhere it should not have been." style="padding:8px 14px; font-size:0.84rem;">Regenerate</button>' +
+        '<button type="button" class="secondary lc-btn" data-act="copyScrobbleWebhookUrl" style="padding:8px 14px; font-size:0.84rem;">Copy Webhook URL</button>' +
+        '<button type="button" class="secondary lc-btn" data-act="regenerateScrobbleWebhookUrl" title="Issues a new webhook URL and stops the old one working. Use this if the URL has been shared or logged somewhere it should not have been." style="padding:8px 14px; font-size:0.84rem;">Regenerate</button>' +
       '</div>' +
 
       '<div style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
         '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0 0 4px;">' +
-          '<input type="checkbox" id="scrobbleFilterUsersCb" ' + (filterUsers ? 'checked' : '') + ' onchange="onScrobbleFilterUsersToggle(this)" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
+          '<input type="checkbox" id="scrobbleFilterUsersCb" ' + (filterUsers ? 'checked' : '') + ' data-act="onScrobbleFilterUsersToggle" data-act-args="[&quot;@self&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
           '<span style="font-weight:600;">Enable Media Server User Filtering</span>' +
         '</label>' +
         '<p style="margin:0 0 8px; color:var(--muted); font-size:0.8rem;">When enabled, only selected or specified media server user profiles will scrobble into your lists. Unselected users will be ignored.</p>' +
         '<div id="scrobbleFilterDetails" style="' + (filterUsers ? '' : 'display:none;') + ' margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.06);">' +
           '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">' +
             '<p style="margin:0; font-size:0.8rem; font-weight:600; color:var(--text);">Select Allowed Users:</p>' +
-            '<button type="button" class="secondary lc-btn" onclick="loadScrobbleSeenUsers()" style="padding:3px 8px; font-size:0.75rem;">Refresh Users</button>' +
+            '<button type="button" class="secondary lc-btn" data-act="loadScrobbleSeenUsers" style="padding:3px 8px; font-size:0.75rem;">Refresh Users</button>' +
           '</div>' +
           '<div id="scrobbleSeenUsersBox" style="font-size:0.82rem; color:var(--muted); margin-bottom:10px;"><small>Loading\u2026</small></div>' +
           '<p style="margin:0 0 4px; font-size:0.8rem; color:var(--muted);">Additional / Manual Usernames (comma-separated):</p>' +
-          '<input type="text" id="scrobbleAllowedUsersInput" placeholder="e.g. James, Alice" value="' + escapeHtml(allowedUsers) + '" oninput="onScrobbleAllowedUsersChange()" style="width:100%; box-sizing:border-box; margin-bottom:8px; font-size:0.84rem;">' +
+          '<input type="text" id="scrobbleAllowedUsersInput" placeholder="e.g. James, Alice" value="' + escapeHtml(allowedUsers) + '" data-act-on="input" data-act="onScrobbleAllowedUsersChange" style="width:100%; box-sizing:border-box; margin-bottom:8px; font-size:0.84rem;">' +
           '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:0.84rem; user-select:none; margin:0;">' +
-            '<input type="checkbox" id="scrobbleBlockAnonCb" ' + (blockAnon ? 'checked' : '') + ' onchange="onScrobbleBlockAnonChange(this)" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
+            '<input type="checkbox" id="scrobbleBlockAnonCb" ' + (blockAnon ? 'checked' : '') + ' data-act="onScrobbleBlockAnonChange" data-act-args="[&quot;@self&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
             '<span>Block scrobbles with no username in the payload</span>' +
           '</label>' +
         '</div>' +
@@ -1084,15 +1259,15 @@ function renderTrackPlaybackSection() {
 
       '<div style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
         '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0 0 8px;">' +
-          '<input type="checkbox" id="syncMediaServerHistoryCb" checked onchange="toggleMediaServerSync(this.checked)" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
+          '<input type="checkbox" id="syncMediaServerHistoryCb" checked data-act="toggleMediaServerSync" data-act-args="[&quot;@checked&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
           '<span style="font-weight:600;">Automatically sync media server scrobbles to your Watch History list</span>' +
         '</label>' +
         '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0 0 10px;">' +
-          '<input type="checkbox" id="forwardScrobbleToProvidersCb" checked onchange="toggleForwardScrobbles(this.checked)" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
+          '<input type="checkbox" id="forwardScrobbleToProvidersCb" checked data-act="toggleForwardScrobbles" data-act-args="[&quot;@checked&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
           '<span style="font-weight:600;">Forward scrobbles to connected external accounts (Trakt, Simkl, MDBList)</span>' +
         '</label>' +
         '<div>' +
-          '<button type="button" class="secondary lc-btn" onclick="syncAllConnectedAccountsNow(this)" style="padding:8px 14px; font-size:0.82rem; white-space:normal; line-height:1.35; text-align:center; max-width:100%; width:100%; box-sizing:border-box;">Sync Current Watch History to Connected Accounts Now</button>' +
+          '<button type="button" class="secondary lc-btn" data-act="syncAllConnectedAccountsNow" data-act-args="[&quot;@self&quot;]" style="padding:8px 14px; font-size:0.82rem; white-space:normal; line-height:1.35; text-align:center; max-width:100%; width:100%; box-sizing:border-box;">Sync Current Watch History to Connected Accounts Now</button>' +
         '</div>' +
       '</div>' +
 
@@ -1284,7 +1459,7 @@ async function loadScrobbleSeenUsers() {
       const serverName = (info && info.server) || 'Media Server';
       html +=
         '<label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.84rem; padding:3px 0;">' +
-          '<input type="checkbox" class="scrobble-user-cb" value="' + escapeHtml(username) + '" ' + (isChecked ? 'checked' : '') + ' onchange="onScrobbleUserCheckboxToggle()" style="width:15px; height:15px; cursor:pointer; flex:none;">' +
+          '<input type="checkbox" class="scrobble-user-cb" value="' + escapeHtml(username) + '" ' + (isChecked ? 'checked' : '') + ' data-act="onScrobbleUserCheckboxToggle" style="width:15px; height:15px; cursor:pointer; flex:none;">' +
           '<span><strong>' + escapeHtml(username) + '</strong> <span style="color:var(--muted); font-size:0.78rem;">(' + escapeHtml(serverName) + timeStr + ')</span></span>' +
         '</label>';
     }
@@ -1301,7 +1476,7 @@ function copyScrobbleWebhookUrl() {
   navigator.clipboard.writeText(input.value).then(() => {
     if (typeof showAddedToast === 'function') showAddedToast('Webhook URL copied to clipboard! \u2713');
     else if (typeof showAppAlert === 'function') showAppAlert('Copied', 'Scrobble Webhook URL copied to clipboard! Paste this URL into Plex, Jellyfin, or Emby webhooks settings.', true);
-    else alert('Scrobble Webhook URL copied to clipboard! Paste this URL into Plex, Jellyfin, or Emby webhooks settings.');
+    else showToast('Scrobble Webhook URL copied to clipboard! Paste this URL into Plex, Jellyfin, or Emby webhooks settings.', 'success');
   }).catch(() => {
     if (typeof showAppPrompt === 'function') {
       showAppPrompt('Scrobble Webhook URL', 'Copy your Scrobble Webhook URL below:', input.value);
@@ -1348,7 +1523,7 @@ async function refreshTrackPlaybackStatus() {
     const serverLabel = data.lastServer ? '<strong>' + escapeHtml(data.lastServer) + '</strong>' : '<strong>In-App Streaming Player</strong>';
     const userLabel = data.lastUser ? ' &bull; User: <strong>' + escapeHtml(data.lastUser) + '</strong>' : '';
     const rawMatched = data.matched || data.lastPingId || 'OK';
-    const displayMatched = rawMatched.replace(/^(yes|no|error)\b/i, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+    const displayMatched = rawMatched.replace(/^(yes|no|error)\\b/i, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
     statusBox.innerHTML =
       '<div style="padding:10px 12px; background:rgba(0,122,255,0.08); border:1px solid rgba(0,122,255,0.25); border-radius:8px; font-size:0.84rem;">' +
         '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">' +
@@ -1369,7 +1544,7 @@ function copyAccountKey() {
   if (!key) return;
   navigator.clipboard.writeText(key).then(() => {
     if (typeof showAddedToast === 'function') showAddedToast('Key copied to clipboard! \u2713');
-    else alert('Key copied to your clipboard.');
+    else showToast('Key copied to your clipboard.', 'success');
   }).catch(() => {
     if (typeof showAppPrompt === 'function') {
       showAppPrompt('Account Key', 'Copy your key below:', key);
@@ -1393,6 +1568,12 @@ function clearLocalAccountData() {
   tmdbSessionId = '';
   tmdbAccountId = '';
   tmdbUsername = '';
+  // Since P6-8 the provider keys and tokens live in memory, not localStorage,
+  // so the storage sweep below no longer reaches them. Left in place, the next
+  // account signed in on this tab inherited the last one's -- and the first
+  // load of an account with none of its own pushed them up to it.
+  _providerSecretsInMemory = {};
+  _creatorKeysAppliedFor = null;
 
   // Clear personal list arrays & tracking sets
   window._myTraktLists = [];
@@ -1553,19 +1734,19 @@ function switchCreatorProfile() {
 
 function openRestoreModal() {
   showModal(
-    '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+    '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
     '<h2>Login</h2>' +
     '<p class="modal-sub">Enter your Username and Account Key to login and sync your lists.</p>' +
     '<div class="row"><input type="text" id="restoreNameInput" placeholder="Username"></div>' +
     '<div class="row" style="margin-top:8px;"><input type="text" id="restoreKeyInput" placeholder="Key (e.g. MYL-XXXX-XXXX-XXXX)"></div>' +
     '<div id="restoreModalError"></div>' +
     '<div class="actions" style="margin-top:14px;">' +
-    '<button type="button" class="primary" id="restoreSubmitBtn" onclick="submitRestoreProfile()">Login</button>' +
-    '<button type="button" class="secondary" onclick="closeModal(); openCreateProfileModal();">Need an account? Create one</button>' +
+    '<button type="button" class="primary" id="restoreSubmitBtn" data-act="submitRestoreProfile">Login</button>' +
+    '<button type="button" class="secondary" data-act="closeModal" data-act-then="openCreateProfileModal">Need an account? Create one</button>' +
     '</div>' +
     '<div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px; font-size:0.85rem;">' +
-    '<a href="#" onclick="event.preventDefault(); closeModal(); openForgotKeyModal();">Forgot key?</a>' +
-    '<a href="#" onclick="event.preventDefault(); closeModal(); openForgotUsernameModal();">Forgot username?</a>' +
+    '<a href="#" data-act="closeModal" data-act-prevent data-act-then="openForgotKeyModal">Forgot key?</a>' +
+    '<a href="#" data-act="closeModal" data-act-prevent data-act-then="openForgotUsernameModal">Forgot username?</a>' +
     '</div>'
   );
 }
@@ -1617,6 +1798,11 @@ async function submitRestoreProfile() {
     await loadCreatorSync();
     // After the sync load, so tokens this account keeps in sync are included.
     if (data.session && typeof importLocalConnectionsOnce === 'function') importLocalConnectionsOnce(data.creatorName);
+    // P6-9: a list marked "Save to an account" while signed out was copied out
+    // of the store before this sign-in (clearLocalAccountData empties it), and
+    // is pushed now -- which is the only moment it can be. This account may
+    // already have lists, so a clashing slug is not re-used (see the function).
+    await flushPendingListSaves({ avoidExistingSlugs: true });
   } catch (e) {
     errBox.innerHTML = '<p class="testresult err">Network error.</p>';
   } finally {
@@ -1632,15 +1818,15 @@ async function submitRestoreProfile() {
 // person has fully proven who they are.
 function openForgotKeyModal() {
   showModal(
-    '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+    '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
     '<h2>Reset Your Key</h2>' +
     '<p class="modal-sub">Enter your Username and the recovery answer you set when you created your account.</p>' +
     '<div class="row"><input type="text" id="forgotKeyNameInput" placeholder="Username"></div>' +
     '<div class="row" style="margin-top:8px;"><input type="text" id="forgotKeyAnswerInput" placeholder="Recovery Answer"></div>' +
     '<div id="forgotKeyModalError"></div>' +
     '<div class="actions" style="margin-top:14px;">' +
-    '<button type="button" class="primary" id="forgotKeySubmitBtn" onclick="submitForgotKey()">Reset Key</button>' +
-    '<button type="button" class="secondary" onclick="closeModal(); openRestoreModal();">Back to Login</button>' +
+    '<button type="button" class="primary" id="forgotKeySubmitBtn" data-act="submitForgotKey">Reset Key</button>' +
+    '<button type="button" class="secondary" data-act="closeModal" data-act-then="openRestoreModal">Back to Login</button>' +
     '</div>' +
     '<p class="modal-sub" style="margin-top:14px;">Didn\\'t set a recovery answer, or don\\'t remember it? Reach out via Settings &gt; Feedback &amp; Support.</p>'
   );
@@ -1698,15 +1884,15 @@ async function submitForgotKey() {
 // (and Recovery Answer if configured on their account).
 function openForgotUsernameModal() {
   showModal(
-    '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+    '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
     '<h2>Find Your Username</h2>' +
     '<p class="modal-sub">Enter your Account Key and Recovery Answer (if you set one) to retrieve your username.</p>' +
     '<div class="row"><input type="text" id="forgotUsernameKeyInput" placeholder="Key (e.g. MYL-XXXX-XXXX-XXXX)"></div>' +
     '<div class="row" style="margin-top:8px;"><input type="text" id="forgotUsernameAnswerInput" placeholder="Recovery Answer (if set)"></div>' +
     '<div id="forgotUsernameModalError"></div>' +
     '<div class="actions" style="margin-top:14px;">' +
-    '<button type="button" class="primary" id="forgotUsernameSubmitBtn" onclick="submitForgotUsername()">Find Username</button>' +
-    '<button type="button" class="secondary" onclick="closeModal(); openRestoreModal();">Back to Login</button>' +
+    '<button type="button" class="primary" id="forgotUsernameSubmitBtn" data-act="submitForgotUsername">Find Username</button>' +
+    '<button type="button" class="secondary" data-act="closeModal" data-act-then="openRestoreModal">Back to Login</button>' +
     '</div>'
   );
 }
@@ -1735,14 +1921,14 @@ async function submitForgotUsername() {
     }
     const username = data.username;
     showModal(
-      '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+      '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
       '<h2>Account Found</h2>' +
       '<p class="modal-sub" style="margin-bottom:6px;">Your Username is:</p>' +
       '<div class="creator-key-display" style="font-size:1.1rem; font-weight:700; user-select:all;">' + escapeHtml(username) + '</div>' +
       (data.displayName && data.displayName !== username ? '<p class="modal-sub" style="margin-top:8px;">Display Name: <strong>' + escapeHtml(data.displayName) + '</strong></p>' : '') +
       '<div class="actions" style="margin-top:18px;">' +
       '<button type="button" class="primary" id="loginWithFoundUserBtn">Login with this Username</button>' +
-      '<button type="button" class="secondary" onclick="closeModal()">Done</button>' +
+      '<button type="button" class="secondary" data-act="closeModal">Done</button>' +
       '</div>'
     );
     const loginBtn = document.getElementById('loginWithFoundUserBtn');
@@ -2031,6 +2217,37 @@ function creatorSyncGateOpen() {
   return _creatorSyncLoadedFor === activeCreator.creatorName;
 }
 
+// --- The provider credentials a push may speak for ---------------------------
+//
+// The gate above opens on a timer when the first load never lands, and that
+// used to be safe for the credentials because this browser kept its own copy
+// of them. Since P6-8 it does not: a tab knows the account's keys and tokens
+// only once a load has handed them back. A push from a tab that never got that
+// far would send every one of them blank, and sync/save stores what it is sent
+// -- one failed load, then any autosave, and the account's Trakt, MDBList,
+// Simkl and TMDB connections were gone.
+//
+// So until the account's own credentials have been applied, a blank one is
+// left out of the push rather than sent, and the server keeps what it has for
+// anything a push leaves out (see /api/creator/sync/save, 26_). A credential
+// this tab does have still goes up, and so does a blank for a provider that
+// was disconnected on purpose: that blank is the disconnect.
+var _creatorKeysAppliedFor = null;
+
+function accountProviderSecretsApplied() {
+  if (typeof activeCreator === 'undefined' || !activeCreator) return false;
+  return _creatorKeysAppliedFor === activeCreator.creatorName;
+}
+
+function creatorSyncKeysForPush() {
+  const keys = (typeof collectKeys === 'function') ? collectKeys() : {};
+  if (accountProviderSecretsApplied()) return keys;
+  Object.keys(PROVIDER_SECRET_FIELDS).forEach((field) => {
+    if (!keys[field] && !isProviderDisconnected(PROVIDER_SECRET_FIELDS[field])) delete keys[field];
+  });
+  return keys;
+}
+
 // Remembers that a push was wanted. Which kind is all that needs keeping --
 // every push reads the current state out of localStorage/the DOM when it
 // runs, so one deferred push covers any number of changes made while the gate
@@ -2300,7 +2517,8 @@ async function pushCreatorSync() {
         creatorName: activeCreator.creatorName,
         creatorKey: creatorKey,
         config: collectEntries(),
-        keys: (typeof collectKeys === 'function') ? collectKeys() : {},
+        // Not collectKeys() as it stands: see creatorSyncKeysForPush.
+        keys: creatorSyncKeysForPush(),
         // Presets and tracking data (watchHistory/continueWatching/etc)
         // deliberately NOT included here -- both are pieces of this state
         // that can genuinely grow large, while everything else in this
@@ -2721,6 +2939,8 @@ async function loadCreatorSync(opts) {
     // account emptied while this browser was asleep? If so its copy is stale by
     // definition, and uploading it is exactly how a reset used to undo itself.
     if (shouldApplyAccountReset(data.resetAt)) {
+      // An emptied account has no credentials to lose: blank is the truth.
+      _creatorKeysAppliedFor = loadingFor;
       markCreatorSyncLoaded();
       applyRemoteAccountReset(data.resetAt);
       return;
@@ -2729,6 +2949,7 @@ async function loadCreatorSync(opts) {
       // This account has nothing stored, so there is nothing to be stale
       // against and this browser's state becomes its first save -- open the
       // gate first, or the pushes below would defer against themselves.
+      _creatorKeysAppliedFor = loadingFor;
       markCreatorSyncLoaded();
       pushCreatorSync();
       const localPresets = loadPresetsMap();
@@ -2940,26 +3161,30 @@ async function loadCreatorSync(opts) {
         let needPushSync = false;
 
         if (synced.keys.tmdbKey && !tmdbDisc) {
-          localStorage.setItem('myListAddon:tmdbKey', synced.keys.tmdbKey);
+          rememberProviderSecret('myListAddon:tmdbKey', synced.keys.tmdbKey);
+          // The account has it; a pre-P6-8 copy here is redundant.
+          dropLegacyProviderSecret('myListAddon:tmdbKey');
           const el = document.getElementById('tmdbKeyInput');
           if (el) el.value = synced.keys.tmdbKey;
         } else if (tmdbDisc) {
-          localStorage.removeItem('myListAddon:tmdbKey');
+          forgetProviderSecret('myListAddon:tmdbKey');
           const el = document.getElementById('tmdbKeyInput');
           if (el) el.value = '';
-        } else if (localStorage.getItem('myListAddon:tmdbKey')) {
+        } else if (readProviderSecret('myListAddon:tmdbKey')) {
           needPushSync = true;
         }
 
         if (synced.keys.tmdbSessionId && !tmdbDisc) {
-          localStorage.setItem('myListAddon:tmdbSessionId', synced.keys.tmdbSessionId);
+          rememberProviderSecret('myListAddon:tmdbSessionId', synced.keys.tmdbSessionId);
+          // The account has it; a pre-P6-8 copy here is redundant.
+          dropLegacyProviderSecret('myListAddon:tmdbSessionId');
           window.tmdbSessionId = synced.keys.tmdbSessionId;
           tmdbSessionId = synced.keys.tmdbSessionId;
         } else if (tmdbDisc) {
-          localStorage.removeItem('myListAddon:tmdbSessionId');
+          forgetProviderSecret('myListAddon:tmdbSessionId');
           window.tmdbSessionId = '';
           tmdbSessionId = '';
-        } else if (localStorage.getItem('myListAddon:tmdbSessionId')) {
+        } else if (readProviderSecret('myListAddon:tmdbSessionId')) {
           needPushSync = true;
         }
 
@@ -2988,26 +3213,30 @@ async function loadCreatorSync(opts) {
         }
 
         if (synced.keys.mdblistKey && !mdblistDisc) {
-          localStorage.setItem('myListAddon:mdblistKey', synced.keys.mdblistKey);
+          rememberProviderSecret('myListAddon:mdblistKey', synced.keys.mdblistKey);
+          // The account has it; a pre-P6-8 copy here is redundant.
+          dropLegacyProviderSecret('myListAddon:mdblistKey');
           const el = document.getElementById('mdblistKeyInput');
           if (el) el.value = synced.keys.mdblistKey;
         } else if (mdblistDisc) {
-          localStorage.removeItem('myListAddon:mdblistKey');
+          forgetProviderSecret('myListAddon:mdblistKey');
           const el = document.getElementById('mdblistKeyInput');
           if (el) el.value = '';
-        } else if (localStorage.getItem('myListAddon:mdblistKey')) {
+        } else if (readProviderSecret('myListAddon:mdblistKey')) {
           needPushSync = true;
         }
 
         if (synced.keys.mdblistAccessToken && !mdblistDisc) {
-          localStorage.setItem('myListAddon:mdblistAccessToken', synced.keys.mdblistAccessToken);
+          rememberProviderSecret('myListAddon:mdblistAccessToken', synced.keys.mdblistAccessToken);
+          // The account has it; a pre-P6-8 copy here is redundant.
+          dropLegacyProviderSecret('myListAddon:mdblistAccessToken');
           window.mdblistAccessToken = synced.keys.mdblistAccessToken;
           mdblistAccessToken = synced.keys.mdblistAccessToken;
         } else if (mdblistDisc) {
-          localStorage.removeItem('myListAddon:mdblistAccessToken');
+          forgetProviderSecret('myListAddon:mdblistAccessToken');
           window.mdblistAccessToken = '';
           mdblistAccessToken = '';
-        } else if (localStorage.getItem('myListAddon:mdblistAccessToken')) {
+        } else if (readProviderSecret('myListAddon:mdblistAccessToken')) {
           needPushSync = true;
         }
 
@@ -3024,14 +3253,16 @@ async function loadCreatorSync(opts) {
         }
 
         if (synced.keys.traktKey && !traktDisc) {
-          localStorage.setItem('myListAddon:traktKey', synced.keys.traktKey);
+          rememberProviderSecret('myListAddon:traktKey', synced.keys.traktKey);
+          // The account has it; a pre-P6-8 copy here is redundant.
+          dropLegacyProviderSecret('myListAddon:traktKey');
           const el = document.getElementById('traktKeyInput');
           if (el) el.value = synced.keys.traktKey;
         } else if (traktDisc) {
-          localStorage.removeItem('myListAddon:traktKey');
+          forgetProviderSecret('myListAddon:traktKey');
           const el = document.getElementById('traktKeyInput');
           if (el) el.value = '';
-        } else if (localStorage.getItem('myListAddon:traktKey')) {
+        } else if (readProviderSecret('myListAddon:traktKey')) {
           needPushSync = true;
         }
 
@@ -3050,38 +3281,44 @@ async function loadCreatorSync(opts) {
         }
 
         if (synced.keys.traktAccessToken && !traktDisc) {
-          localStorage.setItem('myListAddon:traktAccessToken', synced.keys.traktAccessToken);
+          rememberProviderSecret('myListAddon:traktAccessToken', synced.keys.traktAccessToken);
+          // The account has it; a pre-P6-8 copy here is redundant.
+          dropLegacyProviderSecret('myListAddon:traktAccessToken');
           window.traktAccessToken = synced.keys.traktAccessToken;
           traktAccessToken = synced.keys.traktAccessToken;
         } else if (traktDisc) {
-          localStorage.removeItem('myListAddon:traktAccessToken');
+          forgetProviderSecret('myListAddon:traktAccessToken');
           window.traktAccessToken = '';
           traktAccessToken = '';
-        } else if (localStorage.getItem('myListAddon:traktAccessToken')) {
+        } else if (readProviderSecret('myListAddon:traktAccessToken')) {
           needPushSync = true;
         }
 
         if (synced.keys.simklKey && !simklDisc) {
-          localStorage.setItem('myListAddon:simklKey', synced.keys.simklKey);
+          rememberProviderSecret('myListAddon:simklKey', synced.keys.simklKey);
+          // The account has it; a pre-P6-8 copy here is redundant.
+          dropLegacyProviderSecret('myListAddon:simklKey');
           const el = document.getElementById('simklKeyInput');
           if (el) el.value = synced.keys.simklKey;
         } else if (simklDisc) {
-          localStorage.removeItem('myListAddon:simklKey');
+          forgetProviderSecret('myListAddon:simklKey');
           const el = document.getElementById('simklKeyInput');
           if (el) el.value = '';
-        } else if (localStorage.getItem('myListAddon:simklKey')) {
+        } else if (readProviderSecret('myListAddon:simklKey')) {
           needPushSync = true;
         }
 
         if (synced.keys.simklAccessToken && !simklDisc) {
-          localStorage.setItem('myListAddon:simklAccessToken', synced.keys.simklAccessToken);
+          rememberProviderSecret('myListAddon:simklAccessToken', synced.keys.simklAccessToken);
+          // The account has it; a pre-P6-8 copy here is redundant.
+          dropLegacyProviderSecret('myListAddon:simklAccessToken');
           window.simklAccessToken = synced.keys.simklAccessToken;
           simklAccessToken = synced.keys.simklAccessToken;
         } else if (simklDisc) {
-          localStorage.removeItem('myListAddon:simklAccessToken');
+          forgetProviderSecret('myListAddon:simklAccessToken');
           window.simklAccessToken = '';
           simklAccessToken = '';
-        } else if (localStorage.getItem('myListAddon:simklAccessToken')) {
+        } else if (readProviderSecret('myListAddon:simklAccessToken')) {
           needPushSync = true;
         }
 
@@ -3456,6 +3693,7 @@ async function loadCreatorSync(opts) {
     // The account's state is applied, so anything this browser wants to send
     // is now built on it rather than on nothing. Releases whatever was held
     // back while this load was in flight -- see creatorSyncGateOpen.
+    _creatorKeysAppliedFor = loadingFor;
     markCreatorSyncLoaded();
   } catch (e) {
     // Network hiccup -- stay with whatever's already on this browser
@@ -3480,7 +3718,7 @@ async function loadCreatorSync(opts) {
 function beginSaveListFlow(sourceRow, urlInput, name) {
   const payload = parseCustomListPayloadClient(urlInput.value);
   if (!payload) {
-    alert('Could not read this list.');
+    showToast('Could not read this list.', 'error');
     return;
   }
   if (activeCreator) {
@@ -3498,13 +3736,13 @@ function startSaveListFlow(btn) {
   const sourceRow = btn.closest('.source-row');
   const urlInput = sourceRow && sourceRow.querySelector('.url');
   if (!urlInput) {
-    alert('Could not read this list.');
+    showToast('Could not read this list.', 'error');
     return;
   }
   const rowDiv = urlInput.closest('.entry');
   const name = rowDiv && rowDiv.querySelector('.name') ? rowDiv.querySelector('.name').value.trim() : '';
   if (!name) {
-    alert('Name this list first (in the row above), then try again.');
+    showToast('Name this list first (in the row above), then try again.', 'error');
     return;
   }
   beginSaveListFlow(sourceRow, urlInput, name);
@@ -3512,7 +3750,7 @@ function startSaveListFlow(btn) {
 
 function openCreateProfileModal() {
   showModal(
-    '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+    '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
     '<h2>Create a Free Account</h2>' +
     '<p class="modal-sub">Save and sync your custom lists, presets, and channels from any device.<br>No email. No password. Just a username and key.</p>' +
     '<div class="row"><input type="text" id="createProfileNameInput" placeholder="Choose a Username" maxlength="25"></div>' +
@@ -3521,8 +3759,8 @@ function openCreateProfileModal() {
     '<p class="modal-sub" style="font-size:0.78rem; margin-top:4px;">If you ever lose your key, this is the only way back in besides contacting us. It can reset your key on its own, so treat it like a password: at least 8 characters, something only you know -- not a public username or anything someone could look up.</p>' +
     '<div id="createProfileError"></div>' +
     '<div class="actions" style="margin-top:14px;">' +
-    '<button type="button" class="primary" id="createProfileSubmitBtn" onclick="submitCreateProfile()">Create Account</button>' +
-    '<button type="button" class="secondary" onclick="closeModal(); openRestoreModal();">Already have one? Login</button>' +
+    '<button type="button" class="primary" id="createProfileSubmitBtn" data-act="submitCreateProfile">Create Account</button>' +
+    '<button type="button" class="secondary" data-act="closeModal" data-act-then="openRestoreModal">Already have one? Login</button>' +
     '</div>'
   );
 }
@@ -3632,7 +3870,15 @@ async function submitCreateProfile() {
     renderTrackPlaybackSection();
     showKeyRevealModal(data.displayName, data.creatorKey);
     loadCreatorSync();
-    migrateLocalCustomListsToAccount();
+    // A list somebody pressed "Save to an account" on while signed out is in
+    // the queue. The whole-store migration above uploads every hand-built list
+    // and usually takes it first, so the flush waits for the migration (which
+    // is not awaited here) and then clears the queue either way -- see
+    // flushPendingListSaves.
+    Promise.resolve()
+      .then(function () { return migrateLocalCustomListsToAccount(); })
+      .catch(function () {})
+      .then(function () { return flushPendingListSaves(); });
   } catch (e) {
     errBox.innerHTML = '<p class="testresult err">Network error.</p>';
   } finally {
@@ -3658,8 +3904,8 @@ function showKeyRevealModal(displayName, creatorKey) {
     '<div class="creator-key-display" id="revealedCreatorKey">' + escapeHtml(creatorKey) + '</div>' +
     '<p class="modal-sub">Save this key somewhere safe. You\\'ll need it to edit your lists from another browser. You can view it again later from Settings.</p>' +
     '<div class="actions">' +
-    '<button type="button" class="secondary" id="copyRevealedKeyBtn" onclick="copyRevealedCreatorKey()">Copy Key</button>' +
-    '<button type="button" onclick="continueAfterKeyReveal()">Continue</button>' +
+    '<button type="button" class="secondary" id="copyRevealedKeyBtn" data-act="copyRevealedCreatorKey">Copy Key</button>' +
+    '<button type="button" data-act="continueAfterKeyReveal">Continue</button>' +
     '</div>'
   );
 }
@@ -3699,7 +3945,7 @@ function openVisibilityModal() {
   if (!ctx) return;
   showModal(
     '<div class="modal-body">' +
-      '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+      '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
       '<h2 class="panel-title" style="margin-top:0;">Save Custom List</h2>' +
       '<p style="margin:0 0 16px; font-size:0.88rem; color:var(--muted);">Choose visibility for <strong>' + escapeHtml(ctx.name || 'Custom List') + '</strong> on your Profile.</p>' +
       '<div class="visibility-choice" style="display:flex; flex-direction:column; gap:12px; margin: 16px 0 20px;">' +
@@ -3713,8 +3959,8 @@ function openVisibilityModal() {
         '</label>' +
       '</div>' +
       '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end; gap:8px;">' +
-        '<button type="button" class="secondary lc-btn" onclick="closeModal()">Cancel</button>' +
-        '<button type="button" class="primary lc-btn" onclick="confirmSaveAsCreator()">Save List</button>' +
+        '<button type="button" class="secondary lc-btn" data-act="closeModal">Cancel</button>' +
+        '<button type="button" class="primary lc-btn" data-act="confirmSaveAsCreator">Save List</button>' +
       '</div>' +
     '</div>'
   );
@@ -3724,7 +3970,7 @@ function showSavedCustomListModal(listName, visibility, url) {
   const isPrivate = visibility === 'private';
   showModal(
     '<div class="modal-body">' +
-      '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+      '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
       '<h2 class="panel-title" style="margin-top:0;">\u2713 List Saved</h2>' +
       '<p style="margin:8px 0 16px; font-size:0.9rem; color:var(--text);">' +
         '<strong>' + escapeHtml(listName || 'Custom List') + '</strong> has been saved to your Profile as a <strong>' + (isPrivate ? 'private' : 'public') + '</strong> list.' +
@@ -3737,13 +3983,13 @@ function showSavedCustomListModal(listName, visibility, url) {
             '<p style="margin:0 0 8px; font-size:0.84rem; color:var(--muted);">Public share link:</p>' +
             '<div style="display:flex; gap:8px; align-items:center;">' +
               '<input type="text" id="savedListUrlInput" value="' + escapeAttr(url || '') + '" readonly style="flex:1; padding:10px 12px; font-size:0.88rem; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text);">' +
-              '<button type="button" class="lc-btn primary" id="savedListCopyBtn" onclick="copyShareUrlById(&quot;savedListUrlInput&quot;, this)" style="white-space:nowrap; padding:10px 14px;">Copy Link</button>' +
+              '<button type="button" class="lc-btn primary" id="savedListCopyBtn" data-act="copyShareUrlById" data-act-args="[&quot;savedListUrlInput&quot;,&quot;@self&quot;]" style="white-space:nowrap; padding:10px 14px;">Copy Link</button>' +
             '</div>' +
           '</div>'
       ) +
       '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end; gap:8px;">' +
         (!isPrivate && url ? '<a href="' + escapeAttr(url) + '" target="_blank" class="button secondary lc-btn" style="text-decoration:none; display:inline-flex; align-items:center;">Open Link &nearr;</a>' : '') +
-        '<button type="button" class="primary lc-btn" onclick="closeModal()">Done</button>' +
+        '<button type="button" class="primary lc-btn" data-act="closeModal">Done</button>' +
       '</div>' +
     '</div>'
   );
@@ -3819,11 +4065,11 @@ async function confirmSaveAsCreator() {
 function showAppNoticeModal(title, message, isError) {
   showModal(
     '<div class="modal-body">' +
-      '<button type="button" class="modal-close-x" aria-label="Close" onclick="closeModal()">\u2715</button>' +
+      '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
       '<h2 class="panel-title" style="margin-top:0;' + (isError ? ' color:var(--danger);' : '') + '">' + escapeHtml(title || 'Notice') + '</h2>' +
       '<p style="margin:12px 0 20px; font-size:0.9rem; color:var(--text); line-height:1.4;">' + escapeHtml(message || '') + '</p>' +
       '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end;">' +
-        '<button type="button" class="primary lc-btn" onclick="closeModal()">OK</button>' +
+        '<button type="button" class="primary lc-btn" data-act="closeModal">OK</button>' +
       '</div>' +
     '</div>'
   );
@@ -4516,13 +4762,13 @@ async function renderCreatorDashboard(options) {
           overlays += '<div class="list-card-count-overlay desktop-only creatorListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
         }
         const removeBtn = isWatchlist
-          ? '<button type="button" class="cw-remove-btn" onclick="event.stopPropagation(); removeWatchlistItemDirect(&quot;' + escapeJsAttr(it.imdbId || it.id) + '&quot;, this)" title="Remove from Watchlist" aria-label="Remove from Watchlist">\u2715</button>'
+          ? '<button type="button" class="cw-remove-btn" data-act="removeWatchlistItemDirect" data-act-stop data-act-args="' + appActArgs([it.imdbId || it.id, "@self"]) + '" title="Remove from Watchlist" aria-label="Remove from Watchlist">\u2715</button>'
           : '';
         const posterType = it.kind || (it.type !== 'mixed' ? (it.type || '') : '') || (it.showId ? 'series' : (l.type === 'mixed' ? '' : (l.type || '')));
         const itemPoster = resolveItemPoster(it);
         const label = formatWatchItemLabel(it);
         const posterEl = itemPoster
-          ? '<img src="' + escapeAttr(itemPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.showId || it.imdbId || it.id || (it.tmdbId ? ('tmdb:' + it.tmdbId) : '')) + '" data-type="' + escapeAttr(posterType) + '" data-title="' + escapeAttr(label.title || it.showTitle || it.title || it.name || '') + '" alt="" loading="lazy" onerror="handlePosterImgError(this)">'
+          ? '<img src="' + escapeAttr(itemPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.showId || it.imdbId || it.id || (it.tmdbId ? ('tmdb:' + it.tmdbId) : '')) + '" data-type="' + escapeAttr(posterType) + '" data-title="' + escapeAttr(label.title || it.showTitle || it.title || it.name || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
           : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
           const ratingSpan = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(it) : '';
           return '<div class="list-card-mini-poster-tile" data-id="' + escapeAttr(it.showId || it.imdbId || it.id || '') + '" data-type="' + escapeAttr(posterType) + '" data-title="' + escapeAttr(label.title || it.showTitle || it.title || it.name || '') + '">' +
@@ -4545,7 +4791,7 @@ async function renderCreatorDashboard(options) {
         '<div class="list-card-header">' +
           '<div class="list-card-body creatorListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' +
             '<div class="list-card-title">' +
-              '<span class="drag-handle-list" title="Drag to reorder" onclick="event.stopPropagation();">&#x2630;</span>' +
+              '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop>&#x2630;</span>' +
               escapeHtml(l.name) +
             '</div>' +
             '<div class="list-card-meta">' +
@@ -4791,18 +5037,18 @@ function buildLocalListCardHtml(l) {
     let removeBtn = '';
     const cwRemoveId = it.showId || it.imdbId || it.id;
     if (l.slug === 'continue-watching' && cwRemoveId) {
-      removeBtn = '<button type="button" class="cw-remove-btn" onclick="event.stopPropagation(); dismissContinueWatchingShow(&quot;' + escapeJsAttr(cwRemoveId) + '&quot;, this)" title="Remove from Continue Watching" aria-label="Remove from Continue Watching">\u2715</button>';
+      removeBtn = '<button type="button" class="cw-remove-btn" data-act="dismissContinueWatchingShow" data-act-stop data-act-args="' + appActArgs([cwRemoveId, "@self"]) + '" title="Remove from Continue Watching" aria-label="Remove from Continue Watching">\u2715</button>';
     } else if (l.slug === 'airing-next' && cwRemoveId) {
       // The dashboard renders Airing Next through buildAiringNextCardHtml
       // (21_client-custom-list-builder.js), which has its own copy of this
       // button. This branch is for anything that reaches the generic card
       // with the airing-next slug, so the shelf never renders an "x" that
       // removes the wrong thing -- or, worse, none at all.
-      removeBtn = '<button type="button" class="cw-remove-btn" onclick="event.stopPropagation(); removeAiringNextShow(&quot;' + escapeJsAttr(cwRemoveId) + '&quot;, this)" title="Remove from Airing Next" aria-label="Remove from Airing Next">\u2715</button>';
+      removeBtn = '<button type="button" class="cw-remove-btn" data-act="removeAiringNextShow" data-act-stop data-act-args="' + appActArgs([cwRemoveId, "@self"]) + '" title="Remove from Airing Next" aria-label="Remove from Airing Next">\u2715</button>';
     } else if (isWatchlist) {
-      removeBtn = '<button type="button" class="cw-remove-btn" onclick="event.stopPropagation(); removeWatchlistItemDirect(&quot;' + escapeJsAttr(it.imdbId || it.id) + '&quot;, this)" title="Remove from Watchlist" aria-label="Remove from Watchlist">\u2715</button>';
+      removeBtn = '<button type="button" class="cw-remove-btn" data-act="removeWatchlistItemDirect" data-act-stop data-act-args="' + appActArgs([it.imdbId || it.id, "@self"]) + '" title="Remove from Watchlist" aria-label="Remove from Watchlist">\u2715</button>';
     } else if (l.slug === 'watch-history') {
-      removeBtn = '<button type="button" class="cw-remove-btn" onclick="event.stopPropagation(); removeWatchHistoryItemDirect(&quot;' + escapeJsAttr(it.id || it.imdbId) + '&quot;, this)" title="Remove from Watch History" aria-label="Remove from Watch History">\u2715</button>';
+      removeBtn = '<button type="button" class="cw-remove-btn" data-act="removeWatchHistoryItemDirect" data-act-stop data-act-args="' + appActArgs([it.id || it.imdbId, "@self"]) + '" title="Remove from Watch History" aria-label="Remove from Watch History">\u2715</button>';
     }
     const itemPoster = resolveItemPoster(it);
     const isAiringList = l.slug === 'airing-next' || l.statusKey === 'airing-next';
@@ -4885,7 +5131,7 @@ function buildLocalListCardHtml(l) {
     }
 
     const posterEl = itemPoster
-      ? '<img src="' + escapeAttr(itemPoster) + '" class="clickable-poster" data-id="' + escapeAttr(posterId) + '" data-type="' + escapeAttr(posterType) + '" data-title="' + escapeAttr(label.title || it.showTitle || it.title || it.name || '') + '" alt="" loading="lazy" onerror="handlePosterImgError(this)">'
+      ? '<img src="' + escapeAttr(itemPoster) + '" class="clickable-poster" data-id="' + escapeAttr(posterId) + '" data-type="' + escapeAttr(posterType) + '" data-title="' + escapeAttr(label.title || it.showTitle || it.title || it.name || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
       : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
     const ratingSpan = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(it) : '';
     return '<div class="list-card-mini-poster-tile" data-id="' + escapeAttr(posterId) + '" data-type="' + escapeAttr(posterType) + '" data-title="' + escapeAttr(label.title || it.showTitle || it.title || it.name || '') + '">' +
@@ -4947,7 +5193,7 @@ function buildLocalListCardHtml(l) {
     '<div class="list-card-header">' +
       '<div class="list-card-body localListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type || 'movie') + '" style="cursor:pointer;">' +
         '<div class="list-card-title">' +
-          '<span class="drag-handle-list" title="Drag to reorder" onclick="event.stopPropagation();">&#x2630;</span>' +
+          '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop>&#x2630;</span>' +
           escapeHtml(l.name) +
         '</div>' +
         '<div class="list-card-meta">' +
@@ -5212,7 +5458,7 @@ if (_creatorDashEl) {
           if (typeof showAppAlert === 'function') {
             showAppAlert('Error', 'Could not delete: ' + (data.error || 'unknown error'), false);
           } else {
-            alert('Could not delete: ' + (data.error || 'unknown error'));
+            showToast('Could not delete: ' + (data.error || 'unknown error'), 'error');
           }
           return;
         }
@@ -5246,7 +5492,7 @@ if (_creatorDashEl) {
         if (typeof showAppAlert === 'function') {
           showAppAlert('Network Error', 'Network error while deleting.', false);
         } else {
-          alert('Network error while deleting.');
+          showToast('Network error while deleting.', 'error');
         }
       }
     }, true);
@@ -5270,7 +5516,7 @@ if (_creatorDashEl) {
     const slug = addToConfigBtn.dataset.slug;
     const listMeta = (lastCreatorListsData || []).find((l) => l.slug === slug);
     if (!listMeta) {
-      alert('Could not find that list -- try refreshing.');
+      showToast('Could not find that list -- try refreshing.', 'error');
       return;
     }
     const isAdded = addToConfigBtn.classList.contains('is-added') || (typeof isListAddedToConfig === 'function' && isListAddedToConfig(null, listMeta.type, slug));
@@ -5378,7 +5624,7 @@ if (_creatorDashEl) {
     const slug = localAddToConfigBtn.dataset.slug;
     const listMeta = (lastLocalCustomListsData || []).find((l) => l.slug === slug);
     if (!listMeta) {
-      alert('Could not find that list -- try refreshing.');
+      showToast('Could not find that list -- try refreshing.', 'error');
       return;
     }
     
@@ -5526,7 +5772,7 @@ function normalizeSnapshotItemsForCatalog(items) {
 function editCreatorList(slug) {
   const listMeta = (lastCreatorListsData || []).find((l) => l.slug === slug);
   if (!listMeta) {
-    alert('Could not find that list -- try refreshing.');
+    showToast('Could not find that list -- try refreshing.', 'error');
     return;
   }
   const isWatchlist = slug === 'watchlist' || listMeta.isWatchlist || (listMeta.name && listMeta.name.toLowerCase() === 'watchlist');
@@ -5574,7 +5820,7 @@ function editLocalCustomList(slug) {
   const map = loadLocalCustomLists();
   const listMeta = map[slug];
   if (!listMeta) {
-    alert('Could not find that list -- try refreshing.');
+    showToast('Could not find that list -- try refreshing.', 'error');
     return;
   }
   const isWatchlist = slug === 'watchlist' || listMeta.isWatchlist || (listMeta.name && listMeta.name.toLowerCase() === 'watchlist');
@@ -5714,12 +5960,12 @@ function openCreateListModal(presetDestination) {
   if (!requireSignedInFor('create custom lists')) return; // docs/DECISIONS.md D-8
   const destEl = document.getElementById('createListModalDestination');
   if (destEl) {
-    const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
-    const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || localStorage.getItem('myListAddon:tmdbSessionId') || '';
+    const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
+    const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || readProviderSecret('myListAddon:tmdbSessionId') || '';
     const tmdbAcc = (typeof tmdbAccountId !== 'undefined' && tmdbAccountId) || localStorage.getItem('myListAddon:tmdbAccountId') || '';
-    const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
-    const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:mdblistKey') || '';
-    const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
+    const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
+    const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || readProviderSecret('myListAddon:mdblistKey') || '';
+    const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
 
     let optsHtml = '<option value="custom">Custom List (Local / Creator)</option>';
     if (traktToken) optsHtml += '<option value="trakt">Trakt List</option>';
@@ -5802,7 +6048,7 @@ async function submitCreateListModal() {
           if (data.ok && data.imdbId) finalImdbId = data.imdbId;
         } catch(e) {}
       } else if (finalImdbId && String(finalImdbId).startsWith('tt')) {
-        const apiKeyTmdb = (document.getElementById('tmdbKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:tmdbKey') || '';
+        const apiKeyTmdb = (document.getElementById('tmdbKeyInput')?.value.trim()) || readProviderSecret('myListAddon:tmdbKey') || '';
         if (apiKeyTmdb) {
           try {
             const findRes = await fetch('https://api.themoviedb.org/3/find/' + encodeURIComponent(finalImdbId) + '?api_key=' + encodeURIComponent(apiKeyTmdb) + '&external_source=imdb_id');
@@ -5895,16 +6141,16 @@ async function submitCreateListModal() {
       }
     } else {
       // External Provider Creation (Trakt, TMDB, MDBList)
-      const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
-      const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:traktKey') || '';
+      const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
+      const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || readProviderSecret('myListAddon:traktKey') || '';
       const traktUser = (typeof traktUsername !== 'undefined' && traktUsername) || localStorage.getItem('myListAddon:traktUsername') || '';
-      const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || localStorage.getItem('myListAddon:tmdbSessionId') || '';
-      const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:tmdbKey') || '';
-      const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
-      const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:mdblistKey') || '';
+      const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || readProviderSecret('myListAddon:tmdbSessionId') || '';
+      const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || readProviderSecret('myListAddon:tmdbKey') || '';
+      const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
+      const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || readProviderSecret('myListAddon:mdblistKey') || '';
       const mdbUser = (typeof mdblistUsername !== 'undefined' && mdblistUsername) || localStorage.getItem('myListAddon:mdblistUsername') || '';
-      const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || localStorage.getItem('myListAddon:simklAccessToken') || '';
-      const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:simklKey') || '';
+      const simklToken = (typeof simklAccessToken !== 'undefined' && simklAccessToken) || readProviderSecret('myListAddon:simklAccessToken') || '';
+      const simklKey = (document.getElementById('simklKeyInput')?.value.trim()) || readProviderSecret('myListAddon:simklKey') || '';
 
       const res = await fetch(ORIGIN + '/api/external-list/create', {
         method: 'POST',
@@ -6017,12 +6263,12 @@ function deleteExternalListDirect(provider, listId, listName, btn) {
         btn.textContent = 'Deleting...';
       }
 
-      const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || localStorage.getItem('myListAddon:traktAccessToken') || '';
-      const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:traktKey') || '';
-      const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || localStorage.getItem('myListAddon:tmdbSessionId') || '';
-      const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:tmdbKey') || '';
-      const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || localStorage.getItem('myListAddon:mdblistAccessToken') || '';
-      const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || localStorage.getItem('myListAddon:mdblistKey') || '';
+      const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
+      const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || readProviderSecret('myListAddon:traktKey') || '';
+      const tmdbSess = (typeof tmdbSessionId !== 'undefined' && tmdbSessionId) || readProviderSecret('myListAddon:tmdbSessionId') || '';
+      const tmdbKey = (document.getElementById('tmdbKeyInput')?.value.trim()) || readProviderSecret('myListAddon:tmdbKey') || '';
+      const mdbToken = (typeof mdblistAccessToken !== 'undefined' && mdblistAccessToken) || readProviderSecret('myListAddon:mdblistAccessToken') || '';
+      const mdbKey = (document.getElementById('mdblistKeyInput')?.value.trim()) || readProviderSecret('myListAddon:mdblistKey') || '';
 
       try {
         const res = await fetch(ORIGIN + '/api/external-list/delete', {

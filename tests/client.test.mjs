@@ -348,18 +348,24 @@ describe("client: what an anonymous user's first account publishes", () => {
 
 // --- FE-02: data that arrived from someone else must not become code -------
 //
-// 37 handler sites build a JavaScript string inside an HTML attribute and
-// delimit it with &quot;. escapeAttr is escapeHtml, which EMITS &quot; -- and
-// the HTML parser decodes attribute entities before the JS parser runs, so the
-// escaping re-formed the delimiter it was meant to neutralise. A channel id
-// carrying ");… arrived through a restored backup or a pasted install link and
-// executed, with the victim's Creator Key in reach.
+// Until P6-8 the arguments of a handler travelled as a JavaScript string inside
+// an HTML attribute -- fn(&quot;VALUE&quot;). escapeAttr is escapeHtml, which
+// EMITS &quot;, and the HTML parser decodes attribute entities before the JS
+// parser runs, so the escaping re-formed the delimiter it was meant to
+// neutralise. A channel id carrying ");... arrived through a restored backup
+// or a pasted install link and executed, with the victim's Creator Key in
+// reach.
 //
-// Two tests, because there are two layers and each has to hold on its own:
-// the escaper (what stops it executing) and the import check (what stops it
-// being stored at all).
+// The attribute is gone, so the code path that ran it is gone. What is left to
+// prove is that its replacement cannot be talked into the same thing: the
+// arguments are one JSON attribute (appActArgs, 16_), the dispatcher reads it
+// with JSON.parse and never evaluates it, and the value a payload would have
+// to break out of is a string inside an array. Two tests, because there are
+// still two layers: the attribute (what stops it executing) and the import
+// check (what stops it being stored at all).
 
-// Mirrors what a browser does with an attribute value before running it.
+// Mirrors what a browser does with an attribute value before handing it to the
+// page: decode the entities, then read the characters.
 function decodeEntities(s) {
   return String(s)
     .replace(/&quot;/g, '"')
@@ -369,38 +375,53 @@ function decodeEntities(s) {
     .replace(/&amp;/g, "&");
 }
 
-describe("client: an imported id cannot break out of an inline handler", () => {
+describe("client: an imported id cannot break out of an action attribute", () => {
   const BREAKOUT = '"); window.__pwned = 1; //';
 
-  it("escapes so the handler stays one call with one argument", () => {
+  it("keeps the payload a string in the argument array", () => {
     const client = loadClient();
-    const attr = 'fn(&quot;' + client.call("escapeJsAttr", BREAKOUT) + '&quot;)';
-    const code = decodeEntities(attr);
+    const attr = client.call("appActArgs", [BREAKOUT, "movie"]);
 
-    // The whole payload has to survive as ONE argument. Before the fix this
-    // parsed as fn("") followed by the payload as live statements.
+    // Nothing in the attribute can end the attribute or the element: no quote,
+    // no angle bracket. Before P6-8 the escaped quote re-formed the delimiter
+    // the browser had just decoded and the payload ran.
+    assert.equal(/["'<>]/.test(attr), false, "the attribute value is inert");
+
+    const args = JSON.parse(decodeEntities(attr));
+    assert.deepEqual(args, [BREAKOUT, "movie"]);
+  });
+
+  it("executes nothing when a payload is dispatched through it", () => {
+    const client = loadClient();
     const seen = [];
-    // eslint-disable-next-line no-new-func
-    new Function("fn", code)((...args) => seen.push(args));
+    client.set("__p68Target", function () { seen.push([...arguments]); });
+    const el = {
+      _attributes: { "data-act": "__p68Target", "data-act-args": decodeEntities(client.call("appActArgs", [BREAKOUT])) },
+      value: "", checked: false,
+      setAttribute(k, v) { this._attributes[k] = String(v); },
+      getAttribute(k) { const v = this._attributes[k]; return v === undefined ? null : v; },
+      hasAttribute(k) { return Object.prototype.hasOwnProperty.call(this._attributes, k); },
+    };
+    const ev = { type: "click", target: el, stopPropagation() {}, preventDefault() {} };
+    assert.equal(client.call("appActDispatch", ev), true, "the control still works");
     assert.deepEqual(seen, [[BREAKOUT]],
       "the id must arrive as a single string argument, not as executed code");
+    assert.equal(client.get("window.__pwned"), undefined, "and nothing ran");
   });
 
   it("leaves an ordinary id byte-identical", () => {
     const client = loadClient();
     for (const id of ["ch_1700000000_ab12", "tt0944947", "tmdb:1399", "my-list-slug"]) {
-      assert.equal(client.call("escapeJsAttr", id), id, id + " must pass through untouched");
+      const args = JSON.parse(decodeEntities(client.call("appActArgs", [id])));
+      assert.deepEqual(args, [id], id + " must pass through untouched");
     }
   });
 
   it("survives a name that merely contains quotes, which used to be a syntax error", () => {
     const client = loadClient();
     const name = 'O\'Brien & Sons "Best"';
-    const code = decodeEntities('fn(&quot;' + client.call("escapeJsAttr", name) + '&quot;)');
-    const seen = [];
-    // eslint-disable-next-line no-new-func
-    new Function("fn", code)((...args) => seen.push(args));
-    assert.deepEqual(seen, [[name]]);
+    const args = JSON.parse(decodeEntities(client.call("appActArgs", [name])));
+    assert.deepEqual(args, [name]);
   });
 
   it("drops such an id at import rather than storing it", () => {
@@ -1914,7 +1935,7 @@ describe("client: a card's poster preview retries once before giving up", () => 
       assert.match(slot.className, /poster-preview-error/);
       assert.doesNotMatch(slot.className, /poster-preview-slot/,
         "must resolve out of the in-flight class -- stashCatalogSearchView reads that class to mean still loading");
-      assert.match(slot.innerHTML, /onclick="retryPosterSlot\(this\)"/,
+      assert.match(slot.innerHTML, /data-act="retryPosterSlot" data-act-args="\[&quot;@self&quot;\]"/,
         "a way back that does not require reloading the whole page");
     })();
   });
@@ -3977,8 +3998,8 @@ describe("client: Item Details Storylines, Sagas & Universes watch order", () =>
     assert.ok(html.includes("is-current"), "has is-current class on active title");
     assert.ok(html.includes("item-storyline-current-pill"), "has Current badge pill");
     // Other entries should have click handlers pointing to openItemDetailsModal
-    assert.ok(html.includes("openItemDetailsModal(&quot;tt9243946&quot;, &quot;movie&quot;)"), "El Camino has click handler");
-    assert.ok(html.includes("openItemDetailsModal(&quot;tt3032476&quot;, &quot;series&quot;)"), "Better Call Saul has click handler");
+    assert.ok(html.includes('data-act="openItemDetailsModal" data-act-stop data-act-args="[&quot;tt9243946&quot;,&quot;movie&quot;]"'), "El Camino has click handler");
+    assert.ok(html.includes('data-act="openItemDetailsModal" data-act-stop data-act-args="[&quot;tt3032476&quot;,&quot;series&quot;]"'), "Better Call Saul has click handler");
   });
 
   it("renderItemStorylinesWatchOrder highlights companion movie when viewing El Camino", () => {
@@ -3995,7 +4016,7 @@ describe("client: Item Details Storylines, Sagas & Universes watch order", () =>
     // El Camino is Part 2, and should have is-current
     assert.ok(html.includes("is-current"), "highlights current movie");
     // Breaking Bad should have click handler
-    assert.ok(html.includes("openItemDetailsModal(&quot;tt0903747&quot;, &quot;series&quot;)"), "Breaking Bad has click handler");
+    assert.ok(html.includes('data-act="openItemDetailsModal" data-act-stop data-act-args="[&quot;tt0903747&quot;,&quot;series&quot;]"'), "Breaking Bad has click handler");
   });
 
   it("renderItemStorylinesWatchOrder renders movie sagas such as MCU Infinity Saga", () => {
@@ -5931,7 +5952,7 @@ describe("client: signed out, only the site's public lists", () => {
     await client.call("generate");
     const html = client.get("document").getElementById("result").innerHTML;
     assert.match(html, /Sign in to add channels to an install link\./);
-    assert.match(html, /openRestoreModal\(\)/);
+    assert.match(html, /data-act="openRestoreModal"/);
   });
 });
 
@@ -8352,7 +8373,10 @@ describe("client: connections kept on the server (P3a-9)", () => {
     const [req] = requestsTo(client, "/api/connections/trakt/token");
     assert.equal(req.method, "POST");
     assert.equal(req.headers["Content-Type"], "application/json", "the CSRF check needs it");
-    assert.equal(client.localStorage.getItem("myListAddon:traktAccessToken"), "SERVER-TRAKT");
+    // P6-8: a provider token lives in memory for the tab, not in storage --
+    // the account holds it (S-05). The username is not a credential and stays.
+    assert.equal(client.localStorage.getItem("myListAddon:traktAccessToken"), null, "no token in localStorage");
+    assert.equal(client.call("readProviderSecret", "myListAddon:traktAccessToken"), "SERVER-TRAKT");
     assert.equal(client.localStorage.getItem("myListAddon:traktUsername"), "fan");
     assert.equal(client.get("traktAccessToken"), "SERVER-TRAKT");
     assert.ok(urls.length && !urls.some((u) => String(u).includes("connected=")), "the marker leaves the address bar");
@@ -8367,7 +8391,8 @@ describe("client: connections kept on the server (P3a-9)", () => {
     withUrl(client, "?connected=tmdb");
     await client.call("pickUpServerConnection");
     await settle();
-    assert.equal(client.localStorage.getItem("myListAddon:tmdbSessionId"), "SERVER-TMDB");
+    assert.equal(client.localStorage.getItem("myListAddon:tmdbSessionId"), null, "no session id in localStorage");
+    assert.equal(client.call("readProviderSecret", "myListAddon:tmdbSessionId"), "SERVER-TMDB");
     assert.equal(client.localStorage.getItem("myListAddon:tmdbAccountId"), "77");
     assert.equal(client.localStorage.getItem("myListAddon:tmdbUsername"), "tfan");
   });
@@ -8377,7 +8402,8 @@ describe("client: connections kept on the server (P3a-9)", () => {
     const urls = withUrl(client, "", "#trakt_token=FRAG-TOKEN&trakt_username=fraguser");
     client.call("pickUpTraktTokenFromUrl");
     await settle();
-    assert.equal(client.localStorage.getItem("myListAddon:traktAccessToken"), "FRAG-TOKEN");
+    assert.equal(client.localStorage.getItem("myListAddon:traktAccessToken"), null, "no token in localStorage");
+    assert.equal(client.call("readProviderSecret", "myListAddon:traktAccessToken"), "FRAG-TOKEN");
     assert.equal(client.localStorage.getItem("myListAddon:traktUsername"), "fraguser");
     assert.ok(urls.some((u) => !String(u).includes("trakt_token")), "the token is stripped from the address bar");
   });

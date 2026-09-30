@@ -1,10 +1,10 @@
 <div class="tab-panel" data-tab-panel="settings" id="content-settings" role="tabpanel" aria-labelledby="tab-desktop-settings" hidden>
   <!-- Settings Top Submenu Pills -->
   <div class="subnav-pills-bar" id="settingsSubnavBar">
-    <button type="button" class="subnav-pill active" data-sub="account" onclick="switchSettingsSubmenu('account', this)"><span class="check-icon">&#x2713;</span> Account &amp; Sync</button>
-    <button type="button" class="subnav-pill" data-sub="external" onclick="switchSettingsSubmenu('external', this)">External Accounts &amp; API Keys</button>
-    <button type="button" class="subnav-pill" data-sub="backup" onclick="switchSettingsSubmenu('backup', this)">Presets &amp; Backup</button>
-    <button type="button" class="subnav-pill" data-sub="feedback" onclick="switchSettingsSubmenu('feedback', this)">Feedback and Support</button>
+    <button type="button" class="subnav-pill active" data-sub="account" data-act="switchSettingsSubmenu" data-act-args="[&quot;account&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> Account &amp; Sync</button>
+    <button type="button" class="subnav-pill" data-sub="external" data-act="switchSettingsSubmenu" data-act-args="[&quot;external&quot;,&quot;@self&quot;]">External Accounts &amp; API Keys</button>
+    <button type="button" class="subnav-pill" data-sub="backup" data-act="switchSettingsSubmenu" data-act-args="[&quot;backup&quot;,&quot;@self&quot;]">Presets &amp; Backup</button>
+    <button type="button" class="subnav-pill" data-sub="feedback" data-act="switchSettingsSubmenu" data-act-args="[&quot;feedback&quot;,&quot;@self&quot;]">Feedback and Support</button>
   </div>
 
   <!-- Submenu 2: Presets & Backup -->
@@ -16,11 +16,11 @@
       <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Save your current setup as a named preset to reuse or download as a file.</p>
       <div class="row">
         <input type="text" id="presetNameInput" placeholder="Preset name (e.g. Home Cinema)">
-        <button type="button" class="secondary lc-btn" onclick="saveCurrentAsPreset()">Save preset</button>
+        <button type="button" class="secondary lc-btn" data-act="saveCurrentAsPreset">Save preset</button>
       </div>
       <div class="actions" style="margin-top:8px;">
-        <button type="button" class="secondary lc-btn" onclick="document.getElementById('presetFileInput').click()">Upload preset file</button>
-        <input type="file" id="presetFileInput" aria-label="Choose a preset file to upload" accept="application/json,.json" style="display:none;" onchange="uploadPresetFile(this)">
+        <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;presetFileInput&quot;]">Upload preset file</button>
+        <input type="file" id="presetFileInput" aria-label="Choose a preset file to upload" accept="application/json,.json" style="display:none;" data-act="uploadPresetFile" data-act-args="[&quot;@self&quot;]">
       </div>
       <div id="presetsList" style="margin-top:10px;"></div>
     </div>
@@ -30,21 +30,27 @@
       <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Export a complete backup snapshot of your catalogs, custom lists, watchlist, watch history, continue watching, channels, presets, and settings &mdash; or restore from a previous JSON backup.</p>
       <textarea id="configJsonBox" rows="5" style="width:100%;font-family:monospace;font-size:14px;" placeholder="Paste config JSON here to restore..."></textarea>
       <div class="backup-actions-grid" style="margin-top:8px;">
-        <button type="button" class="secondary lc-btn" onclick="exportConfigJson()">Export current</button>
-        <button type="button" class="secondary lc-btn" onclick="importConfigJson()">Import JSON</button>
-        <button type="button" class="secondary lc-btn" onclick="downloadConfigJson()">Download file</button>
-        <button type="button" class="secondary lc-btn" onclick="document.getElementById('configFileInput').click()">Upload file</button>
-        <input type="file" id="configFileInput" aria-label="Choose a backup file to restore" accept="application/json,.json" style="display:none;" onchange="uploadConfigFile(this)">
+        <button type="button" class="secondary lc-btn" data-act="exportConfigJson">Export current</button>
+        <button type="button" class="secondary lc-btn" data-act="importConfigJson">Import JSON</button>
+        <button type="button" class="secondary lc-btn" data-act="downloadConfigJson">Download file</button>
+        <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;configFileInput&quot;]">Upload file</button>
+        <input type="file" id="configFileInput" aria-label="Choose a backup file to restore" accept="application/json,.json" style="display:none;" data-act="uploadConfigFile" data-act-args="[&quot;@self&quot;]">
       </div>
 
-      <div style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px;">
+      <!-- Importing from an install link is not offered in the new UI: an
+           install id is an unrevocable bearer credential that returns connected
+           accounts' tokens (SECURITY_AUDIT.md S-02), and a backup file does the
+           same job safely. The legacy page keeps it until P6-8 removes the old
+           markup for good. -->
+${newUi ? '' : `      <div style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px;">
         <p style="margin:0 0 6px; font-weight:700; font-size:0.88rem;">Import from Install / Configure Link:</p>
         <div class="row">
           <input type="text" id="importLinkInput" placeholder="Paste an install or configure link here">
-          <button type="button" class="secondary lc-btn" onclick="importFromLink()">Import link</button>
-          <button type="button" class="secondary lc-btn" onclick="restoreListsFromLink()" title="Rebuild and restore custom lists &amp; channels from this link into My Lists without altering your catalog shelves">Restore Lists</button>
+          <button type="button" class="secondary lc-btn" data-act="importFromLink">Import link</button>
+          <button type="button" class="secondary lc-btn" data-act="restoreListsFromLink" title="Rebuild and restore custom lists &amp; channels from this link into My Lists without altering your catalog shelves">Restore Lists</button>
         </div>
       </div>
+`}
     </div>
 
     <!-- Export Lists & History (Universal CSV / Trakt / Letterboxd / MDBList / Simkl) -->
@@ -59,9 +65,9 @@
             <div style="font-size:0.8rem; color:var(--muted);">All watched movies, shows, and episodes with timestamps</div>
           </div>
           <div class="export-actions-grid">
-            <button type="button" class="secondary lc-btn" onclick="exportDataToCsv('watch-history', 'trakt')">CSV (Trakt / Simkl)</button>
-            <button type="button" class="secondary lc-btn" onclick="exportDataToCsv('watch-history', 'letterboxd')">CSV (Letterboxd)</button>
-            <button type="button" class="secondary lc-btn" onclick="exportDataToCsv('watch-history', 'standard')">Universal CSV</button>
+            <button type="button" class="secondary lc-btn" data-act="exportDataToCsv" data-act-args="[&quot;watch-history&quot;,&quot;trakt&quot;]">CSV (Trakt / Simkl)</button>
+            <button type="button" class="secondary lc-btn" data-act="exportDataToCsv" data-act-args="[&quot;watch-history&quot;,&quot;letterboxd&quot;]">CSV (Letterboxd)</button>
+            <button type="button" class="secondary lc-btn" data-act="exportDataToCsv" data-act-args="[&quot;watch-history&quot;,&quot;standard&quot;]">Universal CSV</button>
           </div>
         </div>
 
@@ -71,8 +77,8 @@
             <div style="font-size:0.8rem; color:var(--muted);">Export all created lists, watchlist, and continue watching items</div>
           </div>
           <div class="export-actions-grid">
-            <button type="button" class="secondary lc-btn" onclick="exportDataToCsv('all-custom-lists', 'standard')">Export All (CSV)</button>
-            <button type="button" class="secondary lc-btn" onclick="exportDataToJson('full-library')">Full Library (JSON)</button>
+            <button type="button" class="secondary lc-btn" data-act="exportDataToCsv" data-act-args="[&quot;all-custom-lists&quot;,&quot;standard&quot;]">Export All (CSV)</button>
+            <button type="button" class="secondary lc-btn" data-act="exportDataToJson" data-act-args="[&quot;full-library&quot;]">Full Library (JSON)</button>
           </div>
         </div>
       </div>

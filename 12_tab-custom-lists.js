@@ -1,19 +1,25 @@
 <div class="tab-panel" data-tab-panel="lists" id="content-lists" role="tabpanel" aria-labelledby="tab-desktop-lists" hidden>
   <!-- Top Submenu Pills for Lists -->
   <div class="subnav-pills-bar" id="listsSubnavBar">
-    <button type="button" class="subnav-pill active" data-sub="my-lists" onclick="switchListsSubmenu('my-lists', this)"><span class="check-icon">&#x2713;</span> My Lists</button>
-    <button type="button" class="subnav-pill" data-sub="liked" onclick="switchListsSubmenu('liked', this)">Liked</button>
-    <button type="button" class="subnav-pill" data-sub="import" onclick="switchListsSubmenu('import', this)">Import</button>
+    <button type="button" class="subnav-pill active" data-sub="my-lists" data-act="switchListsSubmenu" data-act-args="[&quot;my-lists&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> My Lists</button>
+    <button type="button" class="subnav-pill" data-sub="liked" data-act="switchListsSubmenu" data-act-args="[&quot;liked&quot;,&quot;@self&quot;]">Liked</button>
+    <button type="button" class="subnav-pill" data-sub="import" data-act="switchListsSubmenu" data-act-args="[&quot;import&quot;,&quot;@self&quot;]">Import</button>
   </div>
 
   <!-- Submenu 1: User's Connected Account & Custom Lists -->
   <div class="lists-subpanel" id="listsSubMyLists">
+    <!-- The shell's own list cards (P6-4): open a list, add titles to it, put
+         it on the home screen, share it. Emitted only for a browser with the
+         FF_NEW_UI cookie; the dashboard below is the same one the old page
+         uses. -->
+${newUi ? '    <div id="appShellListsHome"></div>' : ''}
+
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">Your Custom Lists</h2>
         <div style="display:flex; gap:8px;">
-          <button type="button" class="primary lc-btn" onclick="openCreateListModal('custom')">+ New List</button>
-          <button type="button" class="secondary lc-btn" onclick="(async()=>{await loadCreatorSync();renderCreatorDashboard();})()">Refresh</button>
+          <button type="button" class="primary lc-btn" data-act="openCreateListModal" data-act-args="[&quot;custom&quot;]">+ New List</button>
+          <button type="button" class="secondary lc-btn" data-act="appActRefreshCreatorDashboard">Refresh</button>
         </div>
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Custom lists you've created locally or on your profile.</p>
@@ -24,7 +30,7 @@
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="panel-title" style="margin-bottom:0;">Your MDBList Lists</h2>
         <div style="display:flex; gap:8px;">
-          <button type="button" class="secondary lc-btn" id="listsMdblistConnectBtn" onclick="toggleListsMdblistConnection()">Connect MDBList</button>
+          <button type="button" class="secondary lc-btn" id="listsMdblistConnectBtn" data-act="toggleListsMdblistConnection">Connect MDBList</button>
         </div>
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Lists, Watchlist, and Watch History from your connected MDBList account.</p>
@@ -35,7 +41,7 @@
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="panel-title" style="margin-bottom:0;">Your Trakt Lists</h2>
         <div style="display:flex; gap:8px;">
-          <button type="button" class="secondary lc-btn" id="listsTraktConnectBtn" onclick="toggleListsTraktConnection()">Connect Trakt</button>
+          <button type="button" class="secondary lc-btn" id="listsTraktConnectBtn" data-act="toggleListsTraktConnection">Connect Trakt</button>
         </div>
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Lists, Watchlist, and Watch History from your connected Trakt account.</p>
@@ -47,7 +53,7 @@
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="panel-title" style="margin-bottom:0;">Your TMDB Lists</h2>
         <div style="display:flex; gap:8px;">
-          <button type="button" class="secondary lc-btn" id="listsTmdbConnectBtn" onclick="toggleListsTmdbConnection()">Connect TMDB</button>
+          <button type="button" class="secondary lc-btn" id="listsTmdbConnectBtn" data-act="toggleListsTmdbConnection">Connect TMDB</button>
         </div>
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Lists, Watchlist, and Favorites from your connected TMDB account.</p>
@@ -58,7 +64,7 @@
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="panel-title" style="margin-bottom:0;">Your Simkl Lists</h2>
         <div style="display:flex; gap:8px;">
-          <button type="button" class="secondary lc-btn" id="listsSimklConnectBtn" onclick="toggleListsSimklConnection()">Connect Simkl</button>
+          <button type="button" class="secondary lc-btn" id="listsSimklConnectBtn" data-act="toggleListsSimklConnection">Connect Simkl</button>
         </div>
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Lists, Watchlist, and Watch History from your connected Simkl account.</p>
@@ -71,7 +77,7 @@
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">Lists You Liked</h2>
-        <button type="button" class="secondary lc-btn" onclick="renderLikedListsFeed(true)">Refresh</button>
+        <button type="button" class="secondary lc-btn" data-act="renderLikedListsFeed" data-act-args="[true]">Refresh</button>
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Lists you've saved with the heart, from the community directory and from your connected accounts.</p>
       <!-- The placeholder here is the pre-JS state only. renderLikedListsFeed
@@ -84,6 +90,10 @@
 
   <!-- Submenu 5: Create Custom List Builder -->
   <div class="lists-subpanel" id="listsSubCreateList" style="display:none;">
+    <!-- Inline "Add titles" search (P6-4), shell only: type, tap Add, and the
+         title is in the draft this panel already saves. -->
+${newUi ? '    <div id="appShellAddTitles"></div>' : ''}
+
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title" id="customListEditorTitle">Create a Custom List</h2>
@@ -93,8 +103,8 @@
       <p style="margin-top:14px; margin-bottom:6px; font-weight:600; font-size:0.85rem;">Picks in this list:</p>
       <div id="customListDraftList"><p style="color:var(--muted); font-size:0.85rem;"><small>No items in this list yet &mdash; tap + on any movie or show across Discover, Search, or Charts to add it.</small></p></div>
       <div class="actions" style="margin-top:8px; justify-content:flex-start; gap:8px;">
-        <button type="button" class="secondary lc-btn" onclick="shuffleCustomListDraft()">Shuffle Picks Now</button>
-        <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" onclick="removeAllCustomListDraftPicks()">Remove All</button>
+        <button type="button" class="secondary lc-btn" data-act="shuffleCustomListDraft">Shuffle Picks Now</button>
+        <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" data-act="removeAllCustomListDraftPicks">Remove All</button>
       </div>
       <div id="customListVisibilityRow" style="margin-top:12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; max-width:280px;">
         <span style="font-size:0.95rem; font-weight:500; color:var(--text);">Public</span>
@@ -113,7 +123,7 @@
         <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px;">
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
             <label for="customListPlayOrderSelect" style="font-size:0.85rem; font-weight:600; white-space:nowrap;">Play order:</label>
-            <select id="customListPlayOrderSelect" onchange="applyCustomListPlayOrder(this.value)" style="flex:1; min-width:210px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+            <select id="customListPlayOrderSelect" data-act="applyCustomListPlayOrder" data-act-args="[&quot;@value&quot;]" style="flex:1; min-width:210px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
               <option value="as-listed">Creation order (as listed)</option>
               <option value="aired-asc">Air date &mdash; oldest first</option>
               <option value="aired-desc">Air date &mdash; newest first</option>
@@ -132,28 +142,34 @@
       </details>
       <div id="customListTypeToggles" style="margin-top:8px; display:flex; gap:16px; flex-wrap:wrap;">
         <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-          <input type="radio" name="customListTypeRadio" value="movie" onchange="setCustomListDraftTypeToggle('movie')" checked>
+          <input type="radio" name="customListTypeRadio" value="movie" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;movie&quot;]" checked>
           <span style="font-size:0.85rem;">Movies</span>
         </label>
         <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-          <input type="radio" name="customListTypeRadio" value="series" onchange="setCustomListDraftTypeToggle('series')">
+          <input type="radio" name="customListTypeRadio" value="series" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;series&quot;]">
           <span style="font-size:0.85rem;">Shows</span>
         </label>
         <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-          <input type="radio" name="customListTypeRadio" value="mixed" onchange="setCustomListDraftTypeToggle('mixed')">
+          <input type="radio" name="customListTypeRadio" value="mixed" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;mixed&quot;]">
           <span style="font-size:0.85rem;">Mixed (Movies &amp; Shows)</span>
         </label>
       </div>
       <div class="row" style="margin-top:10px;">
         <input type="text" id="customListNameInput" placeholder="List name (e.g. My Favorites)">
-        <button type="button" class="primary" id="customListSaveBtn" onclick="saveCustomList()">Save</button>
-        <button type="button" id="customListCancelEditBtn" class="secondary" style="display:none;" onclick="cancelEditCustomList()">Cancel</button>
+        <button type="button" class="primary" id="customListSaveBtn" data-act="saveCustomList">Save</button>
+        <button type="button" id="customListCancelEditBtn" class="secondary" style="display:none;" data-act="cancelEditCustomList">Cancel</button>
       </div>
     </div>
   </div>
 
   <!-- Submenu 7: Import list from a Link -->
   <div class="lists-subpanel" id="listsSubImport" style="display:none;">
+    <!-- The shell's own importer (P6-6): choose a Letterboxd, IMDb or Trakt
+         file and the server does the matching, with real progress, a review
+         step, and the result saved as a list. Emitted only for a browser with
+         the FF_NEW_UI cookie; the panel below it is unchanged. -->
+${newUi ? '    <div id="appShellImports"></div>' : ''}
+
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">Import list from a link</h2>
@@ -164,7 +180,7 @@
       </div>
       <div class="row" style="margin-top:8px;">
         <input type="text" id="customListImportNameInput" placeholder="Name (e.g. My Favorites)">
-        <button type="button" class="secondary" id="customListImportBtn" onclick="importCustomListFromLink(this)">Import list</button>
+        <button type="button" class="secondary" id="customListImportBtn" data-act="importCustomListFromLink" data-act-args="[&quot;@self&quot;]">Import list</button>
       </div>
       <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-top:10px;">
         <input type="checkbox" id="customListImportSyncCheck" checked>

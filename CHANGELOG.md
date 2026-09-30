@@ -27,6 +27,117 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 8. **Recommended: set up the background jobs queue** (Phase 5, `docs/OPERATIONS.md` §18): create the queues `mylists-jobs` and `mylists-jobs-dlq`, make this Worker the consumer of `mylists-jobs` (batch size 25, 5 retries, dead-letter queue `mylists-jobs-dlq`), bind `mylists-jobs` to the Worker as `JOBS`, then press **Send a test job** in `/admin` → Maintenance. Without it everything works as before.
 
+### 🩹 Fixes from reviewing Phase 6
+
+Nothing to configure and nothing to undo; all of it ships with the next deploy.
+
+- **Your connected accounts could be erased by one failed page load.** Since P6-8 the page holds your Trakt, MDBList, Simkl and TMDB keys and tokens only once your account has handed them back. If that first load failed (offline, a server error), the page still saved your settings 20 seconds later — with every key blank, and the server stored the blanks. Now the page leaves out any key it has not seen yet, and the server keeps what it has for anything left out. Disconnecting still clears a key, because a disconnect sends the blank on purpose.
+- **Signing out now forgets those keys in the open tab.** Before, the next person to sign in on the same tab could inherit them — and if their account had none, the page saved the previous person's tokens into it.
+- **The keys are really out of browser storage now.** P6-8 stopped writing them under their own names, but the page's saved state (`myListAddon:state`) still carried a full copy on every change. It no longer does. A copy saved before this is kept only until your account has handed the keys back, the same rule the other old copies follow.
+- **"Save to an account" can no longer replace one of your account's lists.** Pressing it while signed out, then signing in to an account that already had a list with the same name, would have overwritten that list. A clashing list now goes up under a new address instead (a second list can be deleted; an overwritten one cannot come back).
+- **Buttons that stopped working after P6-8:** the Combined Charts cards' **+ Movies** / **+ Shows** (they threw an error and added nothing) and their **See All**; and on channel cards, tapping a small poster opened the title's details and closed them again at once.
+- **A redirect that could send people to another site.** `?ff_new_ui=1` on an address starting with two slashes (`//other-site.com/?ff_new_ui=1`) redirected there. It now always stays on this site.
+- **About thirty patterns in the page's code that never matched what they were written for** (from before Phase 6, and the same slip P6-6 found one of): search words were split on the letter "s", the file importer's IMDb-id finder never found an id, "hide watched" never recognised a bare TMDB id, " (Movies)"/" (Shows)" was never trimmed off a list name, and a file name without a dot lost its whole name. The page's code sits inside the Worker's own template, so every backslash in it has to be written twice; a new test (`tests/client-escapes.test.mjs`) now fails the build when one is not.
+
+### 🔧 The admin dashboard's controls name their action too (P6-10)
+
+- **Not behind the new-interface cookie: this is the `/admin` page's own markup, so it reaches the dashboard the moment it is deployed.** Nothing to configure and nothing to undo (`docs/OPERATIONS.md` §23). Only the dashboard you use to see the site's numbers is affected; nothing visitors see changes.
+- **The dashboard's 76 inline handlers are gone — the last in the repo — and it carries none at all**: 67 clicks, the six dropdowns that load Trending and Search, the two boxes that filter as you type, and the one Enter key that starts the provider search. That covers the three section buttons, every sub-tab pill, the Maintenance buttons (migrate, copy lists, copy history, jobs, schema check), the feedback list and its modals, Provider Preview and New on Streaming. A control names its action in `data-act` and one listener per event type runs it (`adminActDispatch`, in the dashboard's own script). The names are the same as the builder page's on purpose: the two pages now speak one language for "this control does this".
+  - `/admin` does not load the builder's bundle — it is a separate page with its own script — so it carries its own small copy of that runtime. The rule is the one P6-8 established: a control says which event it answers to when its tag does not (the two boxes that filter as you type say `input`), `Enter` alone runs the provider-lookup search, and arguments travel as one JSON value instead of a line of JavaScript.
+  - **One argument used to be a JavaScript string inside the markup**: the new-key box's **Copy Key** button had the key spliced into its own `onclick`. It is data now, escaped once, so a key can never end the attribute it sits in — and the two buttons in that box are plain named functions.
+  - **A creator's own display name** (which is arbitrary text they chose) was already kept out of the markup by P6-8's `data-displayname`; the Reset Key button now names its action too, and a test renders a display name carrying a quote and a `<script>` tag and proves it stays data.
+- **No more pop-up boxes on the dashboard either.** Its eight `alert()` calls are the dashboard's own dialog now (`showAdminAlert`). Its ten `confirm()` dialogs are deliberately left for a follow-up: each one sits inside a destructive flow (delete lists, undo the installs move, restart a copy) and converting it means restructuring that flow around a callback, which is a change of its own rather than a line of this one.
+- **Guarded like the builder page.** `html_checks.py` now fails *any* render that carries an inline handler — the exception the admin page had is gone — and it resolves all 45 actions across the dashboard's 75 controls against the script that defines them. `tests/admin-actions.test.mjs` (12) runs the dashboard's own script in a sandbox and checks the whole contract: the arguments escape once, `@self` and friends resolve, a select answers change and a button click, the two filter boxes answer `input`, Enter alone runs the search, the innermost control runs first, and a vanished action warns once instead of dying silently.
+- **A bug the new test caught before the commit:** binding the listener where the dashboard's other start-up code runs put it *above* the declaration it reads, so the script would have died on the const's dead zone and taken the whole dashboard down with it. The check that renders the page cannot see that (it never runs the script); the test that runs it can.
+
+### 🌐 Your lists now say where they are saved (P6-9, new UI only)
+
+- **Only for a browser on the new interface** (`?ff_new_ui=1`). Lists shows the lists your account has **and** the ones this browser keeps on its own, and each card says which is which.
+  - A list built while signed out is marked **"Saved in this browser only"**, with a sentence under it saying that clearing this browser's data loses it, and two buttons that were not there before: **Save to an account** and **Export** (it has no Share button — there is nothing to share until it is saved).
+  - **Save to an account**, signed in: the list is sent to your account as **private**, the browser's copy is deleted once the account has confirmed it has the list, and any row already built from it now edits the account's copy. A list that fails to save stays in this browser rather than disappearing.
+  - **Save to an account**, signed out: pressing it copies the list and asks you to sign in, then saves it the moment you are signed in. (Signing in empties this browser's list store, which is why the copy is made first — and the save is said out loud, so a list that could not be sent is never left behind quietly.)
+  - **Export** downloads that one list as a small JSON file — the same shape Settings › Backups › Restore already reads — so it can be restored on any browser.
+  - The generated shelves (Watchlist, Watch History, Continue Watching, Airing Next) are **not** offered this way: they are not hand-built lists, and their content already travels with your account's tracking record.
+  - Nothing migrates by itself when you sign in to an account that already has lists: the lists are shown, and the button is yours to press — which is what keeps a list the account already has from being duplicated.
+- The old page is unchanged, and nothing here needs a dashboard change or a migration (`docs/OPERATIONS.md` §22).
+
+### 🧹 Buttons say what they do, and the browser stops keeping your keys (P6-8)
+
+- **Not behind the new-interface cookie: this one is the page's own markup and this browser's own storage, so it reaches everyone once it is deployed.** Nothing to configure (`docs/OPERATIONS.md` §21).
+- **Every control in the builder now names its action instead of carrying a line of code.** 447 inline `onclick=` / `onchange=` / `oninput=` attributes are gone from the page's markup: a button carries `data-act="fnName"` and its arguments as one value, and a single listener for the whole page runs it (`appActDispatch`, `16_client-row-core.js`). This is the shape fix, not tidying:
+  - The old `onclick="fn(&quot;…&quot;)"` was the bug from the last audit — the browser decodes an attribute before JavaScript sees it, so the escaping *re-formed* the quote it was meant to hide, and an id from a restored backup or a pasted install link was enough to run code (FE-02). Arguments are now escaped once, for both the data and the markup, so a title like `O'Brien & Sons "Best"` is a string in an array rather than a way out of the attribute.
+  - A renamed function used to be a button that silently did nothing. The name is now checked the same way the old handlers were: the build resolves every `data-act` (234 distinct actions over 867 controls) against the bundle, and fails if an inline handler comes back on the builder page. The `/admin` dashboard keeps its own until P6-10.
+  - A control says which event it answers to whenever its tag does not (`data-act-on="input"` for the boxes that search as you type). File inputs answer **change** only — answering both would upload the same backup twice — and the one control that used to have two handlers, the catalog search box (search as you type *and* Enter), is one action that reads the event it was given.
+  - `escapeJsAttr`, the helper that double-escaped those old attributes, is deleted along with the shape it existed for. Its three tests now dispatch the same payload through the new path and prove it arrives as a string.
+- **Provider keys and tokens are no longer stored in the browser.** Trakt, MDBList, Simkl and TMDB keys, tokens and session ids are held for the visit only; your account already has them (every save sends them up), and a browser that has a copy from before keeps working — the old copy is dropped once the account hands the same credential back. **One consequence to know:** if you are *not* signed in and paste a key, it lasts for that visit and is saved when you sign in — signing in is what keeps it.
+- **No more pop-up boxes.** Nothing in the app's page uses the browser's own alert/confirm/prompt dialogs any more; messages are the app's toast, and the ones that need an answer are the app's own dialog.
+- The **Creator Key** is deliberately untouched: it is what signs this browser in, and it moves with the signed-in sessions in P6-9 rather than here.
+
+### 📺 Building a channel starts with a template (P6-7, new UI only)
+
+- **Only for a browser on the new interface** (`?ff_new_ui=1`). Channels opens with **New channel** above the panels that were there before: pick a template, look at what is playing today, then add it to your home screen.
+  - **TV network** (A&E, HBO, NBC, Cartoon Network and the rest), **Franchise or universe** (a saga in its canon order), **Actor or creator**, **From a list** (a MDBList, Trakt or TMDB show list, kept in step with it if you leave the switch on), and **Custom** -- which opens the full builder rather than a cut-down copy of it.
+  - **Today's lineup is the server's answer**, not an arrangement made on the page: the preview asks the same code a Stremio request goes through, shows the plan (say "24 shows a day, 3 episodes a block, 1,820 episodes in the pool") and up to twelve posters, and says so when a rule like *Hide watched* cannot be applied to a preview.
+  - **Nothing is added to your home screen until you press it.** The channel is built and saved in this browser first, My Channels lists it either way, and the one button under the preview adds or removes the row.
+  - **Schedule options** sit under the template: daily rotation with shows a day and episodes a block, play order (as the channel is, interleaved, by air date, shuffled), *Hide watched*, and how many episodes of one show the pool keeps. A TV network still uses the server's ready-made pool whenever those options are the ones it is built with; ask for something different and the pool is built for your choices instead.
+  - A **saga** needs no account (it is a public row, like the Storylines tab's own "Add"); the other templates ask you to sign in first, exactly as the builder does.
+
+### 📥 Importing a list is a job now, with progress and a review step (P6-6, new UI only)
+
+- **Only for a browser on the new interface** (`?ff_new_ui=1`). Lists › Import opens with the new importer above the panel that was there before:
+  - **Choose a file** — a Letterboxd zip or CSV, an IMDb CSV, a Trakt export — and the screen says what it found: how many films, how many shows, and the list name it suggests. The file is read in the browser (through the importer the page already had) because the rows are what get sent.
+  - **The matching happens on the server.** The rows are handed over once (up to 5,000) and a background job resolves them; the screen shows **Matched 34 of 120**, a progress bar, and how many titles are waiting for review or were not found. **Close the page and it keeps going** — come back and it is where you left it, and it says so once when it has finished.
+  - **A file with both films and shows is two imports** (one import is one kind), so the chips say which half is being sent and the other half waits for a second run. A chip with nothing behind it says so and is disabled rather than sending the wrong rows.
+  - **Review** — the titles TMDB could not settle on its own are collected with up to three candidates each: pick the right one, or **Skip**. The rest of the import never waits for them.
+  - **The result is a list, and one toggle adds it to the home screen.** Name it (the file's own name is suggested), and **Show it on my home screen** — ticked by default — adds a single row for it, built exactly the way the dashboard's own **+ Add** row is built; the same button takes it off again. Import another file when you are done.
+  - Anything that matched nothing is counted and said plainly rather than quietly dropped.
+- **The old import panel is still there** underneath and the old page's Import is unchanged. `/api/bulk-resolve`, the browser-side resolver this replaces, is kept one more release as a shim.
+- **One bug fixed on the way**, found by the new tests: the shell's Explore search box (P6-5) split its query on the letter "s" — inside the Worker's own template literal a `\s` written with one backslash reaches the browser as a bare `s`. Fixed for Explore and for the import screen; the same mistake in three older client regexes is written up in `HANDOFF.md` rather than changed here, because it is not this task's code.
+
+### 🧭 Explore: other people's lists in one place (P6-5, new UI only)
+
+- **Only for a browser on the new interface** (`?ff_new_ui=1`). Discover opens with an **Explore** section:
+  - **Source chips**: All sources · My Lists community · MDBList · Trakt · TMDB. Pick one and only that source is asked.
+  - **Search as you type** (a pause of a third of a second, then results), or leave the box empty to browse what is popular.
+  - **Sort**: **Most liked** (every source reports likes) or **Newest** (for the lists that say when they last changed — this site's own; the providers do not, so theirs keep their place rather than being guessed at). **Most added** counts how many people put a list on their home screen, which the new list service keeps and which is not switched on yet, so it is shown, explained and disabled.
+  - **Preview** looks inside a list before you add it — the first few posters and how many titles — and every card (and the preview) has **Add to home screen**, which puts it in your rows the same way the old search's button does. Press it again to take it off.
+- One thing said out loud rather than hidden: MDBList publishes no list search, so MDBList results are its popular lists narrowed to your words — the same thing the old search did, now labelled.
+
+### 📋 Your lists, cards you can act on (P6-4, new UI only)
+
+- **Only for a browser on the new interface** (`?ff_new_ui=1`). Lists now opens with a card per list -- name, who can see it, and how many titles:
+  - **Add titles** opens the list in the editor and puts a search box right there: type, tap **Add**, and the title is in the list. Save writes it, exactly as before, so nothing about how a list is stored changes.
+  - **Show on home screen** adds the list as a row (and **On your home screen** takes it off again), using the same row the old **+ Add** button builds.
+  - **Share** gives one place for who can see a list -- **Private / Unlisted / Public**, what each one means, and **Copy link**. Unlisted belongs to the next list service, which is not switched on yet, so it is shown, explained, and disabled rather than saved as something else; until then a list is private or public.
+  - **Open** goes to the list's own page, and **+ New list** starts one.
+- The dashboard the page already had stays underneath (drag to reorder, edit, delete, the connected providers), so nothing is lost while the new view grows.
+
+### 📺 A paste-first home screen in the new UI (P6-3)
+
+- **Only for a browser on the new interface** (`?ff_new_ui=1`). The Catalogs view (the home screen) now opens with an editor above the rows:
+  - **Paste, then look.** Paste one list link per line -- MDBList, Trakt, TMDB, Simkl, an IMDb list, one of your own lists or a shared channel -- and press **Check links**. Every line is read before anything is added, and the review table says what each one is: the detected name, where the link comes from, Movies or Shows, how many titles, and **Ready** or **Skipped** with the reason. **Add 2 lists** adds the ready ones; anything skipped stays in the list, with its reason, so a typo is one line to fix rather than a fresh start.
+  - **Nothing you did not ask for.** The eight demo rows a first-time visitor used to be handed silently are now a button -- **Add a starter pack (8 rows)** -- and it is offered only while the screen has none of your own rows.
+  - **"Hide titles already shown in rows above"** now sits directly above the rows it applies to, with the rule spelled out: the top row keeps everything, each row below drops what an earlier row already showed, and row order is what decides. In the new UI the Settings copy of that toggle is hidden; both write the same setting, so the two cannot disagree.
+  - **The live preview follows the rows.** Adding, removing, renaming or dragging a row refreshes the poster preview a moment later instead of waiting for **Refresh Preview**.
+- The rows themselves, the drag handles and the up/down buttons are unchanged, and the old page keeps its own screens exactly as they are.
+
+### ⚙️ Settings in the new UI: account, devices, connections, install links (P6-2)
+
+- **Only for a browser on the new interface** (`?ff_new_ui=1`). Settings → Account & Sync now opens with four cards above the panels that were there before:
+  - **Account** — who you are signed in as, **Sign out**, and **Delete account** (which asks first, then removes everything in the background).
+  - **Devices** — every browser signed in to your account, when each was last used, **Sign out** per device and **Sign out my other devices**. The one you are using is marked and cannot sign itself out by accident.
+  - **Connections** — Trakt, MDBList, Simkl and TMDB, each showing *Connected as @you*, *Reconnect needed*, *Sign-in expired* or *Not connected*, with the one button that connects, reconnects or disconnects it. Connecting uses the same flow as the rest of the site, so a connection now works in Stremio without a new install link.
+  - **Install links** — this browser's link with **Install in Stremio**, **Install in Nuvio**, **Copy link** and instructions for other apps (Wako and anything else that takes a Stremio manifest), plus the install links saved on your account (name, rows, when last used) with **Revoke**.
+- **Removed in the new interface:** "Import from Install / Configure Link". An install link hands back the connected accounts' tokens (SECURITY_AUDIT S-02); a backup file does the same job safely, and that is offered instead. The page everyone else sees keeps it until the old markup goes (P6-8).
+- Nothing changes for anyone not on the new interface: the same screen, the same buttons.
+
+### 🧭 The new frontend, opt-in per browser (P6-1)
+
+- **Nothing changes for anyone who does not ask for it.** The frontend rebuild starts here, and it is switched on per browser rather than per deploy: open `mylistsaddon.com/?ff_new_ui=1` and that browser gets the new shell, `?ff_new_ui=0` puts it back. `docs/OPERATIONS.md` §20 has the two links.
+- In the new shell the six views have real addresses (`/catalogs`, `/lists/liked`, `/channels/explore`, `/settings/account`, ...), the tabs are ordinary links, so middle-click, "open in a new tab", bookmarking and sharing a view all work, and the back button moves between views.
+- An **install bar** above the tabs says whether this browser's install link still matches what has been built since (`Not installed yet` / `Unsaved changes to your install link` / `Install link up to date`), with the one action that fixes it, instead of the old floating "Update Link" banner.
+- Every panel is the one that exists today: the shell is the frame, the routing, and the shared pieces the rest of Phase 6 will be built from (one toast system, one accessible dialog, one way to call the API with the session cookie). Nothing is stored on the server, so switching back is instant and lossless, and the shell's addresses 404 for everyone else exactly as they did before.
+
 ### 🏠 Home screens with "remove duplicates" built once (P5-11)
 
 - **A new switch, `FF_MATERIALIZER` (off).** For installs with "Remove duplicate items across lists", each Stremio row used to rebuild every row above it; a 20-row home screen did about 210 row builds. With the switch on, the whole home screen is built once per hour (at most 20 builds) and served from there. The rows are the same.

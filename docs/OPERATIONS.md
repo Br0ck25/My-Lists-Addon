@@ -391,3 +391,59 @@ From Phase 5, background work (refreshing charts and show schedules, imports, cl
 `FF_MATERIALIZER` only matters for installs with **Remove duplicate items across lists** turned on. For those, each Stremio row used to rebuild every row above it to know what to hide, so a 20-row home screen did about 210 row builds. With the switch on, the first page of every row is built once, duplicates are removed in one pass, and the result is kept for an hour (in KV as `snap:mat:...`, one key per install). A home screen then costs at most one build per row per hour. Personal rows (Watchlist, Continue Watching and the like) are never de-duplicated and are unaffected, as are pages after the first.
 
 **Turning it on:** Worker → Settings → Variables and Secrets → Add → type *Text*, name `FF_MATERIALIZER`, value `1`. Deploy. **Turning it off:** delete the variable and deploy. Both are safe at any time; the `snap:mat:` keys expire by themselves within an hour. A change to an install (rows added, removed or reordered) is picked up at once, as a new build.
+
+## 20. The new UI shell (P6-1)
+
+The frontend rebuild (Phase 6) is being built behind a **cookie**, not a Worker variable, so the owner can walk the new interface on their own device while everyone else keeps the page they know, and a rollback is one cookie rather than a deploy.
+
+**What it changes:** with the cookie set, the six views have real addresses — `/catalogs`, `/catalogs/quickadd`, `/lists/liked`, `/channels/explore`, `/discover/movies`, `/search`, `/settings/account` and so on — the tabs are ordinary links (middle-click and open-in-a-new-tab work), every view keeps the same panels it has today, and an install bar above the tabs says whether this browser's install link is up to date. Settings → Account & Sync also gains four cards at the top -- account, devices, connections and install links -- which read and change things on the server (sign out, delete the account, sign devices out, connect a provider, revoke an install link).
+
+**What it needs on the server:** the screens that read or change *your account* -- Settings' four cards, and Imports below -- go through the session cookie (`/api/me`, `/api/imports`, ...), which is what `FF_SESSIONS=1` turns on. With it unset those screens say you are not signed in, and the import API answers 401; nothing else on the page is affected. Set it in the dashboard (Worker → Settings → Variables) before trying them, and remember that turning it off again signs every browser out.
+
+**Turning it on for yourself:** open
+
+```
+https://mylistsaddon.com/?ff_new_ui=1
+```
+
+You are bounced back to the page you asked for, without the parameter, and the cookie is set for a year. Do the same on your phone (or any browser) to try it there; the cookie is per browser.
+
+**Turning it off:** `https://mylistsaddon.com/?ff_new_ui=0` — same bounce, cookie cleared. Nothing is stored server-side either way, so no data is affected and nothing has to be undone.
+
+**For everyone at once** (later, when Phase 6 is finished): the plan is a Worker variable, `FF_NEW_UI=1`, defaulting off, once the whole frontend is behind it. Until then the cookie is the only switch, and nobody without it sees any change at all — the shell's paths still 404 for them, exactly as before.
+
+## 21. What P6-8 changed for everyone
+
+**Nothing to configure.** Unlike P6-1 to P6-7, this one is not behind the new-UI cookie: it is the page's own markup and this browser's own storage, so it reaches every visitor once the new `worker_entry_combined.js` is deployed. Nothing in the dashboard, no migration and no variable.
+
+- **Every control names its action.** The buttons, boxes and lists in the builder no longer carry a line of JavaScript in the markup; a single listener runs them (`appActDispatch`, `16_client-row-core.js`). If a control ever "does nothing" in the new build, the browser console says `Action failed: <name>` (once per name) instead of failing silently, and `verify.sh`/`html_checks.py` fail the build if a name does not exist in the bundle.
+- **No more browser pop-ups.** A message that used to be an `alert()` is now the app's own toast, bottom centre; anything that needed a yes/no is the app's own dialog.
+- **Provider keys are no longer re-saved in the browser.** A Trakt, MDBList, Simkl or TMDB key or token lives in memory while the page is open, is read from the old stored copy if one is there, and the stored copy is cleaned up once the account (signed in) hands the same value back. Consequence to know: if a visitor is **not signed in** and pastes a key, it works for that visit but is not kept for the next one — signing in is what saves it. The Creator Key itself is untouched (it is what signs this browser in; it moves in P6-9).
+- **Nothing to undo** if the deploy has to be rolled back: the previous file re-stores what the old page stored.
+
+## 22. Lists that live in one browser (P6-9)
+
+**Nothing to configure.** Like P6-1 to P6-7 this screen is only reachable with the new-UI cookie (§20); no migration, no variable and no dashboard change. The old page is untouched, and the API call it makes (`POST /api/creator/lists/save`) is the one the sign-up migration has always used.
+
+**What changed:** Lists now shows the account's lists **and** the lists this browser keeps on its own (a list built while signed out lives in `myListAddon:localCustomLists` and stays there through a sign-in, because nothing migrates it at that moment). A list the account does not have is labelled **"Saved in this browser only"** and carries **Save to an account** and **Export** instead of Share.
+
+- **How a list is known to be browser-only.** Every list the account owns is mirrored into the local map with a `creatorSlug`; an entry without one has never been sent to an account. That is a lookup, not a guess — which is why the view waits ("Loading your lists…") while signed in until the account's own list has arrived: the local map is a *cache* of the account's lists in that state, and rendering early would label an account's list as browser-only.
+- **Save to an account, signed in.** The list is posted as **private**, the row that pointed at the local copy is re-pointed at the account's, and the browser's copy is deleted *after* the account confirms it has the list. A failure leaves the browser's copy alone and says so.
+- **Save to an account, signed out.** Signing in runs `clearLocalAccountData()`, which empties this browser's list store, so the list is copied into a pending queue *before* the sign-in dialog opens and pushed the moment the sign-in completes (a new account pushes the queue after its one-time migration of everything else, so nothing is sent twice). Both outcomes are announced in a toast.
+- **Export** downloads that one list as the small JSON file Settings › Backups › Restore already reads (`version: "3.0"`, one entry in `customLists`), so it can be restored in any browser.
+- **Nothing merges by itself.** Signing in to an account that already has lists does not sweep the browser's lists into it; each one waits for its own button. That is deliberate: an automatic merge cannot tell a list the account already has from one it does not, and would duplicate it.
+- **Not offered for the generated shelves** (Watchlist, Watch History, Continue Watching, Airing Next): their content travels with the account's tracking record, and "saving" one would either duplicate it or invent a list.
+- **Nothing to undo** if the deploy is rolled back: the browser's store is the same store the old page uses, and a list moves only when someone presses the button.
+
+**If something looks wrong:** the console names the action that failed (`Action failed: <name>`), and a list that did not move is still in this browser — reload Lists and it is there.
+## 23. What P6-10 changed for the admin dashboard
+
+**Nothing to configure.** The `/admin` page is the dashboard you use, not something visitors see: it is its own document, its own script and its own menu `/admin`, and none of it is behind a cookie, a variable or a migration. Deploying the new `worker_entry_combined.js` is the whole change.
+
+- **The dashboard's buttons name their action.** 76 inline `onclick` / `onchange` / `oninput` / `onkeydown` attributes are gone; each control carries `data-act` (plus `data-act-args` for its arguments) and one listener per event type runs it (`adminActDispatch`, in the dashboard's own script — the page does not load the builder's bundle, so it carries its own copy of that runtime). **What you should notice: nothing.** Every button does what it did.
+- **The two boxes that filter as you type** (Provider Preview's, Creator Accounts') still filter as you type — they say so with `data-act-on="input"`. **The provider search box** still searches when you press Enter, and only when you press Enter.
+- **A creator's display name cannot reach the markup as code.** The Reset Key button already kept the name in a `data-` attribute; the Copy Key button in the "new key" box used to have the key written into its own handler, and now takes it as an argument. A test renders a display name containing a quote and a `<script>` tag and proves it stays text.
+- **The dashboard's messages are its own dialog now** (`showAdminAlert`), not the browser's pop-up: 8 `alert()` calls became it. The ten yes/no `confirm()` prompts (delete lists, undo the installs move, restart a copy, reset a key) are **unchanged for now** — each one is inside a flow that has to be restructured around a callback, which is a change of its own.
+- **If something looks wrong:** the browser console says `Admin action not found: <name>` (once per name) if a control ever names a function that is not there, instead of the button silently doing nothing. `html_checks.py` fails the build on any inline handler on any page, so that shape cannot come back quietly.
+- **Nothing to undo** if you roll back the deploy: the previous file is the previous dashboard.
+- **The CSP is unchanged** (`docs/DECISIONS.md` D-18): the dashboard still serves an inline `<script>` block, so `'unsafe-inline'` stays until P7-1 moves the page's scripts into files. Removing the handlers is what makes that a header change rather than a rewrite.

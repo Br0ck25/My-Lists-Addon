@@ -250,7 +250,9 @@ describe("My Lists Addon Charts on the website", () => {
     assert.match(html, /<h2 class="shelf-title">My Lists Addon Charts<\/h2>/);
     assert.match(html, /data-add-all-action="mylists-charts"/);
     for (const url of ["tmdb:new-on-streaming", "mylists:most-watched:today", "mylists:most-watched:7", "mylists:most-watched:30"]) {
-      assert.ok(html.includes(`'${url}', 'movie'`) && html.includes(`'${url}', 'series'`), `missing movie/show buttons for ${url}`);
+      // P6-8: the button names its action and carries its arguments as JSON.
+      assert.ok(html.includes(`&quot;${url}&quot;,&quot;movie&quot;,true`) && html.includes(`&quot;${url}&quot;,&quot;series&quot;,true`),
+        `missing movie/show buttons for ${url}`);
     }
     assert.match(js, /function addAllMyListsAddonCharts\(\) \{\n  addRow\("New on Streaming", "tmdb:new-on-streaming", 'movie'/);
     assert.match(js, /action === 'mylists-charts'\) addAllMyListsAddonCharts\(\)/);

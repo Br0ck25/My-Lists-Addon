@@ -20,7 +20,7 @@ async function importCustomListFromLink(btn) {
   const syncCheck = document.getElementById('customListImportSyncCheck');
   const listUrl = urlInput.value.trim();
   if (!listUrl) {
-    alert('Paste a list URL first.');
+    showToast('Paste a list URL first.', 'error');
     return;
   }
   const name = nameInput.value.trim() || guessNameFromUrl(listUrl);
@@ -86,7 +86,7 @@ async function loadListToCustomListDraft(name, listUrl, contentType, btn) {
       if (typeof showAppAlert === 'function') {
         showAppAlert('Customize List', 'Could not load items for this list.');
       } else {
-        alert('Could not load items for this list.');
+        showToast('Could not load items for this list.', 'error');
       }
       return;
     }
@@ -114,7 +114,7 @@ async function loadListToCustomListDraft(name, listUrl, contentType, btn) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Customize List', 'Error loading list: ' + (err.message || err));
     } else {
-      alert('Error loading list: ' + (err.message || err));
+      showToast('Error loading list: ' + (err.message || err), 'error');
     }
   }
   if (btn) {
@@ -152,7 +152,7 @@ async function addToCustomListDraft(searchType, tmdbId, title, year, poster, btn
     const res = await fetch(ORIGIN + endpoint + encodeURIComponent(tmdbId), { cache: 'no-store' });
     const data = await res.json();
     if (!data.ok) {
-      alert('Could not add "' + title + '": ' + (data.error || 'unknown error'));
+      showToast('Could not add "' + title + '": ' + (data.error || 'unknown error'), 'error');
       if (btn) {
         btn.disabled = false;
         btn.textContent = '+ Add';
@@ -171,7 +171,7 @@ async function addToCustomListDraft(searchType, tmdbId, title, year, poster, btn
     if (btn) btn.textContent = 'Added \u2713';
     if (typeof trackEvent === 'function') trackEvent('list-add', data.imdbId, title, itemType);
   } catch (e) {
-    alert('Network error adding "' + title + '".');
+    showToast('Network error adding "' + title + '".', 'error');
     if (btn) {
       btn.disabled = false;
       btn.textContent = '+ Add';
@@ -421,7 +421,7 @@ function saveCustomList() {
   const nameInput = document.getElementById('customListNameInput');
   const name = nameInput.value.trim();
   if (!name) {
-    alert('Name this list first.');
+    showToast('Name this list first.', 'error');
     return;
   }
 
@@ -489,7 +489,7 @@ function saveCustomList() {
       }).then(async (res) => {
         const data = await res.json();
         if (!data.ok) {
-          alert('Could not save list: ' + (data.error || 'unknown error'));
+          showToast('Could not save list: ' + (data.error || 'unknown error'), 'error');
           return;
         }
         const slug = data.slug;
@@ -514,7 +514,7 @@ function saveCustomList() {
           showAddedToast('"' + name + '" saved \u2713');
         }
       }).catch(() => {
-        alert('Network error while saving list.');
+        showToast('Network error while saving list.', 'error');
       });
     } else {
       const map = loadLocalCustomLists();
@@ -575,7 +575,7 @@ function saveCustomList() {
 // the one on the server, not a row in this particular install link.
 async function saveCreatorListEdit(name) {
   if (!activeCreator) {
-    alert('Your Profile session expired -- please restore it again.');
+    showToast('Your Profile session expired -- please restore it again.', 'error');
     editingCreatorListSlug = null;
     updateCustomListSaveButtonLabel();
     return;
@@ -649,7 +649,7 @@ async function saveCreatorListEdit(name) {
       if (typeof showAppNoticeModal === 'function') {
         showAppNoticeModal('This List Changed Elsewhere', msg, true);
       } else {
-        alert(msg);
+        showToast(msg, 'error');
       }
       return;
     }
@@ -658,7 +658,7 @@ async function saveCreatorListEdit(name) {
       if (typeof showAppNoticeModal === 'function') {
         showAppNoticeModal('Could Not Save Changes', data.error || 'Unknown error occurred.', true);
       } else {
-        alert('Could not save changes: ' + (data.error || 'unknown error'));
+        showToast('Could not save changes: ' + (data.error || 'unknown error'), 'error');
       }
       return;
     }
@@ -689,7 +689,7 @@ async function saveCreatorListEdit(name) {
     if (typeof showAppNoticeModal === 'function') {
       showAppNoticeModal('Network Error', 'A network error occurred while saving. Please try again.', true);
     } else {
-      alert('Network error while saving.');
+      showToast('Network error while saving.', 'error');
     }
   } finally {
     endSubmit();
@@ -822,7 +822,7 @@ async function saveLocalCustomListEdit(name) {
     if (typeof showAppNoticeModal === 'function') {
       showAppNoticeModal(title, msg, true);
     } else {
-      alert(msg);
+      showToast(msg, 'error');
     }
     cancelEditCustomList();
     renderCreatorDashboard();
@@ -845,7 +845,7 @@ function openEditCustomListDraft(urlInput) {
   if (!urlInput) return;
   const payload = parseCustomListPayloadClient(urlInput.value);
   if (!payload) {
-    alert('Could not read this list to edit it.');
+    showToast('Could not read this list to edit it.', 'error');
     return;
   }
   customListDraftItems = (payload.items || []).slice();
@@ -880,7 +880,7 @@ function editCustomList(btn) {
   const sourceRow = btn.closest('.source-row');
   const urlInput = sourceRow && sourceRow.querySelector('.url');
   if (!urlInput) {
-    alert('Could not read this list to edit it.');
+    showToast('Could not read this list to edit it.', 'error');
     return;
   }
   openEditCustomListDraft(urlInput);
@@ -967,7 +967,7 @@ function setCustomListDraftTypeToggle(type) {
       return itType !== type;
     });
     if (hasOpposite) {
-      alert('This list contains both movies and shows -- keep it set to "Mixed" or remove incompatible items first.');
+      showToast('This list contains both movies and shows -- keep it set to "Mixed" or remove incompatible items first.', 'error');
       updateCustomListTypeRadio(customListDraftType);
       return;
     }
@@ -1408,7 +1408,7 @@ function removeWatchedItemFromWatchlist(id, showId, extraIds) {
     if (!s) return;
     targetIds.add(s);
     if (s.startsWith('tmdb:')) targetIds.add(s.slice(5));
-    else if (/^\d+$/.test(s)) targetIds.add('tmdb:' + s);
+    else if (/^\\d+$/.test(s)) targetIds.add('tmdb:' + s);
   };
   addId(id);
   if (Array.isArray(extraIds)) extraIds.forEach(addId);
@@ -1444,11 +1444,11 @@ function removeWatchedItemFromWatchlist(id, showId, extraIds) {
         if (itShowId && fullyWatchedShowIds.has(itShowId)) return false;
         if (itTmdbId && fullyWatchedShowIds.has(itTmdbId)) return false;
         if (itId && itId.startsWith('tmdb:') && fullyWatchedShowIds.has(itId.slice(5))) return false;
-        if (itId && /^\d+$/.test(itId) && fullyWatchedShowIds.has('tmdb:' + itId)) return false;
+        if (itId && /^\\d+$/.test(itId) && fullyWatchedShowIds.has('tmdb:' + itId)) return false;
         return true;
       }
 
-      if (itId && (targetIds.has(itId) || (/^\d+$/.test(itId) && targetIds.has('tmdb:' + itId)) || (itId.startsWith('tmdb:') && targetIds.has(itId.slice(5))))) return false;
+      if (itId && (targetIds.has(itId) || (/^\\d+$/.test(itId) && targetIds.has('tmdb:' + itId)) || (itId.startsWith('tmdb:') && targetIds.has(itId.slice(5))))) return false;
       if (itImdbId && targetIds.has(itImdbId)) return false;
       if (itTmdbId && (targetIds.has(itTmdbId) || targetIds.has('tmdb:' + itTmdbId))) return false;
       return true;
@@ -1517,11 +1517,11 @@ function removeWatchedItemFromWatchlist(id, showId, extraIds) {
           if (itShowId && fullyWatchedShowIds.has(itShowId)) return false;
           if (itTmdbId && fullyWatchedShowIds.has(itTmdbId)) return false;
           if (itId && itId.startsWith('tmdb:') && fullyWatchedShowIds.has(itId.slice(5))) return false;
-          if (itId && /^\d+$/.test(itId) && fullyWatchedShowIds.has('tmdb:' + itId)) return false;
+          if (itId && /^\\d+$/.test(itId) && fullyWatchedShowIds.has('tmdb:' + itId)) return false;
           return true;
         }
 
-        if (itId && (targetIds.has(itId) || (/^\d+$/.test(itId) && targetIds.has('tmdb:' + itId)) || (itId.startsWith('tmdb:') && targetIds.has(itId.slice(5))))) return false;
+        if (itId && (targetIds.has(itId) || (/^\\d+$/.test(itId) && targetIds.has('tmdb:' + itId)) || (itId.startsWith('tmdb:') && targetIds.has(itId.slice(5))))) return false;
         if (itImdbId && targetIds.has(itImdbId)) return false;
         if (itTmdbId && (targetIds.has(itTmdbId) || targetIds.has('tmdb:' + itTmdbId))) return false;
         return true;
@@ -1566,7 +1566,7 @@ function cleanWatchedFromWatchlists() {
       const s = String(w.id);
       watchedIds.add(s);
       if (s.startsWith('tmdb:')) watchedIds.add(s.slice(5));
-      else if (/^\d+$/.test(s)) watchedIds.add('tmdb:' + s);
+      else if (/^\\d+$/.test(s)) watchedIds.add('tmdb:' + s);
     }
     if (w.imdbId) watchedIds.add(String(w.imdbId));
     if (w.tmdbId) {
@@ -1602,11 +1602,11 @@ function cleanWatchedFromWatchlists() {
         if (itImdbId && fullyWatchedShowIds.has(itImdbId)) return false;
         if (itTmdbId && fullyWatchedShowIds.has(itTmdbId)) return false;
         if (itId && itId.startsWith('tmdb:') && fullyWatchedShowIds.has(itId.slice(5))) return false;
-        if (itId && /^\d+$/.test(itId) && fullyWatchedShowIds.has('tmdb:' + itId)) return false;
+        if (itId && /^\\d+$/.test(itId) && fullyWatchedShowIds.has('tmdb:' + itId)) return false;
         return true;
       } else {
         // Movies: remove as soon as they appear in Watch History.
-        if (itId && (watchedIds.has(itId) || (/^\d+$/.test(itId) && watchedIds.has('tmdb:' + itId)) || (itId.startsWith('tmdb:') && watchedIds.has(itId.slice(5))))) return false;
+        if (itId && (watchedIds.has(itId) || (/^\\d+$/.test(itId) && watchedIds.has('tmdb:' + itId)) || (itId.startsWith('tmdb:') && watchedIds.has(itId.slice(5))))) return false;
         if (itImdbId && watchedIds.has(itImdbId)) return false;
         if (itTmdbId && (watchedIds.has(itTmdbId) || watchedIds.has('tmdb:' + itTmdbId))) return false;
         return true;
@@ -2013,7 +2013,7 @@ window.markShowWatched = async function(imdbId) {
   }
 
   const tkInput = document.getElementById('tmdbKeyInput');
-  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
 
   const allEpisodes = [];
   const CONCURRENCY = 4;
@@ -2722,7 +2722,7 @@ async function updateContinueWatching(showId) {
   if (!showId) return { ok: false };
 
   const tkInput = document.getElementById('tmdbKeyInput');
-  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || (typeof localStorage !== 'undefined' ? (localStorage.getItem('myListAddon:tmdbKey') || '') : '');
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || (typeof localStorage !== 'undefined' ? (readProviderSecret('myListAddon:tmdbKey') || '') : '');
 
   // Reading Watch History here (outside the commit lock) is safe: nothing
   // concurrently writes to Watch History during a Continue Watching batch
@@ -3879,7 +3879,7 @@ async function backfillWatchHistoryEpisodeStills() {
   // Sort season 1 first so missing shows are detected before checking later seasons
   pending.sort((a, b) => (Number(a[1].seasonNum) || 0) - (Number(b[1].seasonNum) || 0));
   const tkInput = document.getElementById('tmdbKeyInput');
-  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || localStorage.getItem('myListAddon:tmdbKey') || '';
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
 
   let changed = 0;
   const inFlightShows = new Set();
@@ -4038,7 +4038,7 @@ function buildAiringNextCardHtml() {
           subtitle: it.name || it.episodeTitle || (it.isSeasonPremiere ? 'Season Premiere' : (it.episodeNum != null ? ('Episode ' + it.episodeNum) : ''))
         };
     const removeBtn = it.showId
-      ? '<button type="button" class="cw-remove-btn" onclick="event.stopPropagation(); removeAiringNextShow(&quot;' + escapeJsAttr(it.showId) + '&quot;, this)" title="Remove from Airing Next" aria-label="Remove from Airing Next">\u2715</button>'
+      ? '<button type="button" class="cw-remove-btn" data-act="removeAiringNextShow" data-act-stop data-act-args="' + appActArgs([it.showId, "@self"]) + '" title="Remove from Airing Next" aria-label="Remove from Airing Next">\u2715</button>'
       : '';
     const ratingSpan = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(it) : '';
     return '<div class="list-card-mini-poster-tile">' +

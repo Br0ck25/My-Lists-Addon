@@ -514,10 +514,10 @@ describe("P3c-3: copying watch history into the activity database", () => {
   it("the admin page offers it only with the activity database bound", async () => {
     const env = activityEnv();
     const page = await call(env, "/admin", { cookie: await adminCookie(env) });
-    assert.match(page.text, /id="activityBackfillBtn" onclick="runActivityBackfill\(false\)" >/);
+    assert.match(page.text, /id="activityBackfillBtn" data-act="runActivityBackfill" data-act-args="\[false\]" >/);
     const unbound = makeEnv({ DB: makeD1() });
     const page2 = await call(unbound, "/admin", { cookie: await adminCookie(unbound) });
-    assert.match(page2.text, /id="activityBackfillBtn" onclick="runActivityBackfill\(false\)" disabled>/);
+    assert.match(page2.text, /id="activityBackfillBtn" data-act="runActivityBackfill" data-act-args="\[false\]" disabled>/);
   });
 });
 

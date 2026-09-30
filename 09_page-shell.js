@@ -1,6 +1,98 @@
+// --- The new UI shell's chrome (Phase 6, P6-1) ------------------------------
+//
+// Everything here is emitted only for a browser carrying the FF_NEW_UI cookie
+// (isNewUiRequest, 02_http-and-creator-utils.js), so the page every other
+// visitor gets is byte-for-byte the page they got before. The client bundle is
+// shared by both variants -- it is one content-hashed file (splitAppBundle,
+// 02_) -- so the shell's behaviour is not emitted from here: it lives in
+// 24_client-backup-restore-presets.js and keys off the NEW_UI flag in the
+// per-request preamble.
+//
+// The tabs are real links. Middle-click, copy-link, open-in-a-new-tab and the
+// back button all work with no JavaScript at all; the client intercepts a
+// plain left click and routes in-page. The class names are the legacy ones on
+// purpose: every existing rule -- the desktop pills, the mobile bottom bar,
+// the dark theme, the safe-area padding -- then applies to them unchanged.
+const APP_SHELL_TAB_ICONS = {
+  catalogs: '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>',
+  lists: '<line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line>',
+  channels: '<rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect><polyline points="17 2 12 7 7 2"></polyline>',
+  discover: '<rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect>',
+  search: '<circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>',
+  settings: '<circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>',
+};
+
+// Which view the page opens on when it is served at a shell path. The shell's
+// own routing (24_) reads the same table, written into the bundle.
+function appShellTabForPath(pathname) {
+  const p = String(pathname || "");
+  for (const t of APP_SHELL_TABS) {
+    if (p === t.path) return t;
+    if (p.startsWith(t.path + "/")) {
+      const rest = p.slice(t.path.length + 1).replace(/\/+$/, "");
+      if (rest && t.subs.indexOf(rest) !== -1) return t;
+    }
+  }
+  return null;
+}
+
+function buildAppShellNavHtml(style) {
+  const isDesktop = style === "desktop";
+  const items = APP_SHELL_TABS.map((t) => {
+    const active = t.id === "discover";
+    const cls = (isDesktop ? "tab-btn" : "bottom-nav-item") + (active ? " active" : "");
+    // The id and aria-controls keep the panels' own aria-labelledby="tab-..."
+    // pointing at a real element: the legacy buttons carry these ids and the
+    // panels were never changed, so a nav without them leaves six references
+    // dangling (html_checks.py fails the build for exactly that).
+    const attrs = `class="${cls}" id="tab-${isDesktop ? "desktop" : "mobile"}-${t.id}" aria-controls="content-${t.id}"` +
+      ` data-tab="${t.id}" data-app-route href="${t.path}" title="${t.label}"` +
+      (active ? ' aria-current="page"' : "");
+    if (isDesktop) return `<a ${attrs}>${t.label}</a>`;
+    return `<a ${attrs}>\n      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">\n        ${APP_SHELL_TAB_ICONS[t.id] || ""}\n      </svg>\n      ${t.label}\n    </a>`;
+  }).join("\n    ");
+  if (isDesktop) {
+    return `<div class="tab-bar" id="appShellDesktopNav">\n    <nav aria-label="Main navigation" style="display:flex; gap:8px; overflow-x:auto; width:100%;">\n    ${items}\n    </nav>\n  </div>`;
+  }
+  return `<nav class="bottom-nav" id="appShellMobileNav" aria-label="Main navigation">\n    ${items}\n  </nav>`;
+}
+
+// Path -> { tab, sub } for the head script, which runs before the body exists
+// and so cannot use the client bundle's router. The bundle builds the same
+// routes from APP_SHELL_TAB_LIST (16_client-row-core.js); a test keeps the two
+// agreeing with this one table.
+function buildAppShellHeadRoutes() {
+  const out = {};
+  for (const t of APP_SHELL_TABS) {
+    out[t.path] = { tab: t.id, sub: "" };
+    for (const sub of t.subs) out[t.path + "/" + sub] = { tab: t.id, sub: sub };
+  }
+  return out;
+}
+
+// The install bar. Its first paint is server-rendered so it is there before any
+// script runs, and its state (none / unsaved / live) is then kept by the client
+// -- the last install link this browser generated is browser state, so the
+// Worker cannot know it. See appShellRefreshInstallBar (24_).
+const APP_SHELL_INSTALL_BAR_HTML = `<div id="appShellInstallBar" class="app-shell-install-bar" data-state="none">
+    <span class="app-shell-install-dot" aria-hidden="true"></span>
+    <span class="app-shell-install-text" id="appShellInstallText">Not installed yet</span>
+    <button type="button" class="app-shell-install-action" id="appShellInstallBtn" data-action="install">Get install link</button>
+  </div>`;
+
+// The Worker-side twin of appActArgs (16_client-row-core.js). 08_quickadd-chart-data.js
+// builds some of the page's markup here in the Worker rather than in the
+// browser (see buildCombinedChartsHtml), so its data-act arguments need the
+// same JSON-then-HTML escaping at render time. Kept next to renderBuilder so
+// it is obviously server-side code: the client's own copy is inside the
+// template literal below and is not in scope here.
+function appActArgsServer(values) {
+  return escapeHtmlServer(JSON.stringify(values || []));
+}
+
 function renderBuilder(
   origin,
-  { initialEntries = [], initialKeys = {}, isConfigureMode = false, deepLinkList = null } = {}
+  { initialEntries = [], initialKeys = {}, isConfigureMode = false, deepLinkList = null, newUi = false } = {}
 ) {
   const initialTmdbKey = initialKeys.tmdbKey || "";
   const initialMdblistKey = initialKeys.mdblistKey || "";
@@ -91,33 +183,24 @@ function renderBuilder(
   // apart (see the "pre-fill" block's own comment on why that distinction
   // matters for when to trust localStorage over what the server sent).
   const usingDefaultEntries = !hasInitial;
+  // A first-time visitor on the OLD page still gets the demo rows it always
+  // got. On a shell page the same rows are offered as a button in the
+  // home-screen editor instead (P6-3): nothing is added that was not asked
+  // for, and both read STARTER_PACK_ENTRIES (00_constants.js) so they cannot
+  // drift.
   const initialEntriesJson = jsonForScript(
-    hasInitial
-      ? initialEntries
-      : [
-          { name: "Popular", url: "https://mdblist.com/lists/official/movies/popular\ntmdb:chart:popular\ntrakt:chart:popular", type: "movie", enabled: true, group: "Combined Charts" },
-          { name: "Popular", url: "https://mdblist.com/lists/official/shows/popular\ntmdb:chart:popular\ntrakt:chart:popular", type: "series", enabled: true, group: "Combined Charts" },
-          { name: "Trending", url: "tmdb:chart:trending\ntrakt:chart:trending\nsimkl:chart:today\nsimkl:chart:week\nsimkl:chart:month", type: "movie", enabled: true, group: "Combined Charts" },
-          { name: "Trending", url: "tmdb:chart:trending\ntrakt:chart:trending\nsimkl:chart:today\nsimkl:chart:week\nsimkl:chart:month", type: "series", enabled: true, group: "Combined Charts" },
-          // Both the Top 10 and full Streaming Catalogs merged rows below
-          // use the exact same joined url string for their movie row and
-          // series row now -- unlike the old per-provider mdblist.com
-          // urls they replaced, a tmdb:chart:X source doesn't encode
-          // movie/series in the url itself; fetchCatalog picks the right
-          // side of TMDB_CHART_PATHS[chartKey] from entry.type at fetch
-          // time (see 07_source-fetchers-tmdb-simkl.js), the same way the
-          // standalone per-provider rows in 08_quickadd-chart-data.js
-          // already reuse one url for both their +Movies and +Shows
-          // buttons.
-          { name: "Streaming Top 10 (All Services)", url: "https://mdblist.com/lists/ahmed2250/apple-tv-top-10-movies-today\nhttps://mdblist.com/lists/andykai/disney-top-10-no-hulu\nhttps://mdblist.com/lists/harmes7/hbo-max-top-10-movies-m77r6mc20q\nhttps://mdblist.com/lists/hulupiv/hulu-top-10-movies\nhttps://mdblist.com/lists/hdlists/netflix-top-10-trending-movies\nhttps://mdblist.com/lists/ahmed2250/paramount-top-10-movies-today\nhttps://mdblist.com/lists/diimaan/amazon-prime-top-10-movies\nhttps://mdblist.com/lists/diimaan/peacock-top-10-movies", type: "movie", enabled: true, group: "Combined Charts" },
-          { name: "Streaming Top 10 (All Services)", url: "https://mdblist.com/lists/ahmed2250/apple-tv-top-10-tv-shows-today\nhttps://mdblist.com/lists/andykai/disney-trending-no-hulu\nhttps://mdblist.com/lists/harmes7/hbo-max-top-10-series-cp45l27nhd\nhttps://mdblist.com/lists/hulupiv/hulu-top-10-shows\nhttps://mdblist.com/lists/hdlists/netflix-top-10-trending-shows\nhttps://mdblist.com/lists/ahmed2250/paramount-top-10-tv-shows-today\nhttps://mdblist.com/lists/diimaan/amazon-prime-top-10-tv-shows\nhttps://mdblist.com/lists/peacockpiv/peacock-top-10-shows", type: "series", enabled: true, group: "Combined Charts" },
-          { name: "Streaming (All Services)", url: "tmdb:chart:appletv\ntmdb:chart:disney\ntmdb:chart:discovery\ntmdb:chart:hbomax\ntmdb:chart:hulu\ntmdb:chart:netflix\ntmdb:chart:netflixkids\ntmdb:chart:paramount\ntmdb:chart:primevideo\ntmdb:chart:peacock", type: "movie", enabled: true, group: "Combined Charts" },
-          { name: "Streaming (All Services)", url: "tmdb:chart:appletv\ntmdb:chart:disney\ntmdb:chart:discovery\ntmdb:chart:hbomax\ntmdb:chart:hulu\ntmdb:chart:netflix\ntmdb:chart:netflixkids\ntmdb:chart:paramount\ntmdb:chart:primevideo\ntmdb:chart:peacock", type: "series", enabled: true, group: "Combined Charts" }
-      ]
+    hasInitial ? initialEntries : (newUi ? [] : STARTER_PACK_ENTRIES)
   );
 
+  // The shell variant of the chrome. Both navs keep the legacy wrappers
+  // (`.tab-bar`, `.bottom-nav`) so the existing CSS -- including the mobile
+  // bottom bar -- applies to them unchanged; only the items differ, from
+  // buttons to links.
+  const appShellDesktopNavHtml = newUi ? buildAppShellNavHtml("desktop") : "";
+  const appShellMobileNavHtml = newUi ? buildAppShellNavHtml("mobile") : "";
+
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en"${newUi ? ' data-app-shell="1"' : ''}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -132,6 +215,7 @@ ${seoHeadHtml}
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script>
+  ${newUi ? `var APP_SHELL_HEAD_ROUTES = ${jsonForScript(buildAppShellHeadRoutes())};` : ""}
   if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
     document.documentElement.classList.add('dark-theme');
     try {
@@ -152,8 +236,20 @@ ${seoHeadHtml}
     var h = location.hash || '';
     var isDeep = (p.startsWith('/lists/') && p !== '/lists') || p.startsWith('/channels/') || h.startsWith('#/list?') || h.startsWith('#/item?');
     var tab = 'discover';
+    // The new UI shell routes on real paths (/catalogs, /settings, ...), so
+    // there the path -- not the last tab this browser used -- decides which
+    // view opens. Same table the Worker rendered the nav from.
+    // APP_SHELL_HEAD_ROUTES is declared just above only on a shell page; this
+    // script is shared by both variants, so it must not name it unconditionally
+    // -- scope_check.mjs catches exactly that, and a legacy page would throw.
+    var shellRoute = null;
+    if (document.documentElement.getAttribute('data-app-shell') === '1' && typeof APP_SHELL_HEAD_ROUTES !== 'undefined') {
+      shellRoute = APP_SHELL_HEAD_ROUTES[p] || null;
+    }
     if (isDeep) {
       tab = h.startsWith('#/item?') ? 'item-details' : 'list-details';
+    } else if (shellRoute) {
+      tab = shellRoute.tab;
     } else {
       try {
         var s = localStorage.getItem('myListAddon:activeTab');
@@ -161,22 +257,23 @@ ${seoHeadHtml}
       } catch (e) {}
     }
     document.documentElement.setAttribute('data-initial-tab', tab);
+    var shellSub = (shellRoute && shellRoute.sub) || '';
 
     try {
-      var catSub = localStorage.getItem('myListAddon:catalogsSubmenu') || 'all';
+      var catSub = shellSub || localStorage.getItem('myListAddon:catalogsSubmenu') || 'all';
       document.documentElement.setAttribute('data-initial-catalogs-sub', catSub);
-      var listSub = localStorage.getItem('myListAddon:listsSubmenu') || 'my-lists';
+      var listSub = (shellRoute && shellRoute.tab === 'lists' && shellSub) || localStorage.getItem('myListAddon:listsSubmenu') || 'my-lists';
       // Must agree with normalizeListsSubmenu (16_client-row-core.js): the rule
       // above hides every Lists panel and then un-hides the one this attribute
       // names, so a stale value naming a panel that no longer exists leaves the
       // tab blank from first paint.
       if (['my-lists', 'liked', 'import', 'create-list'].indexOf(listSub) === -1) listSub = 'my-lists';
       document.documentElement.setAttribute('data-initial-lists-sub', listSub);
-      var chSub = localStorage.getItem('myListAddon:channelsSubmenu') || 'my-channels';
+      var chSub = (shellRoute && shellRoute.tab === 'channels' && shellSub) || localStorage.getItem('myListAddon:channelsSubmenu') || 'my-channels';
       document.documentElement.setAttribute('data-initial-channels-sub', chSub);
-      var setSub = localStorage.getItem('myListAddon:settingsSubmenu') || 'account';
+      var setSub = (shellRoute && shellRoute.tab === 'settings' && shellSub) || localStorage.getItem('myListAddon:settingsSubmenu') || 'account';
       document.documentElement.setAttribute('data-initial-settings-sub', setSub);
-      var discSub = localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
+      var discSub = (shellRoute && shellRoute.tab === 'discover' && shellSub) || localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
       if (discSub === 'all') discSub = 'movie';
       document.documentElement.setAttribute('data-initial-discover-sub', discSub);
     } catch (e) {}
@@ -3525,6 +3622,197 @@ ${seoHeadHtml}
     animation: spin 0.9s linear infinite;
   }
 
+  /* --- The new UI shell's install bar (Phase 6, P6-1) --------------------- */
+  /* Emitted for every visitor and inert without <html data-app-shell="1">.
+     That is deliberate: /app.css is one shared, content-hashed file
+     (splitAppCss, 02_http-and-creator-utils.js), so a variant-dependent
+     stylesheet would cost every visitor the shared cache. */
+  .app-shell-install-bar { display: none; }
+  html[data-app-shell="1"] .app-shell-install-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 10px;
+    padding: 10px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-2);
+    /* Sticky rather than fixed: on a phone the bottom of the screen belongs
+       to the tab bar, and the bar must not sit over the poster grid while a
+       list is being built. */
+    position: sticky;
+    top: 0;
+    z-index: 900;
+  }
+  html[data-app-shell="1"] .app-shell-install-dot {
+    width: 9px; height: 9px; flex: none; border-radius: 50%;
+    background: var(--muted);
+  }
+  html[data-app-shell="1"] .app-shell-install-bar[data-state="none"] .app-shell-install-dot { background: var(--muted); }
+  html[data-app-shell="1"] .app-shell-install-bar[data-state="unsaved"] .app-shell-install-dot { background: var(--warn); }
+  html[data-app-shell="1"] .app-shell-install-bar[data-state="live"] .app-shell-install-dot { background: var(--success); }
+  html[data-app-shell="1"] .app-shell-install-text {
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  html[data-app-shell="1"] .app-shell-install-action {
+    flex: none;
+    background: var(--accent); color: #fff; border: none;
+    border-radius: var(--radius-pill);
+    padding: 7px 14px; font-size: 0.82rem; font-weight: 700;
+    min-height: unset; cursor: pointer;
+  }
+  html[data-app-shell="1"] .app-shell-install-action:hover { background: var(--accent-hover); }
+  html[data-app-shell="1"] .app-shell-install-bar[data-state="live"] .app-shell-install-action {
+    background: var(--surface); color: var(--accent);
+    border: 1.5px solid var(--border-strong);
+  }
+  html[data-app-shell="1"] .app-shell-install-bar[data-state="live"] .app-shell-install-action:hover {
+    border-color: var(--accent); color: var(--accent);
+  }
+  /* The floating "Unsaved changes to install link" banner and the install
+     bar say the same thing; showing both would be the duplication this shell
+     exists to remove. */
+  html[data-app-shell="1"] #unsavedInstallBanner { display: none !important; }
+
+  /* The shell's Settings cards (P6-2). The card itself is the ordinary
+     .panel; these are the rows, the small action row and the status chip
+     inside it, so the new panels look like the rest of the page without a
+     second stylesheet. */
+  html[data-app-shell="1"] .app-shell-muted { color: var(--muted); font-size: 0.85rem; margin: 0 0 10px; }
+  html[data-app-shell="1"] .app-shell-kv { margin: 0 0 8px; font-size: 0.92rem; }
+  html[data-app-shell="1"] .app-shell-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+  html[data-app-shell="1"] .app-shell-row {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap; padding: 12px 0;
+    border-top: 1px solid var(--border);
+  }
+  html[data-app-shell="1"] .app-shell-row-main { flex: 1 1 240px; min-width: 0; font-size: 0.9rem; }
+  html[data-app-shell="1"] .app-shell-row-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  html[data-app-shell="1"] .app-shell-chip {
+    display: inline-block; padding: 2px 10px; border-radius: var(--radius-pill);
+    font-size: 0.75rem; font-weight: 600;
+    border: 1px solid var(--border); color: var(--muted);
+  }
+  html[data-app-shell="1"] .app-shell-chip-ok { color: var(--success); border-color: rgba(52, 199, 89, 0.45); }
+  html[data-app-shell="1"] .app-shell-chip-warn { color: var(--warn); border-color: rgba(255, 149, 0, 0.45); }
+  html[data-app-shell="1"] .app-shell-danger { color: var(--danger); border-color: rgba(255, 59, 48, 0.35); }
+  html[data-app-shell="1"] .app-shell-details { margin-top: 10px; font-size: 0.88rem; }
+  html[data-app-shell="1"] .app-shell-details summary { cursor: pointer; color: var(--text); }
+
+  /* The home-screen editor (P6-3): the paste box, the review table and the
+     duplicate toggle that now sits directly above the rows it applies to. The
+     toggle used to live in Settings; on a shell page that copy is hidden, so
+     the same setting is described in one place (see #legacyDedupePanel). */
+  html[data-app-shell="1"] #legacyDedupePanel { display: none; }
+  html[data-app-shell="1"] .app-shell-add-box {
+    width: 100%; min-height: 92px; padding: 10px 12px; margin: 0 0 8px;
+    border: 1px solid var(--border); border-radius: 10px;
+    background: var(--bg); color: var(--text);
+    font-family: var(--font-mono, monospace); font-size: 0.86rem; line-height: 1.45;
+    resize: vertical;
+  }
+  html[data-app-shell="1"] .app-shell-review { margin-top: 12px; }
+  html[data-app-shell="1"] .app-shell-review-row {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); font-size: 0.88rem;
+  }
+  html[data-app-shell="1"] .app-shell-review-url {
+    color: var(--muted); font-size: 0.78rem;
+    word-break: break-all; overflow-wrap: anywhere;
+  }
+  html[data-app-shell="1"] .app-shell-review-bad { color: var(--danger); }
+  html[data-app-shell="1"] .app-shell-dedupe {
+    display: flex; align-items: flex-start; gap: 10px; cursor: pointer;
+    font-size: 0.92rem; user-select: none; margin: 14px 0 4px;
+    padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--surface);
+  }
+  html[data-app-shell="1"] .app-shell-dedupe input { margin-top: 2px; cursor: pointer; width: 16px; height: 16px; }
+
+  /* A visibility choice (P6-4) is a chip you can press: Private, Unlisted,
+     Public. The chosen one is highlighted; the one that needs the new list
+     service is disabled and says why. */
+  html[data-app-shell="1"] button.app-shell-chip {
+    background: none; font: inherit; cursor: pointer;
+  }
+  html[data-app-shell="1"] button.app-shell-chip.is-on {
+    color: var(--accent); border-color: var(--accent);
+  }
+  html[data-app-shell="1"] button.app-shell-chip[disabled] { cursor: not-allowed; opacity: 0.55; }
+
+  /* What is actually in a list, previewed before it is added (P6-5). */
+  html[data-app-shell="1"] .app-shell-explore-preview { padding: 2px 0 10px; }
+  html[data-app-shell="1"] .app-shell-explore-posters {
+    display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 8px;
+  }
+  html[data-app-shell="1"] .app-shell-explore-poster {
+    width: 58px; height: 87px; object-fit: cover; border-radius: 6px;
+    background: var(--panel-strong); border: 1px solid var(--border);
+  }
+  html[data-app-shell="1"] .app-shell-explore-poster-none { display: block; }
+
+  /* Import progress (P6-6): how far the server has got, and a heading for the
+     blocks under it. */
+  html[data-app-shell="1"] .app-shell-h3 { margin: 14px 0 6px; font-size: 1rem; }
+  html[data-app-shell="1"] .app-shell-bar {
+    height: 8px; border-radius: 999px; overflow: hidden;
+    background: var(--panel-strong); border: 1px solid var(--border); margin: 2px 0 8px;
+  }
+  html[data-app-shell="1"] .app-shell-bar > span {
+    display: block; height: 100%; background: var(--accent); transition: width 0.3s ease;
+  }
+  html[data-app-shell="1"] #appShellImportName, html[data-app-shell="1"] #appShellAddTitlesInput {
+    width: 100%; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.95rem;
+  }
+
+  /* Channels (P6-7): the template cards, the schedule panel, and the lineup
+     the server answers with. The lineup tiles are the same shape as the
+     list preview's posters (P6-5), deliberately. */
+  html[data-app-shell="1"] .app-shell-template-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px; margin: 12px 0;
+  }
+  html[data-app-shell="1"] button.app-shell-template-card {
+    display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
+    text-align: left; padding: 12px 14px; cursor: pointer; font: inherit;
+    border: 1px solid var(--border); border-radius: 10px;
+    background: var(--surface); color: var(--text);
+  }
+  html[data-app-shell="1"] button.app-shell-template-card:hover { border-color: var(--accent); }
+  html[data-app-shell="1"] .app-shell-template-card .app-shell-muted { font-size: 0.8rem; }
+  html[data-app-shell="1"] .app-shell-template-note { font-size: 0.74rem; }
+  html[data-app-shell="1"] .app-shell-schedule {
+    margin: 12px 0; padding: 10px 12px; border: 1px solid var(--border);
+    border-radius: 10px; background: var(--surface);
+  }
+  html[data-app-shell="1"] .app-shell-schedule summary { cursor: pointer; font-weight: 600; }
+  html[data-app-shell="1"] .app-shell-schedule input[type="number"] { width: 84px; }
+  html[data-app-shell="1"] .app-shell-schedule .app-shell-muted { font-size: 0.8rem; }
+  html[data-app-shell="1"] .app-shell-person-grid { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+  html[data-app-shell="1"] .app-shell-lineup {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+    gap: 8px; margin: 8px 0 10px;
+  }
+  html[data-app-shell="1"] .app-shell-lineup-tile { display: flex; flex-direction: column; gap: 4px; }
+  html[data-app-shell="1"] .app-shell-lineup-tile img,
+  html[data-app-shell="1"] .app-shell-lineup-blank {
+    width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 6px;
+    background: var(--panel-strong); border: 1px solid var(--border);
+  }
+  html[data-app-shell="1"] .app-shell-lineup-tile span {
+    font-size: 0.72rem; color: var(--muted);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  html[data-app-shell="1"] #appShellChannels input[type="text"] {
+    width: 100%; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.95rem;
+  }
+
   /* --- Floating Unsaved Changes to Install Link Banner -------------------- */
   .unsaved-install-banner {
     position: fixed;
@@ -3641,7 +3929,7 @@ ${seoHeadHtml}
       </div>
     </div>
     <div class="app-header-actions">
-      <button type="button" class="theme-toggle-btn dark-mode-toggle" id="themeToggleBtn" onclick="toggleTheme()" aria-label="Toggle Light or Dark Mode" title="Toggle Light / Dark Mode">
+      <button type="button" class="theme-toggle-btn dark-mode-toggle" id="themeToggleBtn" data-act="toggleTheme" aria-label="Toggle Light or Dark Mode" title="Toggle Light / Dark Mode">
         <svg class="theme-icon-sun" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="12" cy="12" r="4" fill="currentColor"></circle>
           <line x1="12" y1="2" x2="12" y2="4.5"></line>
@@ -3661,31 +3949,35 @@ ${seoHeadHtml}
     </div>
   </header>
 
+  <!-- The install bar (new UI shell only): what the current configuration is
+       installed as, and the one action that changes it. -->
+${newUi ? "  " + APP_SHELL_INSTALL_BAR_HTML : ""}
+
   <!-- Top Tab Bar (Desktop View) -->
-  <div class="tab-bar" role="tablist" aria-label="Main navigation">
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-catalogs" aria-controls="content-catalogs" aria-selected="false" tabindex="-1" data-tab="catalogs" onclick="switchTab('catalogs')">Catalogs</button>
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-lists" aria-controls="content-lists" aria-selected="false" tabindex="-1" data-tab="lists" onclick="switchTab('lists')">Lists</button>
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-channels" aria-controls="content-channels" aria-selected="false" tabindex="-1" data-tab="channels" onclick="switchTab('channels')">Channels</button>
-    <button type="button" class="tab-btn active" role="tab" id="tab-desktop-discover" aria-controls="content-discover" aria-selected="true" tabindex="0" data-tab="discover" onclick="switchTab('discover')">Discover</button>
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-search" aria-controls="content-search" aria-selected="false" tabindex="-1" data-tab="search" onclick="switchTab('search')">Search</button>
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-settings" aria-controls="content-settings" aria-selected="false" tabindex="-1" data-tab="settings" onclick="switchTab('settings')">Settings</button>
-  </div>
+${newUi ? appShellDesktopNavHtml : `  <div class="tab-bar" role="tablist" aria-label="Main navigation">
+    <button type="button" class="tab-btn" role="tab" id="tab-desktop-catalogs" aria-controls="content-catalogs" aria-selected="false" tabindex="-1" data-tab="catalogs" data-act="switchTab" data-act-args="[&quot;catalogs&quot;]">Catalogs</button>
+    <button type="button" class="tab-btn" role="tab" id="tab-desktop-lists" aria-controls="content-lists" aria-selected="false" tabindex="-1" data-tab="lists" data-act="switchTab" data-act-args="[&quot;lists&quot;]">Lists</button>
+    <button type="button" class="tab-btn" role="tab" id="tab-desktop-channels" aria-controls="content-channels" aria-selected="false" tabindex="-1" data-tab="channels" data-act="switchTab" data-act-args="[&quot;channels&quot;]">Channels</button>
+    <button type="button" class="tab-btn active" role="tab" id="tab-desktop-discover" aria-controls="content-discover" aria-selected="true" tabindex="0" data-tab="discover" data-act="switchTab" data-act-args="[&quot;discover&quot;]">Discover</button>
+    <button type="button" class="tab-btn" role="tab" id="tab-desktop-search" aria-controls="content-search" aria-selected="false" tabindex="-1" data-tab="search" data-act="switchTab" data-act-args="[&quot;search&quot;]">Search</button>
+    <button type="button" class="tab-btn" role="tab" id="tab-desktop-settings" aria-controls="content-settings" aria-selected="false" tabindex="-1" data-tab="settings" data-act="switchTab" data-act-args="[&quot;settings&quot;]">Settings</button>
+  </div>`}
 
   <!-- Unsaved Changes Floating Banner -->
   <div id="unsavedInstallBanner" class="unsaved-install-banner">
     <span id="unsavedInstallText" style="font-weight:600;">Unsaved changes to install link</span>
-    <button type="button" class="unsaved-install-banner-btn" id="unsavedInstallBtn" onclick="updateInstallLinkFromBanner()">Update Link</button>
+    <button type="button" class="unsaved-install-banner-btn" id="unsavedInstallBtn" data-act="updateInstallLinkFromBanner">Update Link</button>
   </div>
 
   <!-- Bottom Nav Bar (Mobile View - Persistent Glassmorphism) -->
-  <nav class="bottom-nav" role="tablist" aria-label="Main navigation">
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-catalogs" aria-controls="content-catalogs" aria-selected="false" tabindex="-1" data-tab="catalogs" onclick="switchTab('catalogs')" title="Catalogs">
+${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria-label="Main navigation">
+    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-catalogs" aria-controls="content-catalogs" aria-selected="false" tabindex="-1" data-tab="catalogs" data-act="switchTab" data-act-args="[&quot;catalogs&quot;]" title="Catalogs">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
       </svg>
       Catalogs
     </button>
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-lists" aria-controls="content-lists" aria-selected="false" tabindex="-1" data-tab="lists" onclick="switchTab('lists')" title="Lists">
+    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-lists" aria-controls="content-lists" aria-selected="false" tabindex="-1" data-tab="lists" data-act="switchTab" data-act-args="[&quot;lists&quot;]" title="Lists">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line>
         <line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line>
@@ -3693,34 +3985,34 @@ ${seoHeadHtml}
       </svg>
       Lists
     </button>
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-channels" aria-controls="content-channels" aria-selected="false" tabindex="-1" data-tab="channels" onclick="switchTab('channels')" title="Channels">
+    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-channels" aria-controls="content-channels" aria-selected="false" tabindex="-1" data-tab="channels" data-act="switchTab" data-act-args="[&quot;channels&quot;]" title="Channels">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>
         <polyline points="17 2 12 7 7 2"></polyline>
       </svg>
       Channels
     </button>
-    <button type="button" class="bottom-nav-item active" role="tab" id="tab-mobile-discover" aria-controls="content-discover" aria-selected="true" tabindex="0" data-tab="discover" onclick="switchTab('discover')" title="Discover">
+    <button type="button" class="bottom-nav-item active" role="tab" id="tab-mobile-discover" aria-controls="content-discover" aria-selected="true" tabindex="0" data-tab="discover" data-act="switchTab" data-act-args="[&quot;discover&quot;]" title="Discover">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect>
         <rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect>
       </svg>
       Discover
     </button>
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-search" aria-controls="content-search" aria-selected="false" tabindex="-1" data-tab="search" onclick="switchTab('search')" title="Search">
+    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-search" aria-controls="content-search" aria-selected="false" tabindex="-1" data-tab="search" data-act="switchTab" data-act-args="[&quot;search&quot;]" title="Search">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
       </svg>
       Search
     </button>
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-settings" aria-controls="content-settings" aria-selected="false" tabindex="-1" data-tab="settings" onclick="switchTab('settings')" title="Settings">
+    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-settings" aria-controls="content-settings" aria-selected="false" tabindex="-1" data-tab="settings" data-act="switchTab" data-act-args="[&quot;settings&quot;]" title="Settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="12" cy="12" r="3"></circle>
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
       </svg>
       Settings
     </button>
-  </nav>
+  </nav>`}
 
   <script>
     (function() {
@@ -3749,9 +4041,9 @@ ${seoHeadHtml}
         var cBar = document.getElementById('creatorProfileBar');
         if (cBar) {
           if (cName && cKey) {
-            cBar.innerHTML = '<div style="display:flex; align-items:center; gap:8px;"><button type="button" class="subnav-pill active" style="margin:0; font-size:0.85rem; padding:8px 14px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px; border-radius:var(--radius-pill);" onclick="switchTab(&quot;account&quot;)">&#x1F464; ' + String(cDisp || cName || '').replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}) + '</button></div>';
+            cBar.innerHTML = '<div style="display:flex; align-items:center; gap:8px;"><button type="button" class="subnav-pill active" style="margin:0; font-size:0.85rem; padding:8px 14px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px; border-radius:var(--radius-pill);" data-act="switchTab" data-act-args="[&quot;account&quot;]">&#x1F464; ' + String(cDisp || cName || '').replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}) + '</button></div>';
           } else {
-            cBar.innerHTML = '<div style="display:flex; align-items:center; gap:6px;"><button type="button" class="lc-btn primary" onclick="openRestoreModal()" style="padding:8px 16px; font-size:0.85rem; font-weight:700; border-radius:var(--radius-pill);">Login</button></div>';
+            cBar.innerHTML = '<div style="display:flex; align-items:center; gap:6px;"><button type="button" class="lc-btn primary" data-act="openRestoreModal" style="padding:8px 16px; font-size:0.85rem; font-weight:700; border-radius:var(--radius-pill);">Login</button></div>';
           }
         }
       } catch (e) {}
@@ -3764,7 +4056,7 @@ ${seoHeadHtml}
   <!-- List Details page ("See All" full list view) -->
   <div class="tab-panel list-details-page" data-tab-panel="list-details" id="content-list-details" hidden>
     <div style="margin-bottom: 20px;">
-      <button type="button" class="lc-btn secondary" onclick="navigateBackFromDetail()" style="padding: 6px 12px; font-size: 0.9rem;">&larr; Back</button>
+      <button type="button" class="lc-btn secondary" data-act="navigateBackFromDetail" style="padding: 6px 12px; font-size: 0.9rem;">&larr; Back</button>
     </div>
     <div class="detail-header-info" style="margin-bottom:14px;">
       <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
@@ -3786,24 +4078,24 @@ ${seoHeadHtml}
     </div>
     <div id="detailFilterBar" class="detail-filter-bar" style="display:none;">
       <div id="whFilterControls" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; width:100%;">
-        <button type="button" class="subnav-pill active wh-filter-pill" data-wh-filter="all" onclick="setWatchHistoryFilter('all', this)">All</button>
-        <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="movie" onclick="setWatchHistoryFilter('movie', this)">Movies</button>
-        <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="series" onclick="setWatchHistoryFilter('series', this)">Shows</button>
+        <button type="button" class="subnav-pill active wh-filter-pill" data-wh-filter="all" data-act="setWatchHistoryFilter" data-act-args="[&quot;all&quot;,&quot;@self&quot;]">All</button>
+        <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="movie" data-act="setWatchHistoryFilter" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]">Movies</button>
+        <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="series" data-act="setWatchHistoryFilter" data-act-args="[&quot;series&quot;,&quot;@self&quot;]">Shows</button>
         <label class="wh-group-shows-toggle" style="display:inline-flex; align-items:center; gap:6px; margin-left:8px; cursor:pointer; font-size:0.84rem; color:var(--text); user-select:none;">
-          <input type="checkbox" id="whGroupShowsCheckbox" onchange="toggleWatchHistoryGroupShows(this.checked)" style="accent-color:var(--accent); cursor:pointer;">
+          <input type="checkbox" id="whGroupShowsCheckbox" data-act="toggleWatchHistoryGroupShows" data-act-args="[&quot;@checked&quot;]" style="accent-color:var(--accent); cursor:pointer;">
           <span>Shows instead of episodes</span>
         </label>
-        <button type="button" class="subnav-pill" id="whClearHistoryBtn" onclick="clearWatchHistoryAll()" style="color:var(--danger); border-color:rgba(255,59,48,0.35); margin-left:auto; font-weight:600;">Clear History</button>
+        <button type="button" class="subnav-pill" id="whClearHistoryBtn" data-act="clearWatchHistoryAll" style="color:var(--danger); border-color:rgba(255,59,48,0.35); margin-left:auto; font-weight:600;">Clear History</button>
       </div>
       <div id="genericTypeFilterControls" style="display:none; gap:6px; flex-wrap:wrap; align-items:center; width:100%;">
-        <button type="button" class="subnav-pill active generic-type-pill" id="detailTypeAllBtn" onclick="switchListDetailsType('all')">All</button>
-        <button type="button" class="subnav-pill generic-type-pill" id="detailTypeMovieBtn" onclick="switchListDetailsType('movie')">Movies</button>
-        <button type="button" class="subnav-pill generic-type-pill" id="detailTypeSeriesBtn" onclick="switchListDetailsType('series')">Shows</button>
-        <button type="button" class="subnav-pill" id="cwClearHistoryBtn" onclick="clearContinueWatchingAll()" style="display:none; color:var(--danger); border-color:rgba(255,59,48,0.35); margin-left:auto; font-weight:600;">Clear All</button>
+        <button type="button" class="subnav-pill active generic-type-pill" id="detailTypeAllBtn" data-act="switchListDetailsType" data-act-args="[&quot;all&quot;]">All</button>
+        <button type="button" class="subnav-pill generic-type-pill" id="detailTypeMovieBtn" data-act="switchListDetailsType" data-act-args="[&quot;movie&quot;]">Movies</button>
+        <button type="button" class="subnav-pill generic-type-pill" id="detailTypeSeriesBtn" data-act="switchListDetailsType" data-act-args="[&quot;series&quot;]">Shows</button>
+        <button type="button" class="subnav-pill" id="cwClearHistoryBtn" data-act="clearContinueWatchingAll" style="display:none; color:var(--danger); border-color:rgba(255,59,48,0.35); margin-left:auto; font-weight:600;">Clear All</button>
       </div>
       <div id="whSortControls" style="display:flex; align-items:center; gap:8px;">
         <label for="whSortSelect" style="font-size:0.75rem; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.02em;">Sort</label>
-        <select id="whSortSelect" class="detail-sort-select" onchange="setWatchHistorySort(this.value)">
+        <select id="whSortSelect" class="detail-sort-select" data-act="setWatchHistorySort" data-act-args="[&quot;@value&quot;]">
           <option value="recent">Recently Watched</option>
           <option value="oldest">Oldest Watched</option>
           <option value="title-asc">Title (A-Z)</option>
@@ -3817,7 +4109,7 @@ ${seoHeadHtml}
 
   <div class="tab-panel" data-tab-panel="item-details" id="content-item-details" hidden>
     <div style="margin-bottom: 20px;">
-      <button type="button" class="lc-btn secondary" onclick="navigateBackFromDetail()" style="padding: 6px 12px; font-size: 0.9rem;">&larr; Back</button>
+      <button type="button" class="lc-btn secondary" data-act="navigateBackFromDetail" style="padding: 6px 12px; font-size: 0.9rem;">&larr; Back</button>
     </div>
     <div id="itemDetailsBody" style="display: flex; flex-direction: column; gap: 24px;">
       <!-- Filled dynamically -->
@@ -3828,12 +4120,12 @@ ${seoHeadHtml}
     <div class="modal-card" style="width: 100%; max-width: 380px; padding: 22px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow); display: flex; flex-direction: column;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
         <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);" id="createListModalTitle">Create List</h2>
-        <button type="button" class="modal-close-x" aria-label="Close" onclick="closeCreateListModal()">&#x2715;</button>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeCreateListModal">&#x2715;</button>
       </div>
 
       <div style="margin-bottom: 12px;">
         <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Destination</label>
-        <select id="createListModalDestination" aria-label="Destination" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.95rem;" onchange="onChangeCreateListDestination()">
+        <select id="createListModalDestination" aria-label="Destination" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.95rem;" data-act="onChangeCreateListDestination">
           <option value="custom">Custom List</option>
           <option value="trakt">Trakt List</option>
           <option value="tmdb">TMDB List</option>
@@ -3844,7 +4136,7 @@ ${seoHeadHtml}
       
       <div style="margin-bottom: 12px;">
         <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">List Name *</label>
-        <input type="text" id="createListModalName" placeholder="e.g. My Favorite Sci-Fi" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.95rem;" oninput="document.getElementById('createListModalBtn').disabled = !this.value.trim(); document.getElementById('createListModalBtn').style.opacity = this.value.trim() ? '1' : '0.5';">
+        <input type="text" id="createListModalName" placeholder="e.g. My Favorite Sci-Fi" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="appActValidateCreateListName" data-act-args="[&quot;@value&quot;]">
       </div>
 
       <div style="margin-bottom: 12px;">
@@ -3870,8 +4162,8 @@ ${seoHeadHtml}
       </div>
       
       <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
-        <button type="button" class="lc-btn secondary" onclick="closeCreateListModal()">Cancel</button>
-        <button type="button" class="lc-btn primary" id="createListModalBtn" style="opacity: 0.5; min-width: 80px;" disabled onclick="submitCreateListModal()">Create</button>
+        <button type="button" class="lc-btn secondary" data-act="closeCreateListModal">Cancel</button>
+        <button type="button" class="lc-btn primary" id="createListModalBtn" style="opacity: 0.5; min-width: 80px;" disabled data-act="submitCreateListModal">Create</button>
       </div>
     </div>
   </div>
@@ -3882,25 +4174,25 @@ ${seoHeadHtml}
       <h2 style="margin-top:0; font-size:1.3rem; font-weight:600; color:var(--text);">Add Catalog</h2>
       
       <div style="margin: 16px 0;">
-        <input type="text" id="addShelfModalName" placeholder="Catalog name" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem; margin-bottom:12px;" oninput="validateAddShelfModal()">
+        <input type="text" id="addShelfModalName" placeholder="Catalog name" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem; margin-bottom:12px;" data-act-on="input" data-act="validateAddShelfModal">
         
         <div id="addShelfModalLinksContainer">
           <div class="add-shelf-link-row" style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
-            <input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd)" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" oninput="onAddShelfModalLinkInput(this); validateAddShelfModal()">
+            <input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd)" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">
           </div>
         </div>
         
-        <button type="button" class="lc-btn secondary" style="width: 100%; margin-bottom: 12px; font-size: 0.9rem;" onclick="addShelfModalAddLink()">+ Add another link (Combined List)</button>
+        <button type="button" class="lc-btn secondary" style="width: 100%; margin-bottom: 12px; font-size: 0.9rem;" data-act="addShelfModalAddLink">+ Add another link (Combined List)</button>
         
-        <select id="addShelfModalType" aria-label="Catalog type" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem; margin-bottom:12px;" onchange="validateAddShelfModal()">
+        <select id="addShelfModalType" aria-label="Catalog type" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem; margin-bottom:12px;" data-act="validateAddShelfModal">
           <option value="movie">Movies</option>
           <option value="series">Shows</option>
         </select>
       </div>
       
       <div style="display:flex; justify-content:flex-end; gap:16px; margin-top: 8px;">
-        <button type="button" style="background:none; border:none; color:var(--text); font-weight:600; font-size:1rem; cursor:pointer;" onclick="document.getElementById('addShelfModal').style.display = 'none'">Cancel</button>
-        <button type="button" id="addShelfModalBtn" style="background:none; border:none; color:var(--accent); font-weight:600; font-size:1rem; cursor:pointer; opacity: 0.5;" disabled onclick="submitAddShelfModal()">Add</button>
+        <button type="button" style="background:none; border:none; color:var(--text); font-weight:600; font-size:1rem; cursor:pointer;" data-act="appActHideAddShelfModal">Cancel</button>
+        <button type="button" id="addShelfModalBtn" style="background:none; border:none; color:var(--accent); font-weight:600; font-size:1rem; cursor:pointer; opacity: 0.5;" disabled data-act="submitAddShelfModal">Add</button>
       </div>
     </div>
   </div>
@@ -3918,7 +4210,7 @@ ${seoHeadHtml}
         <!-- Filled dynamically -->
       </div>
       <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
-        <button type="button" class="lc-btn secondary" id="selectListModalCancelBtn" onclick="closeSelectListModal()">Cancel</button>
+        <button type="button" class="lc-btn secondary" id="selectListModalCancelBtn" data-act="closeSelectListModal">Cancel</button>
         <button type="button" class="lc-btn primary" id="addSelectedListsBtn" style="min-width: 90px;">Done</button>
       </div>
     </div>
@@ -3929,7 +4221,7 @@ ${seoHeadHtml}
     <div class="modal-card" style="width: 100%; max-width: 420px; padding: 24px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow); display: flex; flex-direction: column; text-align: center;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
         <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);">Connect Trakt</h2>
-        <button type="button" class="modal-close-x" aria-label="Close" onclick="closeTraktDeviceModal()">&#x2715;</button>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeTraktDeviceModal">&#x2715;</button>
       </div>
       <p style="margin: 0 0 16px; color: var(--muted); font-size: 0.9rem;">To authorize your Trakt account without redirects or rate limits, enter the code below on Trakt:</p>
       
@@ -3948,7 +4240,7 @@ ${seoHeadHtml}
       </div>
 
       <div style="margin-top: 18px; border-top: 1px solid var(--border); padding-top: 14px;">
-        <button type="button" class="lc-btn secondary" style="width: 100%;" onclick="closeTraktDeviceModal()">Cancel</button>
+        <button type="button" class="lc-btn secondary" style="width: 100%;" data-act="closeTraktDeviceModal">Cancel</button>
       </div>
     </div>
   </div>

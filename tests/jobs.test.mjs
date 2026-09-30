@@ -152,14 +152,14 @@ describe("P5-1: the job queue", () => {
     assert.match(ping.body.error, /JOBS/);
     const page = await call(env, "/admin", { cookie });
     assert.match(page.text, /JOBS is not bound\./);
-    assert.match(page.text, /id="jobsPingBtn" onclick="runJobsPing\(\)" disabled/);
+    assert.match(page.text, /id="jobsPingBtn" data-act="runJobsPing" disabled/);
   });
 
   it("the admin page offers the test job once JOBS is bound", async () => {
     const env = jobsEnv();
     const page = await call(env, "/admin", { cookie: await adminCookie(env) });
     assert.match(page.text, /Background jobs queue: <span style="color:#30d158;">bound<\/span>/);
-    assert.match(page.text, /id="jobsPingBtn" onclick="runJobsPing\(\)" >/);
+    assert.match(page.text, /id="jobsPingBtn" data-act="runJobsPing" >/);
   });
 
   it("a job that fails is delivered again with a growing delay, then reaches the dead-letter queue", async () => {
@@ -612,7 +612,7 @@ describe("P5-2: the cron tick only dispatches", () => {
         assert.equal(typeof j.lastMs, "number");
       }
       const page = await call(env, "/admin", { cookie });
-      assert.match(page.text, /id="jobsStatusBtn" onclick="runJobsStatus\(\)" >/);
+      assert.match(page.text, /id="jobsStatusBtn" data-act="runJobsStatus" >/);
 
       env.DB._db.exec("DROP TABLE jobs");
       const none = await call(env, "/admin/api/jobs/status", { cookie });

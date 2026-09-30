@@ -1548,3 +1548,56 @@ const BETTER_POSTER_WARM_IDS_PER_MINUTE = 800;
 // wall-clock time: 8 at 4 at a time is two waits, not eight.
 const BETTER_POSTER_PREWARM_CHECKS_PER_TICK = 60;
 const BETTER_POSTER_PREWARM_FETCHES_PER_TICK = 8;
+
+// --- The new UI shell (Phase 6, P6-1) ----------------------------------------
+//
+// The frontend rebuild is opt-in per browser while it is being built, through a
+// cookie rather than a Worker variable: the owner can try it on their own
+// device without changing anything for anyone else, and turning it off again is
+// one cookie rather than a deploy. The Worker reads the cookie once per request
+// (isNewUiRequest, 02_http-and-creator-utils.js) and renders the same page with
+// the shell's chrome around the existing views.
+//
+// This table is the ONE list of the site's top-level views. The Worker renders
+// the shell's navigation from it (buildAppShellNavHtml, 09_page-shell.js) and
+// writes it into the client bundle (16_client-row-core.js), where the router
+// (24_client-backup-restore-presets.js) builds the same paths back from it.
+// Adding a view is one entry here, not three edits.
+//
+// `subs` are the sub-tab ids the view's own switcher already knows: the shell
+// routes /catalogs/quickadd to switchCatalogsSubmenu('quickadd') rather than
+// inventing a second set of names. The first sub is that view's default.
+// A route whose sub is not in this list falls back to the view itself, so a
+// stale URL can never open a panel that does not exist.
+const NEW_UI_COOKIE = "FF_NEW_UI";
+
+const APP_SHELL_TABS = [
+  { id: "catalogs", label: "Catalogs", path: "/catalogs", subs: ["all", "quickadd", "bulk"] },
+  { id: "lists", label: "Lists", path: "/lists", subs: ["my-lists", "liked", "create-list", "import"] },
+  { id: "channels", label: "Channels", path: "/channels", subs: ["my-channels", "storylines", "quickadd", "explore", "import", "build"] },
+  { id: "discover", label: "Discover", path: "/discover", subs: ["movie", "all", "series", "popular", "curated", "gems", "kids", "holidays", "genres"] },
+  { id: "search", label: "Search", path: "/search", subs: [] },
+  { id: "settings", label: "Settings", path: "/settings", subs: ["account", "external", "backup", "feedback"] },
+];
+
+// The paths the shell answers on. Exact matches only: /lists/<slug> and
+// /channels/<user>/<slug> are share links with their own routes, and must keep
+// working exactly as they do.
+const APP_SHELL_PATHS = new Set(APP_SHELL_TABS.map((t) => t.path));
+
+// The rows a first-time visitor used to be given silently (the page fell back
+// to these when there was no saved configuration). The new UI does not pre-fill
+// them -- "see 8 catalogs you did not add" is one of the things the frontend
+// rebuild sets out to remove (FRONTEND_UX_AUDIT §7, scenario 1) -- and offers
+// them instead, as one button in the home-screen editor (P6-3). Both the old
+// page's fallback and that button read this one list, so they cannot drift.
+const STARTER_PACK_ENTRIES = [
+  { name: "Popular", url: "https://mdblist.com/lists/official/movies/popular\ntmdb:chart:popular\ntrakt:chart:popular", type: "movie", enabled: true, group: "Combined Charts" },
+  { name: "Popular", url: "https://mdblist.com/lists/official/shows/popular\ntmdb:chart:popular\ntrakt:chart:popular", type: "series", enabled: true, group: "Combined Charts" },
+  { name: "Trending", url: "tmdb:chart:trending\ntrakt:chart:trending\nsimkl:chart:today\nsimkl:chart:week\nsimkl:chart:month", type: "movie", enabled: true, group: "Combined Charts" },
+  { name: "Trending", url: "tmdb:chart:trending\ntrakt:chart:trending\nsimkl:chart:today\nsimkl:chart:week\nsimkl:chart:month", type: "series", enabled: true, group: "Combined Charts" },
+  { name: "Streaming Top 10 (All Services)", url: "https://mdblist.com/lists/ahmed2250/apple-tv-top-10-movies-today\nhttps://mdblist.com/lists/andykai/disney-top-10-no-hulu\nhttps://mdblist.com/lists/harmes7/hbo-max-top-10-movies-m77r6mc20q\nhttps://mdblist.com/lists/hulupiv/hulu-top-10-movies\nhttps://mdblist.com/lists/hdlists/netflix-top-10-trending-movies\nhttps://mdblist.com/lists/ahmed2250/paramount-top-10-movies-today\nhttps://mdblist.com/lists/diimaan/amazon-prime-top-10-movies\nhttps://mdblist.com/lists/diimaan/peacock-top-10-movies", type: "movie", enabled: true, group: "Combined Charts" },
+  { name: "Streaming Top 10 (All Services)", url: "https://mdblist.com/lists/ahmed2250/apple-tv-top-10-tv-shows-today\nhttps://mdblist.com/lists/andykai/disney-trending-no-hulu\nhttps://mdblist.com/lists/harmes7/hbo-max-top-10-series-cp45l27nhd\nhttps://mdblist.com/lists/hulupiv/hulu-top-10-shows\nhttps://mdblist.com/lists/hdlists/netflix-top-10-trending-shows\nhttps://mdblist.com/lists/ahmed2250/paramount-top-10-tv-shows-today\nhttps://mdblist.com/lists/diimaan/amazon-prime-top-10-tv-shows\nhttps://mdblist.com/lists/peacockpiv/peacock-top-10-shows", type: "series", enabled: true, group: "Combined Charts" },
+  { name: "Streaming (All Services)", url: "tmdb:chart:appletv\ntmdb:chart:disney\ntmdb:chart:discovery\ntmdb:chart:hbomax\ntmdb:chart:hulu\ntmdb:chart:netflix\ntmdb:chart:netflixkids\ntmdb:chart:paramount\ntmdb:chart:primevideo\ntmdb:chart:peacock", type: "movie", enabled: true, group: "Combined Charts" },
+  { name: "Streaming (All Services)", url: "tmdb:chart:appletv\ntmdb:chart:disney\ntmdb:chart:discovery\ntmdb:chart:hbomax\ntmdb:chart:hulu\ntmdb:chart:netflix\ntmdb:chart:netflixkids\ntmdb:chart:paramount\ntmdb:chart:primevideo\ntmdb:chart:peacock", type: "series", enabled: true, group: "Combined Charts" }
+];

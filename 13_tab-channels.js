@@ -1,11 +1,11 @@
 <div class="tab-panel" data-tab-panel="channels" id="content-channels" role="tabpanel" aria-labelledby="tab-desktop-channels" hidden>
   <!-- Top Submenu Pills for Channels -->
   <div class="subnav-pills-bar" id="channelsSubnavBar">
-    <button type="button" class="subnav-pill active" data-sub="my-channels" onclick="switchChannelsSubmenu('my-channels', this)"><span class="check-icon">&#x2713;</span> My Channels</button>
-    <button type="button" class="subnav-pill" data-sub="storylines" onclick="switchChannelsSubmenu('storylines', this)">Storylines &amp; Universes</button>
-    <button type="button" class="subnav-pill" data-sub="quickadd" onclick="switchChannelsSubmenu('quickadd', this)">Quick Add</button>
-    <button type="button" class="subnav-pill" data-sub="explore" onclick="switchChannelsSubmenu('explore', this)">Explore Channels</button>
-    <button type="button" class="subnav-pill" data-sub="import" onclick="switchChannelsSubmenu('import', this)">Import</button>
+    <button type="button" class="subnav-pill active" data-sub="my-channels" data-act="switchChannelsSubmenu" data-act-args="[&quot;my-channels&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> My Channels</button>
+    <button type="button" class="subnav-pill" data-sub="storylines" data-act="switchChannelsSubmenu" data-act-args="[&quot;storylines&quot;,&quot;@self&quot;]">Storylines &amp; Universes</button>
+    <button type="button" class="subnav-pill" data-sub="quickadd" data-act="switchChannelsSubmenu" data-act-args="[&quot;quickadd&quot;,&quot;@self&quot;]">Quick Add</button>
+    <button type="button" class="subnav-pill" data-sub="explore" data-act="switchChannelsSubmenu" data-act-args="[&quot;explore&quot;,&quot;@self&quot;]">Explore Channels</button>
+    <button type="button" class="subnav-pill" data-sub="import" data-act="switchChannelsSubmenu" data-act-args="[&quot;import&quot;,&quot;@self&quot;]">Import</button>
   </div>
 
   <!-- Submenu: Storylines & Universes (Canon Timelines, Sagas & Bridges) -->
@@ -20,12 +20,12 @@
 
       <!-- Category Filter Tabs -->
       <div class="subnav-pills-bar" id="storylineCategoryFilterBar" style="margin-bottom:16px; flex-wrap:wrap;">
-        <button type="button" class="subnav-pill active" onclick="filterStorylinesCategory('all', this)"><span class="check-icon">&#x2713;</span> All Sagas</button>
-        <button type="button" class="subnav-pill" onclick="filterStorylinesCategory('moviesagas', this)">Movie Sagas (3+ Films)</button>
-        <button type="button" class="subnav-pill" onclick="filterStorylinesCategory('tvuniverses', this)">TV Universes &amp; Bridges</button>
-        <button type="button" class="subnav-pill" onclick="filterStorylinesCategory('scifi', this)">Sci-Fi &amp; Fantasy</button>
-        <button type="button" class="subnav-pill" onclick="filterStorylinesCategory('action', this)">Action &amp; Crime</button>
-        <button type="button" class="subnav-pill" onclick="filterStorylinesCategory('animation', this)">Animation &amp; Anime</button>
+        <button type="button" class="subnav-pill active" data-act="filterStorylinesCategory" data-act-args="[&quot;all&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> All Sagas</button>
+        <button type="button" class="subnav-pill" data-act="filterStorylinesCategory" data-act-args="[&quot;moviesagas&quot;,&quot;@self&quot;]">Movie Sagas (3+ Films)</button>
+        <button type="button" class="subnav-pill" data-act="filterStorylinesCategory" data-act-args="[&quot;tvuniverses&quot;,&quot;@self&quot;]">TV Universes &amp; Bridges</button>
+        <button type="button" class="subnav-pill" data-act="filterStorylinesCategory" data-act-args="[&quot;scifi&quot;,&quot;@self&quot;]">Sci-Fi &amp; Fantasy</button>
+        <button type="button" class="subnav-pill" data-act="filterStorylinesCategory" data-act-args="[&quot;action&quot;,&quot;@self&quot;]">Action &amp; Crime</button>
+        <button type="button" class="subnav-pill" data-act="filterStorylinesCategory" data-act-args="[&quot;animation&quot;,&quot;@self&quot;]">Animation &amp; Anime</button>
       </div>
 
       <div id="storylinesUniverseList" style="display:flex; flex-direction:column; gap:16px;"></div>
@@ -34,19 +34,25 @@
 
   <!-- Submenu 1: My Channels -->
   <div class="channels-subpanel" id="channelsSubMyChannels">
+    <!-- The shell's own channel templates (P6-7): choose a template, look at
+         what is playing today, then add the channel to the home screen.
+         Emitted only for a browser with the FF_NEW_UI cookie; every panel
+         below is unchanged, and the Custom template hands off to the legacy
+         builder itself until that is rewritten. -->
+${newUi ? '    <div id="appShellChannels"></div>' : ''}
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">My Channels</h2>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <button type="button" class="secondary lc-btn" onclick="createNextUpChannel(this)" title="A channel that always plays the next episode of everything you have on the go">+ Next Up Channel</button>
-          <button type="button" class="primary lc-btn" onclick="openBuildCustomChannel()">+ New Channel</button>
+          <button type="button" class="secondary lc-btn" data-act="createNextUpChannel" data-act-args="[&quot;@self&quot;]" title="A channel that always plays the next episode of everything you have on the go">+ Next Up Channel</button>
+          <button type="button" class="primary lc-btn" data-act="openBuildCustomChannel">+ New Channel</button>
         </div>
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Your custom built and saved 24/7 TV channels. Play episodes continuously in broadcast order or daily shuffle.</p>
       <div id="channelNextUpStatus" style="margin-bottom:8px;"></div>
       <div class="row" id="myChannelsToolbar" style="margin-bottom:10px; gap:8px;">
-        <input type="text" id="myChannelsSearchInput" aria-label="Search your channels" placeholder="Search your channels..." oninput="setMyChannelsSearch(this.value)">
-        <select id="myChannelsSortSelect" aria-label="Order your channels" onchange="setMyChannelsSort(this.value)" style="flex:none; width:auto;">
+        <input type="text" id="myChannelsSearchInput" aria-label="Search your channels" placeholder="Search your channels..." data-act-on="input" data-act="setMyChannelsSearch" data-act-args="[&quot;@value&quot;]">
+        <select id="myChannelsSortSelect" aria-label="Order your channels" data-act="setMyChannelsSort" data-act-args="[&quot;@value&quot;]" style="flex:none; width:auto;">
           <option value="recent">Recently updated</option>
           <option value="created">Recently created</option>
           <option value="name">Name (A&ndash;Z)</option>
@@ -73,16 +79,16 @@
           <h3 style="font-size:0.95rem; font-weight:700; margin:0;">Create Merged Catalog</h3>
         </div>
         <div class="actions" style="margin-bottom:8px; justify-content:space-between;">
-          <button type="button" class="secondary lc-btn" onclick="renderChannelMergeList()">Refresh list</button>
+          <button type="button" class="secondary lc-btn" data-act="renderChannelMergeList">Refresh list</button>
           <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:0.85rem; user-select:none;">
-            <input type="checkbox" id="channelMergeSelectAllCheck" onchange="toggleAllChannelMergeChecks(this)">
+            <input type="checkbox" id="channelMergeSelectAllCheck" data-act="toggleAllChannelMergeChecks" data-act-args="[&quot;@self&quot;]">
             <span>Select all</span>
           </label>
         </div>
         <div id="channelMergeList"><p style="color:var(--muted); font-size:0.85rem;"><small>No saved channels yet.</small></p></div>
         <div class="row" style="margin-top:8px;">
           <input type="text" id="channelMergeNameInput" aria-label="Combined catalog name" placeholder="Combined catalog name (e.g. Live TV)">
-          <button type="button" class="secondary" onclick="mergeChannelsIntoRow()">Merge into catalog</button>
+          <button type="button" class="secondary" data-act="mergeChannelsIntoRow">Merge into catalog</button>
         </div>
       </div>
     </div>
@@ -134,14 +140,14 @@
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Explore Channels</h2>
-        <button type="button" class="secondary lc-btn" onclick="loadChannelDirectory(true)">Refresh</button>
+        <button type="button" class="secondary lc-btn" data-act="loadChannelDirectory" data-act-args="[true]">Refresh</button>
       </div>
       <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">
         24/7 channels built and published by other people &mdash; &ldquo;Saturday Morning 90s&rdquo;, &ldquo;80s VHS Sci-Fi Vault&rdquo;, whatever anyone has put together. Add one to your own setup in a single click, then edit it however you like.
       </p>
       <div class="row" style="margin-bottom:10px; gap:8px;">
-        <input type="text" id="channelDirectorySearchInput" aria-label="Filter published channels" placeholder="Filter by name, description or creator..." oninput="renderChannelDirectory()">
-        <select id="channelDirectorySortSelect" aria-label="Order published channels" onchange="setChannelDirectorySort(this.value)" style="flex:none; width:auto;">
+        <input type="text" id="channelDirectorySearchInput" aria-label="Filter published channels" placeholder="Filter by name, description or creator..." data-act-on="input" data-act="renderChannelDirectory">
+        <select id="channelDirectorySortSelect" aria-label="Order published channels" data-act="setChannelDirectorySort" data-act-args="[&quot;@value&quot;]" style="flex:none; width:auto;">
           <option value="newest">Newest</option>
           <option value="added">Most added</option>
           <option value="liked">Most liked</option>
@@ -164,7 +170,7 @@
       </div>
       <div class="row">
         <input type="text" id="channelImportNameInput" placeholder="Channel name (e.g. Sitcom Central)">
-        <button type="button" class="secondary" onclick="importChannelFromLink(this)">Import channel</button>
+        <button type="button" class="secondary" data-act="importChannelFromLink" data-act-args="[&quot;@self&quot;]">Import channel</button>
       </div>
       <label class="channel-rule-row" style="margin-top:10px;">
         <input type="checkbox" id="channelImportLiveSyncCheck" checked>
@@ -179,8 +185,8 @@
       </div>
       <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Paste a channel share link (or just its code) to rebuild that exact channel here &mdash; every pick, its play order and its broadcast schedule.</p>
       <div class="row">
-        <input type="text" id="channelShareCodeInput" placeholder="https://... /channel/AbC123 &mdash; or the code on its own" onkeydown="if(event.key==='Enter'){event.preventDefault();importSharedChannel(this);}">
-        <button type="button" class="secondary" onclick="importSharedChannel(this)">Add channel</button>
+        <input type="text" id="channelShareCodeInput" placeholder="https://... /channel/AbC123 &mdash; or the code on its own" data-act-on="keydown" data-act="importSharedChannel" data-act-keys="Enter" data-act-prevent data-act-args="[&quot;@self&quot;]">
+        <button type="button" class="secondary" data-act="importSharedChannel" data-act-args="[&quot;@self&quot;]">Add channel</button>
       </div>
       <div id="channelShareImportStatus" style="margin-top:8px;"></div>
     </div>
@@ -194,13 +200,13 @@
       </div>
       <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Search any TV show or movie to add to your channel, and reorder or remove picks:</p>
       <div class="subnav-pills-bar" id="channelSearchTypeChips" style="margin-bottom:10px;">
-        <button type="button" class="subnav-pill active" id="channelSearchTypeShowsBtn" onclick="setChannelSearchType('tv', this)"><span class="check-icon">&#x2713;</span> Shows</button>
-        <button type="button" class="subnav-pill" id="channelSearchTypeMoviesBtn" onclick="setChannelSearchType('movie', this)">Movies</button>
-        <button type="button" class="subnav-pill" id="channelSearchTypePeopleBtn" onclick="setChannelSearchType('person', this)">Actors &amp; Directors</button>
+        <button type="button" class="subnav-pill active" id="channelSearchTypeShowsBtn" data-act="setChannelSearchType" data-act-args="[&quot;tv&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> Shows</button>
+        <button type="button" class="subnav-pill" id="channelSearchTypeMoviesBtn" data-act="setChannelSearchType" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]">Movies</button>
+        <button type="button" class="subnav-pill" id="channelSearchTypePeopleBtn" data-act="setChannelSearchType" data-act-args="[&quot;person&quot;,&quot;@self&quot;]">Actors &amp; Directors</button>
       </div>
       <div class="row">
-        <input type="text" id="channelSearchInput" placeholder="Search a show by name..." onkeydown="if(event.key==='Enter'){event.preventDefault();runChannelTitleSearch();}">
-        <button type="button" class="secondary" onclick="runChannelTitleSearch()">Search</button>
+        <input type="text" id="channelSearchInput" placeholder="Search a show by name..." data-act-on="keydown" data-act="runChannelTitleSearch" data-act-keys="Enter" data-act-prevent>
+        <button type="button" class="secondary" data-act="runChannelTitleSearch">Search</button>
       </div>
       <div id="channelSearchResult"></div>
       <div id="channelEpisodePicker"></div>
@@ -210,27 +216,27 @@
       <p style="margin-top:14px; margin-bottom:6px; font-weight:600; font-size:0.85rem;">Picks in this channel: <span id="channelDraftCountBadge" style="color:var(--muted); font-weight:500;"></span></p>
       <div id="channelDraftStats" style="margin:0 0 8px; color:var(--muted); font-size:0.78rem;"></div>
       <div class="row" style="margin-bottom:8px; gap:8px;">
-        <input type="text" id="channelDraftFilterInput" aria-label="Filter these picks" placeholder="Filter these picks by show or episode name..." oninput="setChannelDraftFilter(this.value)">
-        <button type="button" class="secondary lc-btn" id="channelDraftSelectModeBtn" style="flex:none; width:auto; white-space:nowrap;" onclick="toggleChannelDraftSelectMode()">Select</button>
+        <input type="text" id="channelDraftFilterInput" aria-label="Filter these picks" placeholder="Filter these picks by show or episode name..." data-act-on="input" data-act="setChannelDraftFilter" data-act-args="[&quot;@value&quot;]">
+        <button type="button" class="secondary lc-btn" id="channelDraftSelectModeBtn" style="flex:none; width:auto; white-space:nowrap;" data-act="toggleChannelDraftSelectMode">Select</button>
       </div>
       <div id="channelDraftBulkBar" style="display:none; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:8px; padding:8px; border:1px solid var(--border); border-radius:8px; background:var(--surface);">
         <span id="channelDraftSelectionCount" style="font-size:0.8rem; font-weight:600;">0 selected</span>
-        <button type="button" class="secondary lc-btn" onclick="selectAllChannelDraftShown(true)">Select shown</button>
-        <button type="button" class="secondary lc-btn" onclick="selectAllChannelDraftShown(false)">Clear</button>
-        <select id="channelDraftSelectShowSelect" onchange="selectChannelDraftByGroup(this.value); this.selectedIndex = 0;" style="font-size:0.82rem; padding:5px 8px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+        <button type="button" class="secondary lc-btn" data-act="selectAllChannelDraftShown" data-act-args="[true]">Select shown</button>
+        <button type="button" class="secondary lc-btn" data-act="selectAllChannelDraftShown" data-act-args="[false]">Clear</button>
+        <select id="channelDraftSelectShowSelect" data-act="appActSelectChannelDraftGroup" data-act-args="[&quot;@self&quot;,&quot;@value&quot;]" style="font-size:0.82rem; padding:5px 8px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px;">
           <option value="">Select a whole show or season&hellip;</option>
         </select>
         <span style="flex:1;"></span>
-        <button type="button" class="secondary lc-btn" onclick="pairChannelDraftSelection()" title="Play these picks back to back, in this order">Pair</button>
-        <button type="button" class="secondary lc-btn" onclick="unpairChannelDraftSelection()" title="Drop any hand-made pairing on these picks">Unpair</button>
-        <button type="button" class="secondary lc-btn" onclick="moveChannelDraftSelection('top')">To top</button>
-        <button type="button" class="secondary lc-btn" onclick="moveChannelDraftSelection('bottom')">To bottom</button>
-        <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" onclick="removeChannelDraftSelection()">Remove selected</button>
+        <button type="button" class="secondary lc-btn" data-act="pairChannelDraftSelection" title="Play these picks back to back, in this order">Pair</button>
+        <button type="button" class="secondary lc-btn" data-act="unpairChannelDraftSelection" title="Drop any hand-made pairing on these picks">Unpair</button>
+        <button type="button" class="secondary lc-btn" data-act="moveChannelDraftSelection" data-act-args="[&quot;top&quot;]">To top</button>
+        <button type="button" class="secondary lc-btn" data-act="moveChannelDraftSelection" data-act-args="[&quot;bottom&quot;]">To bottom</button>
+        <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" data-act="removeChannelDraftSelection">Remove selected</button>
       </div>
       <div id="channelDraftList"><p style="color:var(--muted); font-size:0.85rem;"><small>Nothing added yet &mdash; search above to get started.</small></p></div>
       <div class="actions" style="margin-top:8px; justify-content:flex-start; gap:8px;">
-        <button type="button" class="secondary lc-btn" onclick="shuffleChannelDraft(); showAddedToast('Channel picks shuffled.');">Shuffle Picks Now</button>
-        <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" onclick="removeAllChannelDraftPicks()">Remove All</button>
+        <button type="button" class="secondary lc-btn" data-act="appActShuffleChannelPicks">Shuffle Picks Now</button>
+        <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" data-act="removeAllChannelDraftPicks">Remove All</button>
       </div>
       <div id="channelVisibilityRow" style="margin-top:12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; max-width:280px;">
         <span style="font-size:0.95rem; font-weight:500; color:var(--text);">Public</span>
@@ -248,7 +254,7 @@
         <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px;">
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
             <label for="channelPlayOrderSelect" style="font-size:0.85rem; font-weight:600; white-space:nowrap;">Play order:</label>
-            <select id="channelPlayOrderSelect" onchange="applyChannelPlayOrder(this.value)" style="flex:1; min-width:210px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+            <select id="channelPlayOrderSelect" data-act="applyChannelPlayOrder" data-act-args="[&quot;@value&quot;]" style="flex:1; min-width:210px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
               <option value="as-listed">Creation order (as listed)</option>
               <option value="aired-asc">Air date &mdash; oldest first</option>
               <option value="aired-desc">Air date &mdash; newest first</option>
@@ -264,21 +270,21 @@
           <div style="border-top:1px solid var(--border); padding-top:12px;">
             <p style="margin:0 0 8px; font-weight:600; font-size:0.85rem;">Broadcast schedule</p>
             <label class="channel-rule-row">
-              <input type="checkbox" id="channelDailyRotateCheck" onchange="updateChannelBroadcastControls()">
+              <input type="checkbox" id="channelDailyRotateCheck" data-act="updateChannelBroadcastControls">
               <span>Daily Broadcast Schedule &mdash; run a fresh lineup out of these picks every day</span>
             </label>
             <div id="channelDailyRotateDials" style="display:none; margin:8px 0 0 24px; flex-wrap:wrap; gap:10px;">
               <label class="channel-dial">Shows per day
-                <input type="number" id="channelRotateShowsInput" min="1" max="48" step="1" value="24" onchange="updateChannelBroadcastControls()">
+                <input type="number" id="channelRotateShowsInput" min="1" max="48" step="1" value="24" data-act="updateChannelBroadcastControls">
               </label>
               <label class="channel-dial">Episodes per block
-                <input type="number" id="channelRotateEpisodesInput" min="1" max="12" step="1" value="3" onchange="updateChannelBroadcastControls()">
+                <input type="number" id="channelRotateEpisodesInput" min="1" max="12" step="1" value="3" data-act="updateChannelBroadcastControls">
               </label>
               <label class="channel-dial">Turns over at
-                <input type="time" id="channelRotateTurnoverTime" value="00:00" onchange="updateChannelBroadcastControls()">
+                <input type="time" id="channelRotateTurnoverTime" value="00:00" data-act="updateChannelBroadcastControls">
               </label>
               <label class="channel-dial">In
-                <select id="channelRotateTurnoverZone" onchange="updateChannelBroadcastControls()">
+                <select id="channelRotateTurnoverZone" data-act="updateChannelBroadcastControls">
                   <option value="utc">UTC</option>
                   <option value="local">my local time</option>
                 </select>
@@ -293,13 +299,13 @@
             <p style="margin:2px 0 0 24px; color:var(--muted); font-size:0.78rem;">Needs Auto-track playback signed in. Once every pick has been seen, the whole channel comes back rather than going dark. Leave it off to keep watched episodes in the rotation.</p>
 
             <label class="channel-rule-row" style="margin-top:10px;">
-              <input type="checkbox" id="channelPairPartsCheck" onchange="updateChannelBroadcastControls()">
+              <input type="checkbox" id="channelPairPartsCheck" data-act="updateChannelBroadcastControls">
               <span>Keep multi-part episodes together</span>
             </label>
             <p id="channelPairPartsHint" style="margin:2px 0 0 24px; color:var(--muted); font-size:0.78rem;">Finds &ldquo;Part 1&rdquo; / &ldquo;Pt. II&rdquo; / &ldquo;(2)&rdquo; in episode titles. Whenever one part is on today, the rest play straight after it instead of turning up tomorrow.</p>
 
             <label class="channel-rule-row" style="margin-top:10px;">
-              <input type="checkbox" id="channelAutoNewEpisodesCheck" onchange="updateChannelBroadcastControls()">
+              <input type="checkbox" id="channelAutoNewEpisodesCheck" data-act="updateChannelBroadcastControls">
               <span>Automatically add new episodes</span>
             </label>
             <div id="channelNewEpisodesRow" style="display:none; margin:6px 0 0 24px;">
@@ -332,7 +338,7 @@
           <p style="margin:0 0 6px; font-size:0.8rem; font-weight:600; color:var(--muted);">Or use a custom image URL (JPEG, PNG, WebP, GIF):</p>
           <div class="row" style="gap:8px;">
             <input type="url" id="channelPosterUrlInput" placeholder="https://example.com/poster.jpg" style="flex:1; font-size:0.82rem;">
-            <button type="button" class="secondary" style="white-space:nowrap; font-size:0.82rem;" onclick="applyChannelPosterUrl()">Use This</button>
+            <button type="button" class="secondary" style="white-space:nowrap; font-size:0.82rem;" data-act="applyChannelPosterUrl">Use This</button>
           </div>
           <div id="channelPosterUrlPreview" style="margin-top:8px; align-items:center; gap:10px; display:none;">
             <img id="channelPosterUrlImg" src="" alt="Poster preview" style="width:54px; height:80px; object-fit:cover; border-radius:4px; border:2px solid var(--accent);" loading="lazy">
@@ -343,8 +349,8 @@
 
       <div class="row" style="margin-top:12px;">
         <input type="text" id="channelNameInput" placeholder="Channel name (e.g. Comedy Night)" style="flex:1;">
-        <button type="button" class="primary" id="channelSaveBtn" onclick="saveChannel()">Save</button>
-        <button type="button" id="channelCancelEditBtn" class="secondary" style="display:none;" onclick="cancelEditChannel()">Cancel</button>
+        <button type="button" class="primary" id="channelSaveBtn" data-act="saveChannel">Save</button>
+        <button type="button" id="channelCancelEditBtn" class="secondary" style="display:none;" data-act="cancelEditChannel">Cancel</button>
       </div>
     </div>
   </div>
@@ -358,19 +364,19 @@
     <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Search to find movies, shows and lists to add to your lists.</p>
     
     <div class="row">
-      <input type="text" id="catalogSearchInput" aria-label="Search by title or list name" placeholder="Search by title or list name..." oninput="handleCatalogSearchInput(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();runCatalogSearch();}">
-      <button type="button" class="primary" onclick="runCatalogSearch()">Search</button>
+      <input type="text" id="catalogSearchInput" aria-label="Search by title or list name" placeholder="Search by title or list name..." data-act="appActCatalogSearchInput" data-act-on="input,keydown" data-act-args="[&quot;@self&quot;,&quot;@event&quot;]">
+      <button type="button" class="primary" data-act="runCatalogSearch">Search</button>
     </div>
 
     <div class="subnav-pills-bar" id="catalogSearchTypeChips" style="margin-top:10px;">
-      <button type="button" class="subnav-pill active" onclick="setCatalogSearchFilter('movie', this)"><span class="check-icon">&#x2713;</span> Movies</button>
-      <button type="button" class="subnav-pill" onclick="setCatalogSearchFilter('tv', this)">Shows</button>
-      <button type="button" class="subnav-pill" onclick="setCatalogSearchFilter('lists', this)">Lists</button>
+      <button type="button" class="subnav-pill active" data-act="setCatalogSearchFilter" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> Movies</button>
+      <button type="button" class="subnav-pill" data-act="setCatalogSearchFilter" data-act-args="[&quot;tv&quot;,&quot;@self&quot;]">Shows</button>
+      <button type="button" class="subnav-pill" data-act="setCatalogSearchFilter" data-act-args="[&quot;lists&quot;,&quot;@self&quot;]">Lists</button>
     </div>
 
     <!-- Quick Filter Dropdowns for Movies & Shows -->
     <div id="catalogSearchFiltersRow" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; align-items:center;">
-      <select id="catalogSearchGenreSelect" aria-label="Filter by genre" onchange="applySearchFilters()" style="flex:1; min-width:130px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+      <select id="catalogSearchGenreSelect" aria-label="Filter by genre" data-act="applySearchFilters" style="flex:1; min-width:130px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
         <option value="">All Genres</option>
         <option value="28,10759">Action &amp; Adventure</option>
         <option value="16">Animation</option>
@@ -390,7 +396,7 @@
         <option value="37">Western</option>
       </select>
 
-      <select id="catalogSearchYearSelect" aria-label="Filter by year" onchange="applySearchFilters()" style="flex:1; min-width:115px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+      <select id="catalogSearchYearSelect" aria-label="Filter by year" data-act="applySearchFilters" style="flex:1; min-width:115px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
         <option value="">All Years</option>
         <option value="2026">2026</option>
         <option value="2025">2025</option>
@@ -403,7 +409,7 @@
         <option value="<1990">1980s &amp; Older</option>
       </select>
 
-      <select id="catalogSearchRatingSelect" aria-label="Filter by minimum rating" onchange="applySearchFilters()" style="flex:1; min-width:115px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+      <select id="catalogSearchRatingSelect" aria-label="Filter by minimum rating" data-act="applySearchFilters" style="flex:1; min-width:115px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
         <option value="">All Ratings</option>
         <option value="8.0">8.0+ ⭐</option>
         <option value="7.0">7.0+ ⭐</option>
@@ -411,7 +417,7 @@
         <option value="5.0">5.0+ ⭐</option>
       </select>
 
-      <button type="button" id="catalogSearchResetFiltersBtn" class="secondary lc-btn" onclick="resetSearchFilters()" style="font-size:0.8rem; padding:6px 10px; height:auto; display:none;">Reset</button>
+      <button type="button" id="catalogSearchResetFiltersBtn" class="secondary lc-btn" data-act="resetSearchFilters" style="font-size:0.8rem; padding:6px 10px; height:auto; display:none;">Reset</button>
     </div>
 
     <div id="catalogSearchResult" style="margin-top:14px;"></div>

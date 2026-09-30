@@ -175,6 +175,14 @@ async function handleFetch(request, env, ctx) {
     // token as its config segment (see v2InstallPath, 27_installs.js).
     const path = v2InstallPath(url.pathname) || url.pathname;
 
+    // ?ff_new_ui=1 (or 0) turns the new UI shell on or off for this browser,
+    // then bounces to the same address without the parameter (P6-1). Handled
+    // before anything else so it works from any page of the site.
+    if (request.method === "GET" || request.method === "HEAD") {
+      const shellSwitch = appShellSwitchResponse(url);
+      if (shellSwitch) return shellSwitch;
+    }
+
     if (request.method === "OPTIONS") {
       if (isPublicCorsPath(path)) {
         return new Response(null, { headers: corsHeaders() });
@@ -239,7 +247,30 @@ async function handleFetch(request, env, ctx) {
       // rebuilt and resent ~1.6MB on every navigation, with no validator at
       // all, which also left the browser free to heuristically cache a copy
       // it had no way to check.
-      return await htmlPageResponse(request, renderBuilderCached(url.origin, {}));
+      return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
+    }
+
+    // The new UI shell's own paths (Phase 6, P6-1): /catalogs, /lists,
+    // /channels, /discover, /search, /settings and a sub-tab below any of them
+    // (/settings/connections, /catalogs/quickadd). Served only to a browser
+    // that carries the FF_NEW_UI cookie; without it these addresses keep
+    // 404ing exactly as they do today, so nothing changes for anyone else, and
+    // turning the shell off again is one cookie rather than a deploy.
+    //
+    // Exact paths only: /lists/<slug> and /channels/<user>/<slug> are share
+    // links and keep their own routes below.
+    if (APP_SHELL_PATHS.has(path) && isNewUiRequest(request)) {
+      ctx.waitUntil(bumpStat(env, "pageviews"));
+      return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
+    }
+    if (isNewUiRequest(request)) {
+      for (const shellTab of APP_SHELL_TABS) {
+        if (path.indexOf(shellTab.path + "/") !== 0) continue;
+        const shellSub = path.slice(shellTab.path.length + 1);
+        if (shellTab.subs.indexOf(shellSub) === -1) continue;
+        ctx.waitUntil(bumpStat(env, "pageviews"));
+        return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
+      }
     }
 
     // add-on icon, served straight from this Worker
@@ -558,7 +589,7 @@ async function handleFetch(request, env, ctx) {
       // keys stays uncacheable, while the bundle it references is the same
       // shared, immutable /app.js everyone else already has.
       return new Response(
-        await pageWithExternalBundle(renderBuilder(url.origin, {
+        await pageWithExternalBundle(renderPage(request, url.origin, {
           initialEntries: resolvedForPage.entries,
           // Every setting the link carries except its keys and tokens. This
           // used to name seven fields by hand and left Better Posters out, so
@@ -603,7 +634,7 @@ async function handleFetch(request, env, ctx) {
       ctx.waitUntil(bumpStat(env, "pageviews"));
       return await htmlPageResponse(
         request,
-        renderBuilderCached(url.origin, { isConfigureMode: true })
+        renderPageCached(request, url.origin, { isConfigureMode: true })
       );
     }
 
@@ -737,8 +768,8 @@ async function handleFetch(request, env, ctx) {
       return await htmlPageResponse(
         request,
         curated
-          ? renderBuilder(url.origin, { deepLinkList: { name: curated.name, type: curated.type, url: "custom:curated:" + curated.slug } })
-          : renderBuilderCached(url.origin, {})
+          ? renderPage(request, url.origin, { deepLinkList: { name: curated.name, type: curated.type, url: "custom:curated:" + curated.slug } })
+          : renderPageCached(request, url.origin, {})
       );
     }
 
@@ -757,8 +788,8 @@ async function handleFetch(request, env, ctx) {
       return await htmlPageResponse(
         request,
         chart
-          ? renderBuilder(url.origin, { deepLinkList: { name: chart.name, type: chart.type || ((chart.showUrl && chart.showUrl.includes('shows')) ? "series" : "movie"), url: chart.movieUrl } })
-          : renderBuilderCached(url.origin, {})
+          ? renderPage(request, url.origin, { deepLinkList: { name: chart.name, type: chart.type || ((chart.showUrl && chart.showUrl.includes('shows')) ? "series" : "movie"), url: chart.movieUrl } })
+          : renderPageCached(request, url.origin, {})
       );
     }
 
@@ -766,7 +797,7 @@ async function handleFetch(request, env, ctx) {
     // Note: Creator/user public lists (/lists/:user/:slug) and .json endpoints pass through to creator routes.
     if (path.startsWith("/lists/") && !path.endsWith(".json") && (path.startsWith("/lists/mdblist/") || path.startsWith("/lists/trakt/") || path.startsWith("/lists/tmdb/") || path.startsWith("/lists/simkl/") || path.startsWith("/lists/custom/") || path.startsWith("/lists/curated/"))) {
       ctx.waitUntil(bumpStat(env, "pageviews"));
-      return await htmlPageResponse(request, renderBuilderCached(url.origin, {}));
+      return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
     }
 
     // /channels/:username/:channelSlug -- public shareable URL for a creator's published channel
@@ -826,7 +857,7 @@ async function handleFetch(request, env, ctx) {
         }
       }
       ctx.waitUntil(bumpStat(env, "pageviews"));
-      return await htmlPageResponse(request, renderBuilderCached(url.origin, {}));
+      return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
     }
 
     // /:config/manifest.json

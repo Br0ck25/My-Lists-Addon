@@ -79,15 +79,17 @@ function isPrivateApiPath(path) {
 // set a more specific value for one of these (none do today) would still
 // win, rather than this clobbering it.
 //
-// CSP is deliberately not the strict, script-src-locked-down kind: this
-// app relies on plenty of inline <script> blocks and inline onclick=/
-// onchange= handlers throughout the builder/admin pages, which only work
-// with 'unsafe-inline' on script-src. (That trade is only reasonable if the
-// handlers actually resolve, which html_checks.py now verifies across all
-// 733 of them -- for a long time this comment cited that step before it
-// existed.) Tightening
-// that further would mean a nonce- or hash-based rewrite of every inline
-// handler -- a real project of its own, not a header tweak. What this CSP
+// CSP is deliberately not the strict, script-src-locked-down kind: this app
+// still serves its page as inline <script> blocks (the builder bundle and the
+// per-request preamble, and /admin's own script), which only work with
+// 'unsafe-inline' on script-src. That half is P7-1's, and it is what is left:
+// the inline on*= handlers this comment used to cite are gone from both pages
+// -- P6-8 on the builder, P6-10 on /admin -- and are now data-act attributes
+// run by a delegated listener instead, checked the same way (html_checks.py
+// resolves every action name against the page that declares it, and fails the
+// build on an inline handler, whatever it is called). Removing the handlers is
+// what makes a nonce/hash for the <script> blocks a header change away rather
+// than part of a much larger rewrite. What this CSP
 // still buys, even with 'unsafe-inline' allowed: no loading of scripts/
 // styles/fonts from any origin except the ones this app actually uses
 // (jsDelivr for fflate, Google Fonts, YouTube for trailer embeds), no
@@ -1718,15 +1720,101 @@ async function hashStringForKey(s) {
 // sent when the browser already holds a byte-identical copy.
 const BUILDER_PAGE_MEMO = new Map();
 
+// --- The new UI shell's cookie (Phase 6, P6-1) -------------------------------
+//
+// The shell (see APP_SHELL_TABS, 00_constants.js) is opt-in per BROWSER, not
+// per deployment: the Worker reads NEW_UI_COOKIE from the page request's own
+// headers. That is what lets the owner walk the new interface on their device
+// while everyone else keeps the page they know, and lets a rollback be a
+// cookie rather than a deploy.
+//
+// `?ff_new_ui=1` on any link sets it and `?ff_new_ui=0` clears it
+// (appShellSwitchResponse below), so nobody has to open developer tools.
+function readCookieValue(cookieHeader, name) {
+  const m = String(cookieHeader || "").match(new RegExp("(?:^|;\\s*)" + name + "=([^;]*)"));
+  if (!m) return "";
+  try {
+    return decodeURIComponent(m[1]);
+  } catch {
+    return m[1];
+  }
+}
+
+function isNewUiRequest(request) {
+  try {
+    const raw = readCookieValue(request && request.headers ? request.headers.get("Cookie") : "", NEW_UI_COOKIE).trim().toLowerCase();
+    return raw === "1" || raw === "on" || raw === "true";
+  } catch {
+    return false;
+  }
+}
+
+function appShellCookieHeader(on) {
+  return on
+    ? `${NEW_UI_COOKIE}=1; Path=/; Max-Age=31536000; SameSite=Lax`
+    : `${NEW_UI_COOKIE}=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+}
+
+// The one place the cookie is written. Returns null for every request that is
+// not asking to switch, so the caller can fall through to its normal routing.
+// The redirect drops the parameter, so the address people see and share never
+// carries it.
+function appShellSwitchResponse(url) {
+  const raw = url.searchParams.get("ff_new_ui");
+  if (raw === null) return null;
+  const on = !(raw === "0" || raw === "off" || raw === "false" || raw === "");
+  const clean = new URL(url.href);
+  clean.searchParams.delete("ff_new_ui");
+  const qs = clean.searchParams.toString();
+  // One leading slash, always. A path that starts with two (//evil.com/,
+  // which is also what /\evil.com parses to) is a protocol-relative address,
+  // and a browser follows it to that host: the switch was an open redirect.
+  const samePath = "/" + clean.pathname.replace(/^\/+/, "");
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: samePath + (qs ? "?" + qs : "") + (clean.hash || ""),
+      "Set-Cookie": appShellCookieHeader(on),
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
+// Every render of the page goes through this, so the shell and the page it
+// wraps can never disagree about which variant was asked for. A false
+// `newUi` is dropped rather than passed on, so the flag-off variants stay
+// exactly the renders they were before this existed (same memo key, same
+// bytes).
+function newUiPageOpts(request, opts) {
+  const out = Object.assign({}, opts || {});
+  if (isNewUiRequest(request)) out.newUi = true;
+  return out;
+}
+
+// Every page route renders through these two instead of calling renderBuilder
+// itself, so the variant is decided in exactly one place: the request.
+function renderPage(request, origin, opts) {
+  return renderBuilder(origin, newUiPageOpts(request, opts));
+}
+
+function renderPageCached(request, origin, opts) {
+  return renderBuilderCached(origin, newUiPageOpts(request, opts));
+}
+
 function renderBuilderCached(origin, opts) {
   // Only the argument-free variants are stable enough to memoize; anything
-  // carrying entries, keys or a deep link is rendered fresh.
-  const isDefault = !opts || Object.keys(opts).length === 0;
-  const isBareConfigure = !!(opts && opts.isConfigureMode === true && Object.keys(opts).length === 1);
+  // carrying entries, keys or a deep link is rendered fresh. The shell is a
+  // variant of the same two: same arguments otherwise, different chrome, so
+  // it is memoized under its own key rather than re-rendering 1.6MB a load.
+  const shellOpts = Object.assign({}, opts || {});
+  const isShell = shellOpts.newUi === true;
+  if (!isShell) delete shellOpts.newUi;
+  const isDefault = Object.keys(shellOpts).length === 0;
+  const isBareConfigure = !!(shellOpts.isConfigureMode === true && Object.keys(shellOpts).length === 1);
   if (!isDefault && !isBareConfigure) {
     return renderBuilder(origin, opts || {});
   }
-  const memoKey = `${origin}::${isBareConfigure ? "configure" : "default"}`;
+  const memoKey = `${origin}::${isBareConfigure ? "configure" : "default"}${isShell ? ":shell" : ""}`;
   const hit = BUILDER_PAGE_MEMO.get(memoKey);
   if (hit) return hit;
   const html = renderBuilder(origin, opts || {});
