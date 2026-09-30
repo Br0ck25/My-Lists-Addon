@@ -5,7 +5,7 @@
 > **Release in progress (2026-09-29): read `docs/RELEASES.md` first.**
 > - The owner is taking the new version live one phase at a time, straight to mylistsaddon.com.
 > - Branch `claude/elegant-ride-o7m8fh` started as Release 1: `main` at the end of Phase 1 (`31e55d9`), plus three updates from the public repository (Br0ck25/My-Lists, 2026-09-26) that this repository was missing. Release 1 has been live since 2026-09-29.
-> - Each later release merges the next phase's commit from `main` into that branch. The table in `docs/RELEASES.md` lists them. Releases 1 to 3 are live (2026-09-29; Migrate Accounts: 695 accounts, reconciled). The branch is now Release 4 (Phase 3b), prepared and not yet live; `FF_V2_LISTS_READ` waits for the list copy's results.
+> - Each later release merges the next phase's commit from `main` into that branch. The table in `docs/RELEASES.md` lists them. Releases 1 to 3 are live (2026-09-29; Migrate Accounts: 695 accounts, reconciled). Release 4 (Phase 3b) is live too, and the list copy finished (698 accounts, 0 failed). Next: `FF_V2_LISTS_READ` (steps in `docs/RELEASES.md`), then Release 5 (Phase 3c).
 > - The rest of this file describes `main` as it was at the end of the newest phase merged in.
 
 ---

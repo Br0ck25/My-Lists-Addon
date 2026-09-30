@@ -6,7 +6,8 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Release 1** went live on 2026-09-29. The owner reports everything working.
 - **Release 2** went live on 2026-09-29. The owner reports no issues.
 - **Release 3** went live on 2026-09-29. Migrate Accounts reported: *695 accounts in table (695 D1, 658 KV, union 695). Reconciled ✓*.
-- **Release 4** is prepared and not yet live.
+- **Release 4** is live, and the list copy finished with 698 accounts and none failed (results under Release 4).
+- **Next:** the `FF_V2_LISTS_READ` switch (steps under Release 4), then Release 5.
 
 The owner decided to release the new version **one phase at a time, straight to the live site**, with no separate test site. Each release waits until the one before it has run cleanly for at least a day.
 
@@ -294,3 +295,47 @@ With `FF_V2_LISTS_ONLY`, nothing live in v2 means nothing live, because the lega
 Paste Release 3's file and Deploy. Leave migration 0016, the bucket and the copy in place:
 - the older code does not know they are there;
 - a later *Start over* brings the copy up to date.
+
+### Live: the list copy's results
+
+Reported by the owner:
+
+> Phase: done.
+> Accounts: 698 done, 0 in progress, 0 waiting to be copied again, 0 failed.
+> Lists: 951 found, 931 copied, 20 unchanged since the last run, 0 copies of deleted lists retired, 1 order entries with no list behind them.
+> Items: 42641 in the old lists, 42503 copied, 0.324% not carried: 0 with no usable id, 134 listed twice, 4 on lists copied in an earlier run. 13631 titles TMDB could not place yet (kept, tried again later).
+> Likes: 0 shown before, 0 voters copied, 0 kept from the old totals with no voter on record.
+> Anonymous lists: 0 found. Likes on outside lists: 92 lists, 54 voters copied.
+> Shared channels: 97 found (56 listed in Explore Channels), 97 copied, 0 unreadable. Episode lists: 97 written to R2. Adds: 18 kept from the old totals.
+> Most items not carried: #405 33.11%, #158 20.00%, #495 5.56%, #664 0.65%, #316 0.34%, #139 0.10%. Examples from the first: the same show listed twice in one list ("nostalgia": Atomic Betty, BrainRush, Mickey Mouse Clubhouse, ...).
+
+What it means:
+- **Nothing was lost.** The 138 items not carried are titles listed twice in the same list: 134 in this run, plus 4 counted on lists copied in an earlier run. v2 keeps each once, so once reads switch, those lists show each repeated title once. Account #405's "nostalgia" list is the one most affected.
+- **The 13,631 titles TMDB could not place are only a lookup that has not happened.** Every item is rebuilt from the new tables exactly as it was saved: `legacyItemExtra` keeps whatever the title's row cannot give back, and checks that when it is written. So lists look the same whether a title is matched or not.
+- **A stub is upgraded in place** when a later save meets the same title and TMDB answers (up to 25 lookups per save).
+- **Known gap, for later:** nothing calls `retryUnresolvedMedia` (`29_media.js`), on this branch or on `main`, so the rest wait for a later save. Only later features need the TMDB match (Phase 5's show schedule, for one). Add a retry job with Release 7 (Phase 5, the jobs queue).
+
+### The switch after Release 4: `FF_V2_LISTS_READ`
+
+Not a code change; a setting. **It can be turned off again at any time without losing anything.** Every change is still written to the old storage as well as the new tables, until `FF_V2_LISTS_ONLY`, which is weeks away.
+
+1. **Let Release 4 run for about a day first.**
+2. **Bring the copy up to date:** `/admin` → Maintenance → **Lists v2** → **Start over**, and wait for *Done*.
+   - It copies only what changed since the first run.
+   - It has to happen before the switch: once reads are on the new tables, Start over leaves finished accounts alone.
+   - Then **Check results**: still *0 failed*.
+3. **Turn it on:** Workers & Pages → the My Lists Worker → Settings → **Variables and Secrets** → **Add**:
+   - Type *Text*;
+   - Name `FF_V2_LISTS_READ`;
+   - Value `1`;
+   - Save, then Deploy if the dashboard asks.
+4. **Check** (everything should look exactly as before, except that a title listed twice in one list now shows once):
+   - your own lists on the website: the same lists, items and order;
+   - a public list page, `/lists/<name>/<list>`;
+   - the public directory and search on the website;
+   - Explore Channels, and a shared channel link;
+   - in Stremio or Nuvio, a custom list row, including a **private** one of your own;
+   - add and remove an item in a list, rename it, and check the change reaches the app;
+   - like and unlike a list.
+5. **If anything looks wrong:** delete the variable (and Deploy). The site reads the old storage again, which never stopped being written. Then report what looked wrong.
+6. **Leave it on for at least a few days** before Release 5, and a week or two before `FF_V2_LISTS_ONLY` is even considered (`docs/OPERATIONS.md` §11).
