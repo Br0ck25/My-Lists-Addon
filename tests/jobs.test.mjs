@@ -102,6 +102,38 @@ describe("P5-1: the job queue", () => {
     assert.ok(answer.roundTripMs >= 0);
   });
 
+  it("the admin sees the answer at once, even where KV has not caught up", async () => {
+    // On the live site the consumer runs in another data center, and the
+    // admin page's first read of the missing KV key is cached there as missing
+    // for up to a minute: KV alone made a working queue look broken. The
+    // answer is in D1 too, and read from there first.
+    const env = jobsEnv();
+    const cookie = await adminCookie(env);
+    const nonce = await sendPing(env, cookie);
+    await drainQueue(env);
+    env.CONFIGS._store.delete("jobs:ping:" + nonce); // what that data center still sees
+    const answer = await pingAnswer(env, cookie, nonce);
+    assert.equal(answer.received, true);
+    assert.equal(answer.attempts, 1);
+    const row = env.DB._db.prepare("SELECT type, status FROM jobs WHERE dedupe_key = ?").get("ping:" + nonce);
+    assert.deepEqual({ ...row }, { type: "jobs.ping", status: "done" });
+  });
+
+  it("a test job's answer row is cleared a day on, and nothing else in the jobs table is", async () => {
+    const env = jobsEnv();
+    const cookie = await adminCookie(env);
+    const old = await sendPing(env, cookie);
+    await drainQueue(env);
+    const twoDaysAgo = Date.now() - 2 * 86400000;
+    env.DB._db.prepare("UPDATE jobs SET created_at = ? WHERE dedupe_key = ?").run(twoDaysAgo, "ping:" + old);
+    env.DB._db.prepare(
+      "INSERT INTO jobs (type, dedupe_key, status, run_after, created_at, updated_at) VALUES ('migrate.lists', 'migrate.lists:acct:1', 'done', 0, ?, ?)"
+    ).run(twoDaysAgo, twoDaysAgo);
+    await sendPing(env, cookie);
+    assert.equal(env.DB._db.prepare("SELECT count(*) AS n FROM jobs WHERE dedupe_key = ?").get("ping:" + old).n, 0);
+    assert.equal(env.DB._db.prepare("SELECT count(*) AS n FROM jobs WHERE dedupe_key = 'migrate.lists:acct:1'").get().n, 1, "an old row of another type stays");
+  });
+
   it("the admin's queue routes need the admin", async () => {
     const env = jobsEnv();
     assert.equal((await call(env, "/admin/api/jobs/status")).status, 401);

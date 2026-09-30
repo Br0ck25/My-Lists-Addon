@@ -33,6 +33,12 @@
 // (Maintenance tab) enqueues it and waits for it to come back, which proves the
 // producer binding, the queue and the consumer are all set up.
 //
+// Its answer is kept in D1 as well as KV, and read from D1 first. KV alone
+// could not show it in time: the consumer runs in another data center, and
+// the admin page's first read of the not-yet-written key is cached there as
+// "missing" for up to a minute -- the page's whole wait. On the live site the
+// button said "not picked up within a minute" with the queue set up right.
+//
 // Metrics: one Analytics Engine point per job type per batch, index `job`:
 // blobs ["job", type, queue], doubles [messages, done, retried, dropped,
 // milliseconds spent].
@@ -62,6 +68,9 @@ const JOB_SEND_BATCH_MAX_MESSAGES = 100;
 const JOB_SEND_BATCH_MAX_BYTES = 240 * 1024;
 const JOB_PING_KV_PREFIX = "jobs:ping:";
 const JOB_PING_TTL_SEC = 60 * 60;
+// The answer's row in the jobs table (migration 0016): type jobs.ping, which
+// no dispatcher query names, so nothing ever runs or counts it.
+const JOB_PING_ROW_PREFIX = "ping:";
 
 const JOB_HANDLERS = new Map(); // type -> { type, run, retryDelaySec }
 
@@ -312,14 +321,40 @@ defineJobType("jobs.ping", {
     const key = JOB_PING_KV_PREFIX + nonce;
     // Delivered twice: the first answer stands.
     if (await env.CONFIGS.get(key)) return;
-    await env.CONFIGS.put(key, JSON.stringify({
+    const answer = JSON.stringify({
       receivedAt: Date.now(),
       sentAt: Number(payload.sentAt) || job.enqueuedAt || null,
       attempts: job.attempts,
       queue: job.queue,
-    }), { expirationTtl: JOB_PING_TTL_SEC });
+    });
+    await env.CONFIGS.put(key, answer, { expirationTtl: JOB_PING_TTL_SEC });
+    // The copy the admin page reads first (see the header). Best effort: KV
+    // above already holds the answer.
+    if (env.DB) {
+      try {
+        const now = Date.now();
+        await env.DB.prepare(
+          "INSERT OR IGNORE INTO jobs (type, dedupe_key, status, attempts, run_after, progress_json, created_at, updated_at) VALUES ('jobs.ping', ?, 'done', ?, 0, ?, ?, ?)"
+        ).bind(JOB_PING_ROW_PREFIX + nonce, Number(job.attempts) || 1, answer, now, now).run();
+      } catch {
+        // No jobs table (migration 0016): the KV answer is the only one.
+      }
+    }
   },
 });
+
+// The answer to a test job: from D1, else KV. Null while there is none.
+async function readJobPingAnswer(env, nonce) {
+  if (env && env.DB) {
+    try {
+      const row = await env.DB.prepare("SELECT progress_json FROM jobs WHERE dedupe_key = ?").bind(JOB_PING_ROW_PREFIX + nonce).first();
+      if (row && row.progress_json) return row.progress_json;
+    } catch {
+      // No jobs table: KV below.
+    }
+  }
+  return env && env.CONFIGS ? await env.CONFIGS.get(JOB_PING_KV_PREFIX + nonce) : null;
+}
 
 function newJobPingNonce() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
@@ -356,6 +391,12 @@ async function handleJobsAdminApi(request, env, url, path) {
       }
       if (!env.CONFIGS) return json({ ok: false, error: "No CONFIGS KV binding." }, 503);
       const nonce = newJobPingNonce();
+      // Earlier test jobs' answers, a day on: nothing reads them any more.
+      if (env.DB) {
+        try {
+          await env.DB.prepare("DELETE FROM jobs WHERE type = 'jobs.ping' AND created_at < ?").bind(Date.now() - 86400000).run();
+        } catch {}
+      }
       const sent = await enqueueJob(env, "jobs.ping", { nonce, sentAt: Date.now() });
       if (!sent.ok) return json({ ok: false, error: `Could not send to the queue (${sent.reason}). See the Worker's logs.` }, 502);
       return json({ ok: true, nonce });
@@ -363,7 +404,7 @@ async function handleJobsAdminApi(request, env, url, path) {
     if (path === "/admin/api/jobs/ping" && request.method === "GET") {
       const nonce = url.searchParams.get("nonce") || "";
       if (!/^[A-Za-z0-9-]{8,64}$/.test(nonce)) return json({ ok: false, error: "Missing or malformed nonce." }, 400);
-      const raw = env.CONFIGS ? await env.CONFIGS.get(JOB_PING_KV_PREFIX + nonce) : null;
+      const raw = await readJobPingAnswer(env, nonce);
       if (!raw) return json({ ok: true, received: false });
       let rec = {};
       try {
