@@ -1048,7 +1048,10 @@ async function fetchBetterPosterUpstream(env, bp, timeoutMs) {
       if (!res.ok || !contentType.startsWith("image/")) return null;
       const bytes = await res.arrayBuffer();
       if (!bytes.byteLength || bytes.byteLength > BETTER_POSTER_MAX_BYTES) return null;
-      if (env && env.CONFIGS) {
+      if (typeof betterPostersInR2 === "function" && betterPostersInR2(env)) {
+        // P5-9 (52_poster-fetch.js): the copy lives in R2.
+        await storeBetterPosterR2(env, bp, bytes, contentType).catch(() => {});
+      } else if (env && env.CONFIGS) {
         await env.CONFIGS.put(bp.kvKey, bytes, {
           expirationTtl: BETTER_POSTER_KEEP_SECONDS,
           metadata: { ct: contentType, at: Date.now() },
@@ -1070,6 +1073,7 @@ async function fetchBetterPosterUpstream(env, bp, timeoutMs) {
 // The stored copy, if there is one -- and a background refresh when it is
 // more than a day old.
 async function readStoredBetterPoster(env, ctx, bp) {
+  if (typeof betterPostersInR2 === "function" && betterPostersInR2(env)) return readBetterPosterR2(env, ctx, bp);
   if (!env || !env.CONFIGS) return null;
   try {
     const got = await env.CONFIGS.getWithMetadata(bp.kvKey, { type: "arrayBuffer" });
@@ -1218,6 +1222,12 @@ async function getBetterPoster(env, ctx, bp, origin, opts) {
     return stored;
   }
   if (await betterPosterRecentlyMissed(origin, bp)) return null;
+  // P5-9: with R2 and the queue, no request waits on btttr.cc. A job fetches
+  // it, and this answers at once (serveBetterPoster's stand-in).
+  if (typeof betterPostersInR2 === "function" && betterPostersInR2(env)) {
+    background(sendBetterPosterFetch(env, bp));
+    return null;
+  }
   const pending = fetchBetterPosterForPage(env, ctx, bp, origin, waitMs ? BETTER_POSTER_BACKGROUND_TIMEOUT_MS : BETTER_POSTER_UPSTREAM_TIMEOUT_MS)
     .then(async (found) => {
       if (!found) await flushBetterPosterRetries(env, false);

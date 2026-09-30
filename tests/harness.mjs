@@ -116,7 +116,8 @@ export function makeKv(initial = {}) {
       const slice = keys.slice(start, start + limit);
       const complete = start + slice.length >= keys.length;
       return {
-        keys: slice.map((name) => ({ name })),
+        // Real KV returns each key's metadata with it (P5-5 reads it).
+        keys: slice.map((name) => (metadata.has(name) ? { name, metadata: metadata.get(name) } : { name })),
         list_complete: complete,
         cursor: complete ? undefined : Buffer.from(slice[slice.length - 1]).toString("base64"),
       };
@@ -291,41 +292,154 @@ export function makeEnv(opts = {}) {
 // arrayBuffer }, delete of one key or several, head, list by prefix), in
 // memory. `_hooks.beforePut/beforeGet/beforeDelete` throw to make a call fail.
 export function makeR2() {
+  // Text values are kept as text (the channel pools); binary ones (poster
+  // images, P5-9) as bytes, with the object's metadata, as R2 does.
   const store = new Map();
+  const meta = new Map();
   const hooks = { beforePut: null, beforeGet: null, beforeDelete: null };
-  const body = (key, text) => ({
-    key,
-    size: text.length,
-    text: async () => text,
-    json: async () => JSON.parse(text),
-    arrayBuffer: async () => new TextEncoder().encode(text).buffer,
-  });
+  const toBytes = (v) => (typeof v === "string" ? new TextEncoder().encode(v) : v instanceof ArrayBuffer ? new Uint8Array(v) : new Uint8Array(v.buffer, v.byteOffset, v.byteLength));
+  const body = (key, value) => {
+    const m = meta.get(key) || {};
+    return {
+      key,
+      size: typeof value === "string" ? value.length : value.byteLength,
+      customMetadata: m.customMetadata || {},
+      httpMetadata: m.httpMetadata || {},
+      uploaded: m.uploaded,
+      text: async () => (typeof value === "string" ? value : new TextDecoder().decode(value)),
+      json: async () => JSON.parse(typeof value === "string" ? value : new TextDecoder().decode(value)),
+      arrayBuffer: async () => { const b = toBytes(value); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength); },
+    };
+  };
   return {
     _store: store,
+    _meta: meta,
     _hooks: hooks,
-    async put(key, value) {
+    async put(key, value, opts = {}) {
       if (hooks.beforePut) await hooks.beforePut(key);
-      const text = typeof value === "string" ? value : new TextDecoder().decode(value);
-      store.set(String(key), text);
-      return { key: String(key), size: text.length };
+      const v = typeof value === "string" ? value : toBytes(value).slice();
+      store.set(String(key), v);
+      meta.set(String(key), { customMetadata: opts.customMetadata || {}, httpMetadata: opts.httpMetadata || {}, uploaded: new Date() });
+      return { key: String(key), size: typeof v === "string" ? v.length : v.byteLength };
     },
     async get(key) {
       if (hooks.beforeGet) await hooks.beforeGet(key);
       return store.has(String(key)) ? body(String(key), store.get(String(key))) : null;
     },
     async head(key) {
-      return store.has(String(key)) ? { key: String(key), size: store.get(String(key)).length } : null;
+      return store.has(String(key)) ? body(String(key), store.get(String(key))) : null;
     },
     async delete(keys) {
       for (const k of [].concat(keys)) {
         if (hooks.beforeDelete) await hooks.beforeDelete(k);
         store.delete(String(k));
+        meta.delete(String(k));
       }
     },
     async list({ prefix = "" } = {}) {
       return { objects: [...store.keys()].filter((k) => k.startsWith(prefix)).sort().map((k) => ({ key: k })), truncated: false };
     },
   };
+}
+
+// A Cloudflare Queue (Phase 5): the producer side the Worker sees as a
+// binding (send, sendBatch), holding what was sent until drainQueue delivers
+// it. Bodies go through JSON, as a "json" message does. Queues' own limits
+// are enforced: 128 KB per message, 100 messages and 256 KB per sendBatch.
+// `_hooks.beforeSend` throws to make a send fail.
+export const QUEUE_MAX_MESSAGE_BYTES = 128 * 1024;
+export function makeQueue(name = "mylists-jobs") {
+  const pending = [];
+  const hooks = { beforeSend: null };
+  let seq = 0;
+  const enqueue = async (body, opts = {}) => {
+    if (hooks.beforeSend) await hooks.beforeSend(body);
+    const text = JSON.stringify(body);
+    if (Buffer.byteLength(text) > QUEUE_MAX_MESSAGE_BYTES) throw new Error(`Queue send failed: message too large (${Buffer.byteLength(text)} bytes)`);
+    const msg = { id: `msg-${name}-${++seq}`, body: JSON.parse(text), attempts: 1, delaySeconds: Number(opts.delaySeconds) || 0, timestamp: new Date() };
+    pending.push(msg);
+    return msg;
+  };
+  return {
+    _name: name,
+    _pending: pending,
+    _dlq: [],
+    _sent: [],
+    _hooks: hooks,
+    async send(body, opts = {}) {
+      const msg = await enqueue(body, opts);
+      this._sent.push(msg.body);
+    },
+    async sendBatch(messages) {
+      if (messages.length > 100) throw new Error(`Queue sendBatch failed: ${messages.length} messages (at most 100)`);
+      const bytes = messages.reduce((n, m) => n + Buffer.byteLength(JSON.stringify(m.body)), 0);
+      if (bytes > 256 * 1024) throw new Error(`Queue sendBatch failed: ${bytes} bytes (at most 256 KB)`);
+      for (const m of messages) {
+        const msg = await enqueue(m.body, m);
+        this._sent.push(msg.body);
+      }
+    },
+  };
+}
+
+// Delivers a makeQueue's messages to the Worker's queue() handler the way the
+// consumer configured in docs/OPERATIONS.md section 18 does: batches of up to
+// `batchSize`; a message the handler acks is gone; one it retries comes back
+// with `attempts` + 1 (the delay it asked for is recorded, not waited out);
+// after `maxRetries` retries it goes to the dead-letter queue (`queue._dlq`).
+// A message the handler neither acks nor retries is acknowledged when queue()
+// returns and retried when it throws, as Cloudflare does. Returns a log of
+// every delivery.
+export async function drainQueue(env, { queue = env.JOBS, w = worker, batchSize = 25, maxRetries = 5, rounds = 50 } = {}) {
+  const log = { batches: 0, deliveries: [], retries: [], dlq: [] };
+  for (let round = 0; round < rounds && queue._pending.length; round++) {
+    const taken = queue._pending.splice(0, batchSize);
+    const outcome = new Map();
+    const settle = (m, what, delaySeconds) => {
+      if (!outcome.has(m.id)) outcome.set(m.id, { what, delaySeconds: Number(delaySeconds) || 0 });
+    };
+    const messages = taken.map((m) => ({
+      id: m.id,
+      timestamp: m.timestamp,
+      body: JSON.parse(JSON.stringify(m.body)),
+      attempts: m.attempts,
+      ack() { settle(m, "ack"); },
+      retry(opts = {}) { settle(m, "retry", opts.delaySeconds); },
+    }));
+    const batch = {
+      queue: queue._name,
+      messages,
+      ackAll() { for (const m of taken) settle(m, "ack"); },
+      retryAll(opts = {}) { for (const m of taken) settle(m, "retry", opts.delaySeconds); },
+    };
+    let pending = [];
+    const ctx = { waitUntil: (p) => pending.push(Promise.resolve(p).catch(() => {})) };
+    let threw = null;
+    try {
+      await w.queue(batch, env, ctx);
+    } catch (err) {
+      threw = err;
+    }
+    for (let i = 0; i < 20 && pending.length; i++) {
+      const p = pending;
+      pending = [];
+      await Promise.all(p);
+    }
+    log.batches++;
+    for (const m of taken) {
+      const o = outcome.get(m.id) || { what: threw ? "retry" : "ack", delaySeconds: 0 };
+      log.deliveries.push({ id: m.id, type: m.body && m.body.type, attempts: m.attempts, outcome: o.what });
+      if (o.what !== "retry") continue;
+      log.retries.push({ id: m.id, type: m.body && m.body.type, attempts: m.attempts, delaySeconds: o.delaySeconds });
+      if (m.attempts > maxRetries) {
+        queue._dlq.push(m);
+        log.dlq.push(m);
+      } else {
+        queue._pending.push({ ...m, attempts: m.attempts + 1, delaySeconds: o.delaySeconds });
+      }
+    }
+  }
+  return log;
 }
 
 export async function call(env, path, opts = {}) {

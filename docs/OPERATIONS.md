@@ -39,7 +39,7 @@ Set these in the dashboard: Worker → **Settings → Bindings → Add**.
 | `ANALYTICS` | Analytics Engine dataset (`mylists_events`) | Recommended | Per-request route, status and storage-operation counts, used to measure the next phases | **Add now.** The code writes to it when present and skips it otherwise. |
 | `DB_ACTIVITY` | D1 database (`mylists-activity`) | Later (Phase 3c) | Watch events and progress | Can be added now; nothing uses it yet. Create the database (D1 → Create → `mylists-activity`), run `migrations/activity/A0001_activity.sql` in **its** Console (not the main database's), then bind it. See §4. |
 | `BLOBS` | R2 bucket (`mylists-blobs`) | Recommended (Phase 3b) | Shared channels' episode lists (P3b-8); later posters, exports and D1 backups | **Add with Phase 3b.** Create the bucket (R2 → Create bucket → `mylists-blobs`), then bind it. Without it, shared channels still get their rows and their episodes are read from KV. |
-| `JOBS` | Queue producer (`mylists-jobs`) | Later (Phase 5) | Background jobs | Not yet. The queue **consumer** is configured on the queue: Queues → `mylists-jobs` → Settings → Add consumer → this Worker. |
+| `JOBS` | Queue producer (`mylists-jobs`) | Recommended (Phase 5) | Background jobs: work that nobody is waiting on runs from a queue instead of inside a request or a cron tick | **Add with Phase 5**, with the queue's consumer and dead-letter queue: the steps are in §18. Without it nothing is sent to a queue, and the cron keeps doing its work itself, as before. |
 
 The owner confirmed on 2026-09-27 that this account's dashboard offers Queues, R2 and Analytics Engine bindings.
 
@@ -69,10 +69,11 @@ Adding a binding before the code that uses it is harmless. Removing a binding th
 - `FF_V2_LISTS_API` (optional): `1` turns on `/api/lists`, the item-level list API, and `/api/likes`, the likes API, over the new list tables (P3b-4, P3b-5). **Leave unset.** What these APIs write goes to the new tables only. Until a later release stops writing the old storage (P3b-9), turning `FF_V2_LISTS_READ` off, or running the copy again, would lose it.
 - `FF_V2_LISTS_ONLY` (optional, P3b-9): `1` stops writing the old list and channel storage; the new tables become the only store, and everything reads from them. **One-way.** Leave unset until §11 says it is time, and once set, leave it set.
 - `FF_PROVIDER_BREAKER` (optional, P4-4): `1` turns on the provider breaker (§14). When a provider (TMDB, Trakt, MDBList, Simkl, ...) fails five times in a row, the site stops calling it for a minute and serves its last good copies straight away, instead of every row waiting for a timeout. Safe to turn on and off at any time.
+- `FF_MATERIALIZER` (optional, P5-11): `1` makes installs that use **Remove duplicate items across lists** build their home screen once per hour instead of each row rebuilding the rows above it (§19). Safe to turn on and off at any time.
 - `INSTALL_MIGRATION_PERCENT` (optional, `0` to `100`): the share of existing install links whose keys and tokens move into encrypted D1 storage the first time they are used. See §8 before setting it.
 - **Delete** these retired variables if they are still set: `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET`, `CRON_SUBREQUEST_BUDGET`. The code ignores them.
 
-**Cron trigger** (Worker → Settings → Triggers): `*/6 * * * *`. Later phases replace this with a 5-minute dispatcher plus hourly and daily triggers.
+**Cron trigger** (Worker → Settings → Triggers): `*/5 * * * *` (the older `*/6 * * * *` works the same). One trigger is enough: with the queue bound (§18) each tick only hands out due jobs, each with its own schedule.
 
 **Compatibility date:** check the value under Worker → Settings → Runtime and record it here. When raising it, run the full test suite and a staging deploy first.
 
@@ -312,6 +313,8 @@ Each Worker copy keeps its own count. The first one to find a provider down writ
 
 **Turning it on:** Worker → Settings → Variables and Secrets → Add → type *Text*, name `FF_CHART_SNAPSHOTS`, value `1`. Deploy. **Turning it off:** delete the variable and deploy. Both are safe at any time. The `snap:chart:` keys expire by themselves after a week; they can also be deleted by hand, and are rebuilt when next asked for.
 
+**Refreshed in the background (P5-5):** with the queue (§18) running, the hourly `chart.refresh` job rebuilds every chart page used in the last three days, for each region asked for, so visitors are never the ones waiting for a rebuild. It notes what is in use in small `snap:chartuse:` keys (they expire after three days). While the switch is on, the old chart warm-up leaves these charts to it.
+
 **Cost:** one KV read per chart row per Worker copy per minute at most (each copy remembers what it read for a minute), and one KV write per chart page every two hours while someone is asking for it.
 
 ## 16. The nightly provider check (P4-5)
@@ -347,3 +350,44 @@ The website's previews are not affected. They still show a storyline list's epis
 
 **Turning it on:** Worker → Settings → Variables and Secrets → Add → type *Text*, name `FF_CANONICAL_IDS`, value `1`. Deploy. **Turning it off:** delete the variable and deploy; rows go back to the ids they had. Neither stores anything.
 
+## 18. The background jobs queue (P5-1)
+
+From Phase 5, background work (refreshing charts and show schedules, imports, clean-ups) runs as **jobs** on a Cloudflare Queue, `mylists-jobs`, instead of inside a web request or a cron tick. This Worker both puts jobs on the queue and takes them off. A job that fails is tried again a little later (after 30 seconds, then 1, 2, 4 and 8 minutes); after five retries it is moved to a second queue, `mylists-jobs-dlq` (the "dead-letter queue"), where it waits to be looked at instead of being lost.
+
+**Setting it up** (once, in the Cloudflare dashboard):
+
+1. **Storage & Databases → Queues → Create queue**, name `mylists-jobs`.
+2. Create a second queue the same way, name `mylists-jobs-dlq`.
+3. Open `mylists-jobs` → **Settings** → **Consumers** → **Add consumer**:
+   - consumer: this Worker (the My Lists Worker);
+   - batch size `25`;
+   - max retries `5`;
+   - max wait time (batch timeout) `5` seconds;
+   - dead letter queue: `mylists-jobs-dlq`.
+   Leave `mylists-jobs-dlq` without a consumer.
+4. **Workers & Pages** → the My Lists Worker → **Settings → Bindings → Add → Queue**, variable name `JOBS`, queue `mylists-jobs`. Deploy.
+5. **Check it:** `/admin` → Maintenance → **Background jobs queue** should say *bound*. Press **Send a test job**. Within a few seconds it should say *Round trip works*. If it says the job was not picked up, step 3 is missing or names another Worker.
+
+**Order does not matter**, and nothing breaks before it is done: without `JOBS` nothing is sent to a queue, and every piece of work that has not moved to jobs yet runs exactly as before.
+
+**Watching it:**
+
+- **Queues → `mylists-jobs` → Metrics** shows how many jobs are waiting and how old the oldest is. A backlog that keeps growing means jobs arrive faster than they finish; the Worker's *Logs* say which job type is failing (`[Jobs] <type> failed`).
+- **Queues → `mylists-jobs-dlq` → Messages** lists the jobs that failed six times (Cloudflare keeps them for 4 days). Each shows its `type` and its `payload` (what it was for). Scheduled work is simply made again by its next run once the cause is fixed; the handover notes of each job type say what to do about one that is not.
+- With the `ANALYTICS` binding, each batch writes one point per job type, index `job`: blobs `["job", <type>, <queue>]` and doubles `[jobs, done, tried again, dropped, milliseconds spent]`.
+
+**Turning it off:** delete the `JOBS` binding and deploy. Jobs already waiting stay on the queue and run when it is bound again (or expire after 4 days). Removing the consumer (step 3) while `JOBS` is still bound makes jobs pile up unrun, so remove the binding first.
+
+**What runs on it (P5-2):** once `JOBS` is bound, the cron's work runs as seven jobs (`cron.episodes`, `cron.airing-next`, `cron.new-on-streaming`, `cron.charts`, `cron.better-posters`, `cron.channel-presets`, `cron.housekeeping`). `/admin` → Maintenance → **Check jobs** shows each one's last run. A job the queue does not pick up within 10 minutes is run by the cron itself, so a broken queue slows the work but never stops it. Needs migration 0016; without it the cron does the work itself, as before.
+
+**Show schedules (P5-3):** `show.watchers` (daily) counts who watches each show, and `show.refresh` (hourly) checks those shows with TMDB and TVmaze. They need migration 0017, the activity database (`DB_ACTIVITY`, with the history copied, §12) and `TMDB_API_KEY`. Without them they do nothing. **Check jobs** shows both.
+
+**Comparing the shelves (P5-4):** `shelf.shadow` (hourly) compares each copied account's stored Continue Watching and Airing Next with the ones worked out from the show schedules. It only reads. After the queue, the activity database and the history copy are running, leave it for a week, then look at **Check jobs**: the line under `shelf.shadow` gives the difference. Under 1% means the new shelves can be switched on (`FF_SHOW_SCHEDULE`, in a later release).
+
+**Better Posters (P5-9):** with both `BLOBS` (§2) and the queue bound, Better Posters are stored in R2 (`img/bp/...`) and fetched from btttr.cc by `poster.fetch` jobs, so no page or Stremio row waits on btttr.cc. Posters already stored in KV keep being served and move to R2 as they are used.
+
+## 19. Building a home screen once (P5-11)
+
+`FF_MATERIALIZER` only matters for installs with **Remove duplicate items across lists** turned on. For those, each Stremio row used to rebuild every row above it to know what to hide, so a 20-row home screen did about 210 row builds. With the switch on, the first page of every row is built once, duplicates are removed in one pass, and the result is kept for an hour (in KV as `snap:mat:...`, one key per install). A home screen then costs at most one build per row per hour. Personal rows (Watchlist, Continue Watching and the like) are never de-duplicated and are unaffected, as are pages after the first.
+
+**Turning it on:** Worker → Settings → Variables and Secrets → Add → type *Text*, name `FF_MATERIALIZER`, value `1`. Deploy. **Turning it off:** delete the variable and deploy. Both are safe at any time; the `snap:mat:` keys expire by themselves within an hour. A change to an install (rows added, removed or reordered) is picked up at once, as a new build.

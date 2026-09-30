@@ -118,7 +118,7 @@ The deployment sections further down are for the operator of mylistsaddon.com; t
 ## Requirements
 
 - A Cloudflare account on the **Workers Paid** plan. The code assumes Paid limits (10,000 outbound fetches and 30 s of CPU per invocation) and no longer splits its work to fit the Free plan: an import, an Airing Next refresh and a cron tick each finish in one invocation.
-- Bindings: KV (`CONFIGS`) and D1 (`DB`) are required; an Analytics Engine dataset (`ANALYTICS`) and an R2 bucket (`BLOBS`, for shared channels' episode lists) are recommended. The full table is in [docs/OPERATIONS.md](docs/OPERATIONS.md#2-bindings).
+- Bindings: KV (`CONFIGS`) and D1 (`DB`) are required; an Analytics Engine dataset (`ANALYTICS`) and an R2 bucket (`BLOBS`, for shared channels' episode lists) are recommended, and so is the background jobs queue (`JOBS`, a Queue producer for `mylists-jobs`, with this Worker as its consumer; Phase 5). The full table is in [docs/OPERATIONS.md](docs/OPERATIONS.md#2-bindings).
 - **Optional**: API keys and OAuth apps from TMDB, Trakt, Simkl or MDBList to unlock each provider.
 - **Zero build dependencies**: the whole add-on is `worker_entry_combined.js`, pasted into the dashboard.
 

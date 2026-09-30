@@ -144,6 +144,8 @@ async function resolveConfig(configParam, env, { withTracking = false } = {}) {
           track: !!parsed.track,
           trackCreatorName: parsed.trackCreatorName || "",
           trackCreatorKey: parsed.trackCreatorKey || "",
+          // Providers whose connection needs signing in again (P5-7).
+          reconnect: Array.isArray(parsed._reconnect) ? parsed._reconnect : [],
           // The verified username, or "". Every personal-shelf read downstream
           // is gated on this rather than on trackCreatorName -- see the block
           // above and mayReadTrackedShelf (02_http-and-creator-utils.js).

@@ -209,6 +209,10 @@ async function handleFetch(request, env, ctx) {
     // activity database, run from /admin) -- 37_activity-backfill.js.
     const activityBackfillResponse = await handleActivityBackfillApi(request, env, url, path);
     if (activityBackfillResponse) return activityBackfillResponse;
+    // /admin/api/jobs/* (the background job queue: is it bound, and a test
+    // job's round trip) -- 44_jobs-queue.js.
+    const jobsAdminResponse = await handleJobsAdminApi(request, env, url, path);
+    if (jobsAdminResponse) return jobsAdminResponse;
     // /api/lists (the item-level list API over the v2 tables, behind
     // FF_V2_LISTS_API) -- 31_lists-api.js. The legacy /api/lists/like and
     // /api/lists/like-external routes below are left to answer as they do.
@@ -218,6 +222,14 @@ async function handleFetch(request, env, ctx) {
     // the same flag) -- 32_likes-api.js.
     const likesApiResponse = await handleLikesApi(request, env, url, path);
     if (likesApiResponse) return likesApiResponse;
+    // /api/imports (imports resolved by a background job, P5-6) --
+    // 49_imports.js.
+    const importsResponse = await handleImportsApi(request, env, url, path);
+    if (importsResponse) return importsResponse;
+    // DELETE /api/me (deleting an account in the background, P5-8) --
+    // 51_account-purge.js.
+    const accountDeleteResponse = await handleAccountDeleteApi(request, env, url, path);
+    if (accountDeleteResponse) return accountDeleteResponse;
 
     if (path === "/" || path === "") {
       ctx.waitUntil(bumpStat(env, "pageviews"));
@@ -255,6 +267,29 @@ async function handleFetch(request, env, ctx) {
         <text x="150" y="205" text-anchor="middle" font-family="sans-serif" font-size="42" fill="#5865a8">\u26a0</text>
         <text x="150" y="250" text-anchor="middle" font-family="sans-serif" font-size="17" fill="#c7cde6">Temporarily</text>
         <text x="150" y="274" text-anchor="middle" font-family="sans-serif" font-size="17" fill="#c7cde6">unavailable</text>
+      </svg>`;
+      return new Response(svg, {
+        headers: {
+          "Content-Type": "image/svg+xml",
+          "Cache-Control": "public, max-age=86400",
+          ...corsHeaders(),
+        },
+      });
+    }
+
+    // The "Reconnect" tile's poster (P5-7): a personal row whose provider
+    // connection needs signing in again.
+    if (path === "/reconnect-poster.svg") {
+      const provider = String(url.searchParams.get("provider") || "");
+      const adapter = isConnectionProvider(provider) ? providerAdapter(provider) : null;
+      const label = adapter ? adapter.label : "your account";
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450">
+        <rect width="300" height="450" fill="#161a2e"/>
+        <rect x="0.5" y="0.5" width="299" height="449" fill="none" stroke="#2a2f4a"/>
+        <text x="150" y="195" text-anchor="middle" font-family="sans-serif" font-size="42" fill="#5865a8">\u21bb</text>
+        <text x="150" y="245" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#c7cde6">Reconnect</text>
+        <text x="150" y="270" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#c7cde6">${escapeXml(label)}</text>
+        <text x="150" y="300" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#8a91b4">at mylistsaddon.com</text>
       </svg>`;
       return new Response(svg, {
         headers: {
@@ -340,6 +375,8 @@ async function handleFetch(request, env, ctx) {
           const { bp, sent } = wanted[cursor++];
           if (await readStoredBetterPoster(env, ctx, bp)) { stored++; ready.push(sent); continue; }
           if (await betterPosterRecentlyMissed(url.origin, bp)) continue;
+          // P5-9: handed to the poster.fetch job instead of waited on.
+          if (typeof betterPostersInR2 === "function" && betterPostersInR2(env)) { await sendBetterPosterFetch(env, bp); continue; }
           if (await fetchBetterPosterForPage(env, ctx, bp, url.origin, BETTER_POSTER_UPSTREAM_TIMEOUT_MS)) { fetched++; ready.push(sent); }
         }
       }));
@@ -1096,6 +1133,25 @@ Sitemap: ${url.origin}/sitemap.xml`;
       const isLiveCustomList = rowSources.includes("custom-list") &&
         customListRowIsLive(entry.url, !!trackCreatorName);
 
+      // A personal row whose provider connection needs signing in again
+      // (token.refresh, P5-7): one tile saying so, instead of an empty row.
+      if (isUserPersonal && Array.isArray(resolvedConfig.reconnect) && resolvedConfig.reconnect.length) {
+        const rowProviders = String(entry.url || "").split("\n").map((u) => u.trim()).filter(Boolean).map((u) => resolveSourceRef(u).provider);
+        const reconnectProvider = rowProviders.find((p) => resolvedConfig.reconnect.includes(p));
+        if (reconnectProvider) {
+          const label = (providerAdapter(reconnectProvider) || {}).label || reconnectProvider;
+          return jsonPublic({
+            metas: skip === 0 ? [{
+              id: "tt0000000",
+              type: entry.type,
+              name: `Reconnect ${label} at mylistsaddon.com`,
+              description: `${label} asked to be signed in again. Open mylistsaddon.com, sign in, and reconnect ${label} in Settings; this row then fills again.`,
+              poster: `${url.origin}/reconnect-poster.svg?provider=${encodeURIComponent(reconnectProvider)}`,
+            }] : [],
+          }, 200, { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" });
+        }
+      }
+
       // Graceful degradation only applies to the first page (skip === 0):
       // that's the case that makes a whole shelf silently vanish from the
       // home screen, whereas a failure deeper into pagination (scrolling
@@ -1117,8 +1173,17 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // to a config that PROVED it belongs to that account. See resolveConfig
         // (04_config-resolution.js) for how that is established and
         // mayReadTrackedShelf (02_http-and-creator-utils.js) for what it gates.
-        let metas = await fetchCatalog(entry, skip, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, adultContentFilter, isStremioCatalog: true, canonicalIds: true, betterPosters, betterPostersOptions: betterPostersOptionsFrom(resolvedConfig, url.origin), showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, env, ctx, origin: url.origin });
-        if (dedupeAcrossLists) {
+        const catalogKeys = { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, adultContentFilter, isStremioCatalog: true, canonicalIds: true, betterPosters, betterPostersOptions: betterPostersOptionsFrom(resolvedConfig, url.origin), showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, env, ctx, origin: url.origin };
+        // FF_MATERIALIZER (P5-11, 54_materializer.js): with de-duplication, the
+        // first page of every non-personal row is built once per install and
+        // de-duplicated in one pass, instead of each row rebuilding the rows
+        // above it. Null means the usual path below.
+        let metas = dedupeAcrossLists && skip === 0 && !searchQuery && !isUserPersonal && isMaterializerEnabled(env)
+          ? await materializedRowPage(env, ctx, { config, entries, entryIndex, keys: catalogKeys })
+          : null;
+        const materialized = !!metas;
+        if (!metas) metas = await fetchCatalog(entry, skip, catalogKeys);
+        if (dedupeAcrossLists && !materialized) {
           metas = await dedupeAcrossListEntries(entries, entryIndex, skip, metas, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, canonicalIds: true, env, ctx });
         }
         if (searchQuery && Array.isArray(metas) && metas.length > 0) {

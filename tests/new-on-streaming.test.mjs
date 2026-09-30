@@ -581,7 +581,7 @@ describe("RapidAPI Streaming Availability sweep", () => {
     assert.match(sweepRes.reason, /RAPIDAPI_KEY is not set/);
   });
 
-  it("increments monthly request count in KV on each RapidAPI page fetched", async () => {
+  it("increments the monthly request count on each RapidAPI page fetched (a D1 row since P5-10)", async () => {
     const db = makeD1();
     const env = makeEnv({ DB: db, RAPIDAPI_KEY: "test-rapidapi-key", NEW_ON_STREAMING_ENGINE: "rapidapi" });
     const currentMonth = new Date().toISOString().slice(0, 7);
@@ -596,9 +596,9 @@ describe("RapidAPI Streaming Availability sweep", () => {
       const cookie = await adminCookie(env);
       await sweep(env, cookie);
 
-      const usageRaw = await env.CONFIGS.get("cron:rapidapi:usage");
-      assert.ok(usageRaw, "usage must be recorded in KV");
-      const usage = JSON.parse(usageRaw);
+      const row = db._db.prepare("SELECT progress_json FROM jobs WHERE dedupe_key = 'ledger:rapidapi'").get();
+      assert.ok(row, "usage must be recorded in D1");
+      const usage = JSON.parse(row.progress_json);
       assert.equal(usage.month, currentMonth);
       assert.ok(usage.count >= 1, "count must be incremented");
       assert.ok(usage.lastAt > 0);
