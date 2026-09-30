@@ -155,7 +155,7 @@ function renderBuilder(
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="${ADDON_NAME} — Stremio Catalogs from Your Lists">
 <meta name="twitter:description" content="Turn any MDBList, Trakt, TMDB, or Simkl list into a Stremio/wako catalog row. Free, with no ads.">
-<script type="application/ld+json">${jsonForScript({
+<script type="application/ld+json" nonce="${CSP_NONCE_PLACEHOLDER}">${jsonForScript({
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         name: ADDON_NAME,
@@ -200,10 +200,15 @@ function renderBuilder(
 <link rel="manifest" href="${origin}/app.webmanifest">
 ${seoHeadHtml}
 <link rel="icon" type="image/png" href="${origin}/icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<script>
+<!-- Fonts: the device's own (P7-1). This page used to load Inter, Space
+     Grotesk and JetBrains Mono from fonts.googleapis.com + fonts.gstatic.com,
+     which cost a third-party connection on first paint, told Google which
+     pages a visitor opened, and pinned style-src/font-src to those origins.
+     The stacks below are what is left of that: the same shapes and weights,
+     rendered by the OS (San Francisco on Apple, Segoe UI on Windows, Roboto
+     on Android), so the page has no third-party origin at all and paints
+     without waiting on one. See docs/DECISIONS.md D-20. -->
+<script nonce="${CSP_NONCE_PLACEHOLDER}">
   ${newUi ? `var APP_SHELL_HEAD_ROUTES = ${jsonForScript(buildAppShellHeadRoutes())};` : ""}
   if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
     document.documentElement.classList.add('dark-theme');
@@ -276,7 +281,7 @@ ${seoHeadHtml}
   covers the bundle: rendered across origins, configure mode and deep links,
   it comes back byte-identical every time and carries no injected value.
 -->
-<style>/*MYLISTS_APP_CSS_START*/
+<style nonce="${CSP_NONCE_PLACEHOLDER}">/*MYLISTS_APP_CSS_START*/
   :root {
     /* Wako-inspired iOS-native modern light theme */
     color-scheme: light;
@@ -302,9 +307,13 @@ ${seoHeadHtml}
     --shadow-sm:    0 1px 3px rgba(0,0,0,0.06);
     --shadow:       0 2px 10px rgba(0,0,0,0.08);
     --shadow-md:    0 4px 20px rgba(0,0,0,0.10);
-    --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
-    --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
-    --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+    /* The device's own fonts (P7-1) -- no webfont request, no third-party
+       origin. The display stack is the body stack: headings keep their weight
+       and size, which is what carried the hierarchy, and an OS UI font at 700
+       or 800 is the look the webfonts were standing in for. */
+    --font-display: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
+    --font-body:    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
+    --font-mono:    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
     --sb-track:     transparent;
     --sb-thumb:     rgba(0,0,0,0.15);
     --sb-thumb-hover:rgba(0,0,0,0.25);
@@ -3852,26 +3861,22 @@ ${seoHeadHtml}
   }
 /*MYLISTS_APP_CSS_END*/</style>
 <!-- fflate, for reading Trakt/Letterboxd export .zips entirely client-side.
-     Loaded from a CDN the CSP's script-src allows, so whatever this URL
-     returns runs with full page privileges -- and this page holds
-     myListAddon:creatorKey, mdblistAccessToken, simklAccessToken and the
-     provider API keys in localStorage, all readable by any script in it.
-     Pinning the version is not integrity checking; the integrity hash is.
-     It is a SHA-384 of the exact 32,665-byte 0.8.2 UMD bundle, so a
-     substituted or tampered response simply does not execute.
-     crossorigin="anonymous" is required for SRI on a cross-origin script
-     (jsDelivr serves access-control-allow-origin: *).
-     If this is ever repointed at a new version, the hash MUST be
-     regenerated with it:
-       curl -sS <url> | openssl dgst -sha384 -binary | openssl base64 -A
-     A mismatch blocks the script, which the callers already handle: every
-     use site checks for fflate being undefined and shows a real message
-     (see 18_client-copy-and-trakt-export.js).
+     It used to be a cdn.jsdelivr.net script with an SRI hash: a third-party
+     origin in script-src, allowed to run with full page privileges (this page
+     holds myListAddon:creatorKey and the provider keys in localStorage), and
+     a hash that had to be regenerated by hand on every bump. P7-1 made it
+     this Worker's own file -- FFLATE_UMD_JS (01_icon-asset.js), served from
+     FFLATE_VENDOR_PATH (25_api-catalog-routes.js) -- so there is no
+     third-party origin left in the page, and the served bytes are the
+     vendored bytes rather than a URL's word for it.
+     The path carries the version, so the response is immutable and is cached
+     by the service worker along with /app.js and /app.css.
+     The callers still handle it being absent: every use site checks for
+     fflate being undefined and shows a real message (see
+     18_client-copy-and-trakt-export.js).
      NB: no backticks in this comment -- this whole file is string content
      inside renderBuilder's template literal, so one would close it early. -->
-<script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"
-        integrity="sha384-DT0Ls0mO7JmjTnT+oBuMhEJzYJO1zUqzuuMXNdnOmOQRIpN2BgSjvBV/j50NngIT"
-        crossorigin="anonymous"></script>
+<script src="${FFLATE_VENDOR_PATH}"></script>
 </head>
 <body>
 <div class="page">
@@ -3965,7 +3970,7 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
     </button>
   </nav>`}
 
-  <script>
+  <script nonce="${CSP_NONCE_PLACEHOLDER}">
     (function() {
       var initTab = document.documentElement.getAttribute('data-initial-tab');
       if (initTab) {
@@ -4196,7 +4201,7 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
     </div>
   </div>
 
-<script>
+<script nonce="${CSP_NONCE_PLACEHOLDER}">
 /* Chart data tables -- injected at render time for renderDiscoverChartsList */
 window._CHARTS_TMDB = ${jsonForScript(TMDB_CHART_LISTS)};
 window._CHARTS_TRAKT = ${jsonForScript(TRAKT_CHART_LISTS)};

@@ -56,7 +56,7 @@
 | PF-F5 | Airing Next computed in the browser: up to 60 shows through `/api/details/batch` with round loops (`DETAILS_BATCH_MAX_ROUNDS`) | `21_:3455-3480`, `3690-3725` | Server-computed shelves (improvement #2) |
 | PF-F6 | Live Preview re-fetches each row's shelf through `/api/preview`; placeholders "Click Refresh Preview above to load posters" appear on load | Seen in the running app | Preview reads the same materialized rows as Stremio; lazy per visible row |
 | PF-F7 | 326 `innerHTML` assignments that rebuild whole sections on state changes | code count | Update only the element that changed (vanilla JavaScript, no framework, D-11) |
-| PF-F8 | Google Fonts (three families) and jsDelivr (`fflate`) on the critical path, loaded cross-origin | `09_:3629`, `03_:1600-1602` | Self-host fonts and `fflate`, subset and preload; `fflate` only in the import view |
+| PF-F8 | Google Fonts (three families) and jsDelivr (`fflate`) on the critical path, loaded cross-origin | `09_:3629`, `03_:1600-1602` | **Half done by P7-1:** no cross-origin request is left -- the fonts are the device's own (D-20) and `fflate` is served from this Worker (`/vendor/fflate-0.8.2.js`, immutable; the service worker caches it). Still open: `fflate` is loaded on every page rather than only in the import view |
 | PF-F9 | Service worker precaches `/` and the bundle; with a 2.0 MB bundle, the first install downloads everything | `25_:66-161` | Keep the SW; precache only the shell plus the current route's chunk |
 
 ## 4. Backend findings

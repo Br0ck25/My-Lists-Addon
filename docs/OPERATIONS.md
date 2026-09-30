@@ -34,7 +34,7 @@ Set these in the dashboard: Worker → **Settings → Bindings → Add**.
 
 | Binding name | Type | Required | What it is for | Status |
 |---|---|---|---|---|
-| `CONFIGS` | KV namespace | **Yes** | Install configs, list and sync records (being moved to D1), caches, rate limits | In use |
+| `CONFIGS` | KV namespace | **Yes** | Install configs, list and sync records (being moved to D1), caches | In use |
 | `DB` | D1 database (`my-lists-db`) | **Yes** | Accounts, lists, likes, tracking, directory, search, counters | In use |
 | `ANALYTICS` | Analytics Engine dataset (`mylists_events`) | Recommended | Per-request route, status and storage-operation counts, used to measure the next phases | **Add now.** The code writes to it when present and skips it otherwise. |
 | `DB_ACTIVITY` | D1 database (`mylists-activity`) | Later (Phase 3c) | Watch events and progress | Can be added now; nothing uses it yet. Create the database (D1 → Create → `mylists-activity`), run `migrations/activity/A0001_activity.sql` in **its** Console (not the main database's), then bind it. See §4. |
@@ -129,18 +129,30 @@ When it nears D1's size limit it can be split: create and bind `DB_ACTIVITY_1`, 
   5. Never load a backup into the live database on top of existing data.
 - The KV namespace has no built-in backup. The data that matters in KV is being moved to D1 (see `MIGRATION_PLAN.md`).
 
-## 6. Recommended WAF rate-limiting rules
+## 6. Recommended WAF rate-limiting rules (optional)
 
-Configure these under Security → WAF → Rate limiting rules on the zone. They stop abuse before it reaches the Worker. Starting points (per IP, 1 minute):
+**Nothing in the code needs these.** Every limit the Worker applies itself is a D1 counter now (§26), and it works with no dashboard change at all. What a rule here adds is that the request is refused at Cloudflare's edge and never reaches the Worker: no CPU spent, no D1 write, and the same protection while the Worker is mid-deploy or over its CPU budget.
 
-| Path | Limit |
-|---|---|
-| `/api/creator/create` | 5 |
-| `/api/creator/restore`, `/api/creator/reset-key`, `/api/creator/forgot-username` | 20 |
-| `/admin/login` | 10 |
-| `/api/save` | 30 |
-| `/api/lists/like*`, `/api/channel/like`, `/api/channel/share` | 60 |
-| `/api/feedback*` | 20 |
+Configure them under **Security → WAF → Rate limiting rules** on the zone. Each rule is: an expression (which requests), a threshold (how many, over what period), a counting characteristic (**IP source address**), and an action (**Block**, for a minute). Starting points, per IP, per minute:
+
+| Path | Limit | Why |
+|---|---|---|
+| `POST /api/session` | 30 | Signing in verifies a PBKDF2 hash — the most CPU-expensive request in the app |
+| `POST /api/creator/create` | 10 | Mints a profile and a Creator Key |
+| `POST /api/creator/restore`, `/api/creator/reset-key`, `/api/creator/forgot-username` | 20 | Credential guesses |
+| `POST /admin/login` | 10 | The admin key |
+| `POST /api/installs/*` | 30 | Install links are written, not just read |
+| `POST /api/likes/*` | 60 | Liking and unliking |
+| `POST /api/imports`, `/api/imports/*` | 10 | Each import can call four providers with this site's keys |
+| `POST /api/feedback`, `/api/feedback/threads` | 20 | Feedback writes |
+| `POST /api/scrobble*` | 120 | A webhook from someone's media server, so a first sync arrives in a burst — keep this one generous |
+| `POST /api/save` | 30 | Anonymous 10 MB blobs (S-12) |
+
+- **The expression for one path**, in the dashboard's own syntax: `(http.request.method eq "POST" and http.request.uri.path eq "/api/session")`. For a prefix: `(http.request.method eq "POST" and starts_with(http.request.uri.path, "/api/likes/"))`.
+- **Your plan decides how many you get.** Cloudflare gives the Free plan **one** rate-limiting rule, Pro two, Business five. If you only get one, make it `POST /api/session` — it is the check an attacker can make expensive. The rest are already covered by the code's own limits; these rules only move where the refusal happens.
+- **Keep the counting characteristic on IP**, not "everything": a global count on a shared path would let one visitor spend everyone's budget.
+- **An edge block looks different from an app block.** Cloudflare answers with its own 429 page (error 1015) and the Worker never logs the request; the app's own limits answer with a JSON body (`{"ok":false,"error":"Too many attempts…"}`) or the admin login page. If you see 1015 in a browser, you set a rule too tight — raise the threshold or lengthen the period; no deploy is needed either way.
+- **IPv6** is counted per `/64` by the Worker's own limits (one address block, not one address), and Cloudflare's rules count the same way for `ip.src`.
 
 ## 7. Health
 
@@ -446,4 +458,68 @@ You are bounced back to the page you asked for, without the parameter, and the c
 - **The dashboard's messages are its own dialog now** (`showAdminAlert`), not the browser's pop-up: 8 `alert()` calls became it. The ten yes/no `confirm()` prompts (delete lists, undo the installs move, restart a copy, reset a key) are **unchanged for now** — each one is inside a flow that has to be restructured around a callback, which is a change of its own.
 - **If something looks wrong:** the browser console says `Admin action not found: <name>` (once per name) if a control ever names a function that is not there, instead of the button silently doing nothing. `html_checks.py` fails the build on any inline handler on any page, so that shape cannot come back quietly.
 - **Nothing to undo** if you roll back the deploy: the previous file is the previous dashboard.
-- **The CSP is unchanged** (`docs/DECISIONS.md` D-18): the dashboard still serves an inline `<script>` block, so `'unsafe-inline'` stays until P7-1 moves the page's scripts into files. Removing the handlers is what makes that a header change rather than a rewrite.
+- **The CSP was unchanged by this task** (`docs/DECISIONS.md` D-18); P7-1 (§24 below) then removed `'unsafe-inline'` from `script-src` by stamping the dashboard's inline `<script>` blocks with a per-response nonce, rather than by moving them into files.
+
+## 24. The strict Content-Security-Policy (P7-1)
+
+**Nothing to configure, and nothing to run.** Deploying `worker_entry_combined.js` is the whole change: the policy is built per response, the nonce comes from the platform's random generator, and the one library the page used to load from a CDN is now served by this Worker. There is no dashboard step, no migration and no new secret.
+
+- **What changed for visitors:** nothing they should notice. The pages look and behave the same; the fonts are the device's own now (San Francisco, Segoe UI, Roboto — see `docs/DECISIONS.md` D-20) instead of Inter/Space Grotesk/JetBrains Mono from Google, and the zip reader is one same-origin file, so importing an export works with no third-party request.
+- **What changed in the header:** `script-src 'self' 'nonce-<one per response>'`. `'unsafe-inline'` and the jsDelivr host are gone, so an injected `<script>` — or an `src` pointing at somebody else's server — is refused by the browser. `style-src-elem` is nonce-only too; `style-src` keeps `'unsafe-inline'` because the app writes `style="…"` attributes, which a nonce cannot cover. `connect-src`/`img-src` still allow `https:` (the client talks to provider APIs directly and posters come from provider hosts).
+- **If a page ever came out without its nonce**, its own scripts would be refused and the page would be visibly dead — that is the loud failure, not a silent downgrade. It cannot happen quietly: `html_checks.py` fails the build if any rendered inline `<script>`/`<style>` lacks the nonce, and `tests/csp.test.mjs` checks every page the Worker serves, including both `/admin` ones.
+- **Trusted Types is REPORT-ONLY.** Every page also carries `Content-Security-Policy-Report-Only: require-trusted-types-for 'script'`, which does not block anything; it reports what *would* be blocked, and the app assigns to `innerHTML` in ~300 places, so that is a to-do list rather than a switch to flip. Reports are posted to `POST /api/csp-report`.
+- **Where you can see the reports:** Workers Logs (Observability → Logs), filtered on `[csp]` — one line per distinct violation per isolate, e.g. `[csp] refused: csp-violation require-trusted-types-for https://example.test`. If the Analytics Engine binding (`ANALYTICS`) is set, each report also writes one data point indexed `csp:<kind>`, which is where counts belong. Nothing is stored per report: the endpoint writes no KV and no D1.
+- **If you want the reports off** (they are browser-generated POSTs, so a busy site sees real traffic): set the Worker variable **`FF_CSP_TT_REPORT`** to `0`. That removes only the report-only header; the enforced policy is unchanged either way.
+- **The endpoint's guardrails** (`handleCspReport`, `02_`): anonymous by necessity (a browser sends these with no cookie and no `Origin`, and a content type of `application/csp-report` or `application/reports+json`, which is why the CSRF check exempts it); answers `204` to everything, including junk and oversized bodies; caps a body at 8 KB (`CSP_REPORT_MAX_BYTES`); rate-limits per IP at 60 a minute (`CSP_REPORT_MAX_PER_MINUTE`); and keeps only the *origin* of a `blocked-uri` (a blocked URL can carry the payload that caused it, and the line goes to logs).
+- **The vendored zip reader** is `FFLATE_UMD_JS` in `01_icon-asset.js`, served at `/vendor/fflate-0.8.2.js` with `Cache-Control: public, max-age=31536000, immutable` and an `ETag` (the version is in the path, so a bump is a new URL and no browser can hold a stale copy). The service worker caches it beside `/app.js` and `/app.css`, so a zip import no longer needs the network. To update it: `npm pack fflate@<version>`, replace the raw string and the two constants, run the tests (`tests/csp.test.mjs` pins the SHA-256 of the exact bytes).
+- **Nothing to undo** if the deploy is rolled back: the previous file serves the previous header and the CDN script tag.
+
+## 25. Cloudflare Access on the admin dashboard (P7-2)
+
+**Two optional variables and one migration.** Without any of it the dashboard works exactly as it did: the admin key signs you in, the cookie is the signed expiry it always was, and nothing is logged. With it, `/admin` is behind Cloudflare's own identity provider (Google, GitHub, one-time PIN — whatever the Access policy says), so the dashboard can have a real second factor, and every sign-in and every action that changes something is recorded.
+
+### Turning it on (dashboard work, in this order)
+
+1. **Zero Trust → Access → Applications → Add an application → Self-hosted.**
+   - Name it something you will recognize (e.g. `My Lists admin`).
+   - **Application domain:** your Worker's hostname, path `admin` — that covers `/admin` and everything under it (`/admin/api/...`).
+   - Add a policy. A "one-time PIN to my email" policy is enough, or an email/GitHub/Google rule. Keep it to the people who should see the numbers; `FF_ADMIN_EMAILS` below is a second lock, not a substitute for this.
+   - Session duration is your choice; seven days matches the dashboard's own cookie.
+2. **Copy the Application Audience (AUD) Tag** from the application's overview page.
+3. **Worker → Settings → Variables and Secrets → Add** (plain text, not secrets — neither is sensitive):
+   - `CF_ACCESS_TEAM_DOMAIN` = your team domain, e.g. `myteam.cloudflareaccess.com`
+   - `CF_ACCESS_AUD` = the AUD tag from step 2
+   - Optional: `FF_ADMIN_EMAILS` = `you@example.com,second@example.com` — the only addresses allowed to *use* the dashboard. Empty means "everyone Access lets through".
+4. **Deploy, then apply `migrations/0018_admin_sessions_audit.sql`** in the D1 Console (it only adds two tables and is safe to run twice). Without it the dashboard still signs you in with the key, but sessions cannot be listed or revoked and nothing is recorded — the Maintenance tab says exactly that.
+5. **Check it:** open `/admin` in a new private window. Access should ask who you are *before* the Worker ever sees the request, and you should land on the dashboard without typing the admin key. Then look at **Maintenance → Audit log** — your arrival should be in it if you came in through the key box, and **Signed-in admin browsers** should list this browser.
+
+### What changes once it is on
+
+- **Signing in through Access is the sign-in.** No key is typed, and each sign-in is recorded as `access:<email>`, so the audit log names a person rather than "admin".
+- **The admin key still works, on purpose.** It is the break-glass path, and it is what you fall back to if Access is misconfigured, if you reach the Worker by a hostname Access does not cover, or if Cloudflare Access itself is having a bad day. It is recorded as actor `key`. If you would rather nothing could bypass Access, there is no variable for that today — leave it and remember the key still works, or rotate `ADMIN_KEY` to a long random value you keep in your password manager.
+- **The login page says Access is on** when it is, so a locked-out admin knows to look at the Access policy instead of hunting for the key.
+- **Every sign-in is now a row that can be revoked.** Maintenance → **Signed-in admin browsers** lists them with the IP and browser each came from, and **Sign out** on a row ends that browser on its next request — no `ADMIN_KEY` rotation, no signing out your own laptop by accident. **Sign out every browser** does all of them at once. This needs migration 0018.
+- **Every action that changes something is logged** (Maintenance → **Audit log**, newest first): resetting a creator's key, deleting a list or a channel, replying to feedback, running a migration, clearing a channel preset, signing in and out, revoking a session. Each row has the time, the person, the action, what it was done to, the request's identifying fields, and the IP. **No key, token or password is ever recorded** — the fields are picked by name, so a credential cannot arrive in the log by accident, and reading the log is itself not an action.
+- **The log is capped at the newest 5,000 rows**, pruned as new rows are written. It is a record of what happened recently, not an archive; if you ever need longer, export it from D1.
+- **Nothing to undo** if you roll the deploy back: the old code ignores the two tables, and the dashboard goes back to the key-only cookie. Removing the Access application is a dashboard change, and the key keeps working throughout.
+
+### If something looks wrong
+
+- **"Too many redirects" / a blank page from Access:** the Access application's policy is not letting you in. Check the application's path (`admin`) and its policy — Access answers before the Worker, so nothing in this repo can see or log those attempts.
+- **Access asks who you are, then the dashboard shows the key login page:** the token did not verify. The Worker logs `[admin] refused a Cloudflare Access token: <reason>` once per distinct reason — `audience` means `CF_ACCESS_AUD` does not match this application, `issuer` means `CF_ACCESS_TEAM_DOMAIN` is wrong, `signature` means the certs came from a different team. The key box below the note is the way in while you fix it.
+- **"You are not authorized" after Access let you in:** `FF_ADMIN_EMAILS` is set and your address is not on it.
+
+## 26. Rate limits that count exactly (P7-3)
+
+**Nothing to configure, and nothing to run except one optional index.** Deploying `worker_entry_combined.js` is the whole change: every limit in this Worker — profile creation, restore, the admin login, previews, saves, the tracking beacons, the CSP reports, the bulk resolve — is now a counter in D1's `rate_counters` table (created by migration `0015`, so most deployments already have it) instead of a `ratelimit:` key in KV. There is no new binding, no new secret, and no new variable. §6 above is the optional edge half.
+
+- **Why it moved.** A KV counter is read, compared and written back, and KV serves reads from the edge cache for up to a minute. A burst arriving in parallel — which is what a script, a scraper or a password guesser is — therefore all read the same pre-increment value and all passed. The limit was not a limit in the only conditions it existed for (SECURITY_AUDIT S-13). D1 has real transactions, so the limit is now the number it says.
+- **What is counted, and how.** One row per bucket, per client and per window: `scope` is `bucket:key` (`adminlogin:203.0.113.9`, `connimport:a<accountId>`), `window_start` is the epoch millisecond the window began at. Windows are **aligned to the clock**, not started by the first request, so a window is a row that can be deleted when it is spent. The increment and the read-back happen in one D1 batch — one transaction — so two requests landing in the same instant cannot both spend the last of a budget.
+- **Which endpoints spend on failure, and which spend up front.** The credential endpoints (`/admin/login`, `/api/creator/restore`, `/api/creator/forgot-username`) read the count and spend only when a guess actually fails, because a correct key must never consume the budget that protects it. Everything else spends first and refuses over — including the refused requests, so the counter is a record of what arrived rather than a budget that resets when someone pauses.
+- **What happens without D1.** A deployment with no `DB` binding, or a database that has not had `0015` applied, falls back to a counter in the isolate's own memory. It still limits — a burst from one client is refused — but it is per isolate, so several isolates each allow the full budget: looser than D1, never unlimited. The admin dashboard's **Maintenance → Schema status** names `rate_counters` if the table is the thing that is missing (`D1_SCHEMA_MANIFEST`), and the Worker logs `[ratelimit] D1 counter failed, falling back to this isolate's memory: <reason>` **once per distinct reason** so a broken binding cannot flood the logs.
+- **The optional index (`migrations/0019_rate_counters_window_index.sql`).** Spent rows are deleted in the background — at most once every ten minutes per isolate, never on the request's own path. The delete filters on `window_start`, which the table's primary key `(scope, window_start)` cannot serve, so without this index the cleanup scans the whole table: **slower, not broken.** Apply it in the D1 Console when convenient; it is one `CREATE INDEX IF NOT EXISTS` and one ledger row, and safe to run twice.
+- **Where to look when you wonder whether a limit is biting:** Workers Logs, filtered on `[ratelimit]`. To see the counters themselves, run this in the D1 Console (read-only):
+  `SELECT scope, datetime(window_start / 1000, 'unixepoch') AS window, count FROM rate_counters ORDER BY window_start DESC LIMIT 30;`
+  A row disappears once its window is a day old. Nothing in the dashboard shows these; they are operational counters, not statistics.
+- **Setting a limit** means editing the constant the call site names (`CSP_REPORT_MAX_PER_MINUTE`, `DETAILS_BATCH_IDS_PER_MINUTE`, `BULK_RESOLVE_ITEMS_PER_MINUTE`, `ADMIN_LOGIN_MAX_FAILURES_PER_DAY`, …) in `00_constants.js` and redeploying — there is deliberately no per-deployment variable for any of them, because a limit nobody can see in the code is a limit nobody can reason about. The one exception is §6's WAF rules, which are dashboard edits.
+- **Nothing to undo** if you roll the deploy back: the previous file writes `ratelimit:` KV keys again and ignores the table. The table itself is harmless without the code (it is only rows of `bucket:key` and counts, and it is not read or written by anything else), and the index is one of the ones `schema.sql` provisions.

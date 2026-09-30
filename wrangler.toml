@@ -134,9 +134,26 @@ dead_letter_queue = "mylists-jobs-dlq"
 # home screen's rows once per install and hour instead of each row rebuilding
 # the rows above it. Safe to turn on and off (docs/OPERATIONS.md section 19).
 # FF_MATERIALIZER = "1"
+# Optional, Phase 7 (P7-1): "0" turns OFF the report-only
+# require-trusted-types-for header (CSP/Trusted Types reports posted to
+# /api/csp-report). Unset means on. The enforced policy is unaffected either
+# way; this only stops the reports (docs/OPERATIONS.md section 24).
+# FF_CSP_TT_REPORT = "0"
 # Optional, 0-100: share of existing install links whose keys and tokens are
 # moved into encrypted D1 storage on first use (needs TOKEN_ENCRYPTION_KEY)
 # INSTALL_MIGRATION_PERCENT = "0"
+# Optional, Phase 7 (P7-2): Cloudflare Access on the admin dashboard. Set BOTH
+# of the first two and a valid Access token signs you in without ADMIN_KEY --
+# CF_ACCESS_TEAM_DOMAIN is your team domain (e.g. myteam.cloudflareaccess.com)
+# and CF_ACCESS_AUD is the Access application's Application Audience tag, which
+# is what stops a token from another Access app opening this dashboard.
+# FF_ADMIN_EMAILS is an optional comma-separated second lock on who may use it.
+# Unset means Access is off and the key is the only way in. The dashboard also
+# needs migration 0018 for revocable sessions and the audit log. See
+# docs/OPERATIONS.md section 25.
+# CF_ACCESS_TEAM_DOMAIN = "myteam.cloudflareaccess.com"
+# CF_ACCESS_AUD = "0000000000000000000000000000000000000000000000000000000000000000"
+# FF_ADMIN_EMAILS = "you@example.com"
 
 # --- Cron trigger (REQUIRED for Continue Watching) ---------------------------
 # Drives the scheduled() export at the bottom of

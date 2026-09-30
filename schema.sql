@@ -346,6 +346,9 @@ CREATE TABLE IF NOT EXISTS rate_counters (
     count        INTEGER NOT NULL DEFAULT 1,
     PRIMARY KEY (scope, window_start)
 );
+-- The sweep that clears spent windows (migrations/0019, P7-3): the primary key
+-- is (scope, window_start), so this covers the WHERE window_start < cutoff side.
+CREATE INDEX IF NOT EXISTS idx_rate_counters_window ON rate_counters(window_start);
 
 CREATE TABLE IF NOT EXISTS account_settings (
     account_id    INTEGER PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
@@ -555,6 +558,38 @@ CREATE TABLE IF NOT EXISTS title_daily_stats (
 CREATE INDEX IF NOT EXISTS idx_title_daily_stats_top ON title_daily_stats(event_type, day, n DESC);
 CREATE INDEX IF NOT EXISTS idx_title_daily_stats_media ON title_daily_stats(media_id);
 
+-- Admin sessions and the admin audit log (migrations/0018, P7-2). The admin
+-- dashboard's cookie is an opaque revocable session token instead of a signed
+-- expiry, and every admin login, logout and mutating admin request writes a
+-- row. See migrations/0018_admin_sessions_audit.sql for what each column is.
+CREATE TABLE IF NOT EXISTS admin_sessions (
+    id          TEXT PRIMARY KEY,
+    token_hash  TEXT NOT NULL,
+    actor       TEXT NOT NULL,
+    created_at  INTEGER NOT NULL,
+    last_seen_at INTEGER NOT NULL,
+    expires_at  INTEGER NOT NULL,
+    revoked_at  INTEGER,
+    ip          TEXT,
+    user_agent  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires ON admin_sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_admin_sessions_actor ON admin_sessions(actor);
+
+CREATE TABLE IF NOT EXISTS admin_audit_log (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    at          INTEGER NOT NULL,
+    actor       TEXT NOT NULL,
+    action      TEXT NOT NULL,
+    target      TEXT,
+    detail      TEXT,
+    status      INTEGER,
+    ip          TEXT,
+    user_agent  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_at ON admin_audit_log(at DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_action ON admin_audit_log(action);
+
 -- Migration ledger (migrations/0014). A fresh database starts at the latest version.
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version    TEXT PRIMARY KEY,
@@ -578,4 +613,6 @@ INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES
   ('0014', 0),
   ('0015', 0),
   ('0016', 0),
-  ('0017', 0);
+  ('0017', 0),
+  ('0018', 0),
+  ('0019', 0);

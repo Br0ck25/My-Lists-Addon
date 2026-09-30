@@ -6566,7 +6566,7 @@ function renderGuidePage(origin) {
 <meta name="twitter:title" content="${title}">
 <meta name="twitter:description" content="${description}">
 <link rel="icon" type="image/png" href="${origin}/icon.png">
-<script type="application/ld+json">${jsonForScript({
+<script type="application/ld+json" nonce="${CSP_NONCE_PLACEHOLDER}">${jsonForScript({
     "@context": "https://schema.org",
     "@type": "FAQPage",
     mainEntity: [
@@ -6608,10 +6608,10 @@ function renderGuidePage(origin) {
       },
     ],
   })}</script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700;800&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-<style>
+<!-- The device's own fonts (P7-1): this page used to load Space Grotesk,
+     Inter and JetBrains Mono from Google Fonts. It now has no third-party
+     origin at all. See docs/DECISIONS.md D-20. -->
+<style nonce="${CSP_NONCE_PLACEHOLDER}">
   :root {
     /* Same reason as the app shell's (09_page-shell.js): an installed PWA
        paints the status bar and the home-indicator strip from the UA's own
@@ -6662,7 +6662,7 @@ function renderGuidePage(origin) {
     background: var(--bg);
     color: var(--text);
     padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
     font-size: 16px;
     line-height: 1.65;
     -webkit-font-smoothing: antialiased;
@@ -6696,7 +6696,7 @@ function renderGuidePage(origin) {
     border-radius: 10px;
   }
   .brand-text {
-    font-family: 'Space Grotesk', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
     font-weight: 800;
     font-size: 1.25rem;
     letter-spacing: -0.02em;
@@ -6777,7 +6777,7 @@ function renderGuidePage(origin) {
     margin-bottom: 16px;
   }
   h1 {
-    font-family: 'Space Grotesk', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
     font-size: 2.5rem;
     font-weight: 800;
     line-height: 1.15;
@@ -6846,13 +6846,13 @@ function renderGuidePage(origin) {
     font-weight: 700;
   }
   h2 {
-    font-family: 'Space Grotesk', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
     font-size: 1.5rem;
     font-weight: 700;
     letter-spacing: -0.02em;
   }
   h3 {
-    font-family: 'Space Grotesk', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
     font-size: 1.15rem;
     font-weight: 700;
     margin: 24px 0 10px;
@@ -6922,7 +6922,7 @@ function renderGuidePage(origin) {
     border-radius: 6px;
     padding: 2px 7px;
     font-size: 0.88em;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
     color: var(--text);
   }
   .code-block {
@@ -6930,7 +6930,7 @@ function renderGuidePage(origin) {
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     padding: 12px 16px;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
     font-size: 0.88rem;
     color: var(--text);
     overflow-x: auto;
@@ -7023,7 +7023,7 @@ function renderGuidePage(origin) {
     .step-card { flex-direction: column; gap: 10px; }
   }
 </style>
-<script>
+<script nonce="${CSP_NONCE_PLACEHOLDER}">
   function applyTheme(t) {
     if (t === 'light') {
       document.documentElement.classList.add('light-theme');

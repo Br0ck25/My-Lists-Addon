@@ -120,7 +120,7 @@ The things that would push a team toward PostgreSQL are the 10 GB D1 limit and t
 |---|---|---|---|
 | `header.js` | 50 | Banner comment for the combined file | **Stale.** Says "stateless… no database, no server-side auth". |
 | `00_constants.js` | 1,265 | Limits, free-tier budgets, provider IDs, env-key globals (`let TMDB_API_KEY…`), `D1_SCHEMA_MANIFEST`, BetterPosters options, personal-shelf prefixes | Config, budgets, schema metadata and UI option HTML builders in one file |
-| `01_icon-asset.js` | 1,393 | 115 KB base64 PNG | Should be a build asset |
+| `01_icon-asset.js` | 1,393 | 115 KB base64 PNG + the vendored fflate 0.8.2 UMD source (P7-1) | The PNG should be a build asset; fflate is deliberate (see `tests/csp.test.mjs`) |
 | `02_http-and-creator-utils.js` | 4,995 | CORS/CSP/JSON helpers; base64 config decode; PBKDF2/auth memo; key blind index; page memo and bundle split; 3-tier provider cache and circuit breaker; timeouts; IP keys; KV rate limiter; auth-failure budget; likes ledger; scrobble tokens; list tombstones; purge; slugs; SSRF guard; public directory query; sync versioning; creator tombstones; `getCreator`; `getCreatorList`; share gate; air-time formatting; schema check; the tracking D1 read/write engine; the channel directory index | At least 12 subsystems |
 | `03_admin.js` | 4,430 | Counters, telemetry, leaderboards, audience analytics, admin HMAC cookie, admin login page, **admin dashboard as a 150 KB template literal** | Analytics engine and admin UI |
 | `04_config-resolution.js` | 537 | `resolveConfig` (install config plus tracking-blob merge plus ownership proof), `detectSource` (30-way prefix/regex dispatch), URL parsers, MDBList toplists, Trakt list search | Config storage, authorization and provider parsing |
@@ -183,7 +183,7 @@ There are 138 exact-path routes plus 14 regex or prefix routes, about 152 handle
 - **Channels:** `channelshare:{code}`, `creatorchannel:{u}:{slug}`, `index:publicchannels`, `channellikevoters:`, `channel:preset:v2:{network}`, `channelpool:`, `channelnew:`.
 - **Caches:** `cache:{kvKey}` (provider responses), `cache:poster_fallback:`, `tmdbdetail_v2:`, `tvmaze:airtime:v3:`, `unpacked_show:`, `mylists:mostwatched:v2:`, `bpimg:v1:` (BetterPosters image **bytes**), `bp:retry:v1`, `bp:variants:v1`, `bp:sharedids:v1`.
 - **Counters (KV fallbacks):** `stats:*`, `evtcount:*`, `evtdayindex:*`, `evtmeta:*`, `searchquery:*`, `searchquerydayindex:*`, `feedback:*`, `feedbackrate:`.
-- **Rate limits:** `ratelimit:{bucket}:{ip}` (about 12 buckets).
+- **Rate limits:** D1 `rate_counters`, one row per `{bucket}:{ip}` (or `{bucket}:a{accountId}`) per clock-aligned window (P7-3; `consumeRateLimit`, `02_`). A deployment with no D1 falls back to a per-isolate in-memory counter. Nothing is written to KV for a limit any more.
 - **Cron and migration state:** `cron:continuewatching:cursor`, `cron:airingnext:cursor`, `cron:prewarm:cursor`, `cron:channelpresets:cursor`, `cron:bpwarm:cursor`, `cron:last_warmed:mdblist`, `cron:newonstreaming:{lastsweep, streams:, jwdays:, bumpcursor:}`, `cron:rapidapi:usage`, `backfilltrending:cursor`, `migrated1:state`, `migratedaycounts:state`, `stats:genredecade:migrated`.
 
 **Per-isolate memory caches:**
@@ -431,7 +431,7 @@ For each type the table records the authority today, duplication, caching, the s
 | Temporary markers (tombstones, reset markers, `trackingd1behind`, scrobble queue, `airingnextchecked`) | KV and D1 | Both | — | — | — | TTL | **Delete.** They exist only to reconcile the dual store and local-first sync. |
 | Provider caches | Isolate Map → KV `cache:` → edge | Three tiers | Yes by design | Refetch | — | TTL | **KV `pc:` (TTL)** plus in-flight coalescing |
 | Chart / catalog caches | KV `cache:`, `lastgood:`, prewarm | — | Yes | Refetch | — | BG | **KV `snap:chart:{id}:{region}:{page}`** written by a job |
-| Rate limits | KV (non-atomic) plus D1 `authfail` | — | — | Limits reset | — | TTL | **WAF rules** (per IP) plus **D1 `rate_counters`** (per account/credential) |
+| Rate limits | **D1 `rate_counters`** (a batch per spend, atomic — P7-3) plus D1 `authfail` for daily budgets; per-isolate memory when D1 is absent | — | — | Limits reset | Falls back to each isolate's memory (looser, never unlimited) | TX | WAF rules (per IP, optional, `docs/OPERATIONS.md` §6) on top of what is already here |
 | Public directory / search | D1 `UNION` query plus FTS5 (standalone); KV scan fallback | — | — | — | — | FTS | **D1 `lists` index plus FTS5 external-content table**; KV cache of page 1 for 60 s |
 | Title metadata (event_meta, titles on rows) | D1 plus KV | Both | Yes | — | — | — | **D1 `media`** (canonical, persisted) |
 | Generated images | KV `bpimg:` (bytes); badged SVGs regenerated per request | — | — | Refetch | — | — | **R2 plus Cache API** |
@@ -743,7 +743,7 @@ The existing files keep their responsibilities:
 | File | Owns |
 |---|---|
 | `00_constants.js` | Constants, limits, shared tables (shelf prefixes, schema manifest) |
-| `01_icon-asset.js` | The app icon |
+| `01_icon-asset.js` | The app icon, and the browser assets the Worker serves itself (fflate, P7-1) |
 | `02_http-and-creator-utils.js` | HTTP helpers and the fetch guard, auth and account helpers, storage helpers (KV/D1), likes, the directory, the schema gate and request metrics |
 | `03_admin.js` | The admin page and its data queries |
 | `04_config-resolution.js` | Install configs, source detection and the provider registry (`CATALOG_SOURCES`, `PROVIDER_ADAPTERS`, P4-1), the D-8 account rule |

@@ -46,12 +46,12 @@
 | S-02 | **High** | The install config id is an unrevocable bearer credential that returns OAuth tokens and grants scrobble writes |
 | S-03 | **High** (verify) | Authenticated Trakt `users/me/*` responses are edge-cached by URL (`cf.cacheTtl`) and may be served across users |
 | S-04 | **High** | Provider OAuth tokens and API keys are stored unencrypted in many places and never refreshed or revoked |
-| S-05 | **High** | XSS blast radius: `'unsafe-inline'` CSP (inline `<script>` blocks, P7-1), 326 `innerHTML` sites, secrets in `localStorage` -- the 733 inline handlers are gone (P6-8, P6-10) |
+| S-05 | **High** | XSS blast radius: 326 `innerHTML` sites, secrets in `localStorage` -- **narrowed by P7-1**: `script-src` is nonce-only (no `'unsafe-inline'`, no host), so an injected `<script>` no longer executes; the inline handlers (P6-8, P6-10) and the third-party script/font origins are gone. Trusted Types is report-only until the `innerHTML` sinks are converted |
 | S-06 | **Medium-High** | The Creator Key blind index is an unsalted, unpeppered SHA-256 |
 | S-07 | **Medium** | TMDB OAuth callback accepts `request_token` from the query string without binding it to the state cookie (login CSRF) |
 | S-08 | **Medium** | The scrobble webhook accepts the install id, or the Creator Key in the query string, as write credentials |
 | S-09 | **Medium** | No `Origin`/`Sec-Fetch-Site` checks: cross-site pages can drive anonymous writes (likes, adds, telemetry, `/api/save`) from visitors' IPs |
-| S-10 | **Medium** | Admin: one shared secret, stateless 7-day cookie, no per-session revocation, no audit log, no second factor |
+| S-10 | **Medium → addressed by P7-2** | Admin: Cloudflare Access (a real second factor) or the shared secret as break-glass; per-browser revocable sessions; an audit log of every mutating admin request. What is left is that the break-glass key path cannot be disabled by a variable |
 | S-11 | **Medium** | The recovery answer is a password-equivalent that can mint a new key |
 | S-12 | **Medium** | `/api/save` allows unauthenticated permanent writes of up to 10 MB, 20 per minute per IP (storage and cost abuse) |
 | S-13 | **Medium** | Rate limiting is non-atomic (KV) and IP-only for most routes |
@@ -178,7 +178,7 @@ Tokens arrive in URL fragments after OAuth (`25_:3438`, `3704`, `3819`, `5212`).
 
 **Current:**
 
-- CSP `script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net` (`02_`). **What is left is the inline `<script>` blocks** (the builder bundle, the per-request preamble, /admin's own script) -- P7-1's task. The inline handlers this line used to cite are gone: P6-8 converted the builder page's ~470 and P6-10 /admin's 76, each to `data-act` + one delegated listener (`appActDispatch`, `16_` / `adminActDispatch`, `03_`), with `html_checks.py` resolving every action name and failing the build on a handler, whatever it is called.
+- **Fixed by P7-1 (2026-09-29):** CSP `script-src 'self' 'nonce-<one per response>'` (`02_`), with a fresh nonce stamped into every inline `<script>`/`<style>` at the Worker's boundary (`withSecurityHeaders`, `02_`; the placeholder is `CSP_NONCE_PLACEHOLDER`, and `html_checks.py` fails the build if a rendered block lacks it). There is no `'unsafe-inline'` and no host left in `script-src`, so an injected `<script>` -- or an injected `src` to someone else's server -- is refused by the browser. `style-src-elem` is nonce-only too; `style-src` keeps `'unsafe-inline'` for the app's own `style="..."` attributes, which a nonce cannot cover. The third-party origins that used to be in the policy are gone: fflate is served from this Worker (`/vendor/fflate-0.8.2.js`, `FFLATE_UMD_JS` in `01_`) and the webfonts are the device's own (D-20). The inline handlers this line used to cite went in P6-8/P6-10.
 - 326 `innerHTML` assignments in the client, against 260 `escapeHtml(` calls. Escaping is applied per call site by convention.
 - User-controlled strings rendered in many places: list names, display names, channel descriptions, feedback text, provider titles.
 - **Every secret is in `localStorage`:** the Creator Key, OAuth tokens and API keys.
@@ -189,10 +189,10 @@ Tokens arrive in URL fragments after OAuth (`25_:3438`, `3704`, `3819`, `5212`).
 **Proposed:**
 
 - Remove secrets from `localStorage` (S-01, S-04). Session cookies are `HttpOnly`.
-- ~~Move to event delegation with no inline handlers~~ (done: P6-8 on the builder page, P6-10 on /admin), then a nonce-based or hash-based CSP (`script-src 'self'`) for the inline `<script>` blocks, which is P7-1.
+- ~~Move to event delegation with no inline handlers~~ (done: P6-8 on the builder page, P6-10 on /admin), ~~then a nonce-based CSP (`script-src 'self'`) for the inline `<script>` blocks~~ (done: P7-1).
 - Render user strings through the existing `escapeHtml` / `escapeAttr` helpers every time, or use `textContent` (vanilla JavaScript, no framework, D-11).
-- Add a Trusted Types policy (`require-trusted-types-for 'script'`) once `innerHTML` is gone.
-- Self-host `fflate`; drop jsDelivr from `script-src`.
+- Trusted Types is **report-only** as of P7-1 (`require-trusted-types-for 'script'`, reports to `/api/csp-report`, counted in Analytics Engine and logged once per distinct violation per isolate; `FF_CSP_TT_REPORT=0` turns the reports off). Enforcement waits on the `innerHTML` sites.
+- ~~Self-host `fflate`; drop jsDelivr from `script-src`~~ (done: P7-1).
 
 ---
 
@@ -240,8 +240,8 @@ Tokens arrive in URL fragments after OAuth (`25_:3438`, `3704`, `3819`, `5212`).
   - No second factor.
   - The admin can reset any user's key (`/admin/api/reset-creator-key`, `26_:1465`) and read any list.
 - **Proposed.**
-  - Put `/admin*` behind **Cloudflare Access** (Zero Trust; dashboard-configured; SSO plus MFA). Keep `ADMIN_KEY` only as a break-glass fallback.
-  - Store admin sessions in D1 (revocable), with an `admin_audit_log` table written on every mutating admin call.
+  - ~~Put `/admin*` behind **Cloudflare Access** (Zero Trust; dashboard-configured; SSO plus MFA). Keep `ADMIN_KEY` only as a break-glass fallback.~~ **Done by P7-2**: `CF_ACCESS_TEAM_DOMAIN` + `CF_ACCESS_AUD` (and the optional `FF_ADMIN_EMAILS`) make a *verified* Access token the sign-in -- the JWT signature is checked against the team's own certs, with issuer, audience and expiry, because the header itself proves nothing. The key stays as break-glass on purpose (D-24), and the login page says which is in effect. Setup: `docs/OPERATIONS.md` §25.
+  - ~~Store admin sessions in D1 (revocable), with an `admin_audit_log` table written on every mutating admin call.~~ **Done by P7-2** (migration 0018): the cookie is `<id>.<secret>` with only the secret's SHA-256 stored, sessions are listed and revoked in the Maintenance tab, logout revokes the row, and every mutating admin request writes an audit row from the one gate all 39 admin routes pass through (`isAdminRequest`). The log records named fields only, so a key or token cannot reach it (D-27). What is left: the break-glass key path cannot be disabled by a variable, and the log keeps the newest 5,000 rows rather than an archive.
 
 ### S-11 — Recovery answer equals password
 
@@ -262,8 +262,10 @@ Tokens arrive in URL fragments after OAuth (`25_:3438`, `3704`, `3819`, `5212`).
 
 ### S-13 — Rate limiting
 
-- **Where.** KV `ratelimit:*` (`02_:1698-1708`, plus 8 inline copies). The code acknowledges that stale reads let bursts through. Most limits key only on IP; IPv6 is collapsed to /64 (good).
-- **Proposed.** WAF rate-limiting rules for per-IP limits at the edge, plus D1 atomic counters for per-account and per-credential limits (FT-13). For login: per-username and per-IP limits with exponential backoff.
+- **Where.** Every limiter in the Worker: `consumeRateLimit` (`02_`) and its call sites in `25_`, `26_` and `28_`.
+- **Was.** KV `ratelimit:*` (`02_:1698-1708`, plus 8 inline copies). The code acknowledged that stale reads let bursts through — KV caches reads at the edge for up to a minute and has no atomic increment, so a parallel burst (what a scraper or a guesser is) all read the same pre-increment value and all passed. Most limits keyed only on IP; IPv6 is collapsed to /64 (good).
+- **~~Proposed.~~ Done by P7-3 (the code half):** the counters are D1 rows in `rate_counters` (migration 0015), one per bucket, client and clock-aligned window, incremented by an atomic upsert and read back inside the same `batch` — one transaction, which D1 does not interleave with another batch. **No `ratelimit:` KV write remains anywhere** (`tests/rate-limit.test.mjs` asserts that over every limiter with D1 bound and without it, and that two requests arriving together cannot both spend a budget of one). The credential endpoints spend only on a *failed* guess (a correct secret must not consume the budget that protects it); everything else spends up front, refused requests included. With no D1 the counter is per isolate: looser, never unlimited, and logged once per distinct reason. The per-IP edge half is the operator's, written as a short optional list with thresholds in `docs/OPERATIONS.md` §6 — **nothing has to be clicked for the code to work.**
+- **What is left.** No per-username backoff on creator sign-in (`/api/session` verifies the key hash and is limited per IP at 60/min, `creatorauth`; the per-account daily budget of 5 (`RESET_KEY_ACCOUNT_MAX_FAILURES`) covers key *reset*, not sign-in) — it matters less now that the per-IP half is exact and the key space is ~60 bits, but a per-account counter with a delay is still the better shape. The daily budgets stay where they are (`authfail:<scope>:<day>`, atomic on D1, KV fallback).
 
 ### S-14 — Secrets in logs
 
@@ -335,4 +337,4 @@ Tokens arrive in URL fragments after OAuth (`25_:3438`, `3704`, `3819`, `5212`).
    - S-21 (confirm rotation).
 2. **Phase 7 (with sessions):** S-01, S-02, S-04, S-06, S-08, S-09, S-11, S-16.
 3. **Phase 6 (with the frontend rewrite):** S-05 CSP and Trusted Types.
-4. **Ongoing:** S-10 Cloudflare Access for admin, S-12, S-13, S-14.
+4. **Ongoing:** S-10 (the code half is P7-2; the Access application is a dashboard step), S-12, S-13 (the code half is P7-3; the WAF rules are optional and listed in `docs/OPERATIONS.md` §6), S-14.

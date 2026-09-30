@@ -447,6 +447,15 @@ export async function call(env, path, opts = {}) {
     method = "GET",
     json,
     form,
+    // Which module instance answers. The default is the shared one; a test
+    // that depends on per-isolate memory (the rate-limit sweep's once-per-ten-
+    // minutes timer, the chart memo) passes freshIsolate().
+    w = worker,
+    // A raw body, for a request that is not JSON and cannot go through `json`
+    // -- a browser's CSP report (application/csp-report,
+    // application/reports+json) is the one that needs it (tests/csp.test.mjs).
+    // Named rawBody, not body: the response parsing below already owns `body`.
+    rawBody,
     headers = {},
     ip = nextIp(),
     cookie,
@@ -473,12 +482,14 @@ export async function call(env, path, opts = {}) {
     const fd = new FormData();
     for (const [k, v] of Object.entries(form)) fd.set(k, v);
     init.body = fd;
+  } else if (rawBody !== undefined) {
+    init.body = rawBody;
   } else if (method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE") {
     if (!h["Content-Type"] && !h["content-type"]) {
       h["Content-Type"] = "application/json";
     }
   }
-  const res = await worker.fetch(new Request("https://example.test" + path, init), env, ctx);
+  const res = await w.fetch(new Request("https://example.test" + path, init), env, ctx);
   await Promise.all(pending);
   const text = await res.text();
   let body = text;
@@ -505,6 +516,23 @@ export function lapseCreatorTombstone(env, username) {
       // copy above is the whole of the hold in that case.
     }
   }
+}
+
+// Waits out a rate-limit window boundary if one is about to fall inside the
+// test. P7-3's counters are aligned to the clock -- one row per (bucket,
+// client, window) -- so a test that spends a whole budget and then asserts the
+// NEXT request is refused is only meaningful inside one window: a request
+// landing the other side of the boundary starts a fresh counter and the
+// assertion fails for a reason that has nothing to do with the code. Waiting
+// for the start of a minute is what makes that deterministic, instead of
+// retrying and hoping. Costs nothing in the common case (it returns
+// immediately unless the test began within a second of a boundary).
+export async function awaitFreshRateWindow(periodMs = 60000, marginMs = 3000) {
+  const into = Date.now() % periodMs;
+  // Comfortably inside a window: a probe that takes a few hundred
+  // milliseconds cannot reach the boundary. Otherwise wait it out.
+  if (periodMs - into > marginMs) return;
+  await new Promise((r) => setTimeout(r, periodMs - into + 50));
 }
 
 export async function createUser(env, name, extra = {}) {

@@ -20,7 +20,7 @@
   that the bundle reads and assigns exactly as it did when the two were one
   element.
 -->
-<script>
+<script nonce="${CSP_NONCE_PLACEHOLDER}">
 const ORIGIN = (typeof location !== 'undefined' && location.origin) ? location.origin : ${jsonForScript(origin)};
 const IS_CONFIGURE = ${isConfigureMode};
 // Whether this page was served as the new UI shell (Phase 6, P6-1). It is a
@@ -57,7 +57,7 @@ const serverShuffleShelves = ${initialShuffleShelves ? 'true' : 'false'};
 const serverShuffleItems = ${initialShuffleItems ? 'true' : 'false'};
 
 </script>
-<script>/*MYLISTS_APP_BUNDLE_START*/
+<script nonce="${CSP_NONCE_PLACEHOLDER}">/*MYLISTS_APP_BUNDLE_START*/
 // Every native/official chart's (slug, name, movieUrl, showUrl) -- lets
 // openListDetailsPage (23_client-list-management.js) push the clean
 // /lists/<slug> path when the list it's opening is one of these, instead
