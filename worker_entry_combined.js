@@ -1281,6 +1281,10 @@ const D1_SCHEMA_MANIFEST = [
     migration: "0019", kind: "index", name: "idx_rate_counters_window",
     consequence: "Clearing spent rate-limit windows scans the whole counters table every ten minutes instead of a window range. Slower, not broken (P7-3).",
   },
+  {
+    migration: "0020", kind: "table", name: "media_episodes",
+    consequence: "Watch History served from the activity database shows episodes as \"Episode N\" with the show poster, and no episode name is kept from new plays.",
+  },
 ];
 
 
@@ -101168,6 +101172,114 @@ async function retryUnresolvedMedia(env, opts = {}) {
   return { tried: rows.length, resolved };
 }
 
+// --- Episode names and stills (migration 0020) ---------------------------------
+//
+// The activity database records a play as a title, a season and an episode --
+// nothing names the episode itself. The legacy Watch History kept the name and
+// the still on every entry, so Watch History served from the activity database
+// (FF_EVENT_TRACKING) showed every episode as "Episode 3" with the show poster.
+// An episode is called the same thing for everyone, so its name and still are
+// kept once, in media_episodes beside media: written by the plays (38_), a save
+// from the website (40_) and the history copy (37_, which reads the legacy
+// entries that still have them), and read by Watch History (39_).
+//
+// Nothing here may break what calls it: a database without 0020 reads as no
+// names, and a write that fails is logged and dropped.
+
+const EPISODE_TITLE_MAX_CHARS = 300;
+const EPISODE_IMAGE_MAX_CHARS = 1000;
+let _episodeTitlesWarned = false;
+
+function episodeTitlesWarn(e) {
+  if (/no such table/i.test(String((e && e.message) || e)) || _episodeTitlesWarned) return;
+  _episodeTitlesWarned = true;
+  console.error("media_episodes:", e);
+}
+
+// { title, image } a legacy Watch History entry gives its episode, or null.
+// Only an entry that knows its show: the web page saves an episode it had no
+// show loaded for under the show's name (see legacyHistoryPlay), which is not
+// the episode's. "Episode 3" is the placeholder, not a name, and a poster that
+// is the show's (or a generated one) is not the episode's still.
+function episodeTitleFromLegacy(item) {
+  if (!item || typeof item !== "object") return null;
+  if (!item.showId && !item.showTitle) return null;
+  const raw = typeof item.name === "string" && item.name.trim() ? item.name : item.title;
+  let title = typeof raw === "string" ? raw.trim().slice(0, EPISODE_TITLE_MAX_CHARS) : "";
+  const showTitle = typeof item.showTitle === "string" ? item.showTitle.trim() : "";
+  if (/^episode\s+\d+$/i.test(title) || (showTitle && title === showTitle)) title = "";
+  const poster = typeof item.poster === "string" ? item.poster.trim() : "";
+  const showPoster = typeof item.showPoster === "string" ? item.showPoster.trim() : "";
+  const image = /^https:\/\//i.test(poster) && poster.length <= EPISODE_IMAGE_MAX_CHARS && poster !== showPoster &&
+    !/metahub\.space\/poster|\/bp\/|\/api\/(?:safe-poster|poster-badge)/i.test(poster) ? poster : "";
+  return title || image ? { title, image } : null;
+}
+
+// Stores names for episodes ({ mediaId, season, episode, title, image }). A
+// name already stored is replaced only by a different one, and a blank never
+// replaces one, so re-sending what is there writes nothing. Returns rows written.
+async function saveEpisodeTitles(env, rows) {
+  if (!env || !env.DB || !Array.isArray(rows) || !rows.length) return 0;
+  const byKey = new Map();
+  for (const r of rows) {
+    if (!r || r.mediaId == null || r.season == null || r.episode == null) continue;
+    const title = r.title ? String(r.title).slice(0, EPISODE_TITLE_MAX_CHARS) : null;
+    const image = r.image ? String(r.image).slice(0, EPISODE_IMAGE_MAX_CHARS) : null;
+    if (!title && !image) continue;
+    const key = `${r.mediaId}:${r.season}:${r.episode}`;
+    const prev = byKey.get(key);
+    byKey.set(key, [Number(r.mediaId), Number(r.season), Number(r.episode), title || (prev && prev[3]) || null, image || (prev && prev[4]) || null]);
+  }
+  if (!byKey.size) return 0;
+  let written = 0;
+  try {
+    for (const part of d1JsonChunks([...byKey.values()])) {
+      const out = await env.DB.prepare(
+        `INSERT INTO media_episodes (media_id, season, episode, title, image, updated_at)
+         SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'),
+                json_extract(value, '$[3]'), json_extract(value, '$[4]'), ?
+         FROM json_each(?) WHERE true
+         ON CONFLICT (media_id, season, episode) DO UPDATE SET
+           title = COALESCE(excluded.title, media_episodes.title),
+           image = COALESCE(excluded.image, media_episodes.image),
+           updated_at = excluded.updated_at
+         WHERE (excluded.title IS NOT NULL AND excluded.title IS NOT media_episodes.title)
+            OR (excluded.image IS NOT NULL AND excluded.image IS NOT media_episodes.image)`
+      ).bind(Date.now(), part).run();
+      written += Number(out && out.meta && out.meta.changes) || 0;
+    }
+  } catch (e) {
+    episodeTitlesWarn(e);
+  }
+  return written;
+}
+
+// Map "mediaId:season:episode" -> { title, image } for the episodes asked for
+// ({ mediaId, season, episode }); an episode with no stored name is absent.
+async function episodeTitlesFor(env, keys) {
+  const out = new Map();
+  if (!env || !env.DB || !Array.isArray(keys) || !keys.length) return out;
+  const want = new Map();
+  for (const k of keys) {
+    if (!k || k.mediaId == null || k.season == null || k.episode == null) continue;
+    want.set(`${k.mediaId}:${k.season}:${k.episode}`, [Number(k.mediaId), Number(k.season), Number(k.episode)]);
+  }
+  if (!want.size) return out;
+  try {
+    for (const part of d1JsonChunks([...want.values()])) {
+      const { results } = await env.DB.prepare(
+        `SELECT e.media_id, e.season, e.episode, e.title, e.image FROM json_each(?) j
+         JOIN media_episodes e ON e.media_id = json_extract(j.value, '$[0]')
+          AND e.season = json_extract(j.value, '$[1]') AND e.episode = json_extract(j.value, '$[2]')`
+      ).bind(part).all();
+      for (const r of results || []) out.set(`${r.media_id}:${r.season}:${r.episode}`, { title: r.title || "", image: r.image || "" });
+    }
+  } catch (e) {
+    episodeTitlesWarn(e);
+  }
+  return out;
+}
+
 // --- Lists v2 backfill: migrate.lists (Phase 3b, P3b-3) ----------------------
 //
 // Copies every existing list into the lists v2 tables (migration 0016):
@@ -104997,7 +105109,7 @@ const ACTIVITY_BACKFILL_CHUNK = 200;         // history entries resolved and wri
 const ACTIVITY_BACKFILL_SAMPLES = 5;         // examples kept of each kind of difference
 const ACTIVITY_BACKFILL_LEASE_MS = 90000;    // one step at a time
 const ACTIVITY_BACKFILL_ENTRY_MAX = 4000;    // characters of a Continue Watching entry kept in companion_json
-const ACTIVITY_BACKFILL_MAIN_TABLES = new Set(["media", "jobs"]);
+const ACTIVITY_BACKFILL_MAIN_TABLES = new Set(["media", "jobs", "media_episodes"]);
 const ACTIVITY_BACKFILL_ACTIVITY_TABLES = new Set(["watch_events", "show_progress", "user_media_state"]);
 
 // A D1 binding that counts every statement against the step's budget and
@@ -105276,11 +105388,16 @@ function legacyHistoryPlay(item, fallbackAt) {
   const ref = isEpisode
     ? { type: "episode", showId, imdbId: item.imdbId, showTitle: item.showTitle, seasonNum: season, episodeNum: episode }
     : { ...item };
+  // The episode's own name and still, which the activity database keeps in
+  // media_episodes rather than on the play (29_media.js).
+  const names = isEpisode ? episodeTitleFromLegacy(item) : null;
   return {
     id,
     ref,
     season: isEpisode ? season : null,
     episode: isEpisode ? episode : null,
+    title: names ? names.title : "",
+    image: names ? names.image : "",
     watchedAt,
     undated,
     label: String(item.showTitle || item.name || item.title || id || "(no id)").slice(0, 80) + (isEpisode && season != null ? ` S${season}E${episode}` : ""),
@@ -105344,12 +105461,15 @@ async function copyActivityHistoryChunk(env, actDb, accountId, chunk, budget, re
       return;
     }
     rows.push({ mediaId, season: play.season, episode: play.episode, t: play.watchedAt, label: play.label,
-      legacyId: String(play.id).startsWith("(no id)") ? null : play.id });
+      legacyId: String(play.id).startsWith("(no id)") ? null : play.id, title: play.title, image: play.image });
   });
   const { inserted, kept } = await insertActivityPlays(actDb, accountId, rows, "migrated", (r) => {
     recon.history.duplicates++;
     activityBackfillSample(recon.samples.duplicates, r.label);
   });
+  // Every episode name the legacy entries carry, duplicates' included: the
+  // one place the names of plays copied before 0020 can come from.
+  await saveEpisodeTitles(env, rows);
   recon.history.copied += inserted;
   // A play the statement skipped was within ten minutes of one stored by
   // an earlier chunk (or a same-key play): a duplicate as well.
@@ -105876,7 +105996,8 @@ async function activityAccountId(env, username) {
 function activityPlayFromLegacyEntry(entry) {
   if (!entry || typeof entry !== "object") return null;
   const play = legacyHistoryPlay(entry, Date.now());
-  return { ref: play.ref, season: play.season, episode: play.episode, watchedAt: play.watchedAt, legacyId: play.id || null };
+  return { ref: play.ref, season: play.season, episode: play.episode, watchedAt: play.watchedAt, legacyId: play.id || null,
+    title: play.title || "", image: play.image || "" };
 }
 
 // The statements for one play, given its media id. Exposed for the tests
@@ -105945,6 +106066,11 @@ async function recordActivityPlay(env, username, play, source) {
       : true;
     const out = await actDb.batch(activityPlayStatements(actDb, accountId, mediaId, p, src, now));
     const inserted = Number(out && out[0] && out[0].meta && out[0].meta.changes) > 0;
+    // The episode's own name and still (29_media.js). A write only when it is
+    // new or has changed.
+    if (isEpisode && (play.title || play.image)) {
+      await saveEpisodeTitles(env, [{ mediaId, season: p.season, episode: p.episode, title: play.title, image: play.image }]);
+    }
     if (!known) {
       try {
         await env.DB.prepare(
@@ -106246,35 +106372,26 @@ async function airingNext(env, accountId, opts = {}) {
   return { items, missingSchedule };
 }
 
-// One page of Watch History, newest first. cursor is the opaque string the
-// previous page returned ("watchedAt:id"); null at the end.
-async function watchHistoryPage(env, accountId, opts = {}) {
-  const actDb = activityDb(env, accountId);
-  if (!actDb) return { items: [], cursor: null };
-  const limit = Math.max(1, Math.min(SHELF_HISTORY_PAGE_MAX, Math.floor(Number(opts.limit)) || SHELF_HISTORY_PAGE));
-  let sql = "SELECT id, media_id, season, episode, watched_at, legacy_id FROM watch_events WHERE account_id = ?";
-  const args = [accountId];
-  const m = /^(\d+):(\d+)$/.exec(String(opts.cursor || ""));
-  if (m) {
-    sql += " AND (watched_at < ? OR (watched_at = ? AND id < ?))";
-    args.push(Number(m[1]), Number(m[1]), Number(m[2]));
-  }
-  sql += " ORDER BY watched_at DESC, id DESC LIMIT ?";
-  args.push(limit + 1);
-  const { results } = await actDb.prepare(sql).bind(...args).all();
-  const rows = results || [];
-  const more = rows.length > limit;
-  const page = more ? rows.slice(0, limit) : rows;
-  const titles = await shelfTitles(env, page.map((r) => r.media_id));
+// Watch History items for watch_events rows, in the order given. An episode
+// is named and pictured as media_episodes has it (29_media.js); an episode no
+// play ever named is still "Episode N" with the show poster.
+async function watchHistoryItems(env, rows) {
+  const [titles, episodes] = await Promise.all([
+    shelfTitles(env, rows.map((r) => r.media_id)),
+    episodeTitlesFor(env, rows.filter((r) => r.season != null && r.episode != null)
+      .map((r) => ({ mediaId: r.media_id, season: r.season, episode: r.episode }))),
+  ]);
   const items = [];
-  for (const r of page) {
+  for (const r of rows) {
     const t = titles.get(r.media_id);
     if (!t) continue;
     const showId = shelfShowId(t.media);
     const poster = shelfPoster(t.media);
     if (r.season != null && r.episode != null) {
+      const ep = episodes.get(`${r.media_id}:${r.season}:${r.episode}`);
       items.push({
-        id: r.legacy_id || `${showId}:${r.season}:${r.episode}`, type: "episode", name: `Episode ${r.episode}`, poster,
+        id: r.legacy_id || `${showId}:${r.season}:${r.episode}`, type: "episode", name: (ep && ep.title) || `Episode ${r.episode}`,
+        poster: (ep && ep.image) || poster,
         showId, showTitle: t.media.title || "", showPoster: poster, seasonNum: r.season, episodeNum: r.episode,
         watchedAt: r.watched_at, mediaId: r.media_id,
       });
@@ -106285,8 +106402,57 @@ async function watchHistoryPage(env, accountId, opts = {}) {
       });
     }
   }
+  return items;
+}
+
+// One page of Watch History, newest first. cursor is the opaque string the
+// previous page returned ("watchedAt:id"); null at the end.
+async function watchHistoryPage(env, accountId, opts = {}) {
+  const actDb = activityDb(env, accountId);
+  if (!actDb) return { items: [], cursor: null };
+  const limit = Math.max(1, Math.min(SHELF_HISTORY_PAGE_MAX, Math.floor(Number(opts.limit)) || SHELF_HISTORY_PAGE));
+  const m = /^(\d+):(\d+)$/.exec(String(opts.cursor || ""));
+  const rows = await watchEventRows(actDb, accountId, m ? { t: Number(m[1]), id: Number(m[2]) } : null, limit + 1);
+  const more = rows.length > limit;
+  const page = more ? rows.slice(0, limit) : rows;
+  const items = await watchHistoryItems(env, page);
   const last = page[page.length - 1];
   return { items, cursor: more && last ? `${last.watched_at}:${last.id}` : null };
+}
+
+// Up to `limit` of an account's plays, newest first, after `cursor` ({ t, id }).
+async function watchEventRows(actDb, accountId, cursor, limit) {
+  let sql = "SELECT id, media_id, season, episode, watched_at, legacy_id FROM watch_events WHERE account_id = ?";
+  const args = [accountId];
+  if (cursor) {
+    sql += " AND (watched_at < ? OR (watched_at = ? AND id < ?))";
+    args.push(cursor.t, cursor.t, cursor.id);
+  }
+  sql += " ORDER BY watched_at DESC, id DESC LIMIT ?";
+  args.push(limit);
+  const { results } = await actDb.prepare(sql).bind(...args).all();
+  return results || [];
+}
+
+// Every play an account has, newest first: the whole Watch History, as the
+// legacy record held it. Read WATCH_HISTORY_READ_ROWS at a time -- the record
+// used to stop at the newest 5,000 (40_event-tracking.js), which was a limit
+// the legacy record never had.
+const WATCH_HISTORY_READ_ROWS = 5000;
+
+async function watchHistoryAll(env, accountId) {
+  const actDb = activityDb(env, accountId);
+  if (!actDb) return [];
+  const rows = [];
+  let cursor = null;
+  for (;;) {
+    const part = await watchEventRows(actDb, accountId, cursor, WATCH_HISTORY_READ_ROWS);
+    rows.push(...part);
+    if (part.length < WATCH_HISTORY_READ_ROWS) break;
+    const last = part[part.length - 1];
+    cursor = { t: last.watched_at, id: last.id };
+  }
+  return watchHistoryItems(env, rows);
 }
 
 // The Watchlist: the account's watchlist list in lists v2, as legacy items.
@@ -106343,7 +106509,6 @@ async function watchlistShelf(env, accountId) {
 // Accounts whose copy has not finished stay on the legacy stores until it
 // has, and the copy's Start over is refused while the flag is on.
 
-const EVENT_TRACKING_HISTORY_MAX = 5000;   // Watch History entries a record holds
 const EVENT_TRACKING_CACHE_MS = 60 * 1000;
 const EVENT_TRACKING_KEY = "creatorsynctracking:";
 
@@ -106415,16 +106580,12 @@ async function assembleTrackingRecord(env, rawKv, username, accountId) {
     rest = trackingRecordRest(legacy || {});
     await writeTrackingSettings(env, accountId, settings.all, rest);
   }
-  const history = [];
-  let cursor = null;
-  do {
-    const page = await watchHistoryPage(env, accountId, { cursor, limit: SHELF_HISTORY_PAGE_MAX });
-    history.push(...page.items.map((it) => {
-      const { mediaId, ...legacyItem } = it;
-      return legacyItem;
-    }));
-    cursor = page.cursor;
-  } while (cursor && history.length < EVENT_TRACKING_HISTORY_MAX);
+  // The whole history, as the legacy record held it. It used to stop at the
+  // newest 5,000 plays, which the legacy record never did.
+  const history = (await watchHistoryAll(env, accountId)).map((it) => {
+    const { mediaId, ...legacyItem } = it;
+    return legacyItem;
+  });
   const record = { ...rest, watchHistory: history };
   if (isShowScheduleEnabled(env)) {
     const [cw, an] = await Promise.all([continueWatching(env, accountId), airingNext(env, accountId)]);
@@ -106475,9 +106636,11 @@ async function saveTrackingRecord(env, username, accountId, record) {
       const { ids } = await resolveMediaBatch(env, chunk.map((p) => p.ref), { maxLookups: 20 });
       const rows = [];
       chunk.forEach((p, j) => {
-        if (ids[j] != null) rows.push({ mediaId: ids[j], season: p.season, episode: p.episode, t: p.watchedAt, legacyId: p.id });
+        if (ids[j] != null) rows.push({ mediaId: ids[j], season: p.season, episode: p.episode, t: p.watchedAt, legacyId: p.id, title: p.title, image: p.image });
       });
       await insertActivityPlays(actDb, accountId, rows, "web");
+      // The episode names the website had for them (29_media.js).
+      await saveEpisodeTitles(env, rows);
     }
   }
   if (intentional) {

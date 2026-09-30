@@ -933,3 +933,114 @@ describe("P3c-6: with FF_EVENT_TRACKING, a copied account is served from the act
     assert.match(r.body.error, /FF_EVENT_TRACKING/);
   });
 });
+
+// --- Episode names, and no cap on Watch History (the release branch) ----------
+//
+// With FF_EVENT_TRACKING, Watch History comes from the activity database, which
+// records a play as a title and an episode number -- so every episode showed as
+// "Episode N" with the show poster, and the record stopped at the newest 5,000
+// plays. The names now live once per episode in media_episodes (migration
+// 0020, 29_media.js), written by the plays, a website save and the history
+// copy; and the record holds every play, as the legacy record did.
+
+describe("Watch History from the activity database: episode names, and every play", () => {
+  it("names an episode as media_episodes has it, with its still; an unnamed one stays Episode N", async () => {
+    const sb = loadShelves();
+    const { env, main, act } = shelfFixture();
+    const ins = act._db.prepare("INSERT INTO watch_events (account_id, media_id, season, episode, watched_at, source, dedupe_key) VALUES (7, ?, ?, ?, ?, 'ping', ?)");
+    ins.run(1, 1, 1, 100, "a");
+    ins.run(1, 1, 2, 200, "b");
+    main._db.prepare("INSERT INTO media_episodes (media_id, season, episode, title, image, updated_at) VALUES (1, 1, 2, ?, ?, 0)")
+      .run("Cat's in the Bag...", "https://image.tmdb.org/t/p/w500/s1e2.jpg");
+    const page = plain(await sb.watchHistoryPage(env, 7, { limit: 10 }));
+    assert.equal(page.items[0].name, "Cat's in the Bag...");
+    assert.equal(page.items[0].poster, "https://image.tmdb.org/t/p/w500/s1e2.jpg");
+    assert.equal(page.items[0].showPoster, "https://image.tmdb.org/t/p/w500/bb.jpg", "the show keeps its own poster");
+    assert.equal(page.items[1].name, "Episode 1", "no name known: the placeholder, as before");
+    assert.equal(page.items[1].poster, page.items[1].showPoster);
+  });
+
+  it("works on a database without 0020: every episode is Episode N, nothing breaks", async () => {
+    const sb = loadShelves();
+    const { env, main, act } = shelfFixture();
+    main._db.exec("DROP TABLE media_episodes");
+    act._db.prepare("INSERT INTO watch_events (account_id, media_id, season, episode, watched_at, source, dedupe_key) VALUES (7, 1, 1, 3, 100, 'ping', 'x')").run();
+    const page = plain(await sb.watchHistoryPage(env, 7, { limit: 10 }));
+    assert.equal(page.items[0].name, "Episode 3");
+  });
+
+  it("a play keeps its episode's name and still, and the same play again writes nothing more", async () => {
+    const sb = loadScrobble();
+    const { env, main, act } = await playEnv();
+    await sb.resolveMediaBatch(env, [{ id: "tt0903747", type: "series" }], { maxLookups: 0 });
+    const named = { ...episodeEntry(1, 3, T0), name: "...And the Bag's in the River", poster: "https://image.tmdb.org/t/p/w500/s1e3.jpg", showPoster: "https://image.tmdb.org/t/p/w500/bb.jpg" };
+    const r = await sb.recordActivityPlay(env, "ann", sb.activityPlayFromLegacyEntry(named), "ping");
+    assert.equal(r.recorded, true, JSON.stringify(r));
+    const row = main.db._db.prepare("SELECT title, image FROM media_episodes WHERE media_id = ? AND season = 1 AND episode = 3").get(r.mediaId);
+    assert.deepEqual([row.title, row.image], ["...And the Bag's in the River", "https://image.tmdb.org/t/p/w500/s1e3.jpg"]);
+    main.db._db.prepare("UPDATE media_episodes SET updated_at = 1").run();
+    await sb.recordActivityPlay(env, "ann", sb.activityPlayFromLegacyEntry({ ...named, watchedAt: T0 + 5 * H }), "ping");
+    const again = main.db._db.prepare("SELECT title, updated_at FROM media_episodes WHERE media_id = ?").all(r.mediaId);
+    assert.equal(again.length, 1, "one row per episode");
+    assert.equal(again[0].updated_at, 1, "the same name again is not a write");
+    await sb.recordActivityPlay(env, "ann", sb.activityPlayFromLegacyEntry({ ...named, name: "Episode 3", poster: "", watchedAt: T0 + 9 * H }), "ping");
+    assert.equal(main.db._db.prepare("SELECT title FROM media_episodes WHERE media_id = ?").get(r.mediaId).title,
+      "...And the Bag's in the River", "a later play without the name does not blank it");
+  });
+
+  it("does not take a show's name, the placeholder, or the show poster for the episode's", () => {
+    const sb = loadScrobble();
+    const plainOf = (v) => JSON.parse(JSON.stringify(v));
+    assert.deepEqual(plainOf(sb.episodeTitleFromLegacy({ showId: "tt1", showTitle: "Show", name: "Pilot", poster: "https://x/still.jpg", showPoster: "https://x/show.jpg" })),
+      { title: "Pilot", image: "https://x/still.jpg" });
+    assert.equal(sb.episodeTitleFromLegacy({ showId: "tt1", name: "Episode 4", poster: "https://x/show.jpg", showPoster: "https://x/show.jpg" }), null);
+    assert.equal(sb.episodeTitleFromLegacy({ showId: "tt1", showTitle: "Show", name: "Show" }), null);
+    assert.equal(sb.episodeTitleFromLegacy({ id: "tt0944947:2:3", type: "episode", name: "Game of Thrones" }), null,
+      "an entry saved without its show carries the show's name, not the episode's");
+    assert.equal(sb.episodeTitleFromLegacy({ showId: "tt1", poster: "https://images.metahub.space/poster/medium/tt1/img" }), null);
+  });
+
+  it("the history copy brings the legacy names over, and /sync/load shows them", async () => {
+    const env = activityEnv({ FF_EVENT_TRACKING: "1" });
+    const user = await createUser(env, "namedwatch");
+    await env.CONFIGS.put("creatorsynctracking:namedwatch", JSON.stringify({
+      updatedAt: T0 + 5 * H,
+      watchHistory: [
+        { id: "n1", type: "episode", showId: "tt0903747", showTitle: "Breaking Bad", seasonNum: 1, episodeNum: 1, name: "Pilot", poster: "https://image.tmdb.org/t/p/w500/p1.jpg", showPoster: "https://image.tmdb.org/t/p/w500/bb.jpg", watchedAt: T0 },
+        { id: "n2", type: "episode", showId: "tt0903747", showTitle: "Breaking Bad", seasonNum: 1, episodeNum: 2, name: "Cat's in the Bag...", watchedAt: T0 + H },
+        { id: "tt0137523", type: "movie", name: "Fight Club", watchedAt: T0 + 2 * H },
+      ],
+    }));
+    await runActivityBackfill(env, await adminCookie(env));
+    const data = (await call(env, "/api/creator/sync/load", { method: "POST", json: { creatorName: user.creatorName, creatorKey: user.creatorKey } })).body.data;
+    const byId = new Map(data.watchHistory.map((it) => [it.id, it]));
+    assert.equal(byId.get("n1").name, "Pilot");
+    assert.equal(byId.get("n1").poster, "https://image.tmdb.org/t/p/w500/p1.jpg");
+    assert.equal(byId.get("n2").name, "Cat's in the Bag...");
+    assert.equal(byId.get("tt0137523").name, "Fight Club");
+  });
+
+  it("a website save names the episodes it adds", async () => {
+    const { env, user } = await eventTrackingSetup();
+    const data = await loadTracking(env, user);
+    const added = { id: "e9", type: "episode", showId: "tt0903747", showTitle: "Breaking Bad", seasonNum: 1, episodeNum: 6, name: "Crazy Handful of Nothin'", watchedAt: T0 + 7 * H };
+    const r = await saveTrackingV2(env, user, { ...data, watchHistory: [added, ...data.watchHistory], expectedClientVersion: data.trackingClientVersion });
+    assert.equal(r.body.ok, true, JSON.stringify(r.body));
+    const again = await loadTracking(env, user);
+    assert.equal(again.watchHistory.find((it) => it.id === "e9").name, "Crazy Handful of Nothin'");
+  });
+
+  it("hands back every play, not just the newest 5,000", async () => {
+    const { env, user } = await eventTrackingSetup();
+    const id = accountId(env, "annwatch");
+    const fightClub = mediaIdBy(env, "imdb_id", "tt0137523");
+    const before = (await loadTracking(env, user)).watchHistory.length;
+    const ins = env.DB_ACTIVITY._db.prepare("INSERT INTO watch_events (account_id, media_id, season, episode, watched_at, source, dedupe_key, legacy_id) VALUES (?, ?, NULL, NULL, ?, 'web', ?, ?)");
+    env.DB_ACTIVITY._db.exec("BEGIN");
+    for (let i = 0; i < 5200; i++) ins.run(id, fightClub, T0 - (i + 1) * H, `bulk${i}`, `bulk${i}`);
+    env.DB_ACTIVITY._db.exec("COMMIT");
+    const data = await loadTracking(env, user);
+    assert.equal(data.watchHistory.length, before + 5200);
+    assert.equal(data.watchHistory[data.watchHistory.length - 1].id, "bulk5199", "the oldest play is there too");
+  });
+});

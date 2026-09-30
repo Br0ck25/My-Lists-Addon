@@ -590,6 +590,19 @@ CREATE TABLE IF NOT EXISTS admin_audit_log (
 CREATE INDEX IF NOT EXISTS idx_admin_audit_at ON admin_audit_log(at DESC);
 CREATE INDEX IF NOT EXISTS idx_admin_audit_action ON admin_audit_log(action);
 
+-- Episode names and stills, once per episode (migrations/0020). Watch History
+-- from the activity database reads them (watchHistoryItems, 39_); the plays
+-- and the history copy write them (57_episode-titles.js).
+CREATE TABLE IF NOT EXISTS media_episodes (
+    media_id    INTEGER NOT NULL,
+    season      INTEGER NOT NULL,
+    episode     INTEGER NOT NULL,
+    title       TEXT,
+    image       TEXT,
+    updated_at  INTEGER NOT NULL,
+    PRIMARY KEY (media_id, season, episode)
+) WITHOUT ROWID;
+
 -- Migration ledger (migrations/0014). A fresh database starts at the latest version.
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version    TEXT PRIMARY KEY,
@@ -615,4 +628,5 @@ INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES
   ('0016', 0),
   ('0017', 0),
   ('0018', 0),
-  ('0019', 0);
+  ('0019', 0),
+  ('0020', 0);

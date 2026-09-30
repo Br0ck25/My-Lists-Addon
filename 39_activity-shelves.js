@@ -277,35 +277,26 @@ async function airingNext(env, accountId, opts = {}) {
   return { items, missingSchedule };
 }
 
-// One page of Watch History, newest first. cursor is the opaque string the
-// previous page returned ("watchedAt:id"); null at the end.
-async function watchHistoryPage(env, accountId, opts = {}) {
-  const actDb = activityDb(env, accountId);
-  if (!actDb) return { items: [], cursor: null };
-  const limit = Math.max(1, Math.min(SHELF_HISTORY_PAGE_MAX, Math.floor(Number(opts.limit)) || SHELF_HISTORY_PAGE));
-  let sql = "SELECT id, media_id, season, episode, watched_at, legacy_id FROM watch_events WHERE account_id = ?";
-  const args = [accountId];
-  const m = /^(\d+):(\d+)$/.exec(String(opts.cursor || ""));
-  if (m) {
-    sql += " AND (watched_at < ? OR (watched_at = ? AND id < ?))";
-    args.push(Number(m[1]), Number(m[1]), Number(m[2]));
-  }
-  sql += " ORDER BY watched_at DESC, id DESC LIMIT ?";
-  args.push(limit + 1);
-  const { results } = await actDb.prepare(sql).bind(...args).all();
-  const rows = results || [];
-  const more = rows.length > limit;
-  const page = more ? rows.slice(0, limit) : rows;
-  const titles = await shelfTitles(env, page.map((r) => r.media_id));
+// Watch History items for watch_events rows, in the order given. An episode
+// is named and pictured as media_episodes has it (29_media.js); an episode no
+// play ever named is still "Episode N" with the show poster.
+async function watchHistoryItems(env, rows) {
+  const [titles, episodes] = await Promise.all([
+    shelfTitles(env, rows.map((r) => r.media_id)),
+    episodeTitlesFor(env, rows.filter((r) => r.season != null && r.episode != null)
+      .map((r) => ({ mediaId: r.media_id, season: r.season, episode: r.episode }))),
+  ]);
   const items = [];
-  for (const r of page) {
+  for (const r of rows) {
     const t = titles.get(r.media_id);
     if (!t) continue;
     const showId = shelfShowId(t.media);
     const poster = shelfPoster(t.media);
     if (r.season != null && r.episode != null) {
+      const ep = episodes.get(`${r.media_id}:${r.season}:${r.episode}`);
       items.push({
-        id: r.legacy_id || `${showId}:${r.season}:${r.episode}`, type: "episode", name: `Episode ${r.episode}`, poster,
+        id: r.legacy_id || `${showId}:${r.season}:${r.episode}`, type: "episode", name: (ep && ep.title) || `Episode ${r.episode}`,
+        poster: (ep && ep.image) || poster,
         showId, showTitle: t.media.title || "", showPoster: poster, seasonNum: r.season, episodeNum: r.episode,
         watchedAt: r.watched_at, mediaId: r.media_id,
       });
@@ -316,8 +307,57 @@ async function watchHistoryPage(env, accountId, opts = {}) {
       });
     }
   }
+  return items;
+}
+
+// One page of Watch History, newest first. cursor is the opaque string the
+// previous page returned ("watchedAt:id"); null at the end.
+async function watchHistoryPage(env, accountId, opts = {}) {
+  const actDb = activityDb(env, accountId);
+  if (!actDb) return { items: [], cursor: null };
+  const limit = Math.max(1, Math.min(SHELF_HISTORY_PAGE_MAX, Math.floor(Number(opts.limit)) || SHELF_HISTORY_PAGE));
+  const m = /^(\d+):(\d+)$/.exec(String(opts.cursor || ""));
+  const rows = await watchEventRows(actDb, accountId, m ? { t: Number(m[1]), id: Number(m[2]) } : null, limit + 1);
+  const more = rows.length > limit;
+  const page = more ? rows.slice(0, limit) : rows;
+  const items = await watchHistoryItems(env, page);
   const last = page[page.length - 1];
   return { items, cursor: more && last ? `${last.watched_at}:${last.id}` : null };
+}
+
+// Up to `limit` of an account's plays, newest first, after `cursor` ({ t, id }).
+async function watchEventRows(actDb, accountId, cursor, limit) {
+  let sql = "SELECT id, media_id, season, episode, watched_at, legacy_id FROM watch_events WHERE account_id = ?";
+  const args = [accountId];
+  if (cursor) {
+    sql += " AND (watched_at < ? OR (watched_at = ? AND id < ?))";
+    args.push(cursor.t, cursor.t, cursor.id);
+  }
+  sql += " ORDER BY watched_at DESC, id DESC LIMIT ?";
+  args.push(limit);
+  const { results } = await actDb.prepare(sql).bind(...args).all();
+  return results || [];
+}
+
+// Every play an account has, newest first: the whole Watch History, as the
+// legacy record held it. Read WATCH_HISTORY_READ_ROWS at a time -- the record
+// used to stop at the newest 5,000 (40_event-tracking.js), which was a limit
+// the legacy record never had.
+const WATCH_HISTORY_READ_ROWS = 5000;
+
+async function watchHistoryAll(env, accountId) {
+  const actDb = activityDb(env, accountId);
+  if (!actDb) return [];
+  const rows = [];
+  let cursor = null;
+  for (;;) {
+    const part = await watchEventRows(actDb, accountId, cursor, WATCH_HISTORY_READ_ROWS);
+    rows.push(...part);
+    if (part.length < WATCH_HISTORY_READ_ROWS) break;
+    const last = part[part.length - 1];
+    cursor = { t: last.watched_at, id: last.id };
+  }
+  return watchHistoryItems(env, rows);
 }
 
 // The Watchlist: the account's watchlist list in lists v2, as legacy items.

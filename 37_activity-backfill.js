@@ -50,7 +50,7 @@ const ACTIVITY_BACKFILL_CHUNK = 200;         // history entries resolved and wri
 const ACTIVITY_BACKFILL_SAMPLES = 5;         // examples kept of each kind of difference
 const ACTIVITY_BACKFILL_LEASE_MS = 90000;    // one step at a time
 const ACTIVITY_BACKFILL_ENTRY_MAX = 4000;    // characters of a Continue Watching entry kept in companion_json
-const ACTIVITY_BACKFILL_MAIN_TABLES = new Set(["media", "jobs"]);
+const ACTIVITY_BACKFILL_MAIN_TABLES = new Set(["media", "jobs", "media_episodes"]);
 const ACTIVITY_BACKFILL_ACTIVITY_TABLES = new Set(["watch_events", "show_progress", "user_media_state"]);
 
 // A D1 binding that counts every statement against the step's budget and
@@ -329,11 +329,16 @@ function legacyHistoryPlay(item, fallbackAt) {
   const ref = isEpisode
     ? { type: "episode", showId, imdbId: item.imdbId, showTitle: item.showTitle, seasonNum: season, episodeNum: episode }
     : { ...item };
+  // The episode's own name and still, which the activity database keeps in
+  // media_episodes rather than on the play (29_media.js).
+  const names = isEpisode ? episodeTitleFromLegacy(item) : null;
   return {
     id,
     ref,
     season: isEpisode ? season : null,
     episode: isEpisode ? episode : null,
+    title: names ? names.title : "",
+    image: names ? names.image : "",
     watchedAt,
     undated,
     label: String(item.showTitle || item.name || item.title || id || "(no id)").slice(0, 80) + (isEpisode && season != null ? ` S${season}E${episode}` : ""),
@@ -397,12 +402,15 @@ async function copyActivityHistoryChunk(env, actDb, accountId, chunk, budget, re
       return;
     }
     rows.push({ mediaId, season: play.season, episode: play.episode, t: play.watchedAt, label: play.label,
-      legacyId: String(play.id).startsWith("(no id)") ? null : play.id });
+      legacyId: String(play.id).startsWith("(no id)") ? null : play.id, title: play.title, image: play.image });
   });
   const { inserted, kept } = await insertActivityPlays(actDb, accountId, rows, "migrated", (r) => {
     recon.history.duplicates++;
     activityBackfillSample(recon.samples.duplicates, r.label);
   });
+  // Every episode name the legacy entries carry, duplicates' included: the
+  // one place the names of plays copied before 0020 can come from.
+  await saveEpisodeTitles(env, rows);
   recon.history.copied += inserted;
   // A play the statement skipped was within ten minutes of one stored by
   // an earlier chunk (or a same-key play): a duplicate as well.

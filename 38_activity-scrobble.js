@@ -38,7 +38,8 @@ async function activityAccountId(env, username) {
 function activityPlayFromLegacyEntry(entry) {
   if (!entry || typeof entry !== "object") return null;
   const play = legacyHistoryPlay(entry, Date.now());
-  return { ref: play.ref, season: play.season, episode: play.episode, watchedAt: play.watchedAt, legacyId: play.id || null };
+  return { ref: play.ref, season: play.season, episode: play.episode, watchedAt: play.watchedAt, legacyId: play.id || null,
+    title: play.title || "", image: play.image || "" };
 }
 
 // The statements for one play, given its media id. Exposed for the tests
@@ -107,6 +108,11 @@ async function recordActivityPlay(env, username, play, source) {
       : true;
     const out = await actDb.batch(activityPlayStatements(actDb, accountId, mediaId, p, src, now));
     const inserted = Number(out && out[0] && out[0].meta && out[0].meta.changes) > 0;
+    // The episode's own name and still (29_media.js). A write only when it is
+    // new or has changed.
+    if (isEpisode && (play.title || play.image)) {
+      await saveEpisodeTitles(env, [{ mediaId, season: p.season, episode: p.episode, title: play.title, image: play.image }]);
+    }
     if (!known) {
       try {
         await env.DB.prepare(

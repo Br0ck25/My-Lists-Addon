@@ -14,7 +14,8 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Release 8** went live on 2026-09-30. The owner reports everything working, and asked for changes to the new interface and for five older bugs to be fixed: that is Release 9.
 - **Release 9** went live on 2026-09-30. The owner found two problems, fixed in Release 9b (prepared, not yet live): the red x on a list card's poster opened the list instead of removing the title, and ticking *Enable media server user filtering* did not stick.
 - **Release 9b** went live on 2026-09-30, followed by the sign-in sessions step (steps under Release 9b). The owner reports everything looks good.
-- **Release 10** (Phase 7 so far, PR #9) is prepared and not yet live.
+- **Release 10** (Phase 7 so far, PR #9) went live on 2026-09-30. The owner does not want Cloudflare Access on `/admin`.
+- **Next:** `FF_V2_LISTS_ONLY` now (the owner's call, rather than after a week or two), then Release 11 and `FF_EVENT_TRACKING`. Both steps are below.
 
 The owner decided to release the new version **one phase at a time, straight to the live site**, with no separate test site. Each release waits until the one before it has run cleanly for at least a day.
 
@@ -40,6 +41,7 @@ The owner decided to release the new version **one phase at a time, straight to 
 | 8 | Phase 6: new interface | `eee71a7` | none | none (the new interface is behind a cookie) |
 | 9 | Five bug fixes and the owner's new-interface changes (this branch only) | none | none | none |
 | 10 | Phase 7 so far ([PR #9](https://github.com/Br0ck25/My-Lists-Addon/pull/9), not yet merged into `main`) | `243340a` (the PR's head) | `0018`, `0019` (optional) | none required; Cloudflare Access for `/admin` optional |
+| 11 | Watch History from the activity database: episode names, and no 5,000-play cap (this branch only) | none | `0020` | the history copy's *Start over*, then `FF_EVENT_TRACKING` |
 
 Each release gets its own section below when it is prepared, with its steps in plain words.
 
@@ -797,3 +799,51 @@ One change on top of it (`docs/OPERATIONS.md` §24): the Trusted Types reports a
 ### Rollback
 
 Paste Release 9b's file and Deploy. The two new tables stay and are ignored by the older code; the admin sign-in goes back to the key-only cookie.
+
+---
+
+## After Release 10: `FF_V2_LISTS_ONLY` (no deploy)
+
+The owner asked for this now rather than after a week or two of `FF_V2_LISTS_READ`. It is **one-way** (`docs/OPERATIONS.md` §11): from then on lists, likes and shared channels are written only to the new tables, and the old storage falls behind for good.
+
+Checked before recommending it:
+- every place this branch saves an account's list writes the new tables (the ported *every list is live* code included, fixed for this in Release 4);
+- the signed-out live lists (`listlive:` keys) are a separate store the switch does not touch;
+- the suite's lists-only tests pass. (Forcing the switch on for *every* test fails only the ones that seed the old storage and copy it, which the switch forbids by design.)
+
+**Steps:**
+1. `/admin` → **Lists v2** → *Check results*: every account copied, none waiting to be copied again, none failed. If some are waiting, press *Copy lists*, then *Check results* again.
+2. Note the time. D1 keeps 30 days of Time Travel, so the database can be put back to this moment if it ever had to be.
+3. Worker **wako** → **Settings** → **Variables and Secrets** → **+ Add** → Type **Text**, name `FF_V2_LISTS_ONLY`, value `1` → **Deploy**.
+4. Check: make a list, add and remove titles, rename it, reorder your lists, delete it; like and unlike a list; add and remove a Watchlist title; save a shared channel. In Stremio or Nuvio, an edit reaches the row.
+
+**Never** delete the variable, or turn `FF_V2_LISTS_READ` off, afterwards: both would show everyone lists as they were on the day it was turned on.
+
+---
+
+## Release 11: episode names and every play, for Watch History from the activity database
+
+**Branch point:** this branch after Release 10. Nothing here comes from `main`.
+
+With `FF_EVENT_TRACKING` (one-way per account, still off), Watch History is served from the activity database. Two things kept it off (see "Why `FF_EVENT_TRACKING` waits" under Release 5), and the owner asked for both to be fixed first:
+
+- **"Episode N" with the show's poster.** The activity database records a play as a title, a season and an episode; nothing held the episode's name or still.
+  - They are now kept once per episode, in a new table `media_episodes` in the main database (migration `0020`).
+  - Every play from Stremio, Nuvio, Plex, Jellyfin or Emby writes it; so does a website save that adds an episode; and so does the history copy, which reads the old Watch History entries that still have them.
+  - Watch History shows the stored name and still. An episode nobody ever recorded a name for still says "Episode N".
+- **The 5,000-play cap.** The record stopped at the newest 5,000 plays. It now holds every play, as the old record did, read 5,000 rows at a time.
+
+Nothing changes while `FF_EVENT_TRACKING` is off, except that plays start filling in `media_episodes`.
+
+`bash verify.sh` passes, and so does the suite with `MLA_TEST_V2_LISTS_READ=1`. Both fixes have tests that fail on Release 10 (the cap test gets 5,000 of 5,206 plays).
+
+**Steps:**
+1. Keep Release 10's file (`release-10-NEW-worker.js`) as the rollback file.
+2. Deploy Release 11's file (`release-11-NEW-worker.js`).
+3. **D1 → `my-lists-db`** (the main database) → Console → paste `release-11-migration-0020-MAIN-database.sql` → **Execute**. Safe to run twice.
+4. `/admin` → Maintenance → **Activity: copy watch history** → **Start over**, and keep the page open until it says *Done*. It copies every account again from the old storage: the episode names come with it, and so does anything changed on the website since the first copy.
+5. **Check results:** no failed accounts, and no account with fewer plays than before that the examples cannot explain. Send the results over before step 6.
+6. **Then** Worker **wako** → **Settings** → **Variables and Secrets** → **+ Add** → Text `FF_EVENT_TRACKING` = `1` → **Deploy**. **One-way:** never delete it afterwards.
+7. Check: Watch History shows episode names and stills and goes all the way back; play something and it appears at the top; Continue Watching moves on; remove an item and it stays removed.
+
+**Rollback before step 6:** paste Release 10's file. The new table is harmless to it. **After step 6** there is no going back to the old storage, only forward fixes.

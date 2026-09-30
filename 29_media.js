@@ -467,3 +467,111 @@ async function retryUnresolvedMedia(env, opts = {}) {
   }
   return { tried: rows.length, resolved };
 }
+
+// --- Episode names and stills (migration 0020) ---------------------------------
+//
+// The activity database records a play as a title, a season and an episode --
+// nothing names the episode itself. The legacy Watch History kept the name and
+// the still on every entry, so Watch History served from the activity database
+// (FF_EVENT_TRACKING) showed every episode as "Episode 3" with the show poster.
+// An episode is called the same thing for everyone, so its name and still are
+// kept once, in media_episodes beside media: written by the plays (38_), a save
+// from the website (40_) and the history copy (37_, which reads the legacy
+// entries that still have them), and read by Watch History (39_).
+//
+// Nothing here may break what calls it: a database without 0020 reads as no
+// names, and a write that fails is logged and dropped.
+
+const EPISODE_TITLE_MAX_CHARS = 300;
+const EPISODE_IMAGE_MAX_CHARS = 1000;
+let _episodeTitlesWarned = false;
+
+function episodeTitlesWarn(e) {
+  if (/no such table/i.test(String((e && e.message) || e)) || _episodeTitlesWarned) return;
+  _episodeTitlesWarned = true;
+  console.error("media_episodes:", e);
+}
+
+// { title, image } a legacy Watch History entry gives its episode, or null.
+// Only an entry that knows its show: the web page saves an episode it had no
+// show loaded for under the show's name (see legacyHistoryPlay), which is not
+// the episode's. "Episode 3" is the placeholder, not a name, and a poster that
+// is the show's (or a generated one) is not the episode's still.
+function episodeTitleFromLegacy(item) {
+  if (!item || typeof item !== "object") return null;
+  if (!item.showId && !item.showTitle) return null;
+  const raw = typeof item.name === "string" && item.name.trim() ? item.name : item.title;
+  let title = typeof raw === "string" ? raw.trim().slice(0, EPISODE_TITLE_MAX_CHARS) : "";
+  const showTitle = typeof item.showTitle === "string" ? item.showTitle.trim() : "";
+  if (/^episode\s+\d+$/i.test(title) || (showTitle && title === showTitle)) title = "";
+  const poster = typeof item.poster === "string" ? item.poster.trim() : "";
+  const showPoster = typeof item.showPoster === "string" ? item.showPoster.trim() : "";
+  const image = /^https:\/\//i.test(poster) && poster.length <= EPISODE_IMAGE_MAX_CHARS && poster !== showPoster &&
+    !/metahub\.space\/poster|\/bp\/|\/api\/(?:safe-poster|poster-badge)/i.test(poster) ? poster : "";
+  return title || image ? { title, image } : null;
+}
+
+// Stores names for episodes ({ mediaId, season, episode, title, image }). A
+// name already stored is replaced only by a different one, and a blank never
+// replaces one, so re-sending what is there writes nothing. Returns rows written.
+async function saveEpisodeTitles(env, rows) {
+  if (!env || !env.DB || !Array.isArray(rows) || !rows.length) return 0;
+  const byKey = new Map();
+  for (const r of rows) {
+    if (!r || r.mediaId == null || r.season == null || r.episode == null) continue;
+    const title = r.title ? String(r.title).slice(0, EPISODE_TITLE_MAX_CHARS) : null;
+    const image = r.image ? String(r.image).slice(0, EPISODE_IMAGE_MAX_CHARS) : null;
+    if (!title && !image) continue;
+    const key = `${r.mediaId}:${r.season}:${r.episode}`;
+    const prev = byKey.get(key);
+    byKey.set(key, [Number(r.mediaId), Number(r.season), Number(r.episode), title || (prev && prev[3]) || null, image || (prev && prev[4]) || null]);
+  }
+  if (!byKey.size) return 0;
+  let written = 0;
+  try {
+    for (const part of d1JsonChunks([...byKey.values()])) {
+      const out = await env.DB.prepare(
+        `INSERT INTO media_episodes (media_id, season, episode, title, image, updated_at)
+         SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'),
+                json_extract(value, '$[3]'), json_extract(value, '$[4]'), ?
+         FROM json_each(?) WHERE true
+         ON CONFLICT (media_id, season, episode) DO UPDATE SET
+           title = COALESCE(excluded.title, media_episodes.title),
+           image = COALESCE(excluded.image, media_episodes.image),
+           updated_at = excluded.updated_at
+         WHERE (excluded.title IS NOT NULL AND excluded.title IS NOT media_episodes.title)
+            OR (excluded.image IS NOT NULL AND excluded.image IS NOT media_episodes.image)`
+      ).bind(Date.now(), part).run();
+      written += Number(out && out.meta && out.meta.changes) || 0;
+    }
+  } catch (e) {
+    episodeTitlesWarn(e);
+  }
+  return written;
+}
+
+// Map "mediaId:season:episode" -> { title, image } for the episodes asked for
+// ({ mediaId, season, episode }); an episode with no stored name is absent.
+async function episodeTitlesFor(env, keys) {
+  const out = new Map();
+  if (!env || !env.DB || !Array.isArray(keys) || !keys.length) return out;
+  const want = new Map();
+  for (const k of keys) {
+    if (!k || k.mediaId == null || k.season == null || k.episode == null) continue;
+    want.set(`${k.mediaId}:${k.season}:${k.episode}`, [Number(k.mediaId), Number(k.season), Number(k.episode)]);
+  }
+  if (!want.size) return out;
+  try {
+    for (const part of d1JsonChunks([...want.values()])) {
+      const { results } = await env.DB.prepare(
+        `SELECT e.media_id, e.season, e.episode, e.title, e.image FROM json_each(?) j
+         JOIN media_episodes e ON e.media_id = json_extract(j.value, '$[0]')
+          AND e.season = json_extract(j.value, '$[1]') AND e.episode = json_extract(j.value, '$[2]')`
+      ).bind(part).all();
+      for (const r of results || []) out.set(`${r.media_id}:${r.season}:${r.episode}`, { title: r.title || "", image: r.image || "" });
+    }
+  } catch (e) {
+    episodeTitlesWarn(e);
+  }
+  return out;
+}

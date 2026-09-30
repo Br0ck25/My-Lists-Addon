@@ -1258,6 +1258,10 @@ const D1_SCHEMA_MANIFEST = [
     migration: "0019", kind: "index", name: "idx_rate_counters_window",
     consequence: "Clearing spent rate-limit windows scans the whole counters table every ten minutes instead of a window range. Slower, not broken (P7-3).",
   },
+  {
+    migration: "0020", kind: "table", name: "media_episodes",
+    consequence: "Watch History served from the activity database shows episodes as \"Episode N\" with the show poster, and no episode name is kept from new plays.",
+  },
 ];
 
 

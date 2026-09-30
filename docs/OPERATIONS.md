@@ -279,6 +279,7 @@ It does not copy Airing Next or the recommendations. Both are worked out rather 
 - *Plays copied* against the old history. The same play recorded twice within ten minutes (the same episode under two ids, or a retried scrobble) is kept once; an entry with no id at all cannot be copied (nothing can show it today either). Both are counted, with examples.
 - *Accounts with fewer plays than their old history* should be 0, or explained by those two reasons. The examples say which.
 - *Titles TMDB could not place yet* are **kept**, with the id they had, and tried again later.
+- Each episode's name and still, from the old entries, go to `media_episodes` (migration `0020`; without it they are skipped and the copy carries on).
 - *Failed accounts* names each account the copy could not finish and why. The rest carry on.
 
 **Running it again:** *Copy history* does nothing once the copy is done. *Start over* copies every account again from the start: what an earlier copy made is replaced, so the copy matches the old storage as it is now. Plays recorded some other way (once scrobbles go to the new database, P3c-4) are kept.
@@ -291,9 +292,10 @@ It does not copy Airing Next or the recommendations. Both are worked out rather 
 
 **Before turning it on:**
 
-1. The activity database is bound and migrated (§2, §4), and migration `0017` is applied.
-2. The copy (§12) says *Done*, and *Check results* shows no failed accounts you have not looked at, and no account with fewer plays than its old history that you cannot explain.
-3. Back up D1 (§5), and export the tracking keys from KV (`creatorsynctracking:`) if you want a copy of the old records.
+1. The activity database is bound and migrated (§2, §4), and migrations `0017` and `0020` are applied.
+2. *Start over* the history copy (§12) and let it finish, after `0020` is applied: it brings the episode names over, and whatever changed on the website since the first copy.
+3. The copy (§12) says *Done*, and *Check results* shows no failed accounts you have not looked at, and no account with fewer plays than its old history that you cannot explain.
+4. Back up D1 (§5), and export the tracking keys from KV (`creatorsynctracking:`) if you want a copy of the old records.
 
 **Turning it on:** Worker → Settings → Variables and Secrets → Add → type *Text*, name `FF_EVENT_TRACKING`, value `1`. Deploy.
 
@@ -301,9 +303,8 @@ It does not copy Airing Next or the recommendations. Both are worked out rather 
 
 - Accounts whose copy has finished are served from the activity database straight away. Any other account stays on the old storage until *Copy history* has copied it. *Start over* is refused while the flag is on.
 - Continue Watching and Airing Next are shown as they were last worked out, as today. Working them out from the show schedule comes with `FF_SHOW_SCHEDULE`, after the schedule job exists (Phase 5).
-- Known differences:
-  - Watch History shows an episode as "Episode N" with the show's poster, where the old record kept the episode's own title and still.
-  - The website's list is capped at the latest 5,000 plays; the database keeps them all.
+- Episodes keep their own names and stills: they are kept once per episode in `media_episodes` (migration `0020`), filled by every play and by the copy. **Run *Start over* (§12) after applying `0020` and before turning the flag on**: plays copied before `0020` have their names only in the old records, and the copy is what brings them over (it also brings anything changed on the website since the first copy). An episode nobody ever recorded a name for still shows as "Episode N".
+- Every play is served: the record holds the whole Watch History, as the old record did. (It used to stop at the latest 5,000.)
 
 ## 14. The provider breaker (P4-4)
 

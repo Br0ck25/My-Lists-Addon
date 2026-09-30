@@ -39,7 +39,6 @@
 // Accounts whose copy has not finished stay on the legacy stores until it
 // has, and the copy's Start over is refused while the flag is on.
 
-const EVENT_TRACKING_HISTORY_MAX = 5000;   // Watch History entries a record holds
 const EVENT_TRACKING_CACHE_MS = 60 * 1000;
 const EVENT_TRACKING_KEY = "creatorsynctracking:";
 
@@ -111,16 +110,12 @@ async function assembleTrackingRecord(env, rawKv, username, accountId) {
     rest = trackingRecordRest(legacy || {});
     await writeTrackingSettings(env, accountId, settings.all, rest);
   }
-  const history = [];
-  let cursor = null;
-  do {
-    const page = await watchHistoryPage(env, accountId, { cursor, limit: SHELF_HISTORY_PAGE_MAX });
-    history.push(...page.items.map((it) => {
-      const { mediaId, ...legacyItem } = it;
-      return legacyItem;
-    }));
-    cursor = page.cursor;
-  } while (cursor && history.length < EVENT_TRACKING_HISTORY_MAX);
+  // The whole history, as the legacy record held it. It used to stop at the
+  // newest 5,000 plays, which the legacy record never did.
+  const history = (await watchHistoryAll(env, accountId)).map((it) => {
+    const { mediaId, ...legacyItem } = it;
+    return legacyItem;
+  });
   const record = { ...rest, watchHistory: history };
   if (isShowScheduleEnabled(env)) {
     const [cw, an] = await Promise.all([continueWatching(env, accountId), airingNext(env, accountId)]);
@@ -171,9 +166,11 @@ async function saveTrackingRecord(env, username, accountId, record) {
       const { ids } = await resolveMediaBatch(env, chunk.map((p) => p.ref), { maxLookups: 20 });
       const rows = [];
       chunk.forEach((p, j) => {
-        if (ids[j] != null) rows.push({ mediaId: ids[j], season: p.season, episode: p.episode, t: p.watchedAt, legacyId: p.id });
+        if (ids[j] != null) rows.push({ mediaId: ids[j], season: p.season, episode: p.episode, t: p.watchedAt, legacyId: p.id, title: p.title, image: p.image });
       });
       await insertActivityPlays(actDb, accountId, rows, "web");
+      // The episode names the website had for them (29_media.js).
+      await saveEpisodeTitles(env, rows);
     }
   }
   if (intentional) {
