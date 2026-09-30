@@ -42464,6 +42464,49 @@ function forgetLikedList(usernameSlug) {
   } catch (e) {}
 }
 
+// "username/slug" for one of this add-on's own list pages
+// (ORIGIN/lists/:username/:slug), '' for anything else. Those lists are liked
+// by that pair through /api/lists/like; /api/lists/like-external refuses them
+// ("That URL can't be liked"). The Discover cards and the list details page
+// give every list the external heart, so the click handler below reads the
+// URL back through this and sends an own list the right way. No regex: see
+// the note above BETTER_POSTERS_ORIGIN_WEB.
+function ownListUsernameSlug(listUrl) {
+  const s = String(listUrl || '').trim();
+  if (!s) return '';
+  let u;
+  try {
+    u = new URL(s, ORIGIN);
+  } catch (e) {
+    return '';
+  }
+  let own = '';
+  try { own = new URL(ORIGIN).host; } catch (e) {}
+  const host = u.host.toLowerCase();
+  if ((u.protocol !== 'https:' && u.protocol !== 'http:') ||
+      (host !== own && host !== 'mylistsaddon.com' && host !== 'www.mylistsaddon.com')) return '';
+  const parts = u.pathname.split('/').filter(Boolean);
+  if (parts.length !== 3 || parts[0] !== 'lists') return '';
+  let user = '';
+  let slug = '';
+  try {
+    user = decodeURIComponent(parts[1]);
+    slug = decodeURIComponent(parts[2]);
+  } catch (e) {
+    return '';
+  }
+  if (!user || !slug || user.indexOf('/') >= 0 || slug.indexOf('/') >= 0) return '';
+  return user + '/' + slug;
+}
+
+// Whether a list is liked, whichever way it was stored: an own list as its
+// "username/slug", anything else as its URL.
+function isListUrlLiked(listUrl) {
+  const set = getLikedListsSet();
+  const own = ownListUsernameSlug(listUrl);
+  return set.has(listUrl) || (!!own && set.has(own));
+}
+
 document.addEventListener('click', async (e) => {
   const curatedBtn = e.target.closest('.curatedViewBtn');
   if (curatedBtn) {
@@ -42587,10 +42630,18 @@ document.addEventListener('click', async (e) => {
     }
     return;
   }
-  const likeBtn = e.target.closest('.searchLikeBtn');
+  let likeBtn = e.target.closest('.searchLikeBtn');
+  // An external heart on one of this add-on's own lists is liked as one --
+  // see ownListUsernameSlug.
+  let ownSlugFromUrl = '';
+  if (!likeBtn) {
+    const externalBtn = e.target.closest('.searchLikeExternalBtn');
+    ownSlugFromUrl = externalBtn ? ownListUsernameSlug(externalBtn.dataset.url) : '';
+    if (ownSlugFromUrl) likeBtn = externalBtn;
+  }
   if (likeBtn && !likeBtn.disabled) {
     if (!requireSignedInFor('like lists')) return;
-    const usernameSlug = likeBtn.dataset.usernameSlug || '';
+    const usernameSlug = likeBtn.dataset.usernameSlug || ownSlugFromUrl || '';
     const parts = usernameSlug.split('/');
     if (parts.length !== 2) return;
     const wasLiked = likeBtn.classList.contains('liked');
@@ -43091,7 +43142,7 @@ async function loadCuratedListsFeed(forceRefresh) {
         sectionsHtml += recommendedLists.map(l => {
           const type = l.type || 'movie';
           const added = alreadyAdded.has(l.url + '|' + type);
-          const alreadyLiked = getLikedListsSet().has(l.url);
+          const alreadyLiked = isListUrlLiked(l.url);
           const author = l.user || l.creatorName || 'Community';
           return '<div class="list-card" data-list-type="' + escapeAttr(type) + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(l.items || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
             '<div class="list-card-header">' +
@@ -43142,7 +43193,7 @@ async function loadCuratedListsFeed(forceRefresh) {
         sectionsHtml += similarToCustom.map(l => {
           const type = l.type || 'movie';
           const added = alreadyAdded.has(l.url + '|' + type);
-          const alreadyLiked = getLikedListsSet().has(l.url);
+          const alreadyLiked = isListUrlLiked(l.url);
           const author = l.user || l.creatorName || 'Community';
           return '<div class="list-card" data-list-type="' + escapeAttr(type) + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(l.items || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
             '<div class="list-card-header">' +
@@ -73801,7 +73852,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
         if (typeof toggleChannelDirectoryLike === 'function') toggleChannelDirectoryLike(channelLikeCode, likeBtn);
       };
     } else if (listUrl && !isNoLikesList && !isPersonalSentinel && !listUrl.startsWith('custom:') && !listUrl.startsWith('channel:') && !listUrl.startsWith('channel:v1:') && !listUrl.startsWith('autotrack:') && !listUrl.startsWith('simkl:user:')) {
-      const isLiked = getLikedListsSet().has(listUrl);
+      const isLiked = (typeof isListUrlLiked === 'function') ? isListUrlLiked(listUrl) : getLikedListsSet().has(listUrl);
       likeBtn.style.display = '';
       likeBtn.dataset.url = listUrl;
       delete likeBtn.dataset.channelLikeCode;

@@ -3275,7 +3275,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
         if (typeof toggleChannelDirectoryLike === 'function') toggleChannelDirectoryLike(channelLikeCode, likeBtn);
       };
     } else if (listUrl && !isNoLikesList && !isPersonalSentinel && !listUrl.startsWith('custom:') && !listUrl.startsWith('channel:') && !listUrl.startsWith('channel:v1:') && !listUrl.startsWith('autotrack:') && !listUrl.startsWith('simkl:user:')) {
-      const isLiked = getLikedListsSet().has(listUrl);
+      const isLiked = (typeof isListUrlLiked === 'function') ? isListUrlLiked(listUrl) : getLikedListsSet().has(listUrl);
       likeBtn.style.display = '';
       likeBtn.dataset.url = listUrl;
       delete likeBtn.dataset.channelLikeCode;
