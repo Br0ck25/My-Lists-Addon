@@ -1,0 +1,51 @@
+{
+  "provider": "tvmaze",
+  "endpoint": "/episodes/{id} (the show's _links.nextepisode.href)",
+  "origin": "Captured 2026-09-28 from the live API, trimmed to a few items.",
+  "usedBy": [
+    "fetchShowAirTimeUncached"
+  ],
+  "live": {
+    "needs": [],
+    "request": {
+      "url": "https://api.tvmaze.com/episodes/2939710"
+    }
+  },
+  "required": [
+    "id:number",
+    "season:number",
+    "number:number",
+    "airdate:string",
+    "airtime:string",
+    "airstamp:string"
+  ],
+  "response": {
+    "id": 2939710,
+    "url": "https://www.tvmaze.com/episodes/2939710/severance-2x10-cold-harbor",
+    "name": "Cold Harbor",
+    "season": 2,
+    "number": 10,
+    "type": "regular",
+    "airdate": "2025-03-21",
+    "airtime": "",
+    "airstamp": "2025-03-21T12:00:00+00:00",
+    "runtime": 75,
+    "rating": {
+      "average": 8.2
+    },
+    "image": {
+      "medium": "https://static.tvmaze.com/uploads/images/medium_landscape/559/1398936.jpg",
+      "original": "https://static.tvmaze.com/uploads/images/original_untouched/559/1398936.jpg"
+    },
+    "summary": "<p>A summary.</p>",
+    "_links": {
+      "self": {
+        "href": "https://api.tvmaze.com/episodes/2939710"
+      },
+      "show": {
+        "href": "https://api.tvmaze.com/shows/44933",
+        "name": "Severance"
+      }
+    }
+  }
+}

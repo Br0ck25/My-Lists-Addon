@@ -1,0 +1,100 @@
+{
+  "provider": "tmdb",
+  "endpoint": "/3/movie/{id}?append_to_response=external_ids,videos,release_dates",
+  "origin": "Written from the provider's API reference (it needs a key); the nightly live check compares it with the real thing.",
+  "usedBy": [
+    "fetchTmdbDetails",
+    "fetchTmdbMediaFacts"
+  ],
+  "live": {
+    "needs": [
+      "TMDB_API_KEY"
+    ],
+    "request": {
+      "url": "https://api.themoviedb.org/3/movie/550?api_key={TMDB_API_KEY}&append_to_response=external_ids,videos,release_dates"
+    }
+  },
+  "required": [
+    "id:number",
+    "title:string",
+    "imdb_id:string",
+    "external_ids.imdb_id:string",
+    "videos.results:array",
+    "videos.results[*].site:string",
+    "videos.results[*].type:string",
+    "videos.results[*].key:string",
+    "release_dates.results[]",
+    "release_dates.results[].release_dates[].type:number",
+    "genres[].name:string",
+    "runtime:number",
+    "vote_average:number",
+    "adult:boolean"
+  ],
+  "response": {
+    "adult": false,
+    "backdrop_path": "/hZkgoQYus5vegHoetLkCJzb17zJ.jpg",
+    "genres": [
+      {
+        "id": 18,
+        "name": "Drama"
+      }
+    ],
+    "id": 550,
+    "imdb_id": "tt0137523",
+    "original_title": "Fight Club",
+    "poster_path": "/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg",
+    "release_date": "1999-10-15",
+    "runtime": 139,
+    "title": "Fight Club",
+    "vote_average": 8.4,
+    "vote_count": 30000,
+    "external_ids": {
+      "imdb_id": "tt0137523",
+      "wikidata_id": "Q190050",
+      "facebook_id": null,
+      "instagram_id": null,
+      "twitter_id": null
+    },
+    "videos": {
+      "results": [
+        {
+          "iso_639_1": "en",
+          "iso_3166_1": "US",
+          "name": "Official Trailer",
+          "key": "BdJKm16Co6M",
+          "site": "YouTube",
+          "size": 1080,
+          "type": "Trailer",
+          "official": true,
+          "published_at": "2014-10-02T19:20:22.000Z",
+          "id": "5c9294240e0a267cd516835f"
+        }
+      ]
+    },
+    "release_dates": {
+      "results": [
+        {
+          "iso_3166_1": "US",
+          "release_dates": [
+            {
+              "certification": "R",
+              "descriptors": [],
+              "iso_639_1": "",
+              "note": "",
+              "release_date": "1999-10-15T00:00:00.000Z",
+              "type": 3
+            },
+            {
+              "certification": "R",
+              "descriptors": [],
+              "iso_639_1": "",
+              "note": "DVD",
+              "release_date": "2000-06-06T00:00:00.000Z",
+              "type": 5
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "provider": "tmdb",
+  "endpoint": "A chart page of movies: /3/trending/movie/{window}, /3/movie/popular, /3/discover/movie ...",
+  "origin": "Written from the provider's API reference (it needs a key); the nightly live check compares it with the real thing.",
+  "usedBy": [
+    "fetchTmdbPagedResults",
+    "fetchTmdbChart",
+    "fetchTmdbHiddenGems",
+    "fetchTmdbKids",
+    "fetchTmdbHoliday",
+    "fetchTmdbGenre",
+    "fetchTmdbProviderTop10",
+    "mapTmdbItem"
+  ],
+  "live": {
+    "needs": [
+      "TMDB_API_KEY"
+    ],
+    "request": {
+      "url": "https://api.themoviedb.org/3/trending/movie/week?api_key={TMDB_API_KEY}&page=1"
+    }
+  },
+  "required": [
+    "page:number",
+    "total_results:number",
+    "total_pages:number",
+    "results[]",
+    "results[].id:number",
+    "results[].title:string",
+    "results[*].poster_path:string",
+    "results[*].backdrop_path:string",
+    "results[*].release_date:string",
+    "results[*].vote_average:number"
+  ],
+  "response": {
+    "page": 1,
+    "results": [
+      {
+        "adult": false,
+        "backdrop_path": "/8ZTVqvKDQ8emSGUEMjsS4yHAwrp.jpg",
+        "id": 27205,
+        "title": "Inception",
+        "original_language": "en",
+        "original_title": "Inception",
+        "overview": "An overview.",
+        "poster_path": "/oYuLEt3zVCKq57qu2F8dT7NIa6f.jpg",
+        "media_type": "movie",
+        "genre_ids": [
+          28,
+          878,
+          12
+        ],
+        "popularity": 120.5,
+        "release_date": "2010-06-12",
+        "video": false,
+        "vote_average": 8.4,
+        "vote_count": 2100
+      },
+      {
+        "adult": false,
+        "backdrop_path": "/dqK9Hag1054tghRQSqLSfrkvQnA.jpg",
+        "id": 155,
+        "title": "The Dark Knight",
+        "original_language": "en",
+        "original_title": "The Dark Knight",
+        "overview": "An overview.",
+        "poster_path": "/qJ2tW6WMUDux911r6m7haRef0WH.jpg",
+        "media_type": "movie",
+        "genre_ids": [
+          18,
+          28,
+          80
+        ],
+        "popularity": 120.5,
+        "release_date": "2008-06-12",
+        "video": false,
+        "vote_average": 8.5,
+        "vote_count": 2100
+      },
+      {
+        "adult": false,
+        "backdrop_path": null,
+        "id": 550,
+        "title": "Fight Club",
+        "original_language": "en",
+        "original_title": "Fight Club",
+        "overview": "An overview.",
+        "poster_path": "/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg",
+        "media_type": "movie",
+        "genre_ids": [
+          18
+        ],
+        "popularity": 120.5,
+        "release_date": "1999-06-12",
+        "video": false,
+        "vote_average": 8.4,
+        "vote_count": 2100
+      }
+    ],
+    "total_pages": 500,
+    "total_results": 10000
+  }
+}

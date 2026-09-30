@@ -1,0 +1,69 @@
+{
+  "provider": "trakt",
+  "endpoint": "/shows/popular and /movies/popular: items NOT wrapped",
+  "origin": "Written from the provider's API reference (it needs a key); the nightly live check compares it with the real thing.",
+  "usedBy": [
+    "fetchTraktChart",
+    "mapTraktItems"
+  ],
+  "live": {
+    "needs": [
+      "TRAKT_CLIENT_ID"
+    ],
+    "request": {
+      "url": "https://api.trakt.tv/shows/popular?limit=10&page=1&extended=full",
+      "headers": {
+        "Content-Type": "application/json",
+        "trakt-api-version": "2",
+        "trakt-api-key": "{TRAKT_CLIENT_ID}"
+      }
+    }
+  },
+  "required": [
+    "[]",
+    "[].ids.trakt:number",
+    "[].title:string",
+    "[*].year:number",
+    "[*].ids.imdb:string",
+    "[*].ids.tmdb:number"
+  ],
+  "headers": {
+    "x-pagination-item-count": "80000"
+  },
+  "response": [
+    {
+      "title": "Game of Thrones",
+      "year": 2011,
+      "ids": {
+        "trakt": 1390,
+        "slug": "game-of-thrones",
+        "tvdb": 121361,
+        "imdb": "tt0944947",
+        "tmdb": 1399
+      },
+      "rating": 8.9,
+      "votes": 9000,
+      "genres": [
+        "drama"
+      ],
+      "certification": "TV-MA"
+    },
+    {
+      "title": "Breaking Bad",
+      "year": 2008,
+      "ids": {
+        "trakt": 1388,
+        "slug": "breaking-bad",
+        "tvdb": 81189,
+        "imdb": "tt0903747",
+        "tmdb": 1396
+      },
+      "rating": 8.9,
+      "votes": 9000,
+      "genres": [
+        "drama"
+      ],
+      "certification": "TV-MA"
+    }
+  ]
+}

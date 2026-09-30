@@ -2303,8 +2303,15 @@ const OUTBOUND_DEFAULT_TIMEOUT_MS = 30000;
 // the log redaction at the top of 00_constants.js, this is the whole of the
 // planned `providerFetch` (task P2-6): one place every outbound call goes
 // through, instead of a wrapper each call site has to remember to use.
+//
+// With FF_PROVIDER_BREAKER on, a call to a provider's host also goes through
+// that provider's breaker (41_provider-breaker.js): refused at once while the
+// provider is known to be down, and counted otherwise. typeof-guarded because
+// the tests load this file on its own.
 function fetch(input, init) {
-  return globalThis.fetch(input, withDefaultTimeout(input, withoutEdgeCacheForCredentials(input, init)));
+  const provider = typeof providerBreakerFor === "function" ? providerBreakerFor(input) : null;
+  if (!provider) return globalThis.fetch(input, withDefaultTimeout(input, withoutEdgeCacheForCredentials(input, init)));
+  return providerBreakerFetch(provider, () => globalThis.fetch(input, withDefaultTimeout(input, withoutEdgeCacheForCredentials(input, init))));
 }
 
 // A caller's own signal always wins. A Request object is left alone too: it

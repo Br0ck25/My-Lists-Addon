@@ -1476,6 +1476,10 @@ function nonSecretInstallConfigFields(values) {
 // one of these would show a shelf that disagrees with what the account just
 // did, so the next request always re-reads.
 //
+// These are the sources of kind "personal" in the provider registry
+// (CATALOG_SOURCES, 04_config-resolution.js). A test keeps the two in
+// agreement, so a new personal source goes in both.
+//
 //   autotrack        Watchlist, Watch History, Continue Watching, Airing Next
 //   curated          Recommended Movies / Recommended Shows
 //   trakt-*, mdblist-*, simkl-user

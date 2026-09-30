@@ -1,0 +1,50 @@
+name: Provider live check
+
+# Nightly: asks every provider the Worker reads (TMDB, Trakt, MDBList, Simkl,
+# TVmaze, Cinemeta, JustWatch, RapidAPI) one real question, and checks the
+# answer still has every field the Worker depends on (task P4-5). The fields
+# are listed in tests/fixtures/providers/*/*.json, which the test suite also
+# feeds to the real fetchers, so a fixture and the live API are held to the
+# same list. When a provider renames or drops a field, this fails and names
+# it, before a catalog quietly goes empty.
+#
+# Keys (Settings -> Secrets and variables -> Actions), all optional. A
+# provider whose key is missing is skipped and shown as skipped; the keyless
+# ones (MDBList public lists, Simkl chart files, TVmaze, Cinemeta, JustWatch)
+# always run.
+#   TMDB_API_KEY      the same TMDB key the Worker uses
+#   TRAKT_CLIENT_ID   the same Trakt client id
+#   MDBLIST_API_KEY   the same MDBList key
+#   SIMKL_CLIENT_ID   the same Simkl client id
+#   RAPIDAPI_KEY      only if the RapidAPI engine is in use: each run spends
+#                     one request of its monthly quota
+#
+# It never writes anything, anywhere.
+
+on:
+  schedule:
+    - cron: "41 5 * * *" # daily, 05:41 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Ask each provider, and check the answers
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          TRAKT_CLIENT_ID: ${{ secrets.TRAKT_CLIENT_ID }}
+          MDBLIST_API_KEY: ${{ secrets.MDBLIST_API_KEY }}
+          SIMKL_CLIENT_ID: ${{ secrets.SIMKL_CLIENT_ID }}
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+        run: node provider_live_check.mjs

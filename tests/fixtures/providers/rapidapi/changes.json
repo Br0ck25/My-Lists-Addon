@@ -1,0 +1,94 @@
+{
+  "provider": "rapidapi",
+  "endpoint": "streaming-availability.p.rapidapi.com/changes (v4)",
+  "origin": "Written from the provider's API reference (it needs a key); the nightly live check compares it with the real thing. Its live check spends one request of the monthly RapidAPI quota a night, and runs only when RAPIDAPI_KEY is set.",
+  "usedBy": [
+    "fetchRapidApiStreamingChanges",
+    "processRapidApiStreamingChanges",
+    "extractRapidApiPoster"
+  ],
+  "live": {
+    "needs": [
+      "RAPIDAPI_KEY"
+    ],
+    "request": {
+      "url": "https://streaming-availability.p.rapidapi.com/changes?country=us&change_type=new&item_type=show&catalogs=netflix.subscription&order_direction=desc&output_language=en",
+      "headers": {
+        "x-rapidapi-key": "{RAPIDAPI_KEY}",
+        "x-rapidapi-host": "streaming-availability.p.rapidapi.com"
+      }
+    }
+  },
+  "required": [
+    "changes:array",
+    "shows:object",
+    "hasMore:boolean",
+    "changes[*].changeType:string",
+    "changes[*].itemType:string",
+    "changes[*].showId:string",
+    "changes[*].service.id:string",
+    "changes[*].timestamp:number"
+  ],
+  "response": {
+    "changes": [
+      {
+        "changeType": "new",
+        "itemType": "show",
+        "showId": "82",
+        "showType": "movie",
+        "service": {
+          "id": "netflix",
+          "name": "Netflix"
+        },
+        "streamingOptionType": "subscription",
+        "timestamp": 1790500000,
+        "link": "https://www.netflix.com/title/70131314/"
+      },
+      {
+        "changeType": "new",
+        "itemType": "season",
+        "showId": "1399",
+        "showType": "series",
+        "season": 2,
+        "service": {
+          "id": "netflix",
+          "name": "Netflix"
+        },
+        "streamingOptionType": "subscription",
+        "timestamp": 1790400000
+      }
+    ],
+    "shows": {
+      "82": {
+        "itemType": "show",
+        "showType": "movie",
+        "id": "82",
+        "imdbId": "tt1375666",
+        "tmdbId": "movie/27205",
+        "title": "Inception",
+        "releaseYear": 2010,
+        "imageSet": {
+          "verticalPoster": {
+            "w240": "https://cdn.movieofthenight.com/show/82/poster/vertical/en/240.jpg",
+            "w600": "https://cdn.movieofthenight.com/show/82/poster/vertical/en/600.jpg"
+          }
+        }
+      },
+      "1399": {
+        "itemType": "show",
+        "showType": "series",
+        "id": "1399",
+        "imdbId": "tt0944947",
+        "tmdbId": "tv/1399",
+        "title": "Game of Thrones",
+        "firstAirYear": 2011,
+        "imageSet": {
+          "verticalPoster": {
+            "w600": "https://cdn.movieofthenight.com/show/1399/poster/vertical/en/600.jpg"
+          }
+        }
+      }
+    },
+    "hasMore": false
+  }
+}

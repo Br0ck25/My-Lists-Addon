@@ -1,0 +1,114 @@
+{
+  "provider": "simkl",
+  "endpoint": "data.simkl.in/discover/trending/movies/{today|week|month}_100.json",
+  "origin": "Captured 2026-09-28 from the live API, trimmed to a few items.",
+  "usedBy": [
+    "fetchSimklChart",
+    "mapSimklItems"
+  ],
+  "live": {
+    "needs": [],
+    "request": {
+      "url": "https://data.simkl.in/discover/trending/movies/today_100.json"
+    }
+  },
+  "required": [
+    "[]",
+    "[].title:string",
+    "[].ids.simkl_id:number",
+    "[*].ids.imdb:string",
+    "[*].ratings.imdb.rating:number || [*].ratings.simkl.rating:number"
+  ],
+  "response": [
+    {
+      "title": "The End of Oak Street",
+      "url": "/movies/2123791/the-end-of-oak-street",
+      "poster": "20/2036989114a175eae4",
+      "fanart": "19/19818287730a769e81",
+      "ids": {
+        "simkl_id": 2123791,
+        "slug": "the-end-of-oak-street",
+        "imdb": "tt27165187",
+        "tmdb": "1101383",
+        "tvdb": "358926",
+        "tvdbslug": "flowervale-street",
+        "traktslug": "flowervale-street-2026",
+        "letterboxd": "flowervale-street"
+      },
+      "release_date": "08/12/2026",
+      "rank": 17484,
+      "ratings": {
+        "simkl": {
+          "rating": 6.2,
+          "votes": 816
+        },
+        "imdb": {
+          "rating": 6.3,
+          "votes": 65218
+        }
+      },
+      "runtime": "1h 40m",
+      "status": "ended"
+    },
+    {
+      "title": "Resident Evil",
+      "url": "/movies/2695349/resident-evil",
+      "poster": "20/20690225528dfc103f",
+      "fanart": "20/20590293af5cd31ffc",
+      "ids": {
+        "simkl_id": 2695349,
+        "slug": "resident-evil",
+        "imdb": "tt35538033",
+        "tmdb": "1423191",
+        "tvdb": "371459",
+        "tvdbslug": "resident-evil-reboot",
+        "traktslug": "untitled-resident-evil-reboot-2026",
+        "letterboxd": "untitled-resident-evil-reboot"
+      },
+      "release_date": "09/16/2026",
+      "rank": 2050,
+      "ratings": {
+        "simkl": {
+          "rating": 7.56,
+          "votes": 445
+        },
+        "imdb": {
+          "rating": 7.6,
+          "votes": 62010
+        }
+      },
+      "runtime": "1h 35m",
+      "status": "premiere"
+    },
+    {
+      "title": "Toy Story 5",
+      "url": "/movies/2092563/toy-story-5",
+      "poster": "19/19558343ee17798c8c",
+      "fanart": "20/202066132a4a36e715",
+      "ids": {
+        "simkl_id": 2092563,
+        "slug": "toy-story-5",
+        "imdb": "tt29355505",
+        "tmdb": "1084244",
+        "tvdb": "344106",
+        "tvdbslug": "toy-story-5",
+        "traktslug": "toy-story-5-2026",
+        "letterboxd": "toy-story-5"
+      },
+      "release_date": "06/17/2026",
+      "rank": 4094,
+      "ratings": {
+        "simkl": {
+          "rating": 7.6,
+          "votes": 1080
+        },
+        "imdb": {
+          "rating": 7.3,
+          "votes": 87788
+        }
+      },
+      "runtime": "1h 42m",
+      "status": "ended"
+    }
+  ]
+}

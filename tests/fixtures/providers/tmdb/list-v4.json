@@ -1,0 +1,94 @@
+{
+  "provider": "tmdb",
+  "endpoint": "/4/list/{id}?page=N (a public list)",
+  "origin": "Written from the provider's API reference (it needs a key); the nightly live check compares it with the real thing.",
+  "usedBy": [
+    "fetchTmdb"
+  ],
+  "live": {
+    "needs": [
+      "TMDB_API_KEY"
+    ],
+    "discover": {
+      "url": "https://api.themoviedb.org/3/movie/550/lists?api_key={TMDB_API_KEY}&page=1",
+      "pick": "results.0.id"
+    },
+    "request": {
+      "url": "https://api.themoviedb.org/4/list/{DISCOVERED}?api_key={TMDB_API_KEY}&page=1"
+    }
+  },
+  "required": [
+    "id:number",
+    "name:string",
+    "total_pages:number",
+    "total_results:number",
+    "results[]",
+    "results[].id:number",
+    "results[].media_type:string"
+  ],
+  "response": {
+    "id": 28,
+    "name": "Best Picture Winners",
+    "page": 1,
+    "public": true,
+    "total_pages": 1,
+    "total_results": 3,
+    "results": [
+      {
+        "adult": false,
+        "backdrop_path": null,
+        "id": 550,
+        "title": "Fight Club",
+        "original_language": "en",
+        "original_title": "Fight Club",
+        "overview": "An overview.",
+        "poster_path": "/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg",
+        "media_type": "movie",
+        "genre_ids": [
+          18
+        ],
+        "popularity": 120.5,
+        "release_date": "1999-06-12",
+        "video": false,
+        "vote_average": 8.4,
+        "vote_count": 2100
+      },
+      {
+        "adult": false,
+        "backdrop_path": null,
+        "id": 155,
+        "title": "The Dark Knight",
+        "original_language": "en",
+        "original_title": "The Dark Knight",
+        "overview": "An overview.",
+        "poster_path": "/qJ2tW6WMUDux911r6m7haRef0WH.jpg",
+        "media_type": "movie",
+        "genre_ids": [
+          18,
+          28,
+          80
+        ],
+        "popularity": 120.5,
+        "release_date": "2008-06-12",
+        "video": false,
+        "vote_average": 8.5,
+        "vote_count": 2100
+      },
+      {
+        "adult": false,
+        "backdrop_path": null,
+        "genre_ids": [
+          18,
+          80
+        ],
+        "id": 1396,
+        "media_type": "tv",
+        "name": "Breaking Bad",
+        "original_name": "Breaking Bad",
+        "first_air_date": "2008-01-20",
+        "poster_path": "/ztkUQFLlC19CCMYHW9o1zWhJRNq.jpg",
+        "vote_average": 8.9
+      }
+    ]
+  }
+}

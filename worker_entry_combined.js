@@ -1499,6 +1499,10 @@ function nonSecretInstallConfigFields(values) {
 // one of these would show a shelf that disagrees with what the account just
 // did, so the next request always re-reads.
 //
+// These are the sources of kind "personal" in the provider registry
+// (CATALOG_SOURCES, 04_config-resolution.js). A test keeps the two in
+// agreement, so a new personal source goes in both.
+//
 //   autotrack        Watchlist, Watch History, Continue Watching, Airing Next
 //   curated          Recommended Movies / Recommended Shows
 //   trakt-*, mdblist-*, simkl-user
@@ -5265,8 +5269,15 @@ const OUTBOUND_DEFAULT_TIMEOUT_MS = 30000;
 // the log redaction at the top of 00_constants.js, this is the whole of the
 // planned `providerFetch` (task P2-6): one place every outbound call goes
 // through, instead of a wrapper each call site has to remember to use.
+//
+// With FF_PROVIDER_BREAKER on, a call to a provider's host also goes through
+// that provider's breaker (41_provider-breaker.js): refused at once while the
+// provider is known to be down, and counted otherwise. typeof-guarded because
+// the tests load this file on its own.
 function fetch(input, init) {
-  return globalThis.fetch(input, withDefaultTimeout(input, withoutEdgeCacheForCredentials(input, init)));
+  const provider = typeof providerBreakerFor === "function" ? providerBreakerFor(input) : null;
+  if (!provider) return globalThis.fetch(input, withDefaultTimeout(input, withoutEdgeCacheForCredentials(input, init)));
+  return providerBreakerFetch(provider, () => globalThis.fetch(input, withDefaultTimeout(input, withoutEdgeCacheForCredentials(input, init))));
 }
 
 // A caller's own signal always wins. A Request object is left alone too: it
@@ -14131,54 +14142,345 @@ function parseTmdbWebChartUrl(rawUrl) {
   return null;
 }
 
+// --- The provider registry (P4-1) -------------------------------------------
+//
+// Every catalog source this add-on serves, in the order they are tried, and
+// the provider adapter that owns each. It replaces two chains that had to be
+// kept in step by hand: detectSource's if/else (what a row's URL is) and the
+// matching if/else in fetchCatalog (which fetcher serves it). One row of
+// CATALOG_SOURCES now says both, so a new source is added in one place.
+//
+// A source:
+//   name       What detectSource returns. Other code keys off these names
+//              (STREMIO_LIVE_ROW_SOURCES, the catalog route), so never rename
+//              one.
+//   provider   The adapter that owns it (PROVIDER_ADAPTERS below).
+//   kind       "chart"    a ranking, the same for everyone;
+//              "list"     a public list, the same for everyone;
+//              "personal" one account's shelf (watchlist, history, Up Next,
+//                         Airing Next, Recommended). These are exactly the rows
+//                         STREMIO_LIVE_ROW_SOURCES (00_constants.js) serves
+//                         no-store, and a test keeps the two in agreement;
+//              "own"      a row whose payload is in the row itself (a channel,
+//                         a custom list).
+//              The adapter contract in NEXT_VERSION_ARCHITECTURE §6.2 calls
+//              "chart" and "list" shared, and "personal" user-authenticated.
+//   match(s)   True when the trimmed URL or sentinel is this source. ORDER
+//              MATTERS: the first match wins, exactly as the if/else did.
+//              mdblist:watchlist is tried before the MDBList catch-all, the
+//              published-list shape before trakt.tv and themoviedb.org, and
+//              the MDBList public list takes anything nothing else claimed,
+//              as it always has (old configs rely on it).
+//   arg(s)     Optional: the part of the string the fetcher needs (a chart or
+//              genre key), so fetchCatalog no longer slices it out itself.
+//   apiUse     The provider whose key the request may spend, counted against
+//              the shared key in the admin API Usage tab (trackSharedApiUse,
+//              05_catalog-core.js). null when the row makes no provider call.
+//   fetchPage(ref, { entry, skip, keys })
+//              The fetcher, called with exactly the arguments fetchCatalog
+//              used to pass it.
+//   snapshot   Charts only, optional: the page may be served from a chart
+//              snapshot (P4-3, 42_chart-snapshots.js). { region: true } when
+//              the install's region changes the rows; variant(ref, page) for
+//              anything else that does (a setting, the day). The chart key,
+//              the row's type and the page are always part of the snapshot.
+//
+// The fetchers live in 05_, 06_ and 07_. They are only named inside the
+// closures, so this file still loads on its own (the tests load it that way to
+// check detection).
+
+// "trakt:watchlist", or the same sentinel with a suffix ("trakt:watchlist:x").
+function isSourceSentinel(s, name) {
+  return s === name || s.startsWith(name + ":");
+}
+
+function sourceArgAfter(prefix) {
+  return (s) => s.slice(prefix.length);
+}
+
+// The MDBList credential a row uses: the connected account's token, then the
+// install's own key, then the site's.
+function catalogMdblistKey(keys) {
+  return keys.mdblistAccessToken || keys.mdblistKey || MDBLIST_API_KEY;
+}
+
+function catalogTraktKey(keys) {
+  return keys.traktKey || TRAKT_CLIENT_ID;
+}
+
+const CATALOG_SOURCES = [
+  {
+    name: "mdblist-watchlist", provider: "mdblist", kind: "personal", apiUse: "mdblist",
+    match: (s) => isSourceSentinel(s, "mdblist:watchlist") || /^https?:\/\/(www\.)?mdblist\.com\/(?:lists\/[^/]+\/)?watchlist\/?/i.test(s),
+    fetchPage: (ref, { entry, skip, keys }) => fetchMdblistWatchlist(entry, skip, catalogMdblistKey(keys), keys.mdblistAccessToken || ""),
+  },
+  {
+    name: "mdblist-history", provider: "mdblist", kind: "personal", apiUse: "mdblist",
+    match: (s) => isSourceSentinel(s, "mdblist:history") || /^https?:\/\/(www\.)?mdblist\.com\/(?:lists\/[^/]+\/)?history\/?/i.test(s),
+    fetchPage: (ref, { entry, skip, keys }) => fetchMdblistHistory(entry, skip, catalogMdblistKey(keys), keys.mdblistAccessToken || ""),
+  },
+  {
+    name: "mdblist-airing-next", provider: "mdblist", kind: "personal", apiUse: "mdblist",
+    match: (s) => isSourceSentinel(s, "mdblist:airing-next") || s === "mdblist:user:shows:airing-next",
+    fetchPage: (ref, { entry, skip, keys }) => fetchMdblistAiringNext(entry, skip, catalogMdblistKey(keys), keys.mdblistAccessToken || "", keys.tmdbKey || TMDB_API_KEY, keys.env, keys.ctx),
+  },
+  {
+    name: "mdblist-upnext", provider: "mdblist", kind: "personal", apiUse: "mdblist",
+    match: (s) => isSourceSentinel(s, "mdblist:upnext") || s === "mdblist:user:shows:upnext",
+    fetchPage: (ref, { entry, skip, keys }) => fetchMdblistUpNext(entry, skip, catalogMdblistKey(keys), keys.mdblistAccessToken || "", keys.tmdbKey || TMDB_API_KEY, keys.env, keys.ctx),
+  },
+  // (www.|app.) and a trailing "?query" or "#hash" are tolerated in the
+  // trakt.tv URLs below. A fully $-anchored .../watchlist$ failed to recognize
+  // a URL copied while a filter was active on trakt.tv (a trailing
+  // "?something=x"), or one copied from app.trakt.tv. It then fell through to
+  // the generic "trakt" source, which expects a /lists/ path, and the row
+  // never resolved.
+  {
+    name: "trakt-watchlist", provider: "trakt", kind: "personal", apiUse: "trakt",
+    match: (s) => isSourceSentinel(s, "trakt:watchlist") || /^https?:\/\/(www\.|app\.)?trakt\.tv\/users\/[^/]+\/watchlist\/?(?:[?#].*)?$/i.test(s),
+    fetchPage: (ref, { entry, skip, keys }) => fetchTraktWatchlist(entry, skip, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx),
+  },
+  {
+    name: "trakt-history", provider: "trakt", kind: "personal", apiUse: "trakt",
+    match: (s) => isSourceSentinel(s, "trakt:history") || /^https?:\/\/(www\.|app\.)?trakt\.tv\/users\/[^/]+\/history\/?(?:[?#].*)?$/i.test(s),
+    fetchPage: (ref, { entry, skip, keys }) => fetchTraktHistory(entry, skip, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx),
+  },
+  {
+    name: "trakt-airing-next", provider: "trakt", kind: "personal", apiUse: "trakt",
+    match: (s) => isSourceSentinel(s, "trakt:airing-next") || s === "trakt:user:shows:airing-next",
+    fetchPage: (ref, { entry, skip, keys }) => fetchTraktAiringNext(entry, skip, catalogTraktKey(keys), keys.traktAccessToken || "", keys.tmdbKey || TMDB_API_KEY, keys.env, keys.ctx),
+  },
+  {
+    name: "trakt-continue-watching", provider: "trakt", kind: "personal", apiUse: "trakt",
+    match: (s) => isSourceSentinel(s, "trakt:continue-watching") || s === "trakt:user:continue-watching" || /^https?:\/\/(www\.|app\.)?trakt\.tv\/users\/[^/]+\/continue-watching\/?(?:[?#].*)?$/i.test(s),
+    fetchPage: (ref, { entry, skip, keys }) => fetchTraktContinueWatching(entry, skip, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx),
+  },
+  {
+    name: "tmdb-chart", provider: "tmdb", kind: "chart", apiUse: "tmdb",
+    snapshot: { region: true, variant: (ref, { keys }) => (keys.hideNonDigitalReleases ? "digital" : "") },
+    match: (s) => s.startsWith("tmdb:chart:") || !!parseTmdbWebChartUrl(s),
+    arg: (s) => {
+      const webChart = parseTmdbWebChartUrl(s);
+      return webChart ? webChart.chartKey : s.slice("tmdb:chart:".length);
+    },
+    fetchPage: (ref, { entry, skip, keys }) => fetchTmdbChart(entry, skip, TMDB_API_KEY, ref.arg, keys.region, keys.hideNonDigitalReleases, keys.env, keys.ctx),
+  },
+  {
+    name: "tmdb-top10", provider: "tmdb", kind: "chart", apiUse: "tmdb",
+    snapshot: { region: true },
+    match: (s) => s.startsWith("tmdb:top10:"),
+    arg: sourceArgAfter("tmdb:top10:"),
+    fetchPage: (ref, { entry, skip, keys }) => fetchTmdbProviderTop10(entry, skip, TMDB_API_KEY, ref.arg, keys.region),
+  },
+  {
+    name: "tmdb-hidden-gems", provider: "tmdb", kind: "chart", apiUse: "tmdb",
+    // A different slice each UTC day (fetchTmdbHiddenGems), so the day is part of the snapshot.
+    snapshot: { variant: () => "day" + Math.floor(Date.now() / 86400000) },
+    match: (s) => s === "tmdb:hidden-gems",
+    fetchPage: (ref, { entry, skip }) => fetchTmdbHiddenGems(entry, skip, TMDB_API_KEY),
+  },
+  {
+    name: "tmdb-kids", provider: "tmdb", kind: "chart", apiUse: "tmdb",
+    snapshot: {},
+    match: (s) => s.startsWith("tmdb:kids:"),
+    arg: sourceArgAfter("tmdb:kids:"),
+    fetchPage: (ref, { entry, skip }) => fetchTmdbKids(entry, skip, TMDB_API_KEY, ref.arg),
+  },
+  {
+    name: "tmdb-holiday", provider: "tmdb", kind: "chart", apiUse: "tmdb",
+    snapshot: {},
+    match: (s) => s.startsWith("tmdb:holiday:"),
+    arg: sourceArgAfter("tmdb:holiday:"),
+    fetchPage: (ref, { entry, skip }) => fetchTmdbHoliday(entry, skip, TMDB_API_KEY, ref.arg),
+  },
+  {
+    name: "tmdb-genre", provider: "tmdb", kind: "chart", apiUse: "tmdb",
+    snapshot: { region: true },
+    match: (s) => s.startsWith("tmdb:genre:"),
+    arg: sourceArgAfter("tmdb:genre:"),
+    fetchPage: (ref, { entry, skip, keys }) => fetchTmdbGenre(entry, skip, TMDB_API_KEY, ref.arg, keys.region),
+  },
+  // New on Streaming: bare, or with a "+"-separated service selection after a
+  // colon ("tmdb:new-on-streaming:netflix+hulu"). It reads D1 and makes no
+  // provider call: the JustWatch (or RapidAPI) and TMDB calls happen in the
+  // cron sweep (sweepNewOnStreaming), counted against the sweep's own budget
+  // rather than against whoever opened the shelf. So it belongs to this site,
+  // and spends no key here.
+  {
+    name: "tmdb-new-on-streaming", provider: "mylists", kind: "chart", apiUse: null,
+    match: (s) => isSourceSentinel(s, "tmdb:new-on-streaming") || isSourceSentinel(s, "rapidapi:new-on-streaming") || isSourceSentinel(s, "streaming:new-on-streaming"),
+    fetchPage: (ref, { entry, skip, keys }) => fetchNewOnStreaming(entry, skip, keys),
+  },
+  // This add-on's own Most Watched chart ("mylists:most-watched:today|7|30"),
+  // read from a KV snapshot rebuilt at most hourly or daily
+  // (fetchMostWatchedCatalog).
+  {
+    name: "mylists-most-watched", provider: "mylists", kind: "chart", apiUse: null,
+    match: (s) => s.startsWith("mylists:most-watched:"),
+    fetchPage: (ref, { entry, skip, keys }) => fetchMostWatchedCatalog(entry, skip, keys),
+  },
+  {
+    name: "trakt-chart", provider: "trakt", kind: "chart", apiUse: "trakt",
+    snapshot: {},
+    match: (s) => s.startsWith("trakt:chart:"),
+    arg: sourceArgAfter("trakt:chart:"),
+    fetchPage: (ref, { entry, skip, keys }) => fetchTraktChart(entry, skip, catalogTraktKey(keys), ref.arg, keys.env, keys.ctx),
+  },
+  {
+    name: "simkl-chart", provider: "simkl", kind: "chart", apiUse: "simkl",
+    snapshot: {},
+    match: (s) => s.startsWith("simkl:chart:"),
+    arg: sourceArgAfter("simkl:chart:"),
+    fetchPage: (ref, { entry, skip, keys }) => fetchSimklChart(entry, skip, SIMKL_CLIENT_ID, ref.arg, keys.env, keys.ctx),
+  },
+  {
+    name: "simkl-user", provider: "simkl", kind: "personal", apiUse: "simkl",
+    match: (s) => s.startsWith("simkl:user:"),
+    arg: sourceArgAfter("simkl:user:"),
+    fetchPage: (ref, { entry, skip, keys }) => fetchSimklUserList(entry, skip, keys.simklAccessToken, SIMKL_CLIENT_ID, ref.arg, keys.tmdbKey, keys.env, keys.ctx),
+  },
+  {
+    name: "channel", provider: "mylists", kind: "own", apiUse: null,
+    match: (s) => s.startsWith("channel:v1:"),
+    fetchPage: (ref, { entry, keys }) => fetchChannelCatalog(entry, keys.origin),
+  },
+  {
+    name: "custom-list", provider: "mylists", kind: "own", apiUse: null,
+    match: (s) => s.startsWith("customlist:v1:"),
+    fetchPage: (ref, { entry, skip, keys }) => fetchCustomListCatalog(entry, skip, keys),
+  },
+  {
+    name: "autotrack", provider: "mylists", kind: "personal", apiUse: null,
+    match: (s) => s.startsWith("autotrack:") || s === "custom:watch-history" || s === "custom:continue-watching" || s === "custom:watchlist" || s.startsWith("custom:watch-history:") || s.startsWith("custom:continue-watching:"),
+    fetchPage: (ref, { entry, keys }) => fetchAutoTrackedCatalog(entry, keys.env, keys),
+  },
+  // Recommended Movies / Shows: the account's own Discover snapshot, or, when
+  // that is too old, recommendations built from TMDB (so it counts as TMDB).
+  {
+    name: "curated", provider: "mylists", kind: "personal", apiUse: "tmdb",
+    match: (s) => s.startsWith("custom:curated:") || s.startsWith("curated:"),
+    fetchPage: (ref, { entry, skip, keys }) => fetchCuratedCatalog(entry, skip, keys),
+  },
+  {
+    name: "tmdb-collection", provider: "tmdb", kind: "list", apiUse: "tmdb",
+    match: (s) => s.startsWith("tmdb:collection:") || /^https?:\/\/(?:www\.)?themoviedb\.org\/collection\//i.test(s),
+    fetchPage: (ref, { entry, skip, keys }) => fetchTmdbCollection(entry, skip, TMDB_API_KEY, keys.env, keys.ctx),
+  },
+  // A list published on this site, read from its own storage, never fetched.
+  {
+    name: "published-list", provider: "mylists", kind: "list", apiUse: null,
+    match: (s) => !!parsePublishedListUrl(s),
+    fetchPage: (ref, { entry, keys }) => fetchPublishedListCatalog(entry, keys.env),
+  },
+  {
+    name: "trakt", provider: "trakt", kind: "list", apiUse: "trakt",
+    match: (s) => /^https?:\/\/(www\.|app\.)?trakt\.tv\//i.test(s),
+    fetchPage: (ref, { entry, skip, keys }) => fetchTrakt(entry, skip, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx),
+  },
+  {
+    name: "tmdb", provider: "tmdb", kind: "list", apiUse: "tmdb",
+    match: (s) => /^https?:\/\/(www\.)?themoviedb\.org\/list\//i.test(s),
+    fetchPage: (ref, { entry, skip }) => fetchTmdb(entry, skip, TMDB_API_KEY),
+  },
+  // The default, and backwards-compatible with existing configs: anything not
+  // claimed above is an MDBList public list (a URL, or a bare "user/list").
+  {
+    name: "mdblist", provider: "mdblist", kind: "list", apiUse: "mdblist",
+    match: () => true,
+    fetchPage: (ref, { entry, skip, keys }) => fetchMdblist(entry, skip, catalogMdblistKey(keys), keys.env, keys.ctx),
+  },
+];
+
+const CATALOG_SOURCE_BY_NAME = new Map(CATALOG_SOURCES.map((src) => [src.name, src]));
+
+function catalogSourceByName(name) {
+  return CATALOG_SOURCE_BY_NAME.get(name) || null;
+}
+
+// What a row's URL (or sentinel) is, as the adapters see it:
+//   { source, provider, kind, url, arg }
+// Always returns a ref: the last source takes anything.
+function resolveSourceRef(input) {
+  const s = String(input || "").trim();
+  for (const src of CATALOG_SOURCES) {
+    if (src.match(s)) {
+      return { source: src.name, provider: src.provider, kind: src.kind, url: s, arg: src.arg ? src.arg(s) : "" };
+    }
+  }
+  return null;
+}
+
 function detectSource(input) {
-  const s = (input || "").trim();
-  if (s === "mdblist:watchlist" || s.startsWith("mdblist:watchlist:") || /^https?:\/\/(www\.)?mdblist\.com\/(?:lists\/[^/]+\/)?watchlist\/?/i.test(s)) return "mdblist-watchlist";
-  if (s === "mdblist:history" || s.startsWith("mdblist:history:") || /^https?:\/\/(www\.)?mdblist\.com\/(?:lists\/[^/]+\/)?history\/?/i.test(s)) return "mdblist-history";
-  if (s === "mdblist:airing-next" || s.startsWith("mdblist:airing-next:") || s === "mdblist:user:shows:airing-next") return "mdblist-airing-next";
-  if (s === "mdblist:upnext" || s.startsWith("mdblist:upnext:") || s === "mdblist:user:shows:upnext") return "mdblist-upnext";
-  // (www.|app.) and a trailing "?query" or "#hash" both tolerated here --
-  // matching every other trakt.tv regex in this function -- because a
-  // fully $-anchored .../watchlist$ / .../history$ (this used to require
-  // the URL end exactly there) silently failed to recognize a URL copied
-  // while some filter/view toggle on trakt.tv's own site was active (e.g.
-  // a trailing "?something=x"), or one copied from app.trakt.tv. It still
-  // fell through to the generic "trakt" case below rather than erroring,
-  // but generic handling expects a /lists/ path a watchlist/history URL
-  // doesn't have, so the list failed to resolve at all.
-  if (s === "trakt:watchlist" || s.startsWith("trakt:watchlist:") || /^https?:\/\/(www\.|app\.)?trakt\.tv\/users\/[^/]+\/watchlist\/?(?:[?#].*)?$/i.test(s)) return "trakt-watchlist";
-  if (s === "trakt:history" || s.startsWith("trakt:history:") || /^https?:\/\/(www\.|app\.)?trakt\.tv\/users\/[^/]+\/history\/?(?:[?#].*)?$/i.test(s)) return "trakt-history";
-  if (s === "trakt:airing-next" || s.startsWith("trakt:airing-next:") || s === "trakt:user:shows:airing-next") return "trakt-airing-next";
-  if (s === "trakt:continue-watching" || s.startsWith("trakt:continue-watching:") || s === "trakt:user:continue-watching" || /^https?:\/\/(www\.|app\.)?trakt\.tv\/users\/[^/]+\/continue-watching\/?(?:[?#].*)?$/i.test(s)) return "trakt-continue-watching";
-  if (s.startsWith("tmdb:chart:") || parseTmdbWebChartUrl(s)) return "tmdb-chart";
-  if (s.startsWith("tmdb:top10:")) return "tmdb-top10";
-  if (s === "tmdb:hidden-gems") return "tmdb-hidden-gems";
-  if (s.startsWith("tmdb:kids:")) return "tmdb-kids";
-  if (s.startsWith("tmdb:holiday:")) return "tmdb-holiday";
-  if (s.startsWith("tmdb:genre:")) return "tmdb-genre";
-  // Bare, or with a "+"-separated service selection after a colon --
-  // "tmdb:new-on-streaming", "tmdb:new-on-streaming:netflix+hulu". Matched
-  // before nothing else because it shares no prefix with the entries above;
-  // it is listed here so the tmdb: family stays in one place.
-  if (
-    s === "tmdb:new-on-streaming" || s.startsWith("tmdb:new-on-streaming:") ||
-    s === "rapidapi:new-on-streaming" || s.startsWith("rapidapi:new-on-streaming:") ||
-    s === "streaming:new-on-streaming" || s.startsWith("streaming:new-on-streaming:")
-  ) return "tmdb-new-on-streaming";
-  // This add-on's own Most Watched chart -- "mylists:most-watched:today|7|30".
-  if (s.startsWith("mylists:most-watched:")) return "mylists-most-watched";
-  if (s.startsWith("trakt:chart:")) return "trakt-chart";
-  if (s.startsWith("simkl:chart:")) return "simkl-chart";
-  if (s.startsWith("simkl:user:")) return "simkl-user";
-  if (s.startsWith("channel:v1:")) return "channel";
-  if (s.startsWith("customlist:v1:")) return "custom-list";
-  if (s.startsWith("autotrack:") || s === "custom:watch-history" || s === "custom:continue-watching" || s === "custom:watchlist" || s.startsWith("custom:watch-history:") || s.startsWith("custom:continue-watching:")) return "autotrack";
-  if (s.startsWith("custom:curated:") || s.startsWith("curated:")) return "curated";
-  if (s.startsWith("tmdb:collection:") || /^https?:\/\/(?:www\.)?themoviedb\.org\/collection\//i.test(s)) return "tmdb-collection";
-  if (parsePublishedListUrl(s)) return "published-list";
-  if (/^https?:\/\/(www\.|app\.)?trakt\.tv\//i.test(s)) return "trakt";
-  if (/^https?:\/\/(www\.)?themoviedb\.org\/list\//i.test(s)) return "tmdb";
-  return "mdblist"; // default / backwards-compatible with existing configs
+  return resolveSourceRef(input).source;
+}
+
+// A Letterboxd list or watchlist URL: { provider, kind: "import", user, slug }.
+// Letterboxd has no API, so its rows are never served live: a Letterboxd list
+// is imported (read in the browser, matched through /api/bulk-resolve) and
+// becomes one of the person's own lists. detectSource does not claim these
+// URLs, so a pasted one still goes to the MDBList default, as before.
+function parseLetterboxdListUrl(input) {
+  const s = String(input || "").trim();
+  const m = s.match(/^https?:\/\/(?:www\.)?letterboxd\.com\/([A-Za-z0-9_]{1,40})\/(?:list\/([A-Za-z0-9_-]{1,120})|(watchlist))\/?(?:[?#].*)?$/i);
+  if (!m) return null;
+  return { provider: "letterboxd", kind: "import", url: s, user: m[1].toLowerCase(), slug: (m[2] || m[3]).toLowerCase() };
+}
+
+// The provider adapters. Each one names the hosts it talks to, the catalog
+// sources it owns (filled from CATALOG_SOURCES below) and parseRef, which
+// reads a URL or sentinel into a ref when it is one of that provider's.
+//
+// usesSharedKey(keys): whether a request with these install keys spends the
+// site's own key rather than the person's. Only the providers some source
+// names as its apiUse have one.
+//
+// Some providers serve no catalog row. JustWatch and RapidAPI feed the New on
+// Streaming sweep, TVmaze gives air times, Cinemeta is the metadata fallback,
+// and Letterboxd is import only. They are here so every provider this Worker
+// calls has one entry to hang its breaker, metrics and fixtures on (P4-4,
+// P4-5).
+function makeProviderAdapter(id, label, hosts, extra) {
+  return {
+    id,
+    label,
+    hosts,
+    sources: [],
+    parseRef(input) {
+      const ref = resolveSourceRef(input);
+      return ref && ref.provider === id ? ref : null;
+    },
+    ...(extra || {}),
+  };
+}
+
+const PROVIDER_ADAPTERS = {
+  tmdb: makeProviderAdapter("tmdb", "TMDB", ["api.themoviedb.org", "themoviedb.org", "www.themoviedb.org"], {
+    usesSharedKey: () => true,
+  }),
+  trakt: makeProviderAdapter("trakt", "Trakt", ["api.trakt.tv", "trakt.tv", "www.trakt.tv", "app.trakt.tv"], {
+    usesSharedKey: (keys) => !keys.traktKey,
+  }),
+  mdblist: makeProviderAdapter("mdblist", "MDBList", ["api.mdblist.com", "mdblist.com", "www.mdblist.com"], {
+    usesSharedKey: (keys) => !(keys.mdblistKey || keys.mdblistAccessToken),
+  }),
+  simkl: makeProviderAdapter("simkl", "Simkl", ["api.simkl.com", "data.simkl.in", "simkl.com", "www.simkl.com"], {
+    usesSharedKey: () => true,
+  }),
+  justwatch: makeProviderAdapter("justwatch", "JustWatch", ["apis.justwatch.com"], { parseRef: () => null }),
+  rapidapi: makeProviderAdapter("rapidapi", "RapidAPI Streaming Availability", ["streaming-availability.p.rapidapi.com"], { parseRef: () => null }),
+  tvmaze: makeProviderAdapter("tvmaze", "TVmaze", ["api.tvmaze.com"], { parseRef: () => null }),
+  cinemeta: makeProviderAdapter("cinemeta", "Cinemeta", ["v3-cinemeta.strem.io", "images.metahub.space"], { parseRef: () => null }),
+  letterboxd: makeProviderAdapter("letterboxd", "Letterboxd", ["letterboxd.com", "www.letterboxd.com"], { parseRef: parseLetterboxdListUrl }),
+  // This site's own rows: channels, custom and published lists, the tracked
+  // shelves, Recommended, Most Watched and New on Streaming. Served from its
+  // own storage; no host.
+  mylists: makeProviderAdapter("mylists", "My Lists", []),
+};
+
+for (const src of CATALOG_SOURCES) PROVIDER_ADAPTERS[src.provider].sources.push(src.name);
+
+function providerAdapter(id) {
+  return Object.prototype.hasOwnProperty.call(PROVIDER_ADAPTERS, id) ? PROVIDER_ADAPTERS[id] : null;
 }
 
 // --- What a signed-out install may carry (docs/DECISIONS.md D-8) ------------
@@ -14651,50 +14953,26 @@ async function fetchCatalog(entry, skip = 0, keys = {}) {
   if (urls.length > 1) {
     result = await fetchMergedCatalog(urls, entry.type, skip, keys);
   } else {
-    const mdblistKey = keys.mdblistAccessToken || keys.mdblistKey || MDBLIST_API_KEY;
-    const traktKey = keys.traktKey || TRAKT_CLIENT_ID;
-    const source = detectSource(entry.url);
-    if (source === "mdblist-watchlist") { trackSharedApiUse(keys, !(keys.mdblistKey || keys.mdblistAccessToken), "mdblist"); result = await fetchMdblistWatchlist(entry, skip, mdblistKey, keys.mdblistAccessToken || ""); }
-    else if (source === "mdblist-history") { trackSharedApiUse(keys, !(keys.mdblistKey || keys.mdblistAccessToken), "mdblist"); result = await fetchMdblistHistory(entry, skip, mdblistKey, keys.mdblistAccessToken || ""); }
-    else if (source === "mdblist-airing-next") { trackSharedApiUse(keys, !(keys.mdblistKey || keys.mdblistAccessToken), "mdblist"); result = await fetchMdblistAiringNext(entry, skip, mdblistKey, keys.mdblistAccessToken || "", keys.tmdbKey || TMDB_API_KEY, keys.env, keys.ctx); }
-    else if (source === "mdblist-upnext") { trackSharedApiUse(keys, !(keys.mdblistKey || keys.mdblistAccessToken), "mdblist"); result = await fetchMdblistUpNext(entry, skip, mdblistKey, keys.mdblistAccessToken || "", keys.tmdbKey || TMDB_API_KEY, keys.env, keys.ctx); }
-    else if (source === "trakt") { trackSharedApiUse(keys, !keys.traktKey, "trakt"); result = await fetchTrakt(entry, skip, traktKey, keys.traktAccessToken || "", keys.env, keys.ctx); }
-    else if (source === "trakt-watchlist") { trackSharedApiUse(keys, !keys.traktKey, "trakt"); result = await fetchTraktWatchlist(entry, skip, traktKey, keys.traktAccessToken || "", keys.env, keys.ctx); }
-    else if (source === "trakt-history") { trackSharedApiUse(keys, !keys.traktKey, "trakt"); result = await fetchTraktHistory(entry, skip, traktKey, keys.traktAccessToken || "", keys.env, keys.ctx); }
-    else if (source === "trakt-airing-next") { trackSharedApiUse(keys, !keys.traktKey, "trakt"); result = await fetchTraktAiringNext(entry, skip, traktKey, keys.traktAccessToken || "", keys.tmdbKey || TMDB_API_KEY, keys.env, keys.ctx); }
-    else if (source === "trakt-continue-watching") { trackSharedApiUse(keys, !keys.traktKey, "trakt"); result = await fetchTraktContinueWatching(entry, skip, traktKey, keys.traktAccessToken || "", keys.env, keys.ctx); }
-    else if (source === "tmdb") { trackSharedApiUse(keys, true, "tmdb"); result = await fetchTmdb(entry, skip, TMDB_API_KEY); }
-    else if (source === "tmdb-chart") {
-      trackSharedApiUse(keys, true, "tmdb");
-      const webChart = typeof parseTmdbWebChartUrl === "function" ? parseTmdbWebChartUrl(entry.url) : null;
-      const chartKey = webChart ? webChart.chartKey : entry.url.trim().slice("tmdb:chart:".length);
-      result = await fetchTmdbChart(entry, skip, TMDB_API_KEY, chartKey, keys.region, keys.hideNonDigitalReleases, keys.env, keys.ctx);
-    }
-    else if (source === "tmdb-collection") { trackSharedApiUse(keys, true, "tmdb"); result = await fetchTmdbCollection(entry, skip, TMDB_API_KEY, keys.env, keys.ctx); }
-    else if (source === "tmdb-top10") { trackSharedApiUse(keys, true, "tmdb"); result = await fetchTmdbProviderTop10(entry, skip, TMDB_API_KEY, entry.url.trim().slice("tmdb:top10:".length), keys.region); }
-    else if (source === "tmdb-hidden-gems") { trackSharedApiUse(keys, true, "tmdb"); result = await fetchTmdbHiddenGems(entry, skip, TMDB_API_KEY); }
-    else if (source === "tmdb-kids") { trackSharedApiUse(keys, true, "tmdb"); result = await fetchTmdbKids(entry, skip, TMDB_API_KEY, entry.url.trim().slice("tmdb:kids:".length)); }
-    else if (source === "tmdb-holiday") { trackSharedApiUse(keys, true, "tmdb"); result = await fetchTmdbHoliday(entry, skip, TMDB_API_KEY, entry.url.trim().slice("tmdb:holiday:".length)); }
-    else if (source === "tmdb-genre") { trackSharedApiUse(keys, true, "tmdb"); result = await fetchTmdbGenre(entry, skip, TMDB_API_KEY, entry.url.trim().slice("tmdb:genre:".length), keys.region); }
-    // No trackSharedApiUse: this one reads D1 and makes no provider call at
-    // all. Its TMDB spend happens on the cron tick (sweepNewOnStreaming),
-    // where it is already counted against the sweep's own budget rather than
-    // against whoever happened to open the shelf.
-    else if (source === "tmdb-new-on-streaming") { result = await fetchNewOnStreaming(entry, skip, keys); }
-    // Reads this add-on's own watch counts (a KV snapshot, rebuilt at most
-    // hourly/daily); see fetchMostWatchedCatalog.
-    else if (source === "mylists-most-watched") { result = await fetchMostWatchedCatalog(entry, skip, keys); }
-    else if (source === "trakt-chart") { trackSharedApiUse(keys, !keys.traktKey, "trakt"); result = await fetchTraktChart(entry, skip, traktKey, entry.url.trim().slice("trakt:chart:".length), keys.env, keys.ctx); }
-    else if (source === "simkl-chart") { trackSharedApiUse(keys, true, "simkl"); result = await fetchSimklChart(entry, skip, SIMKL_CLIENT_ID, entry.url.trim().slice("simkl:chart:".length), keys.env, keys.ctx); }
-    else if (source === "simkl-user") { trackSharedApiUse(keys, true, "simkl"); result = await fetchSimklUserList(entry, skip, keys.simklAccessToken, SIMKL_CLIENT_ID, entry.url.trim().slice("simkl:user:".length), keys.tmdbKey, keys.env, keys.ctx); }
-    else if (source === "channel") result = fetchChannelCatalog(entry, keys.origin);
-    else if (source === "custom-list") result = await fetchCustomListCatalog(entry, skip, keys);
-    else if (source === "autotrack") result = await fetchAutoTrackedCatalog(entry, keys.env, keys);
-    else if (source === "curated") { trackSharedApiUse(keys, true, "tmdb"); result = await fetchCuratedCatalog(entry, skip, keys); }
-    else if (source === "published-list") result = await fetchPublishedListCatalog(entry, keys.env);
-    else {
-      trackSharedApiUse(keys, !(keys.mdblistKey || keys.mdblistAccessToken), "mdblist");
-      result = await fetchMdblist(entry, skip, mdblistKey, keys.env, keys.ctx);
+    // One source. The provider registry (CATALOG_SOURCES,
+    // 04_config-resolution.js) says what it is, which provider's key it
+    // spends, and which fetcher serves it.
+    const ref = resolveSourceRef(entry.url);
+    const source = catalogSourceByName(ref.source);
+    if (source.apiUse) trackSharedApiUse(keys, PROVIDER_ADAPTERS[source.apiUse].usesSharedKey(keys), source.apiUse);
+    // FF_PROVIDER_BREAKER: learn whether another isolate found this provider
+    // down (41_provider-breaker.js; typeof-guarded, the tests load this file
+    // without it).
+    if (typeof providerBreakerRefresh === "function") await providerBreakerRefresh(keys.env, source.apiUse || ref.provider);
+    // FF_CHART_SNAPSHOTS: a chart page is served from its snapshot
+    // (42_chart-snapshots.js), otherwise the fetcher is called as before.
+    result = typeof fetchSourcePageWithSnapshot === "function"
+      ? await fetchSourcePageWithSnapshot(source, ref, { entry, skip, keys })
+      : await source.fetchPage(ref, { entry, skip, keys });
+    // FF_CANONICAL_IDS: a Stremio catalog's ids made canonical
+    // (43_catalog-ids.js). A merged row's sources each come through here, so
+    // the merge above de-duplicates canonical ids.
+    if (keys.canonicalIds === true && typeof canonicalizeCatalogMetas === "function") {
+      result = await canonicalizeCatalogMetas(keys.env, result, { kind: entry.type });
     }
   }
 
@@ -77107,6 +77385,8 @@ Sitemap: ${url.origin}/sitemap.xml`;
         const searchConfig = config ? await resolveConfig(config, env) : {};
         const effectiveTmdbKey = searchConfig.tmdbKey || TMDB_API_KEY;
         let metas = await searchCatalogMetas(searchQuery, type, skip, effectiveTmdbKey, env, ctx, url.origin);
+        // FF_CANONICAL_IDS (43_catalog-ids.js), as fetchCatalog does for rows.
+        metas = await canonicalizeCatalogMetas(env, metas, { kind: type });
         // This route builds its metas directly rather than through
         // fetchCatalog, so it needs its own call -- otherwise search results
         // would be the one row in Stremio still showing the old artwork.
@@ -77172,9 +77452,9 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // to a config that PROVED it belongs to that account. See resolveConfig
         // (04_config-resolution.js) for how that is established and
         // mayReadTrackedShelf (02_http-and-creator-utils.js) for what it gates.
-        let metas = await fetchCatalog(entry, skip, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, adultContentFilter, isStremioCatalog: true, betterPosters, betterPostersOptions: betterPostersOptionsFrom(resolvedConfig, url.origin), showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, env, ctx, origin: url.origin });
+        let metas = await fetchCatalog(entry, skip, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, adultContentFilter, isStremioCatalog: true, canonicalIds: true, betterPosters, betterPostersOptions: betterPostersOptionsFrom(resolvedConfig, url.origin), showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, env, ctx, origin: url.origin });
         if (dedupeAcrossLists) {
-          metas = await dedupeAcrossListEntries(entries, entryIndex, skip, metas, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, env, ctx });
+          metas = await dedupeAcrossListEntries(entries, entryIndex, skip, metas, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, canonicalIds: true, env, ctx });
         }
         if (searchQuery && Array.isArray(metas) && metas.length > 0) {
           const sq = searchQuery.toLowerCase();
@@ -91725,6 +92005,8 @@ export default {
     // FF_EVENT_TRACKING: tracking records of accounts served from the
     // activity database are read and written there (40_event-tracking.js).
     const runEnv = eventTrackingEnv(counters ? instrumentEnv(env, counters) : env);
+    // FF_PROVIDER_BREAKER (41_provider-breaker.js).
+    configureProviderBreaker(env);
     try {
       response = await schemaWriteGate(request, env);
       if (!response) response = await handleFetch(request, runEnv, ctx);
@@ -91756,6 +92038,13 @@ export default {
       // An unparseable URL cannot have reached a private route anyway.
     }
     if (counters) writeRequestMetrics(env, request, response, startedAt, counters);
+    // A breaker this request opened is shared with other isolates, and the
+    // provider metrics are written when due. No I/O when there is nothing to do.
+    try {
+      if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(providerBreakerFlush(env).catch(() => {}));
+    } catch {
+      // Never affects the response.
+    }
     return withSecurityHeaders(response, privatePath, request ? request._sessionCookie : null);
   },
 
@@ -91782,6 +92071,7 @@ export default {
     // empty API key just because this isolate's first event happened to be a
     // cron tick rather than a request. See applyEnvApiKeys.
     applyEnvApiKeys(env);
+    configureProviderBreaker(env);
     // FF_EVENT_TRACKING, as in the fetch handler above.
     env = eventTrackingEnv(env);
     // No outbound-fetch budget is divided between the tasks any more. That
@@ -91835,7 +92125,7 @@ export default {
           }
         })()),
         guard("pruneTombstones", pruneTombstones(env)),
-      ])
+      ]).then(() => guard("providerBreakerFlush", providerBreakerFlush(env)))
     );
     } catch (err) {
       // Anything thrown synchronously before waitUntil was even reached --
@@ -99278,4 +99568,585 @@ function eventTrackingEnv(env) {
       return Reflect.get(target, prop, receiver);
     },
   });
+}
+
+// --- Provider breaker (Phase 4, P4-4) -----------------------------------------
+//
+// When a provider goes down, every request that needs it used to wait out the
+// timeout (10 s on the catalog paths, 30 s elsewhere) before the cache tiers
+// served the last good copy. During an outage that is every request, each one
+// holding a Stremio row open and adding load to a provider already in trouble.
+//
+// The breaker counts consecutive failures per provider, at the one place every
+// outbound call goes through (the fetch guard, 02_http-and-creator-utils.js).
+// After PROVIDER_BREAKER_THRESHOLD in a row it opens for
+// PROVIDER_BREAKER_OPEN_MS: calls to that provider are refused at once with a
+// ProviderUnavailable error, which the cache tiers treat like any failure, so
+// the last good copy is served straight away. When the time is up the next
+// call is let through; one success closes it, one more failure opens it again.
+//
+//   A failure is: no answer (a network error or a timeout), a 5xx, or a 429.
+//   A 401, 403 or 404 is an answer about that request (a wrong key, a title
+//   that does not exist), not about the provider, so it closes the count.
+//
+// Which provider a call belongs to comes from the adapters' hosts
+// (PROVIDER_ADAPTERS, 04_config-resolution.js). A call to any other host is
+// left alone.
+//
+// The state lives in this isolate's memory, where the fetch guard can read it
+// without waiting. Isolates share it through KV: an isolate that opens a
+// breaker writes `pb:{provider}` (60 s, KV's shortest lifetime), and an
+// isolate about to serve a catalog row from a provider reads that key, at most
+// once a minute per provider, so a provider found to be down in one place is
+// skipped everywhere within about a minute. The fetch guard has no `env`, so
+// the KV side runs where there is one: the catalog path reads
+// (providerBreakerRefresh, from fetchCatalog), and the end of every request
+// and cron tick writes (providerBreakerFlush).
+//
+// Metrics: providerBreakerFlush writes one Analytics Engine point per provider
+// at most once a minute per isolate: blobs ["provider", id, "open"|"closed"],
+// doubles [calls, failures, refused, latency ms summed, times opened].
+//
+// Behind FF_PROVIDER_BREAKER (off). Off, the fetch guard does exactly what it
+// did before. Module level, after the Worker's exports, like 27_ onward.
+
+const PROVIDER_BREAKER_THRESHOLD = 5;
+const PROVIDER_BREAKER_OPEN_MS = 60 * 1000;
+const PROVIDER_BREAKER_KV_PREFIX = "pb:";
+const PROVIDER_BREAKER_KV_TTL_SEC = 60;
+// How often an isolate re-reads one provider's pb: key. KV is eventually
+// consistent over about a minute anyway, so reading more often buys nothing.
+const PROVIDER_BREAKER_READ_EVERY_MS = 60 * 1000;
+const PROVIDER_METRICS_EVERY_MS = 60 * 1000;
+
+const PROVIDER_BREAKERS = new Map(); // provider id -> state (providerBreakerState)
+let providerBreakerOn = false;
+let providerBreakerHostIndex = null;
+let providerMetricsFlushedAt = 0;
+
+function isProviderBreakerEnabled(env) {
+  const v = env && env.FF_PROVIDER_BREAKER;
+  return v === "1" || v === "true" || v === true;
+}
+
+// Called at the start of every request and cron tick, with that invocation's
+// env, like applyEnvApiKeys.
+function configureProviderBreaker(env) {
+  providerBreakerOn = isProviderBreakerEnabled(env);
+}
+
+function providerBreakerState(provider) {
+  let st = PROVIDER_BREAKERS.get(provider);
+  if (!st) {
+    st = {
+      failures: 0,      // consecutive
+      openUntil: 0,
+      publish: false,   // opened here, not yet written to KV
+      readAt: 0,        // last read of pb:{provider}
+      // Since the last metrics point:
+      calls: 0, failed: 0, refused: 0, latencyMs: 0, opened: 0,
+    };
+    PROVIDER_BREAKERS.set(provider, st);
+  }
+  return st;
+}
+
+function providerForHost(host) {
+  if (!providerBreakerHostIndex) {
+    const index = new Map();
+    if (typeof PROVIDER_ADAPTERS === "object" && PROVIDER_ADAPTERS) {
+      for (const adapter of Object.values(PROVIDER_ADAPTERS)) {
+        for (const h of adapter.hosts || []) index.set(h, adapter.id);
+      }
+    }
+    providerBreakerHostIndex = index;
+  }
+  return providerBreakerHostIndex.get(String(host || "").toLowerCase()) || null;
+}
+
+// The provider an outbound call belongs to, or null (the breaker is off, or
+// the host is nobody's). Called by the fetch guard on every call, so it
+// returns as early as it can.
+function providerBreakerFor(input) {
+  if (!providerBreakerOn) return null;
+  try {
+    const raw = input && typeof input === "object" && typeof input.url === "string" ? input.url : String(input);
+    return providerForHost(new URL(raw).hostname);
+  } catch {
+    return null;
+  }
+}
+
+function providerBreakerIsOpen(provider, now = Date.now()) {
+  const st = PROVIDER_BREAKERS.get(provider);
+  return !!st && st.openUntil > now;
+}
+
+function providerUnavailableError(provider) {
+  const adapter = typeof providerAdapter === "function" ? providerAdapter(provider) : null;
+  const err = new Error(`${adapter ? adapter.label : provider} is not answering right now; trying again shortly.`);
+  err.name = "ProviderUnavailable";
+  err.provider = provider;
+  err.breakerOpen = true;
+  return err;
+}
+
+function isProviderFailureStatus(status) {
+  return !status || status >= 500 || status === 429;
+}
+
+function providerBreakerRecord(provider, status, latencyMs) {
+  const st = providerBreakerState(provider);
+  const now = Date.now();
+  st.calls++;
+  st.latencyMs += Math.max(0, latencyMs || 0);
+  if (!isProviderFailureStatus(status)) {
+    st.failures = 0;
+    return;
+  }
+  st.failed++;
+  st.failures++;
+  if (st.failures >= PROVIDER_BREAKER_THRESHOLD && st.openUntil <= now) {
+    st.openUntil = now + PROVIDER_BREAKER_OPEN_MS;
+    st.opened++;
+    st.publish = true;
+    console.warn(`[ProviderBreaker] ${provider}: ${st.failures} failures in a row; refusing calls for ${PROVIDER_BREAKER_OPEN_MS / 1000}s.`);
+  }
+}
+
+// The fetch guard's call for a provider's request. `run` makes the real call.
+function providerBreakerFetch(provider, run) {
+  const now = Date.now();
+  if (providerBreakerIsOpen(provider, now)) {
+    providerBreakerState(provider).refused++;
+    return Promise.reject(providerUnavailableError(provider));
+  }
+  let pending;
+  try {
+    pending = run();
+  } catch (err) {
+    // A call that could not even be made (a malformed URL) says nothing
+    // about the provider.
+    return Promise.reject(err);
+  }
+  return Promise.resolve(pending).then(
+    (res) => {
+      providerBreakerRecord(provider, res && res.status, Date.now() - now);
+      return res;
+    },
+    (err) => {
+      providerBreakerRecord(provider, 0, Date.now() - now);
+      throw err;
+    },
+  );
+}
+
+// Before a catalog row calls a provider: take up an open breaker another
+// isolate published. At most one KV read per provider per minute; never
+// throws, and never delays a row by more than that one read.
+async function providerBreakerRefresh(env, provider) {
+  if (!providerBreakerOn || !provider || !env || !env.CONFIGS) return;
+  if (typeof providerAdapter === "function") {
+    const adapter = providerAdapter(provider);
+    if (!adapter || !adapter.hosts || !adapter.hosts.length) return;
+  }
+  const st = providerBreakerState(provider);
+  const now = Date.now();
+  if (st.openUntil > now || now - st.readAt < PROVIDER_BREAKER_READ_EVERY_MS) return;
+  st.readAt = now;
+  try {
+    const shared = await env.CONFIGS.get(PROVIDER_BREAKER_KV_PREFIX + provider, "json");
+    const until = shared ? Number(shared.openUntil) : 0;
+    if (until > now && until > st.openUntil) {
+      st.openUntil = Math.min(until, now + PROVIDER_BREAKER_OPEN_MS);
+      // Someone else's failures: the next trial call after this is judged
+      // on its own, like one here after an opening.
+      st.failures = Math.max(st.failures, PROVIDER_BREAKER_THRESHOLD);
+    }
+  } catch {
+    // KV unavailable: the breaker works from this isolate's own count.
+  }
+}
+
+// End of a request or cron tick: publish breakers opened here, and write the
+// metrics point when one is due. Cheap when there is nothing to do (no I/O).
+async function providerBreakerFlush(env) {
+  if (!providerBreakerOn || !env || !PROVIDER_BREAKERS.size) return;
+  const now = Date.now();
+  const writes = [];
+  for (const [provider, st] of PROVIDER_BREAKERS) {
+    if (!st.publish) continue;
+    st.publish = false;
+    if (st.openUntil <= now || !env.CONFIGS) continue;
+    writes.push(env.CONFIGS.put(
+      PROVIDER_BREAKER_KV_PREFIX + provider,
+      JSON.stringify({ openUntil: st.openUntil, failures: st.failures, at: now }),
+      { expirationTtl: PROVIDER_BREAKER_KV_TTL_SEC },
+    ).catch(() => {}));
+  }
+  if (writes.length) await Promise.all(writes);
+  if (now - providerMetricsFlushedAt < PROVIDER_METRICS_EVERY_MS) return;
+  providerMetricsFlushedAt = now;
+  const analytics = env.ANALYTICS && typeof env.ANALYTICS.writeDataPoint === "function" ? env.ANALYTICS : null;
+  for (const [provider, st] of PROVIDER_BREAKERS) {
+    if (!st.calls && !st.refused && !st.opened) continue;
+    if (analytics) {
+      try {
+        analytics.writeDataPoint({
+          blobs: ["provider", provider, st.openUntil > now ? "open" : "closed"],
+          doubles: [st.calls, st.failed, st.refused, st.latencyMs, st.opened],
+          indexes: ["provider"],
+        });
+      } catch {
+        // Metrics must never affect a response.
+      }
+    }
+    st.calls = 0;
+    st.failed = 0;
+    st.refused = 0;
+    st.latencyMs = 0;
+    st.opened = 0;
+  }
+}
+
+// --- Chart snapshots (Phase 4, P4-3) --------------------------------------------
+//
+// A chart (TMDB Popular, Trakt Trending, a genre or kids shelf ...) is the same
+// rows for everyone who asks for it with the same settings. So one copy of each
+// page is kept in KV, under
+//
+//   snap:chart:{source}:{chart}:{type}:{region}:{skip}[:{variant}]
+//
+// and every catalog request for it reads that copy:
+//
+//   fresh (built less than CHART_SNAPSHOT_FRESH_MS ago)  served as it is;
+//   stale                                                served as it is, and
+//       rebuilt in the background (at most once per CHART_SNAPSHOT_RETRY_MS per
+//       isolate, so a provider that keeps failing is not asked on every request);
+//   missing                                              built now, then stored.
+//
+// An empty result never replaces a non-empty snapshot: a chart is never really
+// empty, so an empty answer is a provider fault, and keeping the last good copy
+// is the whole point. An empty result is never stored at all.
+//
+// Which rows: the catalog sources of kind "chart" (CATALOG_SOURCES,
+// 04_config-resolution.js) that name a `snapshot` rule, which says which of
+// the request's settings change the rows (the region; the digital-release
+// setting; the day, for Hidden Gems' daily rotation). Personal rows never do.
+// This site's own charts (Most Watched, New on Streaming) are snapshots already.
+//
+// The snapshot holds what the fetcher returned, before the per-install steps
+// in fetchCatalog (shuffle, BetterPosters, badges, the adult filter), which
+// still run on every request.
+//
+// The fetchers keep their own caches underneath; a snapshot is built through
+// them. Until the chart refresh job (P5-5), building happens here, on a
+// request, as MIGRATION_PLAN Phase 4 says.
+//
+// Behind FF_CHART_SNAPSHOTS (off). Module level, after the Worker's exports.
+
+const CHART_SNAPSHOT_PREFIX = "snap:chart:";
+const CHART_SNAPSHOT_FRESH_MS = 2 * 60 * 60 * 1000;
+// Kept this long, so an outage makes charts older, not empty.
+const CHART_SNAPSHOT_KV_TTL_SEC = 7 * 24 * 60 * 60;
+// How long this isolate trusts what it last read from KV for one key: other
+// isolates' rebuilds reach it within this.
+const CHART_SNAPSHOT_MEMO_MS = 60 * 1000;
+const CHART_SNAPSHOT_MEMO_MAX = 500;
+// A rebuild that failed or came back empty is not tried again sooner than this.
+const CHART_SNAPSHOT_RETRY_MS = 5 * 60 * 1000;
+
+const CHART_SNAPSHOT_MEMO = new Map();     // key -> { snap, checkedAt, triedAt }
+const CHART_SNAPSHOT_BUILDING = new Map(); // key -> promise of the build
+
+function isChartSnapshotsEnabled(env) {
+  const v = env && env.FF_CHART_SNAPSHOTS;
+  return v === "1" || v === "true" || v === true;
+}
+
+function chartSnapshotKeyPart(v) {
+  const s = String(v == null || v === "" ? "-" : v);
+  return encodeURIComponent(s).slice(0, 120);
+}
+
+// The KV key for this page of this chart, or null when the source is not
+// snapshotted.
+function chartSnapshotKey(source, ref, { entry, skip, keys }) {
+  const rule = source && source.kind === "chart" ? source.snapshot : null;
+  if (!rule) return null;
+  const parts = [
+    source.name,
+    ref.arg,
+    entry && entry.type,
+    rule.region ? (keys && keys.region) : "",
+    Number(skip) || 0,
+  ].map(chartSnapshotKeyPart);
+  const variant = typeof rule.variant === "function" ? rule.variant(ref, { entry, skip, keys }) : "";
+  if (variant) parts.push(chartSnapshotKeyPart(variant));
+  return CHART_SNAPSHOT_PREFIX + parts.join(":");
+}
+
+function chartSnapshotItems(snap) {
+  const items = Array.isArray(snap && snap.items) ? snap.items.slice() : [];
+  if (typeof snap.totalItems === "number") items.totalItems = snap.totalItems;
+  return items;
+}
+
+function rememberChartSnapshot(key, patch) {
+  const prev = CHART_SNAPSHOT_MEMO.get(key);
+  if (!prev && CHART_SNAPSHOT_MEMO.size >= CHART_SNAPSHOT_MEMO_MAX) {
+    const oldest = CHART_SNAPSHOT_MEMO.keys().next().value;
+    if (oldest !== undefined) CHART_SNAPSHOT_MEMO.delete(oldest);
+  }
+  const next = { snap: null, checkedAt: 0, triedAt: 0, ...(prev || {}), ...patch };
+  CHART_SNAPSHOT_MEMO.set(key, next);
+  return next;
+}
+
+async function readChartSnapshot(env, key, now) {
+  const memo = CHART_SNAPSHOT_MEMO.get(key);
+  if (memo && now - memo.checkedAt < CHART_SNAPSHOT_MEMO_MS) return memo.snap;
+  let snap = null;
+  try {
+    const raw = await env.CONFIGS.get(key, "json");
+    if (raw && Array.isArray(raw.items) && Number.isFinite(raw.builtAt)) snap = raw;
+  } catch {
+    // Unreadable: treated as missing, and rebuilt.
+  }
+  rememberChartSnapshot(key, { snap, checkedAt: now });
+  return snap;
+}
+
+// Builds the page through the source's fetcher and stores it, unless it came
+// back empty. Resolves to { snap, raw }: snap is the snapshot now in effect
+// (the new one, or `previous` kept because the new one was empty, or null),
+// raw what the fetcher returned. Rejects when the fetcher did.
+function buildChartSnapshot(source, ref, page, key, previous) {
+  const running = CHART_SNAPSHOT_BUILDING.get(key);
+  if (running) return running;
+  const { keys } = page;
+  const env = keys.env;
+  const job = (async () => {
+    rememberChartSnapshot(key, { triedAt: Date.now() });
+    const fresh = await source.fetchPage(ref, page);
+    const items = Array.isArray(fresh) ? fresh : [];
+    if (!items.length) {
+      if (previous && previous.items.length) {
+        console.warn(`[ChartSnapshot] ${key} came back empty; keeping the last copy.`);
+      }
+      return { snap: previous || null, raw: fresh };
+    }
+    const snap = {
+      items: items.slice(),
+      totalItems: typeof fresh.totalItems === "number" ? fresh.totalItems : null,
+      builtAt: Date.now(),
+    };
+    rememberChartSnapshot(key, { snap, checkedAt: Date.now() });
+    try {
+      await env.CONFIGS.put(key, JSON.stringify(snap), { expirationTtl: CHART_SNAPSHOT_KV_TTL_SEC });
+    } catch {
+      // Another isolate wrote the same key this second, or KV is having a bad
+      // moment: this isolate still serves what it built.
+    }
+    return { snap, raw: fresh };
+  })();
+  CHART_SNAPSHOT_BUILDING.set(key, job);
+  job.then(() => CHART_SNAPSHOT_BUILDING.delete(key), () => CHART_SNAPSHOT_BUILDING.delete(key));
+  return job;
+}
+
+// fetchCatalog's call for one source. Serves the chart snapshot when there is
+// one, and otherwise calls the fetcher exactly as before.
+async function fetchSourcePageWithSnapshot(source, ref, page) {
+  const keys = page.keys || {};
+  const env = keys.env;
+  const key = env && env.CONFIGS && isChartSnapshotsEnabled(env) ? chartSnapshotKey(source, ref, page) : null;
+  if (!key) return source.fetchPage(ref, page);
+
+  const now = Date.now();
+  const snap = await readChartSnapshot(env, key, now);
+  if (snap && snap.items.length) {
+    const memo = CHART_SNAPSHOT_MEMO.get(key);
+    const stale = now - snap.builtAt >= CHART_SNAPSHOT_FRESH_MS;
+    const mayRetry = !memo || now - (memo.triedAt || 0) >= CHART_SNAPSHOT_RETRY_MS;
+    if (stale && mayRetry) {
+      const rebuild = buildChartSnapshot(source, ref, page, key, snap).catch((err) => {
+        console.warn(`[ChartSnapshot] rebuilding ${key} failed; serving the last copy.`, err && err.message);
+      });
+      if (keys.ctx && typeof keys.ctx.waitUntil === "function") keys.ctx.waitUntil(rebuild);
+    }
+    return chartSnapshotItems(snap);
+  }
+  // Nothing stored yet: built now. An empty answer is passed on as the
+  // fetcher gave it (with any total it carries), and not stored.
+  const built = await buildChartSnapshot(source, ref, page, key, null);
+  return built.snap ? chartSnapshotItems(built.snap) : built.raw;
+}
+
+// --- Canonical catalog ids (Phase 4, P4-2) --------------------------------------
+//
+// A Stremio, Nuvio or wako app asks its add-ons for a title's details and
+// streams by the id a catalog row gives it, so an id nobody understands is a
+// tile that opens to "not found" and plays nothing. The rows used to pass on
+// whatever id their source had: a list item's own id (for an episode in a
+// storyline list, that is TMDB's id for the EPISODE, not a title at all), an
+// episode suffix ("tt0944947:1:2"), "tmdb:tv:1399", a bare TMDB number, another
+// scheme's id.
+//
+// With FF_CANONICAL_IDS on, every row a Stremio catalog serves goes through
+// canonicalizeCatalogMetas, at the end of fetchCatalog (the catalog route asks
+// for it with keys.canonicalIds) and in the search catalog:
+//
+//   tt...      the IMDb id, with any episode suffix dropped.
+//   tmdb:N     a TMDB id ("tmdb:tv:N", "tmdb:N:S:E", and a bare number on an
+//              item that is not an episode all become this), upgraded to the
+//              IMDb id when the item carries one or the media table knows it.
+//   channel_   this site's channels, as they are.
+//   episodes   an item with a season or episode number whose own id is not a
+//              title's becomes its SHOW (showId).
+//   others     another scheme's id ("kitsu:1") is looked up in the media table
+//              (alt_id). Found, it becomes that title's id. Not found, it is kept
+//              for the schemes other Stremio add-ons serve
+//              (CATALOG_ALT_ID_SCHEMES, the anime ones), and otherwise the item
+//              is left out: a tile that cannot open is worse than no tile.
+//
+// Then the page is de-duplicated by id (the first stays), and its total
+// adjusted by what was removed, as dedupeAcrossListEntries does.
+//
+// The media table (29_media.js) is only READ here: at most one query per 90
+// ids, and only for rows whose own ids have no IMDb id. Nothing is asked of
+// TMDB and nothing is written on the catalog path; titles reach `media` through
+// the list writes and the backfills. Without the table (migration 0016 not
+// applied) the rules still apply, without the upgrades.
+//
+// Not changed: the website's previews (/api/preview), which show a storyline
+// list's episodes one by one under their own ids.
+//
+// Behind FF_CANONICAL_IDS (off). Module level, after the Worker's exports.
+
+const CATALOG_ALT_ID_SCHEMES = ["kitsu", "mal", "anilist", "anidb"];
+// A missing media table is remembered for this long per database, so a
+// deployment without migration 0016 does not fail a query on every request.
+const CATALOG_IDS_TABLE_RETRY_MS = 10 * 60 * 1000;
+let catalogIdsNoTable = null; // { db, until }
+
+function isCanonicalIdsEnabled(env) {
+  const v = env && env.FF_CANONICAL_IDS;
+  return v === "1" || v === "true" || v === true;
+}
+
+// What one id string names: { imdb }, { tmdb, kind }, { number }, { alt,
+// scheme }, or null.
+function parseCatalogId(raw) {
+  const s = String(raw == null ? "" : raw).trim();
+  if (!s || s.length > 200) return null;
+  let m = /^(tt\d+)(?::|$)/i.exec(s);
+  if (m) return { imdb: m[1].toLowerCase() };
+  m = /^tmdb:(?:(movie|tv|series|show):)?(\d+)(?::\d+:\d+)?$/i.exec(s);
+  if (m) return { tmdb: Number(m[2]), kind: m[1] ? (m[1].toLowerCase() === "movie" ? "movie" : "series") : null };
+  if (/^\d+$/.test(s)) return { number: Number(s) };
+  m = /^([a-z][a-z0-9_-]*):(\S+)$/i.exec(s);
+  if (m) return { alt: m[1].toLowerCase() + ":" + m[2], scheme: m[1].toLowerCase() };
+  return null;
+}
+
+function catalogMetaKind(meta, kindHint) {
+  const t = String((meta && meta.type) || "").toLowerCase();
+  if (t === "series" || t === "tv" || t === "show") return "series";
+  if (t === "movie") return "movie";
+  const h = String(kindHint || "").toLowerCase();
+  return h === "series" ? "series" : (h === "movie" ? "movie" : null);
+}
+
+function catalogMetaIsEpisode(meta) {
+  return String(meta.type || "").toLowerCase() === "episode" || meta.seasonNum != null || meta.episodeNum != null;
+}
+
+// Which title a row names, before any lookup: { imdb } | { tmdb, kind } |
+// { alt, scheme, kind } | { keep: id } (a channel) | null (nothing usable).
+function planCatalogId(meta, kindHint) {
+  if (!meta || typeof meta !== "object") return null;
+  const id = String(meta.id == null ? "" : meta.id).trim();
+  if (id.startsWith("channel_")) return { keep: id };
+  const kind = catalogMetaKind(meta, kindHint);
+  const own = parseCatalogId(id);
+  const episode = catalogMetaIsEpisode(meta);
+  if (own && own.imdb) return { imdb: own.imdb };
+  const imdb = parseCatalogId(meta.imdbId);
+  if (imdb && imdb.imdb) return { imdb: imdb.imdb };
+  // An episode's own number is TMDB's id for the episode, not a title's.
+  if (episode || !own) {
+    const show = parseCatalogId(meta.showId);
+    if (show && show.imdb) return { imdb: show.imdb };
+    if (show && show.tmdb) return { tmdb: show.tmdb, kind: "series" };
+  }
+  if (own && own.tmdb) return { tmdb: own.tmdb, kind: own.kind || kind };
+  const tmdb = parseCatalogId(typeof meta.tmdbId === "number" ? String(meta.tmdbId) : meta.tmdbId);
+  if (tmdb && (tmdb.tmdb || tmdb.number)) return { tmdb: tmdb.tmdb || tmdb.number, kind };
+  if (own && own.number && !episode) return { tmdb: own.number, kind };
+  if (own && own.alt) return { alt: own.alt, scheme: own.scheme, kind };
+  return null;
+}
+
+// Media rows for the plans that could use one, or null when there is no table
+// to ask. Read-only.
+async function catalogIdMediaRows(env, plans) {
+  const db = env && env.DB;
+  if (!db || typeof lookupMediaRows !== "function") return null;
+  if (catalogIdsNoTable && catalogIdsNoTable.db === db && Date.now() < catalogIdsNoTable.until) return null;
+  const refs = [];
+  for (const p of plans) {
+    if (!p || !p.kind) continue;
+    if (p.tmdb) refs.push({ kind: p.kind, tmdbId: p.tmdb });
+    else if (p.alt) refs.push({ kind: p.kind, altId: p.alt });
+  }
+  if (!refs.length) return null;
+  try {
+    return indexMediaRows(await lookupMediaRows(env, refs));
+  } catch (err) {
+    if (/no such table/i.test(String(err && err.message))) {
+      catalogIdsNoTable = { db, until: Date.now() + CATALOG_IDS_TABLE_RETRY_MS };
+    } else {
+      console.warn("[CatalogIds] media lookup failed; serving ids without it.", err && err.message);
+    }
+    return null;
+  }
+}
+
+function catalogIdFromRow(row) {
+  if (!row) return null;
+  if (row.imdb_id) return row.imdb_id;
+  if (row.tmdb_id) return "tmdb:" + row.tmdb_id;
+  return null;
+}
+
+// The page with every id canonical, duplicates removed and the total adjusted.
+// Returns `metas` itself when the switch is off. Never throws.
+async function canonicalizeCatalogMetas(env, metas, { kind } = {}) {
+  if (!isCanonicalIdsEnabled(env) || !Array.isArray(metas) || !metas.length) return metas;
+  const plans = metas.map((m) => planCatalogId(m, kind));
+  const index = await catalogIdMediaRows(env, plans);
+  const out = [];
+  const seen = new Set();
+  for (let i = 0; i < metas.length; i++) {
+    const meta = metas[i];
+    const plan = plans[i];
+    let id = null;
+    if (!plan) id = null;
+    else if (plan.keep) id = plan.keep;
+    else if (plan.imdb) id = plan.imdb;
+    else if (plan.tmdb) {
+      const row = index && plan.kind ? matchMediaRow(index, { kind: plan.kind, tmdbId: plan.tmdb }) : null;
+      id = (row && row.imdb_id) || "tmdb:" + plan.tmdb;
+    } else if (plan.alt) {
+      const row = index && plan.kind ? matchMediaRow(index, { kind: plan.kind, altId: plan.alt }) : null;
+      id = catalogIdFromRow(row) || (CATALOG_ALT_ID_SCHEMES.includes(plan.scheme) ? plan.alt : null);
+    }
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(meta.id === id ? meta : { ...meta, id });
+  }
+  const total = metas.totalItems;
+  if (typeof total === "number") out.totalItems = Math.max(out.length, total - (metas.length - out.length));
+  return out;
 }

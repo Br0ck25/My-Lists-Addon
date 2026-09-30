@@ -1,0 +1,110 @@
+{
+  "provider": "simkl",
+  "endpoint": "data.simkl.in/discover/trending/tv/{today|week|month}_100.json",
+  "origin": "Captured 2026-09-28 from the live API, trimmed to a few items.",
+  "usedBy": [
+    "fetchSimklChart",
+    "mapSimklItems"
+  ],
+  "live": {
+    "needs": [],
+    "request": {
+      "url": "https://data.simkl.in/discover/trending/tv/today_100.json"
+    }
+  },
+  "required": [
+    "[]",
+    "[].title:string",
+    "[].ids.simkl_id:number",
+    "[*].ids.imdb:string"
+  ],
+  "response": [
+    {
+      "title": "Lanterns",
+      "url": "/tv/1247732/lanterns",
+      "poster": "20/20357975b9962aefa0",
+      "fanart": "18/18323529692467f4f9",
+      "ids": {
+        "simkl_id": 1247732,
+        "slug": "lanterns",
+        "imdb": "tt26545992",
+        "tmdb": "95350",
+        "tvdb": "376098",
+        "tvdbslug": "lanterns",
+        "traktslug": "lanterns"
+      },
+      "release_date": "08/17/2026",
+      "rank": 2580,
+      "ratings": {
+        "simkl": {
+          "rating": 7.98,
+          "votes": 386
+        },
+        "imdb": {
+          "rating": 7.8,
+          "votes": 42874
+        }
+      },
+      "runtime": "52m",
+      "status": "ongoing"
+    },
+    {
+      "title": "Ted Lasso",
+      "url": "/tv/1359610/ted-lasso",
+      "poster": "11/116270662d150894ff",
+      "fanart": "10/100607388512169211",
+      "ids": {
+        "simkl_id": 1359610,
+        "slug": "ted-lasso",
+        "imdb": "tt10986410",
+        "tmdb": "97546",
+        "tvdb": "383203",
+        "tvdbslug": "ted-lasso",
+        "traktslug": "ted-lasso"
+      },
+      "release_date": "08/14/2020",
+      "rank": 194,
+      "ratings": {
+        "simkl": {
+          "rating": 8.55,
+          "votes": 3909
+        },
+        "imdb": {
+          "rating": 8.7,
+          "votes": 468190
+        }
+      },
+      "runtime": "33m",
+      "status": "ongoing"
+    },
+    {
+      "title": "MobLand",
+      "url": "/tv/2390613/mobland",
+      "poster": "17/175963733998243bc4",
+      "fanart": "17/173793799a03023487",
+      "ids": {
+        "simkl_id": 2390613,
+        "slug": "mobland",
+        "imdb": "tt31510819",
+        "tmdb": "247718",
+        "tvdb": "446831",
+        "tvdbslug": "the-donovans",
+        "traktslug": "mobland"
+      },
+      "release_date": "03/30/2025",
+      "rank": 870,
+      "ratings": {
+        "simkl": {
+          "rating": 8.13,
+          "votes": 1090
+        },
+        "imdb": {
+          "rating": 8.3,
+          "votes": 128038
+        }
+      },
+      "runtime": "41m",
+      "status": "ongoing"
+    }
+  ]
+}

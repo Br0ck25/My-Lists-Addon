@@ -1,0 +1,84 @@
+{
+  "provider": "tmdb",
+  "endpoint": "/3/tv/{id}?append_to_response=external_ids,videos",
+  "origin": "Written from the provider's API reference (it needs a key); the nightly live check compares it with the real thing.",
+  "usedBy": [
+    "fetchTmdbDetails",
+    "fetchTmdbMediaFacts",
+    "resolveUnpackedShowData"
+  ],
+  "live": {
+    "needs": [
+      "TMDB_API_KEY"
+    ],
+    "request": {
+      "url": "https://api.themoviedb.org/3/tv/1399?api_key={TMDB_API_KEY}&append_to_response=external_ids,videos"
+    }
+  },
+  "required": [
+    "id:number",
+    "name:string",
+    "external_ids.imdb_id:string",
+    "external_ids.tvdb_id:number",
+    "episode_run_time:array",
+    "seasons[].season_number:number",
+    "seasons[].episode_count:number",
+    "first_air_date:string",
+    "status:string",
+    "videos.results:array"
+  ],
+  "response": {
+    "adult": false,
+    "backdrop_path": "/2OMB0ynKlyIenMJWI2Dy9IWT4c.jpg",
+    "episode_run_time": [
+      60
+    ],
+    "first_air_date": "2011-04-17",
+    "genres": [
+      {
+        "id": 10765,
+        "name": "Sci-Fi & Fantasy"
+      }
+    ],
+    "id": 1399,
+    "in_production": false,
+    "last_air_date": "2019-05-19",
+    "name": "Game of Thrones",
+    "number_of_episodes": 73,
+    "number_of_seasons": 8,
+    "poster_path": "/1XS1oqL89opfnbLl8WnZY1O1uJx.jpg",
+    "seasons": [
+      {
+        "air_date": "2010-12-05",
+        "episode_count": 17,
+        "id": 3627,
+        "name": "Specials",
+        "season_number": 0
+      },
+      {
+        "air_date": "2011-04-17",
+        "episode_count": 10,
+        "id": 3624,
+        "name": "Season 1",
+        "season_number": 1
+      },
+      {
+        "air_date": "2012-04-01",
+        "episode_count": 10,
+        "id": 3625,
+        "name": "Season 2",
+        "season_number": 2
+      }
+    ],
+    "status": "Ended",
+    "vote_average": 8.5,
+    "external_ids": {
+      "imdb_id": "tt0944947",
+      "tvdb_id": 121361,
+      "wikidata_id": "Q23572"
+    },
+    "videos": {
+      "results": []
+    }
+  }
+}

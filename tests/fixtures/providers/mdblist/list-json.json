@@ -1,0 +1,76 @@
+{
+  "provider": "mdblist",
+  "endpoint": "A public list's JSON feed: mdblist.com/lists/{user}/{list}/json/",
+  "origin": "Captured 2026-09-28 from the live API, trimmed to a few items.",
+  "usedBy": [
+    "fetchMdblist",
+    "mapMdblistItems",
+    "extractMdblistItem"
+  ],
+  "live": {
+    "needs": [],
+    "request": {
+      "url": "https://mdblist.com/lists/linaspurinis/top-watched-movies-of-the-week/json/"
+    }
+  },
+  "required": [
+    "[]",
+    "[].id:number",
+    "[].title:string",
+    "[].mediatype:string",
+    "[*].imdb_id:string",
+    "[*].release_year:number"
+  ],
+  "response": [
+    {
+      "id": 1317288,
+      "rank": 111,
+      "adult": 0,
+      "title": "Marty Supreme",
+      "tvdbid": 358417,
+      "imdb_id": "tt32916440",
+      "mediatype": "movie",
+      "release_year": 2025
+    },
+    {
+      "id": 475557,
+      "rank": 222,
+      "adult": 0,
+      "title": "Joker",
+      "tvdbid": 7644,
+      "imdb_id": "tt7286456",
+      "mediatype": "movie",
+      "release_year": 2019
+    },
+    {
+      "id": 615457,
+      "rank": 333,
+      "adult": 0,
+      "title": "Nobody",
+      "tvdbid": 133393,
+      "imdb_id": "tt7888964",
+      "mediatype": "movie",
+      "release_year": 2021
+    },
+    {
+      "id": 425274,
+      "rank": 666,
+      "adult": 0,
+      "title": "Now You See Me: Now You Don't",
+      "tvdbid": 13538,
+      "imdb_id": "tt4712810",
+      "mediatype": "movie",
+      "release_year": 2025
+    },
+    {
+      "id": 604079,
+      "rank": 1000,
+      "adult": 0,
+      "title": "The Long Walk",
+      "tvdbid": 306565,
+      "imdb_id": "tt10374610",
+      "mediatype": "movie",
+      "release_year": 2025
+    }
+  ]
+}
