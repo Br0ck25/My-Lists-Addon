@@ -90588,6 +90588,11 @@ function generateSearchVariations(query) {
       let episode = null;
       let year = null;
       let isPlayed = false;
+      // Plex only: an episode's OWN external ids, and a show's TheTVDB id --
+      // see the Guid comment in the Plex branch.
+      let plexEpisodeImdbId = "";
+      let plexEpisodeTvdbId = "";
+      let plexShowTvdbId = "";
 
       // A. Plex Webhook format
       if (payload.Metadata || payload.event) {
@@ -90611,21 +90616,42 @@ function generateSearchVariations(query) {
         episode = meta.index != null ? Number(meta.index) : null;
         year = meta.year || null;
 
-        const guids = [
-          ...(meta.grandparentGuid ? [{ id: meta.grandparentGuid }] : []),
-          ...(meta.parentGuid ? [{ id: meta.parentGuid }] : []),
-          ...(Array.isArray(meta.Guid) ? meta.Guid : (meta.guid ? [{ id: meta.guid }] : []))
-        ];
+        // An episode's Guid list holds the EPISODE's own ids (imdb://tt...
+        // of the episode, tmdb:// of the episode), not the show's -- and with
+        // Plex's current agent the show's own guid is plex://show/..., which
+        // names nothing outside Plex. Taking the episode's ids as the show's
+        // looked the show up by an episode id: TMDB found no show, so the
+        // play was stored with no poster and no next episode. For an episode
+        // only the show's guid is read as the show; the episode's imdb/tvdb
+        // ids are kept aside to find the show through TMDB (below).
+        const ownGuids = Array.isArray(meta.Guid) ? meta.Guid : (meta.guid ? [{ id: meta.guid }] : []);
+        const guids = mediaType === "series"
+          ? (meta.grandparentGuid ? [{ id: meta.grandparentGuid }] : [])
+          : ownGuids;
         for (const g of guids) {
           const gid = String(g.id || "");
           if (gid.includes("imdb://tt")) {
             const m = gid.match(/tt\d+/);
             if (m && !imdbId) imdbId = m[0];
-          } else if (gid.includes("tmdb://")) {
-            const m = gid.match(/tmdb:\/\/(\d+)/);
+          } else if (gid.includes("tmdb://") || gid.includes("themoviedb://")) {
+            // themoviedb:// is Plex's older TMDB agent.
+            const m = gid.match(/(?:tmdb|themoviedb):\/\/(\d+)/);
             if (m && !tmdbId) tmdbId = m[1];
+          } else if (gid.includes("tvdb://")) {
+            // Plex's older TheTVDB agent: com.plexapp.agents.thetvdb://81189?lang=en
+            const m = gid.match(/tvdb:\/\/(\d+)/);
+            if (m && !plexShowTvdbId) plexShowTvdbId = m[1];
           } else if (gid.startsWith("tt") && !imdbId) {
             imdbId = gid;
+          }
+        }
+        if (mediaType === "series") {
+          for (const g of ownGuids) {
+            const gid = String((g && g.id) || "");
+            const imdbM = gid.includes("imdb://") ? gid.match(/tt\d+/) : null;
+            const tvdbM = gid.startsWith("tvdb://") ? gid.match(/tvdb:\/\/(\d+)/) : null;
+            if (imdbM && !plexEpisodeImdbId) plexEpisodeImdbId = imdbM[0];
+            if (tvdbM && !plexEpisodeTvdbId) plexEpisodeTvdbId = tvdbM[1];
           }
         }
       }
@@ -90784,6 +90810,29 @@ function generateSearchVariations(query) {
       }
 
       // 4. Resolve IDs via TMDB if needed
+      //
+      // A Plex episode whose show has no id Plex shares (see the Guid comment
+      // above): TMDB's /find turns the show's TheTVDB id, or the episode's own
+      // IMDb or TheTVDB id, into the show's TMDB id -- exact, where a search
+      // by the show's title can pick the wrong one of two shows with one name.
+      if (mediaType === "series" && !imdbId && !tmdbId && (plexShowTvdbId || plexEpisodeImdbId || plexEpisodeTvdbId)) {
+        const finds = [
+          plexShowTvdbId ? { id: plexShowTvdbId, source: "tvdb_id", pick: (d) => d.tv_results && d.tv_results[0] && d.tv_results[0].id } : null,
+          plexEpisodeImdbId ? { id: plexEpisodeImdbId, source: "imdb_id", pick: (d) => d.tv_episode_results && d.tv_episode_results[0] && d.tv_episode_results[0].show_id } : null,
+          plexEpisodeTvdbId ? { id: plexEpisodeTvdbId, source: "tvdb_id", pick: (d) => d.tv_episode_results && d.tv_episode_results[0] && d.tv_episode_results[0].show_id } : null,
+        ].filter(Boolean);
+        for (const f of finds) {
+          try {
+            const findRes = await fetch(`https://api.themoviedb.org/3/find/${encodeURIComponent(f.id)}?api_key=${effectiveTmdbKey}&external_source=${f.source}`);
+            if (!findRes.ok) continue;
+            const showTmdbId = f.pick(await findRes.json());
+            if (showTmdbId) {
+              tmdbId = String(showTmdbId);
+              break;
+            }
+          } catch {}
+        }
+      }
       if (!imdbId && tmdbId) {
         try {
           const tmdbType = mediaType === "series" ? "tv" : "movie";
