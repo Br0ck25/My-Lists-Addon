@@ -33,6 +33,12 @@ Nothing to configure for the strict CSP (P7-1, below): it is part of the Worker 
 
 **Nothing to configure for the rate limits** (P7-3, below): they are part of the Worker, and the table they use (`rate_counters`) has existed since migration 0015. One **optional** index, `migrations/0019_rate_counters_window_index.sql`, makes the background cleanup of spent windows cheap (without it the cleanup scans — slower, not broken); one **optional** dashboard step, the edge rate-limiting rules in `docs/OPERATIONS.md` §6, moves the refusal to Cloudflare so the request never reaches the Worker. Neither is needed for anything to work.
 
+### 🔒 Scrobble token enforcement, deprecation warnings, and sunset (P7-6)
+
+- **Scoped scrobble token (`st=`) is primary:** Scrobble requests authenticate via `st=` token (`authForm = "st"`), verified without exposing the root Creator Key in the URL.
+- **Legacy deprecation & warning banner:** Webhooks using legacy `?creator=&key=` or `?config=` log a warning to console and write a `scrobble_auth` data point to Analytics Engine. In Creator Profile &rarr; Scrobble Webhook, an alert banner is displayed if recent scrobbles used legacy authentication, prompting users to update their media server configuration with the scoped token. Upgrading to `?st=` automatically clears the banner.
+- **Sunset enforcement:** Configurable via `FF_SCROBBLE_ST_ONLY=1` or `SCROBBLE_SUNSET_DATE` (e.g. `2026-06-01`). Once sunset is activated, legacy authentication forms are rejected with HTTP 410 Gone (`sunset: true`).
+
 ### 🚦 Every rate limit counts exactly now (P7-3)
 
 - **The limits were not limits.** Every throttle in this Worker was a KV key: read the number, compare it, write it back. Cloudflare serves KV reads from the edge cache for up to a minute and has no atomic increment, so a burst arriving in parallel — which is exactly what a script, a scraper or a password guesser is — all read the same pre-increment value and all passed. Under the one condition the limit existed for, it did not exist.

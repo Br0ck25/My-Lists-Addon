@@ -235,6 +235,8 @@ The add-on works out-of-the-box with public MDBList and TMDB links. Adding API k
 | `CF_ACCESS_TEAM_DOMAIN` | Optional (P7-2). Your Cloudflare Zero Trust team domain, e.g. `myteam.cloudflareaccess.com`. With `CF_ACCESS_AUD` set too, a valid Cloudflare Access token *is* the admin sign-in: the dashboard needs no `ADMIN_KEY` from that browser, and each sign-in is recorded as `access:<email>`. Unset means Access is off and the key is the only way in. See `docs/OPERATIONS.md` §25. | Optional |
 | `CF_ACCESS_AUD` | Optional (P7-2). The Access application's **Application Audience (AUD) Tag**, from Zero Trust → Access → Applications → your `/admin` app. Both this and `CF_ACCESS_TEAM_DOMAIN` must be set for Access sign-in; the AUD is what stops a token minted for a different Access app in the same account from opening this dashboard. | Optional |
 | `FF_ADMIN_EMAILS` | Optional (P7-2). Comma-separated email addresses allowed to use the dashboard through Access, e.g. `you@example.com`. Empty or unset means every identity Access lets through may use it — which is the Access policy's job, and this is a second lock for the case where that policy is broader than intended. Only consulted for Access sign-ins; the `ADMIN_KEY` path is unaffected. | Optional |
+| `FF_SCROBBLE_ST_ONLY` | Optional feature flag (`1` or `true`, P7-6). Disallows legacy `creator=&key=` and `config=` query parameters on the scrobble webhook, requiring the scoped scrobble token (`?st=`). Rejected legacy requests receive HTTP 410 Gone. | Optional |
+| `SCROBBLE_SUNSET_DATE` | Optional date string (e.g. `2026-06-01`, P7-6). Automatically activates scrobble token enforcement (`FF_SCROBBLE_ST_ONLY`) once this date is reached. | Optional |
 
 #### OAuth Redirect URIs
 If you configure OAuth authentication for Trakt, Simkl, MDBList, or TMDB, set the OAuth callback URLs in their respective developer portals to:
@@ -245,21 +247,19 @@ If you configure OAuth authentication for Trakt, Simkl, MDBList, or TMDB, set th
 
 #### A note on media-server scrobble URLs
 
-The Plex / Jellyfin / Emby webhook endpoint (`/api/scrobble`) authenticates from the
-URL itself — either `?config=<your install id>` or `?creator=<name>&key=<your Creator
-Key>`. That is forced by the webhook senders, which cannot attach custom headers, but
-it does mean **the key travels in a URL** and so may be recorded in server logs, proxy
-logs, and your media server's own configuration screen.
+The Plex / Jellyfin / Emby webhook endpoint (`/api/scrobble`) authenticates using a
+scoped scrobble token — `?st=<token>` (generated in Creator Profile &rarr; Scrobble Webhook).
+Legacy links previously authenticated via `?config=<install id>` or `?creator=<name>&key=<Creator Key>`.
+Using the scoped `?st=` token ensures your root Creator Key is never exposed in webhook URLs.
 
 Practical consequences:
 
 - Treat a scrobble URL like a password. Don't paste it into screenshots, issues, or
   support threads.
-- If one leaks, rotate it: **Account &rarr; Reset Creator Key** in the app (or
-  `POST /api/creator/reset-key`). The old key stops working immediately and any
-  webhook still using it will simply stop being accepted.
-- Prefer the `?config=` form where you can — it points at a stored install config
-  rather than spelling the Creator Key out in the URL.
+- If one leaks, rotate it: generate a new Scrobble Token in Creator Profile &rarr; Scrobble Webhook.
+  The old token stops working immediately and any webhook still using it will simply stop being accepted.
+- Legacy `?creator=&key=` and `?config=` formats are deprecated (P7-6) and will be sunsetted via
+  `FF_SCROBBLE_ST_ONLY` or `SCROBBLE_SUNSET_DATE`.
 
 ---
 

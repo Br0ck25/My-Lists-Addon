@@ -677,25 +677,40 @@
 
       let authUser = null;
       let effectiveTmdbKey = TMDB_API_KEY;
+      let authForm = "";
 
       if (scrobbleToken) {
         const tokenUser = await usernameForScrobbleToken(env, scrobbleToken);
-        if (tokenUser) authUser = tokenUser;
+        if (tokenUser) {
+          authUser = tokenUser;
+          authForm = "st";
+        }
       }
 
-      if (!authUser && configParam) {
+      const sunset = isScrobbleSunset(env);
+      if (!authUser && sunset && (configParam || (queryCreator && queryKey))) {
+        return json({
+          ok: false,
+          error: "Legacy scrobble authentication (?config= and ?creator=&key=) has been sunset. Please update your media server webhook URL in Settings to use the '?st=' token.",
+          sunset: true,
+        }, 410);
+      }
+
+      if (!authUser && !sunset && configParam) {
         try {
           const resolved = await resolveConfig(configParam, env);
           if (resolved && resolved.installTrackOwner) {
             // A v2 install link with the "track" scope -- see handleSubtitlesTrack.
             if (!(await isCreatorTombstoned(env, resolved.installTrackOwner))) {
               authUser = resolved.installTrackOwner;
+              authForm = "config";
               if (resolved.tmdbKey) effectiveTmdbKey = resolved.tmdbKey;
             }
           } else if (resolved && resolved.trackCreatorName && resolved.trackCreatorKey) {
             const auth = await authenticateCreator(resolved.trackCreatorName, resolved.trackCreatorKey);
             if (auth.ok) {
               authUser = auth.username;
+              authForm = "config";
               if (resolved.tmdbKey) effectiveTmdbKey = resolved.tmdbKey;
             }
           }
@@ -703,10 +718,14 @@
       }
 
       let authThrottled = false;
-      if (!authUser && queryCreator && queryKey) {
+      if (!authUser && !sunset && queryCreator && queryKey) {
         const auth = await authenticateCreator(queryCreator, queryKey);
-        if (auth.ok) authUser = auth.username;
-        else if (auth.throttled) authThrottled = true;
+        if (auth.ok) {
+          authUser = auth.username;
+          authForm = "key";
+        } else if (auth.throttled) {
+          authThrottled = true;
+        }
       }
 
       if (!authUser) {
@@ -719,12 +738,17 @@
         }
         return json({ ok: false, error: "Unauthorized: Invalid or missing user credentials / config parameter." }, 401);
       }
-      // creator+key still works: webhook URLs handed out before scrobble
+      // creator+key still works until sunset: webhook URLs handed out before scrobble
       // tokens existed are sitting in people's media servers, and breaking
       // them would silently stop their history syncing with no error anyone
       // would see. The dashboard only ever shows the token form now, so
       // these age out as people re-copy the URL.
       await ensureTrackingMigrated(env, authUser);
+
+      // P7-6: Log usage of legacy scrobble authentication forms
+      if (authForm !== "st") {
+        console.warn(`[scrobble] legacy auth form '${authForm}' used by user '${authUser}'`);
+      }
 
       if (!effectiveTmdbKey && authUser && env && env.CONFIGS) {
         try {
@@ -969,6 +993,17 @@
         } catch {}
       }
 
+      // P7-6: Record scrobble auth form usage metrics in Analytics Engine
+      try {
+        if (env && env.ANALYTICS && typeof env.ANALYTICS.writeDataPoint === "function") {
+          env.ANALYTICS.writeDataPoint({
+            blobs: ["scrobble_auth", authForm || "unknown", server || "unknown"],
+            doubles: [1],
+            indexes: ["scrobble_auth"],
+          });
+        }
+      } catch {}
+
       if (filterEnabled) {
         const allowed = allowedUsersParam.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
         if (!mediaServerUser) {
@@ -981,6 +1016,8 @@
               lastServer: server,
               lastUser: null,
               matched: `ignored (${ignoredMsg})`,
+              lastAuthForm: authForm || null,
+              legacyAuthForm: authForm === "st" ? null : (authForm || null),
             }));
             return json({ ok: true, ignored: ignoredMsg });
           }
@@ -993,6 +1030,8 @@
             lastServer: server,
             lastUser: mediaServerUser,
             matched: `ignored (${ignoredMsg})`,
+            lastAuthForm: authForm || null,
+            legacyAuthForm: authForm === "st" ? null : (authForm || null),
           }));
           return json({ ok: true, ignored: ignoredMsg });
         }
@@ -1295,6 +1334,8 @@
         lastServer: server,
         lastUser: mediaServerUser || null,
         matched: matched,
+        lastAuthForm: authForm || null,
+        legacyAuthForm: authForm === "st" ? null : (authForm || null),
       }));
 
       return json({
@@ -1545,7 +1586,7 @@
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) return authFailureResponse(auth);
       const raw = await env.CONFIGS.get(`creatortrack:${auth.username}`);
-      let status = { lastPingAt: null, lastPingId: null, lastServer: null, lastUser: null, matched: null };
+      let status = { lastPingAt: null, lastPingId: null, lastServer: null, lastUser: null, matched: null, lastAuthForm: null, legacyAuthForm: null };
       if (raw) {
         try {
           status = JSON.parse(raw);

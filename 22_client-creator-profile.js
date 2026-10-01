@@ -1539,6 +1539,21 @@ async function refreshTrackPlaybackStatus() {
     const userLabel = data.lastUser ? ' &bull; User: <strong>' + escapeHtml(data.lastUser) + '</strong>' : '';
     const rawMatched = data.matched || data.lastPingId || 'OK';
     const displayMatched = rawMatched.replace(/^(yes|no|error)\\b/i, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+    let legacyBanner = '';
+    if (data.legacyAuthForm) {
+      const formName = data.legacyAuthForm === 'key' ? 'Account Key (?creator=&key=)' : 'Install Link (?config=)';
+      legacyBanner =
+        '<div style="margin-top:10px; padding:10px 12px; background:rgba(255,149,0,0.12); border:1px solid rgba(255,149,0,0.35); border-radius:8px; font-size:0.83rem; color:var(--text);">' +
+          '<div style="display:flex; align-items:flex-start; gap:8px;">' +
+            '<span style="color:var(--warning, #ff9500); font-size:1.1rem; line-height:1.2;">&#x26A0;</span>' +
+            '<div>' +
+              '<div style="font-weight:700; color:var(--warning, #ff9500); margin-bottom:2px;">Outdated Webhook URL Detected</div>' +
+              'Your media server is using an older link format (' + escapeHtml(formName) + '). ' +
+              'This format is deprecated and will be retired. Please copy your updated Webhook URL above (carrying your secure token) and paste it into Plex, Jellyfin, or Emby to keep syncing playback.' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+    }
     statusBox.innerHTML =
       '<div style="padding:10px 12px; background:rgba(0,122,255,0.08); border:1px solid rgba(0,122,255,0.25); border-radius:8px; font-size:0.84rem;">' +
         '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">' +
@@ -1548,7 +1563,8 @@ async function refreshTrackPlaybackStatus() {
         '<div style="color:var(--text);">' +
           'Source: ' + serverLabel + userLabel + ' &bull; Matched: <code style="color:var(--accent-2);">' + escapeHtml(displayMatched) + '</code>' +
         '</div>' +
-      '</div>';
+      '</div>' +
+      legacyBanner;
   } catch (e) {
     statusBox.innerHTML = '<small style="color:var(--muted);">Could not check status right now.</small>';
   }

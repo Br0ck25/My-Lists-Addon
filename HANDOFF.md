@@ -39,8 +39,8 @@
 >    - P5-6: retire `/api/bulk-resolve`.
 >
 >    The Explore and Your lists modules in `24_` are unreachable since Release 9, and so are the shell's Account and Connections cards since Release 12 (`appShellAccountBody`, `appShellConnectionsBody`). Delete them only if the owner agrees.
-> 6. **Not started** (`NEXT_VERSION_TASKS.md`, statuses brought up to date on 2026-10-01: 95 done, 6 partly done, 15 not started):
->    - P7-6: scrobble links take the `st` token only, the old forms get a sunset;
+> 6. **Not started** (`NEXT_VERSION_TASKS.md`, statuses brought up to date on 2026-10-02: 96 done, 6 partly done, 14 not started):
+>    - P7-6: scrobble links take the `st` token only, legacy forms get sunset warnings and sunset date/flag enforcement (completed 2026-10-02);
 >    - Phase 8: performance;
 >    - Phase 9: browser tests, a staging copy of the site, a security suite;
 >    - Phase 10: cutover and cleanup, including moving the planning documents to `docs/history/`.

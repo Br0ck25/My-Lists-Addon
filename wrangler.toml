@@ -155,6 +155,12 @@ dead_letter_queue = "mylists-jobs-dlq"
 # CF_ACCESS_TEAM_DOMAIN = "myteam.cloudflareaccess.com"
 # CF_ACCESS_AUD = "0000000000000000000000000000000000000000000000000000000000000000"
 # FF_ADMIN_EMAILS = "you@example.com"
+# Optional, Phase 7 (P7-6): disallows legacy creator=&key= and config= forms on
+# scrobble webhooks, requiring the scoped scrobble token (?st=).
+# FF_SCROBBLE_ST_ONLY = "1"
+# Optional, Phase 7 (P7-6): date string (e.g. "2026-06-01") after which legacy
+# scrobble forms are automatically sunsetted even if FF_SCROBBLE_ST_ONLY is not set.
+# SCROBBLE_SUNSET_DATE = "2026-06-01"
 
 # --- Cron trigger (REQUIRED for Continue Watching) ---------------------------
 # Drives the scheduled() export at the bottom of

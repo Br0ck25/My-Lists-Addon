@@ -5155,6 +5155,24 @@ function readCookieValue(cookieHeader, name) {
   }
 }
 
+// --- Scrobble auth sunset (Phase 7, P7-6) --------------------------------------
+//
+// Webhooks originally carried the Creator Key in the query string (?creator=&key=),
+// or a legacy install config id (?config=), exposing master credentials in media
+// server logs and configurations. P7-6 requires the scoped ?st= token.
+// The legacy forms are logged and show a banner in Settings, and are rejected
+// when FF_SCROBBLE_ST_ONLY=1 or past SCROBBLE_SUNSET_DATE.
+function isScrobbleSunset(env) {
+  if (!env) return false;
+  const v = env.FF_SCROBBLE_ST_ONLY;
+  if (v === "1" || v === "true" || v === true) return true;
+  if (env.SCROBBLE_SUNSET_DATE) {
+    const t = Date.parse(String(env.SCROBBLE_SUNSET_DATE));
+    if (Number.isFinite(t) && Date.now() >= t) return true;
+  }
+  return false;
+}
+
 // The site's default for a browser that has not chosen: the FF_NEW_UI Worker
 // variable. Set to 1, every visitor gets the new interface; a browser that
 // chose (the cookie, `?ff_new_ui=0` or `=1`) keeps its choice either way.
@@ -66620,6 +66638,21 @@ async function refreshTrackPlaybackStatus() {
     const userLabel = data.lastUser ? ' &bull; User: <strong>' + escapeHtml(data.lastUser) + '</strong>' : '';
     const rawMatched = data.matched || data.lastPingId || 'OK';
     const displayMatched = rawMatched.replace(/^(yes|no|error)\\b/i, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+    let legacyBanner = '';
+    if (data.legacyAuthForm) {
+      const formName = data.legacyAuthForm === 'key' ? 'Account Key (?creator=&key=)' : 'Install Link (?config=)';
+      legacyBanner =
+        '<div style="margin-top:10px; padding:10px 12px; background:rgba(255,149,0,0.12); border:1px solid rgba(255,149,0,0.35); border-radius:8px; font-size:0.83rem; color:var(--text);">' +
+          '<div style="display:flex; align-items:flex-start; gap:8px;">' +
+            '<span style="color:var(--warning, #ff9500); font-size:1.1rem; line-height:1.2;">&#x26A0;</span>' +
+            '<div>' +
+              '<div style="font-weight:700; color:var(--warning, #ff9500); margin-bottom:2px;">Outdated Webhook URL Detected</div>' +
+              'Your media server is using an older link format (' + escapeHtml(formName) + '). ' +
+              'This format is deprecated and will be retired. Please copy your updated Webhook URL above (carrying your secure token) and paste it into Plex, Jellyfin, or Emby to keep syncing playback.' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+    }
     statusBox.innerHTML =
       '<div style="padding:10px 12px; background:rgba(0,122,255,0.08); border:1px solid rgba(0,122,255,0.25); border-radius:8px; font-size:0.84rem;">' +
         '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">' +
@@ -66629,7 +66662,8 @@ async function refreshTrackPlaybackStatus() {
         '<div style="color:var(--text);">' +
           'Source: ' + serverLabel + userLabel + ' &bull; Matched: <code style="color:var(--accent-2);">' + escapeHtml(displayMatched) + '</code>' +
         '</div>' +
-      '</div>';
+      '</div>' +
+      legacyBanner;
   } catch (e) {
     statusBox.innerHTML = '<small style="color:var(--muted);">Could not check status right now.</small>';
   }
@@ -91786,25 +91820,40 @@ function generateSearchVariations(query) {
 
       let authUser = null;
       let effectiveTmdbKey = TMDB_API_KEY;
+      let authForm = "";
 
       if (scrobbleToken) {
         const tokenUser = await usernameForScrobbleToken(env, scrobbleToken);
-        if (tokenUser) authUser = tokenUser;
+        if (tokenUser) {
+          authUser = tokenUser;
+          authForm = "st";
+        }
       }
 
-      if (!authUser && configParam) {
+      const sunset = isScrobbleSunset(env);
+      if (!authUser && sunset && (configParam || (queryCreator && queryKey))) {
+        return json({
+          ok: false,
+          error: "Legacy scrobble authentication (?config= and ?creator=&key=) has been sunset. Please update your media server webhook URL in Settings to use the '?st=' token.",
+          sunset: true,
+        }, 410);
+      }
+
+      if (!authUser && !sunset && configParam) {
         try {
           const resolved = await resolveConfig(configParam, env);
           if (resolved && resolved.installTrackOwner) {
             // A v2 install link with the "track" scope -- see handleSubtitlesTrack.
             if (!(await isCreatorTombstoned(env, resolved.installTrackOwner))) {
               authUser = resolved.installTrackOwner;
+              authForm = "config";
               if (resolved.tmdbKey) effectiveTmdbKey = resolved.tmdbKey;
             }
           } else if (resolved && resolved.trackCreatorName && resolved.trackCreatorKey) {
             const auth = await authenticateCreator(resolved.trackCreatorName, resolved.trackCreatorKey);
             if (auth.ok) {
               authUser = auth.username;
+              authForm = "config";
               if (resolved.tmdbKey) effectiveTmdbKey = resolved.tmdbKey;
             }
           }
@@ -91812,10 +91861,14 @@ function generateSearchVariations(query) {
       }
 
       let authThrottled = false;
-      if (!authUser && queryCreator && queryKey) {
+      if (!authUser && !sunset && queryCreator && queryKey) {
         const auth = await authenticateCreator(queryCreator, queryKey);
-        if (auth.ok) authUser = auth.username;
-        else if (auth.throttled) authThrottled = true;
+        if (auth.ok) {
+          authUser = auth.username;
+          authForm = "key";
+        } else if (auth.throttled) {
+          authThrottled = true;
+        }
       }
 
       if (!authUser) {
@@ -91828,12 +91881,17 @@ function generateSearchVariations(query) {
         }
         return json({ ok: false, error: "Unauthorized: Invalid or missing user credentials / config parameter." }, 401);
       }
-      // creator+key still works: webhook URLs handed out before scrobble
+      // creator+key still works until sunset: webhook URLs handed out before scrobble
       // tokens existed are sitting in people's media servers, and breaking
       // them would silently stop their history syncing with no error anyone
       // would see. The dashboard only ever shows the token form now, so
       // these age out as people re-copy the URL.
       await ensureTrackingMigrated(env, authUser);
+
+      // P7-6: Log usage of legacy scrobble authentication forms
+      if (authForm !== "st") {
+        console.warn(`[scrobble] legacy auth form '${authForm}' used by user '${authUser}'`);
+      }
 
       if (!effectiveTmdbKey && authUser && env && env.CONFIGS) {
         try {
@@ -92078,6 +92136,17 @@ function generateSearchVariations(query) {
         } catch {}
       }
 
+      // P7-6: Record scrobble auth form usage metrics in Analytics Engine
+      try {
+        if (env && env.ANALYTICS && typeof env.ANALYTICS.writeDataPoint === "function") {
+          env.ANALYTICS.writeDataPoint({
+            blobs: ["scrobble_auth", authForm || "unknown", server || "unknown"],
+            doubles: [1],
+            indexes: ["scrobble_auth"],
+          });
+        }
+      } catch {}
+
       if (filterEnabled) {
         const allowed = allowedUsersParam.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
         if (!mediaServerUser) {
@@ -92090,6 +92159,8 @@ function generateSearchVariations(query) {
               lastServer: server,
               lastUser: null,
               matched: `ignored (${ignoredMsg})`,
+              lastAuthForm: authForm || null,
+              legacyAuthForm: authForm === "st" ? null : (authForm || null),
             }));
             return json({ ok: true, ignored: ignoredMsg });
           }
@@ -92102,6 +92173,8 @@ function generateSearchVariations(query) {
             lastServer: server,
             lastUser: mediaServerUser,
             matched: `ignored (${ignoredMsg})`,
+            lastAuthForm: authForm || null,
+            legacyAuthForm: authForm === "st" ? null : (authForm || null),
           }));
           return json({ ok: true, ignored: ignoredMsg });
         }
@@ -92404,6 +92477,8 @@ function generateSearchVariations(query) {
         lastServer: server,
         lastUser: mediaServerUser || null,
         matched: matched,
+        lastAuthForm: authForm || null,
+        legacyAuthForm: authForm === "st" ? null : (authForm || null),
       }));
 
       return json({
@@ -92654,7 +92729,7 @@ function generateSearchVariations(query) {
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) return authFailureResponse(auth);
       const raw = await env.CONFIGS.get(`creatortrack:${auth.username}`);
-      let status = { lastPingAt: null, lastPingId: null, lastServer: null, lastUser: null, matched: null };
+      let status = { lastPingAt: null, lastPingId: null, lastServer: null, lastUser: null, matched: null, lastAuthForm: null, legacyAuthForm: null };
       if (raw) {
         try {
           status = JSON.parse(raw);
