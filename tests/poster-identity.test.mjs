@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { loadClient, requestsTo } from "./client-harness.mjs";
+import { fireListeners, loadClient, requestsTo } from "./client-harness.mjs";
 
 // A poster that fails to load is looked up again by the title it belongs to
 // (handlePosterImgError, 23_client-list-management.js). The mini tiles on
@@ -173,5 +173,111 @@ describe("a Better Poster btttr.cc has not drawn yet", () => {
     assert.equal(idOf("https://btttr.cc/poster/imdb/poster-default/tt7772588.jpg"), "tt7772588");
     assert.equal(idOf("https://images.metahub.space/poster/medium/tt7772588/img"), "");
     assert.equal(idOf("https://example.com/bp/poster/nm0000001.jpg"), "");
+  });
+});
+
+// Search's movie and show tiles (renderTitlePosterCards, 19_) name their
+// poster handler in data-act, and Release 9 gave them Better Posters. One
+// Better Poster that failed then reached handlePosterImgError twice -- the
+// delegated data-act listener (16_) and the Better Posters capture listener
+// (23_) both heard the same error. The second call took it for a second
+// failure and put up "No poster" while the first call's lookup was still out;
+// the lookup then brought the ordinary poster back, and the tile showed both,
+// one above the other. Seen on the site searching "one last".
+describe("a failed Better Poster on a Search tile", () => {
+  // Enough of the DOM for the handler, the dispatcher and the placeholder.
+  function node(tag, className = "", data = {}, attrs = {}) {
+    const n = {
+      tagName: tag.toUpperCase(),
+      className,
+      dataset: { ...data },
+      style: {},
+      children: [],
+      parentElement: null,
+      innerHTML: "",
+      isConnected: true,
+      _attributes: { ...attrs },
+      get parentNode() { return this.parentElement; },
+      get classList() {
+        const self = this;
+        return { contains: (c) => String(self.className).split(/\s+/).includes(c) };
+      },
+      get nextElementSibling() {
+        if (!this.parentElement) return null;
+        const sibs = this.parentElement.children;
+        return sibs[sibs.indexOf(this) + 1] || null;
+      },
+      getAttribute(k) { return k === "src" ? (this.src || null) : (k in this._attributes ? this._attributes[k] : null); },
+      setAttribute(k, v) { this._attributes[k] = String(v); },
+      hasAttribute(k) { return k in this._attributes; },
+      appendChild(child) { child.parentElement = this; this.children.push(child); return child; },
+      querySelector(sel) {
+        const want = sel.replace(":scope > ", "").replace(".", "");
+        return this.children.find((c) => String(c.className).split(/\s+/).includes(want)) || null;
+      },
+    };
+    return n;
+  }
+
+  // renderMediaCard's tile for a TMDB search result whose Better Poster was
+  // switched in by applyBetterPostersToTmdbTiles.
+  function searchTile(client) {
+    const card = node("div", "media-card clickable-poster", { id: "tmdb:1092073", type: "movie", title: "One Last Ride" });
+    const wrap = card.appendChild(node("div", "media-card-poster"));
+    const img = wrap.appendChild(node("img", "live-preview-poster", {}, {
+      "data-act": "handlePosterImgError",
+      "data-act-args": '["@self"]',
+    }));
+    wrap.appendChild(node("div", "poster-add-overlay"));
+    img.src = "https://example.com/bp/poster/tt13186482.jpg";
+    client.document.createElement = (t) => node(t);
+    return { wrap, img };
+  }
+
+  // The browser's one error event, through every listener the page has.
+  function failToLoad(client, img) {
+    fireListeners(client, { type: "error", target: img, bubbles: false, preventDefault() {}, stopPropagation() {} });
+  }
+
+  const shownPlaceholders = (wrap) => wrap.children.filter((c) =>
+    c.classList.contains("live-preview-poster-placeholder") && c.style.display !== "none");
+
+  it("shows the title's ordinary poster, and no \"No poster\" box under it", async () => {
+    const client = loadWithFallback({ ok: true, poster: "https://image.tmdb.org/t/p/w500/onelastride.jpg" });
+    const { wrap, img } = searchTile(client);
+
+    failToLoad(client, img);
+    await settle();
+
+    assert.equal(requestsTo(client, "/api/poster-fallback").length, 1, "one failure, one lookup");
+    assert.equal(img.src, "https://image.tmdb.org/t/p/w500/onelastride.jpg");
+    assert.notEqual(img.style.display, "none", "the poster is shown");
+    assert.equal(shownPlaceholders(wrap).length, 0, "and no \"No poster\" box with it");
+  });
+
+  it("shows the box, once, when there is no poster to be had", async () => {
+    const client = loadWithFallback({ ok: false });
+    const { wrap, img } = searchTile(client);
+
+    failToLoad(client, img);
+    await settle();
+
+    assert.equal(img.style.display, "none");
+    assert.equal(shownPlaceholders(wrap).length, 1);
+  });
+
+  it("still shows the box when the ordinary poster fails as well", async () => {
+    const client = loadWithFallback({ ok: true, poster: "https://image.tmdb.org/t/p/w500/onelastride.jpg" });
+    const { wrap, img } = searchTile(client);
+
+    failToLoad(client, img);
+    await settle();
+    // The stand-in itself does not load: that is a real second failure.
+    failToLoad(client, img);
+    await settle();
+
+    assert.equal(requestsTo(client, "/api/poster-fallback").length, 1, "not looked up again");
+    assert.equal(img.style.display, "none");
+    assert.equal(shownPlaceholders(wrap).length, 1);
   });
 });

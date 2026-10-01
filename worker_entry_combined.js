@@ -73187,6 +73187,18 @@ async function renderLivePreview() {
 //
 // So: reveal a real placeholder when one exists, create one when it does
 // not, and never touch a sibling that is not a placeholder.
+// The other way round: a poster that loaded after all takes the place of the
+// "No poster" box showPosterPlaceholderFor put up for it.
+function hidePosterPlaceholderFor(img) {
+  const parent = img && img.parentElement;
+  if (!parent) return;
+  const sib = img.nextElementSibling;
+  const ph = (sib && sib.classList && sib.classList.contains('live-preview-poster-placeholder'))
+    ? sib
+    : parent.querySelector(':scope > .live-preview-poster-placeholder');
+  if (ph && ph !== img) ph.style.display = 'none';
+}
+
 function showPosterPlaceholderFor(img) {
   if (!img) return;
   img.style.display = 'none';
@@ -73245,11 +73257,18 @@ function handlePosterImgError(img) {
     img.src = standIn;
     return;
   }
+  // The same failure reported twice -- the delegated data-act error handler
+  // and the Better Posters capture listener below can both hear one error --
+  // must not look like a second failure while the first one's lookup is still
+  // out: that showed the "No poster" box, and then the lookup's poster as well,
+  // one above the other.
+  if (img.dataset.fallbackPending) return;
   if (img.dataset.hasFailedFallback) {
     showPosterPlaceholderFor(img);
     return;
   }
   img.dataset.hasFailedFallback = '1';
+  img.dataset.fallbackPending = '1';
 
   const failedSrc = img.getAttribute('src') || '';
   const who = posterItemIdentity(img);
@@ -73270,9 +73289,11 @@ function handlePosterImgError(img) {
     fetch(ORIGIN + '/api/poster-fallback?title=' + encodeURIComponent(cleanTitle || title) + '&type=' + encodeURIComponent(type) + (tmdbId ? '&tmdbId=' + encodeURIComponent(tmdbId) : '') + (imdbId ? '&imdbId=' + encodeURIComponent(imdbId) : ''))
       .then(r => r.json())
       .then(data => {
+        delete img.dataset.fallbackPending;
         if (data && data.ok && data.poster) {
           img.src = data.poster;
           img.style.display = '';
+          hidePosterPlaceholderFor(img);
           // The ordinary poster stands in for the Better one, which is
           // switched in if the page's warm call gets it.
           if (betterPosterId && typeof waitForBetterPoster === 'function') {
@@ -73284,9 +73305,11 @@ function handlePosterImgError(img) {
         }
       })
       .catch(() => {
+        delete img.dataset.fallbackPending;
         showPosterPlaceholderFor(img);
       });
   } else {
+    delete img.dataset.fallbackPending;
     showPosterPlaceholderFor(img);
   }
 }
@@ -73294,11 +73317,13 @@ function handlePosterImgError(img) {
 // A Better Poster that fails on a tile with no onerror of its own -- the
 // Custom List Builder's and Channel Builder's picks, the Curated For You
 // cards -- gets the same treatment rather than a broken-image icon. Captured,
-// because error events do not bubble.
+// because error events do not bubble. A tile whose img names its handler in
+// data-act (P6-8) is the delegated dispatcher's (16_), not this listener's.
 if (typeof document !== 'undefined' && document && typeof document.addEventListener === 'function') {
   document.addEventListener('error', function(e) {
     const img = e && e.target;
     if (!img || img.tagName !== 'IMG' || typeof img.onerror === 'function') return;
+    if (img.getAttribute && img.getAttribute('data-act')) return;
     if (typeof isBetterPosterUrl !== 'function' || !isBetterPosterUrl(img.getAttribute('src') || '')) return;
     handlePosterImgError(img);
   }, true);

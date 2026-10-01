@@ -190,7 +190,12 @@ export function loadClient(opts = {}) {
     // a TypeError -- which the older save paths swallowed in their own catch,
     // so the tests passed while reporting a network error that never happened.
     getElementsByName: () => [],
-    addEventListener() {}, removeEventListener() {}, cookie: "",
+    // Listeners the bundle registers on document and window at load are kept
+    // in registration order -- recorded, never called -- so a test can play an
+    // event through them the way a browser would (fireListeners).
+    _listeners: [],
+    addEventListener(type, fn, capture) { documentStub._listeners.push({ type, fn, capture: !!capture }); },
+    removeEventListener() {}, cookie: "",
   };
 
   const sandbox = {
@@ -222,7 +227,9 @@ export function loadClient(opts = {}) {
     atob: (s) => Buffer.from(s, "base64").toString("binary"),
     btoa: (s) => Buffer.from(s, "binary").toString("base64"),
     crypto: globalThis.crypto,
-    addEventListener() {}, removeEventListener() {}, dispatchEvent: () => true,
+    _listeners: [],
+    addEventListener(type, fn, capture) { sandbox._listeners.push({ type, fn, capture: !!capture }); },
+    removeEventListener() {}, dispatchEvent: () => true,
     // Viewport and scrolling. lockBackgroundScroll (16_client-row-core.js) reads
     // and restores the scroll position around every modal, so without these the
     // stub throws on any test that opens one -- which is most of them now.
@@ -274,6 +281,23 @@ export function loadClient(opts = {}) {
   sandbox.call = (name, ...args) => sandbox.__scopeCall(name, args);
   if (signedInAs) sandbox.set("activeCreator", { creatorName: signedInAs });
   return sandbox;
+}
+
+/**
+ * Play one event through the listeners the bundle put on window and document,
+ * in a browser's capture order: window's capture listeners, then document's,
+ * then -- for an event that bubbles -- document's and window's bubble ones.
+ */
+export function fireListeners(client, event) {
+  const on = (target, capture) => target._listeners
+    .filter((l) => l.type === event.type && l.capture === capture)
+    .forEach((l) => l.fn(event));
+  on(client, true);
+  on(client.document, true);
+  if (event.bubbles) {
+    on(client.document, false);
+    on(client, false);
+  }
 }
 
 /** Requests the client sent to one path, newest last. */

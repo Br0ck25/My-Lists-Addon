@@ -15,7 +15,7 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Release 9** went live on 2026-09-30. The owner found two problems, fixed in Release 9b (prepared, not yet live): the red x on a list card's poster opened the list instead of removing the title, and ticking *Enable media server user filtering* did not stick.
 - **Release 9b** went live on 2026-09-30, followed by the sign-in sessions step (steps under Release 9b). The owner reports everything looks good.
 - **Release 10** (Phase 7 so far, PR #9) went live on 2026-09-30. The owner does not want Cloudflare Access on `/admin`.
-- **Next:** `FF_V2_LISTS_ONLY` now (the owner's call, rather than after a week or two), then Release 11 and `FF_EVENT_TRACKING`. Both steps are below.
+- **Release 11** went live on 2026-10-01 with migration `0020`, after the list copy's and the history copy's *Start over* (results under each). **`FF_V2_LISTS_ONLY` and `FF_EVENT_TRACKING` are both on** (2026-10-01, one-way: never delete either). The owner reports everything correct, and found one problem, fixed in Release 11b (prepared, not yet live): a Search tile could show its poster and a "No poster" box under it.
 
 The owner decided to release the new version **one phase at a time, straight to the live site**, with no separate test site. Each release waits until the one before it has run cleanly for at least a day.
 
@@ -887,3 +887,35 @@ What it means:
 **Before step 6:** a website removal made after this *Start over* is not in the activity database, so switch soon. If you removed things from Watch History on the website in between, press *Start over* again first. Plays from Stremio, Nuvio and Plex are recorded either way.
 
 Tested before switching: with both `FF_V2_LISTS_ONLY` and `FF_EVENT_TRACKING` on, history loads, a website play is added with its episode name, a Watchlist change is kept (in the new list tables only), and a removal holds (`tests/activity.test.mjs`).
+
+### Live: both switches on (2026-10-01)
+
+The owner deployed Release 11, applied `0020`, ran both *Start over*s (0 waiting, 0 fewer plays), then added `FF_V2_LISTS_ONLY = 1` and `FF_EVENT_TRACKING = 1`, and reports everything correct. Neither variable may be deleted from now on.
+
+---
+
+## Release 11b: Search tiles showing a poster and "No poster" together
+
+**Branch point:** this branch after Release 11. Nothing here comes from `main`.
+
+The owner searched Movies for "one last": One Last Deal, One Last Ride and One Last Dance each showed the poster **and** a grey "No poster" box below it, in the same tile.
+
+- **The cause:** one Better Poster that failed to load was handled twice.
+  - Since Release 8 a poster names its fallback in `data-act`, and the page's one listener runs it (`initDelegatedActions`, 16_).
+  - A second listener, for Better Posters on tiles with no fallback of their own (23_), only skipped posters with an old-style `onerror`, so it ran the fallback for these too.
+  - The first run went to look up the title's ordinary poster. The second, a moment later, took the same failure for "the ordinary poster failed as well" and put up "No poster". Then the lookup answered and showed the poster, leaving both.
+  - It could happen on any poster tile wired this way with Better Posters on (list-card posters, the builders' picks). Search showed it most because Release 9 gave Search Better Posters.
+- **The fix** (`handlePosterImgError` and the listener after it, 23_):
+  - the second listener leaves alone any poster that names its own fallback;
+  - a failure reported again while the lookup is still out is ignored;
+  - a poster that does load takes down any "No poster" box put up for it (`hidePosterPlaceholderFor`).
+  - A real second failure (the ordinary poster not loading either) still shows "No poster".
+
+`bash verify.sh` passes (1,964 tests), and so does the suite with `MLA_TEST_V2_LISTS_READ=1`. The new test (`tests/poster-identity.test.mjs`, "a failed Better Poster on a Search tile") plays one error through every listener the page has, as a browser does; it fails on Release 11. To do that, `tests/client-harness.mjs` now keeps the listeners the page puts on `window` and `document` (`fireListeners`).
+
+**Steps:**
+1. Keep Release 11's file (`release-11-NEW-worker.js`) as the rollback file.
+2. Deploy Release 11b's file (`release-11b-NEW-worker.js`) the usual way. No database step, no variable.
+3. Check: with Better Posters on, Search → Movies "one last" (and Shows): each tile shows one poster, or one "No poster" box, never both. Look at a few list cards on Discover too.
+
+**Rollback:** paste Release 11's file. Both switches stay on either way: this release does not touch them.
