@@ -241,7 +241,7 @@ What it copies: every account's lists (with their order, items and likes), the o
 
 1. `FF_V2_LISTS_READ` has been on for a while (a week or two) with nothing wrong reported.
 2. The `BLOBS` bucket is bound (§2): shared channels' episode lists have nowhere else to go.
-3. `/admin` → **Lists v2** → *Check results* says every account is copied: none in progress, none waiting to be copied again, none failed. If some are waiting, press *Copy lists* first.
+3. `/admin` → **Lists v2** → *Check results* says every account is copied: none in progress, none waiting to be copied again, none failed. If some are waiting, press *Start over* first and let it finish: once the first copy is done, *Copy lists* only resumes it, while *Start over* goes through every account again, skipping the ones already copied.
 4. Back up D1 (§5).
 
 **Turning it on:** Worker → Settings → Variables and Secrets → Add → type *Text*, name `FF_V2_LISTS_ONLY`, value `1`. Deploy.

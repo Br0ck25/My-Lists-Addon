@@ -812,12 +812,32 @@ Checked before recommending it:
 - the suite's lists-only tests pass. (Forcing the switch on for *every* test fails only the ones that seed the old storage and copy it, which the switch forbids by design.)
 
 **Steps:**
-1. `/admin` → **Lists v2** → *Check results*: every account copied, none waiting to be copied again, none failed. If some are waiting, press *Copy lists*, then *Check results* again.
+1. `/admin` → **Lists v2** → *Check results*: every account copied, none waiting to be copied again, none failed. If some are waiting, press **Start over** (not *Copy lists*, which only resumes the first copy) and let it finish, then *Check results* again.
 2. Note the time. D1 keeps 30 days of Time Travel, so the database can be put back to this moment if it ever had to be.
 3. Worker **wako** → **Settings** → **Variables and Secrets** → **+ Add** → Type **Text**, name `FF_V2_LISTS_ONLY`, value `1` → **Deploy**.
 4. Check: make a list, add and remove titles, rename it, reorder your lists, delete it; like and unlike a list; add and remove a Watchlist title; save a shared channel. In Stremio or Nuvio, an edit reaches the row.
 
 **Never** delete the variable, or turn `FF_V2_LISTS_READ` off, afterwards: both would show everyone lists as they were on the day it was turned on.
+
+### Live: the check before the switch (2026-10-01)
+
+Reported by the owner, with Release 11 deployed and migration `0020` applied:
+
+> Accounts: 707 done, 0 in progress, 2 waiting to be copied again, 0 failed.
+> Lists: 965 found, 1 copied, 964 unchanged since the last run, 7 copies of deleted lists retired, 1 order entries with no list behind them.
+> Items: 42717 in the old lists, 42579 copied, 0.323% not carried: 0 with no usable id, 0 listed twice, 138 on lists copied in an earlier run. 0 titles TMDB could not place yet.
+> Likes on outside lists: 92 lists, 54 voters copied. Shared channels: 97 found, 97 unchanged since the last run, 0 unreadable.
+> Migrate Accounts: 709 accounts in table (709 D1, 672 KV, union 709). Reconciled ✓
+
+What it means:
+- **The 138 items are the same 138 as in the first copy** (Release 4): titles listed twice in one list, each kept once. On lists unchanged since then, the copy only reports them as "on lists copied in an earlier run".
+- **"0 titles TMDB could not place"**: the `media.retry` job (Release 7) has matched every one of the 13,631 since Release 4.
+- **The 2 waiting accounts must be copied before the switch.**
+  - An account is "waiting" when one of its list saves could not be copied into the new tables. Until it is copied again it reads from the old storage.
+  - With `FF_V2_LISTS_ONLY` on, it would read the new tables, which are missing that change.
+  - *Copy lists* does not pick them up: it resumes the first copy, which finished in Release 4 (its *Done: 698 accounts*). *Start over* goes through every account again, skips the 707 already copied, and copies these two.
+
+So step 1 above is, in practice: press **Start over**, keep the page open until it says *Done*, then *Check results* must show **0 waiting**. Then switch, straight away.
 
 ---
 
