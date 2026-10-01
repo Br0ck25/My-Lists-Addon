@@ -80,7 +80,10 @@ Adding a binding before the code that uses it is harmless. Removing a binding th
 - `FF_PROVIDER_BREAKER` (optional, P4-4): `1` turns on the provider breaker (§14). When a provider (TMDB, Trakt, MDBList, Simkl, ...) fails five times in a row, the site stops calling it for a minute and serves its last good copies straight away, instead of every row waiting for a timeout. Safe to turn on and off at any time.
 - `FF_MATERIALIZER` (optional, P5-11): `1` makes installs that use **Remove duplicate items across lists** build their home screen once per hour instead of each row rebuilding the rows above it (§19). Safe to turn on and off at any time.
 - `INSTALL_MIGRATION_PERCENT` (optional, `0` to `100`): the share of existing install links whose keys and tokens move into encrypted D1 storage the first time they are used. See §8 before setting it.
+- `SUNSET_60DAY_START_DATE` (optional, Phase 10): set to the date (`YYYY-MM-DD`) when `FF_SESSIONS` is turned on (Day 0 of Phase 10). The Worker includes a `sunset_notices` array in each `/api/creator/sync/load` response listing the seven legacy behaviours that will be removed 60 days later. Unset before Phase 10 starts (returns an empty array). See [`docs/CUTOVER.md`](CUTOVER.md) §P10-2 for the full list of sunset features and their removal timeline.
 - **Delete** these retired variables if they are still set: `BULK_RESOLVE_SUBREQUEST_BUDGET`, `DETAILS_BATCH_SUBREQUEST_BUDGET`, `CRON_SUBREQUEST_BUDGET`. The code ignores them.
+
+**Phase 10 flag flip:** See [`docs/CUTOVER.md`](CUTOVER.md) for the full flag-flip runbook, reconciliation gates, and rollback procedures for the six Phase 10 flags (`FF_SESSIONS`, `FF_INSTALLS`, `FF_V2_LISTS_READ`, `FF_V2_LISTS_API`, `FF_V2_LISTS_ONLY`, `FF_EVENT_TRACKING`). Each flag is separated by at least 7 days and has explicit pass/fail gates before advancing.
 
 **Cron trigger** (Worker → Settings → Triggers): `*/5 * * * *` (the older `*/6 * * * *` works the same). One trigger is enough: with the queue bound (§18) each tick only hands out due jobs, each with its own schedule.
 

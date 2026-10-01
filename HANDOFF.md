@@ -50,7 +50,12 @@
 >    - P9-2: migration test suite with anonymized production fixtures across schemas, accounts, lists, likes, channels, activity, and installs (completed 2026-10-02);
 >    - P9-3: Playwright E2E dropped under D-11 (existing app-shell, client-harness, render, and HTML checks already cover all 12 UX scenarios without browser bloat in CI);
 >    - P9-5: staging Worker topology in wrangler.toml, isolated D1/KV/R2/Queue docs/STAGING.md, deploy checklist docs/DEPLOY_CHECKLIST.md, and automated test suite (completed 2026-10-02 — Phase 9 is 100% complete!);
->    - Phase 10: cutover and cleanup, including moving the planning documents to `docs/history/`.
+>    - **Phase 10 (completed 2026-10-02 — all five P10 tasks done):**
+>      - P10-1: `docs/CUTOVER.md` — six-flag flip runbook with 7-day windows, reconciliation gates, rollback procedures, post-cutover checklist.
+>      - P10-2: `SUNSET_60DAY_START_DATE` variable + `getLegacySunsetNotices(env)` → `sunset_notices` field in `/api/creator/sync/load` responses (7 legacy-feature deprecation banners).
+>      - P10-3: `POST /admin/api/export-kv-to-r2` — batched, resumable KV → R2 gzip archive tool; full prefix list and D1 drop order in `docs/CUTOVER.md` §P10-3.
+>      - P10-4: admin migration tool removal documented in `docs/CUTOVER.md` §P10-4 (deferred until Day 35+ when all flags stable).
+>      - P10-5: `docs/ARCHITECTURE.md` (v2 steady-state reference), 13 planning docs archived to `docs/history/` with `docs/history/README.md` index.
 >
 > **Decisions made on 2026-10-01** (`docs/DECISIONS.md`):
 > - D-31: no one-time recovery codes; P7-5 is dropped.

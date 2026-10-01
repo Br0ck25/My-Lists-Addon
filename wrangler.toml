@@ -161,6 +161,8 @@ dead_letter_queue = "mylists-jobs-dlq"
 # Optional, Phase 7 (P7-6): date string (e.g. "2026-06-01") after which legacy
 # scrobble forms are automatically sunsetted even if FF_SCROBBLE_ST_ONLY is not set.
 # SCROBBLE_SUNSET_DATE = "2026-06-01"
+# Optional, Phase 10 (P10-2): date string (e.g. "2026-10-02") starting 60-day sunset notices
+# SUNSET_60DAY_START_DATE = "2026-10-02"
 # Optional, Phase 8 (P8-2): Cloudflare Account ID for Analytics Engine SQL API queries in /admin
 # CF_ANALYTICS_ACCOUNT_ID = "00000000000000000000000000000000"
 # CLOUDFLARE_ACCOUNT_ID = "00000000000000000000000000000000"

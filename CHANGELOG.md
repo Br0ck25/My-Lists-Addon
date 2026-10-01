@@ -32,6 +32,58 @@ Nothing to configure for the strict CSP (P7-1, below): it is part of the Worker 
 **Optional, and recommended: put the admin dashboard behind Cloudflare Access** (P7-2, below). It needs the two variables `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` from a Zero Trust Access application for `/admin`, plus **migration `0018_admin_sessions_audit.sql`** (two new tables, safe to run twice). Without any of it the dashboard keeps working exactly as it does today — the admin key, the same cookie — and without the migration you get the old behaviour with a note in the dashboard saying what to apply. `docs/OPERATIONS.md` §25 has the click-by-click steps.
 
 **Nothing to configure for the rate limits** (P7-3, below): they are part of the Worker, and the table they use (`rate_counters`) has existed since migration 0015. One **optional** index, `migrations/0019_rate_counters_window_index.sql`, makes the background cleanup of spent windows cheap (without it the cleanup scans — slower, not broken); one **optional** dashboard step, the edge rate-limiting rules in `docs/OPERATIONS.md` §6, moves the refusal to Cloudflare so the request never reaches the Worker. Neither is needed for anything to work.
+### 🏁 Phase 10 — Cutover and Cleanup (P10-1 through P10-5)
+
+#### P10-1: Flag-flip cutover runbook (`docs/CUTOVER.md`) — 2026-10-02
+
+- **New runbook `docs/CUTOVER.md`:** Complete Phase 10 flag-flip procedure documenting the ordered
+  cutover of all six feature flags (`FF_SESSIONS` → `FF_INSTALLS` → `FF_V2_LISTS_READ` →
+  `FF_V2_LISTS_API` → `FF_V2_LISTS_ONLY` → `FF_EVENT_TRACKING`), each separated by at least
+  7 days, with reconciliation gates (queue drain, error-rate thresholds, read-consistency spot
+  checks), per-flag smoke tests, rollback procedures for reversible and one-way flags, and the
+  post-cutover completion checklist. Also documents P10-2, P10-3, and P10-4 scope as appendix
+  sections for operator reference.
+
+#### P10-2: In-app sunset announcements (`02_http-and-creator-utils.js`, `26_api-creator-and-admin-routes.js`) — 2026-10-02
+
+- **New variable `SUNSET_60DAY_START_DATE`** (YYYY-MM-DD): set to Day 0 (when `FF_SESSIONS` is
+  enabled). The Worker includes a `sunset_notices` array in every `/api/creator/sync/load`
+  response from Day 0 through Day 60, listing the seven legacy behaviours being removed.
+- Each notice carries: `feature` key, `urgency` (`info` / `warning` / `urgent`),
+  `daysRemaining` integer, and a human-readable `message`. Empty array when the variable is
+  unset or outside the window — no-op for existing clients.
+- Seven features announced: key-in-body auth, `/api/creator/sync/*` shims, `/api/resolve` route,
+  `LEGACY_UNVERIFIED_CONFIG_SHELVES`, scrobble `config=`/`key=` forms, SHA-256 key lookups,
+  list tombstones for old clients.
+- `docs/OPERATIONS.md` §3 updated with the new variable and a Phase 10 flag-flip reference.
+
+#### P10-3: KV export-to-R2 admin tool (`26_api-creator-and-admin-routes.js`) — 2026-10-02
+
+- **New route `POST /admin/api/export-kv-to-r2`**: exports one KV prefix per call (batch of
+  100 keys) to the `BLOBS` R2 bucket under `kv-archive/{prefix}/{YYYY-MM-DD}.json.gz`.
+  Idempotent; each batch appends to the running archive so the final file is always complete.
+  The caller loops until `done: true`, then deletes the KV keys. Requires both `CONFIGS` KV
+  and `BLOBS` R2 bindings. Admin-authenticated only.
+
+#### P10-4: Admin migration tool removal — 2026-10-02 (documented, not yet removed)
+
+- Documented in `docs/CUTOVER.md` §P10-4 with the exact file and symbol list for post-cutover
+  removal: `/admin/api/migrate-d1`, `/admin/api/migrate-day-counts`, `/admin/api/backfill-trending`,
+  `/admin/api/rebuild-search-index`, `ensureTrackingMigrated`, `migrateGenreDecadeStatsIfNeeded`,
+  `backfillCreatorLastActive`. Deferred until all Phase 10 flags are stable and no migration job
+  can be triggered.
+
+#### P10-5: Documentation consolidation — 2026-10-02
+
+- **New `docs/ARCHITECTURE.md`:** Concise v2 steady-state architecture reference — storage bindings,
+  auth model, request flow, feature flag table, background job cadence, build & verify commands,
+  and key design decisions. Replaces `MIGRATION_PLAN.md` as the canonical architecture doc.
+- **Archived to `docs/history/`:** `STORAGE-PLAN-KV-D1.md`, `COMPLETE_AUDIT_REPORT.md`,
+  `UI_UX_AUDIT.md`, `Changes.md`, `MIGRATION_PLAN.md`, `NEXT_VERSION_ARCHITECTURE.md`,
+  `NEXT_VERSION_TASKS.md`, `BACKEND_AUDIT.md`, `FRONTEND_UX_AUDIT.md`, `PERFORMANCE_AUDIT.md`,
+  `SECURITY_AUDIT.md`, `CLOUDFLARE_FREE_TIER_REMOVAL_PLAN.md`, `crossover_and_companion_guide.md`.
+  A `docs/history/README.md` index lists each file with its period and purpose.
+
 ### 🚀 Staging Worker topology and deploy checklist (P9-5)
 
 - **Isolated Staging Environment (`wrangler.toml`, `docs/STAGING.md`):** Configured complete staging environment topology (`my-lists-addon-staging`) with 100% resource isolation from production:

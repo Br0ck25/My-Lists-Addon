@@ -4836,7 +4836,7 @@
           }
         } catch {}
       }
-      return jsonPrivate({ ok: true, data, resetAt: syncResetAt || 0 });
+      return jsonPrivate({ ok: true, data, resetAt: syncResetAt || 0, sunset_notices: getLegacySunsetNotices(env) });
     }
 
     // /api/creator/sync/like  (POST)  { creatorName, creatorKey, usernameSlug, liked } -> { ok }
@@ -7188,6 +7188,103 @@
 
       const done = nextState.prefixIndex >= PREFIXES.length;
       return json({ ok: true, done, keysMigratedThisCall, prefix, prefixDone });
+    }
+
+    // /admin/api/export-kv-to-r2  (POST) { prefix, cursor? }
+    //   -> { ok, done, keysExported, totalKeysInArchive, archiveKey, cursor? }
+    //
+    // P10-3: Exports one KV prefix in batches of up to 100 keys to the BLOBS
+    // R2 bucket under kv-archive/{sanitisedPrefix}/{YYYY-MM-DD}.json.gz.  The
+    // caller loops until done:true, then deletes the KV keys.  Each batch
+    // appends to the running archive so the final file is a single complete
+    // snapshot of all keys under the prefix for today.  Idempotent: running
+    // again for the same prefix+date rewrites the same R2 key.
+    if (path === "/admin/api/export-kv-to-r2" && request.method === "POST") {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      if (!env || !env.CONFIGS) return json({ ok: false, error: "No KV binding." }, 500);
+      if (!env.BLOBS) return json({ ok: false, error: "No R2 BLOBS binding. Cannot export." }, 500);
+
+      let body;
+      try { body = await request.json(); } catch { body = {}; }
+      const prefix = typeof body.prefix === "string" ? body.prefix.trim() : "";
+      if (!prefix) return json({ ok: false, error: "prefix is required." }, 400);
+
+      // Sanitise the prefix for use as an R2 key segment.
+      const safePrefix = prefix.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const archiveKey = `kv-archive/${safePrefix}/${dateStr}.json.gz`;
+
+      const BATCH = 100;
+      const listOpts = { prefix, limit: BATCH };
+      if (body.cursor) listOpts.cursor = body.cursor;
+
+      const listResult = await env.CONFIGS.list(listOpts);
+      const keys = listResult.keys.map((k) => k.name);
+
+      // Fetch existing archive (previous batches) plus the new values.
+      const [existingArchiveR2, ...values] = await Promise.all([
+        env.BLOBS.get(archiveKey).catch(() => null),
+        ...keys.map((k) => env.CONFIGS.get(k)),
+      ]);
+
+      let existingEntries = {};
+      if (existingArchiveR2) {
+        try {
+          const ab = await existingArchiveR2.arrayBuffer();
+          const ds = new DecompressionStream("gzip");
+          const dw = ds.writable.getWriter();
+          dw.write(new Uint8Array(ab));
+          dw.close();
+          const dr = ds.readable.getReader();
+          const parts = [];
+          for (;;) {
+            const { value, done: d } = await dr.read();
+            if (value) parts.push(value);
+            if (d) break;
+          }
+          const len = parts.reduce((s, p) => s + p.length, 0);
+          const merged = new Uint8Array(len);
+          let off = 0;
+          for (const p of parts) { merged.set(p, off); off += p.length; }
+          existingEntries = JSON.parse(new TextDecoder().decode(merged));
+        } catch {
+          existingEntries = {};
+        }
+      }
+
+      keys.forEach((k, i) => { existingEntries[k] = values[i]; });
+
+      const cs = new CompressionStream("gzip");
+      const cw = cs.writable.getWriter();
+      cw.write(new TextEncoder().encode(JSON.stringify(existingEntries)));
+      cw.close();
+      const cr = cs.readable.getReader();
+      const gzChunks = [];
+      for (;;) {
+        const { value, done: d } = await cr.read();
+        if (value) gzChunks.push(value);
+        if (d) break;
+      }
+      const totalLen = gzChunks.reduce((s, c) => s + c.length, 0);
+      const gzipped = new Uint8Array(totalLen);
+      let gzOff = 0;
+      for (const c of gzChunks) { gzipped.set(c, gzOff); gzOff += c.length; }
+
+      await env.BLOBS.put(archiveKey, gzipped, {
+        httpMetadata: { contentType: "application/json", contentEncoding: "gzip" },
+        customMetadata: { kvPrefix: prefix, exportDate: dateStr, keyCount: String(Object.keys(existingEntries).length) },
+      });
+
+      const done = listResult.list_complete || !listResult.cursor;
+      return json({
+        ok: true,
+        done,
+        keysExported: keys.length,
+        totalKeysInArchive: Object.keys(existingEntries).length,
+        archiveKey,
+        cursor: done ? undefined : listResult.cursor,
+      }, 200, { "Cache-Control": "no-store" });
     }
 
     // /admin/api/feedback -> { ok, entries } -- backs the Feedback tab,

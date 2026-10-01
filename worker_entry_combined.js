@@ -5278,6 +5278,84 @@ function isScrobbleSunset(env) {
   return false;
 }
 
+// --- Phase 10 legacy sunset notices (P10-2) -------------------------------------
+//
+// Set SUNSET_60DAY_START_DATE (YYYY-MM-DD) in Worker variables when FF_SESSIONS
+// is turned on (Phase 10, Day 0). The Worker then includes a sunset_notices array
+// in /api/creator/sync/load responses so the browser can display in-app banners
+// for each deprecated feature. Each notice contains the feature name, a human-
+// readable message, and the number of calendar days remaining until forced removal.
+// An empty array is returned when the variable is not set or the date is in the future.
+//
+// The seven legacy behaviours that are sunset in Phase 10 (60 days after Day 0):
+//   1. Key-in-body auth on /api/creator/* (creatorName+creatorKey in request body)
+//   2. /api/creator/sync/* shims (the whole legacy sync path)
+//   3. /api/resolve route (import-from-link via query-string config= param)
+//   4. LEGACY_UNVERIFIED_CONFIG_SHELVES (unsigned configs as full shelves; FT-37)
+//   5. Scrobble config= / key= query-string forms (?config=... or ?creator=&key=)
+//   6. SHA-256 key lookups (creator_key_lookups table, legacy forgot-username)
+//   7. List tombstones for old clients (FT-26)
+function getLegacySunsetNotices(env) {
+  if (!env || !env.SUNSET_60DAY_START_DATE) return [];
+  const startMs = Date.parse(String(env.SUNSET_60DAY_START_DATE));
+  if (!Number.isFinite(startMs)) return [];
+  const sunsetMs = startMs + 60 * 24 * 60 * 60 * 1000;
+  const nowMs = Date.now();
+  // Only show notices from Day 0 until Day 60 (inclusive).
+  if (nowMs < startMs || nowMs >= sunsetMs + 24 * 60 * 60 * 1000) return [];
+  const daysRemaining = Math.max(0, Math.ceil((sunsetMs - nowMs) / (24 * 60 * 60 * 1000)));
+  const urgency = daysRemaining <= 7 ? "urgent" : daysRemaining <= 30 ? "warning" : "info";
+  const phrase = daysRemaining === 0
+    ? "today"
+    : daysRemaining === 1
+    ? "in 1 day"
+    : `in ${daysRemaining} days`;
+  return [
+    {
+      feature: "key-in-body-auth",
+      urgency,
+      daysRemaining,
+      message: `Signing in with a Creator Key in the request body is being removed ${phrase}. Update your client to use session-based sign-in (/api/session).`,
+    },
+    {
+      feature: "sync-shims",
+      urgency,
+      daysRemaining,
+      message: `/api/creator/sync/* legacy sync routes are being removed ${phrase}. Update your client to the current sync API.`,
+    },
+    {
+      feature: "api-resolve",
+      urgency,
+      daysRemaining,
+      message: `The /api/resolve?config= import route is being removed ${phrase}. Use the current install-link import flow instead.`,
+    },
+    {
+      feature: "legacy-unverified-config-shelves",
+      urgency,
+      daysRemaining,
+      message: `Support for unverified configuration shelves (LEGACY_UNVERIFIED_CONFIG_SHELVES) is being removed ${phrase}.`,
+    },
+    {
+      feature: "scrobble-legacy-auth",
+      urgency,
+      daysRemaining,
+      message: `Scrobble webhooks using ?config= or ?creator=&key= are being removed ${phrase}. Update your media server webhook URL in Settings to use the ?st= token.`,
+    },
+    {
+      feature: "sha256-key-lookups",
+      urgency,
+      daysRemaining,
+      message: `Legacy SHA-256 key lookups (forgot-username via the old index) are being removed ${phrase}. Ensure LOOKUP_PEPPER is configured for the new HMAC index.`,
+    },
+    {
+      feature: "list-tombstones",
+      urgency,
+      daysRemaining,
+      message: `List tombstones for old clients are being removed ${phrase}. Update your client to the current lists API.`,
+    },
+  ];
+}
+
 // The site's default for a browser that has not chosen: the FF_NEW_UI Worker
 // variable. Set to 1, every visitor gets the new interface; a browser that
 // chose (the cookie, `?ff_new_ui=0` or `=1`) keeps its choice either way.
@@ -96347,7 +96425,7 @@ function generateSearchVariations(query) {
           }
         } catch {}
       }
-      return jsonPrivate({ ok: true, data, resetAt: syncResetAt || 0 });
+      return jsonPrivate({ ok: true, data, resetAt: syncResetAt || 0, sunset_notices: getLegacySunsetNotices(env) });
     }
 
     // /api/creator/sync/like  (POST)  { creatorName, creatorKey, usernameSlug, liked } -> { ok }
@@ -98699,6 +98777,103 @@ function generateSearchVariations(query) {
 
       const done = nextState.prefixIndex >= PREFIXES.length;
       return json({ ok: true, done, keysMigratedThisCall, prefix, prefixDone });
+    }
+
+    // /admin/api/export-kv-to-r2  (POST) { prefix, cursor? }
+    //   -> { ok, done, keysExported, totalKeysInArchive, archiveKey, cursor? }
+    //
+    // P10-3: Exports one KV prefix in batches of up to 100 keys to the BLOBS
+    // R2 bucket under kv-archive/{sanitisedPrefix}/{YYYY-MM-DD}.json.gz.  The
+    // caller loops until done:true, then deletes the KV keys.  Each batch
+    // appends to the running archive so the final file is a single complete
+    // snapshot of all keys under the prefix for today.  Idempotent: running
+    // again for the same prefix+date rewrites the same R2 key.
+    if (path === "/admin/api/export-kv-to-r2" && request.method === "POST") {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      if (!env || !env.CONFIGS) return json({ ok: false, error: "No KV binding." }, 500);
+      if (!env.BLOBS) return json({ ok: false, error: "No R2 BLOBS binding. Cannot export." }, 500);
+
+      let body;
+      try { body = await request.json(); } catch { body = {}; }
+      const prefix = typeof body.prefix === "string" ? body.prefix.trim() : "";
+      if (!prefix) return json({ ok: false, error: "prefix is required." }, 400);
+
+      // Sanitise the prefix for use as an R2 key segment.
+      const safePrefix = prefix.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const archiveKey = `kv-archive/${safePrefix}/${dateStr}.json.gz`;
+
+      const BATCH = 100;
+      const listOpts = { prefix, limit: BATCH };
+      if (body.cursor) listOpts.cursor = body.cursor;
+
+      const listResult = await env.CONFIGS.list(listOpts);
+      const keys = listResult.keys.map((k) => k.name);
+
+      // Fetch existing archive (previous batches) plus the new values.
+      const [existingArchiveR2, ...values] = await Promise.all([
+        env.BLOBS.get(archiveKey).catch(() => null),
+        ...keys.map((k) => env.CONFIGS.get(k)),
+      ]);
+
+      let existingEntries = {};
+      if (existingArchiveR2) {
+        try {
+          const ab = await existingArchiveR2.arrayBuffer();
+          const ds = new DecompressionStream("gzip");
+          const dw = ds.writable.getWriter();
+          dw.write(new Uint8Array(ab));
+          dw.close();
+          const dr = ds.readable.getReader();
+          const parts = [];
+          for (;;) {
+            const { value, done: d } = await dr.read();
+            if (value) parts.push(value);
+            if (d) break;
+          }
+          const len = parts.reduce((s, p) => s + p.length, 0);
+          const merged = new Uint8Array(len);
+          let off = 0;
+          for (const p of parts) { merged.set(p, off); off += p.length; }
+          existingEntries = JSON.parse(new TextDecoder().decode(merged));
+        } catch {
+          existingEntries = {};
+        }
+      }
+
+      keys.forEach((k, i) => { existingEntries[k] = values[i]; });
+
+      const cs = new CompressionStream("gzip");
+      const cw = cs.writable.getWriter();
+      cw.write(new TextEncoder().encode(JSON.stringify(existingEntries)));
+      cw.close();
+      const cr = cs.readable.getReader();
+      const gzChunks = [];
+      for (;;) {
+        const { value, done: d } = await cr.read();
+        if (value) gzChunks.push(value);
+        if (d) break;
+      }
+      const totalLen = gzChunks.reduce((s, c) => s + c.length, 0);
+      const gzipped = new Uint8Array(totalLen);
+      let gzOff = 0;
+      for (const c of gzChunks) { gzipped.set(c, gzOff); gzOff += c.length; }
+
+      await env.BLOBS.put(archiveKey, gzipped, {
+        httpMetadata: { contentType: "application/json", contentEncoding: "gzip" },
+        customMetadata: { kvPrefix: prefix, exportDate: dateStr, keyCount: String(Object.keys(existingEntries).length) },
+      });
+
+      const done = listResult.list_complete || !listResult.cursor;
+      return json({
+        ok: true,
+        done,
+        keysExported: keys.length,
+        totalKeysInArchive: Object.keys(existingEntries).length,
+        archiveKey,
+        cursor: done ? undefined : listResult.cursor,
+      }, 200, { "Cache-Control": "no-store" });
     }
 
     // /admin/api/feedback -> { ok, entries } -- backs the Feedback tab,

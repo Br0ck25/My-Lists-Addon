@@ -2175,6 +2175,84 @@ function isScrobbleSunset(env) {
   return false;
 }
 
+// --- Phase 10 legacy sunset notices (P10-2) -------------------------------------
+//
+// Set SUNSET_60DAY_START_DATE (YYYY-MM-DD) in Worker variables when FF_SESSIONS
+// is turned on (Phase 10, Day 0). The Worker then includes a sunset_notices array
+// in /api/creator/sync/load responses so the browser can display in-app banners
+// for each deprecated feature. Each notice contains the feature name, a human-
+// readable message, and the number of calendar days remaining until forced removal.
+// An empty array is returned when the variable is not set or the date is in the future.
+//
+// The seven legacy behaviours that are sunset in Phase 10 (60 days after Day 0):
+//   1. Key-in-body auth on /api/creator/* (creatorName+creatorKey in request body)
+//   2. /api/creator/sync/* shims (the whole legacy sync path)
+//   3. /api/resolve route (import-from-link via query-string config= param)
+//   4. LEGACY_UNVERIFIED_CONFIG_SHELVES (unsigned configs as full shelves; FT-37)
+//   5. Scrobble config= / key= query-string forms (?config=... or ?creator=&key=)
+//   6. SHA-256 key lookups (creator_key_lookups table, legacy forgot-username)
+//   7. List tombstones for old clients (FT-26)
+function getLegacySunsetNotices(env) {
+  if (!env || !env.SUNSET_60DAY_START_DATE) return [];
+  const startMs = Date.parse(String(env.SUNSET_60DAY_START_DATE));
+  if (!Number.isFinite(startMs)) return [];
+  const sunsetMs = startMs + 60 * 24 * 60 * 60 * 1000;
+  const nowMs = Date.now();
+  // Only show notices from Day 0 until Day 60 (inclusive).
+  if (nowMs < startMs || nowMs >= sunsetMs + 24 * 60 * 60 * 1000) return [];
+  const daysRemaining = Math.max(0, Math.ceil((sunsetMs - nowMs) / (24 * 60 * 60 * 1000)));
+  const urgency = daysRemaining <= 7 ? "urgent" : daysRemaining <= 30 ? "warning" : "info";
+  const phrase = daysRemaining === 0
+    ? "today"
+    : daysRemaining === 1
+    ? "in 1 day"
+    : `in ${daysRemaining} days`;
+  return [
+    {
+      feature: "key-in-body-auth",
+      urgency,
+      daysRemaining,
+      message: `Signing in with a Creator Key in the request body is being removed ${phrase}. Update your client to use session-based sign-in (/api/session).`,
+    },
+    {
+      feature: "sync-shims",
+      urgency,
+      daysRemaining,
+      message: `/api/creator/sync/* legacy sync routes are being removed ${phrase}. Update your client to the current sync API.`,
+    },
+    {
+      feature: "api-resolve",
+      urgency,
+      daysRemaining,
+      message: `The /api/resolve?config= import route is being removed ${phrase}. Use the current install-link import flow instead.`,
+    },
+    {
+      feature: "legacy-unverified-config-shelves",
+      urgency,
+      daysRemaining,
+      message: `Support for unverified configuration shelves (LEGACY_UNVERIFIED_CONFIG_SHELVES) is being removed ${phrase}.`,
+    },
+    {
+      feature: "scrobble-legacy-auth",
+      urgency,
+      daysRemaining,
+      message: `Scrobble webhooks using ?config= or ?creator=&key= are being removed ${phrase}. Update your media server webhook URL in Settings to use the ?st= token.`,
+    },
+    {
+      feature: "sha256-key-lookups",
+      urgency,
+      daysRemaining,
+      message: `Legacy SHA-256 key lookups (forgot-username via the old index) are being removed ${phrase}. Ensure LOOKUP_PEPPER is configured for the new HMAC index.`,
+    },
+    {
+      feature: "list-tombstones",
+      urgency,
+      daysRemaining,
+      message: `List tombstones for old clients are being removed ${phrase}. Update your client to the current lists API.`,
+    },
+  ];
+}
+
 // The site's default for a browser that has not chosen: the FF_NEW_UI Worker
 // variable. Set to 1, every visitor gets the new interface; a browser that
 // chose (the cookie, `?ff_new_ui=0` or `=1`) keeps its choice either way.
