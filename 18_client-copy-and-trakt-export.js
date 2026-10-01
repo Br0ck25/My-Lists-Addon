@@ -1734,4 +1734,8 @@ async function runUnifiedListImport() {
   if (resultBox) resultBox.innerHTML = summaryHtml;
 }
 
+/*MYLISTS_APP_BUNDLE_END*/</script>
+<script nonce="${CSP_NONCE_PLACEHOLDER}">/*MYLISTS_APP_FEATURES_START*/
+
+
 

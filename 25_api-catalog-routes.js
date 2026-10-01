@@ -102,7 +102,7 @@ function isImmutableAsset(url) {
   // /vendor/<versioned name> is the same contract as the two above: the
   // version is in the path, so a bump is a new URL and a cached copy can
   // never be stale. That is what makes the zip reader work offline (P7-1).
-  return ((url.pathname === '/app.js' || url.pathname === '/app.css')
+  return ((url.pathname === '/app.js' || url.pathname === '/app-features.js' || url.pathname === '/app.css')
     && !!url.searchParams.get('v'))
     || url.pathname.indexOf('/vendor/') === 0;
 }
@@ -1123,6 +1123,31 @@ Sitemap: ${url.origin}/sitemap.xml`;
       // request for some older hash still gets a working bundle -- better
       // than a broken page -- but must not be allowed to pin today's bytes
       // under yesterday's URL forever.
+      const isCurrent = askedFor === bundle.hash;
+      const etag = `"${bundle.hash}"`;
+      const inm = request.headers.get("If-None-Match") || "";
+      const headers = {
+        "Content-Type": "application/javascript; charset=utf-8",
+        "Cache-Control": isCurrent ? "public, max-age=31536000, immutable" : "no-cache",
+        "ETag": etag,
+      };
+      if (inm.split(",").some((s) => s.trim().replace(/^W\//, "") === etag)) {
+        return new Response(null, { status: 304, headers });
+      }
+      return new Response(bundle.js, { headers });
+    }
+
+    // /app-features.js?v=<hash> -> the secondary features bundle (P8-3).
+    // Same content-addressed, immutable contract as /app.js above.
+    if (path === "/app-features.js") {
+      const bundle = await getAppFeaturesBundle(url.origin);
+      if (!bundle) {
+        return new Response("/* app features bundle unavailable */", {
+          status: 503,
+          headers: { "Content-Type": "application/javascript; charset=utf-8", "Cache-Control": "no-store" },
+        });
+      }
+      const askedFor = url.searchParams.get("v") || "";
       const isCurrent = askedFor === bundle.hash;
       const etag = `"${bundle.hash}"`;
       const inm = request.headers.get("If-None-Match") || "";

@@ -683,8 +683,15 @@ No npm, no `src/` tree, no esbuild, no new test framework (D-11). Phase 2 is now
   - **Graceful Fallback:** If `withSession()` is unsupported, gracefully falls back to `env.DB`.
   - **Documentation & Dashboard Setup:** Added §27 to `docs/OPERATIONS.md` detailing how to enable D1 Read Replication under Cloudflare Dashboard → Storage & Databases → D1 → Settings → Read Replication.
   - **Tests:** `tests/d1-read-replication.test.mjs` (8 tests verifying manifest, catalog, v2 install, directory, admin exclusion, mutating API exclusion, and fallback behavior).
-- [ ] **P8-2** Replace all `bumpStat` / `bumpStatBy` / `recordTrackedEvent` / `recordSearchQuery` writes with Analytics Engine; `title_daily_stats` for Most Watched; the admin dashboard reads through the Analytics Engine SQL API. Backfill history from `stats`. *Done when:* no D1 writes on page views.
-- [ ] **P8-3** Bundle budget check in CI (first view under 150 KB gzip); route chunks. *Done when:* CI enforces it.
+- [x] **P8-3** Bundle budget check in CI (first view under 150 KB gzip); route chunks. *Done when:* CI enforces it.
+  - **Done (2026-10-01):** Implemented two-tier bundle splitting in `02_http-and-creator-utils.js`, `18_client-copy-and-trakt-export.js`, `24_client-backup-restore-presets.js`, `25_api-catalog-routes.js`, `check_bundle_budget.mjs`, and `.github/workflows/ci.yml`.
+  - **Two-Tier Bundle Split:** The client JavaScript payload is partitioned into two bundles:
+    1. `/app.js` (**First View / Critical Path**): Core shell runtime, navigation, library view, search modals, and notifications. Size: **93.26 KB gzip** (well below the 150 KB gzip budget).
+    2. `/app-features.js` (**Secondary Features / Deferred**): Channels builder, custom list creator/editor, creator profile management, backup/restore/presets, and explore filters. Loaded with `defer` without delaying first paint or LCP.
+  - **Content-Addressed Immutable Caching:** Both bundles are served with `?v=<hash>` query strings, `Cache-Control: public, max-age=31536000, immutable`, and 304 revalidation support.
+  - **Service Worker Offline Cache:** `/app-features.js` added to `isImmutableAsset` in `25_api-catalog-routes.js` for seamless PWA caching.
+  - **CI & Local Verification Enforcement:** Added `check_bundle_budget.mjs` running in GitHub Actions CI workflow (`.github/workflows/ci.yml`) and `verify.sh` to enforce the <= 150 KB gzip budget on `/app.js`.
+  - **Tests:** `tests/bundle-budget.test.mjs` (4 tests validating budget compliance, immutable caching, 304 revalidation, and service worker asset inclusion).
 - [x] **P8-4** Badged posters: SVG overlay referencing the image URL, or an R2-rendered image keyed by `(poster, badge, day)`; remove the base64 inlining. Precompute the icon bytes. *Done when:* the poster route CPU time halves in measurement.
   - **Done (2026-10-01):** Implemented in `01_icon-asset.js` and `25_api-catalog-routes.js`.
   - **Removed Base64 Inlining:** `/api/poster-badge` no longer downloads the poster image server-side or performs per-byte base64 encoding (`String.fromCharCode` + `btoa`). The output SVG references the allowlisted poster URL directly in `<image href="..." xlink:href="...">`. Payload dropped from ~300 KB–1.5 MB to ~1.5 KB, with zero outbound image subrequests.

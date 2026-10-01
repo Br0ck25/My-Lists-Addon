@@ -134,6 +134,11 @@ jobs:
           fi
           echo "FUNCTION-MAP.md matches source"
 
+      # P8-3: Bundle budget check -- ensure the first-view JS bundle (/app.js)
+      # stays strictly under the 150 KB gzip budget to protect initial page load.
+      - name: Bundle budget check
+        run: node check_bundle_budget.mjs
+
       - name: Test suite
         run: node --test tests/*.test.mjs
 

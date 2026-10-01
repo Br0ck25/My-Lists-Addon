@@ -889,12 +889,12 @@ describe("audit fix: the scrobble webhook carries a revocable token, not the Cre
   });
 
   it("no longer builds a webhook URL out of the Creator Key", async () => {
-    // The panel's markup is assembled client-side, and the client bundle is
-    // served from /app.js rather than inlined into the shell at "/" -- so
+    // The panel's markup is assembled client-side, and the creator profile
+    // script is served from /app-features.js rather than inlined into the shell at "/" -- so
     // this checks the shipped bundle. The URL builder must take a token, and
     // the old key-bearing construction must be gone entirely.
     const env = makeEnv();
-    const bundle = await call(env, "/app.js");
+    const bundle = await call(env, "/app-features.js");
     assert.equal(bundle.status, 200);
     assert.match(bundle.text, /\/api\/scrobble\?st=/, "the webhook URL builder should use the token parameter");
     assert.ok(

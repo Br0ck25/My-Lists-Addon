@@ -112,6 +112,10 @@ else
 fi
 
 echo
+echo "=== 5b. bundle budget check (P8-3) ==="
+node check_bundle_budget.mjs
+
+echo
 echo "=== 6. tests ==="
 node --test tests/*.test.mjs
 

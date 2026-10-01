@@ -5416,9 +5416,13 @@ async function htmlEtagFor(html) {
 const APP_BUNDLE_START = "<script nonce=\"" + CSP_NONCE_PLACEHOLDER + "\">/*MYLISTS_APP_BUNDLE_START*/";
 const APP_BUNDLE_END = "/*MYLISTS_APP_BUNDLE_END*/<" + "/script>";
 
-// A single entry, because the bundle is the same for everyone. Populated by
-// whichever happens first -- a page render or a direct /app.js hit.
+const APP_FEATURES_BUNDLE_START = "<script nonce=\"" + CSP_NONCE_PLACEHOLDER + "\">/*MYLISTS_APP_FEATURES_START*/";
+const APP_FEATURES_BUNDLE_END = "/*MYLISTS_APP_FEATURES_END*/<" + "/script>";
+
+// Two tiers (P8-3): /app.js is the first-view core bundle (under 150 KB gzip),
+// and /app-features.js is the secondary features bundle loaded deferred in the background.
 let APP_BUNDLE = null;
+let APP_FEATURES_BUNDLE = null;
 
 async function getAppBundle(origin) {
   if (APP_BUNDLE) return APP_BUNDLE;
@@ -5426,28 +5430,56 @@ async function getAppBundle(origin) {
   return APP_BUNDLE;
 }
 
-// Returns { page, bundle }, where page has the bundle element replaced by a
-// script src. If the markers are missing for any reason the original HTML
-// comes back untouched and nothing is cached -- an unrecognised page is
-// served exactly as it was before this existed, rather than half-rewritten.
-async function splitAppBundle(html) {
-  const start = html.indexOf(APP_BUNDLE_START);
-  if (start === -1) return { page: html, bundle: null };
-  const bodyStart = start + APP_BUNDLE_START.length;
-  const end = html.indexOf(APP_BUNDLE_END, bodyStart);
-  if (end === -1) return { page: html, bundle: null };
+async function getAppFeaturesBundle(origin) {
+  if (APP_FEATURES_BUNDLE) return APP_FEATURES_BUNDLE;
+  await splitAppBundle(renderBuilderCached(origin, {}));
+  return APP_FEATURES_BUNDLE;
+}
 
-  const bundle = html.slice(bodyStart, end);
-  if (!APP_BUNDLE) {
-    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(bundle));
-    const hash = [...new Uint8Array(digest)].slice(0, 10).map((b) => b.toString(16).padStart(2, "0")).join("");
-    APP_BUNDLE = { js: bundle, hash };
+// Returns { page, bundle, featuresBundle }, where page has the bundle elements
+// replaced by script src (/app.js and deferred /app-features.js).
+async function splitAppBundle(html) {
+  let page = html;
+
+  // Tier 1: Core /app.js
+  const start = page.indexOf(APP_BUNDLE_START);
+  if (start !== -1) {
+    const bodyStart = start + APP_BUNDLE_START.length;
+    const end = page.indexOf(APP_BUNDLE_END, bodyStart);
+    if (end !== -1) {
+      const bundle = page.slice(bodyStart, end);
+      if (!APP_BUNDLE) {
+        const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(bundle));
+        const hash = [...new Uint8Array(digest)].slice(0, 10).map((b) => b.toString(16).padStart(2, "0")).join("");
+        APP_BUNDLE = { js: bundle, hash };
+      }
+      page =
+        page.slice(0, start) +
+        '<script src="/app.js?v=' + APP_BUNDLE.hash + '"><' + '/script>' +
+        page.slice(end + APP_BUNDLE_END.length);
+    }
   }
-  const page =
-    html.slice(0, start) +
-    '<script src="/app.js?v=' + APP_BUNDLE.hash + '"><' + '/script>' +
-    html.slice(end + APP_BUNDLE_END.length);
-  return { page, bundle: APP_BUNDLE };
+
+  // Tier 2: Deferred /app-features.js (P8-3)
+  const fStart = page.indexOf(APP_FEATURES_BUNDLE_START);
+  if (fStart !== -1) {
+    const fBodyStart = fStart + APP_FEATURES_BUNDLE_START.length;
+    const fEnd = page.indexOf(APP_FEATURES_BUNDLE_END, fBodyStart);
+    if (fEnd !== -1) {
+      const fBundle = page.slice(fBodyStart, fEnd);
+      if (!APP_FEATURES_BUNDLE) {
+        const fDigest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(fBundle));
+        const fHash = [...new Uint8Array(fDigest)].slice(0, 10).map((b) => b.toString(16).padStart(2, "0")).join("");
+        APP_FEATURES_BUNDLE = { js: fBundle, hash: fHash };
+      }
+      page =
+        page.slice(0, fStart) +
+        '<script src="/app-features.js?v=' + APP_FEATURES_BUNDLE.hash + '" defer><' + '/script>' +
+        page.slice(fEnd + APP_FEATURES_BUNDLE_END.length);
+    }
+  }
+
+  return { page, bundle: APP_BUNDLE, featuresBundle: APP_FEATURES_BUNDLE };
 }
 
 // The stylesheet gets exactly the same treatment as the script bundle, for
@@ -42432,6 +42464,10 @@ async function runUnifiedListImport() {
 
   if (resultBox) resultBox.innerHTML = summaryHtml;
 }
+
+/*MYLISTS_APP_BUNDLE_END*/</script>
+<script nonce="${CSP_NONCE_PLACEHOLDER}">/*MYLISTS_APP_FEATURES_START*/
+
 
 
 function guessNameFromUrl(u) {
@@ -82416,7 +82452,7 @@ if (typeof document !== 'undefined') {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initAppShell);
   else initAppShell();
 }
-/*MYLISTS_APP_BUNDLE_END*/</script>
+/*MYLISTS_APP_FEATURES_END*/</script>
 
 </body>
 </html>`;
@@ -83505,7 +83541,7 @@ function isImmutableAsset(url) {
   // /vendor/<versioned name> is the same contract as the two above: the
   // version is in the path, so a bump is a new URL and a cached copy can
   // never be stale. That is what makes the zip reader work offline (P7-1).
-  return ((url.pathname === '/app.js' || url.pathname === '/app.css')
+  return ((url.pathname === '/app.js' || url.pathname === '/app-features.js' || url.pathname === '/app.css')
     && !!url.searchParams.get('v'))
     || url.pathname.indexOf('/vendor/') === 0;
 }
@@ -84526,6 +84562,31 @@ Sitemap: ${url.origin}/sitemap.xml`;
       // request for some older hash still gets a working bundle -- better
       // than a broken page -- but must not be allowed to pin today's bytes
       // under yesterday's URL forever.
+      const isCurrent = askedFor === bundle.hash;
+      const etag = `"${bundle.hash}"`;
+      const inm = request.headers.get("If-None-Match") || "";
+      const headers = {
+        "Content-Type": "application/javascript; charset=utf-8",
+        "Cache-Control": isCurrent ? "public, max-age=31536000, immutable" : "no-cache",
+        "ETag": etag,
+      };
+      if (inm.split(",").some((s) => s.trim().replace(/^W\//, "") === etag)) {
+        return new Response(null, { status: 304, headers });
+      }
+      return new Response(bundle.js, { headers });
+    }
+
+    // /app-features.js?v=<hash> -> the secondary features bundle (P8-3).
+    // Same content-addressed, immutable contract as /app.js above.
+    if (path === "/app-features.js") {
+      const bundle = await getAppFeaturesBundle(url.origin);
+      if (!bundle) {
+        return new Response("/* app features bundle unavailable */", {
+          status: 503,
+          headers: { "Content-Type": "application/javascript; charset=utf-8", "Cache-Control": "no-store" },
+        });
+      }
+      const askedFor = url.searchParams.get("v") || "";
       const isCurrent = askedFor === bundle.hash;
       const etag = `"${bundle.hash}"`;
       const inm = request.headers.get("If-None-Match") || "";

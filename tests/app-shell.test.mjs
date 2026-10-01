@@ -279,12 +279,15 @@ describe("the new UI shell is opt-in through a cookie", () => {
     // appShellActive guards in 16_ and 20_.
     const env = makeEnv();
     const bundle = await call(env, "/app.js");
+    const features = await call(env, "/app-features.js");
+    const allCode = bundle.text + features.text;
     assert.equal(bundle.status, 200);
-    assert.match(bundle.text, /if \(!appShellActive\)/, "the legacy history writes must be conditional on the shell");
-    assert.match(bundle.text, /function appShellHandleNav\(/, "the shell's routing hook");
-    assert.match(bundle.text, /function initAppShell\(/, "the shell's boot function");
-    assert.match(bundle.text, /if \(!NEW_UI\) return;/, "the shell must do nothing at all when NEW_UI is false");
-    assert.match(bundle.text, /credentials: 'same-origin'/, "the API client sends the session cookie");
+    assert.equal(features.status, 200);
+    assert.match(allCode, /if \(!appShellActive\)/, "the legacy history writes must be conditional on the shell");
+    assert.match(allCode, /function appShellHandleNav\(/, "the shell's routing hook");
+    assert.match(allCode, /function initAppShell\(/, "the shell's boot function");
+    assert.match(allCode, /if \(!NEW_UI\) return;/, "the shell must do nothing at all when NEW_UI is false");
+    assert.match(allCode, /credentials: 'same-origin'/, "the API client sends the session cookie");
   });
 });
 

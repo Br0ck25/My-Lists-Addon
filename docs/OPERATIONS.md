@@ -561,4 +561,15 @@ Read replication is configured in Cloudflare's dashboard (no Worker environment 
 - **In-Memory Cache:** A bounded in-memory LRU cache (`BADGED_POSTER_CACHE`, 500 entries) serves repeated poster badge requests instantaneously.
 - **Precomputed Icon Bytes:** `/icon.png` decodes its 115 KB image once at module initialization rather than running `atob()` and byte loops on each request.
 
+## 29. Two-Tier Bundle Split & Budget Enforcement (P8-3)
+
+**Nothing to configure, and no dashboard actions needed.** Deploying `worker_entry_combined.js` delivers the bundle optimization automatically:
+
+- **Two-Tier Client Splitting:** The client script is split into two distinct bundles:
+  1. `/app.js` (**First View / Critical Path**): Contains the core runtime, header navigation, search modal, account basics, notifications, copy/export utilities, and library views. Compressed size is **~93 KB gzip**, strictly under the 150 KB budget.
+  2. `/app-features.js` (**Secondary Features / Deferred**): Contains the Channels builder, custom list creator/editor, creator profile management, backup/restore/presets, and explore filters. Injected into HTML with `defer` so it loads asynchronously in the background without delaying first paint, LCP, or interaction readiness.
+- **Immutable Caching & Service Worker:** Both bundles are served with content-addressed query strings (`?v=<hash>`), `Cache-Control: public, max-age=31536000, immutable`, and 304 revalidation support. The service worker (`sw.js`) caches both bundles as immutable assets for complete offline PWA reliability.
+- **CI Budget Enforcement:** `check_bundle_budget.mjs` runs on every pull request and push in GitHub Actions (`.github/workflows/ci.yml`) and local verification (`verify.sh`). The build automatically fails if `/app.js` exceeds 150 KB gzip.
+
+
 

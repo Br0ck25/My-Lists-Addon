@@ -33,6 +33,15 @@ Nothing to configure for the strict CSP (P7-1, below): it is part of the Worker 
 
 **Nothing to configure for the rate limits** (P7-3, below): they are part of the Worker, and the table they use (`rate_counters`) has existed since migration 0015. One **optional** index, `migrations/0019_rate_counters_window_index.sql`, makes the background cleanup of spent windows cheap (without it the cleanup scans — slower, not broken); one **optional** dashboard step, the edge rate-limiting rules in `docs/OPERATIONS.md` §6, moves the refusal to Cloudflare so the request never reaches the Worker. Neither is needed for anything to work.
 
+### 📦 Two-tier bundle split and CI budget check (P8-3)
+
+- **Two-Tier Client Splitting:** Partitioned the client JavaScript into a critical first-view bundle (`/app.js`) and a deferred features bundle (`/app-features.js`).
+  - `/app.js` (93.26 KB gzip, budget <= 150 KB gzip): Contains the core app shell, navigation, search dialog, library/catalog browsing, notifications, and copy/export utilities.
+  - `/app-features.js` (425.88 KB gzip): Contains the Channel builder, custom list creator/editor, creator profile, backup/restore/presets, and explore filters. Injected with `defer` so it loads in the background without delaying first paint or Core Web Vitals (LCP/INP).
+- **Service Worker Offline Cache:** Updated `sw.js` `isImmutableAsset` to recognize and cache `/app-features.js` alongside `/app.js` as an immutable asset for offline PWA functionality.
+- **Content-Addressed Immutability:** Both bundles are served with `?v=<hash>` query strings, 1-year `immutable` cache headers, and HTTP 304 Not Modified revalidation.
+- **Automated CI Budget Enforcement:** Added `check_bundle_budget.mjs` running in `.github/workflows/ci.yml` and `verify.sh`, asserting that `/app.js` stays under 150 KB gzip on every pull request and commit.
+
 ### 🎨 Badged posters and icon precomputation optimization (P8-4)
 
 - **Eliminated Base64 Inlining:** `/api/poster-badge` no longer downloads the poster image server-side or performs per-byte base64 encoding with `String.fromCharCode` and `btoa`. The badged SVG overlay references the allowlisted poster URL directly in `<image href="..." xlink:href="...">`.

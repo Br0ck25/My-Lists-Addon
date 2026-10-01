@@ -6506,7 +6506,7 @@ if (typeof document !== 'undefined') {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initAppShell);
   else initAppShell();
 }
-/*MYLISTS_APP_BUNDLE_END*/</script>
+/*MYLISTS_APP_FEATURES_END*/</script>
 
 </body>
 </html>`;
