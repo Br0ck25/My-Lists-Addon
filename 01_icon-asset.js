@@ -1391,6 +1391,33 @@ const ICON_BASE64 =
   "D7fshag2u2o3Hg5dR/GArccD2xJFMLiLa/86LONKuZZCF3i8GEjYy02K+Lqep+aY8qaNDmoBNacy" +
   "QzlCdg2zyzy+hPlVXvRDKuYP9vf0538Bp4swIsyBQo8AAAAASUVORK5CYII=";
 
+// Precomputed icon bytes (P8-4, PF-B5): decodes ICON_BASE64 once rather than on
+// every /icon.png request.
+let PRECOMPUTED_ICON_BYTES = null;
+try {
+  if (typeof atob === "function") {
+    const bin = atob(ICON_BASE64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    PRECOMPUTED_ICON_BYTES = bytes;
+  }
+} catch {}
+
+function getIconBytes() {
+  if (!PRECOMPUTED_ICON_BYTES && typeof atob === "function") {
+    try {
+      const bin = atob(ICON_BASE64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      PRECOMPUTED_ICON_BYTES = bytes;
+    } catch {
+      return new Uint8Array(0);
+    }
+  }
+  return PRECOMPUTED_ICON_BYTES || new Uint8Array(0);
+}
+
+
 
 // --- vendored fflate (the zip reader) --------------------------------------
 //

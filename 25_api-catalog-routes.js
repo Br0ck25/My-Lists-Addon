@@ -39,6 +39,11 @@ function isAllowedPosterUrl(raw) {
   return POSTER_IMAGE_HOSTS.has(u.hostname.toLowerCase());
 }
 
+// Bounded isolate cache for badged poster SVGs (P8-4)
+const BADGED_POSTER_CACHE_MAX = 500;
+const BADGED_POSTER_CACHE = new Map();
+
+
 // The service worker, hoisted to module scope for one reason: a string inside
 // a route handler is unreachable, and `node --check` on the combined Worker
 // sees this whole thing as string content either way. As a module-level
@@ -281,12 +286,9 @@ async function handleFetch(request, env, ctx) {
       }
     }
 
-    // add-on icon, served straight from this Worker
+    // add-on icon, served straight from this Worker using precomputed bytes (P8-4)
     if (path === "/icon.png") {
-      const bin = atob(ICON_BASE64 );
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      return new Response(bytes, {
+      return new Response(getIconBytes(), {
         headers: {
           "Content-Type": "image/png",
           "Cache-Control": "public, max-age=86400",
@@ -463,43 +465,39 @@ async function handleFetch(request, env, ctx) {
         return Response.redirect(posterUrl, 302);
       }
 
-      let embeddedPosterDataUri = "";
-      try {
-        let contentType = "";
-        let buffer = null;
-        if (ownBetterPoster) {
-          // Waits no longer than a tile would; without it, the redirect below
-          // hands the app the same URL, which answers with a stand-in.
-          const found = await getBetterPoster(env, ctx, ownBetterPoster, url.origin, { waitMs: BETTER_POSTER_PAGE_WAIT_MS });
-          if (found) {
-            contentType = found.contentType;
-            buffer = found.bytes;
-          }
-        } else {
-          const imgRes = await fetch(posterUrl, {
-            headers: { "User-Agent": "my-list-addon/1.14" },
-            cf: { cacheTtl: 86400, cacheEverything: true }
-          });
-          if (imgRes.ok) {
-            contentType = imgRes.headers.get("content-type") || "image/jpeg";
-            buffer = await imgRes.arrayBuffer();
-          }
-        }
-        if (buffer) {
-          const bytes = new Uint8Array(buffer);
-          let binary = "";
-          const len = bytes.byteLength;
-          for (let i = 0; i < len; i++) {
-            binary += String.fromCharCode(bytes[i]);
-          }
-          const base64 = btoa(binary);
-          embeddedPosterDataUri = `data:${contentType};base64,${base64}`;
-        }
-      } catch (e) {}
+      // Check isolate memo cache (P8-4)
+      const cacheKey = url.search;
+      if (BADGED_POSTER_CACHE.has(cacheKey)) {
+        return new Response(BADGED_POSTER_CACHE.get(cacheKey), {
+          headers: {
+            "Content-Type": "image/svg+xml; charset=utf-8",
+            "Cache-Control": "public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400",
+            ...corsHeaders(),
+          },
+        });
+      }
 
-      if (!embeddedPosterDataUri) {
-        // Fallback: If fetching/inlining image fails, redirect to original untouched poster
-        return Response.redirect(posterUrl, 302);
+      // If ownBetterPoster is present, inline the stored image bytes directly as a data URI
+      // because a Worker fetching its own hostname does not reliably reach itself.
+      // External posters (TMDB, Metahub, etc.) bypass all downloads and base64 encoding (P8-4).
+      let embeddedPoster = posterUrl;
+      if (ownBetterPoster) {
+        try {
+          const found = await getBetterPoster(env, ctx, ownBetterPoster, url.origin, { waitMs: BETTER_POSTER_PAGE_WAIT_MS });
+          if (found && found.bytes) {
+            const bytes = new Uint8Array(found.bytes);
+            let binary = "";
+            const len = bytes.byteLength;
+            for (let i = 0; i < len; i++) {
+              binary += String.fromCharCode(bytes[i]);
+            }
+            embeddedPoster = `data:${found.contentType || "image/jpeg"};base64,${btoa(binary)}`;
+          } else {
+            return Response.redirect(posterUrl, 302);
+          }
+        } catch (e) {
+          return Response.redirect(posterUrl, 302);
+        }
       }
 
       // Format air date tag text (e.g. WED, SEP 16)
@@ -558,14 +556,23 @@ async function handleFetch(request, env, ctx) {
         bottomColor = "#ffd166";
       }
 
+      // P8-4: SVG overlay directly references the allowlisted poster URL rather than
+      // downloading the whole image and base64-inlining it into a massive data URI.
+      // (For ownBetterPoster, embeddedPoster contains the inlined local copy).
       const svg = generateBadgedPosterSvg({
-        posterUrl: embeddedPosterDataUri,
+        posterUrl: embeddedPoster,
         airDateText,
         bottomText,
         bottomBg,
         bottomBorder,
         bottomColor,
       });
+
+      if (BADGED_POSTER_CACHE.size >= BADGED_POSTER_CACHE_MAX) {
+        const oldest = BADGED_POSTER_CACHE.keys().next().value;
+        BADGED_POSTER_CACHE.delete(oldest);
+      }
+      BADGED_POSTER_CACHE.set(cacheKey, svg);
 
       return new Response(svg, {
         headers: {

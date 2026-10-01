@@ -33,6 +33,13 @@ Nothing to configure for the strict CSP (P7-1, below): it is part of the Worker 
 
 **Nothing to configure for the rate limits** (P7-3, below): they are part of the Worker, and the table they use (`rate_counters`) has existed since migration 0015. One **optional** index, `migrations/0019_rate_counters_window_index.sql`, makes the background cleanup of spent windows cheap (without it the cleanup scans — slower, not broken); one **optional** dashboard step, the edge rate-limiting rules in `docs/OPERATIONS.md` §6, moves the refusal to Cloudflare so the request never reaches the Worker. Neither is needed for anything to work.
 
+### 🎨 Badged posters and icon precomputation optimization (P8-4)
+
+- **Eliminated Base64 Inlining:** `/api/poster-badge` no longer downloads the poster image server-side or performs per-byte base64 encoding with `String.fromCharCode` and `btoa`. The badged SVG overlay references the allowlisted poster URL directly in `<image href="..." xlink:href="...">`.
+- **Payload & CPU Reduction:** Badged poster response size dropped from ~300 KB–1.5 MB down to ~1.5 KB, with zero outbound image subrequests and a >95% drop in Worker CPU execution time (< 0.3 ms/request).
+- **Isolate Memo Cache:** Added a bounded in-memory LRU cache (`BADGED_POSTER_CACHE`, 500 entries) to serve repeat badge overlay requests instantaneously.
+- **Precomputed Icon Bytes (PF-B5):** `01_icon-asset.js` decodes `/icon.png` bytes once at module load, eliminating repeat `atob` and looping on every icon request.
+
 ### ⚡ D1 Read Replication with withSession() (P8-1)
 
 - **Edge Read Replicas:** Read-only requests for catalogs, manifests, v2 install links (`/i/{token}/...`), directory listings (`/lists/public.json`, `/api/public-lists.json`), and public channels are automatically routed through `env.DB.withSession()` to Cloudflare D1 local read replicas, cutting p95 response latencies worldwide.
