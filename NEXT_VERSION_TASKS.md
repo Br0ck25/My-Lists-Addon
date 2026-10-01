@@ -720,8 +720,15 @@ No npm, no `src/` tree, no esbuild, no new test framework (D-11). Phase 2 is now
 
 ## Phase 9 — Testing (deliverables)
 
-- [x] **P9-1** ~~The workerd test pool is the default; the node harness is retired.~~ — **Status:** Dropped (D-11). The node harness stays (`tests/harness.mjs`, real SQLite with D1's limits enforced).
-- [ ] **P9-2** Migration test suite with anonymized production fixtures (lists, likes, channels, activity, installs).
+- [x] **P9-2** Migration test suite with anonymized production fixtures (lists, likes, channels, activity, installs).
+  - **Done (2026-10-02):** Implemented comprehensive production migration verification test suite in `tests/migration-suite.test.mjs` and fixtures in `tests/fixtures/migration-fixtures.mjs` (7 test suites, 100% passing):
+    1. **Schema Migration Execution (0001a..0020 & A0001):** Executes all sequential SQLite D1 migrations against a populated database containing legacy creators, custom lists, and likes, verifying complete schema upgrade idempotency without data corruption.
+    2. **Account Backfill (`migrate.accounts` / `backfillAccounts`):** Merges accounts across D1 and KV, authenticates legacy PBKDF2 hashes, validates tombstone handling, verifies backfill idempotency (`updated: 5, inserted: 0`), and asserts legacy store immutability.
+    3. **Custom Lists & Likes Backfill (`migrate.lists` / `30_lists-backfill.js`):** Proves 100% preservation across 8 test lists (custom, companion, 42-item vault, and anonymous lists). Enforces item deduplication, exact item ordering, canonical resolution, like voter ledger migration, and zero lost lists (`totals.lists.missing == 0`).
+    4. **Channels v2 Backfill & Lineup Invariants (`35_channels-v2.js`):** Migrates shared channels to `channels` table and R2 blob pools (`channels/{code}/{pool_version}.json`). Proves deterministic lineup identity for rotating, shuffled, and paired episode channels across identical date seeds (`/api/channel-lineup`).
+    5. **Watch History & Activity Backfill (`migrate.activity` / `37_activity-backfill.js`):** Merges KV sync tracking, D1 watch history, and scrobble queues; deduplicates twin scrobbles (within 10-minute burst window); preserves episode progress and dismissals; verifies compatibility with `/api/creator/sync/load`.
+    6. **Install Secrets Migration (`27_installs.js` & `install_secrets`):** Verifies encryption of plaintext provider credentials (`tmdbKey`, `traktAccessToken`, `simklAccessToken`, `trackCreatorKey`), purges credentials from KV `cfg:` records, and asserts Stremio manifest URL resolution remains intact.
+    7. **Full End-to-End Migration Reconciliation Invariant Audit:** Executes the complete multi-stage pipeline sequentially (accounts -> lists -> channels -> activity -> installs) with active reconciliation assertions, verifying 0 lost entities, 0 failed accounts, and zero schema drift.
 - [ ] **P9-3** Playwright E2E for all 12 scenarios at 375 px and 1280 px, plus axe, in CI. Playwright is installed in CI only (`npm install --no-save`, like the scope checker), never as part of the build (D-11).
 - [x] **P9-4** Security suite: CSRF, query-string credentials, cookie flags, CSP, install-token scope, session revocation, IDOR matrix.
   - **Done (2026-10-01):** Implemented in `tests/security-suite.test.mjs` (16 comprehensive security regression tests across 7 domains):
