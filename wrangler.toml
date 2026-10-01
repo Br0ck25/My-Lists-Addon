@@ -161,6 +161,9 @@ dead_letter_queue = "mylists-jobs-dlq"
 # Optional, Phase 7 (P7-6): date string (e.g. "2026-06-01") after which legacy
 # scrobble forms are automatically sunsetted even if FF_SCROBBLE_ST_ONLY is not set.
 # SCROBBLE_SUNSET_DATE = "2026-06-01"
+# Optional, Phase 8 (P8-2): Cloudflare Account ID for Analytics Engine SQL API queries in /admin
+# CF_ANALYTICS_ACCOUNT_ID = "00000000000000000000000000000000"
+# CLOUDFLARE_ACCOUNT_ID = "00000000000000000000000000000000"
 
 # --- Cron trigger (REQUIRED for Continue Watching) ---------------------------
 # Drives the scheduled() export at the bottom of
@@ -213,3 +216,8 @@ crons = ["*/6 * * * *"]
 # Phase 3a encryption & blind-index secrets:
 #   npx wrangler secret put TOKEN_ENCRYPTION_KEY    # k1:<32-bytes-base64> for AES-GCM token storage
 #   npx wrangler secret put LOOKUP_PEPPER           # Pepper for HMAC blind index lookups
+#
+# Phase 8 (P8-2) Analytics Engine SQL API querying token:
+#   npx wrangler secret put CF_ANALYTICS_TOKEN      # API token with Account Analytics: Read
+#   npx wrangler secret put CLOUDFLARE_API_TOKEN    # optional alias for CF_ANALYTICS_TOKEN
+

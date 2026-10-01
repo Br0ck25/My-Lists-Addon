@@ -33,6 +33,14 @@ Nothing to configure for the strict CSP (P7-1, below): it is part of the Worker 
 
 **Nothing to configure for the rate limits** (P7-3, below): they are part of the Worker, and the table they use (`rate_counters`) has existed since migration 0015. One **optional** index, `migrations/0019_rate_counters_window_index.sql`, makes the background cleanup of spent windows cheap (without it the cleanup scans — slower, not broken); one **optional** dashboard step, the edge rate-limiting rules in `docs/OPERATIONS.md` §6, moves the refusal to Cloudflare so the request never reaches the Worker. Neither is needed for anything to work.
 
+### 📊 Analytics Engine stat counters and zero D1 pageview writes (P8-2)
+
+- **Eliminated D1 Writes on Page Views:** Telemetry counters (`bumpStat`, `bumpStatBy`, `recordSearchQuery`, `recordTrackedEvent`) now stream directly to Cloudflare Analytics Engine via `env.ANALYTICS.writeDataPoint(...)` when the `ANALYTICS` binding (`mylists_events`) is present. This eliminates database write locks and row churn on the D1 `stats` table on every HTML page load and search.
+- **Graceful Fallback:** If `ANALYTICS` is not yet configured in the dashboard, the Worker falls back smoothly to the existing D1 `stats` table and KV counters, ensuring zero telemetry loss during rollout.
+- **Most Watched via `title_daily_stats`:** `computeLeaderboard` reads Most Watched rankings from `title_daily_stats` (maintained daily by `rollup.daily`) joined with `media`, avoiding expensive full-table scans over millions of historical `stats` rows.
+- **Historical Backfill Tool:** Added `backfillTitleDailyStatsFromStats(env)` and admin API route `POST /admin/api/backfill-title-daily-stats` to backfill legacy `stats` entries into `title_daily_stats`.
+- **Analytics Engine SQL API Integration:** Added `queryAnalyticsEngine(env, sql)` enabling the admin dashboard to query Analytics Engine via the Cloudflare SQL API when API tokens are configured.
+
 ### 📦 Two-tier bundle split and CI budget check (P8-3)
 
 - **Two-Tier Client Splitting:** Partitioned the client JavaScript into a critical first-view bundle (`/app.js`) and a deferred features bundle (`/app-features.js`).

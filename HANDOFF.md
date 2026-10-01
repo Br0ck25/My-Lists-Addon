@@ -39,12 +39,13 @@
 >    - P5-6: retire `/api/bulk-resolve`.
 >
 >    The Explore and Your lists modules in `24_` are unreachable since Release 9, and so are the shell's Account and Connections cards since Release 12 (`appShellAccountBody`, `appShellConnectionsBody`). Delete them only if the owner agrees.
-> 6. **Not started / Recent tasks** (`NEXT_VERSION_TASKS.md`, statuses brought up to date on 2026-10-02: 99 done, 6 partly done, 11 not started):
+> 6. **Not started / Recent tasks** (`NEXT_VERSION_TASKS.md`, statuses brought up to date on 2026-10-02: 100 done, 6 partly done, 10 not started):
 >    - P7-6: scrobble links take the `st` token only, legacy forms get sunset warnings and sunset date/flag enforcement (completed 2026-10-02);
 >    - P8-1: D1 read replication with withSession() on catalog and directory reads, x-d1-bookmark sequential consistency (completed 2026-10-02);
 >    - P8-4: badged posters optimization (removed base64 inlining, SVG overlay referencing poster URL, isolate cache) & precomputed icon bytes (completed 2026-10-02);
 >    - P8-3: two-tier bundle split (/app.js first view 93.26 KB gzip < 150 KB budget + deferred /app-features.js) and CI budget check (completed 2026-10-02);
->    - Phase 8 remaining: P8-2 (Analytics Engine metrics & Most Watched), P8-5 (k6 load tests);
+>    - P8-2: Analytics Engine stat counters, zero D1 pageview writes, Most Watched via title_daily_stats (completed 2026-10-02);
+>    - Phase 8 remaining: P8-5 (k6 load tests);
 >    - Phase 9: browser tests, a staging copy of the site, a security suite;
 >    - Phase 10: cutover and cleanup, including moving the planning documents to `docs/history/`.
 >

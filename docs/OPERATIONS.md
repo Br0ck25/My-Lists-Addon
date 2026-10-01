@@ -571,5 +571,29 @@ Read replication is configured in Cloudflare's dashboard (no Worker environment 
 - **Immutable Caching & Service Worker:** Both bundles are served with content-addressed query strings (`?v=<hash>`), `Cache-Control: public, max-age=31536000, immutable`, and 304 revalidation support. The service worker (`sw.js`) caches both bundles as immutable assets for complete offline PWA reliability.
 - **CI Budget Enforcement:** `check_bundle_budget.mjs` runs on every pull request and push in GitHub Actions (`.github/workflows/ci.yml`) and local verification (`verify.sh`). The build automatically fails if `/app.js` exceeds 150 KB gzip.
 
+## 30. Analytics Engine Stat Counters & Zero D1 Writes (P8-2)
+
+### Cloudflare Dashboard Setup
+
+To stream telemetry and stat counters directly into Cloudflare Analytics Engine without writing to D1:
+
+1. In the **Cloudflare Dashboard**, navigate to **Workers & Pages**.
+2. Select your Worker (**wako** or **My Lists Addon**).
+3. Go to **Settings** → **Bindings** → **Add**.
+4. Choose **Analytics Engine** and enter:
+   - **Variable name**: `ANALYTICS`
+   - **Dataset**: `mylists_events`
+5. Click **Save and deploy**.
+
+### How it works
+
+- **Zero D1 Writes on Page Views:** Telemetry calls (`bumpStat("pageviews")`, `bumpStatBy("apiuse:tmdb", ...)`, `recordSearchQuery`, and `recordTrackedEvent`) automatically write non-blocking datapoints to `env.ANALYTICS` whenever the binding is present. D1 database writes (`stats` table) are bypassed completely, removing write lock contention and row churn on user visits.
+- **Graceful Fallback:** If `ANALYTICS` is not yet bound, the Worker safely falls back to writing to D1 `stats` (or KV) so no telemetry data is dropped.
+- **Most Watched via `title_daily_stats`:** `computeLeaderboard` reads rankings directly from `title_daily_stats` (aggregated daily by `rollup.daily`) joined with `media`, avoiding expensive scans over the unbounded `stats` table.
+- **Backfill Tool:** Historical watch statistics can be backfilled into `title_daily_stats` via the authenticated admin endpoint `POST /admin/api/backfill-title-daily-stats`.
+- **Analytics Engine SQL API:** The admin dashboard can query Analytics Engine through `https://api.cloudflare.com/client/v4/accounts/{accountId}/analytics_engine/sql` if `CF_ANALYTICS_TOKEN` (or `CLOUDFLARE_API_TOKEN`) and `CLOUDFLARE_ACCOUNT_ID` are configured as Worker secrets.
+
+
+
 
 

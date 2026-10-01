@@ -237,6 +237,10 @@ The add-on works out-of-the-box with public MDBList and TMDB links. Adding API k
 | `FF_ADMIN_EMAILS` | Optional (P7-2). Comma-separated email addresses allowed to use the dashboard through Access, e.g. `you@example.com`. Empty or unset means every identity Access lets through may use it — which is the Access policy's job, and this is a second lock for the case where that policy is broader than intended. Only consulted for Access sign-ins; the `ADMIN_KEY` path is unaffected. | Optional |
 | `FF_SCROBBLE_ST_ONLY` | Optional feature flag (`1` or `true`, P7-6). Disallows legacy `creator=&key=` and `config=` query parameters on the scrobble webhook, requiring the scoped scrobble token (`?st=`). Rejected legacy requests receive HTTP 410 Gone. | Optional |
 | `SCROBBLE_SUNSET_DATE` | Optional date string (e.g. `2026-06-01`, P7-6). Automatically activates scrobble token enforcement (`FF_SCROBBLE_ST_ONLY`) once this date is reached. | Optional |
+| `CF_ANALYTICS_TOKEN` | Optional (P8-2). Cloudflare API token with *Account Analytics: Read* permissions to query Analytics Engine via the REST API in `/admin`. Can also be supplied as `CLOUDFLARE_API_TOKEN`. | Cloudflare Dashboard &rarr; My Profile &rarr; API Tokens |
+| `CF_ANALYTICS_ACCOUNT_ID` | Optional (P8-2). Cloudflare Account ID for Analytics Engine SQL API queries. Can also be supplied as `CLOUDFLARE_ACCOUNT_ID`. | Cloudflare Dashboard &rarr; Account ID |
+| `CLOUDFLARE_API_TOKEN` | Optional alias for `CF_ANALYTICS_TOKEN` (P8-2). | Cloudflare Dashboard |
+| `CLOUDFLARE_ACCOUNT_ID` | Optional alias for `CF_ANALYTICS_ACCOUNT_ID` (P8-2). | Cloudflare Dashboard |
 
 #### OAuth Redirect URIs
 If you configure OAuth authentication for Trakt, Simkl, MDBList, or TMDB, set the OAuth callback URLs in their respective developer portals to:

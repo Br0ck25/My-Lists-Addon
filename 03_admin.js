@@ -76,6 +76,14 @@ async function d1BumpStat(env, kind, buckets, amount) {
 async function bumpStat(env, kind) {
   if (!env || !env.CONFIGS) return;
   try {
+    if (env.ANALYTICS && typeof env.ANALYTICS.writeDataPoint === "function") {
+      env.ANALYTICS.writeDataPoint({
+        blobs: ["stat", String(kind), statsToday()],
+        doubles: [1],
+        indexes: [String(kind).slice(0, 96)],
+      });
+      return;
+    }
     if (env.DB) {
       await d1BumpStat(env, kind, ["total", statsToday()], 1);
       return;
@@ -116,6 +124,21 @@ async function bumpStatBy(env, kind, amount) {
   try {
     const totalKey = `stats:${kind}:total`;
     
+    if (env.ANALYTICS && typeof env.ANALYTICS.writeDataPoint === "function") {
+      env.ANALYTICS.writeDataPoint({
+        blobs: ["stat", String(kind), "total"],
+        doubles: [Number(amount) || 1],
+        indexes: [String(kind).slice(0, 96)],
+      });
+      if (env.DB && kind.startsWith("sourcegroup:")) {
+        const groupName = kind.slice("sourcegroup:".length);
+        await env.DB.prepare(
+          "INSERT INTO source_groups (id, name, install_count) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET install_count = source_groups.install_count + excluded.install_count"
+        ).bind(groupName, groupName, amount).run();
+      }
+      return;
+    }
+
     if (env.DB && kind.startsWith("sourcegroup:")) {
       // Left exactly as it was: source groups have their own table, their
       // own read path in renderAdminDashboard, and their own branch in
@@ -510,6 +533,15 @@ async function recordTrackedEvent(env, eventType, id, title, mediaType) {
   if (!env || !env.CONFIGS || !id || isJunkTrackedId(id)) return;
   try {
     const day = statsToday();
+    if (env.ANALYTICS && typeof env.ANALYTICS.writeDataPoint === "function") {
+      env.ANALYTICS.writeDataPoint({
+        blobs: ["event", String(eventType), String(id), String(title || "").slice(0, 80), String(mediaType || "")],
+        doubles: [1],
+        indexes: [`evt:${eventType}:${id}`.slice(0, 96)],
+      });
+      await writeEventMetaIfChanged(env, eventType, id, title, mediaType);
+      return;
+    }
     // With D1 bound the counts go there and cost ZERO KV writes, the same way
     // bumpStat's counters already did. This function was the biggest consumer
     // of the free plan's 1,000-writes-a-day budget that bumpStat's move left
@@ -700,6 +732,75 @@ async function d1LeaderboardCounts(env, eventType, window, candidateCap) {
   return rows.map((r) => ({ id: r.key, count: r.count }));
 }
 
+// P8-2: Reads Most Watched from title_daily_stats (populated by rollup.daily)
+// joined with media table, avoiding table scans over stats.
+async function d1MostWatchedFromTitleDailyStats(env, window, mediaTypeFilter, candidateCap) {
+  if (!env || !env.DB) return null;
+  try {
+    const wantType = mediaTypeFilter === "movie" || mediaTypeFilter === "series" ? mediaTypeFilter : null;
+    let rows;
+    if (window === "alltime") {
+      const sql = wantType
+        ? `SELECT m.imdb_id, m.tmdb_id, m.kind AS media_type, m.title, SUM(t.n) AS total
+           FROM title_daily_stats t
+           JOIN media m ON m.id = t.media_id
+           WHERE (t.event_type = 'play' OR t.event_type = 'watched') AND m.kind = ?
+           GROUP BY t.media_id
+           ORDER BY total DESC
+           LIMIT ?`
+        : `SELECT m.imdb_id, m.tmdb_id, m.kind AS media_type, m.title, SUM(t.n) AS total
+           FROM title_daily_stats t
+           JOIN media m ON m.id = t.media_id
+           WHERE (t.event_type = 'play' OR t.event_type = 'watched')
+           GROUP BY t.media_id
+           ORDER BY total DESC
+           LIMIT ?`;
+      const stmt = wantType ? env.DB.prepare(sql).bind(wantType, candidateCap) : env.DB.prepare(sql).bind(candidateCap);
+      const res = await stmt.all();
+      rows = res && res.results ? res.results : [];
+    } else {
+      const days = window === "today" ? 1 : parseInt(window, 10) || 7;
+      const nowMs = Date.now();
+      const oldest = easternDateKey(new Date(nowMs - (days - 1) * 86400000));
+      const newest = easternDateKey(new Date(nowMs));
+      const sql = wantType
+        ? `SELECT m.imdb_id, m.tmdb_id, m.kind AS media_type, m.title, SUM(t.n) AS total
+           FROM title_daily_stats t
+           JOIN media m ON m.id = t.media_id
+           WHERE (t.event_type = 'play' OR t.event_type = 'watched') AND t.day >= ? AND t.day <= ? AND m.kind = ?
+           GROUP BY t.media_id
+           ORDER BY total DESC
+           LIMIT ?`
+        : `SELECT m.imdb_id, m.tmdb_id, m.kind AS media_type, m.title, SUM(t.n) AS total
+           FROM title_daily_stats t
+           JOIN media m ON m.id = t.media_id
+           WHERE (t.event_type = 'play' OR t.event_type = 'watched') AND t.day >= ? AND t.day <= ?
+           GROUP BY t.media_id
+           ORDER BY total DESC
+           LIMIT ?`;
+      const stmt = wantType
+        ? env.DB.prepare(sql).bind(oldest, newest, wantType, candidateCap)
+        : env.DB.prepare(sql).bind(oldest, newest, candidateCap);
+      const res = await stmt.all();
+      rows = res && res.results ? res.results : [];
+    }
+    if (rows && rows.length > 0) {
+      return rows.map((r) => {
+        const id = r.imdb_id || (r.tmdb_id ? `tmdb:${r.tmdb_id}` : "");
+        return {
+          id,
+          count: Number(r.total) || 0,
+          title: r.title || id,
+          mediaType: r.media_type,
+        };
+      }).filter((e) => e.id);
+    }
+  } catch (err) {
+    // Graceful fallback if title_daily_stats is not ready or throws
+  }
+  return null;
+}
+
 async function computeLeaderboard(env, eventType, window, mediaTypeFilter) {
   if (!env || !env.CONFIGS) return [];
   const prefix = `evtcount:${eventType}:`;
@@ -719,7 +820,16 @@ async function computeLeaderboard(env, eventType, window, mediaTypeFilter) {
   let dropZero = false;
 
   if (env.DB) {
-    candidates = await d1LeaderboardCounts(env, eventType, window, CANDIDATE_CAP);
+    if (eventType === "watched") {
+      const dailyStatsRows = await d1MostWatchedFromTitleDailyStats(env, window, wantType, CANDIDATE_CAP);
+      if (dailyStatsRows && dailyStatsRows.length > 0) {
+        candidates = dailyStatsRows;
+      } else {
+        candidates = await d1LeaderboardCounts(env, eventType, window, CANDIDATE_CAP);
+      }
+    } else {
+      candidates = await d1LeaderboardCounts(env, eventType, window, CANDIDATE_CAP);
+    }
   } else if (window === "alltime") {
     const listResult = await listAllKeys(env.CONFIGS, prefix);
     const alltimeKeys = listResult.keys
@@ -771,7 +881,12 @@ async function computeLeaderboard(env, eventType, window, mediaTypeFilter) {
 
   candidates = candidates.filter((c) => !isJunkTrackedId(c.id));
   const meta = await attachEventMeta(env, eventType, candidates.map((c) => c.id));
-  const entries = candidates.map((c, i) => ({ ...meta[i], count: c.count }));
+  const entries = candidates.map((c, i) => ({
+    id: c.id,
+    count: c.count,
+    title: (meta[i] && meta[i].title) || c.title || c.id,
+    mediaType: (meta[i] && meta[i].mediaType) || c.mediaType || "",
+  }));
 
   const filtered = wantType ? entries.filter((e) => e.mediaType === wantType) : entries;
   const nonZero = dropZero ? filtered.filter((e) => e.count > 0) : filtered;
@@ -860,6 +975,14 @@ async function recordSearchQuery(env, query) {
   if (q.length < 2) return;
   try {
     const day = statsToday();
+    if (env.ANALYTICS && typeof env.ANALYTICS.writeDataPoint === "function") {
+      env.ANALYTICS.writeDataPoint({
+        blobs: ["search", q, day],
+        doubles: [1],
+        indexes: ["search:" + q.slice(0, 88)],
+      });
+      return;
+    }
     // Same move as recordTrackedEvent above, and the same reason: three KV
     // writes per search, none of which the free plan's write budget can
     // afford. Nothing but counts here, so there is no meta to keep.
@@ -1390,6 +1513,64 @@ function recordListCopySlug(rawId, origin) {
   return /^[a-z0-9][a-z0-9-]{0,80}$/.test(slug) ? slug : null;
 }
 
+// Analytics Engine SQL API query helper (P8-2).
+// Queries the Analytics Engine SQL API using CF_ANALYTICS_TOKEN (or CLOUDFLARE_API_TOKEN)
+// and CF_ANALYTICS_ACCOUNT_ID (or CLOUDFLARE_ACCOUNT_ID).
+async function queryAnalyticsEngine(env, query) {
+  const token = env && (env.CF_ANALYTICS_TOKEN || env.CLOUDFLARE_API_TOKEN);
+  const accountId = env && (env.CF_ANALYTICS_ACCOUNT_ID || env.CLOUDFLARE_ACCOUNT_ID);
+  if (!token || !accountId || !query) return null;
+  try {
+    const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/analytics_engine/sql`;
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: query,
+    });
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    return json && Array.isArray(json.data) ? json.data : null;
+  } catch {
+    return null;
+  }
+}
+
+// P8-2: Backfill title_daily_stats from legacy stats table
+async function backfillTitleDailyStatsFromStats(env) {
+  if (!env || !env.DB) return { ok: false, error: "No DB binding" };
+  try {
+    let rowsWritten = 0;
+    // 1. Items with IMDb id (tt...)
+    const r1 = await env.DB.prepare(
+      `INSERT INTO title_daily_stats (day, event_type, media_id, n)
+       SELECT s.day, 'watched', m.id, s.n
+       FROM stats s
+       JOIN media m ON m.imdb_id = substr(s.kind, 13)
+       WHERE s.day != 'total' AND s.kind >= 'evt:watched:tt' AND s.kind < 'evt:watched:tu'
+       ON CONFLICT(day, event_type, media_id) DO UPDATE SET n = max(excluded.n, title_daily_stats.n)`
+    ).run();
+    rowsWritten += (r1?.meta?.changes || 0);
+
+    // 2. Items with TMDB id (tmdb:...)
+    const r2 = await env.DB.prepare(
+      `INSERT INTO title_daily_stats (day, event_type, media_id, n)
+       SELECT s.day, 'watched', m.id, s.n
+       FROM stats s
+       JOIN media m ON m.tmdb_id = CAST(substr(s.kind, 17) AS INTEGER)
+       WHERE s.day != 'total' AND s.kind >= 'evt:watched:tmdb:' AND s.kind < 'evt:watched:tmdb;'
+       ON CONFLICT(day, event_type, media_id) DO UPDATE SET n = max(excluded.n, title_daily_stats.n)`
+    ).run();
+    rowsWritten += (r2?.meta?.changes || 0);
+
+    return { ok: true, rowsWritten };
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+}
+
 // --- Counter reads -----------------------------------------------------------
 //
 // D1 is authoritative when bound, and falls back to KV when the row is
@@ -1402,6 +1583,18 @@ function recordListCopySlug(rawId, origin) {
 // Deliberately NOT "D1 + KV summed": /admin/api/migrate-d1 COPIES the KV
 // value into D1, so summing would double every migrated counter.
 async function readStatCount(env, kind, bucket) {
+  if (env && (env.CF_ANALYTICS_TOKEN || env.CLOUDFLARE_API_TOKEN) && (env.CF_ANALYTICS_ACCOUNT_ID || env.CLOUDFLARE_ACCOUNT_ID)) {
+    try {
+      const sanitizedKind = String(kind || "").replace(/'/g, "''");
+      const sql = bucket === "total"
+        ? `SELECT SUM(_sample_interval * double1) AS total FROM mylists_events WHERE blob1 = 'stat' AND blob2 = '${sanitizedKind}'`
+        : `SELECT SUM(_sample_interval * double1) AS total FROM mylists_events WHERE blob1 = 'stat' AND blob2 = '${sanitizedKind}' AND blob3 = '${String(bucket || "").replace(/'/g, "''")}'`;
+      const rows = await queryAnalyticsEngine(env, sql);
+      if (rows && rows.length && rows[0].total != null) {
+        return Number(rows[0].total) || 0;
+      }
+    } catch {}
+  }
   if (env && env.DB) {
     try {
       const { results } = await env.DB.prepare(
@@ -1902,6 +2095,7 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/migrate-accounts": "admin.migrate.accounts",
   "/admin/api/migrate-day-counts": "admin.migrate.day-counts",
   "/admin/api/backfill-trending": "admin.backfill.trending",
+  "/admin/api/backfill-title-daily-stats": "admin.backfill.title-daily-stats",
   "/admin/api/new-on-streaming/sweep": "admin.new-on-streaming.sweep",
   "/admin/api/new-on-streaming/add": "admin.new-on-streaming.add",
   "/admin/api/installs/restore": "admin.installs.undo-move",

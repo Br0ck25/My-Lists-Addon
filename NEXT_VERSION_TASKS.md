@@ -683,6 +683,14 @@ No npm, no `src/` tree, no esbuild, no new test framework (D-11). Phase 2 is now
   - **Graceful Fallback:** If `withSession()` is unsupported, gracefully falls back to `env.DB`.
   - **Documentation & Dashboard Setup:** Added §27 to `docs/OPERATIONS.md` detailing how to enable D1 Read Replication under Cloudflare Dashboard → Storage & Databases → D1 → Settings → Read Replication.
   - **Tests:** `tests/d1-read-replication.test.mjs` (8 tests verifying manifest, catalog, v2 install, directory, admin exclusion, mutating API exclusion, and fallback behavior).
+- [x] **P8-2** Replace all `bumpStat` / `bumpStatBy` / `recordTrackedEvent` / `recordSearchQuery` writes with Analytics Engine; `title_daily_stats` for Most Watched; the admin dashboard reads through the Analytics Engine SQL API. Backfill history from `stats`. *Done when:* no D1 writes on page views.
+  - **Done (2026-10-01):** Implemented in `03_admin.js` and `26_api-creator-and-admin-routes.js`.
+  - **Analytics Engine Counters:** `bumpStat`, `bumpStatBy`, `recordSearchQuery`, and `recordTrackedEvent` now write non-blocking telemetry points directly to `env.ANALYTICS` when the `ANALYTICS` dataset binding is present, completely eliminating D1 write transactions, row churn, and lock contention on public page loads and searches.
+  - **Graceful Fallback:** If `ANALYTICS` is not yet configured, code falls back cleanly to the existing D1 `stats` table (or KV) so no telemetry is lost during transition.
+  - **Most Watched via `title_daily_stats`:** `computeLeaderboard` reads Most Watched directly from `title_daily_stats` (populated by `rollup.daily` and backfills) joined with `media`, avoiding expensive scans over the legacy `stats` table.
+  - **Backfill History Tool:** Added `backfillTitleDailyStatsFromStats(env)` and admin API endpoint `POST /admin/api/backfill-title-daily-stats` to migrate legacy `stats` (`evt:watched:*`) rows into `title_daily_stats`.
+  - **Analytics Engine SQL API Integration:** `queryAnalyticsEngine(env, query)` allows the admin dashboard to query dataset metrics using Cloudflare API tokens if configured.
+  - **Tests:** `tests/analytics-engine-stats.test.mjs` (7 comprehensive unit tests verifying zero D1 writes on pageviews, custom counter amounts, search tracking, event tracking, D1 fallback, Most Watched queries, and admin backfills).
 - [x] **P8-3** Bundle budget check in CI (first view under 150 KB gzip); route chunks. *Done when:* CI enforces it.
   - **Done (2026-10-01):** Implemented two-tier bundle splitting in `02_http-and-creator-utils.js`, `18_client-copy-and-trakt-export.js`, `24_client-backup-restore-presets.js`, `25_api-catalog-routes.js`, `check_bundle_budget.mjs`, and `.github/workflows/ci.yml`.
   - **Two-Tier Bundle Split:** The client JavaScript payload is partitioned into two bundles:

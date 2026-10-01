@@ -5733,6 +5733,20 @@
       return json({ ok: true, done: false, accountsThisCall: 1, titlesThisCall, username });
     }
 
+    // /admin/api/backfill-title-daily-stats  (POST) -> { ok, rowsWritten }
+    // P8-2: Backfills title_daily_stats from legacy stats table
+    if (path === "/admin/api/backfill-title-daily-stats" && request.method === "POST") {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      if (!env || !env.DB) return json({ ok: false, error: "No database binding." }, 500);
+
+      const result = await backfillTitleDailyStatsFromStats(env);
+      if (!result.ok) {
+        return json({ ok: false, error: result.error }, 500, { "Cache-Control": "no-store" });
+      }
+      return json({ ok: true, rowsWritten: result.rowsWritten }, 200, { "Cache-Control": "no-store" });
+    }
+
     // /admin/api/migrate-d1 (POST) -> { ok, done, results, thisCall, scanned }
     // Backfills creators, creator_lists, published-list visibility stamps,
     // source_groups and the stats counters from KV to D1.
