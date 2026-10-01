@@ -2,6 +2,76 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-01 (Claude Code, out of credits). Start here.**
+>
+> **Where things stand**
+> - Work happens on branch `claude/elegant-ride-o7m8fh` (the release branch). It is pushed, the tree is clean, and the newest commit is `7f29e80` (Release 13). `python build.py`, `check_sync.py` and `node --check` pass. `bash verify.sh` passes and so does `MLA_TEST_V2_LISTS_READ=1 node --test tests/*.test.mjs` (1,997 tests, 0 failing).
+> - Deploying is done by the owner: they paste `worker_entry_combined.js` into Cloudflare → Worker **wako** → Edit code → Deploy. The owner is not a programmer: give plain-language dashboard steps, and do all git work yourself. Each release is described in `docs/RELEASES.md` (Releases 1 to 13, with steps and rollback).
+> - **Live on mylistsaddon.com:** Releases 1 to 11 are confirmed live. Release 11b, 12 and 13 were handed over; Release 13 includes the other two. On 2026-10-01 the owner reported adding `FF_PROVIDER_BREAKER=1`, `FF_CHART_SNAPSHOTS=1` and `FF_NEW_UI=1`. `FF_NEW_UI` only works on Release 13 code, so Release 13 is presumably deployed. **Confirm that** (the new interface is the default page without the `?ff_new_ui=1` cookie).
+> - **Switches on:**
+>   - `FF_V2_LISTS_READ`;
+>   - `FF_SESSIONS`, with the secrets `TOKEN_ENCRYPTION_KEY` and `LOOKUP_PEPPER`;
+>   - `FF_V2_LISTS_ONLY` and `FF_EVENT_TRACKING`: **one-way, never delete either**;
+>   - `FF_PROVIDER_BREAKER`, `FF_CHART_SNAPSHOTS`, `FF_NEW_UI` (reported 2026-10-01).
+> - **Switches off:** `FF_CANONICAL_IDS`, `FF_MATERIALIZER`, `FF_INSTALLS` (leave off: nothing creates saved install links), `FF_V2_LISTS_API` (leave off), `INSTALL_MIGRATION_PERCENT`, `FF_CSP_TT_REPORT`.
+> - **Databases:** main `my-lists-db` (`DB`) is at migration `0020`; `mylists-activity` (`DB_ACTIVITY`) has `A0001`. The KV namespace is `CONFIGS`, the R2 bucket `BLOBS`, the queue `JOBS`, and Analytics Engine `ANALYTICS` (not confirmed whether bound).
+>
+> **Open items, in order**
+> 1. **`FF_SHOW_SCHEDULE` (P5-4):**
+>    - The owner wants it on. The gate is the last full `shelf.shadow` comparison: under 1% different and **no shows "not known yet"**. A show the schedule does not know yet is left off Continue Watching once the switch is on (`missingSchedule`, `39_activity-shelves.js`).
+>    - **The owner has not sent the numbers yet.** Ask for the line starting "Last full comparison..." from `/admin` → Check jobs, under `shelf.shadow`. Also ask whether they added `FF_SHOW_SCHEDULE` already: their last message said "I have done all of this", but that step asked for numbers, not a switch.
+>    - If the numbers are clean: add Text `FF_SHOW_SCHEDULE=1`. It is reversible: delete the variable to undo.
+>    - After it has served for a few days, do P5-4's second half: delete `checkForNewEpisodes`, `refreshAiringNextSweep`, the `cron.episodes` / `cron.airing-next` jobs, their cursors and constants, and the client shelf builders (`refreshAiringNext` / `updateContinueWatching`).
+>    - If there are differences, read `47_shelf-shadow.js`. Its examples are media keys (`m<id>`); look those up in the `media` table.
+> 2. **Backups (P1-B1):** the workflow was rewritten in Release 13 (`.github/scripts/d1-backup.mjs`, `.github/workflows/d1-backup.yml`, `docs/OPERATIONS.md` §5). `wrangler d1 export` cannot work: D1 refuses databases with FTS virtual tables (`lists_fts`, `lists_fts2`). The owner still has to add five GitHub secrets:
+>    - `CLOUDFLARE_API_TOKEN` (D1 Read);
+>    - `CLOUDFLARE_ACCOUNT_ID`;
+>    - `D1_DATABASE_ID`;
+>    - `ACTIVITY_D1_DATABASE_ID`;
+>    - `BACKUP_PASSPHRASE`.
+>
+>    Then they run the workflow by hand from this branch. **The scheduled daily run uses `main`'s copy**, which is the old, failing one, until this branch is merged into `main`.
+> 3. **Merge this branch into `main`:** a PR from `claude/elegant-ride-o7m8fh` into `main`. It also brings in PR #9 (Phase 7 so far), already merged into this branch at `243340a`. **Ask the owner before opening it**: they were asked on 2026-10-01 and have not answered. The repository's `CLAUDE.md` rules and the attribution footers apply.
+> 4. **Optional switches, the owner's call:** `FF_CANONICAL_IDS` (`docs/OPERATIONS.md` §17), `FF_MATERIALIZER` (§19), the Analytics Engine binding.
+> 5. **Cleanups that wait on switches:**
+>    - P5-5: delete `prewarmSharedCatalogs`' chart blocks, now that `FF_CHART_SNAPSHOTS` is on, after it has run for good;
+>    - P5-9: delete the old KV Better Poster keys and `prewarmBetterPosters`;
+>    - P5-6: retire `/api/bulk-resolve`.
+>
+>    The Explore and Your lists modules in `24_` are unreachable since Release 9, and so are the shell's Account and Connections cards since Release 12 (`appShellAccountBody`, `appShellConnectionsBody`). Delete them only if the owner agrees.
+> 6. **Not started** (`NEXT_VERSION_TASKS.md`, statuses brought up to date on 2026-10-01: 95 done, 6 partly done, 15 not started):
+>    - P7-6: scrobble links take the `st` token only, the old forms get a sunset;
+>    - Phase 8: performance;
+>    - Phase 9: browser tests, a staging copy of the site, a security suite;
+>    - Phase 10: cutover and cleanup, including moving the planning documents to `docs/history/`.
+>
+> **Decisions made on 2026-10-01** (`docs/DECISIONS.md`):
+> - D-31: no one-time recovery codes; P7-5 is dropped.
+> - D-32: recovery answers are hashed with six chained PBKDF2 rounds of 100,000 (`pbkdf2x:6:100000:...`), because Workers cap one call at 100,000, and old answers are rehashed when next used. Account Keys stay at one round. A rollback below Release 13 breaks any answer already upgraded.
+>
+> **Files changed in Releases 11b–13**
+> - **11b:** `23_` (`handlePosterImgError`'s `fallbackPending`, `hidePosterPlaceholderFor`), `tests/client-harness.mjs` (`fireListeners`).
+> - **12:**
+>   - `19_` and `23_`: `rememberBetterPosterOriginal`; a failed Better Poster goes back to the title's own poster;
+>   - new `57_title-details-fallback.js`: `/api/details` for titles TMDB does not have yet, from `streaming_events` and Cinemeta;
+>   - `22_`: classic sign-out also ends the session cookie;
+>   - `24_` and `15_`: the shell Settings draws only Devices and Install link;
+>   - `09_` CSS: `.row` button width, and the drag outline on every `createSortableList` item.
+> - **13:**
+>   - `02_`: `newUiDefaultOn`, `isNewUiRequest` with the env default, the cookie stores 0 for "classic", `hashRecoveryAnswer` / `verifyRecoveryAnswer` / `storeRecoveryAnswerHash`;
+>   - `25_`: `request.newUiDefault`;
+>   - `26_`: recovery answer routes;
+>   - the backup script and workflow;
+>   - docs.
+> - **Tests added:** `tests/title-details-fallback.test.mjs`, `tests/drag-outline.test.mjs`, `tests/d1-backup.test.mjs`, `tests/recovery-answer-hash.test.mjs`, plus additions to `tests/poster-identity.test.mjs`, `tests/app-shell*.test.mjs` and `tests/client.test.mjs`.
+>
+> **How to work here** (`CLAUDE.md`):
+> - Edit only the numbered files and `header.js`, never `worker_entry_combined.js`.
+> - After every change run `python build.py`, `python check_sync.py`, `node --check worker_entry_combined.js` and `python gen_map.py`, then `git add -A` (the drift check compares against the index), then `bash verify.sh` and `MLA_TEST_V2_LISTS_READ=1 node --test tests/*.test.mjs`.
+> - Files `09_` to `24_` sit inside a template literal: double every backslash.
+> - Push only to `claude/elegant-ride-o7m8fh`.
+> - For each release, copy the built file as `release-<n>-NEW-worker.js` for the owner, and add a section to `docs/RELEASES.md` with plain-language steps and a rollback.
+
 > **Release in progress (2026-09-29): read `docs/RELEASES.md` first.**
 > - The owner is taking the new version live one phase at a time, straight to mylistsaddon.com.
 > - Branch `claude/elegant-ride-o7m8fh` started as Release 1: `main` at the end of Phase 1 (`31e55d9`), plus three updates from the public repository (Br0ck25/My-Lists, 2026-09-26) that this repository was missing. Release 1 has been live since 2026-09-29.
@@ -11,7 +81,7 @@
 ---
 
 ## Current Status
-- **Last Updated**: 2026-09-29
+- **Last Updated**: 2026-10-01 (Claude Code handoff; see the HANDOFF block at the top)
 - **Last Active AI**: Arena (P7-1 the strict CSP, P7-2 the admin dashboard's identity, P7-3 rate limits that count exactly -- branch `arena/01a0eb86-my-lists-addon`, PR #9 open against `main`; see "Phase 7" below)
 - **Active Task**: **P7-1, P7-2 and P7-3 (Phase 7, security hardening) are done on `arena/01a0eb86-my-lists-addon` and waiting to be merged (PR #9).** P7-3 moves every abuse limit off KV: `rate_counters` in D1, one row per bucket/client/clock-aligned window, incremented atomically and read back in the same transaction, so a limit is the number it says even under a parallel burst -- and **no `ratelimit:` KV write remains anywhere**. Credential endpoints spend only on failed guesses; with no D1 the counter falls back to the isolate's memory (looser, never unlimited); spent windows are swept in the background and `migrations/0019` (optional, one index) makes that cheap; the WAF half is a short optional click-list in `docs/OPERATIONS.md` §6, so nothing has to be configured for the code to work. `docs/OPERATIONS.md` §26, `docs/DECISIONS.md` D-28 to D-30. P7-2 adds Cloudflare Access on `/admin` (verified tokens, key as break-glass), per-browser revocable admin sessions and an admin audit log over migration 0018 -- all optional: with none of it configured the dashboard behaves exactly as before. `docs/OPERATIONS.md` §25 is the setup, `docs/DECISIONS.md` D-24 to D-27 the reasoning. **P7-1 (Phase 7, security hardening) is done:** every page carries a nonce-only `script-src` and the page makes no third-party request. Every page the Worker serves now carries a nonce-only `script-src` (no `'unsafe-inline'`, no host), the page makes no third-party request (fflate is served from this Worker, the fonts are the device's own), and Trusted Types rides in report-only mode with a reports sink at `POST /api/csp-report` (`docs/OPERATIONS.md` §24; `docs/DECISIONS.md` D-20 to D-23). Nothing to configure; the report-only header can be turned off with `FF_CSP_TT_REPORT=0`. **Phase 6 (the frontend) is merged into `main` (PR #7, merge commit `9543c2b`), together with the review fixes (`f623002`).** Nothing is live until the owner deploys; the next step is the owner's walkthrough of the new interface (`/?ff_new_ui=1`), then Phase 7. **P6-1 to P6-10 are done** (the new UI shell behind the `FF_NEW_UI` cookie, the Settings view inside it, the paste-first home-screen editor, the Lists view, Explore, the imports screen, the channel templates, the markup cleanup -- no inline handlers on either page, no `alert()`, no provider credentials in `localStorage` -- the browser-only lists with "Save to an account" / "Export", and the `/admin` dashboard converted to the same delegated actions; see "Phase 6" below). **Phase 6 is complete: P6-1 to P6-10.** **Phase 5 (jobs and caching) is merged into `main` (PR #6)**: P5-1 to P5-11, one commit each (`44_` to `54_`). What is left of Phase 5 waits on the owner's rollout (see "What is left of Phase 5" under Phase 5 below). Phases 3a to 4 are merged (PRs #1 to #5); their rollouts (deploy, migrations, the copies, the optional switches) are the owner's.
 - **Task State**: 1,868 tests, 1,868 pass, 0 fail, 0 skipped, both ways (plain and `MLA_TEST_V2_LISTS_READ=1`), and `bash verify.sh` passes (after P7-3). After P7-2: 1,857. After P7-1: 1,837. After P6-10: 1,810. After P6-9: 1,798. After P6-8: 1,789. After P6-7: 1,771. After P6-6: 1,756. After P6-5: 1,738. After P6-4: 1,724. After P6-3: 1,712. After P6-2: 1,699. After P6-1: 1,685. Before Phase 6: 1,661 tests pass, 0 fail, 1 skipped, both ways (after P5-11). Build, sync, syntax, scope, render and HTML checks pass, and the checks now include the new UI shell page as a fourth render.
