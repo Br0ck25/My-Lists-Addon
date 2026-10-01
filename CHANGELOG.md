@@ -33,6 +33,16 @@ Nothing to configure for the strict CSP (P7-1, below): it is part of the Worker 
 
 **Nothing to configure for the rate limits** (P7-3, below): they are part of the Worker, and the table they use (`rate_counters`) has existed since migration 0015. One **optional** index, `migrations/0019_rate_counters_window_index.sql`, makes the background cleanup of spent windows cheap (without it the cleanup scans — slower, not broken); one **optional** dashboard step, the edge rate-limiting rules in `docs/OPERATIONS.md` §6, moves the refusal to Cloudflare so the request never reaches the Worker. Neither is needed for anything to work.
 
+### ⚡ k6 load testing suite and performance baselines (P8-5)
+
+- **Automated k6 Load Test Suites (`loadtests/`):** Created production-grade load testing scripts:
+  - `catalog-hot-path.js`: Simulates 20 VUs requesting manifests and 20-row home screen catalogs, asserting warm cache p95 < 15 ms and cold KV p95 < 40 ms.
+  - `scrobble-burst.js`: Ramps up to 100 requests/sec with scoped scrobble tokens (`?st=`), asserting 0% error rate, zero lock contention, and p95 < 100 ms.
+  - `directory-depth.js`: Paginates through 20+ pages of `/lists/public.json`, asserting constant-time $O(1)$ keyset lookups with p95 < 50 ms.
+  - `run-all.js`: Combines all three scenarios into a unified multi-scenario load test suite.
+- **In-Process Automated Benchmarks (`tests/load-performance.test.mjs`):** Regression tests running against `worker_entry_combined.js` in-process using `tests/harness.mjs`, asserting the latency budgets from `PERFORMANCE_AUDIT.md` §5 (warm cache < 5 ms, cold KV < 40 ms, scrobble burst < 100 ms, directory depth < 50 ms).
+- **Performance Documentation (`docs/PERFORMANCE.md`):** Comprehensive report recording latency budgets, measured baselines, k6 execution instructions, and the complete audit findings resolution matrix (PF-F1..F9, PF-B1..B17).
+
 ### 📊 Analytics Engine stat counters and zero D1 pageview writes (P8-2)
 
 - **Eliminated D1 Writes on Page Views:** Telemetry counters (`bumpStat`, `bumpStatBy`, `recordSearchQuery`, `recordTrackedEvent`) now stream directly to Cloudflare Analytics Engine via `env.ANALYTICS.writeDataPoint(...)` when the `ANALYTICS` binding (`mylists_events`) is present. This eliminates database write locks and row churn on the D1 `stats` table on every HTML page load and search.
