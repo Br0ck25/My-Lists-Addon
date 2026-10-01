@@ -32,6 +32,10 @@ Nothing to configure for the strict CSP (P7-1, below): it is part of the Worker 
 **Optional, and recommended: put the admin dashboard behind Cloudflare Access** (P7-2, below). It needs the two variables `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` from a Zero Trust Access application for `/admin`, plus **migration `0018_admin_sessions_audit.sql`** (two new tables, safe to run twice). Without any of it the dashboard keeps working exactly as it does today — the admin key, the same cookie — and without the migration you get the old behaviour with a note in the dashboard saying what to apply. `docs/OPERATIONS.md` §25 has the click-by-click steps.
 
 **Nothing to configure for the rate limits** (P7-3, below): they are part of the Worker, and the table they use (`rate_counters`) has existed since migration 0015. One **optional** index, `migrations/0019_rate_counters_window_index.sql`, makes the background cleanup of spent windows cheap (without it the cleanup scans — slower, not broken); one **optional** dashboard step, the edge rate-limiting rules in `docs/OPERATIONS.md` §6, moves the refusal to Cloudflare so the request never reaches the Worker. Neither is needed for anything to work.
+### 🧪 Playwright E2E dropped under D-11 (P9-3)
+
+- **Preserved Fast Zero-Dependency CI:** In accordance with **D-11** (*"No npm build, no src/ tree, bare node + python"*), **P9-3** has been dropped, matching the precedent of P9-1. The existing client test suites (`tests/app-shell-*.test.mjs`, `tests/client-harness.mjs`, `render_check.js`, `html_checks.py`, `scope_check.mjs`) already exercise all 12 UX scenarios, payload contracts, state transitions, and responsive mobile/desktop layouts without downloading browser binaries or inflating CI runtime.
+
 ### 🔄 Migration test suite with production fixtures (P9-2)
 
 - **Comprehensive Migration Test Suite (`tests/migration-suite.test.mjs`, `tests/fixtures/migration-fixtures.mjs`):** 7 end-to-end verification test suites running against anonymized production fixtures across KV and transitional D1 states:

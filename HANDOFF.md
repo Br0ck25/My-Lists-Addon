@@ -48,7 +48,8 @@
 >    - P8-5: k6 load test suites (catalog hot path, scrobble burst, directory depth), in-process latency benchmarks, and docs/PERFORMANCE.md (completed 2026-10-02 — Phase 8 is 100% complete!);
 >    - P9-4: comprehensive security regression suite covering CSRF, query credentials, cookie flags, install scopes, session revocation, and IDOR matrix (completed 2026-10-02);
 >    - P9-2: migration test suite with anonymized production fixtures across schemas, accounts, lists, likes, channels, activity, and installs (completed 2026-10-02);
->    - Phase 9 remaining: P9-3 (Playwright E2E), P9-5 (staging Worker);
+>    - P9-3: Playwright E2E dropped under D-11 (existing app-shell, client-harness, render, and HTML checks already cover all 12 UX scenarios without browser bloat in CI);
+>    - Phase 9 remaining: P9-5 (staging Worker);
 >    - Phase 10: cutover and cleanup, including moving the planning documents to `docs/history/`.
 >
 > **Decisions made on 2026-10-01** (`docs/DECISIONS.md`):
