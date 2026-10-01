@@ -39,14 +39,15 @@
 >    - P5-6: retire `/api/bulk-resolve`.
 >
 >    The Explore and Your lists modules in `24_` are unreachable since Release 9, and so are the shell's Account and Connections cards since Release 12 (`appShellAccountBody`, `appShellConnectionsBody`). Delete them only if the owner agrees.
-> 6. **Not started / Recent tasks** (`NEXT_VERSION_TASKS.md`, statuses brought up to date on 2026-10-02: 101 done, 6 partly done, 9 not started):
+> 6. **Not started / Recent tasks** (`NEXT_VERSION_TASKS.md`, statuses brought up to date on 2026-10-02: 102 done, 6 partly done, 8 not started):
 >    - P7-6: scrobble links take the `st` token only, legacy forms get sunset warnings and sunset date/flag enforcement (completed 2026-10-02);
 >    - P8-1: D1 read replication with withSession() on catalog and directory reads, x-d1-bookmark sequential consistency (completed 2026-10-02);
 >    - P8-4: badged posters optimization (removed base64 inlining, SVG overlay referencing poster URL, isolate cache) & precomputed icon bytes (completed 2026-10-02);
 >    - P8-3: two-tier bundle split (/app.js first view 93.26 KB gzip < 150 KB budget + deferred /app-features.js) and CI budget check (completed 2026-10-02);
 >    - P8-2: Analytics Engine stat counters, zero D1 pageview writes, Most Watched via title_daily_stats (completed 2026-10-02);
 >    - P8-5: k6 load test suites (catalog hot path, scrobble burst, directory depth), in-process latency benchmarks, and docs/PERFORMANCE.md (completed 2026-10-02 — Phase 8 is 100% complete!);
->    - Phase 9: browser tests, a staging copy of the site, a security suite;
+>    - P9-4: comprehensive security regression suite covering CSRF, query credentials, cookie flags, install scopes, session revocation, and IDOR matrix (completed 2026-10-02);
+>    - Phase 9 remaining: P9-2 (migration test suite), P9-3 (Playwright E2E), P9-5 (staging Worker);
 >    - Phase 10: cutover and cleanup, including moving the planning documents to `docs/history/`.
 >
 > **Decisions made on 2026-10-01** (`docs/DECISIONS.md`):

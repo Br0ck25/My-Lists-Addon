@@ -723,7 +723,15 @@ No npm, no `src/` tree, no esbuild, no new test framework (D-11). Phase 2 is now
 - [x] **P9-1** ~~The workerd test pool is the default; the node harness is retired.~~ — **Status:** Dropped (D-11). The node harness stays (`tests/harness.mjs`, real SQLite with D1's limits enforced).
 - [ ] **P9-2** Migration test suite with anonymized production fixtures (lists, likes, channels, activity, installs).
 - [ ] **P9-3** Playwright E2E for all 12 scenarios at 375 px and 1280 px, plus axe, in CI. Playwright is installed in CI only (`npm install --no-save`, like the scope checker), never as part of the build (D-11).
-- [ ] **P9-4** Security suite: CSRF, query-string credentials, cookie flags, CSP, install-token scope, session revocation, IDOR matrix.
+- [x] **P9-4** Security suite: CSRF, query-string credentials, cookie flags, CSP, install-token scope, session revocation, IDOR matrix.
+  - **Done (2026-10-01):** Implemented in `tests/security-suite.test.mjs` (16 comprehensive security regression tests across 7 domains):
+    1. **CSRF Enforcement:** Verifies cross-origin (`Origin: https://evil.attacker.com`), cross-site (`Sec-Fetch-Site: cross-site`), and non-JSON content-type requests are rejected with 403 Forbidden on all state-changing endpoints, while webhook and admin login exemptions are preserved.
+    2. **Query-String Credential Rejection:** Verifies `refuseQueryCredentials` blocks credentials in URL query strings (`creatorKey`, `tmdbKey`, `mdblistKey`, etc.) on `/api/preview` with 400 Bad Request.
+    3. **Cookie Security Flags & Headers:** Validates `mla_session` cookie attributes (`HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, `Max-Age`), security headers (`Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy`, HSTS), and `Cache-Control: no-store` on private endpoints.
+    4. **Install-Token Scope Isolation:** Validates install tokens/IDs cannot authorize creator endpoints (`/api/creator/lists`, `/api/me`), and legacy scrobble parameters (`creator=&key=`) are rejected with 410 Gone when sunset is active (`FF_SCROBBLE_ST_ONLY`).
+    5. **Session Revocation & Expiry:** Asserts immediate session invalidation on logout (`DELETE /api/session`) and complete session clearance on account deletion (`DELETE /api/me`).
+    6. **IDOR Matrix (Cross-Account Isolation):** Validates User B cannot view, modify, or delete User A's private custom lists, cannot access User A's provider connections, and cannot view or revoke User A's install links.
+    7. **Admin Authorization:** Enforces strict boundary on `/admin` and mutating admin APIs against unauthenticated or unauthorized actors.
 - [ ] **P9-5** A staging Worker with its own D1, KV, R2 and Queue (dashboard) and a deploy checklist.
 
 ## Phase 10 — Cutover and cleanup

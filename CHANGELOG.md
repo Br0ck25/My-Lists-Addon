@@ -33,6 +33,17 @@ Nothing to configure for the strict CSP (P7-1, below): it is part of the Worker 
 
 **Nothing to configure for the rate limits** (P7-3, below): they are part of the Worker, and the table they use (`rate_counters`) has existed since migration 0015. One **optional** index, `migrations/0019_rate_counters_window_index.sql`, makes the background cleanup of spent windows cheap (without it the cleanup scans — slower, not broken); one **optional** dashboard step, the edge rate-limiting rules in `docs/OPERATIONS.md` §6, moves the refusal to Cloudflare so the request never reaches the Worker. Neither is needed for anything to work.
 
+### 🛡️ Comprehensive security regression suite (P9-4)
+
+- **Security Regression Suite (`tests/security-suite.test.mjs`):** 16 comprehensive security regression tests covering seven security domains:
+  - **CSRF & Origin Enforcement:** Rejects cross-origin, cross-site, and non-JSON content-type mutating requests with 403 Forbidden while preserving exemptions for webhooks and admin login forms.
+  - **Query-String Credential Rejection:** Enforces `refuseQueryCredentials`, preventing credential leakage (`creatorKey`, `tmdbKey`, etc.) via URL queries.
+  - **Cookie Security Flags & Headers:** Validates `HttpOnly`, `Secure`, `SameSite=Lax`, and `Path=/` on `mla_session` cookies; enforces strict CSP (`object-src 'none'`, `base-uri 'self'`, `frame-ancestors 'self'`), `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, and `Cache-Control: no-store` on private endpoints.
+  - **Install-Token Scope Isolation:** Ensures install IDs cannot authorize creator endpoints or access private user data.
+  - **Session Revocation:** Verifies immediate invalidation on logout (`DELETE /api/session`) and complete session clearance on account deletion (`DELETE /api/me`).
+  - **IDOR Matrix:** Proves cross-account isolation: User B cannot modify or delete User A's private lists, cannot access User A's provider connections, and cannot revoke User A's install links.
+  - **Admin Privilege Boundaries:** Verifies unauthorized access to `/admin` and mutating admin APIs is rejected with 401/403.
+
 ### ⚡ k6 load testing suite and performance baselines (P8-5)
 
 - **Automated k6 Load Test Suites (`loadtests/`):** Created production-grade load testing scripts:
