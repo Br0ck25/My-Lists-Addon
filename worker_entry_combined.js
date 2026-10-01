@@ -1606,12 +1606,12 @@ const BETTER_POSTER_PREWARM_FETCHES_PER_TICK = 8;
 
 // --- The new UI shell (Phase 6, P6-1) ----------------------------------------
 //
-// The frontend rebuild is opt-in per browser while it is being built, through a
-// cookie rather than a Worker variable: the owner can try it on their own
-// device without changing anything for anyone else, and turning it off again is
-// one cookie rather than a deploy. The Worker reads the cookie once per request
-// (isNewUiRequest, 02_http-and-creator-utils.js) and renders the same page with
-// the shell's chrome around the existing views.
+// The frontend rebuild is chosen per browser through a cookie (`?ff_new_ui=1`
+// or `=0` sets it), and the FF_NEW_UI Worker variable sets what a browser that
+// has not chosen gets: off, the classic page; 1, the new interface for
+// everyone. The Worker decides once per request (isNewUiRequest,
+// 02_http-and-creator-utils.js) and renders the same page with the shell's
+// chrome around the existing views.
 //
 // This table is the ONE list of the site's top-level views. The Worker renders
 // the shell's navigation from it (buildAppShellNavHtml, 09_page-shell.js) and
@@ -4041,6 +4041,108 @@ async function verifyCreatorKey(key, storedHash) {
   }
 }
 
+// --- Recovery answers: six times the work (P7-4) ------------------------------
+//
+// A Creator Key is generated: ~60 random bits (generateCreatorKey), out of
+// reach of guessing at any hash cost, so it stays at one PBKDF2 run -- which
+// every unmemoized sign-in check pays. A recovery answer is chosen by a
+// person, lowercased, and can replace the key outright (/api/creator/reset-
+// key): if the stored hashes ever leaked, it is the one that could be guessed
+// offline. So it gets more work.
+//
+// The plan's target was 600,000 iterations. Workers refuse a PBKDF2 call over
+// 100,000 (workerd's DEFAULT_MAX_PBKDF2_ITERATIONS), so the work is chained:
+// round 1 derives from the answer, each later round from the round before,
+// same salt, 100,000 iterations each. Six rounds are the 600,000 iterations'
+// work, about 90 ms of CPU, spent only when an answer is set or used.
+//
+// Stored as pbkdf2x:<rounds>:<iterations>:<salt>:<hash>. An answer stored the
+// old way (pbkdf2:...) still verifies, and is rehashed the next time it is
+// used correctly (reset-key, forgot-username), while the answer is at hand.
+const RECOVERY_HASH_ROUNDS = 6;
+
+async function pbkdf2Chain(secret, salt, iterations, rounds) {
+  let material = new TextEncoder().encode(secret);
+  let bits = null;
+  for (let r = 0; r < rounds; r++) {
+    const key = await crypto.subtle.importKey("raw", material, "PBKDF2", false, ["deriveBits"]);
+    bits = new Uint8Array(await crypto.subtle.deriveBits({ name: "PBKDF2", salt, iterations, hash: "SHA-256" }, key, 256));
+    material = bits;
+  }
+  return bits;
+}
+
+async function hashRecoveryAnswer(answer) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const bits = await pbkdf2Chain(answer, salt, PBKDF2_ITERATIONS, RECOVERY_HASH_ROUNDS);
+  return `pbkdf2x:${RECOVERY_HASH_ROUNDS}:${PBKDF2_ITERATIONS}:${bufferToHex(salt)}:${bufferToHex(bits)}`;
+}
+
+async function verifyRecoveryAnswer(answer, storedHash) {
+  const stored = String(storedHash || "");
+  if (stored.startsWith("pbkdf2:")) return verifyCreatorKey(answer, stored);
+  const parts = stored.split(":");
+  if (parts.length !== 5 || parts[0] !== "pbkdf2x") return false;
+  const rounds = parseInt(parts[1], 10);
+  const iterations = parseInt(parts[2], 10);
+  // Bounded, so a stored value can never ask for unbounded work.
+  if (!(rounds >= 1 && rounds <= 20) || !(iterations >= 1 && iterations <= PBKDF2_ITERATIONS)) return false;
+  try {
+    const bits = await pbkdf2Chain(answer, hexToBuffer(parts[3]), iterations, rounds);
+    return timingSafeEqualHex(bufferToHex(bits), parts[4]);
+  } catch {
+    return false;
+  }
+}
+
+// Whether a stored answer already has today's work factor.
+function recoveryAnswerHashIsCurrent(storedHash) {
+  const parts = String(storedHash || "").split(":");
+  return parts.length === 5 && parts[0] === "pbkdf2x" &&
+    parseInt(parts[1], 10) >= RECOVERY_HASH_ROUNDS && parseInt(parts[2], 10) >= PBKDF2_ITERATIONS;
+}
+
+// A new recovery answer hash, wherever the profile is kept: D1's creators row
+// (the copy getCreator reads first), the accounts mirror, then the KV profile.
+// ok:false only when the creators row could not be written.
+async function storeRecoveryAnswerHash(env, username, hash) {
+  if (env && env.DB) {
+    try {
+      await env.DB.prepare("UPDATE creators SET recovery_answer_hash = ? WHERE username = ?").bind(hash, username).run();
+    } catch (dbErr) {
+      console.error("D1 write error (recovery answer):", dbErr);
+      return { ok: false };
+    }
+    try {
+      await env.DB.prepare("UPDATE accounts SET recovery_answer_hash = ? WHERE username = ? COLLATE NOCASE").bind(hash, username).run();
+    } catch {}
+  }
+  const raw = await getCreator(env, username);
+  if (raw) {
+    try {
+      const profile = JSON.parse(raw);
+      profile.recoveryAnswerHash = hash;
+      await env.CONFIGS.put(`creator:${username}`, JSON.stringify(profile));
+    } catch (kvErr) {
+      console.error("KV write error (recovery answer):", kvErr);
+    }
+  }
+  return { ok: true };
+}
+
+// An answer just verified, rehashed if it was stored the old way. Never
+// throws: failing to upgrade must not fail the request that proved it.
+async function upgradeRecoveryAnswerHash(env, username, answer, profile) {
+  if (!profile || recoveryAnswerHashIsCurrent(profile.recoveryAnswerHash)) return;
+  try {
+    const hash = await hashRecoveryAnswer(answer);
+    const stored = await storeRecoveryAnswerHash(env, username, hash);
+    if (stored.ok) profile.recoveryAnswerHash = hash;
+  } catch (e) {
+    console.error("Failed to upgrade a recovery answer hash:", e);
+  }
+}
+
 // --- Verified-key memo (per-isolate, in memory only) -------------------------
 // verifyCreatorKey above runs PBKDF2 at 100,000 iterations, and because a
 // Creator Profile issues no session or token, EVERY authenticated request
@@ -5053,19 +5155,32 @@ function readCookieValue(cookieHeader, name) {
   }
 }
 
+// The site's default for a browser that has not chosen: the FF_NEW_UI Worker
+// variable. Set to 1, every visitor gets the new interface; a browser that
+// chose (the cookie, `?ff_new_ui=0` or `=1`) keeps its choice either way.
+// handleFetch (25_) stamps it on the request, so every page route -- most of
+// which see the request but not env -- decides the same way.
+function newUiDefaultOn(env) {
+  const v = env ? env.FF_NEW_UI : undefined;
+  return v === "1" || v === "true" || v === true;
+}
+
 function isNewUiRequest(request) {
   try {
     const raw = readCookieValue(request && request.headers ? request.headers.get("Cookie") : "", NEW_UI_COOKIE).trim().toLowerCase();
-    return raw === "1" || raw === "on" || raw === "true";
+    if (raw === "1" || raw === "on" || raw === "true") return true;
+    if (raw === "0" || raw === "off" || raw === "false") return false;
+    return !!(request && request.newUiDefault === true);
   } catch {
     return false;
   }
 }
 
+// "Off" is remembered as 0 rather than by clearing the cookie: with the new
+// interface the site's default, a browser with no cookie gets it, so clearing
+// would have undone the choice to keep the classic page.
 function appShellCookieHeader(on) {
-  return on
-    ? `${NEW_UI_COOKIE}=1; Path=/; Max-Age=31536000; SameSite=Lax`
-    : `${NEW_UI_COOKIE}=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+  return `${NEW_UI_COOKIE}=${on ? "1" : "0"}; Path=/; Max-Age=31536000; SameSite=Lax`;
 }
 
 // The one place the cookie is written. Returns null for every request that is
@@ -83328,6 +83443,10 @@ async function handleFetch(request, env, ctx) {
     // token as its config segment (see v2InstallPath, 27_installs.js).
     const path = v2InstallPath(url.pathname) || url.pathname;
 
+    // Whether a browser that has not chosen gets the new interface
+    // (FF_NEW_UI; isNewUiRequest, 02_).
+    request.newUiDefault = newUiDefaultOn(env);
+
     // ?ff_new_ui=1 (or 0) turns the new UI shell on or off for this browser,
     // then bounces to the same address without the parameter (P6-1). Handled
     // before anything else so it works from any page of the site.
@@ -83406,9 +83525,8 @@ async function handleFetch(request, env, ctx) {
     // The new UI shell's own paths (Phase 6, P6-1): /catalogs, /lists,
     // /channels, /discover, /search, /settings and a sub-tab below any of them
     // (/settings/connections, /catalogs/quickadd). Served only to a browser
-    // that carries the FF_NEW_UI cookie; without it these addresses keep
-    // 404ing exactly as they do today, so nothing changes for anyone else, and
-    // turning the shell off again is one cookie rather than a deploy.
+    // that gets the new interface (its cookie, or the FF_NEW_UI variable);
+    // for any other these addresses 404, as they always did.
     //
     // Exact paths only: /lists/<slug> and /channels/<user>/<slug> are share
     // links and keep their own routes below.
@@ -92653,7 +92771,7 @@ function generateSearchVariations(query) {
           error: `Recovery Answer must be at least ${RECOVERY_ANSWER_MIN_LENGTH} characters -- it can reset your key, so treat it like a password.`,
         }, 400);
       }
-      const recoveryAnswerHash = recoveryAnswerRaw ? await hashCreatorKey(recoveryAnswerRaw.toLowerCase()) : null;
+      const recoveryAnswerHash = recoveryAnswerRaw ? await hashRecoveryAnswer(recoveryAnswerRaw.toLowerCase()) : null;
       const nowMs = Date.now();
       const profileObj = { displayName, keyHash, recoveryAnswerHash, createdAt: nowMs };
 
@@ -92810,13 +92928,16 @@ function generateSearchVariations(query) {
         return json({ ok: false, error: genericError }, 429);
       }
 
-      const matches = await verifyCreatorKey(answer.toLowerCase(), profile.recoveryAnswerHash);
+      const matches = await verifyRecoveryAnswer(answer.toLowerCase(), profile.recoveryAnswerHash);
       if (!matches) {
         // Failures only: answering correctly must never consume the budget
         // that protects you.
         await noteAuthFailure(env, resetScope, resetDay);
         return json({ ok: false, error: genericError }, 401);
       }
+      // An answer stored the old way is rehashed while it is at hand (P7-4).
+      // Before the key is rotated: the profile written below then carries it.
+      await upgradeRecoveryAnswerHash(env, v.normalized, answer.toLowerCase(), profile);
 
       const creatorKey = generateCreatorKey();
       const keyHash = await hashCreatorKey(creatorKey);
@@ -92940,33 +93061,10 @@ function generateSearchVariations(query) {
         }, 400);
       }
 
-      const recoveryAnswerHash = await hashCreatorKey(recoveryAnswerRaw.toLowerCase());
-
-      if (env.DB) {
-        try {
-          await env.DB.prepare(
-            "UPDATE creators SET recovery_answer_hash = ? WHERE username = ?"
-          ).bind(recoveryAnswerHash, auth.username).run();
-        } catch (dbErr) {
-          console.error("D1 write error (update recovery answer):", dbErr);
-          return json({ ok: false, error: "Failed to update recovery answer. Please try again." }, 500);
-        }
-        try {
-          await env.DB.prepare(
-            "UPDATE accounts SET recovery_answer_hash = ? WHERE username = ? COLLATE NOCASE"
-          ).bind(recoveryAnswerHash, auth.username).run();
-        } catch (accErr) {}
-      }
-
-      const raw = await getCreator(env, auth.username);
-      if (raw) {
-        try {
-          const profile = JSON.parse(raw);
-          profile.recoveryAnswerHash = recoveryAnswerHash;
-          await env.CONFIGS.put(`creator:${auth.username}`, JSON.stringify(profile));
-        } catch (kvErr) {
-          console.error("KV write error (update recovery answer):", kvErr);
-        }
+      const recoveryAnswerHash = await hashRecoveryAnswer(recoveryAnswerRaw.toLowerCase());
+      const stored = await storeRecoveryAnswerHash(env, auth.username, recoveryAnswerHash);
+      if (!stored.ok) {
+        return json({ ok: false, error: "Failed to update recovery answer. Please try again." }, 500);
       }
 
       if (body.creatorKey) {
@@ -93086,10 +93184,12 @@ function generateSearchVariations(query) {
         if (!presentedAnswer) {
           return failForgot("A Recovery Answer is required for this account. Please enter your Recovery Answer.", 401);
         }
-        const answerMatches = await verifyCreatorKey(presentedAnswer.toLowerCase(), profile.recoveryAnswerHash);
+        const answerMatches = await verifyRecoveryAnswer(presentedAnswer.toLowerCase(), profile.recoveryAnswerHash);
         if (!answerMatches) {
           return failForgot(genericError, 401);
         }
+        // Rehashed if it was stored the old way (P7-4).
+        await upgradeRecoveryAnswerHash(env, v.normalized, presentedAnswer.toLowerCase(), profile);
       }
 
       await storeCreatorKeyLookup(env, presentedKey, v.normalized);

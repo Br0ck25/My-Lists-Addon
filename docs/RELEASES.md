@@ -17,6 +17,7 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Release 10** (Phase 7 so far, PR #9) went live on 2026-09-30. The owner does not want Cloudflare Access on `/admin`.
 - **Release 11** went live on 2026-10-01 with migration `0020`, after the list copy's and the history copy's *Start over* (results under each). **`FF_V2_LISTS_ONLY` and `FF_EVENT_TRACKING` are both on** (2026-10-01, one-way: never delete either). The owner reports everything correct, and found one problem, fixed in Release 11b: a Search tile could show its poster and a "No poster" box under it.
 - **Release 12** (prepared, not yet live; it includes 11b) answers the owner's review of the new interface before it goes to everyone, and fixes New on Streaming titles too new for TMDB (details under Release 12).
+- **Release 13** (prepared, not yet live; includes 12) adds the `FF_NEW_UI` switch, stronger hashing for recovery answers, and a daily backup that works. With it come the switches the owner asked for now: `FF_PROVIDER_BREAKER`, `FF_CHART_SNAPSHOTS`, then `FF_SHOW_SCHEDULE` once its comparison is read. The owner dropped one-time recovery codes (D-31).
 
 The owner decided to release the new version **one phase at a time, straight to the live site**, with no separate test site. Each release waits until the one before it has run cleanly for at least a day.
 
@@ -44,6 +45,7 @@ The owner decided to release the new version **one phase at a time, straight to 
 | 10 | Phase 7 so far ([PR #9](https://github.com/Br0ck25/My-Lists-Addon/pull/9), not yet merged into `main`) | `243340a` (the PR's head) | `0018`, `0019` (optional) | none required; Cloudflare Access for `/admin` optional |
 | 11 | Watch History from the activity database: episode names, and no 5,000-play cap (this branch only) | none | `0020` | the history copy's *Start over*, then `FF_EVENT_TRACKING` |
 | 12 | The owner's review of the new interface, and titles too new for TMDB (this branch only; includes 11b) | none | none | none |
+| 13 | `FF_NEW_UI`, recovery answer hashing (P7-4), the backup rewritten (this branch only) | none | none | `FF_PROVIDER_BREAKER`, `FF_CHART_SNAPSHOTS`, `FF_SHOW_SCHEDULE`, `FF_NEW_UI`; GitHub secrets for the backup |
 
 Each release gets its own section below when it is prepared, with its steps in plain words.
 
@@ -979,3 +981,48 @@ They fail on Release 11b. One older test (`tests/worker.test.mjs`, "truncated bo
    - drag a catalog row, a list and a pick in the custom list builder: each shows the dashed outline while it moves.
 
 **Rollback:** paste the previous file. Nothing else to undo.
+
+---
+
+## Release 13: the switches, a backup that works, and recovery answer hashing
+
+**Branch point:** this branch after Release 12. Nothing here comes from `main`. It includes 12 (and 11b): deploy this one if those are not live yet.
+
+The owner asked for the recommended next steps, and for `FF_PROVIDER_BREAKER`, `FF_CHART_SNAPSHOTS` and `FF_SHOW_SCHEDULE` now. They do not want one-time recovery codes (P7-5 dropped, D-31).
+
+### What it changes
+
+- **`FF_NEW_UI`, the switch for everyone** (02_, 25_).
+  - Set to `1`, every browser that has not chosen gets the new interface.
+  - `?ff_new_ui=0` keeps the classic page for a browser. It now stores "classic" in the cookie rather than clearing it, so the choice holds under the new default.
+  - Off (unset), nothing changes. Reversible; no data moves. Tests in `tests/app-shell.test.mjs`.
+- **Recovery answers get six times the hashing work (P7-4, D-32).**
+  - The plan asked for 600,000 PBKDF2 iterations, but Workers refuse more than 100,000 in one call (checked in Cloudflare's runtime source), so it is six chained rounds of 100,000.
+  - Existing answers keep working and are upgraded the next time they are used to reset a key or find a username.
+  - Account Keys stay as they are: they are about 60 random bits, beyond guessing at any hash cost, and every sign-in check pays it. Tests: `tests/recovery-answer-hash.test.mjs`.
+- **The daily database backup is rewritten** (GitHub, not the Worker).
+  - It could never have worked: `wrangler d1 export` refuses a database with virtual tables, and the main database has two (the list search tables). An export also blocks the database while it runs.
+  - It now reads every table with ordinary queries (`.github/scripts/d1-backup.mjs`) and writes SQL that restores it, search tables included. It also copies `mylists-activity`, which since `FF_EVENT_TRACKING` is the only copy of Watch History.
+  - Tests restore a dump into an empty database and compare every row, on the real schemas of both databases (`tests/d1-backup.test.mjs`).
+  - **The daily run uses the copy of the workflow on `main`**, which is the old one until this branch is merged. Until then, run it by hand from this branch.
+
+### Checked before recommending the switches
+
+- **`FF_PROVIDER_BREAKER` and `FF_CHART_SNAPSHOTS`:** the whole suite was run with both forced on, alongside `FF_V2_LISTS_READ`. Seven tests failed, and all seven are expectations about the switches being off, not problems:
+  - two test "nothing happens with it off";
+  - two see the breaker correctly skipping TMDB for a minute after an earlier test broke TMDB on purpose;
+  - two expect calls to TMDB that a snapshot now answers;
+  - one sees one extra short-lived breaker note with the network turned off.
+- **`FF_SHOW_SCHEDULE`** only changes how Continue Watching and Airing Next are read (with `FF_EVENT_TRACKING` on), so it can be turned off again. One gate matters: a show the schedule does not know yet is left off Continue Watching. So it goes on once `/admin` → Check jobs shows the last full `shelf.shadow` comparison under 1% different with no shows "not known yet". After it has served for a few days, the old Continue Watching and Airing Next code is deleted (P5-4).
+
+`bash verify.sh` passes (1,997 tests), and so does the suite with `MLA_TEST_V2_LISTS_READ=1`.
+
+**Steps:**
+1. Keep the file now live as the rollback file.
+2. Deploy `release-13-NEW-worker.js`. No database step.
+3. Worker **wako** → Settings → Variables and Secrets → add Text `FF_PROVIDER_BREAKER` = `1` and Text `FF_CHART_SNAPSHOTS` = `1` → Deploy. Check that the home screen rows load in Stremio and on Discover. To undo either one, delete it and deploy.
+4. `/admin` → **Check jobs**, and send the `shelf.shadow` line ("Last full comparison ..."). `FF_SHOW_SCHEDULE` goes on from what it says.
+5. When ready for everyone: add Text `FF_NEW_UI` = `1` → Deploy. Anyone can keep the old page with `/?ff_new_ui=0`. To undo, delete it.
+6. Backups: the five GitHub secrets (`docs/OPERATIONS.md` §5), then Actions → **D1 backup** → **Run workflow**, choosing this branch.
+
+**Rollback:** paste the previous file and remove any switch that misbehaves. One thing does not roll back: a recovery answer set or used after Release 13 is stored in the new shape, which older code cannot read. On an older release that answer fails until Release 13 is back. Account Keys are unaffected.

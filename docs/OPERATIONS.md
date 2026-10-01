@@ -64,6 +64,7 @@ Adding a binding before the code that uses it is harmless. Removing a binding th
 
 - `NEW_ON_STREAMING_ENGINE` (optional; default `justwatch`).
 - `FF_SESSIONS` (optional): `1` turns on session sign-in for the `/api/creator/*` routes (P3a-6). **Leave unset** until the new sign-in screens ship.
+- `FF_NEW_UI` (optional): `1` makes the new interface the page for every browser that has not chosen (§20). Reversible.
 - `FF_INSTALLS` (optional): `1` turns on `/api/installs`, where a signed-in account creates, renames, rotates and removes `/i/{token}` install links (P3a-8). **Leave unset** until the screens for it ship. Links that already exist are served either way.
 - `FF_V2_LISTS_READ` (optional): `1` makes the site read lists and shared channels from the new tables: the dashboard, list pages, catalogs, the directory and search, shared channels and Explore Channels (P3b-6 to P3b-8). **Leave unset** until the copy (§9) has finished; §10 has the steps. Turning it off again is always safe, because every change is still written to the old storage.
 - `FF_V2_LISTS_API` (optional): `1` turns on `/api/lists`, the item-level list API, and `/api/likes`, the likes API, over the new list tables (P3b-4, P3b-5). **Leave unset.** What these APIs write goes to the new tables only. Until a later release stops writing the old storage (P3b-9), turning `FF_V2_LISTS_READ` off, or running the copy again, would lose it.
@@ -111,23 +112,27 @@ When it nears D1's size limit it can be split: create and bind `DB_ACTIVITY_1`, 
 
 ## 5. Backups
 
-- **Before any migration:** D1 → `my-lists-db` → *Backups / Time Travel* (D1 keeps point-in-time recovery for 30 days on Paid), or export with `npx wrangler d1 export my-lists-db --remote --output=backup.sql`.
-- **Daily off-Cloudflare copy:** `.github/workflows/d1-backup.yml` exports the database every day at 04:17 UTC. It encrypts the export and keeps it as an Actions artifact for 30 days.
-  - It needs four repository secrets (Settings → Secrets and variables → Actions):
-    - `CLOUDFLARE_API_TOKEN`: an API token with *D1: Read*;
+- **Before any migration:** D1 → `my-lists-db` → *Backups / Time Travel* (D1 keeps point-in-time recovery for 30 days on Paid). `wrangler d1 export` does **not** work on `my-lists-db`: D1 refuses to export a database with virtual tables, and it has two (the full-text search tables `lists_fts` and `lists_fts2`).
+- **Daily off-Cloudflare copy:** `.github/workflows/d1-backup.yml`, every day at 04:17 UTC, and on demand (Actions → *D1 backup* → *Run workflow*).
+  - It reads every table of both databases with ordinary queries (`.github/scripts/d1-backup.mjs`) and writes SQL that recreates them, so the search tables are no obstacle and the site is never paused (an export blocks the database while it runs).
+  - Each database's copy is compressed, encrypted and kept as an Actions artifact for 30 days.
+  - It needs these repository secrets (GitHub → the repository → Settings → Secrets and variables → Actions):
+    - `CLOUDFLARE_API_TOKEN`: an API token with *Account → D1 → Read* only;
     - `CLOUDFLARE_ACCOUNT_ID`;
-    - `D1_DATABASE_ID`: shown on the database's overview page;
+    - `D1_DATABASE_ID`: `my-lists-db`'s id, shown on the database's overview page;
+    - `ACTIVITY_D1_DATABASE_ID`: `mylists-activity`'s id. Since `FF_EVENT_TRACKING`, Watch History lives only there. Optional for the job, not for you;
     - `BACKUP_PASSPHRASE`: a long random string.
-  - Until all four are set, the job skips itself with a warning.
+  - Until the four required ones are set, the job skips itself with a warning.
   - Keep a copy of the passphrase outside GitHub. Without it no backup can be read.
   - The export is encrypted because this repository's Actions artifacts can be downloaded by other people, and the export holds every account's data.
-- **Restoring a daily copy:**
+  - The daily run uses the copy of the workflow on `main`. A run by hand can pick a branch (*Use workflow from*).
+- **Restoring a daily copy** (each database the same way):
   1. Download the artifact from the workflow run.
   2. Decrypt it: `gpg --decrypt my-lists-db-<stamp>.sql.gz.gpg > backup.sql.gz` (it asks for the passphrase), then `gunzip backup.sql.gz`.
-  3. Load it into a **new, empty** database first and check it: `npx wrangler d1 create my-lists-restore`, then `npx wrangler d1 execute my-lists-restore --remote --file=backup.sql`.
-  4. Point the Worker's `DB` binding at the restored database only once it checks out.
+  3. Load it into a **new, empty** database first and check it: `npx wrangler d1 create my-lists-restore`, then `npx wrangler d1 execute my-lists-restore --remote --file=backup.sql`. The search tables come back filled; nothing needs rebuilding.
+  4. Point the Worker's binding (`DB`, or `DB_ACTIVITY` for `mylists-activity`) at the restored database only once it checks out.
   5. Never load a backup into the live database on top of existing data.
-- The KV namespace has no built-in backup. The data that matters in KV is being moved to D1 (see `MIGRATION_PLAN.md`).
+- The KV namespace has no built-in backup. With `FF_V2_LISTS_ONLY` and `FF_EVENT_TRACKING` on, lists and Watch History are in D1. The R2 bucket (`BLOBS`: channel pools and Better Poster images) is not copied: both are rebuilt from D1 and the providers.
 
 ## 6. Recommended WAF rate-limiting rules (optional)
 
@@ -421,9 +426,9 @@ https://mylistsaddon.com/?ff_new_ui=1
 
 You are bounced back to the page you asked for, without the parameter, and the cookie is set for a year. Do the same on your phone (or any browser) to try it there; the cookie is per browser.
 
-**Turning it off:** `https://mylistsaddon.com/?ff_new_ui=0` — same bounce, cookie cleared. Nothing is stored server-side either way, so no data is affected and nothing has to be undone.
+**Turning it off:** `https://mylistsaddon.com/?ff_new_ui=0` — same bounce, and the cookie now says "classic" (`FF_NEW_UI=0`) for a year rather than being cleared, so the choice holds when the new interface is everyone's default. Nothing is stored server-side either way, so no data is affected and nothing has to be undone.
 
-**For everyone at once** (later, when Phase 6 is finished): the plan is a Worker variable, `FF_NEW_UI=1`, defaulting off, once the whole frontend is behind it. Until then the cookie is the only switch, and nobody without it sees any change at all — the shell's paths still 404 for them, exactly as before.
+**For everyone at once:** Worker → Settings → Variables and Secrets → Add → type *Text*, name `FF_NEW_UI`, value `1` → Deploy. Every browser that has not chosen gets the new interface; one that chose keeps its choice (`?ff_new_ui=0` keeps the classic page). **To undo:** delete the variable and deploy. It is a choice of page only: no data moves, and both pages read and write the same account.
 
 ## 21. What P6-8 changed for everyone
 

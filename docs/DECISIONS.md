@@ -2,6 +2,13 @@
 
 Decisions the owner has made. They are recorded here so the code, the plan documents and future work agree. The newest entries are at the top.
 
+## 2026-10-01 — Account recovery stays as it is (P7-5), and stronger hashing where it counts (P7-4)
+
+| # | Decision | Consequence in the code |
+|---|---|---|
+| D-32 | **Recovery answers get six times the hashing work; Account Keys stay as they are.** The plan asked for at least 600,000 PBKDF2 iterations. Workers refuse a single PBKDF2 call over 100,000 (workerd's `DEFAULT_MAX_PBKDF2_ITERATIONS`), which is what everything uses today. | A recovery answer is chosen by a person and can replace the key, so it is the one an attacker with a leaked database could guess: it is now six chained rounds of 100,000 (`hashRecoveryAnswer`, `pbkdf2x:6:100000:…`, about 90 ms, spent only when an answer is set or used). Old answers still verify and are rehashed the next time they are used correctly (reset-key, forgot-username). An Account Key is ~60 random bits (`generateCreatorKey`): no hash cost changes how guessable it is, and every unmemoized sign-in check pays it, so it stays at one round. |
+| D-31 | **No one-time recovery codes.** The owner does not want them: the recovery answer stays the way an account is recovered, with the Account Key. | Task P7-5 is dropped. Nothing changes in the code: `openSetRecoveryAnswerModal` and the forgot-key and forgot-username flows (`22_`) stay as they are. D-12's mention of "the one-time recovery codes planned for Phase 3a" no longer applies. |
+
 ## 2026-09-29 — Rate limits that count (P7-3)
 
 | # | Decision | Consequence in the code |
@@ -55,7 +62,7 @@ Decisions the owner has made. They are recorded here so the code, the plan docum
 | # | Decision | Consequence in the code |
 |---|---|---|
 | D-11 | **No npm build, no `src/` tree, no frameworks.** The code stays in the numbered split files (`header.js`, `00_`–`26_`), `python build.py` builds `worker_entry_combined.js`, and that one file is pasted into the dashboard. No `package.json`, esbuild, Vitest/Miniflare, ESLint/TypeScript toolchain, or front-end framework (Preact and the like). `CLAUDE.md` and `AGENTS.md` say the same for every assistant. | Where the plan names a `src/<area>/<file>.js` module, it names a responsibility, not a file: that code goes in the numbered file that owns the area, or in a new numbered server file after `26_` (`27_…`). `NEXT_VERSION_ARCHITECTURE.md` §7.2 maps each one. The checks stay (`check_sync.py`, `scope_check.mjs`, `render_check.js`, `html_checks.py`, `gen_map.py`), and tests stay on `node --test` with `tests/harness.mjs`. Phase 2 of `NEXT_VERSION_TASKS.md` is rewritten around this. |
-| D-12 | **No email recovery.** | Accounts recover with the Creator Key or the recovery answer, and with the one-time recovery codes planned for Phase 3a. No email is collected or stored. |
+| D-12 | **No email recovery.** | Accounts recover with the Creator Key or the recovery answer. (One-time recovery codes were planned too; the owner dropped them, D-31.) No email is collected or stored. |
 
 Also confirmed by the owner on 2026-09-27: the Cloudflare dashboard offers **Queues, R2 and Analytics Engine** bindings on this account (task P0-6). D1 read replication was not checked.
 

@@ -1583,12 +1583,12 @@ const BETTER_POSTER_PREWARM_FETCHES_PER_TICK = 8;
 
 // --- The new UI shell (Phase 6, P6-1) ----------------------------------------
 //
-// The frontend rebuild is opt-in per browser while it is being built, through a
-// cookie rather than a Worker variable: the owner can try it on their own
-// device without changing anything for anyone else, and turning it off again is
-// one cookie rather than a deploy. The Worker reads the cookie once per request
-// (isNewUiRequest, 02_http-and-creator-utils.js) and renders the same page with
-// the shell's chrome around the existing views.
+// The frontend rebuild is chosen per browser through a cookie (`?ff_new_ui=1`
+// or `=0` sets it), and the FF_NEW_UI Worker variable sets what a browser that
+// has not chosen gets: off, the classic page; 1, the new interface for
+// everyone. The Worker decides once per request (isNewUiRequest,
+// 02_http-and-creator-utils.js) and renders the same page with the shell's
+// chrome around the existing views.
 //
 // This table is the ONE list of the site's top-level views. The Worker renders
 // the shell's navigation from it (buildAppShellNavHtml, 09_page-shell.js) and

@@ -133,8 +133,10 @@ describe("the new UI shell is opt-in through a cookie", () => {
     const off = await call(env, "/settings?ff_new_ui=0");
     assert.equal(off.status, 302);
     assert.equal(off.headers.get("location"), "/settings");
-    assert.match(off.headers.get("set-cookie") || "", /^FF_NEW_UI=;/);
-    assert.match(off.headers.get("set-cookie") || "", /Max-Age=0/);
+    // Remembered as 0, not cleared: with FF_NEW_UI on for the site, a browser
+    // with no cookie gets the new interface.
+    assert.match(off.headers.get("set-cookie") || "", /^FF_NEW_UI=0;/);
+    assert.match(off.headers.get("set-cookie") || "", /Max-Age=31536000/);
 
     // Any value other than 0/off/false is "on", so a link can carry it plainly.
     const onAlias = await call(env, "/?ff_new_ui=on");
@@ -283,5 +285,53 @@ describe("the new UI shell is opt-in through a cookie", () => {
     assert.match(bundle.text, /function initAppShell\(/, "the shell's boot function");
     assert.match(bundle.text, /if \(!NEW_UI\) return;/, "the shell must do nothing at all when NEW_UI is false");
     assert.match(bundle.text, /credentials: 'same-origin'/, "the API client sends the session cookie");
+  });
+});
+
+// FF_NEW_UI, the Worker variable: what a browser that has not chosen gets.
+describe("the new interface for everyone (FF_NEW_UI)", () => {
+  const isShell = (res) => res.text.includes('<html lang="en" data-app-shell="1">');
+
+  it("serves the new interface to a browser that has not chosen", async () => {
+    const env = makeEnv({ FF_NEW_UI: "1" });
+    const home = await call(env, "/");
+    assert.equal(home.status, 200);
+    assert.ok(isShell(home), "the home page is the new interface");
+    assert.ok(home.text.includes("const NEW_UI = true;"));
+    for (const view of VIEWS) {
+      const res = await call(env, view.path);
+      assert.equal(res.status, 200, `${view.path} is served`);
+      assert.ok(isShell(res), `${view.path} is the new interface`);
+    }
+  });
+
+  it("keeps the classic page for a browser that chose it", async () => {
+    const env = makeEnv({ FF_NEW_UI: "1" });
+    const off = await call(env, "/?ff_new_ui=0");
+    const cookie = (off.headers.get("set-cookie") || "").split(";")[0];
+    assert.equal(cookie, "FF_NEW_UI=0");
+    const home = await call(env, "/", { cookie });
+    assert.equal(isShell(home), false, "the classic page, by the browser's choice");
+    assert.ok(home.text.includes("const NEW_UI = false;"));
+    assert.equal((await call(env, "/settings", { cookie })).status, 404, "the new interface's addresses stay its own");
+  });
+
+  it("changes nothing while the variable is off, or set to anything but 1", async () => {
+    for (const value of [undefined, "", "0", "no"]) {
+      const env = makeEnv(value === undefined ? {} : { FF_NEW_UI: value });
+      assert.equal(isShell(await call(env, "/")), false, `FF_NEW_UI=${value}`);
+      assert.equal((await call(env, "/settings")).status, 404);
+      assert.ok(isShell(await call(env, "/", { cookie: SHELL_COOKIE })), "the cookie still opts in");
+    }
+  });
+
+  it("serves the two pages from two separate memos, never one for the other", async () => {
+    const env = makeEnv({ FF_NEW_UI: "1" });
+    const shell = await call(env, "/");
+    const classic = await call(env, "/", { cookie: "FF_NEW_UI=0" });
+    const shellAgain = await call(env, "/");
+    assert.ok(isShell(shell) && isShell(shellAgain));
+    assert.equal(isShell(classic), false);
+    assert.notEqual(shell.headers.get("etag"), classic.headers.get("etag"));
   });
 });

@@ -1662,7 +1662,7 @@
           error: `Recovery Answer must be at least ${RECOVERY_ANSWER_MIN_LENGTH} characters -- it can reset your key, so treat it like a password.`,
         }, 400);
       }
-      const recoveryAnswerHash = recoveryAnswerRaw ? await hashCreatorKey(recoveryAnswerRaw.toLowerCase()) : null;
+      const recoveryAnswerHash = recoveryAnswerRaw ? await hashRecoveryAnswer(recoveryAnswerRaw.toLowerCase()) : null;
       const nowMs = Date.now();
       const profileObj = { displayName, keyHash, recoveryAnswerHash, createdAt: nowMs };
 
@@ -1819,13 +1819,16 @@
         return json({ ok: false, error: genericError }, 429);
       }
 
-      const matches = await verifyCreatorKey(answer.toLowerCase(), profile.recoveryAnswerHash);
+      const matches = await verifyRecoveryAnswer(answer.toLowerCase(), profile.recoveryAnswerHash);
       if (!matches) {
         // Failures only: answering correctly must never consume the budget
         // that protects you.
         await noteAuthFailure(env, resetScope, resetDay);
         return json({ ok: false, error: genericError }, 401);
       }
+      // An answer stored the old way is rehashed while it is at hand (P7-4).
+      // Before the key is rotated: the profile written below then carries it.
+      await upgradeRecoveryAnswerHash(env, v.normalized, answer.toLowerCase(), profile);
 
       const creatorKey = generateCreatorKey();
       const keyHash = await hashCreatorKey(creatorKey);
@@ -1949,33 +1952,10 @@
         }, 400);
       }
 
-      const recoveryAnswerHash = await hashCreatorKey(recoveryAnswerRaw.toLowerCase());
-
-      if (env.DB) {
-        try {
-          await env.DB.prepare(
-            "UPDATE creators SET recovery_answer_hash = ? WHERE username = ?"
-          ).bind(recoveryAnswerHash, auth.username).run();
-        } catch (dbErr) {
-          console.error("D1 write error (update recovery answer):", dbErr);
-          return json({ ok: false, error: "Failed to update recovery answer. Please try again." }, 500);
-        }
-        try {
-          await env.DB.prepare(
-            "UPDATE accounts SET recovery_answer_hash = ? WHERE username = ? COLLATE NOCASE"
-          ).bind(recoveryAnswerHash, auth.username).run();
-        } catch (accErr) {}
-      }
-
-      const raw = await getCreator(env, auth.username);
-      if (raw) {
-        try {
-          const profile = JSON.parse(raw);
-          profile.recoveryAnswerHash = recoveryAnswerHash;
-          await env.CONFIGS.put(`creator:${auth.username}`, JSON.stringify(profile));
-        } catch (kvErr) {
-          console.error("KV write error (update recovery answer):", kvErr);
-        }
+      const recoveryAnswerHash = await hashRecoveryAnswer(recoveryAnswerRaw.toLowerCase());
+      const stored = await storeRecoveryAnswerHash(env, auth.username, recoveryAnswerHash);
+      if (!stored.ok) {
+        return json({ ok: false, error: "Failed to update recovery answer. Please try again." }, 500);
       }
 
       if (body.creatorKey) {
@@ -2095,10 +2075,12 @@
         if (!presentedAnswer) {
           return failForgot("A Recovery Answer is required for this account. Please enter your Recovery Answer.", 401);
         }
-        const answerMatches = await verifyCreatorKey(presentedAnswer.toLowerCase(), profile.recoveryAnswerHash);
+        const answerMatches = await verifyRecoveryAnswer(presentedAnswer.toLowerCase(), profile.recoveryAnswerHash);
         if (!answerMatches) {
           return failForgot(genericError, 401);
         }
+        // Rehashed if it was stored the old way (P7-4).
+        await upgradeRecoveryAnswerHash(env, v.normalized, presentedAnswer.toLowerCase(), profile);
       }
 
       await storeCreatorKeyLookup(env, presentedKey, v.normalized);

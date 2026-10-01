@@ -965,6 +965,108 @@ async function verifyCreatorKey(key, storedHash) {
   }
 }
 
+// --- Recovery answers: six times the work (P7-4) ------------------------------
+//
+// A Creator Key is generated: ~60 random bits (generateCreatorKey), out of
+// reach of guessing at any hash cost, so it stays at one PBKDF2 run -- which
+// every unmemoized sign-in check pays. A recovery answer is chosen by a
+// person, lowercased, and can replace the key outright (/api/creator/reset-
+// key): if the stored hashes ever leaked, it is the one that could be guessed
+// offline. So it gets more work.
+//
+// The plan's target was 600,000 iterations. Workers refuse a PBKDF2 call over
+// 100,000 (workerd's DEFAULT_MAX_PBKDF2_ITERATIONS), so the work is chained:
+// round 1 derives from the answer, each later round from the round before,
+// same salt, 100,000 iterations each. Six rounds are the 600,000 iterations'
+// work, about 90 ms of CPU, spent only when an answer is set or used.
+//
+// Stored as pbkdf2x:<rounds>:<iterations>:<salt>:<hash>. An answer stored the
+// old way (pbkdf2:...) still verifies, and is rehashed the next time it is
+// used correctly (reset-key, forgot-username), while the answer is at hand.
+const RECOVERY_HASH_ROUNDS = 6;
+
+async function pbkdf2Chain(secret, salt, iterations, rounds) {
+  let material = new TextEncoder().encode(secret);
+  let bits = null;
+  for (let r = 0; r < rounds; r++) {
+    const key = await crypto.subtle.importKey("raw", material, "PBKDF2", false, ["deriveBits"]);
+    bits = new Uint8Array(await crypto.subtle.deriveBits({ name: "PBKDF2", salt, iterations, hash: "SHA-256" }, key, 256));
+    material = bits;
+  }
+  return bits;
+}
+
+async function hashRecoveryAnswer(answer) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const bits = await pbkdf2Chain(answer, salt, PBKDF2_ITERATIONS, RECOVERY_HASH_ROUNDS);
+  return `pbkdf2x:${RECOVERY_HASH_ROUNDS}:${PBKDF2_ITERATIONS}:${bufferToHex(salt)}:${bufferToHex(bits)}`;
+}
+
+async function verifyRecoveryAnswer(answer, storedHash) {
+  const stored = String(storedHash || "");
+  if (stored.startsWith("pbkdf2:")) return verifyCreatorKey(answer, stored);
+  const parts = stored.split(":");
+  if (parts.length !== 5 || parts[0] !== "pbkdf2x") return false;
+  const rounds = parseInt(parts[1], 10);
+  const iterations = parseInt(parts[2], 10);
+  // Bounded, so a stored value can never ask for unbounded work.
+  if (!(rounds >= 1 && rounds <= 20) || !(iterations >= 1 && iterations <= PBKDF2_ITERATIONS)) return false;
+  try {
+    const bits = await pbkdf2Chain(answer, hexToBuffer(parts[3]), iterations, rounds);
+    return timingSafeEqualHex(bufferToHex(bits), parts[4]);
+  } catch {
+    return false;
+  }
+}
+
+// Whether a stored answer already has today's work factor.
+function recoveryAnswerHashIsCurrent(storedHash) {
+  const parts = String(storedHash || "").split(":");
+  return parts.length === 5 && parts[0] === "pbkdf2x" &&
+    parseInt(parts[1], 10) >= RECOVERY_HASH_ROUNDS && parseInt(parts[2], 10) >= PBKDF2_ITERATIONS;
+}
+
+// A new recovery answer hash, wherever the profile is kept: D1's creators row
+// (the copy getCreator reads first), the accounts mirror, then the KV profile.
+// ok:false only when the creators row could not be written.
+async function storeRecoveryAnswerHash(env, username, hash) {
+  if (env && env.DB) {
+    try {
+      await env.DB.prepare("UPDATE creators SET recovery_answer_hash = ? WHERE username = ?").bind(hash, username).run();
+    } catch (dbErr) {
+      console.error("D1 write error (recovery answer):", dbErr);
+      return { ok: false };
+    }
+    try {
+      await env.DB.prepare("UPDATE accounts SET recovery_answer_hash = ? WHERE username = ? COLLATE NOCASE").bind(hash, username).run();
+    } catch {}
+  }
+  const raw = await getCreator(env, username);
+  if (raw) {
+    try {
+      const profile = JSON.parse(raw);
+      profile.recoveryAnswerHash = hash;
+      await env.CONFIGS.put(`creator:${username}`, JSON.stringify(profile));
+    } catch (kvErr) {
+      console.error("KV write error (recovery answer):", kvErr);
+    }
+  }
+  return { ok: true };
+}
+
+// An answer just verified, rehashed if it was stored the old way. Never
+// throws: failing to upgrade must not fail the request that proved it.
+async function upgradeRecoveryAnswerHash(env, username, answer, profile) {
+  if (!profile || recoveryAnswerHashIsCurrent(profile.recoveryAnswerHash)) return;
+  try {
+    const hash = await hashRecoveryAnswer(answer);
+    const stored = await storeRecoveryAnswerHash(env, username, hash);
+    if (stored.ok) profile.recoveryAnswerHash = hash;
+  } catch (e) {
+    console.error("Failed to upgrade a recovery answer hash:", e);
+  }
+}
+
 // --- Verified-key memo (per-isolate, in memory only) -------------------------
 // verifyCreatorKey above runs PBKDF2 at 100,000 iterations, and because a
 // Creator Profile issues no session or token, EVERY authenticated request
@@ -1977,19 +2079,32 @@ function readCookieValue(cookieHeader, name) {
   }
 }
 
+// The site's default for a browser that has not chosen: the FF_NEW_UI Worker
+// variable. Set to 1, every visitor gets the new interface; a browser that
+// chose (the cookie, `?ff_new_ui=0` or `=1`) keeps its choice either way.
+// handleFetch (25_) stamps it on the request, so every page route -- most of
+// which see the request but not env -- decides the same way.
+function newUiDefaultOn(env) {
+  const v = env ? env.FF_NEW_UI : undefined;
+  return v === "1" || v === "true" || v === true;
+}
+
 function isNewUiRequest(request) {
   try {
     const raw = readCookieValue(request && request.headers ? request.headers.get("Cookie") : "", NEW_UI_COOKIE).trim().toLowerCase();
-    return raw === "1" || raw === "on" || raw === "true";
+    if (raw === "1" || raw === "on" || raw === "true") return true;
+    if (raw === "0" || raw === "off" || raw === "false") return false;
+    return !!(request && request.newUiDefault === true);
   } catch {
     return false;
   }
 }
 
+// "Off" is remembered as 0 rather than by clearing the cookie: with the new
+// interface the site's default, a browser with no cookie gets it, so clearing
+// would have undone the choice to keep the classic page.
 function appShellCookieHeader(on) {
-  return on
-    ? `${NEW_UI_COOKIE}=1; Path=/; Max-Age=31536000; SameSite=Lax`
-    : `${NEW_UI_COOKIE}=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+  return `${NEW_UI_COOKIE}=${on ? "1" : "0"}; Path=/; Max-Age=31536000; SameSite=Lax`;
 }
 
 // The one place the cookie is written. Returns null for every request that is

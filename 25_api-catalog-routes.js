@@ -180,6 +180,10 @@ async function handleFetch(request, env, ctx) {
     // token as its config segment (see v2InstallPath, 27_installs.js).
     const path = v2InstallPath(url.pathname) || url.pathname;
 
+    // Whether a browser that has not chosen gets the new interface
+    // (FF_NEW_UI; isNewUiRequest, 02_).
+    request.newUiDefault = newUiDefaultOn(env);
+
     // ?ff_new_ui=1 (or 0) turns the new UI shell on or off for this browser,
     // then bounces to the same address without the parameter (P6-1). Handled
     // before anything else so it works from any page of the site.
@@ -258,9 +262,8 @@ async function handleFetch(request, env, ctx) {
     // The new UI shell's own paths (Phase 6, P6-1): /catalogs, /lists,
     // /channels, /discover, /search, /settings and a sub-tab below any of them
     // (/settings/connections, /catalogs/quickadd). Served only to a browser
-    // that carries the FF_NEW_UI cookie; without it these addresses keep
-    // 404ing exactly as they do today, so nothing changes for anyone else, and
-    // turning the shell off again is one cookie rather than a deploy.
+    // that gets the new interface (its cookie, or the FF_NEW_UI variable);
+    // for any other these addresses 404, as they always did.
     //
     // Exact paths only: /lists/<slug> and /channels/<user>/<slug> are share
     // links and keep their own routes below.
