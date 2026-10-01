@@ -1044,3 +1044,35 @@ describe("Watch History from the activity database: episode names, and every pla
     assert.equal(data.watchHistory[data.watchHistory.length - 1].id, "bulk5199", "the oldest play is there too");
   });
 });
+
+// The live site turns on FF_V2_LISTS_ONLY and FF_EVENT_TRACKING within a day of
+// each other, so the watch-history journeys must hold with both on: the
+// Watchlist that save-tracking carries is a list (v2 only), and everything
+// else is the activity database.
+describe("FF_EVENT_TRACKING together with FF_V2_LISTS_ONLY", () => {
+  const both = { FF_V2_LISTS_READ: "1", FF_V2_LISTS_ONLY: "1" };
+
+  it("loads, adds a play with its name, and keeps a Watchlist change", async () => {
+    const { env, user } = await eventTrackingSetup(both);
+    const data = await loadTracking(env, user);
+    assert.ok(data.watchHistory.length >= 5, `history served: ${data.watchHistory.length}`);
+    const added = { id: "e8", type: "episode", showId: "tt0903747", showTitle: "Breaking Bad", seasonNum: 1, episodeNum: 7, name: "A No-Rough-Stuff-Type Deal", watchedAt: T0 + 8 * H };
+    const watchlist = [{ id: "tt0133093", type: "movie", name: "The Matrix" }];
+    const r = await saveTrackingV2(env, user, { ...data, watchHistory: [added, ...data.watchHistory], watchlist, watchlistUpdatedAt: T0 + 8 * H, expectedClientVersion: data.trackingClientVersion });
+    assert.equal(r.body.ok, true, JSON.stringify(r.body));
+    const again = await loadTracking(env, user);
+    assert.equal(again.watchHistory[0].id, "e8");
+    assert.equal(again.watchHistory[0].name, "A No-Rough-Stuff-Type Deal");
+    assert.deepEqual(again.watchlist.map((it) => it.id), ["tt0133093"], "the Watchlist is a v2 list and keeps the change");
+    assert.equal(await env.CONFIGS.get(`creatorlist:${user.creatorName}:watchlist`), null, "nothing written to the old list storage");
+  });
+
+  it("an intentional removal holds", async () => {
+    const { env, user } = await eventTrackingSetup(both);
+    const data = await loadTracking(env, user);
+    const without = data.watchHistory.filter((it) => it.id !== "tt0137523");
+    const r = await saveTrackingV2(env, user, { ...data, watchHistory: without, intentionalRemoval: true, expectedClientVersion: data.trackingClientVersion });
+    assert.equal(r.body.ok, true, JSON.stringify(r.body));
+    assert.ok(!(await loadTracking(env, user)).watchHistory.some((it) => it.id === "tt0137523"));
+  });
+});

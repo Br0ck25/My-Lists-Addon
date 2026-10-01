@@ -839,6 +839,8 @@ What it means:
 
 So step 1 above is, in practice: press **Start over**, keep the page open until it says *Done*, then *Check results* must show **0 waiting**. Then switch, straight away.
 
+After *Start over* (2026-10-01): **Accounts: 709 done, 0 in progress, 0 waiting to be copied again, 0 failed.** Lists 966 found, 965 unchanged; items as before (the same 138 repeated titles); shared channels 100, all unchanged. Clear to switch.
+
 ---
 
 ## Release 11: episode names and every play, for Watch History from the activity database
@@ -867,3 +869,21 @@ Nothing changes while `FF_EVENT_TRACKING` is off, except that plays start fillin
 7. Check: Watch History shows episode names and stills and goes all the way back; play something and it appears at the top; Continue Watching moves on; remove an item and it stays removed.
 
 **Rollback before step 6:** paste Release 10's file. The new table is harmless to it. **After step 6** there is no going back to the old storage, only forward fixes.
+
+### Live: the history copy's *Start over* (2026-10-01)
+
+Reported by the owner, with Release 11 and `0020` in place:
+
+> Accounts: 709 done, 0 in progress, 0 waiting, 0 failed.
+> History: 45842 entries in KV, 45842 in D1, 1077 in the scrobble queue, 45853 different entries in all. 45709 plays copied; 144 were the same play twice (within ten minutes), 0 had no usable id. 5123 titles TMDB could not place yet (kept, tried again later).
+> Shows: 1586 with progress, 516 finished, 98 hidden from Continue Watching, 5 hidden from Airing Next, 24 storyline or movie suggestions kept, 6 in Continue Watching with no history. Movies watched: 12135.
+> Plays now in the activity database: 45882 (the larger of the KV and D1 histories added up: 45842). Accounts with fewer plays than their old history: 0.
+
+What it means:
+- **Nothing is missing:** 45,882 plays against 45,842 in the old history. The 40 extra are plays the Stremio, Nuvio and Plex pings recorded straight into the activity database, which *Start over* keeps. The 144 repeats are one play recorded twice within ten minutes.
+- **The 5,123 titles TMDB could not place are kept** with the id and name they came with. `media.retry` asks TMDB about 200 an hour, so they will be matched over the next day or so. Watch History shows them either way.
+- The episode names came across with the copy, into `media_episodes`.
+
+**Before step 6:** a website removal made after this *Start over* is not in the activity database, so switch soon. If you removed things from Watch History on the website in between, press *Start over* again first. Plays from Stremio, Nuvio and Plex are recorded either way.
+
+Tested before switching: with both `FF_V2_LISTS_ONLY` and `FF_EVENT_TRACKING` on, history loads, a website play is added with its episode name, a Watchlist change is kept (in the new list tables only), and a removal holds (`tests/activity.test.mjs`).
