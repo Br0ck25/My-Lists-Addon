@@ -221,3 +221,68 @@ crons = ["*/6 * * * *"]
 #   npx wrangler secret put CF_ANALYTICS_TOKEN      # API token with Account Analytics: Read
 #   npx wrangler secret put CLOUDFLARE_API_TOKEN    # optional alias for CF_ANALYTICS_TOKEN
 
+# ==============================================================================
+# STAGING ENVIRONMENT (Phase 9, P9-5)
+# Completely isolated staging topology with dedicated D1, KV, R2, Queues,
+# Analytics Engine dataset, and distinct secret keys.
+# Deploy with: npx wrangler deploy --env staging
+# ==============================================================================
+[env.staging]
+name = "my-lists-addon-staging"
+main = "worker_entry_combined.js"
+compatibility_date = "2024-01-01"
+routes = [
+  { pattern = "staging.mylistsaddon.com/*", zone_name = "mylistsaddon.com" }
+]
+
+[[env.staging.kv_namespaces]]
+binding = "CONFIGS"
+id = "YOUR_STAGING_KV_NAMESPACE_ID"
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "my-lists-db-staging"
+database_id = "YOUR_STAGING_DATABASE_ID"
+
+[[env.staging.d1_databases]]
+binding = "DB_ACTIVITY"
+database_name = "mylists-activity-staging"
+database_id = "YOUR_STAGING_ACTIVITY_DATABASE_ID"
+
+[[env.staging.analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "mylists_events_staging"
+
+[[env.staging.r2_buckets]]
+binding = "BLOBS"
+bucket_name = "mylists-blobs-staging"
+
+[[env.staging.queues.producers]]
+binding = "JOBS"
+queue = "mylists-jobs-staging"
+
+[[env.staging.queues.consumers]]
+queue = "mylists-jobs-staging"
+max_batch_size = 25
+max_batch_timeout = 5
+max_retries = 5
+dead_letter_queue = "mylists-jobs-staging-dlq"
+
+[env.staging.triggers]
+crons = ["*/15 * * * *"]
+
+[env.staging.vars]
+ENVIRONMENT = "staging"
+# Staging feature flags enabled ahead of production cutover:
+FF_SESSIONS = "1"
+FF_INSTALLS = "1"
+FF_V2_LISTS_READ = "1"
+FF_V2_LISTS_API = "1"
+FF_EVENT_TRACKING = "1"
+FF_PROVIDER_BREAKER = "1"
+FF_CHART_SNAPSHOTS = "1"
+FF_CANONICAL_IDS = "1"
+FF_MATERIALIZER = "1"
+FF_SCROBBLE_ST_ONLY = "1"
+INSTALL_MIGRATION_PERCENT = "100"
+

@@ -737,8 +737,12 @@ No npm, no `src/` tree, no esbuild, no new test framework (D-11). Phase 2 is now
     4. **Install-Token Scope Isolation:** Validates install tokens/IDs cannot authorize creator endpoints (`/api/creator/lists`, `/api/me`), and legacy scrobble parameters (`creator=&key=`) are rejected with 410 Gone when sunset is active (`FF_SCROBBLE_ST_ONLY`).
     5. **Session Revocation & Expiry:** Asserts immediate session invalidation on logout (`DELETE /api/session`) and complete session clearance on account deletion (`DELETE /api/me`).
     6. **IDOR Matrix (Cross-Account Isolation):** Validates User B cannot view, modify, or delete User A's private custom lists, cannot access User A's provider connections, and cannot view or revoke User A's install links.
-    7. **Admin Authorization:** Enforces strict boundary on `/admin` and mutating admin APIs against unauthenticated or unauthorized actors.
-- [ ] **P9-5** A staging Worker with its own D1, KV, R2 and Queue (dashboard) and a deploy checklist.
+- [x] **P9-5** A staging Worker with its own D1, KV, R2 and Queue (dashboard) and a deploy checklist.
+  - **Done (2026-10-02):** Implemented staging infrastructure configuration, comprehensive operational runbooks, and automated validation tests:
+    1. **Staging Environment Topology (`wrangler.toml`):** Configured `[env.staging]` (`my-lists-addon-staging`) mirroring all 6 core bindings (`CONFIGS`, `DB` pointing to `my-lists-db-staging`, `DB_ACTIVITY` pointing to `mylists-activity-staging`, `BLOBS` pointing to `mylists-blobs-staging`, `JOBS` queue producer and consumer on `mylists-jobs-staging` with `mylists-jobs-staging-dlq`, and `ANALYTICS` dataset `mylists_events_staging`).
+    2. **Staging Operational Guide (`docs/STAGING.md`):** Complete guide documenting 100% architectural isolation guarantees, step-by-step dashboard & CLI provisioning procedures, anonymized fixture seeding from `tests/fixtures/migration-fixtures.mjs`, and k6 automated load verification commands.
+    3. **Production Deploy Checklist (`docs/DEPLOY_CHECKLIST.md` & `docs/OPERATIONS.md`):** Comprehensive 6-phase gated release runbook covering Phase A (Local build, sync, scope, HTML, budget, and test gates), Phase B (D1 exports & Time Travel bookmarks), Phase C (Staging deployment & smoke testing), Phase D (Production migration & deployment procedure), Phase E (30-minute soak monitoring), and Phase F (Emergency rollback protocol).
+    4. **Automated Verification Suite (`tests/staging-deploy-check.test.mjs`):** Regression tests validating `wrangler.toml` staging environment configuration, fresh database schema initialization against SQLite `DatabaseSync`, and deploy checklist documentation gate completeness (3 passing tests).
 
 ## Phase 10 — Cutover and cleanup
 

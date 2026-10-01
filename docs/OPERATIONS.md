@@ -6,25 +6,33 @@ How the hosted Worker is deployed, configured and recovered. The Worker is deplo
 
 ## 1. Release checklist
 
+The comprehensive release procedure is documented in **[`docs/DEPLOY_CHECKLIST.md`](DEPLOY_CHECKLIST.md)** and the staging setup in **[`docs/STAGING.md`](STAGING.md)**. Summary of gates:
+
 1. **Build and verify locally**, from the repo root:
    ```bash
    python build.py
    python check_sync.py
    node --check worker_entry_combined.js
+   node check_bundle_budget.mjs
    node --test tests/*.test.mjs
+   MLA_TEST_V2_LISTS_READ=1 node --test tests/*.test.mjs
    ```
-2. **Apply database migrations first** if the release adds any (see §4). The current release has four, `0014`, `0015`, `0016`, then `0017`. A Worker that needs a newer schema than the database has refuses writes with a maintenance message rather than failing silently. That guard only works once migration `0014` is applied.
-3. **Back up D1** (see §5) if the release contains a migration.
-4. **Deploy.** Cloudflare dashboard → Workers & Pages → the My Lists Worker → **Edit code** → select all → paste the new `worker_entry_combined.js` → **Deploy**.
-5. **Smoke test:**
-   - `/` loads;
+2. **Back up D1** (see §5 and [`docs/DEPLOY_CHECKLIST.md`](DEPLOY_CHECKLIST.md) Phase B) if the release contains a migration.
+3. **Deploy to Staging first** (see [`docs/STAGING.md`](STAGING.md)):
+   - Apply pending migrations to `my-lists-db-staging`.
+   - Deploy code via `npx wrangler deploy --env staging` (or dashboard).
+   - Execute staging smoke tests and queue roundtrip.
+4. **Apply database migrations to Production** in strict sequential order (see §4).
+5. **Deploy to Production.** Cloudflare dashboard → Workers & Pages → `my-lists-addon` → **Edit code** → select all → paste the new `worker_entry_combined.js` → **Deploy**.
+6. **Smoke test production:**
+   - `/` loads (200);
    - an existing install's `/{id}/manifest.json` returns JSON;
    - one catalog row loads;
    - `/lists/public.json` returns lists;
-   - log in on the website.
-6. **Watch** the Worker's *Metrics* and *Logs* for 30 minutes: error rate, CPU time, D1 errors.
+   - log in via `/api/session` or website.
+7. **Soak period:** Watch the Worker's *Metrics* and *Live Logs* for 30 minutes (error rate $< 0.1\%$, median CPU $< 15\text{ ms}$, queue empty).
 
-**Rollback:** paste the previous `worker_entry_combined.js` and Deploy. Keep the last three released files. Migrations are additive, so an older Worker keeps running against a newer schema.
+**Rollback:** See [`docs/DEPLOY_CHECKLIST.md`](DEPLOY_CHECKLIST.md) Phase F. Paste the previous `worker_entry_combined.js` and Deploy. Keep the last three released files. Migrations are additive, so an older Worker keeps running against a newer schema.
 
 ---
 

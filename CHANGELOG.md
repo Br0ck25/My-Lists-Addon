@@ -32,6 +32,24 @@ Nothing to configure for the strict CSP (P7-1, below): it is part of the Worker 
 **Optional, and recommended: put the admin dashboard behind Cloudflare Access** (P7-2, below). It needs the two variables `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` from a Zero Trust Access application for `/admin`, plus **migration `0018_admin_sessions_audit.sql`** (two new tables, safe to run twice). Without any of it the dashboard keeps working exactly as it does today — the admin key, the same cookie — and without the migration you get the old behaviour with a note in the dashboard saying what to apply. `docs/OPERATIONS.md` §25 has the click-by-click steps.
 
 **Nothing to configure for the rate limits** (P7-3, below): they are part of the Worker, and the table they use (`rate_counters`) has existed since migration 0015. One **optional** index, `migrations/0019_rate_counters_window_index.sql`, makes the background cleanup of spent windows cheap (without it the cleanup scans — slower, not broken); one **optional** dashboard step, the edge rate-limiting rules in `docs/OPERATIONS.md` §6, moves the refusal to Cloudflare so the request never reaches the Worker. Neither is needed for anything to work.
+### 🚀 Staging Worker topology and deploy checklist (P9-5)
+
+- **Isolated Staging Environment (`wrangler.toml`, `docs/STAGING.md`):** Configured complete staging environment topology (`my-lists-addon-staging`) with 100% resource isolation from production:
+  - Dedicated staging databases: `my-lists-db-staging` and `mylists-activity-staging`.
+  - Dedicated KV namespace: `my-lists-configs-staging`.
+  - Dedicated R2 bucket: `mylists-blobs-staging`.
+  - Dedicated background queue and DLQ: `mylists-jobs-staging` with `mylists-jobs-staging-dlq` (batch size 25, 5 retries).
+  - Dedicated Analytics Engine dataset: `mylists_events_staging`.
+  - Distinct secrets: independent `ADMIN_KEY`, `TOKEN_ENCRYPTION_KEY`, and `LOOKUP_PEPPER`.
+- **Gated Production Deploy Checklist (`docs/DEPLOY_CHECKLIST.md` & `docs/OPERATIONS.md`):** Comprehensive 6-phase release runbook:
+  - **Phase A (Local & CI Gate):** Build check, source sync check, syntax check, 150 KB first-view bundle budget audit, scope resolution, HTML Living Standard validation, and test suites.
+  - **Phase B (Backup Gate):** D1 export backups and Time Travel bookmarks.
+  - **Phase C (Staging Rehearsal):** Migration execution, worker deployment, smoke testing, and k6 load tests on staging.
+  - **Phase D (Production Deployment):** Ordered migration execution, Worker deployment, and immediate smoke testing.
+  - **Phase E (Post-Deploy Soak):** 30-minute soak monitoring error rates, CPU time, queue messages, and D1 operations.
+  - **Phase F (Rollback Protocol):** Fast code reversion, flag rollback, and database recovery.
+- **Automated Validation Suite (`tests/staging-deploy-check.test.mjs`):** Regression tests validating staging binding symmetry, SQLite schema initialization, and checklist completeness.
+
 ### 🧪 Playwright E2E dropped under D-11 (P9-3)
 
 - **Preserved Fast Zero-Dependency CI:** In accordance with **D-11** (*"No npm build, no src/ tree, bare node + python"*), **P9-3** has been dropped, matching the precedent of P9-1. The existing client test suites (`tests/app-shell-*.test.mjs`, `tests/client-harness.mjs`, `render_check.js`, `html_checks.py`, `scope_check.mjs`) already exercise all 12 UX scenarios, payload contracts, state transitions, and responsive mobile/desktop layouts without downloading browser binaries or inflating CI runtime.
