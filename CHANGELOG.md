@@ -33,6 +33,13 @@ Nothing to configure for the strict CSP (P7-1, below): it is part of the Worker 
 
 **Nothing to configure for the rate limits** (P7-3, below): they are part of the Worker, and the table they use (`rate_counters`) has existed since migration 0015. One **optional** index, `migrations/0019_rate_counters_window_index.sql`, makes the background cleanup of spent windows cheap (without it the cleanup scans — slower, not broken); one **optional** dashboard step, the edge rate-limiting rules in `docs/OPERATIONS.md` §6, moves the refusal to Cloudflare so the request never reaches the Worker. Neither is needed for anything to work.
 
+### ⚡ D1 Read Replication with withSession() (P8-1)
+
+- **Edge Read Replicas:** Read-only requests for catalogs, manifests, v2 install links (`/i/{token}/...`), directory listings (`/lists/public.json`, `/api/public-lists.json`), and public channels are automatically routed through `env.DB.withSession()` to Cloudflare D1 local read replicas, cutting p95 response latencies worldwide.
+- **Sequential Consistency:** Client bookmarks (`x-d1-bookmark`) are forwarded to `withSession()` and response bookmarks are returned in HTTP headers so subsequent reads observe previous writes sequentially.
+- **Primary Route Isolation:** Admin (`/admin`), session auth (`/api/session`, `/api/me`), scrobbles, creator profile changes, and mutation endpoints continue executing directly on the primary D1 database.
+- **Zero-downtime Dashboard Toggle:** Enabling read replication in the Cloudflare Dashboard under Storage & Databases → D1 → Settings → Read Replication activates global replica distribution with zero code changes or Worker restarts.
+
 ### 🔒 Scrobble token enforcement, deprecation warnings, and sunset (P7-6)
 
 - **Scoped scrobble token (`st=`) is primary:** Scrobble requests authenticate via `st=` token (`authForm = "st"`), verified without exposing the root Creator Key in the URL.

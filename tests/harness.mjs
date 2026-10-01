@@ -140,7 +140,7 @@ export function makeD1({ foreignKeys = true, schema = "main" } = {}) {
   // add here -- the drift test in worker.test.mjs is what keeps the two
   // provisioning paths identical.
 
-  const state = { fail: null };
+  const state = { fail: null, sessions: 0, lastBookmark: null };
   const norm = (v) => (v === undefined ? null : typeof v === "boolean" ? (v ? 1 : 0) : v);
 
   // D1's own limits (checked 2026-09-25). SQLite on its own allows far more,
@@ -206,8 +206,9 @@ export function makeD1({ foreignKeys = true, schema = "main" } = {}) {
   };
   const _statBuckets = (kind) => q("SELECT day FROM stats WHERE kind = ?", kind).map((r) => r.day);
 
-  return {
+  const d1 = {
     _db: db,
+    _state: state,
     _creators: tableView("creators", "username"),
     _lists: tableView("creator_lists", "id"),
     _stat,
@@ -257,7 +258,19 @@ export function makeD1({ foreignKeys = true, schema = "main" } = {}) {
       }
     },
     async exec(sql) { db.exec(String(sql)); return { count: 0, duration: 0 }; },
+    withSession(bookmark) {
+      state.sessions = (state.sessions || 0) + 1;
+      state.lastBookmark = bookmark;
+      const bmk = "bmk_" + state.sessions;
+      const sessionObj = {
+        ...d1,
+        getBookmark() { return bmk; },
+        withSession: (bm) => d1.withSession(bm),
+      };
+      return sessionObj;
+    },
   };
+  return d1;
 }
 
 let ipSeq = 1;

@@ -675,7 +675,14 @@ No npm, no `src/` tree, no esbuild, no new test framework (D-11). Phase 2 is now
 
 ## Phase 8 — Performance
 
-- [ ] **P8-1** Enable D1 read replication on `DB`; use `env.DB.withSession()` for catalog, directory and public list reads. *Done when:* p95 latency improves in the non-primary regions.
+- [x] **P8-1** Enable D1 read replication on `DB`; use `env.DB.withSession()` for catalog, directory and public list reads. *Done when:* p95 latency improves in the non-primary regions.
+  - **Done (2026-10-01):** Implemented in `02_http-and-creator-utils.js`, `26_api-creator-and-admin-routes.js`, `27_installs.js`, `29_media.js`, `33_lists-directory.js`, `39_activity-shelves.js`.
+  - **Edge Read Replica Routing:** Catalog, manifest, v2 install, public directory (`/lists/public.json`, `/api/public-lists.json`), and public list/channel requests automatically wrap `env.DB` using `withD1ReadSession(env, request)` to query local D1 read replicas via `env.DB.withSession(bookmark)`.
+  - **Sequential Consistency:** Client bookmarks from `x-d1-bookmark` headers are respected; outgoing responses provide the latest session bookmark via `x-d1-bookmark`.
+  - **Primary Route Isolation:** Admin (`/admin`), session/auth (`/api/session`, `/api/me`), scrobbles, creator endpoints, and mutating APIs remain strictly on the primary D1 database.
+  - **Graceful Fallback:** If `withSession()` is unsupported, gracefully falls back to `env.DB`.
+  - **Documentation & Dashboard Setup:** Added §27 to `docs/OPERATIONS.md` detailing how to enable D1 Read Replication under Cloudflare Dashboard → Storage & Databases → D1 → Settings → Read Replication.
+  - **Tests:** `tests/d1-read-replication.test.mjs` (8 tests verifying manifest, catalog, v2 install, directory, admin exclusion, mutating API exclusion, and fallback behavior).
 - [ ] **P8-2** Replace all `bumpStat` / `bumpStatBy` / `recordTrackedEvent` / `recordSearchQuery` writes with Analytics Engine; `title_daily_stats` for Most Watched; the admin dashboard reads through the Analytics Engine SQL API. Backfill history from `stats`. *Done when:* no D1 writes on page views.
 - [ ] **P8-3** Bundle budget check in CI (first view under 150 KB gzip); route chunks. *Done when:* CI enforces it.
 - [ ] **P8-4** Badged posters: SVG overlay referencing the image URL, or an R2-rendered image keyed by `(poster, badge, day)`; remove the base64 inlining. Precompute the icon bytes. *Done when:* the poster route CPU time halves in measurement.

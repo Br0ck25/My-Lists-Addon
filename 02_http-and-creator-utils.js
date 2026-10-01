@@ -338,7 +338,7 @@ async function handleCspReport(request, env, ctx) {
 //
 // A 304 or a bodyless response has nothing to substitute -- and must not: its
 // whole point is that the browser already holds the bytes.
-async function withSecurityHeaders(response, privatePath = false, extraSetCookie = null, nonce = "", env = null) {
+async function withSecurityHeaders(response, privatePath = false, extraSetCookie = null, nonce = "", env = null, sessionBookmark = null) {
   const headers = new Headers(response.headers);
   let body = response.body;
   const contentType = headers.get("Content-Type") || "";
@@ -356,6 +356,9 @@ async function withSecurityHeaders(response, privatePath = false, extraSetCookie
   }
   if (extraSetCookie && !headers.has("Set-Cookie")) {
     headers.set("Set-Cookie", extraSetCookie);
+  }
+  if (sessionBookmark && !headers.has("x-d1-bookmark")) {
+    headers.set("x-d1-bookmark", sessionBookmark);
   }
   // Deliberately set rather than defaulted -- see isPrivateApiPath.
   if (privatePath) headers.set("Cache-Control", "no-store");
@@ -534,13 +537,18 @@ function instrumentEnv(env, counters) {
     delete: (...a) => { counters.kvWrites++; return kv.delete(...a); },
     list: (...a) => { counters.kvLists++; return kv.list(...a); },
   } : kv;
-  const dbProxy = db ? {
-    prepare: (...a) => { counters.d1Statements++; return db.prepare(...a); },
-    batch: (...a) => { counters.d1Batches++; return db.batch(...a); },
-    exec: (...a) => { counters.d1Statements++; return db.exec(...a); },
-    dump: (...a) => db.dump(...a),
-    withSession: (...a) => db.withSession(...a),
-  } : db;
+  function wrapDbSession(targetDb) {
+    if (!targetDb) return targetDb;
+    return {
+      prepare: (...a) => { counters.d1Statements++; return targetDb.prepare(...a); },
+      batch: (...a) => { counters.d1Batches++; return targetDb.batch(...a); },
+      exec: (...a) => { counters.d1Statements++; return targetDb.exec(...a); },
+      dump: (...a) => targetDb.dump(...a),
+      getBookmark: () => (typeof targetDb.getBookmark === "function" ? targetDb.getBookmark() : null),
+      withSession: (...a) => wrapDbSession(typeof targetDb.withSession === "function" ? targetDb.withSession(...a) : targetDb),
+    };
+  }
+  const dbProxy = wrapDbSession(db);
   return new Proxy(env, {
     get(target, prop, receiver) {
       if (prop === "CONFIGS") return kvProxy;
@@ -567,6 +575,76 @@ function writeRequestMetrics(env, request, response, startedAt, counters) {
   } catch {
     // Metrics must never affect a response.
   }
+}
+
+// --- D1 Read Replication (Phase 8, P8-1) -------------------------------------
+//
+// In Cloudflare D1 with Read Replication enabled, read queries routed through
+// env.DB.withSession() execute against local read replicas rather than the
+// primary database, reducing p95 latency worldwide.
+//
+// withD1ReadSession wraps env so that env.DB resolves to a replica session for
+// read-only request paths (catalog, directory, and public list reads).
+// d1Read(env, request) can also be used directly where an explicit read session
+// is desired.
+function d1Read(env, request = null) {
+  if (!env || !env.DB) return null;
+  if (env._d1Session) return env._d1Session;
+  if (typeof env.DB.withSession === "function") {
+    try {
+      const bookmark = (request && typeof request.headers?.get === "function" ? request.headers.get("x-d1-bookmark") : null) || "first-unconstrained";
+      return env.DB.withSession(bookmark);
+    } catch {
+      return env.DB;
+    }
+  }
+  return env.DB;
+}
+
+function withD1ReadSession(env, request = null) {
+  if (!env || !env.DB || typeof env.DB.withSession !== "function") return env;
+  if (env._d1Session) return env;
+  try {
+    const bookmark = (request && typeof request.headers?.get === "function" ? request.headers.get("x-d1-bookmark") : null) || "first-unconstrained";
+    const session = env.DB.withSession(bookmark);
+    if (!session) return env;
+    return new Proxy(env, {
+      get(target, prop, receiver) {
+        if (prop === "DB") return session;
+        if (prop === "_d1Session") return session;
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+  } catch {
+    return env;
+  }
+}
+
+function isD1ReplicaReadRequest(request) {
+  if (!request) return false;
+  const method = request.method || "GET";
+  if (method !== "GET" && method !== "HEAD") return false;
+  let pathname = "";
+  try {
+    pathname = new URL(request.url).pathname;
+  } catch {
+    return false;
+  }
+  // Exclude admin, session, auth, me, save, create, and maintenance routes
+  if (/^\/(admin|api\/(session|me|creator|save|imports))\b/.test(pathname)) return false;
+
+  // Stremio / Nuvio catalog and install paths (including v2 /i/{token}/...)
+  if (/\/(manifest\.json|catalog\/|meta\/|subtitles\/)/.test(pathname)) return true;
+
+  // Directory and search
+  if (pathname === "/lists/public.json" || pathname === "/api/public-lists.json" || pathname === "/api/search-published-lists") return true;
+
+  // Public lists and channels
+  if (/^\/(lists|channel|channels)\//.test(pathname)) return true;
+  if (/^\/api\/lists\/[^/]+(\/items)?$/.test(pathname)) return true;
+  if (pathname === "/api/channel-lineup" || pathname === "/api/channel-preset") return true;
+
+  return false;
 }
 
 function base64UrlEncodeBytes(bytes) {
@@ -4080,7 +4158,8 @@ async function getPublicListIndex(env, ctx, opts = {}) {
   const wantsPage = Number.isFinite(opts.limit) && opts.limit > 0;
   const pageLimit = wantsPage ? Math.min(Math.floor(opts.limit), PUBLIC_INDEX_MAX_ROWS) : PUBLIC_INDEX_MAX_ROWS;
   const pageOffset = Number.isFinite(opts.offset) && opts.offset > 0 ? Math.floor(opts.offset) : 0;
-  if (env && env.DB) {
+  const db = d1Read(env) || (env && env.DB);
+  if (db) {
     try {
       const query = `
         SELECT
@@ -4109,8 +4188,8 @@ async function getPublicListIndex(env, ctx, opts = {}) {
         SELECT (SELECT COUNT(*) FROM creator_lists WHERE visibility = 'public') AS n
       `;
       const [res, countRes] = await Promise.all([
-        env.DB.prepare(query).bind(pageLimit, pageOffset).all(),
-        env.DB.prepare(countQuery).all().catch(() => null),
+        db.prepare(query).bind(pageLimit, pageOffset).all(),
+        db.prepare(countQuery).all().catch(() => null),
       ]);
       const rows = (res && res.results) ? res.results : [];
       const entries = rows.map((r) => ({

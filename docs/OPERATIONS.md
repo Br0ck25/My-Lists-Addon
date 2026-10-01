@@ -529,3 +529,26 @@ You are bounced back to the page you asked for, without the parameter, and the c
   A row disappears once its window is a day old. Nothing in the dashboard shows these; they are operational counters, not statistics.
 - **Setting a limit** means editing the constant the call site names (`CSP_REPORT_MAX_PER_MINUTE`, `DETAILS_BATCH_IDS_PER_MINUTE`, `BULK_RESOLVE_ITEMS_PER_MINUTE`, `ADMIN_LOGIN_MAX_FAILURES_PER_DAY`, …) in `00_constants.js` and redeploying — there is deliberately no per-deployment variable for any of them, because a limit nobody can see in the code is a limit nobody can reason about. The one exception is §6's WAF rules, which are dashboard edits.
 - **Nothing to undo** if you roll the deploy back: the previous file writes `ratelimit:` KV keys again and ignores the table. The table itself is harmless without the code (it is only rows of `bucket:key` and counts, and it is not read or written by anything else), and the index is one of the ones `schema.sql` provisions.
+
+## 27. D1 Read Replication (P8-1)
+
+Cloudflare D1 supports global Read Replication, maintaining read-only replicas of your database in regions close to your users worldwide. Catalog requests, directory browsing, and public list queries now automatically use `env.DB.withSession()` to execute against nearby replicas instead of routing across the globe to the primary database location.
+
+### How it works
+
+- **Edge Replica Routing:** On read paths (manifests, catalog requests, v2 install links, directory listings, and channel lineups), the Worker binds a D1 read session with sequential consistency.
+- **Consistency Bookmarks:** Outgoing responses on read paths include an `x-d1-bookmark` header. If a client forwards this header on subsequent requests, the Worker asks D1 for a replica that has caught up with that bookmark. If no bookmark is provided, `first-unconstrained` is used to execute immediately against the closest available replica.
+- **Mutations Stay on Primary:** Admin routes (`/admin`), authentication/sessions (`/api/session`, `/api/me`), scrobbles, imports, and creator writes bypass the read replica session and query the primary D1 database directly to ensure strict read-after-write consistency.
+- **Graceful Fallback:** If `withSession()` is unavailable (e.g. local development or older D1 runtime), the Worker transparently falls back to `env.DB` with zero errors.
+
+### Enabling Read Replication in Cloudflare Dashboard
+
+Read replication is configured in Cloudflare's dashboard (no Worker environment variables or code changes required):
+
+1. Log into the **Cloudflare Dashboard**.
+2. Navigate to **Storage & Databases** → **D1 SQL Database**.
+3. Select your production database (e.g. `my-lists-db`).
+4. Select the **Settings** tab.
+5. Under **Read Replication**, click to enable read replication and select your desired replica regions (or choose automatic distribution).
+6. Once enabled, D1 begins serving the `withSession()` calls from replicas in the configured regions automatically.
+

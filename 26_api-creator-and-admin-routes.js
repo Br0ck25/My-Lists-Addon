@@ -8186,11 +8186,13 @@ export default {
     // FF_EVENT_TRACKING: tracking records of accounts served from the
     // activity database are read and written there (40_event-tracking.js).
     const runEnv = eventTrackingEnv(counters ? instrumentEnv(env, counters) : env);
+    // P8-1: D1 Read Replication (withSession) for catalog, directory and public list reads.
+    const effectiveEnv = isD1ReplicaReadRequest(request) ? withD1ReadSession(runEnv, request) : runEnv;
     // FF_PROVIDER_BREAKER (41_provider-breaker.js).
     configureProviderBreaker(env);
     try {
       response = await schemaWriteGate(request, env);
-      if (!response) response = await handleFetch(request, runEnv, ctx);
+      if (!response) response = await handleFetch(request, effectiveEnv, ctx);
     } catch (err) {
       // The boundary this file did not have. handleFetch has no top-level
       // try, so any uncaught throw -- a KV put hitting its 1-write-per-second
@@ -8230,7 +8232,11 @@ export default {
     // for an HTML page, into every inline <script>/<style> the page
     // carries -- see withSecurityHeaders and CSP_NONCE_PLACEHOLDER.
     const nonce = cspNonce();
-    return await withSecurityHeaders(response, privatePath, request ? request._sessionCookie : null, nonce, env);
+    let sessionBookmark = null;
+    if (effectiveEnv && effectiveEnv._d1Session && typeof effectiveEnv._d1Session.getBookmark === "function") {
+      try { sessionBookmark = effectiveEnv._d1Session.getBookmark(); } catch {}
+    }
+    return await withSecurityHeaders(response, privatePath, request ? request._sessionCookie : null, nonce, env, sessionBookmark);
   },
 
   // Runs on whatever schedule this Worker's owner configured under
