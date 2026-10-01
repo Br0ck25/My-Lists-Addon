@@ -3454,6 +3454,20 @@ ${seoHeadHtml}
     transform: scale(0.98);
     transition: transform 0.15s ease, opacity 0.15s ease;
   }
+  /* What marks the item being moved, on every drag-to-reorder
+     (createSortableList, 16_): catalog rows, Your Custom Lists, My Channels,
+     and the picks in the channel and custom list builders. Only the list
+     cards had it; the owner asked for it everywhere. */
+  .sortable-item.dragging,
+  .entry.dragging,
+  .list-card.dragging,
+  .custom-list-pick.dragging,
+  .channel-pick.dragging,
+  .creator-list-row.dragging,
+  .live-preview-poster-card.dragging {
+    outline: 2px dashed var(--accent) !important;
+    outline-offset: 2px;
+  }
 
   @media (max-width: 640px) {
     .customListMoveBtn { display: none !important; }
@@ -3467,6 +3481,12 @@ ${seoHeadHtml}
     .actions button, .actions a { width: auto; }
     .custom-list-pick-poster { width: 72px; height: 108px; }
     .row { flex-direction: row; }
+    /* A box with its button beside it (Lists -> Import's name and Import list,
+       among others): every input is width:100%, so side by side it squeezed
+       the button until its words stacked. The button keeps its own width and
+       the box takes what is left. */
+    .row > input + button, .row > select + button { flex: 0 0 auto; white-space: nowrap; }
+    .row > input, .row > select { min-width: 0; }
     .field-row { grid-template-columns: minmax(0, 1fr) auto; }
     #lists { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }

@@ -57,42 +57,44 @@ function routesFor(overrides) {
 }
 
 describe("the shell's Settings view", () => {
-  it("renders four panels with no inline handlers in any of them", async () => {
+  // Devices and the install link. The account and connections cards are not
+  // drawn: Your Account and External Accounts & API Keys, on the same page,
+  // have the same buttons, and the owner found each one twice.
+  it("renders the devices and install link panels, with no inline handlers", async () => {
     const client = loadClient({ newUi: true, signedIn: true, routes: routesFor() });
     await openSettings(client);
     const markup = home(client);
-    for (const role of ["account", "devices", "connections", "installs"]) {
+    for (const role of ["devices", "installs"]) {
       assert.ok(markup.includes('id="appShellSettingsBody-' + role + '"'), role + " panel is missing");
     }
+    for (const role of ["account", "connections"]) {
+      assert.equal(markup.includes('id="appShellSettingsBody-' + role + '"'), false, role + " panel is back: its buttons are on the page twice");
+    }
     assert.equal(/on[a-z]+=/.test(markup), false, "the new panels must not add inline handlers");
-    assert.ok(panel(client, "account").includes('data-app-shell-action="account-signout"'));
-    assert.ok(panel(client, "connections").includes('data-app-shell-action="connection-connect"'));
+    assert.equal(markup.includes("account-signout"), false);
+    assert.equal(markup.includes("account-delete"), false);
   });
 
-  it("reads the account, its devices, its connections and its install links over the session cookie", async () => {
+  it("reads the account, its devices and its install links over the session cookie", async () => {
     const client = loadClient({ newUi: true, signedIn: true, routes: routesFor() });
     await openSettings(client);
 
-    assert.match(panel(client, "account"), /Alice/);
-    assert.match(panel(client, "account"), /@alice/);
     assert.match(panel(client, "devices"), /Chrome on Windows/);
     assert.match(panel(client, "devices"), /This device/);
     assert.match(panel(client, "devices"), /Safari on iOS/);
-    assert.match(panel(client, "connections"), /Connected as @alice/);
-    assert.match(panel(client, "connections"), /Reconnect as @alicetv/);
-    assert.match(panel(client, "connections"), /Not connected/); // MDBList and TMDB
     assert.match(panel(client, "installs"), /Living room/);
     assert.match(panel(client, "installs"), /Revoke/);
 
-    for (const path of ["/api/me", "/api/me/sessions", "/api/connections", "/api/installs"]) {
+    for (const path of ["/api/me", "/api/me/sessions", "/api/installs"]) {
       const sent = requestsTo(client, path);
       assert.ok(sent.length >= 1, "no request to " + path);
       assert.equal(sent[0].credentials, "same-origin");
       assert.equal(sent[0].cache, "no-store");
     }
+    assert.equal(requestsTo(client, "/api/connections").length, 0, "nothing draws connections here any more");
   });
 
-  it("says what is unavailable instead of showing an empty card", async () => {
+  it("says what is unavailable, and nothing about saved install links while they are off", async () => {
     const client = loadClient({
       newUi: true,
       signedIn: true,
@@ -102,7 +104,11 @@ describe("the shell's Settings view", () => {
       }),
     });
     await openSettings(client);
-    assert.match(panel(client, "installs"), /not switched on for this site yet/);
+    // The owner asked what "Saved install links are not switched on for this
+    // site yet" meant: nothing on the site makes one, so it is not mentioned.
+    assert.doesNotMatch(panel(client, "installs"), /not switched on/);
+    assert.doesNotMatch(panel(client, "installs"), /saved on your account/);
+    assert.match(panel(client, "installs"), /Get install link/);
     // escapeHtml turns the apostrophe into &#39; on the way in, which is right.
     assert.match(panel(client, "devices"), /Sessions aren/);
   });
@@ -110,12 +116,8 @@ describe("the shell's Settings view", () => {
   it("signed out, asks nobody and points at signing in", async () => {
     const client = loadClient({ newUi: true, routes: { "/api/me": async () => SIGNED_OUT } });
     await openSettings(client);
-    assert.match(panel(client, "account"), /You are not signed in/);
-    assert.match(panel(client, "account"), /Sign in or restore/);
-    assert.match(panel(client, "account"), /Import a backup file/);
     assert.match(panel(client, "devices"), /Sign in to see the devices/);
-    assert.match(panel(client, "connections"), /Sign in to connect Trakt/);
-    assert.match(panel(client, "installs"), /Sign in to keep named install links/);
+    assert.doesNotMatch(panel(client, "installs"), /named install links/);
     assert.equal(requestsTo(client, "/api/me/sessions").length, 0);
     assert.equal(requestsTo(client, "/api/connections").length, 0);
     assert.equal(requestsTo(client, "/api/installs").length, 0);
@@ -137,7 +139,6 @@ describe("the shell's Settings view", () => {
     assert.equal(sent[0].method, "DELETE");
     assert.equal(sent[0].headers["Content-Type"], "application/json");
     assert.equal(client.get("appShellState.get('account')"), null);
-    assert.match(panel(client, "account"), /You are not signed in/);
   });
 });
 

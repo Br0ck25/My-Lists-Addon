@@ -1419,6 +1419,22 @@ function handlePosterImgError(img) {
   // out: that showed the "No poster" box, and then the lookup's poster as well,
   // one above the other.
   if (img.dataset.fallbackPending) return;
+  // A Better Poster btttr.cc does not have: back to the poster the title came
+  // with, if it had one (rememberBetterPosterOriginal, 19), rather than
+  // looking it up again -- the lookup knows less than the list did about a
+  // title too new for TMDB and Metahub. The Better Poster is still switched
+  // in if the page's warm call gets it. Only once: a stand-in that fails as
+  // well goes on to the lookup below.
+  if (!standIn && typeof betterPosterOriginalFor === 'function') {
+    const failedBetter = img.getAttribute('src') || '';
+    const original = betterPosterOriginalFor(failedBetter);
+    if (original && original !== failedBetter) {
+      img.dataset.posterStandIn = original;
+      img.src = original;
+      if (typeof waitForBetterPoster === 'function') waitForBetterPoster(img, failedBetter);
+      return;
+    }
+  }
   if (img.dataset.hasFailedFallback) {
     showPosterPlaceholderFor(img);
     return;
@@ -1450,6 +1466,8 @@ function handlePosterImgError(img) {
           img.src = data.poster;
           img.style.display = '';
           hidePosterPlaceholderFor(img);
+          // Standing in for a stand-in that failed: this is the one now.
+          if (img.dataset.posterStandIn) img.dataset.posterStandIn = data.poster;
           // The ordinary poster stands in for the Better one, which is
           // switched in if the page's warm call gets it.
           if (betterPosterId && typeof waitForBetterPoster === 'function') {

@@ -1740,8 +1740,27 @@ function clearLocalAccountData() {
   if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
 }
 
-function switchCreatorProfile() {
+// Since sign-in sessions (FF_SESSIONS), signing in also gives this browser a
+// sign-in cookie. Clearing this browser's copy of the account left that cookie
+// signed in: the new interface's Settings, and anything else that reads the
+// cookie, went on as the account just signed out of -- on a shared computer,
+// for the next person too. So the server's session is ended as well; a
+// failure there (offline) still signs this browser out.
+async function switchCreatorProfile() {
+  try {
+    await fetch(ORIGIN + '/api/session', {
+      method: 'DELETE',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      // verifyCsrf (02_) refuses a DELETE without it, body or not.
+      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+    });
+  } catch (e) {}
   clearLocalAccountData();
+  if (typeof appShellState !== 'undefined' && appShellState && typeof appShellState.set === 'function') {
+    appShellState.set({ account: null });
+  }
+  if (typeof appShellRefreshSettingsHome === 'function') appShellRefreshSettingsHome();
   if (typeof showAddedToast === 'function') {
     showAddedToast('Signed out \u2713');
   }

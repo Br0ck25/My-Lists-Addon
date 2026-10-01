@@ -176,6 +176,48 @@ describe("a Better Poster btttr.cc has not drawn yet", () => {
   });
 });
 
+// Enough of the DOM for the handler, the dispatcher and the placeholder.
+function node(tag, className = "", data = {}, attrs = {}) {
+  const n = {
+    tagName: tag.toUpperCase(),
+    className,
+    dataset: { ...data },
+    style: {},
+    children: [],
+    parentElement: null,
+    innerHTML: "",
+    isConnected: true,
+    _attributes: { ...attrs },
+    get parentNode() { return this.parentElement; },
+    get classList() {
+      const self = this;
+      return { contains: (c) => String(self.className).split(/\s+/).includes(c) };
+    },
+    get nextElementSibling() {
+      if (!this.parentElement) return null;
+      const sibs = this.parentElement.children;
+      return sibs[sibs.indexOf(this) + 1] || null;
+    },
+    getAttribute(k) { return k === "src" ? (this.src || null) : (k in this._attributes ? this._attributes[k] : null); },
+    setAttribute(k, v) { this._attributes[k] = String(v); },
+    hasAttribute(k) { return k in this._attributes; },
+    appendChild(child) { child.parentElement = this; this.children.push(child); return child; },
+    querySelector(sel) {
+      const want = sel.replace(":scope > ", "").replace(".", "");
+      return this.children.find((c) => String(c.className).split(/\s+/).includes(want)) || null;
+    },
+  };
+  return n;
+}
+
+// The browser's one error event, through every listener the page has.
+function failToLoad(client, img) {
+  fireListeners(client, { type: "error", target: img, bubbles: false, preventDefault() {}, stopPropagation() {} });
+}
+
+const shownPlaceholders = (wrap) => wrap.children.filter((c) =>
+  c.classList.contains("live-preview-poster-placeholder") && c.style.display !== "none");
+
 // Search's movie and show tiles (renderTitlePosterCards, 19_) name their
 // poster handler in data-act, and Release 9 gave them Better Posters. One
 // Better Poster that failed then reached handlePosterImgError twice -- the
@@ -185,40 +227,6 @@ describe("a Better Poster btttr.cc has not drawn yet", () => {
 // the lookup then brought the ordinary poster back, and the tile showed both,
 // one above the other. Seen on the site searching "one last".
 describe("a failed Better Poster on a Search tile", () => {
-  // Enough of the DOM for the handler, the dispatcher and the placeholder.
-  function node(tag, className = "", data = {}, attrs = {}) {
-    const n = {
-      tagName: tag.toUpperCase(),
-      className,
-      dataset: { ...data },
-      style: {},
-      children: [],
-      parentElement: null,
-      innerHTML: "",
-      isConnected: true,
-      _attributes: { ...attrs },
-      get parentNode() { return this.parentElement; },
-      get classList() {
-        const self = this;
-        return { contains: (c) => String(self.className).split(/\s+/).includes(c) };
-      },
-      get nextElementSibling() {
-        if (!this.parentElement) return null;
-        const sibs = this.parentElement.children;
-        return sibs[sibs.indexOf(this) + 1] || null;
-      },
-      getAttribute(k) { return k === "src" ? (this.src || null) : (k in this._attributes ? this._attributes[k] : null); },
-      setAttribute(k, v) { this._attributes[k] = String(v); },
-      hasAttribute(k) { return k in this._attributes; },
-      appendChild(child) { child.parentElement = this; this.children.push(child); return child; },
-      querySelector(sel) {
-        const want = sel.replace(":scope > ", "").replace(".", "");
-        return this.children.find((c) => String(c.className).split(/\s+/).includes(want)) || null;
-      },
-    };
-    return n;
-  }
-
   // renderMediaCard's tile for a TMDB search result whose Better Poster was
   // switched in by applyBetterPostersToTmdbTiles.
   function searchTile(client) {
@@ -233,14 +241,6 @@ describe("a failed Better Poster on a Search tile", () => {
     client.document.createElement = (t) => node(t);
     return { wrap, img };
   }
-
-  // The browser's one error event, through every listener the page has.
-  function failToLoad(client, img) {
-    fireListeners(client, { type: "error", target: img, bubbles: false, preventDefault() {}, stopPropagation() {} });
-  }
-
-  const shownPlaceholders = (wrap) => wrap.children.filter((c) =>
-    c.classList.contains("live-preview-poster-placeholder") && c.style.display !== "none");
 
   it("shows the title's ordinary poster, and no \"No poster\" box under it", async () => {
     const client = loadWithFallback({ ok: true, poster: "https://image.tmdb.org/t/p/w500/onelastride.jpg" });
@@ -277,6 +277,73 @@ describe("a failed Better Poster on a Search tile", () => {
     await settle();
 
     assert.equal(requestsTo(client, "/api/poster-fallback").length, 1, "not looked up again");
+    assert.equal(img.style.display, "none");
+    assert.equal(shownPlaceholders(wrap).length, 1);
+  });
+});
+
+// New on Streaming (07_) lists titles by IMDb id the day a service adds them,
+// with JustWatch's poster. Some are too new for btttr.cc, TMDB and Metahub
+// alike. With Better Posters on, that poster was replaced by a Better Poster
+// btttr.cc could not draw, the lookup that followed found nothing either, and
+// the tile said "No poster" -- while the list had a poster all along. Seen on
+// the site: The Devil's Mark (tt39833082), Full Figured Flings (tt35457754).
+describe("a Better Poster btttr.cc does not have, on a title the list gave a poster", () => {
+  const JUSTWATCH = "https://images.justwatch.com/poster/342779810/s592/the-devils-mark-2026.jpg";
+
+  function newOnStreamingTile(fallbackAnswer) {
+    const client = loadClient({
+      storage: { "myListAddon:betterPosters": "1" },
+      routes: { "/api/poster-fallback": () => ({ json: fallbackAnswer }) },
+    });
+    client.document.createElement = (t) => node(t);
+    const item = { id: "tt39833082", type: "movie", name: "The Devil's Mark", poster: JUSTWATCH };
+    const src = client.call("resolveClientPoster", item, item.poster);
+    const card = node("div", "media-card clickable-poster", { id: item.id, type: "movie", title: item.name });
+    const wrap = card.appendChild(node("div", "media-card-poster"));
+    const img = wrap.appendChild(node("img", "live-preview-poster", {}, {
+      "data-act": "handlePosterImgError",
+      "data-act-args": '["@self"]',
+    }));
+    img.src = src;
+    return { client, wrap, img, src };
+  }
+
+  it("goes back to the list's own poster, without looking the title up", async () => {
+    const { client, wrap, img, src } = newOnStreamingTile({ ok: true, poster: "https://images.metahub.space/poster/medium/tt39833082/img" });
+    assert.match(src, /\/bp\/[^/]+\/tt39833082\.jpg/, "Better Posters is on for this tile");
+
+    failToLoad(client, img);
+    await settle();
+
+    assert.equal(img.src, JUSTWATCH);
+    assert.equal(requestsTo(client, "/api/poster-fallback").length, 0, "nothing to look up: the list had one");
+    assert.notEqual(img.style.display, "none");
+    assert.equal(shownPlaceholders(wrap).length, 0);
+  });
+
+  it("still swaps the Better Poster in if btttr.cc draws it later", async () => {
+    const { client, img, src } = newOnStreamingTile({ ok: false });
+    const probes = [];
+    client.Image = function () { const p = { src: "", onload: null }; probes.push(p); return p; };
+
+    failToLoad(client, img);
+    await settle();
+    client.call("betterPostersReady", [new URL(src).pathname + new URL(src).search]);
+    assert.equal(probes.length, 1);
+    probes[0].onload();
+    assert.equal(img.src, src);
+  });
+
+  it("looks the title up only when the list's poster fails as well", async () => {
+    const { client, wrap, img } = newOnStreamingTile({ ok: false });
+
+    failToLoad(client, img);
+    await settle();
+    failToLoad(client, img);
+    await settle();
+
+    assert.equal(requestsTo(client, "/api/poster-fallback").length, 1);
     assert.equal(img.style.display, "none");
     assert.equal(shownPlaceholders(wrap).length, 1);
   });

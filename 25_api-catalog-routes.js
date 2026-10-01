@@ -7824,7 +7824,13 @@ function generateSearchVariations(query) {
       if (!reqBody.tmdbKey) ctx.waitUntil(bumpStat(env, "apiuse:tmdb"));
       
       const isFreshReq = reqBody.fresh === "1" || reqBody.fresh === true || (url && url.searchParams.get("fresh") === "1");
-      const details = await fetchTmdbItemDetails(imdbId, tmdbKey, reqBody.type, reqBody.region, isFreshReq, env, ctx);
+      let details = await fetchTmdbItemDetails(imdbId, tmdbKey, reqBody.type, reqBody.region, isFreshReq, env, ctx);
+      // A title TMDB has no entry for yet -- New on Streaming lists some the
+      // day a service adds them -- opens from what else is known about it
+      // (57_title-details-fallback.js).
+      if (!details && typeof titleDetailsWithoutTmdb === "function") {
+        details = await titleDetailsWithoutTmdb(env, imdbId, reqBody.type, reqBody.region);
+      }
       if (!details) return json({ ok: false, error: "Not found or TMDB error" }, 404);
       
       // Short max-age -- same reasoning as /api/season's own comment: this

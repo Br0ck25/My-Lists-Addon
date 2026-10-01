@@ -220,6 +220,7 @@ const anonRoutes = (saves) => ({
   "/api/creator/sync/save": () => ({ json: { ok: true } }),
   "/api/creator/sync/meta": () => ({ json: { ok: true } }),
   "/api/creator/sync/save-tracking": () => ({ json: { ok: true } }),
+  "/api/session": () => ({ json: { ok: true } }),
 });
 
 function fillCreateForm(client, name) {
@@ -247,13 +248,46 @@ describe("client: one browser, two accounts", () => {
     });
     client.set("activeCreator", { creatorName: "alice", displayName: "Alice" });
 
-    client.call("switchCreatorProfile");
+    await client.call("switchCreatorProfile");
 
     const remaining = [...client.localStorage._store.entries()]
       .filter(([k, v]) => String(v).includes(SECRET) || /alice/i.test(String(v)) || /alice/i.test(k))
       .map(([k]) => k);
     assert.deepEqual(remaining, [], "the next person on this browser must not find the last one's data");
     assert.equal(client.get("activeCreator"), null);
+  });
+
+  // FF_SESSIONS gives a signed-in browser a sign-in cookie as well. Signing
+  // out of the classic page used to leave it signed in, so the new
+  // interface's Settings went on as the account just signed out of.
+  it("signing out ends the browser's server session too", async () => {
+    const client = loadClient({
+      storage: { "myListAddon:creatorName": "alice", "myListAddon:creatorKey": "MYL-AAAA" },
+      routes: anonRoutes([]),
+    });
+    client.set("activeCreator", { creatorName: "alice", displayName: "Alice" });
+
+    await client.call("switchCreatorProfile");
+
+    const sent = requestsTo(client, "/api/session");
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].method, "DELETE");
+    assert.equal(sent[0].credentials, "same-origin");
+    assert.equal(sent[0].headers["Content-Type"], "application/json", "verifyCsrf refuses a DELETE without it");
+    assert.equal(client.get("activeCreator"), null);
+  });
+
+  it("still signs this browser out when the server cannot be reached", async () => {
+    const client = loadClient({
+      storage: { "myListAddon:creatorName": "alice", "myListAddon:creatorKey": "MYL-AAAA" },
+      routes: { ...anonRoutes([]), "/api/session": () => { throw new Error("offline"); } },
+    });
+    client.set("activeCreator", { creatorName: "alice", displayName: "Alice" });
+
+    await client.call("switchCreatorProfile");
+
+    assert.equal(client.get("activeCreator"), null);
+    assert.equal(client.localStorage.getItem("myListAddon:creatorKey"), null);
   });
 
   it("creating a second account does not carry the first one's lists into it", async () => {

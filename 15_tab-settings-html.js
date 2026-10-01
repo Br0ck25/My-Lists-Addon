@@ -1,14 +1,17 @@
   <!-- Submenu 1: Account & Sync -->
   <div class="settings-subpanel" id="settingsSubAccount">
-    <!-- The shell's own Settings cards (P6-2): account, devices, connections and
-         install links, filled by 24_client-backup-restore-presets.js. Emitted
-         only for a browser carrying the FF_NEW_UI cookie; the legacy panels
-         below are unchanged for everyone. -->
-${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
     <div class="panel">
       <h2 class="panel-title">Your Account</h2>
       <div id="accountKeySection"></div>
     </div>
+    <!-- The shell's own Settings cards (P6-2), filled by
+         24_client-backup-restore-presets.js: this account's devices and this
+         browser's install link. Its account and connections cards are gone:
+         Your Account above and External Accounts & API Keys already have both,
+         and the owner found every button twice. Emitted only for a browser
+         carrying the FF_NEW_UI cookie; the legacy panels are unchanged for
+         everyone. -->
+${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
 
     <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Watchlist Preferences</h2>

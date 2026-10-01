@@ -322,6 +322,34 @@ function isGeneratedPosterUrl(p) {
     || p.indexOf('/api/safe-poster') >= 0;
 }
 
+// The poster each title had before a Better Poster replaced it, by IMDb id.
+// It is what handlePosterImgError (23) puts back when btttr.cc has no Better
+// Poster for a title. New on Streaming lists some titles the day a service
+// adds them, with JustWatch's poster, before btttr.cc, TMDB or Metahub know
+// them: replacing that poster and then looking the title up again found
+// nothing, and the tile said "No poster" (seen: The Devil's Mark, Full
+// Figured Flings). Oldest dropped first past the cap; a grid re-renders and
+// records its titles again.
+var _betterPosterOriginals = new Map();
+var BETTER_POSTER_ORIGINALS_MAX = 5000;
+
+function rememberBetterPosterOriginal(imdbId, poster) {
+  if (!imdbId || !poster || typeof poster !== 'string') return;
+  if (isBetterPosterUrl(poster) || isGeneratedPosterUrl(poster)) return;
+  if (_betterPosterOriginals.get(imdbId) === poster) return;
+  _betterPosterOriginals.delete(imdbId);
+  _betterPosterOriginals.set(imdbId, poster);
+  if (_betterPosterOriginals.size > BETTER_POSTER_ORIGINALS_MAX) {
+    _betterPosterOriginals.delete(_betterPosterOriginals.keys().next().value);
+  }
+}
+
+// The poster a failed Better Poster URL replaced, or ''.
+function betterPosterOriginalFor(url) {
+  const id = betterPosterImdbFromUrl(url);
+  return (id && _betterPosterOriginals.get(id)) || '';
+}
+
 function applyBetterPosterWeb(it, poster) {
   if (!betterPostersOnWeb()) return poster;
   const alreadyBetter = isBetterPosterUrl(poster);
@@ -334,6 +362,7 @@ function applyBetterPosterWeb(it, poster) {
   }
   const imdbId = betterPostersWebImdbId(it);
   if (!imdbId) return poster;
+  rememberBetterPosterOriginal(imdbId, poster);
   // Rebuilt from the current settings every time rather than kept, so
   // changing a style option re-renders with the new one instead of keeping
   // whatever URL happened to be produced first.
@@ -542,7 +571,10 @@ async function applyBetterPostersToTmdbTiles(rootEl) {
     if (!imdbId) return;
     const url = betterPostersWebUrl(imdbId);
     const img = el.querySelector('img');
-    if (img) img.src = url;
+    if (img) {
+      rememberBetterPosterOriginal(imdbId, img.getAttribute('src') || '');
+      img.src = url;
+    }
     // The poster modal reads this back, so it has to match what is shown.
     if (el.dataset.poster) el.dataset.poster = url;
   });

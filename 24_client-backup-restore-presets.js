@@ -3465,28 +3465,23 @@ function appShellInstallsBody(linkState, res, installs) {
       '<p class="app-shell-kv" style="word-break:break-all;">' + appShellSettingsEscape(link) + '</p></details>';
   }
 
-  if (res && res.ok && Array.isArray(installs)) {
-    if (!installs.length) {
-      html += '<p class="app-shell-muted">No install links are saved on your account yet.</p>';
-    } else {
-      html += installs.map(function (inst) {
-        const name = inst && inst.name ? inst.name : 'Install link';
-        const rows = inst && inst.rows !== null && inst.rows !== undefined ? ' &middot; ' + inst.rows + ' rows' : '';
-        const used = ' <span class="app-shell-muted">Last used ' + appShellSettingsEscape(appShellWhen(inst && inst.lastUsedAt)) + '</span>';
-        const revoked = inst && inst.revokedAt ? appShellChip('Revoked', 'warn') : '';
-        return appShellSettingsRow(
-          '<strong>' + appShellSettingsEscape(name) + '</strong>' + rows + '<br>' + used,
-          inst && inst.revokedAt ? '' : appShellSettingsButton('install-revoke', 'Revoke', String(inst && inst.id)),
-          revoked
-        );
-      }).join('');
-    }
-  } else if (res && res.signInRequired) {
-    html += '<p class="app-shell-muted">Sign in to keep named install links on your account, and to revoke one from here.</p>';
-  } else if (res && res.status === 404) {
-    html += '<p class="app-shell-muted">Saved install links are not switched on for this site yet.</p>';
-  } else if (res) {
-    html += '<p class="app-shell-muted">' + appShellSettingsEscape(res.error || 'Could not load your install links.') + '</p>';
+  // Saved install links (FF_INSTALLS, /api/installs) are listed only when the
+  // account has some. Nothing on the site makes one yet -- the switch is off,
+  // and its screens were never built -- so a line about them ("not switched on
+  // for this site yet", "sign in to keep named install links") only raised the
+  // question of what they were.
+  if (res && res.ok && Array.isArray(installs) && installs.length) {
+    html += installs.map(function (inst) {
+      const name = inst && inst.name ? inst.name : 'Install link';
+      const rows = inst && inst.rows !== null && inst.rows !== undefined ? ' &middot; ' + inst.rows + ' rows' : '';
+      const used = ' <span class="app-shell-muted">Last used ' + appShellSettingsEscape(appShellWhen(inst && inst.lastUsedAt)) + '</span>';
+      const revoked = inst && inst.revokedAt ? appShellChip('Revoked', 'warn') : '';
+      return appShellSettingsRow(
+        '<strong>' + appShellSettingsEscape(name) + '</strong>' + rows + '<br>' + used,
+        inst && inst.revokedAt ? '' : appShellSettingsButton('install-revoke', 'Revoke', String(inst && inst.id)),
+        revoked
+      );
+    }).join('');
   }
   return html;
 }
@@ -3504,33 +3499,29 @@ function appShellSettingsHeadline() {
 
 function appShellRenderSettingsSkeleton() {
   const loading = '<p class="app-shell-muted">Loading...</p>';
-  appShellSettingsBody('account', loading);
   appShellSettingsBody('devices', loading);
-  appShellSettingsBody('connections', loading);
   appShellSettingsBody('installs', loading);
 }
 
+// Devices and the install link only. The account and connections cards this
+// view used to start with are no longer drawn: Your Account (just above,
+// renderAccountKeySection, 22_) and External Accounts & API Keys hold the same
+// sign-in, sign-out, delete and connect buttons, and the owner found every one
+// of them twice. appShellAccountBody, appShellConnectionsBody and their actions
+// are left in place, unreached.
 async function appShellRefreshSettingsHome() {
   const host = appShellSettingsHost();
   if (!host || !NEW_UI) return false;
   appShellRenderSettingsSkeleton();
   const account = await appShellRefreshAccount();
-  appShellSettingsBody('account', appShellAccountBody(account));
   if (!account) {
     const signedOut = { ok: false, status: 401, error: 'Sign in first.', signInRequired: true, data: null };
     appShellSettingsBody('devices', appShellDevicesBody(signedOut, []));
-    appShellSettingsBody('connections', appShellConnectionsBody(signedOut, {}));
     appShellSettingsBody('installs', appShellInstallsBody(appShellInstallLinkStateSafe(), signedOut, []));
     return true;
   }
   const sessionsRes = await appShellApiFetch('/api/me/sessions');
   appShellSettingsBody('devices', appShellDevicesBody(sessionsRes, (sessionsRes.data && sessionsRes.data.sessions) || []));
-  const connectionsRes = await appShellApiFetch('/api/connections');
-  const byProvider = {};
-  ((connectionsRes.data && connectionsRes.data.connections) || []).forEach(function (c) {
-    if (c && c.provider) byProvider[c.provider] = c;
-  });
-  appShellSettingsBody('connections', appShellConnectionsBody(connectionsRes, byProvider));
   const installsRes = await appShellApiFetch('/api/installs');
   appShellSettingsBody('installs', appShellInstallsBody(appShellInstallLinkStateSafe(), installsRes, (installsRes.data && installsRes.data.installs) || []));
   return true;
@@ -3542,10 +3533,8 @@ function appShellRenderSettingsHome() {
   const host = appShellSettingsHost();
   if (!host || !NEW_UI) return false;
   host.innerHTML =
-    appShellSettingsPanel('account', 'Account', '<p class="app-shell-muted">Loading...</p>') +
     appShellSettingsPanel('devices', 'Devices', '<p class="app-shell-muted">Loading...</p>') +
-    appShellSettingsPanel('connections', 'Connections', '<p class="app-shell-muted">Loading...</p>') +
-    appShellSettingsPanel('installs', 'Install links', '<p class="app-shell-muted">Loading...</p>');
+    appShellSettingsPanel('installs', 'Install link', '<p class="app-shell-muted">Loading...</p>');
   appShellRefreshSettingsHome();
   return true;
 }

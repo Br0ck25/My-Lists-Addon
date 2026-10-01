@@ -31454,6 +31454,20 @@ ${seoHeadHtml}
     transform: scale(0.98);
     transition: transform 0.15s ease, opacity 0.15s ease;
   }
+  /* What marks the item being moved, on every drag-to-reorder
+     (createSortableList, 16_): catalog rows, Your Custom Lists, My Channels,
+     and the picks in the channel and custom list builders. Only the list
+     cards had it; the owner asked for it everywhere. */
+  .sortable-item.dragging,
+  .entry.dragging,
+  .list-card.dragging,
+  .custom-list-pick.dragging,
+  .channel-pick.dragging,
+  .creator-list-row.dragging,
+  .live-preview-poster-card.dragging {
+    outline: 2px dashed var(--accent) !important;
+    outline-offset: 2px;
+  }
 
   @media (max-width: 640px) {
     .customListMoveBtn { display: none !important; }
@@ -31467,6 +31481,12 @@ ${seoHeadHtml}
     .actions button, .actions a { width: auto; }
     .custom-list-pick-poster { width: 72px; height: 108px; }
     .row { flex-direction: row; }
+    /* A box with its button beside it (Lists -> Import's name and Import list,
+       among others): every input is width:100%, so side by side it squeezed
+       the button until its words stacked. The button keeps its own width and
+       the box takes what is left. */
+    .row > input + button, .row > select + button { flex: 0 0 auto; white-space: nowrap; }
+    .row > input, .row > select { min-width: 0; }
     .field-row { grid-template-columns: minmax(0, 1fr) auto; }
     #lists { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
@@ -33225,15 +33245,18 @@ ${newUi ? '' : `      <div style="margin-top:16px; border-top:1px solid var(--bo
   </div>
   <!-- Submenu 1: Account & Sync -->
   <div class="settings-subpanel" id="settingsSubAccount">
-    <!-- The shell's own Settings cards (P6-2): account, devices, connections and
-         install links, filled by 24_client-backup-restore-presets.js. Emitted
-         only for a browser carrying the FF_NEW_UI cookie; the legacy panels
-         below are unchanged for everyone. -->
-${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
     <div class="panel">
       <h2 class="panel-title">Your Account</h2>
       <div id="accountKeySection"></div>
     </div>
+    <!-- The shell's own Settings cards (P6-2), filled by
+         24_client-backup-restore-presets.js: this account's devices and this
+         browser's install link. Its account and connections cards are gone:
+         Your Account above and External Accounts & API Keys already have both,
+         and the owner found every button twice. Emitted only for a browser
+         carrying the FF_NEW_UI cookie; the legacy panels are unchanged for
+         everyone. -->
+${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
 
     <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Watchlist Preferences</h2>
@@ -42496,6 +42519,34 @@ function isGeneratedPosterUrl(p) {
     || p.indexOf('/api/safe-poster') >= 0;
 }
 
+// The poster each title had before a Better Poster replaced it, by IMDb id.
+// It is what handlePosterImgError (23) puts back when btttr.cc has no Better
+// Poster for a title. New on Streaming lists some titles the day a service
+// adds them, with JustWatch's poster, before btttr.cc, TMDB or Metahub know
+// them: replacing that poster and then looking the title up again found
+// nothing, and the tile said "No poster" (seen: The Devil's Mark, Full
+// Figured Flings). Oldest dropped first past the cap; a grid re-renders and
+// records its titles again.
+var _betterPosterOriginals = new Map();
+var BETTER_POSTER_ORIGINALS_MAX = 5000;
+
+function rememberBetterPosterOriginal(imdbId, poster) {
+  if (!imdbId || !poster || typeof poster !== 'string') return;
+  if (isBetterPosterUrl(poster) || isGeneratedPosterUrl(poster)) return;
+  if (_betterPosterOriginals.get(imdbId) === poster) return;
+  _betterPosterOriginals.delete(imdbId);
+  _betterPosterOriginals.set(imdbId, poster);
+  if (_betterPosterOriginals.size > BETTER_POSTER_ORIGINALS_MAX) {
+    _betterPosterOriginals.delete(_betterPosterOriginals.keys().next().value);
+  }
+}
+
+// The poster a failed Better Poster URL replaced, or ''.
+function betterPosterOriginalFor(url) {
+  const id = betterPosterImdbFromUrl(url);
+  return (id && _betterPosterOriginals.get(id)) || '';
+}
+
 function applyBetterPosterWeb(it, poster) {
   if (!betterPostersOnWeb()) return poster;
   const alreadyBetter = isBetterPosterUrl(poster);
@@ -42508,6 +42559,7 @@ function applyBetterPosterWeb(it, poster) {
   }
   const imdbId = betterPostersWebImdbId(it);
   if (!imdbId) return poster;
+  rememberBetterPosterOriginal(imdbId, poster);
   // Rebuilt from the current settings every time rather than kept, so
   // changing a style option re-renders with the new one instead of keeping
   // whatever URL happened to be produced first.
@@ -42716,7 +42768,10 @@ async function applyBetterPostersToTmdbTiles(rootEl) {
     if (!imdbId) return;
     const url = betterPostersWebUrl(imdbId);
     const img = el.querySelector('img');
-    if (img) img.src = url;
+    if (img) {
+      rememberBetterPosterOriginal(imdbId, img.getAttribute('src') || '');
+      img.src = url;
+    }
     // The poster modal reads this back, so it has to match what is shown.
     if (el.dataset.poster) el.dataset.poster = url;
   });
@@ -66651,8 +66706,27 @@ function clearLocalAccountData() {
   if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
 }
 
-function switchCreatorProfile() {
+// Since sign-in sessions (FF_SESSIONS), signing in also gives this browser a
+// sign-in cookie. Clearing this browser's copy of the account left that cookie
+// signed in: the new interface's Settings, and anything else that reads the
+// cookie, went on as the account just signed out of -- on a shared computer,
+// for the next person too. So the server's session is ended as well; a
+// failure there (offline) still signs this browser out.
+async function switchCreatorProfile() {
+  try {
+    await fetch(ORIGIN + '/api/session', {
+      method: 'DELETE',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      // verifyCsrf (02_) refuses a DELETE without it, body or not.
+      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+    });
+  } catch (e) {}
   clearLocalAccountData();
+  if (typeof appShellState !== 'undefined' && appShellState && typeof appShellState.set === 'function') {
+    appShellState.set({ account: null });
+  }
+  if (typeof appShellRefreshSettingsHome === 'function') appShellRefreshSettingsHome();
   if (typeof showAddedToast === 'function') {
     showAddedToast('Signed out \u2713');
   }
@@ -73263,6 +73337,22 @@ function handlePosterImgError(img) {
   // out: that showed the "No poster" box, and then the lookup's poster as well,
   // one above the other.
   if (img.dataset.fallbackPending) return;
+  // A Better Poster btttr.cc does not have: back to the poster the title came
+  // with, if it had one (rememberBetterPosterOriginal, 19), rather than
+  // looking it up again -- the lookup knows less than the list did about a
+  // title too new for TMDB and Metahub. The Better Poster is still switched
+  // in if the page's warm call gets it. Only once: a stand-in that fails as
+  // well goes on to the lookup below.
+  if (!standIn && typeof betterPosterOriginalFor === 'function') {
+    const failedBetter = img.getAttribute('src') || '';
+    const original = betterPosterOriginalFor(failedBetter);
+    if (original && original !== failedBetter) {
+      img.dataset.posterStandIn = original;
+      img.src = original;
+      if (typeof waitForBetterPoster === 'function') waitForBetterPoster(img, failedBetter);
+      return;
+    }
+  }
   if (img.dataset.hasFailedFallback) {
     showPosterPlaceholderFor(img);
     return;
@@ -73294,6 +73384,8 @@ function handlePosterImgError(img) {
           img.src = data.poster;
           img.style.display = '';
           hidePosterPlaceholderFor(img);
+          // Standing in for a stand-in that failed: this is the one now.
+          if (img.dataset.posterStandIn) img.dataset.posterStandIn = data.poster;
           // The ordinary poster stands in for the Better one, which is
           // switched in if the page's warm call gets it.
           if (betterPosterId && typeof waitForBetterPoster === 'function') {
@@ -79028,28 +79120,23 @@ function appShellInstallsBody(linkState, res, installs) {
       '<p class="app-shell-kv" style="word-break:break-all;">' + appShellSettingsEscape(link) + '</p></details>';
   }
 
-  if (res && res.ok && Array.isArray(installs)) {
-    if (!installs.length) {
-      html += '<p class="app-shell-muted">No install links are saved on your account yet.</p>';
-    } else {
-      html += installs.map(function (inst) {
-        const name = inst && inst.name ? inst.name : 'Install link';
-        const rows = inst && inst.rows !== null && inst.rows !== undefined ? ' &middot; ' + inst.rows + ' rows' : '';
-        const used = ' <span class="app-shell-muted">Last used ' + appShellSettingsEscape(appShellWhen(inst && inst.lastUsedAt)) + '</span>';
-        const revoked = inst && inst.revokedAt ? appShellChip('Revoked', 'warn') : '';
-        return appShellSettingsRow(
-          '<strong>' + appShellSettingsEscape(name) + '</strong>' + rows + '<br>' + used,
-          inst && inst.revokedAt ? '' : appShellSettingsButton('install-revoke', 'Revoke', String(inst && inst.id)),
-          revoked
-        );
-      }).join('');
-    }
-  } else if (res && res.signInRequired) {
-    html += '<p class="app-shell-muted">Sign in to keep named install links on your account, and to revoke one from here.</p>';
-  } else if (res && res.status === 404) {
-    html += '<p class="app-shell-muted">Saved install links are not switched on for this site yet.</p>';
-  } else if (res) {
-    html += '<p class="app-shell-muted">' + appShellSettingsEscape(res.error || 'Could not load your install links.') + '</p>';
+  // Saved install links (FF_INSTALLS, /api/installs) are listed only when the
+  // account has some. Nothing on the site makes one yet -- the switch is off,
+  // and its screens were never built -- so a line about them ("not switched on
+  // for this site yet", "sign in to keep named install links") only raised the
+  // question of what they were.
+  if (res && res.ok && Array.isArray(installs) && installs.length) {
+    html += installs.map(function (inst) {
+      const name = inst && inst.name ? inst.name : 'Install link';
+      const rows = inst && inst.rows !== null && inst.rows !== undefined ? ' &middot; ' + inst.rows + ' rows' : '';
+      const used = ' <span class="app-shell-muted">Last used ' + appShellSettingsEscape(appShellWhen(inst && inst.lastUsedAt)) + '</span>';
+      const revoked = inst && inst.revokedAt ? appShellChip('Revoked', 'warn') : '';
+      return appShellSettingsRow(
+        '<strong>' + appShellSettingsEscape(name) + '</strong>' + rows + '<br>' + used,
+        inst && inst.revokedAt ? '' : appShellSettingsButton('install-revoke', 'Revoke', String(inst && inst.id)),
+        revoked
+      );
+    }).join('');
   }
   return html;
 }
@@ -79067,33 +79154,29 @@ function appShellSettingsHeadline() {
 
 function appShellRenderSettingsSkeleton() {
   const loading = '<p class="app-shell-muted">Loading...</p>';
-  appShellSettingsBody('account', loading);
   appShellSettingsBody('devices', loading);
-  appShellSettingsBody('connections', loading);
   appShellSettingsBody('installs', loading);
 }
 
+// Devices and the install link only. The account and connections cards this
+// view used to start with are no longer drawn: Your Account (just above,
+// renderAccountKeySection, 22_) and External Accounts & API Keys hold the same
+// sign-in, sign-out, delete and connect buttons, and the owner found every one
+// of them twice. appShellAccountBody, appShellConnectionsBody and their actions
+// are left in place, unreached.
 async function appShellRefreshSettingsHome() {
   const host = appShellSettingsHost();
   if (!host || !NEW_UI) return false;
   appShellRenderSettingsSkeleton();
   const account = await appShellRefreshAccount();
-  appShellSettingsBody('account', appShellAccountBody(account));
   if (!account) {
     const signedOut = { ok: false, status: 401, error: 'Sign in first.', signInRequired: true, data: null };
     appShellSettingsBody('devices', appShellDevicesBody(signedOut, []));
-    appShellSettingsBody('connections', appShellConnectionsBody(signedOut, {}));
     appShellSettingsBody('installs', appShellInstallsBody(appShellInstallLinkStateSafe(), signedOut, []));
     return true;
   }
   const sessionsRes = await appShellApiFetch('/api/me/sessions');
   appShellSettingsBody('devices', appShellDevicesBody(sessionsRes, (sessionsRes.data && sessionsRes.data.sessions) || []));
-  const connectionsRes = await appShellApiFetch('/api/connections');
-  const byProvider = {};
-  ((connectionsRes.data && connectionsRes.data.connections) || []).forEach(function (c) {
-    if (c && c.provider) byProvider[c.provider] = c;
-  });
-  appShellSettingsBody('connections', appShellConnectionsBody(connectionsRes, byProvider));
   const installsRes = await appShellApiFetch('/api/installs');
   appShellSettingsBody('installs', appShellInstallsBody(appShellInstallLinkStateSafe(), installsRes, (installsRes.data && installsRes.data.installs) || []));
   return true;
@@ -79105,10 +79188,8 @@ function appShellRenderSettingsHome() {
   const host = appShellSettingsHost();
   if (!host || !NEW_UI) return false;
   host.innerHTML =
-    appShellSettingsPanel('account', 'Account', '<p class="app-shell-muted">Loading...</p>') +
     appShellSettingsPanel('devices', 'Devices', '<p class="app-shell-muted">Loading...</p>') +
-    appShellSettingsPanel('connections', 'Connections', '<p class="app-shell-muted">Loading...</p>') +
-    appShellSettingsPanel('installs', 'Install links', '<p class="app-shell-muted">Loading...</p>');
+    appShellSettingsPanel('installs', 'Install link', '<p class="app-shell-muted">Loading...</p>');
   appShellRefreshSettingsHome();
   return true;
 }
@@ -90891,7 +90972,13 @@ function generateSearchVariations(query) {
       if (!reqBody.tmdbKey) ctx.waitUntil(bumpStat(env, "apiuse:tmdb"));
       
       const isFreshReq = reqBody.fresh === "1" || reqBody.fresh === true || (url && url.searchParams.get("fresh") === "1");
-      const details = await fetchTmdbItemDetails(imdbId, tmdbKey, reqBody.type, reqBody.region, isFreshReq, env, ctx);
+      let details = await fetchTmdbItemDetails(imdbId, tmdbKey, reqBody.type, reqBody.region, isFreshReq, env, ctx);
+      // A title TMDB has no entry for yet -- New on Streaming lists some the
+      // day a service adds them -- opens from what else is known about it
+      // (57_title-details-fallback.js).
+      if (!details && typeof titleDetailsWithoutTmdb === "function") {
+        details = await titleDetailsWithoutTmdb(env, imdbId, reqBody.type, reqBody.region);
+      }
       if (!details) return json({ ok: false, error: "Not found or TMDB error" }, 404);
       
       // Short max-age -- same reasoning as /api/season's own comment: this
@@ -110378,4 +110465,110 @@ function scrobblePlaysUnseenBy(queue, existingBlob, seenAt, incomingIds) {
     queued.has(String(it.id)) &&
     !incomingIds.has(String(it.id)) &&
     (Number(it.watchedAt) || 0) > since);
+}
+// --- Title details for a title TMDB does not have yet -------------------------
+//
+// /api/details (25_) finds a title at TMDB by its IMDb id. New on Streaming
+// (fetchNewOnStreaming, 07_) lists titles by IMDb id the day JustWatch or
+// RapidAPI sees a service add them -- some of them before TMDB has an entry
+// at all. Seen on the site (2026-10-01): The Devil's Mark (tt39833082) and
+// Full Figured Flings (tt35457754), both 2026. Opening either said "Not found
+// or TMDB error", with Better Posters on or off.
+//
+// What is known about such a title -- the name, poster, backdrop and year New
+// on Streaming stored with it, and Cinemeta's record when it has one -- is
+// handed back in the shape fetchTmdbItemDetails answers with: tmdbId null,
+// and nothing only TMDB knows (its rating, seasons, budget). null when
+// neither knows the title, so the route still answers "not found" then.
+//
+// Module level, after the Worker's exports, like 27_ onward.
+
+// The New on Streaming row for one title, newest event first. Narrowed by
+// region and service so the lookup walks the table's primary key
+// (region, service, imdb_id) instead of scanning it.
+async function streamingEventTitle(env, imdbId, region) {
+  if (!env || !env.DB || typeof NEW_ON_STREAMING_PROVIDERS === "undefined") return null;
+  const services = NEW_ON_STREAMING_PROVIDERS.map((p) => p.key);
+  const where = typeof newOnStreamingRegion === "function" ? newOnStreamingRegion(region) : String(region || "US").toUpperCase().slice(0, 2);
+  try {
+    return await env.DB.prepare(
+      `SELECT kind, name, poster, background, year
+         FROM streaming_events
+        WHERE region = ? AND service IN (${services.map(() => "?").join(",")}) AND imdb_id = ?
+        ORDER BY last_event_at DESC
+        LIMIT 1`
+    ).bind(where, ...services, imdbId).first();
+  } catch {
+    return null;
+  }
+}
+
+// Cinemeta's record for one title, trying the kind it was asked for first.
+async function cinemetaTitleMeta(imdbId, kinds) {
+  for (const kind of kinds) {
+    try {
+      const res = await fetch(`https://v3-cinemeta.strem.io/meta/${kind}/${imdbId}.json`, {
+        cf: { cacheTtl: 86400, cacheEverything: true },
+      });
+      if (!res.ok) continue;
+      const data = await res.json().catch(() => null);
+      if (data && data.meta && data.meta.name) return data.meta;
+    } catch {}
+  }
+  return null;
+}
+
+// "1h 32min", "92 min", 92 -> 92; anything else -> null.
+function cinemetaRuntimeMinutes(raw) {
+  if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) return Math.round(raw);
+  const s = String(raw || "").toLowerCase();
+  const h = s.match(/(\d+)\s*h/);
+  const m = s.match(/(\d+)\s*min/);
+  const total = (h ? Number(h[1]) * 60 : 0) + (m ? Number(m[1]) : 0);
+  return total > 0 ? total : null;
+}
+
+async function titleDetailsWithoutTmdb(env, rawId, type, region) {
+  const imdbId = String(rawId || "").trim().split(":")[0].toLowerCase();
+  if (!/^tt\d{5,12}$/.test(imdbId)) return null;
+  const row = await streamingEventTitle(env, imdbId, region);
+  const wantSeries = type === "series" || type === "tv" || (row && row.kind === "series");
+  const meta = await cinemetaTitleMeta(imdbId, wantSeries ? ["series", "movie"] : ["movie", "series"]);
+  const title = (meta && meta.name) || (row && row.name) || "";
+  if (!title) return null;
+
+  const trailer = meta && Array.isArray(meta.trailers)
+    ? meta.trailers.find((t) => t && t.source && (!t.type || t.type === "Trailer"))
+    : null;
+  const listOf = (v) => (Array.isArray(v) && v.length ? v.filter((x) => typeof x === "string" && x).slice(0, 8) : undefined);
+  const released = meta && typeof meta.released === "string" ? meta.released.slice(0, 10) : "";
+  const year = String((meta && (meta.year || meta.releaseInfo)) || (row && row.year) || "").slice(0, 4);
+
+  return {
+    id: imdbId,
+    imdbId: imdbId,
+    title: title,
+    overview: (meta && meta.description) || "",
+    // The stored poster first: it is the one the New on Streaming tile shows.
+    poster: (row && row.poster) || (meta && meta.poster) || "",
+    background: (row && row.background) || (meta && meta.background) || "",
+    rating: null,
+    releaseYear: /^\d{4}$/.test(year) ? year : "",
+    releaseDate: /^\d{4}-\d{2}-\d{2}$/.test(released) ? released : null,
+    seasonsData: null,
+    tmdbId: null,
+    runtime: meta ? cinemetaRuntimeMinutes(meta.runtime) : null,
+    budget: null,
+    revenue: null,
+    contentRating: null,
+    genres: meta && Array.isArray(meta.genres) ? meta.genres.filter((g) => typeof g === "string").join(", ") : "",
+    trailerKey: trailer ? String(trailer.source) : null,
+    cast: listOf(meta && meta.cast),
+    director: listOf(meta && meta.director),
+    nextEpisodeAirDate: null,
+    nextEpisodeNumber: null,
+    nextEpisodeSeasonNumber: null,
+    nextEpisodeName: null,
+    notOnTmdb: true,
+  };
 }

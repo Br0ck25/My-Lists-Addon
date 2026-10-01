@@ -7429,6 +7429,9 @@ describe("A13: an unhandled exception must not escape the Worker", () => {
       if (/themoviedb/.test(u)) {
         return new Response("{not json", { status: 200, headers: { "Content-Type": "application/json" } });
       }
+      // With TMDB no help, /api/details asks Cinemeta next
+      // (titleDetailsWithoutTmdb, 57_). Kept off the real network.
+      if (/strem\.io/.test(u)) return new Response("Not Found", { status: 404 });
       return realFetch(input, init);
     };
     try {

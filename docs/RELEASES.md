@@ -15,7 +15,8 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Release 9** went live on 2026-09-30. The owner found two problems, fixed in Release 9b (prepared, not yet live): the red x on a list card's poster opened the list instead of removing the title, and ticking *Enable media server user filtering* did not stick.
 - **Release 9b** went live on 2026-09-30, followed by the sign-in sessions step (steps under Release 9b). The owner reports everything looks good.
 - **Release 10** (Phase 7 so far, PR #9) went live on 2026-09-30. The owner does not want Cloudflare Access on `/admin`.
-- **Release 11** went live on 2026-10-01 with migration `0020`, after the list copy's and the history copy's *Start over* (results under each). **`FF_V2_LISTS_ONLY` and `FF_EVENT_TRACKING` are both on** (2026-10-01, one-way: never delete either). The owner reports everything correct, and found one problem, fixed in Release 11b (prepared, not yet live): a Search tile could show its poster and a "No poster" box under it.
+- **Release 11** went live on 2026-10-01 with migration `0020`, after the list copy's and the history copy's *Start over* (results under each). **`FF_V2_LISTS_ONLY` and `FF_EVENT_TRACKING` are both on** (2026-10-01, one-way: never delete either). The owner reports everything correct, and found one problem, fixed in Release 11b: a Search tile could show its poster and a "No poster" box under it.
+- **Release 12** (prepared, not yet live; it includes 11b) answers the owner's review of the new interface before it goes to everyone, and fixes New on Streaming titles too new for TMDB (details under Release 12).
 
 The owner decided to release the new version **one phase at a time, straight to the live site**, with no separate test site. Each release waits until the one before it has run cleanly for at least a day.
 
@@ -42,6 +43,7 @@ The owner decided to release the new version **one phase at a time, straight to 
 | 9 | Five bug fixes and the owner's new-interface changes (this branch only) | none | none | none |
 | 10 | Phase 7 so far ([PR #9](https://github.com/Br0ck25/My-Lists-Addon/pull/9), not yet merged into `main`) | `243340a` (the PR's head) | `0018`, `0019` (optional) | none required; Cloudflare Access for `/admin` optional |
 | 11 | Watch History from the activity database: episode names, and no 5,000-play cap (this branch only) | none | `0020` | the history copy's *Start over*, then `FF_EVENT_TRACKING` |
+| 12 | The owner's review of the new interface, and titles too new for TMDB (this branch only; includes 11b) | none | none | none |
 
 Each release gets its own section below when it is prepared, with its steps in plain words.
 
@@ -919,3 +921,61 @@ The owner searched Movies for "one last": One Last Deal, One Last Ride and One L
 3. Check: with Better Posters on, Search → Movies "one last" (and Shows): each tile shows one poster, or one "No poster" box, never both. Look at a few list cards on Discover too.
 
 **Rollback:** paste Release 11's file. Both switches stay on either way: this release does not touch them.
+
+---
+
+## Release 12: the owner's review of the new interface, and titles too new for TMDB
+
+**Branch point:** this branch after Release 11b. Nothing here comes from `main`. It includes 11b, so if 11b is not deployed yet, deploy this instead.
+
+The owner went through the new interface (`/?ff_new_ui=1`) before it goes to everyone, and found five things, plus one problem on the live site.
+
+### What changes for everyone
+
+- **New on Streaming titles too new for TMDB.**
+  - The New on Streaming lists hold titles by IMDb id the day a service adds them, with JustWatch's poster. Some are too new for TMDB, Metahub and btttr.cc. Seen: The Devil's Mark (`tt39833082`) and Full Figured Flings (`tt35457754`), checked on the live site on 2026-10-01.
+  - **With Better Posters on, their tiles said "No poster".** The JustWatch poster was replaced by a Better Poster btttr.cc could not draw. The lookup after that (TMDB, then Metahub) found nothing either.
+    - Now a Better Poster that fails goes back to the poster the title came with (`rememberBetterPosterOriginal`, 19_; `handlePosterImgError`, 23_).
+    - It switches to the Better Poster if btttr.cc draws it later.
+    - It applies to every list, not just New on Streaming.
+  - **Opening one said "✗ Not found or TMDB error"**, with Better Posters on or off: the details page asks TMDB, and TMDB has no entry yet.
+    - Now `/api/details` falls back to what else is known (`titleDetailsWithoutTmdb`, new file `57_title-details-fallback.js`):
+      - the name, poster, backdrop and year New on Streaming stored;
+      - Cinemeta's description, genres, runtime, cast and trailer when it has them.
+    - A title nobody knows still says "not found".
+- **Signing out of the classic page ends the sign-in session too.**
+  - Since `FF_SESSIONS`, signing in also gives the browser a sign-in cookie. *Sign Out / Switch* only cleared the page's own copy, so the cookie stayed signed in. The new interface's Settings, and anything else that reads the cookie, went on as that account, for the next person on a shared computer too.
+  - It now also ends the server session (`switchCreatorProfile`, 22_).
+
+### What only the new interface changes
+
+- **Settings → Account & Sync: no more doubled buttons.**
+  - The new interface had added its own Account card (sign in, sign out, delete account) and Connections card (Trakt, MDBList, Simkl, TMDB) above the classic panels, which have the same buttons.
+  - Both cards are gone; *Your Account* and *External Accounts & API Keys* are the ones to use.
+  - What is left of the new cards, **Devices** and **Install link**, now sits below *Your Account*.
+- **Install link card:**
+  - It shows this browser's install link with *Install in Stremio*, *Install in Nuvio*, *Copy link* and *Update link*. It is where the install bar's job went in Release 9.
+  - "Saved install links" (named links kept on the account, each revocable, behind `FF_INSTALLS`) is a feature whose screens were never built: nothing on the site makes one. So the card no longer mentions it ("not switched on for this site yet"). It lists them only if an account ever has some.
+  - **Leave `FF_INSTALLS` unset.**
+- **Lists → Import:** the *Import list* button no longer squeezes to two lines beside the name box on a computer. The same goes for any box with a button beside it (09_ CSS).
+- **Drag and drop:** the blue dashed outline Your Custom Lists shows on the item being moved is now on every drag-to-reorder: catalog rows, My Channels, and the picks in the channel and custom list builders.
+  - `tests/drag-outline.test.mjs` checks that every reorderable list gets it, including one added later.
+
+`bash verify.sh` passes (1,975 tests), and so does the suite with `MLA_TEST_V2_LISTS_READ=1`. The new tests:
+- the poster stand-in (`tests/poster-identity.test.mjs`);
+- the details fallback (`tests/title-details-fallback.test.mjs`);
+- the sign-out (`tests/client.test.mjs`).
+
+They fail on Release 11b. One older test (`tests/worker.test.mjs`, "truncated body") now fakes Cinemeta as well, so it stays off the real network.
+
+**Steps:**
+1. Keep the file now live (`release-11b-NEW-worker.js`, or `release-11-NEW-worker.js` if 11b was skipped) as the rollback file.
+2. Deploy `release-12-NEW-worker.js` the usual way. No database step, no variable.
+3. Check:
+   - with Better Posters on, Discover → New on Streaming → See all: The Devil's Mark and Full Figured Flings show a poster, and open to a page with their name and poster;
+   - classic page: Sign Out / Switch, then open `/?ff_new_ui=1` → Settings: Devices says to sign in;
+   - new interface, Settings → Account & Sync: one set of account buttons; *Devices* and *Install link* below *Your Account*;
+   - Lists → Import on a computer: *Import list* on one line;
+   - drag a catalog row, a list and a pick in the custom list builder: each shows the dashed outline while it moves.
+
+**Rollback:** paste the previous file. Nothing else to undo.
