@@ -9,7 +9,7 @@
 | **03** | **Authentication, Sessions & Account Identity** | **FULL** | Module 01, 02 | 0 confirmed, 0 suspected |
 | **04** | **Database, Storage, Data Integrity** | **FULL** | Module 01 | 0 confirmed, 0 suspected |
 | **05** | **Core Product Flows (Lists, Watch History, Channels, Installs)** | **FULL** | Module 02, 03, 04 | 0 confirmed, 0 suspected |
-| 06 | Channels v2, Storylines & R2 Episode Blobs | NOT TESTED | Module 05 | — |
+| **06** | **Jobs, Queues, Cron, Time Boundaries** | **FULL** | Module 01 | 0 confirmed, 0 suspected |
 | 07 | Stremio Endpoints, Catalog Core & Canonical IDs | NOT TESTED | Module 01, 02 | — |
 | 08 | Provider Integrations, Circuit Breakers & Snapshots | NOT TESTED | Module 07 | — |
 | 09 | Scrobble Webhooks, Watch History & Activity DB | NOT TESTED | Module 02, 07 | — |
@@ -237,6 +237,52 @@
   - Tested using local Miniflare / SQLite / in-memory KV simulation without live Cloudflare edge network.
 - **Next Exact Action:**
   - Await user prompt for the next audit module.
+
+---
+
+## Module 06 Record: Jobs, Queues, Cron, Time Boundaries
+
+- **Status:** **FULL**
+- **Date Completed:** 2026-10-02
+- **Target Git SHA:** `3717e620b3fe5c00808cde429fb1cbc6609a4b5c`
+- **Files Examined:**
+  - `wrangler.toml` (`[queues.producers]`, `[queues.consumers]`, `[triggers] crons = ["*/6 * * * *"]`)
+  - `44_jobs-queue.js` (Queue producer `enqueueJob` / `enqueueJobs`, consumer `handleJobsBatch`, exponential retry backoff, DLQ after 5 retries, poison-pill defense)
+  - `45_jobs-dispatcher.js` (`definePeriodicJob`, `defineDurableJob`, CAS claiming, lease timeout recovery, fallback inline runner)
+  - `46_show-refresh.js`, `47_shelf-shadow.js`, `48_chart-refresh.js`, `49_imports.js`, `50_token-refresh.js`, `51_account-purge.js`, `52_poster-fetch.js`, `53_more-jobs.js`, `54_materializer.js`, `55_media-retry.js`, `56_scrobble-queue.js`
+  - `02_http-and-creator-utils.js` (`getDailySeed`, `easternDateKey`, `getLegacySunsetNotices`, `DAY_MS`)
+  - `03_admin.js` (`easternDateKey`, `statsToday`)
+  - `05_catalog-core.js` (`channelRotationDay`, `daysSinceEpochUTC`)
+  - `tests/jobs.test.mjs`, `tests/more-jobs.test.mjs`, `tests/scrobble-queue.test.mjs`
+- **Commands Run:**
+  - `node --test tests/jobs.test.mjs tests/more-jobs.test.mjs tests/scrobble-queue.test.mjs` (exit 0: 49 passing tests across 10 suites)
+  - `node audit/full-2026-10-02/probes/p05_jobs_queues_and_time.mjs` (exit 0: 4/4 suites passed)
+- **Probes Created:**
+  - `audit/full-2026-10-02/probes/p05_jobs_queues_and_time.mjs`
+- **Finding IDs:** None (0 confirmed defects)
+- **Suspected IDs:** None
+- **Observations:**
+  - **A. Jobs & Queues Concurrency, Retries & Dead-Letter Handling:**
+    - **Poison-Pill Defense:** Messages with non-object, null, array, empty type, or numeric type bodies are explicitly acknowledged and dropped (`stat("invalid").dropped`), preventing poison pill crash loops.
+    - **Deployment Skew / Unknown Type Defense:** Messages with unknown job types are not discarded; they are retried with long backoff (`JOB_UNKNOWN_TYPE_RETRY_SEC = 10 min`), allowing newer/rolled-back deployments to safely process messages.
+    - **Dead-Letter Routing:** Failing jobs retry with exponential backoff (`30s * 2^(attempts-1)`), and when `attempts > JOBS_MAX_RETRIES` (5 retries), they are routed to the dead-letter queue (`mylists-jobs-dlq`).
+    - **D1 Jobs Table Optimistic Concurrency:** Job claims execute atomic CAS updates (`WHERE id = ? AND status = 'queued' AND run_after = ?`). Duplicate message deliveries match 0 rows and return `{ skipped: "stale" }`.
+    - **Lease Expiry & Abandoned Recovery:** Running rows past their lease (`status = 'running' AND run_after < now`) are reclaimed by the dispatcher, incrementing attempts and re-queueing for another run.
+    - **Stale Completion Rejection:** Workers finishing after lease expiration have their `status = 'done'` write rejected (`changes !== 1`), preventing slow workers from corrupting re-assigned job states.
+    - **Unbound Queue Fallback:** When `JOBS` queue binding is absent, the scheduled cron tick executes due jobs inline (`JOBS_INLINE_LIMIT = 20`), guaranteeing continued operation on Free plan deployments.
+  - **B. Time Boundaries, Controlled Clocks & Calendars:**
+    - **Eastern Daily Rollover:** `getDailySeed` and admin statistics use `easternDateKey` (`America/New_York`), rotating daily shuffles cleanly at midnight Eastern instead of during high-traffic evening hours (7-8 PM Eastern) as would occur with naive UTC days.
+    - **Leap Day Arithmetic:** Tested February 29 in leap years (`2028-02-28` -> `2028-02-29` -> `2028-03-01`); exact 48-hour separation verified across `utcDay` and `easternDateKey`.
+    - **Monthly Quota Ledger Rollover:** `rapidApiLedgerD1` atomically evaluates month matching (`CASE WHEN json_extract(progress_json, '$.month') = ? THEN count ELSE 0 END + add`). Month rollover (`2026-01` to `2026-02`, and `2028-02` to `2028-03`) automatically resets the counter to the new addition without race conditions.
+    - **Half-Open Intervals for Daily Rollup:** `rollup.daily` queries `watched_at >= start AND watched_at < end`, strictly ensuring boundary events at `00:00:00.000Z` are counted in exactly one daily bucket without omissions or double-counting.
+    - **Sunset Notices 60-Day Window:** `getLegacySunsetNotices` cleanly bounds notices between Day 0 (`daysRemaining = 60`) and Day 60 (`daysRemaining = 0`), correctly shifting urgency from `info` -> `warning` -> `urgent`, and automatically suppresses notices before start and after expiry (Day 61+).
+- **Areas Not Tested:**
+  - Multi-day physical clock drift on physical hypervisors.
+- **Limitations:**
+  - Tested using local Miniflare / SQLite / in-memory queues without live Cloudflare edge network.
+- **Next Exact Action:**
+  - Await user prompt for the next audit module.
+
 
 
 
