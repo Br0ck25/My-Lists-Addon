@@ -517,6 +517,7 @@ function collectKeys() {
     betterPostersTrendTags: getBetterPostersSetting('betterPostersTrendTags', true),
     betterPostersQuality: getBetterPostersSetting('betterPostersQuality', false),
     betterPostersAge: getBetterPostersSetting('betterPostersAge', false),
+    betterPostersOrderTodayBadges: getBetterPostersSetting('betterPostersOrderTodayBadges', false),
     betterPostersLang: getBetterPostersChoice('betterPostersLang', 'en'),
     betterPostersRatingSource: getBetterPostersChoice('betterPostersRatingSource', 'avg'),
     showBadgesAiringNext: getBadgeSetting('showBadgesAiringNext'),
@@ -728,6 +729,7 @@ const BETTER_POSTERS_TOGGLES = [
   { key: 'betterPostersTrendTags', id: 'betterPostersTrendTagsCheckbox', on: true },
   { key: 'betterPostersQuality', id: 'betterPostersQualityCheckbox', on: false },
   { key: 'betterPostersAge', id: 'betterPostersAgeCheckbox', on: false },
+  { key: 'betterPostersOrderTodayBadges', id: 'betterPostersOrderTodayBadgesCheckbox', on: false },
 ];
 
 function initBetterPostersSettingsUI() {
@@ -1057,6 +1059,20 @@ async function renderLivePreview() {
         if (previewKey) body.creatorKey = previewKey;
         if (keys.hideNonDigitalReleases) body.hideNonDigitalReleases = true;
         if (keys.adultContentFilter) body.adultContentFilter = true;
+        if (keys.betterPosters) body.betterPosters = true;
+        if (keys.betterPostersOrderTodayBadges) body.betterPostersOrderTodayBadges = true;
+        if (keys.betterPosters) {
+          body.betterPostersOptions = {
+            genre: keys.betterPostersGenre !== false,
+            rating: keys.betterPostersRating !== false,
+            quality: !!keys.betterPostersQuality,
+            age: !!keys.betterPostersAge,
+            trendTags: keys.betterPostersTrendTags !== false,
+            orderTodayBadges: !!keys.betterPostersOrderTodayBadges,
+            lang: keys.betterPostersLang || 'en',
+            ratingSource: keys.betterPostersRatingSource || 'avg',
+          };
+        }
         const res = await fetch(ORIGIN + '/api/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

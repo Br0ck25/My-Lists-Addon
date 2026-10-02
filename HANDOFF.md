@@ -8,9 +8,10 @@
 - **Last Updated**: 2026-10-02
 - **Last Active AI**: Antigravity / Gemini 3.8
 - **Active Task**: Better Posters list creation from labels/badges and #xx today badge ordering setting.
-- **Task State**: Initial branch setup and PR creation prior to feature implementation.
+- **Task State**: Implementation complete, tested (1,408 passed, 0 failed, 1 skipped), PR #11 opened and ready for review.
 - **Git State**:
   - Branch `poster_badge_list_ordering` branched from `main`.
+  - PR #11: `https://github.com/Br0ck25/My-Lists-Addon/pull/11`
 - **The owner is not a programmer.** Explain in plain words, do the git work for them, and ask before anything that changes stored user data or needs a dashboard change.
 
 ---
@@ -87,7 +88,7 @@ node scope_check.mjs worker worker_entry_combined.js
 ```
 Then delete `node_modules`.
 
-Last run (2026-09-27): all of the above pass, 1,372 tests passed, 0 failed, 1 skipped.
+Last run (2026-10-02): all of the above pass, 1,408 tests passed, 0 failed, 1 skipped.
 
 The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/json` to every POST, so a route test cannot notice a page that forgets them. A static test ("every mutating fetch the pages make sends a JSON content type") covers that instead.
 
@@ -136,6 +137,11 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
     - The page fetches it once over its session (`POST /api/connections/:provider/token`), as a bridge until Phase 6.
     - `POST /api/connections/import-local` (checked with each provider, once, rate-limited), `GET /api/connections`, and `DELETE /api/connections/:provider` (which revokes at Trakt and TMDB).
     - Page changes: the `apply*Connection` helpers, `pickUpServerConnection`, `forgetServerConnection` and `importLocalConnectionsOnce` in `17_`, with hooks in `22_` and `24_`.
+  - **Better Posters: Badge Lists & #xx Today Ordering (Antigravity):**
+    - Better Posters shelf in Quick Add and Discover with ready-made lists based on popular poster tags/labels: Trending Today (movies & shows), In Cinema, Binge Ready, Returning Shows, Cannes Winners, Emmy Winners, Oscar Winners.
+    - `betterposters:` catalog prefix supported in `detectSource`, `fetchBetterPostersCatalog`, and Stremio catalog routing. Accessible without an account (Decision D-8).
+    - `betterPostersOrderTodayBadges` setting registered in `INSTALL_CONFIG_FIELDS` (`requires: "betterPosters"`), exposed in Settings, synchronized across profile and install links, and passed to catalog routing & Live Preview.
+    - `orderMetasByTodayBadges` groups items bearing `#xx Today` badges consecutively and sorts them in ascending numerical rank order starting at the first badged item's original position, preserving non-badged items before and after.
 
 ---
 

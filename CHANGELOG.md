@@ -22,6 +22,16 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 `FF_SESSIONS` and `FF_INSTALLS` stay **off** (unset). Leave them off until the new sign-in and install-link screens ship.
 
+### 🎨 Better Posters: List creation from badges & #xx Today badge ordering
+
+- **Better Posters Lists & Shelves**:
+  - Added Better Posters shelf in Quick Add and Discover containing ready-made lists based on popular poster tags/labels: *Trending Today* (movies & shows), *In Cinema*, *Binge Ready*, *Returning Shows*, *Cannes Winners*, *Emmy Winners*, and *Oscar Winners*.
+  - Added `betterposters:` catalog prefix support (`betterposters:today`, `betterposters:in-cinema`, `betterposters:binge-ready`, `betterposters:returning`, `betterposters:cannes-winner`, `betterposters:emmy-winner`, `betterposters:oscar-winner`), rendering with Better Posters artwork directly.
+  - Per Decision D-8, Better Posters lists are public charts accessible without requiring an account.
+- **#xx Today Badge Ordering**:
+  - Added `betterPostersOrderTodayBadges` setting under Better Posters options (toggleable in Settings and synced across profile and install links).
+  - When enabled, items bearing the `#xx Today` badge in a catalog or list preview are grouped consecutively and sorted in ascending rank order (`#1`, `#2`, `#11`, `#13`, etc.) starting at the position of the earliest badged item. Non-badged items before and after retain their exact relative order.
+
 ### 🔐 Stremio rows use the account's own connections (P3a-10)
 
 - **A personal Trakt, MDBList or Simkl row gets its token from the install owner's connection** when the install link does not carry one itself. A TMDB key is filled the same way.

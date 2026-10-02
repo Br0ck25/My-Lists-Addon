@@ -1232,6 +1232,7 @@ const INSTALL_CONFIG_FIELDS = [
   { name: "betterPostersTrendTags", kind: "flagOn", requires: "betterPosters" },
   { name: "betterPostersQuality", kind: "flag", requires: "betterPosters" },
   { name: "betterPostersAge", kind: "flag", requires: "betterPosters" },
+  { name: "betterPostersOrderTodayBadges", kind: "flag", requires: "betterPosters" },
   {
     name: "betterPostersLang", kind: "choice", default: "en", requires: "betterPosters",
     allowed: BETTER_POSTERS_LANGS.map((l) => l.value),

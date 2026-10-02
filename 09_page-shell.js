@@ -26,6 +26,7 @@ function renderBuilder(
   const initialBetterPostersQuality = !!initialKeys.betterPostersQuality;
   const initialBetterPostersAge = !!initialKeys.betterPostersAge;
   const initialBetterPostersTrendTags = initialKeys.betterPostersTrendTags !== false;
+  const initialBetterPostersOrderTodayBadges = !!initialKeys.betterPostersOrderTodayBadges;
   const betterPostersLangOptionsHtml = buildBetterPostersLangOptionsHtml(initialKeys.betterPostersLang || "en");
   const betterPostersRatingSourceOptionsHtml = buildBetterPostersRatingSourceOptionsHtml(initialKeys.betterPostersRatingSource || "avg");
   const streamingTop10Html = buildStreamingTop10Html();
@@ -41,6 +42,7 @@ function renderBuilder(
   const genresHtml = buildGenresHtml();
   // New on Streaming + My Lists Addon Most Watched -- see MY_LISTS_ADDON_CHARTS (08).
   const myListsAddonChartsHtml = buildMyListsAddonChartsHtml();
+  const betterPostersChartsHtml = buildBetterPostersChartsHtml();
   // Precomputed here (same pattern as the *Html fragments above) rather
   // than built inline inside the giant HTML template literal below --
   // this file's template literal has bitten past changes before with

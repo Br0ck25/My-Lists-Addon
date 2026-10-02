@@ -1017,7 +1017,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
       const resolvedConfig = await resolveConfig(config, env);
       // As in the manifest route: most installs ask for catalogs far more often.
       ctx.waitUntil(maybeMigrateLegacyInstall(env, config));
-      const { entries, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, trackCreatorName, trackOwner, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists, betterPosters, showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist } = resolvedConfig;
+      const { entries, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, trackCreatorName, trackOwner, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists, betterPosters, betterPostersOrderTodayBadges, showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist } = resolvedConfig;
       const entryIndex = entries.findIndex((e) => e.id === id && e.type === type);
       const entry = entryIndex >= 0 ? entries[entryIndex] : null;
       if (!entry || entry.enabled === false) return jsonPublic({ metas: [] });
@@ -1056,7 +1056,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // to a config that PROVED it belongs to that account. See resolveConfig
         // (04_config-resolution.js) for how that is established and
         // mayReadTrackedShelf (02_http-and-creator-utils.js) for what it gates.
-        let metas = await fetchCatalog(entry, skip, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, adultContentFilter, isStremioCatalog: true, betterPosters, betterPostersOptions: betterPostersOptionsFrom(resolvedConfig, url.origin), showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, env, ctx, origin: url.origin });
+        let metas = await fetchCatalog(entry, skip, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, adultContentFilter, isStremioCatalog: true, betterPosters, betterPostersOrderTodayBadges, betterPostersOptions: betterPostersOptionsFrom(resolvedConfig, url.origin), showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, env, ctx, origin: url.origin });
         if (dedupeAcrossLists) {
           metas = await dedupeAcrossListEntries(entries, entryIndex, skip, metas, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, env, ctx });
         }
@@ -1177,7 +1177,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
     // callers with a normal-sized url (a plain mdblist/trakt/tmdb list
     // link is never going to hit that limit).
     if (path === "/api/preview") {
-      let testUrl, type, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, sampleSize, skip, creatorName, creatorKey, hideNonDigitalReleases, adultContentFilter, region;
+      let testUrl, type, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, sampleSize, skip, creatorName, creatorKey, hideNonDigitalReleases, adultContentFilter, region, betterPosters, betterPostersOrderTodayBadges, betterPostersOptions;
       if (request.method === "POST") {
         let reqBody;
         try {
@@ -1199,6 +1199,9 @@ Sitemap: ${url.origin}/sitemap.xml`;
         region = reqBody.region || "";
         hideNonDigitalReleases = !!reqBody.hideNonDigitalReleases;
         adultContentFilter = !!reqBody.adultContentFilter;
+        betterPosters = !!reqBody.betterPosters;
+        betterPostersOrderTodayBadges = !!reqBody.betterPostersOrderTodayBadges;
+        betterPostersOptions = reqBody.betterPostersOptions || null;
         sampleSize = Math.max(1, Math.min(PAGE_SIZE, parseInt(reqBody.sample, 10) || 5));
         skip = Math.max(0, parseInt(reqBody.skip, 10) || 0);
       } else {
@@ -1225,6 +1228,9 @@ Sitemap: ${url.origin}/sitemap.xml`;
         region = url.searchParams.get("region") || "";
         hideNonDigitalReleases = url.searchParams.get("hideNonDigitalReleases") === "1";
         adultContentFilter = url.searchParams.get("adultContentFilter") === "1";
+        betterPosters = url.searchParams.get("betterPosters") === "1";
+        betterPostersOrderTodayBadges = url.searchParams.get("betterPostersOrderTodayBadges") === "1";
+        betterPostersOptions = null;
         sampleSize = Math.max(1, Math.min(PAGE_SIZE, parseInt(url.searchParams.get("sample"), 10) || 5));
         skip = Math.max(0, parseInt(url.searchParams.get("skip"), 10) || 0);
       }
@@ -1268,7 +1274,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
 
       let body;
       try {
-        const metas = await fetchCatalog({ url: testUrl, type }, skip, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, creatorName, verifiedOwner: previewVerifiedOwner, hideNonDigitalReleases, adultContentFilter, region, env, ctx, origin: url.origin });
+        const metas = await fetchCatalog({ url: testUrl, type }, skip, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, creatorName, verifiedOwner: previewVerifiedOwner, hideNonDigitalReleases, adultContentFilter, region, env, ctx, origin: url.origin, betterPosters, betterPostersOrderTodayBadges, betterPostersOptions });
         const totalItems = (typeof metas.totalItems === "number") ? metas.totalItems : (metas.length < PAGE_SIZE && skip === 0 ? metas.length : null);
         // Enrich sample items that lack ratings with TMDb data.
         // fetchTmdbDetails is cached (7 days) so popular titles are cache hits.
@@ -1300,6 +1306,8 @@ Sitemap: ${url.origin}/sitemap.xml`;
             type: m.type || (m.mediatype === "show" || m.mediatype === "series" || m.mediatype === "tv" ? "series" : (m.mediatype === "episode" ? "episode" : (type === "series" ? "series" : "movie"))),
             name: m.name,
             poster: m.poster,
+            badgeRank: m.badgeRank != null ? m.badgeRank : (m._rank != null ? m._rank : undefined),
+            _rank: m._rank != null ? m._rank : undefined,
             year: m.releaseInfo,
             showTitle: m.showTitle,
             posterShape: m.posterShape,

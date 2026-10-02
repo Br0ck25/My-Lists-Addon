@@ -144,7 +144,7 @@ function buildStreamingRowsHtml(list, labelSuffix, group) {
       <div class="discover-chart-header">
         <div class="discover-chart-info">
           <div class="discover-chart-title">${p.name}</div>
-          <div class="discover-chart-sub">${labelSuffix ? labelSuffix : (p.type === 'movie' ? 'Theatrical Box Office' : (p.type === 'series' ? 'Anime Trending' : 'Movies & Shows'))}</div>
+          <div class="discover-chart-sub">${p.sub ? p.sub : (labelSuffix ? labelSuffix : (p.type === 'movie' ? 'Theatrical Box Office' : (p.type === 'series' ? 'Anime Trending' : 'Movies & Shows')))}</div>
         </div>
         ${seeAllLink}
       </div>
@@ -482,6 +482,72 @@ function buildMyListsAddonChartsHtml() {
   return buildStreamingRowsHtml(MY_LISTS_ADDON_CHARTS, "", "My Lists Addon Charts");
 }
 
+// --- Better Posters badge & label lists -------------------------------------
+//
+// Powered by Better Posters artwork overlays -- Top Today (#1 to #25),
+// In Cinema, Binge Ready, Returning, Cannes Winners, Emmy Winners, and Oscar Winners:
+const BETTER_POSTERS_CHARTS = [
+  {
+    name: "Better Posters Top Today",
+    movieUrl: "betterposters:chart:today",
+    showUrl: "betterposters:chart:today",
+    sub: "#1 to #25 Today Badges",
+  },
+  {
+    name: "Better Posters In Cinema",
+    url: "betterposters:chart:in-cinema",
+    type: "movie",
+    sub: "In Cinema Badge",
+  },
+  {
+    name: "Better Posters Binge Ready",
+    url: "betterposters:chart:binge-ready",
+    type: "series",
+    sub: "Binge Ready Badge",
+  },
+  {
+    name: "Better Posters Returning",
+    url: "betterposters:chart:returning",
+    type: "series",
+    sub: "Returning Badge",
+  },
+  {
+    name: "Better Posters Cannes Winners",
+    url: "betterposters:chart:cannes-winner",
+    type: "movie",
+    sub: "Cannes Winner Badge",
+  },
+  {
+    name: "Better Posters Emmy Winners",
+    url: "betterposters:chart:emmy-winner",
+    type: "series",
+    sub: "Emmy Winner Badge",
+  },
+  {
+    name: "Better Posters Oscar Winners",
+    url: "betterposters:chart:oscar-winner",
+    type: "movie",
+    sub: "Oscar Winner Badge",
+  },
+];
+
+function buildBetterPostersChartsHtml() {
+  return buildStreamingRowsHtml(BETTER_POSTERS_CHARTS, "", "Better Posters Lists");
+}
+
+function buildAddAllBetterPostersChartsJs() {
+  const calls = BETTER_POSTERS_CHARTS.map(function (p) {
+    if (p.movieUrl && p.showUrl) {
+      return "  addRow(" + JSON.stringify(p.name) + ", " + JSON.stringify(p.movieUrl) + ", 'movie', true, 'Better Posters Lists');\n" +
+             "  addRow(" + JSON.stringify(p.name) + ", " + JSON.stringify(p.showUrl) + ", 'series', true, 'Better Posters Lists');";
+    }
+    const url = p.url || p.movieUrl || p.showUrl;
+    const type = p.type || "movie";
+    return "  addRow(" + JSON.stringify(p.name) + ", " + JSON.stringify(url) + ", " + JSON.stringify(type) + ", true, 'Better Posters Lists');";
+  }).join("\n");
+  return buildAddAllFnJs("addAllBetterPostersCharts", calls);
+}
+
 // --- Clean, shareable /lists/<slug> urls for every native/official chart ---
 //
 // "TMDB Trending" -> "TMDB-Trending" -- title case preserved, everything
@@ -528,6 +594,10 @@ const CHART_SLUG_ENTRIES = (() => {
     ...MY_LISTS_ADDON_CHARTS,
   ].forEach((p) => add(p.name, p.movieUrl, p.showUrl));
   [...TRAKT_BOXOFFICE_LIST, SIMKL_ANIME_LIST[0]].forEach((p) => add(p.name, p.url, p.url));
+  BETTER_POSTERS_CHARTS.forEach((p) => {
+    if (p.movieUrl && p.showUrl) add(p.name, p.movieUrl, p.showUrl);
+    else if (p.url) add(p.name, p.url, p.url);
+  });
   COMBINED_CHART_LISTS.forEach((p) => add(p.name, p.movieUrls.join("\n"), p.showUrls.join("\n")));
   return entries;
 })();

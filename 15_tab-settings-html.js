@@ -105,6 +105,13 @@
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Certification chip (PG-13, TV-MA, and so on).</p>
           </div>
         </label>
+        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
+          <input type="checkbox" id="betterPostersOrderTodayBadgesCheckbox" ${initialBetterPostersOrderTodayBadges ? 'checked' : ''} onchange="toggleBetterPostersSetting('betterPostersOrderTodayBadges', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <div>
+            <span style="font-weight:600;">Order # Today badges</span>
+            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Group and sort # Today badges numerically (#1, #2, #11, #13...) in lists.</p>
+          </div>
+        </label>
         <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
           <label for="betterPostersRatingSourceSelect" style="font-size:0.85rem; font-weight:600; color:var(--text);">Rating source</label>
           <select id="betterPostersRatingSourceSelect" onchange="toggleBetterPostersSetting('betterPostersRatingSource', this.value)" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">

@@ -87,6 +87,16 @@
       ${myListsAddonChartsHtml}
     </div>
 
+    <!-- Better Posters Lists Shelf -->
+    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
+      <div class="shelf-header" style="margin-bottom:8px;">
+        <h2 class="shelf-title">Better Posters Lists</h2>
+        <button type="button" class="qa-add-all-btn lc-btn primary" data-add-all-action="betterposters-charts">+ Add all</button>
+      </div>
+      <p class="qa-shelf-sub">Lists powered by Better Posters artwork &mdash; Top Today (#1 to #25), In Cinema, Binge Ready, Returning, and award winners (Cannes, Emmy, Oscar):</p>
+      ${betterPostersChartsHtml}
+    </div>
+
     <!-- Combined Charts Shelf -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">

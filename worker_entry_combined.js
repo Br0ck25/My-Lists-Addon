@@ -1255,6 +1255,7 @@ const INSTALL_CONFIG_FIELDS = [
   { name: "betterPostersTrendTags", kind: "flagOn", requires: "betterPosters" },
   { name: "betterPostersQuality", kind: "flag", requires: "betterPosters" },
   { name: "betterPostersAge", kind: "flag", requires: "betterPosters" },
+  { name: "betterPostersOrderTodayBadges", kind: "flag", requires: "betterPosters" },
   {
     name: "betterPostersLang", kind: "choice", default: "en", requires: "betterPosters",
     allowed: BETTER_POSTERS_LANGS.map((l) => l.value),
@@ -13698,6 +13699,7 @@ function detectSource(input) {
   if (s.startsWith("simkl:user:")) return "simkl-user";
   if (s.startsWith("channel:v1:")) return "channel";
   if (s.startsWith("customlist:v1:")) return "custom-list";
+  if (s.startsWith("betterposters:chart:") || s.startsWith("betterposters:badge:") || s.startsWith("betterposters:")) return "betterposters";
   if (s.startsWith("autotrack:") || s === "custom:watch-history" || s === "custom:continue-watching" || s === "custom:watchlist" || s.startsWith("custom:watch-history:") || s.startsWith("custom:continue-watching:")) return "autotrack";
   if (s.startsWith("custom:curated:") || s.startsWith("curated:")) return "curated";
   if (s.startsWith("tmdb:collection:") || /^https?:\/\/(?:www\.)?themoviedb\.org\/collection\//i.test(s)) return "tmdb-collection";
@@ -13824,7 +13826,8 @@ function isAllowedCatalogSourceUrl(raw) {
     s.startsWith("autotrack:") ||
     s.startsWith("custom:") ||
     s.startsWith("curated:") ||
-    s.startsWith("mylists:most-watched:")
+    s.startsWith("mylists:most-watched:") ||
+    s.startsWith("betterposters:")
   ) {
     return true;
   }
@@ -14212,6 +14215,9 @@ async function fetchCatalog(entry, skip = 0, keys = {}) {
     else if (source === "autotrack") result = await fetchAutoTrackedCatalog(entry, keys.env, keys);
     else if (source === "curated") { trackSharedApiUse(keys, true, "tmdb"); result = await fetchCuratedCatalog(entry, skip, keys); }
     else if (source === "published-list") result = await fetchPublishedListCatalog(entry, keys.env);
+    else if (source === "betterposters") {
+      result = await fetchBetterPostersCatalog(entry, skip, keys);
+    }
     else {
       trackSharedApiUse(keys, !(keys.mdblistKey || keys.mdblistAccessToken), "mdblist");
       result = await fetchMdblist(entry, skip, mdblistKey, keys.env, keys.ctx);
@@ -14231,6 +14237,13 @@ async function fetchCatalog(entry, skip = 0, keys = {}) {
   // The adult-content filter still runs after both and still wins.
   if (keys.betterPosters && Array.isArray(result) && result.length > 0) {
     result = applyBetterPostersToMetas(result, keys.betterPostersOptions || {});
+  }
+
+  const orderToday = keys.betterPostersOrderTodayBadges || (keys.betterPostersOptions && keys.betterPostersOptions.orderTodayBadges);
+  if (orderToday && Array.isArray(result) && result.length > 1) {
+    const tot = result.totalItems;
+    result = orderMetasByTodayBadges(result, entry.type);
+    result.totalItems = tot;
   }
 
   if (keys.isStremioCatalog === true && keys.origin && Array.isArray(result) && result.length > 0) {
@@ -14979,6 +14992,9 @@ function buildBetterPosterUrl(imdbId, opts) {
   if (o.ratingSource && o.ratingSource !== "avg" && BETTER_POSTERS_RATING_SOURCES.some((r) => r.value === o.ratingSource)) {
     params.push("rs=" + encodeURIComponent(o.ratingSource));
   }
+  if (o.rank != null && /^[1-9]\d?$/.test(String(o.rank))) {
+    params.push("r=" + encodeURIComponent(String(o.rank)));
+  }
   const qs = params.length ? "?" + params.join("&") : "";
   // Served through this Worker's own copy whenever the caller knows where
   // this Worker lives -- see serveBetterPoster below for why.
@@ -15050,10 +15066,13 @@ function parseBetterPosterPath(pathname, searchParams) {
   const lang = BETTER_POSTERS_LANGS.some((l) => l.value === langRaw && l.value !== "en") ? langRaw : "";
   const rsRaw = searchParams.get("rs") || "";
   const rs = BETTER_POSTERS_RATING_SOURCES.some((r) => r.value === rsRaw && r.value !== "avg") ? rsRaw : "";
+  const rankRaw = searchParams.get("r") || "";
+  const rank = /^[1-9]\d?$/.test(rankRaw) ? rankRaw : "";
   const params = [];
   if (tag) params.push("tag=none");
   if (lang) params.push("lang=" + encodeURIComponent(lang));
   if (rs) params.push("rs=" + encodeURIComponent(rs));
+  if (rank) params.push("r=" + encodeURIComponent(rank));
   const qs = params.length ? "?" + params.join("&") : "";
   return {
     style: m[1],
@@ -15061,9 +15080,10 @@ function parseBetterPosterPath(pathname, searchParams) {
     tag,
     lang,
     rs,
+    rank,
     path: `/bp/${m[1]}/${m[2]}.jpg${qs}`,
     upstream: `${BETTER_POSTERS_ORIGIN}/${m[1]}/imdb/poster-default/${m[2]}.jpg${qs}`,
-    kvKey: `bpimg:v1:${m[1]}:${m[2]}:${tag}:${lang}:${rs}`,
+    kvKey: `bpimg:v1:${m[1]}:${m[2]}:${tag}:${lang}:${rs}${rank ? ":" + rank : ""}`,
   };
 }
 
@@ -15410,6 +15430,7 @@ function betterPostersOptionsFrom(cfg, origin) {
     quality: !!c.betterPostersQuality,
     age: !!c.betterPostersAge,
     trendTags: c.betterPostersTrendTags !== false,
+    ...(c.betterPostersOrderTodayBadges ? { orderTodayBadges: true } : {}),
     lang: c.betterPostersLang || "en",
     ratingSource: c.betterPostersRatingSource || "avg",
   };
@@ -15434,10 +15455,266 @@ function applyBetterPostersToMetas(metas, opts) {
     if (m.posterShape === "landscape") return m;
     const imdbId = betterPostersImdbId(m);
     if (!imdbId) return m;
-    return { ...m, poster: buildBetterPosterUrl(imdbId, opts) };
+    let rank = m.badgeRank != null ? m.badgeRank : (m._rank != null ? m._rank : null);
+    if (rank == null && typeof m.poster === "string") {
+      const rM = /[?&]r=([1-9]\d?)(?:&|$)/.exec(m.poster);
+      if (rM) rank = parseInt(rM[1], 10);
+    }
+    const itemOpts = rank ? { ...opts, rank } : opts;
+    return { ...m, poster: buildBetterPosterUrl(imdbId, itemOpts) };
   });
   mapped.totalItems = tot;
   return mapped;
+}
+
+// --- Better Posters Today cache & badge rank ordering --------------------
+
+const BETTER_POSTERS_TODAY_CACHE = {
+  movie: { ranks: new Map(), ts: 0 },
+  series: { ranks: new Map(), ts: 0 },
+};
+
+async function refreshBetterPostersTodayCache(type) {
+  const kind = type === "series" ? "series" : "movie";
+  const cache = BETTER_POSTERS_TODAY_CACHE[kind];
+  const now = Date.now();
+  if (now - cache.ts < 3600000 && cache.ranks.size > 0) return cache.ranks;
+
+  const endpoint = kind === "series" ? "series/tmdb-today-shows.json" : "movie/tmdb-today.json";
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 3000);
+    const res = await fetch(`https://btttr.cc/catalog/${endpoint}`, {
+      signal: ctrl.signal,
+      headers: { "User-Agent": "my-list-addon/1.9" },
+    });
+    clearTimeout(timer);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && Array.isArray(data.metas)) {
+        const map = new Map();
+        data.metas.forEach((m, idx) => {
+          const r = typeof m._rank === "number" ? m._rank : idx + 1;
+          if (m.id) map.set(m.id, r);
+          const imdb = betterPostersImdbId(m);
+          if (imdb) map.set(imdb, r);
+        });
+        cache.ranks = map;
+        cache.ts = now;
+      }
+    }
+  } catch (_) {}
+  return cache.ranks;
+}
+
+function getPosterRankParam(url) {
+  if (!url || typeof url !== "string") return null;
+  const m = /[?&]r=([1-9]\d?)(?:&|$)/.exec(url);
+  if (m) return parseInt(m[1], 10);
+  const tagM = /(?:#|%23)([1-9]\d?)(?:%20|\s*)Today/i.exec(url);
+  if (tagM) return parseInt(tagM[1], 10);
+  return null;
+}
+
+function getTodayBadgeRank(meta, type) {
+  if (!meta || typeof meta !== "object") return null;
+  if (typeof meta.badgeRank === "number" && meta.badgeRank >= 1 && meta.badgeRank <= 25) {
+    return meta.badgeRank;
+  }
+  if (typeof meta._rank === "number" && meta._rank >= 1 && meta._rank <= 25) {
+    return meta._rank;
+  }
+  const fromPoster = getPosterRankParam(meta.poster) || getPosterRankParam(meta.image);
+  if (fromPoster != null) return fromPoster;
+
+  const imdbId = betterPostersImdbId(meta);
+  if (imdbId && BETTER_POSTERS_TODAY_CACHE) {
+    const kind = type === "series" ? "series" : "movie";
+    const entry = BETTER_POSTERS_TODAY_CACHE[kind];
+    if (entry && entry.ranks && entry.ranks.has(imdbId)) {
+      return entry.ranks.get(imdbId);
+    }
+  }
+  return null;
+}
+
+function orderMetasByTodayBadges(metas, type) {
+  if (!Array.isArray(metas) || metas.length <= 1) return metas;
+
+  const badged = [];
+  for (let i = 0; i < metas.length; i++) {
+    const m = metas[i];
+    const rank = getTodayBadgeRank(m, type);
+    if (rank != null) {
+      badged.push({ meta: m, rank, origIdx: i });
+    }
+  }
+
+  if (badged.length <= 1) {
+    return metas;
+  }
+
+  const firstIdx = Math.min(...badged.map((b) => b.origIdx));
+
+  // Sort badged items by badge rank ascending (if tie, preserve original order)
+  badged.sort((a, b) => (a.rank - b.rank) || (a.origIdx - b.origIdx));
+
+  const badgedSet = new Set(badged.map((b) => b.meta));
+
+  const before = [];
+  const after = [];
+
+  for (let i = 0; i < metas.length; i++) {
+    const m = metas[i];
+    if (badgedSet.has(m)) continue;
+    if (i < firstIdx) {
+      before.push(m);
+    } else {
+      after.push(m);
+    }
+  }
+
+  const sortedBadgedMetas = badged.map((b) => b.meta);
+  const reordered = [...before, ...sortedBadgedMetas, ...after];
+  if (metas.totalItems != null) {
+    reordered.totalItems = metas.totalItems;
+  }
+  return reordered;
+}
+
+async function fetchBetterPostersCatalog(entry, skip = 0, keys = {}) {
+  const rawSlug = String(entry.url || "").replace(/^betterposters:(?:chart:|badge:)?/, "").trim().toLowerCase();
+  const tmdbKey = keys.tmdbKey || TMDB_API_KEY || (keys.env && keys.env.TMDB_API_KEY) || "";
+  let result = [];
+
+  if (rawSlug === "today") {
+    const wantType = entry.type === "series" ? "series" : "movie";
+    let items = [];
+    try {
+      const endpoint = wantType === "series" ? "series/tmdb-today-shows.json" : "movie/tmdb-today.json";
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 4000);
+      const res = await fetch(`https://btttr.cc/catalog/${endpoint}`, {
+        signal: ctrl.signal,
+        headers: { "User-Agent": "my-list-addon/1.9" },
+      });
+      clearTimeout(timer);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.metas) && data.metas.length > 0) {
+          items = data.metas.map((m, idx) => ({
+            ...m,
+            badgeRank: typeof m._rank === "number" ? m._rank : idx + 1,
+            _rank: typeof m._rank === "number" ? m._rank : idx + 1,
+          }));
+        }
+      }
+    } catch (_) {}
+
+    if (!items.length && tmdbKey) {
+      // Fallback: TMDB trending daily
+      try {
+        const trendingPath = wantType === "series" ? "trending/tv/day" : "trending/movie/day";
+        const tmdbResults = await fetchTmdbPagedResults(trendingPath, tmdbKey, 0, 0);
+        const resolved = await mapWithConcurrency(tmdbResults.slice(0, 25), TMDB_DETAIL_RESOLVE_CONCURRENCY, async (it, idx) => {
+          const details = await fetchTmdbDetails(it.id, wantType === "series" ? "tv" : "movie", tmdbKey, keys.env);
+          if (!details || !details.imdbId) return null;
+          const meta = mapTmdbItem(it, details.imdbId, entry.type, details.videos, details);
+          meta.badgeRank = idx + 1;
+          meta._rank = idx + 1;
+          return meta;
+        });
+        items = resolved.filter(Boolean);
+      } catch (_) {}
+    }
+
+    const sliced = items.slice(skip, skip + PAGE_SIZE);
+    sliced.totalItems = items.length;
+    result = sliced;
+  } else if (rawSlug === "in-cinema") {
+    try {
+      result = await fetchTmdbChart(entry, skip, tmdbKey, "now_playing", keys.region, keys.hideNonDigitalReleases, keys.env, keys.ctx);
+    } catch (_) {
+      result = [];
+    }
+  } else if (rawSlug === "binge-ready") {
+    try {
+      const discoverPath = "discover/tv?sort_by=popularity.desc&with_status=3&vote_count.gte=50&include_adult=false";
+      const windowItems = await fetchTmdbPagedResults(discoverPath, tmdbKey, skip, 0);
+      const resolved = await mapWithConcurrency(windowItems, TMDB_DETAIL_RESOLVE_CONCURRENCY, async (it) => {
+        const details = await fetchTmdbDetails(it.id, "tv", tmdbKey, keys.env);
+        if (!details || !details.imdbId) return null;
+        return mapTmdbItem(it, details.imdbId, "series", details.videos, details);
+      });
+      result = resolved.filter(Boolean);
+      result.totalItems = windowItems.totalItems;
+    } catch (_) {
+      result = [];
+    }
+  } else if (rawSlug === "returning") {
+    try {
+      const discoverPath = "discover/tv?sort_by=popularity.desc&with_status=0&vote_count.gte=50&include_adult=false";
+      const windowItems = await fetchTmdbPagedResults(discoverPath, tmdbKey, skip, 0);
+      const resolved = await mapWithConcurrency(windowItems, TMDB_DETAIL_RESOLVE_CONCURRENCY, async (it) => {
+        const details = await fetchTmdbDetails(it.id, "tv", tmdbKey, keys.env);
+        if (!details || !details.imdbId) return null;
+        return mapTmdbItem(it, details.imdbId, "series", details.videos, details);
+      });
+      result = resolved.filter(Boolean);
+      result.totalItems = windowItems.totalItems;
+    } catch (_) {
+      result = [];
+    }
+  } else if (rawSlug === "cannes-winner") {
+    try {
+      const discoverPath = "discover/movie?sort_by=vote_average.desc&vote_count.gte=200&with_keywords=187056|974|1585&include_adult=false";
+      const windowItems = await fetchTmdbPagedResults(discoverPath, tmdbKey, skip, 0);
+      const resolved = await mapWithConcurrency(windowItems, TMDB_DETAIL_RESOLVE_CONCURRENCY, async (it) => {
+        const details = await fetchTmdbDetails(it.id, "movie", tmdbKey, keys.env);
+        if (!details || !details.imdbId) return null;
+        return mapTmdbItem(it, details.imdbId, "movie", details.videos, details);
+      });
+      result = resolved.filter(Boolean);
+      result.totalItems = windowItems.totalItems;
+    } catch (_) {
+      result = [];
+    }
+  } else if (rawSlug === "emmy-winner") {
+    try {
+      const discoverPath = "discover/tv?sort_by=vote_average.desc&vote_count.gte=200&with_keywords=209215|1425&include_adult=false";
+      const windowItems = await fetchTmdbPagedResults(discoverPath, tmdbKey, skip, 0);
+      const resolved = await mapWithConcurrency(windowItems, TMDB_DETAIL_RESOLVE_CONCURRENCY, async (it) => {
+        const details = await fetchTmdbDetails(it.id, "tv", tmdbKey, keys.env);
+        if (!details || !details.imdbId) return null;
+        return mapTmdbItem(it, details.imdbId, "series", details.videos, details);
+      });
+      result = resolved.filter(Boolean);
+      result.totalItems = windowItems.totalItems;
+    } catch (_) {
+      result = [];
+    }
+  } else if (rawSlug === "oscar-winner") {
+    try {
+      const discoverPath = "discover/movie?sort_by=vote_average.desc&vote_count.gte=500&with_keywords=209214|948|602&include_adult=false";
+      const windowItems = await fetchTmdbPagedResults(discoverPath, tmdbKey, skip, 0);
+      const resolved = await mapWithConcurrency(windowItems, TMDB_DETAIL_RESOLVE_CONCURRENCY, async (it) => {
+        const details = await fetchTmdbDetails(it.id, "movie", tmdbKey, keys.env);
+        if (!details || !details.imdbId) return null;
+        return mapTmdbItem(it, details.imdbId, "movie", details.videos, details);
+      });
+      result = resolved.filter(Boolean);
+      result.totalItems = windowItems.totalItems;
+    } catch (_) {
+      result = [];
+    }
+  }
+
+  // Always apply Better Posters artwork so badges are rendered on Better Posters lists
+  const bpOpts = keys.betterPostersOptions || betterPostersOptionsFrom(keys, keys.origin);
+  const tot = result.totalItems;
+  result = applyBetterPostersToMetas(result, bpOpts);
+  result.totalItems = tot;
+  return result || [];
 }
 
 function applyBadgedPostersToMetas(metas, origin) {
@@ -24971,7 +25248,7 @@ function buildStreamingRowsHtml(list, labelSuffix, group) {
       <div class="discover-chart-header">
         <div class="discover-chart-info">
           <div class="discover-chart-title">${p.name}</div>
-          <div class="discover-chart-sub">${labelSuffix ? labelSuffix : (p.type === 'movie' ? 'Theatrical Box Office' : (p.type === 'series' ? 'Anime Trending' : 'Movies & Shows'))}</div>
+          <div class="discover-chart-sub">${p.sub ? p.sub : (labelSuffix ? labelSuffix : (p.type === 'movie' ? 'Theatrical Box Office' : (p.type === 'series' ? 'Anime Trending' : 'Movies & Shows')))}</div>
         </div>
         ${seeAllLink}
       </div>
@@ -25309,6 +25586,72 @@ function buildMyListsAddonChartsHtml() {
   return buildStreamingRowsHtml(MY_LISTS_ADDON_CHARTS, "", "My Lists Addon Charts");
 }
 
+// --- Better Posters badge & label lists -------------------------------------
+//
+// Powered by Better Posters artwork overlays -- Top Today (#1 to #25),
+// In Cinema, Binge Ready, Returning, Cannes Winners, Emmy Winners, and Oscar Winners:
+const BETTER_POSTERS_CHARTS = [
+  {
+    name: "Better Posters Top Today",
+    movieUrl: "betterposters:chart:today",
+    showUrl: "betterposters:chart:today",
+    sub: "#1 to #25 Today Badges",
+  },
+  {
+    name: "Better Posters In Cinema",
+    url: "betterposters:chart:in-cinema",
+    type: "movie",
+    sub: "In Cinema Badge",
+  },
+  {
+    name: "Better Posters Binge Ready",
+    url: "betterposters:chart:binge-ready",
+    type: "series",
+    sub: "Binge Ready Badge",
+  },
+  {
+    name: "Better Posters Returning",
+    url: "betterposters:chart:returning",
+    type: "series",
+    sub: "Returning Badge",
+  },
+  {
+    name: "Better Posters Cannes Winners",
+    url: "betterposters:chart:cannes-winner",
+    type: "movie",
+    sub: "Cannes Winner Badge",
+  },
+  {
+    name: "Better Posters Emmy Winners",
+    url: "betterposters:chart:emmy-winner",
+    type: "series",
+    sub: "Emmy Winner Badge",
+  },
+  {
+    name: "Better Posters Oscar Winners",
+    url: "betterposters:chart:oscar-winner",
+    type: "movie",
+    sub: "Oscar Winner Badge",
+  },
+];
+
+function buildBetterPostersChartsHtml() {
+  return buildStreamingRowsHtml(BETTER_POSTERS_CHARTS, "", "Better Posters Lists");
+}
+
+function buildAddAllBetterPostersChartsJs() {
+  const calls = BETTER_POSTERS_CHARTS.map(function (p) {
+    if (p.movieUrl && p.showUrl) {
+      return "  addRow(" + JSON.stringify(p.name) + ", " + JSON.stringify(p.movieUrl) + ", 'movie', true, 'Better Posters Lists');\n" +
+             "  addRow(" + JSON.stringify(p.name) + ", " + JSON.stringify(p.showUrl) + ", 'series', true, 'Better Posters Lists');";
+    }
+    const url = p.url || p.movieUrl || p.showUrl;
+    const type = p.type || "movie";
+    return "  addRow(" + JSON.stringify(p.name) + ", " + JSON.stringify(url) + ", " + JSON.stringify(type) + ", true, 'Better Posters Lists');";
+  }).join("\n");
+  return buildAddAllFnJs("addAllBetterPostersCharts", calls);
+}
+
 // --- Clean, shareable /lists/<slug> urls for every native/official chart ---
 //
 // "TMDB Trending" -> "TMDB-Trending" -- title case preserved, everything
@@ -25355,6 +25698,10 @@ const CHART_SLUG_ENTRIES = (() => {
     ...MY_LISTS_ADDON_CHARTS,
   ].forEach((p) => add(p.name, p.movieUrl, p.showUrl));
   [...TRAKT_BOXOFFICE_LIST, SIMKL_ANIME_LIST[0]].forEach((p) => add(p.name, p.url, p.url));
+  BETTER_POSTERS_CHARTS.forEach((p) => {
+    if (p.movieUrl && p.showUrl) add(p.name, p.movieUrl, p.showUrl);
+    else if (p.url) add(p.name, p.url, p.url);
+  });
   COMBINED_CHART_LISTS.forEach((p) => add(p.name, p.movieUrls.join("\n"), p.showUrls.join("\n")));
   return entries;
 })();
@@ -25449,6 +25796,7 @@ function renderBuilder(
   const initialBetterPostersQuality = !!initialKeys.betterPostersQuality;
   const initialBetterPostersAge = !!initialKeys.betterPostersAge;
   const initialBetterPostersTrendTags = initialKeys.betterPostersTrendTags !== false;
+  const initialBetterPostersOrderTodayBadges = !!initialKeys.betterPostersOrderTodayBadges;
   const betterPostersLangOptionsHtml = buildBetterPostersLangOptionsHtml(initialKeys.betterPostersLang || "en");
   const betterPostersRatingSourceOptionsHtml = buildBetterPostersRatingSourceOptionsHtml(initialKeys.betterPostersRatingSource || "avg");
   const streamingTop10Html = buildStreamingTop10Html();
@@ -25464,6 +25812,7 @@ function renderBuilder(
   const genresHtml = buildGenresHtml();
   // New on Streaming + My Lists Addon Most Watched -- see MY_LISTS_ADDON_CHARTS (08).
   const myListsAddonChartsHtml = buildMyListsAddonChartsHtml();
+  const betterPostersChartsHtml = buildBetterPostersChartsHtml();
   // Precomputed here (same pattern as the *Html fragments above) rather
   // than built inline inside the giant HTML template literal below --
   // this file's template literal has bitten past changes before with
@@ -29484,6 +29833,16 @@ if ('serviceWorker' in navigator) {
       ${myListsAddonChartsHtml}
     </div>
 
+    <!-- Better Posters Lists Shelf -->
+    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
+      <div class="shelf-header" style="margin-bottom:8px;">
+        <h2 class="shelf-title">Better Posters Lists</h2>
+        <button type="button" class="qa-add-all-btn lc-btn primary" data-add-all-action="betterposters-charts">+ Add all</button>
+      </div>
+      <p class="qa-shelf-sub">Lists powered by Better Posters artwork &mdash; Top Today (#1 to #25), In Cinema, Binge Ready, Returning, and award winners (Cannes, Emmy, Oscar):</p>
+      ${betterPostersChartsHtml}
+    </div>
+
     <!-- Combined Charts Shelf -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
@@ -29605,6 +29964,9 @@ if ('serviceWorker' in navigator) {
   <div id="discoverShelvesContainer">
     <!-- My Lists Addon Charts Shelf -->
     ${myListsAddonChartsHtml}
+
+    <!-- Better Posters Lists Shelf -->
+    ${betterPostersChartsHtml}
 
     <!-- Combined Charts Shelf -->
     ${combinedChartsHtml}
@@ -30458,6 +30820,13 @@ if ('serviceWorker' in navigator) {
           <div>
             <span style="font-weight:600;">Age rating</span>
             <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Certification chip (PG-13, TV-MA, and so on).</p>
+          </div>
+        </label>
+        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
+          <input type="checkbox" id="betterPostersOrderTodayBadgesCheckbox" ${initialBetterPostersOrderTodayBadges ? 'checked' : ''} onchange="toggleBetterPostersSetting('betterPostersOrderTodayBadges', this.checked)" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
+          <div>
+            <span style="font-weight:600;">Order # Today badges</span>
+            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Group and sort # Today badges numerically (#1, #2, #11, #13...) in lists.</p>
           </div>
         </label>
         <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
@@ -34120,6 +34489,7 @@ ${buildAddAllFnJs("addAllKidsCharts", buildAddAllPairsCallsJs(KIDS_LISTS, "Kids"
 ${buildAddAllFnJs("addAllHolidayCharts", buildAddAllPairsCallsJs(HOLIDAY_LISTS, "Holidays", ""))}
 ${buildAddAllFnJs("addAllGenreCharts", buildAddAllPairsCallsJs(GENRE_LISTS, "Genres", ""))}
 ${buildAddAllFnJs("addAllMyListsAddonCharts", buildAddAllPairsCallsJs(MY_LISTS_ADDON_CHARTS, "My Lists Addon Charts", ""))}
+${buildAddAllBetterPostersChartsJs()}
 
 function addAllHiddenGems() {
   addRow("Hidden Gems", "tmdb:hidden-gems", "movie", true, "Hidden Gems");
@@ -34145,6 +34515,7 @@ document.addEventListener('click', (e) => {
   else if (action === 'holidays') addAllHolidayCharts();
   else if (action === 'genres') addAllGenreCharts();
   else if (action === 'mylists-charts') addAllMyListsAddonCharts();
+  else if (action === 'betterposters-charts') addAllBetterPostersCharts();
 });
 
 // Adds a blank source row to an existing entry -- this is how a normal
@@ -64243,6 +64614,7 @@ async function loadCreatorSync(opts) {
         { key: 'betterPostersTrendTags', id: 'betterPostersTrendTagsCheckbox' },
         { key: 'betterPostersQuality', id: 'betterPostersQualityCheckbox' },
         { key: 'betterPostersAge', id: 'betterPostersAgeCheckbox' },
+        { key: 'betterPostersOrderTodayBadges', id: 'betterPostersOrderTodayBadgesCheckbox' },
       ].forEach(({ key, id }) => {
         if (typeof synced.keys[key] === 'boolean') {
           try { localStorage.setItem('myListAddon:' + key, synced.keys[key] ? '1' : '0'); } catch (e) {}
@@ -68175,6 +68547,7 @@ function collectKeys() {
     betterPostersTrendTags: getBetterPostersSetting('betterPostersTrendTags', true),
     betterPostersQuality: getBetterPostersSetting('betterPostersQuality', false),
     betterPostersAge: getBetterPostersSetting('betterPostersAge', false),
+    betterPostersOrderTodayBadges: getBetterPostersSetting('betterPostersOrderTodayBadges', false),
     betterPostersLang: getBetterPostersChoice('betterPostersLang', 'en'),
     betterPostersRatingSource: getBetterPostersChoice('betterPostersRatingSource', 'avg'),
     showBadgesAiringNext: getBadgeSetting('showBadgesAiringNext'),
@@ -68386,6 +68759,7 @@ const BETTER_POSTERS_TOGGLES = [
   { key: 'betterPostersTrendTags', id: 'betterPostersTrendTagsCheckbox', on: true },
   { key: 'betterPostersQuality', id: 'betterPostersQualityCheckbox', on: false },
   { key: 'betterPostersAge', id: 'betterPostersAgeCheckbox', on: false },
+  { key: 'betterPostersOrderTodayBadges', id: 'betterPostersOrderTodayBadgesCheckbox', on: false },
 ];
 
 function initBetterPostersSettingsUI() {
@@ -68715,6 +69089,20 @@ async function renderLivePreview() {
         if (previewKey) body.creatorKey = previewKey;
         if (keys.hideNonDigitalReleases) body.hideNonDigitalReleases = true;
         if (keys.adultContentFilter) body.adultContentFilter = true;
+        if (keys.betterPosters) body.betterPosters = true;
+        if (keys.betterPostersOrderTodayBadges) body.betterPostersOrderTodayBadges = true;
+        if (keys.betterPosters) {
+          body.betterPostersOptions = {
+            genre: keys.betterPostersGenre !== false,
+            rating: keys.betterPostersRating !== false,
+            quality: !!keys.betterPostersQuality,
+            age: !!keys.betterPostersAge,
+            trendTags: keys.betterPostersTrendTags !== false,
+            orderTodayBadges: !!keys.betterPostersOrderTodayBadges,
+            lang: keys.betterPostersLang || 'en',
+            ratingSource: keys.betterPostersRatingSource || 'avg',
+          };
+        }
         const res = await fetch(ORIGIN + '/api/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -76034,7 +76422,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
       const resolvedConfig = await resolveConfig(config, env);
       // As in the manifest route: most installs ask for catalogs far more often.
       ctx.waitUntil(maybeMigrateLegacyInstall(env, config));
-      const { entries, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, trackCreatorName, trackOwner, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists, betterPosters, showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist } = resolvedConfig;
+      const { entries, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, trackCreatorName, trackOwner, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists, betterPosters, betterPostersOrderTodayBadges, showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist } = resolvedConfig;
       const entryIndex = entries.findIndex((e) => e.id === id && e.type === type);
       const entry = entryIndex >= 0 ? entries[entryIndex] : null;
       if (!entry || entry.enabled === false) return jsonPublic({ metas: [] });
@@ -76073,7 +76461,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // to a config that PROVED it belongs to that account. See resolveConfig
         // (04_config-resolution.js) for how that is established and
         // mayReadTrackedShelf (02_http-and-creator-utils.js) for what it gates.
-        let metas = await fetchCatalog(entry, skip, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, adultContentFilter, isStremioCatalog: true, betterPosters, betterPostersOptions: betterPostersOptionsFrom(resolvedConfig, url.origin), showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, env, ctx, origin: url.origin });
+        let metas = await fetchCatalog(entry, skip, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, adultContentFilter, isStremioCatalog: true, betterPosters, betterPostersOrderTodayBadges, betterPostersOptions: betterPostersOptionsFrom(resolvedConfig, url.origin), showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, env, ctx, origin: url.origin });
         if (dedupeAcrossLists) {
           metas = await dedupeAcrossListEntries(entries, entryIndex, skip, metas, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, env, ctx });
         }
@@ -76194,7 +76582,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
     // callers with a normal-sized url (a plain mdblist/trakt/tmdb list
     // link is never going to hit that limit).
     if (path === "/api/preview") {
-      let testUrl, type, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, sampleSize, skip, creatorName, creatorKey, hideNonDigitalReleases, adultContentFilter, region;
+      let testUrl, type, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, sampleSize, skip, creatorName, creatorKey, hideNonDigitalReleases, adultContentFilter, region, betterPosters, betterPostersOrderTodayBadges, betterPostersOptions;
       if (request.method === "POST") {
         let reqBody;
         try {
@@ -76216,6 +76604,9 @@ Sitemap: ${url.origin}/sitemap.xml`;
         region = reqBody.region || "";
         hideNonDigitalReleases = !!reqBody.hideNonDigitalReleases;
         adultContentFilter = !!reqBody.adultContentFilter;
+        betterPosters = !!reqBody.betterPosters;
+        betterPostersOrderTodayBadges = !!reqBody.betterPostersOrderTodayBadges;
+        betterPostersOptions = reqBody.betterPostersOptions || null;
         sampleSize = Math.max(1, Math.min(PAGE_SIZE, parseInt(reqBody.sample, 10) || 5));
         skip = Math.max(0, parseInt(reqBody.skip, 10) || 0);
       } else {
@@ -76242,6 +76633,9 @@ Sitemap: ${url.origin}/sitemap.xml`;
         region = url.searchParams.get("region") || "";
         hideNonDigitalReleases = url.searchParams.get("hideNonDigitalReleases") === "1";
         adultContentFilter = url.searchParams.get("adultContentFilter") === "1";
+        betterPosters = url.searchParams.get("betterPosters") === "1";
+        betterPostersOrderTodayBadges = url.searchParams.get("betterPostersOrderTodayBadges") === "1";
+        betterPostersOptions = null;
         sampleSize = Math.max(1, Math.min(PAGE_SIZE, parseInt(url.searchParams.get("sample"), 10) || 5));
         skip = Math.max(0, parseInt(url.searchParams.get("skip"), 10) || 0);
       }
@@ -76285,7 +76679,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
 
       let body;
       try {
-        const metas = await fetchCatalog({ url: testUrl, type }, skip, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, creatorName, verifiedOwner: previewVerifiedOwner, hideNonDigitalReleases, adultContentFilter, region, env, ctx, origin: url.origin });
+        const metas = await fetchCatalog({ url: testUrl, type }, skip, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, creatorName, verifiedOwner: previewVerifiedOwner, hideNonDigitalReleases, adultContentFilter, region, env, ctx, origin: url.origin, betterPosters, betterPostersOrderTodayBadges, betterPostersOptions });
         const totalItems = (typeof metas.totalItems === "number") ? metas.totalItems : (metas.length < PAGE_SIZE && skip === 0 ? metas.length : null);
         // Enrich sample items that lack ratings with TMDb data.
         // fetchTmdbDetails is cached (7 days) so popular titles are cache hits.
@@ -76317,6 +76711,8 @@ Sitemap: ${url.origin}/sitemap.xml`;
             type: m.type || (m.mediatype === "show" || m.mediatype === "series" || m.mediatype === "tv" ? "series" : (m.mediatype === "episode" ? "episode" : (type === "series" ? "series" : "movie"))),
             name: m.name,
             poster: m.poster,
+            badgeRank: m.badgeRank != null ? m.badgeRank : (m._rank != null ? m._rank : undefined),
+            _rank: m._rank != null ? m._rank : undefined,
             year: m.releaseInfo,
             showTitle: m.showTitle,
             posterShape: m.posterShape,

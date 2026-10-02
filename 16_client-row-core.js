@@ -3243,6 +3243,7 @@ ${buildAddAllFnJs("addAllKidsCharts", buildAddAllPairsCallsJs(KIDS_LISTS, "Kids"
 ${buildAddAllFnJs("addAllHolidayCharts", buildAddAllPairsCallsJs(HOLIDAY_LISTS, "Holidays", ""))}
 ${buildAddAllFnJs("addAllGenreCharts", buildAddAllPairsCallsJs(GENRE_LISTS, "Genres", ""))}
 ${buildAddAllFnJs("addAllMyListsAddonCharts", buildAddAllPairsCallsJs(MY_LISTS_ADDON_CHARTS, "My Lists Addon Charts", ""))}
+${buildAddAllBetterPostersChartsJs()}
 
 function addAllHiddenGems() {
   addRow("Hidden Gems", "tmdb:hidden-gems", "movie", true, "Hidden Gems");
@@ -3268,6 +3269,7 @@ document.addEventListener('click', (e) => {
   else if (action === 'holidays') addAllHolidayCharts();
   else if (action === 'genres') addAllGenreCharts();
   else if (action === 'mylists-charts') addAllMyListsAddonCharts();
+  else if (action === 'betterposters-charts') addAllBetterPostersCharts();
 });
 
 // Adds a blank source row to an existing entry -- this is how a normal

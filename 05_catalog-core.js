@@ -179,6 +179,9 @@ async function fetchCatalog(entry, skip = 0, keys = {}) {
     else if (source === "autotrack") result = await fetchAutoTrackedCatalog(entry, keys.env, keys);
     else if (source === "curated") { trackSharedApiUse(keys, true, "tmdb"); result = await fetchCuratedCatalog(entry, skip, keys); }
     else if (source === "published-list") result = await fetchPublishedListCatalog(entry, keys.env);
+    else if (source === "betterposters") {
+      result = await fetchBetterPostersCatalog(entry, skip, keys);
+    }
     else {
       trackSharedApiUse(keys, !(keys.mdblistKey || keys.mdblistAccessToken), "mdblist");
       result = await fetchMdblist(entry, skip, mdblistKey, keys.env, keys.ctx);
@@ -198,6 +201,13 @@ async function fetchCatalog(entry, skip = 0, keys = {}) {
   // The adult-content filter still runs after both and still wins.
   if (keys.betterPosters && Array.isArray(result) && result.length > 0) {
     result = applyBetterPostersToMetas(result, keys.betterPostersOptions || {});
+  }
+
+  const orderToday = keys.betterPostersOrderTodayBadges || (keys.betterPostersOptions && keys.betterPostersOptions.orderTodayBadges);
+  if (orderToday && Array.isArray(result) && result.length > 1) {
+    const tot = result.totalItems;
+    result = orderMetasByTodayBadges(result, entry.type);
+    result.totalItems = tot;
   }
 
   if (keys.isStremioCatalog === true && keys.origin && Array.isArray(result) && result.length > 0) {
@@ -946,6 +956,9 @@ function buildBetterPosterUrl(imdbId, opts) {
   if (o.ratingSource && o.ratingSource !== "avg" && BETTER_POSTERS_RATING_SOURCES.some((r) => r.value === o.ratingSource)) {
     params.push("rs=" + encodeURIComponent(o.ratingSource));
   }
+  if (o.rank != null && /^[1-9]\d?$/.test(String(o.rank))) {
+    params.push("r=" + encodeURIComponent(String(o.rank)));
+  }
   const qs = params.length ? "?" + params.join("&") : "";
   // Served through this Worker's own copy whenever the caller knows where
   // this Worker lives -- see serveBetterPoster below for why.
@@ -1017,10 +1030,13 @@ function parseBetterPosterPath(pathname, searchParams) {
   const lang = BETTER_POSTERS_LANGS.some((l) => l.value === langRaw && l.value !== "en") ? langRaw : "";
   const rsRaw = searchParams.get("rs") || "";
   const rs = BETTER_POSTERS_RATING_SOURCES.some((r) => r.value === rsRaw && r.value !== "avg") ? rsRaw : "";
+  const rankRaw = searchParams.get("r") || "";
+  const rank = /^[1-9]\d?$/.test(rankRaw) ? rankRaw : "";
   const params = [];
   if (tag) params.push("tag=none");
   if (lang) params.push("lang=" + encodeURIComponent(lang));
   if (rs) params.push("rs=" + encodeURIComponent(rs));
+  if (rank) params.push("r=" + encodeURIComponent(rank));
   const qs = params.length ? "?" + params.join("&") : "";
   return {
     style: m[1],
@@ -1028,9 +1044,10 @@ function parseBetterPosterPath(pathname, searchParams) {
     tag,
     lang,
     rs,
+    rank,
     path: `/bp/${m[1]}/${m[2]}.jpg${qs}`,
     upstream: `${BETTER_POSTERS_ORIGIN}/${m[1]}/imdb/poster-default/${m[2]}.jpg${qs}`,
-    kvKey: `bpimg:v1:${m[1]}:${m[2]}:${tag}:${lang}:${rs}`,
+    kvKey: `bpimg:v1:${m[1]}:${m[2]}:${tag}:${lang}:${rs}${rank ? ":" + rank : ""}`,
   };
 }
 
@@ -1377,6 +1394,7 @@ function betterPostersOptionsFrom(cfg, origin) {
     quality: !!c.betterPostersQuality,
     age: !!c.betterPostersAge,
     trendTags: c.betterPostersTrendTags !== false,
+    ...(c.betterPostersOrderTodayBadges ? { orderTodayBadges: true } : {}),
     lang: c.betterPostersLang || "en",
     ratingSource: c.betterPostersRatingSource || "avg",
   };
@@ -1401,10 +1419,266 @@ function applyBetterPostersToMetas(metas, opts) {
     if (m.posterShape === "landscape") return m;
     const imdbId = betterPostersImdbId(m);
     if (!imdbId) return m;
-    return { ...m, poster: buildBetterPosterUrl(imdbId, opts) };
+    let rank = m.badgeRank != null ? m.badgeRank : (m._rank != null ? m._rank : null);
+    if (rank == null && typeof m.poster === "string") {
+      const rM = /[?&]r=([1-9]\d?)(?:&|$)/.exec(m.poster);
+      if (rM) rank = parseInt(rM[1], 10);
+    }
+    const itemOpts = rank ? { ...opts, rank } : opts;
+    return { ...m, poster: buildBetterPosterUrl(imdbId, itemOpts) };
   });
   mapped.totalItems = tot;
   return mapped;
+}
+
+// --- Better Posters Today cache & badge rank ordering --------------------
+
+const BETTER_POSTERS_TODAY_CACHE = {
+  movie: { ranks: new Map(), ts: 0 },
+  series: { ranks: new Map(), ts: 0 },
+};
+
+async function refreshBetterPostersTodayCache(type) {
+  const kind = type === "series" ? "series" : "movie";
+  const cache = BETTER_POSTERS_TODAY_CACHE[kind];
+  const now = Date.now();
+  if (now - cache.ts < 3600000 && cache.ranks.size > 0) return cache.ranks;
+
+  const endpoint = kind === "series" ? "series/tmdb-today-shows.json" : "movie/tmdb-today.json";
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 3000);
+    const res = await fetch(`https://btttr.cc/catalog/${endpoint}`, {
+      signal: ctrl.signal,
+      headers: { "User-Agent": "my-list-addon/1.9" },
+    });
+    clearTimeout(timer);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && Array.isArray(data.metas)) {
+        const map = new Map();
+        data.metas.forEach((m, idx) => {
+          const r = typeof m._rank === "number" ? m._rank : idx + 1;
+          if (m.id) map.set(m.id, r);
+          const imdb = betterPostersImdbId(m);
+          if (imdb) map.set(imdb, r);
+        });
+        cache.ranks = map;
+        cache.ts = now;
+      }
+    }
+  } catch (_) {}
+  return cache.ranks;
+}
+
+function getPosterRankParam(url) {
+  if (!url || typeof url !== "string") return null;
+  const m = /[?&]r=([1-9]\d?)(?:&|$)/.exec(url);
+  if (m) return parseInt(m[1], 10);
+  const tagM = /(?:#|%23)([1-9]\d?)(?:%20|\s*)Today/i.exec(url);
+  if (tagM) return parseInt(tagM[1], 10);
+  return null;
+}
+
+function getTodayBadgeRank(meta, type) {
+  if (!meta || typeof meta !== "object") return null;
+  if (typeof meta.badgeRank === "number" && meta.badgeRank >= 1 && meta.badgeRank <= 25) {
+    return meta.badgeRank;
+  }
+  if (typeof meta._rank === "number" && meta._rank >= 1 && meta._rank <= 25) {
+    return meta._rank;
+  }
+  const fromPoster = getPosterRankParam(meta.poster) || getPosterRankParam(meta.image);
+  if (fromPoster != null) return fromPoster;
+
+  const imdbId = betterPostersImdbId(meta);
+  if (imdbId && BETTER_POSTERS_TODAY_CACHE) {
+    const kind = type === "series" ? "series" : "movie";
+    const entry = BETTER_POSTERS_TODAY_CACHE[kind];
+    if (entry && entry.ranks && entry.ranks.has(imdbId)) {
+      return entry.ranks.get(imdbId);
+    }
+  }
+  return null;
+}
+
+function orderMetasByTodayBadges(metas, type) {
+  if (!Array.isArray(metas) || metas.length <= 1) return metas;
+
+  const badged = [];
+  for (let i = 0; i < metas.length; i++) {
+    const m = metas[i];
+    const rank = getTodayBadgeRank(m, type);
+    if (rank != null) {
+      badged.push({ meta: m, rank, origIdx: i });
+    }
+  }
+
+  if (badged.length <= 1) {
+    return metas;
+  }
+
+  const firstIdx = Math.min(...badged.map((b) => b.origIdx));
+
+  // Sort badged items by badge rank ascending (if tie, preserve original order)
+  badged.sort((a, b) => (a.rank - b.rank) || (a.origIdx - b.origIdx));
+
+  const badgedSet = new Set(badged.map((b) => b.meta));
+
+  const before = [];
+  const after = [];
+
+  for (let i = 0; i < metas.length; i++) {
+    const m = metas[i];
+    if (badgedSet.has(m)) continue;
+    if (i < firstIdx) {
+      before.push(m);
+    } else {
+      after.push(m);
+    }
+  }
+
+  const sortedBadgedMetas = badged.map((b) => b.meta);
+  const reordered = [...before, ...sortedBadgedMetas, ...after];
+  if (metas.totalItems != null) {
+    reordered.totalItems = metas.totalItems;
+  }
+  return reordered;
+}
+
+async function fetchBetterPostersCatalog(entry, skip = 0, keys = {}) {
+  const rawSlug = String(entry.url || "").replace(/^betterposters:(?:chart:|badge:)?/, "").trim().toLowerCase();
+  const tmdbKey = keys.tmdbKey || TMDB_API_KEY || (keys.env && keys.env.TMDB_API_KEY) || "";
+  let result = [];
+
+  if (rawSlug === "today") {
+    const wantType = entry.type === "series" ? "series" : "movie";
+    let items = [];
+    try {
+      const endpoint = wantType === "series" ? "series/tmdb-today-shows.json" : "movie/tmdb-today.json";
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 4000);
+      const res = await fetch(`https://btttr.cc/catalog/${endpoint}`, {
+        signal: ctrl.signal,
+        headers: { "User-Agent": "my-list-addon/1.9" },
+      });
+      clearTimeout(timer);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.metas) && data.metas.length > 0) {
+          items = data.metas.map((m, idx) => ({
+            ...m,
+            badgeRank: typeof m._rank === "number" ? m._rank : idx + 1,
+            _rank: typeof m._rank === "number" ? m._rank : idx + 1,
+          }));
+        }
+      }
+    } catch (_) {}
+
+    if (!items.length && tmdbKey) {
+      // Fallback: TMDB trending daily
+      try {
+        const trendingPath = wantType === "series" ? "trending/tv/day" : "trending/movie/day";
+        const tmdbResults = await fetchTmdbPagedResults(trendingPath, tmdbKey, 0, 0);
+        const resolved = await mapWithConcurrency(tmdbResults.slice(0, 25), TMDB_DETAIL_RESOLVE_CONCURRENCY, async (it, idx) => {
+          const details = await fetchTmdbDetails(it.id, wantType === "series" ? "tv" : "movie", tmdbKey, keys.env);
+          if (!details || !details.imdbId) return null;
+          const meta = mapTmdbItem(it, details.imdbId, entry.type, details.videos, details);
+          meta.badgeRank = idx + 1;
+          meta._rank = idx + 1;
+          return meta;
+        });
+        items = resolved.filter(Boolean);
+      } catch (_) {}
+    }
+
+    const sliced = items.slice(skip, skip + PAGE_SIZE);
+    sliced.totalItems = items.length;
+    result = sliced;
+  } else if (rawSlug === "in-cinema") {
+    try {
+      result = await fetchTmdbChart(entry, skip, tmdbKey, "now_playing", keys.region, keys.hideNonDigitalReleases, keys.env, keys.ctx);
+    } catch (_) {
+      result = [];
+    }
+  } else if (rawSlug === "binge-ready") {
+    try {
+      const discoverPath = "discover/tv?sort_by=popularity.desc&with_status=3&vote_count.gte=50&include_adult=false";
+      const windowItems = await fetchTmdbPagedResults(discoverPath, tmdbKey, skip, 0);
+      const resolved = await mapWithConcurrency(windowItems, TMDB_DETAIL_RESOLVE_CONCURRENCY, async (it) => {
+        const details = await fetchTmdbDetails(it.id, "tv", tmdbKey, keys.env);
+        if (!details || !details.imdbId) return null;
+        return mapTmdbItem(it, details.imdbId, "series", details.videos, details);
+      });
+      result = resolved.filter(Boolean);
+      result.totalItems = windowItems.totalItems;
+    } catch (_) {
+      result = [];
+    }
+  } else if (rawSlug === "returning") {
+    try {
+      const discoverPath = "discover/tv?sort_by=popularity.desc&with_status=0&vote_count.gte=50&include_adult=false";
+      const windowItems = await fetchTmdbPagedResults(discoverPath, tmdbKey, skip, 0);
+      const resolved = await mapWithConcurrency(windowItems, TMDB_DETAIL_RESOLVE_CONCURRENCY, async (it) => {
+        const details = await fetchTmdbDetails(it.id, "tv", tmdbKey, keys.env);
+        if (!details || !details.imdbId) return null;
+        return mapTmdbItem(it, details.imdbId, "series", details.videos, details);
+      });
+      result = resolved.filter(Boolean);
+      result.totalItems = windowItems.totalItems;
+    } catch (_) {
+      result = [];
+    }
+  } else if (rawSlug === "cannes-winner") {
+    try {
+      const discoverPath = "discover/movie?sort_by=vote_average.desc&vote_count.gte=200&with_keywords=187056|974|1585&include_adult=false";
+      const windowItems = await fetchTmdbPagedResults(discoverPath, tmdbKey, skip, 0);
+      const resolved = await mapWithConcurrency(windowItems, TMDB_DETAIL_RESOLVE_CONCURRENCY, async (it) => {
+        const details = await fetchTmdbDetails(it.id, "movie", tmdbKey, keys.env);
+        if (!details || !details.imdbId) return null;
+        return mapTmdbItem(it, details.imdbId, "movie", details.videos, details);
+      });
+      result = resolved.filter(Boolean);
+      result.totalItems = windowItems.totalItems;
+    } catch (_) {
+      result = [];
+    }
+  } else if (rawSlug === "emmy-winner") {
+    try {
+      const discoverPath = "discover/tv?sort_by=vote_average.desc&vote_count.gte=200&with_keywords=209215|1425&include_adult=false";
+      const windowItems = await fetchTmdbPagedResults(discoverPath, tmdbKey, skip, 0);
+      const resolved = await mapWithConcurrency(windowItems, TMDB_DETAIL_RESOLVE_CONCURRENCY, async (it) => {
+        const details = await fetchTmdbDetails(it.id, "tv", tmdbKey, keys.env);
+        if (!details || !details.imdbId) return null;
+        return mapTmdbItem(it, details.imdbId, "series", details.videos, details);
+      });
+      result = resolved.filter(Boolean);
+      result.totalItems = windowItems.totalItems;
+    } catch (_) {
+      result = [];
+    }
+  } else if (rawSlug === "oscar-winner") {
+    try {
+      const discoverPath = "discover/movie?sort_by=vote_average.desc&vote_count.gte=500&with_keywords=209214|948|602&include_adult=false";
+      const windowItems = await fetchTmdbPagedResults(discoverPath, tmdbKey, skip, 0);
+      const resolved = await mapWithConcurrency(windowItems, TMDB_DETAIL_RESOLVE_CONCURRENCY, async (it) => {
+        const details = await fetchTmdbDetails(it.id, "movie", tmdbKey, keys.env);
+        if (!details || !details.imdbId) return null;
+        return mapTmdbItem(it, details.imdbId, "movie", details.videos, details);
+      });
+      result = resolved.filter(Boolean);
+      result.totalItems = windowItems.totalItems;
+    } catch (_) {
+      result = [];
+    }
+  }
+
+  // Always apply Better Posters artwork so badges are rendered on Better Posters lists
+  const bpOpts = keys.betterPostersOptions || betterPostersOptionsFrom(keys, keys.origin);
+  const tot = result.totalItems;
+  result = applyBetterPostersToMetas(result, bpOpts);
+  result.totalItems = tot;
+  return result || [];
 }
 
 function applyBadgedPostersToMetas(metas, origin) {
