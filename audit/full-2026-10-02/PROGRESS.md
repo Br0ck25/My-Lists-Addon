@@ -10,8 +10,8 @@
 | **04** | **Database, Storage, Data Integrity** | **FULL** | Module 01 | 0 confirmed, 0 suspected |
 | **05** | **Core Product Flows (Lists, Watch History, Channels, Installs)** | **FULL** | Module 02, 03, 04 | 0 confirmed, 0 suspected |
 | **06** | **Jobs, Queues, Cron, Time Boundaries** | **FULL** | Module 01 | 0 confirmed, 0 suspected |
-| 07 | Stremio Endpoints, Catalog Core & Canonical IDs | NOT TESTED | Module 01, 02 | — |
-| 08 | Provider Integrations, Circuit Breakers & Snapshots | NOT TESTED | Module 07 | — |
+| **07** | **External Providers (Integrations, Circuit Breakers, Snapshots)** | **FULL** | Module 01, 02 | 0 confirmed, 0 suspected |
+| 08 | Stremio Endpoints, Catalog Core & Canonical IDs | NOT TESTED | Module 01, 02, 07 | — |
 | 09 | Scrobble Webhooks, Watch History & Activity DB | NOT TESTED | Module 02, 07 | — |
 | 10 | Admin Dashboard, Sessions, Audit Logging & Access | NOT TESTED | Module 02, 03 | — |
 | 11 | Queue Consumers, Cron Dispatcher & Background Jobs | NOT TESTED | Module 01 | — |
@@ -282,6 +282,53 @@
   - Tested using local Miniflare / SQLite / in-memory queues without live Cloudflare edge network.
 - **Next Exact Action:**
   - Await user prompt for the next audit module.
+
+---
+
+## Module 07 Record: External Providers
+
+- **Status:** **FULL**
+- **Date Completed:** 2026-10-02
+- **Target Git SHA:** `822c2cd7b4b2ae337d22396a5e3358527d35668d`
+- **Files Examined:**
+  - `06_source-fetchers-mdblist-trakt.js` (Trakt & MDBList fetchers, mapping, auth headers, rate limit handling)
+  - `07_source-fetchers-tmdb-simkl.js` (TMDB & Simkl fetchers, movie vs series path trees, `/external_ids`, poster formatting)
+  - `41_provider-breaker.js` (Circuit breaker threshold 5, cooldown 60s, cross-isolate KV sync via `pb:*`, status classification)
+  - `42_chart-snapshots.js` (KV chart snapshots `snap:chart:*`, 2h fresh window, 7d TTL, empty response rejection guard)
+  - `43_catalog-ids.js` (Canonical ID mapping, IMDb `tt...` vs TMDB `tmdb:...` prefixing)
+  - `50_token-refresh.js` (OAuth token refresh background job, 7-day proactive window, reauth marking)
+  - `52_poster-fetch.js`, `57_title-details-fallback.js` (Poster warming & fallback detail lookups)
+  - `tests/providers.test.mjs`, `tests/provider-contracts.test.mjs`, `tests/chart-refresh.test.mjs`, `tests/my-lists-addon-charts.test.mjs`
+- **Commands Run:**
+  - `node --test tests/providers.test.mjs tests/provider-contracts.test.mjs tests/chart-refresh.test.mjs tests/my-lists-addon-charts.test.mjs` (exit 0: 64 passing tests across 11 suites)
+  - `node audit/full-2026-10-02/probes/p06_external_providers.mjs` (exit 0: 4/4 suites passed)
+- **Probes Created:**
+  - `audit/full-2026-10-02/probes/p06_external_providers.mjs`
+- **Deliverables:**
+  - `audit/full-2026-10-02/provider_trace.md` (Comprehensive integration & fault-tolerance trace across all 6 external providers)
+- **Finding IDs:** None (0 confirmed defects)
+- **Suspected IDs:** None
+- **Observations:**
+  - **A. Provider Request Construction & Schema Discrimination:**
+    - **Movie vs Series Mapping:** TMDB and Trakt strictly differentiate media types (`it.movie` vs `it.show`, `/movie/*` vs `/tv/*`). Trakt items carry type-tagged objects which map cleanly to Stremio `movie` and `series` types.
+    - **ID Extraction Hierarchy:** Trakt and TMDB mapping prioritizes IMDb IDs (`obj.ids.imdb` -> `tt...`). When absent, fallback is converted to canonical `tmdb:{id}` syntax. Malformed items lacking both IDs are safely discarded rather than creating broken tiles.
+  - **B. Provider Failure vs. Empty Data Snapshot Protection:**
+    - **Exception on Non-200:** `fetchTmdbPagedResults` and Trakt fetchers throw an Error upon HTTP failure statuses (500, 503, 429) rather than returning empty collections `[]`.
+    - **Snapshot Preservation Guard:** In `42_chart-snapshots.js:132`, if an upstream provider returns an empty array (`items.length === 0`), the snapshot engine preserves the existing good snapshot in KV, logs a warning, and refuses to overwrite it with empty data.
+  - **C. Circuit Breaker State Machine & Resilience:**
+    - **Failure Threshold & Cooldown:** After 5 consecutive failures (HTTP 5xx, 429, or network timeouts), the circuit breaker opens for 60 seconds (`PROVIDER_BREAKER_OPEN_MS = 60,000`).
+    - **Fast Refusal:** During the open cooldown window, outbound calls are rejected immediately with `ProviderUnavailable`, preventing user request delays and protecting upstream APIs from retry storms. Stale cached copies are served immediately.
+    - **Domain Error Handling:** HTTP 401, 403, and 404 domain responses reset the consecutive failure counter to 0, ensuring individual invalid API keys or missing IDs never trip the circuit breaker for all users.
+  - **D. Token Expiry & Proactive Refresh:**
+    - Proactive background job `token.refresh` (`50_token-refresh.js`) queries connections expiring within 7 days (`TOKEN_REFRESH_WINDOW_MS = 7 * 86,400,000`) and calls provider `/oauth/token` endpoints before expiration.
+    - Rejected refresh tokens cleanly mark connection status as `reauth_required` in D1 and display a reconnect banner to the user.
+- **Areas Not Tested:**
+  - Live third-party provider network outages and IP-level Cloudflare edge blocks.
+- **Limitations:**
+  - Tested using local synthetic fixtures, Miniflare, and mock harnesses; live production API credentials are not accessed during read-only audit.
+- **Next Exact Action:**
+  - Await user prompt for the next audit module.
+
 
 
 
