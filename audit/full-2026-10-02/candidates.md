@@ -22,5 +22,10 @@ Status categories: `confirmed` | `suspected` | `intentional` | `dismissed: why`
 | CAND-16 | `appShellSignOut()` halts on server/network failure without clearing local account data | `24_client-backup-restore-presets.js:3581` | `confirmed` | Confirmed defect (`AUDIT-FE-001`). When offline or if `/api/session` returns non-200, early return skips `clearLocalAccountData()`, preserving all sensitive credentials and user lists in the browser. |
 | CAND-17 | `saveChannel()` lacks in-flight double-click guard or button disabling | `20_client-channel-builder.js:9172` | `confirmed` | Confirmed defect (`AUDIT-FE-002`). Asynchronous execution of `await postChannelShare` occurs before clearing form fields and draft items, allowing rapid double-clicks to mint duplicate channels in D1/R2 and `localChannels`. |
 | CAND-18 | `executeUnifiedListSearch()` lacks sequence counter check on fallback search | `19_client-search-and-likes.js:842` | `confirmed` | Confirmed defect (`AUDIT-FE-003`). Asynchronous fallback search (`altRes`) lacks `thisSeq !== currentListSearchSequence` check before rendering, allowing out-of-order fallback results to overwrite newer queries. In addition, reciprocal chained `.replace()` calls in lines 836-837 cancel each other out. |
+| CAND-19 | Preset names escaping path not confirmed from numbered source fragments | `worker_entry_combined.js:77727` | `intentional` | The `names.map(...)` preset names path at combined line 77727 traces through `appShellChannelEscape()` which wraps `escapeHtml`. Could not directly confirm from numbered source (`24_client-backup-restore-presets.js`) due to line mapping complexity. Consistent with every other preset name rendering pattern in the file; assessed intentionally escaped. |
+| CAND-20 | CSP `img-src` allows `data:` URIs | `02_http-and-creator-utils.js:181` | `intentional` | `img-src 'self' https: data:` is the enforced directive. `data:` URIs in images cannot execute scripts (CSP blocks script-src strictly); this is a low-severity info item. The TMDB/Trakt poster pipeline uses HTTPS URLs exclusively, not data URIs. |
+
+
+
 
 

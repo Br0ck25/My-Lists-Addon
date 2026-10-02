@@ -35,4 +35,22 @@
 [2026-10-02T02:31:48Z] node audit/full-2026-10-02/probes/p05_jobs_queues_and_time.mjs | exit: 0 | 4 suites passed (Queue message lifecycle & poison-pill defense, D1 Jobs CAS claiming & lease recovery, Cron dispatch & unbound queue fallback, Time boundaries, Eastern rollover, leap days & 60-day sunset notices)
 [2026-10-02T02:36:09Z] node audit/full-2026-10-02/probes/p06_external_providers.mjs | exit: 0 | 4 suites passed (Trakt/TMDB item mapping & movie/series discrimination, Provider failure vs empty data snapshot protection, Provider circuit breaker state machine & 5-failure trip, OAuth token 7-day proactive refresh window)
 [2026-10-02T02:50:34Z] node --test audit/full-2026-10-02/probes/p07_frontend_state_async.mjs | exit: 0 | 5 suites passed (AUDIT-FE-001 offline signout halt, AUDIT-FE-002 saveChannel double-submit duplicate creation, AUDIT-FE-003 executeUnifiedListSearch unsequenced fallback search clobber, clearLocalAccountData full sweep, runCatalogSearch out-of-order sequence counter discarding)
+[2026-10-02T03:00:59Z] [MODULE 09] node -e "...innerHTML sink enumeration across 09_..25_ source files" | exit: 0 | Full sink map generated for innerHTML/insertAdjacentHTML/location.href/eval sinks
+[2026-10-02T03:01:06Z] [MODULE 09] node -e "...location.href/window.open/eval/new Function sink search" | exit: 0 | 4 location.href sinks found (all ORIGIN+literal), 0 window.open, 0 eval, 0 new Function
+[2026-10-02T03:01:13Z] [MODULE 09] node -e "...escapeHtml usage in 16_client-row-core.js" | exit: 0 | All user-data-touching innerHTML calls use escapeHtml() or escapeAttr()
+[2026-10-02T03:01:27Z] [MODULE 09] node -e "...publishedUrl and stremio:// URL source tracing" | exit: 0 | publishedUrl = server-constructed URL, config ID = base64url [A-Za-z0-9_-]
+[2026-10-02T03:01:43Z] [MODULE 09] node -e "...CSP Content-Security-Policy header and nonce implementation" | exit: 0 | securityHeaders() verified: nonce-only script-src, frame-ancestors self, object-src none, base-uri self
+[2026-10-02T03:01:58Z] [MODULE 09] node -e "...service worker template and origin check" | exit: 0 | SW: origin-locked, GET-only, no ${} interpolation in SW string
+[2026-10-02T03:02:17Z] [MODULE 09] node -e "...validateCreatorUsername and slugifyServer charset" | exit: 0 | username: [a-z0-9_-], slug: [a-z0-9-]
+[2026-10-02T03:02:31Z] [MODULE 09] node -e "...generateShortId base64url output verification" | exit: 0 | Config IDs: [A-Za-z0-9_-]{12} - HTML safe
+[2026-10-02T03:02:40Z] [MODULE 09] node -e "...livePreviewPosterHtml function body check" | exit: 0 | escapeAttr(resolvedPoster), escapeAttr(m.id) - all user data escaped
+[2026-10-02T03:02:50Z] [MODULE 09] node -e "...watchBadgeHtml - only returns two static literals" | exit: 0 | SAFE - static strings only
+[2026-10-02T03:02:55Z] [MODULE 09] node -e "...insertAdjacentHTML full enumeration in source files" | exit: 0 | All 17 insertAdjacentHTML calls: static literals or escaped data
+[2026-10-02T03:06:43Z] [MODULE 09] node render_check.js rendered-hostile.html --hostile && python html_checks.py rendered-hostile.html local-hostile | exit: 0 | Hostile render is inert (both markers present, neither breaks out); CSP nonces intact; 0 inline handlers
+[2026-10-02T03:09:26Z] [MODULE 09] node --test tests/security-suite.test.mjs tests/csp.test.mjs | exit: 0 | 31/31 security tests pass (CSRF, credential rejection, cookie security, session revocation, IDOR matrix, admin auth, nonce-only CSP, Trusted Types report-only)
+[2026-10-02T03:09:26Z] [MODULE 09] node --test tests/security-suite.test.mjs tests/csp.test.mjs tests/client-escapes.test.mjs | exit: 0 | 34/34 tests pass
+[2026-10-02T03:14:21Z] [MODULE 09] node --test audit/full-2026-10-02/probes/p08_frontend_security_dom.mjs | exit: 0 | 20/20 assertions pass across 7 suites (escapeHtml correctness, username/slug charset, config ID HTML-safety, CSP structure, SW security, no eval/document.write, hostile render integration)
+
+
+
 

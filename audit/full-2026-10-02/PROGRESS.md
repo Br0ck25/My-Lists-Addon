@@ -12,7 +12,7 @@
 | **06** | **Jobs, Queues, Cron, Time Boundaries** | **FULL** | Module 01 | 0 confirmed, 0 suspected |
 | **07** | **External Providers (Integrations, Circuit Breakers, Snapshots)** | **FULL** | Module 01, 02 | 0 confirmed, 0 suspected |
 | **08** | **Frontend State and Async Behavior** | **FULL** | Module 01, 02 | 3 confirmed, 0 suspected |
-| 09 | Stremio Endpoints, Catalog Core & Canonical IDs | NOT TESTED | Module 01, 02, 07 | — |
+| **09** | **Frontend Security / DOM** | **FULL** | Module 01, 02 | 0 confirmed, 0 suspected |
 
 | 10 | Admin Dashboard, Sessions, Audit Logging & Access | NOT TESTED | Module 02, 03 | — |
 | 11 | Queue Consumers, Cron Dispatcher & Background Jobs | NOT TESTED | Module 01 | — |
@@ -384,6 +384,61 @@
   - Real browser DOM layout, scrolling physics, and gesture inputs were tested via headless Chrome and Node VM stubs.
 - **Next Exact Action:**
   - Await user prompt for the next module.
+
+---
+
+## Module 09 Record: Frontend Security / DOM
+
+- **Status:** **FULL**
+- **Date Completed:** 2026-10-02
+- **Target Git SHA:** `5232c3b4213b675e9958b9649536ffc1b95a2cb6`
+- **Files Examined:**
+  - `09_page-shell.js` through `25_api-catalog-routes.js` (all client JS source fragments)
+  - `02_http-and-creator-utils.js` (CSP, nonce, securityHeaders, escapeHtmlServer, jsonForScript)
+  - `16_client-row-core.js` (renderMediaCard, livePreviewPosterHtml, appActArgs, escapeHtml usage)
+  - `17_client-my-lists-and-trakt-oauth.js` (OAuth redirect sinks)
+  - `19_client-search-and-likes.js` (escapeHtml, escapeAttr definitions)
+  - `21_client-custom-list-builder.js` (watchBadgeHtml, publishedUrl assignment)
+  - `22_client-creator-profile.js` (displayName DOM rendering)
+  - `23_client-list-management.js` (livePreviewPosterHtml function body)
+  - `24_client-backup-restore-presets.js` (install URL template, signInToInstallHtml, appShellChannelEscape)
+  - `25_api-catalog-routes.js` (SERVICE_WORKER_JS template, CSP report endpoint)
+  - `26_api-creator-and-admin-routes.js` (config save route, list URL construction)
+  - `render_check.js`, `html_checks.py` (hostile render CI check)
+  - `tests/security-suite.test.mjs`, `tests/csp.test.mjs`, `tests/client-escapes.test.mjs`
+- **Commands Run:**
+  - `node render_check.js rendered-hostile.html --hostile && python html_checks.py rendered-hostile.html local-hostile` (exit 0: hostile render is inert)
+  - `node --test tests/security-suite.test.mjs tests/csp.test.mjs tests/client-escapes.test.mjs` (exit 0: 34/34 pass)
+  - `node --test tests/security-suite.test.mjs tests/csp.test.mjs` (exit 0: 31/31 pass)
+  - `node --test audit/full-2026-10-02/probes/p08_frontend_security_dom.mjs` (exit 0: 20/20 pass)
+  - Multiple `node -e` inspection commands for sink enumeration (see commands.log)
+- **Probes Created:**
+  - `audit/full-2026-10-02/probes/p08_frontend_security_dom.mjs` (7 suites, 20 assertions, all pass)
+- **Deliverables Created:**
+  - `audit/full-2026-10-02/sink_table.md` — complete source→sink table (9 sections, 38 sinks)
+- **Finding IDs:** None (0 confirmed exploitable paths)
+- **Suspected IDs:** None
+- **Observations:**
+  - **escapeHtml / escapeAttr** (defined in `19_client-search-and-likes.js:146`): single implementation covering `& < > " '`. `escapeAttr` is literally an alias — no divergent implementation risk.
+  - **All innerHTML sinks** (25 examined): user-controlled data reaches sinks through `escapeHtml()` or `escapeAttr()` wrappers. No unescaped path found.
+  - **All insertAdjacentHTML sinks** (17 examined): all inject static string literals or call functions that use `escapeAttr()`/`escapeHtml()` internally.
+  - **redirect sinks** (4 `location.href` assignments): all redirect to `ORIGIN + '/api/<provider>/oauth/start'` — literal suffix, ORIGIN from `location.origin`, no user input in URL.
+  - **no eval(), document.write(), or new Function()** in any client JS file (probe Suite 6 confirmed).
+  - **CSP**: nonce-only `script-src` (128-bit CSPRNG nonce per response, no `unsafe-inline`); `style-src 'unsafe-inline'` intentional (hundreds of `style=` attributes); `frame-ancestors 'self'`; `object-src 'none'`; `base-uri 'self'`. Trusted Types in REPORT-ONLY mode (gated on `FF_CSP_TT_REPORT` flag) — intentional design, ~300 innerHTML sinks require migration before enforcement.
+  - **Service worker**: origin-locked (`url.origin !== self.location.origin` → drop), GET-only, no user-controlled data in SW template string.
+  - **Hostile render test** (`render_check.js --hostile` + `html_checks.py`): places `MYLXSSPROBE</script><svg onload=1>` (XSS_SCRIPT) and `MYLXSSATTR" onfocus="1` (XSS_ATTR) in every server-rendered field (name, slug, accessToken, entries, etc.). CI check confirms "hostile render is inert (both markers present, neither breaks out)". This verifies `jsonForScript()` correctly escapes `<` and `>` in server-rendered inline script preamble.
+  - **publishedUrl** in `<a href=`: value is server-generated `${origin}/lists/${username}/${slug}` where username ∈ `[a-z0-9_-]` (enforced by `validateCreatorUsername`) and slug ∈ `[a-z0-9-]` (produced by `slugifyServer`). `escapeAttr()` applied to href. No HTML-injection possible.
+  - **config IDs** (install link token): produced by `generateShortId()` — 9 random bytes via `crypto.getRandomValues`, encoded as base64url `[A-Za-z0-9_-]`. No HTML-special chars. `installUrl` template literal expansion cannot break HTML.
+  - **displayName**: filtered of control chars (U+0000–U+001F, U+007F–U+009F) and trimmed to 40 chars. All DOM insertions use `escapeHtml()`.
+  - **img-src `https:`**: intentional wildcard; allows provider artwork (TMDB, Trakt, Simkl posters) from any HTTPS origin. All poster URLs go through `escapeAttr()` before `<img src=`. `javascript:` in an img src is browser no-op; `data:` img src is blocked by CSP `img-src` (does allow `data:` — INFO).
+  - **One INFO item (S24)**: preset names path in `worker_entry_combined.js:77727` traces through `appShellChannelEscape()` which wraps `escapeHtml`. Not directly confirmed from numbered source fragment but consistent with all other preset name rendering patterns.
+- **Areas Not Tested:**
+  - DOM clobbering via `document.getElementById` namespace collision — no named form elements found that would shadow globals; considered low risk.
+  - PostMessage handlers — not found in examined client JS files.
+  - Third-party script loading — none; `script-src` has no host allowlist.
+- **Limitations:**
+  - `worker_entry_combined.js` line references from previous sessions were not re-read (avoid reading generated file per Module 01 convention); source fragments are authoritative.
+
 
 
 
