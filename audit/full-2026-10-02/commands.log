@@ -50,6 +50,18 @@
 [2026-10-02T03:09:26Z] [MODULE 09] node --test tests/security-suite.test.mjs tests/csp.test.mjs | exit: 0 | 31/31 security tests pass (CSRF, credential rejection, cookie security, session revocation, IDOR matrix, admin auth, nonce-only CSP, Trusted Types report-only)
 [2026-10-02T03:09:26Z] [MODULE 09] node --test tests/security-suite.test.mjs tests/csp.test.mjs tests/client-escapes.test.mjs | exit: 0 | 34/34 tests pass
 [2026-10-02T03:14:21Z] [MODULE 09] node --test audit/full-2026-10-02/probes/p08_frontend_security_dom.mjs | exit: 0 | 20/20 assertions pass across 7 suites (escapeHtml correctness, username/slug charset, config ID HTML-safety, CSP structure, SW security, no eval/document.write, hostile render integration)
+[2026-10-02T11:37:42Z] [MODULE 10] npm install --save-dev playwright | exit: 0 | Playwright installed in scratch copy
+[2026-10-02T11:37:45Z] [MODULE 10] node render_check.js audit-ui-builder.html | exit: 0 | renderBuilder OK -> audit-ui-builder.html 2713601 chars
+[2026-10-02T11:37:47Z] [MODULE 10] node render_check.js audit-ui-shell.html --shell | exit: 0 | renderBuilder (new UI shell) OK -> audit-ui-shell.html 2716146 chars
+[2026-10-02T11:41:05Z] [MODULE 10] node audit/full-2026-10-02/probes/p09_ui_accessibility.mjs | exit: 1 | 33 pass, 11 fail, 10 warn — confirmed AUDIT-UI-001 (like buttons); other failures were probe false positives (file:// artifacts, wrong call signatures, wrong variable names)
+[2026-10-02T11:42:33Z] [MODULE 10] node modal_focus_analysis.cjs | exit: 0 | showModal inspected: focuses h2 heading (tabindex=-1) or items[0]; aria-modal=true; aria-labelledby set; Escape closes overlay
+[2026-10-02T11:45:32Z] [MODULE 10] node modal_focus_v2.cjs | exit: 0 | CONFIRMED: focus on h2 in modal, focusedInModal=true, Escape removes overlay, Tab trapped (First->Second->Third->First->Second->Third)
+[2026-10-02T11:46:16Z] [MODULE 10] node -e "...subnav overflow containment analysis (Playwright)" | exit: 0 | All overflowing .subnav-pill elements are inside .subnav-pills-bar (overflow-x:auto) — intentional horizontal scroll
+[2026-10-02T11:47:02Z] [MODULE 10] node -e "...searchLikeBtn/searchLikeExternalBtn aria-label survey" | exit: 0 | 0 aria-label, 0 title; all ✕ buttons have aria-label; detailLikeBtn correctly labelled — AUDIT-UI-001 confirmed
+[2026-10-02T11:47:02Z] [MODULE 10] node -e "...close button aria-label check (Playwright)" | exit: 0 | modal-close-x: aria-label=Close; remove-source-btn: aria-label=Remove this source; all icon buttons correctly labelled
+
+
+
 
 
 

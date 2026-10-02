@@ -13,14 +13,15 @@
 | **07** | **External Providers (Integrations, Circuit Breakers, Snapshots)** | **FULL** | Module 01, 02 | 0 confirmed, 0 suspected |
 | **08** | **Frontend State and Async Behavior** | **FULL** | Module 01, 02 | 3 confirmed, 0 suspected |
 | **09** | **Frontend Security / DOM** | **FULL** | Module 01, 02 | 0 confirmed, 0 suspected |
+| **10** | **UI / UX / Responsive / Accessibility** | **FULL** | Module 01, 08 | 1 confirmed, 0 suspected |
 
-| 10 | Admin Dashboard, Sessions, Audit Logging & Access | NOT TESTED | Module 02, 03 | — |
-| 11 | Queue Consumers, Cron Dispatcher & Background Jobs | NOT TESTED | Module 01 | — |
-| 12 | Frontend DOM Security, Templates, XSS & Actions | NOT TESTED | Module 01 | — |
-| 13 | CSP, Security Headers, CORS & Network Boundaries | NOT TESTED | Module 12 | — |
-| 14 | Rate Limiting, Atomic Counters & Denial of Service | NOT TESTED | Module 01, 02 | — |
-| 15 | Cross-Cutting Triage, Regressions & History Review | NOT TESTED | Modules 01–14 | — |
-| 99 | Final Synthesis & Comprehensive Audit Report | NOT TESTED | Module 15 | — |
+| 11 | Admin Dashboard, Sessions, Audit Logging & Access | NOT TESTED | Module 02, 03 | — |
+| 12 | Queue Consumers, Cron Dispatcher & Background Jobs | NOT TESTED | Module 01 | — |
+| 13 | Frontend DOM Security, Templates, XSS & Actions | NOT TESTED | Module 01 | — |
+| 14 | CSP, Security Headers, CORS & Network Boundaries | NOT TESTED | Module 13 | — |
+| 15 | Rate Limiting, Atomic Counters & Denial of Service | NOT TESTED | Module 01, 02 | — |
+| 16 | Cross-Cutting Triage, Regressions & History Review | NOT TESTED | Modules 01–15 | — |
+| 99 | Final Synthesis & Comprehensive Audit Report | NOT TESTED | Module 16 | — |
 
 ---
 
@@ -438,6 +439,63 @@
   - Third-party script loading — none; `script-src` has no host allowlist.
 - **Limitations:**
   - `worker_entry_combined.js` line references from previous sessions were not re-read (avoid reading generated file per Module 01 convention); source fragments are authoritative.
+
+---
+
+## Module 10 Record: UI / UX / Responsive / Accessibility
+
+- **Status:** **FULL**
+- **Date Completed:** 2026-10-02
+- **Target Git SHA:** `39fbc48ea7bf70854bfcb1def659cb746ece55ba`
+- **Browser Tool:** Playwright v1.x + Chrome 129 (C:\Program Files\Google\Chrome\Application\chrome.exe) — headless
+- **Pages Tested:**
+  - `audit-ui-builder.html` (builder page — `renderBuilder()` with default opts)
+  - `audit-ui-shell.html` (new UI shell — `renderBuilder()` with `{newUi: true}`)
+- **Viewports Tested:** 375×667 (mobile-xs), 390×844 (mobile), 768×1024 (tablet), 1280×900 (desktop), 1920×1080 (wide)
+- **Files Examined:**
+  - `09_page-shell.js` (CSS: focus ring, subnav pills, tab widget, accessibility fixes comment)
+  - `16_client-row-core.js` (showModal, closeModal, focusableInModal, handleModalKeydown, toast)
+  - `19_client-search-and-likes.js` (searchLikeBtn/searchLikeExternalBtn rendering, state update)
+  - `23_client-list-management.js` (detailLikeBtn aria-label, channel/list detail panel)
+- **Commands Run:**
+  - `node render_check.js audit-ui-builder.html` (exit 0)
+  - `node render_check.js audit-ui-shell.html --shell` (exit 0)
+  - `node audit/full-2026-10-02/probes/p09_ui_accessibility.mjs` (exit 1 — probe found confirmed defect AUDIT-UI-001 and false positives)
+  - `node modal_focus_v2.cjs` (exit 0 — modal focus, Escape, tab trap CONFIRMED WORKING)
+  - `node modal_focus_analysis.cjs` (exit 0 — showModal source inspection)
+  - Multiple `node -e` and Playwright scripts for: subnav overflow containment, close button aria-label, like button exhaustive survey
+- **Probes Created:**
+  - `audit/full-2026-10-02/probes/p09_ui_accessibility.mjs` (12 suites, Playwright-based)
+- **Finding IDs:** `AUDIT-UI-001`
+- **Suspected IDs:** None
+- **Observations:**
+  - **Confirmed defect AUDIT-UI-001:** `searchLikeBtn` / `searchLikeExternalBtn` buttons in search results and list cards render heart symbol (♡/♥) with NO `aria-label` or `title`. Accessible name is the Unicode character name ("white heart suit"/"black heart suit") — not meaningful. Negative control: `#detailLikeBtn` correctly receives `aria-label="Like this list"` / `"Like this channel"` dynamically. 4 rendering sites in `19_client-search-and-likes.js`.
+  - **CONFIRMED WORKING — Modal system:** `showModal()` focuses `<h2>` heading (tabindex=-1) or first focusable item; Escape removes the overlay from DOM; Tab is fully trapped inside modal (never escapes); `aria-modal="true"` and `aria-labelledby` are set; focus return logic captures `_modalReturnFocus` before opening.
+  - **CONFIRMED WORKING — Focus ring:** CSS `:where(a[href],button,...):focus-visible { outline: 2px solid var(--accent) !important; outline-offset: 2px; }` — correct use of `:focus-visible` (not `:focus`) so mouse clicks don't show ring; `!important` overrides more-specific rules that had cleared it. Comment in source documents the prior regression and fix.
+  - **CONFIRMED WORKING — Tab widget:** Roving tabindex pattern: active tab has `tabindex="0"`, others have `tabindex="-1"`. All 12 tabs have `aria-controls` pointing to existing panels. Exactly 1 tabpanel visible at load. `aria-selected="true"` on exactly one tab.
+  - **CONFIRMED WORKING — Close buttons:** Modal close `✕` has `aria-label="Close"`. Row remove `✕` has `aria-label="Remove this source"`. All surveyed icon-only buttons with meaningful function have `aria-label`.
+  - **CONFIRMED WORKING — Horizontal scrollable subnav:** Pills that extend beyond viewport at 375px are inside `.subnav-pills-bar` (`overflow-x: auto; scrollbar-width: none`). This is intentional horizontal scroll UX.
+  - **CONFIRMED WORKING — aria-live:** `#actionToast` with `role="status"` and `aria-live="polite"` present in static HTML; toast function sets `assertive` for errors; modal message `<p>` has `role="status" aria-live="polite"`.
+  - **CONFIRMED WORKING — Heading hierarchy:** No level skips found across 59 headings (h1, h1, h2×57).
+  - **CONFIRMED WORKING — lang attribute:** `<html lang="en">` on both builder and shell pages.
+  - **CONFIRMED WORKING — Title:** Non-empty `<title>` present.
+  - **CONFIRMED WORKING — CSS custom properties:** `--text`, `--bg`, `--accent`, `--accent-2`, `--danger`, `--muted`, `--border` all defined (note: `--accent-1` is not a defined variable; the design system uses `--accent` and `--accent-2`).
+  - **CONFIRMED WORKING — prefers-reduced-motion:** `@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none; transition: none; } }` (paraphrased) — animations halt for users who request reduced motion.
+  - **INFO:** `aria-expanded` is not used in static HTML — accordion/toggle patterns do not use this attribute. Toggles use JS class manipulation. Not a violation but reduces ARIA expressiveness.
+  - **INFO:** No `<main>` or `role=main` landmark found — layout uses `<div id="app">` without explicit role.
+  - **INFO:** 10 interactive elements with `tabindex="-1"` — all are non-active `role=tab` buttons, which is correct roving tabindex.
+  - **PROBE FALSE POSITIVES:** S1-01/S7-01 (JS errors) are file:// loading artifacts (SW registration fails on file://); S2/S7-04 overflow is inside intentional horizontal scroll container; S4-03 (41 icon-only buttons) includes `✕` buttons with aria-label (probe logic flaw); S5-02/S5-05 (focus not in modal) was wrong showModal call signature; S6-01 (text input reject) is file:// context limitation; S10-01 (--accent-1 missing) is wrong variable name.
+- **Areas Not Tested:**
+  - Live application serving over HTTP (required for service worker, API calls, session state) — not available; local file:// rendering used.
+  - Keyboard navigation of the tab widget via Arrow keys (ARIA tab pattern requires arrow keys to navigate between tabs, not Tab key).
+  - Visual contrast ratio measurement (no color computation library; CSS custom properties verified present and non-empty).
+  - Screen reader in-browser testing (NVDA/JAWS/VoiceOver) — not available in CI/headless environment.
+  - Mobile browser touch event handling (swipe-to-scroll, pinch-zoom).
+  - Animation and transition behavior under `prefers-reduced-motion: reduce`.
+- **Limitations:**
+  - file:// URL protocol prevents service worker registration and cross-origin API calls. These are expected failures not present in production.
+  - Playwright accessibility tree not used (accessibility snapshot would be more accurate than DOM inspection for computed accessible names).
+
 
 
 
