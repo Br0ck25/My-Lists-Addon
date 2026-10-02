@@ -3898,8 +3898,8 @@ describe("audit fix 3: the Continue Watching cron cannot revert a concurrent sav
       return J({ episodes: [] });
     };
 
-    // Park the cron right after ITS OWN read of the tracking blob (the
-    // second read of that key -- the first belongs to ensureTrackingMigrated),
+    // Park the cron right after ITS OWN read of the tracking blob (post P10-4,
+    // ensureTrackingMigrated is obsolete and does no KV read),
     // which stands in for the TMDB round-trips that make this window seconds wide.
     let release;
     const gate = new Promise((r) => { release = r; });
@@ -3908,7 +3908,7 @@ describe("audit fix 3: the Continue Watching cron cannot revert a concurrent sav
     const origGet = env.CONFIGS.get.bind(env.CONFIGS);
     env.CONFIGS.get = async (k, t) => {
       const v = await origGet(k, t);
-      if (k === TKEY && cronPhase && ++reads === 2) await gate;
+      if (k === TKEY && cronPhase && ++reads === 1) await gate;
       return v;
     };
 

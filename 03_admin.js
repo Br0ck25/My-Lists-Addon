@@ -234,70 +234,9 @@ async function bumpJsonCounterBlob(env, key, fields) {
 // Audience tab gets loaded afterward. Old counts are added to (not
 // overwritten over) whatever the new blob already has, so any plays that
 // already landed in the new blob in the window before this migration ran
-// aren't double-counted away.
+// P10-4: migrateGenreDecadeStatsIfNeeded removed (stats are in Analytics Engine/D1)
 async function migrateGenreDecadeStatsIfNeeded(env) {
-  if (!env || !env.CONFIGS) return;
-  const sentinelKey = "stats:genredecade:migrated";
-  try {
-    const already = await env.CONFIGS.get(sentinelKey);
-    if (already) return;
-
-    const [genreBlobRaw, decadeBlobRaw, genreList, decadeList] = await Promise.all([
-      env.CONFIGS.get("stats:genres:alltime"),
-      env.CONFIGS.get("stats:decades:alltime"),
-      listAllKeys(env.CONFIGS, "stats:genre:"),
-      listAllKeys(env.CONFIGS, "stats:decade:"),
-    ]);
-
-    let genreCounts = {};
-    try {
-      genreCounts = genreBlobRaw ? JSON.parse(genreBlobRaw) || {} : {};
-    } catch {
-      genreCounts = {};
-    }
-    let decadeCounts = {};
-    try {
-      decadeCounts = decadeBlobRaw ? JSON.parse(decadeBlobRaw) || {} : {};
-    } catch {
-      decadeCounts = {};
-    }
-
-    const genreTotalKeys = (genreList.keys || []).filter((k) => k.name.endsWith(":total"));
-    await Promise.all(
-      genreTotalKeys.map(async (k) => {
-        const name = k.name.slice("stats:genre:".length, -":total".length);
-        const raw = await env.CONFIGS.get(k.name);
-        const count = parseInt(raw, 10) || 0;
-        if (name && count > 0) genreCounts[name] = (parseInt(genreCounts[name], 10) || 0) + count;
-      })
-    );
-
-    const decadeTotalKeys = (decadeList.keys || []).filter((k) => k.name.endsWith(":total"));
-    await Promise.all(
-      decadeTotalKeys.map(async (k) => {
-        const name = k.name.slice("stats:decade:".length, -":total".length);
-        const raw = await env.CONFIGS.get(k.name);
-        const count = parseInt(raw, 10) || 0;
-        if (name && count > 0) decadeCounts[name] = (parseInt(decadeCounts[name], 10) || 0) + count;
-      })
-    );
-
-    await Promise.all([
-      env.CONFIGS.put("stats:genres:alltime", JSON.stringify(genreCounts)),
-      env.CONFIGS.put("stats:decades:alltime", JSON.stringify(decadeCounts)),
-      // Written last and only after both blobs above succeed -- if this
-      // whole function throws partway through, the sentinel never gets
-      // set, so the next Audience tab load just retries the migration
-      // from scratch rather than a partial migration looking "done".
-      env.CONFIGS.put(sentinelKey, "1"),
-    ]);
-  } catch (e) {
-    // best-effort -- if this fails, the sentinel key was never written,
-    // so this just retries next time computeAudienceAnalytics runs. Old
-    // per-key data is untouched either way (this only ever adds to the
-    // new blob, never deletes the old keys), so nothing is lost by a
-    // failed attempt.
-  }
+  return;
 }
 
 // Records roughly how recently a creator account was last active -- feeds
@@ -373,38 +312,11 @@ const LAST_ACTIVE_BACKFILL_BATCH = 100;
 // -> ~12 loads) and then costs zero KV reads. Each repaired value is also
 // written onto the in-memory account object so it shows the right "Last
 // Active" on the load that repairs it, not one load later.
+// P10-4 (FT-42): backfillCreatorLastActive removed (accounts in D1 v2)
 async function backfillCreatorLastActive(env, accounts) {
-  if (!env || !env.DB || !env.CONFIGS || !Array.isArray(accounts)) return;
-  const missing = accounts.filter((c) => c && c.username && !c.lastActive).slice(0, LAST_ACTIVE_BACKFILL_BATCH);
-  if (!missing.length) return;
-  const stmts = [];
-  await Promise.all(
-    missing.map(async (c) => {
-      try {
-        const raw = await env.CONFIGS.get(`creatorlastseen:${c.username}`);
-        const ts = raw ? parseInt(raw, 10) || 0 : 0;
-        if (ts) {
-          c.lastActive = ts;
-          // `AND last_active IS NULL` guards against clobbering a value a
-          // concurrent touch already wrote.
-          stmts.push(
-            env.DB.prepare("UPDATE creators SET last_active = ? WHERE username = ? AND last_active IS NULL").bind(ts, c.username)
-          );
-        }
-      } catch {
-        // best-effort per account; retried on a later load
-      }
-    })
-  );
-  if (stmts.length) {
-    try {
-      // One batched D1 call for the whole batch rather than one per row.
-      await env.DB.batch(stmts);
-    } catch (e) {
-      // Non-fatal: the same rows are picked up again on the next load.
-    }
-  }
+  return;
 }
+
 
 // Records one "marked as watched" or "added to a list" event for a given
 // title -- feeds the admin dashboard's Trending Data tab, which is meant
@@ -2502,9 +2414,6 @@ async function renderAdminDashboard(env) {
       createdAt: row.created_at || null,
       lastActive: row.last_active || null,
     }));
-    // Historical accounts have NULL last_active in D1; repair a bounded
-    // batch from KV each load (see backfillCreatorLastActive).
-    await backfillCreatorLastActive(env, creatorAccounts);
   } else {
     // KV-only fallback. listAllKeys is a full cursor sweep (fine for
     // enumerating, no per-key reads), then bound the fan-out: a KV get per

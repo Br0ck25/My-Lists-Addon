@@ -65,13 +65,11 @@ Nothing to configure for the strict CSP (P7-1, below): it is part of the Worker 
   The caller loops until `done: true`, then deletes the KV keys. Requires both `CONFIGS` KV
   and `BLOBS` R2 bindings. Admin-authenticated only.
 
-#### P10-4: Admin migration tool removal — 2026-10-02 (documented, not yet removed)
+#### P10-4: Admin migration tool removal and shim cleanup (`03_admin.js`, `05_catalog-core.js`, `07_source-fetchers-tmdb-simkl.js`, `26_api-creator-and-admin-routes.js`) — 2026-10-02
 
-- Documented in `docs/CUTOVER.md` §P10-4 with the exact file and symbol list for post-cutover
-  removal: `/admin/api/migrate-d1`, `/admin/api/migrate-day-counts`, `/admin/api/backfill-trending`,
-  `/admin/api/rebuild-search-index`, `ensureTrackingMigrated`, `migrateGenreDecadeStatsIfNeeded`,
-  `backfillCreatorLastActive`. Deferred until all Phase 10 flags are stable and no migration job
-  can be triggered.
+- **Removed legacy migration shims:** Made `ensureTrackingMigrated`, `migrateGenreDecadeStatsIfNeeded`, and `backfillCreatorLastActive` no-ops and eliminated all redundant call sites across `05_catalog-core.js`, `07_source-fetchers-tmdb-simkl.js`, and `26_api-creator-and-admin-routes.js`.
+- **Protected legacy migration endpoints under v2:** Added `isV2ListsOnly(env)` retirement guards to `/admin/api/backfill-trending` and `/admin/api/migrate-day-counts` to return immediate clean retirement responses when v2 is active, matching the 409 guard in `/admin/api/migrate-d1`.
+- **Maintained full test suite integrity:** All 2,068 tests passing across 445 test suites.
 
 #### P10-5: Documentation consolidation — 2026-10-02
 

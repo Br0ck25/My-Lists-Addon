@@ -323,7 +323,6 @@
       let matched = "no";
 
       try {
-        await ensureTrackingMigrated(env, auth.username);
         const syncKey = `creatorsynctracking:${auth.username}`;
 
         // Resolve what we're actually recording (TMDB lookups) exactly
@@ -742,9 +741,6 @@
       // tokens existed are sitting in people's media servers, and breaking
       // them would silently stop their history syncing with no error anyone
       // would see. The dashboard only ever shows the token form now, so
-      // these age out as people re-copy the URL.
-      await ensureTrackingMigrated(env, authUser);
-
       // P7-6: Log usage of legacy scrobble authentication forms
       if (authForm !== "st") {
         console.warn(`[scrobble] legacy auth form '${authForm}' used by user '${authUser}'`);
@@ -3613,18 +3609,6 @@
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) return authFailureResponse(auth);
 
-      // Same one-time forward migration, this time for tracking data
-      // (watchHistory/continueWatching/fullyWatchedShowIds/
-      // dismissedContinueWatching/trackPlayback) -- see
-      // ensureTrackingMigrated's own comment. Critical to run here
-      // specifically: this endpoint is the most frequent write to
-      // creatorsync:{username} of any of them (any routine autosave), and
-      // the blob built below no longer includes tracking fields at all --
-      // without migrating first, the very next autosave after this
-      // shipped would silently erase anyone's tracking data before
-      // save-tracking ever got a chance to run for them.
-      await ensureTrackingMigrated(env, auth.username);
-
       // One-time forward migration: presets used to live embedded in this
       // same blob, but as of this endpoint no longer accepts them here at
       // all (see /api/creator/sync/save-presets below) -- an updated client
@@ -4538,13 +4522,7 @@
       }
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) return authFailureResponse(auth);
-      await ensureTrackingMigrated(env, auth.username);
-      // These five reads are independent of one another, and were awaited
-      // one after the next -- so this endpoint paid five sequential KV
-      // round trips before it could start assembling anything. Issuing them
-      // together turns that into one. (ensureTrackingMigrated above still
-      // runs first on purpose: it can WRITE the tracking key, so reading it
-      // concurrently with that would be a race.)
+      // These reads are independent of one another and awaited in parallel.
       const [raw, presetsRawInit, channelsRawInit, trackingRawInit, orderRawInit, d1Tracking, d1UserLists, syncResetAt] = await Promise.all([
         env.CONFIGS.get(`creatorsync:${auth.username}`),
         env.CONFIGS.get(`creatorsyncpresets:${auth.username}`),
@@ -5650,6 +5628,9 @@
       const authed = await isAdminRequest(request, env);
       if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
       if (!env || !env.CONFIGS) return json({ ok: true, done: true, accountsThisCall: 0, titlesThisCall: 0 });
+      if (isV2ListsOnly(env)) {
+        return json({ ok: true, done: true, accountsThisCall: 0, titlesThisCall: 0, retired: true });
+      }
 
       const WATCHED_TITLE_CAP = 6;
       const LIST_ITEM_CAP = 6;
@@ -7104,6 +7085,9 @@
       const authed = await isAdminRequest(request, env);
       if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
       if (!env || !env.CONFIGS) return json({ ok: true, done: true, keysMigratedThisCall: 0 });
+      if (isV2ListsOnly(env)) {
+        return json({ ok: true, done: true, keysMigratedThisCall: 0, retired: true });
+      }
 
       const PREFIXES = ["evtcount:watched:", "evtcount:list-add:", "searchquery:"];
       const BATCH_LIMIT = 100;

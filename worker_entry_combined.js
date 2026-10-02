@@ -10334,70 +10334,9 @@ async function bumpJsonCounterBlob(env, key, fields) {
 // Audience tab gets loaded afterward. Old counts are added to (not
 // overwritten over) whatever the new blob already has, so any plays that
 // already landed in the new blob in the window before this migration ran
-// aren't double-counted away.
+// P10-4: migrateGenreDecadeStatsIfNeeded removed (stats are in Analytics Engine/D1)
 async function migrateGenreDecadeStatsIfNeeded(env) {
-  if (!env || !env.CONFIGS) return;
-  const sentinelKey = "stats:genredecade:migrated";
-  try {
-    const already = await env.CONFIGS.get(sentinelKey);
-    if (already) return;
-
-    const [genreBlobRaw, decadeBlobRaw, genreList, decadeList] = await Promise.all([
-      env.CONFIGS.get("stats:genres:alltime"),
-      env.CONFIGS.get("stats:decades:alltime"),
-      listAllKeys(env.CONFIGS, "stats:genre:"),
-      listAllKeys(env.CONFIGS, "stats:decade:"),
-    ]);
-
-    let genreCounts = {};
-    try {
-      genreCounts = genreBlobRaw ? JSON.parse(genreBlobRaw) || {} : {};
-    } catch {
-      genreCounts = {};
-    }
-    let decadeCounts = {};
-    try {
-      decadeCounts = decadeBlobRaw ? JSON.parse(decadeBlobRaw) || {} : {};
-    } catch {
-      decadeCounts = {};
-    }
-
-    const genreTotalKeys = (genreList.keys || []).filter((k) => k.name.endsWith(":total"));
-    await Promise.all(
-      genreTotalKeys.map(async (k) => {
-        const name = k.name.slice("stats:genre:".length, -":total".length);
-        const raw = await env.CONFIGS.get(k.name);
-        const count = parseInt(raw, 10) || 0;
-        if (name && count > 0) genreCounts[name] = (parseInt(genreCounts[name], 10) || 0) + count;
-      })
-    );
-
-    const decadeTotalKeys = (decadeList.keys || []).filter((k) => k.name.endsWith(":total"));
-    await Promise.all(
-      decadeTotalKeys.map(async (k) => {
-        const name = k.name.slice("stats:decade:".length, -":total".length);
-        const raw = await env.CONFIGS.get(k.name);
-        const count = parseInt(raw, 10) || 0;
-        if (name && count > 0) decadeCounts[name] = (parseInt(decadeCounts[name], 10) || 0) + count;
-      })
-    );
-
-    await Promise.all([
-      env.CONFIGS.put("stats:genres:alltime", JSON.stringify(genreCounts)),
-      env.CONFIGS.put("stats:decades:alltime", JSON.stringify(decadeCounts)),
-      // Written last and only after both blobs above succeed -- if this
-      // whole function throws partway through, the sentinel never gets
-      // set, so the next Audience tab load just retries the migration
-      // from scratch rather than a partial migration looking "done".
-      env.CONFIGS.put(sentinelKey, "1"),
-    ]);
-  } catch (e) {
-    // best-effort -- if this fails, the sentinel key was never written,
-    // so this just retries next time computeAudienceAnalytics runs. Old
-    // per-key data is untouched either way (this only ever adds to the
-    // new blob, never deletes the old keys), so nothing is lost by a
-    // failed attempt.
-  }
+  return;
 }
 
 // Records roughly how recently a creator account was last active -- feeds
@@ -10473,38 +10412,11 @@ const LAST_ACTIVE_BACKFILL_BATCH = 100;
 // -> ~12 loads) and then costs zero KV reads. Each repaired value is also
 // written onto the in-memory account object so it shows the right "Last
 // Active" on the load that repairs it, not one load later.
+// P10-4 (FT-42): backfillCreatorLastActive removed (accounts in D1 v2)
 async function backfillCreatorLastActive(env, accounts) {
-  if (!env || !env.DB || !env.CONFIGS || !Array.isArray(accounts)) return;
-  const missing = accounts.filter((c) => c && c.username && !c.lastActive).slice(0, LAST_ACTIVE_BACKFILL_BATCH);
-  if (!missing.length) return;
-  const stmts = [];
-  await Promise.all(
-    missing.map(async (c) => {
-      try {
-        const raw = await env.CONFIGS.get(`creatorlastseen:${c.username}`);
-        const ts = raw ? parseInt(raw, 10) || 0 : 0;
-        if (ts) {
-          c.lastActive = ts;
-          // `AND last_active IS NULL` guards against clobbering a value a
-          // concurrent touch already wrote.
-          stmts.push(
-            env.DB.prepare("UPDATE creators SET last_active = ? WHERE username = ? AND last_active IS NULL").bind(ts, c.username)
-          );
-        }
-      } catch {
-        // best-effort per account; retried on a later load
-      }
-    })
-  );
-  if (stmts.length) {
-    try {
-      // One batched D1 call for the whole batch rather than one per row.
-      await env.DB.batch(stmts);
-    } catch (e) {
-      // Non-fatal: the same rows are picked up again on the next load.
-    }
-  }
+  return;
 }
+
 
 // Records one "marked as watched" or "added to a list" event for a given
 // title -- feeds the admin dashboard's Trending Data tab, which is meant
@@ -12602,9 +12514,6 @@ async function renderAdminDashboard(env) {
       createdAt: row.created_at || null,
       lastActive: row.last_active || null,
     }));
-    // Historical accounts have NULL last_active in D1; repair a bounded
-    // batch from KV each load (see backfillCreatorLastActive).
-    await backfillCreatorLastActive(env, creatorAccounts);
   } else {
     // KV-only fallback. listAllKeys is a full cursor sweep (fine for
     // enumerating, no per-key reads), then bound the fan-out: a KV get per
@@ -19019,32 +18928,10 @@ async function fetchCuratedCatalog(entry, skip = 0, keys = {}) {
 // further down this file) -- since any of the three could be the first to
 // run after this split shipped, and whichever runs first must not
 // silently lose whatever was already saved the old way.
+// P10-4 (BE-M19): ensureTrackingMigrated is obsolete since all accounts
+// are migrated to DB_ACTIVITY under FF_EVENT_TRACKING.
 async function ensureTrackingMigrated(env, username) {
-  const existing = await env.CONFIGS.get(`creatorsynctracking:${username}`);
-  if (existing !== null) return; // already migrated (or already using the new key)
-  const oldRaw = await env.CONFIGS.get(`creatorsync:${username}`);
-  if (!oldRaw) return;
-  try {
-    const oldBlob = JSON.parse(oldRaw);
-    const hasTrackingData = (Array.isArray(oldBlob.watchHistory) && oldBlob.watchHistory.length) ||
-      (Array.isArray(oldBlob.continueWatching) && oldBlob.continueWatching.length) ||
-      (Array.isArray(oldBlob.watchlist) && oldBlob.watchlist.length) ||
-      (Array.isArray(oldBlob.fullyWatchedShowIds) && oldBlob.fullyWatchedShowIds.length) ||
-      (oldBlob.dismissedContinueWatching && Object.keys(oldBlob.dismissedContinueWatching).length) ||
-      typeof oldBlob.trackPlayback === "boolean";
-    if (!hasTrackingData) return;
-    await env.CONFIGS.put(`creatorsynctracking:${username}`, JSON.stringify({
-      watchHistory: Array.isArray(oldBlob.watchHistory) ? oldBlob.watchHistory : [],
-      continueWatching: Array.isArray(oldBlob.continueWatching) ? oldBlob.continueWatching : [],
-      watchlist: Array.isArray(oldBlob.watchlist) ? oldBlob.watchlist : [],
-      fullyWatchedShowIds: Array.isArray(oldBlob.fullyWatchedShowIds) ? oldBlob.fullyWatchedShowIds : [],
-      dismissedContinueWatching: oldBlob.dismissedContinueWatching && typeof oldBlob.dismissedContinueWatching === "object" ? oldBlob.dismissedContinueWatching : {},
-      trackPlayback: typeof oldBlob.trackPlayback === "boolean" ? oldBlob.trackPlayback : false,
-      updatedAt: Date.now(),
-    }));
-  } catch {
-    // old blob unreadable -- nothing to migrate
-  }
+  return;
 }
 
 async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
@@ -19242,11 +19129,7 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
       }
     }
     if (!items) {
-      let trackingRaw = await env.CONFIGS.get('creatorsynctracking:' + username);
-      if (!trackingRaw) {
-        await ensureTrackingMigrated(env, username);
-        trackingRaw = await env.CONFIGS.get('creatorsynctracking:' + username);
-      }
+      const trackingRaw = await env.CONFIGS.get('creatorsynctracking:' + username);
       if (trackingRaw) {
         const trackingBlob = JSON.parse(trackingRaw);
         items = slug === 'watch-history' ? trackingBlob.watchHistory : (slug === 'continue-watching' ? trackingBlob.continueWatching : (slug === 'airing-next' ? trackingBlob.airingNext : (trackingBlob.watchlist || [])));
@@ -27429,7 +27312,6 @@ async function checkForNewEpisodes(env, maxShowChecks) {
     // It is skipped rather than retried because the next full cycle will come
     // back to it anyway.
     try {
-    await ensureTrackingMigrated(env, username);
     let blob = null;
     if (env.DB) {
       blob = await readCreatorTrackingD1(env, username);
@@ -91912,7 +91794,6 @@ function generateSearchVariations(query) {
       let matched = "no";
 
       try {
-        await ensureTrackingMigrated(env, auth.username);
         const syncKey = `creatorsynctracking:${auth.username}`;
 
         // Resolve what we're actually recording (TMDB lookups) exactly
@@ -92331,9 +92212,6 @@ function generateSearchVariations(query) {
       // tokens existed are sitting in people's media servers, and breaking
       // them would silently stop their history syncing with no error anyone
       // would see. The dashboard only ever shows the token form now, so
-      // these age out as people re-copy the URL.
-      await ensureTrackingMigrated(env, authUser);
-
       // P7-6: Log usage of legacy scrobble authentication forms
       if (authForm !== "st") {
         console.warn(`[scrobble] legacy auth form '${authForm}' used by user '${authUser}'`);
@@ -95202,18 +95080,6 @@ function generateSearchVariations(query) {
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) return authFailureResponse(auth);
 
-      // Same one-time forward migration, this time for tracking data
-      // (watchHistory/continueWatching/fullyWatchedShowIds/
-      // dismissedContinueWatching/trackPlayback) -- see
-      // ensureTrackingMigrated's own comment. Critical to run here
-      // specifically: this endpoint is the most frequent write to
-      // creatorsync:{username} of any of them (any routine autosave), and
-      // the blob built below no longer includes tracking fields at all --
-      // without migrating first, the very next autosave after this
-      // shipped would silently erase anyone's tracking data before
-      // save-tracking ever got a chance to run for them.
-      await ensureTrackingMigrated(env, auth.username);
-
       // One-time forward migration: presets used to live embedded in this
       // same blob, but as of this endpoint no longer accepts them here at
       // all (see /api/creator/sync/save-presets below) -- an updated client
@@ -96127,13 +95993,7 @@ function generateSearchVariations(query) {
       }
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) return authFailureResponse(auth);
-      await ensureTrackingMigrated(env, auth.username);
-      // These five reads are independent of one another, and were awaited
-      // one after the next -- so this endpoint paid five sequential KV
-      // round trips before it could start assembling anything. Issuing them
-      // together turns that into one. (ensureTrackingMigrated above still
-      // runs first on purpose: it can WRITE the tracking key, so reading it
-      // concurrently with that would be a race.)
+      // These reads are independent of one another and awaited in parallel.
       const [raw, presetsRawInit, channelsRawInit, trackingRawInit, orderRawInit, d1Tracking, d1UserLists, syncResetAt] = await Promise.all([
         env.CONFIGS.get(`creatorsync:${auth.username}`),
         env.CONFIGS.get(`creatorsyncpresets:${auth.username}`),
@@ -97239,6 +97099,9 @@ function generateSearchVariations(query) {
       const authed = await isAdminRequest(request, env);
       if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
       if (!env || !env.CONFIGS) return json({ ok: true, done: true, accountsThisCall: 0, titlesThisCall: 0 });
+      if (isV2ListsOnly(env)) {
+        return json({ ok: true, done: true, accountsThisCall: 0, titlesThisCall: 0, retired: true });
+      }
 
       const WATCHED_TITLE_CAP = 6;
       const LIST_ITEM_CAP = 6;
@@ -98693,6 +98556,9 @@ function generateSearchVariations(query) {
       const authed = await isAdminRequest(request, env);
       if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
       if (!env || !env.CONFIGS) return json({ ok: true, done: true, keysMigratedThisCall: 0 });
+      if (isV2ListsOnly(env)) {
+        return json({ ok: true, done: true, keysMigratedThisCall: 0, retired: true });
+      }
 
       const PREFIXES = ["evtcount:watched:", "evtcount:list-add:", "searchquery:"];
       const BATCH_LIMIT = 100;
