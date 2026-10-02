@@ -1,0 +1,214 @@
+# BASELINE AUDIT RECORD
+Generated: 2026-10-02
+Module: 01 (Baseline, Architecture, Generated Source)
+
+## 1. Git Repository State
+Branch: claude/elegant-ride-o7m8fh
+Commit SHA: 6f02c3b7104bc5b58993d15502a5a351697fa670
+Commit Message: docs: update README.md for hosted platform focus and remove self-hosting guide
+Working Tree Status (`git status --porcelain`):
+(clean - no modified, staged, or untracked files prior to audit)
+
+## 2. Environment & Runtime
+Operating System: Windows (pwsh shell)
+Node Version: v24.21.0
+Package Manager: npm 11.19.0 (no root package.json; zero runtime npm dependencies)
+Python Version: Python 3.11.9
+Scratch Directory: C:\tmp\audit-work-2026-10-02 (reused)
+
+## 3. Package & Project Configuration
+Project Name: my-lists-addon (from wrangler.toml)
+Type: Pure Vanilla JavaScript (ESM) / Cloudflare Worker
+Root package.json: None (intentional design: no npm toolchain, no Vite/Webpack/Rollup)
+Pinned Dev Tools (ephemeral for checks): acorn@8.14.0, eslint-scope@8.2.0
+
+## 4. Available Verification & Build Scripts
+- Build:
+  - `python build.py` (concatenates header.js + 00_*.js..57_*.js into worker_entry_combined.js)
+  - `powershell -File build.ps1` (PowerShell equivalent, UTF-8 LF byte-consistent)
+- Verification & Checks:
+  - `python check_sync.py` (verifies worker_entry_combined.js matches source fragments byte-for-byte ignoring CRLF)
+  - `node --check worker_entry_combined.js` (parses syntax of combined Worker bundle)
+  - `node scope_check.mjs worker worker_entry_combined.js` (static scope & identifier resolution check for Worker)
+  - `node render_check.js rendered-scope.html` + `node scope_check.mjs page rendered-scope.html` (scope check for frontend page)
+  - `node render_check.js rendered.html` + `python html_checks.py rendered.html local` (validates builder page HTML, CSP nonces, script bounds)
+  - `node render_check.js rendered-shell.html --shell` + `python html_checks.py rendered-shell.html local-shell` + `node scope_check.mjs page rendered-shell.html` (validates new UI shell page)
+  - `node render_check.js rendered-admin.html --admin` + `python html_checks.py rendered-admin.html local-admin` (validates admin dashboard template literal)
+  - `node render_check.js service-worker.js --sw` + `node --check service-worker.js` (syntax-checks template-literal service worker)
+  - `node render_check.js rendered-hostile.html --hostile` + `python html_checks.py rendered-hostile.html local-hostile` (stored XSS & hostile input safety check)
+  - `node check_bundle_budget.mjs` (bundle budget check: <= 150 KB gzip for first view /app.js bundle)
+  - `bash verify.sh` (composite CI runner executing steps 1-6)
+- Code Mapping / Generation:
+  - `python gen_map.py` (indexes symbols and routes into FUNCTION-MAP.md)
+  - `git diff --ignore-cr-at-eol --quiet -- FUNCTION-MAP.md` (drift check for symbol map)
+- Test Suite:
+  - `node --test tests/*.test.mjs` (Node.js built-in test runner; 56+ test files, 2,068 passing tests)
+- Deployment:
+  - Manual paste deploy: Paste `worker_entry_combined.js` into Cloudflare Workers dashboard
+  - Staging deploy: `npx wrangler deploy --env staging`
+
+## 5. Environment & Configuration Structure
+wrangler.toml:
+- Compatibility Date: 2024-01-01
+- Main Entry: worker_entry_combined.js
+
+Feature Flags (Worker environment variables):
+- `NEW_ON_STREAMING_ENGINE` (default: "justwatch", fallback: "rapidapi")
+- `FF_SESSIONS`: Session-based auth (/api/session, mla_session cookie)
+- `FF_INSTALLS`: /api/installs management API
+- `FF_V2_LISTS_READ`: Read lists/channels from D1 v2 tables
+- `FF_V2_LISTS_API`: /api/lists and /api/likes over v2 tables
+- `FF_V2_LISTS_ONLY`: One-way cutover to v2 D1 tables only
+- `FF_EVENT_TRACKING`: Watch history and show progress in DB_ACTIVITY
+- `FF_SHOW_SCHEDULE`: Show schedule calculation for Continue Watching/Airing Next
+- `FF_PROVIDER_BREAKER`: External provider circuit breaker
+- `FF_CHART_SNAPSHOTS`: Shared chart snapshots cached in KV
+- `FF_CANONICAL_IDS`: Canonical IMDb-preferred IDs in catalog rows
+- `FF_MATERIALIZER`: Hourly home screen materialized view for deduplication
+- `FF_CSP_TT_REPORT`: Trusted Types report-only CSP header
+- `INSTALL_MIGRATION_PERCENT`: Gradual migration percentage of install secrets to D1
+- `FF_NEW_UI`: Default new UI shell
+- `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, `FF_ADMIN_EMAILS`: Cloudflare Access integration for /admin
+- `FF_SCROBBLE_ST_ONLY`, `SCROBBLE_SUNSET_DATE`: Scrobble token enforcement and sunsetting
+- `SUNSET_60DAY_START_DATE`: 60-day sunset notices start date
+- `CF_ANALYTICS_ACCOUNT_ID`: Cloudflare Analytics Engine SQL API account ID
+
+Secrets (configured via Cloudflare Dashboard / wrangler secret):
+- `ADMIN_KEY`: Break-glass administrative access key
+- `TMDB_API_KEY`: Upstream TMDB API key
+- `RAPIDAPI_KEY` / `STREAMING_AVAILABILITY_API_KEY`: Upstream RapidAPI streaming availability key
+- `TRAKT_CLIENT_ID`, `TRAKT_CLIENT_SECRET`: Trakt OAuth credentials
+- `MDBLIST_API_KEY`, `MDBLIST_POPULAR_KEY`, `MDBLIST_CLIENT_ID`, `MDBLIST_CLIENT_SECRET`: MDBList API and OAuth
+- `SIMKL_CLIENT_ID`, `SIMKL_CLIENT_SECRET`: Simkl OAuth credentials
+- `TOKEN_ENCRYPTION_KEY`: AES-GCM 256-bit key for encrypting provider credentials and install secrets
+- `LOOKUP_PEPPER`: HMAC pepper for account recovery / forgot-username blind index lookups
+- `CF_ANALYTICS_TOKEN` / `CLOUDFLARE_API_TOKEN`: Analytics Engine SQL API query token
+
+## 6. Cloudflare Bindings
+Production Topology:
+- KV Namespace: `CONFIGS` (id: YOUR_KV_NAMESPACE_ID) - Install configs, caches, cursors
+- D1 Database: `DB` (database_name: my-lists-db, database_id: YOUR_DATABASE_ID) - Authoritative store
+- Analytics Engine: `ANALYTICS` (dataset: mylists_events) - Request telemetry
+- R2 Bucket: `BLOBS` (bucket_name: mylists-blobs) - Shared channel episode pools
+- Queue Producer: `JOBS` (queue: mylists-jobs) - Background job queue
+- Queue Consumer: `mylists-jobs` (max_batch_size: 25, max_batch_timeout: 5s, max_retries: 5, DLQ: mylists-jobs-dlq)
+- Cron Triggers: `["*/6 * * * *"]` - Episode airings sweep and chart prewarming
+
+Staging Topology (`[env.staging]`):
+- Dedicated isolated bindings: `CONFIGS` (staging KV), `DB` (my-lists-db-staging), `DB_ACTIVITY` (mylists-activity-staging), `ANALYTICS` (mylists_events_staging), `BLOBS` (mylists-blobs-staging), `JOBS` (mylists-jobs-staging producer/consumer)
+- Cron Triggers: `["*/15 * * * *"]`
+
+## 7. Browser Availability
+- Google Chrome: Available at `C:\Program Files\Google\Chrome\Application\chrome.exe` (headless mode tested and operational)
+- Microsoft Edge: Available at `C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`
+- Status: BROWSER AVAILABLE (automated headless testing possible if required)
+
+## 8. Existing Test Inventory
+Test framework: Built-in `node:test` + `node:assert/strict` with custom in-memory mock harness (`tests/harness.mjs`).
+Test files located in `tests/`:
+- `bundle-budget.test.mjs` (P8-3 bundle budget and two-tier split tests)
+- `channel-like.test.mjs`
+- `channel-pairing.test.mjs`
+- `channel-preset.test.mjs`
+- `chart-refresh.test.mjs`
+- `client-actions.test.mjs`
+- `client-escapes.test.mjs`
+- `client-harness.mjs` (Client test mock harness)
+- `client-storage.test.mjs`
+- `client.test.mjs` (Comprehensive client DOM & logic suite)
+- `csp.test.mjs`
+- `d1-backup.test.mjs`
+- `d1-read-replication.test.mjs`
+- `drag-outline.test.mjs`
+- `every-list-live-v2.test.mjs`
+- `every-list-live.client.test.mjs`
+- `every-list-live.test.mjs`
+- `harness.mjs` (Backend Worker mock harness: KV, D1, R2, Queue, Analytics Engine)
+- `helpers-unit.test.mjs`
+- `imdb-ids.test.mjs`
+- `imports.test.mjs`
+- `jobs.test.mjs`
+- `lists-v2.test.mjs`
+- `live-rows-stay-live.test.mjs`
+- `load-performance.test.mjs`
+- `materializer.test.mjs`
+- `media-retry.test.mjs`
+- `migration-suite.test.mjs`
+- `more-jobs.test.mjs`
+- `my-lists-addon-charts.test.mjs`
+- `new-on-streaming.test.mjs`
+- `own-list-like.client.test.mjs`
+- `personal-shelves.test.mjs`
+- `phase10-cutover.test.mjs`
+- `plex-webhook.test.mjs`
+- `poster-fetch.test.mjs`
+- `poster-identity.test.mjs`
+- `poster-optimization.test.mjs`
+- `provider-contracts.test.mjs`
+- `provider-secrets-sync.test.mjs`
+- `providers.test.mjs`
+- `rate-limit.test.mjs`
+- `recovery-answer-hash.test.mjs`
+- `scrobble-filter.client.test.mjs`
+- `scrobble-queue.test.mjs`
+- `scrobble-sunset.test.mjs`
+- `search-list-chips.client.test.mjs`
+- `security-suite.test.mjs`
+- `shelf-shadow.test.mjs`
+- `show-refresh.test.mjs`
+- `staging-deploy-check.test.mjs`
+- `title-details-fallback.test.mjs`
+- `token-refresh.test.mjs`
+- `tracked-shelves-stay-live.test.mjs`
+- `watchlist-airing.test.mjs`
+- `watchlist-badges.test.mjs`
+- `watchlist-remove-and-sync.test.mjs`
+- `worker.test.mjs` (Comprehensive Worker integration suite)
+Test Fixtures (`tests/fixtures/`):
+- `migration-fixtures.mjs`
+- Providers: `cinemeta/series-meta.json`, `justwatch/new-titles.json`, `mdblist/list-json.json`, `mdblist/top-lists.json`, `rapidapi/changes.json`, `simkl/trending-movies.json`, `simkl/trending-tv.json`, `tmdb/*.json`, `trakt/*.json`, `tvmaze/*.json`
+
+## 9. Existing Probe and Audit Infrastructure
+Directory `audit/`:
+- `audit/adversarial-2026-09-06`: 24 test probes (`t01` - `t24`), mutation runners (`mutate.sh`), kit
+- `audit/adversarial-II-2026-09-06`: 26 test probes (`p01` - `p26`), mutation runners (`mutate2.sh`, `mutate3.sh`, `mutate4.sh`)
+- `audit/adversarial-III-2026-09-08`: 30+ probes (`p02` - `p44`), triage harness
+- `audit/frontend-2026-09-07`: 25+ probes (`t04` - `t48`), server mock, drive script
+- `audit/frontend-2026-09-13`: 16 probes (`t01` - `t16`), server mock, drive script
+- `audit/full-2026-09-13`: 12 probes (`p01` - `p12`)
+- `audit/reset-resurrection`: 3 probes (`r01` - `r03`)
+In-repo audit tools: `verify.sh`, `check_sync.py`, `scope_check.mjs`, `render_check.js`, `html_checks.py`, `check_bundle_budget.mjs`, `gen_map.py`
+
+## 10. Filename-Only Listing of `docs/history`
+(Unopened, filenames only per audit protocol):
+- next-version-plan-2026-09-24-superseded
+- AUDIT-2026-09-05-INDEPENDENT.md
+- AUDIT-2026-09-05-STATUS.md
+- AUDIT-2026-09-05.md
+- AUDIT-2026-09-06-ADVERSARIAL-II-FIX-STATUS.md
+- AUDIT-2026-09-06-ADVERSARIAL-II.md
+- AUDIT-2026-09-06-ADVERSARIAL.md
+- AUDIT-2026-09-06-FIX-STATUS.md
+- AUDIT-2026-09-07-FRONTEND-FIX-STATUS.md
+- AUDIT-2026-09-07-FRONTEND.md
+- AUDIT-2026-09-08-ADVERSARIAL-III.md
+- AUDIT-2026-09-08-FIX-STATUS.md
+- AUDIT-2026-09-13-FRONTEND-FIX-STATUS.md
+- AUDIT-2026-09-13-FRONTEND.md
+- AUDIT-2026-09.md
+- AUDIT-STATUS.md
+- BACKEND_AUDIT.md
+- Changes - archive.md
+- Changes.md
+- CLOUDFLARE_FREE_TIER_REMOVAL_PLAN.md
+- COMPLETE_AUDIT_REPORT.md
+- crossover_and_companion_guide.md
+- FRONTEND_UX_AUDIT.md
+- MIGRATION_PLAN.md
+- NEXT_VERSION_ARCHITECTURE.md
+- NEXT_VERSION_TASKS.md
+- PERFORMANCE_AUDIT.md
+- README.md
+- SECURITY_AUDIT.md
+- STORAGE-PLAN-KV-D1.md
+- UI_UX_AUDIT.md

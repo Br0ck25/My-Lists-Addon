@@ -1,0 +1,68 @@
+[2026-10-02T01:20:21Z] node --version | exit: 0 | v24.21.0
+[2026-10-02T01:20:21Z] npm --version | exit: 0 | 11.19.0
+[2026-10-02T01:20:25Z] python --version | exit: 0 | Python 3.11.9
+[2026-10-02T01:20:56Z] python check_sync.py | exit: 0 | ok: worker_entry_combined.js matches its sources (5,374,368 bytes, line endings ignored)
+[2026-10-02T01:21:23Z] python build.py | exit: 0 | header bytes: 1043, combined bytes: 5374368
+[2026-10-02T01:21:26Z] git diff --ignore-cr-at-eol --quiet -- worker_entry_combined.js | exit: 0 | Combined worker matches source fragments byte-exact (CRLF-insensitive)
+[2026-10-02T01:21:29Z] node --check worker_entry_combined.js | exit: 0 | Combined worker parses without syntax errors
+[2026-10-02T01:21:32Z] node scope_check.mjs worker worker_entry_combined.js | exit: 0 | Every identifier resolves (5044 global references, 0 top-level declarations, 202 window.* exports, 512 typeof-guarded)
+[2026-10-02T01:21:36Z] node render_check.js rendered-scope.html | exit: 0 | renderBuilder OK -> rendered-scope.html 2713601 chars
+[2026-10-02T01:21:37Z] node scope_check.mjs page rendered-scope.html | exit: 0 | Every identifier resolves (12806 global references, 1352 top-level declarations, 192 window.* exports, 355 typeof-guarded)
+[2026-10-02T01:21:40Z] node render_check.js rendered.html | exit: 0 | renderBuilder OK -> rendered.html 2713601 chars
+[2026-10-02T01:21:41Z] python html_checks.py rendered.html local | exit: 0 | Builder page HTML validated: 0 duplicate declarations, 234 actions resolve, CSP nonces intact
+[2026-10-02T01:21:44Z] node render_check.js rendered-shell.html --shell | exit: 0 | renderBuilder (new UI shell) OK -> rendered-shell.html 2716146 chars
+[2026-10-02T01:21:45Z] python html_checks.py rendered-shell.html local-shell | exit: 0 | Shell HTML validated: 233 actions resolve, CSP nonces intact
+[2026-10-02T01:21:46Z] node scope_check.mjs page rendered-shell.html | exit: 0 | Every identifier resolves in shell (12807 global references, 1353 top-level declarations)
+[2026-10-02T01:21:50Z] node render_check.js rendered-admin.html --admin | exit: 0 | renderAdminDashboard OK -> rendered-admin.html 189344 chars
+[2026-10-02T01:21:51Z] python html_checks.py rendered-admin.html local-admin | exit: 0 | Admin HTML validated: 49 actions resolve, CSP nonces intact
+[2026-10-02T01:21:54Z] node render_check.js service-worker.js --sw | exit: 0 | SERVICE_WORKER_JS OK -> service-worker.js 3517 chars
+[2026-10-02T01:21:55Z] node --check service-worker.js | exit: 0 | Service worker syntax OK
+[2026-10-02T01:21:58Z] node render_check.js rendered-hostile.html --hostile | exit: 0 | renderBuilder (hostile input) OK -> rendered-hostile.html 2710697 chars
+[2026-10-02T01:21:59Z] python html_checks.py rendered-hostile.html local-hostile | exit: 0 | Hostile render confirmed inert (both markers present, neither breaks out)
+[2026-10-02T01:22:04Z] python gen_map.py | exit: 0 | FUNCTION-MAP.md generated: 2657 symbols, 211 routes, 172,266 bytes
+[2026-10-02T01:22:05Z] git diff --ignore-cr-at-eol --quiet -- FUNCTION-MAP.md | exit: 0 | FUNCTION-MAP.md matches source symbol map exactly
+[2026-10-02T01:22:09Z] node check_bundle_budget.mjs | exit: 0 | First view JS bundle is 93.26 KB gzip (budget: <= 150 KB)
+[2026-10-02T01:22:15Z] node --test tests/bundle-budget.test.mjs | exit: 0 | 4 tests passed, 0 failed
+[2026-10-02T01:22:19Z] node --test tests/*.test.mjs | exit: 0 | 2068 tests passed, 0 failed (445 suites, 146695 ms)
+[2026-10-02T01:42:48Z] node tests/probe_module02_deep_dive.mjs | exit: 0 | 14 deep dive probes passed (error shapes, Stremio types, private cache headers, rate limiting)
+[2026-10-02T01:45:27Z] node audit/full-2026-10-02/probes/p01_routing_and_stremio.mjs | exit: 0 | Deterministic verification probe passed (manifest, catalog fallbacks, meta fallbacks, stream 404, unauth 401, no-store headers, cross-account protection)
+[2026-10-02T01:50:48Z] node --test tests/admin-security.test.mjs tests/admin-actions.test.mjs tests/recovery-answer-hash.test.mjs tests/account-purge.test.mjs tests/account-reset.test.mjs tests/security-suite.test.mjs | exit: 0 | 61 tests passed across 15 suites (1389 ms)
+[2026-10-02T01:53:00Z] node audit/full-2026-10-02/probes/p02_auth_and_sessions.mjs | exit: 0 | 9 deep invariant checks passed (PBKDF2 key/recovery hashing, session creation, token hashing in D1, session resolution & expiry, CSRF, IDOR defense, key reset revocation, admin auth & audit logging, account deletion tombstones)
+[2026-10-02T02:03:31Z] node audit/full-2026-10-02/probes/p02_auth_matrix.mjs | exit: 0 | 6 suites passed with positive and negative controls (cross-account IDOR rejection, installs ownership, lists v2 privacy, key reset session revocation, expired/revoked/malformed tokens, admin escalation defense)
+[2026-10-02T02:07:46Z] node --test tests/migration-suite.test.mjs | exit: 0 | 7 migration suites passed (schema upgrade sequence 0001a-0020 & A0001, accounts, lists/likes, channels, watch history, install secrets, full reconciliation, 545 ms)
+[2026-10-02T02:16:46Z] node audit/full-2026-10-02/probes/p03_storage_integrity.mjs | exit: 0 | 7 suites passed (schema migration replay & equivalence, install zero-row optimistic locking, list v2 version preconditions, like ledger changes() accounting, channel R2 blob lifecycle & orphan cleanup, FTS2 search sync, anti-resurrection tombstones)
+[2026-10-02T02:25:30Z] node audit/full-2026-10-02/probes/p04_core_product_flows.mjs | exit: 0 | 4 suites passed (Lists lifecycle, mutations & independence, Watch History & continue watching persistence with strict account separation, Channels lineup generation with part pairing & deterministic rotation, Installs scopes, manifest generation, token rotation & revocation)
+[2026-10-02T02:31:48Z] node audit/full-2026-10-02/probes/p05_jobs_queues_and_time.mjs | exit: 0 | 4 suites passed (Queue message lifecycle & poison-pill defense, D1 Jobs CAS claiming & lease recovery, Cron dispatch & unbound queue fallback, Time boundaries, Eastern rollover, leap days & 60-day sunset notices)
+[2026-10-02T02:36:09Z] node audit/full-2026-10-02/probes/p06_external_providers.mjs | exit: 0 | 4 suites passed (Trakt/TMDB item mapping & movie/series discrimination, Provider failure vs empty data snapshot protection, Provider circuit breaker state machine & 5-failure trip, OAuth token 7-day proactive refresh window)
+[2026-10-02T02:50:34Z] node --test audit/full-2026-10-02/probes/p07_frontend_state_async.mjs | exit: 0 | 5 suites passed (AUDIT-FE-001 offline signout halt, AUDIT-FE-002 saveChannel double-submit duplicate creation, AUDIT-FE-003 executeUnifiedListSearch unsequenced fallback search clobber, clearLocalAccountData full sweep, runCatalogSearch out-of-order sequence counter discarding)
+[2026-10-02T03:00:59Z] [MODULE 09] node -e "...innerHTML sink enumeration across 09_..25_ source files" | exit: 0 | Full sink map generated for innerHTML/insertAdjacentHTML/location.href/eval sinks
+[2026-10-02T03:01:06Z] [MODULE 09] node -e "...location.href/window.open/eval/new Function sink search" | exit: 0 | 4 location.href sinks found (all ORIGIN+literal), 0 window.open, 0 eval, 0 new Function
+[2026-10-02T03:01:13Z] [MODULE 09] node -e "...escapeHtml usage in 16_client-row-core.js" | exit: 0 | All user-data-touching innerHTML calls use escapeHtml() or escapeAttr()
+[2026-10-02T03:01:27Z] [MODULE 09] node -e "...publishedUrl and stremio:// URL source tracing" | exit: 0 | publishedUrl = server-constructed URL, config ID = base64url [A-Za-z0-9_-]
+[2026-10-02T03:01:43Z] [MODULE 09] node -e "...CSP Content-Security-Policy header and nonce implementation" | exit: 0 | securityHeaders() verified: nonce-only script-src, frame-ancestors self, object-src none, base-uri self
+[2026-10-02T03:01:58Z] [MODULE 09] node -e "...service worker template and origin check" | exit: 0 | SW: origin-locked, GET-only, no ${} interpolation in SW string
+[2026-10-02T03:02:17Z] [MODULE 09] node -e "...validateCreatorUsername and slugifyServer charset" | exit: 0 | username: [a-z0-9_-], slug: [a-z0-9-]
+[2026-10-02T03:02:31Z] [MODULE 09] node -e "...generateShortId base64url output verification" | exit: 0 | Config IDs: [A-Za-z0-9_-]{12} - HTML safe
+[2026-10-02T03:02:40Z] [MODULE 09] node -e "...livePreviewPosterHtml function body check" | exit: 0 | escapeAttr(resolvedPoster), escapeAttr(m.id) - all user data escaped
+[2026-10-02T03:02:50Z] [MODULE 09] node -e "...watchBadgeHtml - only returns two static literals" | exit: 0 | SAFE - static strings only
+[2026-10-02T03:02:55Z] [MODULE 09] node -e "...insertAdjacentHTML full enumeration in source files" | exit: 0 | All 17 insertAdjacentHTML calls: static literals or escaped data
+[2026-10-02T03:06:43Z] [MODULE 09] node render_check.js rendered-hostile.html --hostile && python html_checks.py rendered-hostile.html local-hostile | exit: 0 | Hostile render is inert (both markers present, neither breaks out); CSP nonces intact; 0 inline handlers
+[2026-10-02T03:09:26Z] [MODULE 09] node --test tests/security-suite.test.mjs tests/csp.test.mjs | exit: 0 | 31/31 security tests pass (CSRF, credential rejection, cookie security, session revocation, IDOR matrix, admin auth, nonce-only CSP, Trusted Types report-only)
+[2026-10-02T03:09:26Z] [MODULE 09] node --test tests/security-suite.test.mjs tests/csp.test.mjs tests/client-escapes.test.mjs | exit: 0 | 34/34 tests pass
+[2026-10-02T03:14:21Z] [MODULE 09] node --test audit/full-2026-10-02/probes/p08_frontend_security_dom.mjs | exit: 0 | 20/20 assertions pass across 7 suites (escapeHtml correctness, username/slug charset, config ID HTML-safety, CSP structure, SW security, no eval/document.write, hostile render integration)
+[2026-10-02T11:37:42Z] [MODULE 10] npm install --save-dev playwright | exit: 0 | Playwright installed in scratch copy
+[2026-10-02T11:37:45Z] [MODULE 10] node render_check.js audit-ui-builder.html | exit: 0 | renderBuilder OK -> audit-ui-builder.html 2713601 chars
+[2026-10-02T11:37:47Z] [MODULE 10] node render_check.js audit-ui-shell.html --shell | exit: 0 | renderBuilder (new UI shell) OK -> audit-ui-shell.html 2716146 chars
+[2026-10-02T11:41:05Z] [MODULE 10] node audit/full-2026-10-02/probes/p09_ui_accessibility.mjs | exit: 1 | 33 pass, 11 fail, 10 warn — confirmed AUDIT-UI-001 (like buttons); other failures were probe false positives (file:// artifacts, wrong call signatures, wrong variable names)
+[2026-10-02T11:42:33Z] [MODULE 10] node modal_focus_analysis.cjs | exit: 0 | showModal inspected: focuses h2 heading (tabindex=-1) or items[0]; aria-modal=true; aria-labelledby set; Escape closes overlay
+[2026-10-02T11:45:32Z] [MODULE 10] node modal_focus_v2.cjs | exit: 0 | CONFIRMED: focus on h2 in modal, focusedInModal=true, Escape removes overlay, Tab trapped (First->Second->Third->First->Second->Third)
+[2026-10-02T11:46:16Z] [MODULE 10] node -e "...subnav overflow containment analysis (Playwright)" | exit: 0 | All overflowing .subnav-pill elements are inside .subnav-pills-bar (overflow-x:auto) — intentional horizontal scroll
+[2026-10-02T11:47:02Z] [MODULE 10] node -e "...searchLikeBtn/searchLikeExternalBtn aria-label survey" | exit: 0 | 0 aria-label, 0 title; all ✕ buttons have aria-label; detailLikeBtn correctly labelled — AUDIT-UI-001 confirmed
+[2026-10-02T11:47:02Z] [MODULE 10] node -e "...close button aria-label check (Playwright)" | exit: 0 | modal-close-x: aria-label=Close; remove-source-btn: aria-label=Remove this source; all icon buttons correctly labelled
+
+
+
+
+
+
+
