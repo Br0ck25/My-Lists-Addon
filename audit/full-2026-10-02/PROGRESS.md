@@ -8,7 +8,7 @@
 | **02** | **Backend / API / Routing / Stremio Protocol** | **FULL** | Module 01 | 0 confirmed, 0 suspected |
 | **03** | **Authentication, Sessions & Account Identity** | **FULL** | Module 01, 02 | 0 confirmed, 0 suspected |
 | **04** | **Database, Storage, Data Integrity** | **FULL** | Module 01 | 0 confirmed, 0 suspected |
-| 05 | Install Links & Secrets Encryption (AES-GCM) | NOT TESTED | Module 02, 03, 04 | — |
+| **05** | **Core Product Flows (Lists, Watch History, Channels, Installs)** | **FULL** | Module 02, 03, 04 | 0 confirmed, 0 suspected |
 | 06 | Channels v2, Storylines & R2 Episode Blobs | NOT TESTED | Module 05 | — |
 | 07 | Stremio Endpoints, Catalog Core & Canonical IDs | NOT TESTED | Module 01, 02 | — |
 | 08 | Provider Integrations, Circuit Breakers & Snapshots | NOT TESTED | Module 07 | — |
@@ -192,5 +192,51 @@
   - Tested using local SQLite (`node:sqlite`) and mock harness without live Cloudflare edge network.
 - **Next Exact Action:**
   - Await user prompt for the next audit module.
+
+---
+
+## Module 05 Record: Core Product Flows (Lists, Watch History, Channels, Installs)
+
+- **Status:** **FULL**
+- **Date Completed:** 2026-10-02
+- **Target Git SHA:** `e9518736b96e8a82d459910567e93c598e2e784f`
+- **Files Examined:**
+  - `04_config-resolution.js` (`resolveConfig`, `isV2InstallParam`)
+  - `05_catalog-core.js` (`buildManifest`, `liveShelfNames`, catalog search definitions)
+  - `13_tab-channels.js`, `20_client-channel-builder.js`, `35_channels-v2.js` (`/api/channel-lineup`, `channelPartTitleSplit`, deterministic lineup rotation)
+  - `22_client-creator-profile.js`, `26_api-creator-and-admin-routes.js` (`/api/creator/sync/save-tracking`, `/api/creator/sync/load`, conflict guards, account separation)
+  - `27_installs.js` (`/api/installs`, scopes: `read`, `track`, token rotation, manifest resolution `/i/:token/manifest.json`, revocation)
+  - `31_lists-api.js` (Lists v2 CRUD, item mutations, reordering, visibility boundaries, independence)
+  - `tests/lists-v2.test.mjs`, `tests/installs.test.mjs`, `tests/channels-v2.test.mjs`
+- **Commands Run:**
+  - `node audit/full-2026-10-02/probes/p04_core_product_flows.mjs` (exit 0: 4/4 test suites passed)
+- **Probes Created:**
+  - `audit/full-2026-10-02/probes/p04_core_product_flows.mjs`
+- **Finding IDs:** None (0 confirmed defects)
+- **Suspected IDs:** None
+- **Observations:**
+  - **A. Lists Lifecycle, Independence, and Privacy:**
+    - Creating, updating, reordering, and deleting list items on List A never affects List B (verified with separate lists and verified ordering).
+    - Public vs Unlisted/Private visibility boundaries strictly enforced: public lists resolve anonymously via `/api/lists/user/:creator/:slug`; private/unlisted lists require creator ownership or session authentication.
+  - **B. Watch History, Progress Tracking, and Account Separation:**
+    - Watch history entries saved via `/api/creator/sync/save-tracking` persist across loads via `/api/creator/sync/load` with exact item IDs (`id: "tt0903747:1:1"`).
+    - Strict account separation verified: User B querying `/api/creator/sync/load` has 0 items from User A's history.
+  - **C. Channels, Lineup Generation, and Deterministic Rotation:**
+    - Lineup generation (`POST /api/channel-lineup`) with `pairParts: true` groups multi-part episodes (`Pilot (1)` and `Pilot (2)`).
+    - Determinism verified: calling the lineup endpoint repeatedly with the same day seed produces 100% identical item ordering.
+    - Changing the timestamp to Day 2 triggers clean deterministic rotation across shows and episodes without item loss.
+  - **D. Installs, Scopes, Token Rotation, and Revocation:**
+    - Creating an install via `POST /api/installs` issues an opaque install token and records configured scopes (`["read", "track"]`).
+    - Stremio manifests (`GET /i/:token/manifest.json`) resolve active user catalogs alongside default search catalogs.
+    - Strict account isolation: User B attempting to view User A's install via `GET /api/installs/:id` returns 404.
+    - Token rotation (`PATCH /api/installs/:id` with `{ rotateToken: true }`) generates a new token; requests using the previous rotated token immediately stop serving custom catalogs.
+    - Deleting an install marks `revoked_at` in D1 and invalidates snapshots; manifest requests with the revoked token immediately return empty user catalogs.
+- **Areas Not Tested:**
+  - Production playback scrobbles from real Stremio Android/TV clients over long multi-hour streaming sessions.
+- **Limitations:**
+  - Tested using local Miniflare / SQLite / in-memory KV simulation without live Cloudflare edge network.
+- **Next Exact Action:**
+  - Await user prompt for the next audit module.
+
 
 
