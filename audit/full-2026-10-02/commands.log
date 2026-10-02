@@ -24,3 +24,6 @@
 [2026-10-02T01:22:09Z] node check_bundle_budget.mjs | exit: 0 | First view JS bundle is 93.26 KB gzip (budget: <= 150 KB)
 [2026-10-02T01:22:15Z] node --test tests/bundle-budget.test.mjs | exit: 0 | 4 tests passed, 0 failed
 [2026-10-02T01:22:19Z] node --test tests/*.test.mjs | exit: 0 | 2068 tests passed, 0 failed (445 suites, 146695 ms)
+[2026-10-02T01:42:48Z] node tests/probe_module02_deep_dive.mjs | exit: 0 | 14 deep dive probes passed (error shapes, Stremio types, private cache headers, rate limiting)
+[2026-10-02T01:45:27Z] node audit/full-2026-10-02/probes/p01_routing_and_stremio.mjs | exit: 0 | Deterministic verification probe passed (manifest, catalog fallbacks, meta fallbacks, stream 404, unauth 401, no-store headers, cross-account protection)
+

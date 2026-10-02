@@ -5,19 +5,19 @@
 | Module | Name / Area | Status | Prerequisite | Findings |
 |---|---|---|---|---|
 | **01** | **Baseline, Architecture, Generated Source** | **FULL** | None | 0 confirmed, 0 suspected |
-| 02 | Authentication, Sessions & Account Identity | NOT TESTED | Module 01 | — |
-| 03 | Install Links & Secrets Encryption (AES-GCM) | NOT TESTED | Module 01, 02 | — |
-| 04 | Account Lifecycle, Purge & Recovery Proofs | NOT TESTED | Module 02 | — |
+| **02** | **Backend / API / Routing / Stremio Protocol** | **FULL** | Module 01 | 0 confirmed, 0 suspected |
+| 03 | Authentication, Sessions & Account Identity | NOT TESTED | Module 01, 02 | — |
+| 04 | Install Links & Secrets Encryption (AES-GCM) | NOT TESTED | Module 02, 03 | — |
 | 05 | Lists v2, Likes Ledger & Data Ownership | NOT TESTED | Module 01, 02 | — |
 | 06 | Channels v2, Storylines & R2 Episode Blobs | NOT TESTED | Module 05 | — |
-| 07 | Stremio Endpoints, Catalog Core & Canonical IDs | NOT TESTED | Module 01 | — |
+| 07 | Stremio Endpoints, Catalog Core & Canonical IDs | NOT TESTED | Module 01, 02 | — |
 | 08 | Provider Integrations, Circuit Breakers & Snapshots | NOT TESTED | Module 07 | — |
 | 09 | Scrobble Webhooks, Watch History & Activity DB | NOT TESTED | Module 02, 07 | — |
-| 10 | Admin Dashboard, Sessions, Audit Logging & Access | NOT TESTED | Module 02 | — |
+| 10 | Admin Dashboard, Sessions, Audit Logging & Access | NOT TESTED | Module 02, 03 | — |
 | 11 | Queue Consumers, Cron Dispatcher & Background Jobs | NOT TESTED | Module 01 | — |
 | 12 | Frontend DOM Security, Templates, XSS & Actions | NOT TESTED | Module 01 | — |
 | 13 | CSP, Security Headers, CORS & Network Boundaries | NOT TESTED | Module 12 | — |
-| 14 | Rate Limiting, Atomic Counters & Denial of Service | NOT TESTED | Module 01 | — |
+| 14 | Rate Limiting, Atomic Counters & Denial of Service | NOT TESTED | Module 01, 02 | — |
 | 15 | Cross-Cutting Triage, Regressions & History Review | NOT TESTED | Modules 01–14 | — |
 | 99 | Final Synthesis & Comprehensive Audit Report | NOT TESTED | Module 15 | — |
 
@@ -68,4 +68,38 @@
 - **Limitations:**
   - Production credentials and live Cloudflare bindings are absent by protocol design.
 - **Next Exact Action:**
-  - Proceed to **Module 02**: Authentication, Sessions & Account Identity (`FF_SESSIONS`, `sessions` table, `mla_session` cookies, `Account Key` verification, `isAdminRequest`, recovery answer cryptography).
+  - Proceed to **Module 03**: Authentication, Sessions & Account Identity.
+
+---
+
+## Module 02 Record: Backend / API / Routing / Stremio Protocol
+
+- **Status:** **FULL**
+- **Date Completed:** 2026-10-02
+- **Target Git SHA:** `86b08f80e43ec100b2577516d3a027246ce088d0`
+- **Files Examined:**
+  - `25_api-catalog-routes.js`, `26_api-creator-and-admin-routes.js`
+  - `27_installs.js`, `28_connections.js`, `31_lists-api.js`, `32_likes-api.js`, `35_channels-v2.js`, `38_activity-scrobble.js`
+  - `02_http-and-creator-utils.js`, `04_config-resolution.js`, `05_catalog-core.js`
+  - `FUNCTION-MAP.md`
+- **Commands Run:**
+  - `node tests/probe_module02_deep_dive.mjs` (exit 0: 14/14 checks passed)
+  - `node audit/full-2026-10-02/probes/p01_routing_and_stremio.mjs` (exit 0: verified manifest, catalogs, meta, stream 404, unauth 401, no-store headers, cross-account boundaries)
+- **Probes Created:**
+  - `audit/full-2026-10-02/probes/p01_routing_and_stremio.mjs`
+- **Finding IDs:** None (0 confirmed defects)
+- **Suspected IDs:** None
+- **Observations:**
+  - Complete 85-route inventory generated and saved to `route_inventory.md`.
+  - Stremio manifest v3 compliance verified: declares `catalog`, `meta` with `idPrefixes: ["tt", "tmdb:", "channel_"]`; declares `subtitles` hook when tracking enabled; does not declare `stream` (returns clean 404).
+  - Stremio error resilience: invalid IDs, unsupported types, and missing lists return `{ metas: [] }` or `{ meta: null }` with HTTP 200 and permissive CORS (`*`), conforming to Stremio client expectations.
+  - Invariant N10 (Cache-Control: private, no-store) verified strictly enforced at the Worker response boundary (`26_api-creator-and-admin-routes.js:8314`, `isPrivateApiPath`) across all account-scoped, creator, and admin endpoints.
+  - Rate limiting verified functional for credential brute force (429) and spend-first bulk endpoints.
+  - Identified and recorded CAND-10 (non-GET on static assets) and CAND-11 (defensive non-array config defaulting) in `candidates.md`.
+- **Areas Not Tested:**
+  - Live third-party OAuth redirects and code exchanges (Trakt, Simkl, MDBList, TMDB) requiring live provider accounts.
+- **Limitations:**
+  - Tested using in-memory SQLite (`node:sqlite`) and mock harness without live Cloudflare production services.
+- **Next Exact Action:**
+  - Proceed to **Module 03**: Authentication, Sessions & Account Identity (`FF_SESSIONS`, `sessions` table, `mla_session` cookie verification, `Account Key` verification, `isAdminRequest`, recovery answer PBKDF2 cryptography).
+

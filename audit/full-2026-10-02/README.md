@@ -109,3 +109,4 @@ audit/full-2026-10-02/
 | Session | Module | Date | Target SHA | Status / Summary |
 |---|---|---|---|---|
 | 01 | Module 01: Baseline, Architecture, Generated Source | 2026-10-02 | `6f02c3b7104bc5b58993d15502a5a351697fa670` | FULL: Baseline recorded, 26 verification commands run (all exit 0), 2068 tests passing, architecture mapped, candidates ledger established. |
+| 02 | Module 02: Backend / API / Routing / Stremio Protocol | 2026-10-02 | `86b08f80e43ec100b2577516d3a027246ce088d0` | IN PROGRESS: Route inventory, request handling probes, Stremio protocol edge cases. Note: SHA reflects audit commit 86b08f8 over baseline 6f02c3b. |
