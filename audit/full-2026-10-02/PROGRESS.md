@@ -120,11 +120,16 @@
 - **Commands Run:**
   - `node --test tests/admin-security.test.mjs tests/admin-actions.test.mjs tests/recovery-answer-hash.test.mjs tests/account-purge.test.mjs tests/account-reset.test.mjs tests/security-suite.test.mjs` (exit 0: 61 tests passing across 15 suites)
   - `node audit/full-2026-10-02/probes/p02_auth_and_sessions.mjs` (exit 0: 9/9 deep invariant checks passing)
+  - `node audit/full-2026-10-02/probes/p02_auth_matrix.mjs` (exit 0: 6/6 test suites passing with positive and negative controls)
 - **Probes Created:**
   - `audit/full-2026-10-02/probes/p02_auth_and_sessions.mjs`
+  - `audit/full-2026-10-02/probes/p02_auth_matrix.mjs`
+- **Deliverables:**
+  - `audit/full-2026-10-02/auth_matrix.md` (Comprehensive route-by-route authorization matrix covering 10 functional route groups)
 - **Finding IDs:** None (0 confirmed defects)
 - **Suspected IDs:** None
 - **Observations:**
+  - **Authorization & Ownership Matrix:** Complete `auth_matrix.md` generated with columns `Route | Identity | Ownership | Unauthorized test | Result`, covering Creator Management, Sessions & Identity, Installs v2, Connections, Lists v2, Likes v2, Channels v2, Activity Scrobble & History, OAuth flows, and Admin endpoints. Verified via `p02_auth_matrix.mjs` with both positive and negative controls.
   - **Account Key Cryptography:** Creator keys are generated with format `MYL-XXXX-XXXX-XXXX` (~60 bits of entropy) from a 32-character unambiguous charset. Key storage uses PBKDF2 with SHA-256, 16-byte random salt, and 100,000 iterations. Verification uses SHA-256 pre-digests with constant-time hex comparison (`timingSafeEqualSecret`) to protect against both length and value timing attacks.
   - **Recovery Answer Chaining (D-32):** Recovery answers are lowercased and hashed across 6 sequential PBKDF2 rounds of 100,000 iterations (`pbkdf2x:6:100000:...`), achieving 600,000 effective iterations within Cloudflare workerd single-call CPU bounds. Transparent automatic upgrade from legacy single-round answers is verified on successful recovery attempts.
   - **Blind Index Lookups:** Dual-mode lookup verified: HMAC v2 lookup using `LOOKUP_PEPPER` against `accounts.key_lookup_hmac` with fallback to SHA-256 blind index in `creator_key_lookups`. Both modes achieve O(1) account resolution without storing reversible key mappings.

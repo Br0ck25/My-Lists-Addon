@@ -110,5 +110,5 @@ audit/full-2026-10-02/
 |---|---|---|---|---|
 | 01 | Module 01: Baseline, Architecture, Generated Source | 2026-10-02 | `6f02c3b7104bc5b58993d15502a5a351697fa670` | FULL: Baseline recorded, 26 verification commands run (all exit 0), 2068 tests passing, architecture mapped, candidates ledger established. |
 | 02 | Module 02: Backend / API / Routing / Stremio Protocol | 2026-10-02 | `86b08f80e43ec100b2577516d3a027246ce088d0` | FULL: 85-route inventory generated, Stremio v3 protocol compliance validated, Invariant N10 no-store cache control verified, probe p01 executed cleanly. |
-| 03 | Module 03: Authentication, Sessions & Account Identity | 2026-10-02 | `8a2a83e2031261b6f52a40fb8f03c4602fb0ee09` | FULL: PBKDF2 100k key hashing & 6-round chained recovery hashing verified; session creation, token hashing in D1, cookie security, CSRF defense, IDOR isolation, and admin boundaries verified via p02 probe. |
+| 03 | Module 03: Authentication, Sessions & Account Identity | 2026-10-02 | `8a2a83e2031261b6f52a40fb8f03c4602fb0ee09` | FULL: Exhaustive `auth_matrix.md` generated (10 route groups); PBKDF2 100k key hashing & 6-round chained recovery hashing verified; session creation, token hashing in D1, cookie security, CSRF defense, IDOR isolation, and admin boundaries verified via `p02_auth_and_sessions.mjs` and `p02_auth_matrix.mjs` (negative controls). |
 
