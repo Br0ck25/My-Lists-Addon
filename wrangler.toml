@@ -143,6 +143,8 @@ dead_letter_queue = "mylists-jobs-dlq"
 # Optional, 0-100: share of existing install links whose keys and tokens are
 # moved into encrypted D1 storage on first use (needs TOKEN_ENCRYPTION_KEY)
 # INSTALL_MIGRATION_PERCENT = "0"
+# Optional: The new interface for every browser (?ff_new_ui=0 to opt out).
+# FF_NEW_UI = "1"
 # Optional, Phase 7 (P7-2): Cloudflare Access on the admin dashboard. Set BOTH
 # of the first two and a valid Access token signs you in without ADMIN_KEY --
 # CF_ACCESS_TEAM_DOMAIN is your team domain (e.g. myteam.cloudflareaccess.com)

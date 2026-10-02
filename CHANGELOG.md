@@ -32,6 +32,19 @@ Nothing to configure for the strict CSP (P7-1, below): it is part of the Worker 
 **Optional, and recommended: put the admin dashboard behind Cloudflare Access** (P7-2, below). It needs the two variables `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` from a Zero Trust Access application for `/admin`, plus **migration `0018_admin_sessions_audit.sql`** (two new tables, safe to run twice). Without any of it the dashboard keeps working exactly as it does today — the admin key, the same cookie — and without the migration you get the old behaviour with a note in the dashboard saying what to apply. `docs/OPERATIONS.md` §25 has the click-by-click steps.
 
 **Nothing to configure for the rate limits** (P7-3, below): they are part of the Worker, and the table they use (`rate_counters`) has existed since migration 0015. One **optional** index, `migrations/0019_rate_counters_window_index.sql`, makes the background cleanup of spent windows cheap (without it the cleanup scans — slower, not broken); one **optional** dashboard step, the edge rate-limiting rules in `docs/OPERATIONS.md` §6, moves the refusal to Cloudflare so the request never reaches the Worker. Neither is needed for anything to work.
+### 📄 Documentation — Project Positioning Update — 2026-10-02
+
+- **README.md Redesign:** Updated documentation to reflect that the project is no longer released
+  as a self-hosting package. Positioned the repository exclusively as the open-source codebase
+  powering the official hosted platform at [mylistsaddon.com](https://mylistsaddon.com).
+- **Removed Self-Hosting Setup Guide:** Replaced the multi-step Cloudflare Worker deployment tutorial
+  and self-host troubleshooting guides with clean getting-started instructions for mylistsaddon.com,
+  developer setup / testing workflows (`python build.py`, `node --test tests/*.test.mjs`), app
+  integration guides (Stremio, Wako, Nuvio, Plex/Jellyfin/Emby webhooks), and direct links to
+  operator documentation (`docs/OPERATIONS.md`, `docs/ARCHITECTURE.md`, `docs/CUTOVER.md`).
+- **wrangler.toml Invariant:** Documented `# FF_NEW_UI = "1"` to ensure all active worker env vars
+  satisfy the automated environment documentation audit tests.
+
 ### 🏁 Phase 10 — Cutover and Cleanup (P10-1 through P10-5)
 
 #### P10-1: Flag-flip cutover runbook (`docs/CUTOVER.md`) — 2026-10-02

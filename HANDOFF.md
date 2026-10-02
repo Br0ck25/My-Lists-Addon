@@ -31,8 +31,9 @@
 >    - `BACKUP_PASSPHRASE`.
 >
 >    Then they run the workflow by hand from this branch. **The scheduled daily run uses `main`'s copy**, which is the old, failing one, until this branch is merged into `main`.
-> 3. **Merged into `main` (completed 2026-10-02):** `claude/elegant-ride-o7m8fh` merged into `main` at `8a7c06d`. It brings in all changes from PR #9 (Phase 7) along with Phases 8, 9, and 10. `origin/main` is fully up to date. PR #9 can be closed as superseded.
-> 4. **Optional switches, the owner's call:** `FF_CANONICAL_IDS` (`docs/OPERATIONS.md` §17), `FF_MATERIALIZER` (§19), the Analytics Engine binding.
+> 3. **Merged into `main` (completed 2026-10-02):** `claude/elegant-ride-o7m8fh` merged into `main` at `8a7c06d` and `12eb7f8`. It brings in all changes from PR #9 (Phase 7) along with Phases 8, 9, and 10. `origin/main` is fully up to date. PR #9 can be closed as superseded.
+> 4. **README.md Redesign (completed 2026-10-02):** Repositioned repository as open-source codebase powering hosted platform at `mylistsaddon.com`; removed self-hosting setup guide.
+> 5. **Optional switches, the owner's call:** `FF_CANONICAL_IDS` (`docs/OPERATIONS.md` §17), `FF_MATERIALIZER` (§19), the Analytics Engine binding.
 > 5. **Cleanups that wait on switches:**
 >    - P5-5: delete `prewarmSharedCatalogs`' chart blocks, now that `FF_CHART_SNAPSHOTS` is on, after it has run for good;
 >    - P5-9: delete the old KV Better Poster keys and `prewarmBetterPosters`;
