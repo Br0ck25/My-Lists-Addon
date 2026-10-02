@@ -26,4 +26,6 @@
 [2026-10-02T01:22:19Z] node --test tests/*.test.mjs | exit: 0 | 2068 tests passed, 0 failed (445 suites, 146695 ms)
 [2026-10-02T01:42:48Z] node tests/probe_module02_deep_dive.mjs | exit: 0 | 14 deep dive probes passed (error shapes, Stremio types, private cache headers, rate limiting)
 [2026-10-02T01:45:27Z] node audit/full-2026-10-02/probes/p01_routing_and_stremio.mjs | exit: 0 | Deterministic verification probe passed (manifest, catalog fallbacks, meta fallbacks, stream 404, unauth 401, no-store headers, cross-account protection)
+[2026-10-02T01:50:48Z] node --test tests/admin-security.test.mjs tests/admin-actions.test.mjs tests/recovery-answer-hash.test.mjs tests/account-purge.test.mjs tests/account-reset.test.mjs tests/security-suite.test.mjs | exit: 0 | 61 tests passed across 15 suites (1389 ms)
+[2026-10-02T01:53:00Z] node audit/full-2026-10-02/probes/p02_auth_and_sessions.mjs | exit: 0 | 9 deep invariant checks passed (PBKDF2 key/recovery hashing, session creation, token hashing in D1, session resolution & expiry, CSRF, IDOR defense, key reset revocation, admin auth & audit logging, account deletion tombstones)
 

@@ -6,7 +6,7 @@
 |---|---|---|---|---|
 | **01** | **Baseline, Architecture, Generated Source** | **FULL** | None | 0 confirmed, 0 suspected |
 | **02** | **Backend / API / Routing / Stremio Protocol** | **FULL** | Module 01 | 0 confirmed, 0 suspected |
-| 03 | Authentication, Sessions & Account Identity | NOT TESTED | Module 01, 02 | — |
+| **03** | **Authentication, Sessions & Account Identity** | **FULL** | Module 01, 02 | 0 confirmed, 0 suspected |
 | 04 | Install Links & Secrets Encryption (AES-GCM) | NOT TESTED | Module 02, 03 | — |
 | 05 | Lists v2, Likes Ledger & Data Ownership | NOT TESTED | Module 01, 02 | — |
 | 06 | Channels v2, Storylines & R2 Episode Blobs | NOT TESTED | Module 05 | — |
@@ -102,4 +102,44 @@
   - Tested using in-memory SQLite (`node:sqlite`) and mock harness without live Cloudflare production services.
 - **Next Exact Action:**
   - Proceed to **Module 03**: Authentication, Sessions & Account Identity (`FF_SESSIONS`, `sessions` table, `mla_session` cookie verification, `Account Key` verification, `isAdminRequest`, recovery answer PBKDF2 cryptography).
+
+---
+
+## Module 03 Record: Authentication, Sessions & Account Identity
+
+- **Status:** **FULL**
+- **Date Completed:** 2026-10-02
+- **Target Git SHA:** `8a2a83e2031261b6f52a40fb8f03c4602fb0ee09`
+- **Files Examined:**
+  - `02_http-and-creator-utils.js` (PBKDF2 key & recovery hashing, `verifyCsrf`, `createSession`, `resolveSession`, `revokeSession`, `deleteAccountRow`, `purgeCreatorData`, `isCreatorTombstoned`)
+  - `03_admin.js` (`resolveAdminIdentity`, `adminAccessIdentity`, `isValidAdminCookie`, `createAdminSession`, `resolveAdminSession`, `recordAdminAudit`)
+  - `26_api-creator-and-admin-routes.js` (`authenticateCreator`, `/api/session`, `/api/me`, `/api/creator/create`, `/api/creator/reset-key`, `/api/creator/forgot-username`, `/api/creator/delete-account`, `/admin/login`, `/admin/api/*`)
+  - `27_installs.js`, `28_connections.js`, `31_lists-api.js` (account-scoped route authorization)
+  - `schema.sql` (`creators`, `accounts`, `sessions`, `creator_key_lookups`, `creator_tombstones`, `admin_sessions`, `admin_audit_log`)
+  - `tests/admin-security.test.mjs`, `tests/admin-actions.test.mjs`, `tests/recovery-answer-hash.test.mjs`, `tests/account-purge.test.mjs`, `tests/account-reset.test.mjs`, `tests/security-suite.test.mjs`
+- **Commands Run:**
+  - `node --test tests/admin-security.test.mjs tests/admin-actions.test.mjs tests/recovery-answer-hash.test.mjs tests/account-purge.test.mjs tests/account-reset.test.mjs tests/security-suite.test.mjs` (exit 0: 61 tests passing across 15 suites)
+  - `node audit/full-2026-10-02/probes/p02_auth_and_sessions.mjs` (exit 0: 9/9 deep invariant checks passing)
+- **Probes Created:**
+  - `audit/full-2026-10-02/probes/p02_auth_and_sessions.mjs`
+- **Finding IDs:** None (0 confirmed defects)
+- **Suspected IDs:** None
+- **Observations:**
+  - **Account Key Cryptography:** Creator keys are generated with format `MYL-XXXX-XXXX-XXXX` (~60 bits of entropy) from a 32-character unambiguous charset. Key storage uses PBKDF2 with SHA-256, 16-byte random salt, and 100,000 iterations. Verification uses SHA-256 pre-digests with constant-time hex comparison (`timingSafeEqualSecret`) to protect against both length and value timing attacks.
+  - **Recovery Answer Chaining (D-32):** Recovery answers are lowercased and hashed across 6 sequential PBKDF2 rounds of 100,000 iterations (`pbkdf2x:6:100000:...`), achieving 600,000 effective iterations within Cloudflare workerd single-call CPU bounds. Transparent automatic upgrade from legacy single-round answers is verified on successful recovery attempts.
+  - **Blind Index Lookups:** Dual-mode lookup verified: HMAC v2 lookup using `LOOKUP_PEPPER` against `accounts.key_lookup_hmac` with fallback to SHA-256 blind index in `creator_key_lookups`. Both modes achieve O(1) account resolution without storing reversible key mappings.
+  - **Session Architecture (`FF_SESSIONS`):** 32-byte cryptographically random tokens (`crypto.getRandomValues`). The raw token is strictly ephemeral in memory and client cookies; only its SHA-256 hash (`id_hash`) is written to the D1 `sessions` table. Session cookies are emitted with `HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000`. Session resolution also supports `Authorization: Bearer <token>`.
+  - **Session Lifecycle & Invalidation:** Expired sessions (`expires_at <= now`) and revoked sessions (`revoked_at IS NOT NULL`) fail closed immediately. `DELETE /api/session` clears the cookie (`Max-Age=0`) and stamps `revoked_at` in D1. Key rotation via `/api/creator/reset-key` cascades revocation across all active sessions for that account and clears the isolate memory memo.
+  - **CSRF & Origin Boundary:** Global middleware inspects all mutating requests (`POST, PUT, PATCH, DELETE`). Enforces same-origin (`Origin` or `Sec-Fetch-Site: same-origin`) and strict `Content-Type: application/json`. Exemptions are limited to webhooks, OAuth callbacks, and admin form login.
+  - **Cross-Account Authorization (IDOR Defense):** Authenticated requests across creator endpoints, install management (`/api/installs`), provider connections (`/api/connections`), and lists (`/api/lists`) derive ownership strictly from `request.account.id` and `request.account.username`. Client attempts to supply a mismatched `creatorName` are rejected with 401.
+  - **Admin Authentication Boundaries:** Cloudflare Access RS256 JWT assertions (`Cf-Access-Jwt-Assertion`) verified against team JWKS (`/cdn-cgi/access/certs`) with expiration, issuer, audience (`CF_ACCESS_AUD`), and `FF_ADMIN_EMAILS` validation. Break-glass `ADMIN_KEY` authentication issues revocable `admin_sessions` with `SameSite=Strict` cookies and is protected by per-IP burst (10/min) and daily failure counters. Audit logging (`admin_audit_log`) uses strict field whitelisting to guarantee keys and tokens never leak.
+  - **Account Deletion & Tombstones:** `/api/creator/delete-account` requires explicit confirmation (`confirm: "DELETE"`), writes anti-resurrection tombstones to KV (`creatordeleted:<username>`) and D1 (`creator_tombstones`), cascades session deletion, wipes provider connections and install secrets, and deletes account records.
+  - Identified and recorded CAND-12 (disjunctive Origin / Sec-Fetch-Site evaluation) in `candidates.md`.
+- **Areas Not Tested:**
+  - Live Cloudflare Access IdP login redirects with live hardware tokens.
+- **Limitations:**
+  - Tested using local SQLite in-memory harness (`tests/harness.mjs`) without live Cloudflare edge network.
+- **Next Exact Action:**
+  - Proceed to **Module 04**: Install Links & Secrets Encryption (AES-GCM).
+
 
