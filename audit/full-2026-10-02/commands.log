@@ -1,0 +1,26 @@
+[2026-10-02T01:20:21Z] node --version | exit: 0 | v24.21.0
+[2026-10-02T01:20:21Z] npm --version | exit: 0 | 11.19.0
+[2026-10-02T01:20:25Z] python --version | exit: 0 | Python 3.11.9
+[2026-10-02T01:20:56Z] python check_sync.py | exit: 0 | ok: worker_entry_combined.js matches its sources (5,374,368 bytes, line endings ignored)
+[2026-10-02T01:21:23Z] python build.py | exit: 0 | header bytes: 1043, combined bytes: 5374368
+[2026-10-02T01:21:26Z] git diff --ignore-cr-at-eol --quiet -- worker_entry_combined.js | exit: 0 | Combined worker matches source fragments byte-exact (CRLF-insensitive)
+[2026-10-02T01:21:29Z] node --check worker_entry_combined.js | exit: 0 | Combined worker parses without syntax errors
+[2026-10-02T01:21:32Z] node scope_check.mjs worker worker_entry_combined.js | exit: 0 | Every identifier resolves (5044 global references, 0 top-level declarations, 202 window.* exports, 512 typeof-guarded)
+[2026-10-02T01:21:36Z] node render_check.js rendered-scope.html | exit: 0 | renderBuilder OK -> rendered-scope.html 2713601 chars
+[2026-10-02T01:21:37Z] node scope_check.mjs page rendered-scope.html | exit: 0 | Every identifier resolves (12806 global references, 1352 top-level declarations, 192 window.* exports, 355 typeof-guarded)
+[2026-10-02T01:21:40Z] node render_check.js rendered.html | exit: 0 | renderBuilder OK -> rendered.html 2713601 chars
+[2026-10-02T01:21:41Z] python html_checks.py rendered.html local | exit: 0 | Builder page HTML validated: 0 duplicate declarations, 234 actions resolve, CSP nonces intact
+[2026-10-02T01:21:44Z] node render_check.js rendered-shell.html --shell | exit: 0 | renderBuilder (new UI shell) OK -> rendered-shell.html 2716146 chars
+[2026-10-02T01:21:45Z] python html_checks.py rendered-shell.html local-shell | exit: 0 | Shell HTML validated: 233 actions resolve, CSP nonces intact
+[2026-10-02T01:21:46Z] node scope_check.mjs page rendered-shell.html | exit: 0 | Every identifier resolves in shell (12807 global references, 1353 top-level declarations)
+[2026-10-02T01:21:50Z] node render_check.js rendered-admin.html --admin | exit: 0 | renderAdminDashboard OK -> rendered-admin.html 189344 chars
+[2026-10-02T01:21:51Z] python html_checks.py rendered-admin.html local-admin | exit: 0 | Admin HTML validated: 49 actions resolve, CSP nonces intact
+[2026-10-02T01:21:54Z] node render_check.js service-worker.js --sw | exit: 0 | SERVICE_WORKER_JS OK -> service-worker.js 3517 chars
+[2026-10-02T01:21:55Z] node --check service-worker.js | exit: 0 | Service worker syntax OK
+[2026-10-02T01:21:58Z] node render_check.js rendered-hostile.html --hostile | exit: 0 | renderBuilder (hostile input) OK -> rendered-hostile.html 2710697 chars
+[2026-10-02T01:21:59Z] python html_checks.py rendered-hostile.html local-hostile | exit: 0 | Hostile render confirmed inert (both markers present, neither breaks out)
+[2026-10-02T01:22:04Z] python gen_map.py | exit: 0 | FUNCTION-MAP.md generated: 2657 symbols, 211 routes, 172,266 bytes
+[2026-10-02T01:22:05Z] git diff --ignore-cr-at-eol --quiet -- FUNCTION-MAP.md | exit: 0 | FUNCTION-MAP.md matches source symbol map exactly
+[2026-10-02T01:22:09Z] node check_bundle_budget.mjs | exit: 0 | First view JS bundle is 93.26 KB gzip (budget: <= 150 KB)
+[2026-10-02T01:22:15Z] node --test tests/bundle-budget.test.mjs | exit: 0 | 4 tests passed, 0 failed
+[2026-10-02T01:22:19Z] node --test tests/*.test.mjs | exit: 0 | 2068 tests passed, 0 failed (445 suites, 146695 ms)
