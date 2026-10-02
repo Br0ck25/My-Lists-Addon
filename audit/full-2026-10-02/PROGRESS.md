@@ -11,8 +11,9 @@
 | **05** | **Core Product Flows (Lists, Watch History, Channels, Installs)** | **FULL** | Module 02, 03, 04 | 0 confirmed, 0 suspected |
 | **06** | **Jobs, Queues, Cron, Time Boundaries** | **FULL** | Module 01 | 0 confirmed, 0 suspected |
 | **07** | **External Providers (Integrations, Circuit Breakers, Snapshots)** | **FULL** | Module 01, 02 | 0 confirmed, 0 suspected |
-| 08 | Stremio Endpoints, Catalog Core & Canonical IDs | NOT TESTED | Module 01, 02, 07 | — |
-| 09 | Scrobble Webhooks, Watch History & Activity DB | NOT TESTED | Module 02, 07 | — |
+| **08** | **Frontend State and Async Behavior** | **FULL** | Module 01, 02 | 3 confirmed, 0 suspected |
+| 09 | Stremio Endpoints, Catalog Core & Canonical IDs | NOT TESTED | Module 01, 02, 07 | — |
+
 | 10 | Admin Dashboard, Sessions, Audit Logging & Access | NOT TESTED | Module 02, 03 | — |
 | 11 | Queue Consumers, Cron Dispatcher & Background Jobs | NOT TESTED | Module 01 | — |
 | 12 | Frontend DOM Security, Templates, XSS & Actions | NOT TESTED | Module 01 | — |
@@ -327,7 +328,63 @@
 - **Limitations:**
   - Tested using local synthetic fixtures, Miniflare, and mock harnesses; live production API credentials are not accessed during read-only audit.
 - **Next Exact Action:**
-  - Await user prompt for the next audit module.
+  - Proceed to Module 08: Frontend State and Async Behavior.
+
+---
+
+## Module 08 Record: Frontend State and Async Behavior
+
+- **Status:** **FULL**
+- **Date Completed:** 2026-10-02
+- **Target Git SHA:** `05e16c8bdf8ad3db7cd04279aa63e780b31217f1`
+- **Files Examined:**
+  - `09_page-shell.js` (Page shell, HTML structure, theme initialization, tab routing, script preamble)
+  - `10_tab-search-add.js`, `11_tab-quick-add.js`, `12_tab-custom-lists.js`, `13_tab-channels.js`, `14_tab-presets-backup.js`, `15_tab-settings-html.js` (HTML tab templates)
+  - `16_client-row-core.js` (Row management, drag-and-drop, rating badges, live preview shelf, install links)
+  - `17_client-my-lists-and-trakt-oauth.js` (External provider connections, Trakt device code OAuth, sync history)
+  - `18_client-copy-and-trakt-export.js` (Clipboard interactions, Trakt export, bulk resolve)
+  - `19_client-search-and-likes.js` (Search inputs, debouncing, unified list search, likes system `/api/lists/like`, details modal)
+  - `20_client-channel-builder.js` (Channel Builder, schedule rules, presets, lineup preview, share/publish `/api/channel/share`)
+  - `21_client-custom-list-builder.js` (Custom List Builder, item mutations, play order, expectedUpdatedAt concurrency)
+  - `22_client-creator-profile.js` (Creator authentication, login/signup/restore, session management, gated sync, `clearLocalAccountData`)
+  - `23_client-list-management.js` (List details, See All full page, poster previews)
+  - `24_client-backup-restore-presets.js` (App shell routing, API client `appShellApiFetch`, presets, signout, installs)
+  - `25_api-catalog-routes.js:73-173` (`SERVICE_WORKER_JS` caching boundaries)
+  - `tests/client-harness.mjs`, `tests/client.test.mjs`, `tests/client-actions.test.mjs`, `tests/client-storage.test.mjs`
+- **Commands Run:**
+  - `node --test tests/*client*.test.mjs` (exit 0: 469 tests passed across 105 suites in 3.6s)
+  - `node --test audit/full-2026-10-02/probes/p07_frontend_state_async.mjs` (exit 0: 5/5 suites passed)
+- **Probes Created:**
+  - `audit/full-2026-10-02/probes/p07_frontend_state_async.mjs`
+- **Deliverables:**
+  - `audit/full-2026-10-02/frontend_api_inventory.md` (Comprehensive catalog of 86 client API call sites with payload, response, error, retry, optimistic update, and caching specifications)
+  - `audit/full-2026-10-02/frontend_state_inventory.md` (Analysis across all 9 client state layers, authoritative sources of truth matrix, conflict resolution rules, and user-switching lifecycle)
+- **Finding IDs:**
+  - `AUDIT-FE-001` (P2): `appShellSignOut()` halts and preserves local credentials on network/server error (`24_client-backup-restore-presets.js:3581`)
+  - `AUDIT-FE-002` (P2): `saveChannel()` allows duplicate publishing and local creation on rapid double-click (`20_client-channel-builder.js:9172`)
+  - `AUDIT-FE-003` (P3): `executeUnifiedListSearch` overwrites newer query with out-of-order fallback results (`19_client-search-and-likes.js:842`)
+- **Suspected IDs:** None
+- **Observations:**
+  - **A. Flow Mapping & Reactivity:**
+    - The vanilla JS architecture combines DOM as working state (`#lists` `.entry` elements) with memory caches and `localStorage`.
+    - Autosaving debounces at 3000ms (`scheduleCreatorSyncSave`) and tracking sync at 300ms (`scheduleTrackingSync`).
+    - Optimistic updates are applied immediately to DOM and local storage; optimistic concurrency is enforced on the backend via `expectedUpdatedAt`.
+  - **B. User Switching & State Cleanup:**
+    - `clearLocalAccountData()` provides an extensive sweep of in-memory globals (`activeCreator`, `traktAccessToken`, `_providerSecretsInMemory`), `localStorage` (all `myListAddon:*` keys except UI tab navigation), `sessionStorage`, and DOM input forms.
+    - However, `appShellSignOut()` in the new UI shell placed this cleanup behind `if (!res.ok) return false;`, preventing local sign-out when offline (`AUDIT-FE-001`).
+  - **C. Async Concurrency & Idempotency:**
+    - Form submissions across several modals are protected by `beginSubmit()`.
+    - `saveCustomList()` synchronously clears `nameInput.value = ''` upon click, preventing duplicate new list saves.
+    - In contrast, `saveChannel()` is asynchronous and awaits `postChannelShare` before clearing inputs, enabling double-submit duplicates on rapid clicks (`AUDIT-FE-002`).
+    - Title search (`runCatalogSearch`) cleanly discards out-of-order responses using `currentTitleSearchSequence`.
+    - List search (`executeUnifiedListSearch`) correctly checks sequence numbers for primary queries, but omitted the check on its alternate fallback search (`altRes`), allowing delayed fallback responses to clobber active searches (`AUDIT-FE-003`).
+- **Areas Not Tested:**
+  - Hardware GPU rasterization and mobile browser layout engine bugs (desktop Chrome and Node VM testing utilized).
+- **Limitations:**
+  - Real browser DOM layout, scrolling physics, and gesture inputs were tested via headless Chrome and Node VM stubs.
+- **Next Exact Action:**
+  - Await user prompt for the next module.
+
 
 
 
