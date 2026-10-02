@@ -31,7 +31,7 @@
 >    - `BACKUP_PASSPHRASE`.
 >
 >    Then they run the workflow by hand from this branch. **The scheduled daily run uses `main`'s copy**, which is the old, failing one, until this branch is merged into `main`.
-> 3. **Merge this branch into `main`:** a PR from `claude/elegant-ride-o7m8fh` into `main`. It also brings in PR #9 (Phase 7 so far), already merged into this branch at `243340a`. **Ask the owner before opening it**: they were asked on 2026-10-01 and have not answered. The repository's `CLAUDE.md` rules and the attribution footers apply.
+> 3. **Merged into `main` (completed 2026-10-02):** `claude/elegant-ride-o7m8fh` merged into `main` at `8a7c06d`. It brings in all changes from PR #9 (Phase 7) along with Phases 8, 9, and 10. `origin/main` is fully up to date. PR #9 can be closed as superseded.
 > 4. **Optional switches, the owner's call:** `FF_CANONICAL_IDS` (`docs/OPERATIONS.md` §17), `FF_MATERIALIZER` (§19), the Analytics Engine binding.
 > 5. **Cleanups that wait on switches:**
 >    - P5-5: delete `prewarmSharedCatalogs`' chart blocks, now that `FF_CHART_SNAPSHOTS` is on, after it has run for good;
