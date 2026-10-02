@@ -5,13 +5,12 @@
 ---
 
 ## Current Status
-- **Last Updated**: 2026-09-27
-- **Last Active AI**: Claude Code (Opus 5.5)
-- **Active Task**: Phase 3a is complete: P3a-1 through P3a-10 are done, verified and tested. Next: Phase 3b (lists, likes, channels), starting with P3b-1.
-- **Task State**: All tests passing (1,399 passed, 0 failed, 1 skipped: the opt-in network test). `verify.sh` checks pass. CI on GitHub runs the same suite on Node 22.
+- **Last Updated**: 2026-10-02
+- **Last Active AI**: Antigravity / Gemini 3.8
+- **Active Task**: Better Posters list creation from labels/badges and #xx today badge ordering setting.
+- **Task State**: Initial branch setup and PR creation prior to feature implementation.
 - **Git State**:
-  - The review fixes, P3a-8 and P3a-9 were merged into `main` as PR #1.
-  - P3a-10 is on the branch `feat/p3a-10-provider-tokens`, with its own PR into `main`.
+  - Branch `poster_badge_list_ordering` branched from `main`.
 - **The owner is not a programmer.** Explain in plain words, do the git work for them, and ask before anything that changes stored user data or needs a dashboard change.
 
 ---
