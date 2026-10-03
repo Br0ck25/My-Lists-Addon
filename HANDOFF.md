@@ -2,7 +2,26 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
-> **HANDOFF, 2026-10-03 (Antigravity): Settings UI Modernization - Phase A (Account & Sync Cleanup).**
+> **HANDOFF, 2026-10-03 (Antigravity): Settings UI Modernization - Phase B (Presets & Backup Cleanup).**
+>
+> **Where things stand**
+> - Completed Phase B of Settings UI & UX Modernization:
+>   - Modernized Presets List with 3-Dot Overflow Menu (`.preset-actions-cluster`, `.preset-overflow-menu`, `.preset-overflow-dropdown`):
+>     - Streamlined the 5-button row into primary `Load` + secondary `Share` + compact `⋯` overflow menu containing `Download .json`, `Restore Lists`, and destructive `Delete Preset` (red).
+>     - Added click-outside dismissal and auto-close on action select.
+>     - Preserved all data delegation classes (`preset-load-btn`, `preset-share-btn`, `preset-download-btn`, `preset-restore-lists-btn`, `preset-delete-btn`).
+>   - Redesigned Backup & Restore into Friendly Action Cards & Progressive Disclosure:
+>     - Created two distinct action tiles: "Download Backup" and "Restore from File" with prominent CTAs.
+>     - Tucked the intimidating raw JSON textarea (`#configJsonBox`) and raw import/export buttons inside an expandable `<details class="backup-advanced-disclosure">` accordion.
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK.
+>   - `node --check worker_entry_combined.js`: OK.
+>   - `python gen_map.py`: OK.
+>   - Client & core test suites passing (399 client tests pass).
+> - Branch: `feat/design-system-phase-1`
+> - Next step: Phase C (External Accounts & API Keys - Provider Integration Cards, connection badges, streamlined Trakt device auth, and drag-and-drop file import).
+>
+
 >
 > **Where things stand**
 > - Completed Phase A of Settings UI & UX Modernization:

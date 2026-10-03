@@ -1630,14 +1630,20 @@ function renderPresetsList() {
     const count = entries.length;
     return '<div class="preset-card" data-preset="' + escapeAttr(n) + '">' +
       '<div class="preset-card-header">' +
-        '<strong class="preset-card-title">' + escapeHtml(n) + '</strong> <small style="color:var(--muted);">(' + count + ' list' + (count === 1 ? '' : 's') + ')</small>' +
+        '<strong class="preset-card-title">' + escapeHtml(n) + '</strong> <small style="color:var(--muted); flex-shrink:0;">(' + count + ' list' + (count === 1 ? '' : 's') + ')</small>' +
       '</div>' +
-      '<div class="preset-actions-grid">' +
-        '<button type="button" class="secondary lc-btn preset-load-btn">Load</button>' +
-        '<button type="button" class="secondary lc-btn preset-restore-lists-btn" title="Rebuild and restore custom lists &amp; channels from this preset into My Lists">Restore Lists</button>' +
-        '<button type="button" class="secondary lc-btn preset-share-btn">Share</button>' +
-        '<button type="button" class="secondary lc-btn preset-download-btn">Download</button>' +
-        '<button type="button" class="secondary lc-btn preset-delete-btn">Delete</button>' +
+      '<div class="preset-actions-cluster">' +
+        '<button type="button" class="primary lc-btn preset-load-btn" title="Load this preset into your active catalogs">Load</button>' +
+        '<button type="button" class="secondary lc-btn preset-share-btn" title="Share this preset">Share</button>' +
+        '<details class="preset-overflow-menu">' +
+          '<summary class="preset-overflow-btn" aria-label="More actions for ' + escapeAttr(n) + '">&#x22EF;</summary>' +
+          '<div class="preset-overflow-dropdown">' +
+            '<button type="button" class="preset-menu-item preset-download-btn">&#x1F4E5; Download .json</button>' +
+            '<button type="button" class="preset-menu-item preset-restore-lists-btn" title="Rebuild and restore custom lists &amp; channels from this preset into My Lists">&#x21BB; Restore Lists</button>' +
+            '<div class="preset-menu-divider"></div>' +
+            '<button type="button" class="preset-menu-item preset-delete-btn" style="color:var(--danger, #ff3b30);">&#x1F5D1; Delete Preset</button>' +
+          '</div>' +
+        '</details>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -1650,6 +1656,10 @@ if (presetsListEl) {
     const row = e.target.closest('[data-preset]');
     if (!row) return;
     const name = row.getAttribute('data-preset');
+    const menu = row.querySelector('.preset-overflow-menu[open]');
+    if (menu && (e.target.classList.contains('preset-menu-item') || e.target.closest('.preset-menu-item'))) {
+      menu.removeAttribute('open');
+    }
     if (e.target.classList.contains('preset-load-btn')) loadPreset(name);
     else if (e.target.classList.contains('preset-restore-lists-btn')) rebuildCustomListsFromPreset(name, false);
     else if (e.target.classList.contains('preset-share-btn')) sharePreset(name);
@@ -1657,6 +1667,12 @@ if (presetsListEl) {
     else if (e.target.classList.contains('preset-delete-btn')) deletePreset(name);
   });
 }
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.preset-overflow-menu')) {
+    document.querySelectorAll('.preset-overflow-menu[open]').forEach((d) => d.removeAttribute('open'));
+  }
+});
 
 function loadPreset(name) {
   const map = loadPresetsMap();

@@ -30267,7 +30267,7 @@ ${seoHeadHtml}
     background: var(--color-danger-subtle);
   }
 
-  /* --- Presets & Backup 2x2 Mobile Layout & Unified Sizing ---------------- */
+  /* --- Presets & Backup Layout & Unified Sizing ---------------- */
   .preset-card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -30275,20 +30275,106 @@ ${seoHeadHtml}
     padding: 12px 14px;
     margin-bottom: 8px;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
     gap: 10px;
     box-shadow: var(--shadow-sm);
   }
   .preset-card-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 8px;
+    min-width: 0;
+    flex: 1 1 auto;
   }
   .preset-card-title {
     font-weight: 700;
     font-size: 0.92rem;
     color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .preset-actions-cluster {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    position: relative;
+  }
+  .preset-overflow-menu {
+    position: relative;
+    display: inline-block;
+  }
+  .preset-overflow-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    font-size: 1.15rem;
+    line-height: 1;
+    transition: background-color 0.12s ease, border-color 0.12s ease;
+  }
+  .preset-overflow-btn::-webkit-details-marker {
+    display: none;
+  }
+  .preset-overflow-btn:hover {
+    background: var(--color-bg-sunken, rgba(255, 255, 255, 0.06));
+    border-color: var(--color-border-strong, var(--border));
+  }
+  .preset-overflow-menu[open] .preset-overflow-btn {
+    background: var(--color-bg-sunken, rgba(255, 255, 255, 0.08));
+    border-color: var(--color-brand, var(--accent));
+  }
+  .preset-overflow-dropdown {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 60;
+    min-width: 175px;
+    background: var(--color-bg-elevated, var(--surface-1, #1e1e24));
+    border: 1px solid var(--color-border-strong, var(--border));
+    border-radius: var(--radius-sm, 8px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .preset-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text);
+    background: none;
+    border: none;
+    border-radius: var(--radius-xs, 4px);
+    text-align: left;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: background-color 0.12s ease;
+    white-space: nowrap;
+  }
+  .preset-menu-item:hover {
+    background: var(--color-bg-sunken, rgba(255, 255, 255, 0.06));
+  }
+  .preset-menu-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 3px 0;
   }
   .preset-actions-grid, .backup-actions-grid, .export-actions-grid {
     display: grid;
@@ -30296,12 +30382,50 @@ ${seoHeadHtml}
     gap: 6px;
     width: 100%;
   }
+  .backup-quick-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .backup-advanced-disclosure {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md, 10px);
+    background: var(--surface-1, rgba(255, 255, 255, 0.02));
+    overflow: hidden;
+    transition: border-color 0.15s ease;
+  }
+  .backup-advanced-disclosure[open] {
+    border-color: var(--color-border-strong, var(--border));
+  }
+  .backup-advanced-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--muted);
+    list-style: none;
+  }
+  .backup-advanced-summary::-webkit-details-marker {
+    display: none;
+  }
+  .backup-advanced-summary:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.03);
+  }
+  .backup-advanced-disclosure[open] .backup-advanced-arrow {
+    transform: rotate(180deg);
+  }
+  .backup-advanced-arrow {
+    transition: transform 0.15s ease;
+    font-size: 0.8rem;
+    display: inline-block;
+  }
   @media (min-width: 641px) {
-    .preset-card {
-      flex-direction: row;
-      align-items: center;
-      justify-content: space-between;
-    }
     .preset-actions-grid {
       display: flex;
       gap: 6px;
@@ -30314,13 +30438,23 @@ ${seoHeadHtml}
       width: auto;
     }
   }
+  @media (max-width: 480px) {
+    .preset-card {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+    }
+    .preset-actions-cluster {
+      justify-content: flex-end;
+    }
+  }
   #settingsSubBackup .lc-btn,
   #settingsSubBackup .preset-actions-grid button,
   #settingsSubBackup .backup-actions-grid button,
   #settingsSubBackup .export-actions-grid button,
   #settingsSubBackup .row button {
-    padding: 6px 12px;
-    font-size: 0.8rem;
+    padding: 6px 14px;
+    font-size: 0.82rem;
     font-weight: 600;
     min-height: 34px;
     border-radius: var(--radius-pill);
@@ -34196,12 +34330,10 @@ ${newUi ? `    <!-- Where the lists come from, and in what order (new UI only): 
         <h2 class="shelf-title">My Presets <span class="badge" id="presetsCountBadge"></span></h2>
       </div>
       <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Save your current setup as a named preset to reuse or download as a file.</p>
-      <div class="row">
-        <input type="text" id="presetNameInput" placeholder="Preset name (e.g. Home Cinema)">
-        <button type="button" class="secondary lc-btn" data-act="saveCurrentAsPreset">Save preset</button>
-      </div>
-      <div class="actions" style="margin-top:8px;">
-        <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;presetFileInput&quot;]">Upload preset file</button>
+      <div class="preset-create-group" style="display:flex; gap:8px; align-items:stretch; margin-bottom:10px; flex-wrap:wrap;">
+        <input type="text" id="presetNameInput" placeholder="Preset name (e.g. Home Cinema)" style="flex:1 1 200px; min-width:0; padding:8px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.9rem;">
+        <button type="button" class="primary lc-btn" data-act="saveCurrentAsPreset" style="white-space:nowrap; padding:0 16px;">Save preset</button>
+        <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;presetFileInput&quot;]" style="white-space:nowrap; padding:0 14px;">Upload preset file</button>
         <input type="file" id="presetFileInput" aria-label="Choose a preset file to upload" accept="application/json,.json" style="display:none;" data-act="uploadPresetFile" data-act-args="[&quot;@self&quot;]">
       </div>
       <div id="presetsList" style="margin-top:10px;"></div>
@@ -34209,15 +34341,46 @@ ${newUi ? `    <!-- Where the lists come from, and in what order (new UI only): 
 
     <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Backup &amp; Restore</h2>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Export a complete backup snapshot of your catalogs, custom lists, watchlist, watch history, continue watching, channels, presets, and settings &mdash; or restore from a previous JSON backup.</p>
-      <textarea id="configJsonBox" rows="5" style="width:100%;font-family:monospace;font-size:14px;" placeholder="Paste config JSON here to restore..."></textarea>
-      <div class="backup-actions-grid" style="margin-top:8px;">
-        <button type="button" class="secondary lc-btn" data-act="exportConfigJson">Export current</button>
-        <button type="button" class="secondary lc-btn" data-act="importConfigJson">Import JSON</button>
-        <button type="button" class="secondary lc-btn" data-act="downloadConfigJson">Download file</button>
-        <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;configFileInput&quot;]">Upload file</button>
-        <input type="file" id="configFileInput" aria-label="Choose a backup file to restore" accept="application/json,.json" style="display:none;" data-act="uploadConfigFile" data-act-args="[&quot;@self&quot;]">
+      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">Export a complete backup snapshot of your catalogs, custom lists, watchlist, watch history, continue watching, channels, presets, and settings &mdash; or restore from a previous JSON backup.</p>
+      
+      <div class="backup-quick-grid">
+        <div style="border:1px solid var(--border); border-radius:10px; padding:14px; background:var(--color-bg-sunken, rgba(255,255,255,0.02)); display:flex; flex-direction:column; justify-content:space-between; gap:10px;">
+          <div>
+            <div style="font-weight:700; font-size:0.92rem; color:var(--text); display:flex; align-items:center; gap:6px;">
+              <span>&#x1F4E5;</span> Download Backup
+            </div>
+            <p style="margin:4px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Save a complete snapshot file (.json) with all your catalogs, lists, channels, history, and settings.</p>
+          </div>
+          <button type="button" class="secondary lc-btn" data-act="downloadConfigJson" style="align-self:flex-start; padding:8px 18px; font-weight:600;">Download Backup File</button>
+        </div>
+
+        <div style="border:1px solid var(--border); border-radius:10px; padding:14px; background:var(--color-bg-sunken, rgba(255,255,255,0.02)); display:flex; flex-direction:column; justify-content:space-between; gap:10px;">
+          <div>
+            <div style="font-weight:700; font-size:0.92rem; color:var(--text); display:flex; align-items:center; gap:6px;">
+              <span>&#x1F4E4;</span> Restore from File
+            </div>
+            <p style="margin:4px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Restore your previous setup from an exported backup .json file.</p>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;configFileInput&quot;]" style="padding:8px 18px; font-weight:600;">Upload &amp; Restore File</button>
+            <input type="file" id="configFileInput" aria-label="Choose a backup file to restore" accept="application/json,.json" style="display:none;" data-act="uploadConfigFile" data-act-args="[&quot;@self&quot;]">
+          </div>
+        </div>
       </div>
+
+      <details class="backup-advanced-disclosure">
+        <summary class="backup-advanced-summary">
+          <span>Advanced: Direct JSON Configuration Payload</span>
+          <span class="backup-advanced-arrow">&#x25BE;</span>
+        </summary>
+        <div style="padding:0 14px 14px; display:flex; flex-direction:column; gap:10px;">
+          <textarea id="configJsonBox" rows="5" style="width:100%; font-family:var(--font-mono, monospace); font-size:13px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); padding:8px 10px; box-sizing:border-box;" placeholder="Paste config JSON here to restore..."></textarea>
+          <div class="backup-actions-grid" style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" class="secondary lc-btn" data-act="exportConfigJson">Export current to box</button>
+            <button type="button" class="secondary lc-btn" data-act="importConfigJson">Import JSON from box</button>
+          </div>
+        </div>
+      </details>
 
       <!-- Importing from an install link is not offered in the new UI: an
            install id is an unrevocable bearer credential that returns connected
@@ -78503,14 +78666,20 @@ function renderPresetsList() {
     const count = entries.length;
     return '<div class="preset-card" data-preset="' + escapeAttr(n) + '">' +
       '<div class="preset-card-header">' +
-        '<strong class="preset-card-title">' + escapeHtml(n) + '</strong> <small style="color:var(--muted);">(' + count + ' list' + (count === 1 ? '' : 's') + ')</small>' +
+        '<strong class="preset-card-title">' + escapeHtml(n) + '</strong> <small style="color:var(--muted); flex-shrink:0;">(' + count + ' list' + (count === 1 ? '' : 's') + ')</small>' +
       '</div>' +
-      '<div class="preset-actions-grid">' +
-        '<button type="button" class="secondary lc-btn preset-load-btn">Load</button>' +
-        '<button type="button" class="secondary lc-btn preset-restore-lists-btn" title="Rebuild and restore custom lists &amp; channels from this preset into My Lists">Restore Lists</button>' +
-        '<button type="button" class="secondary lc-btn preset-share-btn">Share</button>' +
-        '<button type="button" class="secondary lc-btn preset-download-btn">Download</button>' +
-        '<button type="button" class="secondary lc-btn preset-delete-btn">Delete</button>' +
+      '<div class="preset-actions-cluster">' +
+        '<button type="button" class="primary lc-btn preset-load-btn" title="Load this preset into your active catalogs">Load</button>' +
+        '<button type="button" class="secondary lc-btn preset-share-btn" title="Share this preset">Share</button>' +
+        '<details class="preset-overflow-menu">' +
+          '<summary class="preset-overflow-btn" aria-label="More actions for ' + escapeAttr(n) + '">&#x22EF;</summary>' +
+          '<div class="preset-overflow-dropdown">' +
+            '<button type="button" class="preset-menu-item preset-download-btn">&#x1F4E5; Download .json</button>' +
+            '<button type="button" class="preset-menu-item preset-restore-lists-btn" title="Rebuild and restore custom lists &amp; channels from this preset into My Lists">&#x21BB; Restore Lists</button>' +
+            '<div class="preset-menu-divider"></div>' +
+            '<button type="button" class="preset-menu-item preset-delete-btn" style="color:var(--danger, #ff3b30);">&#x1F5D1; Delete Preset</button>' +
+          '</div>' +
+        '</details>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -78523,6 +78692,10 @@ if (presetsListEl) {
     const row = e.target.closest('[data-preset]');
     if (!row) return;
     const name = row.getAttribute('data-preset');
+    const menu = row.querySelector('.preset-overflow-menu[open]');
+    if (menu && (e.target.classList.contains('preset-menu-item') || e.target.closest('.preset-menu-item'))) {
+      menu.removeAttribute('open');
+    }
     if (e.target.classList.contains('preset-load-btn')) loadPreset(name);
     else if (e.target.classList.contains('preset-restore-lists-btn')) rebuildCustomListsFromPreset(name, false);
     else if (e.target.classList.contains('preset-share-btn')) sharePreset(name);
@@ -78530,6 +78703,12 @@ if (presetsListEl) {
     else if (e.target.classList.contains('preset-delete-btn')) deletePreset(name);
   });
 }
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.preset-overflow-menu')) {
+    document.querySelectorAll('.preset-overflow-menu[open]').forEach((d) => d.removeAttribute('open'));
+  }
+});
 
 function loadPreset(name) {
   const map = loadPresetsMap();
