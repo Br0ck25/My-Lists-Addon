@@ -1758,10 +1758,13 @@ ${seoHeadHtml}
   .list-card-actions {
     display: flex; gap: 5px; align-items: center; flex-shrink: 0; flex-wrap: wrap;
   }
-  .lc-btn {
-    padding: 6px 12px;
-    min-height: unset;
-    font-size: var(--font-size-xs, 0.8rem);
+  .lc-btn,
+  button.lc-btn,
+  .actions button.lc-btn {
+    padding: 6px 12px !important;
+    min-height: unset !important;
+    height: auto !important;
+    font-size: var(--font-size-xs, 0.8rem) !important;
     font-weight: 600;
     border-radius: var(--radius-pill);
     border: 1.5px solid var(--color-border-strong);
@@ -1776,13 +1779,16 @@ ${seoHeadHtml}
     transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
   }
   .lc-btn:active:not(:disabled) { transform: scale(0.98); }
-  .lc-btn.primary {
+  .lc-btn.primary,
+  button.lc-btn.primary,
+  .actions button.lc-btn.primary {
     background: var(--color-brand);
     color: var(--color-text-inverse, #fff);
     border-color: var(--color-brand);
     box-shadow: 0 2px 6px var(--color-brand-subtle);
-    padding: 6px 12px;
-    min-height: unset;
+    padding: 6px 12px !important;
+    min-height: unset !important;
+    height: auto !important;
   }
   .lc-btn.primary:hover:not(:disabled) {
     background: var(--color-brand-hover);
@@ -1855,6 +1861,10 @@ ${seoHeadHtml}
     justify-content: space-between;
     gap: 10px;
     box-shadow: var(--shadow-sm);
+    position: relative;
+  }
+  .preset-card:has(.preset-overflow-menu[open]) {
+    z-index: 50;
   }
   .preset-card-header {
     display: flex;
@@ -1913,8 +1923,8 @@ ${seoHeadHtml}
   .preset-overflow-dropdown {
     position: absolute;
     right: 0;
-    top: calc(100% + 6px);
-    z-index: 60;
+    top: calc(100% + 4px);
+    z-index: 100;
     min-width: 175px;
     background: var(--color-bg-elevated, var(--surface-1, #1e1e24));
     border: 1px solid var(--color-border-strong, var(--border));
@@ -2875,7 +2885,7 @@ ${seoHeadHtml}
     padding: 16px;
     width: 100%;
     max-width: 100%;
-    overflow: hidden;
+    overflow: visible;
   }
   .panel-title {
     font-size: 1.1rem;
@@ -3432,9 +3442,7 @@ ${seoHeadHtml}
     font-size: var(--font-size-sm, 0.88rem);
   }
 
-  .btn-lg,
-  .actions button.primary,
-  .actions .btn-primary {
+  .btn-lg {
     min-height: var(--control-height-lg, 48px);
     padding: 12px 22px;
     font-size: var(--font-size-base, 0.95rem);

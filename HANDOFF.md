@@ -2,7 +2,29 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
-> **HANDOFF, 2026-10-03 (Antigravity): Settings UI Modernization - Phase C (Provider Cards & Drag/Drop Import) & Phase D (Feedback & Resources Polish).**
+> **HANDOFF, 2026-10-03 (Antigravity): UI Polish - Emoji Cleanup, Preset Dropdown Overflow Fix, Button Sizing Normalization.**
+>
+> **Where things stand**
+> - Emoji Clutter Elimination:
+>   - Removed provider emojis (`🎬`, `▶`, `📋`, `📺`) from TMDB, Trakt, MDBList, and Simkl cards in `15_tab-settings-html.js`.
+>   - Removed folder emoji (`📂`) from `.import-dropzone` in `15_tab-settings-html.js`.
+>   - Removed download/upload emojis (`📥`, `📤`) from "Download Backup" and "Restore from File" headings in `14_tab-presets-backup.js`.
+>   - Removed emojis (`📥`, `🔄`, `🗑️`) from the preset overflow dropdown items (`Download .json`, `Restore Lists`, `Delete Preset`) in `24_client-backup-restore-presets.js`.
+>   - Removed emoji icons (`📖`, `☕`, `⚡`) from documentation and resource cards in `15_tab-settings-html.js`.
+> - Fixed Preset Dropdown Cutoff:
+>   - Resolved cutoff issue where `.preset-overflow-dropdown` was clipped by the container edge on short preset lists.
+>   - Root cause: `.panel` had `overflow: hidden;` in `09_page-shell.js`.
+>   - Solution: Set `.panel { overflow: visible; }`, added `.preset-card:has(.preset-overflow-menu[open]) { z-index: 50; }`, and set `.preset-overflow-dropdown { z-index: 100; }`.
+> - Button Sizing Normalization:
+>   - `+ New Catalog`: Decoupled `.actions button.primary` from `.btn-lg` in `09_page-shell.js`, restoring the compact pill sizing (`.lc-btn`) to match adjacent `Edit` and `Refresh Preview` controls.
+>   - `Search`: Standardized the `#content-search` Search button in `13_tab-channels.js` to `.primary.lc-btn` (38px height, 18px padding), eliminating the oversized 48px bubble and aligning perfectly with `#catalogSearchInput`.
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK (5,413,027 bytes).
+>   - `node --check worker_entry_combined.js`: OK.
+>   - `python gen_map.py`: 2,660 symbols, 211 routes.
+>   - All 2,068 tests passing across 25 test suites with 0 failures.
+> - Branch: `feat/design-system-phase-1`
+>
 >
 > **Where things stand**
 > - Completed Phase C (External Accounts & API Keys):

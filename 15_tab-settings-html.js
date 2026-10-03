@@ -329,15 +329,12 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       <!-- TMDB Section -->
       <div class="provider-card" id="tmdbSection">
         <div class="provider-card-header">
-          <div class="provider-card-brand">
-            <div class="provider-card-icon">&#x1F3AC;</div>
-            <div>
-              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                <span class="provider-card-title">The Movie Database (TMDB)</span>
-                <span id="tmdbConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
-              </div>
-              <p class="provider-card-desc">Connect your TMDB account to import personal lists, watchlist, and favorites, or use a custom API key / Token.</p>
+          <div>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span class="provider-card-title">The Movie Database (TMDB)</span>
+              <span id="tmdbConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
             </div>
+            <p class="provider-card-desc">Connect your TMDB account to import personal lists, watchlist, and favorites, or use a custom API key / Token.</p>
           </div>
         </div>
         <div class="provider-card-actions">
@@ -359,15 +356,12 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       <!-- Trakt Section -->
       <div class="provider-card" id="traktSection">
         <div class="provider-card-header">
-          <div class="provider-card-brand">
-            <div class="provider-card-icon" style="color:#ed1c24;">&#x25B6;</div>
-            <div>
-              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                <span class="provider-card-title">Trakt</span>
-                <span id="traktConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
-              </div>
-              <p class="provider-card-desc">Connect your Trakt account to import personal lists, watchlist, and collection, or use a custom Client ID.</p>
+          <div>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span class="provider-card-title">Trakt</span>
+              <span id="traktConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
             </div>
+            <p class="provider-card-desc">Connect your Trakt account to import personal lists, watchlist, and collection, or use a custom Client ID.</p>
           </div>
         </div>
         <div class="provider-card-actions trakt-connect-actions">
@@ -406,15 +400,12 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       <!-- MDBList Section -->
       <div class="provider-card" id="mdblistSection">
         <div class="provider-card-header">
-          <div class="provider-card-brand">
-            <div class="provider-card-icon">&#x1F4CB;</div>
-            <div>
-              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                <span class="provider-card-title">MDBList</span>
-                <span id="mdblistConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
-              </div>
-              <p class="provider-card-desc">Connect your MDBList account to import personal lists, watchlist, and watch history, or use a custom API key.</p>
+          <div>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span class="provider-card-title">MDBList</span>
+              <span id="mdblistConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
             </div>
+            <p class="provider-card-desc">Connect your MDBList account to import personal lists, watchlist, and watch history, or use a custom API key.</p>
           </div>
         </div>
         <div class="provider-card-actions">
@@ -451,15 +442,12 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       <!-- Simkl Section -->
       <div class="provider-card" id="simklSection">
         <div class="provider-card-header">
-          <div class="provider-card-brand">
-            <div class="provider-card-icon">&#x1F4FA;</div>
-            <div>
-              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                <span class="provider-card-title">Simkl</span>
-                <span id="simklConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
-              </div>
-              <p class="provider-card-desc">Connect your Simkl account to import personal lists, watchlist, and history, or use a custom Client ID.</p>
+          <div>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span class="provider-card-title">Simkl</span>
+              <span id="simklConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
             </div>
+            <p class="provider-card-desc">Connect your Simkl account to import personal lists, watchlist, and history, or use a custom Client ID.</p>
           </div>
         </div>
         <div class="provider-card-actions">
@@ -528,7 +516,6 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
 
       <div style="margin-bottom:14px;">
         <div class="import-dropzone" id="importDropzone" data-act="appActOpenFilePicker" data-act-args="[&quot;unifiedImportFileInput&quot;]">
-          <div class="import-dropzone-icon">&#x1F4C2;</div>
           <div style="text-align:center;">
             <div style="font-weight:600; font-size:0.92rem; color:var(--text);">Choose files or drag &amp; drop here</div>
             <div style="margin-top:3px; color:var(--muted); font-size:0.78rem;">CSV, JSON, ZIP, or TXT exports (multi-file supported)</div>
@@ -620,34 +607,25 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       
       <div class="resource-cards-grid">
         <a href="/guide" class="resource-card">
-          <div class="resource-card-top">
-            <div class="resource-card-icon">&#x1F4D6;</div>
-            <div>
-              <div class="resource-card-title">User Guide &amp; Docs</div>
-              <div class="resource-card-desc">Step-by-step how-to guides covering catalogs, channels, storylines, and list importing.</div>
-            </div>
+          <div>
+            <div class="resource-card-title">User Guide &amp; Docs</div>
+            <div class="resource-card-desc">Step-by-step how-to guides covering catalogs, channels, storylines, and list importing.</div>
           </div>
           <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:0.8rem; pointer-events:none;">Open Guide &rarr;</span>
         </a>
 
         <a href="https://buymeacoffee.com/brock25" target="_blank" rel="noopener" class="resource-card">
-          <div class="resource-card-top">
-            <div class="resource-card-icon">&#x2615;</div>
-            <div>
-              <div class="resource-card-title">Buy Me a Coffee</div>
-              <div class="resource-card-desc">Support the continued development and hosting costs of the free public server.</div>
-            </div>
+          <div>
+            <div class="resource-card-title">Buy Me a Coffee</div>
+            <div class="resource-card-desc">Support the continued development and hosting costs of the free public server.</div>
           </div>
           <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:0.8rem; pointer-events:none;">Support Project &rarr;</span>
         </a>
 
         <a href="https://torbox.app/subscription?referral=af23795c-7706-4b02-a979-d84b5613cfd1" target="_blank" rel="noopener" class="resource-card">
-          <div class="resource-card-top">
-            <div class="resource-card-icon">&#x26A1;</div>
-            <div>
-              <div class="resource-card-title">TorBox Debrid</div>
-              <div class="resource-card-desc">Fast, modern debrid provider with fast torrent caching and Usenet support.</div>
-            </div>
+          <div>
+            <div class="resource-card-title">TorBox Debrid</div>
+            <div class="resource-card-desc">Fast, modern debrid provider with fast torrent caching and Usenet support.</div>
           </div>
           <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:0.8rem; pointer-events:none;">Try TorBox (Referral) &rarr;</span>
         </a>

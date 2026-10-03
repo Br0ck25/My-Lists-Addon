@@ -30,8 +30,8 @@
       <div class="backup-quick-grid">
         <div style="border:1px solid var(--border); border-radius:10px; padding:14px; background:var(--color-bg-sunken, rgba(255,255,255,0.02)); display:flex; flex-direction:column; justify-content:space-between; gap:10px;">
           <div>
-            <div style="font-weight:700; font-size:0.92rem; color:var(--text); display:flex; align-items:center; gap:6px;">
-              <span>&#x1F4E5;</span> Download Backup
+            <div style="font-weight:700; font-size:0.92rem; color:var(--text);">
+              Download Backup
             </div>
             <p style="margin:4px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Save a complete snapshot file (.json) with all your catalogs, lists, channels, history, and settings.</p>
           </div>
@@ -40,8 +40,8 @@
 
         <div style="border:1px solid var(--border); border-radius:10px; padding:14px; background:var(--color-bg-sunken, rgba(255,255,255,0.02)); display:flex; flex-direction:column; justify-content:space-between; gap:10px;">
           <div>
-            <div style="font-weight:700; font-size:0.92rem; color:var(--text); display:flex; align-items:center; gap:6px;">
-              <span>&#x1F4E4;</span> Restore from File
+            <div style="font-weight:700; font-size:0.92rem; color:var(--text);">
+              Restore from File
             </div>
             <p style="margin:4px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Restore your previous setup from an exported backup .json file.</p>
           </div>

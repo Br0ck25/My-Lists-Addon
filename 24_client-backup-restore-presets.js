@@ -1638,10 +1638,10 @@ function renderPresetsList() {
         '<details class="preset-overflow-menu">' +
           '<summary class="preset-overflow-btn" aria-label="More actions for ' + escapeAttr(n) + '">&#x22EF;</summary>' +
           '<div class="preset-overflow-dropdown">' +
-            '<button type="button" class="preset-menu-item preset-download-btn">&#x1F4E5; Download .json</button>' +
-            '<button type="button" class="preset-menu-item preset-restore-lists-btn" title="Rebuild and restore custom lists &amp; channels from this preset into My Lists">&#x21BB; Restore Lists</button>' +
+            '<button type="button" class="preset-menu-item preset-download-btn">Download .json</button>' +
+            '<button type="button" class="preset-menu-item preset-restore-lists-btn" title="Rebuild and restore custom lists &amp; channels from this preset into My Lists">Restore Lists</button>' +
             '<div class="preset-menu-divider"></div>' +
-            '<button type="button" class="preset-menu-item preset-delete-btn" style="color:var(--danger, #ff3b30);">&#x1F5D1; Delete Preset</button>' +
+            '<button type="button" class="preset-menu-item preset-delete-btn" style="color:var(--danger, #ff3b30);">Delete Preset</button>' +
           '</div>' +
         '</details>' +
       '</div>' +

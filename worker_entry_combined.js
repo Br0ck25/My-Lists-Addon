@@ -30183,10 +30183,13 @@ ${seoHeadHtml}
   .list-card-actions {
     display: flex; gap: 5px; align-items: center; flex-shrink: 0; flex-wrap: wrap;
   }
-  .lc-btn {
-    padding: 6px 12px;
-    min-height: unset;
-    font-size: var(--font-size-xs, 0.8rem);
+  .lc-btn,
+  button.lc-btn,
+  .actions button.lc-btn {
+    padding: 6px 12px !important;
+    min-height: unset !important;
+    height: auto !important;
+    font-size: var(--font-size-xs, 0.8rem) !important;
     font-weight: 600;
     border-radius: var(--radius-pill);
     border: 1.5px solid var(--color-border-strong);
@@ -30201,13 +30204,16 @@ ${seoHeadHtml}
     transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
   }
   .lc-btn:active:not(:disabled) { transform: scale(0.98); }
-  .lc-btn.primary {
+  .lc-btn.primary,
+  button.lc-btn.primary,
+  .actions button.lc-btn.primary {
     background: var(--color-brand);
     color: var(--color-text-inverse, #fff);
     border-color: var(--color-brand);
     box-shadow: 0 2px 6px var(--color-brand-subtle);
-    padding: 6px 12px;
-    min-height: unset;
+    padding: 6px 12px !important;
+    min-height: unset !important;
+    height: auto !important;
   }
   .lc-btn.primary:hover:not(:disabled) {
     background: var(--color-brand-hover);
@@ -30280,6 +30286,10 @@ ${seoHeadHtml}
     justify-content: space-between;
     gap: 10px;
     box-shadow: var(--shadow-sm);
+    position: relative;
+  }
+  .preset-card:has(.preset-overflow-menu[open]) {
+    z-index: 50;
   }
   .preset-card-header {
     display: flex;
@@ -30338,8 +30348,8 @@ ${seoHeadHtml}
   .preset-overflow-dropdown {
     position: absolute;
     right: 0;
-    top: calc(100% + 6px);
-    z-index: 60;
+    top: calc(100% + 4px);
+    z-index: 100;
     min-width: 175px;
     background: var(--color-bg-elevated, var(--surface-1, #1e1e24));
     border: 1px solid var(--color-border-strong, var(--border));
@@ -31300,7 +31310,7 @@ ${seoHeadHtml}
     padding: 16px;
     width: 100%;
     max-width: 100%;
-    overflow: hidden;
+    overflow: visible;
   }
   .panel-title {
     font-size: 1.1rem;
@@ -31857,9 +31867,7 @@ ${seoHeadHtml}
     font-size: var(--font-size-sm, 0.88rem);
   }
 
-  .btn-lg,
-  .actions button.primary,
-  .actions .btn-primary {
+  .btn-lg {
     min-height: var(--control-height-lg, 48px);
     padding: 12px 22px;
     font-size: var(--font-size-base, 0.95rem);
@@ -34415,7 +34423,7 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
     
     <div class="row">
       <input type="text" id="catalogSearchInput" aria-label="Search by title or list name" placeholder="Search by title or list name..." data-act="appActCatalogSearchInput" data-act-on="input,keydown" data-act-args="[&quot;@self&quot;,&quot;@event&quot;]">
-      <button type="button" class="primary" data-act="runCatalogSearch">Search</button>
+      <button type="button" class="primary lc-btn" data-act="runCatalogSearch" style="padding:0 18px; font-size:0.85rem; height:38px; min-height:38px; align-self:center;">Search</button>
     </div>
 
     <div class="subnav-pills-bar" id="catalogSearchTypeChips" style="margin-top:10px;">
@@ -34523,8 +34531,8 @@ ${newUi ? `    <!-- Where the lists come from, and in what order (new UI only): 
       <div class="backup-quick-grid">
         <div style="border:1px solid var(--border); border-radius:10px; padding:14px; background:var(--color-bg-sunken, rgba(255,255,255,0.02)); display:flex; flex-direction:column; justify-content:space-between; gap:10px;">
           <div>
-            <div style="font-weight:700; font-size:0.92rem; color:var(--text); display:flex; align-items:center; gap:6px;">
-              <span>&#x1F4E5;</span> Download Backup
+            <div style="font-weight:700; font-size:0.92rem; color:var(--text);">
+              Download Backup
             </div>
             <p style="margin:4px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Save a complete snapshot file (.json) with all your catalogs, lists, channels, history, and settings.</p>
           </div>
@@ -34533,8 +34541,8 @@ ${newUi ? `    <!-- Where the lists come from, and in what order (new UI only): 
 
         <div style="border:1px solid var(--border); border-radius:10px; padding:14px; background:var(--color-bg-sunken, rgba(255,255,255,0.02)); display:flex; flex-direction:column; justify-content:space-between; gap:10px;">
           <div>
-            <div style="font-weight:700; font-size:0.92rem; color:var(--text); display:flex; align-items:center; gap:6px;">
-              <span>&#x1F4E4;</span> Restore from File
+            <div style="font-weight:700; font-size:0.92rem; color:var(--text);">
+              Restore from File
             </div>
             <p style="margin:4px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Restore your previous setup from an exported backup .json file.</p>
           </div>
@@ -34937,15 +34945,12 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       <!-- TMDB Section -->
       <div class="provider-card" id="tmdbSection">
         <div class="provider-card-header">
-          <div class="provider-card-brand">
-            <div class="provider-card-icon">&#x1F3AC;</div>
-            <div>
-              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                <span class="provider-card-title">The Movie Database (TMDB)</span>
-                <span id="tmdbConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
-              </div>
-              <p class="provider-card-desc">Connect your TMDB account to import personal lists, watchlist, and favorites, or use a custom API key / Token.</p>
+          <div>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span class="provider-card-title">The Movie Database (TMDB)</span>
+              <span id="tmdbConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
             </div>
+            <p class="provider-card-desc">Connect your TMDB account to import personal lists, watchlist, and favorites, or use a custom API key / Token.</p>
           </div>
         </div>
         <div class="provider-card-actions">
@@ -34967,15 +34972,12 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       <!-- Trakt Section -->
       <div class="provider-card" id="traktSection">
         <div class="provider-card-header">
-          <div class="provider-card-brand">
-            <div class="provider-card-icon" style="color:#ed1c24;">&#x25B6;</div>
-            <div>
-              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                <span class="provider-card-title">Trakt</span>
-                <span id="traktConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
-              </div>
-              <p class="provider-card-desc">Connect your Trakt account to import personal lists, watchlist, and collection, or use a custom Client ID.</p>
+          <div>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span class="provider-card-title">Trakt</span>
+              <span id="traktConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
             </div>
+            <p class="provider-card-desc">Connect your Trakt account to import personal lists, watchlist, and collection, or use a custom Client ID.</p>
           </div>
         </div>
         <div class="provider-card-actions trakt-connect-actions">
@@ -35014,15 +35016,12 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       <!-- MDBList Section -->
       <div class="provider-card" id="mdblistSection">
         <div class="provider-card-header">
-          <div class="provider-card-brand">
-            <div class="provider-card-icon">&#x1F4CB;</div>
-            <div>
-              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                <span class="provider-card-title">MDBList</span>
-                <span id="mdblistConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
-              </div>
-              <p class="provider-card-desc">Connect your MDBList account to import personal lists, watchlist, and watch history, or use a custom API key.</p>
+          <div>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span class="provider-card-title">MDBList</span>
+              <span id="mdblistConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
             </div>
+            <p class="provider-card-desc">Connect your MDBList account to import personal lists, watchlist, and watch history, or use a custom API key.</p>
           </div>
         </div>
         <div class="provider-card-actions">
@@ -35059,15 +35058,12 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       <!-- Simkl Section -->
       <div class="provider-card" id="simklSection">
         <div class="provider-card-header">
-          <div class="provider-card-brand">
-            <div class="provider-card-icon">&#x1F4FA;</div>
-            <div>
-              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                <span class="provider-card-title">Simkl</span>
-                <span id="simklConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
-              </div>
-              <p class="provider-card-desc">Connect your Simkl account to import personal lists, watchlist, and history, or use a custom Client ID.</p>
+          <div>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span class="provider-card-title">Simkl</span>
+              <span id="simklConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
             </div>
+            <p class="provider-card-desc">Connect your Simkl account to import personal lists, watchlist, and history, or use a custom Client ID.</p>
           </div>
         </div>
         <div class="provider-card-actions">
@@ -35136,7 +35132,6 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
 
       <div style="margin-bottom:14px;">
         <div class="import-dropzone" id="importDropzone" data-act="appActOpenFilePicker" data-act-args="[&quot;unifiedImportFileInput&quot;]">
-          <div class="import-dropzone-icon">&#x1F4C2;</div>
           <div style="text-align:center;">
             <div style="font-weight:600; font-size:0.92rem; color:var(--text);">Choose files or drag &amp; drop here</div>
             <div style="margin-top:3px; color:var(--muted); font-size:0.78rem;">CSV, JSON, ZIP, or TXT exports (multi-file supported)</div>
@@ -35228,34 +35223,25 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       
       <div class="resource-cards-grid">
         <a href="/guide" class="resource-card">
-          <div class="resource-card-top">
-            <div class="resource-card-icon">&#x1F4D6;</div>
-            <div>
-              <div class="resource-card-title">User Guide &amp; Docs</div>
-              <div class="resource-card-desc">Step-by-step how-to guides covering catalogs, channels, storylines, and list importing.</div>
-            </div>
+          <div>
+            <div class="resource-card-title">User Guide &amp; Docs</div>
+            <div class="resource-card-desc">Step-by-step how-to guides covering catalogs, channels, storylines, and list importing.</div>
           </div>
           <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:0.8rem; pointer-events:none;">Open Guide &rarr;</span>
         </a>
 
         <a href="https://buymeacoffee.com/brock25" target="_blank" rel="noopener" class="resource-card">
-          <div class="resource-card-top">
-            <div class="resource-card-icon">&#x2615;</div>
-            <div>
-              <div class="resource-card-title">Buy Me a Coffee</div>
-              <div class="resource-card-desc">Support the continued development and hosting costs of the free public server.</div>
-            </div>
+          <div>
+            <div class="resource-card-title">Buy Me a Coffee</div>
+            <div class="resource-card-desc">Support the continued development and hosting costs of the free public server.</div>
           </div>
           <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:0.8rem; pointer-events:none;">Support Project &rarr;</span>
         </a>
 
         <a href="https://torbox.app/subscription?referral=af23795c-7706-4b02-a979-d84b5613cfd1" target="_blank" rel="noopener" class="resource-card">
-          <div class="resource-card-top">
-            <div class="resource-card-icon">&#x26A1;</div>
-            <div>
-              <div class="resource-card-title">TorBox Debrid</div>
-              <div class="resource-card-desc">Fast, modern debrid provider with fast torrent caching and Usenet support.</div>
-            </div>
+          <div>
+            <div class="resource-card-title">TorBox Debrid</div>
+            <div class="resource-card-desc">Fast, modern debrid provider with fast torrent caching and Usenet support.</div>
           </div>
           <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:0.8rem; pointer-events:none;">Try TorBox (Referral) &rarr;</span>
         </a>
@@ -78952,10 +78938,10 @@ function renderPresetsList() {
         '<details class="preset-overflow-menu">' +
           '<summary class="preset-overflow-btn" aria-label="More actions for ' + escapeAttr(n) + '">&#x22EF;</summary>' +
           '<div class="preset-overflow-dropdown">' +
-            '<button type="button" class="preset-menu-item preset-download-btn">&#x1F4E5; Download .json</button>' +
-            '<button type="button" class="preset-menu-item preset-restore-lists-btn" title="Rebuild and restore custom lists &amp; channels from this preset into My Lists">&#x21BB; Restore Lists</button>' +
+            '<button type="button" class="preset-menu-item preset-download-btn">Download .json</button>' +
+            '<button type="button" class="preset-menu-item preset-restore-lists-btn" title="Rebuild and restore custom lists &amp; channels from this preset into My Lists">Restore Lists</button>' +
             '<div class="preset-menu-divider"></div>' +
-            '<button type="button" class="preset-menu-item preset-delete-btn" style="color:var(--danger, #ff3b30);">&#x1F5D1; Delete Preset</button>' +
+            '<button type="button" class="preset-menu-item preset-delete-btn" style="color:var(--danger, #ff3b30);">Delete Preset</button>' +
           '</div>' +
         '</details>' +
       '</div>' +
