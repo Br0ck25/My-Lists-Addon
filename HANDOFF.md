@@ -2,6 +2,24 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-03 (Antigravity): Catalogs UI Modernization - Phase 2 (Add Catalog Modal Polish).**
+>
+> **Where things stand**
+> - Modernized "Add Catalog" Modal (`#addShelfModal` in `09_page-shell.js`, `16_client-row-core.js`):
+>   - Replaced plain text `Cancel` and faint `Add` links with standard design system pill buttons: `Cancel` (`.lc-btn.secondary`) and `Add` (`.lc-btn.primary` with distinct disabled state).
+>   - Added a top-right `✕` dismiss button (`.modal-close-x`) with `data-act="appActHideAddShelfModal"`.
+>   - Added clear uppercase field micro-labels (`CATALOG NAME`, `CATALOG URL`, `CONTENT TYPE`) above inputs so users never lose context when placeholders disappear.
+>   - Expanded card width from a cramped 340px to a comfortable 400px (matching the `New Custom List` modal).
+>   - Standardized input padding, borders, and remove button styling for dynamic additional URLs in `16_client-row-core.js`.
+>   - Preserved all IDs (`#addShelfModal`, `#addShelfModalName`, `#addShelfModalLinksContainer`, `.addShelfModalLinkInput`, `#addShelfModalType`, `#addShelfModalBtn`) and validation behavior.
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK (5,415,471 bytes).
+>   - `node --check worker_entry_combined.js`: OK.
+>   - `python gen_map.py`: 2,660 symbols, 211 routes.
+>   - All 542 client & shell tests passing.
+> - Branch: `feat/design-system-phase-1`
+> - Next step: Phase 3 (Installation Card & Manifest Link Consolidation).
+>
 > **HANDOFF, 2026-10-03 (Antigravity): Catalogs UI Modernization - Phase 1 (Daily Randomizer Toggles & Edit Mode Trash Icon Fix).**
 >
 > **Where things stand**
