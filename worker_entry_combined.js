@@ -31743,7 +31743,7 @@ ${seoHeadHtml}
   }
 
   /* Default button behavior (Primary brand style) */
-  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn)),
+  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn, .text-action-btn)),
   .btn-primary,
   .primary:not(.lc-btn) {
     background: var(--color-brand);
@@ -31754,7 +31754,7 @@ ${seoHeadHtml}
     padding: 10px 18px;
   }
 
-  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn)):hover:not(:disabled),
+  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn, .text-action-btn)):hover:not(:disabled),
   .btn-primary:hover:not(:disabled),
   .primary:not(.lc-btn):hover:not(:disabled) {
     background: var(--color-brand-hover);
@@ -31762,7 +31762,7 @@ ${seoHeadHtml}
     color: var(--color-text-inverse, #fff);
   }
 
-  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn)):active:not(:disabled),
+  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn, .text-action-btn)):active:not(:disabled),
   .btn-primary:active:not(:disabled),
   .primary:not(.lc-btn):active:not(:disabled) {
     background: var(--color-brand-active);
@@ -32335,7 +32335,7 @@ ${seoHeadHtml}
     line-height: 1.35;
   }
 
-  #lists { display: grid; gap: 10px; grid-template-columns: 1fr; width: 100%; max-width: 100%; }
+  #lists { display: grid; gap: 12px; grid-template-columns: 1fr; width: 100%; max-width: 100%; margin-bottom: 20px; }
   .entry {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -32496,11 +32496,11 @@ ${seoHeadHtml}
 
   /* --- Live Preview Shelves (Home Screen) --------------------------------- */
   .live-preview-shelf {
-    background: var(--surface);
-    border: 1px solid var(--border);
+    background: transparent;
+    border: none;
     border-radius: var(--radius);
-    padding: 12px;
-    box-shadow: var(--shadow-sm);
+    padding: 0 0 14px 0;
+    box-shadow: none;
     margin-bottom: 12px;
     width: 100%;
   }
@@ -32522,25 +32522,47 @@ ${seoHeadHtml}
   }
   .live-preview-shelf-title .text-action-btn {
     margin-left: auto;
-    color: var(--accent);
-    background: none;
-    border: none;
-    font-size: 0.84rem;
+    color: var(--accent) !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    min-height: unset !important;
+    height: auto !important;
+    padding: 2px 4px !important;
+    font-size: 0.82rem;
     font-weight: 600;
     cursor: pointer;
-    padding: 2px 4px;
     flex: none;
+    text-decoration: none;
     white-space: nowrap;
+    outline: none;
+    line-height: inherit;
+  }
+  .live-preview-shelf-title .text-action-btn:hover:not(:disabled) {
+    background: transparent !important;
+    color: var(--accent) !important;
+    text-decoration: underline;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+  .live-preview-shelf-title .text-action-btn:active:not(:disabled) {
+    background: transparent !important;
+    color: var(--accent) !important;
+    transform: none !important;
   }
   .live-preview-shelf-title .text-action-btn:disabled {
     opacity: 0.35;
     cursor: default;
+    background: transparent !important;
+    text-decoration: none;
   }
   .live-preview-posters {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 8px;
     width: 100%;
+    padding-bottom: 6px;
   }
   @media (max-width: 640px) {
     .live-preview-posters .live-preview-poster-card:nth-child(n+4) {
@@ -32587,7 +32609,8 @@ ${seoHeadHtml}
     font-size: 0.70rem;
     color: var(--text);
     font-weight: 600;
-    line-height: 1.2;
+    line-height: 1.25;
+    padding: 2px 4px 4px 4px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -32600,7 +32623,8 @@ ${seoHeadHtml}
   .live-preview-poster-subtitle {
     font-size: 0.66rem;
     color: var(--muted);
-    line-height: 1.2;
+    line-height: 1.25;
+    padding: 0 4px 2px 4px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -33736,10 +33760,19 @@ if ('serviceWorker' in navigator) {
     <!-- Reorderable Catalog Shelves -->
     <div id="lists"></div>
 
-    <!-- The shell's "Hide titles already shown in rows above" toggle (P6-3),
-         right above the Daily Randomizer. Emitted only for a browser with the
-         FF_NEW_UI cookie; the old page keeps it in Settings. -->
-${newUi ? '    <div id="appShellHomeEditor"></div>' : ''}
+    <!-- Duplicate rows toggle right above the Daily Randomizer -->
+${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-top:16px; padding:12px 16px; background:var(--surface); border-radius:12px; border:1px solid var(--border);">' +
+      '<div class="settings-toggle-row" style="padding:0;">' +
+        '<div style="flex:1; min-width:0; padding-right:12px;">' +
+          '<span style="font-weight:600; font-size:0.88rem; color:var(--text);">Hide titles already shown in rows above</span>' +
+          '<p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">The top row keeps everything; lower rows drop titles already shown above.</p>' +
+        '</div>' +
+        '<label class="ui-toggle" aria-label="Hide titles already shown in rows above">' +
+          '<input type="checkbox" id="catalogsDedupeCheckbox"' + (initialDedupeAcrossLists ? ' checked' : '') + ' data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:dedupeAcrossLists&quot;,&quot;@checked&quot;]">' +
+          '<span class="ui-toggle-slider"></span>' +
+        '</label>' +
+      '</div>' +
+    '</div>')}
 
     <!-- 24-Hour Randomizer Controls -->
     <div style="margin-top:16px; padding:12px 16px; background:var(--surface); border-radius:12px; border:1px solid var(--border);">
@@ -36142,6 +36175,13 @@ function appActStoreSettingValue(key, value) {
 
 function appActStoreSettingChecked(key, checked) {
   try { localStorage.setItem(String(key), checked ? '1' : '0'); } catch (e) {}
+  if (key === 'myListAddon:dedupeAcrossLists') {
+    const cb1 = document.getElementById('catalogsDedupeCheckbox');
+    const cb2 = document.getElementById('dedupeAcrossListsCheckbox');
+    if (cb1) cb1.checked = !!checked;
+    if (cb2) cb2.checked = !!checked;
+    if (typeof renderLivePreview === 'function') renderLivePreview();
+  }
   saveState();
   return true;
 }
@@ -39256,7 +39296,7 @@ function addRow(name, url, type, enabled, group, channelId) {
       : (isChannel || isCustomList || isPremade)
         ? ''
         : '<button type="button" class="secondary add-source-btn" data-act="addSourceRow" data-act-args="[&quot;@self&quot;]">+ Add another source (merge into one catalog)</button>') +
-    '<div class="live-preview-shelf" style="padding:0; margin:0; border:none; background:transparent;"><div class="live-preview-shelf-title"><span class="shelf-drag-handle" title="Drag to reorder catalog">&#x2630;</span><span class="shelf-title-text">' + escapeHtml(name || 'Unnamed') + ' - ' + (type === 'series' ? 'Series' : 'Movies') + '</span><span class="live-preview-shelf-status"></span><button type="button" class="text-action-btn" disabled>See All &rsaquo;</button></div><div class="live-preview-posters"><p style="color:var(--muted); font-size:0.88rem; text-align:center; padding: 20px;"><small>Click "Refresh Preview" above to load posters.</small></p></div></div>';
+    '<div class="live-preview-shelf"><div class="live-preview-shelf-title"><span class="shelf-drag-handle" title="Drag to reorder catalog">&#x2630;</span><span class="shelf-title-text">' + escapeHtml(name || 'Unnamed') + ' - ' + (type === 'series' ? 'Series' : 'Movies') + '</span><span class="live-preview-shelf-status"></span><button type="button" class="text-action-btn" disabled>See All &rsaquo;</button></div><div class="live-preview-posters"><p style="color:var(--muted); font-size:0.88rem; text-align:center; padding: 20px;"><small>Click "Refresh Preview" above to load posters.</small></p></div></div>';
   container.appendChild(div);
   // Every custom-list row this browser owns gets a live server-side copy
   // (see withLiveListToken): the token is stamped into the row's URL here,
@@ -70211,6 +70251,8 @@ async function loadCreatorSync(opts) {
       if (typeof synced.keys.dedupeAcrossLists === 'boolean') {
         const cb = document.getElementById('dedupeAcrossListsCheckbox');
         if (cb) cb.checked = synced.keys.dedupeAcrossLists;
+        const catCb = document.getElementById('catalogsDedupeCheckbox');
+        if (catCb) catCb.checked = synced.keys.dedupeAcrossLists;
         try { localStorage.setItem('myListAddon:dedupeAcrossLists', synced.keys.dedupeAcrossLists ? '1' : '0'); } catch (e) {}
       }
       if (typeof synced.keys.shuffleShelves === 'boolean') {
@@ -74294,7 +74336,14 @@ function collectKeys() {
     })(),
     hideNonDigitalReleases: document.getElementById('hideNonDigitalReleasesCheckbox') ? document.getElementById('hideNonDigitalReleasesCheckbox').checked : false,
     adultContentFilter: typeof isAdultContentFilterEnabled === 'function' ? isAdultContentFilterEnabled() : (localStorage.getItem('myListAddon:adultContentFilter') === '1'),
-    dedupeAcrossLists: document.getElementById('dedupeAcrossListsCheckbox') ? document.getElementById('dedupeAcrossListsCheckbox').checked : (localStorage.getItem('myListAddon:dedupeAcrossLists') === '1'),
+    dedupeAcrossLists: (function() {
+      const cb1 = document.getElementById('catalogsDedupeCheckbox');
+      const cb2 = document.getElementById('dedupeAcrossListsCheckbox');
+      if (cb1 && cb1.checked) return true;
+      if (cb2 && cb2.checked) return true;
+      if (cb1 || cb2) return false;
+      try { return localStorage.getItem('myListAddon:dedupeAcrossLists') === '1'; } catch (e) { return false; }
+    })(),
     syncTraktHistory: localStorage.getItem('myListAddon:syncTraktHistory') === 'true',
     syncMdblistHistory: localStorage.getItem('myListAddon:syncMdblistHistory') === 'true',
     syncSimklHistory: localStorage.getItem('myListAddon:syncSimklHistory') === 'true',
@@ -78072,6 +78121,8 @@ function applyImportedConfig(data) {
   if (typeof s.dedupeAcrossLists === 'boolean') {
     const cb = document.getElementById('dedupeAcrossListsCheckbox');
     if (cb) cb.checked = s.dedupeAcrossLists;
+    const catCb = document.getElementById('catalogsDedupeCheckbox');
+    if (catCb) catCb.checked = s.dedupeAcrossLists;
     try { localStorage.setItem('myListAddon:dedupeAcrossLists', s.dedupeAcrossLists ? '1' : '0'); } catch (e) {}
   }
   if (typeof s.region === 'string' && s.region) {
@@ -79891,11 +79942,11 @@ if (serverEntries.length && !serverEntriesAreDefaults) {
   const savedDedupeAcrossListsDirect = (function() {
     try { return localStorage.getItem('myListAddon:dedupeAcrossLists'); } catch (e) { return null; }
   })();
-  if (savedDedupeAcrossListsDirect !== null && document.getElementById('dedupeAcrossListsCheckbox')) {
-    document.getElementById('dedupeAcrossListsCheckbox').checked = savedDedupeAcrossListsDirect === '1';
-  } else if (saved && saved.keys && document.getElementById('dedupeAcrossListsCheckbox')) {
-    document.getElementById('dedupeAcrossListsCheckbox').checked = !!saved.keys.dedupeAcrossLists;
-  }
+  const isDedupeOn = savedDedupeAcrossListsDirect !== null ? (savedDedupeAcrossListsDirect === '1') : (saved && saved.keys ? !!saved.keys.dedupeAcrossLists : false);
+  const dedupeEl = document.getElementById('dedupeAcrossListsCheckbox');
+  if (dedupeEl) dedupeEl.checked = isDedupeOn;
+  const catDedupeEl = document.getElementById('catalogsDedupeCheckbox');
+  if (catDedupeEl) catDedupeEl.checked = isDedupeOn;
   const tmdbDisc = localStorage.getItem('myListAddon:tmdbDisconnected') === 'true';
   const mdblistDisc = localStorage.getItem('myListAddon:mdblistDisconnected') === 'true';
   const traktDisc = localStorage.getItem('myListAddon:traktDisconnected') === 'true';
@@ -81213,6 +81264,8 @@ function appShellSetDedupe(on) {
   try { localStorage.setItem('myListAddon:dedupeAcrossLists', value); } catch (e) {}
   const legacy = document.getElementById('dedupeAcrossListsCheckbox');
   if (legacy) legacy.checked = !!on;
+  const cat = document.getElementById('catalogsDedupeCheckbox');
+  if (cat) cat.checked = !!on;
   if (typeof saveState === 'function') saveState();
   if (typeof renderLivePreview === 'function') renderLivePreview();
   appShellRenderHomeEditor();

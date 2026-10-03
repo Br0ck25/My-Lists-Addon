@@ -3526,6 +3526,8 @@ async function loadCreatorSync(opts) {
       if (typeof synced.keys.dedupeAcrossLists === 'boolean') {
         const cb = document.getElementById('dedupeAcrossListsCheckbox');
         if (cb) cb.checked = synced.keys.dedupeAcrossLists;
+        const catCb = document.getElementById('catalogsDedupeCheckbox');
+        if (catCb) catCb.checked = synced.keys.dedupeAcrossLists;
         try { localStorage.setItem('myListAddon:dedupeAcrossLists', synced.keys.dedupeAcrossLists ? '1' : '0'); } catch (e) {}
       }
       if (typeof synced.keys.shuffleShelves === 'boolean') {

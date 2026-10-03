@@ -2,6 +2,33 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-03 (Antigravity): Catalogs UI Polish - Dedupe Toggle Display, See All Link Styling, & Poster Title Alignment.**
+>
+> **Where things stand**
+> - "Hide titles already shown in rows above" Always Visible on Catalogs Tab (`10_tab-search-add.js`, `16_client-row-core.js`, `22_client-creator-profile.js`, `23_client-list-management.js`, `24_client-backup-restore-presets.js`):
+>   - Root Cause: In production environments where `FF_NEW_UI` is not set in Worker environment variables, `newUi` is `false`, so `<div id="appShellHomeEditor"></div>` was not emitted.
+>   - Fix: Rendered the `.settings-toggle-row` card directly in HTML above Daily Randomizer when `newUi` is false, matching the exact styling and copy.
+>   - Wired `catalogsDedupeCheckbox` across state restoration, presets, profile sync, `collectKeys()`, and `appActStoreSettingChecked` to ensure 100% two-way sync with `dedupeAcrossListsCheckbox` and live preview.
+> - "See All ›" Text Action Link Polish (`09_page-shell.js`):
+>   - Root Cause: Global button rules (`button { border-radius: var(--radius-pill); }`) and `:where(button:not(...))` applied capsule pill background and 40px min-height to `.text-action-btn` on hover/focus.
+>   - Fix: Excluded `.text-action-btn` from `:where(button:not(...))` rules.
+>   - Replaced button pill background with sleek text link styling: `background: transparent !important; border: none !important; box-shadow: none !important; border-radius: 0 !important; color: var(--accent) !important; font-size: 0.82rem; font-weight: 600; text-decoration: none;`. Hover applies `text-decoration: underline;` matching `.discover-chart-seeall`.
+> - Poster Title Overflow & Baseline Clipping Fix (`09_page-shell.js`, `16_client-row-core.js`):
+>   - Root Cause: `.live-preview-shelf` had hardcoded inline `style="padding:0; margin:0; border:none; background:transparent;"` and `.entry` had `padding: 0 !important;`. The last row of posters had 0px bottom margin, placing poster titles directly on top of the next card's 12px rounded corner border.
+>   - Fix:
+>     - Removed hardcoded inline style on `.live-preview-shelf` so CSS applies.
+>     - Added `padding: 0 0 14px 0; margin-bottom: 12px;` to `.live-preview-shelf`.
+>     - Added `padding-bottom: 6px;` to `.live-preview-posters`.
+>     - Added `padding: 2px 4px 4px 4px;` and `line-height: 1.25;` to `.live-preview-poster-name` and `.live-preview-poster-subtitle`.
+>     - Added `margin-bottom: 20px;` and `gap: 12px;` to `#lists`.
+>   - Poster names and descenders now have ample breathing room and will never touch or breach container borders.
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK (5,420,826 bytes).
+>   - `node --check worker_entry_combined.js`: OK (0 syntax errors).
+>   - `python gen_map.py`: 2,660 symbols, 211 routes.
+>   - All 542 targeted tests passing (`node --test tests/app-shell*.test.mjs tests/client*.test.mjs`).
+> - Branch: `feat/design-system-phase-1`
+>
 > **HANDOFF, 2026-10-03 (Antigravity): Catalogs UI Polish - Control Row Height Normalization, Hide Titles Already Shown, & Mobile Actions Layout.**
 >
 > **Where things stand**

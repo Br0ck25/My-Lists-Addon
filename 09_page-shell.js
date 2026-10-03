@@ -3318,7 +3318,7 @@ ${seoHeadHtml}
   }
 
   /* Default button behavior (Primary brand style) */
-  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn)),
+  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn, .text-action-btn)),
   .btn-primary,
   .primary:not(.lc-btn) {
     background: var(--color-brand);
@@ -3329,7 +3329,7 @@ ${seoHeadHtml}
     padding: 10px 18px;
   }
 
-  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn)):hover:not(:disabled),
+  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn, .text-action-btn)):hover:not(:disabled),
   .btn-primary:hover:not(:disabled),
   .primary:not(.lc-btn):hover:not(:disabled) {
     background: var(--color-brand-hover);
@@ -3337,7 +3337,7 @@ ${seoHeadHtml}
     color: var(--color-text-inverse, #fff);
   }
 
-  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn)):active:not(:disabled),
+  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn, .text-action-btn)):active:not(:disabled),
   .btn-primary:active:not(:disabled),
   .primary:not(.lc-btn):active:not(:disabled) {
     background: var(--color-brand-active);
@@ -3910,7 +3910,7 @@ ${seoHeadHtml}
     line-height: 1.35;
   }
 
-  #lists { display: grid; gap: 10px; grid-template-columns: 1fr; width: 100%; max-width: 100%; }
+  #lists { display: grid; gap: 12px; grid-template-columns: 1fr; width: 100%; max-width: 100%; margin-bottom: 20px; }
   .entry {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -4071,11 +4071,11 @@ ${seoHeadHtml}
 
   /* --- Live Preview Shelves (Home Screen) --------------------------------- */
   .live-preview-shelf {
-    background: var(--surface);
-    border: 1px solid var(--border);
+    background: transparent;
+    border: none;
     border-radius: var(--radius);
-    padding: 12px;
-    box-shadow: var(--shadow-sm);
+    padding: 0 0 14px 0;
+    box-shadow: none;
     margin-bottom: 12px;
     width: 100%;
   }
@@ -4097,25 +4097,47 @@ ${seoHeadHtml}
   }
   .live-preview-shelf-title .text-action-btn {
     margin-left: auto;
-    color: var(--accent);
-    background: none;
-    border: none;
-    font-size: 0.84rem;
+    color: var(--accent) !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    min-height: unset !important;
+    height: auto !important;
+    padding: 2px 4px !important;
+    font-size: 0.82rem;
     font-weight: 600;
     cursor: pointer;
-    padding: 2px 4px;
     flex: none;
+    text-decoration: none;
     white-space: nowrap;
+    outline: none;
+    line-height: inherit;
+  }
+  .live-preview-shelf-title .text-action-btn:hover:not(:disabled) {
+    background: transparent !important;
+    color: var(--accent) !important;
+    text-decoration: underline;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+  .live-preview-shelf-title .text-action-btn:active:not(:disabled) {
+    background: transparent !important;
+    color: var(--accent) !important;
+    transform: none !important;
   }
   .live-preview-shelf-title .text-action-btn:disabled {
     opacity: 0.35;
     cursor: default;
+    background: transparent !important;
+    text-decoration: none;
   }
   .live-preview-posters {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 8px;
     width: 100%;
+    padding-bottom: 6px;
   }
   @media (max-width: 640px) {
     .live-preview-posters .live-preview-poster-card:nth-child(n+4) {
@@ -4162,7 +4184,8 @@ ${seoHeadHtml}
     font-size: 0.70rem;
     color: var(--text);
     font-weight: 600;
-    line-height: 1.2;
+    line-height: 1.25;
+    padding: 2px 4px 4px 4px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -4175,7 +4198,8 @@ ${seoHeadHtml}
   .live-preview-poster-subtitle {
     font-size: 0.66rem;
     color: var(--muted);
-    line-height: 1.2;
+    line-height: 1.25;
+    padding: 0 4px 2px 4px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

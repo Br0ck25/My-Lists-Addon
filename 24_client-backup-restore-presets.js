@@ -636,6 +636,8 @@ function applyImportedConfig(data) {
   if (typeof s.dedupeAcrossLists === 'boolean') {
     const cb = document.getElementById('dedupeAcrossListsCheckbox');
     if (cb) cb.checked = s.dedupeAcrossLists;
+    const catCb = document.getElementById('catalogsDedupeCheckbox');
+    if (catCb) catCb.checked = s.dedupeAcrossLists;
     try { localStorage.setItem('myListAddon:dedupeAcrossLists', s.dedupeAcrossLists ? '1' : '0'); } catch (e) {}
   }
   if (typeof s.region === 'string' && s.region) {
@@ -2455,11 +2457,11 @@ if (serverEntries.length && !serverEntriesAreDefaults) {
   const savedDedupeAcrossListsDirect = (function() {
     try { return localStorage.getItem('myListAddon:dedupeAcrossLists'); } catch (e) { return null; }
   })();
-  if (savedDedupeAcrossListsDirect !== null && document.getElementById('dedupeAcrossListsCheckbox')) {
-    document.getElementById('dedupeAcrossListsCheckbox').checked = savedDedupeAcrossListsDirect === '1';
-  } else if (saved && saved.keys && document.getElementById('dedupeAcrossListsCheckbox')) {
-    document.getElementById('dedupeAcrossListsCheckbox').checked = !!saved.keys.dedupeAcrossLists;
-  }
+  const isDedupeOn = savedDedupeAcrossListsDirect !== null ? (savedDedupeAcrossListsDirect === '1') : (saved && saved.keys ? !!saved.keys.dedupeAcrossLists : false);
+  const dedupeEl = document.getElementById('dedupeAcrossListsCheckbox');
+  if (dedupeEl) dedupeEl.checked = isDedupeOn;
+  const catDedupeEl = document.getElementById('catalogsDedupeCheckbox');
+  if (catDedupeEl) catDedupeEl.checked = isDedupeOn;
   const tmdbDisc = localStorage.getItem('myListAddon:tmdbDisconnected') === 'true';
   const mdblistDisc = localStorage.getItem('myListAddon:mdblistDisconnected') === 'true';
   const traktDisc = localStorage.getItem('myListAddon:traktDisconnected') === 'true';
@@ -3777,6 +3779,8 @@ function appShellSetDedupe(on) {
   try { localStorage.setItem('myListAddon:dedupeAcrossLists', value); } catch (e) {}
   const legacy = document.getElementById('dedupeAcrossListsCheckbox');
   if (legacy) legacy.checked = !!on;
+  const cat = document.getElementById('catalogsDedupeCheckbox');
+  if (cat) cat.checked = !!on;
   if (typeof saveState === 'function') saveState();
   if (typeof renderLivePreview === 'function') renderLivePreview();
   appShellRenderHomeEditor();
