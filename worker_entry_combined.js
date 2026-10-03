@@ -30326,6 +30326,77 @@ ${seoHeadHtml}
     border-color: rgba(255,59,48,0.4);
     background: var(--color-danger-subtle);
   }
+  /* --- Soft Brand-Tinted Add/Remove Action Buttons on List Cards --- */
+  .localListAddToConfigBtn:not(.is-added),
+  .creatorListAddToConfigBtn:not(.is-added),
+  .myListAddBtn:not(.is-added) {
+    background: rgba(0, 122, 255, 0.08) !important;
+    border-color: rgba(0, 122, 255, 0.35) !important;
+    color: var(--accent) !important;
+    box-shadow: 0 1px 3px rgba(0, 122, 255, 0.08);
+  }
+  :root.dark-theme .localListAddToConfigBtn:not(.is-added),
+  :root.dark-theme .creatorListAddToConfigBtn:not(.is-added),
+  :root.dark-theme .myListAddBtn:not(.is-added) {
+    background: rgba(10, 132, 255, 0.14) !important;
+    border-color: rgba(10, 132, 255, 0.4) !important;
+    color: var(--accent) !important;
+  }
+  .localListAddToConfigBtn:not(.is-added):hover:not(:disabled),
+  .creatorListAddToConfigBtn:not(.is-added):hover:not(:disabled),
+  .myListAddBtn:not(.is-added):hover:not(:disabled) {
+    background: rgba(0, 122, 255, 0.16) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+  }
+  :root.dark-theme .localListAddToConfigBtn:not(.is-added):hover:not(:disabled),
+  :root.dark-theme .creatorListAddToConfigBtn:not(.is-added):hover:not(:disabled),
+  :root.dark-theme .myListAddBtn:not(.is-added):hover:not(:disabled) {
+    background: rgba(10, 132, 255, 0.24) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+  }
+  .localListAddToConfigBtn:not(.is-added):active:not(:disabled),
+  .creatorListAddToConfigBtn:not(.is-added):active:not(:disabled),
+  .myListAddBtn:not(.is-added):active:not(:disabled) {
+    transform: scale(0.97);
+    background: rgba(0, 122, 255, 0.22) !important;
+  }
+  .localListAddToConfigBtn.is-added,
+  .creatorListAddToConfigBtn.is-added,
+  .myListAddBtn.is-added {
+    color: var(--color-danger, #d70015) !important;
+    background: rgba(255, 59, 48, 0.08) !important;
+    border-color: rgba(255, 59, 48, 0.35) !important;
+    box-shadow: 0 1px 3px rgba(255, 59, 48, 0.08);
+  }
+  :root.dark-theme .localListAddToConfigBtn.is-added,
+  :root.dark-theme .creatorListAddToConfigBtn.is-added,
+  :root.dark-theme .myListAddBtn.is-added {
+    color: var(--color-danger, #ff453a) !important;
+    background: rgba(255, 69, 58, 0.15) !important;
+    border-color: rgba(255, 69, 58, 0.4) !important;
+  }
+  .localListAddToConfigBtn.is-added:hover:not(:disabled),
+  .creatorListAddToConfigBtn.is-added:hover:not(:disabled),
+  .myListAddBtn.is-added:hover:not(:disabled) {
+    background: rgba(255, 59, 48, 0.16) !important;
+    border-color: var(--danger) !important;
+    color: var(--danger) !important;
+  }
+  :root.dark-theme .localListAddToConfigBtn.is-added:hover:not(:disabled),
+  :root.dark-theme .creatorListAddToConfigBtn.is-added:hover:not(:disabled),
+  :root.dark-theme .myListAddBtn.is-added:hover:not(:disabled) {
+    background: rgba(255, 69, 58, 0.24) !important;
+    border-color: var(--danger) !important;
+    color: var(--danger) !important;
+  }
+  .localListAddToConfigBtn.is-added:active:not(:disabled),
+  .creatorListAddToConfigBtn.is-added:active:not(:disabled),
+  .myListAddBtn.is-added:active:not(:disabled) {
+    transform: scale(0.97);
+    background: rgba(255, 59, 48, 0.22) !important;
+  }
   .lc-btn.view-btn {
     color: var(--color-brand);
     border-color: transparent;
@@ -36611,8 +36682,8 @@ function updateAllListAddButtons() {
     const type = btn.dataset.type;
     const isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(url, type) || isListAddedToConfig(null, type, url) || isListAddedToConfig(url, 'movie') || isListAddedToConfig(url, 'series') || isListAddedToConfig(url)) : false;
     btn.classList.toggle('is-added', isAdded);
-    btn.classList.toggle('secondary', isAdded);
-    btn.classList.toggle('primary', !isAdded);
+    btn.classList.add('secondary');
+    btn.classList.remove('primary');
     btn.textContent = isAdded ? 'Remove' : '+ Add';
     btn.style.color = isAdded ? 'var(--danger)' : '';
     btn.disabled = false;
@@ -39960,7 +40031,7 @@ function renderMyMdblistLists(lists) {
     const isAdded = typeof isListAddedToConfig === 'function'
       ? (isListAddedToConfig(l.url, targetType) || isListAddedToConfig(null, targetType, l.url) || isListAddedToConfig(l.url, 'movie') || isListAddedToConfig(l.url, 'series') || isListAddedToConfig(l.url))
       : (alreadyAdded.has(l.url + '|' + targetType) || alreadyAdded.has(l.url + '|movie') || alreadyAdded.has(l.url + '|series'));
-    const addBtns = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary is-added' : 'primary') + ' myListAddBtn" ' +
+    const addBtns = '<button type="button" class="lc-btn secondary myListAddBtn' + (isAdded ? ' is-added' : '') + '" ' +
       (isAdded ? 'style="color:var(--danger);"' : '') +
       ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(targetType) + '">' +
       (isAdded ? 'Remove' : '+ Add') +
@@ -40929,7 +41000,7 @@ function renderMyPrivateTraktLists(lists) {
     const isAdded = typeof isListAddedToConfig === 'function'
       ? (isListAddedToConfig(l.url, targetType) || isListAddedToConfig(null, targetType, l.url) || isListAddedToConfig(l.url, 'movie') || isListAddedToConfig(l.url, 'series') || isListAddedToConfig(l.url))
       : (alreadyAdded.has(l.url + '|' + targetType) || alreadyAdded.has(l.url + '|movie') || alreadyAdded.has(l.url + '|series'));
-    const addBtns = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary is-added' : 'primary') + ' myListAddBtn myPrivateListAddBtn" ' +
+    const addBtns = '<button type="button" class="lc-btn secondary myListAddBtn myPrivateListAddBtn' + (isAdded ? ' is-added' : '') + '" ' +
       (isAdded ? 'style="color:var(--danger);"' : '') +
       ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(targetType) + '">' +
       (isAdded ? 'Remove' : '+ Add') +
@@ -41359,7 +41430,7 @@ function renderMyTmdbLists(lists) {
     const isAdded = typeof isListAddedToConfig === 'function'
       ? (isListAddedToConfig(l.url, targetType) || isListAddedToConfig(null, targetType, l.url) || isListAddedToConfig(l.url, 'movie') || isListAddedToConfig(l.url, 'series') || isListAddedToConfig(l.url))
       : (alreadyAdded.has(l.url + '|' + targetType) || alreadyAdded.has(l.url + '|movie') || alreadyAdded.has(l.url + '|series'));
-    const addBtns = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary is-added' : 'primary') + ' myListAddBtn" ' +
+    const addBtns = '<button type="button" class="lc-btn secondary myListAddBtn' + (isAdded ? ' is-added' : '') + '" ' +
       (isAdded ? 'style="color:var(--danger);"' : '') +
       ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(targetType) + '">' +
       (isAdded ? 'Remove' : '+ Add') +
@@ -41940,7 +42011,7 @@ function renderMySimklLists(lists) {
     const markWatchedBtn = isCompleted
       ? '<button type="button" class="lc-btn secondary" data-url="' + escapeAttr(l.url) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(type) + '" data-act="markSimklListAllWatched" data-act-args="[&quot;@self&quot;]">Mark all as Watched</button>'
       : '';
-    const addBtn = '<button type="button" class="lc-btn ' + (added ? 'secondary is-added' : 'primary') + ' myListAddBtn" ' + (added ? 'style="color:var(--danger);"' : '') + ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + type + '">' + (added ? 'Remove' : '+ Add') + '</button>';
+    const addBtn = '<button type="button" class="lc-btn secondary myListAddBtn' + (added ? ' is-added' : '') + '" ' + (added ? 'style="color:var(--danger);"' : '') + ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + type + '">' + (added ? 'Remove' : '+ Add') + '</button>';
 
     const previewItems = filteredItems.slice(0, 9);
     let posterThumbs = '';

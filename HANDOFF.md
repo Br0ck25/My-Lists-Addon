@@ -2,9 +2,21 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
-> **HANDOFF, 2026-10-03 (Antigravity): Global Drag Handle Modernization & Lists Tab Design Polish.**
+> **HANDOFF, 2026-10-03 (Antigravity): Global Drag Handle Modernization, 2-Line Poster Title Clamp, & Soft Brand-Tinted Add Pills.**
 >
 > **Where things stand**
+> - 2-Line Poster Title Wrapping Fix (`09_page-shell.js`):
+>   - Replaced single-line `white-space: nowrap` on `.list-card-mini-poster-name` with a standard 2-line clamp (`display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; min-height: 2.5em; word-break: break-word;`).
+>   - Long movie and series titles (*Once Upon a Time in Hollywood*, *The Shawshank Redemption*, *Mononoke the Movie: The Phantom*) now wrap cleanly across two lines without premature truncation.
+>   - Preserves uniform baseline alignment across all posters in the row via `min-height: 2.5em`.
+> - Soft Brand-Tinted Add/Remove Pills (`09_page-shell.js`, `16_client-row-core.js`, `17_client-my-lists-and-trakt-oauth.js`, `21_client-custom-list-builder.js`, `22_client-creator-profile.js`):
+>   - Solved the action indifference and flat contrast of plain white secondary buttons by styling `+ Add` as a soft brand-tinted pill:
+>     - Background: `rgba(0, 122, 255, 0.08)` (light) / `rgba(10, 132, 255, 0.14)` (dark)
+>     - Border: `1.5px solid rgba(0, 122, 255, 0.35)`
+>     - Color: `var(--accent)` (brand blue)
+>   - Visually separates the additive "publish to catalogs" action from neutral card management (`Edit`, `Delete` in neutral white).
+>   - Avoids overwhelming the viewport or competing with the solid blue `+ New List` CTA at the top.
+>   - When added to catalogs, smoothly transitions into a soft danger-tinted pill (`color: var(--danger); background: rgba(255, 59, 48, 0.08); border-color: rgba(255, 59, 48, 0.35);`).
 > - Global Drag Handle Modernization (`09_page-shell.js`, `16_client-row-core.js`, `20_client-channel-builder.js`, `21_client-custom-list-builder.js`, `22_client-creator-profile.js`):
 >   - Modernized drag handles across all 5 locations in the site simultaneously from the hamburger glyph (`☰` / `&#x2630;` / `&#9776;`) to a unified, crisp 6-dot vertical grip SVG (`<svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor"...>`).
 >   - Updated locations:
@@ -18,9 +30,6 @@
 >   - Transformed `.cw-remove-btn` from a permanent shouting red alert dot to a sleek translucent dark glass circular badge (`background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); border: 1px solid rgba(255, 255, 255, 0.22);`).
 >   - On desktop (`@media (hover: hover) and (pointer: fine)`), hide remove buttons until hovering or focusing the parent poster card, keeping artwork clean while smooth fading in on hover.
 >   - Highlight in `var(--danger)` only on hover/active. On touch devices, remain visible in glass style to maintain 100% touch accessibility without alarm fatigue.
-> - Action Hierarchy on List Cards (`16_client-row-core.js`, `21_client-custom-list-builder.js`, `22_client-creator-profile.js`):
->   - Standardized `+ Add` buttons on list cards to `.lc-btn.secondary`, preventing 5+ competing bright blue primary buttons down the page and reserving solid blue for top-level creation (`+ New List`).
->   - Maintained smooth toggle transitions: toggling between `+ Add` and `Remove` retains `.secondary` and toggles `.is-added` with `var(--danger)` text color.
 > - Tokenized "Auto-tracked" Badges (`09_page-shell.js`, `21_client-custom-list-builder.js`, `22_client-creator-profile.js`):
 >   - Replaced raw inline unstyled text with the semantic design token `<span class="list-source-badge badge-autotrack">Auto-tracked</span>`.
 > - Verification & Tests:

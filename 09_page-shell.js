@@ -1903,6 +1903,77 @@ ${seoHeadHtml}
     border-color: rgba(255,59,48,0.4);
     background: var(--color-danger-subtle);
   }
+  /* --- Soft Brand-Tinted Add/Remove Action Buttons on List Cards --- */
+  .localListAddToConfigBtn:not(.is-added),
+  .creatorListAddToConfigBtn:not(.is-added),
+  .myListAddBtn:not(.is-added) {
+    background: rgba(0, 122, 255, 0.08) !important;
+    border-color: rgba(0, 122, 255, 0.35) !important;
+    color: var(--accent) !important;
+    box-shadow: 0 1px 3px rgba(0, 122, 255, 0.08);
+  }
+  :root.dark-theme .localListAddToConfigBtn:not(.is-added),
+  :root.dark-theme .creatorListAddToConfigBtn:not(.is-added),
+  :root.dark-theme .myListAddBtn:not(.is-added) {
+    background: rgba(10, 132, 255, 0.14) !important;
+    border-color: rgba(10, 132, 255, 0.4) !important;
+    color: var(--accent) !important;
+  }
+  .localListAddToConfigBtn:not(.is-added):hover:not(:disabled),
+  .creatorListAddToConfigBtn:not(.is-added):hover:not(:disabled),
+  .myListAddBtn:not(.is-added):hover:not(:disabled) {
+    background: rgba(0, 122, 255, 0.16) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+  }
+  :root.dark-theme .localListAddToConfigBtn:not(.is-added):hover:not(:disabled),
+  :root.dark-theme .creatorListAddToConfigBtn:not(.is-added):hover:not(:disabled),
+  :root.dark-theme .myListAddBtn:not(.is-added):hover:not(:disabled) {
+    background: rgba(10, 132, 255, 0.24) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+  }
+  .localListAddToConfigBtn:not(.is-added):active:not(:disabled),
+  .creatorListAddToConfigBtn:not(.is-added):active:not(:disabled),
+  .myListAddBtn:not(.is-added):active:not(:disabled) {
+    transform: scale(0.97);
+    background: rgba(0, 122, 255, 0.22) !important;
+  }
+  .localListAddToConfigBtn.is-added,
+  .creatorListAddToConfigBtn.is-added,
+  .myListAddBtn.is-added {
+    color: var(--color-danger, #d70015) !important;
+    background: rgba(255, 59, 48, 0.08) !important;
+    border-color: rgba(255, 59, 48, 0.35) !important;
+    box-shadow: 0 1px 3px rgba(255, 59, 48, 0.08);
+  }
+  :root.dark-theme .localListAddToConfigBtn.is-added,
+  :root.dark-theme .creatorListAddToConfigBtn.is-added,
+  :root.dark-theme .myListAddBtn.is-added {
+    color: var(--color-danger, #ff453a) !important;
+    background: rgba(255, 69, 58, 0.15) !important;
+    border-color: rgba(255, 69, 58, 0.4) !important;
+  }
+  .localListAddToConfigBtn.is-added:hover:not(:disabled),
+  .creatorListAddToConfigBtn.is-added:hover:not(:disabled),
+  .myListAddBtn.is-added:hover:not(:disabled) {
+    background: rgba(255, 59, 48, 0.16) !important;
+    border-color: var(--danger) !important;
+    color: var(--danger) !important;
+  }
+  :root.dark-theme .localListAddToConfigBtn.is-added:hover:not(:disabled),
+  :root.dark-theme .creatorListAddToConfigBtn.is-added:hover:not(:disabled),
+  :root.dark-theme .myListAddBtn.is-added:hover:not(:disabled) {
+    background: rgba(255, 69, 58, 0.24) !important;
+    border-color: var(--danger) !important;
+    color: var(--danger) !important;
+  }
+  .localListAddToConfigBtn.is-added:active:not(:disabled),
+  .creatorListAddToConfigBtn.is-added:active:not(:disabled),
+  .myListAddBtn.is-added:active:not(:disabled) {
+    transform: scale(0.97);
+    background: rgba(255, 59, 48, 0.22) !important;
+  }
   .lc-btn.view-btn {
     color: var(--color-brand);
     border-color: transparent;

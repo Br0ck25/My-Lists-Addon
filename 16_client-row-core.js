@@ -1033,8 +1033,8 @@ function updateAllListAddButtons() {
     const type = btn.dataset.type;
     const isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(url, type) || isListAddedToConfig(null, type, url) || isListAddedToConfig(url, 'movie') || isListAddedToConfig(url, 'series') || isListAddedToConfig(url)) : false;
     btn.classList.toggle('is-added', isAdded);
-    btn.classList.toggle('secondary', isAdded);
-    btn.classList.toggle('primary', !isAdded);
+    btn.classList.add('secondary');
+    btn.classList.remove('primary');
     btn.textContent = isAdded ? 'Remove' : '+ Add';
     btn.style.color = isAdded ? 'var(--danger)' : '';
     btn.disabled = false;
