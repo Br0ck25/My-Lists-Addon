@@ -33,98 +33,112 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       </select>
     </div>
 
-    <div class="panel" style="margin-top:12px;">
+      <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Trending &amp; Popular Catalogs</h2>
-      <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">
-        <input type="checkbox" id="hideNonDigitalReleasesCheckbox" ${initialHideNonDigitalReleases ? 'checked' : ''} data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:hideNonDigitalReleases&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-        <div>
-          <span style="font-weight:600;">Hide items with no digital release</span>
-          <p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Removes still-in-theaters movies with no known digital or physical release from TMDB Trending and Popular catalogs.</p>
-          <details style="margin-top:4px; font-size:0.8rem; color:var(--muted);">
+      <div class="settings-toggle-row">
+        <div style="flex:1; min-width:0; padding-right:12px;">
+          <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Hide items with no digital release</span>
+          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Removes still-in-theaters movies with no known digital or physical release from TMDB Trending and Popular catalogs.</p>
+          <details style="margin-top:6px; font-size:0.8rem; color:var(--muted);">
             <summary style="cursor:pointer; color:var(--accent); font-weight:600;">More details</summary>
             <p style="margin:4px 0 0;">Useful for skipping in-theaters titles you cannot stream or buy yet. TV Shows are not affected. Requires Save/Update to take effect on an existing install link.</p>
           </details>
         </div>
-      </label>
+        <label class="ui-toggle" aria-label="Hide items with no digital release">
+          <input type="checkbox" id="hideNonDigitalReleasesCheckbox" ${initialHideNonDigitalReleases ? 'checked' : ''} data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:hideNonDigitalReleases&quot;,&quot;@checked&quot;]">
+          <span class="ui-toggle-slider"></span>
+        </label>
+      </div>
     </div>
 
     <div class="panel" style="margin-top:12px;" id="legacyDedupePanel">
       <h2 class="panel-title">Duplicate Items Across Lists</h2>
-      <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">
-        <input type="checkbox" id="dedupeAcrossListsCheckbox" ${initialDedupeAcrossLists ? 'checked' : ''} data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:dedupeAcrossLists&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-        <div>
-          <span style="font-weight:600;">Remove duplicate items across lists</span>
-          <p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Automatically removes titles from lower catalog rows if already shown in a row above.</p>
-          <details style="margin-top:4px; font-size:0.8rem; color:var(--muted);">
+      <div class="settings-toggle-row">
+        <div style="flex:1; min-width:0; padding-right:12px;">
+          <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Remove duplicate items across lists</span>
+          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Automatically removes titles from lower catalog rows if already shown in a row above.</p>
+          <details style="margin-top:6px; font-size:0.8rem; color:var(--muted);">
             <summary style="cursor:pointer; color:var(--accent); font-weight:600;">How row deduplication works</summary>
             <p style="margin:4px 0 0;">Keeps your top catalog row intact; every list below it has items shown in earlier lists filtered out. Drag lists in Catalogs to change priority. Requires Save/Update to take effect on an existing install link.</p>
           </details>
         </div>
-      </label>
+        <label class="ui-toggle" aria-label="Remove duplicate items across lists">
+          <input type="checkbox" id="dedupeAcrossListsCheckbox" ${initialDedupeAcrossLists ? 'checked' : ''} data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:dedupeAcrossLists&quot;,&quot;@checked&quot;]">
+          <span class="ui-toggle-slider"></span>
+        </label>
+      </div>
     </div>
 
     <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Adult Content &amp; Poster Safety</h2>
-      <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">
-        <input type="checkbox" id="adultContentFilterCheckbox" ${initialAdultContentFilter ? 'checked' : ''} data-act="appActToggleAdultFilter" data-act-args="[&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-        <div>
-          <span style="font-weight:600;">Adult Content Filter</span>
-          <p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Filter NSFW posters and replace default unfiltered posters with safe, age-appropriate ones across your catalogs, search, continue watching, and Stremio/Nuvio.</p>
+      <div class="settings-toggle-row">
+        <div style="flex:1; min-width:0; padding-right:12px;">
+          <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Adult Content Filter</span>
+          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Filter NSFW posters and replace default unfiltered posters with safe, age-appropriate ones across your catalogs, search, continue watching, and Stremio/Nuvio.</p>
         </div>
-      </label>
+        <label class="ui-toggle" aria-label="Adult Content Filter">
+          <input type="checkbox" id="adultContentFilterCheckbox" ${initialAdultContentFilter ? 'checked' : ''} data-act="appActToggleAdultFilter" data-act-args="[&quot;@checked&quot;]">
+          <span class="ui-toggle-slider"></span>
+        </label>
+      </div>
     </div>
 
     <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Better Posters</h2>
       <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Swap plain poster artwork for <a href="https://btttr.cc/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">BetterPosters</a> &mdash; posters with the genre, rating and tags drawn directly into the artwork. No API key or account needed.</p>
-      <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-        <input type="checkbox" id="betterPostersCheckbox" ${initialBetterPosters ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPosters&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-        <div>
-          <span style="font-weight:600;">Use Better Posters artwork</span>
-          <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Enriches artwork across Live Preview, Search, Discover, and your streaming catalog rows.</p>
-          <details style="margin-top:4px; font-size:0.8rem; color:var(--muted);">
+      <div class="settings-toggle-row">
+        <div style="flex:1; min-width:0; padding-right:12px;">
+          <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Use Better Posters artwork</span>
+          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Enriches artwork across Live Preview, Search, Discover, and your streaming catalog rows.</p>
+          <details style="margin-top:6px; font-size:0.8rem; color:var(--muted);">
             <summary style="cursor:pointer; color:var(--accent); font-weight:600;">Artwork compatibility details</summary>
             <p style="margin:4px 0 0;">Only titles with an IMDb ID are affected. Poster badges are drawn over this artwork rather than replacing it. Adult Content Filter still overrides it. TV Channel artwork and episode stills are preserved.</p>
           </details>
         </div>
-      </label>
+        <label class="ui-toggle" aria-label="Use Better Posters artwork">
+          <input type="checkbox" id="betterPostersCheckbox" ${initialBetterPosters ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPosters&quot;,&quot;@checked&quot;]">
+          <span class="ui-toggle-slider"></span>
+        </label>
+      </div>
       <div id="betterPostersOptions" style="display:${initialBetterPosters ? 'flex' : 'none'}; flex-direction:column; gap:10px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
         <div style="font-size:0.85rem; font-weight:700; color:var(--text);">What to draw on the poster</div>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersGenreCheckbox" ${initialBetterPostersGenre ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersGenre&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Genre</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Genre label along the bottom of the poster.</p>
-          </div>
-        </label>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersRatingCheckbox" ${initialBetterPostersRating ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRating&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Rating</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Star rating along the bottom of the poster.</p>
-          </div>
-        </label>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersTrendTagsCheckbox" ${initialBetterPostersTrendTags ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersTrendTags&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Trend tags</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">A corner tag on titles that are currently trending or newly released.</p>
-          </div>
-        </label>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersQualityCheckbox" ${initialBetterPostersQuality ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersQuality&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Quality tags</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">4K, Dolby Vision and Atmos badges, where BetterPosters knows them.</p>
-          </div>
-        </label>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersAgeCheckbox" ${initialBetterPostersAge ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersAge&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Age rating</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Certification chip (PG-13, TV-MA, and so on).</p>
-          </div>
-        </label>
+        <div class="settings-check-group">
+          <label class="settings-check-item">
+            <input type="checkbox" id="betterPostersGenreCheckbox" ${initialBetterPostersGenre ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersGenre&quot;,&quot;@checked&quot;]">
+            <div style="flex:1; min-width:0;">
+              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Genre</span>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Genre label along the bottom of the poster.</p>
+            </div>
+          </label>
+          <label class="settings-check-item">
+            <input type="checkbox" id="betterPostersRatingCheckbox" ${initialBetterPostersRating ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRating&quot;,&quot;@checked&quot;]">
+            <div style="flex:1; min-width:0;">
+              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Rating</span>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Star rating along the bottom of the poster.</p>
+            </div>
+          </label>
+          <label class="settings-check-item">
+            <input type="checkbox" id="betterPostersTrendTagsCheckbox" ${initialBetterPostersTrendTags ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersTrendTags&quot;,&quot;@checked&quot;]">
+            <div style="flex:1; min-width:0;">
+              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Trend tags</span>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">A corner tag on titles that are currently trending or newly released.</p>
+            </div>
+          </label>
+          <label class="settings-check-item">
+            <input type="checkbox" id="betterPostersQualityCheckbox" ${initialBetterPostersQuality ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersQuality&quot;,&quot;@checked&quot;]">
+            <div style="flex:1; min-width:0;">
+              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Quality tags</span>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">4K, Dolby Vision and Atmos badges, where BetterPosters knows them.</p>
+            </div>
+          </label>
+          <label class="settings-check-item">
+            <input type="checkbox" id="betterPostersAgeCheckbox" ${initialBetterPostersAge ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersAge&quot;,&quot;@checked&quot;]">
+            <div style="flex:1; min-width:0;">
+              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Age rating</span>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Certification chip (PG-13, TV-MA, and so on).</p>
+            </div>
+          </label>
+        </div>
         <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
           <label for="betterPostersRatingSourceSelect" style="font-size:0.85rem; font-weight:600; color:var(--text);">Rating source</label>
           <select id="betterPostersRatingSourceSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRatingSource&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
@@ -152,7 +166,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
             <label class="settings-check-item">
               <input type="checkbox" id="badgeAiringNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesAiringNext&quot;,&quot;@checked&quot;]">
               <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Airing Next</span>
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Airing Next (Dashboard)</span>
                 <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Airing Next shelf and provider lists on your dashboard</p>
               </div>
             </label>
@@ -200,21 +214,21 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
             <label class="settings-check-item">
               <input type="checkbox" id="badgeStremioAiringNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioAiringNext&quot;,&quot;@checked&quot;]">
               <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Airing Next Catalogs</span>
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Airing Next Catalogs in Stremio &amp; Nuvio</span>
                 <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Overlay premiere, finale, and air date chips in Stremio and Nuvio</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeStremioContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioContinueWatching&quot;,&quot;@checked&quot;]">
               <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Continue Watching Catalogs</span>
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Continue Watching Catalogs in Stremio &amp; Nuvio</span>
                 <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Overlay chips on Continue Watching artwork in Stremio and Nuvio</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeStremioWatchlistCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioWatchlist&quot;,&quot;@checked&quot;]">
               <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Watchlist Catalogs</span>
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Watchlist Catalogs in Stremio &amp; Nuvio</span>
                 <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Overlay chips on Watchlist artwork in Stremio and Nuvio</p>
               </div>
             </label>

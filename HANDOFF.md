@@ -2,6 +2,31 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-03 (Antigravity): Settings UI Modernization - Phase A (Account & Sync Cleanup).**
+>
+> **Where things stand**
+> - Completed Phase A of Settings UI & UX Modernization:
+>   - Unified Account Key Credential Group (`.account-key-group`, `.account-key-actions`):
+>     - Consolidated the 4-row detached Account Key layout into a single sleek credential input group with trailing inline `Show Key` and `Copy Key` buttons.
+>     - Fully responsive on mobile screens (stacks gracefully below 520px).
+>   - Contained Danger Zone in Collapsible Progressive Disclosure (`.danger-zone-disclosure`, `.danger-zone-summary`, `.danger-zone-arrow`, `.danger-zone-content`):
+>     - Destructive actions (`Reset Account Data` and `Delete Account & All Data`) are now enclosed inside an expandable `<details>` drawer at the bottom of the card.
+>     - Eliminates loud, anxiety-inducing orange/red alert boxes from dominating everyday settings browsing.
+>   - Converted Watchlist Preferences to Modern Toggle:
+>     - Transformed "Automatically remove watched items from Watchlist" from an unstyled checkbox into `.settings-toggle-row` with an iOS-style `.ui-toggle` switch.
+>   - Modernized Hidden Lists Section:
+>     - Wrapped "Whole Sections" and "Individual Lists" into `.settings-check-group` and `.settings-check-item` cards with hover feedback, clean dividers, and touch-friendly padding.
+>   - Modernized Remaining Account & Sync Feature Panels:
+>     - Converted "Hide items with no digital release" (Trending & Popular Catalogs), "Remove duplicate items across lists" (Duplicate Items Across Lists), "Adult Content Filter", and "Use Better Posters artwork" into `.settings-toggle-row` with `.ui-toggle` switches.
+>     - Converted Better Posters options (Genre, Rating, Trend tags, Quality tags, Age rating) into `.settings-check-group` with `.settings-check-item` cards.
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK.
+>   - `node --check worker_entry_combined.js`: OK.
+>   - `python gen_map.py`: 2,660 symbols, 211 routes.
+>   - Full test suite: 2,068 passing, 0 failing across all 25 test files.
+> - Branch: `feat/design-system-phase-1`
+> - Next step: Phase B (Presets & Backup cleanup - 3-dot overflow menu for preset rows, progressive disclosure for raw JSON box, friendly backup download/upload buttons).
+>
 > **HANDOFF, 2026-10-03 (Antigravity): Design System - Settings Toggles & Checklist Modernization.**
 >
 > **Where things stand**

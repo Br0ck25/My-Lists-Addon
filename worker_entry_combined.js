@@ -30359,6 +30359,95 @@ ${seoHeadHtml}
     letter-spacing: 0.5px;
     margin: 4px 0 10px;
   }
+  .account-key-group {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    margin: 4px 0 6px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .account-key-group .creator-key-display {
+    flex: 1 1 auto;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 8px 12px;
+  }
+  .account-key-actions {
+    display: flex;
+    gap: 6px;
+    align-items: stretch;
+    flex-shrink: 0;
+  }
+  .account-key-actions .lc-btn {
+    padding: 0 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.84rem;
+    font-weight: 600;
+    white-space: nowrap;
+    min-height: 40px;
+  }
+  @media (max-width: 520px) {
+    .account-key-group {
+      flex-direction: column;
+    }
+    .account-key-actions {
+      width: 100%;
+    }
+    .account-key-actions .lc-btn {
+      flex: 1;
+    }
+  }
+
+  .danger-zone-disclosure {
+    margin-top: 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md, 10px);
+    background: var(--surface-1, rgba(255, 255, 255, 0.02));
+    overflow: hidden;
+    transition: border-color 0.15s ease;
+  }
+  .danger-zone-disclosure[open] {
+    border-color: rgba(255, 59, 48, 0.3);
+  }
+  .danger-zone-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--muted);
+    list-style: none;
+  }
+  .danger-zone-summary::-webkit-details-marker {
+    display: none;
+  }
+  .danger-zone-summary:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.03);
+  }
+  .danger-zone-disclosure[open] .danger-zone-arrow {
+    transform: rotate(180deg);
+  }
+  .danger-zone-arrow {
+    transition: transform 0.15s ease;
+    font-size: 0.8rem;
+    display: inline-block;
+  }
+  .danger-zone-content {
+    padding: 0 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
   .webhook-input-group {
     display: flex;
     gap: 8px;
@@ -34212,98 +34301,112 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       </select>
     </div>
 
-    <div class="panel" style="margin-top:12px;">
+      <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Trending &amp; Popular Catalogs</h2>
-      <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">
-        <input type="checkbox" id="hideNonDigitalReleasesCheckbox" ${initialHideNonDigitalReleases ? 'checked' : ''} data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:hideNonDigitalReleases&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-        <div>
-          <span style="font-weight:600;">Hide items with no digital release</span>
-          <p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Removes still-in-theaters movies with no known digital or physical release from TMDB Trending and Popular catalogs.</p>
-          <details style="margin-top:4px; font-size:0.8rem; color:var(--muted);">
+      <div class="settings-toggle-row">
+        <div style="flex:1; min-width:0; padding-right:12px;">
+          <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Hide items with no digital release</span>
+          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Removes still-in-theaters movies with no known digital or physical release from TMDB Trending and Popular catalogs.</p>
+          <details style="margin-top:6px; font-size:0.8rem; color:var(--muted);">
             <summary style="cursor:pointer; color:var(--accent); font-weight:600;">More details</summary>
             <p style="margin:4px 0 0;">Useful for skipping in-theaters titles you cannot stream or buy yet. TV Shows are not affected. Requires Save/Update to take effect on an existing install link.</p>
           </details>
         </div>
-      </label>
+        <label class="ui-toggle" aria-label="Hide items with no digital release">
+          <input type="checkbox" id="hideNonDigitalReleasesCheckbox" ${initialHideNonDigitalReleases ? 'checked' : ''} data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:hideNonDigitalReleases&quot;,&quot;@checked&quot;]">
+          <span class="ui-toggle-slider"></span>
+        </label>
+      </div>
     </div>
 
     <div class="panel" style="margin-top:12px;" id="legacyDedupePanel">
       <h2 class="panel-title">Duplicate Items Across Lists</h2>
-      <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">
-        <input type="checkbox" id="dedupeAcrossListsCheckbox" ${initialDedupeAcrossLists ? 'checked' : ''} data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:dedupeAcrossLists&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-        <div>
-          <span style="font-weight:600;">Remove duplicate items across lists</span>
-          <p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Automatically removes titles from lower catalog rows if already shown in a row above.</p>
-          <details style="margin-top:4px; font-size:0.8rem; color:var(--muted);">
+      <div class="settings-toggle-row">
+        <div style="flex:1; min-width:0; padding-right:12px;">
+          <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Remove duplicate items across lists</span>
+          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Automatically removes titles from lower catalog rows if already shown in a row above.</p>
+          <details style="margin-top:6px; font-size:0.8rem; color:var(--muted);">
             <summary style="cursor:pointer; color:var(--accent); font-weight:600;">How row deduplication works</summary>
             <p style="margin:4px 0 0;">Keeps your top catalog row intact; every list below it has items shown in earlier lists filtered out. Drag lists in Catalogs to change priority. Requires Save/Update to take effect on an existing install link.</p>
           </details>
         </div>
-      </label>
+        <label class="ui-toggle" aria-label="Remove duplicate items across lists">
+          <input type="checkbox" id="dedupeAcrossListsCheckbox" ${initialDedupeAcrossLists ? 'checked' : ''} data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:dedupeAcrossLists&quot;,&quot;@checked&quot;]">
+          <span class="ui-toggle-slider"></span>
+        </label>
+      </div>
     </div>
 
     <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Adult Content &amp; Poster Safety</h2>
-      <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">
-        <input type="checkbox" id="adultContentFilterCheckbox" ${initialAdultContentFilter ? 'checked' : ''} data-act="appActToggleAdultFilter" data-act-args="[&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-        <div>
-          <span style="font-weight:600;">Adult Content Filter</span>
-          <p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Filter NSFW posters and replace default unfiltered posters with safe, age-appropriate ones across your catalogs, search, continue watching, and Stremio/Nuvio.</p>
+      <div class="settings-toggle-row">
+        <div style="flex:1; min-width:0; padding-right:12px;">
+          <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Adult Content Filter</span>
+          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Filter NSFW posters and replace default unfiltered posters with safe, age-appropriate ones across your catalogs, search, continue watching, and Stremio/Nuvio.</p>
         </div>
-      </label>
+        <label class="ui-toggle" aria-label="Adult Content Filter">
+          <input type="checkbox" id="adultContentFilterCheckbox" ${initialAdultContentFilter ? 'checked' : ''} data-act="appActToggleAdultFilter" data-act-args="[&quot;@checked&quot;]">
+          <span class="ui-toggle-slider"></span>
+        </label>
+      </div>
     </div>
 
     <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Better Posters</h2>
       <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Swap plain poster artwork for <a href="https://btttr.cc/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">BetterPosters</a> &mdash; posters with the genre, rating and tags drawn directly into the artwork. No API key or account needed.</p>
-      <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-        <input type="checkbox" id="betterPostersCheckbox" ${initialBetterPosters ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPosters&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-        <div>
-          <span style="font-weight:600;">Use Better Posters artwork</span>
-          <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Enriches artwork across Live Preview, Search, Discover, and your streaming catalog rows.</p>
-          <details style="margin-top:4px; font-size:0.8rem; color:var(--muted);">
+      <div class="settings-toggle-row">
+        <div style="flex:1; min-width:0; padding-right:12px;">
+          <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Use Better Posters artwork</span>
+          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Enriches artwork across Live Preview, Search, Discover, and your streaming catalog rows.</p>
+          <details style="margin-top:6px; font-size:0.8rem; color:var(--muted);">
             <summary style="cursor:pointer; color:var(--accent); font-weight:600;">Artwork compatibility details</summary>
             <p style="margin:4px 0 0;">Only titles with an IMDb ID are affected. Poster badges are drawn over this artwork rather than replacing it. Adult Content Filter still overrides it. TV Channel artwork and episode stills are preserved.</p>
           </details>
         </div>
-      </label>
+        <label class="ui-toggle" aria-label="Use Better Posters artwork">
+          <input type="checkbox" id="betterPostersCheckbox" ${initialBetterPosters ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPosters&quot;,&quot;@checked&quot;]">
+          <span class="ui-toggle-slider"></span>
+        </label>
+      </div>
       <div id="betterPostersOptions" style="display:${initialBetterPosters ? 'flex' : 'none'}; flex-direction:column; gap:10px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
         <div style="font-size:0.85rem; font-weight:700; color:var(--text);">What to draw on the poster</div>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersGenreCheckbox" ${initialBetterPostersGenre ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersGenre&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Genre</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Genre label along the bottom of the poster.</p>
-          </div>
-        </label>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersRatingCheckbox" ${initialBetterPostersRating ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRating&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Rating</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Star rating along the bottom of the poster.</p>
-          </div>
-        </label>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersTrendTagsCheckbox" ${initialBetterPostersTrendTags ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersTrendTags&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Trend tags</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">A corner tag on titles that are currently trending or newly released.</p>
-          </div>
-        </label>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersQualityCheckbox" ${initialBetterPostersQuality ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersQuality&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Quality tags</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">4K, Dolby Vision and Atmos badges, where BetterPosters knows them.</p>
-          </div>
-        </label>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersAgeCheckbox" ${initialBetterPostersAge ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersAge&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Age rating</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Certification chip (PG-13, TV-MA, and so on).</p>
-          </div>
-        </label>
+        <div class="settings-check-group">
+          <label class="settings-check-item">
+            <input type="checkbox" id="betterPostersGenreCheckbox" ${initialBetterPostersGenre ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersGenre&quot;,&quot;@checked&quot;]">
+            <div style="flex:1; min-width:0;">
+              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Genre</span>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Genre label along the bottom of the poster.</p>
+            </div>
+          </label>
+          <label class="settings-check-item">
+            <input type="checkbox" id="betterPostersRatingCheckbox" ${initialBetterPostersRating ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRating&quot;,&quot;@checked&quot;]">
+            <div style="flex:1; min-width:0;">
+              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Rating</span>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Star rating along the bottom of the poster.</p>
+            </div>
+          </label>
+          <label class="settings-check-item">
+            <input type="checkbox" id="betterPostersTrendTagsCheckbox" ${initialBetterPostersTrendTags ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersTrendTags&quot;,&quot;@checked&quot;]">
+            <div style="flex:1; min-width:0;">
+              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Trend tags</span>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">A corner tag on titles that are currently trending or newly released.</p>
+            </div>
+          </label>
+          <label class="settings-check-item">
+            <input type="checkbox" id="betterPostersQualityCheckbox" ${initialBetterPostersQuality ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersQuality&quot;,&quot;@checked&quot;]">
+            <div style="flex:1; min-width:0;">
+              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Quality tags</span>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">4K, Dolby Vision and Atmos badges, where BetterPosters knows them.</p>
+            </div>
+          </label>
+          <label class="settings-check-item">
+            <input type="checkbox" id="betterPostersAgeCheckbox" ${initialBetterPostersAge ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersAge&quot;,&quot;@checked&quot;]">
+            <div style="flex:1; min-width:0;">
+              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Age rating</span>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Certification chip (PG-13, TV-MA, and so on).</p>
+            </div>
+          </label>
+        </div>
         <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
           <label for="betterPostersRatingSourceSelect" style="font-size:0.85rem; font-weight:600; color:var(--text);">Rating source</label>
           <select id="betterPostersRatingSourceSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRatingSource&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
@@ -34331,7 +34434,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
             <label class="settings-check-item">
               <input type="checkbox" id="badgeAiringNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesAiringNext&quot;,&quot;@checked&quot;]">
               <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Airing Next</span>
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Airing Next (Dashboard)</span>
                 <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Airing Next shelf and provider lists on your dashboard</p>
               </div>
             </label>
@@ -34379,21 +34482,21 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
             <label class="settings-check-item">
               <input type="checkbox" id="badgeStremioAiringNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioAiringNext&quot;,&quot;@checked&quot;]">
               <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Airing Next Catalogs</span>
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Airing Next Catalogs in Stremio &amp; Nuvio</span>
                 <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Overlay premiere, finale, and air date chips in Stremio and Nuvio</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeStremioContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioContinueWatching&quot;,&quot;@checked&quot;]">
               <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Continue Watching Catalogs</span>
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Continue Watching Catalogs in Stremio &amp; Nuvio</span>
                 <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Overlay chips on Continue Watching artwork in Stremio and Nuvio</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeStremioWatchlistCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioWatchlist&quot;,&quot;@checked&quot;]">
               <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Watchlist Catalogs</span>
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Watchlist Catalogs in Stremio &amp; Nuvio</span>
                 <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Overlay chips on Watchlist artwork in Stremio and Nuvio</p>
               </div>
             </label>
@@ -66703,13 +66806,17 @@ function renderAccountKeySection() {
     '</div>' +
     '<button type="button" class="secondary lc-btn" data-act="switchCreatorProfile">Sign Out / Switch</button>' +
     '</div>' +
-    '<p style="margin:0 0 4px;"><small>Account Key</small></p>' +
-    '<div class="creator-key-display" id="accountKeyDisplay">' + '\u2022'.repeat(Math.max(8, key.length)) + '</div>' +
-    '<div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-top:10px;">' +
-    '<button type="button" class="secondary" id="accountKeyToggleBtn" data-act="toggleAccountKeyVisibility">Show Key</button>' +
-    '<button type="button" class="secondary" data-act="copyAccountKey">Copy Key</button>' +
+    '<div style="margin-top:6px;">' +
+      '<div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); font-weight:700; margin-bottom:6px;">Account Key</div>' +
+      '<div class="account-key-group">' +
+        '<div class="creator-key-display" id="accountKeyDisplay">' + '\u2022'.repeat(Math.max(8, key.length)) + '</div>' +
+        '<div class="account-key-actions">' +
+          '<button type="button" class="secondary lc-btn" id="accountKeyToggleBtn" data-act="toggleAccountKeyVisibility">Show Key</button>' +
+          '<button type="button" class="secondary lc-btn" data-act="copyAccountKey">Copy Key</button>' +
+        '</div>' +
+      '</div>' +
+      '<p style="margin:4px 0 0; color:var(--muted); font-size:0.78rem;">Anyone with this key can sign in as you and edit your lists &mdash; keep it somewhere safe, and don&apos;t share it.</p>' +
     '</div>' +
-    '<p style="margin-top:10px;"><small>Anyone with this key can sign in as you and edit your lists &mdash; keep it somewhere safe, and don&apos;t share it.</small></p>' +
     '<div class="recovery-section" style="margin-top:16px; padding:14px 16px; border:1px solid rgba(255,255,255,0.12); border-radius:12px; background:rgba(255,255,255,0.03);">' +
       '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:6px;">' +
         '<div style="font-weight:700; font-size:0.9rem; color:var(--text);">Account Recovery</div>' +
@@ -66726,16 +66833,27 @@ function renderAccountKeySection() {
         (hasRecovery ? 'Update Recovery Answer' : 'Set Recovery Answer') +
       '</button>' +
     '</div>' +
-    '<div class="danger-zone" style="margin-top:20px; padding:14px 16px; border:1px solid rgba(255,149,0,0.35); border-radius:12px; background:rgba(255,149,0,0.06);">' +
-      '<div style="font-weight:700; font-size:0.9rem; color:#ff9500; margin-bottom:4px;">Reset Account</div>' +
-      '<p style="margin:0 0 10px; font-size:0.82rem; color:var(--muted);">Delete every list, channel, preset, watch history entry and catalog row on this account, returning it to how it was when you created it. Your account and key stay the same, and you stay signed in.</p>' +
-      '<button type="button" class="lc-btn" style="background:#ff9500; color:#fff; border:none; padding:7px 14px; font-weight:700; border-radius:8px; cursor:pointer;" data-act="openResetAccountModal">Reset Account Data</button>' +
-    '</div>' +
-    '<div class="danger-zone" style="margin-top:12px; padding:14px 16px; border:1px solid rgba(255,59,48,0.3); border-radius:12px; background:rgba(255,59,48,0.05);">' +
-      '<div style="font-weight:700; font-size:0.9rem; color:var(--danger, #ff3b30); margin-bottom:4px;">Delete Account</div>' +
-      '<p style="margin:0 0 10px; font-size:0.82rem; color:var(--muted);">Permanently delete your account, all published lists, and all synced data from the server.</p>' +
-      '<button type="button" class="lc-btn" style="background:#ff3b30; color:#fff; border:none; padding:7px 14px; font-weight:700; border-radius:8px; cursor:pointer;" data-act="openDeleteAccountModal">Delete Account &amp; All Data</button>' +
-    '</div>';
+    '<details class="danger-zone-disclosure">' +
+      '<summary class="danger-zone-summary">' +
+        '<span style="display:flex; align-items:center; gap:8px;">' +
+          '<span style="font-size:0.95rem;">&#x26A0;</span>' +
+          '<span>Danger Zone (Reset or Delete Account)</span>' +
+        '</span>' +
+        '<span class="danger-zone-arrow">&#x25BE;</span>' +
+      '</summary>' +
+      '<div class="danger-zone-content">' +
+        '<div style="border:1px solid rgba(255,149,0,0.3); border-radius:10px; padding:12px 14px; background:rgba(255,149,0,0.05);">' +
+          '<div style="font-weight:700; font-size:0.88rem; color:#ff9500; margin-bottom:4px;">Reset Account</div>' +
+          '<p style="margin:0 0 10px; font-size:0.8rem; color:var(--muted); line-height:1.4;">Delete every list, channel, preset, watch history entry and catalog row on this account, returning it to how it was when you created it. Your account and key stay the same, and you stay signed in.</p>' +
+          '<button type="button" class="lc-btn" style="background:#ff9500; color:#fff; border:none; padding:6px 14px; font-weight:700; font-size:0.84rem; border-radius:8px; cursor:pointer;" data-act="openResetAccountModal">Reset Account Data</button>' +
+        '</div>' +
+        '<div style="border:1px solid rgba(255,59,48,0.3); border-radius:10px; padding:12px 14px; background:rgba(255,59,48,0.05);">' +
+          '<div style="font-weight:700; font-size:0.88rem; color:var(--danger, #ff3b30); margin-bottom:4px;">Delete Account</div>' +
+          '<p style="margin:0 0 10px; font-size:0.8rem; color:var(--muted); line-height:1.4;">Permanently delete your account, all published lists, and all synced data from the server.</p>' +
+          '<button type="button" class="lc-btn" style="background:#ff3b30; color:#fff; border:none; padding:6px 14px; font-weight:700; font-size:0.84rem; border-radius:8px; cursor:pointer;" data-act="openDeleteAccountModal">Delete Account &amp; All Data</button>' +
+        '</div>' +
+      '</div>' +
+    '</details>';
 }
 
 function openSetRecoveryAnswerModal() {
@@ -67019,13 +67137,16 @@ function renderWatchlistPreferencesSection() {
     autoClean = val !== '0';
   } catch (e) {}
   box.innerHTML =
-    '<label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">' +
-      '<input type="checkbox" id="removeWatchedFromWatchlistCheck" ' + (autoClean ? 'checked' : '') + ' data-act="onRemoveWatchedFromWatchlistToggle" data-act-args="[&quot;@self&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">' +
-      '<div>' +
-        '<span style="font-weight:600;">Automatically remove watched items from Watchlist</span>' +
-        '<p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Movies are removed once watched. TV shows are only removed after every episode has been watched.</p>' +
+    '<div class="settings-toggle-row">' +
+      '<div style="flex:1; min-width:0; padding-right:12px;">' +
+        '<span style="font-weight:600; font-size:0.92rem; color:var(--text);">Automatically remove watched items from Watchlist</span>' +
+        '<p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Movies are removed once watched. TV shows are only removed after every episode has been watched.</p>' +
       '</div>' +
-    '</label>';
+      '<label class="ui-toggle" aria-label="Automatically remove watched items from Watchlist">' +
+        '<input type="checkbox" id="removeWatchedFromWatchlistCheck" ' + (autoClean ? 'checked' : '') + ' data-act="onRemoveWatchedFromWatchlistToggle" data-act-args="[&quot;@self&quot;]">' +
+        '<span class="ui-toggle-slider"></span>' +
+      '</label>' +
+    '</div>';
 }
 
 function onRemoveWatchedFromWatchlistToggle(cb) {
@@ -67150,30 +67271,36 @@ function renderHiddenListsSettingsSection() {
   // connected yet -- hiding ahead of connecting is harmless and saves a
   // trip back here after connecting.
   const sectionLabels = { mdblist: 'Your MDBList Lists', trakt: 'Your Trakt Lists', tmdb: 'Your TMDB Lists', simkl: 'Your Simkl Lists' };
-  const sectionsHtml = Object.keys(sectionLabels).map((section) => {
+  const sectionsHtml = '<div class="settings-check-group">' + Object.keys(sectionLabels).map((section) => {
     const checked = hiddenSections.has(section);
-    return '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none; padding:6px 0; border-bottom:1px solid var(--border);">' +
-      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-section-id="' + escapeAttr(section) + '" data-act="onHiddenSectionToggle" data-act-args="[&quot;@self&quot;]" style="cursor:pointer; width:16px; height:16px; flex-shrink:0;">' +
-      '<span style="font-weight:600;">' + escapeHtml(sectionLabels[section]) + '</span>' +
+    return '<label class="settings-check-item">' +
+      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-section-id="' + escapeAttr(section) + '" data-act="onHiddenSectionToggle" data-act-args="[&quot;@self&quot;]">' +
+      '<div style="flex:1; min-width:0;">' +
+        '<span style="font-weight:600; font-size:0.88rem; color:var(--text);">' + escapeHtml(sectionLabels[section]) + '</span>' +
+      '</div>' +
     '</label>';
-  }).join('');
+  }).join('') + '</div>';
 
-  const rowsHtml = rows.length ? rows.map((r) => {
+  const rowsHtml = rows.length ? ('<div class="settings-check-group">' + rows.map((r) => {
     const checked = hiddenIds.has(String(r.id));
-    return '<label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none; padding:6px 0; border-bottom:1px solid var(--border);">' +
-      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-list-id="' + escapeAttr(r.id) + '" data-act="onHiddenListToggle" data-act-args="[&quot;@self&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px; flex-shrink:0;">' +
-      '<div style="min-width:0;">' +
-        '<span style="font-weight:600; overflow-wrap:anywhere;">' + escapeHtml(r.name) + '</span>' +
+    return '<label class="settings-check-item">' +
+      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-list-id="' + escapeAttr(r.id) + '" data-act="onHiddenListToggle" data-act-args="[&quot;@self&quot;]">' +
+      '<div style="flex:1; min-width:0;">' +
+        '<span style="font-weight:600; font-size:0.88rem; color:var(--text); overflow-wrap:anywhere;">' + escapeHtml(r.name) + '</span>' +
         '<div style="color:var(--muted); font-size:0.78rem; margin-top:2px;">' + escapeHtml(r.source) + '</div>' +
       '</div>' +
     '</label>';
-  }).join('') : '<p style="color:var(--muted); font-size:0.85rem; margin-top:8px;"><small>No individual lists found yet -- visit My Lists (and connect any providers you use) first.</small></p>';
+  }).join('') + '</div>') : '<p style="color:var(--muted); font-size:0.85rem; margin-top:8px;"><small>No individual lists found yet -- visit My Lists (and connect any providers you use) first.</small></p>';
 
   box.innerHTML =
-    '<p style="margin:0 0 6px; font-weight:600; font-size:0.85rem;">Whole Sections</p>' +
-    sectionsHtml +
-    '<p style="margin:14px 0 6px; font-weight:600; font-size:0.85rem;">Individual Lists</p>' +
-    rowsHtml;
+    '<div style="margin-bottom:14px;">' +
+      '<div style="font-weight:700; font-size:0.85rem; color:var(--text); margin-bottom:6px;">Whole Sections</div>' +
+      sectionsHtml +
+    '</div>' +
+    '<div style="border-top:1px solid var(--border); padding-top:14px;">' +
+      '<div style="font-weight:700; font-size:0.85rem; color:var(--text); margin-bottom:6px;">Individual Lists</div>' +
+      rowsHtml +
+    '</div>';
 }
 
 function onHiddenListToggle(cb) {

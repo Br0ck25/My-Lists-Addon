@@ -684,13 +684,17 @@ function renderAccountKeySection() {
     '</div>' +
     '<button type="button" class="secondary lc-btn" data-act="switchCreatorProfile">Sign Out / Switch</button>' +
     '</div>' +
-    '<p style="margin:0 0 4px;"><small>Account Key</small></p>' +
-    '<div class="creator-key-display" id="accountKeyDisplay">' + '\u2022'.repeat(Math.max(8, key.length)) + '</div>' +
-    '<div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-top:10px;">' +
-    '<button type="button" class="secondary" id="accountKeyToggleBtn" data-act="toggleAccountKeyVisibility">Show Key</button>' +
-    '<button type="button" class="secondary" data-act="copyAccountKey">Copy Key</button>' +
+    '<div style="margin-top:6px;">' +
+      '<div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); font-weight:700; margin-bottom:6px;">Account Key</div>' +
+      '<div class="account-key-group">' +
+        '<div class="creator-key-display" id="accountKeyDisplay">' + '\u2022'.repeat(Math.max(8, key.length)) + '</div>' +
+        '<div class="account-key-actions">' +
+          '<button type="button" class="secondary lc-btn" id="accountKeyToggleBtn" data-act="toggleAccountKeyVisibility">Show Key</button>' +
+          '<button type="button" class="secondary lc-btn" data-act="copyAccountKey">Copy Key</button>' +
+        '</div>' +
+      '</div>' +
+      '<p style="margin:4px 0 0; color:var(--muted); font-size:0.78rem;">Anyone with this key can sign in as you and edit your lists &mdash; keep it somewhere safe, and don&apos;t share it.</p>' +
     '</div>' +
-    '<p style="margin-top:10px;"><small>Anyone with this key can sign in as you and edit your lists &mdash; keep it somewhere safe, and don&apos;t share it.</small></p>' +
     '<div class="recovery-section" style="margin-top:16px; padding:14px 16px; border:1px solid rgba(255,255,255,0.12); border-radius:12px; background:rgba(255,255,255,0.03);">' +
       '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:6px;">' +
         '<div style="font-weight:700; font-size:0.9rem; color:var(--text);">Account Recovery</div>' +
@@ -707,16 +711,27 @@ function renderAccountKeySection() {
         (hasRecovery ? 'Update Recovery Answer' : 'Set Recovery Answer') +
       '</button>' +
     '</div>' +
-    '<div class="danger-zone" style="margin-top:20px; padding:14px 16px; border:1px solid rgba(255,149,0,0.35); border-radius:12px; background:rgba(255,149,0,0.06);">' +
-      '<div style="font-weight:700; font-size:0.9rem; color:#ff9500; margin-bottom:4px;">Reset Account</div>' +
-      '<p style="margin:0 0 10px; font-size:0.82rem; color:var(--muted);">Delete every list, channel, preset, watch history entry and catalog row on this account, returning it to how it was when you created it. Your account and key stay the same, and you stay signed in.</p>' +
-      '<button type="button" class="lc-btn" style="background:#ff9500; color:#fff; border:none; padding:7px 14px; font-weight:700; border-radius:8px; cursor:pointer;" data-act="openResetAccountModal">Reset Account Data</button>' +
-    '</div>' +
-    '<div class="danger-zone" style="margin-top:12px; padding:14px 16px; border:1px solid rgba(255,59,48,0.3); border-radius:12px; background:rgba(255,59,48,0.05);">' +
-      '<div style="font-weight:700; font-size:0.9rem; color:var(--danger, #ff3b30); margin-bottom:4px;">Delete Account</div>' +
-      '<p style="margin:0 0 10px; font-size:0.82rem; color:var(--muted);">Permanently delete your account, all published lists, and all synced data from the server.</p>' +
-      '<button type="button" class="lc-btn" style="background:#ff3b30; color:#fff; border:none; padding:7px 14px; font-weight:700; border-radius:8px; cursor:pointer;" data-act="openDeleteAccountModal">Delete Account &amp; All Data</button>' +
-    '</div>';
+    '<details class="danger-zone-disclosure">' +
+      '<summary class="danger-zone-summary">' +
+        '<span style="display:flex; align-items:center; gap:8px;">' +
+          '<span style="font-size:0.95rem;">&#x26A0;</span>' +
+          '<span>Danger Zone (Reset or Delete Account)</span>' +
+        '</span>' +
+        '<span class="danger-zone-arrow">&#x25BE;</span>' +
+      '</summary>' +
+      '<div class="danger-zone-content">' +
+        '<div style="border:1px solid rgba(255,149,0,0.3); border-radius:10px; padding:12px 14px; background:rgba(255,149,0,0.05);">' +
+          '<div style="font-weight:700; font-size:0.88rem; color:#ff9500; margin-bottom:4px;">Reset Account</div>' +
+          '<p style="margin:0 0 10px; font-size:0.8rem; color:var(--muted); line-height:1.4;">Delete every list, channel, preset, watch history entry and catalog row on this account, returning it to how it was when you created it. Your account and key stay the same, and you stay signed in.</p>' +
+          '<button type="button" class="lc-btn" style="background:#ff9500; color:#fff; border:none; padding:6px 14px; font-weight:700; font-size:0.84rem; border-radius:8px; cursor:pointer;" data-act="openResetAccountModal">Reset Account Data</button>' +
+        '</div>' +
+        '<div style="border:1px solid rgba(255,59,48,0.3); border-radius:10px; padding:12px 14px; background:rgba(255,59,48,0.05);">' +
+          '<div style="font-weight:700; font-size:0.88rem; color:var(--danger, #ff3b30); margin-bottom:4px;">Delete Account</div>' +
+          '<p style="margin:0 0 10px; font-size:0.8rem; color:var(--muted); line-height:1.4;">Permanently delete your account, all published lists, and all synced data from the server.</p>' +
+          '<button type="button" class="lc-btn" style="background:#ff3b30; color:#fff; border:none; padding:6px 14px; font-weight:700; font-size:0.84rem; border-radius:8px; cursor:pointer;" data-act="openDeleteAccountModal">Delete Account &amp; All Data</button>' +
+        '</div>' +
+      '</div>' +
+    '</details>';
 }
 
 function openSetRecoveryAnswerModal() {
@@ -1000,13 +1015,16 @@ function renderWatchlistPreferencesSection() {
     autoClean = val !== '0';
   } catch (e) {}
   box.innerHTML =
-    '<label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">' +
-      '<input type="checkbox" id="removeWatchedFromWatchlistCheck" ' + (autoClean ? 'checked' : '') + ' data-act="onRemoveWatchedFromWatchlistToggle" data-act-args="[&quot;@self&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">' +
-      '<div>' +
-        '<span style="font-weight:600;">Automatically remove watched items from Watchlist</span>' +
-        '<p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Movies are removed once watched. TV shows are only removed after every episode has been watched.</p>' +
+    '<div class="settings-toggle-row">' +
+      '<div style="flex:1; min-width:0; padding-right:12px;">' +
+        '<span style="font-weight:600; font-size:0.92rem; color:var(--text);">Automatically remove watched items from Watchlist</span>' +
+        '<p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Movies are removed once watched. TV shows are only removed after every episode has been watched.</p>' +
       '</div>' +
-    '</label>';
+      '<label class="ui-toggle" aria-label="Automatically remove watched items from Watchlist">' +
+        '<input type="checkbox" id="removeWatchedFromWatchlistCheck" ' + (autoClean ? 'checked' : '') + ' data-act="onRemoveWatchedFromWatchlistToggle" data-act-args="[&quot;@self&quot;]">' +
+        '<span class="ui-toggle-slider"></span>' +
+      '</label>' +
+    '</div>';
 }
 
 function onRemoveWatchedFromWatchlistToggle(cb) {
@@ -1131,30 +1149,36 @@ function renderHiddenListsSettingsSection() {
   // connected yet -- hiding ahead of connecting is harmless and saves a
   // trip back here after connecting.
   const sectionLabels = { mdblist: 'Your MDBList Lists', trakt: 'Your Trakt Lists', tmdb: 'Your TMDB Lists', simkl: 'Your Simkl Lists' };
-  const sectionsHtml = Object.keys(sectionLabels).map((section) => {
+  const sectionsHtml = '<div class="settings-check-group">' + Object.keys(sectionLabels).map((section) => {
     const checked = hiddenSections.has(section);
-    return '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none; padding:6px 0; border-bottom:1px solid var(--border);">' +
-      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-section-id="' + escapeAttr(section) + '" data-act="onHiddenSectionToggle" data-act-args="[&quot;@self&quot;]" style="cursor:pointer; width:16px; height:16px; flex-shrink:0;">' +
-      '<span style="font-weight:600;">' + escapeHtml(sectionLabels[section]) + '</span>' +
+    return '<label class="settings-check-item">' +
+      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-section-id="' + escapeAttr(section) + '" data-act="onHiddenSectionToggle" data-act-args="[&quot;@self&quot;]">' +
+      '<div style="flex:1; min-width:0;">' +
+        '<span style="font-weight:600; font-size:0.88rem; color:var(--text);">' + escapeHtml(sectionLabels[section]) + '</span>' +
+      '</div>' +
     '</label>';
-  }).join('');
+  }).join('') + '</div>';
 
-  const rowsHtml = rows.length ? rows.map((r) => {
+  const rowsHtml = rows.length ? ('<div class="settings-check-group">' + rows.map((r) => {
     const checked = hiddenIds.has(String(r.id));
-    return '<label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none; padding:6px 0; border-bottom:1px solid var(--border);">' +
-      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-list-id="' + escapeAttr(r.id) + '" data-act="onHiddenListToggle" data-act-args="[&quot;@self&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px; flex-shrink:0;">' +
-      '<div style="min-width:0;">' +
-        '<span style="font-weight:600; overflow-wrap:anywhere;">' + escapeHtml(r.name) + '</span>' +
+    return '<label class="settings-check-item">' +
+      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-list-id="' + escapeAttr(r.id) + '" data-act="onHiddenListToggle" data-act-args="[&quot;@self&quot;]">' +
+      '<div style="flex:1; min-width:0;">' +
+        '<span style="font-weight:600; font-size:0.88rem; color:var(--text); overflow-wrap:anywhere;">' + escapeHtml(r.name) + '</span>' +
         '<div style="color:var(--muted); font-size:0.78rem; margin-top:2px;">' + escapeHtml(r.source) + '</div>' +
       '</div>' +
     '</label>';
-  }).join('') : '<p style="color:var(--muted); font-size:0.85rem; margin-top:8px;"><small>No individual lists found yet -- visit My Lists (and connect any providers you use) first.</small></p>';
+  }).join('') + '</div>') : '<p style="color:var(--muted); font-size:0.85rem; margin-top:8px;"><small>No individual lists found yet -- visit My Lists (and connect any providers you use) first.</small></p>';
 
   box.innerHTML =
-    '<p style="margin:0 0 6px; font-weight:600; font-size:0.85rem;">Whole Sections</p>' +
-    sectionsHtml +
-    '<p style="margin:14px 0 6px; font-weight:600; font-size:0.85rem;">Individual Lists</p>' +
-    rowsHtml;
+    '<div style="margin-bottom:14px;">' +
+      '<div style="font-weight:700; font-size:0.85rem; color:var(--text); margin-bottom:6px;">Whole Sections</div>' +
+      sectionsHtml +
+    '</div>' +
+    '<div style="border-top:1px solid var(--border); padding-top:14px;">' +
+      '<div style="font-weight:700; font-size:0.85rem; color:var(--text); margin-bottom:6px;">Individual Lists</div>' +
+      rowsHtml +
+    '</div>';
 }
 
 function onHiddenListToggle(cb) {

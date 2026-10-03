@@ -1934,6 +1934,95 @@ ${seoHeadHtml}
     letter-spacing: 0.5px;
     margin: 4px 0 10px;
   }
+  .account-key-group {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    margin: 4px 0 6px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .account-key-group .creator-key-display {
+    flex: 1 1 auto;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 8px 12px;
+  }
+  .account-key-actions {
+    display: flex;
+    gap: 6px;
+    align-items: stretch;
+    flex-shrink: 0;
+  }
+  .account-key-actions .lc-btn {
+    padding: 0 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.84rem;
+    font-weight: 600;
+    white-space: nowrap;
+    min-height: 40px;
+  }
+  @media (max-width: 520px) {
+    .account-key-group {
+      flex-direction: column;
+    }
+    .account-key-actions {
+      width: 100%;
+    }
+    .account-key-actions .lc-btn {
+      flex: 1;
+    }
+  }
+
+  .danger-zone-disclosure {
+    margin-top: 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md, 10px);
+    background: var(--surface-1, rgba(255, 255, 255, 0.02));
+    overflow: hidden;
+    transition: border-color 0.15s ease;
+  }
+  .danger-zone-disclosure[open] {
+    border-color: rgba(255, 59, 48, 0.3);
+  }
+  .danger-zone-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--muted);
+    list-style: none;
+  }
+  .danger-zone-summary::-webkit-details-marker {
+    display: none;
+  }
+  .danger-zone-summary:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.03);
+  }
+  .danger-zone-disclosure[open] .danger-zone-arrow {
+    transform: rotate(180deg);
+  }
+  .danger-zone-arrow {
+    transition: transform 0.15s ease;
+    font-size: 0.8rem;
+    display: inline-block;
+  }
+  .danger-zone-content {
+    padding: 0 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
   .webhook-input-group {
     display: flex;
     gap: 8px;
