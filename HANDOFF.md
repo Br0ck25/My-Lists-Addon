@@ -2,6 +2,34 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-03 (Antigravity): Catalogs UI Polish - Control Row Height Normalization, Hide Titles Already Shown, & Mobile Actions Layout.**
+>
+> **Where things stand**
+> - Control Row Height & Radius Normalization (`09_page-shell.js`):
+>   - Excluded `.ec-btn` from general `button.secondary` and `button.danger` rules so they don't inherit 40px min-height or large padding.
+>   - Standardized `input.pos` and all `.ec-btn` elements (`.drag-handle`, `.movebtn`, `.removebtn`) to exact matching dimensions:
+>     - `height: 30px; min-height: 30px !important; max-height: 30px;`
+>     - `box-sizing: border-box;`
+>     - `border-radius: 7px;`
+>     - `border: 1.5px solid var(--border-strong);`
+>   - All 5 items in the catalog edit control row now sit perfectly flush with uniform heights and border radii.
+> - "Hide titles already shown in rows above" Modernization (`24_client-backup-restore-presets.js`):
+>   - Clarified that this setting was never removed; it resides directly above Daily Randomizer on the Catalogs tab in the new UI (`#appShellHomeEditor`).
+>   - Modernized the markup in `appShellRenderHomeEditor()` to match Daily Randomizer using the sleek `.settings-toggle-row` and `.ui-toggle` switch.
+> - Mobile Actions Bar Layout (`09_page-shell.js`, `10_tab-search-add.js`):
+>   - Created `.catalog-actions-bar` replacing `.actions` on the bottom CTA row.
+>   - On mobile (`<= 640px`), `Remove All` and `Generate Install Link` sit **beside one another** in a single row rather than staggered:
+>     - `Remove All`: Compact destructive pill (`flex: 0 0 auto;`).
+>     - `Generate Install Link`: Expanded primary pill (`flex: 1 1 auto; text-align: center;`) positioned directly under the user's thumb.
+>     - Matches the side-by-side layout of `[ Install in Stremio ] [ Install in Nuvio ]` directly below it and saves precious vertical screen space.
+>   - On desktop, maintains clean spacing (`Remove All` on the left, `Generate Install Link` on the right).
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK (5,418,247 bytes).
+>   - `node --check worker_entry_combined.js`: OK.
+>   - `python gen_map.py`: 2,660 symbols, 211 routes.
+>   - All 542 client & shell tests passing; full test suite passing (2,068 tests).
+> - Branch: `feat/design-system-phase-1`
+>
 > **HANDOFF, 2026-10-03 (Antigravity): Catalogs UI Modernization - Phase 3 (Installation Card & Manifest Link Consolidation).**
 >
 > **Where things stand**

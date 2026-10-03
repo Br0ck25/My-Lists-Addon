@@ -64,8 +64,8 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ''}
       </div>
     </div>
 
-    <div class="actions" style="margin-top:16px; justify-content:space-between; align-items:center;">
-      <button type="button" data-act="removeAllLists" class="btn-danger" style="margin-right:auto;">Remove All</button>
+    <div class="catalog-actions-bar">
+      <button type="button" data-act="removeAllLists" class="btn-danger">Remove All</button>
       <button type="button" class="btn-primary" data-act="generate">${isConfigureMode ? "Update Add-on" : "Generate Install Link"}</button>
     </div>
   </div>

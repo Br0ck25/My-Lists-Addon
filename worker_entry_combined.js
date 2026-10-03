@@ -31787,8 +31787,8 @@ ${seoHeadHtml}
 
   /* Secondary button style */
   .btn-secondary,
-  button.secondary:not(.lc-btn),
-  .secondary:not(.lc-btn),
+  button.secondary:not(.lc-btn, .ec-btn),
+  .secondary:not(.lc-btn, .ec-btn),
   .btn-copy,
   .btn-watchlist,
   .btn-test {
@@ -31842,8 +31842,9 @@ ${seoHeadHtml}
   /* Destructive / Danger button style */
   .btn-danger,
   .btn-destructive,
-  button.danger,
-  .actions button[data-act="removeAllLists"] {
+  button.danger:not(.ec-btn),
+  .actions button[data-act="removeAllLists"],
+  .catalog-actions-bar button[data-act="removeAllLists"] {
     background: var(--color-danger-subtle);
     color: var(--color-danger);
     border: 1.5px solid rgba(255, 59, 48, 0.3);
@@ -31854,8 +31855,9 @@ ${seoHeadHtml}
 
   .btn-danger:hover:not(:disabled),
   .btn-destructive:hover:not(:disabled),
-  button.danger:hover:not(:disabled),
-  .actions button[data-act="removeAllLists"]:hover:not(:disabled) {
+  button.danger:not(.ec-btn):hover:not(:disabled),
+  .actions button[data-act="removeAllLists"]:hover:not(:disabled),
+  .catalog-actions-bar button[data-act="removeAllLists"]:hover:not(:disabled) {
     background: var(--color-danger);
     color: #fff;
     border-color: var(--color-danger);
@@ -31863,7 +31865,9 @@ ${seoHeadHtml}
 
   .btn-danger:active:not(:disabled),
   .btn-destructive:active:not(:disabled),
-  .actions button[data-act="removeAllLists"]:active:not(:disabled) {
+  button.danger:not(.ec-btn):active:not(:disabled),
+  .actions button[data-act="removeAllLists"]:active:not(:disabled),
+  .catalog-actions-bar button[data-act="removeAllLists"]:active:not(:disabled) {
     background: var(--color-danger-hover);
     transform: scale(0.98);
   }
@@ -31918,6 +31922,43 @@ ${seoHeadHtml}
   .btn-nuvio   { background: linear-gradient(135deg, #FF5E3A, #FF2A68); color: #fff; border: none; }
   .btn-wako    { background: linear-gradient(135deg, #007AFF, #34AADC); color: #fff; border: none; }
   .actions { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+
+  /* Catalog actions bar: side-by-side on mobile, spread on desktop */
+  .catalog-actions-bar {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    margin-top: 16px;
+  }
+  .catalog-actions-bar button[data-act="removeAllLists"] {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+  .catalog-actions-bar button[data-act="generate"] {
+    flex: 0 0 auto;
+    margin-left: auto;
+    white-space: nowrap;
+  }
+  @media (max-width: 640px) {
+    .catalog-actions-bar {
+      gap: 8px;
+    }
+    .catalog-actions-bar button[data-act="removeAllLists"] {
+      flex: 0 0 auto;
+      padding: 9px 12px;
+      font-size: 0.85rem;
+    }
+    .catalog-actions-bar button[data-act="generate"] {
+      flex: 1 1 auto;
+      margin-left: 0;
+      text-align: center;
+      padding: 9px 14px;
+      font-size: 0.88rem;
+    }
+  }
 
   /* --- Install Result Card & Manifest Link Display ------------------------ */
   #result {
@@ -32337,18 +32378,43 @@ ${seoHeadHtml}
     border-radius: 8px; width: auto;
   }
   .entry-pos-wrap .pos {
-    width: 48px; min-height: unset; padding: 5px 6px;
-    font-size: 0.82rem; border-radius: 7px; text-align: center;
-    background: var(--bg); border: 1.5px solid var(--border-strong);
+    width: 48px;
+    height: 30px;
+    min-height: 30px !important;
+    max-height: 30px;
+    box-sizing: border-box;
+    padding: 0 6px;
+    font-size: 0.82rem;
+    border-radius: 7px;
+    text-align: center;
+    background: var(--bg);
+    border: 1.5px solid var(--border-strong);
+    line-height: 27px;
   }
   .entry-ctrl-row {
     display: flex; gap: 4px; align-items: center; flex-shrink: 0;
   }
   .ec-btn {
-    width: 32px; height: 32px; min-height: unset; padding: 0;
-    border-radius: 8px; background: var(--bg); border: 1.5px solid var(--border-strong);
-    color: var(--muted); display: inline-flex; align-items: center; justify-content: center;
-    cursor: pointer; font-size: 0.9rem;
+    width: 30px;
+    height: 30px;
+    min-height: 30px !important;
+    max-height: 30px;
+    box-sizing: border-box;
+    padding: 0;
+    border-radius: 7px;
+    background: var(--bg);
+    border: 1.5px solid var(--border-strong);
+    color: var(--muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.82rem;
+    line-height: 1;
+  }
+  .ec-btn:not(.movebtn):not(.drag-handle):not(.removebtn) {
+    width: auto;
+    padding: 0 10px;
   }
   .ec-btn:hover:not(:disabled) { color: var(--text); background: var(--panel-strong); }
   .ec-btn.danger {
@@ -33705,8 +33771,8 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ''}
       </div>
     </div>
 
-    <div class="actions" style="margin-top:16px; justify-content:space-between; align-items:center;">
-      <button type="button" data-act="removeAllLists" class="btn-danger" style="margin-right:auto;">Remove All</button>
+    <div class="catalog-actions-bar">
+      <button type="button" data-act="removeAllLists" class="btn-danger">Remove All</button>
       <button type="button" class="btn-primary" data-act="generate">${isConfigureMode ? "Update Add-on" : "Generate Install Link"}</button>
     </div>
   </div>
@@ -81116,11 +81182,18 @@ function appShellRenderHomeEditor() {
   // Randomizer (10_tab-search-add.js). The paste box, the starter pack and
   // the check-links review that shared this panel were taken out at the
   // owner's request; + New Catalog and Catalogs -> Bulk Add do that job.
-  const html = '<label class="app-shell-dedupe" for="appShellDedupeToggle">' +
-    '<input type="checkbox" id="appShellDedupeToggle"' + (dedupe ? ' checked' : '') + '>' +
-    '<span><strong>Hide titles already shown in rows above</strong>' +
-    '<br><span class="app-shell-muted">The top row keeps everything; every row below it drops anything an earlier row already showed. Row order is what decides, so drag a row to change it. The preview updates now, and Stremio follows once you update your install link.</span></span>' +
-    '</label>';
+  const html = '<div style="margin-top:16px; padding:12px 16px; background:var(--surface); border-radius:12px; border:1px solid var(--border);">' +
+    '<div class="settings-toggle-row" style="padding:0;">' +
+      '<div style="flex:1; min-width:0; padding-right:12px;">' +
+        '<span style="font-weight:600; font-size:0.88rem; color:var(--text);">Hide titles already shown in rows above</span>' +
+        '<p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">The top row keeps everything; lower rows drop titles already shown above.</p>' +
+      '</div>' +
+      '<label class="ui-toggle" aria-label="Hide titles already shown in rows above">' +
+        '<input type="checkbox" id="appShellDedupeToggle"' + (dedupe ? ' checked' : '') + '>' +
+        '<span class="ui-toggle-slider"></span>' +
+      '</label>' +
+    '</div>' +
+  '</div>';
 
   host.innerHTML = html;
   const toggle = document.getElementById('appShellDedupeToggle');

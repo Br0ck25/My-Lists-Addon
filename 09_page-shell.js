@@ -3362,8 +3362,8 @@ ${seoHeadHtml}
 
   /* Secondary button style */
   .btn-secondary,
-  button.secondary:not(.lc-btn),
-  .secondary:not(.lc-btn),
+  button.secondary:not(.lc-btn, .ec-btn),
+  .secondary:not(.lc-btn, .ec-btn),
   .btn-copy,
   .btn-watchlist,
   .btn-test {
@@ -3417,8 +3417,9 @@ ${seoHeadHtml}
   /* Destructive / Danger button style */
   .btn-danger,
   .btn-destructive,
-  button.danger,
-  .actions button[data-act="removeAllLists"] {
+  button.danger:not(.ec-btn),
+  .actions button[data-act="removeAllLists"],
+  .catalog-actions-bar button[data-act="removeAllLists"] {
     background: var(--color-danger-subtle);
     color: var(--color-danger);
     border: 1.5px solid rgba(255, 59, 48, 0.3);
@@ -3429,8 +3430,9 @@ ${seoHeadHtml}
 
   .btn-danger:hover:not(:disabled),
   .btn-destructive:hover:not(:disabled),
-  button.danger:hover:not(:disabled),
-  .actions button[data-act="removeAllLists"]:hover:not(:disabled) {
+  button.danger:not(.ec-btn):hover:not(:disabled),
+  .actions button[data-act="removeAllLists"]:hover:not(:disabled),
+  .catalog-actions-bar button[data-act="removeAllLists"]:hover:not(:disabled) {
     background: var(--color-danger);
     color: #fff;
     border-color: var(--color-danger);
@@ -3438,7 +3440,9 @@ ${seoHeadHtml}
 
   .btn-danger:active:not(:disabled),
   .btn-destructive:active:not(:disabled),
-  .actions button[data-act="removeAllLists"]:active:not(:disabled) {
+  button.danger:not(.ec-btn):active:not(:disabled),
+  .actions button[data-act="removeAllLists"]:active:not(:disabled),
+  .catalog-actions-bar button[data-act="removeAllLists"]:active:not(:disabled) {
     background: var(--color-danger-hover);
     transform: scale(0.98);
   }
@@ -3493,6 +3497,43 @@ ${seoHeadHtml}
   .btn-nuvio   { background: linear-gradient(135deg, #FF5E3A, #FF2A68); color: #fff; border: none; }
   .btn-wako    { background: linear-gradient(135deg, #007AFF, #34AADC); color: #fff; border: none; }
   .actions { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+
+  /* Catalog actions bar: side-by-side on mobile, spread on desktop */
+  .catalog-actions-bar {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    margin-top: 16px;
+  }
+  .catalog-actions-bar button[data-act="removeAllLists"] {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+  .catalog-actions-bar button[data-act="generate"] {
+    flex: 0 0 auto;
+    margin-left: auto;
+    white-space: nowrap;
+  }
+  @media (max-width: 640px) {
+    .catalog-actions-bar {
+      gap: 8px;
+    }
+    .catalog-actions-bar button[data-act="removeAllLists"] {
+      flex: 0 0 auto;
+      padding: 9px 12px;
+      font-size: 0.85rem;
+    }
+    .catalog-actions-bar button[data-act="generate"] {
+      flex: 1 1 auto;
+      margin-left: 0;
+      text-align: center;
+      padding: 9px 14px;
+      font-size: 0.88rem;
+    }
+  }
 
   /* --- Install Result Card & Manifest Link Display ------------------------ */
   #result {
@@ -3912,18 +3953,43 @@ ${seoHeadHtml}
     border-radius: 8px; width: auto;
   }
   .entry-pos-wrap .pos {
-    width: 48px; min-height: unset; padding: 5px 6px;
-    font-size: 0.82rem; border-radius: 7px; text-align: center;
-    background: var(--bg); border: 1.5px solid var(--border-strong);
+    width: 48px;
+    height: 30px;
+    min-height: 30px !important;
+    max-height: 30px;
+    box-sizing: border-box;
+    padding: 0 6px;
+    font-size: 0.82rem;
+    border-radius: 7px;
+    text-align: center;
+    background: var(--bg);
+    border: 1.5px solid var(--border-strong);
+    line-height: 27px;
   }
   .entry-ctrl-row {
     display: flex; gap: 4px; align-items: center; flex-shrink: 0;
   }
   .ec-btn {
-    width: 32px; height: 32px; min-height: unset; padding: 0;
-    border-radius: 8px; background: var(--bg); border: 1.5px solid var(--border-strong);
-    color: var(--muted); display: inline-flex; align-items: center; justify-content: center;
-    cursor: pointer; font-size: 0.9rem;
+    width: 30px;
+    height: 30px;
+    min-height: 30px !important;
+    max-height: 30px;
+    box-sizing: border-box;
+    padding: 0;
+    border-radius: 7px;
+    background: var(--bg);
+    border: 1.5px solid var(--border-strong);
+    color: var(--muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.82rem;
+    line-height: 1;
+  }
+  .ec-btn:not(.movebtn):not(.drag-handle):not(.removebtn) {
+    width: auto;
+    padding: 0 10px;
   }
   .ec-btn:hover:not(:disabled) { color: var(--text); background: var(--panel-strong); }
   .ec-btn.danger {

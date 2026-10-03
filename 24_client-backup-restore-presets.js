@@ -3746,11 +3746,18 @@ function appShellRenderHomeEditor() {
   // Randomizer (10_tab-search-add.js). The paste box, the starter pack and
   // the check-links review that shared this panel were taken out at the
   // owner's request; + New Catalog and Catalogs -> Bulk Add do that job.
-  const html = '<label class="app-shell-dedupe" for="appShellDedupeToggle">' +
-    '<input type="checkbox" id="appShellDedupeToggle"' + (dedupe ? ' checked' : '') + '>' +
-    '<span><strong>Hide titles already shown in rows above</strong>' +
-    '<br><span class="app-shell-muted">The top row keeps everything; every row below it drops anything an earlier row already showed. Row order is what decides, so drag a row to change it. The preview updates now, and Stremio follows once you update your install link.</span></span>' +
-    '</label>';
+  const html = '<div style="margin-top:16px; padding:12px 16px; background:var(--surface); border-radius:12px; border:1px solid var(--border);">' +
+    '<div class="settings-toggle-row" style="padding:0;">' +
+      '<div style="flex:1; min-width:0; padding-right:12px;">' +
+        '<span style="font-weight:600; font-size:0.88rem; color:var(--text);">Hide titles already shown in rows above</span>' +
+        '<p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">The top row keeps everything; lower rows drop titles already shown above.</p>' +
+      '</div>' +
+      '<label class="ui-toggle" aria-label="Hide titles already shown in rows above">' +
+        '<input type="checkbox" id="appShellDedupeToggle"' + (dedupe ? ' checked' : '') + '>' +
+        '<span class="ui-toggle-slider"></span>' +
+      '</label>' +
+    '</div>' +
+  '</div>';
 
   host.innerHTML = html;
   const toggle = document.getElementById('appShellDedupeToggle');
