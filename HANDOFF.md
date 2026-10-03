@@ -2,6 +2,32 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-03 (Antigravity): Settings UI Modernization - Phase C (Provider Cards & Drag/Drop Import) & Phase D (Feedback & Resources Polish).**
+>
+> **Where things stand**
+> - Completed Phase C (External Accounts & API Keys):
+>   - Structured Provider Integration Cards (`.provider-card`, `.provider-card-header`, `.provider-card-brand`, `.provider-card-icon`, `.provider-card-title`, `.provider-card-desc`):
+>     - Upgraded TMDB, Trakt, MDBList, and Simkl sections into modern, surface-elevated provider cards with brand icons.
+>     - Positioned status indicators as sleek pill badges (`.provider-status-badge`) next to provider titles.
+>     - Resolved button hierarchy: Prominent primary CTA (`.primary.lc-btn`) for connecting/reconnecting; distinct secondary action for Trakt device PIN/code (`#traktDeviceBtn`); danger styling (`.btn-danger`) for disconnect buttons.
+>     - Cleaned up custom API key / client ID inputs inside expandable `.provider-advanced-disclosure` drawers with animated chevron indicators.
+>   - Modern Drag-and-Drop Dropzone for Import List (`.import-dropzone`):
+>     - Added interactive dashed drag & drop area with upload icon, format hints, and hover/dragover highlights.
+>     - Wired native HTML5 drag & drop listeners (`dragover`, `dragleave`, `drop`) in `18_client-copy-and-trakt-export.js` feeding directly into `onUnifiedImportFilesSelected`.
+>     - Preserved all element IDs (`importListSourceSelect`, `importTargetListSelect`, `unifiedImportFileInput`, `btnUnifiedImport`, etc.) and `data-act` bindings.
+> - Completed Phase D (Feedback & Resources Polish):
+>   - Ergonomic Feedback Container (`.feedback-container`):
+>     - Constrained the feedback form and composer to an optimal readable reading line length (`max-width: 680px`) on desktop displays.
+>   - Unified Resources & Documentation Cards (`.resource-cards-grid`, `.resource-card`, `.resource-card-top`, `.resource-card-icon`):
+>     - Replaced disconnected, tiny 2-line panels with an elegant 3-card resource grid for User Guide & Docs (`/guide`), Buy Me a Coffee, and TorBox Debrid.
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK.
+>   - `node --check worker_entry_combined.js`: OK.
+>   - `python gen_map.py`: OK.
+>   - `node check_bundle_budget.mjs`: First view JS is 93.45 KB gzip (budget: <= 150 KB).
+>   - Full client, shell, and watchlist test suites passing (572 tests pass).
+> - Branch: `feat/design-system-phase-1`
+>
 > **HANDOFF, 2026-10-03 (Antigravity): Settings UI Modernization - Phase B (Presets & Backup Cleanup).**
 >
 > **Where things stand**

@@ -3652,9 +3652,186 @@ ${seoHeadHtml}
     }
   }
 
+  /* --- Provider Integration Cards (External Accounts & API Keys) --- */
+  .provider-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--color-bg-sunken, rgba(255, 255, 255, 0.02));
+    padding: 16px;
+    margin-bottom: 16px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .provider-card:hover {
+    border-color: var(--color-border-strong, var(--border));
+  }
+  .provider-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .provider-card-brand {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    flex: 1;
+    min-width: 200px;
+  }
+  .provider-card-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    background: var(--surface-2, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .provider-card-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .provider-card-desc {
+    margin: 3px 0 0;
+    color: var(--muted);
+    font-size: 0.82rem;
+    line-height: 1.35;
+  }
+  .provider-status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    background: var(--surface-2, rgba(255, 255, 255, 0.05));
+    border: 1px solid var(--border);
+    font-size: 0.78rem;
+    line-height: 1.2;
+    flex-shrink: 0;
+  }
+  .provider-status-badge > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .provider-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .provider-advanced-disclosure {
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+    margin-top: 12px;
+  }
+  .provider-advanced-summary {
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+    padding: 2px 0;
+  }
+  .provider-advanced-summary:hover {
+    color: var(--text);
+  }
+  .provider-advanced-arrow {
+    font-size: 0.75rem;
+    transition: transform 0.2s ease;
+  }
+  .provider-advanced-disclosure[open] .provider-advanced-arrow {
+    transform: rotate(180deg);
+  }
 
+  /* --- Import List Dropzone --- */
+  .import-dropzone {
+    border: 2px dashed var(--color-border-strong, var(--border));
+    border-radius: 12px;
+    padding: 24px 16px;
+    background: var(--color-bg-sunken, rgba(255, 255, 255, 0.02));
+    text-align: center;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: border-color 0.2s ease, background 0.2s ease;
+  }
+  .import-dropzone:hover,
+  .import-dropzone.dragover {
+    border-color: var(--color-brand, #3b82f6);
+    background: var(--color-brand-subtle, rgba(59, 130, 246, 0.08));
+  }
+  .import-dropzone-icon {
+    font-size: 2rem;
+    line-height: 1;
+  }
 
-  /* --- Catalog Shelves (#lists in My Catalogs Tab) ------------------------ */
+  /* --- Feedback & External Resources Polish --- */
+  .feedback-container {
+    max-width: 680px;
+    width: 100%;
+  }
+  .resource-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+    margin-top: 10px;
+  }
+  .resource-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    background: var(--color-bg-sunken, rgba(255, 255, 255, 0.02));
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 12px;
+    text-decoration: none;
+    transition: border-color 0.2s ease, transform 0.15s ease;
+  }
+  .resource-card:hover {
+    border-color: var(--color-border-strong, var(--border));
+    transform: translateY(-1px);
+  }
+  .resource-card-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .resource-card-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    background: var(--surface-2, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .resource-card-title {
+    font-weight: 700;
+    font-size: 0.92rem;
+    color: var(--text);
+  }
+  .resource-card-desc {
+    margin: 3px 0 0;
+    color: var(--muted);
+    font-size: 0.8rem;
+    line-height: 1.35;
+  }
+
   #lists { display: grid; gap: 10px; grid-template-columns: 1fr; width: 100%; max-width: 100%; }
   .entry {
     background: var(--surface);

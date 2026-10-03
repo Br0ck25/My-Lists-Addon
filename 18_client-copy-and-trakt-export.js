@@ -1734,6 +1734,29 @@ async function runUnifiedListImport() {
   if (resultBox) resultBox.innerHTML = summaryHtml;
 }
 
+const importDropzone = document.getElementById('importDropzone');
+if (importDropzone) {
+  importDropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    importDropzone.classList.add('dragover');
+  });
+  importDropzone.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    importDropzone.classList.remove('dragover');
+  });
+  importDropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    importDropzone.classList.remove('dragover');
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+      const fileInput = document.getElementById('unifiedImportFileInput');
+      if (fileInput) {
+        fileInput.files = e.dataTransfer.files;
+        onUnifiedImportFilesSelected(fileInput);
+      }
+    }
+  });
+}
+
 /*MYLISTS_APP_BUNDLE_END*/</script>
 <script nonce="${CSP_NONCE_PLACEHOLDER}">/*MYLISTS_APP_FEATURES_START*/
 

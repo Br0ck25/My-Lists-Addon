@@ -32077,9 +32077,186 @@ ${seoHeadHtml}
     }
   }
 
+  /* --- Provider Integration Cards (External Accounts & API Keys) --- */
+  .provider-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--color-bg-sunken, rgba(255, 255, 255, 0.02));
+    padding: 16px;
+    margin-bottom: 16px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .provider-card:hover {
+    border-color: var(--color-border-strong, var(--border));
+  }
+  .provider-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .provider-card-brand {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    flex: 1;
+    min-width: 200px;
+  }
+  .provider-card-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    background: var(--surface-2, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .provider-card-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .provider-card-desc {
+    margin: 3px 0 0;
+    color: var(--muted);
+    font-size: 0.82rem;
+    line-height: 1.35;
+  }
+  .provider-status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    background: var(--surface-2, rgba(255, 255, 255, 0.05));
+    border: 1px solid var(--border);
+    font-size: 0.78rem;
+    line-height: 1.2;
+    flex-shrink: 0;
+  }
+  .provider-status-badge > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .provider-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .provider-advanced-disclosure {
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+    margin-top: 12px;
+  }
+  .provider-advanced-summary {
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+    padding: 2px 0;
+  }
+  .provider-advanced-summary:hover {
+    color: var(--text);
+  }
+  .provider-advanced-arrow {
+    font-size: 0.75rem;
+    transition: transform 0.2s ease;
+  }
+  .provider-advanced-disclosure[open] .provider-advanced-arrow {
+    transform: rotate(180deg);
+  }
 
+  /* --- Import List Dropzone --- */
+  .import-dropzone {
+    border: 2px dashed var(--color-border-strong, var(--border));
+    border-radius: 12px;
+    padding: 24px 16px;
+    background: var(--color-bg-sunken, rgba(255, 255, 255, 0.02));
+    text-align: center;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: border-color 0.2s ease, background 0.2s ease;
+  }
+  .import-dropzone:hover,
+  .import-dropzone.dragover {
+    border-color: var(--color-brand, #3b82f6);
+    background: var(--color-brand-subtle, rgba(59, 130, 246, 0.08));
+  }
+  .import-dropzone-icon {
+    font-size: 2rem;
+    line-height: 1;
+  }
 
-  /* --- Catalog Shelves (#lists in My Catalogs Tab) ------------------------ */
+  /* --- Feedback & External Resources Polish --- */
+  .feedback-container {
+    max-width: 680px;
+    width: 100%;
+  }
+  .resource-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+    margin-top: 10px;
+  }
+  .resource-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    background: var(--color-bg-sunken, rgba(255, 255, 255, 0.02));
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 12px;
+    text-decoration: none;
+    transition: border-color 0.2s ease, transform 0.15s ease;
+  }
+  .resource-card:hover {
+    border-color: var(--color-border-strong, var(--border));
+    transform: translateY(-1px);
+  }
+  .resource-card-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .resource-card-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    background: var(--surface-2, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .resource-card-title {
+    font-weight: 700;
+    font-size: 0.92rem;
+    color: var(--text);
+  }
+  .resource-card-desc {
+    margin: 3px 0 0;
+    color: var(--muted);
+    font-size: 0.8rem;
+    line-height: 1.35;
+  }
+
   #lists { display: grid; gap: 10px; grid-template-columns: 1fr; width: 100%; max-width: 100%; }
   .entry {
     background: var(--surface);
@@ -34758,34 +34935,55 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Connect your external service accounts and API keys. When signed in to your Profile, your connected accounts stay synchronized across devices and logouts.</p>
 
       <!-- TMDB Section -->
-      <div id="tmdbSection" style="padding-bottom:14px; margin-bottom:14px; border-bottom:1px solid var(--border);">
-        <p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">The Movie Database (TMDB)</p>
-        <p style="margin:0 0 10px; color:var(--muted); font-size:0.83rem;">Connect your TMDB account to import your personal lists, watchlist, and favorites, or use a custom API key / Token.</p>
-        <div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-          <button type="button" class="secondary" id="tmdbConnectBtn" data-act="startTmdbConnect">Connect TMDB Account</button>
-          <button type="button" class="secondary" id="tmdbDisconnectBtn" style="display:none;" data-act="disconnectTmdb">Disconnect</button>
+      <div class="provider-card" id="tmdbSection">
+        <div class="provider-card-header">
+          <div class="provider-card-brand">
+            <div class="provider-card-icon">&#x1F3AC;</div>
+            <div>
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <span class="provider-card-title">The Movie Database (TMDB)</span>
+                <span id="tmdbConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
+              </div>
+              <p class="provider-card-desc">Connect your TMDB account to import personal lists, watchlist, and favorites, or use a custom API key / Token.</p>
+            </div>
+          </div>
         </div>
-        <p id="tmdbConnectStatus" style="margin:0 0 10px; font-size:0.85rem;"></p>
-        <details style="font-size:0.85rem; color:var(--muted);">
-          <summary style="cursor:pointer; color:var(--text);">Advanced: Custom TMDB API Key / Token</summary>
-          <div style="margin-top:8px;">
-            <input type="text" id="tmdbKeyInput" placeholder="Optional: TMDB API Key (v3) or Read Access Token (v4)" value="${escapeHtmlServer(initialTmdbKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;tmdb&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
-            <p style="margin-top:4px;"><small>Get a free TMDB API key at <a href="https://www.themoviedb.org/settings/api" target="_blank" style="color:var(--accent-2);">themoviedb.org/settings/api</a>.</small></p>
+        <div class="provider-card-actions">
+          <button type="button" class="primary lc-btn" id="tmdbConnectBtn" data-act="startTmdbConnect">Connect TMDB Account</button>
+          <button type="button" class="secondary lc-btn btn-danger" id="tmdbDisconnectBtn" style="display:none;" data-act="disconnectTmdb">Disconnect</button>
+        </div>
+        <details class="provider-advanced-disclosure">
+          <summary class="provider-advanced-summary">
+            <span>Advanced: Custom TMDB API Key / Token</span>
+            <span class="provider-advanced-arrow">&#x25BE;</span>
+          </summary>
+          <div style="margin-top:10px;">
+            <input type="text" id="tmdbKeyInput" placeholder="Optional: TMDB API Key (v3) or Read Access Token (v4)" value="${escapeHtmlServer(initialTmdbKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;tmdb&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); box-sizing:border-box;">
+            <p style="margin:6px 0 0; font-size:0.78rem; color:var(--muted);">Get a free TMDB API key at <a href="https://www.themoviedb.org/settings/api" target="_blank" style="color:var(--accent-2);">themoviedb.org/settings/api</a>.</p>
           </div>
         </details>
       </div>
 
       <!-- Trakt Section -->
-      <div id="traktSection" style="padding-bottom:14px; margin-bottom:14px; border-bottom:1px solid var(--border);">
-        <p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">Trakt</p>
-        <p style="margin:0 0 10px; color:var(--muted); font-size:0.83rem;">Connect your Trakt account to import your personal lists, watchlist, and collection, or use a custom Client ID.</p>
-        <div class="actions trakt-connect-actions">
-          <button type="button" class="secondary" id="traktConnectBtn" data-act="startTraktConnect">Connect Trakt Account</button>
-          <button type="button" class="secondary" id="traktDeviceBtn" data-act="startTraktDeviceLogin">Connect with PIN / Code</button>
-          <button type="button" class="secondary" id="traktDisconnectBtn" style="display:none;" data-act="disconnectTrakt">Disconnect</button>
+      <div class="provider-card" id="traktSection">
+        <div class="provider-card-header">
+          <div class="provider-card-brand">
+            <div class="provider-card-icon" style="color:#ed1c24;">&#x25B6;</div>
+            <div>
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <span class="provider-card-title">Trakt</span>
+                <span id="traktConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
+              </div>
+              <p class="provider-card-desc">Connect your Trakt account to import personal lists, watchlist, and collection, or use a custom Client ID.</p>
+            </div>
+          </div>
         </div>
-        <p id="traktConnectStatus" style="margin:0 0 10px; font-size:0.85rem;"></p>
-        <div id="traktSyncHistoryWrap" style="margin:10px 0; padding:12px 14px; background:var(--color-bg-sunken, rgba(255,255,255,0.04)); border-radius:8px; border:1px solid var(--border);">
+        <div class="provider-card-actions trakt-connect-actions">
+          <button type="button" class="primary lc-btn" id="traktConnectBtn" data-act="startTraktConnect">Connect Trakt Account</button>
+          <button type="button" class="secondary lc-btn" id="traktDeviceBtn" data-act="startTraktDeviceLogin" title="Connect from a TV or secondary device via trakt.tv/activate">Connect with PIN / Code</button>
+          <button type="button" class="secondary lc-btn btn-danger" id="traktDisconnectBtn" style="display:none;" data-act="disconnectTrakt">Disconnect</button>
+        </div>
+        <div id="traktSyncHistoryWrap" style="margin:10px 0; padding:12px 14px; background:var(--surface-2, rgba(255,255,255,0.04)); border-radius:8px; border:1px solid var(--border);">
           <div class="settings-toggle-row" style="padding:0 0 10px;">
             <div style="flex:1; min-width:0; padding-right:12px;">
               <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Sync Watch History to Trakt</span>
@@ -34800,30 +34998,38 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
             <button type="button" class="secondary lc-btn" id="syncTraktHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;trakt&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
           </div>
         </div>
-        <details style="font-size:0.85rem; color:var(--muted);">
-          <summary style="cursor:pointer; color:var(--text);">Advanced: Custom Trakt Client ID & Username</summary>
-          <div style="margin-top:8px;">
-            <div class="row">
-              <input type="text" id="traktKeyInput" placeholder="Optional: Trakt Client ID" value="${escapeHtmlServer(initialTraktKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
-            </div>
-            <div class="row" style="margin-top:8px;">
-              <input type="text" id="traktUsernameInput" placeholder="Optional: Trakt username" value="${escapeHtmlServer(initialTraktUsername)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
-            </div>
-            <p style="margin-top:4px;"><small>Create a free Trakt Client ID at <a href="https://trakt.tv/oauth/applications" target="_blank" style="color:var(--accent-2);">trakt.tv/oauth/applications</a>.</small></p>
+        <details class="provider-advanced-disclosure">
+          <summary class="provider-advanced-summary">
+            <span>Advanced: Custom Trakt Client ID &amp; Username</span>
+            <span class="provider-advanced-arrow">&#x25BE;</span>
+          </summary>
+          <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">
+            <input type="text" id="traktKeyInput" placeholder="Optional: Trakt Client ID" value="${escapeHtmlServer(initialTraktKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); box-sizing:border-box;">
+            <input type="text" id="traktUsernameInput" placeholder="Optional: Trakt username" value="${escapeHtmlServer(initialTraktUsername)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); box-sizing:border-box;">
+            <p style="margin:2px 0 0; font-size:0.78rem; color:var(--muted);">Create a free Trakt Client ID at <a href="https://trakt.tv/oauth/applications" target="_blank" style="color:var(--accent-2);">trakt.tv/oauth/applications</a>.</p>
           </div>
         </details>
       </div>
 
       <!-- MDBList Section -->
-      <div id="mdblistSection" style="padding-bottom:14px; margin-bottom:14px; border-bottom:1px solid var(--border);">
-        <p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">MDBList</p>
-        <p style="margin:0 0 10px; color:var(--muted); font-size:0.83rem;">Connect your MDBList account to import your personal lists, watchlist, and watch history, or use a custom API key.</p>
-        <div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-          <button type="button" class="secondary" id="mdblistConnectBtn" data-act="startMdblistConnect">Connect MDBList Account</button>
-          <button type="button" class="secondary" id="mdblistDisconnectBtn" style="display:none;" data-act="disconnectMdblist">Disconnect</button>
+      <div class="provider-card" id="mdblistSection">
+        <div class="provider-card-header">
+          <div class="provider-card-brand">
+            <div class="provider-card-icon">&#x1F4CB;</div>
+            <div>
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <span class="provider-card-title">MDBList</span>
+                <span id="mdblistConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
+              </div>
+              <p class="provider-card-desc">Connect your MDBList account to import personal lists, watchlist, and watch history, or use a custom API key.</p>
+            </div>
+          </div>
         </div>
-        <p id="mdblistConnectStatus" style="margin:0 0 10px; font-size:0.85rem;"></p>
-        <div id="mdblistSyncHistoryWrap" style="margin:10px 0; padding:12px 14px; background:var(--color-bg-sunken, rgba(255,255,255,0.04)); border-radius:8px; border:1px solid var(--border);">
+        <div class="provider-card-actions">
+          <button type="button" class="primary lc-btn" id="mdblistConnectBtn" data-act="startMdblistConnect">Connect MDBList Account</button>
+          <button type="button" class="secondary lc-btn btn-danger" id="mdblistDisconnectBtn" style="display:none;" data-act="disconnectMdblist">Disconnect</button>
+        </div>
+        <div id="mdblistSyncHistoryWrap" style="margin:10px 0; padding:12px 14px; background:var(--surface-2, rgba(255,255,255,0.04)); border-radius:8px; border:1px solid var(--border);">
           <div class="settings-toggle-row" style="padding:0 0 10px;">
             <div style="flex:1; min-width:0; padding-right:12px;">
               <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Sync Watch History to MDBList</span>
@@ -34838,25 +35044,37 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
             <button type="button" class="secondary lc-btn" id="syncMdblistHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;mdblist&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
           </div>
         </div>
-        <details style="font-size:0.85rem; color:var(--muted);">
-          <summary style="cursor:pointer; color:var(--text);">Advanced: Custom MDBList API Key</summary>
-          <div style="margin-top:8px;">
-            <input type="text" id="mdblistKeyInput" placeholder="Optional: MDBList API key" value="${escapeHtmlServer(initialMdblistKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;mdblist&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
-            <p style="margin-top:4px;"><small>Get a free MDBList key at <a href="https://mdblist.com/preferences" target="_blank" style="color:var(--accent-2);">mdblist.com/preferences</a>.</small></p>
+        <details class="provider-advanced-disclosure">
+          <summary class="provider-advanced-summary">
+            <span>Advanced: Custom MDBList API Key</span>
+            <span class="provider-advanced-arrow">&#x25BE;</span>
+          </summary>
+          <div style="margin-top:10px;">
+            <input type="text" id="mdblistKeyInput" placeholder="Optional: MDBList API key" value="${escapeHtmlServer(initialMdblistKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;mdblist&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); box-sizing:border-box;">
+            <p style="margin:6px 0 0; font-size:0.78rem; color:var(--muted);">Get a free MDBList key at <a href="https://mdblist.com/preferences" target="_blank" style="color:var(--accent-2);">mdblist.com/preferences</a>.</p>
           </div>
         </details>
       </div>
 
       <!-- Simkl Section -->
-      <div id="simklSection" style="padding-bottom:14px; margin-bottom:14px;">
-        <p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">Simkl</p>
-        <p style="margin:0 0 10px; color:var(--muted); font-size:0.83rem;">Connect your Simkl account to import your personal lists, watchlist, and history, or use a custom Client ID.</p>
-        <div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-          <button type="button" class="secondary" id="simklConnectBtn" data-act="startSimklConnect">Connect Simkl Account</button>
-          <button type="button" class="secondary" id="simklDisconnectBtn" style="display:none;" data-act="disconnectSimkl">Disconnect</button>
+      <div class="provider-card" id="simklSection">
+        <div class="provider-card-header">
+          <div class="provider-card-brand">
+            <div class="provider-card-icon">&#x1F4FA;</div>
+            <div>
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <span class="provider-card-title">Simkl</span>
+                <span id="simklConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
+              </div>
+              <p class="provider-card-desc">Connect your Simkl account to import personal lists, watchlist, and history, or use a custom Client ID.</p>
+            </div>
+          </div>
         </div>
-        <p id="simklConnectStatus" style="margin:0 0 10px; font-size:0.85rem;"></p>
-        <div id="simklSyncHistoryWrap" style="margin:10px 0; padding:12px 14px; background:var(--color-bg-sunken, rgba(255,255,255,0.04)); border-radius:8px; border:1px solid var(--border);">
+        <div class="provider-card-actions">
+          <button type="button" class="primary lc-btn" id="simklConnectBtn" data-act="startSimklConnect">Connect Simkl Account</button>
+          <button type="button" class="secondary lc-btn btn-danger" id="simklDisconnectBtn" style="display:none;" data-act="disconnectSimkl">Disconnect</button>
+        </div>
+        <div id="simklSyncHistoryWrap" style="margin:10px 0; padding:12px 14px; background:var(--surface-2, rgba(255,255,255,0.04)); border-radius:8px; border:1px solid var(--border);">
           <div class="settings-toggle-row" style="padding:0 0 10px;">
             <div style="flex:1; min-width:0; padding-right:12px;">
               <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Sync Watch History to Simkl</span>
@@ -34871,65 +35089,76 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
             <button type="button" class="secondary lc-btn" id="syncSimklHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;simkl&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
           </div>
         </div>
-        <details style="font-size:0.85rem; color:var(--muted);">
-          <summary style="cursor:pointer; color:var(--text);">Advanced: Custom Simkl Client ID</summary>
-          <div style="margin-top:8px;">
-            <input type="text" id="simklKeyInput" placeholder="Optional: Simkl Client ID" value="${escapeHtmlServer(initialSimklKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;simkl&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
-            <p style="margin-top:4px;"><small>Create a free Simkl Client ID at <a href="https://simkl.com/settings/developer/" target="_blank" style="color:var(--accent-2);">simkl.com/settings/developer/</a>.</small></p>
+        <details class="provider-advanced-disclosure">
+          <summary class="provider-advanced-summary">
+            <span>Advanced: Custom Simkl Client ID</span>
+            <span class="provider-advanced-arrow">&#x25BE;</span>
+          </summary>
+          <div style="margin-top:10px;">
+            <input type="text" id="simklKeyInput" placeholder="Optional: Simkl Client ID" value="${escapeHtmlServer(initialSimklKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;simkl&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); box-sizing:border-box;">
+            <p style="margin:6px 0 0; font-size:0.78rem; color:var(--muted);">Create a free Simkl Client ID at <a href="https://simkl.com/settings/developer/" target="_blank" style="color:var(--accent-2);">simkl.com/settings/developer/</a>.</p>
           </div>
         </details>
       </div>
     </div>
 
     <!-- Unified Import List Panel -->
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel" style="margin-top:14px;">
       <h2 class="panel-title">Import List</h2>
-      <p style="margin:0 0 8px; color:var(--text); font-size:0.9rem;">Use the form below to import a file and have the items automatically imported to one of your account lists.</p>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:0.83rem;">We support CSV and JSON imports from sites like IMDb, Letterboxd, MovieLens, Trakt, Simkl and TMDB. You can also upload multiple files at once.</p>
+      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">Import files to automatically populate or create custom lists in your account. Supports CSV and JSON exports from IMDb, Letterboxd, MovieLens, Trakt, Simkl, and TMDB.</p>
 
-      <div style="margin-bottom:12px;">
-        <label for="importListSourceSelect" style="display:block; font-weight:600; font-size:0.88rem; margin-bottom:6px; color:var(--text);">Source (optional)</label>
-        <select id="importListSourceSelect" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.95rem;">
-          <option value="auto">Auto-detect</option>
-          <option value="imdb">IMDb</option>
-          <option value="letterboxd">Letterboxd</option>
-          <option value="movielens">MovieLens</option>
-          <option value="trakt">Trakt</option>
-          <option value="simkl">Simkl</option>
-          <option value="tmdb">TMDB</option>
-        </select>
-      </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px; margin-bottom:12px;">
+        <div>
+          <label for="importListSourceSelect" style="display:block; font-weight:600; font-size:0.85rem; margin-bottom:6px; color:var(--text);">Source (optional)</label>
+          <select id="importListSourceSelect" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.92rem; box-sizing:border-box;">
+            <option value="auto">Auto-detect</option>
+            <option value="imdb">IMDb</option>
+            <option value="letterboxd">Letterboxd</option>
+            <option value="movielens">MovieLens</option>
+            <option value="trakt">Trakt</option>
+            <option value="simkl">Simkl</option>
+            <option value="tmdb">TMDB</option>
+          </select>
+        </div>
 
-      <div style="margin-bottom:12px;">
-        <label for="importTargetListSelect" style="display:block; font-weight:600; font-size:0.88rem; margin-bottom:6px; color:var(--text);">Import to which list?</label>
-        <select id="importTargetListSelect" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.95rem;" data-act="onImportTargetListChange">
-          <!-- Populated dynamically -->
-        </select>
-      </div>
-
-      <div id="importNewListInputWrap" style="display:none; margin-bottom:12px;">
-        <label for="importNewListNameInput" style="display:block; font-weight:600; font-size:0.88rem; margin-bottom:6px; color:var(--text);">New List Name</label>
-        <input type="text" id="importNewListNameInput" placeholder="e.g. My Favorite Movies" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.95rem;">
-      </div>
-
-      <div style="margin-bottom:14px;">
-        <label style="display:block; font-weight:600; font-size:0.88rem; margin-bottom:6px; color:var(--text);">Select file(s)</label>
-        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-          <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;unifiedImportFileInput&quot;]" style="padding:8px 16px;">Select files&hellip;</button>
-          <input type="file" id="unifiedImportFileInput" aria-label="Choose a file to import" multiple accept=".csv,.json,.zip,.txt" style="display:none;" data-act="onUnifiedImportFilesSelected" data-act-args="[&quot;@self&quot;]">
-          <span id="unifiedImportSelectedCount" style="font-size:0.85rem; color:var(--muted);">No files selected</span>
+        <div>
+          <label for="importTargetListSelect" style="display:block; font-weight:600; font-size:0.85rem; margin-bottom:6px; color:var(--text);">Import to which list?</label>
+          <select id="importTargetListSelect" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.92rem; box-sizing:border-box;" data-act="onImportTargetListChange">
+            <!-- Populated dynamically -->
+          </select>
         </div>
       </div>
 
-      <div style="margin-bottom:14px; display:flex; flex-direction:column; gap:6px;">
-        <label style="font-size:0.85rem; display:flex; align-items:center; gap:6px; color:var(--text); cursor:pointer;">
+      <div id="importNewListInputWrap" style="display:none; margin-bottom:12px;">
+        <label for="importNewListNameInput" style="display:block; font-weight:600; font-size:0.85rem; margin-bottom:6px; color:var(--text);">New List Name</label>
+        <input type="text" id="importNewListNameInput" placeholder="e.g. My Favorite Movies" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.92rem; box-sizing:border-box;">
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <div class="import-dropzone" id="importDropzone" data-act="appActOpenFilePicker" data-act-args="[&quot;unifiedImportFileInput&quot;]">
+          <div class="import-dropzone-icon">&#x1F4C2;</div>
+          <div style="text-align:center;">
+            <div style="font-weight:600; font-size:0.92rem; color:var(--text);">Choose files or drag &amp; drop here</div>
+            <div style="margin-top:3px; color:var(--muted); font-size:0.78rem;">CSV, JSON, ZIP, or TXT exports (multi-file supported)</div>
+          </div>
+          <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;unifiedImportFileInput&quot;]" style="padding:6px 14px; font-size:0.82rem; margin-top:2px;">Select files&hellip;</button>
+          <input type="file" id="unifiedImportFileInput" aria-label="Choose a file to import" multiple accept=".csv,.json,.zip,.txt" style="display:none;" data-act="onUnifiedImportFilesSelected" data-act-args="[&quot;@self&quot;]">
+        </div>
+        <div id="unifiedImportSelectedCount" style="margin-top:6px; font-size:0.82rem; color:var(--muted);">No files selected</div>
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <label class="settings-check-item" style="padding:10px 12px; margin:0;">
           <input type="checkbox" id="importAlsoMarkWatchedCheck">
-          Also add watched items to Watch History (marks them watched)
+          <div class="settings-check-label">
+            <strong style="font-size:0.88rem; color:var(--text);">Also add watched items to Watch History</strong>
+            <span class="settings-check-desc">Automatically marks imported watched items in your Watch History</span>
+          </div>
         </label>
       </div>
 
-      <div class="actions" style="margin-top:6px;">
-        <button type="button" class="secondary lc-btn" id="btnUnifiedImport" style="padding:10px 24px; font-size:0.95rem;" data-act="runUnifiedListImport">Import</button>
+      <div class="actions" style="margin-top:8px;">
+        <button type="button" class="primary lc-btn" id="btnUnifiedImport" style="padding:10px 24px; font-size:0.92rem; font-weight:600;" data-act="runUnifiedListImport">Start Import</button>
       </div>
 
       <div id="unifiedImportResult" style="margin-top:12px;"></div>
@@ -34950,60 +35179,86 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       <!-- Active Threads Selector -->
       <div id="supportThreadsBar" class="support-threads-bar" style="display:none; margin-bottom:12px;"></div>
 
-      <!-- Chat View -->
-      <div id="supportChatView" style="display:none;">
-        <div id="supportMessagesStream" class="support-messages-stream"></div>
-        <div class="support-reply-composer" style="margin-top:10px;">
-          <textarea id="supportReplyInput" placeholder="Type a reply to the developer..." data-act-on="keydown" data-act="appActFeedbackReplyOnEnter" data-act-args="[&quot;@event&quot;]"></textarea>
-          <button type="button" class="primary lc-btn" id="supportReplySendBtn" data-act="sendUserFeedbackReply" style="min-height:44px; padding:0 20px;">Send</button>
+      <div class="feedback-container">
+        <!-- Chat View -->
+        <div id="supportChatView" style="display:none;">
+          <div id="supportMessagesStream" class="support-messages-stream"></div>
+          <div class="support-reply-composer" style="margin-top:10px;">
+            <textarea id="supportReplyInput" placeholder="Type a reply to the developer..." data-act-on="keydown" data-act="appActFeedbackReplyOnEnter" data-act-args="[&quot;@event&quot;]"></textarea>
+            <button type="button" class="primary lc-btn" id="supportReplySendBtn" data-act="sendUserFeedbackReply" style="min-height:44px; padding:0 20px;">Send</button>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+            <span id="supportChatStatus" style="font-size:0.8rem; color:var(--muted);"></span>
+            <button type="button" class="secondary lc-btn" data-act="refreshUserFeedbackThreads" style="padding:2px 8px; font-size:0.75rem; border:none; background:none; color:var(--muted); cursor:pointer;">&#x21BB; Refresh</button>
+          </div>
         </div>
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
-          <span id="supportChatStatus" style="font-size:0.8rem; color:var(--muted);"></span>
-          <button type="button" class="secondary lc-btn" data-act="refreshUserFeedbackThreads" style="padding:2px 8px; font-size:0.75rem; border:none; background:none; color:var(--muted); cursor:pointer;">&#x21BB; Refresh</button>
-        </div>
-      </div>
 
-      <!-- New Message / Initial Form -->
-      <div id="newFeedbackFormWrap">
-        <div class="row">
-          <label style="font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:2px;">Category</label>
-          <select id="feedbackCategorySelect" aria-label="Feedback category">
-            <option value="bug">Bug Report</option>
-            <option value="improvement">Improvement / Feature Request</option>
-            <option value="idea">Idea / Suggestion</option>
-            <option value="other">General Question / Other</option>
-          </select>
+        <!-- New Message / Initial Form -->
+        <div id="newFeedbackFormWrap">
+          <div class="row">
+            <label style="font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:2px;">Category</label>
+            <select id="feedbackCategorySelect" aria-label="Feedback category">
+              <option value="bug">Bug Report</option>
+              <option value="improvement">Improvement / Feature Request</option>
+              <option value="idea">Idea / Suggestion</option>
+              <option value="other">General Question / Other</option>
+            </select>
+          </div>
+          <div class="row" style="margin-top:8px;">
+            <label style="font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:2px;">Message</label>
+            <textarea id="feedbackMessageInput" rows="4" style="width:100%;" placeholder="What would you like help with or what did you find?"></textarea>
+          </div>
+          <div class="row" style="margin-top:8px;">
+            <label style="font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:2px;">Contact Info (optional)</label>
+            <input type="text" id="feedbackContactInput" placeholder="Email, Discord username, etc. (optional)">
+          </div>
+          <div class="actions" style="margin-top:10px; gap:8px; justify-content:flex-start;">
+            <button type="button" class="primary lc-btn" id="feedbackSubmitBtn" data-act="submitFeedback">Send Message</button>
+            <button type="button" class="secondary lc-btn" id="feedbackCancelNewBtn" style="display:none;" data-act="toggleNewFeedbackForm" data-act-args="[false]">Cancel</button>
+          </div>
+          <p id="feedbackStatus" style="margin-top:8px; font-size:0.85rem;"></p>
         </div>
-        <div class="row" style="margin-top:8px;">
-          <label style="font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:2px;">Message</label>
-          <textarea id="feedbackMessageInput" rows="4" style="width:100%;" placeholder="What would you like help with or what did you find?"></textarea>
-        </div>
-        <div class="row" style="margin-top:8px;">
-          <label style="font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:2px;">Contact Info (optional)</label>
-          <input type="text" id="feedbackContactInput" placeholder="Email, Discord username, etc. (optional)">
-        </div>
-        <div class="actions" style="margin-top:10px; gap:8px; justify-content:flex-start;">
-          <button type="button" class="primary lc-btn" id="feedbackSubmitBtn" data-act="submitFeedback">Send Message</button>
-          <button type="button" class="secondary lc-btn" id="feedbackCancelNewBtn" style="display:none;" data-act="toggleNewFeedbackForm" data-act-args="[false]">Cancel</button>
-        </div>
-        <p id="feedbackStatus" style="margin-top:8px; font-size:0.85rem;"></p>
       </div>
     </div>
 
-    <!-- Guide Link Section -->
-    <div class="panel" style="margin-top:12px;">
-      <h2 class="panel-title">Guide</h2>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Step-by-step how-to guides covering every tab: adding catalogs, building Channels, Storylines &amp; Universes, importing lists, and more.</p>
-      <a href="/guide" class="lc-btn secondary" style="display:inline-flex; align-items:center; gap:8px; text-decoration:none; padding:10px 20px; font-weight:700; font-size:0.92rem; border-radius:var(--radius-pill);">Open the Guide</a>
-    </div>
+    <!-- Resources & Documentation Section -->
+    <div class="panel" style="margin-top:14px;">
+      <h2 class="panel-title">Resources &amp; Support</h2>
+      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">Helpful guides, documentation, and ways to support continued hosting and development of My Lists Addon.</p>
+      
+      <div class="resource-cards-grid">
+        <a href="/guide" class="resource-card">
+          <div class="resource-card-top">
+            <div class="resource-card-icon">&#x1F4D6;</div>
+            <div>
+              <div class="resource-card-title">User Guide &amp; Docs</div>
+              <div class="resource-card-desc">Step-by-step how-to guides covering catalogs, channels, storylines, and list importing.</div>
+            </div>
+          </div>
+          <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:0.8rem; pointer-events:none;">Open Guide &rarr;</span>
+        </a>
 
-    <!-- Support & Recommended Debrid Section -->
-    <div class="panel" style="margin-top:12px;">
-      <h2 class="panel-title">Support &amp; Recommended Debrid</h2>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Support the continued development and hosting of My Lists Addon, or sign up for TorBox debrid using our referral link.</p>
-      <div class="actions" style="flex-direction:row; width:auto; gap:10px; flex-wrap:wrap;">
-        <a href="https://buymeacoffee.com/brock25" target="_blank" rel="noopener" class="lc-btn secondary" style="display:inline-flex; align-items:center; gap:8px; text-decoration:none; padding:10px 20px; font-weight:700; font-size:0.92rem; border-radius:var(--radius-pill);">Buy me a coffee</a>
-        <a href="https://torbox.app/subscription?referral=af23795c-7706-4b02-a979-d84b5613cfd1" target="_blank" rel="noopener" class="lc-btn secondary" style="display:inline-flex; align-items:center; gap:8px; text-decoration:none; padding:10px 20px; font-weight:700; font-size:0.92rem; border-radius:var(--radius-pill);">Try TorBox Debrid (Referral)</a>
+        <a href="https://buymeacoffee.com/brock25" target="_blank" rel="noopener" class="resource-card">
+          <div class="resource-card-top">
+            <div class="resource-card-icon">&#x2615;</div>
+            <div>
+              <div class="resource-card-title">Buy Me a Coffee</div>
+              <div class="resource-card-desc">Support the continued development and hosting costs of the free public server.</div>
+            </div>
+          </div>
+          <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:0.8rem; pointer-events:none;">Support Project &rarr;</span>
+        </a>
+
+        <a href="https://torbox.app/subscription?referral=af23795c-7706-4b02-a979-d84b5613cfd1" target="_blank" rel="noopener" class="resource-card">
+          <div class="resource-card-top">
+            <div class="resource-card-icon">&#x26A1;</div>
+            <div>
+              <div class="resource-card-title">TorBox Debrid</div>
+              <div class="resource-card-desc">Fast, modern debrid provider with fast torrent caching and Usenet support.</div>
+            </div>
+          </div>
+          <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:0.8rem; pointer-events:none;">Try TorBox (Referral) &rarr;</span>
+        </a>
       </div>
     </div>
   </div>
@@ -43434,6 +43689,29 @@ async function runUnifiedListImport() {
   summaryHtml += '</div>';
 
   if (resultBox) resultBox.innerHTML = summaryHtml;
+}
+
+const importDropzone = document.getElementById('importDropzone');
+if (importDropzone) {
+  importDropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    importDropzone.classList.add('dragover');
+  });
+  importDropzone.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    importDropzone.classList.remove('dragover');
+  });
+  importDropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    importDropzone.classList.remove('dragover');
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+      const fileInput = document.getElementById('unifiedImportFileInput');
+      if (fileInput) {
+        fileInput.files = e.dataTransfer.files;
+        onUnifiedImportFilesSelected(fileInput);
+      }
+    }
+  });
 }
 
 /*MYLISTS_APP_BUNDLE_END*/</script>
