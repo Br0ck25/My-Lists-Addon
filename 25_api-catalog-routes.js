@@ -71,8 +71,8 @@ const BADGED_POSTER_CACHE = new Map();
 // reading a Trakt or Letterboxd export no longer needs the network; the fonts
 // are the device's own (no third-party origin left in the page at all).
 const SERVICE_WORKER_JS = `
-const ASSETS = 'mylists-assets-v2';
-const SHELL = 'mylists-shell-v2';
+const ASSETS = 'mylists-assets-v3';
+const SHELL = 'mylists-shell-v3';
 const SHELL_URL = '/';
 const KEEP = [ASSETS, SHELL];
 
@@ -150,15 +150,40 @@ self.addEventListener('fetch', (e) => {
   if (req.mode === 'navigate') {
     e.respondWith((async () => {
       try {
-        const res = await fetch(req);
-        // Only the plain page is worth keeping. A deep link renders
-        // per-request data, and replaying yesterday's copy of it later would
-        // be worse than not answering.
-        if (res && res.ok && url.pathname === SHELL_URL && !url.search) {
-          try {
-            const cache = await caches.open(SHELL);
-            await cache.put(SHELL_URL, res.clone());
-          } catch (err) {}
+        // Strip conditional cache validation headers (If-None-Match, If-Modified-Since)
+        // so origin server returns full 200 OK HTML instead of an empty 304 response
+        // which breaks Service Worker navigation resolution and strands reloads on stale shells.
+        const netHeaders = new Headers(req.headers);
+        netHeaders.delete('if-none-match');
+        netHeaders.delete('if-modified-since');
+        const netReq = new Request(req.url, {
+          method: 'GET',
+          headers: netHeaders,
+          credentials: req.credentials,
+          cache: 'no-cache'
+        });
+
+        const res = await fetch(netReq);
+        const isShellPath = url.pathname === SHELL_URL ||
+          url.pathname === '/catalogs' || url.pathname === '/lists' ||
+          url.pathname === '/channels' || url.pathname === '/discover' ||
+          url.pathname === '/search' || url.pathname === '/settings';
+
+        if (res && res.ok) {
+          if (isShellPath && !url.search) {
+            try {
+              const cache = await caches.open(SHELL);
+              await cache.put(SHELL_URL, res.clone());
+            } catch (err) {}
+          }
+          return res;
+        }
+
+        // On server 5xx or bad response, fall back to cached shell if available
+        if (res && res.status >= 500) {
+          const cache = await caches.open(SHELL);
+          const cached = await cache.match(SHELL_URL);
+          if (cached) return cached;
         }
         return res;
       } catch (err) {

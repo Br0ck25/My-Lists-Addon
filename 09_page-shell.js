@@ -5198,7 +5198,7 @@ ${seoHeadHtml}
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
         </svg>
       </button>
-      <div id="creatorProfileBar"></div>
+      <div id="creatorProfileBar"><button type="button" class="header-avatar-btn signed-out" id="headerProfileBtn" data-act="openRestoreModal" aria-label="Sign in or create account" title="Sign in or create account"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></button></div>
     </div>
   </header>
 
@@ -5516,7 +5516,9 @@ window._CHARTS_HOLIDAYS = ${jsonForScript(HOLIDAY_LISTS)};
 window._CHARTS_GENRES = ${jsonForScript(GENRE_LISTS)};
 window._CHARTS_MY_LISTS_ADDON = ${jsonForScript(MY_LISTS_ADDON_CHARTS)};
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(e => console.error(e));
+  navigator.serviceWorker.register('/sw.js').then(function(reg) {
+    if (reg) reg.update().catch(function() {});
+  }).catch(function(e) { console.error(e); });
 }
 </script>
 
