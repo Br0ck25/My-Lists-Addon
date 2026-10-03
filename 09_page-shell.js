@@ -1314,16 +1314,19 @@ ${seoHeadHtml}
     flex-direction: column;
     justify-content: space-between;
     gap: 10px;
-    transition: transform 0.12s, box-shadow 0.12s;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
   }
   .discover-chart-card:hover {
     box-shadow: var(--shadow);
-    transform: translateY(-1px);
+    border-color: var(--border-strong);
+    transform: translateY(-2px);
   }
   .discover-chart-header {
     display: flex;
-    align-items: center;
-    gap: 10px;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 48px;
   }
   .discover-chart-info {
     flex: 1;
@@ -1331,17 +1334,24 @@ ${seoHeadHtml}
   }
   .discover-chart-title {
     font-weight: 700;
-    font-size: 0.92rem;
+    font-size: 0.90rem;
     color: var(--text);
-    white-space: nowrap;
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal;
+    word-break: break-word;
   }
   .discover-chart-sub {
     font-size: 0.74rem;
     color: var(--muted);
     font-weight: 500;
-    margin-top: 1px;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .discover-chart-seeall {
     flex-shrink: 0;
@@ -1350,7 +1360,9 @@ ${seoHeadHtml}
     color: var(--accent);
     text-decoration: none;
     white-space: nowrap;
-    padding: 4px 2px;
+    padding: 2px 0;
+    margin-top: 1px;
+    align-self: flex-start;
   }
   .discover-chart-seeall:hover {
     text-decoration: underline;
@@ -1364,7 +1376,15 @@ ${seoHeadHtml}
     flex: 1;
     justify-content: center;
     font-size: 0.78rem;
+    font-weight: 600;
     padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    transition: all 0.15s ease;
+  }
+  .discover-chart-btns .lc-btn:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--panel-strong);
   }
 
   /* --- Shelves & Horizontal Poster Strips (Discover Tab) ------------------- */
@@ -1384,6 +1404,25 @@ ${seoHeadHtml}
   .qa-shelf-card {
     margin-bottom: 16px;
     gap: 0;
+  }
+  .qa-shelf-card .shelf-header {
+    align-items: center;
+  }
+  .qa-add-all-btn {
+    font-size: 0.80rem !important;
+    font-weight: 600 !important;
+    padding: 4px 12px !important;
+    border-radius: var(--radius-pill) !important;
+    color: var(--accent) !important;
+    border: 1.5px solid var(--border-strong) !important;
+    background: var(--surface) !important;
+    box-shadow: var(--shadow-sm) !important;
+    transition: all 0.15s ease;
+  }
+  .qa-add-all-btn:hover:not(:disabled) {
+    background: var(--color-brand-subtle) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent-hover) !important;
   }
   /* The line under a Quick Add card's title. Shared with Channels -> Quick
      Add, which is where the pattern comes from -- one class so a change to

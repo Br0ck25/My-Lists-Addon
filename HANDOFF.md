@@ -2,6 +2,31 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-03 (Antigravity): Quick Add Modernization - Phase 1 (Card Polish, Title Wrapping, & Add All Hierarchy).**
+>
+> **Where things stand**
+> - Fix Card Title Truncation & Height Normalization (`09_page-shell.js`):
+>   - Replaced single-line ellipsis clipping (`white-space: nowrap`) with 2-line clamp (`-webkit-line-clamp: 2; line-height: 1.25; word-break: break-word;`).
+>   - Long catalog titles like "Streaming Top 10 (All Services)" and "Streaming Charts (Extended)" now wrap cleanly without cut-off words or ellipses.
+>   - Added `min-height: 48px;` to `.discover-chart-header` with `align-items: flex-start; justify-content: space-between; gap: 8px;`, ensuring all cards maintain identical header height across grid rows.
+> - "See All ›" Alignment (`09_page-shell.js`):
+>   - Added `align-self: flex-start; padding: 2px 0; margin-top: 1px;` so "See All ›" remains neatly anchored to the top-right baseline of the first line of the title.
+> - Refined `+ Add all` Button Hierarchy (`09_page-shell.js`, `10_tab-search-add.js`):
+>   - Changed all 11 `.qa-add-all-btn` elements in `10_tab-search-add.js` from `lc-btn primary` to `lc-btn secondary`.
+>   - Styled `.qa-add-all-btn` as a sleek secondary pill (`border-radius: var(--radius-pill); font-size: 0.80rem; padding: 4px 12px; color: var(--accent); border: 1.5px solid var(--border-strong); background: var(--surface);`).
+>   - Added brand subtle hover styling (`background: var(--color-brand-subtle); border-color: var(--accent); color: var(--accent-hover);`).
+>   - Eliminates solid blue button fatigue across the 11 Quick Add shelves while keeping all delegated action attributes (`data-add-all-action`) and test assertions intact.
+> - Card Hover Interactivity & Button Feedback (`09_page-shell.js`):
+>   - Enhanced `.discover-chart-card:hover` with a tactile 2px lift (`transform: translateY(-2px);`) and stronger border highlight (`border-color: var(--border-strong);`).
+>   - Enhanced `.discover-chart-btns .lc-btn:hover` with accent border and accent color for immediate visual feedback when hovering "+ Movies" or "+ Shows".
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK (5,422,099 bytes).
+>   - `node --check worker_entry_combined.js`: OK (0 syntax errors).
+>   - `python gen_map.py`: 2,660 symbols, 211 routes.
+>   - All 557 client, shell, and chart tests passing (`node --test tests/my-lists-addon-charts.test.mjs tests/app-shell*.test.mjs tests/client*.test.mjs`).
+>   - Quick add worker tests passing (`tests/worker.test.mjs`).
+> - Branch: `feat/design-system-phase-1`
+>
 > **HANDOFF, 2026-10-03 (Antigravity): Catalogs UI Polish - Dedupe Toggle Display, See All Link Styling, & Poster Title Alignment.**
 >
 > **Where things stand**
