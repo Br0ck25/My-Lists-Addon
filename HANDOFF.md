@@ -2,11 +2,11 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
-> **HANDOFF, 2026-10-03 (Antigravity): Design System - Phase 1 (Consolidated CSS Variables & Design Tokens).**
+> **HANDOFF, 2026-10-03 (Antigravity): Design System - Phase 1 & 2 (Design Tokens & Unified Button System).**
 >
 > **Where things stand**
-> - Implemented Phase 1 of Design System:
->   - Unified semantic token architecture in `:root` and `:root.dark-theme` within `09_page-shell.js`:
+> - Implemented Phase 1 (Tokens) & Phase 2 (Button Architecture) of Design System:
+>   - Phase 1: Consolidated CSS Variables & Semantic Design Tokens in `:root` and `:root.dark-theme` (`09_page-shell.js`):
 >     - Semantic Surfaces & Overlays (`--color-bg-canvas`, `--color-bg-surface`, `--color-bg-elevated`, `--color-bg-sunken`, `--color-bg-overlay`).
 >     - Semantic Borders (`--color-border-subtle`, `--color-border-strong`, `--color-border-focus`).
 >     - Semantic Typography / Foreground (`--color-text-primary`, `--color-text-secondary`, `--color-text-muted`, `--color-text-inverse`).
@@ -17,7 +17,13 @@
 >     - Border Radius Scale (`--radius-xs` through `--radius-pill`).
 >     - Control Heights & Minimum Touch Targets (`--control-height-sm`, `--control-height-md`, `--control-height-lg`, `--control-touch-min`).
 >     - Full backward-compatibility mapping for all legacy aliases (`--bg`, `--surface`, `--panel`, `--border`, `--text`, `--accent`, etc.).
->   - Fixed dark-mode modal flattening: updated dialogs (`createListModal`, `addShelfModal`, `selectListModal`, `traktDeviceModal`) and `.modal-card` to use `--color-bg-elevated` and `--color-border-strong` with elevated shadows instead of pitch-black `--bg`.
+>     - Fixed dark-mode modal flattening: updated dialogs (`createListModal`, `addShelfModal`, `selectListModal`, `traktDeviceModal`) and `.modal-card` to use `--color-bg-elevated` and `--color-border-strong` with elevated shadows instead of pitch-black `--bg`.
+>   - Phase 2: Standardized Button Architecture (`09_page-shell.js`):
+>     - Unified base button reset `.btn`, `button`, `.actions a` with smooth transitions and active pressed feedback (`transform: scale(0.98)`).
+>     - Semantic style variants: `.btn-primary` (brand solid), `.btn-secondary` (surface + border), `.btn-ghost` / `.btn-tertiary` (transparent hover fill), `.btn-danger` / `.btn-destructive` (red alert outline/fill).
+>     - Standard size variants: `.btn-sm` (32px), `.btn-md` (40px default), `.btn-lg` (48px primary CTAs).
+>     - Mapped legacy `.lc-btn`, `button.secondary`, `.actions button`, `preset-load-btn`, etc. directly to the new button system with backward compatibility.
+>     - Enhanced touch targets: Added `::after` touch padding to `.cw-remove-btn` to satisfy WCAG 44×44px minimum touch perimeter; ensured `.subnav-pill` has min-height 36px.
 > - Verified via `python build.py`, `python check_sync.py`, `node --check worker_entry_combined.js`, `python gen_map.py`, `node check_bundle_budget.mjs` (first view JS: 93.30 KB gzip <= 150 KB budget), and full test suite (`node --test tests/*.test.mjs`: 2,068 passing, 0 failing).
 > - Branch: `feat/design-system-phase-1`
 >

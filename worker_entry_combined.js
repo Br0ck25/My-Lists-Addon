@@ -29625,31 +29625,31 @@ ${seoHeadHtml}
     flex: none;
     flex-shrink: 0;
     padding: 7px 16px;
+    min-height: 36px;
     border-radius: var(--radius-pill);
-    border: 1.5px solid var(--border-strong);
-    background: var(--surface);
-    color: var(--text-2);
+    border: 1.5px solid var(--color-border-strong);
+    background: var(--color-bg-surface);
+    color: var(--color-text-secondary);
     font-size: 0.86rem;
     font-weight: 600;
     cursor: pointer;
     white-space: nowrap;
-    min-height: unset;
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    transition: background 0.12s, color 0.12s, border-color 0.12s, box-shadow 0.12s;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
     box-shadow: var(--shadow-sm);
     font-family: inherit;
   }
   .subnav-pill.active {
-    background: var(--accent);
+    background: var(--color-brand);
     color: #ffffff;
-    border-color: var(--accent);
-    box-shadow: 0 2px 8px rgba(0,122,255,0.28);
+    border-color: var(--color-brand);
+    box-shadow: 0 2px 8px var(--color-brand-subtle);
   }
   .subnav-pill:hover:not(.active) {
-    border-color: var(--accent);
-    color: var(--accent);
+    border-color: var(--color-brand);
+    color: var(--color-brand);
   }
   .subnav-pill .check-icon {
     font-weight: 800;
@@ -30177,38 +30177,57 @@ ${seoHeadHtml}
     display: flex; gap: 5px; align-items: center; flex-shrink: 0; flex-wrap: wrap;
   }
   .lc-btn {
-    padding: 6px 12px; min-height: unset;
-    font-size: 0.8rem; font-weight: 600;
+    padding: 6px 12px;
+    min-height: var(--control-height-sm, 32px);
+    font-size: var(--font-size-xs, 0.8rem);
+    font-weight: 600;
     border-radius: var(--radius-pill);
-    border: 1.5px solid var(--border-strong);
-    background: var(--bg); color: var(--text-2);
-    cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
-    font-family: inherit; white-space: nowrap;
-    transition: background 0.12s, color 0.12s, border-color 0.12s;
+    border: 1.5px solid var(--color-border-strong);
+    background: var(--color-bg-surface);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: inherit;
+    white-space: nowrap;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
   }
-  .lc-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
-  .lc-btn.primary:hover:not(:disabled) { opacity: 0.85; }
-  /* Disabled meant "ignores clicks" and looked identical to a working
-     button, which is how a season that has not aired yet -- whose button
-     now says when it does -- would otherwise read as one that is simply
-     broken. Covers every disabled .lc-btn, including the ones already
-     disabled mid-fetch. */
-  .lc-btn:disabled { opacity: 0.55; cursor: default; }
-  /* The same surface 'button.secondary' gives every Connect / Disconnect /
-     Copy button, spelled with two classes so it also reaches the <a>s that
-     are styled as buttons. Those needed it: 'button, .actions a' (further
-     down this stylesheet) is more specific than a bare '.lc-btn', so an
-     <a class="lc-btn secondary"> inside .actions -- the Buy me a coffee and
-     TorBox referral links in Settings -- came out accent blue with white
-     text no matter which modifier class it carried. */
+  .lc-btn:active:not(:disabled) { transform: scale(0.98); }
+  .lc-btn.primary {
+    background: var(--color-brand);
+    color: var(--color-text-inverse, #fff);
+    border-color: var(--color-brand);
+    box-shadow: 0 2px 6px var(--color-brand-subtle);
+  }
+  .lc-btn.primary:hover:not(:disabled) {
+    background: var(--color-brand-hover);
+    border-color: var(--color-brand-hover);
+  }
+  .lc-btn:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
   .lc-btn.secondary {
-    background: var(--surface);
-    color: var(--text-2);
-    border: 1.5px solid var(--border-strong);
+    background: var(--color-bg-surface);
+    color: var(--color-text-secondary);
+    border: 1.5px solid var(--color-border-strong);
     box-shadow: var(--shadow-sm);
   }
-  .lc-btn.liked { color: var(--danger); border-color: rgba(255,59,48,0.4); }
-  .lc-btn.view-btn { color: var(--accent); border-color: transparent; background: transparent; padding: 0; font-size: 0.82rem; }
+  .lc-btn.secondary:hover:not(:disabled) {
+    background: var(--color-bg-sunken);
+    color: var(--color-text-primary);
+  }
+  .lc-btn.liked {
+    color: var(--color-danger);
+    border-color: rgba(255,59,48,0.4);
+    background: var(--color-danger-subtle);
+  }
+  .lc-btn.view-btn {
+    color: var(--color-brand);
+    border-color: transparent;
+    background: transparent;
+    padding: 0;
+    font-size: 0.82rem;
+    min-height: unset;
+  }
 
   /* --- Presets & Backup 2x2 Mobile Layout & Unified Sizing ---------------- */
   .preset-card {
@@ -30659,6 +30678,14 @@ ${seoHeadHtml}
   }
   .cw-remove-btn:hover {
     filter: brightness(0.88);
+  }
+  .cw-remove-btn::after {
+    content: '';
+    position: absolute;
+    top: -10px;
+    bottom: -10px;
+    left: -10px;
+    right: -10px;
   }
   #lists .cw-remove-btn,
   .live-preview-shelf-row .cw-remove-btn,
@@ -31373,41 +31400,199 @@ ${seoHeadHtml}
   }
   .row { display: flex; flex-direction: column; align-items: stretch; gap: 10px; margin-bottom: 10px; width: 100%; }
   .field-row { display: grid; grid-template-columns: 1fr; gap: 10px; width: 100%; }
-  button, .actions a {
-    padding: 11px 18px;
-    min-height: 44px;
-    border-radius: var(--radius-pill);
-    border: none;
-    background: var(--accent);
-    color: #fff;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 0.925rem;
-    text-decoration: none;
+  /* ==========================================================================
+     Design System: Standard Button Architecture (Phase 2)
+     ========================================================================== */
+
+  /* Base button reset & common layout */
+  .btn,
+  button,
+  .actions a {
+    box-sizing: border-box;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: opacity 0.12s, transform 0.12s;
+    gap: var(--space-1-5, 6px);
     font-family: inherit;
+    font-size: var(--font-size-base, 0.925rem);
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+    text-decoration: none;
+    white-space: nowrap;
+    border-radius: var(--radius-pill);
+    border: 1.5px solid transparent;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    vertical-align: middle;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease,
+                box-shadow 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
   }
-  button.secondary, .btn-copy, .btn-watchlist, .btn-test {
-    background: var(--surface);
-    color: var(--text-2);
-    border: 1.5px solid var(--border-strong);
+
+  /* Default button behavior (Primary brand style) */
+  button:not(.secondary):not(.btn-secondary):not(.btn-ghost):not(.btn-danger):not(.header-icon-btn):not(.header-avatar-btn):not(.theme-toggle-btn):not(.modal-close-x):not(.subnav-pill):not(.tab-btn):not(.cw-remove-btn):not(.ec-btn):not(.item-back-btn):not(.view-btn),
+  .btn-primary,
+  .primary {
+    background: var(--color-brand);
+    color: var(--color-text-inverse, #fff);
+    border-color: var(--color-brand);
+    box-shadow: 0 2px 8px var(--color-brand-subtle);
+    min-height: var(--control-height-md, 40px);
+    padding: 10px 18px;
+  }
+
+  button:not(.secondary):not(.btn-secondary):not(.btn-ghost):not(.btn-danger):not(.header-icon-btn):not(.header-avatar-btn):not(.theme-toggle-btn):not(.modal-close-x):not(.subnav-pill):not(.tab-btn):not(.cw-remove-btn):not(.ec-btn):not(.item-back-btn):not(.view-btn):hover:not(:disabled),
+  .btn-primary:hover:not(:disabled),
+  .primary:hover:not(:disabled) {
+    background: var(--color-brand-hover);
+    border-color: var(--color-brand-hover);
+    color: var(--color-text-inverse, #fff);
+  }
+
+  button:not(.secondary):not(.btn-secondary):not(.btn-ghost):not(.btn-danger):not(.header-icon-btn):not(.header-avatar-btn):not(.theme-toggle-btn):not(.modal-close-x):not(.subnav-pill):not(.tab-btn):not(.cw-remove-btn):not(.ec-btn):not(.item-back-btn):not(.view-btn):active:not(:disabled),
+  .btn-primary:active:not(:disabled),
+  .primary:active:not(:disabled) {
+    background: var(--color-brand-active);
+    border-color: var(--color-brand-active);
+    transform: scale(0.98);
+  }
+
+  /* Secondary button style */
+  .btn-secondary,
+  button.secondary,
+  .secondary,
+  .btn-copy,
+  .btn-watchlist,
+  .btn-test {
+    background: var(--color-bg-surface);
+    color: var(--color-text-secondary);
+    border: 1.5px solid var(--color-border-strong);
     box-shadow: var(--shadow-sm);
+    min-height: var(--control-height-md, 40px);
+    padding: 9px 16px;
   }
+
+  .btn-secondary:hover:not(:disabled),
+  button.secondary:hover:not(:disabled),
+  .secondary:hover:not(:disabled),
+  .btn-copy:hover:not(:disabled),
+  .btn-watchlist:hover:not(:disabled),
+  .btn-test:hover:not(:disabled) {
+    background: var(--color-bg-sunken);
+    color: var(--color-text-primary);
+    border-color: var(--color-border-strong);
+  }
+
+  .btn-secondary:active:not(:disabled),
+  button.secondary:active:not(:disabled),
+  .secondary:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  /* Ghost / Tertiary button style */
+  .btn-ghost,
+  .btn-tertiary {
+    background: transparent;
+    color: var(--color-text-secondary);
+    border: 1.5px solid transparent;
+    box-shadow: none;
+    min-height: var(--control-height-md, 40px);
+    padding: 8px 14px;
+  }
+
+  .btn-ghost:hover:not(:disabled),
+  .btn-tertiary:hover:not(:disabled) {
+    background: var(--color-brand-subtle);
+    color: var(--color-brand);
+  }
+
+  .btn-ghost:active:not(:disabled),
+  .btn-tertiary:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  /* Destructive / Danger button style */
+  .btn-danger,
+  .btn-destructive,
+  button.danger,
+  .actions button[data-act="removeAllLists"] {
+    background: var(--color-danger-subtle);
+    color: var(--color-danger);
+    border: 1.5px solid rgba(255, 59, 48, 0.3);
+    box-shadow: var(--shadow-sm);
+    min-height: var(--control-height-md, 40px);
+    padding: 9px 16px;
+  }
+
+  .btn-danger:hover:not(:disabled),
+  .btn-destructive:hover:not(:disabled),
+  button.danger:hover:not(:disabled),
+  .actions button[data-act="removeAllLists"]:hover:not(:disabled) {
+    background: var(--color-danger);
+    color: #fff;
+    border-color: var(--color-danger);
+  }
+
+  .btn-danger:active:not(:disabled),
+  .btn-destructive:active:not(:disabled),
+  .actions button[data-act="removeAllLists"]:active:not(:disabled) {
+    background: var(--color-danger-hover);
+    transform: scale(0.98);
+  }
+
+  /* Size Variants */
+  .btn-sm,
+  .lc-btn {
+    min-height: var(--control-height-sm, 32px);
+    padding: 5px 12px;
+    font-size: var(--font-size-xs, 0.8rem);
+    border-radius: var(--radius-pill);
+  }
+
+  .btn-md {
+    min-height: var(--control-height-md, 40px);
+    padding: 9px 16px;
+    font-size: var(--font-size-sm, 0.88rem);
+  }
+
+  .btn-lg,
+  .actions button.primary,
+  .actions .btn-primary {
+    min-height: var(--control-height-lg, 48px);
+    padding: 12px 22px;
+    font-size: var(--font-size-base, 0.95rem);
+  }
+
+  /* Disabled state across all buttons */
+  .btn:disabled,
+  button:disabled,
+  .actions a:disabled,
+  .btn[aria-disabled="true"],
+  button[aria-disabled="true"] {
+    opacity: 0.5;
+    cursor: not-allowed !important;
+    pointer-events: none;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+
   button.modal-close-x {
     width: 32px; height: 32px; min-height: unset;
     padding: 0; border-radius: 50%;
-    background: var(--bg); color: var(--muted);
-    border: 1px solid var(--border-strong);
+    background: var(--color-bg-sunken); color: var(--color-text-muted);
+    border: 1px solid var(--color-border-strong);
     display: inline-flex; align-items: center; justify-content: center;
     font-size: 1rem; line-height: 1; flex: none;
   }
-  button:hover:not(:disabled), .actions a:hover { opacity: 0.85; }
-  .btn-stremio { background: linear-gradient(135deg, #9B8FFF, #6D48FF); color: #fff; }
-  .btn-nuvio   { background: linear-gradient(135deg, #FF5E3A, #FF2A68); color: #fff; }
-  .btn-wako    { background: linear-gradient(135deg, #007AFF, #34AADC); color: #fff; }
+  button.modal-close-x:hover {
+    color: var(--color-text-primary);
+    background: var(--color-border-strong);
+  }
+
+  .btn-stremio { background: linear-gradient(135deg, #9B8FFF, #6D48FF); color: #fff; border: none; }
+  .btn-nuvio   { background: linear-gradient(135deg, #FF5E3A, #FF2A68); color: #fff; border: none; }
+  .btn-wako    { background: linear-gradient(135deg, #007AFF, #34AADC); color: #fff; border: none; }
   .actions { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
 
   /* --- Install Result Card & Manifest Link Display ------------------------ */
