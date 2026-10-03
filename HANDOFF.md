@@ -142,6 +142,7 @@ The harness (`tests/harness.mjs`) adds `Origin` and `Content-Type: application/j
     - `betterposters:` catalog prefix supported in `detectSource`, `fetchBetterPostersCatalog`, and Stremio catalog routing. Accessible without an account (Decision D-8).
     - `betterPostersOrderTodayBadges` setting registered in `INSTALL_CONFIG_FIELDS` (`requires: "betterPosters"`), exposed in Settings, synchronized across profile and install links, and passed to catalog routing & Live Preview.
     - `orderMetasByTodayBadges` groups items bearing `#xx Today` badges consecutively and sorts them in ascending numerical rank order starting at the first badged item's original position, preserving non-badged items before and after.
+    - Added `queue(batch, env, ctx)` handler to `export default` in `26_api-creator-and-admin-routes.js`, satisfying Cloudflare's queue consumer requirement when a Queue trigger or consumer binding is configured in the Cloudflare dashboard.
 
 ---
 

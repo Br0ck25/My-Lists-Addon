@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const { makeEnv, makeKv, makeD1, accountProof, call } = await import("./harness.mjs");
+const { makeEnv, makeKv, makeD1, accountProof, call, worker } = await import("./harness.mjs");
 
 function extractFunction(src, name) {
   const start = src.indexOf(`function ${name}`);
@@ -245,3 +245,20 @@ describe("End-to-end Better Posters Today badge ordering in Stremio catalogs", (
     ]);
   });
 });
+
+describe("Cloudflare Worker exports compliance", () => {
+  it("exports queue handler for Cloudflare queue consumers", async () => {
+    assert.equal(typeof worker.queue, "function", "worker.queue must be a function");
+    let acked = false;
+    await worker.queue({
+      queue: "mylists-jobs",
+      messages: [{
+        id: "msg-1",
+        body: { type: "test" },
+        ack: () => { acked = true; },
+      }],
+    }, {}, {});
+    assert.equal(acked, true);
+  });
+});
+

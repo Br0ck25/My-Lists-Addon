@@ -7792,4 +7792,25 @@ export default {
       console.error("[Cron] scheduled() failed before its tasks were queued:", err);
     }
   },
+
+  // Runs when messages arrive on any queue configured with this Worker as a
+  // consumer (e.g. Cloudflare Queues -> mylists-jobs -> Settings -> Add consumer).
+  // Background job handlers will be expanded in Phase 5.
+  async queue(batch, env, ctx) {
+    try {
+      applyEnvApiKeys(env);
+      if (!batch || !Array.isArray(batch.messages)) return;
+      for (const msg of batch.messages) {
+        try {
+          if (msg && typeof msg.ack === "function") {
+            msg.ack();
+          }
+        } catch (err) {
+          console.error("[Queue] Failed processing message:", err);
+        }
+      }
+    } catch (err) {
+      console.error("[Queue] queue() handler failed:", err);
+    }
+  },
 };

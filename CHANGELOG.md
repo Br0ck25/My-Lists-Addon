@@ -22,6 +22,8 @@ Do these in order. Details are in `docs/OPERATIONS.md`.
 
 `FF_SESSIONS` and `FF_INSTALLS` stay **off** (unset). Leave them off until the new sign-in and install-link screens ship.
 
+- Added `queue` handler to Worker's default export object alongside `fetch` and `scheduled`. Resolves Cloudflare deployment check ("Queue handler is missing") when a Cloudflare Queue consumer trigger (e.g. `mylists-jobs`) is configured in the Cloudflare dashboard.
+
 ### 🎨 Better Posters: List creation from badges & #xx Today badge ordering
 
 - **Better Posters Lists & Shelves**:
