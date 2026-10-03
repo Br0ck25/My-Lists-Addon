@@ -38,7 +38,8 @@ function appShellTabForPath(pathname) {
 
 function buildAppShellNavHtml(style) {
   const isDesktop = style === "desktop";
-  const items = APP_SHELL_TABS.map((t) => {
+  const tabs = isDesktop ? APP_SHELL_TABS : APP_SHELL_TABS.filter((t) => t.id !== "search");
+  const items = tabs.map((t) => {
     const active = t.id === "discover";
     const cls = (isDesktop ? "tab-btn" : "bottom-nav-item") + (active ? " active" : "");
     // The id and aria-controls keep the panels' own aria-labelledby="tab-..."
@@ -421,16 +422,18 @@ ${seoHeadHtml}
     display: flex;
     align-items: center;
     justify-content: space-between;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 10px;
     padding: 6px 4px 8px;
+    min-width: 0;
   }
   .app-header-left {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     flex: 1 1 auto;
     min-width: 0;
+    overflow: hidden;
   }
   .app-header-avatar {
     width: 40px;
@@ -443,6 +446,7 @@ ${seoHeadHtml}
     display: flex;
     flex-direction: column;
     min-width: 0;
+    overflow: hidden;
   }
   .app-header-title {
     font-size: 1.35rem;
@@ -468,13 +472,15 @@ ${seoHeadHtml}
     display: flex;
     align-items: center;
     gap: 8px;
+    flex: 0 0 auto;
     margin-left: auto;
   }
-  .header-icon-btn {
+  .header-icon-btn, .header-avatar-btn {
     width: 36px;
     height: 36px;
     min-width: 36px;
     min-height: 36px;
+    max-height: 36px;
     box-sizing: border-box;
     border-radius: 50%;
     background: var(--surface);
@@ -483,13 +489,56 @@ ${seoHeadHtml}
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     color: var(--text-2);
     cursor: pointer;
     box-shadow: var(--shadow-sm);
     padding: 0;
+    font-family: inherit;
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease, color 0.2s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .header-icon-btn:hover, .header-avatar-btn:hover {
+    background: var(--panel-strong);
+    border-color: var(--accent);
+    color: var(--text);
+    transform: scale(1.06);
+    box-shadow: var(--shadow);
+  }
+  .header-icon-btn:active, .header-avatar-btn:active {
+    transform: scale(0.92);
+  }
+  .header-icon-btn:focus-visible, .header-avatar-btn:focus-visible, .theme-toggle-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .header-icon-btn.active, html[data-initial-tab="search"] #headerSearchBtn {
+    background: var(--panel-strong);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .header-avatar-btn.signed-in {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #ffffff;
+  }
+  .header-avatar-btn.signed-in:hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+    color: #ffffff;
+  }
+  .header-avatar-initial {
+    font-size: 0.95rem;
+    font-weight: 700;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+  button.header-icon-btn, button.header-avatar-btn, button.theme-toggle-btn {
+    padding: 0;
+    min-height: unset;
   }
   .theme-toggle-btn, .dark-mode-toggle {
     width: 36px;
@@ -854,6 +903,87 @@ ${seoHeadHtml}
      page past the viewport width on mobile, same as the two subpanels
      above. */
   #itemDetailsBody { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
+
+  /* --- Item details: compact hero, metadata pills, genre chips, synopsis --- */
+  #content-item-details { position: relative; }
+  .item-back-btn {
+    position: absolute; top: 12px; left: 12px; z-index: 3;
+    padding: 6px 14px; min-height: unset;
+    font-size: 0.9rem; font-weight: 600; font-family: inherit;
+    color: #fff; background: rgba(0,0,0,0.45);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: var(--radius-pill);
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+    cursor: pointer; box-shadow: none;
+  }
+  .item-back-btn:hover { background: rgba(0,0,0,0.6); }
+  .item-back-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  .item-hero {
+    position: relative; overflow: hidden; width: 100%;
+    height: clamp(220px, 62vw, 360px);
+    border-radius: var(--radius) var(--radius) 0 0;
+    background: var(--panel-strong);
+  }
+  .item-hero-bg {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover; object-position: center 20%;
+  }
+  .item-hero-shade {
+    position: absolute; inset: 0;
+    background: linear-gradient(to bottom, transparent 35%, var(--bg) 100%);
+  }
+  .item-head {
+    display: flex; gap: 16px; align-items: flex-end;
+    margin-top: calc(-1 * clamp(80px, 22vw, 130px));
+    padding: 0 16px; position: relative; z-index: 1; min-width: 0;
+  }
+  .item-head-poster {
+    flex: 0 0 auto; width: clamp(88px, 24vw, 140px);
+    border-radius: var(--radius-sm); box-shadow: var(--shadow-md);
+    border: 2px solid var(--bg); display: block;
+  }
+  .item-head-main { flex: 1 1 0; min-width: 0; padding-bottom: 4px; }
+  .item-title {
+    margin: 0 0 10px; font-size: clamp(1.4rem, 5vw, 2.2rem);
+    font-family: serif; line-height: 1.15; overflow-wrap: anywhere;
+  }
+  .item-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .item-pill {
+    display: inline-flex; align-items: center; padding: 3px 10px;
+    font-size: 0.82rem; font-weight: 600; white-space: nowrap;
+    color: var(--text-2); background: var(--panel-strong);
+    border: 1px solid var(--border-strong); border-radius: var(--radius-pill);
+  }
+  .item-pill-sep { color: var(--muted); font-size: 0.8rem; }
+  .item-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  .item-actions .lc-btn {
+    flex: 1 1 160px; justify-content: center;
+    padding: 10px 16px; font-size: 0.95rem;
+  }
+  .item-genres { display: flex; flex-wrap: wrap; gap: 8px; }
+  .item-genre-chip {
+    padding: 5px 14px; min-height: unset; font-size: 0.85rem; font-weight: 600; font-family: inherit;
+    color: var(--text-2); background: var(--surface);
+    border: 1.5px solid var(--border-strong); border-radius: var(--radius-pill);
+    cursor: pointer; transition: background 0.12s, color 0.12s, border-color 0.12s;
+  }
+  .item-genre-chip:hover { color: var(--accent); border-color: var(--accent); }
+  .item-genre-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .item-synopsis {
+    margin: 0; font-size: 1.05rem; line-height: 1.6; color: var(--text);
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3;
+    line-clamp: 3; overflow: hidden;
+  }
+  .item-synopsis.is-expanded { display: block; -webkit-line-clamp: unset; line-clamp: unset; overflow: visible; }
+  .item-synopsis-toggle {
+    margin-top: 6px; padding: 0; min-height: unset; background: none; border: 0;
+    color: var(--accent); font-size: 0.95rem; font-weight: 600;
+    font-family: inherit; cursor: pointer;
+  }
+  .item-synopsis-toggle:hover { text-decoration: underline; }
+  .item-synopsis-toggle[hidden] { display: none; }
+  .item-synopsis-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   /* --- Bottom Nav (Mobile Only - Persistent Glassmorphism) ---------------- */
   .bottom-nav { display: none; }
@@ -3909,6 +4039,12 @@ ${seoHeadHtml}
       </div>
     </div>
     <div class="app-header-actions">
+      <button type="button" class="header-icon-btn header-search-btn" id="headerSearchBtn" data-act="switchTab" data-act-args="[&quot;search&quot;]" aria-label="Search" title="Search">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+      </button>
       <button type="button" class="theme-toggle-btn dark-mode-toggle" id="themeToggleBtn" data-act="toggleTheme" aria-label="Toggle Light or Dark Mode" title="Toggle Light / Dark Mode">
         <svg class="theme-icon-sun" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="12" cy="12" r="4" fill="currentColor"></circle>
@@ -3975,12 +4111,6 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
       </svg>
       Discover
     </button>
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-search" aria-controls="content-search" aria-selected="false" tabindex="-1" data-tab="search" data-act="switchTab" data-act-args="[&quot;search&quot;]" title="Search">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-      </svg>
-      Search
-    </button>
     <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-settings" aria-controls="content-settings" aria-selected="false" tabindex="-1" data-tab="settings" data-act="switchTab" data-act-args="[&quot;settings&quot;]" title="Settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="12" cy="12" r="3"></circle>
@@ -3993,6 +4123,10 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
   <script nonce="${CSP_NONCE_PLACEHOLDER}">
     (function() {
       var initTab = document.documentElement.getAttribute('data-initial-tab');
+      if (initTab === 'search') {
+        var sBtn = document.getElementById('headerSearchBtn');
+        if (sBtn) sBtn.classList.add('active');
+      }
       if (initTab) {
         var titles = {
           discover: { title: 'Discover', sub: 'Explore Popular & Streaming' },
@@ -4017,9 +4151,11 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
         var cBar = document.getElementById('creatorProfileBar');
         if (cBar) {
           if (cName && cKey) {
-            cBar.innerHTML = '<div style="display:flex; align-items:center; gap:8px;"><button type="button" class="subnav-pill active" style="margin:0; font-size:0.85rem; padding:8px 14px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px; border-radius:var(--radius-pill);" data-act="switchTab" data-act-args="[&quot;account&quot;]">&#x1F464; ' + String(cDisp || cName || '').replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}) + '</button></div>';
+            var disp = cDisp || cName || 'Account';
+            var init = (disp.charAt(0) || 'U').toUpperCase();
+            cBar.innerHTML = '<button type="button" class="header-avatar-btn signed-in" id="headerProfileBtn" data-act="switchTab" data-act-args="[&quot;account&quot;]" aria-label="Account: ' + String(disp).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}) + '" title="Signed in as ' + String(disp).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}) + '"><span class="header-avatar-initial">' + String(init).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}) + '</span></button>';
           } else {
-            cBar.innerHTML = '<div style="display:flex; align-items:center; gap:6px;"><button type="button" class="lc-btn primary" data-act="openRestoreModal" style="padding:8px 16px; font-size:0.85rem; font-weight:700; border-radius:var(--radius-pill);">Login</button></div>';
+            cBar.innerHTML = '<button type="button" class="header-avatar-btn signed-out" id="headerProfileBtn" data-act="openRestoreModal" aria-label="Sign in or create account" title="Sign in or create account"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></button>';
           }
         }
       } catch (e) {}
@@ -4084,9 +4220,7 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
   </div>
 
   <div class="tab-panel" data-tab-panel="item-details" id="content-item-details" hidden>
-    <div style="margin-bottom: 20px;">
-      <button type="button" class="lc-btn secondary" data-act="navigateBackFromDetail" style="padding: 6px 12px; font-size: 0.9rem;">&larr; Back</button>
-    </div>
+    <button type="button" class="item-back-btn" data-act="navigateBackFromDetail" aria-label="Back">&larr; Back</button>
     <div id="itemDetailsBody" style="display: flex; flex-direction: column; gap: 24px;">
       <!-- Filled dynamically -->
     </div>

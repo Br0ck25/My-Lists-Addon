@@ -1247,6 +1247,10 @@ function switchTab(name) {
     b.setAttribute('aria-selected', on ? 'true' : 'false');
     b.setAttribute('tabindex', on ? '0' : '-1');
   }
+  const headerSearchBtn = document.getElementById('headerSearchBtn');
+  if (headerSearchBtn) {
+    headerSearchBtn.classList.toggle('active', name === 'search');
+  }
 
   if (name !== 'list-details' && name !== 'item-details') {
     window._originTab = name;

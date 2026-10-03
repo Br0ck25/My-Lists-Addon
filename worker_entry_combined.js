@@ -28463,7 +28463,8 @@ function appShellTabForPath(pathname) {
 
 function buildAppShellNavHtml(style) {
   const isDesktop = style === "desktop";
-  const items = APP_SHELL_TABS.map((t) => {
+  const tabs = isDesktop ? APP_SHELL_TABS : APP_SHELL_TABS.filter((t) => t.id !== "search");
+  const items = tabs.map((t) => {
     const active = t.id === "discover";
     const cls = (isDesktop ? "tab-btn" : "bottom-nav-item") + (active ? " active" : "");
     // The id and aria-controls keep the panels' own aria-labelledby="tab-..."
@@ -28846,16 +28847,18 @@ ${seoHeadHtml}
     display: flex;
     align-items: center;
     justify-content: space-between;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 10px;
     padding: 6px 4px 8px;
+    min-width: 0;
   }
   .app-header-left {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     flex: 1 1 auto;
     min-width: 0;
+    overflow: hidden;
   }
   .app-header-avatar {
     width: 40px;
@@ -28868,6 +28871,7 @@ ${seoHeadHtml}
     display: flex;
     flex-direction: column;
     min-width: 0;
+    overflow: hidden;
   }
   .app-header-title {
     font-size: 1.35rem;
@@ -28893,13 +28897,15 @@ ${seoHeadHtml}
     display: flex;
     align-items: center;
     gap: 8px;
+    flex: 0 0 auto;
     margin-left: auto;
   }
-  .header-icon-btn {
+  .header-icon-btn, .header-avatar-btn {
     width: 36px;
     height: 36px;
     min-width: 36px;
     min-height: 36px;
+    max-height: 36px;
     box-sizing: border-box;
     border-radius: 50%;
     background: var(--surface);
@@ -28908,13 +28914,56 @@ ${seoHeadHtml}
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     color: var(--text-2);
     cursor: pointer;
     box-shadow: var(--shadow-sm);
     padding: 0;
+    font-family: inherit;
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease, color 0.2s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .header-icon-btn:hover, .header-avatar-btn:hover {
+    background: var(--panel-strong);
+    border-color: var(--accent);
+    color: var(--text);
+    transform: scale(1.06);
+    box-shadow: var(--shadow);
+  }
+  .header-icon-btn:active, .header-avatar-btn:active {
+    transform: scale(0.92);
+  }
+  .header-icon-btn:focus-visible, .header-avatar-btn:focus-visible, .theme-toggle-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .header-icon-btn.active, html[data-initial-tab="search"] #headerSearchBtn {
+    background: var(--panel-strong);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .header-avatar-btn.signed-in {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #ffffff;
+  }
+  .header-avatar-btn.signed-in:hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+    color: #ffffff;
+  }
+  .header-avatar-initial {
+    font-size: 0.95rem;
+    font-weight: 700;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+  button.header-icon-btn, button.header-avatar-btn, button.theme-toggle-btn {
+    padding: 0;
+    min-height: unset;
   }
   .theme-toggle-btn, .dark-mode-toggle {
     width: 36px;
@@ -29279,6 +29328,87 @@ ${seoHeadHtml}
      page past the viewport width on mobile, same as the two subpanels
      above. */
   #itemDetailsBody { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
+
+  /* --- Item details: compact hero, metadata pills, genre chips, synopsis --- */
+  #content-item-details { position: relative; }
+  .item-back-btn {
+    position: absolute; top: 12px; left: 12px; z-index: 3;
+    padding: 6px 14px; min-height: unset;
+    font-size: 0.9rem; font-weight: 600; font-family: inherit;
+    color: #fff; background: rgba(0,0,0,0.45);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: var(--radius-pill);
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+    cursor: pointer; box-shadow: none;
+  }
+  .item-back-btn:hover { background: rgba(0,0,0,0.6); }
+  .item-back-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  .item-hero {
+    position: relative; overflow: hidden; width: 100%;
+    height: clamp(220px, 62vw, 360px);
+    border-radius: var(--radius) var(--radius) 0 0;
+    background: var(--panel-strong);
+  }
+  .item-hero-bg {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover; object-position: center 20%;
+  }
+  .item-hero-shade {
+    position: absolute; inset: 0;
+    background: linear-gradient(to bottom, transparent 35%, var(--bg) 100%);
+  }
+  .item-head {
+    display: flex; gap: 16px; align-items: flex-end;
+    margin-top: calc(-1 * clamp(80px, 22vw, 130px));
+    padding: 0 16px; position: relative; z-index: 1; min-width: 0;
+  }
+  .item-head-poster {
+    flex: 0 0 auto; width: clamp(88px, 24vw, 140px);
+    border-radius: var(--radius-sm); box-shadow: var(--shadow-md);
+    border: 2px solid var(--bg); display: block;
+  }
+  .item-head-main { flex: 1 1 0; min-width: 0; padding-bottom: 4px; }
+  .item-title {
+    margin: 0 0 10px; font-size: clamp(1.4rem, 5vw, 2.2rem);
+    font-family: serif; line-height: 1.15; overflow-wrap: anywhere;
+  }
+  .item-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .item-pill {
+    display: inline-flex; align-items: center; padding: 3px 10px;
+    font-size: 0.82rem; font-weight: 600; white-space: nowrap;
+    color: var(--text-2); background: var(--panel-strong);
+    border: 1px solid var(--border-strong); border-radius: var(--radius-pill);
+  }
+  .item-pill-sep { color: var(--muted); font-size: 0.8rem; }
+  .item-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  .item-actions .lc-btn {
+    flex: 1 1 160px; justify-content: center;
+    padding: 10px 16px; font-size: 0.95rem;
+  }
+  .item-genres { display: flex; flex-wrap: wrap; gap: 8px; }
+  .item-genre-chip {
+    padding: 5px 14px; min-height: unset; font-size: 0.85rem; font-weight: 600; font-family: inherit;
+    color: var(--text-2); background: var(--surface);
+    border: 1.5px solid var(--border-strong); border-radius: var(--radius-pill);
+    cursor: pointer; transition: background 0.12s, color 0.12s, border-color 0.12s;
+  }
+  .item-genre-chip:hover { color: var(--accent); border-color: var(--accent); }
+  .item-genre-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .item-synopsis {
+    margin: 0; font-size: 1.05rem; line-height: 1.6; color: var(--text);
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3;
+    line-clamp: 3; overflow: hidden;
+  }
+  .item-synopsis.is-expanded { display: block; -webkit-line-clamp: unset; line-clamp: unset; overflow: visible; }
+  .item-synopsis-toggle {
+    margin-top: 6px; padding: 0; min-height: unset; background: none; border: 0;
+    color: var(--accent); font-size: 0.95rem; font-weight: 600;
+    font-family: inherit; cursor: pointer;
+  }
+  .item-synopsis-toggle:hover { text-decoration: underline; }
+  .item-synopsis-toggle[hidden] { display: none; }
+  .item-synopsis-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   /* --- Bottom Nav (Mobile Only - Persistent Glassmorphism) ---------------- */
   .bottom-nav { display: none; }
@@ -32334,6 +32464,12 @@ ${seoHeadHtml}
       </div>
     </div>
     <div class="app-header-actions">
+      <button type="button" class="header-icon-btn header-search-btn" id="headerSearchBtn" data-act="switchTab" data-act-args="[&quot;search&quot;]" aria-label="Search" title="Search">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+      </button>
       <button type="button" class="theme-toggle-btn dark-mode-toggle" id="themeToggleBtn" data-act="toggleTheme" aria-label="Toggle Light or Dark Mode" title="Toggle Light / Dark Mode">
         <svg class="theme-icon-sun" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="12" cy="12" r="4" fill="currentColor"></circle>
@@ -32400,12 +32536,6 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
       </svg>
       Discover
     </button>
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-search" aria-controls="content-search" aria-selected="false" tabindex="-1" data-tab="search" data-act="switchTab" data-act-args="[&quot;search&quot;]" title="Search">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-      </svg>
-      Search
-    </button>
     <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-settings" aria-controls="content-settings" aria-selected="false" tabindex="-1" data-tab="settings" data-act="switchTab" data-act-args="[&quot;settings&quot;]" title="Settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="12" cy="12" r="3"></circle>
@@ -32418,6 +32548,10 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
   <script nonce="${CSP_NONCE_PLACEHOLDER}">
     (function() {
       var initTab = document.documentElement.getAttribute('data-initial-tab');
+      if (initTab === 'search') {
+        var sBtn = document.getElementById('headerSearchBtn');
+        if (sBtn) sBtn.classList.add('active');
+      }
       if (initTab) {
         var titles = {
           discover: { title: 'Discover', sub: 'Explore Popular & Streaming' },
@@ -32442,9 +32576,11 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
         var cBar = document.getElementById('creatorProfileBar');
         if (cBar) {
           if (cName && cKey) {
-            cBar.innerHTML = '<div style="display:flex; align-items:center; gap:8px;"><button type="button" class="subnav-pill active" style="margin:0; font-size:0.85rem; padding:8px 14px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px; border-radius:var(--radius-pill);" data-act="switchTab" data-act-args="[&quot;account&quot;]">&#x1F464; ' + String(cDisp || cName || '').replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}) + '</button></div>';
+            var disp = cDisp || cName || 'Account';
+            var init = (disp.charAt(0) || 'U').toUpperCase();
+            cBar.innerHTML = '<button type="button" class="header-avatar-btn signed-in" id="headerProfileBtn" data-act="switchTab" data-act-args="[&quot;account&quot;]" aria-label="Account: ' + String(disp).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}) + '" title="Signed in as ' + String(disp).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}) + '"><span class="header-avatar-initial">' + String(init).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}) + '</span></button>';
           } else {
-            cBar.innerHTML = '<div style="display:flex; align-items:center; gap:6px;"><button type="button" class="lc-btn primary" data-act="openRestoreModal" style="padding:8px 16px; font-size:0.85rem; font-weight:700; border-radius:var(--radius-pill);">Login</button></div>';
+            cBar.innerHTML = '<button type="button" class="header-avatar-btn signed-out" id="headerProfileBtn" data-act="openRestoreModal" aria-label="Sign in or create account" title="Sign in or create account"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></button>';
           }
         }
       } catch (e) {}
@@ -32509,9 +32645,7 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
   </div>
 
   <div class="tab-panel" data-tab-panel="item-details" id="content-item-details" hidden>
-    <div style="margin-bottom: 20px;">
-      <button type="button" class="lc-btn secondary" data-act="navigateBackFromDetail" style="padding: 6px 12px; font-size: 0.9rem;">&larr; Back</button>
-    </div>
+    <button type="button" class="item-back-btn" data-act="navigateBackFromDetail" aria-label="Back">&larr; Back</button>
     <div id="itemDetailsBody" style="display: flex; flex-direction: column; gap: 24px;">
       <!-- Filled dynamically -->
     </div>
@@ -35446,6 +35580,10 @@ function switchTab(name) {
     }
     b.setAttribute('aria-selected', on ? 'true' : 'false');
     b.setAttribute('tabindex', on ? '0' : '-1');
+  }
+  const headerSearchBtn = document.getElementById('headerSearchBtn');
+  if (headerSearchBtn) {
+    headerSearchBtn.classList.toggle('active', name === 'search');
   }
 
   if (name !== 'list-details' && name !== 'item-details') {
@@ -46078,15 +46216,17 @@ async function openItemDetailsModal(id, type, opts) {
     const budgetStr = formatMoney(d.budget);
     const revenueStr = formatMoney(d.revenue);
 
-    let infoHtml = '';
-    if (dateStr) infoHtml += '<div style="margin-bottom:6px;">' + escapeHtml(dateStr) + '</div>';
-    if (d.seasons) infoHtml += '<div style="margin-bottom:6px;">' + escapeHtml(d.seasons + ' season' + (d.seasons > 1 ? 's' : '')) + '</div>';
-    if (runtimeStr) infoHtml += '<div style="margin-bottom:6px;">' + escapeHtml(runtimeStr) + '</div>';
-    if (d.contentRating) infoHtml += '<div style="margin-bottom:6px;">' + escapeHtml(d.contentRating) + '</div>';
-    if (d.rating) infoHtml += '<div style="margin-bottom:6px;">\u2605 ' + escapeHtml(d.rating) + ' TMDB</div>';
-    if (budgetStr) infoHtml += '<div style="margin-bottom:6px;">Budget ' + escapeHtml(budgetStr) + '</div>';
-    if (revenueStr) infoHtml += '<div style="margin-bottom:6px;">Box Office ' + escapeHtml(revenueStr) + '</div>';
-    if (d.genres) infoHtml += '<div style="margin-bottom:20px;">' + escapeHtml(d.genres) + '</div>';
+    const yearStr = d.releaseYear || (d.releaseDate ? String(d.releaseDate).slice(0, 4) : '');
+    const pillParts = [];
+    const addPill = (text, tip) => pillParts.push('<span class="item-pill"' + (tip ? ' title="' + escapeAttr(tip) + '"' : '') + '>' + escapeHtml(text) + '</span>');
+    if (d.contentRating) addPill(d.contentRating);
+    if (runtimeStr) addPill(runtimeStr);
+    if (yearStr) addPill(yearStr, dateStr && dateStr !== yearStr ? dateStr : '');
+    if (d.seasons) addPill(d.seasons + ' season' + (d.seasons > 1 ? 's' : ''));
+    if (d.rating) addPill('\u2605 ' + d.rating + ' TMDB');
+    if (budgetStr) addPill('Budget ' + budgetStr);
+    if (revenueStr) addPill('Box Office ' + revenueStr);
+    const infoHtml = pillParts.join('<span class="item-pill-sep" aria-hidden="true">\u2022</span>');
     
     const trailerHtml = d.trailerKey ? 
       '<h3 style="margin: 0 0 16px; font-family:serif; font-size:1.5rem;">Trailer</h3>' +
@@ -46143,35 +46283,106 @@ async function openItemDetailsModal(id, type, opts) {
     // offering to mark what the person has already seen.
     const showBtnState = showWatchedButtonState(isShowFullyWatched(d));
 
+    const heroImg = d.background || d.poster || '';
+    const isSeriesItem = !!((d.seasonsData && d.seasonsData.length > 0) || type === 'series');
+    const genreList = (Array.isArray(d.genres) ? d.genres : String(d.genres || '').split(','))
+      .map((g) => String(g || '').trim()).filter(Boolean);
+    const genresHtml = genreList.length ?
+      '<div class="item-genres">' + genreList.map((g) =>
+        '<button type="button" class="item-genre-chip" data-act="openSearchByGenre" data-act-args="' + appActArgs([g, isSeriesItem ? 'tv' : 'movie']) + '">' + escapeHtml(g) + '</button>'
+      ).join('') + '</div>' : '';
+
     body.innerHTML = 
-      '<div style="display:flex; flex-direction:row; gap:32px; flex-wrap:wrap;">' +
-        '<div style="flex: 0 0 300px; max-width: 100%;">' +
-          (d.poster ? '<img src="' + escapeAttr(resolveClientPoster(d, d.poster)) + '" style="width:100%; border-radius:8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">' : '') +
+      '<div class="item-hero">' +
+        (heroImg ? '<img class="item-hero-bg" src="' + escapeAttr(d.background || resolveClientPoster(d, d.poster)) + '" alt="">' : '') +
+        '<div class="item-hero-shade"></div>' +
+      '</div>' +
+      '<div class="item-head">' +
+        (d.poster ? '<img class="item-head-poster" src="' + escapeAttr(resolveClientPoster(d, d.poster)) + '" alt="">' : '') +
+        '<div class="item-head-main">' +
+          '<h1 class="item-title">' + escapeHtml(d.title) + '</h1>' +
+          (infoHtml ? '<div class="item-pills">' + infoHtml + '</div>' : '') +
         '</div>' +
-        '<div style="flex: 1; min-width: 300px;">' +
-          '<h1 style="margin:0 0 16px; font-size:2.5rem; font-family: serif;">' + escapeHtml(d.title) + '</h1>' +
-          '<div style="margin-bottom:16px; color:var(--text); font-size:1.05rem;">' + infoHtml + '</div>' +
-          '<p style="font-size:1.05rem; line-height:1.6; color:var(--text); margin-bottom: 24px;">' + escapeHtml(d.overview || 'No overview available.') + '</p>' +
-          '<div style="display:flex; gap:16px; flex-wrap:wrap; align-items:center; margin-top:20px;">' +
-            '<button type="button" class="lc-btn primary" data-act="openSelectListModalFromItemModal">+ Add to list</button>' +
-            (((d.seasonsData && d.seasonsData.length > 0) || type === 'series') ?
-              '<button type="button" id="btnMarkShowWatched" class="lc-btn ' + showBtnState.className + '" data-act="markShowWatched" data-act-args="' + appActArgs([d.id]) + '">' +
-                showBtnState.label +
-              '</button>'
-              :
-              '<button type="button" id="btnMarkWatched" class="lc-btn ' + (isItemWatched(d.id, d.tmdbId, d.imdbId) ? 'secondary' : 'primary') + '" data-act="toggleMovieWatchStatusFromModal">' +
-                (isItemWatched(d.id, d.tmdbId, d.imdbId) ? '<span style="margin-right:4px;">&#x2713;</span> Mark as unwatched' : 'Mark as Watched') +
-              '</button>') +
-          '</div>' +
-        '</div>' +
+      '</div>' +
+      '<div class="item-actions">' +
+        '<button type="button" class="lc-btn primary" data-act="openSelectListModalFromItemModal">+ Add to List</button>' +
+        (((d.seasonsData && d.seasonsData.length > 0) || type === 'series') ?
+          '<button type="button" id="btnMarkShowWatched" class="lc-btn ' + showBtnState.className + '" data-act="markShowWatched" data-act-args="' + appActArgs([d.id]) + '">' +
+            showBtnState.label +
+          '</button>'
+          :
+          '<button type="button" id="btnMarkWatched" class="lc-btn ' + (isItemWatched(d.id, d.tmdbId, d.imdbId) ? 'secondary' : 'primary') + '" data-act="toggleMovieWatchStatusFromModal">' +
+            (isItemWatched(d.id, d.tmdbId, d.imdbId) ? '<span style="margin-right:4px;">&#x2713;</span> Mark as unwatched' : 'Mark as Watched') +
+          '</button>') +
+      '</div>' +
+      genresHtml +
+      '<div class="item-synopsis-wrap">' +
+        '<p class="item-synopsis" id="itemSynopsisText">' + escapeHtml(d.overview || 'No overview available.') + '</p>' +
+        '<button type="button" class="item-synopsis-toggle" id="itemSynopsisToggle" aria-controls="itemSynopsisText" aria-expanded="false" hidden data-act="toggleItemSynopsis" data-act-args="[&quot;@self&quot;]">Read More</button>' +
       '</div>' +
       (trailerHtml ? '<div style="margin-top:32px;">' + trailerHtml + '</div>' : '') +
       (seasonsHtml ? '<div style="margin-top:32px;">' + seasonsHtml + '</div>' : '') +
       (storylinesHtml ? '<div style="margin-top:32px;">' + storylinesHtml + '</div>' : '');
+    syncItemSynopsisToggle();
       
   } catch (err) {
-    body.innerHTML = '<p class="testresult err">\u2717 ' + escapeHtml(err.message) + '</p>';
+    body.innerHTML = '<p class="testresult err" style="margin-top:48px;">\u2717 ' + escapeHtml(err.message) + '</p>';
   }
+}
+
+// Shows the Read More button only when the 3-line clamp is actually hiding text.
+function syncItemSynopsisToggle() {
+  try {
+    const p = document.getElementById('itemSynopsisText');
+    const t = document.getElementById('itemSynopsisToggle');
+    if (!p || !t) return;
+    if (p.classList.contains('is-expanded')) { t.hidden = false; return; }
+    t.hidden = !(p.scrollHeight > p.clientHeight + 1);
+  } catch (e) {}
+}
+
+function toggleItemSynopsis(btn) {
+  const p = document.getElementById('itemSynopsisText');
+  if (!p || !btn) return;
+  const open = p.classList.toggle('is-expanded');
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  btn.textContent = open ? 'Show Less' : 'Read More';
+}
+
+// A genre chip on the details screen: open Search on the matching Movies/Shows
+// chip with that genre picked in the genre dropdown.
+function openSearchByGenre(genreName, kind) {
+  const ids = {
+    'action': 28, 'adventure': 10759, 'action & adventure': 10759,
+    'animation': 16, 'comedy': 35, 'crime': 80, 'documentary': 99, 'drama': 18,
+    'family': 10751, 'kids': 10762, 'fantasy': 14, 'science fiction': 878,
+    'sci-fi': 878, 'sci-fi & fantasy': 10765, 'history': 36, 'horror': 27,
+    'music': 10402, 'mystery': 9648, 'romance': 10749, 'thriller': 53,
+    'war': 10752, 'war & politics': 10768, 'western': 37,
+  };
+  const select = document.getElementById('catalogSearchGenreSelect');
+  const id = ids[String(genreName || '').trim().toLowerCase()];
+  let value = '';
+  if (select && id) {
+    const opt = Array.from(select.options).find((o) => o.value && o.value.split(',').indexOf(String(id)) !== -1);
+    if (opt) value = opt.value;
+  }
+  const input = document.getElementById('catalogSearchInput');
+  if (input) input.value = '';
+  if (select) select.value = value;
+  const filter = kind === 'tv' ? 'tv' : 'movie';
+  let chip = null;
+  document.querySelectorAll('#catalogSearchTypeChips .subnav-pill').forEach((p) => {
+    if ((p.getAttribute('data-act-args') || '').indexOf('["' + filter + '"') === 0) chip = p;
+  });
+  switchTab('search');
+  setCatalogSearchFilter(filter, chip);
+}
+
+if (typeof window !== 'undefined') {
+  window.toggleItemSynopsis = toggleItemSynopsis;
+  window.openSearchByGenre = openSearchByGenre;
+  if (typeof window.addEventListener === 'function') window.addEventListener('resize', syncItemSynopsisToggle);
 }
 
 async function toggleSeasonEpisodes(headerEl, seasonNum, imdbId) {
@@ -66042,15 +66253,17 @@ function renderCreatorProfileBar() {
   const bar = document.getElementById('creatorProfileBar');
   if (!bar) return;
   if (activeCreator) {
+    const disp = activeCreator.displayName || activeCreator.creatorName || 'Account';
+    const initial = (disp.charAt(0) || 'U').toUpperCase();
     bar.innerHTML =
-      '<div style="display:flex; align-items:center; gap:8px;">' +
-      '<button type="button" class="subnav-pill active" style="margin:0; font-size:0.85rem; padding:8px 14px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px; border-radius:var(--radius-pill);" data-act="switchTab" data-act-args="[&quot;account&quot;]">&#x1F464; ' + escapeHtml(activeCreator.displayName) + '</button>' +
-      '</div>';
+      '<button type="button" class="header-avatar-btn signed-in" id="headerProfileBtn" data-act="switchTab" data-act-args="[&quot;account&quot;]" aria-label="Account: ' + escapeAttr(disp) + '" title="Signed in as ' + escapeAttr(disp) + '">' +
+        '<span class="header-avatar-initial">' + escapeHtml(initial) + '</span>' +
+      '</button>';
   } else {
     bar.innerHTML =
-      '<div style="display:flex; align-items:center; gap:6px;">' +
-      '<button type="button" class="lc-btn primary" data-act="openRestoreModal" style="padding:8px 16px; font-size:0.85rem; font-weight:700; border-radius:var(--radius-pill);">Login</button>' +
-      '</div>';
+      '<button type="button" class="header-avatar-btn signed-out" id="headerProfileBtn" data-act="openRestoreModal" aria-label="Sign in or create account" title="Sign in or create account">' +
+        '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>' +
+      '</button>';
   }
 }
 

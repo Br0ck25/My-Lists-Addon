@@ -3452,15 +3452,17 @@ async function openItemDetailsModal(id, type, opts) {
     const budgetStr = formatMoney(d.budget);
     const revenueStr = formatMoney(d.revenue);
 
-    let infoHtml = '';
-    if (dateStr) infoHtml += '<div style="margin-bottom:6px;">' + escapeHtml(dateStr) + '</div>';
-    if (d.seasons) infoHtml += '<div style="margin-bottom:6px;">' + escapeHtml(d.seasons + ' season' + (d.seasons > 1 ? 's' : '')) + '</div>';
-    if (runtimeStr) infoHtml += '<div style="margin-bottom:6px;">' + escapeHtml(runtimeStr) + '</div>';
-    if (d.contentRating) infoHtml += '<div style="margin-bottom:6px;">' + escapeHtml(d.contentRating) + '</div>';
-    if (d.rating) infoHtml += '<div style="margin-bottom:6px;">\u2605 ' + escapeHtml(d.rating) + ' TMDB</div>';
-    if (budgetStr) infoHtml += '<div style="margin-bottom:6px;">Budget ' + escapeHtml(budgetStr) + '</div>';
-    if (revenueStr) infoHtml += '<div style="margin-bottom:6px;">Box Office ' + escapeHtml(revenueStr) + '</div>';
-    if (d.genres) infoHtml += '<div style="margin-bottom:20px;">' + escapeHtml(d.genres) + '</div>';
+    const yearStr = d.releaseYear || (d.releaseDate ? String(d.releaseDate).slice(0, 4) : '');
+    const pillParts = [];
+    const addPill = (text, tip) => pillParts.push('<span class="item-pill"' + (tip ? ' title="' + escapeAttr(tip) + '"' : '') + '>' + escapeHtml(text) + '</span>');
+    if (d.contentRating) addPill(d.contentRating);
+    if (runtimeStr) addPill(runtimeStr);
+    if (yearStr) addPill(yearStr, dateStr && dateStr !== yearStr ? dateStr : '');
+    if (d.seasons) addPill(d.seasons + ' season' + (d.seasons > 1 ? 's' : ''));
+    if (d.rating) addPill('\u2605 ' + d.rating + ' TMDB');
+    if (budgetStr) addPill('Budget ' + budgetStr);
+    if (revenueStr) addPill('Box Office ' + revenueStr);
+    const infoHtml = pillParts.join('<span class="item-pill-sep" aria-hidden="true">\u2022</span>');
     
     const trailerHtml = d.trailerKey ? 
       '<h3 style="margin: 0 0 16px; font-family:serif; font-size:1.5rem;">Trailer</h3>' +
@@ -3517,35 +3519,106 @@ async function openItemDetailsModal(id, type, opts) {
     // offering to mark what the person has already seen.
     const showBtnState = showWatchedButtonState(isShowFullyWatched(d));
 
+    const heroImg = d.background || d.poster || '';
+    const isSeriesItem = !!((d.seasonsData && d.seasonsData.length > 0) || type === 'series');
+    const genreList = (Array.isArray(d.genres) ? d.genres : String(d.genres || '').split(','))
+      .map((g) => String(g || '').trim()).filter(Boolean);
+    const genresHtml = genreList.length ?
+      '<div class="item-genres">' + genreList.map((g) =>
+        '<button type="button" class="item-genre-chip" data-act="openSearchByGenre" data-act-args="' + appActArgs([g, isSeriesItem ? 'tv' : 'movie']) + '">' + escapeHtml(g) + '</button>'
+      ).join('') + '</div>' : '';
+
     body.innerHTML = 
-      '<div style="display:flex; flex-direction:row; gap:32px; flex-wrap:wrap;">' +
-        '<div style="flex: 0 0 300px; max-width: 100%;">' +
-          (d.poster ? '<img src="' + escapeAttr(resolveClientPoster(d, d.poster)) + '" style="width:100%; border-radius:8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">' : '') +
+      '<div class="item-hero">' +
+        (heroImg ? '<img class="item-hero-bg" src="' + escapeAttr(d.background || resolveClientPoster(d, d.poster)) + '" alt="">' : '') +
+        '<div class="item-hero-shade"></div>' +
+      '</div>' +
+      '<div class="item-head">' +
+        (d.poster ? '<img class="item-head-poster" src="' + escapeAttr(resolveClientPoster(d, d.poster)) + '" alt="">' : '') +
+        '<div class="item-head-main">' +
+          '<h1 class="item-title">' + escapeHtml(d.title) + '</h1>' +
+          (infoHtml ? '<div class="item-pills">' + infoHtml + '</div>' : '') +
         '</div>' +
-        '<div style="flex: 1; min-width: 300px;">' +
-          '<h1 style="margin:0 0 16px; font-size:2.5rem; font-family: serif;">' + escapeHtml(d.title) + '</h1>' +
-          '<div style="margin-bottom:16px; color:var(--text); font-size:1.05rem;">' + infoHtml + '</div>' +
-          '<p style="font-size:1.05rem; line-height:1.6; color:var(--text); margin-bottom: 24px;">' + escapeHtml(d.overview || 'No overview available.') + '</p>' +
-          '<div style="display:flex; gap:16px; flex-wrap:wrap; align-items:center; margin-top:20px;">' +
-            '<button type="button" class="lc-btn primary" data-act="openSelectListModalFromItemModal">+ Add to list</button>' +
-            (((d.seasonsData && d.seasonsData.length > 0) || type === 'series') ?
-              '<button type="button" id="btnMarkShowWatched" class="lc-btn ' + showBtnState.className + '" data-act="markShowWatched" data-act-args="' + appActArgs([d.id]) + '">' +
-                showBtnState.label +
-              '</button>'
-              :
-              '<button type="button" id="btnMarkWatched" class="lc-btn ' + (isItemWatched(d.id, d.tmdbId, d.imdbId) ? 'secondary' : 'primary') + '" data-act="toggleMovieWatchStatusFromModal">' +
-                (isItemWatched(d.id, d.tmdbId, d.imdbId) ? '<span style="margin-right:4px;">&#x2713;</span> Mark as unwatched' : 'Mark as Watched') +
-              '</button>') +
-          '</div>' +
-        '</div>' +
+      '</div>' +
+      '<div class="item-actions">' +
+        '<button type="button" class="lc-btn primary" data-act="openSelectListModalFromItemModal">+ Add to List</button>' +
+        (((d.seasonsData && d.seasonsData.length > 0) || type === 'series') ?
+          '<button type="button" id="btnMarkShowWatched" class="lc-btn ' + showBtnState.className + '" data-act="markShowWatched" data-act-args="' + appActArgs([d.id]) + '">' +
+            showBtnState.label +
+          '</button>'
+          :
+          '<button type="button" id="btnMarkWatched" class="lc-btn ' + (isItemWatched(d.id, d.tmdbId, d.imdbId) ? 'secondary' : 'primary') + '" data-act="toggleMovieWatchStatusFromModal">' +
+            (isItemWatched(d.id, d.tmdbId, d.imdbId) ? '<span style="margin-right:4px;">&#x2713;</span> Mark as unwatched' : 'Mark as Watched') +
+          '</button>') +
+      '</div>' +
+      genresHtml +
+      '<div class="item-synopsis-wrap">' +
+        '<p class="item-synopsis" id="itemSynopsisText">' + escapeHtml(d.overview || 'No overview available.') + '</p>' +
+        '<button type="button" class="item-synopsis-toggle" id="itemSynopsisToggle" aria-controls="itemSynopsisText" aria-expanded="false" hidden data-act="toggleItemSynopsis" data-act-args="[&quot;@self&quot;]">Read More</button>' +
       '</div>' +
       (trailerHtml ? '<div style="margin-top:32px;">' + trailerHtml + '</div>' : '') +
       (seasonsHtml ? '<div style="margin-top:32px;">' + seasonsHtml + '</div>' : '') +
       (storylinesHtml ? '<div style="margin-top:32px;">' + storylinesHtml + '</div>' : '');
+    syncItemSynopsisToggle();
       
   } catch (err) {
-    body.innerHTML = '<p class="testresult err">\u2717 ' + escapeHtml(err.message) + '</p>';
+    body.innerHTML = '<p class="testresult err" style="margin-top:48px;">\u2717 ' + escapeHtml(err.message) + '</p>';
   }
+}
+
+// Shows the Read More button only when the 3-line clamp is actually hiding text.
+function syncItemSynopsisToggle() {
+  try {
+    const p = document.getElementById('itemSynopsisText');
+    const t = document.getElementById('itemSynopsisToggle');
+    if (!p || !t) return;
+    if (p.classList.contains('is-expanded')) { t.hidden = false; return; }
+    t.hidden = !(p.scrollHeight > p.clientHeight + 1);
+  } catch (e) {}
+}
+
+function toggleItemSynopsis(btn) {
+  const p = document.getElementById('itemSynopsisText');
+  if (!p || !btn) return;
+  const open = p.classList.toggle('is-expanded');
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  btn.textContent = open ? 'Show Less' : 'Read More';
+}
+
+// A genre chip on the details screen: open Search on the matching Movies/Shows
+// chip with that genre picked in the genre dropdown.
+function openSearchByGenre(genreName, kind) {
+  const ids = {
+    'action': 28, 'adventure': 10759, 'action & adventure': 10759,
+    'animation': 16, 'comedy': 35, 'crime': 80, 'documentary': 99, 'drama': 18,
+    'family': 10751, 'kids': 10762, 'fantasy': 14, 'science fiction': 878,
+    'sci-fi': 878, 'sci-fi & fantasy': 10765, 'history': 36, 'horror': 27,
+    'music': 10402, 'mystery': 9648, 'romance': 10749, 'thriller': 53,
+    'war': 10752, 'war & politics': 10768, 'western': 37,
+  };
+  const select = document.getElementById('catalogSearchGenreSelect');
+  const id = ids[String(genreName || '').trim().toLowerCase()];
+  let value = '';
+  if (select && id) {
+    const opt = Array.from(select.options).find((o) => o.value && o.value.split(',').indexOf(String(id)) !== -1);
+    if (opt) value = opt.value;
+  }
+  const input = document.getElementById('catalogSearchInput');
+  if (input) input.value = '';
+  if (select) select.value = value;
+  const filter = kind === 'tv' ? 'tv' : 'movie';
+  let chip = null;
+  document.querySelectorAll('#catalogSearchTypeChips .subnav-pill').forEach((p) => {
+    if ((p.getAttribute('data-act-args') || '').indexOf('["' + filter + '"') === 0) chip = p;
+  });
+  switchTab('search');
+  setCatalogSearchFilter(filter, chip);
+}
+
+if (typeof window !== 'undefined') {
+  window.toggleItemSynopsis = toggleItemSynopsis;
+  window.openSearchByGenre = openSearchByGenre;
+  if (typeof window.addEventListener === 'function') window.addEventListener('resize', syncItemSynopsisToggle);
 }
 
 async function toggleSeasonEpisodes(headerEl, seasonNum, imdbId) {

@@ -647,15 +647,17 @@ function renderCreatorProfileBar() {
   const bar = document.getElementById('creatorProfileBar');
   if (!bar) return;
   if (activeCreator) {
+    const disp = activeCreator.displayName || activeCreator.creatorName || 'Account';
+    const initial = (disp.charAt(0) || 'U').toUpperCase();
     bar.innerHTML =
-      '<div style="display:flex; align-items:center; gap:8px;">' +
-      '<button type="button" class="subnav-pill active" style="margin:0; font-size:0.85rem; padding:8px 14px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px; border-radius:var(--radius-pill);" data-act="switchTab" data-act-args="[&quot;account&quot;]">&#x1F464; ' + escapeHtml(activeCreator.displayName) + '</button>' +
-      '</div>';
+      '<button type="button" class="header-avatar-btn signed-in" id="headerProfileBtn" data-act="switchTab" data-act-args="[&quot;account&quot;]" aria-label="Account: ' + escapeAttr(disp) + '" title="Signed in as ' + escapeAttr(disp) + '">' +
+        '<span class="header-avatar-initial">' + escapeHtml(initial) + '</span>' +
+      '</button>';
   } else {
     bar.innerHTML =
-      '<div style="display:flex; align-items:center; gap:6px;">' +
-      '<button type="button" class="lc-btn primary" data-act="openRestoreModal" style="padding:8px 16px; font-size:0.85rem; font-weight:700; border-radius:var(--radius-pill);">Login</button>' +
-      '</div>';
+      '<button type="button" class="header-avatar-btn signed-out" id="headerProfileBtn" data-act="openRestoreModal" aria-label="Sign in or create account" title="Sign in or create account">' +
+        '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>' +
+      '</button>';
   }
 }
 

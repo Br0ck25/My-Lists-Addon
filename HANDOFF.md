@@ -2,6 +2,23 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-03 (Antigravity): Media Item Details & Top Header Bar Redesign.**
+>
+> **Where things stand**
+> - Implemented Media Item Details redesign:
+>   - Sharp backdrop hero image with bottom gradient fade into page background.
+>   - Floating translucent back arrow button in the top-left corner.
+>   - Primary actions (`+ Add to List`, `Mark as Watched`) positioned above the synopsis.
+>   - Metadata pill badges (Rating, Runtime, Year, TMDB Score).
+>   - Interactive genre chips that jump to catalog search with that genre selected.
+>   - 3-line synopsis clamp with dynamic "Read More" / "Show Less" toggle.
+> - Implemented Top Header Bar compaction:
+>   - Search moved from bottom mobile nav to top header icon next to Dark Mode toggle.
+>   - Removed wide profile button banner and replaced with circular 36px avatar button.
+>   - Header actions and title align cleanly on a single row.
+> - Verified via `python build.py`, `python check_sync.py`, `node --check worker_entry_combined.js`, `python gen_map.py`, and test suites (417 client/app-shell tests, 758 worker tests).
+> - Branch: `feat/details-and-header-redesign`
+>
 > **HANDOFF, 2026-10-01 (Claude Code, out of credits). Start here.**
 >
 > **Where things stand**
