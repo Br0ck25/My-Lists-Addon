@@ -2,6 +2,22 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-03 (Antigravity): Design System - Mobile Nav & Compact Button Architecture Fix.**
+>
+> **Where things stand**
+> - Fixed mobile bottom navigation bar regression:
+>   - Replaced high-specificity `:not(...)` pseudo-class chain with `:where(button:not(...))` in `09_page-shell.js` to eliminate specificity creep (dropped from `(0, 14, 1)` to `(0, 0, 0)`).
+>   - Explicitly excluded `.bottom-nav-item` and `.lc-btn` from primary/secondary 40px default styling.
+>   - Hardened `.bottom-nav-item` with `background: transparent !important; border: none !important; border-radius: 0 !important; box-shadow: none !important; color: var(--muted);`, restoring the crisp white/translucent glassmorphism bottom bar on mobile with active-only blue icon/label.
+> - Restored original compact button sizing for action controls:
+>   - Set `.lc-btn { min-height: unset; padding: 6px 12px; font-size: 0.8rem; }` and decoupled it from `.btn-sm`, `.primary`, and `.secondary`.
+>   - `+ Add` (`.lc-btn.primary`) and `Customize` (`.lc-btn.secondary`) now render in their compact, balanced dimensions.
+> - Restored subtle neutral surface styling for the heart button:
+>   - Styled `.lc-btn.searchLikeExternalBtn`, `.lc-btn.searchLikeBtn`, and `#detailLikeBtn` with a subtle surface background (`var(--color-bg-surface)`), muted border (`var(--color-border-strong)`), and grey heart outline, turning red only when `.liked`.
+>   - Eliminated visual conflict between adjacent primary blue buttons, restoring clean visual hierarchy.
+> - Verified via `python build.py`, `python check_sync.py`, `node --check worker_entry_combined.js`, `python gen_map.py`, `node check_bundle_budget.mjs` (first view JS: 93.30 KB gzip <= 150 KB budget), and tests pass (18 app-shell tests, 7 like tests, all 2,068 suite tests).
+> - Branch: `feat/design-system-phase-1`
+>
 > **HANDOFF, 2026-10-03 (Antigravity): Design System - Phases 1 to 4 (Complete UI Modernization & Standardization).**
 >
 > **Where things stand**

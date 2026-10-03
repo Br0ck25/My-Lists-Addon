@@ -1136,9 +1136,10 @@ ${seoHeadHtml}
       gap: 3px;
       padding: 4px 1px;
       min-height: 62px;
-      background: none;
-      border: none;
-      border-radius: 0;
+      background: transparent !important;
+      border: none !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
       color: var(--muted);
       font-size: 0.78rem;
       font-weight: 600;
@@ -1759,7 +1760,7 @@ ${seoHeadHtml}
   }
   .lc-btn {
     padding: 6px 12px;
-    min-height: var(--control-height-sm, 32px);
+    min-height: unset;
     font-size: var(--font-size-xs, 0.8rem);
     font-weight: 600;
     border-radius: var(--radius-pill);
@@ -1780,6 +1781,8 @@ ${seoHeadHtml}
     color: var(--color-text-inverse, #fff);
     border-color: var(--color-brand);
     box-shadow: 0 2px 6px var(--color-brand-subtle);
+    padding: 6px 12px;
+    min-height: unset;
   }
   .lc-btn.primary:hover:not(:disabled) {
     background: var(--color-brand-hover);
@@ -1791,6 +1794,8 @@ ${seoHeadHtml}
     color: var(--color-text-secondary);
     border: 1.5px solid var(--color-border-strong);
     box-shadow: var(--shadow-sm);
+    padding: 6px 12px;
+    min-height: unset;
   }
   .lc-btn.secondary:hover:not(:disabled) {
     background: var(--color-bg-sunken);
@@ -1808,6 +1813,33 @@ ${seoHeadHtml}
     padding: 0;
     font-size: 0.82rem;
     min-height: unset;
+  }
+  .lc-btn.searchLikeExternalBtn,
+  .lc-btn.searchLikeBtn,
+  #detailLikeBtn {
+    padding: 6px 10px;
+    min-width: 32px;
+    min-height: unset;
+    justify-content: center;
+    background: var(--color-bg-surface);
+    color: var(--color-text-secondary);
+    border: 1.5px solid var(--color-border-strong);
+    box-shadow: none;
+    font-size: 0.95rem;
+    line-height: 1;
+  }
+  .lc-btn.searchLikeExternalBtn:hover:not(:disabled),
+  .lc-btn.searchLikeBtn:hover:not(:disabled),
+  #detailLikeBtn:hover:not(:disabled) {
+    background: var(--color-bg-sunken);
+    color: var(--color-text-primary);
+  }
+  .lc-btn.searchLikeExternalBtn.liked,
+  .lc-btn.searchLikeBtn.liked,
+  #detailLikeBtn.liked {
+    color: var(--color-danger);
+    border-color: rgba(255,59,48,0.4);
+    background: var(--color-danger-subtle);
   }
 
   /* --- Presets & Backup 2x2 Mobile Layout & Unified Sizing ---------------- */
@@ -3012,9 +3044,9 @@ ${seoHeadHtml}
   }
 
   /* Default button behavior (Primary brand style) */
-  button:not(.secondary):not(.btn-secondary):not(.btn-ghost):not(.btn-danger):not(.header-icon-btn):not(.header-avatar-btn):not(.theme-toggle-btn):not(.modal-close-x):not(.subnav-pill):not(.tab-btn):not(.cw-remove-btn):not(.ec-btn):not(.item-back-btn):not(.view-btn),
+  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn)),
   .btn-primary,
-  .primary {
+  .primary:not(.lc-btn) {
     background: var(--color-brand);
     color: var(--color-text-inverse, #fff);
     border-color: var(--color-brand);
@@ -3023,17 +3055,17 @@ ${seoHeadHtml}
     padding: 10px 18px;
   }
 
-  button:not(.secondary):not(.btn-secondary):not(.btn-ghost):not(.btn-danger):not(.header-icon-btn):not(.header-avatar-btn):not(.theme-toggle-btn):not(.modal-close-x):not(.subnav-pill):not(.tab-btn):not(.cw-remove-btn):not(.ec-btn):not(.item-back-btn):not(.view-btn):hover:not(:disabled),
+  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn)):hover:not(:disabled),
   .btn-primary:hover:not(:disabled),
-  .primary:hover:not(:disabled) {
+  .primary:not(.lc-btn):hover:not(:disabled) {
     background: var(--color-brand-hover);
     border-color: var(--color-brand-hover);
     color: var(--color-text-inverse, #fff);
   }
 
-  button:not(.secondary):not(.btn-secondary):not(.btn-ghost):not(.btn-danger):not(.header-icon-btn):not(.header-avatar-btn):not(.theme-toggle-btn):not(.modal-close-x):not(.subnav-pill):not(.tab-btn):not(.cw-remove-btn):not(.ec-btn):not(.item-back-btn):not(.view-btn):active:not(:disabled),
+  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn)):active:not(:disabled),
   .btn-primary:active:not(:disabled),
-  .primary:active:not(:disabled) {
+  .primary:not(.lc-btn):active:not(:disabled) {
     background: var(--color-brand-active);
     border-color: var(--color-brand-active);
     transform: scale(0.98);
@@ -3041,8 +3073,8 @@ ${seoHeadHtml}
 
   /* Secondary button style */
   .btn-secondary,
-  button.secondary,
-  .secondary,
+  button.secondary:not(.lc-btn),
+  .secondary:not(.lc-btn),
   .btn-copy,
   .btn-watchlist,
   .btn-test {
@@ -3055,8 +3087,8 @@ ${seoHeadHtml}
   }
 
   .btn-secondary:hover:not(:disabled),
-  button.secondary:hover:not(:disabled),
-  .secondary:hover:not(:disabled),
+  button.secondary:not(.lc-btn):hover:not(:disabled),
+  .secondary:not(.lc-btn):hover:not(:disabled),
   .btn-copy:hover:not(:disabled),
   .btn-watchlist:hover:not(:disabled),
   .btn-test:hover:not(:disabled) {
@@ -3066,8 +3098,8 @@ ${seoHeadHtml}
   }
 
   .btn-secondary:active:not(:disabled),
-  button.secondary:active:not(:disabled),
-  .secondary:active:not(:disabled) {
+  button.secondary:not(.lc-btn):active:not(:disabled),
+  .secondary:not(.lc-btn):active:not(:disabled) {
     transform: scale(0.98);
   }
 
@@ -3123,8 +3155,7 @@ ${seoHeadHtml}
   }
 
   /* Size Variants */
-  .btn-sm,
-  .lc-btn {
+  .btn-sm {
     min-height: var(--control-height-sm, 32px);
     padding: 5px 12px;
     font-size: var(--font-size-xs, 0.8rem);
