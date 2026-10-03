@@ -382,6 +382,8 @@ ${seoHeadHtml}
     /* Complete Backward-Compatibility Aliases */
     --bg:                   var(--color-bg-canvas);
     --surface:              var(--color-bg-surface);
+    --surface-2:            var(--color-bg-sunken);
+    --surface-3:            var(--color-border-strong);
     --panel:                var(--color-bg-surface);
     --panel-strong:         var(--color-bg-sunken);
     --border:               var(--color-border-subtle);
@@ -455,6 +457,10 @@ ${seoHeadHtml}
     /* Scrollbars (Dark Mode) */
     --sb-thumb:             rgba(255, 255, 255, 0.15);
     --sb-thumb-hover:       rgba(255, 255, 255, 0.25);
+
+    /* Backward-Compatibility Aliases (Dark Mode) */
+    --surface-2:            var(--color-bg-sunken);
+    --surface-3:            var(--color-border-strong);
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 

@@ -39,7 +39,11 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
         <input type="checkbox" id="hideNonDigitalReleasesCheckbox" ${initialHideNonDigitalReleases ? 'checked' : ''} data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:hideNonDigitalReleases&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
         <div>
           <span style="font-weight:600;">Hide items with no digital release</span>
-          <p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Removes movies with no known digital or physical release from TMDB Trending Movies and Popular Movies catalogs -- useful for skipping still-in-theaters titles you can't stream or buy yet. Shows aren't affected (no equivalent release-type data exists for TV). Requires Save/Update to take effect on an existing install link.</p>
+          <p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Removes still-in-theaters movies with no known digital or physical release from TMDB Trending and Popular catalogs.</p>
+          <details style="margin-top:4px; font-size:0.8rem; color:var(--muted);">
+            <summary style="cursor:pointer; color:var(--accent); font-weight:600;">More details</summary>
+            <p style="margin:4px 0 0;">Useful for skipping in-theaters titles you cannot stream or buy yet. TV Shows are not affected. Requires Save/Update to take effect on an existing install link.</p>
+          </details>
         </div>
       </label>
     </div>
@@ -50,7 +54,11 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
         <input type="checkbox" id="dedupeAcrossListsCheckbox" ${initialDedupeAcrossLists ? 'checked' : ''} data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:dedupeAcrossLists&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
         <div>
           <span style="font-weight:600;">Remove duplicate items across lists</span>
-          <p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Keeps your top list exactly as it is; every list below it has anything already shown in an earlier list removed. Order is whatever order your lists are in here -- drag a list to change which one keeps a shared title. Applies to Live Preview &amp; Editor and to the real catalogs Stremio/Nuvio see once you Save/Update. Requires Save/Update to take effect on an existing install link.</p>
+          <p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Automatically removes titles from lower catalog rows if already shown in a row above.</p>
+          <details style="margin-top:4px; font-size:0.8rem; color:var(--muted);">
+            <summary style="cursor:pointer; color:var(--accent); font-weight:600;">How row deduplication works</summary>
+            <p style="margin:4px 0 0;">Keeps your top catalog row intact; every list below it has items shown in earlier lists filtered out. Drag lists in Catalogs to change priority. Requires Save/Update to take effect on an existing install link.</p>
+          </details>
         </div>
       </label>
     </div>
@@ -68,12 +76,16 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
 
     <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Better Posters</h2>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Swap plain poster artwork for <a href="https://btttr.cc/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">BetterPosters</a> &mdash; posters with the genre, rating and tags drawn into the image itself. No API key or account needed. Only movies and shows with an IMDb id are affected; anything else keeps the poster it already had.</p>
+      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Swap plain poster artwork for <a href="https://btttr.cc/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">BetterPosters</a> &mdash; posters with the genre, rating and tags drawn directly into the artwork. No API key or account needed.</p>
       <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
         <input type="checkbox" id="betterPostersCheckbox" ${initialBetterPosters ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPosters&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
         <div>
           <span style="font-weight:600;">Use Better Posters artwork</span>
-          <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Applies everywhere: Live Preview, Search, Discover, My Lists, creator profiles and the builders here on the website, and the catalog rows and title pages Stremio and Nuvio request from the add-on. The website updates as soon as you tick this; Stremio/Nuvio need a Save/Update on an existing install link. Poster badges, if you have them on, are drawn over this artwork rather than replacing it, and the Adult Content Filter still overrides it. TV Channel artwork and episode stills are left as they are.</p>
+          <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Enriches artwork across Live Preview, Search, Discover, and your streaming catalog rows.</p>
+          <details style="margin-top:4px; font-size:0.8rem; color:var(--muted);">
+            <summary style="cursor:pointer; color:var(--accent); font-weight:600;">Artwork compatibility details</summary>
+            <p style="margin:4px 0 0;">Only titles with an IMDb ID are affected. Poster badges are drawn over this artwork rather than replacing it. Adult Content Filter still overrides it. TV Channel artwork and episode stills are preserved.</p>
+          </details>
         </div>
       </label>
       <div id="betterPostersOptions" style="display:${initialBetterPosters ? 'flex' : 'none'}; flex-direction:column; gap:10px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">

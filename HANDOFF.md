@@ -2,10 +2,10 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
-> **HANDOFF, 2026-10-03 (Antigravity): Design System - Phase 1, 2 & 3 (Tokens, Button System & Template Normalization).**
+> **HANDOFF, 2026-10-03 (Antigravity): Design System - Phases 1 to 4 (Complete UI Modernization & Standardization).**
 >
 > **Where things stand**
-> - Implemented Phase 1 (Tokens), Phase 2 (Button Architecture), and Phase 3 (Template Cleanup) of Design System:
+> - Implemented all 4 Phases of Design System:
 >   - Phase 1: Consolidated CSS Variables & Semantic Design Tokens in `:root` and `:root.dark-theme` (`09_page-shell.js`):
 >     - Semantic Surfaces & Overlays (`--color-bg-canvas`, `--color-bg-surface`, `--color-bg-elevated`, `--color-bg-sunken`, `--color-bg-overlay`).
 >     - Semantic Borders (`--color-border-subtle`, `--color-border-strong`, `--color-border-focus`).
@@ -16,7 +16,7 @@
 >     - 8pt Spatial Spacing Scale (`--space-0-5` through `--space-8`).
 >     - Border Radius Scale (`--radius-xs` through `--radius-pill`).
 >     - Control Heights & Minimum Touch Targets (`--control-height-sm`, `--control-height-md`, `--control-height-lg`, `--control-touch-min`).
->     - Full backward-compatibility mapping for all legacy aliases (`--bg`, `--surface`, `--panel`, `--border`, `--text`, `--accent`, etc.).
+>     - Full backward-compatibility mapping for all legacy aliases (`--bg`, `--surface`, `--surface-2`, `--surface-3`, `--panel`, `--border`, `--text`, `--accent`, etc.).
 >     - Fixed dark-mode modal flattening: updated dialogs (`createListModal`, `addShelfModal`, `selectListModal`, `traktDeviceModal`) and `.modal-card` to use `--color-bg-elevated` and `--color-border-strong` with elevated shadows instead of pitch-black `--bg`.
 >   - Phase 2: Standardized Button Architecture (`09_page-shell.js`):
 >     - Unified base button reset `.btn`, `button`, `.actions a` with smooth transitions and active pressed feedback (`transform: scale(0.98)`).
@@ -27,6 +27,9 @@
 >   - Phase 3: Template Cleanup & Button Class Normalization (`10_tab-search-add.js`, `15_tab-settings-html.js`, `09_page-shell.js`):
 >     - Replaced inline color overrides and secondary button red styling with `.btn-danger` and `.btn-danger.btn-sm` on destructive actions ("Remove All", "Clear History", "Clear Continue Watching").
 >     - Cleaned up Catalogs action bar with `.btn-primary` and `.btn-danger`.
+>   - Phase 4: Streamlined Settings & Progressive Disclosure (`15_tab-settings-html.js`, `09_page-shell.js`):
+>     - Converted dense multi-paragraph settings microcopy (Trending Catalogs, Deduplication across lists, BetterPosters) into concise, scannable 1-line descriptions with clean collapsible `<details>` disclosures for technical caveats.
+>     - Resolved undefined `--surface-2` and `--surface-3` token variables in `:root` and `:root.dark-theme`.
 > - Verified via `python build.py`, `python check_sync.py`, `node --check worker_entry_combined.js`, `python gen_map.py`, `node check_bundle_budget.mjs` (first view JS: 93.30 KB gzip <= 150 KB budget), and full test suite (`node --test tests/*.test.mjs`: 2,068 passing, 0 failing).
 > - Branch: `feat/design-system-phase-1`
 >
