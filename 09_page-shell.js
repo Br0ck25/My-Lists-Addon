@@ -2808,10 +2808,13 @@ ${seoHeadHtml}
     font-size: 0.68rem;
     color: var(--text);
     font-weight: 600;
-    line-height: 1.2;
-    white-space: nowrap;
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
+    word-break: break-word;
+    min-height: 2.5em;
   }
   .list-card-mini-poster-subtitle {
     font-size: 0.64rem;
