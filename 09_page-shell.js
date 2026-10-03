@@ -2732,19 +2732,60 @@ ${seoHeadHtml}
   
   /* Toggle Switch */
   .ui-toggle {
-    position: relative; display: inline-block; width: 44px; height: 24px;
+    position: relative; display: inline-block; width: 44px; height: 24px; flex: none; vertical-align: middle;
   }
-  .ui-toggle input { opacity: 0; width: 0; height: 0; }
+  .ui-toggle input { opacity: 0; width: 0; height: 0; position: absolute; pointer-events: none; }
   .ui-toggle-slider {
     position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
-    background-color: var(--border); transition: .3s; border-radius: 24px;
+    background-color: var(--color-border-strong, var(--border)); transition: background-color .25s ease; border-radius: 24px;
   }
   .ui-toggle-slider:before {
     position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px;
-    background-color: white; transition: .3s; border-radius: 50%; box-shadow: var(--shadow-sm);
+    background-color: white; transition: transform .25s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 50%; box-shadow: var(--shadow-sm);
   }
-  .ui-toggle input:checked + .ui-toggle-slider { background-color: var(--accent); }
+  .ui-toggle input:checked + .ui-toggle-slider { background-color: var(--color-brand, var(--accent)); }
   .ui-toggle input:checked + .ui-toggle-slider:before { transform: translateX(20px); }
+  .ui-toggle input:focus-visible + .ui-toggle-slider { outline: 2px solid var(--color-brand, var(--accent)); outline-offset: 2px; }
+
+  /* Settings Components: Toggles & Checklists */
+  .settings-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--color-border-subtle, rgba(255,255,255,0.06));
+  }
+  .settings-toggle-row:last-child {
+    border-bottom: none;
+  }
+  .settings-check-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .settings-check-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm, 8px);
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.12s ease;
+    margin: 0;
+  }
+  .settings-check-item:hover {
+    background: var(--color-bg-sunken, rgba(255,255,255,0.03));
+  }
+  .settings-check-item input[type="checkbox"] {
+    width: 17px;
+    height: 17px;
+    margin-top: 2px;
+    cursor: pointer;
+    flex: none;
+    accent-color: var(--color-brand, var(--accent));
+  }
   input:focus, select:focus, textarea:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px rgba(0,122,255,0.15);

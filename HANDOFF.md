@@ -2,6 +2,24 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-03 (Antigravity): Design System - Settings Toggles & Checklist Modernization.**
+>
+> **Where things stand**
+> - Modernized Settings interface based on UX toggle vs. checklist heuristics:
+>   - Converted standalone feature and automation switches into smooth, tactile iOS-style `.ui-toggle` switches:
+>     - "Enable In-App Playback Auto-Tracking" (`#trackPlaybackCheck`).
+>     - "Enable Media Server User Filtering" (`#scrobbleFilterUsersCb`).
+>     - "Sync media server scrobbles to Watch History" (`#syncMediaServerHistoryCb`).
+>     - "Forward scrobbles to connected external accounts" (`#forwardScrobbleToProvidersCb`).
+>     - "Storyline & Companion Recommendations" (`#autoRecommendCompanionsCheckbox`).
+>     - Provider sync toggles: Trakt (`#syncTraktHistoryCheckbox`), MDBList (`#syncMdblistHistoryCheckbox`), Simkl (`#syncSimklHistoryCheckbox`).
+>   - Upgraded multi-select "Poster Badges & Labels" into modern settings checklists (`.settings-check-group`, `.settings-check-item`):
+>     - Made entire row touch-clickable with hover feedback (`var(--color-bg-sunken)`).
+>     - Stripped repetitive microcopy ("Show premiere, finale, and air date badges on..."), keeping concise titles and clear examples.
+>     - Preserved all input IDs, `data-act`, and `data-act-args` bindings with zero behavioral changes.
+> - Verified via `python build.py`, `python check_sync.py`, `node --check worker_entry_combined.js`, `python gen_map.py`, `node check_bundle_budget.mjs` (first view JS: 93.30 KB gzip <= 150 KB budget), and test suites pass (18 app-shell tests, 6 scrobble-filter tests, 417 client tests).
+> - Branch: `feat/design-system-phase-1`
+>
 > **HANDOFF, 2026-10-03 (Antigravity): Design System - Mobile Nav & Compact Button Architecture Fix.**
 >
 > **Where things stand**

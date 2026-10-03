@@ -1229,11 +1229,16 @@ function renderTrackPlaybackSection() {
   box.innerHTML =
     '<div style="margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid var(--border);">' +
       '<p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">Streaming Apps &amp; Addon Players (Stremio, Nuvio, Wako, etc.)</p>' +
-      '<label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.9rem;">' +
-        '<input type="checkbox" id="trackPlaybackCheck" ' + (enabled ? 'checked' : '') + ' data-act="onTrackPlaybackToggle" data-act-args="[&quot;@self&quot;]">' +
-        '<span>Enable In-App Playback Auto-Tracking</span>' +
-      '</label>' +
-      '<p style="margin:6px 0 0; color:var(--muted); font-size:0.8rem;">Automatically marks movies and episodes as watched whenever playback starts in any supported streaming app or addon player (Stremio, Nuvio, Wako, etc.) via the built-in playback hook. Takes effect on your next install link.</p>' +
+      '<div class="settings-toggle-row">' +
+        '<div style="flex:1; min-width:0; padding-right:12px;">' +
+          '<span style="font-weight:600; font-size:0.92rem; color:var(--text);">Enable In-App Playback Auto-Tracking</span>' +
+          '<p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Automatically marks movies and episodes as watched whenever playback starts in any supported streaming app or addon player (Stremio, Nuvio, Wako, etc.) via the built-in playback hook. Takes effect on your next install link.</p>' +
+        '</div>' +
+        '<label class="ui-toggle" aria-label="Enable In-App Playback Auto-Tracking">' +
+          '<input type="checkbox" id="trackPlaybackCheck" ' + (enabled ? 'checked' : '') + ' data-act="onTrackPlaybackToggle" data-act-args="[&quot;@self&quot;]">' +
+          '<span class="ui-toggle-slider"></span>' +
+        '</label>' +
+      '</div>' +
     '</div>' +
 
     '<div style="margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid var(--border);">' +
@@ -1245,12 +1250,17 @@ function renderTrackPlaybackSection() {
         '<button type="button" class="secondary lc-btn" data-act="regenerateScrobbleWebhookUrl" title="Issues a new webhook URL and stops the old one working. Use this if the URL has been shared or logged somewhere it should not have been." style="padding:8px 14px; font-size:0.84rem;">Regenerate</button>' +
       '</div>' +
 
-      '<div style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
-        '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0 0 4px;">' +
-          '<input type="checkbox" id="scrobbleFilterUsersCb" ' + (filterUsers ? 'checked' : '') + ' data-act="onScrobbleFilterUsersToggle" data-act-args="[&quot;@self&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
-          '<span style="font-weight:600;">Enable Media Server User Filtering</span>' +
-        '</label>' +
-        '<p style="margin:0 0 8px; color:var(--muted); font-size:0.8rem;">When enabled, only selected or specified media server user profiles will scrobble into your lists. Unselected users will be ignored.</p>' +
+      '<div style="margin:10px 0; padding:12px 14px; background:var(--color-bg-sunken, rgba(255,255,255,0.03)); border-radius:8px; border:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
+        '<div class="settings-toggle-row" style="padding:0 0 4px; border-bottom:none;">' +
+          '<div style="flex:1; min-width:0; padding-right:12px;">' +
+            '<span style="font-weight:600; font-size:0.88rem; color:var(--text);">Enable Media Server User Filtering</span>' +
+            '<p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">When enabled, only selected or specified media server user profiles will scrobble into your lists. Unselected users will be ignored.</p>' +
+          '</div>' +
+          '<label class="ui-toggle" aria-label="Enable Media Server User Filtering">' +
+            '<input type="checkbox" id="scrobbleFilterUsersCb" ' + (filterUsers ? 'checked' : '') + ' data-act="onScrobbleFilterUsersToggle" data-act-args="[&quot;@self&quot;]">' +
+            '<span class="ui-toggle-slider"></span>' +
+          '</label>' +
+        '</div>' +
         '<div id="scrobbleFilterDetails" style="' + (filterUsers ? '' : 'display:none;') + ' margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.06);">' +
           '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">' +
             '<p style="margin:0; font-size:0.8rem; font-weight:600; color:var(--text);">Select Allowed Users:</p>' +
@@ -1266,15 +1276,25 @@ function renderTrackPlaybackSection() {
         '</div>' +
       '</div>' +
 
-      '<div style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
-        '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0 0 8px;">' +
-          '<input type="checkbox" id="syncMediaServerHistoryCb" checked data-act="toggleMediaServerSync" data-act-args="[&quot;@checked&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
-          '<span style="font-weight:600;">Automatically sync media server scrobbles to your Watch History list</span>' +
-        '</label>' +
-        '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0 0 10px;">' +
-          '<input type="checkbox" id="forwardScrobbleToProvidersCb" checked data-act="toggleForwardScrobbles" data-act-args="[&quot;@checked&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
-          '<span style="font-weight:600;">Forward scrobbles to connected external accounts (Trakt, Simkl, MDBList)</span>' +
-        '</label>' +
+      '<div style="margin:10px 0; padding:12px 14px; background:var(--color-bg-sunken, rgba(255,255,255,0.03)); border-radius:8px; border:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
+        '<div class="settings-toggle-row" style="padding:0 0 10px;">' +
+          '<div style="flex:1; min-width:0; padding-right:12px;">' +
+            '<span style="font-weight:600; font-size:0.86rem; color:var(--text);">Automatically sync media server scrobbles to your Watch History list</span>' +
+          '</div>' +
+          '<label class="ui-toggle" aria-label="Sync media server scrobbles to Watch History">' +
+            '<input type="checkbox" id="syncMediaServerHistoryCb" checked data-act="toggleMediaServerSync" data-act-args="[&quot;@checked&quot;]">' +
+            '<span class="ui-toggle-slider"></span>' +
+          '</label>' +
+        '</div>' +
+        '<div class="settings-toggle-row" style="padding:10px 0 12px; border-bottom:none;">' +
+          '<div style="flex:1; min-width:0; padding-right:12px;">' +
+            '<span style="font-weight:600; font-size:0.86rem; color:var(--text);">Forward scrobbles to connected external accounts (Trakt, Simkl, MDBList)</span>' +
+          '</div>' +
+          '<label class="ui-toggle" aria-label="Forward scrobbles to connected external accounts">' +
+            '<input type="checkbox" id="forwardScrobbleToProvidersCb" checked data-act="toggleForwardScrobbles" data-act-args="[&quot;@checked&quot;]">' +
+            '<span class="ui-toggle-slider"></span>' +
+          '</label>' +
+        '</div>' +
         '<div>' +
           '<button type="button" class="secondary lc-btn" data-act="syncAllConnectedAccountsNow" data-act-args="[&quot;@self&quot;]" style="padding:8px 14px; font-size:0.82rem; white-space:normal; line-height:1.35; text-align:center; max-width:100%; width:100%; box-sizing:border-box;">Sync Current Watch History to Connected Accounts Now</button>' +
         '</div>' +

@@ -31157,19 +31157,60 @@ ${seoHeadHtml}
   
   /* Toggle Switch */
   .ui-toggle {
-    position: relative; display: inline-block; width: 44px; height: 24px;
+    position: relative; display: inline-block; width: 44px; height: 24px; flex: none; vertical-align: middle;
   }
-  .ui-toggle input { opacity: 0; width: 0; height: 0; }
+  .ui-toggle input { opacity: 0; width: 0; height: 0; position: absolute; pointer-events: none; }
   .ui-toggle-slider {
     position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
-    background-color: var(--border); transition: .3s; border-radius: 24px;
+    background-color: var(--color-border-strong, var(--border)); transition: background-color .25s ease; border-radius: 24px;
   }
   .ui-toggle-slider:before {
     position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px;
-    background-color: white; transition: .3s; border-radius: 50%; box-shadow: var(--shadow-sm);
+    background-color: white; transition: transform .25s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 50%; box-shadow: var(--shadow-sm);
   }
-  .ui-toggle input:checked + .ui-toggle-slider { background-color: var(--accent); }
+  .ui-toggle input:checked + .ui-toggle-slider { background-color: var(--color-brand, var(--accent)); }
   .ui-toggle input:checked + .ui-toggle-slider:before { transform: translateX(20px); }
+  .ui-toggle input:focus-visible + .ui-toggle-slider { outline: 2px solid var(--color-brand, var(--accent)); outline-offset: 2px; }
+
+  /* Settings Components: Toggles & Checklists */
+  .settings-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--color-border-subtle, rgba(255,255,255,0.06));
+  }
+  .settings-toggle-row:last-child {
+    border-bottom: none;
+  }
+  .settings-check-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .settings-check-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm, 8px);
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.12s ease;
+    margin: 0;
+  }
+  .settings-check-item:hover {
+    background: var(--color-bg-sunken, rgba(255,255,255,0.03));
+  }
+  .settings-check-item input[type="checkbox"] {
+    width: 17px;
+    height: 17px;
+    margin-top: 2px;
+    cursor: pointer;
+    flex: none;
+    accent-color: var(--color-brand, var(--accent));
+  }
   input:focus, select:focus, textarea:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px rgba(0,122,255,0.15);
@@ -34282,142 +34323,153 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
 
     <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Poster Badges &amp; Labels</h2>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Customize which badges and indicators are displayed on posters across your website dashboard, catalogs, and Stremio/Nuvio.</p>
-      <div style="display:flex; flex-direction:column; gap:12px;">
-        <div style="border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:4px; display:flex; flex-direction:column; gap:10px;">
-          <div style="font-size:0.85rem; font-weight:700; color:var(--text);">Website &amp; Dashboard</div>
-          <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeAiringNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesAiringNext&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-            <div>
-              <span style="font-weight:600;">Airing Next (Dashboard)</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show premiere, finale, and upcoming air date badges on the Airing Next shelf and provider lists.</p>
-            </div>
-          </label>
-          <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesContinueWatching&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-            <div>
-              <span style="font-weight:600;">Continue Watching (Dashboard)</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show premiere, finale, and air date badges on your in-progress Continue Watching series.</p>
-            </div>
-          </label>
-          <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeWatchlistCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesWatchlist&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-            <div>
-              <span style="font-weight:600;">Watchlist (Dashboard)</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show premiere, finale, and air date badges on shows in your Watchlist that have an episode coming.</p>
-            </div>
-          </label>
-          <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeTraktContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesTraktContinueWatching&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-            <div>
-              <span style="font-weight:600;">Continue Watching (Trakt)</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show premiere, finale, and air date badges on your Trakt Continue Watching series.</p>
-            </div>
-          </label>
-          <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeMdblistUpNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesMdblistUpNext&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-            <div>
-              <span style="font-weight:600;">Up Next (MDBList)</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show premiere, finale, and air date badges on your MDBList Up Next series.</p>
-            </div>
-          </label>
-          <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeCatalogsCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesCatalogs&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-            <div>
-              <span style="font-weight:600;">Catalogs &amp; Live Preview</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show badges on catalog rows, the Catalogs Live Preview &amp; Editor, and catalog See All views.</p>
-            </div>
-          </label>
+      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">Customize which badges and indicators are displayed on posters across your website dashboard, catalogs, and Stremio/Nuvio.</p>
+      <div style="display:flex; flex-direction:column; gap:16px;">
+        <div style="border-bottom:1px solid var(--border); padding-bottom:14px; display:flex; flex-direction:column; gap:6px;">
+          <div style="font-size:0.85rem; font-weight:700; color:var(--text); margin-bottom:4px;">Website &amp; Dashboard</div>
+          <div class="settings-check-group">
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeAiringNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesAiringNext&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Airing Next</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Airing Next shelf and provider lists on your dashboard</p>
+              </div>
+            </label>
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesContinueWatching&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Continue Watching</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">In-progress series on your website dashboard</p>
+              </div>
+            </label>
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeWatchlistCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesWatchlist&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Watchlist</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Shows in your Watchlist with upcoming episodes</p>
+              </div>
+            </label>
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeTraktContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesTraktContinueWatching&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Trakt Continue Watching</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Connected Trakt Continue Watching series</p>
+              </div>
+            </label>
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeMdblistUpNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesMdblistUpNext&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">MDBList Up Next</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Connected MDBList Up Next series</p>
+              </div>
+            </label>
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeCatalogsCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesCatalogs&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Catalogs &amp; Live Preview</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Catalog rows, Catalogs Live Preview &amp; Editor, and See All views</p>
+              </div>
+            </label>
+          </div>
         </div>
 
-        <div style="border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:4px; display:flex; flex-direction:column; gap:10px;">
-          <div style="font-size:0.85rem; font-weight:700; color:var(--text);">Stremio &amp; Nuvio (Artwork Overlays)</div>
-          <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeStremioAiringNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioAiringNext&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-            <div>
-              <span style="font-weight:600;">Airing Next Catalogs in Stremio &amp; Nuvio</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Overlay premiere, finale, and date chips on Airing Next poster artwork in Stremio and Nuvio.</p>
-            </div>
-          </label>
-          <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeStremioContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioContinueWatching&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-            <div>
-              <span style="font-weight:600;">Continue Watching Catalogs in Stremio &amp; Nuvio</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Overlay premiere, finale, and date chips on Continue Watching poster artwork in Stremio and Nuvio.</p>
-            </div>
-          </label>
-          <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeStremioWatchlistCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioWatchlist&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-            <div>
-              <span style="font-weight:600;">Watchlist Catalogs in Stremio &amp; Nuvio</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Overlay premiere, finale, and date chips on Watchlist poster artwork in Stremio and Nuvio.</p>
-            </div>
-          </label>
-          <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeStremioCatalogsCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioCatalogs&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-            <div>
-              <span style="font-weight:600;">Other Custom &amp; Provider Catalogs in Stremio &amp; Nuvio</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Overlay badges on MDBList, Trakt, Simkl, and Custom list catalog rows in Stremio and Nuvio.</p>
-            </div>
-          </label>
+        <div style="border-bottom:1px solid var(--border); padding-bottom:14px; display:flex; flex-direction:column; gap:6px;">
+          <div style="font-size:0.85rem; font-weight:700; color:var(--text); margin-bottom:4px;">Stremio &amp; Nuvio (Artwork Overlays)</div>
+          <div class="settings-check-group">
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeStremioAiringNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioAiringNext&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Airing Next Catalogs</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Overlay premiere, finale, and air date chips in Stremio and Nuvio</p>
+              </div>
+            </label>
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeStremioContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioContinueWatching&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Continue Watching Catalogs</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Overlay chips on Continue Watching artwork in Stremio and Nuvio</p>
+              </div>
+            </label>
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeStremioWatchlistCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioWatchlist&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Watchlist Catalogs</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Overlay chips on Watchlist artwork in Stremio and Nuvio</p>
+              </div>
+            </label>
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeStremioCatalogsCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioCatalogs&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Other Custom &amp; Provider Catalogs</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Overlay badges on MDBList, Trakt, Simkl, and Custom list rows</p>
+              </div>
+            </label>
+          </div>
         </div>
 
-        <div style="font-size:0.85rem; font-weight:700; color:var(--text); margin-top:2px;">Badge Types</div>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeAirDateCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeAirDate&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Upcoming Air Date</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Shows the upcoming air date tag (e.g. <code>TODAY</code>, <code>TOMORROW</code>, <code>WED</code>, <code>SEP 4</code>) on upcoming episode posters.</p>
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          <div style="font-size:0.85rem; font-weight:700; color:var(--text); margin-bottom:4px;">Badge Types</div>
+          <div class="settings-check-group">
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeAirDateCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeAirDate&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Upcoming Air Date</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Air date countdown (e.g. <code>TODAY</code>, <code>TOMORROW</code>, <code>WED</code>, <code>SEP 4</code>)</p>
+              </div>
+            </label>
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeSeasonPremiereCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonPremiere&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Season Premiere</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Green <code>Season Premiere</code> badge on un-aired Episode 1s</p>
+              </div>
+            </label>
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeSeasonFinaleCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonFinale&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Season Finale</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Orange <code>Season Finale</code> badge on final episode of the season</p>
+              </div>
+            </label>
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeSeasonFinaleDateCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonFinaleDate&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Season Finale Date</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Date when the season finale will air (e.g. <code>Finale: Nov 12</code>) on mid-season episodes</p>
+              </div>
+            </label>
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeTmdbRatingCheckbox" checked data-act="toggleTmdbRatingSetting" data-act-args="[&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">TMDb Ratings</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Star rating (e.g. <span style="color:#f5c518; font-weight:700;">★ 7.9</span>) beside the year/subtitle</p>
+              </div>
+            </label>
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeWatchedCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeWatched&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Watched Status Badges</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Checkmark badge on movies and shows you've already watched</p>
+              </div>
+            </label>
           </div>
-        </label>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeSeasonPremiereCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonPremiere&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Season Premiere Badge</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Shows the green <code>Season Premiere</code> badge on upcoming Episode 1s (only when the episode has not yet aired).</p>
-          </div>
-        </label>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeSeasonFinaleCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonFinale&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Season Finale Badge</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Shows the orange <code>Season Finale</code> badge when the upcoming episode is the final episode of that season.</p>
-          </div>
-        </label>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeSeasonFinaleDateCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonFinaleDate&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Season Finale Date Badge</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Shows when the season finale will air (e.g. <code>Finale: Nov 12</code>) on mid-season episodes (Episodes 2–9).</p>
-          </div>
-        </label>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeTmdbRatingCheckbox" checked data-act="toggleTmdbRatingSetting" data-act-args="[&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">TMDb Ratings</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show TMDb star ratings (e.g. <span style="color:#f5c518; font-weight:700;">★ 7.9</span>) beside the year/subtitle across the app (except in Live Preview).</p>
-          </div>
-        </label>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeWatchedCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeWatched&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Watched Status Badges</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Shows the watched badge on movies and shows you've already watched.</p>
-          </div>
-        </label>
+        </div>
       </div>
     </div>
 
     <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Watch History &amp; Continue Watching</h2>
       <div style="border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:12px;">
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="autoRecommendCompanionsCheckbox" checked data-act="toggleCompanionRecommendationSetting" data-act-args="[&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Storyline &amp; Companion Recommendations</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Automatically recommend canon bridge movies between seasons (e.g. <em>Demon Slayer: Mugen Train</em>) and sequel films or spin-off series when a show concludes (e.g. <em>Breaking Bad &rarr; El Camino &rarr; Better Call Saul</em>).</p>
+        <div class="settings-toggle-row" style="padding-top:4px;">
+          <div style="flex:1; min-width:0; padding-right:12px;">
+            <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Storyline &amp; Companion Recommendations</span>
+            <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Automatically recommend canon bridge movies between seasons (e.g. <em>Demon Slayer: Mugen Train</em>) and sequel films or spin-off series when a show concludes (e.g. <em>Breaking Bad &rarr; El Camino &rarr; Better Call Saul</em>).</p>
           </div>
-        </label>
+          <label class="ui-toggle" aria-label="Toggle Storyline and Companion Recommendations">
+            <input type="checkbox" id="autoRecommendCompanionsCheckbox" checked data-act="toggleCompanionRecommendationSetting" data-act-args="[&quot;@checked&quot;]">
+            <span class="ui-toggle-slider"></span>
+          </label>
+        </div>
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Reset or clear all recorded movies and episodes from your personal Watch History or in-progress Continue Watching.</p>
       <div id="watchHistorySettingsSection" style="display:flex; gap:10px; flex-wrap:wrap;">
@@ -34467,13 +34519,18 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
           <button type="button" class="secondary" id="traktDisconnectBtn" style="display:none;" data-act="disconnectTrakt">Disconnect</button>
         </div>
         <p id="traktConnectStatus" style="margin:0 0 10px; font-size:0.85rem;"></p>
-        <div id="traktSyncHistoryWrap" style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.04); border-radius:8px; border:1px solid var(--border);">
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0;">
-            <input type="checkbox" id="syncTraktHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;trakt&quot;,&quot;@checked&quot;]" style="width:16px; height:16px; cursor:pointer;">
-            <span style="font-weight:600;">Sync Watch History to Trakt</span>
-          </label>
-          <p style="margin:4px 0 8px 24px; color:var(--muted); font-size:0.78rem;">Automatically sync items marked as watched or played to your Trakt account history.</p>
-          <div style="margin-left:24px;">
+        <div id="traktSyncHistoryWrap" style="margin:10px 0; padding:12px 14px; background:var(--color-bg-sunken, rgba(255,255,255,0.04)); border-radius:8px; border:1px solid var(--border);">
+          <div class="settings-toggle-row" style="padding:0 0 10px;">
+            <div style="flex:1; min-width:0; padding-right:12px;">
+              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Sync Watch History to Trakt</span>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Automatically sync items marked as watched or played to your Trakt account history.</p>
+            </div>
+            <label class="ui-toggle" aria-label="Sync Watch History to Trakt">
+              <input type="checkbox" id="syncTraktHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;trakt&quot;,&quot;@checked&quot;]">
+              <span class="ui-toggle-slider"></span>
+            </label>
+          </div>
+          <div style="margin-top:8px;">
             <button type="button" class="secondary lc-btn" id="syncTraktHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;trakt&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
           </div>
         </div>
@@ -34500,13 +34557,18 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
           <button type="button" class="secondary" id="mdblistDisconnectBtn" style="display:none;" data-act="disconnectMdblist">Disconnect</button>
         </div>
         <p id="mdblistConnectStatus" style="margin:0 0 10px; font-size:0.85rem;"></p>
-        <div id="mdblistSyncHistoryWrap" style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.04); border-radius:8px; border:1px solid var(--border);">
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0;">
-            <input type="checkbox" id="syncMdblistHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;mdblist&quot;,&quot;@checked&quot;]" style="width:16px; height:16px; cursor:pointer;">
-            <span style="font-weight:600;">Sync Watch History to MDBList</span>
-          </label>
-          <p style="margin:4px 0 8px 24px; color:var(--muted); font-size:0.78rem;">Automatically sync items marked as watched or played to your MDBList account history.</p>
-          <div style="margin-left:24px;">
+        <div id="mdblistSyncHistoryWrap" style="margin:10px 0; padding:12px 14px; background:var(--color-bg-sunken, rgba(255,255,255,0.04)); border-radius:8px; border:1px solid var(--border);">
+          <div class="settings-toggle-row" style="padding:0 0 10px;">
+            <div style="flex:1; min-width:0; padding-right:12px;">
+              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Sync Watch History to MDBList</span>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Automatically sync items marked as watched or played to your MDBList account history.</p>
+            </div>
+            <label class="ui-toggle" aria-label="Sync Watch History to MDBList">
+              <input type="checkbox" id="syncMdblistHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;mdblist&quot;,&quot;@checked&quot;]">
+              <span class="ui-toggle-slider"></span>
+            </label>
+          </div>
+          <div style="margin-top:8px;">
             <button type="button" class="secondary lc-btn" id="syncMdblistHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;mdblist&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
           </div>
         </div>
@@ -34528,13 +34590,18 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
           <button type="button" class="secondary" id="simklDisconnectBtn" style="display:none;" data-act="disconnectSimkl">Disconnect</button>
         </div>
         <p id="simklConnectStatus" style="margin:0 0 10px; font-size:0.85rem;"></p>
-        <div id="simklSyncHistoryWrap" style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.04); border-radius:8px; border:1px solid var(--border);">
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0;">
-            <input type="checkbox" id="syncSimklHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;simkl&quot;,&quot;@checked&quot;]" style="width:16px; height:16px; cursor:pointer;">
-            <span style="font-weight:600;">Sync Watch History to Simkl</span>
-          </label>
-          <p style="margin:4px 0 8px 24px; color:var(--muted); font-size:0.78rem;">Automatically sync items marked as watched or played to your Simkl account history.</p>
-          <div style="margin-left:24px;">
+        <div id="simklSyncHistoryWrap" style="margin:10px 0; padding:12px 14px; background:var(--color-bg-sunken, rgba(255,255,255,0.04)); border-radius:8px; border:1px solid var(--border);">
+          <div class="settings-toggle-row" style="padding:0 0 10px;">
+            <div style="flex:1; min-width:0; padding-right:12px;">
+              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Sync Watch History to Simkl</span>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Automatically sync items marked as watched or played to your Simkl account history.</p>
+            </div>
+            <label class="ui-toggle" aria-label="Sync Watch History to Simkl">
+              <input type="checkbox" id="syncSimklHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;simkl&quot;,&quot;@checked&quot;]">
+              <span class="ui-toggle-slider"></span>
+            </label>
+          </div>
+          <div style="margin-top:8px;">
             <button type="button" class="secondary lc-btn" id="syncSimklHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;simkl&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
           </div>
         </div>
@@ -67181,11 +67248,16 @@ function renderTrackPlaybackSection() {
   box.innerHTML =
     '<div style="margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid var(--border);">' +
       '<p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">Streaming Apps &amp; Addon Players (Stremio, Nuvio, Wako, etc.)</p>' +
-      '<label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.9rem;">' +
-        '<input type="checkbox" id="trackPlaybackCheck" ' + (enabled ? 'checked' : '') + ' data-act="onTrackPlaybackToggle" data-act-args="[&quot;@self&quot;]">' +
-        '<span>Enable In-App Playback Auto-Tracking</span>' +
-      '</label>' +
-      '<p style="margin:6px 0 0; color:var(--muted); font-size:0.8rem;">Automatically marks movies and episodes as watched whenever playback starts in any supported streaming app or addon player (Stremio, Nuvio, Wako, etc.) via the built-in playback hook. Takes effect on your next install link.</p>' +
+      '<div class="settings-toggle-row">' +
+        '<div style="flex:1; min-width:0; padding-right:12px;">' +
+          '<span style="font-weight:600; font-size:0.92rem; color:var(--text);">Enable In-App Playback Auto-Tracking</span>' +
+          '<p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Automatically marks movies and episodes as watched whenever playback starts in any supported streaming app or addon player (Stremio, Nuvio, Wako, etc.) via the built-in playback hook. Takes effect on your next install link.</p>' +
+        '</div>' +
+        '<label class="ui-toggle" aria-label="Enable In-App Playback Auto-Tracking">' +
+          '<input type="checkbox" id="trackPlaybackCheck" ' + (enabled ? 'checked' : '') + ' data-act="onTrackPlaybackToggle" data-act-args="[&quot;@self&quot;]">' +
+          '<span class="ui-toggle-slider"></span>' +
+        '</label>' +
+      '</div>' +
     '</div>' +
 
     '<div style="margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid var(--border);">' +
@@ -67197,12 +67269,17 @@ function renderTrackPlaybackSection() {
         '<button type="button" class="secondary lc-btn" data-act="regenerateScrobbleWebhookUrl" title="Issues a new webhook URL and stops the old one working. Use this if the URL has been shared or logged somewhere it should not have been." style="padding:8px 14px; font-size:0.84rem;">Regenerate</button>' +
       '</div>' +
 
-      '<div style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
-        '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0 0 4px;">' +
-          '<input type="checkbox" id="scrobbleFilterUsersCb" ' + (filterUsers ? 'checked' : '') + ' data-act="onScrobbleFilterUsersToggle" data-act-args="[&quot;@self&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
-          '<span style="font-weight:600;">Enable Media Server User Filtering</span>' +
-        '</label>' +
-        '<p style="margin:0 0 8px; color:var(--muted); font-size:0.8rem;">When enabled, only selected or specified media server user profiles will scrobble into your lists. Unselected users will be ignored.</p>' +
+      '<div style="margin:10px 0; padding:12px 14px; background:var(--color-bg-sunken, rgba(255,255,255,0.03)); border-radius:8px; border:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
+        '<div class="settings-toggle-row" style="padding:0 0 4px; border-bottom:none;">' +
+          '<div style="flex:1; min-width:0; padding-right:12px;">' +
+            '<span style="font-weight:600; font-size:0.88rem; color:var(--text);">Enable Media Server User Filtering</span>' +
+            '<p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">When enabled, only selected or specified media server user profiles will scrobble into your lists. Unselected users will be ignored.</p>' +
+          '</div>' +
+          '<label class="ui-toggle" aria-label="Enable Media Server User Filtering">' +
+            '<input type="checkbox" id="scrobbleFilterUsersCb" ' + (filterUsers ? 'checked' : '') + ' data-act="onScrobbleFilterUsersToggle" data-act-args="[&quot;@self&quot;]">' +
+            '<span class="ui-toggle-slider"></span>' +
+          '</label>' +
+        '</div>' +
         '<div id="scrobbleFilterDetails" style="' + (filterUsers ? '' : 'display:none;') + ' margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.06);">' +
           '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">' +
             '<p style="margin:0; font-size:0.8rem; font-weight:600; color:var(--text);">Select Allowed Users:</p>' +
@@ -67218,15 +67295,25 @@ function renderTrackPlaybackSection() {
         '</div>' +
       '</div>' +
 
-      '<div style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
-        '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0 0 8px;">' +
-          '<input type="checkbox" id="syncMediaServerHistoryCb" checked data-act="toggleMediaServerSync" data-act-args="[&quot;@checked&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
-          '<span style="font-weight:600;">Automatically sync media server scrobbles to your Watch History list</span>' +
-        '</label>' +
-        '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0 0 10px;">' +
-          '<input type="checkbox" id="forwardScrobbleToProvidersCb" checked data-act="toggleForwardScrobbles" data-act-args="[&quot;@checked&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
-          '<span style="font-weight:600;">Forward scrobbles to connected external accounts (Trakt, Simkl, MDBList)</span>' +
-        '</label>' +
+      '<div style="margin:10px 0; padding:12px 14px; background:var(--color-bg-sunken, rgba(255,255,255,0.03)); border-radius:8px; border:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
+        '<div class="settings-toggle-row" style="padding:0 0 10px;">' +
+          '<div style="flex:1; min-width:0; padding-right:12px;">' +
+            '<span style="font-weight:600; font-size:0.86rem; color:var(--text);">Automatically sync media server scrobbles to your Watch History list</span>' +
+          '</div>' +
+          '<label class="ui-toggle" aria-label="Sync media server scrobbles to Watch History">' +
+            '<input type="checkbox" id="syncMediaServerHistoryCb" checked data-act="toggleMediaServerSync" data-act-args="[&quot;@checked&quot;]">' +
+            '<span class="ui-toggle-slider"></span>' +
+          '</label>' +
+        '</div>' +
+        '<div class="settings-toggle-row" style="padding:10px 0 12px; border-bottom:none;">' +
+          '<div style="flex:1; min-width:0; padding-right:12px;">' +
+            '<span style="font-weight:600; font-size:0.86rem; color:var(--text);">Forward scrobbles to connected external accounts (Trakt, Simkl, MDBList)</span>' +
+          '</div>' +
+          '<label class="ui-toggle" aria-label="Forward scrobbles to connected external accounts">' +
+            '<input type="checkbox" id="forwardScrobbleToProvidersCb" checked data-act="toggleForwardScrobbles" data-act-args="[&quot;@checked&quot;]">' +
+            '<span class="ui-toggle-slider"></span>' +
+          '</label>' +
+        '</div>' +
         '<div>' +
           '<button type="button" class="secondary lc-btn" data-act="syncAllConnectedAccountsNow" data-act-args="[&quot;@self&quot;]" style="padding:8px 14px; font-size:0.82rem; white-space:normal; line-height:1.35; text-align:center; max-width:100%; width:100%; box-sizing:border-box;">Sync Current Watch History to Connected Accounts Now</button>' +
         '</div>' +
