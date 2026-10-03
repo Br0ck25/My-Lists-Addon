@@ -244,6 +244,26 @@ describe("New on Streaming as a My Lists Addon chart", () => {
 });
 
 describe("My Lists Addon Charts on the website", () => {
+  it("provides search and category filtering for Quick Add shelves", async () => {
+    const env = makeEnv({});
+    const { html, js } = await pageAndScript(env);
+    assert.match(html, /id="quickAddSearchInput"/);
+    assert.match(html, /id="quickAddCategoryBar"/);
+    assert.match(html, /data-qa-filter="all"/);
+    assert.match(html, /data-qa-filter="charts"/);
+    assert.match(html, /data-qa-filter="streaming"/);
+    assert.match(html, /data-qa-filter="genres"/);
+    assert.match(html, /data-qa-filter="kids"/);
+    assert.match(html, /data-qa-filter="holidays"/);
+    assert.match(html, /data-qa-category="charts"/);
+    assert.match(html, /data-qa-category="streaming"/);
+    assert.match(html, /id="qaNoResults"/);
+    assert.match(js, /function filterQuickAdd\(\)/);
+    assert.match(js, /function filterQuickAddCategory\(category, btn\)/);
+    assert.match(js, /function clearQuickAddSearch\(\)/);
+    assert.match(js, /function resetQuickAddFilters\(\)/);
+  });
+
   it("has its own Quick Add section with all four charts and an Add all button", async () => {
     const env = makeEnv({});
     const { html, js } = await pageAndScript(env);

@@ -1394,6 +1394,72 @@ ${seoHeadHtml}
     gap: 8px;
     margin-bottom: 8px;
   }
+  /* Quick Add Toolbar, Search & Category Filter Bar */
+  .qa-toolbar {
+    margin-bottom: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .qa-search-box {
+    position: relative;
+    width: 100%;
+  }
+  .qa-search-box input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 38px 10px 14px;
+    font-size: 0.88rem;
+    border-radius: var(--radius-sm);
+    border: 1.5px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--shadow-sm);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .qa-search-box input:focus {
+    border-color: var(--accent);
+    outline: none;
+    box-shadow: 0 0 0 3px var(--color-brand-subtle);
+  }
+  .qa-search-box input::placeholder {
+    color: var(--muted);
+  }
+  .qa-search-clear {
+    display: none;
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 2px 8px;
+    line-height: 1;
+    border-radius: var(--radius-pill);
+    transition: color 0.15s ease;
+  }
+  .qa-search-clear:hover {
+    color: var(--text);
+  }
+  #qaSearchCount {
+    display: none;
+    font-size: 0.80rem;
+    color: var(--muted);
+    padding: 0 4px;
+    margin-top: -4px;
+  }
+  .qa-category-bar {
+    padding: 2px 2px 6px 2px;
+  }
+  .qa-category-bar .subnav-pill {
+    padding: 5px 14px;
+    min-height: 32px;
+    font-size: 0.82rem;
+  }
+
   /* Catalogs -> Quick Add sits each section in its own card, the way
      Channels -> Quick Add already did. Composed onto .panel rather than
      restating the surface/border/radius/shadow, so the two cannot drift:

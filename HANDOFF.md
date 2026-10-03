@@ -2,6 +2,31 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-03 (Antigravity): Quick Add Modernization - Phase 2 (Search, Category Navigation Bar, & Real-time Filtering).**
+>
+> **Where things stand**
+> - Quick Add Search & Real-Time Filtering (`10_tab-search-add.js`, `16_client-row-core.js`, `09_page-shell.js`):
+>   - Added `#quickAddSearchInput` and `#quickAddSearchClearBtn` above Quick Add shelves.
+>   - Filters both shelf cards and individual chart titles/subtitles in real time (0ms client-side execution).
+>   - Added `#qaSearchCount` displaying live matching chart counts (e.g. "Found 4 matching charts").
+>   - Added `#qaNoResults` empty state card with a 1-click "Reset Filters" button when a search has 0 matches.
+> - Sticky Category Navigation Pill Bar (`10_tab-search-add.js`, `16_client-row-core.js`, `09_page-shell.js`):
+>   - Added `#quickAddCategoryBar` with 6 filter pills: `All`, `Charts`, `Streaming`, `Genres`, `Kids`, `Holidays`.
+>   - Attached `data-qa-category` attributes to all 11 shelf sections (`charts`, `streaming`, `kids`, `holidays`, `genres`).
+>   - Allows users to instantly view specific categories without scrolling through 11 long vertical shelves.
+>   - Smooth, touch-scrollable horizontal pill bar with active checkmark icons, matching the design system standard across Catalogs, Discover, and Channels.
+> - Handlers & State Management (`16_client-row-core.js`):
+>   - Implemented `filterQuickAddCategory(category, btn)`, `filterQuickAdd()`, `clearQuickAddSearch()`, and `resetQuickAddFilters()`.
+>   - Integrated `filterQuickAdd()` into `switchCatalogsSubmenu('quickadd')` to ensure pristine filter state whenever Quick Add is viewed.
+> - Verification & Tests:
+>   - Added unit test in `tests/my-lists-addon-charts.test.mjs` verifying search input, category bar, data attributes, empty state, and all 4 JS handlers.
+>   - `python build.py` & `python check_sync.py`: OK (5,430,293 bytes).
+>   - `node --check worker_entry_combined.js`: OK (0 syntax errors).
+>   - `python gen_map.py`: 2,664 symbols, 211 routes.
+>   - All 558 client, shell, and chart tests passing (`node --test tests/my-lists-addon-charts.test.mjs tests/app-shell*.test.mjs tests/client*.test.mjs`).
+>   - Quick add worker tests passing (`tests/worker.test.mjs`).
+> - Branch: `feat/design-system-phase-1`
+>
 > **HANDOFF, 2026-10-03 (Antigravity): Quick Add Modernization - Phase 1 (Card Polish, Title Wrapping, & Add All Hierarchy).**
 >
 > **Where things stand**
