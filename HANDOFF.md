@@ -2,10 +2,10 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
-> **HANDOFF, 2026-10-03 (Antigravity): Design System - Phase 1 & 2 (Design Tokens & Unified Button System).**
+> **HANDOFF, 2026-10-03 (Antigravity): Design System - Phase 1, 2 & 3 (Tokens, Button System & Template Normalization).**
 >
 > **Where things stand**
-> - Implemented Phase 1 (Tokens) & Phase 2 (Button Architecture) of Design System:
+> - Implemented Phase 1 (Tokens), Phase 2 (Button Architecture), and Phase 3 (Template Cleanup) of Design System:
 >   - Phase 1: Consolidated CSS Variables & Semantic Design Tokens in `:root` and `:root.dark-theme` (`09_page-shell.js`):
 >     - Semantic Surfaces & Overlays (`--color-bg-canvas`, `--color-bg-surface`, `--color-bg-elevated`, `--color-bg-sunken`, `--color-bg-overlay`).
 >     - Semantic Borders (`--color-border-subtle`, `--color-border-strong`, `--color-border-focus`).
@@ -24,6 +24,9 @@
 >     - Standard size variants: `.btn-sm` (32px), `.btn-md` (40px default), `.btn-lg` (48px primary CTAs).
 >     - Mapped legacy `.lc-btn`, `button.secondary`, `.actions button`, `preset-load-btn`, etc. directly to the new button system with backward compatibility.
 >     - Enhanced touch targets: Added `::after` touch padding to `.cw-remove-btn` to satisfy WCAG 44×44px minimum touch perimeter; ensured `.subnav-pill` has min-height 36px.
+>   - Phase 3: Template Cleanup & Button Class Normalization (`10_tab-search-add.js`, `15_tab-settings-html.js`, `09_page-shell.js`):
+>     - Replaced inline color overrides and secondary button red styling with `.btn-danger` and `.btn-danger.btn-sm` on destructive actions ("Remove All", "Clear History", "Clear Continue Watching").
+>     - Cleaned up Catalogs action bar with `.btn-primary` and `.btn-danger`.
 > - Verified via `python build.py`, `python check_sync.py`, `node --check worker_entry_combined.js`, `python gen_map.py`, `node check_bundle_budget.mjs` (first view JS: 93.30 KB gzip <= 150 KB budget), and full test suite (`node --test tests/*.test.mjs`: 2,068 passing, 0 failing).
 > - Branch: `feat/design-system-phase-1`
 >

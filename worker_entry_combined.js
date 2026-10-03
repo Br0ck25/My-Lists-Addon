@@ -32919,13 +32919,13 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
           <input type="checkbox" id="whGroupShowsCheckbox" data-act="toggleWatchHistoryGroupShows" data-act-args="[&quot;@checked&quot;]" style="accent-color:var(--accent); cursor:pointer;">
           <span>Shows instead of episodes</span>
         </label>
-        <button type="button" class="subnav-pill" id="whClearHistoryBtn" data-act="clearWatchHistoryAll" style="color:var(--danger); border-color:rgba(255,59,48,0.35); margin-left:auto; font-weight:600;">Clear History</button>
+        <button type="button" class="btn-danger btn-sm" id="whClearHistoryBtn" data-act="clearWatchHistoryAll" style="margin-left:auto;">Clear History</button>
       </div>
       <div id="genericTypeFilterControls" style="display:none; gap:6px; flex-wrap:wrap; align-items:center; width:100%;">
         <button type="button" class="subnav-pill active generic-type-pill" id="detailTypeAllBtn" data-act="switchListDetailsType" data-act-args="[&quot;all&quot;]">All</button>
         <button type="button" class="subnav-pill generic-type-pill" id="detailTypeMovieBtn" data-act="switchListDetailsType" data-act-args="[&quot;movie&quot;]">Movies</button>
         <button type="button" class="subnav-pill generic-type-pill" id="detailTypeSeriesBtn" data-act="switchListDetailsType" data-act-args="[&quot;series&quot;]">Shows</button>
-        <button type="button" class="subnav-pill" id="cwClearHistoryBtn" data-act="clearContinueWatchingAll" style="display:none; color:var(--danger); border-color:rgba(255,59,48,0.35); margin-left:auto; font-weight:600;">Clear All</button>
+        <button type="button" class="btn-danger btn-sm" id="cwClearHistoryBtn" data-act="clearContinueWatchingAll" style="display:none; margin-left:auto;">Clear All</button>
       </div>
       <div id="whSortControls" style="display:flex; align-items:center; gap:8px;">
         <label for="whSortSelect" style="font-size:0.75rem; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.02em;">Sort</label>
@@ -33150,8 +33150,8 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ''}
     </div>
 
     <div class="actions" style="margin-top:16px;">
-      <button type="button" data-act="removeAllLists" class="secondary" style="color:var(--danger); border-color:rgba(255,59,48,0.25);">Remove All</button>
-      <button type="button" class="primary" data-act="generate">${isConfigureMode ? "Update Add-on" : "Generate Install Link"}</button>
+      <button type="button" data-act="removeAllLists" class="btn-danger">Remove All</button>
+      <button type="button" class="btn-primary" data-act="generate">${isConfigureMode ? "Update Add-on" : "Generate Install Link"}</button>
     </div>
   </div>
 
@@ -34372,8 +34372,8 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Reset or clear all recorded movies and episodes from your personal Watch History or in-progress Continue Watching.</p>
       <div id="watchHistorySettingsSection" style="display:flex; gap:10px; flex-wrap:wrap;">
-        <button type="button" class="secondary lc-btn" data-act="clearWatchHistoryAll" style="color:var(--danger); border-color:rgba(255,59,48,0.3); font-weight:600; padding:8px 16px;">Clear Watch History</button>
-        <button type="button" class="secondary lc-btn" data-act="clearContinueWatchingAll" style="color:var(--danger); border-color:rgba(255,59,48,0.3); font-weight:600; padding:8px 16px;">Clear Continue Watching</button>
+        <button type="button" class="btn-danger btn-sm" data-act="clearWatchHistoryAll">Clear Watch History</button>
+        <button type="button" class="btn-danger btn-sm" data-act="clearContinueWatchingAll">Clear Continue Watching</button>
       </div>
     </div>
 

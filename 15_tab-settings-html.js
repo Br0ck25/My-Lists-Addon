@@ -271,8 +271,8 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Reset or clear all recorded movies and episodes from your personal Watch History or in-progress Continue Watching.</p>
       <div id="watchHistorySettingsSection" style="display:flex; gap:10px; flex-wrap:wrap;">
-        <button type="button" class="secondary lc-btn" data-act="clearWatchHistoryAll" style="color:var(--danger); border-color:rgba(255,59,48,0.3); font-weight:600; padding:8px 16px;">Clear Watch History</button>
-        <button type="button" class="secondary lc-btn" data-act="clearContinueWatchingAll" style="color:var(--danger); border-color:rgba(255,59,48,0.3); font-weight:600; padding:8px 16px;">Clear Continue Watching</button>
+        <button type="button" class="btn-danger btn-sm" data-act="clearWatchHistoryAll">Clear Watch History</button>
+        <button type="button" class="btn-danger btn-sm" data-act="clearContinueWatchingAll">Clear Continue Watching</button>
       </div>
     </div>
 

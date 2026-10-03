@@ -52,8 +52,8 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ''}
     </div>
 
     <div class="actions" style="margin-top:16px;">
-      <button type="button" data-act="removeAllLists" class="secondary" style="color:var(--danger); border-color:rgba(255,59,48,0.25);">Remove All</button>
-      <button type="button" class="primary" data-act="generate">${isConfigureMode ? "Update Add-on" : "Generate Install Link"}</button>
+      <button type="button" data-act="removeAllLists" class="btn-danger">Remove All</button>
+      <button type="button" class="btn-primary" data-act="generate">${isConfigureMode ? "Update Add-on" : "Generate Install Link"}</button>
     </div>
   </div>
 
