@@ -2,6 +2,25 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-03 (Antigravity): Design System - Phase 1 (Consolidated CSS Variables & Design Tokens).**
+>
+> **Where things stand**
+> - Implemented Phase 1 of Design System:
+>   - Unified semantic token architecture in `:root` and `:root.dark-theme` within `09_page-shell.js`:
+>     - Semantic Surfaces & Overlays (`--color-bg-canvas`, `--color-bg-surface`, `--color-bg-elevated`, `--color-bg-sunken`, `--color-bg-overlay`).
+>     - Semantic Borders (`--color-border-subtle`, `--color-border-strong`, `--color-border-focus`).
+>     - Semantic Typography / Foreground (`--color-text-primary`, `--color-text-secondary`, `--color-text-muted`, `--color-text-inverse`).
+>     - Brand & Semantic Accent (`--color-brand`, `--color-brand-hover`, `--color-brand-active`, `--color-brand-subtle`, `--color-brand-2`).
+>     - Status & Feedback (`--color-danger`, `--color-danger-hover`, `--color-danger-subtle`, `--color-success`, `--color-warn`, rating scales).
+>     - Shadows & Elevation scales (`--shadow-sm`, `--shadow`, `--shadow-md`, `--shadow-lg`, `--shadow-focus`).
+>     - 8pt Spatial Spacing Scale (`--space-0-5` through `--space-8`).
+>     - Border Radius Scale (`--radius-xs` through `--radius-pill`).
+>     - Control Heights & Minimum Touch Targets (`--control-height-sm`, `--control-height-md`, `--control-height-lg`, `--control-touch-min`).
+>     - Full backward-compatibility mapping for all legacy aliases (`--bg`, `--surface`, `--panel`, `--border`, `--text`, `--accent`, etc.).
+>   - Fixed dark-mode modal flattening: updated dialogs (`createListModal`, `addShelfModal`, `selectListModal`, `traktDeviceModal`) and `.modal-card` to use `--color-bg-elevated` and `--color-border-strong` with elevated shadows instead of pitch-black `--bg`.
+> - Verified via `python build.py`, `python check_sync.py`, `node --check worker_entry_combined.js`, `python gen_map.py`, `node check_bundle_budget.mjs` (first view JS: 93.30 KB gzip <= 150 KB budget), and full test suite (`node --test tests/*.test.mjs`: 2,068 passing, 0 failing).
+> - Branch: `feat/design-system-phase-1`
+>
 > **HANDOFF, 2026-10-03 (Antigravity): Media Item Details & Top Header Bar Redesign.**
 >
 > **Where things stand**
