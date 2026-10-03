@@ -102,34 +102,10 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
   </div>
 
   <div class="lists-subpanel" id="catalogsSubQuickAdd" style="display:none;">
-    <!-- Quick Add Search & Category Filter Toolbar -->
-    <div class="qa-toolbar" id="qaToolbar">
-      <div class="qa-search-box">
-        <input type="text" id="quickAddSearchInput" aria-label="Search quick add charts" placeholder="Search charts & streaming services... (e.g. Netflix, Horror, Trending)" data-act-on="input" data-act="filterQuickAdd">
-        <button type="button" class="qa-search-clear" id="quickAddSearchClearBtn" aria-label="Clear search" data-act="clearQuickAddSearch">&times;</button>
-      </div>
-      <div id="qaSearchCount"></div>
-      <div class="subnav-pills-bar qa-category-bar" id="quickAddCategoryBar">
-        <button type="button" class="subnav-pill active" data-qa-filter="all" data-act="filterQuickAddCategory" data-act-args="[&quot;all&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> All</button>
-        <button type="button" class="subnav-pill" data-qa-filter="charts" data-act="filterQuickAddCategory" data-act-args="[&quot;charts&quot;,&quot;@self&quot;]">Charts</button>
-        <button type="button" class="subnav-pill" data-qa-filter="streaming" data-act="filterQuickAddCategory" data-act-args="[&quot;streaming&quot;,&quot;@self&quot;]">Streaming</button>
-        <button type="button" class="subnav-pill" data-qa-filter="genres" data-act="filterQuickAddCategory" data-act-args="[&quot;genres&quot;,&quot;@self&quot;]">Genres</button>
-        <button type="button" class="subnav-pill" data-qa-filter="kids" data-act="filterQuickAddCategory" data-act-args="[&quot;kids&quot;,&quot;@self&quot;]">Kids</button>
-        <button type="button" class="subnav-pill" data-qa-filter="holidays" data-act="filterQuickAddCategory" data-act-args="[&quot;holidays&quot;,&quot;@self&quot;]">Holidays</button>
-      </div>
-    </div>
-
-    <!-- Empty search result card -->
-    <div id="qaNoResults" style="display:none; text-align:center; padding:36px 16px; color:var(--muted); background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); margin-bottom:16px;">
-      <p style="margin:0 0 8px; font-weight:600; font-size:0.95rem; color:var(--text);">No matching charts or catalogs found</p>
-      <p style="margin:0 0 16px; font-size:0.82rem; color:var(--muted);">Try searching for a different service, genre, or keyword, or clear your filters.</p>
-      <button type="button" class="lc-btn secondary" data-act="resetQuickAddFilters">Reset Filters</button>
-    </div>
-
     <div id="catalogsQuickAddContainer">
 
     <!-- My Lists Addon Charts Shelf -- this add-on's own charts (MY_LISTS_ADDON_CHARTS, 08). -->
-    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all" data-qa-category="charts">
+    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">My Lists Addon Charts</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="mylists-charts">+ Add all</button>
@@ -139,7 +115,7 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
     </div>
 
     <!-- Combined Charts Shelf -->
-    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all" data-qa-category="charts">
+    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Combined Charts</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="combined-charts">+ Add all</button>
@@ -149,7 +125,7 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
     </div>
 
     <!-- TMDB Charts Shelf -->
-    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all" data-qa-category="charts">
+    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">TMDB Charts</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="tmdb-charts">+ Add all</button>
@@ -159,7 +135,7 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
     </div>
 
     <!-- Trakt Official Charts Shelf -->
-    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all" data-qa-category="charts">
+    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Trakt Charts</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="trakt-charts">+ Add all</button>
@@ -169,7 +145,7 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
     </div>
 
     <!-- MDBList Official Charts Shelf -->
-    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all" data-qa-category="charts">
+    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">MDBList Official</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="mdblist-charts">+ Add all</button>
@@ -179,7 +155,7 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
     </div>
 
     <!-- Simkl Charts Shelf -->
-    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all" data-qa-category="charts">
+    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Simkl Anime &amp; Trending</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="simkl-charts">+ Add all</button>
@@ -189,7 +165,7 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
     </div>
 
     <!-- Streaming Top 10 Shelf -->
-    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all" data-qa-category="streaming">
+    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Streaming Top 10</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="streaming-top10">+ Add all</button>
@@ -199,7 +175,7 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
     </div>
 
     <!-- Streaming Catalogs Shelf -->
-    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all" data-qa-category="streaming">
+    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Streaming Catalogs</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="streaming-catalogs">+ Add all</button>
@@ -209,7 +185,7 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
     </div>
 
     <!-- Kids Shelf -->
-    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all" data-qa-category="kids">
+    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Kids</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="kids">+ Add all</button>
@@ -219,7 +195,7 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
     </div>
 
     <!-- Holidays Shelf -->
-    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all" data-qa-category="holidays">
+    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Holidays</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="holidays">+ Add all</button>
@@ -229,7 +205,7 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
     </div>
 
     <!-- Genres Shelf -->
-    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all" data-qa-category="genres">
+    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Genres</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="genres">+ Add all</button>

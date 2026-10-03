@@ -27965,7 +27965,6 @@ function buildStreamingRowsHtml(list, labelSuffix, group) {
       <div class="discover-chart-header">
         <div class="discover-chart-info">
           <div class="discover-chart-title">${p.name}</div>
-          <div class="discover-chart-sub">${labelSuffix ? labelSuffix : (p.type === 'movie' ? 'Theatrical Box Office' : (p.type === 'series' ? 'Anime Trending' : 'Movies & Shows'))}</div>
         </div>
         ${seeAllLink}
       </div>
@@ -28171,7 +28170,6 @@ function buildCombinedChartsHtml() {
       <div class="discover-chart-header">
         <div class="discover-chart-info">
           <div class="discover-chart-title">${p.name}</div>
-          <div class="discover-chart-sub">Blended Multi-Source Catalog</div>
         </div>
         <a href="javascript:void(0)" class="discover-chart-seeall" data-act="openListDetailsPage" data-act-args="${appActArgsServer([p.name, "movie", movieUrlsJoined])}">See All &rsaquo;</a>
       </div>
@@ -29751,7 +29749,7 @@ ${seoHeadHtml}
     align-items: flex-start;
     justify-content: space-between;
     gap: 8px;
-    min-height: 48px;
+    min-height: 38px;
   }
   .discover-chart-info {
     flex: 1;
@@ -29768,15 +29766,6 @@ ${seoHeadHtml}
     overflow: hidden;
     white-space: normal;
     word-break: break-word;
-  }
-  .discover-chart-sub {
-    font-size: 0.74rem;
-    color: var(--muted);
-    font-weight: 500;
-    margin-top: 2px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
   .discover-chart-seeall {
     flex-shrink: 0;
@@ -29818,71 +29807,6 @@ ${seoHeadHtml}
     flex-direction: column;
     gap: 8px;
     margin-bottom: 8px;
-  }
-  /* Quick Add Toolbar, Search & Category Filter Bar */
-  .qa-toolbar {
-    margin-bottom: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-  .qa-search-box {
-    position: relative;
-    width: 100%;
-  }
-  .qa-search-box input {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 10px 38px 10px 14px;
-    font-size: 0.88rem;
-    border-radius: var(--radius-sm);
-    border: 1.5px solid var(--border-strong);
-    background: var(--surface);
-    color: var(--text);
-    box-shadow: var(--shadow-sm);
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
-  }
-  .qa-search-box input:focus {
-    border-color: var(--accent);
-    outline: none;
-    box-shadow: 0 0 0 3px var(--color-brand-subtle);
-  }
-  .qa-search-box input::placeholder {
-    color: var(--muted);
-  }
-  .qa-search-clear {
-    display: none;
-    position: absolute;
-    right: 8px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: none;
-    border: none;
-    font-size: 1.25rem;
-    color: var(--muted);
-    cursor: pointer;
-    padding: 2px 8px;
-    line-height: 1;
-    border-radius: var(--radius-pill);
-    transition: color 0.15s ease;
-  }
-  .qa-search-clear:hover {
-    color: var(--text);
-  }
-  #qaSearchCount {
-    display: none;
-    font-size: 0.80rem;
-    color: var(--muted);
-    padding: 0 4px;
-    margin-top: -4px;
-  }
-  .qa-category-bar {
-    padding: 2px 2px 6px 2px;
-  }
-  .qa-category-bar .subnav-pill {
-    padding: 5px 14px;
-    min-height: 32px;
-    font-size: 0.82rem;
   }
 
   /* Catalogs -> Quick Add sits each section in its own card, the way
@@ -33938,34 +33862,10 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
   </div>
 
   <div class="lists-subpanel" id="catalogsSubQuickAdd" style="display:none;">
-    <!-- Quick Add Search & Category Filter Toolbar -->
-    <div class="qa-toolbar" id="qaToolbar">
-      <div class="qa-search-box">
-        <input type="text" id="quickAddSearchInput" aria-label="Search quick add charts" placeholder="Search charts & streaming services... (e.g. Netflix, Horror, Trending)" data-act-on="input" data-act="filterQuickAdd">
-        <button type="button" class="qa-search-clear" id="quickAddSearchClearBtn" aria-label="Clear search" data-act="clearQuickAddSearch">&times;</button>
-      </div>
-      <div id="qaSearchCount"></div>
-      <div class="subnav-pills-bar qa-category-bar" id="quickAddCategoryBar">
-        <button type="button" class="subnav-pill active" data-qa-filter="all" data-act="filterQuickAddCategory" data-act-args="[&quot;all&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> All</button>
-        <button type="button" class="subnav-pill" data-qa-filter="charts" data-act="filterQuickAddCategory" data-act-args="[&quot;charts&quot;,&quot;@self&quot;]">Charts</button>
-        <button type="button" class="subnav-pill" data-qa-filter="streaming" data-act="filterQuickAddCategory" data-act-args="[&quot;streaming&quot;,&quot;@self&quot;]">Streaming</button>
-        <button type="button" class="subnav-pill" data-qa-filter="genres" data-act="filterQuickAddCategory" data-act-args="[&quot;genres&quot;,&quot;@self&quot;]">Genres</button>
-        <button type="button" class="subnav-pill" data-qa-filter="kids" data-act="filterQuickAddCategory" data-act-args="[&quot;kids&quot;,&quot;@self&quot;]">Kids</button>
-        <button type="button" class="subnav-pill" data-qa-filter="holidays" data-act="filterQuickAddCategory" data-act-args="[&quot;holidays&quot;,&quot;@self&quot;]">Holidays</button>
-      </div>
-    </div>
-
-    <!-- Empty search result card -->
-    <div id="qaNoResults" style="display:none; text-align:center; padding:36px 16px; color:var(--muted); background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); margin-bottom:16px;">
-      <p style="margin:0 0 8px; font-weight:600; font-size:0.95rem; color:var(--text);">No matching charts or catalogs found</p>
-      <p style="margin:0 0 16px; font-size:0.82rem; color:var(--muted);">Try searching for a different service, genre, or keyword, or clear your filters.</p>
-      <button type="button" class="lc-btn secondary" data-act="resetQuickAddFilters">Reset Filters</button>
-    </div>
-
     <div id="catalogsQuickAddContainer">
 
     <!-- My Lists Addon Charts Shelf -- this add-on's own charts (MY_LISTS_ADDON_CHARTS, 08). -->
-    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all" data-qa-category="charts">
+    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">My Lists Addon Charts</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="mylists-charts">+ Add all</button>
@@ -33975,7 +33875,7 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
     </div>
 
     <!-- Combined Charts Shelf -->
-    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all" data-qa-category="charts">
+    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Combined Charts</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="combined-charts">+ Add all</button>
@@ -33985,7 +33885,7 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
     </div>
 
     <!-- TMDB Charts Shelf -->
-    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all" data-qa-category="charts">
+    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">TMDB Charts</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="tmdb-charts">+ Add all</button>
@@ -33995,7 +33895,7 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
     </div>
 
     <!-- Trakt Official Charts Shelf -->
-    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all" data-qa-category="charts">
+    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Trakt Charts</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="trakt-charts">+ Add all</button>
@@ -34005,7 +33905,7 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
     </div>
 
     <!-- MDBList Official Charts Shelf -->
-    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all" data-qa-category="charts">
+    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">MDBList Official</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="mdblist-charts">+ Add all</button>
@@ -34015,7 +33915,7 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
     </div>
 
     <!-- Simkl Charts Shelf -->
-    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all" data-qa-category="charts">
+    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Simkl Anime &amp; Trending</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="simkl-charts">+ Add all</button>
@@ -34025,7 +33925,7 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
     </div>
 
     <!-- Streaming Top 10 Shelf -->
-    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all" data-qa-category="streaming">
+    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Streaming Top 10</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="streaming-top10">+ Add all</button>
@@ -34035,7 +33935,7 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
     </div>
 
     <!-- Streaming Catalogs Shelf -->
-    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all" data-qa-category="streaming">
+    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Streaming Catalogs</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="streaming-catalogs">+ Add all</button>
@@ -34045,7 +33945,7 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
     </div>
 
     <!-- Kids Shelf -->
-    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all" data-qa-category="kids">
+    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Kids</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="kids">+ Add all</button>
@@ -34055,7 +33955,7 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
     </div>
 
     <!-- Holidays Shelf -->
-    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all" data-qa-category="holidays">
+    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Holidays</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="holidays">+ Add all</button>
@@ -34065,7 +33965,7 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
     </div>
 
     <!-- Genres Shelf -->
-    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all" data-qa-category="genres">
+    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Genres</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="genres">+ Add all</button>
@@ -38790,127 +38690,11 @@ function switchCatalogsSubmenu(filter, btn) {
   if (filter !== 'all') {
     if (undoToast) undoToast.style.display = 'none';
     if (resultDiv) resultDiv.style.display = 'none';
-    if (filter === 'quickadd' && typeof filterQuickAdd === 'function') {
-      filterQuickAdd();
-    }
   } else {
     // Make sure all list rows are visible since we no longer have row-level filters
     document.querySelectorAll('#lists .entry').forEach(function(e) {
       e.style.display = '';
     });
-  }
-}
-
-function filterQuickAddCategory(category, btn) {
-  window._currentQuickAddCategory = category || 'all';
-  if (!btn && category) {
-    btn = document.querySelector('#quickAddCategoryBar button[data-qa-filter="' + category + '"]');
-  }
-  if (btn) {
-    document.querySelectorAll('#quickAddCategoryBar .subnav-pill').forEach(function(p) {
-      p.classList.remove('active');
-      const c = p.querySelector('.check-icon');
-      if (c) c.remove();
-    });
-    btn.classList.add('active');
-    btn.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
-  }
-  filterQuickAdd();
-}
-
-function filterQuickAdd() {
-  const input = document.getElementById('quickAddSearchInput');
-  const clearBtn = document.getElementById('quickAddSearchClearBtn');
-  const countEl = document.getElementById('qaSearchCount');
-  const q = (input ? input.value : '').trim().toLowerCase();
-  if (clearBtn) clearBtn.style.display = q ? 'block' : 'none';
-
-  const category = window._currentQuickAddCategory || 'all';
-  const container = document.getElementById('catalogsQuickAddContainer');
-  if (!container) return;
-
-  const sections = container.querySelectorAll('.qa-shelf-card');
-  let totalVisibleCards = 0;
-  let totalVisibleSections = 0;
-
-  sections.forEach(function(section) {
-    const secCategory = section.getAttribute('data-qa-category') || 'charts';
-    const matchesCategory = (category === 'all') || (secCategory === category);
-
-    if (!matchesCategory) {
-      section.style.display = 'none';
-      return;
-    }
-
-    if (!q) {
-      section.style.display = '';
-      section.querySelectorAll('.discover-chart-card').forEach(function(card) {
-        card.style.display = '';
-      });
-      totalVisibleSections++;
-      totalVisibleCards++;
-    } else {
-      const titleEl = section.querySelector('.shelf-title');
-      const sectionTitle = (titleEl ? titleEl.textContent : '').toLowerCase();
-      const sectionMatches = sectionTitle.indexOf(q) !== -1;
-
-      let sectionMatchingCards = 0;
-      section.querySelectorAll('.discover-chart-card').forEach(function(card) {
-        const cardTitleEl = card.querySelector('.discover-chart-title');
-        const cardSubEl = card.querySelector('.discover-chart-sub');
-        const cardText = ((cardTitleEl ? cardTitleEl.textContent : '') + ' ' + (cardSubEl ? cardSubEl.textContent : '')).toLowerCase();
-
-        if (sectionMatches || cardText.indexOf(q) !== -1) {
-          card.style.display = '';
-          sectionMatchingCards++;
-        } else {
-          card.style.display = 'none';
-        }
-      });
-
-      if (sectionMatchingCards > 0) {
-        section.style.display = '';
-        totalVisibleSections++;
-        totalVisibleCards += sectionMatchingCards;
-      } else {
-        section.style.display = 'none';
-      }
-    }
-  });
-
-  const noResults = document.getElementById('qaNoResults');
-  if (noResults) {
-    noResults.style.display = (totalVisibleSections === 0) ? 'block' : 'none';
-  }
-  if (countEl) {
-    if (q) {
-      countEl.style.display = 'block';
-      countEl.textContent = 'Found ' + totalVisibleCards + ' matching chart' + (totalVisibleCards === 1 ? '' : 's');
-    } else {
-      countEl.style.display = 'none';
-      countEl.textContent = '';
-    }
-  }
-}
-
-function clearQuickAddSearch() {
-  const input = document.getElementById('quickAddSearchInput');
-  if (input) {
-    input.value = '';
-    input.focus();
-  }
-  filterQuickAdd();
-}
-
-function resetQuickAddFilters() {
-  const input = document.getElementById('quickAddSearchInput');
-  if (input) input.value = '';
-  const allPill = document.querySelector('#quickAddCategoryBar button[data-qa-filter="all"]');
-  if (allPill && typeof filterQuickAddCategory === 'function') {
-    filterQuickAddCategory('all', allPill);
-  } else {
-    window._currentQuickAddCategory = 'all';
-    filterQuickAdd();
   }
 }
 

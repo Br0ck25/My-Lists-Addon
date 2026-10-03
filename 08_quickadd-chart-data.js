@@ -144,7 +144,6 @@ function buildStreamingRowsHtml(list, labelSuffix, group) {
       <div class="discover-chart-header">
         <div class="discover-chart-info">
           <div class="discover-chart-title">${p.name}</div>
-          <div class="discover-chart-sub">${labelSuffix ? labelSuffix : (p.type === 'movie' ? 'Theatrical Box Office' : (p.type === 'series' ? 'Anime Trending' : 'Movies & Shows'))}</div>
         </div>
         ${seeAllLink}
       </div>
@@ -350,7 +349,6 @@ function buildCombinedChartsHtml() {
       <div class="discover-chart-header">
         <div class="discover-chart-info">
           <div class="discover-chart-title">${p.name}</div>
-          <div class="discover-chart-sub">Blended Multi-Source Catalog</div>
         </div>
         <a href="javascript:void(0)" class="discover-chart-seeall" data-act="openListDetailsPage" data-act-args="${appActArgsServer([p.name, "movie", movieUrlsJoined])}">See All &rsaquo;</a>
       </div>
