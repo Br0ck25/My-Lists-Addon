@@ -30264,6 +30264,11 @@ ${seoHeadHtml}
   .list-source-badge.badge-streaming { background: rgba(255,149,0,0.12); color: #ff9500; border-color: rgba(255,149,0,0.3); }
   .list-source-badge.badge-imdb { background: rgba(245,197,24,0.12); color: #b8860b; border-color: rgba(245,197,24,0.3); }
   :root.dark-theme .list-source-badge.badge-imdb { color: #f5c518; }
+  .list-source-badge.badge-autotrack {
+    background: var(--surface-2, rgba(255,255,255,0.06));
+    color: var(--muted);
+    border-color: var(--border);
+  }
   .list-card-actions {
     display: flex; gap: 5px; align-items: center; flex-shrink: 0; flex-wrap: wrap;
   }
@@ -31009,17 +31014,16 @@ ${seoHeadHtml}
     min-height: 24px;
     box-sizing: border-box;
     border-radius: 50%;
-    /* Solid theme color rather than a translucent black overlay -- the
-       translucent version blended with whatever poster sat underneath it
-       (often reading as a muddy brown against warm-toned posters). */
-    background: var(--danger);
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.22);
     color: #fff;
-    border: none;
     outline: none;
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
-    font-size: 16px;
+    font-size: 14px;
     font-weight: bold;
     box-shadow: 0 2px 4px rgba(0,0,0,0.35);
     line-height: 1;
@@ -31029,10 +31033,13 @@ ${seoHeadHtml}
     padding: 0;
     cursor: pointer;
     z-index: 10;
-    transition: filter 0.2s;
+    transition: opacity 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
   }
-  .cw-remove-btn:hover {
-    filter: brightness(0.88);
+  .cw-remove-btn:hover,
+  .cw-remove-btn:active {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #fff;
   }
   .cw-remove-btn::after {
     content: '';
@@ -31041,6 +31048,26 @@ ${seoHeadHtml}
     bottom: -10px;
     left: -10px;
     right: -10px;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .list-card-mini-poster-tile .cw-remove-btn,
+    .channel-pick-item .cw-remove-btn,
+    .custom-list-pick-item .cw-remove-btn,
+    .item-card .cw-remove-btn {
+      opacity: 0;
+      transform: scale(0.88);
+    }
+    .list-card-mini-poster-tile:hover .cw-remove-btn,
+    .list-card-mini-poster-tile:focus-within .cw-remove-btn,
+    .channel-pick-item:hover .cw-remove-btn,
+    .channel-pick-item:focus-within .cw-remove-btn,
+    .custom-list-pick-item:hover .cw-remove-btn,
+    .custom-list-pick-item:focus-within .cw-remove-btn,
+    .item-card:hover .cw-remove-btn,
+    .item-card:focus-within .cw-remove-btn {
+      opacity: 1;
+      transform: scale(1);
+    }
   }
   #lists .cw-remove-btn,
   .live-preview-shelf-row .cw-remove-btn,
@@ -31277,6 +31304,13 @@ ${seoHeadHtml}
     border-radius: var(--radius-sm);
     transition: color 0.15s, background-color 0.15s;
     vertical-align: middle;
+  }
+  .drag-handle-list svg,
+  .shelf-drag-handle svg,
+  .drag-handle svg {
+    display: block;
+    pointer-events: none;
+    flex-shrink: 0;
   }
   .drag-handle-list:hover {
     color: var(--text);
@@ -33190,7 +33224,8 @@ ${seoHeadHtml}
     color: var(--text);
     background: var(--panel-strong);
   }
-  .shelf-drag-handle:active {
+  .shelf-drag-handle:active,
+  .entry .drag-handle:active {
     cursor: grabbing;
   }
   /* The Edit-mode handle is dragged by pointer events too (createSortableList),
@@ -36510,8 +36545,8 @@ function updateAllListAddButtons() {
     const type = card ? card.dataset.listType : null;
     const isAdded = isListAddedToConfig(null, type, slug);
     btn.classList.toggle('is-added', isAdded);
-    btn.classList.toggle('secondary', isAdded);
-    btn.classList.toggle('primary', !isAdded);
+    btn.classList.add('secondary');
+    btn.classList.remove('primary');
     btn.textContent = isAdded ? 'Remove' : '+ Add';
     btn.style.color = isAdded ? 'var(--danger)' : '';
   });
@@ -36524,8 +36559,8 @@ function updateAllListAddButtons() {
     const type = card ? card.dataset.listType : null;
     const isAdded = isListAddedToConfig(null, type, slug);
     btn.classList.toggle('is-added', isAdded);
-    btn.classList.toggle('secondary', isAdded);
-    btn.classList.toggle('primary', !isAdded);
+    btn.classList.add('secondary');
+    btn.classList.remove('primary');
     btn.textContent = isAdded ? 'Remove' : '+ Add';
     btn.style.color = isAdded ? 'var(--danger)' : '';
   });
@@ -39381,7 +39416,7 @@ function addRow(name, url, type, enabled, group, channelId) {
         '<div class="entry-pos-wrap" style="display:flex; align-items:center;">' +
           '<input type="number" class="pos" min="1" title="Type a position number to move this list there" data-act="movePosTo" data-act-args="[&quot;@self&quot;]">' +
         '</div>' +
-        '<span class="drag-handle ec-btn" title="Drag to reorder" style="cursor:grab; font-size:1rem;">&#9776;</span>' +
+        '<span class="drag-handle ec-btn" title="Drag to reorder" style="cursor:grab;"><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
         '<button type="button" class="ec-btn movebtn secondary" data-act="moveRow" data-act-args="[&quot;@self&quot;,-1]" title="Move up">&#8593;</button>' +
         '<button type="button" class="ec-btn movebtn secondary" data-act="moveRow" data-act-args="[&quot;@self&quot;,1]" title="Move down">&#8595;</button>' +
         ((isCustomList || isChannel) ? ('<button type="button" class="ec-btn secondary" style="margin-left: auto; margin-right: 6px; font-weight:600; padding: 2px 10px;" data-act="' + (isCustomList ? 'editEntryCustomList' : 'editEntryChannel') + '" data-act-args="[&quot;@self&quot;]">Edit</button>') : '') +
@@ -39414,7 +39449,7 @@ function addRow(name, url, type, enabled, group, channelId) {
       : (isChannel || isCustomList || isPremade)
         ? ''
         : '<button type="button" class="secondary add-source-btn" data-act="addSourceRow" data-act-args="[&quot;@self&quot;]">+ Add another source (merge into one catalog)</button>') +
-    '<div class="live-preview-shelf"><div class="live-preview-shelf-title"><span class="shelf-drag-handle" title="Drag to reorder catalog">&#x2630;</span><span class="shelf-title-text">' + escapeHtml(name || 'Unnamed') + ' - ' + (type === 'series' ? 'Series' : 'Movies') + '</span><span class="live-preview-shelf-status"></span><button type="button" class="text-action-btn" disabled>See All &rsaquo;</button></div><div class="live-preview-posters"><p style="color:var(--muted); font-size:0.88rem; text-align:center; padding: 20px;"><small>Click "Refresh Preview" above to load posters.</small></p></div></div>';
+    '<div class="live-preview-shelf"><div class="live-preview-shelf-title"><span class="shelf-drag-handle" title="Drag to reorder catalog"><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span><span class="shelf-title-text">' + escapeHtml(name || 'Unnamed') + ' - ' + (type === 'series' ? 'Series' : 'Movies') + '</span><span class="live-preview-shelf-status"></span><button type="button" class="text-action-btn" disabled>See All &rsaquo;</button></div><div class="live-preview-posters"><p style="color:var(--muted); font-size:0.88rem; text-align:center; padding: 20px;"><small>Click "Refresh Preview" above to load posters.</small></p></div></div>';
   container.appendChild(div);
   // Every custom-list row this browser owns gets a live server-side copy
   // (see withLiveListToken): the token is stamped into the row's URL here,
@@ -59875,7 +59910,7 @@ function renderMyCreatedChannelsList() {
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
           '<div class="list-card-title" style="cursor:pointer;" data-act="openChannelDetailsPage" data-act-args="' + appActArgs([ch.channelId]) + '" title="Open ' + escapeAttr(ch.name) + '">' +
-            '<span class="drag-handle-list channel-drag-handle" title="Drag to reorder" data-act="appActNothing" data-act-stop>&#x2630;</span>' +
+            '<span class="drag-handle-list channel-drag-handle" title="Drag to reorder" data-act="appActNothing" data-act-stop><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
             escapeHtml(ch.name) +
           '</div>' +
           (ch.description ? '<div style="font-size:0.8rem; color:var(--text); margin-top:2px;">' + escapeHtml(ch.description) + '</div>' : '') +
@@ -66674,7 +66709,7 @@ function buildAiringNextCardHtml() {
   }).join('');
 
   const isAdded = typeof isListAddedToConfig === 'function' ? isListAddedToConfig(null, 'series', 'airing-next') : false;
-  const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary localListAddToConfigBtn airingNextAddToConfigBtn is-added' : 'primary localListAddToConfigBtn airingNextAddToConfigBtn') + '" ' +
+  const addBtnHtml = '<button type="button" class="lc-btn secondary localListAddToConfigBtn airingNextAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
     (isAdded ? 'style="color:var(--danger);"' : '') +
     ' data-slug="airing-next">' + (isAdded ? 'Remove' : '+ Add') + '</button>';
 
@@ -66682,7 +66717,7 @@ function buildAiringNextCardHtml() {
     '<div class="list-card-header">' +
       '<div class="list-card-body">' +
         '<div class="list-card-title">' +
-          '<span class="drag-handle-list" title="Drag to reorder">&#x2630;</span>' +
+          '<span class="drag-handle-list" title="Drag to reorder"><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
           'Airing Next' +
         '</div>' +
         '<div class="list-card-meta">' +
@@ -66690,7 +66725,7 @@ function buildAiringNextCardHtml() {
         '</div>' +
       '</div>' +
       '<div class="list-card-actions">' +
-        '<span style="font-size:0.78rem; color:var(--muted); white-space:nowrap;">Auto-tracked</span>' +
+        '<span class="list-source-badge badge-autotrack">Auto-tracked</span>' +
         addBtnHtml +
       '</div>' +
     '</div>' +
@@ -71820,7 +71855,7 @@ async function renderCreatorDashboard(options) {
         '<div class="list-card-header">' +
           '<div class="list-card-body creatorListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' +
             '<div class="list-card-title">' +
-              '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop>&#x2630;</span>' +
+              '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
               escapeHtml(l.name) +
             '</div>' +
             '<div class="list-card-meta">' +
@@ -71838,7 +71873,7 @@ async function renderCreatorDashboard(options) {
             syncBtnHtml +
             deleteBtnHtml +
             shareBtn +
-            '<button type="button" class="lc-btn ' + (isAdded ? 'secondary creatorListAddToConfigBtn is-added' : 'primary creatorListAddToConfigBtn') + '" ' +
+            '<button type="button" class="lc-btn secondary creatorListAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
               (isAdded ? 'style="color:var(--danger);"' : '') +
               ' data-slug="' + escapeAttr(l.slug) + '">' +
               (isAdded ? 'Remove' : '+ Add') +
@@ -72203,7 +72238,7 @@ function buildLocalListCardHtml(l) {
     }
   }
 
-  const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary localListAddToConfigBtn is-added' : 'primary localListAddToConfigBtn') + '" ' +
+  const addBtnHtml = '<button type="button" class="lc-btn secondary localListAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
     (isAdded ? 'style="color:var(--danger);"' : '') +
     ' data-slug="' + escapeAttr(l.slug) + '">' +
     (isAdded ? 'Remove' : '+ Add') +
@@ -72222,7 +72257,7 @@ function buildLocalListCardHtml(l) {
     '<div class="list-card-header">' +
       '<div class="list-card-body localListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type || 'movie') + '" style="cursor:pointer;">' +
         '<div class="list-card-title">' +
-          '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop>&#x2630;</span>' +
+          '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
           escapeHtml(l.name) +
         '</div>' +
         '<div class="list-card-meta">' +
@@ -72236,7 +72271,7 @@ function buildLocalListCardHtml(l) {
       '</div>' +
       (isAutoTracked
         ? '<div class="list-card-actions">' +
-            '<span style="font-size:0.78rem; color:var(--muted); white-space:nowrap; margin-right:8px;">Auto-tracked</span>' +
+            '<span class="list-source-badge badge-autotrack" style="margin-right:8px;">Auto-tracked</span>' +
             addBtnHtml +
           '</div>'
         : '<div class="list-card-actions">' +
@@ -72376,8 +72411,8 @@ if (_creatorDashEl) {
         if (typeof removeListFromConfig === 'function') removeListFromConfig(null, 'series', 'airing-next');
         if (typeof renumber === 'function') renumber();
         if (typeof saveState === 'function') saveState();
-        airingAddBtn.classList.remove('is-added', 'secondary');
-        airingAddBtn.classList.add('primary');
+        airingAddBtn.classList.remove('is-added');
+        airingAddBtn.classList.add('secondary');
         airingAddBtn.textContent = '+ Add';
         airingAddBtn.style.color = '';
         if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
@@ -72401,7 +72436,6 @@ if (_creatorDashEl) {
           });
       if (typeof addRow === 'function') addRow('Airing Next', url, 'series', true, 'My Lists');
       airingAddBtn.classList.add('is-added', 'secondary');
-      airingAddBtn.classList.remove('primary');
       airingAddBtn.textContent = 'Remove';
       airingAddBtn.style.color = 'var(--danger)';
       if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
@@ -72555,8 +72589,8 @@ if (_creatorDashEl) {
         removeListFromConfig(null, 'movie', slug);
         removeListFromConfig(null, 'series', slug);
       }
-      addToConfigBtn.classList.remove('is-added', 'secondary');
-      addToConfigBtn.classList.add('primary');
+      addToConfigBtn.classList.remove('is-added');
+      addToConfigBtn.classList.add('secondary');
       addToConfigBtn.textContent = '+ Add';
       addToConfigBtn.style.color = '';
       if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
@@ -72578,7 +72612,6 @@ if (_creatorDashEl) {
         addRow(listMeta.name, 'customlist:v1:' + JSON.stringify(payload), listMeta.type, true, 'Custom Lists');
       }
       addToConfigBtn.classList.add('is-added', 'secondary');
-      addToConfigBtn.classList.remove('primary');
       addToConfigBtn.textContent = 'Remove';
       addToConfigBtn.style.color = 'var(--danger)';
       if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
@@ -72702,8 +72735,8 @@ if (_creatorDashEl) {
       }
       if (typeof renumber === 'function') renumber();
       if (typeof saveState === 'function') saveState();
-      localAddToConfigBtn.classList.remove('is-added', 'secondary');
-      localAddToConfigBtn.classList.add('primary');
+      localAddToConfigBtn.classList.remove('is-added');
+      localAddToConfigBtn.classList.add('secondary');
       localAddToConfigBtn.textContent = '+ Add';
       localAddToConfigBtn.style.color = '';
       if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
@@ -72762,7 +72795,6 @@ if (_creatorDashEl) {
     }
     
     localAddToConfigBtn.classList.add('is-added', 'secondary');
-    localAddToConfigBtn.classList.remove('primary');
     localAddToConfigBtn.textContent = 'Remove';
     localAddToConfigBtn.style.color = 'var(--danger)';
     if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();

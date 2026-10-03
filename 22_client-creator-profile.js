@@ -4945,7 +4945,7 @@ async function renderCreatorDashboard(options) {
         '<div class="list-card-header">' +
           '<div class="list-card-body creatorListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' +
             '<div class="list-card-title">' +
-              '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop>&#x2630;</span>' +
+              '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
               escapeHtml(l.name) +
             '</div>' +
             '<div class="list-card-meta">' +
@@ -4963,7 +4963,7 @@ async function renderCreatorDashboard(options) {
             syncBtnHtml +
             deleteBtnHtml +
             shareBtn +
-            '<button type="button" class="lc-btn ' + (isAdded ? 'secondary creatorListAddToConfigBtn is-added' : 'primary creatorListAddToConfigBtn') + '" ' +
+            '<button type="button" class="lc-btn secondary creatorListAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
               (isAdded ? 'style="color:var(--danger);"' : '') +
               ' data-slug="' + escapeAttr(l.slug) + '">' +
               (isAdded ? 'Remove' : '+ Add') +
@@ -5328,7 +5328,7 @@ function buildLocalListCardHtml(l) {
     }
   }
 
-  const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary localListAddToConfigBtn is-added' : 'primary localListAddToConfigBtn') + '" ' +
+  const addBtnHtml = '<button type="button" class="lc-btn secondary localListAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
     (isAdded ? 'style="color:var(--danger);"' : '') +
     ' data-slug="' + escapeAttr(l.slug) + '">' +
     (isAdded ? 'Remove' : '+ Add') +
@@ -5347,7 +5347,7 @@ function buildLocalListCardHtml(l) {
     '<div class="list-card-header">' +
       '<div class="list-card-body localListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type || 'movie') + '" style="cursor:pointer;">' +
         '<div class="list-card-title">' +
-          '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop>&#x2630;</span>' +
+          '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
           escapeHtml(l.name) +
         '</div>' +
         '<div class="list-card-meta">' +
@@ -5361,7 +5361,7 @@ function buildLocalListCardHtml(l) {
       '</div>' +
       (isAutoTracked
         ? '<div class="list-card-actions">' +
-            '<span style="font-size:0.78rem; color:var(--muted); white-space:nowrap; margin-right:8px;">Auto-tracked</span>' +
+            '<span class="list-source-badge badge-autotrack" style="margin-right:8px;">Auto-tracked</span>' +
             addBtnHtml +
           '</div>'
         : '<div class="list-card-actions">' +
@@ -5501,8 +5501,8 @@ if (_creatorDashEl) {
         if (typeof removeListFromConfig === 'function') removeListFromConfig(null, 'series', 'airing-next');
         if (typeof renumber === 'function') renumber();
         if (typeof saveState === 'function') saveState();
-        airingAddBtn.classList.remove('is-added', 'secondary');
-        airingAddBtn.classList.add('primary');
+        airingAddBtn.classList.remove('is-added');
+        airingAddBtn.classList.add('secondary');
         airingAddBtn.textContent = '+ Add';
         airingAddBtn.style.color = '';
         if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
@@ -5526,7 +5526,6 @@ if (_creatorDashEl) {
           });
       if (typeof addRow === 'function') addRow('Airing Next', url, 'series', true, 'My Lists');
       airingAddBtn.classList.add('is-added', 'secondary');
-      airingAddBtn.classList.remove('primary');
       airingAddBtn.textContent = 'Remove';
       airingAddBtn.style.color = 'var(--danger)';
       if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
@@ -5680,8 +5679,8 @@ if (_creatorDashEl) {
         removeListFromConfig(null, 'movie', slug);
         removeListFromConfig(null, 'series', slug);
       }
-      addToConfigBtn.classList.remove('is-added', 'secondary');
-      addToConfigBtn.classList.add('primary');
+      addToConfigBtn.classList.remove('is-added');
+      addToConfigBtn.classList.add('secondary');
       addToConfigBtn.textContent = '+ Add';
       addToConfigBtn.style.color = '';
       if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
@@ -5703,7 +5702,6 @@ if (_creatorDashEl) {
         addRow(listMeta.name, 'customlist:v1:' + JSON.stringify(payload), listMeta.type, true, 'Custom Lists');
       }
       addToConfigBtn.classList.add('is-added', 'secondary');
-      addToConfigBtn.classList.remove('primary');
       addToConfigBtn.textContent = 'Remove';
       addToConfigBtn.style.color = 'var(--danger)';
       if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
@@ -5827,8 +5825,8 @@ if (_creatorDashEl) {
       }
       if (typeof renumber === 'function') renumber();
       if (typeof saveState === 'function') saveState();
-      localAddToConfigBtn.classList.remove('is-added', 'secondary');
-      localAddToConfigBtn.classList.add('primary');
+      localAddToConfigBtn.classList.remove('is-added');
+      localAddToConfigBtn.classList.add('secondary');
       localAddToConfigBtn.textContent = '+ Add';
       localAddToConfigBtn.style.color = '';
       if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
@@ -5887,7 +5885,6 @@ if (_creatorDashEl) {
     }
     
     localAddToConfigBtn.classList.add('is-added', 'secondary');
-    localAddToConfigBtn.classList.remove('primary');
     localAddToConfigBtn.textContent = 'Remove';
     localAddToConfigBtn.style.color = 'var(--danger)';
     if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();

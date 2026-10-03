@@ -2,6 +2,34 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-03 (Antigravity): Global Drag Handle Modernization & Lists Tab Design Polish.**
+>
+> **Where things stand**
+> - Global Drag Handle Modernization (`09_page-shell.js`, `16_client-row-core.js`, `20_client-channel-builder.js`, `21_client-custom-list-builder.js`, `22_client-creator-profile.js`):
+>   - Modernized drag handles across all 5 locations in the site simultaneously from the hamburger glyph (`☰` / `&#x2630;` / `&#9776;`) to a unified, crisp 6-dot vertical grip SVG (`<svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor"...>`).
+>   - Updated locations:
+>     1. Catalog edit control rows (`16_client-row-core.js:3844`)
+>     2. Live Preview & Editor shelf headers (`16_client-row-core.js:3877`)
+>     3. My Channels lineup cards (`20_client-channel-builder.js:10691`)
+>     4. Custom List builder Airing Next card (`21_client-custom-list-builder.js:4067`)
+>     5. Lists tab cards in both Creator Dashboard and Local Custom Lists (`22_client-creator-profile.js:4948, 5350`)
+>   - Added active grabbing state (`cursor: grabbing`) and SVG child styles in `09_page-shell.js`.
+> - De-escalated Red Poster Delete Buttons (`09_page-shell.js`):
+>   - Transformed `.cw-remove-btn` from a permanent shouting red alert dot to a sleek translucent dark glass circular badge (`background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); border: 1px solid rgba(255, 255, 255, 0.22);`).
+>   - On desktop (`@media (hover: hover) and (pointer: fine)`), hide remove buttons until hovering or focusing the parent poster card, keeping artwork clean while smooth fading in on hover.
+>   - Highlight in `var(--danger)` only on hover/active. On touch devices, remain visible in glass style to maintain 100% touch accessibility without alarm fatigue.
+> - Action Hierarchy on List Cards (`16_client-row-core.js`, `21_client-custom-list-builder.js`, `22_client-creator-profile.js`):
+>   - Standardized `+ Add` buttons on list cards to `.lc-btn.secondary`, preventing 5+ competing bright blue primary buttons down the page and reserving solid blue for top-level creation (`+ New List`).
+>   - Maintained smooth toggle transitions: toggling between `+ Add` and `Remove` retains `.secondary` and toggles `.is-added` with `var(--danger)` text color.
+> - Tokenized "Auto-tracked" Badges (`09_page-shell.js`, `21_client-custom-list-builder.js`, `22_client-creator-profile.js`):
+>   - Replaced raw inline unstyled text with the semantic design token `<span class="list-source-badge badge-autotrack">Auto-tracked</span>`.
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK (5,428,367 bytes).
+>   - `node --check worker_entry_combined.js`: OK (0 syntax errors).
+>   - `python gen_map.py`: 2,662 symbols, 211 routes.
+>   - All 560 tests passing (`node --test tests/my-lists-addon-charts.test.mjs tests/app-shell*.test.mjs tests/client*.test.mjs tests/d1-schema.test.mjs`).
+> - Branch: `feat/design-system-phase-1`
+
 > **HANDOFF, 2026-10-03 (Antigravity): Global Form Controls & Semantic Input Standardization.**
 >
 > **Where things stand**

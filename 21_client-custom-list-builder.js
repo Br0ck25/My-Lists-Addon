@@ -4056,7 +4056,7 @@ function buildAiringNextCardHtml() {
   }).join('');
 
   const isAdded = typeof isListAddedToConfig === 'function' ? isListAddedToConfig(null, 'series', 'airing-next') : false;
-  const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary localListAddToConfigBtn airingNextAddToConfigBtn is-added' : 'primary localListAddToConfigBtn airingNextAddToConfigBtn') + '" ' +
+  const addBtnHtml = '<button type="button" class="lc-btn secondary localListAddToConfigBtn airingNextAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
     (isAdded ? 'style="color:var(--danger);"' : '') +
     ' data-slug="airing-next">' + (isAdded ? 'Remove' : '+ Add') + '</button>';
 
@@ -4064,7 +4064,7 @@ function buildAiringNextCardHtml() {
     '<div class="list-card-header">' +
       '<div class="list-card-body">' +
         '<div class="list-card-title">' +
-          '<span class="drag-handle-list" title="Drag to reorder">&#x2630;</span>' +
+          '<span class="drag-handle-list" title="Drag to reorder"><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
           'Airing Next' +
         '</div>' +
         '<div class="list-card-meta">' +
@@ -4072,7 +4072,7 @@ function buildAiringNextCardHtml() {
         '</div>' +
       '</div>' +
       '<div class="list-card-actions">' +
-        '<span style="font-size:0.78rem; color:var(--muted); white-space:nowrap;">Auto-tracked</span>' +
+        '<span class="list-source-badge badge-autotrack">Auto-tracked</span>' +
         addBtnHtml +
       '</div>' +
     '</div>' +

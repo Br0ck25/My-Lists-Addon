@@ -1841,6 +1841,11 @@ ${seoHeadHtml}
   .list-source-badge.badge-streaming { background: rgba(255,149,0,0.12); color: #ff9500; border-color: rgba(255,149,0,0.3); }
   .list-source-badge.badge-imdb { background: rgba(245,197,24,0.12); color: #b8860b; border-color: rgba(245,197,24,0.3); }
   :root.dark-theme .list-source-badge.badge-imdb { color: #f5c518; }
+  .list-source-badge.badge-autotrack {
+    background: var(--surface-2, rgba(255,255,255,0.06));
+    color: var(--muted);
+    border-color: var(--border);
+  }
   .list-card-actions {
     display: flex; gap: 5px; align-items: center; flex-shrink: 0; flex-wrap: wrap;
   }
@@ -2586,17 +2591,16 @@ ${seoHeadHtml}
     min-height: 24px;
     box-sizing: border-box;
     border-radius: 50%;
-    /* Solid theme color rather than a translucent black overlay -- the
-       translucent version blended with whatever poster sat underneath it
-       (often reading as a muddy brown against warm-toned posters). */
-    background: var(--danger);
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.22);
     color: #fff;
-    border: none;
     outline: none;
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
-    font-size: 16px;
+    font-size: 14px;
     font-weight: bold;
     box-shadow: 0 2px 4px rgba(0,0,0,0.35);
     line-height: 1;
@@ -2606,10 +2610,13 @@ ${seoHeadHtml}
     padding: 0;
     cursor: pointer;
     z-index: 10;
-    transition: filter 0.2s;
+    transition: opacity 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
   }
-  .cw-remove-btn:hover {
-    filter: brightness(0.88);
+  .cw-remove-btn:hover,
+  .cw-remove-btn:active {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #fff;
   }
   .cw-remove-btn::after {
     content: '';
@@ -2618,6 +2625,26 @@ ${seoHeadHtml}
     bottom: -10px;
     left: -10px;
     right: -10px;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .list-card-mini-poster-tile .cw-remove-btn,
+    .channel-pick-item .cw-remove-btn,
+    .custom-list-pick-item .cw-remove-btn,
+    .item-card .cw-remove-btn {
+      opacity: 0;
+      transform: scale(0.88);
+    }
+    .list-card-mini-poster-tile:hover .cw-remove-btn,
+    .list-card-mini-poster-tile:focus-within .cw-remove-btn,
+    .channel-pick-item:hover .cw-remove-btn,
+    .channel-pick-item:focus-within .cw-remove-btn,
+    .custom-list-pick-item:hover .cw-remove-btn,
+    .custom-list-pick-item:focus-within .cw-remove-btn,
+    .item-card:hover .cw-remove-btn,
+    .item-card:focus-within .cw-remove-btn {
+      opacity: 1;
+      transform: scale(1);
+    }
   }
   #lists .cw-remove-btn,
   .live-preview-shelf-row .cw-remove-btn,
@@ -2854,6 +2881,13 @@ ${seoHeadHtml}
     border-radius: var(--radius-sm);
     transition: color 0.15s, background-color 0.15s;
     vertical-align: middle;
+  }
+  .drag-handle-list svg,
+  .shelf-drag-handle svg,
+  .drag-handle svg {
+    display: block;
+    pointer-events: none;
+    flex-shrink: 0;
   }
   .drag-handle-list:hover {
     color: var(--text);
@@ -4767,7 +4801,8 @@ ${seoHeadHtml}
     color: var(--text);
     background: var(--panel-strong);
   }
-  .shelf-drag-handle:active {
+  .shelf-drag-handle:active,
+  .entry .drag-handle:active {
     cursor: grabbing;
   }
   /* The Edit-mode handle is dragged by pointer events too (createSortableList),
