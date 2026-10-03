@@ -35,19 +35,32 @@
 ${newUi ? '    <div id="appShellHomeEditor"></div>' : ''}
 
     <!-- 24-Hour Randomizer Controls -->
-    <div style="margin-top:16px; padding:14px 16px; background:var(--surface); border-radius:12px; border:1px solid var(--border);">
-      <div style="font-weight:600; font-size:0.92rem; margin-bottom:10px; display:flex; align-items:center; gap:6px;">
+    <div style="margin-top:16px; padding:12px 16px; background:var(--surface); border-radius:12px; border:1px solid var(--border);">
+      <div style="font-weight:600; font-size:0.92rem; margin-bottom:4px; display:flex; align-items:center; gap:6px;">
         <span>Daily Randomizer</span>
       </div>
-      <div style="display:flex; flex-direction:column; gap:8px;">
-        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.88rem; margin:0; user-select:none;">
-          <input type="checkbox" id="shuffleShelvesCheckbox" data-act="saveState" style="cursor:pointer; width:16px; height:16px;">
-          <span>Shuffle Catalogs daily (every 24h)</span>
-        </label>
-        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.88rem; margin:0; user-select:none;">
-          <input type="checkbox" id="shuffleItemsCheckbox" data-act="saveState" style="cursor:pointer; width:16px; height:16px;">
-          <span>Shuffle items in Catalogs daily (every 24h)</span>
-        </label>
+      <div>
+        <div class="settings-toggle-row">
+          <div style="flex:1; min-width:0; padding-right:12px;">
+            <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Shuffle Catalogs daily (every 24h)</span>
+            <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Rotates the order of your catalog rows once every 24 hours.</p>
+          </div>
+          <label class="ui-toggle" aria-label="Shuffle Catalogs daily (every 24h)">
+            <input type="checkbox" id="shuffleShelvesCheckbox" data-act="saveState">
+            <span class="ui-toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="settings-toggle-row">
+          <div style="flex:1; min-width:0; padding-right:12px;">
+            <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Shuffle items in Catalogs daily (every 24h)</span>
+            <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Randomizes the order of titles inside each catalog row every 24 hours.</p>
+          </div>
+          <label class="ui-toggle" aria-label="Shuffle items in Catalogs daily (every 24h)">
+            <input type="checkbox" id="shuffleItemsCheckbox" data-act="saveState">
+            <span class="ui-toggle-slider"></span>
+          </label>
+        </div>
       </div>
     </div>
 

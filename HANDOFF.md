@@ -2,6 +2,25 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-03 (Antigravity): Catalogs UI Modernization - Phase 1 (Daily Randomizer Toggles & Edit Mode Trash Icon Fix).**
+>
+> **Where things stand**
+> - Modernized Daily Randomizer Controls in Catalogs Tab (`10_tab-search-add.js`):
+>   - Converted legacy browser checkboxes into sleek `.settings-toggle-row` with `.ui-toggle` switches, harmonizing with the Settings tab design system.
+>   - Added clear, concise microcopy for both options ("Rotates the order of your catalog rows once every 24 hours" and "Randomizes the order of titles inside each catalog row every 24 hours").
+>   - Preserved all IDs (`#shuffleShelvesCheckbox`, `#shuffleItemsCheckbox`) and state persistence (`data-act="saveState"`).
+> - Fixed Edit Mode Delete/Trash Icon Visibility (`16_client-row-core.js`, `09_page-shell.js`):
+>   - Resolved the faint/invisible delete icon bug visible when zoomed out or in light theme.
+>   - Enforced 16x16px SVG dimensions with `stroke-width="2.2"` and `display:block;`.
+>   - Enhanced `.ec-btn.danger` styling with high-contrast color (`#d70015` in light theme, `#ff453a` in dark theme), clean borders, and solid hover state (`background: var(--color-danger); color: #fff`).
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK (5,414,618 bytes).
+>   - `node --check worker_entry_combined.js`: OK.
+>   - `python gen_map.py`: 2,660 symbols, 211 routes.
+>   - All 542 client & shell tests passing.
+> - Branch: `feat/design-system-phase-1`
+> - Next step: Phase 2 (Add Catalog Modal Polish - pill action buttons Cancel/Add and clear field labels).
+>
 > **HANDOFF, 2026-10-03 (Antigravity): UI Polish - Emoji Cleanup, Preset Dropdown Overflow Fix, Button Sizing Normalization.**
 >
 > **Where things stand**

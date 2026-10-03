@@ -32337,7 +32337,26 @@ ${seoHeadHtml}
     cursor: pointer; font-size: 0.9rem;
   }
   .ec-btn:hover:not(:disabled) { color: var(--text); background: var(--panel-strong); }
-  .ec-btn.danger { color: var(--danger); border-color: rgba(255,59,48,0.25); background: rgba(255,59,48,0.07); }
+  .ec-btn.danger {
+    color: var(--color-danger, #d70015);
+    border-color: rgba(255, 59, 48, 0.35);
+    background: rgba(255, 59, 48, 0.08);
+  }
+  :root.dark-theme .ec-btn.danger {
+    color: var(--color-danger, #ff453a);
+    border-color: rgba(255, 69, 58, 0.45);
+    background: rgba(255, 69, 58, 0.15);
+  }
+  .ec-btn.danger:hover:not(:disabled) {
+    color: #ffffff;
+    background: var(--color-danger, #ff3b30);
+    border-color: var(--color-danger, #ff3b30);
+  }
+  .ec-btn.danger svg {
+    display: block;
+    stroke: currentColor;
+    flex-shrink: 0;
+  }
   .sources { display: flex; flex-direction: column; gap: 10px; width: 100%; }
   .source-row { width: 100%; }
   .source-row + .source-row { padding-top: 10px; border-top: 1px dashed var(--border-strong); }
@@ -33634,19 +33653,32 @@ if ('serviceWorker' in navigator) {
 ${newUi ? '    <div id="appShellHomeEditor"></div>' : ''}
 
     <!-- 24-Hour Randomizer Controls -->
-    <div style="margin-top:16px; padding:14px 16px; background:var(--surface); border-radius:12px; border:1px solid var(--border);">
-      <div style="font-weight:600; font-size:0.92rem; margin-bottom:10px; display:flex; align-items:center; gap:6px;">
+    <div style="margin-top:16px; padding:12px 16px; background:var(--surface); border-radius:12px; border:1px solid var(--border);">
+      <div style="font-weight:600; font-size:0.92rem; margin-bottom:4px; display:flex; align-items:center; gap:6px;">
         <span>Daily Randomizer</span>
       </div>
-      <div style="display:flex; flex-direction:column; gap:8px;">
-        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.88rem; margin:0; user-select:none;">
-          <input type="checkbox" id="shuffleShelvesCheckbox" data-act="saveState" style="cursor:pointer; width:16px; height:16px;">
-          <span>Shuffle Catalogs daily (every 24h)</span>
-        </label>
-        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.88rem; margin:0; user-select:none;">
-          <input type="checkbox" id="shuffleItemsCheckbox" data-act="saveState" style="cursor:pointer; width:16px; height:16px;">
-          <span>Shuffle items in Catalogs daily (every 24h)</span>
-        </label>
+      <div>
+        <div class="settings-toggle-row">
+          <div style="flex:1; min-width:0; padding-right:12px;">
+            <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Shuffle Catalogs daily (every 24h)</span>
+            <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Rotates the order of your catalog rows once every 24 hours.</p>
+          </div>
+          <label class="ui-toggle" aria-label="Shuffle Catalogs daily (every 24h)">
+            <input type="checkbox" id="shuffleShelvesCheckbox" data-act="saveState">
+            <span class="ui-toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="settings-toggle-row">
+          <div style="flex:1; min-width:0; padding-right:12px;">
+            <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Shuffle items in Catalogs daily (every 24h)</span>
+            <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Randomizes the order of titles inside each catalog row every 24 hours.</p>
+          </div>
+          <label class="ui-toggle" aria-label="Shuffle items in Catalogs daily (every 24h)">
+            <input type="checkbox" id="shuffleItemsCheckbox" data-act="saveState">
+            <span class="ui-toggle-slider"></span>
+          </label>
+        </div>
       </div>
     </div>
 
@@ -39107,7 +39139,7 @@ function addRow(name, url, type, enabled, group, channelId) {
         '<button type="button" class="ec-btn movebtn secondary" data-act="moveRow" data-act-args="[&quot;@self&quot;,1]" title="Move down">&#8595;</button>' +
         ((isCustomList || isChannel) ? ('<button type="button" class="ec-btn secondary" style="margin-left: auto; margin-right: 6px; font-weight:600; padding: 2px 10px;" data-act="' + (isCustomList ? 'editEntryCustomList' : 'editEntryChannel') + '" data-act-args="[&quot;@self&quot;]">Edit</button>') : '') +
         '<button type="button" class="ec-btn movebtn removebtn danger" data-act="removeEntryWithUndo" data-act-args="[&quot;@self&quot;]" title="Remove this list" aria-label="Remove this list" style="' + (!(isCustomList || isChannel) ? 'margin-left: auto;' : '') + '">' +
-          '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none;">' +
+          '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none; display:block;">' +
             '<polyline points="3 6 5 6 21 6"></polyline>' +
             '<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>' +
             '<path d="M10 11v6"></path><path d="M14 11v6"></path>' +

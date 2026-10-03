@@ -3912,7 +3912,26 @@ ${seoHeadHtml}
     cursor: pointer; font-size: 0.9rem;
   }
   .ec-btn:hover:not(:disabled) { color: var(--text); background: var(--panel-strong); }
-  .ec-btn.danger { color: var(--danger); border-color: rgba(255,59,48,0.25); background: rgba(255,59,48,0.07); }
+  .ec-btn.danger {
+    color: var(--color-danger, #d70015);
+    border-color: rgba(255, 59, 48, 0.35);
+    background: rgba(255, 59, 48, 0.08);
+  }
+  :root.dark-theme .ec-btn.danger {
+    color: var(--color-danger, #ff453a);
+    border-color: rgba(255, 69, 58, 0.45);
+    background: rgba(255, 69, 58, 0.15);
+  }
+  .ec-btn.danger:hover:not(:disabled) {
+    color: #ffffff;
+    background: var(--color-danger, #ff3b30);
+    border-color: var(--color-danger, #ff3b30);
+  }
+  .ec-btn.danger svg {
+    display: block;
+    stroke: currentColor;
+    flex-shrink: 0;
+  }
   .sources { display: flex; flex-direction: column; gap: 10px; width: 100%; }
   .source-row { width: 100%; }
   .source-row + .source-row { padding-top: 10px; border-top: 1px dashed var(--border-strong); }

@@ -36,6 +36,50 @@ This file defines the mandatory rules and protocols for all AI agents working in
 
 ---
 
+## Senior Developer Efficiency Rules
+
+Work like a highly experienced senior developer. The objective is not to produce more code; it is to make the smallest correct change that fully solves the actual problem.
+
+### Before writing code
+1. Understand the request completely.
+2. Read the relevant existing code and trace the affected flow end-to-end.
+3. Search for existing implementations, helpers, utilities, components, routes, and patterns.
+4. Search all callers/usages of code that may be changed.
+5. Identify the actual root cause or required behavior.
+6. Determine whether new code is actually necessary.
+
+Before adding anything, check in this order:
+- Can existing code handle it?
+- Can an existing helper be reused or extended?
+- Can an existing component/pattern be reused?
+- Can standard JavaScript/platform functionality handle it?
+- Can an already-installed dependency handle it?
+- Can the requirement be solved by deleting or simplifying existing code?
+- Only then create new code.
+
+### Minimal implementation
+Prefer fewer lines, fewer files, existing helpers/patterns/dependencies, simple direct solutions, and deletion over addition.
+
+Avoid unnecessary abstractions, duplicate helpers, wrappers, new dependencies for trivial functionality, boilerplate, unrelated cleanup, stylistic rewrites, and unrequested architecture changes. Do not optimize for the smallest diff before understanding the problem. A tiny change in the wrong location is worse than a slightly larger change that fixes the root cause.
+
+### Bug fixes: fix the root cause
+A bug report is usually a symptom. Find the responsible function or data flow, search every caller, determine whether multiple paths share the problem, and fix the shared root cause when appropriate. Do not patch only the exact path mentioned if the same underlying problem exists elsewhere.
+
+### Do not over-engineer
+If two approaches are correct, prefer the simpler one. Do not introduce abstractions or infrastructure unless the existing code genuinely cannot support the requirement. Before implementing a complicated approach, ask: “Do we actually need this, or does something we already have cover it?”
+
+### Preserve existing behavior
+Unless explicitly requested otherwise, do not rewrite working code merely because you would implement it differently. Do not refactor, rename, reorganize, or change unrelated APIs, database behavior, caching behavior, or UI behavior.
+
+### Correctness beats cleverness
+Efficiency never means cutting corners on security, authentication, authorization, validation, error handling, data integrity, accessibility, user-visible correctness, or architectural constraints.
+
+### Verification and final review
+For every non-trivial change, leave a meaningful verification using the smallest appropriate existing test, focused test, syntax check, targeted command, or reproducible verification step. Before reporting completion, review the actual diff for accidental changes, duplicated logic, unused code, and broken references; verify the requested behavior; run the required project checks; and confirm unrelated functionality was not unnecessarily changed.
+
+### Core principle
+> Understand more. Change less.
+
 ## 4. Verification & Testing Protocol
 Before reporting a task complete or handing off to another agent, run:
 ```bash
