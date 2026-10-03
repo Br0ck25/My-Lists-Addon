@@ -17,12 +17,12 @@
 >   - Solution: Set `.panel { overflow: visible; }`, added `.preset-card:has(.preset-overflow-menu[open]) { z-index: 50; }`, and set `.preset-overflow-dropdown { z-index: 100; }`.
 > - Button Sizing Normalization:
 >   - `+ New Catalog`: Decoupled `.actions button.primary` from `.btn-lg` in `09_page-shell.js`, restoring the compact pill sizing (`.lc-btn`) to match adjacent `Edit` and `Refresh Preview` controls.
->   - `Search`: Standardized the `#content-search` Search button in `13_tab-channels.js` to `.primary.lc-btn` (38px height, 18px padding), eliminating the oversized 48px bubble and aligning perfectly with `#catalogSearchInput`.
+>   - `Search`: Matched the `#content-search` Search button in `13_tab-channels.js` and `09_page-shell.js` to the exact dimensions, height (36px), padding (7px 16px), font size (0.86rem), and pill shape of the Movies, Shows, and Lists filter pills (`.subnav-pill`).
 > - Verification & Tests:
->   - `python build.py` & `python check_sync.py`: OK (5,413,027 bytes).
+>   - `python build.py` & `python check_sync.py`: OK (5,413,572 bytes).
 >   - `node --check worker_entry_combined.js`: OK.
 >   - `python gen_map.py`: 2,660 symbols, 211 routes.
->   - All 2,068 tests passing across 25 test suites with 0 failures.
+>   - All tests passing with 0 failures.
 > - Branch: `feat/design-system-phase-1`
 >
 >

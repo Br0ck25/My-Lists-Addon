@@ -3345,6 +3345,21 @@ ${seoHeadHtml}
     transform: scale(0.98);
   }
 
+  /* Search Button (matches size and styling of subnav-pills: Movies, Shows, Lists) */
+  #catalogSearchBtn,
+  button[data-act="runCatalogSearch"] {
+    flex: none;
+    flex-shrink: 0;
+    padding: 7px 16px !important;
+    min-height: 36px !important;
+    height: 36px !important;
+    box-sizing: border-box !important;
+    border-radius: var(--radius-pill) !important;
+    font-size: 0.86rem !important;
+    font-weight: 600 !important;
+    align-self: center;
+  }
+
   /* Secondary button style */
   .btn-secondary,
   button.secondary:not(.lc-btn),

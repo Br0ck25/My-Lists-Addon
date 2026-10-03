@@ -365,7 +365,7 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
     
     <div class="row">
       <input type="text" id="catalogSearchInput" aria-label="Search by title or list name" placeholder="Search by title or list name..." data-act="appActCatalogSearchInput" data-act-on="input,keydown" data-act-args="[&quot;@self&quot;,&quot;@event&quot;]">
-      <button type="button" class="primary lc-btn" data-act="runCatalogSearch" style="padding:0 18px; font-size:0.85rem; height:38px; min-height:38px; align-self:center;">Search</button>
+      <button type="button" class="primary" id="catalogSearchBtn" data-act="runCatalogSearch" style="flex:none; padding:7px 16px; min-height:36px; height:36px; font-size:0.86rem; font-weight:600; border-radius:var(--radius-pill); align-self:center;">Search</button>
     </div>
 
     <div class="subnav-pills-bar" id="catalogSearchTypeChips" style="margin-top:10px;">
