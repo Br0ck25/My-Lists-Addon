@@ -28898,10 +28898,16 @@ ${seoHeadHtml}
      :focus-visible rather than :focus, so a mouse click does not draw a ring
      the way the removed outlines used to; and last in the cascade with
      !important because the rules that cleared it are more specific. */
-  :where(a[href], button, summary, select, input, textarea, [tabindex]):focus-visible {
+  :where(a[href], button, summary, select, [tabindex]):focus-visible,
+  :where(input[type="checkbox"], input[type="radio"]):focus-visible {
     outline: 2px solid var(--accent) !important;
     outline-offset: 2px;
     border-radius: 4px;
+  }
+  :where(input:not([type="checkbox"]):not([type="radio"]), textarea):focus-visible {
+    outline: none !important;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--color-brand-subtle, rgba(0, 122, 255, 0.25)) !important;
   }
 
   /* The page has four @keyframes animations and 33 transitions and said
@@ -29849,6 +29855,67 @@ ${seoHeadHtml}
     font-size: 0.85rem;
     line-height: 1.45;
   }
+  /* Catalogs -> Bulk Import Subpanel */
+  #catalogsSubBulk .bulk-panel {
+    max-width: 860px;
+    margin-top: 0;
+  }
+  .bulk-provider-badges {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin: 0 0 14px;
+    padding: 0 2px;
+  }
+  .bulk-provider-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    margin-right: 2px;
+  }
+  #bulkPasteBox {
+    width: 100%;
+    min-height: 140px;
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    border: 1.5px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.88rem;
+    line-height: 1.6;
+    resize: vertical;
+    outline: none !important;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    box-sizing: border-box;
+  }
+  #bulkPasteBox:focus {
+    background: var(--surface);
+    border-color: var(--color-brand, var(--accent));
+    box-shadow: 0 0 0 3px var(--color-brand-subtle, rgba(0, 122, 255, 0.18)) !important;
+    outline: none !important;
+  }
+  .bulk-actions-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 14px;
+  }
+  .bulk-actions-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #bulkDetectedCount {
+    font-size: 0.82rem;
+    color: var(--muted);
+    font-weight: 500;
+  }
   .shelf-header {
     display: flex;
     align-items: baseline;
@@ -30209,6 +30276,8 @@ ${seoHeadHtml}
   .list-source-badge.badge-simkl { background: rgba(0,122,255,0.12); color: #007aff; border-color: rgba(0,122,255,0.3); }
   .list-source-badge.badge-mylists, .list-source-badge.badge-profile { background: rgba(175,82,222,0.12); color: #af52de; border-color: rgba(175,82,222,0.3); }
   .list-source-badge.badge-streaming { background: rgba(255,149,0,0.12); color: #ff9500; border-color: rgba(255,149,0,0.3); }
+  .list-source-badge.badge-imdb { background: rgba(245,197,24,0.12); color: #b8860b; border-color: rgba(245,197,24,0.3); }
+  :root.dark-theme .list-source-badge.badge-imdb { color: #f5c518; }
   .list-card-actions {
     display: flex; gap: 5px; align-items: center; flex-shrink: 0; flex-wrap: wrap;
   }
@@ -31389,6 +31458,10 @@ ${seoHeadHtml}
     font-family: inherit;
     min-height: 44px;
     transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  input::placeholder, textarea::placeholder {
+    color: var(--muted);
+    opacity: 0.65;
   }
   input[type="file"] {
     padding: 0;
@@ -33851,12 +33924,24 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
     </div>
   
   <div class="lists-subpanel" id="catalogsSubBulk" style="display:none;">
-  <div class="panel" style="margin-top:0;">
+  <div class="panel bulk-panel">
     <h2 class="panel-title">Bulk Import Lists</h2>
-    <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Paste multiple list URLs at once, one per line. Each list is automatically detected and added to your catalogs.</p>
-    <textarea id="bulkPasteBox" rows="5" style="width:100%;font-family:monospace;font-size:15px;" placeholder="https://mdblist.com/lists/user/list-one&#10;https://trakt.tv/users/user/lists/list-two&#10;https://www.themoviedb.org/list/12345"></textarea>
-    <div class="actions" style="margin-top:12px;">
-      <button type="button" class="primary" data-act="bulkAddLists" data-act-args="[&quot;@self&quot;]">Add All Lines as Catalogs</button>
+    <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem; line-height:1.45;">Paste multiple list URLs at once, one per line. Each list is automatically detected and added to your catalogs.</p>
+    <div class="bulk-provider-badges">
+      <span class="bulk-provider-label">Supported:</span>
+      <span class="list-source-badge badge-mdblist">MDBList</span>
+      <span class="list-source-badge badge-trakt">Trakt</span>
+      <span class="list-source-badge badge-tmdb">TMDB</span>
+      <span class="list-source-badge badge-simkl">Simkl</span>
+      <span class="list-source-badge badge-imdb">IMDb</span>
+    </div>
+    <textarea id="bulkPasteBox" rows="6" data-act-on="input" data-act="updateBulkAddUi" placeholder="https://mdblist.com/lists/user/list-one&#10;https://trakt.tv/users/user/lists/list-two&#10;https://www.themoviedb.org/list/12345"></textarea>
+    <div class="bulk-actions-bar">
+      <div class="bulk-actions-left">
+        <button type="button" id="bulkAddBtn" class="primary" data-act="bulkAddLists" data-act-args="[&quot;@self&quot;]">Add All Lines as Catalogs</button>
+        <button type="button" id="bulkClearBtn" class="secondary" data-act="clearBulkInput" style="display:none;">Clear</button>
+      </div>
+      <div id="bulkDetectedCount"></div>
     </div>
   </div>
   </div>
@@ -38690,6 +38775,7 @@ function switchCatalogsSubmenu(filter, btn) {
   if (filter !== 'all') {
     if (undoToast) undoToast.style.display = 'none';
     if (resultDiv) resultDiv.style.display = 'none';
+    if (filter === 'bulk' && typeof updateBulkAddUi === 'function') updateBulkAddUi();
   } else {
     // Make sure all list rows are visible since we no longer have row-level filters
     document.querySelectorAll('#lists .entry').forEach(function(e) {
@@ -44007,12 +44093,44 @@ async function bulkAddLists(btn) {
     const types = await Promise.all(lines.map((u) => detectListType(u, mdblistKey)));
     lines.forEach((u, i) => addRow(guessNameFromUrl(u), u, types[i], true, 'Custom'));
     box.value = '';
+    updateBulkAddUi();
     saveState();
   } finally {
     if (btn) {
       btn.disabled = false;
       btn.textContent = origLabel;
     }
+  }
+}
+
+function updateBulkAddUi() {
+  const box = document.getElementById('bulkPasteBox');
+  if (!box) return;
+  const lines = box.value.split('\\n').map((s) => s.trim()).filter(Boolean);
+  const btn = document.getElementById('bulkAddBtn') || document.querySelector('[data-act="bulkAddLists"]');
+  const clearBtn = document.getElementById('bulkClearBtn');
+  const countEl = document.getElementById('bulkDetectedCount');
+  if (btn) {
+    if (lines.length > 0) {
+      btn.textContent = 'Add ' + lines.length + (lines.length === 1 ? ' Catalog' : ' Catalogs');
+    } else {
+      btn.textContent = 'Add All Lines as Catalogs';
+    }
+  }
+  if (clearBtn) {
+    clearBtn.style.display = lines.length > 0 ? 'inline-flex' : 'none';
+  }
+  if (countEl) {
+    countEl.textContent = lines.length > 0 ? (lines.length + (lines.length === 1 ? ' list URL detected' : ' list URLs detected')) : '';
+  }
+}
+
+function clearBulkInput() {
+  const box = document.getElementById('bulkPasteBox');
+  if (box) {
+    box.value = '';
+    updateBulkAddUi();
+    box.focus();
   }
 }
 

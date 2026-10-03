@@ -95,12 +95,44 @@ async function bulkAddLists(btn) {
     const types = await Promise.all(lines.map((u) => detectListType(u, mdblistKey)));
     lines.forEach((u, i) => addRow(guessNameFromUrl(u), u, types[i], true, 'Custom'));
     box.value = '';
+    updateBulkAddUi();
     saveState();
   } finally {
     if (btn) {
       btn.disabled = false;
       btn.textContent = origLabel;
     }
+  }
+}
+
+function updateBulkAddUi() {
+  const box = document.getElementById('bulkPasteBox');
+  if (!box) return;
+  const lines = box.value.split('\\n').map((s) => s.trim()).filter(Boolean);
+  const btn = document.getElementById('bulkAddBtn') || document.querySelector('[data-act="bulkAddLists"]');
+  const clearBtn = document.getElementById('bulkClearBtn');
+  const countEl = document.getElementById('bulkDetectedCount');
+  if (btn) {
+    if (lines.length > 0) {
+      btn.textContent = 'Add ' + lines.length + (lines.length === 1 ? ' Catalog' : ' Catalogs');
+    } else {
+      btn.textContent = 'Add All Lines as Catalogs';
+    }
+  }
+  if (clearBtn) {
+    clearBtn.style.display = lines.length > 0 ? 'inline-flex' : 'none';
+  }
+  if (countEl) {
+    countEl.textContent = lines.length > 0 ? (lines.length + (lines.length === 1 ? ' list URL detected' : ' list URLs detected')) : '';
+  }
+}
+
+function clearBulkInput() {
+  const box = document.getElementById('bulkPasteBox');
+  if (box) {
+    box.value = '';
+    updateBulkAddUi();
+    box.focus();
   }
 }
 

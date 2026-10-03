@@ -2,6 +2,30 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-03 (Antigravity): Bulk Add UX & Focus Ring Polish.**
+>
+> **Where things stand**
+> - Focus Ring Fix (`09_page-shell.js`):
+>   - Solved the jarring double-ring glitch on text inputs and textareas where global `:focus-visible` applied `outline: 2px solid var(--accent) !important; outline-offset: 2px; border-radius: 4px;`, creating a 2px gap and mismatched corner radii on 8px rounded inputs.
+>   - Excluded text inputs/textareas from offset outlines and applied a seamless, hugging brand focus halo: `outline: none !important; border-color: var(--accent); box-shadow: 0 0 0 3px var(--color-brand-subtle, rgba(0,122,255,0.25)) !important;`.
+> - Textarea Surface & Typography Polish (`09_page-shell.js`):
+>   - Replaced flat dark `#e5e5ea` fill with crisp `var(--surface)` and `border: 1.5px solid var(--border-strong)`.
+>   - Formatted monospace font with generous line-height (`1.6`), `min-height: 140px`, and `resize: vertical`.
+>   - Added subtle `input::placeholder, textarea::placeholder` muted opacity styling.
+> - Context & Supported Provider Badges (`09_page-shell.js`, `10_tab-search-add.js`):
+>   - Added supported provider badge chips under the description: `MDBList`, `Trakt`, `TMDB`, `Simkl`, and `IMDb` (`.badge-imdb` with dark theme support).
+> - Dynamic Counter & Real-Time Ergonomics (`10_tab-search-add.js`, `16_client-row-core.js`, `19_client-search-and-likes.js`):
+>   - Connected `data-act-on="input"` on `#bulkPasteBox` to `updateBulkAddUi()`.
+>   - Button text updates dynamically: `"Add All Lines as Catalogs"` when empty, and `"Add 1 Catalog"` / `"Add N Catalogs"` when URLs are present.
+>   - Added a secondary `"Clear"` button (`#bulkClearBtn`) that appears when text is present, allowing one-click clearing and refocusing.
+>   - Displays live URL count status in `#bulkDetectedCount`.
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK (5,425,577 bytes).
+>   - `node --check worker_entry_combined.js`: OK (0 syntax errors).
+>   - `python gen_map.py`: 2,662 symbols, 211 routes.
+>   - All 560 tests passing (`node --test tests/my-lists-addon-charts.test.mjs tests/app-shell*.test.mjs tests/client*.test.mjs tests/d1-schema.test.mjs`).
+> - Branch: `feat/design-system-phase-1`
+
 > **HANDOFF, 2026-10-03 (Antigravity): Quick Add Polish - Removed Search/Pills & Removed Redundant Subtitle Microcopy.**
 >
 > **Where things stand**

@@ -91,12 +91,24 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
     </div>
   
   <div class="lists-subpanel" id="catalogsSubBulk" style="display:none;">
-  <div class="panel" style="margin-top:0;">
+  <div class="panel bulk-panel">
     <h2 class="panel-title">Bulk Import Lists</h2>
-    <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Paste multiple list URLs at once, one per line. Each list is automatically detected and added to your catalogs.</p>
-    <textarea id="bulkPasteBox" rows="5" style="width:100%;font-family:monospace;font-size:15px;" placeholder="https://mdblist.com/lists/user/list-one&#10;https://trakt.tv/users/user/lists/list-two&#10;https://www.themoviedb.org/list/12345"></textarea>
-    <div class="actions" style="margin-top:12px;">
-      <button type="button" class="primary" data-act="bulkAddLists" data-act-args="[&quot;@self&quot;]">Add All Lines as Catalogs</button>
+    <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem; line-height:1.45;">Paste multiple list URLs at once, one per line. Each list is automatically detected and added to your catalogs.</p>
+    <div class="bulk-provider-badges">
+      <span class="bulk-provider-label">Supported:</span>
+      <span class="list-source-badge badge-mdblist">MDBList</span>
+      <span class="list-source-badge badge-trakt">Trakt</span>
+      <span class="list-source-badge badge-tmdb">TMDB</span>
+      <span class="list-source-badge badge-simkl">Simkl</span>
+      <span class="list-source-badge badge-imdb">IMDb</span>
+    </div>
+    <textarea id="bulkPasteBox" rows="6" data-act-on="input" data-act="updateBulkAddUi" placeholder="https://mdblist.com/lists/user/list-one&#10;https://trakt.tv/users/user/lists/list-two&#10;https://www.themoviedb.org/list/12345"></textarea>
+    <div class="bulk-actions-bar">
+      <div class="bulk-actions-left">
+        <button type="button" id="bulkAddBtn" class="primary" data-act="bulkAddLists" data-act-args="[&quot;@self&quot;]">Add All Lines as Catalogs</button>
+        <button type="button" id="bulkClearBtn" class="secondary" data-act="clearBulkInput" style="display:none;">Clear</button>
+      </div>
+      <div id="bulkDetectedCount"></div>
     </div>
   </div>
   </div>

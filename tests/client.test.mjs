@@ -8486,3 +8486,62 @@ describe("client: connections kept on the server (P3a-9)", () => {
     assert.equal(n, 2);
   });
 });
+
+describe("client: Bulk Add UX refinements", () => {
+  it("renders supported provider badges and updated bulk subpanel markup", () => {
+    const html = renderPage();
+    assert.match(html, /class="list-source-badge badge-mdblist">MDBList<\/span>/);
+    assert.match(html, /class="list-source-badge badge-trakt">Trakt<\/span>/);
+    assert.match(html, /class="list-source-badge badge-tmdb">TMDB<\/span>/);
+    assert.match(html, /class="list-source-badge badge-simkl">Simkl<\/span>/);
+    assert.match(html, /class="list-source-badge badge-imdb">IMDb<\/span>/);
+    assert.match(html, /id="bulkClearBtn"/);
+    assert.match(html, /id="bulkDetectedCount"/);
+  });
+
+  it("updates button text, clear button visibility, and count dynamically", () => {
+    const client = loadClient();
+    const doc = client.window.document;
+    const box = doc.getElementById("bulkPasteBox");
+    const btn = doc.getElementById("bulkAddBtn");
+    const clearBtn = doc.getElementById("bulkClearBtn");
+    const countEl = doc.getElementById("bulkDetectedCount");
+
+    assert.ok(box && btn && clearBtn && countEl);
+
+    // Initial state
+    box.value = "";
+    client.call("updateBulkAddUi");
+    assert.equal(btn.textContent, "Add All Lines as Catalogs");
+    assert.equal(clearBtn.style.display, "none");
+    assert.equal(countEl.textContent, "");
+
+    // 1 list added
+    box.value = "https://mdblist.com/lists/user/list-1";
+    client.call("updateBulkAddUi");
+    assert.equal(btn.textContent, "Add 1 Catalog");
+    assert.equal(clearBtn.style.display, "inline-flex");
+    assert.equal(countEl.textContent, "1 list URL detected");
+
+    // 3 lists added
+    box.value = "https://mdblist.com/lists/user/list-1\nhttps://trakt.tv/users/u/lists/l-2\nhttps://themoviedb.org/list/123";
+    client.call("updateBulkAddUi");
+    assert.equal(btn.textContent, "Add 3 Catalogs");
+    assert.equal(clearBtn.style.display, "inline-flex");
+    assert.equal(countEl.textContent, "3 list URLs detected");
+
+    // Clear action
+    client.call("clearBulkInput");
+    assert.equal(box.value, "");
+    assert.equal(btn.textContent, "Add All Lines as Catalogs");
+    assert.equal(clearBtn.style.display, "none");
+    assert.equal(countEl.textContent, "");
+  });
+
+  it("provides focus halo for text inputs and textareas without offset outline", () => {
+    const html = renderPage();
+    assert.match(html, /:where\(input:not\(\[type="checkbox"\]\):not\(\[type="radio"\]\),\s*textarea\):focus-visible\s*\{[^}]*outline:\s*none\s*!important/);
+    assert.match(html, /#bulkPasteBox:focus\s*\{[^}]*border-color:\s*var\(--color-brand/);
+  });
+});
+

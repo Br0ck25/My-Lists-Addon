@@ -475,10 +475,16 @@ ${seoHeadHtml}
      :focus-visible rather than :focus, so a mouse click does not draw a ring
      the way the removed outlines used to; and last in the cascade with
      !important because the rules that cleared it are more specific. */
-  :where(a[href], button, summary, select, input, textarea, [tabindex]):focus-visible {
+  :where(a[href], button, summary, select, [tabindex]):focus-visible,
+  :where(input[type="checkbox"], input[type="radio"]):focus-visible {
     outline: 2px solid var(--accent) !important;
     outline-offset: 2px;
     border-radius: 4px;
+  }
+  :where(input:not([type="checkbox"]):not([type="radio"]), textarea):focus-visible {
+    outline: none !important;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--color-brand-subtle, rgba(0, 122, 255, 0.25)) !important;
   }
 
   /* The page has four @keyframes animations and 33 transitions and said
@@ -1426,6 +1432,67 @@ ${seoHeadHtml}
     font-size: 0.85rem;
     line-height: 1.45;
   }
+  /* Catalogs -> Bulk Import Subpanel */
+  #catalogsSubBulk .bulk-panel {
+    max-width: 860px;
+    margin-top: 0;
+  }
+  .bulk-provider-badges {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin: 0 0 14px;
+    padding: 0 2px;
+  }
+  .bulk-provider-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    margin-right: 2px;
+  }
+  #bulkPasteBox {
+    width: 100%;
+    min-height: 140px;
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    border: 1.5px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.88rem;
+    line-height: 1.6;
+    resize: vertical;
+    outline: none !important;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    box-sizing: border-box;
+  }
+  #bulkPasteBox:focus {
+    background: var(--surface);
+    border-color: var(--color-brand, var(--accent));
+    box-shadow: 0 0 0 3px var(--color-brand-subtle, rgba(0, 122, 255, 0.18)) !important;
+    outline: none !important;
+  }
+  .bulk-actions-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 14px;
+  }
+  .bulk-actions-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #bulkDetectedCount {
+    font-size: 0.82rem;
+    color: var(--muted);
+    font-weight: 500;
+  }
   .shelf-header {
     display: flex;
     align-items: baseline;
@@ -1786,6 +1853,8 @@ ${seoHeadHtml}
   .list-source-badge.badge-simkl { background: rgba(0,122,255,0.12); color: #007aff; border-color: rgba(0,122,255,0.3); }
   .list-source-badge.badge-mylists, .list-source-badge.badge-profile { background: rgba(175,82,222,0.12); color: #af52de; border-color: rgba(175,82,222,0.3); }
   .list-source-badge.badge-streaming { background: rgba(255,149,0,0.12); color: #ff9500; border-color: rgba(255,149,0,0.3); }
+  .list-source-badge.badge-imdb { background: rgba(245,197,24,0.12); color: #b8860b; border-color: rgba(245,197,24,0.3); }
+  :root.dark-theme .list-source-badge.badge-imdb { color: #f5c518; }
   .list-card-actions {
     display: flex; gap: 5px; align-items: center; flex-shrink: 0; flex-wrap: wrap;
   }
@@ -2966,6 +3035,10 @@ ${seoHeadHtml}
     font-family: inherit;
     min-height: 44px;
     transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  input::placeholder, textarea::placeholder {
+    color: var(--muted);
+    opacity: 0.65;
   }
   input[type="file"] {
     padding: 0;

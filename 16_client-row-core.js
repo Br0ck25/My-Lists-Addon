@@ -3238,6 +3238,7 @@ function switchCatalogsSubmenu(filter, btn) {
   if (filter !== 'all') {
     if (undoToast) undoToast.style.display = 'none';
     if (resultDiv) resultDiv.style.display = 'none';
+    if (filter === 'bulk' && typeof updateBulkAddUi === 'function') updateBulkAddUi();
   } else {
     // Make sure all list rows are visible since we no longer have row-level filters
     document.querySelectorAll('#lists .entry').forEach(function(e) {
