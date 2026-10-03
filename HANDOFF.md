@@ -2,6 +2,25 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-03 (Antigravity): Catalogs UI Modernization - Phase 3 (Installation Card & Manifest Link Consolidation).**
+>
+> **Where things stand**
+> - Destructive vs. Primary CTA Separation (`10_tab-search-add.js`):
+>   - Separated `Remove All` from `Generate Install Link` using `justify-content: space-between` and `margin-right: auto;`.
+>   - Eliminates misclick risk by pushing the destructive action to the far left while keeping the primary action prominently on the right.
+> - Consolidated Manifest Link Card (`24_client-backup-restore-presets.js`, `09_page-shell.js`):
+>   - Consolidated the split Manifest Link layout into an integrated credential row (`.install-url-input-group`):
+>     - Monospace URL box (`#manifestLinkDisplay`) on the left (`flex: 1 1 220px`).
+>     - Solid primary brand pill button (`#copyUrlBtn`) directly adjacent on the right.
+>   - Added `.install-url-copy-btn.primary` styling with white SVG icon, hover elevation, and brand subtle shadow.
+>   - Enhanced typographic hierarchy in the manual install hint box.
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK (5,416,476 bytes).
+>   - `node --check worker_entry_combined.js`: OK.
+>   - `python gen_map.py`: 2,660 symbols, 211 routes.
+>   - All 542 client & shell tests passing.
+> - Branch: `feat/design-system-phase-1`
+>
 > **HANDOFF, 2026-10-03 (Antigravity): Catalogs UI Modernization - Phase 2 (Add Catalog Modal Polish).**
 >
 > **Where things stand**

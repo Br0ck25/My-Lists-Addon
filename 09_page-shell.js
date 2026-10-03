@@ -3590,6 +3590,20 @@ ${seoHeadHtml}
     border-color: var(--accent);
     color: var(--accent);
   }
+  .install-url-copy-btn.primary {
+    background: var(--color-brand) !important;
+    color: var(--color-text-inverse, #fff) !important;
+    border-color: var(--color-brand) !important;
+    box-shadow: 0 2px 6px var(--color-brand-subtle) !important;
+  }
+  .install-url-copy-btn.primary:hover {
+    background: var(--color-brand-hover) !important;
+    border-color: var(--color-brand-hover) !important;
+    color: var(--color-text-inverse, #fff) !important;
+  }
+  .install-url-copy-btn.primary svg {
+    stroke: #ffffff;
+  }
   .install-url-box {
     font-family: var(--font-mono, monospace);
     font-size: 0.84rem;
