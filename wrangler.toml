@@ -13,7 +13,7 @@ compatibility_date = "2024-01-01"
 #   npx wrangler kv namespace create CONFIGS
 [[kv_namespaces]]
 binding = "CONFIGS"
-id = "YOUR_KV_NAMESPACE_ID"
+id = "98a6b193ca47426eb543d2c1de3cbbb7"
 
 # --- D1 (REQUIRED) -----------------------------------------------------------
 # Required. D1 is the primary authoritative store for Creator Profiles, lists,
@@ -30,7 +30,7 @@ id = "YOUR_KV_NAMESPACE_ID"
 [[d1_databases]]
 binding = "DB"
 database_name = "my-lists-db"
-database_id = "YOUR_DATABASE_ID"
+database_id = "24751b3f-e4c7-4df6-bbdf-51a3f2ba02c3"
 
 # --- Activity database (Phase 3c, not needed yet) ------------------------------
 # Watch history and progress, in their own database (36_activity-db.js).
