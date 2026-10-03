@@ -1454,26 +1454,12 @@ ${seoHeadHtml}
     margin-right: 2px;
   }
   #bulkPasteBox {
-    width: 100%;
     min-height: 140px;
-    padding: 12px 14px;
-    border-radius: var(--radius-sm);
-    border: 1.5px solid var(--border-strong);
-    background: var(--surface);
-    color: var(--text);
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     font-size: 0.88rem;
     line-height: 1.6;
     resize: vertical;
-    outline: none !important;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
     box-sizing: border-box;
-  }
-  #bulkPasteBox:focus {
-    background: var(--surface);
-    border-color: var(--color-brand, var(--accent));
-    box-shadow: 0 0 0 3px var(--color-brand-subtle, rgba(0, 122, 255, 0.18)) !important;
-    outline: none !important;
   }
   .bulk-actions-bar {
     display: flex;
@@ -3028,13 +3014,26 @@ ${seoHeadHtml}
     padding: 11px 14px;
     border-radius: var(--radius-sm);
     border: 1.5px solid var(--border-strong);
-    background: var(--surface-2);
+    background: var(--surface);
     color: var(--text);
     outline: none;
     font-size: 16px;
     font-family: inherit;
     min-height: 44px;
-    transition: border-color 0.15s, box-shadow 0.15s;
+    box-shadow: var(--shadow-sm);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  }
+  input:disabled, select:disabled, textarea:disabled,
+  input[readonly], textarea[readonly] {
+    background: var(--surface-2);
+    border-color: var(--border);
+    color: var(--muted);
+    box-shadow: none;
+    cursor: default;
+  }
+  input:disabled, select:disabled, textarea:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
   }
   input::placeholder, textarea::placeholder {
     color: var(--muted);
@@ -3124,8 +3123,12 @@ ${seoHeadHtml}
     accent-color: var(--color-brand, var(--accent));
   }
   input:focus, select:focus, textarea:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(0,122,255,0.15);
+    border-color: var(--color-brand, var(--accent));
+    box-shadow: 0 0 0 3px var(--color-brand-subtle, rgba(0, 122, 255, 0.18));
+  }
+  input[readonly]:focus, textarea[readonly]:focus {
+    border-color: var(--border-strong);
+    box-shadow: none;
   }
   .custom-list-pick-poster {
     width: 36px; height: 54px; object-fit: cover; border-radius: 4px; flex: none; cursor: pointer;
@@ -4906,7 +4909,7 @@ ${seoHeadHtml}
   }
   html[data-app-shell="1"] #appShellImportName, html[data-app-shell="1"] #appShellAddTitlesInput {
     width: 100%; padding: 10px 12px; border-radius: 10px;
-    border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.95rem;
+    border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size: 0.95rem;
   }
 
   /* Channels (P6-7): the template cards, the schedule panel, and the lineup
@@ -4949,7 +4952,7 @@ ${seoHeadHtml}
   }
   html[data-app-shell="1"] #appShellChannels input[type="text"] {
     width: 100%; padding: 10px 12px; border-radius: 10px;
-    border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.95rem;
+    border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size: 0.95rem;
   }
 
   /* --- Floating Unsaved Changes to Install Link Banner -------------------- */
@@ -5260,7 +5263,7 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
 
       <div style="margin-bottom: 12px;">
         <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Destination</label>
-        <select id="createListModalDestination" aria-label="Destination" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.95rem;" data-act="onChangeCreateListDestination">
+        <select id="createListModalDestination" aria-label="Destination" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act="onChangeCreateListDestination">
           <option value="custom">Custom List</option>
           <option value="trakt">Trakt List</option>
           <option value="tmdb">TMDB List</option>
@@ -5271,17 +5274,17 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
       
       <div style="margin-bottom: 12px;">
         <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">List Name *</label>
-        <input type="text" id="createListModalName" placeholder="e.g. My Favorite Sci-Fi" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="appActValidateCreateListName" data-act-args="[&quot;@value&quot;]">
+        <input type="text" id="createListModalName" placeholder="e.g. My Favorite Sci-Fi" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="appActValidateCreateListName" data-act-args="[&quot;@value&quot;]">
       </div>
 
       <div style="margin-bottom: 12px;">
         <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Description (Optional)</label>
-        <textarea id="createListModalDesc" placeholder="Brief summary of what is in this list..." rows="2" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.9rem; resize:vertical; font-family:inherit;"></textarea>
+        <textarea id="createListModalDesc" placeholder="Brief summary of what is in this list..." rows="2" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.9rem; resize:vertical; font-family:inherit;"></textarea>
       </div>
       
       <div style="margin-bottom: 14px;">
         <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Content Type</label>
-        <select id="createListModalType" aria-label="Content type" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.95rem;">
+        <select id="createListModalType" aria-label="Content type" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;">
           <option value="movie">Movies</option>
           <option value="series">Shows</option>
           <option value="mixed">Mixed (Movies &amp; Shows)</option>
@@ -5313,14 +5316,14 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
       
       <div style="margin-bottom: 12px;">
         <label for="addShelfModalName" style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Catalog Name</label>
-        <input type="text" id="addShelfModalName" placeholder="e.g. Trending Movies" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="validateAddShelfModal">
+        <input type="text" id="addShelfModalName" placeholder="e.g. Trending Movies" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="validateAddShelfModal">
       </div>
       
       <div style="margin-bottom: 12px;">
         <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Catalog URL</label>
         <div id="addShelfModalLinksContainer">
           <div class="add-shelf-link-row" style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-            <input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd, MDBList)" style="flex:1; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">
+            <input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd, MDBList)" style="flex:1; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">
           </div>
         </div>
         <button type="button" class="lc-btn secondary" style="width: 100%; font-size: 0.84rem; padding: 6px 12px; margin-top: 4px;" data-act="addShelfModalAddLink">+ Add another link (Combined List)</button>
@@ -5328,7 +5331,7 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
       
       <div style="margin-bottom: 16px;">
         <label for="addShelfModalType" style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Content Type</label>
-        <select id="addShelfModalType" aria-label="Catalog type" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.95rem;" data-act="validateAddShelfModal">
+        <select id="addShelfModalType" aria-label="Catalog type" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act="validateAddShelfModal">
           <option value="movie">Movies</option>
           <option value="series">Shows</option>
         </select>

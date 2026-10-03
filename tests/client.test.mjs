@@ -8541,7 +8541,8 @@ describe("client: Bulk Add UX refinements", () => {
   it("provides focus halo for text inputs and textareas without offset outline", () => {
     const html = renderPage();
     assert.match(html, /:where\(input:not\(\[type="checkbox"\]\):not\(\[type="radio"\]\),\s*textarea\):focus-visible\s*\{[^}]*outline:\s*none\s*!important/);
-    assert.match(html, /#bulkPasteBox:focus\s*\{[^}]*border-color:\s*var\(--color-brand/);
+    assert.match(html, /input,\s*select,\s*textarea\s*\{[^}]*background:\s*var\(--surface\)/);
+    assert.match(html, /input:focus,\s*select:focus,\s*textarea:focus\s*\{[^}]*border-color:\s*var\(--color-brand/);
   });
 });
 

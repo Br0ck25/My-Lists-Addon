@@ -2,6 +2,24 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-03 (Antigravity): Global Form Controls & Semantic Input Standardization.**
+>
+> **Where things stand**
+> - Single Source of Truth for Form Controls (`09_page-shell.js`):
+>   - Replaced legacy global rule `input, select, textarea { background: var(--surface-2); }` with `background: var(--surface);` (clean white in light mode, elevated `#1C1C1E` in dark mode).
+>   - Added `box-shadow: var(--shadow-sm);` and smooth border/shadow/background transitions across all inputs.
+>   - Established semantic states for disabled & read-only inputs (`input:disabled, select:disabled, textarea:disabled, input[readonly], textarea[readonly]`):
+>     - Rendered with sunken gray `background: var(--surface-2)` and muted text, providing intuitive visual feedback distinguishing editable vs. locked/system-generated tokens.
+>     - Read-only fields suppress bright interactive focus halos on click/selection.
+>   - Updated all modal form fields (`createListModal`, `addShelfModal`) and App Shell inputs from `var(--bg)` to `var(--surface)` with `1.5px solid var(--border-strong)`.
+>   - Cleaned up one-off `#bulkPasteBox` background overrides to rely directly on the global design system rules.
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK (5,425,771 bytes).
+>   - `node --check worker_entry_combined.js`: OK (0 syntax errors).
+>   - `python gen_map.py`: 2,662 symbols, 211 routes.
+>   - All 560 tests passing (`node --test tests/my-lists-addon-charts.test.mjs tests/app-shell*.test.mjs tests/client*.test.mjs tests/d1-schema.test.mjs`).
+> - Branch: `feat/design-system-phase-1`
+
 > **HANDOFF, 2026-10-03 (Antigravity): Bulk Add UX & Focus Ring Polish.**
 >
 > **Where things stand**
