@@ -24,7 +24,13 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Release 15** (prepared 2026-10-04) — details under Release 15. Later on 2026-10-04 the owner's Check jobs still showed the comparison without reasons, so 15 was not yet running when that round finished.
 - **Release 16** went live on 2026-10-04 (includes 15). **Compare shelves now** ran over 709 accounts: 19.42% different, with a reason for every difference (under Release 17).
 - **Release 17** went live on 2026-10-04. Its comparison: 15.76% different, 9.22% leaving out `already-watched`; the 50 `other` were gone (the 200-show limit). Details under Release 18.
-- **Release 18** (prepared 2026-10-04, not yet live) — the verdict on `FF_SHOW_SCHEDULE`, and a safety net for shows the schedule does not know. Details under Release 18.
+- **Release 18** went live on 2026-10-04. Its comparison over 744 accounts:
+  - **verdict: 0 entries lost**, 5 shown at another episode, 45 added, and 156 old-list mistakes put right;
+  - 15.79% different, and 4.66% leaving out old-list mistakes;
+  - Continue Watching: 901 the same, 43 shows not known yet. Airing Next: 224 the same, 30 not known yet.
+
+  The 35 accounts added since the last comparison are those `activity.copy-new` copied. The "not known yet" counts grew with them, because their shows are not in the schedule until `show.watchers` (daily) and `show.refresh` (hourly) reach them. Meanwhile the safety net keeps their entries.
+- **`FF_SHOW_SCHEDULE`** is recommended to the owner now, as Release 18's recommendation (0 lost). It is reversible: delete the variable.
 - **`main`** is brought up to date by PR #12 (Releases 14–16).
 - **Cloudflare Workers Builds was connected to this repository** (found 2026-10-04). The owner reports the Worker it was connected to has since been deleted, and merging PR #12 started no build. Every push makes Cloudflare try to build the Worker from GitHub. On `main` it would deploy to production. So far every attempt has failed, so nothing has been deployed that way: `main` at `a6785d6` on 2026-10-03, and this branch's preview with *Authentication error*. The `wrangler.toml` guard (Release 14: `keep_vars`, the `DB_ACTIVITY` placeholder) keeps such a deploy from replacing the dashboard's settings. Deploying stays manual (pasting) unless the owner decides otherwise.
 - **Backups work** (2026-10-04): the owner added the five GitHub secrets, and the first real backup ran (Actions run 37226668219). It copied both databases, encrypted: `my-lists-db` (9.3 MB, 709 accounts' settings, 1,147 lists, 53,082 list items) and `mylists-activity` (0.96 MB, 46,956 plays). From here it runs daily at 04:17 UTC.
