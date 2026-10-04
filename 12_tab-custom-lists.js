@@ -3,7 +3,7 @@
   <div class="subnav-pills-bar" id="listsSubnavBar">
     <button type="button" class="subnav-pill active" data-sub="my-lists" data-act="switchListsSubmenu" data-act-args="[&quot;my-lists&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> My Lists</button>
     <button type="button" class="subnav-pill" data-sub="liked" data-act="switchListsSubmenu" data-act-args="[&quot;liked&quot;,&quot;@self&quot;]">Liked</button>
-    <button type="button" class="subnav-pill" data-sub="import" data-act="switchListsSubmenu" data-act-args="[&quot;import&quot;,&quot;@self&quot;]">Import</button>
+    <button type="button" class="subnav-pill" data-sub="import" data-act="switchListsSubmenu" data-act-args="[&quot;import&quot;,&quot;@self&quot;]" style="display:none;">Import</button>
   </div>
 
   <!-- Submenu 1: User's Connected Account & Custom Lists -->
@@ -12,7 +12,8 @@
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">Your Custom Lists</h2>
         <div style="display:flex; gap:8px;">
-          <button type="button" class="primary lc-btn" data-act="openCreateListModal" data-act-args="[&quot;custom&quot;]">+ New List</button>
+          <button type="button" class="primary lc-btn" data-act="openCreateListModal" data-act-args="[&quot;custom&quot;]">+ Create List</button>
+          <button type="button" class="secondary lc-btn" data-act="openImportListModal">Import</button>
           <button type="button" class="secondary lc-btn" data-act="appActRefreshCreatorDashboard">Refresh</button>
         </div>
       </div>

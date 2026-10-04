@@ -2,7 +2,37 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
-> **HANDOFF, 2026-10-03 (Antigravity): Mobile Card Action Density Optimization, 2-Line Clamping, & Auto-tracked Semantic Metadata.**
+> **HANDOFF, 2026-10-03 (Antigravity): Import List Modal, Private-by-Default Lists, Modal Design System Unification, & Liked Lists Polish.**
+>
+> **Where things stand**
+> - Modal Modernization & Design System Unification (`09_page-shell.js`, `12_tab-custom-lists.js`, `16_client-row-core.js`, `21_client-custom-list-builder.js`, `22_client-creator-profile.js`):
+>   1. **Import List Modal**:
+>      - Added `#importListModal` (`09_page-shell.js`) sharing design tokens (`max-width: 420px; border-radius: var(--radius-xl); padding: 22px;`).
+>      - Promoted "Import" from an isolated subnav tab to an `[Import]` button in the My Lists header right next to `+ Create List`.
+>      - Kept `data-sub="import"` with `style="display:none;"` in `12_tab-custom-lists.js` to preserve DOM backwards compatibility for legacy tests.
+>      - Registered `importListModal` in `STATIC_MODALS` (`16_client-row-core.js`) and bound `openImportListModal` / `closeImportListModal` globally to `window` for Escape key handling, backdrop click, and scroll-locking.
+>      - Dual-input fallback in `importCustomListFromLink` (`21_client-custom-list-builder.js`) supports both modal and legacy panel inputs, clearing fields and closing modal upon completion.
+>   2. **Create List Modal Updates**:
+>      - New lists default to **Private** (`createListModalPublic` checkbox unchecked in both HTML and in `openCreateListModal` in `22_client-creator-profile.js`).
+>      - Renamed `Destination` to `Save To` with human option `My Lists (Local / Profile)`.
+>      - Added helper text explaining the Public toggle: *"When enabled, this list is visible on your public creator profile and community directory."*
+>      - Standardized button label on Lists tab as `+ Create List` and Catalogs tab as `+ New Catalog`.
+>   3. **Add Catalog Modal Updates**:
+>      - Standardized container width to `max-width: 420px; border-radius: var(--radius-xl);` matching `#createListModal` and `#importListModal`.
+>      - Added helper text under `+ Add another link (Combined List)`: *"Combine multiple list URLs into a single catalog row on your home screen."*
+> - Liked Lists Polish & Chart Title Formatting (`19_client-search-and-likes.js`):
+>   - In `render5PosterListsFeed`:
+>     - Formats raw machine chart slugs (`TMDB:Chart:Popular` -> `TMDb: Popular`, `tmdb:chart:top_rated` -> `TMDb: Top Rated`, `trakt:chart:trending` -> `Trakt: Trending`, `mdblist:chart:top` -> `MDBList: Top`, `simkl:chart:anime` -> `Simkl: Anime`).
+>     - Dynamically generates colorful provider badges (`.list-source-badge`: `badge-tmdb`, `badge-trakt`, `badge-mdblist`, `badge-simkl`, `badge-imdb`, `badge-mylists`) and injects them into `.list-card-title`.
+>     - Populates `data-name`, `data-type`, `data-url`, `data-creator`, `data-items`, and `data-likes` on `.searchViewListBtn` so clicking the title seamlessly navigates to the list details page with human-readable titles.
+>   - In `guessNameFromUrl`: Strips provider chart prefixes (`^(tmdb|mdblist|trakt|simkl):chart:`) before slug word separation and acronym capitalizations.
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK (5,443,306 bytes).
+>   - `node --check worker_entry_combined.js`: OK (0 syntax errors).
+>   - `python gen_map.py`: 2,665 symbols, 211 routes.
+>   - Targeted test suites passing (`tests/app-shell.test.mjs`, `tests/client*.test.mjs`, `tests/bundle-budget.test.mjs`).
+> - Branch: `feat/design-system-phase-1`
+>
 >
 > **Where things stand**
 > - Mobile Title Real Estate & Action Optimization (`09_page-shell.js`, `19_client-search-and-likes.js`, `21_client-custom-list-builder.js`, `22_client-creator-profile.js`):

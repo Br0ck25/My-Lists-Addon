@@ -7,6 +7,24 @@
 let customListDraftItems = [];
 let customListDraftType = 'movie'; // 'movie' or 'series', set by user toggle
 
+function openImportListModal() {
+  const modal = document.getElementById('importListModal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll(true);
+  const urlInput = document.getElementById('modalCustomListImportUrlInput') || document.getElementById('customListImportUrlInput');
+  if (urlInput) urlInput.focus();
+}
+window.openImportListModal = openImportListModal;
+
+function closeImportListModal() {
+  const modal = document.getElementById('importListModal');
+  if (!modal || modal.style.display === 'none') return;
+  modal.style.display = 'none';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll(false);
+}
+window.closeImportListModal = closeImportListModal;
+
 // Skips the search-and-pick draft entirely -- copyListToCustomList already
 // does exactly "fetch this list's items and save them as a Custom List"
 // (splitting into "(Movies)"/"(Shows)" lists on its own if the source turns
@@ -15,19 +33,29 @@ let customListDraftType = 'movie'; // 'movie' or 'series', set by user toggle
 // name instead of a link the client already had metadata for.
 async function importCustomListFromLink(btn) {
   if (!requireSignedInFor('import lists')) return; // docs/DECISIONS.md D-8
-  const urlInput = document.getElementById('customListImportUrlInput');
-  const nameInput = document.getElementById('customListImportNameInput');
-  const syncCheck = document.getElementById('customListImportSyncCheck');
-  const listUrl = urlInput.value.trim();
+  const modalUrl = document.getElementById('modalCustomListImportUrlInput');
+  const pageUrl = document.getElementById('customListImportUrlInput');
+  const urlInput = (modalUrl && modalUrl.value.trim()) ? modalUrl : (pageUrl || modalUrl);
+  const modalName = document.getElementById('modalCustomListImportNameInput');
+  const pageName = document.getElementById('customListImportNameInput');
+  const nameInput = (modalUrl && modalUrl.value.trim()) ? modalName : (pageName || modalName);
+  const modalSync = document.getElementById('modalCustomListImportSyncCheck');
+  const pageSync = document.getElementById('customListImportSyncCheck');
+  const syncCheck = (modalUrl && modalUrl.value.trim()) ? modalSync : (pageSync || modalSync);
+
+  const listUrl = urlInput ? urlInput.value.trim() : '';
   if (!listUrl) {
     showToast('Paste a list URL first.', 'error');
     return;
   }
-  const name = nameInput.value.trim() || guessNameFromUrl(listUrl);
+  const name = (nameInput && nameInput.value.trim()) ? nameInput.value.trim() : guessNameFromUrl(listUrl);
   const syncWithLink = syncCheck ? syncCheck.checked : false;
   await copyListToCustomList(name, listUrl, 'unknown', btn, null, { sourceUrl: syncWithLink ? listUrl : '' });
-  urlInput.value = '';
-  nameInput.value = '';
+  if (modalUrl) modalUrl.value = '';
+  if (pageUrl) pageUrl.value = '';
+  if (modalName) modalName.value = '';
+  if (pageName) pageName.value = '';
+  closeImportListModal();
 }
 
 // The "Customize" button on a Discover/Search list card -- the same idea as

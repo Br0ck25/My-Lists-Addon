@@ -33810,16 +33810,16 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
   </div>
 
   <div id="createListModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Create a list" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
-    <div class="modal-card" style="width: 100%; max-width: 380px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
+    <div class="modal-card" style="width: 100%; max-width: 420px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
         <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);" id="createListModalTitle">Create List</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeCreateListModal">&#x2715;</button>
       </div>
 
       <div style="margin-bottom: 12px;">
-        <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Destination</label>
+        <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Save To</label>
         <select id="createListModalDestination" aria-label="Destination" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act="onChangeCreateListDestination">
-          <option value="custom">Custom List</option>
+          <option value="custom">My Lists (Local / Profile)</option>
           <option value="trakt">Trakt List</option>
           <option value="tmdb">TMDB List</option>
           <option value="mdblist">MDBList List</option>
@@ -33846,12 +33846,15 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
         </select>
       </div>
       
-      <div id="createListModalPublicWrap" style="margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center;">
-        <span style="font-size: 0.95rem; font-weight:500; color: var(--text);">Public</span>
-        <label class="ui-toggle">
-          <input type="checkbox" id="createListModalPublic" checked>
-          <span class="ui-toggle-slider"></span>
-        </label>
+      <div id="createListModalPublicWrap" style="margin-bottom: 18px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 0.95rem; font-weight:500; color: var(--text);">Public</span>
+          <label class="ui-toggle">
+            <input type="checkbox" id="createListModalPublic">
+            <span class="ui-toggle-slider"></span>
+          </label>
+        </div>
+        <span style="font-size:0.78rem; color:var(--muted); display:block; margin-top:4px;">When enabled, this list is visible on your public creator profile and community directory.</span>
       </div>
       
       <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
@@ -33863,7 +33866,7 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
 
   <!-- Add Catalog Modal -->
   <div id="addShelfModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Add a catalog" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
-    <div class="modal-card" style="width: 100%; max-width: 400px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
+    <div class="modal-card" style="width: 100%; max-width: 420px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
         <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);">Add Catalog</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="appActHideAddShelfModal">&#x2715;</button>
@@ -33882,6 +33885,7 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
           </div>
         </div>
         <button type="button" class="lc-btn secondary" style="width: 100%; font-size: 0.84rem; padding: 6px 12px; margin-top: 4px;" data-act="addShelfModalAddLink">+ Add another link (Combined List)</button>
+        <small style="display:block; color:var(--muted); font-size:0.78rem; margin-top:4px;">Combine multiple list URLs into a single catalog row on your home screen.</small>
       </div>
       
       <div style="margin-bottom: 16px;">
@@ -33895,6 +33899,33 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
       <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
         <button type="button" class="lc-btn secondary" data-act="appActHideAddShelfModal">Cancel</button>
         <button type="button" class="lc-btn primary" id="addShelfModalBtn" style="opacity: 0.5; min-width: 80px;" disabled data-act="submitAddShelfModal">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import List Modal -->
+  <div id="importListModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Import list from a link" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
+    <div class="modal-card" style="width: 100%; max-width: 420px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
+        <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);">Import List from Link</h2>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeImportListModal">&#x2715;</button>
+      </div>
+      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem; line-height:1.4;">Paste any MDBList, Trakt, or TMDB list URL to import directly as a Custom List.</p>
+      <div style="margin-bottom: 12px;">
+        <label for="modalCustomListImportUrlInput" style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">List URL</label>
+        <input type="text" id="modalCustomListImportUrlInput" placeholder="mdblist.com, trakt.tv, or themoviedb.org URL" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem; box-sizing:border-box;">
+      </div>
+      <div style="margin-bottom: 14px;">
+        <label for="modalCustomListImportNameInput" style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">List Name (Optional)</label>
+        <input type="text" id="modalCustomListImportNameInput" placeholder="e.g. My Favorites (leave blank to auto-detect)" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem; box-sizing:border-box;">
+      </div>
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:18px;">
+        <input type="checkbox" id="modalCustomListImportSyncCheck" checked>
+        <span style="font-size:0.85rem; color:var(--text);">Keep custom list synced with external link</span>
+      </label>
+      <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
+        <button type="button" class="lc-btn secondary" data-act="closeImportListModal">Cancel</button>
+        <button type="button" class="lc-btn primary" id="modalCustomListImportBtn" data-act="importCustomListFromLink" data-act-args="[&quot;@self&quot;]" style="min-width: 90px;">Import List</button>
       </div>
     </div>
   </div>
@@ -34293,7 +34324,7 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
   <div class="subnav-pills-bar" id="listsSubnavBar">
     <button type="button" class="subnav-pill active" data-sub="my-lists" data-act="switchListsSubmenu" data-act-args="[&quot;my-lists&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> My Lists</button>
     <button type="button" class="subnav-pill" data-sub="liked" data-act="switchListsSubmenu" data-act-args="[&quot;liked&quot;,&quot;@self&quot;]">Liked</button>
-    <button type="button" class="subnav-pill" data-sub="import" data-act="switchListsSubmenu" data-act-args="[&quot;import&quot;,&quot;@self&quot;]">Import</button>
+    <button type="button" class="subnav-pill" data-sub="import" data-act="switchListsSubmenu" data-act-args="[&quot;import&quot;,&quot;@self&quot;]" style="display:none;">Import</button>
   </div>
 
   <!-- Submenu 1: User's Connected Account & Custom Lists -->
@@ -34302,7 +34333,8 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">Your Custom Lists</h2>
         <div style="display:flex; gap:8px;">
-          <button type="button" class="primary lc-btn" data-act="openCreateListModal" data-act-args="[&quot;custom&quot;]">+ New List</button>
+          <button type="button" class="primary lc-btn" data-act="openCreateListModal" data-act-args="[&quot;custom&quot;]">+ Create List</button>
+          <button type="button" class="secondary lc-btn" data-act="openImportListModal">Import</button>
           <button type="button" class="secondary lc-btn" data-act="appActRefreshCreatorDashboard">Refresh</button>
         </div>
       </div>
@@ -37773,6 +37805,7 @@ const STATIC_MODALS = [
   { id: 'createListModal', close: 'closeCreateListModal' },
   { id: 'selectListModal', close: 'closeSelectListModal' },
   { id: 'addShelfModal', close: null },
+  { id: 'importListModal', close: 'closeImportListModal' },
   { id: 'traktDeviceModal', close: 'closeTraktDeviceModal' },
 ];
 
@@ -44160,7 +44193,7 @@ function guessNameFromUrl(u) {
     const noQuery = String(u).split(/[?#]/)[0];
     const parts = noQuery.split('/').filter(Boolean);
     let last = parts[parts.length - 1] || noQuery || u;
-    last = last.replace(/[-_]+/g, ' ').trim();
+    last = last.replace(/^(tmdb|mdblist|trakt|simkl):chart:/i, '$1: ').replace(/[-_]+/g, ' ').trim();
     if (!last) return 'List';
     // Title-case each word. The doubled backslashes below (\\b\\w) are
     // required, not a typo or over-escaping: this file's own text is
@@ -46504,10 +46537,60 @@ function render5PosterListsFeed(container, lists) {
           (alreadyLiked ? '&#x2665;' : '&#x2661;') +
         '</button>';
 
-    return '<div class="list-card" data-list-type="' + escapeAttr(type) + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
+    let displayName = l.name || 'Unnamed List';
+    if (/^(tmdb|mdblist|trakt|simkl):/i.test(displayName)) {
+      const parts = displayName.split(':');
+      const provRaw = parts[0].toLowerCase();
+      const provider = provRaw === 'tmdb' ? 'TMDb' : (provRaw === 'mdblist' ? 'MDBList' : (provRaw === 'trakt' ? 'Trakt' : 'Simkl'));
+      const chartParts = parts.slice(1).filter(p => p.toLowerCase() !== 'chart');
+      const chartSlug = chartParts.join(' ').replace(/[-_]+/g, ' ');
+      const chartName = chartSlug.split(' ').filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+      if (chartName) displayName = provider + ': ' + chartName;
+    }
+
+    let badgeClass = 'badge-custom';
+    let badgeText = 'Community';
+    const uLower = (l.url || '').toLowerCase();
+    if (isOwn || l.kind === 'own' || l.source === 'My Lists Addon' || l.source === 'Profile') {
+      badgeClass = 'badge-mylists';
+      badgeText = 'My Lists Addon';
+    } else if (l.source === 'MDBList' || uLower.includes('mdblist')) {
+      badgeClass = 'badge-mdblist';
+      badgeText = 'MDBList';
+    } else if (l.source === 'Trakt' || uLower.includes('trakt')) {
+      badgeClass = 'badge-trakt';
+      badgeText = 'Trakt';
+    } else if (l.source === 'TMDB' || uLower.includes('tmdb') || uLower.includes('themoviedb')) {
+      badgeClass = 'badge-tmdb';
+      badgeText = 'TMDB';
+    } else if (l.source === 'Simkl' || uLower.includes('simkl')) {
+      badgeClass = 'badge-simkl';
+      badgeText = 'Simkl';
+    } else if (l.source === 'IMDb' || uLower.includes('imdb')) {
+      badgeClass = 'badge-imdb';
+      badgeText = 'IMDb';
+    } else if (/^tmdb:/i.test(l.name || '')) {
+      badgeClass = 'badge-tmdb';
+      badgeText = 'TMDB';
+    } else if (/^trakt:/i.test(l.name || '')) {
+      badgeClass = 'badge-trakt';
+      badgeText = 'Trakt';
+    } else if (/^mdblist:/i.test(l.name || '')) {
+      badgeClass = 'badge-mdblist';
+      badgeText = 'MDBList';
+    } else if (/^simkl:/i.test(l.name || '')) {
+      badgeClass = 'badge-simkl';
+      badgeText = 'Simkl';
+    }
+    const sourceBadgeHtml = '<span class="list-source-badge ' + badgeClass + '">' + escapeHtml(badgeText) + '</span>';
+
+    return '<div class="list-card" data-list-type="' + escapeAttr(type) + '" data-name="' + escapeAttr(displayName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
-          '<div class="list-card-title searchViewListBtn" style="cursor:pointer;">' + escapeHtml(l.name) + '</div>' +
+          '<div class="list-card-title searchViewListBtn" style="cursor:pointer;" data-name="' + escapeAttr(displayName) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(l.url || '') + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
+            sourceBadgeHtml +
+            escapeHtml(displayName) +
+          '</div>' +
           '<div class="list-card-meta">' +
             '<span>by ' + escapeHtml(author) + '</span>' +
             '<span class="list-card-meta-sep">&middot;</span>' +
@@ -46520,13 +46603,13 @@ function render5PosterListsFeed(container, lists) {
           likeBtnHtml +
           '<button type="button" class="lc-btn ' + (added ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
             (added ? 'style="color:var(--danger);"' : '') +
-            ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '">' +
+            ' data-name="' + escapeAttr(displayName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '">' +
             (added ? 'Remove' : '+ Add') +
           '</button>' +
-          renderCustomizeButtonHtml(l.name, l.url || '', type) +
+          renderCustomizeButtonHtml(displayName, l.url || '', type) +
         '</div>' +
       '</div>' +
-      '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '"></div>' +
+      '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(displayName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '"></div>' +
     '</div>';
   }).join('');
 
@@ -62776,6 +62859,24 @@ function renderChannelMergeList() {
 let customListDraftItems = [];
 let customListDraftType = 'movie'; // 'movie' or 'series', set by user toggle
 
+function openImportListModal() {
+  const modal = document.getElementById('importListModal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll(true);
+  const urlInput = document.getElementById('modalCustomListImportUrlInput') || document.getElementById('customListImportUrlInput');
+  if (urlInput) urlInput.focus();
+}
+window.openImportListModal = openImportListModal;
+
+function closeImportListModal() {
+  const modal = document.getElementById('importListModal');
+  if (!modal || modal.style.display === 'none') return;
+  modal.style.display = 'none';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll(false);
+}
+window.closeImportListModal = closeImportListModal;
+
 // Skips the search-and-pick draft entirely -- copyListToCustomList already
 // does exactly "fetch this list's items and save them as a Custom List"
 // (splitting into "(Movies)"/"(Shows)" lists on its own if the source turns
@@ -62784,19 +62885,29 @@ let customListDraftType = 'movie'; // 'movie' or 'series', set by user toggle
 // name instead of a link the client already had metadata for.
 async function importCustomListFromLink(btn) {
   if (!requireSignedInFor('import lists')) return; // docs/DECISIONS.md D-8
-  const urlInput = document.getElementById('customListImportUrlInput');
-  const nameInput = document.getElementById('customListImportNameInput');
-  const syncCheck = document.getElementById('customListImportSyncCheck');
-  const listUrl = urlInput.value.trim();
+  const modalUrl = document.getElementById('modalCustomListImportUrlInput');
+  const pageUrl = document.getElementById('customListImportUrlInput');
+  const urlInput = (modalUrl && modalUrl.value.trim()) ? modalUrl : (pageUrl || modalUrl);
+  const modalName = document.getElementById('modalCustomListImportNameInput');
+  const pageName = document.getElementById('customListImportNameInput');
+  const nameInput = (modalUrl && modalUrl.value.trim()) ? modalName : (pageName || modalName);
+  const modalSync = document.getElementById('modalCustomListImportSyncCheck');
+  const pageSync = document.getElementById('customListImportSyncCheck');
+  const syncCheck = (modalUrl && modalUrl.value.trim()) ? modalSync : (pageSync || modalSync);
+
+  const listUrl = urlInput ? urlInput.value.trim() : '';
   if (!listUrl) {
     showToast('Paste a list URL first.', 'error');
     return;
   }
-  const name = nameInput.value.trim() || guessNameFromUrl(listUrl);
+  const name = (nameInput && nameInput.value.trim()) ? nameInput.value.trim() : guessNameFromUrl(listUrl);
   const syncWithLink = syncCheck ? syncCheck.checked : false;
   await copyListToCustomList(name, listUrl, 'unknown', btn, null, { sourceUrl: syncWithLink ? listUrl : '' });
-  urlInput.value = '';
-  nameInput.value = '';
+  if (modalUrl) modalUrl.value = '';
+  if (pageUrl) pageUrl.value = '';
+  if (modalName) modalName.value = '';
+  if (pageName) pageName.value = '';
+  closeImportListModal();
 }
 
 // The "Customize" button on a Discover/Search list card -- the same idea as
@@ -73164,7 +73275,7 @@ function openCreateListModal(presetDestination) {
   const typeEl = document.getElementById('createListModalType');
   if (typeEl) typeEl.value = 'movie';
   const pubEl = document.getElementById('createListModalPublic');
-  if (pubEl) pubEl.checked = true;
+  if (pubEl) pubEl.checked = false; // Default to Private as requested
   
   if (typeof onChangeCreateListDestination === 'function') onChangeCreateListDestination();
 

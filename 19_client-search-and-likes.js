@@ -15,7 +15,7 @@ function guessNameFromUrl(u) {
     const noQuery = String(u).split(/[?#]/)[0];
     const parts = noQuery.split('/').filter(Boolean);
     let last = parts[parts.length - 1] || noQuery || u;
-    last = last.replace(/[-_]+/g, ' ').trim();
+    last = last.replace(/^(tmdb|mdblist|trakt|simkl):chart:/i, '$1: ').replace(/[-_]+/g, ' ').trim();
     if (!last) return 'List';
     // Title-case each word. The doubled backslashes below (\\b\\w) are
     // required, not a typo or over-escaping: this file's own text is
@@ -2359,10 +2359,60 @@ function render5PosterListsFeed(container, lists) {
           (alreadyLiked ? '&#x2665;' : '&#x2661;') +
         '</button>';
 
-    return '<div class="list-card" data-list-type="' + escapeAttr(type) + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
+    let displayName = l.name || 'Unnamed List';
+    if (/^(tmdb|mdblist|trakt|simkl):/i.test(displayName)) {
+      const parts = displayName.split(':');
+      const provRaw = parts[0].toLowerCase();
+      const provider = provRaw === 'tmdb' ? 'TMDb' : (provRaw === 'mdblist' ? 'MDBList' : (provRaw === 'trakt' ? 'Trakt' : 'Simkl'));
+      const chartParts = parts.slice(1).filter(p => p.toLowerCase() !== 'chart');
+      const chartSlug = chartParts.join(' ').replace(/[-_]+/g, ' ');
+      const chartName = chartSlug.split(' ').filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+      if (chartName) displayName = provider + ': ' + chartName;
+    }
+
+    let badgeClass = 'badge-custom';
+    let badgeText = 'Community';
+    const uLower = (l.url || '').toLowerCase();
+    if (isOwn || l.kind === 'own' || l.source === 'My Lists Addon' || l.source === 'Profile') {
+      badgeClass = 'badge-mylists';
+      badgeText = 'My Lists Addon';
+    } else if (l.source === 'MDBList' || uLower.includes('mdblist')) {
+      badgeClass = 'badge-mdblist';
+      badgeText = 'MDBList';
+    } else if (l.source === 'Trakt' || uLower.includes('trakt')) {
+      badgeClass = 'badge-trakt';
+      badgeText = 'Trakt';
+    } else if (l.source === 'TMDB' || uLower.includes('tmdb') || uLower.includes('themoviedb')) {
+      badgeClass = 'badge-tmdb';
+      badgeText = 'TMDB';
+    } else if (l.source === 'Simkl' || uLower.includes('simkl')) {
+      badgeClass = 'badge-simkl';
+      badgeText = 'Simkl';
+    } else if (l.source === 'IMDb' || uLower.includes('imdb')) {
+      badgeClass = 'badge-imdb';
+      badgeText = 'IMDb';
+    } else if (/^tmdb:/i.test(l.name || '')) {
+      badgeClass = 'badge-tmdb';
+      badgeText = 'TMDB';
+    } else if (/^trakt:/i.test(l.name || '')) {
+      badgeClass = 'badge-trakt';
+      badgeText = 'Trakt';
+    } else if (/^mdblist:/i.test(l.name || '')) {
+      badgeClass = 'badge-mdblist';
+      badgeText = 'MDBList';
+    } else if (/^simkl:/i.test(l.name || '')) {
+      badgeClass = 'badge-simkl';
+      badgeText = 'Simkl';
+    }
+    const sourceBadgeHtml = '<span class="list-source-badge ' + badgeClass + '">' + escapeHtml(badgeText) + '</span>';
+
+    return '<div class="list-card" data-list-type="' + escapeAttr(type) + '" data-name="' + escapeAttr(displayName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
-          '<div class="list-card-title searchViewListBtn" style="cursor:pointer;">' + escapeHtml(l.name) + '</div>' +
+          '<div class="list-card-title searchViewListBtn" style="cursor:pointer;" data-name="' + escapeAttr(displayName) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(l.url || '') + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
+            sourceBadgeHtml +
+            escapeHtml(displayName) +
+          '</div>' +
           '<div class="list-card-meta">' +
             '<span>by ' + escapeHtml(author) + '</span>' +
             '<span class="list-card-meta-sep">&middot;</span>' +
@@ -2375,13 +2425,13 @@ function render5PosterListsFeed(container, lists) {
           likeBtnHtml +
           '<button type="button" class="lc-btn ' + (added ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
             (added ? 'style="color:var(--danger);"' : '') +
-            ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '">' +
+            ' data-name="' + escapeAttr(displayName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '">' +
             (added ? 'Remove' : '+ Add') +
           '</button>' +
-          renderCustomizeButtonHtml(l.name, l.url || '', type) +
+          renderCustomizeButtonHtml(displayName, l.url || '', type) +
         '</div>' +
       '</div>' +
-      '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '"></div>' +
+      '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(displayName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '"></div>' +
     '</div>';
   }).join('');
 

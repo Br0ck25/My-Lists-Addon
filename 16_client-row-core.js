@@ -2099,6 +2099,7 @@ const STATIC_MODALS = [
   { id: 'createListModal', close: 'closeCreateListModal' },
   { id: 'selectListModal', close: 'closeSelectListModal' },
   { id: 'addShelfModal', close: null },
+  { id: 'importListModal', close: 'closeImportListModal' },
   { id: 'traktDeviceModal', close: 'closeTraktDeviceModal' },
 ];
 

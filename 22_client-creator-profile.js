@@ -6138,7 +6138,7 @@ function openCreateListModal(presetDestination) {
   const typeEl = document.getElementById('createListModalType');
   if (typeEl) typeEl.value = 'movie';
   const pubEl = document.getElementById('createListModalPublic');
-  if (pubEl) pubEl.checked = true;
+  if (pubEl) pubEl.checked = false; // Default to Private as requested
   
   if (typeof onChangeCreateListDestination === 'function') onChangeCreateListDestination();
 

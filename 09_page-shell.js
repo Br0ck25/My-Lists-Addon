@@ -5387,16 +5387,16 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
   </div>
 
   <div id="createListModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Create a list" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
-    <div class="modal-card" style="width: 100%; max-width: 380px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
+    <div class="modal-card" style="width: 100%; max-width: 420px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
         <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);" id="createListModalTitle">Create List</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeCreateListModal">&#x2715;</button>
       </div>
 
       <div style="margin-bottom: 12px;">
-        <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Destination</label>
+        <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Save To</label>
         <select id="createListModalDestination" aria-label="Destination" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act="onChangeCreateListDestination">
-          <option value="custom">Custom List</option>
+          <option value="custom">My Lists (Local / Profile)</option>
           <option value="trakt">Trakt List</option>
           <option value="tmdb">TMDB List</option>
           <option value="mdblist">MDBList List</option>
@@ -5423,12 +5423,15 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
         </select>
       </div>
       
-      <div id="createListModalPublicWrap" style="margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center;">
-        <span style="font-size: 0.95rem; font-weight:500; color: var(--text);">Public</span>
-        <label class="ui-toggle">
-          <input type="checkbox" id="createListModalPublic" checked>
-          <span class="ui-toggle-slider"></span>
-        </label>
+      <div id="createListModalPublicWrap" style="margin-bottom: 18px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 0.95rem; font-weight:500; color: var(--text);">Public</span>
+          <label class="ui-toggle">
+            <input type="checkbox" id="createListModalPublic">
+            <span class="ui-toggle-slider"></span>
+          </label>
+        </div>
+        <span style="font-size:0.78rem; color:var(--muted); display:block; margin-top:4px;">When enabled, this list is visible on your public creator profile and community directory.</span>
       </div>
       
       <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
@@ -5440,7 +5443,7 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
 
   <!-- Add Catalog Modal -->
   <div id="addShelfModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Add a catalog" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
-    <div class="modal-card" style="width: 100%; max-width: 400px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
+    <div class="modal-card" style="width: 100%; max-width: 420px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
         <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);">Add Catalog</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="appActHideAddShelfModal">&#x2715;</button>
@@ -5459,6 +5462,7 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
           </div>
         </div>
         <button type="button" class="lc-btn secondary" style="width: 100%; font-size: 0.84rem; padding: 6px 12px; margin-top: 4px;" data-act="addShelfModalAddLink">+ Add another link (Combined List)</button>
+        <small style="display:block; color:var(--muted); font-size:0.78rem; margin-top:4px;">Combine multiple list URLs into a single catalog row on your home screen.</small>
       </div>
       
       <div style="margin-bottom: 16px;">
@@ -5472,6 +5476,33 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
       <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
         <button type="button" class="lc-btn secondary" data-act="appActHideAddShelfModal">Cancel</button>
         <button type="button" class="lc-btn primary" id="addShelfModalBtn" style="opacity: 0.5; min-width: 80px;" disabled data-act="submitAddShelfModal">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import List Modal -->
+  <div id="importListModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Import list from a link" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
+    <div class="modal-card" style="width: 100%; max-width: 420px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
+        <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);">Import List from Link</h2>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeImportListModal">&#x2715;</button>
+      </div>
+      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem; line-height:1.4;">Paste any MDBList, Trakt, or TMDB list URL to import directly as a Custom List.</p>
+      <div style="margin-bottom: 12px;">
+        <label for="modalCustomListImportUrlInput" style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">List URL</label>
+        <input type="text" id="modalCustomListImportUrlInput" placeholder="mdblist.com, trakt.tv, or themoviedb.org URL" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem; box-sizing:border-box;">
+      </div>
+      <div style="margin-bottom: 14px;">
+        <label for="modalCustomListImportNameInput" style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">List Name (Optional)</label>
+        <input type="text" id="modalCustomListImportNameInput" placeholder="e.g. My Favorites (leave blank to auto-detect)" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem; box-sizing:border-box;">
+      </div>
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:18px;">
+        <input type="checkbox" id="modalCustomListImportSyncCheck" checked>
+        <span style="font-size:0.85rem; color:var(--text);">Keep custom list synced with external link</span>
+      </label>
+      <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
+        <button type="button" class="lc-btn secondary" data-act="closeImportListModal">Cancel</button>
+        <button type="button" class="lc-btn primary" id="modalCustomListImportBtn" data-act="importCustomListFromLink" data-act-args="[&quot;@self&quot;]" style="min-width: 90px;">Import List</button>
       </div>
     </div>
   </div>
