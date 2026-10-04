@@ -2,6 +2,33 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-04 (Antigravity): Globally Anchoring +Add Button to Far Right with Action Zone Separation.**
+>
+> **Where things stand**
+> - Globally Anchored `+ Add` / `Remove` Action (`09_page-shell.js`, `17_client-my-lists-and-trakt-oauth.js`, `19_client-search-and-likes.js`, `20_client-channel-builder.js`, `22_client-creator-profile.js`):
+>   1. **Problem Solved**:
+>      - Because cards have variable counts of management buttons (Auto-tracked lists: only `+ Add`; Watchlist: `Edit` + `+ Add`; Custom lists & Channels: `Edit` + `Share` + `Delete` + `+ Add`), placing `+ Add` first caused it to jump horizontally across three different columns depending on row type.
+>   2. **Implementation**:
+>      - Globally moved `+ Add` / `Remove` to the **far right (last child)** of `.list-card-actions` across the entire application:
+>        - **Custom Lists** (Server & Local): `[Edit]` &middot; `[Sync]` &middot; `[Share]` &middot; `[Delete]` &middot; `[+ Add]`
+>        - **My Channels**: `[Edit]` &middot; `[Share]` &middot; `[Delete]` &middot; `[+ Add]`
+>        - **Merged Channels**: `[Delete]` &middot; `[+ Add]`
+>        - **Storylines**: `[Customize]` &middot; `[+ Add]`
+>        - **Search & Discover Lists**: `[♥ Like]` &middot; `[Customize]` &middot; `[+ Add]`
+>        - **Personal Provider Lists** (MDBList, Trakt, TMDB): `[Copy]` &middot; `[Delete]` &middot; `[+ Add]`
+>      - Added global CSS zone separation rule in `09_page-shell.js`:
+>        `.list-card-actions :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .channelAddBtn, .curatedAddBtn, .searchAddBtn, .list-search-add-btn, .myListAddBtn):not(:first-child) { margin-left: 6px; }`
+>      - Establishes two clear cognitive zones: **List Management** on the left, **Catalog Installation** on the far right.
+>   3. **Result**:
+>      - 100% vertical column alignment of `+ Add` / `Remove` across all cards site-wide.
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK (5,477,817 bytes).
+>   - `node --check worker_entry_combined.js`: OK (0 syntax errors).
+>   - `python gen_map.py`: 2,670 symbols, 211 routes.
+>   - Targeted test suite (`tests/client.test.mjs`, `tests/imdb-ids.test.mjs`, `tests/better-posters.test.mjs`): 458/458 tests pass (0 failures).
+> - Branch: `feat/design-system-phase-1`
+>
+
 > **HANDOFF, 2026-10-04 (Antigravity): Safe Card Action Button Re-Ordering & Channels Ergonomics Polish.**
 >
 > **Where things stand**
