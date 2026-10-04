@@ -4959,15 +4959,15 @@ async function renderCreatorDashboard(options) {
             '</div>' +
           '</div>' +
           '<div class="list-card-actions">' +
-            '<button type="button" class="lc-btn secondary creatorListEditBtn" data-slug="' + escapeAttr(l.slug) + '">Edit</button>' +
-            syncBtnHtml +
-            deleteBtnHtml +
-            shareBtn +
             '<button type="button" class="lc-btn secondary creatorListAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
               (isAdded ? 'style="color:var(--danger);"' : '') +
               ' data-slug="' + escapeAttr(l.slug) + '">' +
               (isAdded ? 'Remove' : '+ Add') +
             '</button>' +
+            '<button type="button" class="lc-btn secondary creatorListEditBtn" data-slug="' + escapeAttr(l.slug) + '">Edit</button>' +
+            syncBtnHtml +
+            shareBtn +
+            deleteBtnHtml +
           '</div>' +
         '</div>' +
         (posterThumbs ? '<div class="list-card-posters poster-preview-static creatorListViewTrigger" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' + posterThumbs + '</div>' : '') +
@@ -5364,11 +5364,11 @@ function buildLocalListCardHtml(l) {
             addBtnHtml +
           '</div>'
         : '<div class="list-card-actions">' +
+            addBtnHtml +
             '<button type="button" class="lc-btn secondary localListEditBtn" data-slug="' + escapeAttr(l.slug) + '">Edit</button>' +
             syncBtnHtml +
-            deleteBtnHtml +
             shareBtn +
-            addBtnHtml +
+            deleteBtnHtml +
           '</div>') +
     '</div>' +
     (posterThumbs ? '<div class="list-card-posters poster-preview-static localListViewTrigger" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type || 'movie') + '" style="cursor:pointer;">' + posterThumbs + '</div>' : '') +

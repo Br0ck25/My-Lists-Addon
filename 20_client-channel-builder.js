@@ -10609,13 +10609,14 @@ function renderMyCreatedChannelsList() {
       let showName = it.showName || '';
       let epName = it.epName || '';
       let seasonEp = '';
+      const isMovie = (it.kind === 'movie' || it.type === 'movie');
       
-      if (it.season != null && it.episode != null) {
+      if (!isMovie && it.season != null && it.episode != null) {
         seasonEp = 'S' + it.season + 'E' + it.episode;
       }
       
       if (!showName && it.title) {
-        if (it.title.indexOf(' S') !== -1 && it.title.indexOf('E') !== -1) {
+        if (!isMovie && it.title.indexOf(' S') !== -1 && it.title.indexOf('E') !== -1) {
           const sIdx = it.title.indexOf(' S');
           showName = it.title.slice(0, sIdx).trim();
           const rest = it.title.slice(sIdx + 1).trim();
@@ -10639,6 +10640,8 @@ function renderMyCreatedChannelsList() {
       if (!epName) {
         if (it.epName) {
           epName = it.epName;
+        } else if (isMovie) {
+          epName = (it.year ? String(it.year) + ' \u2022 ' : '') + 'Movie';
         } else if (it.title && it.title !== showName) {
           epName = it.title;
         } else if (seasonEp) {
@@ -10698,12 +10701,12 @@ function renderMyCreatedChannelsList() {
           (summaryLine ? '<div class="list-card-meta"><span>' + escapeHtml(summaryLine) + '</span></div>' : '') +
         '</div>' +
         '<div class="list-card-actions">' +
+          addBtnHtml +
           '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="editChannelById" data-act-args="' + appActArgs([ch.channelId]) + '">Edit</button>' +
-          '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="deleteLocalChannel" data-act-args="' + appActArgs([ch.channelId, ch.name]) + '">Delete</button>' +
           ((ch.sharePublished || ch.visibility === 'public')
             ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="shareChannelById" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '" title="Share this channel">Share</button>'
             : '') +
-          addBtnHtml +
+          '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="deleteLocalChannel" data-act-args="' + appActArgs([ch.channelId, ch.name]) + '">Delete</button>' +
         '</div>' +
       '</div>' +
       (posterThumbs ? '<div class="list-card-posters poster-preview-static">' + posterThumbs + '</div>' : '') +
@@ -13392,8 +13395,8 @@ function renderChannelMergeList() {
               '</div>' +
             '</div>' +
             '<div class="list-card-actions">' +
-              '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger);" data-act="deleteLocalMergedChannel" data-act-args="' + appActArgs([merged.mergedId]) + '">Delete</button>' +
               addBtnHtml +
+              '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger);" data-act="deleteLocalMergedChannel" data-act-args="' + appActArgs([merged.mergedId]) + '">Delete</button>' +
             '</div>' +
           '</div>' +
         '</div>';
@@ -13406,12 +13409,23 @@ function renderChannelMergeList() {
   if (!box) return;
   const selectAllCheck = document.getElementById('channelMergeSelectAllCheck');
   if (selectAllCheck) selectAllCheck.checked = false;
+  const selectAllWrap = document.getElementById('channelMergeSelectAllWrap');
+  const controlsRow = document.getElementById('channelMergeControls');
   
   const channels = Object.values(channelsMap);
-  if (!channels.length) {
-    box.innerHTML = '<p><small>No saved channels yet -- add or build a channel above first.</small></p>';
+  if (channels.length < 2) {
+    if (selectAllWrap) selectAllWrap.style.display = 'none';
+    if (controlsRow) controlsRow.style.display = 'none';
+    if (channels.length === 1) {
+      box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem; margin:0;"><small>You have 1 saved channel (<strong>' + escapeHtml(channels[0].name || 'Channel') + '</strong>). Create or quick-add at least one more channel to combine them into a merged catalog.</small></p>';
+    } else {
+      box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem; margin:0;"><small>No saved channels yet &mdash; build a custom channel or add a network above first.</small></p>';
+    }
     return;
   }
+
+  if (selectAllWrap) selectAllWrap.style.display = 'flex';
+  if (controlsRow) controlsRow.style.display = 'flex';
   
   channels.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   

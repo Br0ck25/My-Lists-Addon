@@ -51,8 +51,11 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Your custom built and saved 24/7 TV channels. Play episodes continuously in broadcast order or daily shuffle.</p>
       <div id="channelNextUpStatus" style="margin-bottom:8px;"></div>
       <div class="row" id="myChannelsToolbar" style="margin-bottom:10px; gap:8px;">
-        <input type="text" id="myChannelsSearchInput" aria-label="Search your channels" placeholder="Search your channels..." data-act-on="input" data-act="setMyChannelsSearch" data-act-args="[&quot;@value&quot;]">
-        <select id="myChannelsSortSelect" aria-label="Order your channels" data-act="setMyChannelsSort" data-act-args="[&quot;@value&quot;]" style="flex:none; width:auto;">
+        <div class="search-input-box" style="flex:1;">
+          <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="myChannelsSearchInput" aria-label="Search your channels" placeholder="Search your channels..." style="padding-left:38px; border-radius:var(--radius-pill);" data-act-on="input" data-act="setMyChannelsSearch" data-act-args="[&quot;@value&quot;]">
+        </div>
+        <select id="myChannelsSortSelect" aria-label="Order your channels" data-act="setMyChannelsSort" data-act-args="[&quot;@value&quot;]" style="flex:none; width:auto; border-radius:var(--radius-pill);">
           <option value="recent">Recently updated</option>
           <option value="created">Recently created</option>
           <option value="name">Name (A&ndash;Z)</option>
@@ -78,17 +81,16 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
         <div class="shelf-header" style="margin-bottom:8px;">
           <h3 style="font-size:0.95rem; font-weight:700; margin:0;">Create Merged Catalog</h3>
         </div>
-        <div class="actions" style="margin-bottom:8px; justify-content:space-between;">
-          <button type="button" class="secondary lc-btn" data-act="renderChannelMergeList">Refresh list</button>
+        <div id="channelMergeSelectAllWrap" class="actions" style="margin-bottom:8px; justify-content:flex-end; display:none;">
           <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:0.85rem; user-select:none;">
             <input type="checkbox" id="channelMergeSelectAllCheck" data-act="toggleAllChannelMergeChecks" data-act-args="[&quot;@self&quot;]">
             <span>Select all</span>
           </label>
         </div>
         <div id="channelMergeList"><p style="color:var(--muted); font-size:0.85rem;"><small>No saved channels yet.</small></p></div>
-        <div class="row" style="margin-top:8px;">
-          <input type="text" id="channelMergeNameInput" aria-label="Combined catalog name" placeholder="Combined catalog name (e.g. Live TV)">
-          <button type="button" class="secondary" data-act="mergeChannelsIntoRow">Merge into catalog</button>
+        <div class="row" id="channelMergeControls" style="margin-top:10px; gap:8px; display:none;">
+          <input type="text" id="channelMergeNameInput" aria-label="Combined catalog name" placeholder="Combined catalog name (e.g. Live TV)" style="max-width:380px; width:100%; border-radius:var(--radius-pill);">
+          <button type="button" class="secondary lc-btn" data-act="mergeChannelsIntoRow" style="border-radius:var(--radius-pill);">Merge into catalog</button>
         </div>
       </div>
     </div>

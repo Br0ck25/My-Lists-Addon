@@ -34900,8 +34900,11 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Your custom built and saved 24/7 TV channels. Play episodes continuously in broadcast order or daily shuffle.</p>
       <div id="channelNextUpStatus" style="margin-bottom:8px;"></div>
       <div class="row" id="myChannelsToolbar" style="margin-bottom:10px; gap:8px;">
-        <input type="text" id="myChannelsSearchInput" aria-label="Search your channels" placeholder="Search your channels..." data-act-on="input" data-act="setMyChannelsSearch" data-act-args="[&quot;@value&quot;]">
-        <select id="myChannelsSortSelect" aria-label="Order your channels" data-act="setMyChannelsSort" data-act-args="[&quot;@value&quot;]" style="flex:none; width:auto;">
+        <div class="search-input-box" style="flex:1;">
+          <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="myChannelsSearchInput" aria-label="Search your channels" placeholder="Search your channels..." style="padding-left:38px; border-radius:var(--radius-pill);" data-act-on="input" data-act="setMyChannelsSearch" data-act-args="[&quot;@value&quot;]">
+        </div>
+        <select id="myChannelsSortSelect" aria-label="Order your channels" data-act="setMyChannelsSort" data-act-args="[&quot;@value&quot;]" style="flex:none; width:auto; border-radius:var(--radius-pill);">
           <option value="recent">Recently updated</option>
           <option value="created">Recently created</option>
           <option value="name">Name (A&ndash;Z)</option>
@@ -34927,17 +34930,16 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
         <div class="shelf-header" style="margin-bottom:8px;">
           <h3 style="font-size:0.95rem; font-weight:700; margin:0;">Create Merged Catalog</h3>
         </div>
-        <div class="actions" style="margin-bottom:8px; justify-content:space-between;">
-          <button type="button" class="secondary lc-btn" data-act="renderChannelMergeList">Refresh list</button>
+        <div id="channelMergeSelectAllWrap" class="actions" style="margin-bottom:8px; justify-content:flex-end; display:none;">
           <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:0.85rem; user-select:none;">
             <input type="checkbox" id="channelMergeSelectAllCheck" data-act="toggleAllChannelMergeChecks" data-act-args="[&quot;@self&quot;]">
             <span>Select all</span>
           </label>
         </div>
         <div id="channelMergeList"><p style="color:var(--muted); font-size:0.85rem;"><small>No saved channels yet.</small></p></div>
-        <div class="row" style="margin-top:8px;">
-          <input type="text" id="channelMergeNameInput" aria-label="Combined catalog name" placeholder="Combined catalog name (e.g. Live TV)">
-          <button type="button" class="secondary" data-act="mergeChannelsIntoRow">Merge into catalog</button>
+        <div class="row" id="channelMergeControls" style="margin-top:10px; gap:8px; display:none;">
+          <input type="text" id="channelMergeNameInput" aria-label="Combined catalog name" placeholder="Combined catalog name (e.g. Live TV)" style="max-width:380px; width:100%; border-radius:var(--radius-pill);">
+          <button type="button" class="secondary lc-btn" data-act="mergeChannelsIntoRow" style="border-radius:var(--radius-pill);">Merge into catalog</button>
         </div>
       </div>
     </div>
@@ -60481,13 +60483,14 @@ function renderMyCreatedChannelsList() {
       let showName = it.showName || '';
       let epName = it.epName || '';
       let seasonEp = '';
+      const isMovie = (it.kind === 'movie' || it.type === 'movie');
       
-      if (it.season != null && it.episode != null) {
+      if (!isMovie && it.season != null && it.episode != null) {
         seasonEp = 'S' + it.season + 'E' + it.episode;
       }
       
       if (!showName && it.title) {
-        if (it.title.indexOf(' S') !== -1 && it.title.indexOf('E') !== -1) {
+        if (!isMovie && it.title.indexOf(' S') !== -1 && it.title.indexOf('E') !== -1) {
           const sIdx = it.title.indexOf(' S');
           showName = it.title.slice(0, sIdx).trim();
           const rest = it.title.slice(sIdx + 1).trim();
@@ -60511,6 +60514,8 @@ function renderMyCreatedChannelsList() {
       if (!epName) {
         if (it.epName) {
           epName = it.epName;
+        } else if (isMovie) {
+          epName = (it.year ? String(it.year) + ' \u2022 ' : '') + 'Movie';
         } else if (it.title && it.title !== showName) {
           epName = it.title;
         } else if (seasonEp) {
@@ -60570,12 +60575,12 @@ function renderMyCreatedChannelsList() {
           (summaryLine ? '<div class="list-card-meta"><span>' + escapeHtml(summaryLine) + '</span></div>' : '') +
         '</div>' +
         '<div class="list-card-actions">' +
+          addBtnHtml +
           '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="editChannelById" data-act-args="' + appActArgs([ch.channelId]) + '">Edit</button>' +
-          '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="deleteLocalChannel" data-act-args="' + appActArgs([ch.channelId, ch.name]) + '">Delete</button>' +
           ((ch.sharePublished || ch.visibility === 'public')
             ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="shareChannelById" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '" title="Share this channel">Share</button>'
             : '') +
-          addBtnHtml +
+          '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="deleteLocalChannel" data-act-args="' + appActArgs([ch.channelId, ch.name]) + '">Delete</button>' +
         '</div>' +
       '</div>' +
       (posterThumbs ? '<div class="list-card-posters poster-preview-static">' + posterThumbs + '</div>' : '') +
@@ -63264,8 +63269,8 @@ function renderChannelMergeList() {
               '</div>' +
             '</div>' +
             '<div class="list-card-actions">' +
-              '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger);" data-act="deleteLocalMergedChannel" data-act-args="' + appActArgs([merged.mergedId]) + '">Delete</button>' +
               addBtnHtml +
+              '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger);" data-act="deleteLocalMergedChannel" data-act-args="' + appActArgs([merged.mergedId]) + '">Delete</button>' +
             '</div>' +
           '</div>' +
         '</div>';
@@ -63278,12 +63283,23 @@ function renderChannelMergeList() {
   if (!box) return;
   const selectAllCheck = document.getElementById('channelMergeSelectAllCheck');
   if (selectAllCheck) selectAllCheck.checked = false;
+  const selectAllWrap = document.getElementById('channelMergeSelectAllWrap');
+  const controlsRow = document.getElementById('channelMergeControls');
   
   const channels = Object.values(channelsMap);
-  if (!channels.length) {
-    box.innerHTML = '<p><small>No saved channels yet -- add or build a channel above first.</small></p>';
+  if (channels.length < 2) {
+    if (selectAllWrap) selectAllWrap.style.display = 'none';
+    if (controlsRow) controlsRow.style.display = 'none';
+    if (channels.length === 1) {
+      box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem; margin:0;"><small>You have 1 saved channel (<strong>' + escapeHtml(channels[0].name || 'Channel') + '</strong>). Create or quick-add at least one more channel to combine them into a merged catalog.</small></p>';
+    } else {
+      box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem; margin:0;"><small>No saved channels yet &mdash; build a custom channel or add a network above first.</small></p>';
+    }
     return;
   }
+
+  if (selectAllWrap) selectAllWrap.style.display = 'flex';
+  if (controlsRow) controlsRow.style.display = 'flex';
   
   channels.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   
@@ -72774,15 +72790,15 @@ async function renderCreatorDashboard(options) {
             '</div>' +
           '</div>' +
           '<div class="list-card-actions">' +
-            '<button type="button" class="lc-btn secondary creatorListEditBtn" data-slug="' + escapeAttr(l.slug) + '">Edit</button>' +
-            syncBtnHtml +
-            deleteBtnHtml +
-            shareBtn +
             '<button type="button" class="lc-btn secondary creatorListAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
               (isAdded ? 'style="color:var(--danger);"' : '') +
               ' data-slug="' + escapeAttr(l.slug) + '">' +
               (isAdded ? 'Remove' : '+ Add') +
             '</button>' +
+            '<button type="button" class="lc-btn secondary creatorListEditBtn" data-slug="' + escapeAttr(l.slug) + '">Edit</button>' +
+            syncBtnHtml +
+            shareBtn +
+            deleteBtnHtml +
           '</div>' +
         '</div>' +
         (posterThumbs ? '<div class="list-card-posters poster-preview-static creatorListViewTrigger" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' + posterThumbs + '</div>' : '') +
@@ -73179,11 +73195,11 @@ function buildLocalListCardHtml(l) {
             addBtnHtml +
           '</div>'
         : '<div class="list-card-actions">' +
+            addBtnHtml +
             '<button type="button" class="lc-btn secondary localListEditBtn" data-slug="' + escapeAttr(l.slug) + '">Edit</button>' +
             syncBtnHtml +
-            deleteBtnHtml +
             shareBtn +
-            addBtnHtml +
+            deleteBtnHtml +
           '</div>') +
     '</div>' +
     (posterThumbs ? '<div class="list-card-posters poster-preview-static localListViewTrigger" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type || 'movie') + '" style="cursor:pointer;">' + posterThumbs + '</div>' : '') +
