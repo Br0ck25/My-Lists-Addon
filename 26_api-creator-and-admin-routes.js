@@ -479,10 +479,12 @@
                   } else if (!blob.fullyWatchedShowIds.includes(imdbId)) {
                     // TMDB either had no next episode (show is finished) OR the fetch failed (rate limit/timeout).
                     // If it was a network failure, we don't want to completely lose the show from Continue Watching,
-                    // so we restore the old state just in case. If it truly is finished, it will stay in the old state
-                    // (which is fine, the user can manually dismiss it) or they will naturally fall off.
-                    if (oldCwItems && oldCwItems.length > 0) {
-                      blob.continueWatching = [...oldCwItems, ...blob.continueWatching];
+                    // so we restore the old state just in case -- but only entries still ahead of what was just
+                    // watched (cwEntriesStillAhead). Otherwise the show is marked fully watched, and the episode
+                    // sweep adds the next episode when it airs.
+                    const stillAhead = cwEntriesStillAhead(oldCwItems, latest.seasonNum, latest.episodeNum);
+                    if (stillAhead.length > 0) {
+                      blob.continueWatching = [...stillAhead, ...blob.continueWatching];
                     } else {
                       blob.fullyWatchedShowIds.push(imdbId);
                     }
@@ -1232,8 +1234,11 @@
               });
               blob.fullyWatchedShowIds = blob.fullyWatchedShowIds.filter((s) => s !== resolvedShowId && s !== imdbId);
             } else if (!blob.fullyWatchedShowIds.includes(resolvedShowId)) {
-              if (oldCwItems && oldCwItems.length > 0) {
-                blob.continueWatching = [...oldCwItems, ...blob.continueWatching];
+              // Only what is still ahead of the episode just watched (see the
+              // ping above, and cwEntriesStillAhead).
+              const stillAhead = cwEntriesStillAhead(oldCwItems, latestSeason, latestEpisode);
+              if (stillAhead.length > 0) {
+                blob.continueWatching = [...stillAhead, ...blob.continueWatching];
               } else {
                 blob.fullyWatchedShowIds.push(resolvedShowId);
               }

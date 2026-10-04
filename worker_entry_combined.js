@@ -26,7 +26,7 @@
 // Shown at the top of /admin and in the answer of the "Counts missing" tool,
 // so the owner can see which pasted file is live (docs/RELEASES.md). Change it
 // with every release.
-const WORKER_RELEASE = "16";
+const WORKER_RELEASE = "18";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -14268,7 +14268,10 @@ async function renderAdminDashboard(env) {
             lines.push(line + '.');
             if (j.type === 'shelf.shadow' && j.last) {
               const t = j.last;
-              lines.push('  Last full comparison (' + t.accounts + ' accounts, finished ' + jobsAgo(t.finishedAt) + '): ' + (t.rate * 100).toFixed(2) + '% different. Continue Watching: ' + t.cw.both + ' the same, ' + t.cw.legacyOnly + ' only in the old, ' + t.cw.v2Only + ' only in the new, ' + t.cw.unknown + ' shows not known yet. Airing Next: ' + t.an.both + ' the same, ' + t.an.legacyOnly + ' only in the old, ' + t.an.v2Only + ' only in the new, ' + t.an.unknown + ' not known yet.' + (t.examples && t.examples.length ? ' Examples: ' + JSON.stringify(t.examples.slice(0, 3)) : ''));
+              lines.push('  Last full comparison (' + t.accounts + ' accounts, finished ' + jobsAgo(t.finishedAt) + '): ' + (t.rate * 100).toFixed(2) + '% different' + (t.rateNew != null ? ' (' + (t.rateNew * 100).toFixed(2) + '% leaving out mistakes in the old list)' : '') + '. Continue Watching: ' + t.cw.both + ' the same, ' + t.cw.legacyOnly + ' only in the old, ' + t.cw.v2Only + ' only in the new, ' + t.cw.unknown + ' shows not known yet. Airing Next: ' + t.an.both + ' the same, ' + t.an.legacyOnly + ' only in the old, ' + t.an.v2Only + ' only in the new, ' + t.an.unknown + ' not known yet.' + (t.examples && t.examples.length ? ' Examples: ' + JSON.stringify(t.examples.slice(0, 3)) : ''));
+              if (t.verdict) {
+                lines.push('  If FF_SHOW_SCHEDULE were on: ' + t.verdict.lost + ' lost, ' + t.verdict.changed + ' at another episode, ' + t.verdict.added + ' added, ' + t.verdict.oldWrong + ' old-list mistakes put right.');
+              }
               // Why each difference is there (47_shelf-shadow.js), most common first.
               if (t.cw.whyOld) {
                 const whyText = function (w) {
@@ -14798,7 +14801,8 @@ async function renderAdminDashboard(env) {
             const t = data.last;
             status.textContent = 'Done: ' + t.accounts + ' accounts compared.';
             out.textContent = [
-              (t.rate * 100).toFixed(2) + '% different (the switch waits for under 1%).',
+              (t.rate * 100).toFixed(2) + '% different' + (t.rateNew != null ? '; ' + (t.rateNew * 100).toFixed(2) + '% leaving out mistakes in the old list.' : '.'),
+              t.verdict ? 'If FF_SHOW_SCHEDULE were on now: ' + t.verdict.lost + ' entries lost' + (t.verdict.lost ? ' (' + shelfCompareWhy(t.verdict.lostWhy) + ')' : '') + ', ' + t.verdict.changed + ' shown at another episode, ' + t.verdict.added + ' added; ' + t.verdict.oldWrong + ' mistakes in the old list put right. Shows not known yet keep their current entry.' : '',
               'Continue Watching: ' + t.cw.both + ' the same, ' + t.cw.legacyOnly + ' only in the old, ' + t.cw.v2Only + ' only in the new, ' + t.cw.unknown + ' shows not known yet.',
               '  Why only in the old: ' + shelfCompareWhy(t.cw.whyOld),
               '  Why only in the new: ' + shelfCompareWhy(t.cw.whyNew),
@@ -19101,6 +19105,24 @@ async function ensureTrackingMigrated(env, username) {
   } catch {
     // old blob unreadable -- nothing to migrate
   }
+}
+
+// The Continue Watching entries of one show still ahead of the furthest episode
+// watched. The playback ping and the media server webhook keep a show's old
+// entry when TMDB has nothing newer (it may only have failed), but an entry at
+// or before what was just watched offers an episode already seen, and kept it
+// for good: the show was not marked fully watched, so the episode sweep never
+// looked at it again (the shelf comparison found 93 of them, 2026-10-04).
+// Storyline suggestions and movies are kept as they are.
+function cwEntriesStillAhead(items, season, episode) {
+  const s = Number(season);
+  const e = Number(episode);
+  return (Array.isArray(items) ? items : []).filter((it) => {
+    if (!it || it.isCompanion || it.type === "movie" || it.seasonNum == null || it.episodeNum == null) return true;
+    const iS = Number(it.seasonNum);
+    const iE = Number(it.episodeNum);
+    return iS > s || (iS === s && iE > e);
+  });
 }
 
 async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
@@ -92178,10 +92200,12 @@ function generateSearchVariations(query) {
                   } else if (!blob.fullyWatchedShowIds.includes(imdbId)) {
                     // TMDB either had no next episode (show is finished) OR the fetch failed (rate limit/timeout).
                     // If it was a network failure, we don't want to completely lose the show from Continue Watching,
-                    // so we restore the old state just in case. If it truly is finished, it will stay in the old state
-                    // (which is fine, the user can manually dismiss it) or they will naturally fall off.
-                    if (oldCwItems && oldCwItems.length > 0) {
-                      blob.continueWatching = [...oldCwItems, ...blob.continueWatching];
+                    // so we restore the old state just in case -- but only entries still ahead of what was just
+                    // watched (cwEntriesStillAhead). Otherwise the show is marked fully watched, and the episode
+                    // sweep adds the next episode when it airs.
+                    const stillAhead = cwEntriesStillAhead(oldCwItems, latest.seasonNum, latest.episodeNum);
+                    if (stillAhead.length > 0) {
+                      blob.continueWatching = [...stillAhead, ...blob.continueWatching];
                     } else {
                       blob.fullyWatchedShowIds.push(imdbId);
                     }
@@ -92931,8 +92955,11 @@ function generateSearchVariations(query) {
               });
               blob.fullyWatchedShowIds = blob.fullyWatchedShowIds.filter((s) => s !== resolvedShowId && s !== imdbId);
             } else if (!blob.fullyWatchedShowIds.includes(resolvedShowId)) {
-              if (oldCwItems && oldCwItems.length > 0) {
-                blob.continueWatching = [...oldCwItems, ...blob.continueWatching];
+              // Only what is still ahead of the episode just watched (see the
+              // ping above, and cwEntriesStillAhead).
+              const stillAhead = cwEntriesStillAhead(oldCwItems, latestSeason, latestEpisode);
+              if (stillAhead.length > 0) {
+                blob.continueWatching = [...stillAhead, ...blob.continueWatching];
               } else {
                 blob.fullyWatchedShowIds.push(resolvedShowId);
               }
@@ -106785,6 +106812,21 @@ async function runActivityBackfillStep(env, opts = {}) {
   try {
     const job = await loadActivityBackfillJob(menv, ACTIVITY_BACKFILL_RUN_KEY);
     run = !opts.restart && job && job.progress && job.progress.phase ? job.progress : null;
+    // Accounts made after the copy finished. Without this a finished run was
+    // finished for good, and with FF_EVENT_TRACKING on Start over is refused,
+    // so they could never be copied: their history stayed in the legacy
+    // stores (39 of 748 accounts, 2026-10-04). Account ids only grow, so they
+    // are the ones after where the run stopped; the hourly activity.copy-new
+    // job (58_) takes them on its own.
+    if (run && run.phase === "done") {
+      const newer = await menv.DB.prepare("SELECT count(*) AS n FROM accounts WHERE id > ? AND deleted_at IS NULL")
+        .bind(Number(run.afterAccountId) || 0).first();
+      const n = Number(newer && newer.n) || 0;
+      if (n > 0) {
+        run = { ...run, phase: "accounts", accountsTotal: (Number(run.accountsTotal) || 0) + n };
+        delete run.finishedAt;
+      }
+    }
     if (!run) {
       run = { phase: "accounts", afterAccountId: 0, accountsTotal: 0, accountsDone: 0, accountsFailed: 0, startedAt: Date.now() };
       if (opts.restart) {
@@ -107089,7 +107131,10 @@ async function recordActivityPlay(env, username, play, source) {
 // Nothing calls these yet: P3c-6 serves /sync/load and the personal rows
 // from them, behind FF_EVENT_TRACKING.
 
-const SHELF_PROGRESS_LIMIT = 200;
+// Shows read per account. 200 left a heavy watcher's older shows off Continue
+// Watching and Airing Next, which the stored shelves never did (the shelf
+// comparison, 2026-10-04); 1000 still bounds the read.
+const SHELF_PROGRESS_LIMIT = 1000;
 const SHELF_JOIN_CHUNK = 90;
 const SHELF_HISTORY_PAGE = 50;
 const SHELF_HISTORY_PAGE_MAX = 500;
@@ -107231,6 +107276,38 @@ async function shelfTitles(env, mediaIds) {
     for (const r of rows || []) out.set(r.id, { media: r, sched: r.s_media != null && (r.checked_at != null || r.s_status != null) ? r : null });
   }
   return out;
+}
+
+// The stored entries (as the legacy writers keep them) of the shows the
+// schedule does not know yet. With FF_SHOW_SCHEDULE on they are served as they
+// were instead of dropped: a show that was matched to a movie row never gets a
+// schedule row, and one TMDB cannot answer for stays unknown, so without this
+// it would vanish from the shelf (Release 18). Storyline suggestions are not
+// taken: they are kept whole in show_progress already.
+async function shelfStoredForUnknown(env, entries, mediaIds) {
+  const list = Array.isArray(entries) ? entries : [];
+  const ids = [...new Set((mediaIds || []).filter((m) => m != null))];
+  if (!list.length || !ids.length || !env || !env.DB) return [];
+  const keys = new Set();
+  for (let i = 0; i < ids.length; i += SHELF_JOIN_CHUNK) {
+    const part = ids.slice(i, i + SHELF_JOIN_CHUNK);
+    const { results } = await env.DB.prepare(
+      `SELECT imdb_id, tmdb_id, alt_id FROM media WHERE id IN (${part.map(() => "?").join(", ")})`
+    ).bind(...part).all();
+    for (const m of results || []) {
+      if (m.imdb_id) keys.add(String(m.imdb_id));
+      if (m.tmdb_id) {
+        keys.add(`tmdb:${m.tmdb_id}`);
+        keys.add(`tmdb:tv:${m.tmdb_id}`);
+      }
+      if (m.alt_id) keys.add(String(m.alt_id));
+    }
+  }
+  return list.filter((it) => {
+    if (!it || typeof it !== "object" || it.isCompanion) return false;
+    const id = String(it.showId || it.id || "");
+    return keys.has(id) || (id.startsWith("tt") && keys.has(id.split(":")[0]));
+  });
 }
 
 async function continueWatching(env, accountId, opts = {}) {
@@ -107548,8 +107625,15 @@ async function assembleTrackingRecord(env, rawKv, username, accountId) {
   const record = { ...rest, watchHistory: history };
   if (isShowScheduleEnabled(env)) {
     const [cw, an] = await Promise.all([continueWatching(env, accountId), airingNext(env, accountId)]);
-    record.continueWatching = cw.items.map(({ mediaId, ...it }) => it);
-    record.airingNext = an.items.map(({ mediaId, ...it }) => it);
+    // A show the schedule does not know yet keeps the entry it had
+    // (shelfStoredForUnknown, 39_) rather than dropping off the shelf.
+    const [keepCw, keepAn] = await Promise.all([
+      shelfStoredForUnknown(env, rest.continueWatching, cw.missingSchedule),
+      shelfStoredForUnknown(env, rest.airingNext, an.missingSchedule),
+    ]);
+    record.continueWatching = [...cw.items.map(({ mediaId, ...it }) => it), ...keepCw];
+    record.airingNext = [...an.items.map(({ mediaId, ...it }) => it), ...keepAn]
+      .sort((a, b) => String(a.airDate || "").localeCompare(String(b.airDate || "")));
   }
   return record;
 }
@@ -109713,6 +109797,52 @@ function shelfShadowRate(t) {
   return all ? diff / all : 0;
 }
 
+// Differences that are the old list's own mistake, not the new one's, by the
+// rules both lists share (39_activity-shelves.js):
+//   already-watched     an episode offered although the history says it was watched
+//   not-aired-yet       an episode offered that has not aired and has no date
+//   dismissed, dropped  a show the person dismissed or dropped, still offered
+//   hidden              a show the person took off Airing Next, still listed
+//   no-upcoming, next-already-aired   an Airing Next entry with nothing coming
+//   replaces-old-mistake   the worked-out episode standing in for one of those
+// Left out of `rateNew`, and not counted as lost in the verdict.
+const SHELF_SHADOW_OLD_LIST_WRONG = new Set([
+  "already-watched", "not-aired-yet", "dismissed", "dropped", "hidden", "no-upcoming", "next-already-aired", "replaces-old-mistake",
+]);
+
+// What switching would do, from the round's reasons: entries only the old list
+// has that are not its mistakes (lost), shows offered at another episode
+// (changed, counted once, on the old side), and entries only the new list has
+// (added). Shows the schedule does not know yet keep their stored entry
+// (shelfStoredForUnknown), so they are not lost.
+function shelfShadowVerdict(t) {
+  const out = { lost: 0, changed: 0, added: 0, oldWrong: 0, lostWhy: {} };
+  for (const shelf of [t.cw, t.an]) {
+    for (const [code, n] of Object.entries(shelf.whyOld || {})) {
+      const k = Number(n) || 0;
+      if (SHELF_SHADOW_OLD_LIST_WRONG.has(code)) out.oldWrong += k;
+      else if (code === "different-episode") out.changed += k;
+      else {
+        out.lost += k;
+        out.lostWhy[code] = (out.lostWhy[code] || 0) + k;
+      }
+    }
+    for (const [code, n] of Object.entries(shelf.whyNew || {})) {
+      const k = Number(n) || 0;
+      if (SHELF_SHADOW_OLD_LIST_WRONG.has(code)) out.oldWrong += k;
+      else if (code !== "different-episode") out.added += k;
+    }
+  }
+  return out;
+}
+
+function shelfShadowRateNew(t) {
+  const { oldWrong } = shelfShadowVerdict(t);
+  const diff = t.cw.legacyOnly + t.cw.v2Only + t.an.legacyOnly + t.an.v2Only;
+  const all = t.cw.both + t.an.both + diff - oldWrong;
+  return all > 0 ? (diff - oldWrong) / all : 0;
+}
+
 // Media ids for legacy show ids ("tt…", "tmdb:N", "tmdb:tv:N").
 async function shelfShadowMediaIds(env, showIds) {
   const imdb = [];
@@ -109793,6 +109923,23 @@ function shelfShadowScheduleText(sched) {
   return `${last}, ${next}${sched.season_episode_counts ? "" : ", no episode counts"}${sched.s_status ? ` (${sched.s_status})` : ""}`;
 }
 
+// What the stored entry itself says beyond its episode, and how long ago the
+// schedule was last refreshed: enough to tell an entry the old list kept from
+// a schedule that has not caught up.
+function shelfShadowStoredText(item) {
+  const bits = [];
+  if (item && item.airDate) bits.push(`air date ${String(item.airDate).slice(0, 10)}`);
+  if (item && item.isUnaired) bits.push("marked unaired");
+  return bits.length ? ` (stored entry: ${bits.join(", ")})` : "";
+}
+
+function shelfShadowCheckedText(sched, today) {
+  const at = Number(sched && sched.checked_at);
+  if (!Number.isFinite(at) || at <= 1) return "";
+  const days = Math.floor((Date.parse(`${today}T12:00:00Z`) - at) / 86400000);
+  return days >= 1 ? `, schedule checked ${days} days ago` : ", schedule checked today";
+}
+
 function shelfShadowMediaIdOf(key) {
   const m = /^m(\d+)(?::|$)/.exec(String(key || ""));
   return m ? Number(m[1]) : null;
@@ -109809,6 +109956,9 @@ function shelfShadowCwWhyOld(item, key, ctx) {
   if (!row) return ["no-progress", "no show_progress row for the show"];
   if (row.status === "dropped") return ["dropped", "the show is marked dropped"];
   if (row.last_season == null || row.last_episode == null) return ["no-episode-progress", "show_progress has no episode"];
+  // The worked-out shelf reads only the account's SHELF_PROGRESS_LIMIT most
+  // recently watched shows.
+  if (!ctx.served.has(mediaId)) return ["beyond-limit", `the show is not among the account's ${SHELF_PROGRESS_LIMIT} most recently watched`];
   const lastS = Number(row.last_season);
   const lastE = Number(row.last_episode);
   const S = Number(item.seasonNum);
@@ -109816,13 +109966,26 @@ function shelfShadowCwWhyOld(item, key, ctx) {
   if (row.dismissed_at_season != null && shelfAtOrBefore(lastS, lastE, Number(row.dismissed_at_season), Number(row.dismissed_at_episode) || 0)) {
     return ["dismissed", `dismissed at ${shelfShadowEp(row.dismissed_at_season, row.dismissed_at_episode)}, progress ${shelfShadowEp(lastS, lastE)}`];
   }
+  // The old list's own mistake: it offers an episode the history says was
+  // watched (the ping and the webhook put the old entry back when TMDB had
+  // nothing newer, fixed in Release 17).
   if (shelfAtOrBefore(S, E, lastS, lastE)) return ["already-watched", `stored ${shelfShadowEp(S, E)}, but progress is at ${shelfShadowEp(lastS, lastE)}`];
   const t = ctx.titles.get(mediaId);
   if (!t || !t.sched) return ["schedule-unknown", "the schedule does not know the show yet"];
   const next = shelfEpisodeAfter(t.sched, lastS, lastE, ctx.today);
-  if (!next) return ["schedule-nothing-after", `nothing after ${shelfShadowEp(lastS, lastE)} (stored ${shelfShadowEp(S, E)}): ${shelfShadowScheduleText(t.sched)}`];
+  if (!next) {
+    // An episode past the last one aired, with no date: the old list offered
+    // an episode nobody can watch yet (the ping and webhook take TMDB's next
+    // episode whether or not it has aired). 44 of these on 2026-10-04, most of
+    // them next seasons of returning, ended or cancelled shows.
+    const lastAiredS = t.sched.last_aired_season;
+    const lastAiredE = t.sched.last_aired_episode;
+    const notAired = lastAiredS == null || !shelfAtOrBefore(S, E, Number(lastAiredS), Number(lastAiredE) || 0);
+    return [notAired ? "not-aired-yet" : "schedule-nothing-after", `nothing after ${shelfShadowEp(lastS, lastE)} (stored ${shelfShadowEp(S, E)}${shelfShadowStoredText(item)}): ${shelfShadowScheduleText(t.sched)}${shelfShadowCheckedText(t.sched, ctx.today)}`];
+  }
   if (next.season !== S || next.episode !== E) return ["different-episode", `stored ${shelfShadowEp(S, E)}, worked out ${shelfShadowEp(next.season, next.episode)} after ${shelfShadowEp(lastS, lastE)}`];
-  return ["other", `progress ${shelfShadowEp(lastS, lastE)}: ${shelfShadowScheduleText(t.sched)}`];
+  const v2 = ctx.v2Keys.cw.filter((k) => k.split(":")[0] === `m${mediaId}`);
+  return ["other", `stored ${JSON.stringify({ id: item.id, showId: item.showId, seasonNum: item.seasonNum, episodeNum: item.episodeNum })}, progress ${shelfShadowEp(lastS, lastE)}, new shelf has ${v2.length ? v2.join(", ") : "nothing"} for it: ${shelfShadowScheduleText(t.sched)}`];
 }
 
 // Why a stored Airing Next show is not on the worked-out shelf.
@@ -109847,11 +110010,19 @@ function shelfShadowAnWhyOld(item, key, ctx) {
   return ["other", shelfShadowScheduleText(s)];
 }
 
-// Why the worked-out shelf has an item the stored one has not.
-function shelfShadowWhyNew(shelf, key, ctx) {
+// Why the worked-out shelf has an item the stored one has not. `whyOld` is
+// what was found for the stored side's own differences: a worked-out episode
+// standing in for a stored one the old list had wrong is that mistake put right.
+function shelfShadowWhyNew(shelf, key, ctx, whyOld = {}) {
   const show = String(key).split(":")[0];
   const stored = ctx.legacyKeys[shelf].filter((k) => k && k.split(":")[0] === show);
-  if (shelf === "cw" && stored.length) return ["different-episode", `stored ${stored.join(", ")}`];
+  if (shelf === "cw" && stored.length) {
+    const codes = stored.map((k) => (whyOld[k] ? whyOld[k][0] : null)).filter(Boolean);
+    if (codes.length && codes.every((c) => SHELF_SHADOW_OLD_LIST_WRONG.has(c))) {
+      return ["replaces-old-mistake", `stored ${stored.join(", ")} (${codes.join(", ")})`];
+    }
+    return ["different-episode", `stored ${stored.join(", ")}`];
+  }
   return ["not-stored", "the stored shelf does not have it"];
 }
 
@@ -109904,7 +110075,9 @@ async function compareAccountShelves(env, account, { now = Date.now() } = {}) {
     for (const [k, v] of moreTitles) titles.set(k, v);
     const ctx = {
       rows, titles, today: shelfToday(now),
+      served: new Set(progressRows.map((r) => r.media_id)),
       legacyKeys: { cw: legacyCwKeyed.map(([k]) => k), an: legacyAnKeyed.map(([k]) => k) },
+      v2Keys: { cw: cw.items.map((i) => shelfShadowCwKey(i, ids)), an: an.items.map((i) => shelfShadowAnKey(i, ids)) },
     };
     const byKey = { cw: new Map(legacyCwKeyed), an: new Map(legacyAnKeyed) };
     for (const [shelf, diff, whyOld] of [["cw", cwDiff, shelfShadowCwWhyOld], ["an", anDiff, shelfShadowAnWhyOld]]) {
@@ -109916,7 +110089,7 @@ async function compareAccountShelves(env, account, { now = Date.now() } = {}) {
           diff.why[key] = ["error", jobErrorText(err)];
         }
       }
-      for (const key of diff.v2Only) diff.why[key] = shelfShadowWhyNew(shelf, key, ctx);
+      for (const key of diff.v2Only) diff.why[key] = shelfShadowWhyNew(shelf, key, ctx, diff.why);
     }
   }
   return { cw: cwDiff, an: anDiff };
@@ -109996,7 +110169,7 @@ async function runShelfShadow(env, job = {}, { accounts: batchSize = SHELF_SHADO
   }
   if (!accounts || accounts.length < batchSize) {
     // The round is over: keep its totals, start the next one.
-    return { scanned: (accounts || []).length, progress: { afterId: 0, round: shelfShadowEmpty(), last: { ...round, rate: shelfShadowRate(round), finishedAt: Date.now() } } };
+    return { scanned: (accounts || []).length, progress: { afterId: 0, round: shelfShadowEmpty(), last: { ...round, rate: shelfShadowRate(round), rateNew: shelfShadowRateNew(round), verdict: shelfShadowVerdict(round), finishedAt: Date.now() } } };
   }
   return { scanned: accounts.length, progress: { ...progress, afterId: lastId, round } };
 }
@@ -111649,3 +111822,48 @@ async function titleDetailsWithoutTmdb(env, rawId, type, region) {
     notOnTmdb: true,
   };
 }
+
+// --- New accounts' history copy: activity.copy-new (Release 17) ------------------
+//
+// With FF_EVENT_TRACKING on, an account is served from the activity database
+// once its history copy (migrate.activity, 37_activity-backfill.js) is done.
+// The copy only ever ran when an operator pressed it, so an account made after
+// it finished stayed on the legacy stores (39 of 748 accounts, 2026-10-04).
+// This hourly job runs copy steps for them: runActivityBackfillStep picks up
+// accounts made after a finished run, and is a single cheap count when there
+// are none. Up to ACTIVITY_COPY_NEW_STEPS steps a run.
+//
+// Module level, after the Worker's exports, like 27_ onward.
+
+const ACTIVITY_COPY_NEW_EVERY_MS = 60 * 60 * 1000;
+const ACTIVITY_COPY_NEW_STEPS = 3;
+
+async function runActivityCopyNew(env, job = {}) {
+  const progress = { ...(job.progress || {}) };
+  if (!env || !env.DB || typeof isEventTrackingEnabled !== "function" || !isEventTrackingEnabled(env)) {
+    return { progress, skipped: "FF_EVENT_TRACKING is off" };
+  }
+  let out = null;
+  for (let i = 0; i < ACTIVITY_COPY_NEW_STEPS; i++) {
+    out = await runActivityBackfillStep(env, {});
+    if (!out || !out.ok || out.done) break;
+  }
+  return {
+    progress: {
+      ...progress,
+      lastRun: {
+        at: Date.now(),
+        ok: !!(out && out.ok),
+        done: !!(out && out.done),
+        accountsDone: out ? out.accountsDone : null,
+        accountsTotal: out ? out.accountsTotal : null,
+        error: out && !out.ok ? out.error || null : null,
+      },
+    },
+  };
+}
+
+definePeriodicJob("activity.copy-new", {
+  everyMs: ACTIVITY_COPY_NEW_EVERY_MS,
+  run: (env, payload, job) => runActivityCopyNew(env, job),
+});

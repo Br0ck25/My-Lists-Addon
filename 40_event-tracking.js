@@ -119,8 +119,15 @@ async function assembleTrackingRecord(env, rawKv, username, accountId) {
   const record = { ...rest, watchHistory: history };
   if (isShowScheduleEnabled(env)) {
     const [cw, an] = await Promise.all([continueWatching(env, accountId), airingNext(env, accountId)]);
-    record.continueWatching = cw.items.map(({ mediaId, ...it }) => it);
-    record.airingNext = an.items.map(({ mediaId, ...it }) => it);
+    // A show the schedule does not know yet keeps the entry it had
+    // (shelfStoredForUnknown, 39_) rather than dropping off the shelf.
+    const [keepCw, keepAn] = await Promise.all([
+      shelfStoredForUnknown(env, rest.continueWatching, cw.missingSchedule),
+      shelfStoredForUnknown(env, rest.airingNext, an.missingSchedule),
+    ]);
+    record.continueWatching = [...cw.items.map(({ mediaId, ...it }) => it), ...keepCw];
+    record.airingNext = [...an.items.map(({ mediaId, ...it }) => it), ...keepAn]
+      .sort((a, b) => String(a.airDate || "").localeCompare(String(b.airDate || "")));
   }
   return record;
 }

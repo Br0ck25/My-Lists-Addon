@@ -35,7 +35,10 @@
 // Nothing calls these yet: P3c-6 serves /sync/load and the personal rows
 // from them, behind FF_EVENT_TRACKING.
 
-const SHELF_PROGRESS_LIMIT = 200;
+// Shows read per account. 200 left a heavy watcher's older shows off Continue
+// Watching and Airing Next, which the stored shelves never did (the shelf
+// comparison, 2026-10-04); 1000 still bounds the read.
+const SHELF_PROGRESS_LIMIT = 1000;
 const SHELF_JOIN_CHUNK = 90;
 const SHELF_HISTORY_PAGE = 50;
 const SHELF_HISTORY_PAGE_MAX = 500;
@@ -177,6 +180,38 @@ async function shelfTitles(env, mediaIds) {
     for (const r of rows || []) out.set(r.id, { media: r, sched: r.s_media != null && (r.checked_at != null || r.s_status != null) ? r : null });
   }
   return out;
+}
+
+// The stored entries (as the legacy writers keep them) of the shows the
+// schedule does not know yet. With FF_SHOW_SCHEDULE on they are served as they
+// were instead of dropped: a show that was matched to a movie row never gets a
+// schedule row, and one TMDB cannot answer for stays unknown, so without this
+// it would vanish from the shelf (Release 18). Storyline suggestions are not
+// taken: they are kept whole in show_progress already.
+async function shelfStoredForUnknown(env, entries, mediaIds) {
+  const list = Array.isArray(entries) ? entries : [];
+  const ids = [...new Set((mediaIds || []).filter((m) => m != null))];
+  if (!list.length || !ids.length || !env || !env.DB) return [];
+  const keys = new Set();
+  for (let i = 0; i < ids.length; i += SHELF_JOIN_CHUNK) {
+    const part = ids.slice(i, i + SHELF_JOIN_CHUNK);
+    const { results } = await env.DB.prepare(
+      `SELECT imdb_id, tmdb_id, alt_id FROM media WHERE id IN (${part.map(() => "?").join(", ")})`
+    ).bind(...part).all();
+    for (const m of results || []) {
+      if (m.imdb_id) keys.add(String(m.imdb_id));
+      if (m.tmdb_id) {
+        keys.add(`tmdb:${m.tmdb_id}`);
+        keys.add(`tmdb:tv:${m.tmdb_id}`);
+      }
+      if (m.alt_id) keys.add(String(m.alt_id));
+    }
+  }
+  return list.filter((it) => {
+    if (!it || typeof it !== "object" || it.isCompanion) return false;
+    const id = String(it.showId || it.id || "");
+    return keys.has(id) || (id.startsWith("tt") && keys.has(id.split(":")[0]));
+  });
 }
 
 async function continueWatching(env, accountId, opts = {}) {

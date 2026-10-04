@@ -2181,6 +2181,24 @@ async function ensureTrackingMigrated(env, username) {
   }
 }
 
+// The Continue Watching entries of one show still ahead of the furthest episode
+// watched. The playback ping and the media server webhook keep a show's old
+// entry when TMDB has nothing newer (it may only have failed), but an entry at
+// or before what was just watched offers an episode already seen, and kept it
+// for good: the show was not marked fully watched, so the episode sweep never
+// looked at it again (the shelf comparison found 93 of them, 2026-10-04).
+// Storyline suggestions and movies are kept as they are.
+function cwEntriesStillAhead(items, season, episode) {
+  const s = Number(season);
+  const e = Number(episode);
+  return (Array.isArray(items) ? items : []).filter((it) => {
+    if (!it || it.isCompanion || it.type === "movie" || it.seasonNum == null || it.episodeNum == null) return true;
+    const iS = Number(it.seasonNum);
+    const iE = Number(it.episodeNum);
+    return iS > s || (iS === s && iE > e);
+  });
+}
+
 async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
   if (!env || !env.CONFIGS) return [];
   

@@ -53,6 +53,52 @@ function shelfShadowRate(t) {
   return all ? diff / all : 0;
 }
 
+// Differences that are the old list's own mistake, not the new one's, by the
+// rules both lists share (39_activity-shelves.js):
+//   already-watched     an episode offered although the history says it was watched
+//   not-aired-yet       an episode offered that has not aired and has no date
+//   dismissed, dropped  a show the person dismissed or dropped, still offered
+//   hidden              a show the person took off Airing Next, still listed
+//   no-upcoming, next-already-aired   an Airing Next entry with nothing coming
+//   replaces-old-mistake   the worked-out episode standing in for one of those
+// Left out of `rateNew`, and not counted as lost in the verdict.
+const SHELF_SHADOW_OLD_LIST_WRONG = new Set([
+  "already-watched", "not-aired-yet", "dismissed", "dropped", "hidden", "no-upcoming", "next-already-aired", "replaces-old-mistake",
+]);
+
+// What switching would do, from the round's reasons: entries only the old list
+// has that are not its mistakes (lost), shows offered at another episode
+// (changed, counted once, on the old side), and entries only the new list has
+// (added). Shows the schedule does not know yet keep their stored entry
+// (shelfStoredForUnknown), so they are not lost.
+function shelfShadowVerdict(t) {
+  const out = { lost: 0, changed: 0, added: 0, oldWrong: 0, lostWhy: {} };
+  for (const shelf of [t.cw, t.an]) {
+    for (const [code, n] of Object.entries(shelf.whyOld || {})) {
+      const k = Number(n) || 0;
+      if (SHELF_SHADOW_OLD_LIST_WRONG.has(code)) out.oldWrong += k;
+      else if (code === "different-episode") out.changed += k;
+      else {
+        out.lost += k;
+        out.lostWhy[code] = (out.lostWhy[code] || 0) + k;
+      }
+    }
+    for (const [code, n] of Object.entries(shelf.whyNew || {})) {
+      const k = Number(n) || 0;
+      if (SHELF_SHADOW_OLD_LIST_WRONG.has(code)) out.oldWrong += k;
+      else if (code !== "different-episode") out.added += k;
+    }
+  }
+  return out;
+}
+
+function shelfShadowRateNew(t) {
+  const { oldWrong } = shelfShadowVerdict(t);
+  const diff = t.cw.legacyOnly + t.cw.v2Only + t.an.legacyOnly + t.an.v2Only;
+  const all = t.cw.both + t.an.both + diff - oldWrong;
+  return all > 0 ? (diff - oldWrong) / all : 0;
+}
+
 // Media ids for legacy show ids ("tt…", "tmdb:N", "tmdb:tv:N").
 async function shelfShadowMediaIds(env, showIds) {
   const imdb = [];
@@ -133,6 +179,23 @@ function shelfShadowScheduleText(sched) {
   return `${last}, ${next}${sched.season_episode_counts ? "" : ", no episode counts"}${sched.s_status ? ` (${sched.s_status})` : ""}`;
 }
 
+// What the stored entry itself says beyond its episode, and how long ago the
+// schedule was last refreshed: enough to tell an entry the old list kept from
+// a schedule that has not caught up.
+function shelfShadowStoredText(item) {
+  const bits = [];
+  if (item && item.airDate) bits.push(`air date ${String(item.airDate).slice(0, 10)}`);
+  if (item && item.isUnaired) bits.push("marked unaired");
+  return bits.length ? ` (stored entry: ${bits.join(", ")})` : "";
+}
+
+function shelfShadowCheckedText(sched, today) {
+  const at = Number(sched && sched.checked_at);
+  if (!Number.isFinite(at) || at <= 1) return "";
+  const days = Math.floor((Date.parse(`${today}T12:00:00Z`) - at) / 86400000);
+  return days >= 1 ? `, schedule checked ${days} days ago` : ", schedule checked today";
+}
+
 function shelfShadowMediaIdOf(key) {
   const m = /^m(\d+)(?::|$)/.exec(String(key || ""));
   return m ? Number(m[1]) : null;
@@ -149,6 +212,9 @@ function shelfShadowCwWhyOld(item, key, ctx) {
   if (!row) return ["no-progress", "no show_progress row for the show"];
   if (row.status === "dropped") return ["dropped", "the show is marked dropped"];
   if (row.last_season == null || row.last_episode == null) return ["no-episode-progress", "show_progress has no episode"];
+  // The worked-out shelf reads only the account's SHELF_PROGRESS_LIMIT most
+  // recently watched shows.
+  if (!ctx.served.has(mediaId)) return ["beyond-limit", `the show is not among the account's ${SHELF_PROGRESS_LIMIT} most recently watched`];
   const lastS = Number(row.last_season);
   const lastE = Number(row.last_episode);
   const S = Number(item.seasonNum);
@@ -156,13 +222,26 @@ function shelfShadowCwWhyOld(item, key, ctx) {
   if (row.dismissed_at_season != null && shelfAtOrBefore(lastS, lastE, Number(row.dismissed_at_season), Number(row.dismissed_at_episode) || 0)) {
     return ["dismissed", `dismissed at ${shelfShadowEp(row.dismissed_at_season, row.dismissed_at_episode)}, progress ${shelfShadowEp(lastS, lastE)}`];
   }
+  // The old list's own mistake: it offers an episode the history says was
+  // watched (the ping and the webhook put the old entry back when TMDB had
+  // nothing newer, fixed in Release 17).
   if (shelfAtOrBefore(S, E, lastS, lastE)) return ["already-watched", `stored ${shelfShadowEp(S, E)}, but progress is at ${shelfShadowEp(lastS, lastE)}`];
   const t = ctx.titles.get(mediaId);
   if (!t || !t.sched) return ["schedule-unknown", "the schedule does not know the show yet"];
   const next = shelfEpisodeAfter(t.sched, lastS, lastE, ctx.today);
-  if (!next) return ["schedule-nothing-after", `nothing after ${shelfShadowEp(lastS, lastE)} (stored ${shelfShadowEp(S, E)}): ${shelfShadowScheduleText(t.sched)}`];
+  if (!next) {
+    // An episode past the last one aired, with no date: the old list offered
+    // an episode nobody can watch yet (the ping and webhook take TMDB's next
+    // episode whether or not it has aired). 44 of these on 2026-10-04, most of
+    // them next seasons of returning, ended or cancelled shows.
+    const lastAiredS = t.sched.last_aired_season;
+    const lastAiredE = t.sched.last_aired_episode;
+    const notAired = lastAiredS == null || !shelfAtOrBefore(S, E, Number(lastAiredS), Number(lastAiredE) || 0);
+    return [notAired ? "not-aired-yet" : "schedule-nothing-after", `nothing after ${shelfShadowEp(lastS, lastE)} (stored ${shelfShadowEp(S, E)}${shelfShadowStoredText(item)}): ${shelfShadowScheduleText(t.sched)}${shelfShadowCheckedText(t.sched, ctx.today)}`];
+  }
   if (next.season !== S || next.episode !== E) return ["different-episode", `stored ${shelfShadowEp(S, E)}, worked out ${shelfShadowEp(next.season, next.episode)} after ${shelfShadowEp(lastS, lastE)}`];
-  return ["other", `progress ${shelfShadowEp(lastS, lastE)}: ${shelfShadowScheduleText(t.sched)}`];
+  const v2 = ctx.v2Keys.cw.filter((k) => k.split(":")[0] === `m${mediaId}`);
+  return ["other", `stored ${JSON.stringify({ id: item.id, showId: item.showId, seasonNum: item.seasonNum, episodeNum: item.episodeNum })}, progress ${shelfShadowEp(lastS, lastE)}, new shelf has ${v2.length ? v2.join(", ") : "nothing"} for it: ${shelfShadowScheduleText(t.sched)}`];
 }
 
 // Why a stored Airing Next show is not on the worked-out shelf.
@@ -187,11 +266,19 @@ function shelfShadowAnWhyOld(item, key, ctx) {
   return ["other", shelfShadowScheduleText(s)];
 }
 
-// Why the worked-out shelf has an item the stored one has not.
-function shelfShadowWhyNew(shelf, key, ctx) {
+// Why the worked-out shelf has an item the stored one has not. `whyOld` is
+// what was found for the stored side's own differences: a worked-out episode
+// standing in for a stored one the old list had wrong is that mistake put right.
+function shelfShadowWhyNew(shelf, key, ctx, whyOld = {}) {
   const show = String(key).split(":")[0];
   const stored = ctx.legacyKeys[shelf].filter((k) => k && k.split(":")[0] === show);
-  if (shelf === "cw" && stored.length) return ["different-episode", `stored ${stored.join(", ")}`];
+  if (shelf === "cw" && stored.length) {
+    const codes = stored.map((k) => (whyOld[k] ? whyOld[k][0] : null)).filter(Boolean);
+    if (codes.length && codes.every((c) => SHELF_SHADOW_OLD_LIST_WRONG.has(c))) {
+      return ["replaces-old-mistake", `stored ${stored.join(", ")} (${codes.join(", ")})`];
+    }
+    return ["different-episode", `stored ${stored.join(", ")}`];
+  }
   return ["not-stored", "the stored shelf does not have it"];
 }
 
@@ -244,7 +331,9 @@ async function compareAccountShelves(env, account, { now = Date.now() } = {}) {
     for (const [k, v] of moreTitles) titles.set(k, v);
     const ctx = {
       rows, titles, today: shelfToday(now),
+      served: new Set(progressRows.map((r) => r.media_id)),
       legacyKeys: { cw: legacyCwKeyed.map(([k]) => k), an: legacyAnKeyed.map(([k]) => k) },
+      v2Keys: { cw: cw.items.map((i) => shelfShadowCwKey(i, ids)), an: an.items.map((i) => shelfShadowAnKey(i, ids)) },
     };
     const byKey = { cw: new Map(legacyCwKeyed), an: new Map(legacyAnKeyed) };
     for (const [shelf, diff, whyOld] of [["cw", cwDiff, shelfShadowCwWhyOld], ["an", anDiff, shelfShadowAnWhyOld]]) {
@@ -256,7 +345,7 @@ async function compareAccountShelves(env, account, { now = Date.now() } = {}) {
           diff.why[key] = ["error", jobErrorText(err)];
         }
       }
-      for (const key of diff.v2Only) diff.why[key] = shelfShadowWhyNew(shelf, key, ctx);
+      for (const key of diff.v2Only) diff.why[key] = shelfShadowWhyNew(shelf, key, ctx, diff.why);
     }
   }
   return { cw: cwDiff, an: anDiff };
@@ -336,7 +425,7 @@ async function runShelfShadow(env, job = {}, { accounts: batchSize = SHELF_SHADO
   }
   if (!accounts || accounts.length < batchSize) {
     // The round is over: keep its totals, start the next one.
-    return { scanned: (accounts || []).length, progress: { afterId: 0, round: shelfShadowEmpty(), last: { ...round, rate: shelfShadowRate(round), finishedAt: Date.now() } } };
+    return { scanned: (accounts || []).length, progress: { afterId: 0, round: shelfShadowEmpty(), last: { ...round, rate: shelfShadowRate(round), rateNew: shelfShadowRateNew(round), verdict: shelfShadowVerdict(round), finishedAt: Date.now() } } };
   }
   return { scanned: accounts.length, progress: { ...progress, afterId: lastId, round } };
 }

@@ -4153,7 +4153,10 @@ async function renderAdminDashboard(env) {
             lines.push(line + '.');
             if (j.type === 'shelf.shadow' && j.last) {
               const t = j.last;
-              lines.push('  Last full comparison (' + t.accounts + ' accounts, finished ' + jobsAgo(t.finishedAt) + '): ' + (t.rate * 100).toFixed(2) + '% different. Continue Watching: ' + t.cw.both + ' the same, ' + t.cw.legacyOnly + ' only in the old, ' + t.cw.v2Only + ' only in the new, ' + t.cw.unknown + ' shows not known yet. Airing Next: ' + t.an.both + ' the same, ' + t.an.legacyOnly + ' only in the old, ' + t.an.v2Only + ' only in the new, ' + t.an.unknown + ' not known yet.' + (t.examples && t.examples.length ? ' Examples: ' + JSON.stringify(t.examples.slice(0, 3)) : ''));
+              lines.push('  Last full comparison (' + t.accounts + ' accounts, finished ' + jobsAgo(t.finishedAt) + '): ' + (t.rate * 100).toFixed(2) + '% different' + (t.rateNew != null ? ' (' + (t.rateNew * 100).toFixed(2) + '% leaving out mistakes in the old list)' : '') + '. Continue Watching: ' + t.cw.both + ' the same, ' + t.cw.legacyOnly + ' only in the old, ' + t.cw.v2Only + ' only in the new, ' + t.cw.unknown + ' shows not known yet. Airing Next: ' + t.an.both + ' the same, ' + t.an.legacyOnly + ' only in the old, ' + t.an.v2Only + ' only in the new, ' + t.an.unknown + ' not known yet.' + (t.examples && t.examples.length ? ' Examples: ' + JSON.stringify(t.examples.slice(0, 3)) : ''));
+              if (t.verdict) {
+                lines.push('  If FF_SHOW_SCHEDULE were on: ' + t.verdict.lost + ' lost, ' + t.verdict.changed + ' at another episode, ' + t.verdict.added + ' added, ' + t.verdict.oldWrong + ' old-list mistakes put right.');
+              }
               // Why each difference is there (47_shelf-shadow.js), most common first.
               if (t.cw.whyOld) {
                 const whyText = function (w) {
@@ -4683,7 +4686,8 @@ async function renderAdminDashboard(env) {
             const t = data.last;
             status.textContent = 'Done: ' + t.accounts + ' accounts compared.';
             out.textContent = [
-              (t.rate * 100).toFixed(2) + '% different (the switch waits for under 1%).',
+              (t.rate * 100).toFixed(2) + '% different' + (t.rateNew != null ? '; ' + (t.rateNew * 100).toFixed(2) + '% leaving out mistakes in the old list.' : '.'),
+              t.verdict ? 'If FF_SHOW_SCHEDULE were on now: ' + t.verdict.lost + ' entries lost' + (t.verdict.lost ? ' (' + shelfCompareWhy(t.verdict.lostWhy) + ')' : '') + ', ' + t.verdict.changed + ' shown at another episode, ' + t.verdict.added + ' added; ' + t.verdict.oldWrong + ' mistakes in the old list put right. Shows not known yet keep their current entry.' : '',
               'Continue Watching: ' + t.cw.both + ' the same, ' + t.cw.legacyOnly + ' only in the old, ' + t.cw.v2Only + ' only in the new, ' + t.cw.unknown + ' shows not known yet.',
               '  Why only in the old: ' + shelfCompareWhy(t.cw.whyOld),
               '  Why only in the new: ' + shelfCompareWhy(t.cw.whyNew),
