@@ -2,6 +2,39 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-04 (Antigravity): Settings Subnav Restructure (Option A) & Design System Polish.**
+>
+> **Where things stand**
+> - Settings Subnav Restructure into 6 Focused Tabs (`00_constants.js`, `09_page-shell.js`, `14_tab-presets-backup.js`, `15_tab-settings-html.js`, `16_client-row-core.js`, `tests/app-shell*.test.mjs`):
+>   1. **Focused Subnav Tabs (Option A)**:
+>      - `[Account & Security]` (`account`): Creator Key, Creator Profile, Admin link, Danger Zone (delete account).
+>      - `[Catalog & Display]` (`display`): Content filter rules (Region, Deduplication, Digital Release, Adult Filter), Better Posters configuration, Poster Badges & Labels, and Hidden Lists.
+>      - `[Tracking & Scrobble]` (`scrobble`): Watchlist Preferences, Watch History & Continue Watching, Auto-Track & Media Server Scrobbling (Plex, Emby, Jellyfin, Jellyseerr).
+>      - `[Connected Services]` (`external`): MDBList, Trakt, Simkl, TMDB, and Stremio/Nuvio connections and API keys.
+>      - `[Presets & Backup]` (`backup`): Preset lists, backup and restore.
+>      - `[Feedback and Support]` (`feedback`): Bug report and support links.
+>   2. **Pre-Hydration SSR & Client Route Sync**:
+>      - Added `display` and `scrobble` to `APP_SHELL_TABS.settings.subs` in `00_constants.js`.
+>      - Added pre-hydration SSR selectors and head script route validation in `09_page-shell.js`.
+>      - Updated early script DOM sync and dynamic tab switching dictionary in `16_client-row-core.js`.
+>      - Preserved instant zero-flicker subpanel rendering and full backward compatibility.
+> - Design System & Ergonomic Polish across Settings Screens (`09_page-shell.js`, `15_tab-settings-html.js`, `22_client-creator-profile.js`):
+>   1. **Catalog & Content Rules Consolidation (P1)**:
+>      - Merged 4 isolated single-row cards into a unified, elegant *"Catalog & Content Rules"* card with subtle hairline dividers (`border-bottom: 1px solid var(--border)`).
+>   2. **Constrained Dropdown Widths (P2)**:
+>      - Constrained edge-to-edge stretched dropdowns (`Region`, `Rating Source`, `Poster Language`) from 1,000px wide down to a neat `max-width: 320px` with standard pill radii.
+>   3. **Responsive 2-Column Checkbox Grids (P3)**:
+>      - Replaced tall, single-column checkbox lists (Better Posters, Poster Badges Website & Dashboard, Stremio & Nuvio Artwork Overlays, and Badge Types) with `.settings-check-group.two-col-grid` (`display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 4px 12px;`).
+>      - Cut vertical scrolling distance by over 50% while preserving every DOM ID, `data-act`, and `data-act-args`.
+>   4. **Flattened Nested Scrobbler Rows (P4)**:
+>      - In `22_client-creator-profile.js`, flattened nested sunken grey boxes in Media Server Scrobbling into clean divider rows (`border-top: 1px solid var(--border)`), matching the modern card design system.
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK (5,455,500 bytes).
+>   - `node --check worker_entry_combined.js`: OK (0 syntax errors).
+>   - `python gen_map.py`: 2,666 symbols, 211 routes.
+>   - All 2,071 repository tests passing (`tests/*.test.mjs`: 2,071 passed, 0 failed).
+> - Branch: `feat/design-system-phase-1`
+>
 > **HANDOFF, 2026-10-04 (Antigravity): Search Input Ergonomics — Clear Button (✕) Vector Upgrade & Search Button Removal.**
 >
 > **Where things stand**

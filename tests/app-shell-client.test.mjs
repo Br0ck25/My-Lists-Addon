@@ -17,7 +17,7 @@ const VIEWS = [
   { tab: "channels", path: "/channels", subs: ["my-channels", "storylines", "quickadd", "explore", "import", "build"] },
   { tab: "discover", path: "/discover", subs: ["movie", "all", "series", "popular", "curated", "gems", "kids", "holidays", "genres"] },
   { tab: "search", path: "/search", subs: [] },
-  { tab: "settings", path: "/settings", subs: ["account", "external", "backup", "feedback"] },
+  { tab: "settings", path: "/settings", subs: ["account", "display", "scrobble", "external", "backup", "feedback"] },
 ];
 
 // Values that cross the vm boundary have another realm's prototypes, so

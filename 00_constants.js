@@ -1610,7 +1610,7 @@ const APP_SHELL_TABS = [
   { id: "channels", label: "Channels", path: "/channels", subs: ["my-channels", "storylines", "quickadd", "explore", "import", "build"] },
   { id: "discover", label: "Discover", path: "/discover", subs: ["movie", "all", "series", "popular", "curated", "gems", "kids", "holidays", "genres"] },
   { id: "search", label: "Search", path: "/search", subs: [] },
-  { id: "settings", label: "Settings", path: "/settings", subs: ["account", "external", "backup", "feedback"] },
+  { id: "settings", label: "Settings", path: "/settings", subs: ["account", "display", "scrobble", "external", "backup", "feedback"] },
 ];
 
 // The paths the shell answers on. Exact matches only: /lists/<slug> and

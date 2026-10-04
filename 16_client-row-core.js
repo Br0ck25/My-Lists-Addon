@@ -173,10 +173,14 @@ function normalizeListsSubmenu(raw) {
       });
     }
     var subAccount = document.getElementById('settingsSubAccount');
+    var subDisplay = document.getElementById('settingsSubDisplay');
+    var subScrobble = document.getElementById('settingsSubScrobble');
     var subExternal = document.getElementById('settingsSubExternal');
     var subBackup = document.getElementById('settingsSubBackup');
     var subFeedback = document.getElementById('settingsSubFeedback');
     if (subAccount) subAccount.style.display = (setSub === 'account' || setSub === 'keys') ? 'block' : 'none';
+    if (subDisplay) subDisplay.style.display = (setSub === 'display') ? 'block' : 'none';
+    if (subScrobble) subScrobble.style.display = (setSub === 'scrobble') ? 'block' : 'none';
     if (subExternal) subExternal.style.display = (setSub === 'external') ? 'block' : 'none';
     if (subBackup) subBackup.style.display = (setSub === 'backup') ? 'block' : 'none';
     if (subFeedback) subFeedback.style.display = (setSub === 'feedback') ? 'block' : 'none';
@@ -2636,6 +2640,8 @@ function switchSettingsSubmenu(name, btn) {
   const subpanels = {
     'account': 'settingsSubAccount',
     'keys': 'settingsSubAccount',
+    'display': 'settingsSubDisplay',
+    'scrobble': 'settingsSubScrobble',
     'external': 'settingsSubExternal',
     'backup': 'settingsSubBackup',
     'feedback': 'settingsSubFeedback'

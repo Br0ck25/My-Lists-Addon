@@ -267,6 +267,7 @@ ${seoHeadHtml}
       var chSub = (shellRoute && shellRoute.tab === 'channels' && shellSub) || localStorage.getItem('myListAddon:channelsSubmenu') || 'my-channels';
       document.documentElement.setAttribute('data-initial-channels-sub', chSub);
       var setSub = (shellRoute && shellRoute.tab === 'settings' && shellSub) || localStorage.getItem('myListAddon:settingsSubmenu') || 'account';
+      if (['account', 'display', 'scrobble', 'external', 'backup', 'feedback'].indexOf(setSub) === -1) setSub = 'account';
       document.documentElement.setAttribute('data-initial-settings-sub', setSub);
       var discSub = (shellRoute && shellRoute.tab === 'discover' && shellSub) || localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
       if (discSub === 'all') discSub = 'movie';
@@ -921,6 +922,8 @@ ${seoHeadHtml}
 
   /* Settings */
   html[data-initial-settings-sub] #settingsSubAccount,
+  html[data-initial-settings-sub] #settingsSubDisplay,
+  html[data-initial-settings-sub] #settingsSubScrobble,
   html[data-initial-settings-sub] #settingsSubExternal,
   html[data-initial-settings-sub] #settingsSubBackup,
   html[data-initial-settings-sub] #settingsSubFeedback {
@@ -928,6 +931,12 @@ ${seoHeadHtml}
   }
   html[data-initial-settings-sub="account"] #settingsSubAccount,
   html[data-initial-settings-sub="keys"] #settingsSubAccount {
+    display: block !important;
+  }
+  html[data-initial-settings-sub="display"] #settingsSubDisplay {
+    display: block !important;
+  }
+  html[data-initial-settings-sub="scrobble"] #settingsSubScrobble {
     display: block !important;
   }
   html[data-initial-settings-sub="external"] #settingsSubExternal {
@@ -950,6 +959,8 @@ ${seoHeadHtml}
   }
   html[data-initial-settings-sub="account"] #settingsSubnavBar .subnav-pill[data-sub="account"],
   html[data-initial-settings-sub="keys"] #settingsSubnavBar .subnav-pill[data-sub="account"],
+  html[data-initial-settings-sub="display"] #settingsSubnavBar .subnav-pill[data-sub="display"],
+  html[data-initial-settings-sub="scrobble"] #settingsSubnavBar .subnav-pill[data-sub="scrobble"],
   html[data-initial-settings-sub="external"] #settingsSubnavBar .subnav-pill[data-sub="external"],
   html[data-initial-settings-sub="backup"] #settingsSubnavBar .subnav-pill[data-sub="backup"],
   html[data-initial-settings-sub="feedback"] #settingsSubnavBar .subnav-pill[data-sub="feedback"] {
@@ -3367,6 +3378,11 @@ ${seoHeadHtml}
     display: flex;
     flex-direction: column;
     gap: 2px;
+  }
+  .settings-check-group.two-col-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 4px 12px;
   }
   .settings-check-item {
     display: flex;

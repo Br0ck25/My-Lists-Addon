@@ -1274,7 +1274,7 @@ function renderTrackPlaybackSection() {
         '<button type="button" class="secondary lc-btn" data-act="regenerateScrobbleWebhookUrl" title="Issues a new webhook URL and stops the old one working. Use this if the URL has been shared or logged somewhere it should not have been." style="padding:8px 14px; font-size:0.84rem;">Regenerate</button>' +
       '</div>' +
 
-      '<div style="margin:10px 0; padding:12px 14px; background:var(--color-bg-sunken, rgba(255,255,255,0.03)); border-radius:8px; border:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
+      '<div style="margin:12px 0 0; padding:12px 0; border-top:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
         '<div class="settings-toggle-row" style="padding:0 0 4px; border-bottom:none;">' +
           '<div style="flex:1; min-width:0; padding-right:12px;">' +
             '<span style="font-weight:600; font-size:0.88rem; color:var(--text);">Enable Media Server User Filtering</span>' +
@@ -1300,7 +1300,7 @@ function renderTrackPlaybackSection() {
         '</div>' +
       '</div>' +
 
-      '<div style="margin:10px 0; padding:12px 14px; background:var(--color-bg-sunken, rgba(255,255,255,0.03)); border-radius:8px; border:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
+      '<div style="margin:12px 0 0; padding:12px 0; border-top:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
         '<div class="settings-toggle-row" style="padding:0 0 10px;">' +
           '<div style="flex:1; min-width:0; padding-right:12px;">' +
             '<span style="font-weight:600; font-size:0.86rem; color:var(--text);">Automatically sync media server scrobbles to your Watch History list</span>' +

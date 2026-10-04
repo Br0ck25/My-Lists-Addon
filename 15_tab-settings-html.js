@@ -1,4 +1,4 @@
-  <!-- Submenu 1: Account & Sync -->
+  <!-- Subpanel 1: Account & Security -->
   <div class="settings-subpanel" id="settingsSubAccount">
     <div class="panel">
       <h2 class="panel-title">Your Account</h2>
@@ -6,87 +6,92 @@
     </div>
     <!-- The shell's own Settings cards (P6-2), filled by
          24_client-backup-restore-presets.js: this account's devices and this
-         browser's install link. Its account and connections cards are gone:
-         Your Account above and External Accounts & API Keys already have both,
-         and the owner found every button twice. Emitted only for a browser
-         carrying the FF_NEW_UI cookie; the legacy panels are unchanged for
-         everyone. -->
+         browser's install link. Emitted only for a browser carrying the FF_NEW_UI cookie. -->
 ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
+  </div>
 
-    <div class="panel" style="margin-top:12px;">
-      <h2 class="panel-title">Watchlist Preferences</h2>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Customize how watched movies and TV shows are managed in your personal Watchlist.</p>
-      <div id="watchlistPreferencesSection"></div>
-    </div>
+  <!-- Subpanel 2: Catalog & Display -->
+  <div class="settings-subpanel" id="settingsSubDisplay" style="display:none;">
+    <!-- Consolidated Catalog & Content Rules (P1 & P2) -->
+    <div class="panel">
+      <div class="shelf-header" style="margin-bottom:8px;">
+        <h2 class="shelf-title">Catalog &amp; Content Rules</h2>
+      </div>
+      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">Configure streaming availability, digital release filters, cross-list deduplication, and adult content safety.</p>
 
-    <div class="panel" style="margin-top:12px;">
-      <h2 class="panel-title">Hidden Lists</h2>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Hide specific lists from My Lists, Airing Next, and Simkl Airing Next. A hidden list is still tracked and updated normally underneath -- only its display is suppressed, and it can be shown again here at any time.</p>
-      <div id="hiddenListsSettingsSection"></div>
-    </div>
-
-    <div class="panel" style="margin-top:12px;">
-      <h2 class="panel-title">Region</h2>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Used for streaming-availability catalogs (Netflix, Disney+, etc.), Stream Releases, and content ratings -- so what shows up actually matches what's available where you are.</p>
-      <select id="regionSelect" aria-label="Streaming region" data-act="appActStoreSettingValue" data-act-args="[&quot;myListAddon:region&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
-        ${buildRegionOptionsHtml(initialRegion)}
-      </select>
-    </div>
-
-      <div class="panel" style="margin-top:12px;">
-      <h2 class="panel-title">Trending &amp; Popular Catalogs</h2>
-      <div class="settings-toggle-row">
-        <div style="flex:1; min-width:0; padding-right:12px;">
-          <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Hide items with no digital release</span>
-          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Removes still-in-theaters movies with no known digital or physical release from TMDB Trending and Popular catalogs.</p>
-          <details style="margin-top:6px; font-size:0.8rem; color:var(--muted);">
-            <summary style="cursor:pointer; color:var(--accent); font-weight:600;">More details</summary>
-            <p style="margin:4px 0 0;">Useful for skipping in-theaters titles you cannot stream or buy yet. TV Shows are not affected. Requires Save/Update to take effect on an existing install link.</p>
-          </details>
+      <div class="settings-row-group">
+        <!-- Region -->
+        <div class="settings-row-item" style="padding-bottom:14px; border-bottom:1px solid var(--border);">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:240px;">
+              <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Content Region</span>
+              <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Used for streaming-availability catalogs (Netflix, Disney+, etc.), Stream Releases, and content ratings.</p>
+            </div>
+            <div style="flex:none; width:100%; max-width:320px;">
+              <select id="regionSelect" aria-label="Streaming region" data-act="appActStoreSettingValue" data-act-args="[&quot;myListAddon:region&quot;,&quot;@value&quot;]" style="width:100%; max-width:320px; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.86rem; box-sizing:border-box;">
+                ${buildRegionOptionsHtml(initialRegion)}
+              </select>
+            </div>
+          </div>
         </div>
-        <label class="ui-toggle" aria-label="Hide items with no digital release">
-          <input type="checkbox" id="hideNonDigitalReleasesCheckbox" ${initialHideNonDigitalReleases ? 'checked' : ''} data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:hideNonDigitalReleases&quot;,&quot;@checked&quot;]">
-          <span class="ui-toggle-slider"></span>
-        </label>
+
+        <!-- Digital Release Filter -->
+        <div class="settings-row-item" style="padding:14px 0; border-bottom:1px solid var(--border);">
+          <div class="settings-toggle-row" style="padding:0; border:none;">
+            <div style="flex:1; min-width:0; padding-right:12px;">
+              <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Hide items with no digital release</span>
+              <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Removes still-in-theaters movies with no known digital or physical release from TMDB Trending and Popular catalogs.</p>
+              <details style="margin-top:6px; font-size:0.8rem; color:var(--muted);">
+                <summary style="cursor:pointer; color:var(--accent); font-weight:600;">More details</summary>
+                <p style="margin:4px 0 0;">Useful for skipping in-theaters titles you cannot stream or buy yet. TV Shows are not affected. Requires Save/Update to take effect on an existing install link.</p>
+              </details>
+            </div>
+            <label class="ui-toggle" aria-label="Hide items with no digital release">
+              <input type="checkbox" id="hideNonDigitalReleasesCheckbox" ${initialHideNonDigitalReleases ? 'checked' : ''} data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:hideNonDigitalReleases&quot;,&quot;@checked&quot;]">
+              <span class="ui-toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Deduplication -->
+        <div class="settings-row-item" id="legacyDedupePanel" style="padding:14px 0; border-bottom:1px solid var(--border);">
+          <div class="settings-toggle-row" style="padding:0; border:none;">
+            <div style="flex:1; min-width:0; padding-right:12px;">
+              <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Remove duplicate items across lists</span>
+              <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Automatically removes titles from lower catalog rows if already shown in a row above.</p>
+              <details style="margin-top:6px; font-size:0.8rem; color:var(--muted);">
+                <summary style="cursor:pointer; color:var(--accent); font-weight:600;">How row deduplication works</summary>
+                <p style="margin:4px 0 0;">Keeps your top catalog row intact; every list below it has items shown in earlier lists filtered out. Drag lists in Catalogs to change priority. Requires Save/Update to take effect on an existing install link.</p>
+              </details>
+            </div>
+            <label class="ui-toggle" aria-label="Remove duplicate items across lists">
+              <input type="checkbox" id="dedupeAcrossListsCheckbox" ${initialDedupeAcrossLists ? 'checked' : ''} data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:dedupeAcrossLists&quot;,&quot;@checked&quot;]">
+              <span class="ui-toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Adult Content -->
+        <div class="settings-row-item" style="padding-top:14px;">
+          <div class="settings-toggle-row" style="padding:0; border:none;">
+            <div style="flex:1; min-width:0; padding-right:12px;">
+              <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Adult Content Filter</span>
+              <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Filter NSFW posters and replace default unfiltered posters with safe, age-appropriate ones across your catalogs, search, continue watching, and Stremio/Nuvio.</p>
+            </div>
+            <label class="ui-toggle" aria-label="Adult Content Filter">
+              <input type="checkbox" id="adultContentFilterCheckbox" ${initialAdultContentFilter ? 'checked' : ''} data-act="appActToggleAdultFilter" data-act-args="[&quot;@checked&quot;]">
+              <span class="ui-toggle-slider"></span>
+            </label>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="panel" style="margin-top:12px;" id="legacyDedupePanel">
-      <h2 class="panel-title">Duplicate Items Across Lists</h2>
-      <div class="settings-toggle-row">
-        <div style="flex:1; min-width:0; padding-right:12px;">
-          <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Remove duplicate items across lists</span>
-          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Automatically removes titles from lower catalog rows if already shown in a row above.</p>
-          <details style="margin-top:6px; font-size:0.8rem; color:var(--muted);">
-            <summary style="cursor:pointer; color:var(--accent); font-weight:600;">How row deduplication works</summary>
-            <p style="margin:4px 0 0;">Keeps your top catalog row intact; every list below it has items shown in earlier lists filtered out. Drag lists in Catalogs to change priority. Requires Save/Update to take effect on an existing install link.</p>
-          </details>
-        </div>
-        <label class="ui-toggle" aria-label="Remove duplicate items across lists">
-          <input type="checkbox" id="dedupeAcrossListsCheckbox" ${initialDedupeAcrossLists ? 'checked' : ''} data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:dedupeAcrossLists&quot;,&quot;@checked&quot;]">
-          <span class="ui-toggle-slider"></span>
-        </label>
-      </div>
-    </div>
-
-    <div class="panel" style="margin-top:12px;">
-      <h2 class="panel-title">Adult Content &amp; Poster Safety</h2>
-      <div class="settings-toggle-row">
-        <div style="flex:1; min-width:0; padding-right:12px;">
-          <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Adult Content Filter</span>
-          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Filter NSFW posters and replace default unfiltered posters with safe, age-appropriate ones across your catalogs, search, continue watching, and Stremio/Nuvio.</p>
-        </div>
-        <label class="ui-toggle" aria-label="Adult Content Filter">
-          <input type="checkbox" id="adultContentFilterCheckbox" ${initialAdultContentFilter ? 'checked' : ''} data-act="appActToggleAdultFilter" data-act-args="[&quot;@checked&quot;]">
-          <span class="ui-toggle-slider"></span>
-        </label>
-      </div>
-    </div>
-
+    <!-- Better Posters Panel (P2 & P3) -->
     <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Better Posters</h2>
       <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Swap plain poster artwork for <a href="https://btttr.cc/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">BetterPosters</a> &mdash; posters with the genre, rating and tags drawn directly into the artwork. No API key or account needed.</p>
-      <div class="settings-toggle-row">
+      <div class="settings-toggle-row" style="padding:0 0 12px; border-bottom:none;">
         <div style="flex:1; min-width:0; padding-right:12px;">
           <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Use Better Posters artwork</span>
           <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Enriches artwork across Live Preview, Search, Discover, and your streaming catalog rows.</p>
@@ -100,9 +105,9 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
           <span class="ui-toggle-slider"></span>
         </label>
       </div>
-      <div id="betterPostersOptions" style="display:${initialBetterPosters ? 'flex' : 'none'}; flex-direction:column; gap:10px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
+      <div id="betterPostersOptions" style="display:${initialBetterPosters ? 'flex' : 'none'}; flex-direction:column; gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
         <div style="font-size:0.85rem; font-weight:700; color:var(--text);">What to draw on the poster</div>
-        <div class="settings-check-group">
+        <div class="settings-check-group two-col-grid">
           <label class="settings-check-item">
             <input type="checkbox" id="betterPostersGenreCheckbox" ${initialBetterPostersGenre ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersGenre&quot;,&quot;@checked&quot;]">
             <div style="flex:1; min-width:0;">
@@ -139,30 +144,33 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
             </div>
           </label>
         </div>
-        <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
-          <label for="betterPostersRatingSourceSelect" style="font-size:0.85rem; font-weight:600; color:var(--text);">Rating source</label>
-          <select id="betterPostersRatingSourceSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRatingSource&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
-            ${betterPostersRatingSourceOptionsHtml}
-          </select>
-          <p style="margin:0; color:var(--muted); font-size:0.8rem;">Which score the rating is taken from. Only used when Rating is on above.</p>
-        </div>
-        <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
-          <label for="betterPostersLangSelect" style="font-size:0.85rem; font-weight:600; color:var(--text);">Poster language</label>
-          <select id="betterPostersLangSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersLang&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
-            ${betterPostersLangOptionsHtml}
-          </select>
-          <p style="margin:0; color:var(--muted); font-size:0.8rem;">Language BetterPosters draws the title and labels in, where it has artwork for it.</p>
+        <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:6px;">
+          <div style="flex:1; min-width:220px; max-width:320px;">
+            <label for="betterPostersRatingSourceSelect" style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:4px;">Rating source</label>
+            <select id="betterPostersRatingSourceSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRatingSource&quot;,&quot;@value&quot;]" style="width:100%; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.86rem; box-sizing:border-box;">
+              ${betterPostersRatingSourceOptionsHtml}
+            </select>
+            <p style="margin:4px 0 0; color:var(--muted); font-size:0.78rem;">Which score the rating is taken from.</p>
+          </div>
+          <div style="flex:1; min-width:220px; max-width:320px;">
+            <label for="betterPostersLangSelect" style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:4px;">Poster language</label>
+            <select id="betterPostersLangSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersLang&quot;,&quot;@value&quot;]" style="width:100%; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.86rem; box-sizing:border-box;">
+              ${betterPostersLangOptionsHtml}
+            </select>
+            <p style="margin:4px 0 0; color:var(--muted); font-size:0.78rem;">Language BetterPosters draws text in.</p>
+          </div>
         </div>
       </div>
     </div>
 
+    <!-- Poster Badges & Labels Panel (P3) -->
     <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Poster Badges &amp; Labels</h2>
       <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">Customize which badges and indicators are displayed on posters across your website dashboard, catalogs, and Stremio/Nuvio.</p>
       <div style="display:flex; flex-direction:column; gap:16px;">
         <div style="border-bottom:1px solid var(--border); padding-bottom:14px; display:flex; flex-direction:column; gap:6px;">
           <div style="font-size:0.85rem; font-weight:700; color:var(--text); margin-bottom:4px;">Website &amp; Dashboard</div>
-          <div class="settings-check-group">
+          <div class="settings-check-group two-col-grid">
             <label class="settings-check-item">
               <input type="checkbox" id="badgeAiringNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesAiringNext&quot;,&quot;@checked&quot;]">
               <div style="flex:1; min-width:0;">
@@ -210,7 +218,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
 
         <div style="border-bottom:1px solid var(--border); padding-bottom:14px; display:flex; flex-direction:column; gap:6px;">
           <div style="font-size:0.85rem; font-weight:700; color:var(--text); margin-bottom:4px;">Stremio &amp; Nuvio (Artwork Overlays)</div>
-          <div class="settings-check-group">
+          <div class="settings-check-group two-col-grid">
             <label class="settings-check-item">
               <input type="checkbox" id="badgeStremioAiringNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioAiringNext&quot;,&quot;@checked&quot;]">
               <div style="flex:1; min-width:0;">
@@ -244,12 +252,12 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
 
         <div style="display:flex; flex-direction:column; gap:6px;">
           <div style="font-size:0.85rem; font-weight:700; color:var(--text); margin-bottom:4px;">Badge Types</div>
-          <div class="settings-check-group">
+          <div class="settings-check-group two-col-grid">
             <label class="settings-check-item">
               <input type="checkbox" id="badgeAirDateCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeAirDate&quot;,&quot;@checked&quot;]">
               <div style="flex:1; min-width:0;">
                 <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Upcoming Air Date</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Air date countdown (e.g. <code>TODAY</code>, <code>TOMORROW</code>, <code>WED</code>, <code>SEP 4</code>)</p>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Air date countdown (e.g. <code>TODAY</code>, <code>TOMORROW</code>)</p>
               </div>
             </label>
             <label class="settings-check-item">
@@ -263,14 +271,14 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
               <input type="checkbox" id="badgeSeasonFinaleCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonFinale&quot;,&quot;@checked&quot;]">
               <div style="flex:1; min-width:0;">
                 <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Season Finale</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Orange <code>Season Finale</code> badge on final episode of the season</p>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Orange <code>Season Finale</code> badge on season finales</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeSeasonFinaleDateCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonFinaleDate&quot;,&quot;@checked&quot;]">
               <div style="flex:1; min-width:0;">
                 <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Season Finale Date</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Date when the season finale will air (e.g. <code>Finale: Nov 12</code>) on mid-season episodes</p>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Date when the season finale will air on mid-season episodes</p>
               </div>
             </label>
             <label class="settings-check-item">
@@ -290,6 +298,22 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Hidden Lists Panel -->
+    <div class="panel" style="margin-top:12px;">
+      <h2 class="panel-title">Hidden Lists</h2>
+      <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Hide specific lists from My Lists, Airing Next, and Simkl Airing Next. A hidden list is still tracked and updated normally underneath -- only its display is suppressed, and it can be shown again here at any time.</p>
+      <div id="hiddenListsSettingsSection"></div>
+    </div>
+  </div>
+
+  <!-- Subpanel 3: Tracking & Scrobble -->
+  <div class="settings-subpanel" id="settingsSubScrobble" style="display:none;">
+    <div class="panel">
+      <h2 class="panel-title">Watchlist Preferences</h2>
+      <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Customize how watched movies and TV shows are managed in your personal Watchlist.</p>
+      <div id="watchlistPreferencesSection"></div>
     </div>
 
     <div class="panel" style="margin-top:12px;">

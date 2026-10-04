@@ -18,7 +18,7 @@ const VIEWS = [
   { path: "/channels", subs: ["my-channels", "storylines", "quickadd", "explore", "import", "build"] },
   { path: "/discover", subs: ["movie", "all", "series", "popular", "curated", "gems", "kids", "holidays", "genres"] },
   { path: "/search", subs: [] },
-  { path: "/settings", subs: ["account", "external", "backup", "feedback"] },
+  { path: "/settings", subs: ["account", "display", "scrobble", "external", "backup", "feedback"] },
 ];
 
 // A served page names the shared bundle and stylesheet by content hash
