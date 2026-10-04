@@ -30531,6 +30531,23 @@ ${seoHeadHtml}
     transform: scale(0.97);
     background: rgba(255, 59, 48, 0.22) !important;
   }
+  .channelQuickAddBtn.is-added {
+    border-color: var(--color-brand) !important;
+    color: var(--color-brand) !important;
+    background: var(--brand-glow, rgba(0, 113, 227, 0.08)) !important;
+    font-weight: 600;
+  }
+  :root.dark-theme .channelQuickAddBtn.is-added {
+    border-color: var(--color-brand) !important;
+    color: var(--color-brand) !important;
+    background: rgba(41, 151, 255, 0.15) !important;
+  }
+  .channelQuickAddBtn.is-added:hover:not(:disabled) {
+    background: rgba(0, 113, 227, 0.16) !important;
+  }
+  :root.dark-theme .channelQuickAddBtn.is-added:hover:not(:disabled) {
+    background: rgba(41, 151, 255, 0.24) !important;
+  }
   .lc-btn.view-btn {
     color: var(--color-brand);
     border-color: transparent;
@@ -35019,35 +35036,64 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
         <h2 class="shelf-title sr-only">Quick Add Popular Networks</h2>
       </div>
       <p class="qa-shelf-sub">Instant 1-click TV channels with up to 5,000 episodes, rotating 24 shows with 3 episodes every 24 hours:</p>
-      <div class="channel-quick-grid">
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="A&amp;E" data-networkid="129">A&amp;E</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="ABC" data-networkid="2">ABC</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Adult Swim" data-networkid="80">Adult Swim</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="AMC" data-networkid="174">AMC</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="BBC One" data-networkid="4">BBC One</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Cartoon Network" data-networkid="56">Cartoon Network</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="CBS" data-networkid="16">CBS</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Comedy Central" data-networkid="47">Comedy Central</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Discovery" data-networkid="64">Discovery</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Disney Channel" data-networkid="54">Disney Channel</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Food Network" data-networkid="143">Food Network</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="FOX" data-networkid="19">FOX</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="FX" data-networkid="88">FX</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Hallmark Channel" data-networkid="384">Hallmark Channel</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="HBO" data-networkid="49">HBO</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="HGTV" data-networkid="209">HGTV</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="History" data-networkid="65">History</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Ion Television" data-networkid="436">Ion Television</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="MeTV" data-networkid="738">MeTV</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="MTV" data-networkid="33">MTV</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="NBC" data-networkid="6">NBC</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Nickelodeon" data-networkid="13">Nickelodeon</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Syfy" data-networkid="149">Syfy</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="TBS" data-networkid="68">TBS</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="The CW" data-networkid="71">The CW</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="TLC" data-networkid="84">TLC</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="TNT" data-networkid="41">TNT</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="USA Network" data-networkid="30">USA Network</button>
+      <div class="channel-quick-sections" style="display:flex; flex-direction:column; gap:16px; margin-top:14px;">
+        <div>
+          <div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Major Broadcast</div>
+          <div class="channel-quick-grid">
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="ABC" data-networkid="2">ABC</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="CBS" data-networkid="16">CBS</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="FOX" data-networkid="19">FOX</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="NBC" data-networkid="6">NBC</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="The CW" data-networkid="71">The CW</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="BBC One" data-networkid="4">BBC One</button>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Cable &amp; Premium Drama</div>
+          <div class="channel-quick-grid">
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="AMC" data-networkid="174">AMC</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Comedy Central" data-networkid="47">Comedy Central</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="FX" data-networkid="88">FX</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="HBO" data-networkid="49">HBO</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Syfy" data-networkid="149">Syfy</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="TBS" data-networkid="68">TBS</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="TNT" data-networkid="41">TNT</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="USA Network" data-networkid="30">USA Network</button>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Animation &amp; Kids</div>
+          <div class="channel-quick-grid">
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Adult Swim" data-networkid="80">Adult Swim</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Cartoon Network" data-networkid="56">Cartoon Network</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Disney Channel" data-networkid="54">Disney Channel</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Nickelodeon" data-networkid="13">Nickelodeon</button>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Documentary &amp; Lifestyle</div>
+          <div class="channel-quick-grid">
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Discovery" data-networkid="64">Discovery</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Food Network" data-networkid="143">Food Network</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="HGTV" data-networkid="209">HGTV</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="History" data-networkid="65">History</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="TLC" data-networkid="84">TLC</button>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Classics &amp; Variety</div>
+          <div class="channel-quick-grid">
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="A&amp;E" data-networkid="129">A&amp;E</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Hallmark Channel" data-networkid="384">Hallmark Channel</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Ion Television" data-networkid="436">Ion Television</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="MeTV" data-networkid="738">MeTV</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="MTV" data-networkid="33">MTV</button>
+          </div>
+        </div>
       </div>
       <div id="channelQuickAddStatus" style="margin-top:8px;"></div>
     </div>
@@ -60102,6 +60148,8 @@ function switchChannelsSubmenu(name, btn) {
     renderChannelMergeList();
   } else if (name === 'storylines') {
     renderStorylinesUniverseList();
+  } else if (name === 'quickadd') {
+    updateQuickAddButtonsState();
   } else if (name === 'explore') {
     loadChannelDirectory(false);
     renderChannelPublishList();
@@ -60490,6 +60538,7 @@ function channelItemId(it, idx) {
 }
 
 function renderMyCreatedChannelsList() {
+  if (typeof updateQuickAddButtonsState === 'function') updateQuickAddButtonsState();
   const box = document.getElementById('myCreatedChannelsList');
   if (!box) return;
   
@@ -60762,6 +60811,56 @@ const _channelNameInputEl = document.getElementById('channelNameInput');
 if (_channelNameInputEl) {
   _channelNameInputEl.addEventListener('input', updateChannelSaveButtonLabel);
 }
+
+function updateQuickAddButtonsState() {
+  if (typeof document === 'undefined') return;
+  const container = document.getElementById('channelsSubQuickAdd');
+  if (!container) return;
+  const buttons = container.querySelectorAll('.channelQuickAddBtn');
+  if (!buttons.length) return;
+
+  const localMap = (typeof loadLocalChannels === 'function') ? (loadLocalChannels() || {}) : {};
+  const localChannels = Object.values(localMap);
+  const catalogRows = [...document.querySelectorAll('#lists .entry')];
+
+  buttons.forEach((btn) => {
+    const netId = String(btn.dataset.networkid || '');
+    const netName = btn.dataset.name || '';
+    if (!netName && !netId) return;
+
+    let isAdded = localChannels.some((ch) => {
+      if (!ch) return false;
+      if (netId && String(ch.presetNetworkId || '') === netId) return true;
+      if (netName && (ch.name === netName || ch.name === netName + ' Channel' || ch.name === netName + ' TV')) return true;
+      return false;
+    });
+
+    if (!isAdded && catalogRows.length) {
+      isAdded = catalogRows.some((row) => {
+        const urlInput = row.querySelector('.url');
+        const val = urlInput ? (urlInput.value || '') : '';
+        if (val.startsWith('channel:v1:')) {
+          if (netId && (val.includes('"presetNetworkId":"' + netId + '"') || val.includes('"presetNetworkId":' + netId))) return true;
+          if (netName && val.includes('"name":"' + netName + '"')) return true;
+        }
+        const nameInput = row.querySelector('.name');
+        if (nameInput && nameInput.value === netName) return true;
+        return false;
+      });
+    }
+
+    if (isAdded) {
+      btn.classList.add('is-added');
+      btn.innerHTML = '<span class="check-icon" style="margin-right:4px;">&#x2713;</span> ' + escapeHtml(netName);
+      btn.title = netName + ' (Already added to your channels)';
+    } else {
+      btn.classList.remove('is-added');
+      btn.textContent = netName;
+      btn.title = 'Add ' + netName + ' channel';
+    }
+  });
+}
+window.updateQuickAddButtonsState = updateQuickAddButtonsState;
 
 document.addEventListener('click', (e) => {
   const quickBtn = e.target.closest('.channelQuickAddBtn');
@@ -61132,6 +61231,7 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
       btn.disabled = false;
       btn.textContent = originalLabel;
     }
+    updateQuickAddButtonsState();
   }
 }
 

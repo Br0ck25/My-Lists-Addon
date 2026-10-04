@@ -2,32 +2,32 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
-> **HANDOFF, 2026-10-04 (Antigravity): Storylines Mobile Pill Carousel Scroll, Explore Toolbar Unification, and Quick Add Poster-Free Preservation.**
+> **HANDOFF, 2026-10-04 (Antigravity): Quick Add Category Architecture & Dynamic 'Added' State Indicators.**
 >
 > **Where things stand**
-> - Storylines & Universes Category Filter Carousel (`13_tab-channels.js`):
+> - Quick Add Categorization (`13_tab-channels.js`):
 >   1. **Problem Solved**:
->      - On mobile viewports, the 6 saga filter pills wrapped across 4 rows due to inline `flex-wrap: wrap;`, pushing 75% of the viewport down before the first saga card was visible.
+>      - Quick Add was previously a flat, undifferentiated alphabetical cloud of 28 plain text buttons, causing cognitive overload on desktop and a 14-row vertical button crawl on mobile.
 >   2. **Implementation**:
->      - Removed inline `flex-wrap: wrap;` on `#storylineCategoryFilterBar`.
->      - Restores native `.subnav-pills-bar` horizontal scrolling carousel behavior with hidden scrollbar and momentum panning on mobile, reducing vertical header height from ~140px down to ~36px and bringing cards above the fold.
-> - Explore Channels Toolbar Unification (`13_tab-channels.js`):
+>      - Preserved the clean, poster-free button format while organizing all 28 networks into 5 intuitive, curated sections:
+>        - **Major Broadcast**: ABC · CBS · FOX · NBC · The CW · BBC One
+>        - **Cable & Premium Drama**: AMC · Comedy Central · FX · HBO · Syfy · TBS · TNT · USA Network
+>        - **Animation & Kids**: Adult Swim · Cartoon Network · Disney Channel · Nickelodeon
+>        - **Documentary & Lifestyle**: Discovery · Food Network · HGTV · History · TLC
+>        - **Classics & Variety**: A&E · Hallmark Channel · Ion Television · MeTV · MTV
+>      - Every button retains exact `data-name` and `data-networkid` attributes, preserving 100% compatibility with `appShellChannelNetworks()` and test runners.
+> - Quick Add Dynamic "Added" State Feedback (`09_page-shell.js`, `20_client-channel-builder.js`):
 >   1. **Problem Solved**:
->      - An orphaned `[Refresh]` button was wrapping onto its own isolated line between the intro paragraph and the search bar.
->      - Search input was an unstyled rectangular `<input>` inconsistent with the rest of the application.
+>      - Clicking a network button installed it, but the button quickly reverted to its un-added state, leaving users with zero memory of which networks were already installed.
 >   2. **Implementation**:
->      - Moved `[Refresh]` into the search/filter toolbar row beside the sort dropdown.
->      - Wrapped `#channelDirectorySearchInput` in `.search-input-box` with the SVG search icon and `border-radius: var(--radius-pill)` matching My Channels and global search.
->      - Preserved `See all` card button text exactly as requested by user.
-> - Mobile Card Header Resilience (`09_page-shell.js`):
->   1. Added `!important` to `.list-card-header` layout overrides under `@media (max-width: 640px)` so inline `align-items: center;` cannot prevent proper column stretching.
-> - Quick Add:
->   1. Kept 100% poster-free as explicitly confirmed.
+>      - Added `updateQuickAddButtonsState()` in `20_client-channel-builder.js`: scans local saved channels and active catalog rows to find matching network IDs or channel names.
+>      - Installed networks dynamically show active state: `.is-added` with `<span class="check-icon">&#x2713;</span>`, brand blue outline, and subtle glow tint (`[ ✓ HBO ]`).
+>      - Tied to `switchChannelsSubmenu('quickadd')`, `renderMyCreatedChannelsList()`, and `quickAddChannel` completion.
 > - Verification & Tests:
->   - `python build.py` & `python check_sync.py`: OK (5,489,047 bytes).
+>   - `python build.py` & `python check_sync.py`: OK (5,493,453 bytes).
 >   - `node --check worker_entry_combined.js`: OK (0 syntax errors).
->   - `python gen_map.py`: 2,674 symbols, 211 routes.
->   - Test suites: 458/458 tests pass (0 failures).
+>   - `python gen_map.py`: 2,675 symbols, 211 routes.
+>   - Test suites: 472/472 tests pass (0 failures).
 > - Branch: `feat/design-system-phase-1`
 >
 

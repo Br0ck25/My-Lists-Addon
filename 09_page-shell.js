@@ -2108,6 +2108,23 @@ ${seoHeadHtml}
     transform: scale(0.97);
     background: rgba(255, 59, 48, 0.22) !important;
   }
+  .channelQuickAddBtn.is-added {
+    border-color: var(--color-brand) !important;
+    color: var(--color-brand) !important;
+    background: var(--brand-glow, rgba(0, 113, 227, 0.08)) !important;
+    font-weight: 600;
+  }
+  :root.dark-theme .channelQuickAddBtn.is-added {
+    border-color: var(--color-brand) !important;
+    color: var(--color-brand) !important;
+    background: rgba(41, 151, 255, 0.15) !important;
+  }
+  .channelQuickAddBtn.is-added:hover:not(:disabled) {
+    background: rgba(0, 113, 227, 0.16) !important;
+  }
+  :root.dark-theme .channelQuickAddBtn.is-added:hover:not(:disabled) {
+    background: rgba(41, 151, 255, 0.24) !important;
+  }
   .lc-btn.view-btn {
     color: var(--color-brand);
     border-color: transparent;

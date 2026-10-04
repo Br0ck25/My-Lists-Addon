@@ -10155,6 +10155,8 @@ function switchChannelsSubmenu(name, btn) {
     renderChannelMergeList();
   } else if (name === 'storylines') {
     renderStorylinesUniverseList();
+  } else if (name === 'quickadd') {
+    updateQuickAddButtonsState();
   } else if (name === 'explore') {
     loadChannelDirectory(false);
     renderChannelPublishList();
@@ -10543,6 +10545,7 @@ function channelItemId(it, idx) {
 }
 
 function renderMyCreatedChannelsList() {
+  if (typeof updateQuickAddButtonsState === 'function') updateQuickAddButtonsState();
   const box = document.getElementById('myCreatedChannelsList');
   if (!box) return;
   
@@ -10815,6 +10818,56 @@ const _channelNameInputEl = document.getElementById('channelNameInput');
 if (_channelNameInputEl) {
   _channelNameInputEl.addEventListener('input', updateChannelSaveButtonLabel);
 }
+
+function updateQuickAddButtonsState() {
+  if (typeof document === 'undefined') return;
+  const container = document.getElementById('channelsSubQuickAdd');
+  if (!container) return;
+  const buttons = container.querySelectorAll('.channelQuickAddBtn');
+  if (!buttons.length) return;
+
+  const localMap = (typeof loadLocalChannels === 'function') ? (loadLocalChannels() || {}) : {};
+  const localChannels = Object.values(localMap);
+  const catalogRows = [...document.querySelectorAll('#lists .entry')];
+
+  buttons.forEach((btn) => {
+    const netId = String(btn.dataset.networkid || '');
+    const netName = btn.dataset.name || '';
+    if (!netName && !netId) return;
+
+    let isAdded = localChannels.some((ch) => {
+      if (!ch) return false;
+      if (netId && String(ch.presetNetworkId || '') === netId) return true;
+      if (netName && (ch.name === netName || ch.name === netName + ' Channel' || ch.name === netName + ' TV')) return true;
+      return false;
+    });
+
+    if (!isAdded && catalogRows.length) {
+      isAdded = catalogRows.some((row) => {
+        const urlInput = row.querySelector('.url');
+        const val = urlInput ? (urlInput.value || '') : '';
+        if (val.startsWith('channel:v1:')) {
+          if (netId && (val.includes('"presetNetworkId":"' + netId + '"') || val.includes('"presetNetworkId":' + netId))) return true;
+          if (netName && val.includes('"name":"' + netName + '"')) return true;
+        }
+        const nameInput = row.querySelector('.name');
+        if (nameInput && nameInput.value === netName) return true;
+        return false;
+      });
+    }
+
+    if (isAdded) {
+      btn.classList.add('is-added');
+      btn.innerHTML = '<span class="check-icon" style="margin-right:4px;">&#x2713;</span> ' + escapeHtml(netName);
+      btn.title = netName + ' (Already added to your channels)';
+    } else {
+      btn.classList.remove('is-added');
+      btn.textContent = netName;
+      btn.title = 'Add ' + netName + ' channel';
+    }
+  });
+}
+window.updateQuickAddButtonsState = updateQuickAddButtonsState;
 
 document.addEventListener('click', (e) => {
   const quickBtn = e.target.closest('.channelQuickAddBtn');
@@ -11185,6 +11238,7 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
       btn.disabled = false;
       btn.textContent = originalLabel;
     }
+    updateQuickAddButtonsState();
   }
 }
 
