@@ -1283,13 +1283,17 @@ ${seoHeadHtml}
     display: flex;
     align-items: center;
     width: 100%;
-    gap: 8px;
   }
   .search-input-box {
     position: relative;
+    width: 100%;
     flex: 1;
     display: flex;
     align-items: center;
+  }
+  .search-input-box input {
+    width: 100%;
+    box-sizing: border-box;
   }
   .search-input-icon {
     position: absolute;
@@ -1304,22 +1308,36 @@ ${seoHeadHtml}
     right: 12px;
     width: 22px;
     height: 22px;
-    border-radius: 50%;
-    background: var(--surface-2);
-    border: 1px solid var(--border-strong);
+    min-height: 22px !important;
+    max-height: 22px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    border-radius: 50% !important;
+    background: transparent !important;
+    box-shadow: none !important;
     color: var(--muted);
+    opacity: 0.55;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    padding: 0;
-    font-size: 11px;
-    line-height: 1;
     z-index: 2;
-    transition: background-color 0.15s ease, color 0.15s ease;
+    transition: opacity 0.15s ease, color 0.15s ease, transform 0.12s ease;
   }
   .search-clear-btn:hover {
-    background: var(--border-strong);
+    opacity: 1;
     color: var(--text);
+    background: transparent !important;
+    border: none !important;
+    transform: scale(1.12);
+  }
+  .search-clear-btn:active {
+    transform: scale(0.92);
+    opacity: 0.75;
+  }
+  .search-clear-btn:focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
   }
 
   /* --- Streaming Providers Chips Bar (Discover Tab) ----------------------- */
@@ -3675,7 +3693,7 @@ ${seoHeadHtml}
   }
 
   /* Default button behavior (Primary brand style) */
-  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn, .text-action-btn)),
+  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn, .text-action-btn, .search-clear-btn)),
   .btn-primary,
   .primary:not(.lc-btn) {
     background: var(--color-brand);
@@ -3686,7 +3704,7 @@ ${seoHeadHtml}
     padding: 10px 18px;
   }
 
-  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn, .text-action-btn)):hover:not(:disabled),
+  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn, .text-action-btn, .search-clear-btn)):hover:not(:disabled),
   .btn-primary:hover:not(:disabled),
   .primary:not(.lc-btn):hover:not(:disabled) {
     background: var(--color-brand-hover);
@@ -3694,7 +3712,7 @@ ${seoHeadHtml}
     color: var(--color-text-inverse, #fff);
   }
 
-  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn, .text-action-btn)):active:not(:disabled),
+  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn, .text-action-btn, .search-clear-btn)):active:not(:disabled),
   .btn-primary:active:not(:disabled),
   .primary:not(.lc-btn):active:not(:disabled) {
     background: var(--color-brand-active);

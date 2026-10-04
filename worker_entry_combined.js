@@ -29706,13 +29706,17 @@ ${seoHeadHtml}
     display: flex;
     align-items: center;
     width: 100%;
-    gap: 8px;
   }
   .search-input-box {
     position: relative;
+    width: 100%;
     flex: 1;
     display: flex;
     align-items: center;
+  }
+  .search-input-box input {
+    width: 100%;
+    box-sizing: border-box;
   }
   .search-input-icon {
     position: absolute;
@@ -29727,22 +29731,36 @@ ${seoHeadHtml}
     right: 12px;
     width: 22px;
     height: 22px;
-    border-radius: 50%;
-    background: var(--surface-2);
-    border: 1px solid var(--border-strong);
+    min-height: 22px !important;
+    max-height: 22px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    border-radius: 50% !important;
+    background: transparent !important;
+    box-shadow: none !important;
     color: var(--muted);
+    opacity: 0.55;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    padding: 0;
-    font-size: 11px;
-    line-height: 1;
     z-index: 2;
-    transition: background-color 0.15s ease, color 0.15s ease;
+    transition: opacity 0.15s ease, color 0.15s ease, transform 0.12s ease;
   }
   .search-clear-btn:hover {
-    background: var(--border-strong);
+    opacity: 1;
     color: var(--text);
+    background: transparent !important;
+    border: none !important;
+    transform: scale(1.12);
+  }
+  .search-clear-btn:active {
+    transform: scale(0.92);
+    opacity: 0.75;
+  }
+  .search-clear-btn:focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
   }
 
   /* --- Streaming Providers Chips Bar (Discover Tab) ----------------------- */
@@ -32098,7 +32116,7 @@ ${seoHeadHtml}
   }
 
   /* Default button behavior (Primary brand style) */
-  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn, .text-action-btn)),
+  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn, .text-action-btn, .search-clear-btn)),
   .btn-primary,
   .primary:not(.lc-btn) {
     background: var(--color-brand);
@@ -32109,7 +32127,7 @@ ${seoHeadHtml}
     padding: 10px 18px;
   }
 
-  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn, .text-action-btn)):hover:not(:disabled),
+  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn, .text-action-btn, .search-clear-btn)):hover:not(:disabled),
   .btn-primary:hover:not(:disabled),
   .primary:not(.lc-btn):hover:not(:disabled) {
     background: var(--color-brand-hover);
@@ -32117,7 +32135,7 @@ ${seoHeadHtml}
     color: var(--color-text-inverse, #fff);
   }
 
-  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn, .text-action-btn)):active:not(:disabled),
+  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn, .text-action-btn, .search-clear-btn)):active:not(:disabled),
   .btn-primary:active:not(:disabled),
   .primary:not(.lc-btn):active:not(:disabled) {
     background: var(--color-brand-active);
@@ -35015,10 +35033,11 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
     <div class="search-input-wrapper">
       <div class="search-input-box">
         <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-        <input type="text" id="catalogSearchInput" aria-label="Search by title or list name" placeholder="Search movies by title..." style="padding-left:38px; padding-right:36px;" data-act="appActCatalogSearchInput" data-act-on="input,keydown" data-act-args="[&quot;@self&quot;,&quot;@event&quot;]">
-        <button type="button" id="catalogSearchClearBtn" class="search-clear-btn" aria-label="Clear search" data-act="clearCatalogSearch">&#x2715;</button>
+        <input type="text" id="catalogSearchInput" aria-label="Search by title or list name" placeholder="Search movies by title..." style="width:100%; padding-left:38px; padding-right:38px;" data-act="appActCatalogSearchInput" data-act-on="input,keydown" data-act-args="[&quot;@self&quot;,&quot;@event&quot;]">
+        <button type="button" id="catalogSearchClearBtn" class="search-clear-btn" aria-label="Clear search" data-act="clearCatalogSearch">
+          <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM8.28 7.22a.75.75 0 0 0-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 1 0 1.06 1.06L10 11.06l1.72 1.72a.75.75 0 1 0 1.06-1.06L11.06 10l1.72-1.72a.75.75 0 0 0-1.06-1.06L10 8.94 8.28 7.22Z" clip-rule="evenodd" /></svg>
+        </button>
       </div>
-      <button type="button" class="primary" id="catalogSearchBtn" data-act="runCatalogSearch" style="flex:none; padding:7px 18px; min-height:42px; height:42px; font-size:0.88rem; font-weight:600; border-radius:var(--radius-pill); align-self:center;">Search</button>
     </div>
 
     <div class="search-filters-toolbar">

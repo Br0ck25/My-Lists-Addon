@@ -2,6 +2,25 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-04 (Antigravity): Search Input Ergonomics — Clear Button (✕) Vector Upgrade & Search Button Removal.**
+>
+> **Where things stand**
+> - Search Input Ergonomics & Cognitive Friction Reduction (`13_tab-channels.js`, `09_page-shell.js`):
+>   1. **Removed Redundant [Search] Button**:
+>      - Removed `<button id="catalogSearchBtn">` from the search bar markup in `13_tab-channels.js`.
+>      - Since search triggers live with 350ms debounce as the user types and triggers immediately on `Enter`, the prominent blue button was causing user confusion ("Did the search already run, or do I need to click the button?").
+>      - The search input now cleanly spans full width (`width: 100%`) within its container.
+>   2. **Native Vector Search Clear (✕) Button**:
+>      - Replaced raw text glyph `&#x2715;` and bordered grey circle with a crisp vector SVG knockout disc (`fill="currentColor"`, Heroicons/iOS standard).
+>      - Added `.search-clear-btn` to the `:where(button:not(...))` exclusion selectors in `09_page-shell.js` so default brand button styles (40px min-height, brand blue background on hover) never bleed in.
+>      - Refined `.search-clear-btn` CSS: borderless, transparent background, subtle `opacity: 0.55`, scaling subtly to `opacity: 1.0` on hover.
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK (5,452,451 bytes).
+>   - `node --check worker_entry_combined.js`: OK (0 syntax errors).
+>   - `python gen_map.py`: 2,666 symbols, 211 routes.
+>   - Node test suite passed (525/525 client and search tests).
+> - Branch: `feat/design-system-phase-1`
+
 > **HANDOFF, 2026-10-03 (Antigravity): Search Page UX/UI Polish, Unified Filter Toolbar, & Global 2-Line Poster Title Clamping.**
 >
 > **Where things stand**
