@@ -1361,29 +1361,57 @@ async function readAnalyticsEngineCounts(env) {
   const dataset = String((env && env.CF_ANALYTICS_DATASET) || "mylists_events");
   if (!/^[A-Za-z0-9_]+$/.test(dataset)) return { ok: false, error: "CF_ANALYTICS_DATASET is not a dataset name." };
   const limit = ` LIMIT ${AE_RECOVERY_ROW_LIMIT}`;
+  // Only functions the Analytics Engine SQL reference lists: it has no
+  // concat (it answered 422 "unknown function call: CONCAT"), so each query
+  // returns the raw blobs and the counter names are put together here. GROUP BY
+  // repeats expressions rather than relying on aliases.
+  const sum = "SUM(_sample_interval * double1) AS n";
+  // An event carries no day of its own: the day is when it was written, in
+  // the Eastern time statsToday() counts in.
+  const easternDay = "formatDateTime(timestamp, '%Y-%m-%d', 'America/New_York')";
   const queries = {
-    stat: `SELECT blob2 AS kind, blob3 AS day, SUM(_sample_interval * double1) AS n FROM ${dataset} WHERE blob1 = 'stat' GROUP BY kind, day ORDER BY kind, day${limit}`,
-    // An event carries no day of its own: the day is when it was written,
-    // in the Eastern time statsToday() counts in.
-    event: `SELECT concat('evt:', blob2, ':', blob3) AS kind, formatDateTime(timestamp, '%Y-%m-%d', 'America/New_York') AS day, SUM(_sample_interval * double1) AS n FROM ${dataset} WHERE blob1 = 'event' GROUP BY kind, day ORDER BY kind, day${limit}`,
-    search: `SELECT concat('searchq:', blob2) AS kind, blob3 AS day, SUM(_sample_interval * double1) AS n FROM ${dataset} WHERE blob1 = 'search' GROUP BY kind, day ORDER BY kind, day${limit}`,
+    stat: {
+      sql: `SELECT blob2, blob3, ${sum} FROM ${dataset} WHERE blob1 = 'stat' GROUP BY blob2, blob3${limit}`,
+      kindOf: (row) => String(row.blob2 || ""),
+      dayOf: (row) => String(row.blob3 || ""),
+    },
+    event: {
+      sql: `SELECT blob2, blob3, ${easternDay} AS day, ${sum} FROM ${dataset} WHERE blob1 = 'event' GROUP BY blob2, blob3, ${easternDay}${limit}`,
+      kindOf: (row) => (row.blob2 && row.blob3 ? `evt:${row.blob2}:${row.blob3}` : ""),
+      dayOf: (row) => String(row.day || ""),
+    },
+    search: {
+      sql: `SELECT blob2, blob3, ${sum} FROM ${dataset} WHERE blob1 = 'search' GROUP BY blob2, blob3${limit}`,
+      kindOf: (row) => (row.blob2 ? `searchq:${row.blob2}` : ""),
+      dayOf: (row) => String(row.blob3 || ""),
+    },
   };
-  const out = [];
+  // Rows that end up on the same counter and day (none expected) are added
+  // together, so the ledger has one entry for each.
+  const merged = new Map();
   const truncated = [];
-  for (const [source, sql] of Object.entries(queries)) {
-    const r = await analyticsEngineRows(env, sql);
+  for (const [source, q] of Object.entries(queries)) {
+    const r = await analyticsEngineRows(env, q.sql);
     if (!r.ok) return r;
     if (r.rows.length >= AE_RECOVERY_ROW_LIMIT) truncated.push(source);
     for (const row of r.rows) {
-      const kind = String(row.kind || "");
-      const day = String(row.day || "");
-      const n = Math.round(Number(row.n) || 0);
+      const kind = q.kindOf(row);
+      const day = q.dayOf(row);
+      const n = Number(row.n) || 0;
       if (!kind || n <= 0 || kind.length > 300) continue;
       if (day !== "total" && !/^\d{4}-\d{2}-\d{2}$/.test(day)) continue;
       // bumpStatBy kept writing source groups to D1 all along.
       if (kind.startsWith("sourcegroup:")) continue;
-      out.push({ source, kind, day, n });
+      const key = kind + "\u0000" + day;
+      const prev = merged.get(key);
+      if (prev) prev.n += n;
+      else merged.set(key, { source, kind, day, n });
     }
+  }
+  const out = [];
+  for (const r of merged.values()) {
+    const n = Math.round(r.n);
+    if (n > 0) out.push({ ...r, n });
   }
   return { ok: true, rows: out, truncated };
 }

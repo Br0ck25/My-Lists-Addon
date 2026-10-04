@@ -20,7 +20,7 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Release 13** is live: the owner added `FF_PROVIDER_BREAKER`, `FF_CHART_SNAPSHOTS` and `FF_NEW_UI`. It added the `FF_NEW_UI` switch, stronger hashing for recovery answers, and a daily backup that works. The owner dropped one-time recovery codes (D-31).
 - **`main` at `a6785d6`** is live (2026-10-02 onward): other assistants finished P7-6 and Phases 8–10 and merged everything into `main`, and the Worker was renamed from `wako` to **`my-lists-addon`**. The owner also added `FF_SCROBBLE_ST_ONLY`. The review of that work (2026-10-04) found the admin counters writing nowhere anyone reads, blank badged posters, and a cleanup guide that would have deleted live data: Release 14 fixes them.
 - **`shelf.shadow`** (sent 2026-10-04): last full comparison of 709 accounts, 20.36% different (Continue Watching 836 the same, 206 only in the old, 25 only in the new, 17 shows not known yet; Airing Next 212 / 15 / 22 / 3). Far above the 1% gate: **`FF_SHOW_SCHEDULE` stays off.**
-- **Release 14** (prepared 2026-10-04, not yet live) — details under Release 14.
+- **Release 14** went live on 2026-10-04. Its *Counts missing since 2 October* Preview failed: *Analytics Engine answered 422: unknown function call: CONCAT*. **Release 14b** fixes that (details under Release 14).
 
 The owner decided to release the new version **one phase at a time, straight to the live site**, with no separate test site. Each release waits until the one before it has run cleanly for at least a day.
 
@@ -1103,4 +1103,23 @@ With it on, a media server (Plex, Jellyfin, Emby) that still uses a webhook addr
 **Rollback:** paste the previous file. Two things to know:
 - Counts recorded while Release 14 ran stay in D1.
 - Any days already put back stay put back.
+
+### Release 14b: the recovery query Analytics Engine refused
+
+**What happened:** the owner deployed Release 14 and followed its steps. Preview answered *Failed: Analytics Engine answered 422: Input was invalid: unknown function call: CONCAT*.
+
+**Why:** the query joined text with `concat`, and Analytics Engine's SQL has no such function. Its reference lists only `format` for joining text. The tests' stand-in for Analytics Engine accepted anything, so they could not see this.
+
+**Fix** (`03_admin.js`, `readAnalyticsEngineCounts`):
+- The three queries now return the stored values as they are, and the Worker builds the counter names itself.
+- The only functions they use are `SUM` and `formatDateTime`, both in Cloudflare's SQL reference.
+- `GROUP BY` repeats the expressions instead of relying on names given with `AS`.
+- The stand-in now refuses any function the reference does not list, with the same 422 the real service sent. Putting `concat` back makes 3 tests fail.
+
+Nothing was written by the failed Preview: it stops before touching the database.
+
+**Steps:**
+1. Deploy `release-14b-NEW-worker.js`. Keep `CF_ANALYTICS_TOKEN` and `CF_ANALYTICS_ACCOUNT_ID` as they are.
+2. `/admin` → Maintenance → **Counts missing since 2 October** → **Preview**. Send the result.
+3. If it looks right, **Put them back**. Then delete `CF_ANALYTICS_TOKEN` and the token itself.
 

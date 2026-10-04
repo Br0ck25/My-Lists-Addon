@@ -104,7 +104,21 @@ let restoreFetch = null;
 afterEach(() => { if (restoreFetch) restoreFetch(); restoreFetch = null; });
 
 // The Analytics Engine SQL API, answering from points written the way the
-// P8-2 code wrote them.
+// P8-2 code wrote them. Like the real one, it refuses a function its SQL
+// reference does not list: the first version of the tool used concat, which
+// this fake accepted and the real API answered with 422 "unknown function
+// call: CONCAT".
+const AE_FUNCTIONS = new Set([
+  // developers.cloudflare.com/analytics/analytics-engine/sql-reference/
+  // (aggregate, string, and date and time functions), lower-cased.
+  "count", "sum", "avg", "min", "max", "quantileweighted", "quantileexactweighted",
+  "length", "empty", "lower", "lowerutf8", "upper", "upperutf8", "startswith", "endswith", "position", "substring", "format", "extract",
+  "now", "today", "todatetime", "tounixtimestamp", "formatdatetime", "tostartofinterval", "tostartofday", "toyear", "tomonth",
+  "todayofweek", "todayofmonth", "tohour", "tominute", "tosecond", "tostartofyear", "tostartofmonth", "tostartofweek", "tostartofhour",
+  "tostartoffifteenminutes", "tostartoftenminutes", "tostartoffiveminutes", "tostartofminute", "toyyyymm",
+]);
+const SQL_WORDS = new Set(["in", "and", "or", "not", "as", "from", "where", "select", "by", "on"]);
+
 function fakeAnalyticsEngine(points) {
   const realFetch = globalThis.fetch;
   const asked = [];
@@ -113,15 +127,25 @@ function fakeAnalyticsEngine(points) {
     if (!url.includes("/analytics_engine/sql")) return realFetch(input, init);
     const sql = String(init && init.body);
     asked.push({ sql, auth: init.headers.Authorization });
+    const withoutStrings = sql.replace(/'[^']*'/g, "''");
+    for (const m of withoutStrings.matchAll(/([A-Za-z_][A-Za-z0-9_]*)\s*\(/g)) {
+      const fn = m[1].toLowerCase();
+      if (SQL_WORDS.has(fn)) continue;
+      if (!AE_FUNCTIONS.has(fn)) {
+        return new Response(`Input was invalid: unknown function call: ${m[1].toUpperCase()}`, { status: 422 });
+      }
+    }
+    assert.match(sql, /FORMAT JSON$/);
+    const eventDays = /blob1 = 'event'/.test(sql);
+    const want = (sql.match(/blob1 = '(\w+)'/) || [])[1];
     const group = new Map();
-    const add = (kind, day, n) => {
-      const k = kind + "|" + day;
-      group.set(k, { kind, day, n: (group.get(k) ? group.get(k).n : 0) + n });
-    };
     for (const p of points) {
-      if (sql.includes("blob1 = 'stat'") && p.blobs[0] === "stat") add(p.blobs[1], p.blobs[2], p.doubles[0]);
-      if (sql.includes("blob1 = 'event'") && p.blobs[0] === "event") add(`evt:${p.blobs[1]}:${p.blobs[2]}`, p.day, p.doubles[0]);
-      if (sql.includes("blob1 = 'search'") && p.blobs[0] === "search") add(`searchq:${p.blobs[1]}`, p.blobs[2], p.doubles[0]);
+      if (p.blobs[0] !== want) continue;
+      const row = eventDays
+        ? { blob2: p.blobs[1], blob3: p.blobs[2], day: p.day }
+        : { blob2: p.blobs[1], blob3: p.blobs[2] };
+      const k = JSON.stringify(row);
+      group.set(k, { ...row, n: (group.get(k) ? group.get(k).n : 0) + p.doubles[0] });
     }
     return new Response(JSON.stringify({ meta: [], data: [...group.values()], rows: group.size }), { status: 200 });
   };
@@ -187,6 +211,27 @@ describe("putting back the counts Analytics Engine took (2 October onward)", () 
     assert.equal(again.body.alreadyPutBack, again.body.rows);
     assert.equal(db._stat("pageviews", "total"), 12388 + 123);
     assert.equal(db._stat("evt:watched:tt0137523", "total"), 4);
+  });
+
+  it("asks Analytics Engine only with functions it has, and reports a refusal", async () => {
+    const asked = fakeAnalyticsEngine(GAP_POINTS);
+    const { env, cookie } = await setup();
+    const r = await recover(env, cookie, false);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(asked.length, 3);
+    for (const { sql } of asked) assert.doesNotMatch(sql, /concat/i);
+
+    // And when the service refuses a query, the page is told why.
+    restoreFetch();
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (input, init) => {
+      if (String(input).includes("/analytics_engine/sql")) return new Response("Input was invalid: unknown function call: CONCAT", { status: 422 });
+      return realFetch(input, init);
+    };
+    restoreFetch = () => { globalThis.fetch = realFetch; };
+    const refused = await recover(env, cookie, false);
+    assert.equal(refused.status, 400);
+    assert.match(refused.body.error, /422/);
   });
 
   it("says what is missing instead of guessing without the API token", async () => {
