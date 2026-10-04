@@ -540,11 +540,16 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
 
       <div style="margin-bottom:14px;">
         <div class="import-dropzone" id="importDropzone" data-act="appActOpenFilePicker" data-act-args="[&quot;unifiedImportFileInput&quot;]">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted); opacity:0.8; margin-bottom:2px;" aria-hidden="true">
+            <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
+            <path d="M12 12v9"></path>
+            <path d="m16 16-4-4-4 4"></path>
+          </svg>
           <div style="text-align:center;">
             <div style="font-weight:600; font-size:0.92rem; color:var(--text);">Choose files or drag &amp; drop here</div>
             <div style="margin-top:3px; color:var(--muted); font-size:0.78rem;">CSV, JSON, ZIP, or TXT exports (multi-file supported)</div>
           </div>
-          <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;unifiedImportFileInput&quot;]" style="padding:6px 14px; font-size:0.82rem; margin-top:2px;">Select files&hellip;</button>
+          <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;unifiedImportFileInput&quot;]" style="padding:6px 16px; font-size:0.82rem; margin-top:2px;">Select files&hellip;</button>
           <input type="file" id="unifiedImportFileInput" aria-label="Choose a file to import" multiple accept=".csv,.json,.zip,.txt" style="display:none;" data-act="onUnifiedImportFilesSelected" data-act-args="[&quot;@self&quot;]">
         </div>
         <div id="unifiedImportSelectedCount" style="margin-top:6px; font-size:0.82rem; color:var(--muted);">No files selected</div>

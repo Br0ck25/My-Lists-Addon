@@ -4232,8 +4232,8 @@ ${seoHeadHtml}
   .import-dropzone {
     border: 2px dashed var(--color-border-strong, var(--border));
     border-radius: 12px;
-    padding: 24px 16px;
-    background: var(--color-bg-sunken, rgba(255, 255, 255, 0.02));
+    padding: 28px 16px;
+    background: var(--surface);
     text-align: center;
     cursor: pointer;
     display: flex;
@@ -4241,12 +4241,13 @@ ${seoHeadHtml}
     align-items: center;
     justify-content: center;
     gap: 8px;
-    transition: border-color 0.2s ease, background 0.2s ease;
+    transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
   }
   .import-dropzone:hover,
   .import-dropzone.dragover {
-    border-color: var(--color-brand, #3b82f6);
-    background: var(--color-brand-subtle, rgba(59, 130, 246, 0.08));
+    border-color: var(--color-brand, #007aff);
+    background: var(--color-brand-subtle, rgba(0, 122, 255, 0.04));
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
   }
   .import-dropzone-icon {
     font-size: 2rem;
