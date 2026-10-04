@@ -352,6 +352,13 @@ async function withSecurityHeaders(response, privatePath = false, extraSetCookie
   }
   const extra = securityHeaders(nonce, env);
   for (const key in extra) {
+    // Not on a 304. A browser keeps the page it already has and takes the
+    // 304's headers in place of the stored ones -- so a fresh nonce here
+    // stopped every script of that stored page, whose tags carry the nonce
+    // it was first sent with. Seen in Chromium on a reload: the page loaded
+    // with none of its scripts running (2026-10-04). Without the header on
+    // the 304, the stored policy, which matches the stored page, stays.
+    if (response.status === 304 && /^content-security-policy/i.test(key)) continue;
     if (!headers.has(key)) headers.set(key, extra[key]);
   }
   if (extraSetCookie && !headers.has("Set-Cookie")) {
@@ -1236,6 +1243,16 @@ async function isCreatorAuthMemoized(key, storedHash, username) {
 function invalidateCreatorAuthMemo() {
   CREATOR_AUTH_MEMO.clear();
 }
+
+// The /api/creator/ routes the page signs with its session instead of the
+// Account Key (Release 19; CREATOR_SESSION_ROUTES in 16_ is the page's copy).
+const CREATOR_SESSION_PATH_PREFIXES = [
+  "/api/creator/sync/",
+  "/api/creator/lists",
+  "/api/creator/track-status",
+  "/api/creator/scrobble-token",
+  "/api/creator/scrobble-seen-users",
+];
 
 // --- Session management (P3a-4) -------------------------------------------
 const SESSION_COOKIE_NAME = "mla_session";

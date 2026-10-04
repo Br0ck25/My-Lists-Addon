@@ -262,7 +262,7 @@ export function loadClient(opts = {}) {
       const payload = out.json === undefined ? { ok: true } : out.json;
       return new Response(typeof payload === "string" ? payload : JSON.stringify(payload), {
         status,
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...(out.headers || {}) },
       });
     },
   };

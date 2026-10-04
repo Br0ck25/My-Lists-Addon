@@ -1208,7 +1208,7 @@ async function pushPresetsDirectly(presetsMap) {
     const src = presetSourceMaps();
     const leanPresets = dereferencePresetsMap(presetsMap, src.lists, src.chans);
     const presetsB64 = await compressJsonToBase64(leanPresets);
-    const res = await fetch(ORIGIN + '/api/creator/sync/save-presets', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/sync/save-presets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

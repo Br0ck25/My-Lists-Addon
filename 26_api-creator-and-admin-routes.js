@@ -106,6 +106,12 @@
       // full PBKDF2 run every single time.
       const valid = await verifyCreatorKeyMemoized(creatorKey || "", keyHash, v.normalized);
       if (!valid) return { ok: false, error: "Username or Key is incorrect." };
+      // How many requests still sign with the key on the routes the page now
+      // signs with its session (CREATOR_SESSION_PATH_PREFIXES): the count the
+      // 60-day sunset waits on (Release 19, /admin -> Creators).
+      if (typeof path === "string" && CREATOR_SESSION_PATH_PREFIXES.some((p) => path.startsWith(p))) {
+        ctx.waitUntil(bumpStat(env, "authkey"));
+      }
       // Fire-and-forget, not awaited -- see touchCreatorLastSeen's own
       // comment for why this is throttled and safe to never wait on.
       touchCreatorLastSeen(env, v.normalized);
@@ -8351,7 +8357,19 @@ export default {
     if (effectiveEnv && effectiveEnv._d1Session && typeof effectiveEnv._d1Session.getBookmark === "function") {
       try { sessionBookmark = effectiveEnv._d1Session.getBookmark(); } catch {}
     }
-    return await withSecurityHeaders(response, privatePath, request ? request._sessionCookie : null, nonce, env, sessionBookmark);
+    const secured = await withSecurityHeaders(response, privatePath, request ? request._sessionCookie : null, nonce, env, sessionBookmark);
+    // Tells the page that this browser holds a live session for the account
+    // (one it sent, or one this response hands out), so its next requests can
+    // be signed with the session instead of the Account Key (creatorApiFetch,
+    // 16_; Release 19). The page cannot see the HttpOnly cookie itself.
+    try {
+      if (request && request.account && new URL(request.url).pathname.startsWith("/api/creator/")) {
+        secured.headers.set("X-MLA-Session", String(request.account.username || "").toLowerCase());
+      }
+    } catch {
+      // Never affects the response.
+    }
+    return secured;
   },
 
   // Runs on whatever schedule this Worker's owner configured under

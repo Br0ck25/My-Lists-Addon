@@ -22,6 +22,91 @@
 -->
 <script nonce="${CSP_NONCE_PLACEHOLDER}">
 const ORIGIN = (typeof location !== 'undefined' && location.origin) ? location.origin : ${jsonForScript(origin)};
+
+// --- Requests signed by the session, not the Account Key (Release 19) ---------
+//
+// Since sign-in sessions (FF_SESSIONS), a request that carries the Account Key
+// to an /api/creator/ route also gives this browser a 30-day session cookie,
+// and the routes that read and save the account's data accept that session in
+// place of the key. The server says on every /api/creator/ answer whose
+// session this browser holds (the X-MLA-Session header: the page cannot read
+// the HttpOnly cookie). Once it has said so for the account, those requests
+// go without the key: it no longer travels with every autosave and list edit.
+// When the session is gone (expired, or signed out elsewhere) the server
+// answers 401, and the request is sent once more exactly as before, key
+// included, which also starts a new session -- nobody is signed out by this.
+// Until a session is known (a fresh browser, a server without sessions),
+// nothing changes. Signing in, creating an account, recovery, key resets and
+// deleting always send the key: there the key is what is being checked.
+const CREATOR_SESSION_ROUTES = [
+  '/api/creator/sync/',
+  '/api/creator/lists',
+  '/api/creator/track-status',
+  '/api/creator/scrobble-token',
+  '/api/creator/scrobble-seen-users',
+];
+const CREATOR_SESSION_SEEN_KEY = 'myListAddon:sessionFor';
+
+function creatorRouteUsesSession(url) {
+  let path = '';
+  try {
+    path = new URL(String(url), ORIGIN).pathname;
+  } catch (e) {
+    return false;
+  }
+  return CREATOR_SESSION_ROUTES.some(function (p) { return path.indexOf(p) === 0; });
+}
+
+function creatorSessionHeldFor() {
+  try {
+    return localStorage.getItem(CREATOR_SESSION_SEEN_KEY) || '';
+  } catch (e) {
+    return '';
+  }
+}
+
+function noteCreatorSession(res) {
+  const who = res && res.headers && typeof res.headers.get === 'function' ? res.headers.get('X-MLA-Session') : null;
+  if (!who) return;
+  try {
+    localStorage.setItem(CREATOR_SESSION_SEEN_KEY, String(who).toLowerCase());
+  } catch (e) {}
+}
+
+function forgetCreatorSession() {
+  try {
+    localStorage.removeItem(CREATOR_SESSION_SEEN_KEY);
+  } catch (e) {}
+}
+
+async function creatorApiFetch(url, init) {
+  const opts = init || {};
+  let body = null;
+  if (typeof opts.body === 'string' && creatorRouteUsesSession(url)) {
+    try {
+      body = JSON.parse(opts.body);
+    } catch (e) {
+      body = null;
+    }
+  }
+  const name = body && typeof body === 'object' && !Array.isArray(body) && body.creatorName ? String(body.creatorName).toLowerCase() : '';
+  if (!name || !body.creatorKey || creatorSessionHeldFor() !== name) {
+    const res = await fetch(url, init);
+    noteCreatorSession(res);
+    return res;
+  }
+  const withoutKey = Object.assign({}, body);
+  delete withoutKey.creatorKey;
+  const res = await fetch(url, Object.assign({}, opts, { body: JSON.stringify(withoutKey), credentials: 'same-origin' }));
+  if (res.status !== 401) {
+    noteCreatorSession(res);
+    return res;
+  }
+  forgetCreatorSession();
+  const again = await fetch(url, init);
+  noteCreatorSession(again);
+  return again;
+}
 const IS_CONFIGURE = ${isConfigureMode};
 // Whether this page was served as the new UI shell (Phase 6, P6-1). It is a
 // cookie, so it differs per browser rather than per deploy -- everything that

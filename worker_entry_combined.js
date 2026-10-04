@@ -26,7 +26,7 @@
 // Shown at the top of /admin and in the answer of the "Counts missing" tool,
 // so the owner can see which pasted file is live (docs/RELEASES.md). Change it
 // with every release.
-const WORKER_RELEASE = "18";
+const WORKER_RELEASE = "19";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -3462,6 +3462,13 @@ async function withSecurityHeaders(response, privatePath = false, extraSetCookie
   }
   const extra = securityHeaders(nonce, env);
   for (const key in extra) {
+    // Not on a 304. A browser keeps the page it already has and takes the
+    // 304's headers in place of the stored ones -- so a fresh nonce here
+    // stopped every script of that stored page, whose tags carry the nonce
+    // it was first sent with. Seen in Chromium on a reload: the page loaded
+    // with none of its scripts running (2026-10-04). Without the header on
+    // the 304, the stored policy, which matches the stored page, stays.
+    if (response.status === 304 && /^content-security-policy/i.test(key)) continue;
     if (!headers.has(key)) headers.set(key, extra[key]);
   }
   if (extraSetCookie && !headers.has("Set-Cookie")) {
@@ -4346,6 +4353,16 @@ async function isCreatorAuthMemoized(key, storedHash, username) {
 function invalidateCreatorAuthMemo() {
   CREATOR_AUTH_MEMO.clear();
 }
+
+// The /api/creator/ routes the page signs with its session instead of the
+// Account Key (Release 19; CREATOR_SESSION_ROUTES in 16_ is the page's copy).
+const CREATOR_SESSION_PATH_PREFIXES = [
+  "/api/creator/sync/",
+  "/api/creator/lists",
+  "/api/creator/track-status",
+  "/api/creator/scrobble-token",
+  "/api/creator/scrobble-seen-users",
+];
 
 // --- Session management (P3a-4) -------------------------------------------
 const SESSION_COOKIE_NAME = "mla_session";
@@ -12452,7 +12469,7 @@ async function renderAdminDashboard(env) {
   const [
     totalPV, todayPV, totalIN, todayIN, totalPP, todayPP,
     pvByDay, inByDay, ppByDay,
-    creatorResult, sourceGroupResult
+    creatorResult, sourceGroupResult, authKeyByDay
   ] = await Promise.all([
     readStatCount(env, "pageviews", "total"),
     readStatCount(env, "pageviews", today),
@@ -12468,7 +12485,13 @@ async function renderAdminDashboard(env) {
     // so this can't accidentally sweep those in as if they were accounts.
     listAllKeys(env.CONFIGS, "creator:"),
     listAllKeys(env.CONFIGS, "stats:sourcegroup:"),
+    loadStatsByDay(env, "authkey"),
   ]);
+  // Requests that still sent the Account Key where the session would do
+  // (Release 19): today, and the last 7 days.
+  let authKeyWeek = 0;
+  for (let i = 0; i < 7; i++) authKeyWeek += Number(authKeyByDay[easternDateKey(new Date(Date.now() - i * 86400000))]) || 0;
+  const authKeyToday = Number(authKeyByDay[today]) || 0;
 
   // Walks the last 30 calendar days explicitly (rather than just listing
   // whatever KV happens to have) so days with zero activity still show up
@@ -12794,6 +12817,8 @@ async function renderAdminDashboard(env) {
   <div class="admin-tab-panel" data-admin-panel="creators">
     <div class="stat-cards">
       <div class="stat-card"><div class="stat-value">${totalCreatorCount}</div><div class="stat-label">Creator accounts${creatorTruncatedNote}</div></div>
+      <div class="stat-card"><div class="stat-value">${authKeyToday}</div><div class="stat-label">Saves that sent the Account Key today</div></div>
+      <div class="stat-card"><div class="stat-value">${authKeyWeek}</div><div class="stat-label">... in the last 7 days</div></div>
     </div>
     <div class="table-wrap">
       <table>
@@ -34418,6 +34443,91 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
 -->
 <script nonce="${CSP_NONCE_PLACEHOLDER}">
 const ORIGIN = (typeof location !== 'undefined' && location.origin) ? location.origin : ${jsonForScript(origin)};
+
+// --- Requests signed by the session, not the Account Key (Release 19) ---------
+//
+// Since sign-in sessions (FF_SESSIONS), a request that carries the Account Key
+// to an /api/creator/ route also gives this browser a 30-day session cookie,
+// and the routes that read and save the account's data accept that session in
+// place of the key. The server says on every /api/creator/ answer whose
+// session this browser holds (the X-MLA-Session header: the page cannot read
+// the HttpOnly cookie). Once it has said so for the account, those requests
+// go without the key: it no longer travels with every autosave and list edit.
+// When the session is gone (expired, or signed out elsewhere) the server
+// answers 401, and the request is sent once more exactly as before, key
+// included, which also starts a new session -- nobody is signed out by this.
+// Until a session is known (a fresh browser, a server without sessions),
+// nothing changes. Signing in, creating an account, recovery, key resets and
+// deleting always send the key: there the key is what is being checked.
+const CREATOR_SESSION_ROUTES = [
+  '/api/creator/sync/',
+  '/api/creator/lists',
+  '/api/creator/track-status',
+  '/api/creator/scrobble-token',
+  '/api/creator/scrobble-seen-users',
+];
+const CREATOR_SESSION_SEEN_KEY = 'myListAddon:sessionFor';
+
+function creatorRouteUsesSession(url) {
+  let path = '';
+  try {
+    path = new URL(String(url), ORIGIN).pathname;
+  } catch (e) {
+    return false;
+  }
+  return CREATOR_SESSION_ROUTES.some(function (p) { return path.indexOf(p) === 0; });
+}
+
+function creatorSessionHeldFor() {
+  try {
+    return localStorage.getItem(CREATOR_SESSION_SEEN_KEY) || '';
+  } catch (e) {
+    return '';
+  }
+}
+
+function noteCreatorSession(res) {
+  const who = res && res.headers && typeof res.headers.get === 'function' ? res.headers.get('X-MLA-Session') : null;
+  if (!who) return;
+  try {
+    localStorage.setItem(CREATOR_SESSION_SEEN_KEY, String(who).toLowerCase());
+  } catch (e) {}
+}
+
+function forgetCreatorSession() {
+  try {
+    localStorage.removeItem(CREATOR_SESSION_SEEN_KEY);
+  } catch (e) {}
+}
+
+async function creatorApiFetch(url, init) {
+  const opts = init || {};
+  let body = null;
+  if (typeof opts.body === 'string' && creatorRouteUsesSession(url)) {
+    try {
+      body = JSON.parse(opts.body);
+    } catch (e) {
+      body = null;
+    }
+  }
+  const name = body && typeof body === 'object' && !Array.isArray(body) && body.creatorName ? String(body.creatorName).toLowerCase() : '';
+  if (!name || !body.creatorKey || creatorSessionHeldFor() !== name) {
+    const res = await fetch(url, init);
+    noteCreatorSession(res);
+    return res;
+  }
+  const withoutKey = Object.assign({}, body);
+  delete withoutKey.creatorKey;
+  const res = await fetch(url, Object.assign({}, opts, { body: JSON.stringify(withoutKey), credentials: 'same-origin' }));
+  if (res.status !== 401) {
+    noteCreatorSession(res);
+    return res;
+  }
+  forgetCreatorSession();
+  const again = await fetch(url, init);
+  noteCreatorSession(again);
+  return again;
+}
 const IS_CONFIGURE = ${isConfigureMode};
 // Whether this page was served as the new UI shell (Phase 6, P6-1). It is a
 // cookie, so it differs per browser rather than per deploy -- everything that
@@ -41254,7 +41364,7 @@ async function saveItemsAsNewCustomList(name, type, items, visibility, extraProp
       };
       if (lastSyncedAt !== undefined) payload.lastSyncedAt = lastSyncedAt;
       if (baseItemIds !== undefined) payload.baseItemIds = baseItemIds;
-      const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+      const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -41537,7 +41647,7 @@ async function syncCustomListWithExternalSource(slug, btn, options) {
           baseItemIds: mergeResult.newBaseItemIds,
         };
         if (Number.isFinite(listMeta.updatedAt)) body.expectedUpdatedAt = listMeta.updatedAt;
-        const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+        const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
@@ -44464,7 +44574,7 @@ document.addEventListener('click', async (e) => {
       }
       if (activeCreator) {
         const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-        fetch(ORIGIN + '/api/creator/sync/like', {
+        creatorApiFetch(ORIGIN + '/api/creator/sync/like', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, usernameSlug: usernameSlug, liked: !wasLiked }),
@@ -44545,7 +44655,7 @@ document.addEventListener('click', async (e) => {
       }
       if (activeCreator) {
         const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-        fetch(ORIGIN + '/api/creator/sync/like', {
+        creatorApiFetch(ORIGIN + '/api/creator/sync/like', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, usernameSlug: listUrl, liked: !wasLiked }),
@@ -61809,7 +61919,7 @@ function saveCustomList() {
     const visibility = getCustomListDraftVisibility();
     if (activeCreator) {
       const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-      fetch(ORIGIN + '/api/creator/lists/save', {
+      creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -61964,7 +62074,7 @@ async function saveCreatorListEdit(name) {
       if (cached.baseItemIds) body.baseItemIds = cached.baseItemIds;
     }
     if (baseline !== null) body.expectedUpdatedAt = baseline;
-    const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -65999,7 +66109,7 @@ async function uploadLocalListPayloadToAccount(payload) {
   if (list.lastSyncedAt != null) body.lastSyncedAt = list.lastSyncedAt;
   if (list.baseItemIds) body.baseItemIds = list.baseItemIds;
   try {
-    const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -66350,7 +66460,7 @@ async function submitSetRecoveryAnswer() {
   if (!endSubmit) return;
 
   try {
-    const res = await fetch(ORIGIN + '/api/creator/recovery-answer', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/recovery-answer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -66416,7 +66526,7 @@ async function openResetAccountModal() {
       try {
         if (typeof clearLocalAccountData === 'function') clearLocalAccountData();
 
-        const res = await fetch(ORIGIN + '/api/creator/account/reset', {
+        const res = await creatorApiFetch(ORIGIN + '/api/creator/account/reset', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ creatorName: creatorName, creatorKey: creatorKey, confirm: 'RESET' }),
@@ -66492,7 +66602,7 @@ async function handleDeleteAccount() {
   if (status) status.innerHTML = '<p style="color:var(--muted); font-size:0.85rem;">Deleting account and all data\u2026</p>';
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
   try {
-    const res = await fetch(ORIGIN + '/api/creator/delete-account', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/delete-account', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       // The server requires confirm:"DELETE" on this specific irreversible
@@ -66915,7 +67025,7 @@ async function fetchScrobbleToken(rotate) {
   try { creatorKey = localStorage.getItem('myListAddon:creatorKey') || ''; } catch (e) {}
   if (!creatorKey) return '';
   try {
-    const res = await fetch(ORIGIN + '/api/creator/scrobble-token', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/scrobble-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, rotate: rotate === true }),
@@ -67028,7 +67138,7 @@ async function loadScrobbleSeenUsers() {
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
   box.innerHTML = '<span style="color:var(--muted); font-size:0.8rem;">Checking detected users\u2026</span>';
   try {
-    const res = await fetch(ORIGIN + '/api/creator/scrobble-seen-users', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/scrobble-seen-users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey }),
@@ -67115,7 +67225,7 @@ async function refreshTrackPlaybackStatus() {
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
   statusBox.innerHTML = '<small style="color:var(--muted);">Checking scrobble status\u2026</small>';
   try {
-    const res = await fetch(ORIGIN + '/api/creator/track-status', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/track-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey }),
@@ -67363,6 +67473,7 @@ async function switchCreatorProfile() {
       headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
     });
   } catch (e) {}
+  if (typeof forgetCreatorSession === 'function') forgetCreatorSession();
   clearLocalAccountData();
   if (typeof appShellState !== 'undefined' && appShellState && typeof appShellState.set === 'function') {
     appShellState.set({ account: null });
@@ -67406,7 +67517,7 @@ async function submitRestoreProfile() {
   if (!endSubmit) return;
 
   try {
-    const res = await fetch(ORIGIN + '/api/creator/restore', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/restore', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: name, creatorKey: key }),
@@ -67487,7 +67598,7 @@ async function submitForgotKey() {
   if (!endSubmit) return;
 
   try {
-    const res = await fetch(ORIGIN + '/api/creator/reset-key', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/reset-key', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: name, recoveryAnswer: answer }),
@@ -67550,7 +67661,7 @@ async function submitForgotUsername() {
   if (!endSubmit) return;
 
   try {
-    const res = await fetch(ORIGIN + '/api/creator/forgot-username', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/forgot-username', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorKey: key, recoveryAnswer: answer || undefined }),
@@ -67600,7 +67711,7 @@ async function tryAutoRestoreCreatorProfile() {
   const key = localStorage.getItem('myListAddon:creatorKey');
   if (!name || !key) return;
   try {
-    const res = await fetch(ORIGIN + '/api/creator/restore', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/restore', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: name, creatorKey: key }),
@@ -68135,7 +68246,7 @@ async function pushChannelsSync() {
   try {
     const localChannels = channelsForCloudSync((typeof loadLocalChannels === 'function') ? loadLocalChannels() : {});
     const localMerged = (typeof loadLocalMergedChannels === 'function') ? loadLocalMergedChannels() : {};
-    const res = await fetch(ORIGIN + '/api/creator/sync/save-channels', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/sync/save-channels', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -68208,7 +68319,7 @@ async function pushCreatorSync() {
   // where "my list rows came back after opening the phone" came from.
   if (!creatorSyncGateOpen()) { deferSyncPush('config'); return; }
   try {
-    const res = await fetch(ORIGIN + '/api/creator/sync/save', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/sync/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -68456,7 +68567,7 @@ async function pushTrackingSync(opts) {
       'continue-watching': Number((localMap['continue-watching'] || {}).updatedAt) || 0,
       'watchlist': wlUpdatedAt,
     };
-    const res = await fetch(ORIGIN + '/api/creator/sync/save-tracking', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/sync/save-tracking', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -68626,7 +68737,7 @@ async function loadCreatorSync(opts) {
   const loadingFor = activeCreator.creatorName;
   const isStale = () => !activeCreator || activeCreator.creatorName !== loadingFor;
   try {
-    const res = await fetch(ORIGIN + '/api/creator/sync/load', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/sync/load', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey }),
@@ -69542,7 +69653,7 @@ async function submitCreateProfile() {
   if (!endSubmit) return;
 
   try {
-    const res = await fetch(ORIGIN + '/api/creator/create', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: name, displayName: displayName || undefined, recoveryAnswer: recoveryAnswer || undefined }),
@@ -69741,7 +69852,7 @@ async function confirmSaveAsCreator() {
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
   closeModal();
   try {
-    const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -69881,7 +69992,7 @@ async function hydrateCreatorListItems(data, creatorKey) {
     try {
       for (let i = 0; i < stale.length; i += ${CREATOR_LIST_ITEMS_BATCH_MAX}) {
         const slice = stale.slice(i, i + ${CREATOR_LIST_ITEMS_BATCH_MAX});
-        const res = await fetch(ORIGIN + '/api/creator/lists/items', {
+        const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/items', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -69929,7 +70040,7 @@ async function fetchCreatorListsOnce(creatorKey) {
   if (_creatorListsInFlight) return await _creatorListsInFlight;
   const p = (async () => {
     const askFor = async (offset, knownVersion, includeItems) => {
-      const res = await fetch(ORIGIN + '/api/creator/lists', {
+      const res = await creatorApiFetch(ORIGIN + '/api/creator/lists', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -70260,7 +70371,7 @@ async function uploadMissingLocalListsToAccount(lists, creatorKey) {
         if (l.synced != null) uploadBody.synced = l.synced;
         if (l.lastSyncedAt != null) uploadBody.lastSyncedAt = l.lastSyncedAt;
         if (l.baseItemIds) uploadBody.baseItemIds = l.baseItemIds;
-        const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+        const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(uploadBody),
@@ -70387,7 +70498,7 @@ async function renderCreatorDashboard(options) {
           const previousCount = sList.itemCount;
           sList.items = rowPayload.items;
           sList.itemCount = rowPayload.items.length;
-          fetch(ORIGIN + '/api/creator/lists/save', {
+          creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -71163,7 +71274,7 @@ if (_creatorDashEl) {
       const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
       recordCreatorListDeletion(slug);
       try {
-        const res = await fetch(ORIGIN + '/api/creator/lists/delete', {
+        const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/delete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, slug: slug }),
@@ -71310,7 +71421,7 @@ if (_creatorDashEl) {
           // account while being gone locally, which is precisely what the
           // backfill must not undo.
           recordCreatorListDeletion(slug);
-          fetch(ORIGIN + '/api/creator/lists/delete', {
+          creatorApiFetch(ORIGIN + '/api/creator/lists/delete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, slug: slug }),
@@ -71603,7 +71714,7 @@ async function persistCreatorListOrderFromDom() {
   if (activeCreator) {
     const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
     try {
-      await fetch(ORIGIN + '/api/creator/lists/reorder', {
+      await creatorApiFetch(ORIGIN + '/api/creator/lists/reorder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, order: order }),
@@ -71786,7 +71897,7 @@ async function submitCreateListModal() {
       const payload = { listId: generateChannelId(), type: type, items: initialItems, shuffle: false };
       if (activeCreator) {
         const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-        const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+        const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -72105,7 +72216,7 @@ async function saveCreatorListWithBaseline(list, removeItem, toastMessage) {
     // no updatedAt, and inventing one (0, Date.now()) would either reject
     // every save or assert a version this browser never saw.
     if (Number.isFinite(target.updatedAt)) body.expectedUpdatedAt = target.updatedAt;
-    return await fetch(ORIGIN + '/api/creator/lists/save', {
+    return await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -72480,7 +72591,7 @@ async function handleForegroundResumeSync() {
       const known = window._syncMetaStamps;
       if (known) {
         try {
-          const metaRes = await fetch(ORIGIN + '/api/creator/sync/meta', {
+          const metaRes = await creatorApiFetch(ORIGIN + '/api/creator/sync/meta', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey }),
@@ -77522,7 +77633,7 @@ async function pushPresetsDirectly(presetsMap) {
     const src = presetSourceMaps();
     const leanPresets = dereferencePresetsMap(presetsMap, src.lists, src.chans);
     const presetsB64 = await compressJsonToBase64(leanPresets);
-    const res = await fetch(ORIGIN + '/api/creator/sync/save-presets', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/sync/save-presets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -91827,6 +91938,12 @@ function generateSearchVariations(query) {
       // full PBKDF2 run every single time.
       const valid = await verifyCreatorKeyMemoized(creatorKey || "", keyHash, v.normalized);
       if (!valid) return { ok: false, error: "Username or Key is incorrect." };
+      // How many requests still sign with the key on the routes the page now
+      // signs with its session (CREATOR_SESSION_PATH_PREFIXES): the count the
+      // 60-day sunset waits on (Release 19, /admin -> Creators).
+      if (typeof path === "string" && CREATOR_SESSION_PATH_PREFIXES.some((p) => path.startsWith(p))) {
+        ctx.waitUntil(bumpStat(env, "authkey"));
+      }
       // Fire-and-forget, not awaited -- see touchCreatorLastSeen's own
       // comment for why this is throttled and safe to never wait on.
       touchCreatorLastSeen(env, v.normalized);
@@ -100072,7 +100189,19 @@ export default {
     if (effectiveEnv && effectiveEnv._d1Session && typeof effectiveEnv._d1Session.getBookmark === "function") {
       try { sessionBookmark = effectiveEnv._d1Session.getBookmark(); } catch {}
     }
-    return await withSecurityHeaders(response, privatePath, request ? request._sessionCookie : null, nonce, env, sessionBookmark);
+    const secured = await withSecurityHeaders(response, privatePath, request ? request._sessionCookie : null, nonce, env, sessionBookmark);
+    // Tells the page that this browser holds a live session for the account
+    // (one it sent, or one this response hands out), so its next requests can
+    // be signed with the session instead of the Account Key (creatorApiFetch,
+    // 16_; Release 19). The page cannot see the HttpOnly cookie itself.
+    try {
+      if (request && request.account && new URL(request.url).pathname.startsWith("/api/creator/")) {
+        secured.headers.set("X-MLA-Session", String(request.account.username || "").toLowerCase());
+      }
+    } catch {
+      // Never affects the response.
+    }
+    return secured;
   },
 
   // Runs on whatever schedule this Worker's owner configured under

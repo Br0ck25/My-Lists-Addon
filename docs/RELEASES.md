@@ -30,7 +30,8 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
   - Continue Watching: 901 the same, 43 shows not known yet. Airing Next: 224 the same, 30 not known yet.
 
   The 35 accounts added since the last comparison are those `activity.copy-new` copied. The "not known yet" counts grew with them, because their shows are not in the schedule until `show.watchers` (daily) and `show.refresh` (hourly) reach them. Meanwhile the safety net keeps their entries.
-- **`FF_SHOW_SCHEDULE`** is recommended to the owner now, as Release 18's recommendation (0 lost). It is reversible: delete the variable.
+- **`FF_SHOW_SCHEDULE` is on** (2026-10-04). The owner reports Continue Watching and Airing Next working correctly.
+- **Release 19** went live on 2026-10-04. The owner reports it working correctly. It is the first stage of the sign-in move, and fixes pages that loaded with no scripts running after a reload. Details under Release 19.
 - **`main`** is brought up to date by PR #12 (Releases 14–16).
 - **Cloudflare Workers Builds was connected to this repository** (found 2026-10-04). The owner reports the Worker it was connected to has since been deleted, and merging PR #12 started no build. Every push makes Cloudflare try to build the Worker from GitHub. On `main` it would deploy to production. So far every attempt has failed, so nothing has been deployed that way: `main` at `a6785d6` on 2026-10-03, and this branch's preview with *Authentication error*. The `wrangler.toml` guard (Release 14: `keep_vars`, the `DB_ACTIVITY` placeholder) keeps such a deploy from replacing the dashboard's settings. Deploying stays manual (pasting) unless the owner decides otherwise.
 - **Backups work** (2026-10-04): the owner added the five GitHub secrets, and the first real backup ran (Actions run 37226668219). It copied both databases, encrypted: `my-lists-db` (9.3 MB, 709 accounts' settings, 1,147 lists, 53,082 list items) and `mylists-activity` (0.96 MB, 46,956 plays). From here it runs daily at 04:17 UTC.
@@ -1368,4 +1369,44 @@ If Release 18's comparison shows 0 lost, turn `FF_SHOW_SCHEDULE` on. It is rever
 3. If it says 0 lost: Worker → Settings → Variables and Secrets → add Text `FF_SHOW_SCHEDULE` = `1` → Deploy. Look at your own Continue Watching and Airing Next in Stremio and on the site. To undo, delete the variable.
 
 **Rollback:** paste the 17 file, after deleting `FF_SHOW_SCHEDULE` if it was added.
+
+---
+
+## Release 19: the page signs with its session, and pages work after a reload
+
+**Branch point:** this branch after Release 18, which is live with `FF_SHOW_SCHEDULE` on.
+
+The owner chose the sign-in move as the next step. This is its first stage. Until now the page sent the Account Key in the body of every request that reads or saves the account (`/api/creator/*`). Every such request has also given the browser a 30-day session cookie since `FF_SESSIONS`, and the server already accepts that session in place of the key (`authenticateCreator`). So the page can stop sending the key.
+
+### What it changes
+
+- **`creatorApiFetch`** (`16_`; all 34 page calls to `/api/creator/` go through it).
+  - **Routes covered:** `sync/*`, `lists*`, `track-status`, `scrobble-token` and `scrobble-seen-users`.
+  - **When the key is left out:** once the server has confirmed that this browser holds a session for the account, requests to those routes go without the key. The confirmation is the new `X-MLA-Session` response header, needed because the page cannot read the HttpOnly cookie. The page remembers it per account in `localStorage` (`myListAddon:sessionFor`).
+  - **When the session is gone:** if it has expired, or the person signed out elsewhere, the server answers 401. The request is then sent once more with the key, exactly as before, and that also starts a new session. **Nobody is signed out by this.**
+  - **Before a session is known:** a fresh browser, or a server without sessions, works as before.
+  - **Routes that keep the key:** signing in (`restore`), creating an account, recovery, key resets and deleting. There, the key is what is being checked.
+- **Counter:** `/admin` → Creators shows *Saves that sent the Account Key today* and *… in the last 7 days* (stats kind `authkey`). It only counts the routes above. When it stays near zero, the next stage (the 60-day notice) can be planned.
+- **Pages loaded with no scripts running after a reload** (`02_` `withSecurityHeaders`). This is a bug that is live today, found while checking this release in a real browser.
+  - **Why:** a page answered with "not modified" (304) carried a new `Content-Security-Policy` nonce. The browser keeps its stored page but takes the 304's headers, so every script in the stored page, carrying the old nonce, was refused. That affected the classic page and the new interface alike: on a reload, or on a revisit the browser checked with the server, the page appeared but none of its scripts ran. It stayed like that until a page came back fresh.
+  - **Fix:** a 304 now carries no policy header, so the browser keeps the stored one, which matches the stored page.
+- `/admin` shows **Release 19**.
+
+### Checked in a real browser
+
+The test signs in as the page does, with the name and key in storage, against a local copy of the Worker, then reloads.
+- **First visit:** the 4 requests made before any session existed sent the key. Every request after that went without it: `sync/load`, `sync/save`, `lists`, `lists/items`, all answered 200.
+- **After a reload:** only the sign-in check (`restore`) sent the key, and every save went without it. No page errors, with the service worker on and off. Before the fix, the reload left the page with `ORIGIN is not defined` and no account requests at all.
+- **Tests** in `tests/session-signed-requests.test.mjs`:
+  - the server: session-only saves, another account refused, the header, the counter;
+  - the page: a fresh browser, a known session, another account, an expired session, the routes that keep the key, and that every page call goes through the helper;
+  - the 304 check. It fails without the fix.
+- `bash verify.sh` and the `MLA_TEST_V2_LISTS_READ=1` run pass (counts in the commit).
+
+**Steps:**
+1. Deploy `release-19-NEW-worker.js`. Check that `/admin` says **Release 19**. There is no database step.
+2. Use the site as normal: sign in, edit a list, mark something watched, then reload the page a couple of times. Everything should keep working.
+3. After a day, open `/admin` → **Creators**. *Saves that sent the Account Key today* should be small: one burst per browser that had no session yet.
+
+**Rollback:** paste the 18 file. Sessions and keys both keep working either way.
 

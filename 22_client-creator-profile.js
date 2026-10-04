@@ -408,7 +408,7 @@ async function uploadLocalListPayloadToAccount(payload) {
   if (list.lastSyncedAt != null) body.lastSyncedAt = list.lastSyncedAt;
   if (list.baseItemIds) body.baseItemIds = list.baseItemIds;
   try {
-    const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -759,7 +759,7 @@ async function submitSetRecoveryAnswer() {
   if (!endSubmit) return;
 
   try {
-    const res = await fetch(ORIGIN + '/api/creator/recovery-answer', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/recovery-answer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -825,7 +825,7 @@ async function openResetAccountModal() {
       try {
         if (typeof clearLocalAccountData === 'function') clearLocalAccountData();
 
-        const res = await fetch(ORIGIN + '/api/creator/account/reset', {
+        const res = await creatorApiFetch(ORIGIN + '/api/creator/account/reset', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ creatorName: creatorName, creatorKey: creatorKey, confirm: 'RESET' }),
@@ -901,7 +901,7 @@ async function handleDeleteAccount() {
   if (status) status.innerHTML = '<p style="color:var(--muted); font-size:0.85rem;">Deleting account and all data\u2026</p>';
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
   try {
-    const res = await fetch(ORIGIN + '/api/creator/delete-account', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/delete-account', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       // The server requires confirm:"DELETE" on this specific irreversible
@@ -1324,7 +1324,7 @@ async function fetchScrobbleToken(rotate) {
   try { creatorKey = localStorage.getItem('myListAddon:creatorKey') || ''; } catch (e) {}
   if (!creatorKey) return '';
   try {
-    const res = await fetch(ORIGIN + '/api/creator/scrobble-token', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/scrobble-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, rotate: rotate === true }),
@@ -1437,7 +1437,7 @@ async function loadScrobbleSeenUsers() {
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
   box.innerHTML = '<span style="color:var(--muted); font-size:0.8rem;">Checking detected users\u2026</span>';
   try {
-    const res = await fetch(ORIGIN + '/api/creator/scrobble-seen-users', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/scrobble-seen-users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey }),
@@ -1524,7 +1524,7 @@ async function refreshTrackPlaybackStatus() {
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
   statusBox.innerHTML = '<small style="color:var(--muted);">Checking scrobble status\u2026</small>';
   try {
-    const res = await fetch(ORIGIN + '/api/creator/track-status', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/track-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey }),
@@ -1772,6 +1772,7 @@ async function switchCreatorProfile() {
       headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
     });
   } catch (e) {}
+  if (typeof forgetCreatorSession === 'function') forgetCreatorSession();
   clearLocalAccountData();
   if (typeof appShellState !== 'undefined' && appShellState && typeof appShellState.set === 'function') {
     appShellState.set({ account: null });
@@ -1815,7 +1816,7 @@ async function submitRestoreProfile() {
   if (!endSubmit) return;
 
   try {
-    const res = await fetch(ORIGIN + '/api/creator/restore', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/restore', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: name, creatorKey: key }),
@@ -1896,7 +1897,7 @@ async function submitForgotKey() {
   if (!endSubmit) return;
 
   try {
-    const res = await fetch(ORIGIN + '/api/creator/reset-key', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/reset-key', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: name, recoveryAnswer: answer }),
@@ -1959,7 +1960,7 @@ async function submitForgotUsername() {
   if (!endSubmit) return;
 
   try {
-    const res = await fetch(ORIGIN + '/api/creator/forgot-username', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/forgot-username', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorKey: key, recoveryAnswer: answer || undefined }),
@@ -2009,7 +2010,7 @@ async function tryAutoRestoreCreatorProfile() {
   const key = localStorage.getItem('myListAddon:creatorKey');
   if (!name || !key) return;
   try {
-    const res = await fetch(ORIGIN + '/api/creator/restore', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/restore', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: name, creatorKey: key }),
@@ -2544,7 +2545,7 @@ async function pushChannelsSync() {
   try {
     const localChannels = channelsForCloudSync((typeof loadLocalChannels === 'function') ? loadLocalChannels() : {});
     const localMerged = (typeof loadLocalMergedChannels === 'function') ? loadLocalMergedChannels() : {};
-    const res = await fetch(ORIGIN + '/api/creator/sync/save-channels', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/sync/save-channels', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2617,7 +2618,7 @@ async function pushCreatorSync() {
   // where "my list rows came back after opening the phone" came from.
   if (!creatorSyncGateOpen()) { deferSyncPush('config'); return; }
   try {
-    const res = await fetch(ORIGIN + '/api/creator/sync/save', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/sync/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2865,7 +2866,7 @@ async function pushTrackingSync(opts) {
       'continue-watching': Number((localMap['continue-watching'] || {}).updatedAt) || 0,
       'watchlist': wlUpdatedAt,
     };
-    const res = await fetch(ORIGIN + '/api/creator/sync/save-tracking', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/sync/save-tracking', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -3035,7 +3036,7 @@ async function loadCreatorSync(opts) {
   const loadingFor = activeCreator.creatorName;
   const isStale = () => !activeCreator || activeCreator.creatorName !== loadingFor;
   try {
-    const res = await fetch(ORIGIN + '/api/creator/sync/load', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/sync/load', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey }),
@@ -3951,7 +3952,7 @@ async function submitCreateProfile() {
   if (!endSubmit) return;
 
   try {
-    const res = await fetch(ORIGIN + '/api/creator/create', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: name, displayName: displayName || undefined, recoveryAnswer: recoveryAnswer || undefined }),
@@ -4150,7 +4151,7 @@ async function confirmSaveAsCreator() {
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
   closeModal();
   try {
-    const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -4290,7 +4291,7 @@ async function hydrateCreatorListItems(data, creatorKey) {
     try {
       for (let i = 0; i < stale.length; i += ${CREATOR_LIST_ITEMS_BATCH_MAX}) {
         const slice = stale.slice(i, i + ${CREATOR_LIST_ITEMS_BATCH_MAX});
-        const res = await fetch(ORIGIN + '/api/creator/lists/items', {
+        const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/items', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -4338,7 +4339,7 @@ async function fetchCreatorListsOnce(creatorKey) {
   if (_creatorListsInFlight) return await _creatorListsInFlight;
   const p = (async () => {
     const askFor = async (offset, knownVersion, includeItems) => {
-      const res = await fetch(ORIGIN + '/api/creator/lists', {
+      const res = await creatorApiFetch(ORIGIN + '/api/creator/lists', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -4669,7 +4670,7 @@ async function uploadMissingLocalListsToAccount(lists, creatorKey) {
         if (l.synced != null) uploadBody.synced = l.synced;
         if (l.lastSyncedAt != null) uploadBody.lastSyncedAt = l.lastSyncedAt;
         if (l.baseItemIds) uploadBody.baseItemIds = l.baseItemIds;
-        const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+        const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(uploadBody),
@@ -4796,7 +4797,7 @@ async function renderCreatorDashboard(options) {
           const previousCount = sList.itemCount;
           sList.items = rowPayload.items;
           sList.itemCount = rowPayload.items.length;
-          fetch(ORIGIN + '/api/creator/lists/save', {
+          creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -5572,7 +5573,7 @@ if (_creatorDashEl) {
       const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
       recordCreatorListDeletion(slug);
       try {
-        const res = await fetch(ORIGIN + '/api/creator/lists/delete', {
+        const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/delete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, slug: slug }),
@@ -5719,7 +5720,7 @@ if (_creatorDashEl) {
           // account while being gone locally, which is precisely what the
           // backfill must not undo.
           recordCreatorListDeletion(slug);
-          fetch(ORIGIN + '/api/creator/lists/delete', {
+          creatorApiFetch(ORIGIN + '/api/creator/lists/delete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, slug: slug }),
@@ -6012,7 +6013,7 @@ async function persistCreatorListOrderFromDom() {
   if (activeCreator) {
     const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
     try {
-      await fetch(ORIGIN + '/api/creator/lists/reorder', {
+      await creatorApiFetch(ORIGIN + '/api/creator/lists/reorder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, order: order }),
@@ -6195,7 +6196,7 @@ async function submitCreateListModal() {
       const payload = { listId: generateChannelId(), type: type, items: initialItems, shuffle: false };
       if (activeCreator) {
         const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-        const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+        const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -6514,7 +6515,7 @@ async function saveCreatorListWithBaseline(list, removeItem, toastMessage) {
     // no updatedAt, and inventing one (0, Date.now()) would either reject
     // every save or assert a version this browser never saw.
     if (Number.isFinite(target.updatedAt)) body.expectedUpdatedAt = target.updatedAt;
-    return await fetch(ORIGIN + '/api/creator/lists/save', {
+    return await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -6889,7 +6890,7 @@ async function handleForegroundResumeSync() {
       const known = window._syncMetaStamps;
       if (known) {
         try {
-          const metaRes = await fetch(ORIGIN + '/api/creator/sync/meta', {
+          const metaRes = await creatorApiFetch(ORIGIN + '/api/creator/sync/meta', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey }),

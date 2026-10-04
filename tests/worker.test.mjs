@@ -3644,7 +3644,9 @@ describe("delete-account confirmation", () => {
       activeCreator: { creatorName: "alicedelete", displayName: "Alice" },
       document: { getElementById: () => null },
       localStorage: { getItem: () => "MYL-TEST-KEY1-KEY2" },
-      fetch: async (_url, opts) => {
+      // The page sends its /api/creator/ calls through creatorApiFetch (16_),
+      // which leaves delete-account as it is: the key is what it checks.
+      creatorApiFetch: async (_url, opts) => {
         capturedBody = JSON.parse(opts.body);
         return { json: async () => ({ ok: true }) };
       },
@@ -3660,6 +3662,7 @@ describe("delete-account confirmation", () => {
     // confirmed in the modal.
     assert.equal(capturedBody.confirm, "DELETE");
     assert.equal(capturedBody.creatorName, "alicedelete");
+    assert.equal(capturedBody.creatorKey, "MYL-TEST-KEY1-KEY2", "deleting still sends the key");
   });
 
   it("server rejects a delete-account request with no confirm field (HTTP level)", async () => {
@@ -8102,7 +8105,10 @@ describe("N11: verifying a Creator Key is bounded, not free", () => {
     await createUser(env, "n11user");
     const ip = "203.0.113.99";
     let throttled = 0;
-    for (let i = 0; i < CAP + 15; i++) {
+    // Twice the cap: the limit counts per clock minute, and CAP + 15 tries
+    // that happened to straddle a minute boundary split into two windows
+    // under the cap each, so the test failed about one run in fifty.
+    for (let i = 0; i < 2 * CAP + 15; i++) {
       const r = await call(env, "/api/creator/sync/load", { method: "POST", ip, json: {
         creatorName: "n11user", creatorKey: "MYL-AAAA-BBBB-" + String(i).padStart(4, "0"),
       }});
