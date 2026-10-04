@@ -94,3 +94,71 @@ describe("wrangler.toml cannot quietly undo the live settings", () => {
     assert.doesNotMatch(block[1], /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/, "a placeholder until the owner fills it in");
   });
 });
+
+// --- Release 17 ------------------------------------------------------------------
+
+describe("the old Continue Watching does not keep an episode just watched", () => {
+  // TMDB, for a show whose newest episode is S5E8 and that has no season 6 yet.
+  function fakeTmdb() {
+    const realFetch = globalThis.fetch;
+    const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json" } });
+    globalThis.fetch = async (input, init) => {
+      const url = String(input && input.url ? input.url : input);
+      if (!url.includes("api.themoviedb.org")) return realFetch(input, init);
+      if (url.includes("/find/")) return json({ tv_results: [{ id: 555, name: "Latest Show" }], movie_results: [] });
+      if (/\/tv\/555\/season\/5\b/.test(url)) {
+        return json({ episodes: Array.from({ length: 8 }, (_, i) => ({ id: 9000 + i + 1, episode_number: i + 1, name: `Ep ${i + 1}`, air_date: "2026-01-0" + Math.min(9, i + 1) })) });
+      }
+      if (/\/tv\/555\/season\//.test(url)) return json({ status_message: "not found" }, 404);
+      if (/\/tv\/555\b/.test(url)) return json({ id: 555, name: "Latest Show", genres: [], first_air_date: "2020-01-01", seasons: [{ season_number: 5, episode_count: 8 }] });
+      return json({});
+    };
+    return () => { globalThis.fetch = realFetch; };
+  }
+
+  it("drops the stale entry and marks the show fully watched, so the sweep finds the next episode", async () => {
+    const restore = fakeTmdb();
+    try {
+      const env = makeEnv();
+      env.TMDB_API_KEY = "test-key";
+      const u = await createUser(env, "latestep");
+      await env.CONFIGS.put("cfg:latestcfg", JSON.stringify({ track: true, trackCreatorName: u.creatorName, trackCreatorKey: u.creatorKey, entries: [] }));
+      env.CONFIGS._store.set(`creatorsynctracking:${u.creatorName}`, JSON.stringify({
+        watchHistory: [{ id: "9007", type: "episode", showId: "tt0005555", seasonNum: 5, episodeNum: 7, watchedAt: 1000 }],
+        continueWatching: [{ id: "9008", type: "episode", showId: "tt0005555", seasonNum: 5, episodeNum: 8 }],
+        fullyWatchedShowIds: [], dismissedContinueWatching: {}, trackPlayback: true, updatedAt: 1000,
+      }));
+
+      await call(env, "/latestcfg/subtitles/series/tt0005555:5:8.json");
+
+      const blob = JSON.parse(env.CONFIGS._store.get(`creatorsynctracking:${u.creatorName}`));
+      assert.ok(blob.watchHistory.some((e) => e.seasonNum === 5 && e.episodeNum === 8), "the play was recorded");
+      assert.deepEqual(blob.continueWatching.filter((e) => e.showId === "tt0005555"), [], "S5E8 is not offered again");
+      assert.ok(blob.fullyWatchedShowIds.includes("tt0005555"), "the episode sweep will look for S5E9 / S6E1");
+    } finally {
+      restore();
+    }
+  });
+
+  it("still keeps an entry that is ahead of what was watched", async () => {
+    const restore = fakeTmdb();
+    try {
+      const env = makeEnv();
+      env.TMDB_API_KEY = "test-key";
+      const u = await createUser(env, "rewatcher");
+      await env.CONFIGS.put("cfg:rewatchcfg", JSON.stringify({ track: true, trackCreatorName: u.creatorName, trackCreatorKey: u.creatorKey, entries: [] }));
+      // Watched up to S5E8 already; Continue Watching offers a hand-added S6E1.
+      env.CONFIGS._store.set(`creatorsynctracking:${u.creatorName}`, JSON.stringify({
+        watchHistory: [{ id: "9008", type: "episode", showId: "tt0005555", seasonNum: 5, episodeNum: 8, watchedAt: 1000 }],
+        continueWatching: [{ id: "x601", type: "episode", showId: "tt0005555", seasonNum: 6, episodeNum: 1 }],
+        fullyWatchedShowIds: [], dismissedContinueWatching: {}, trackPlayback: true, updatedAt: 1000,
+      }));
+      // Re-watching an older episode.
+      await call(env, "/rewatchcfg/subtitles/series/tt0005555:5:3.json");
+      const blob = JSON.parse(env.CONFIGS._store.get(`creatorsynctracking:${u.creatorName}`));
+      assert.deepEqual(blob.continueWatching.filter((e) => e.showId === "tt0005555").map((e) => `${e.seasonNum}:${e.episodeNum}`), ["6:1"]);
+    } finally {
+      restore();
+    }
+  });
+});

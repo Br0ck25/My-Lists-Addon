@@ -137,6 +137,10 @@ describe("P5-4: shelf.shadow", () => {
     assert.deepEqual([last.cw.both, last.cw.legacyOnly, last.cw.v2Only], [1, 2, 1], "13 is not a difference");
     assert.deepEqual(last.cw.whyOld, { "schedule-nothing-after": 1, "already-watched": 1 });
     assert.deepEqual(last.cw.whyNew, { "different-episode": 1 });
+    // 4 differences in 6; leaving out the old list's own mistake (15's
+    // already-watched entry), 3 in 5.
+    assert.equal(last.rate, 4 / 6);
+    assert.equal(last.rateNew, 3 / 5);
     const cw = last.examples.find((e) => e.shelf === "cw");
     assert.deepEqual(cw.why, {
       "m14:2:6": "schedule-nothing-after: nothing after S2E5 (stored S2E6): last aired S2E5, no next episode (Returning Series)",

@@ -35,7 +35,10 @@
 // Nothing calls these yet: P3c-6 serves /sync/load and the personal rows
 // from them, behind FF_EVENT_TRACKING.
 
-const SHELF_PROGRESS_LIMIT = 200;
+// Shows read per account. 200 left a heavy watcher's older shows off Continue
+// Watching and Airing Next, which the stored shelves never did (the shelf
+// comparison, 2026-10-04); 1000 still bounds the read.
+const SHELF_PROGRESS_LIMIT = 1000;
 const SHELF_JOIN_CHUNK = 90;
 const SHELF_HISTORY_PAGE = 50;
 const SHELF_HISTORY_PAGE_MAX = 500;

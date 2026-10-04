@@ -5,7 +5,7 @@ import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
-import { call, createUser, makeD1, makeEnv } from "./harness.mjs";
+import { call, createUser, drainQueue, makeD1, makeEnv, makeQueue, runScheduledTick } from "./harness.mjs";
 
 // Phase 3c: watch history and progress in their own database, DB_ACTIVITY
 // (migrations/activity/, schema_activity.sql, 36_activity-db.js).
@@ -790,8 +790,8 @@ describe("P3c-5: the shelves, worked out when read", () => {
     const counted = { DB: count(main, () => mainQueries++), DB_ACTIVITY: count(act, () => actQueries++) };
     const cw = plain(await sb.continueWatching(counted, 7, { now: SHELF_NOW }));
     assert.equal(actQueries, 1);
-    assert.equal(mainQueries, 3, "200 shows: three chunks of at most 90");
-    assert.equal(cw.missingSchedule.length + cw.items.length <= 200, true);
+    assert.equal(mainQueries, 3, "203 shows: three chunks of at most 90");
+    assert.equal(cw.missingSchedule.length + cw.items.length <= 1000, true);
   });
 
   it("Watch History pages newest first, and names episodes and movies", async () => {
@@ -924,6 +924,49 @@ describe("P3c-6: with FF_EVENT_TRACKING, a copied account is served from the act
     await saveTrackingV2(env, user, { ...data, watchHistory: [{ id: "zz", type: "movie", watchedAt: T0 }, ...data.watchHistory], expectedClientVersion: data.trackingClientVersion });
     const blob = JSON.parse(await env.CONFIGS.get("creatorsynctracking:annwatch"));
     assert.ok(blob.watchHistory.some((it) => it.id === "zz"), "the legacy record holds the new entry");
+  });
+
+  // Release 17: an account made after the copy finished was never copied --
+  // the finished run stayed finished, and Start over is refused with the flag
+  // on -- so its history stayed in the legacy stores (39 of 748 accounts).
+  async function lateAccount(env) {
+    const late = await createUser(env, "latecomer");
+    const r = await saveTrackingV2(env, late, { watchHistory: [{ id: "tt0068646", type: "movie", watchedAt: T0 + 9 * H }] });
+    assert.equal(r.body.ok, true);
+    assert.ok(JSON.parse(await env.CONFIGS.get("creatorsynctracking:latecomer")).watchHistory.length, "on the legacy store for now");
+    return late;
+  }
+  const copiedEvents = (env, username) => env.DB_ACTIVITY._db.prepare("SELECT count(*) AS n FROM watch_events WHERE account_id = ?").get(accountId(env, username)).n;
+  const copyJob = (env, username) => env.DB._db.prepare("SELECT status FROM jobs WHERE dedupe_key = ?").get(`migrate.activity:acct:${accountId(env, username)}`);
+
+  it("Copy history takes on accounts made after the copy finished", async () => {
+    const { env, cookie } = await eventTrackingSetup();
+    const late = await lateAccount(env);
+    const steps = await runActivityBackfill(env, cookie);
+    assert.equal(steps[steps.length - 1].done, true);
+    assert.equal(copyJob(env, "latecomer").status, "done");
+    assert.equal(copiedEvents(env, "latecomer"), 1);
+    // From here it is served from the activity database.
+    const data = await loadTracking(env, late);
+    assert.equal(data.watchHistory[0].id, "tt0068646");
+  });
+
+  it("the hourly activity.copy-new job copies them without anyone pressing anything", async () => {
+    const { env } = await eventTrackingSetup({ JOBS: makeQueue() });
+    await lateAccount(env);
+    // The first tick makes the periodic rows; then run only this job.
+    await runScheduledTick(env);
+    env.JOBS._pending.length = 0;
+    env.DB._db.exec("UPDATE jobs SET run_after = 9999999999999 WHERE dedupe_key LIKE 'periodic:%' AND dedupe_key != 'periodic:activity.copy-new'");
+    env.DB._db.exec("UPDATE jobs SET run_after = 1 WHERE dedupe_key = 'periodic:activity.copy-new'");
+    await runScheduledTick(env);
+    env.JOBS._pending.splice(0, env.JOBS._pending.length, ...env.JOBS._pending.filter((m) => m.body.type === "activity.copy-new"));
+    await drainQueue(env);
+    assert.equal(copyJob(env, "latecomer").status, "done");
+    assert.equal(copiedEvents(env, "latecomer"), 1);
+    const row = env.DB._db.prepare("SELECT progress_json, last_error FROM jobs WHERE dedupe_key = 'periodic:activity.copy-new'").get();
+    assert.equal(row.last_error, null);
+    assert.equal(JSON.parse(row.progress_json).lastRun.done, true);
   });
 
   it("the copy cannot start over while the flag is on", async () => {
