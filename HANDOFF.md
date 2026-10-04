@@ -2,6 +2,21 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-03 (Antigravity): New Catalog Modal Input Token Alignment & Global Modal Form Rules.**
+>
+> **Where things stand**
+> - Modal Input Background & Border Unification (`09_page-shell.js`, `16_client-row-core.js`):
+>   1. **Catalog URL Input Alignment**:
+>      - In `16_client-row-core.js`, updated `openAddShelfModal` and `addShelfModalAddLink` dynamic link inputs from legacy `background: var(--bg)` and `border: 1px solid var(--border)` to `background: var(--surface)` and `border: 1.5px solid var(--border-strong)` matching `Catalog Name` and all other form inputs across the app.
+>   2. **Global Modal Input CSS Protection**:
+>      - In `09_page-shell.js`, added `.modal-card input:not([type="checkbox"]):not([type="radio"]), .modal-card select, .modal-card textarea { background: var(--surface); border: 1.5px solid var(--border-strong); color: var(--text); }` to guarantee that all modal inputs always inherit the clean surface background and strong border.
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK (5,448,488 bytes).
+>   - `node --check worker_entry_combined.js`: OK (0 syntax errors).
+>   - `python gen_map.py`: 2,665 symbols, 211 routes.
+>   - Node test suite passed (402/402 client tests passed).
+> - Branch: `feat/design-system-phase-1`
+
 > **HANDOFF, 2026-10-03 (Antigravity): 3-Tier Navigation Stacking Resolution, Subnav Pill Differentiation (Pill Fatigue Fix), & Header Compaction.**
 >
 > **Where things stand**

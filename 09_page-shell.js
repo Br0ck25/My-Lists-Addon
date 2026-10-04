@@ -4618,6 +4618,13 @@ ${seoHeadHtml}
     max-width: 1100px;
     width: 95vw;
   }
+  .modal-card input:not([type="checkbox"]):not([type="radio"]),
+  .modal-card select,
+  .modal-card textarea {
+    background: var(--surface);
+    border: 1.5px solid var(--border-strong);
+    color: var(--text);
+  }
   /* The one animation in here that is not decoration: it is the only signal
      a modal gives that a slow action (Reset Account Data, generating an
      install link) is still running rather than stuck. The spin animation was
