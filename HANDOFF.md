@@ -2,6 +2,36 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-04 (Antigravity): Safe Card Action Button Re-Ordering & Channels Ergonomics Polish.**
+>
+> **Where things stand**
+> - Safe Card Action Button Re-ordering (`20_client-channel-builder.js`, `22_client-creator-profile.js`):
+>   1. **Eliminated Dangerous Sandwiched Delete Buttons**:
+>      - Previously, `Delete` was dangerously sandwiched between `Edit` and `Share` (in Channels: `[Edit]` `[Delete]` `[Share]` `[+ Add]`), or between `Sync` and `Share` (in Custom Lists: `[Edit]` `[Sync]` `[Delete]` `[Share]` `[+ Add]`).
+>      - Re-ordered to the unified, safe design standard:
+>        `[+ Add]` &middot; `[Edit]` &middot; `[Sync]` &middot; `[Share]` &middot; `[Delete]`
+>      - Applied across **My Channels** (`renderMyCreatedChannelsList`), **Merged Channels** (`renderChannelMergeList`), **Server Custom Lists** (`buildServerListCardHtml`), and **Local Custom Lists** (`buildLocalListCardHtml`).
+>      - Pushes the destructive `Delete` action safely to the far right edge of the card, preventing mis-clicks.
+> - Movie Poster "S1E1" Glitch Suppressed (`20_client-channel-builder.js`):
+>   1. Channels and storylines assign dummy `it.season = 1; it.episode = 1;` so streams sequence properly in player feeds.
+>   2. Previously, this caused movies (like Iron Man) on the channel card to display as `Iron Man S1E1` with subtitle `Movie`.
+>   3. Added `isMovie = (it.kind === 'movie' || it.type === 'movie')` checks: `seasonEp` is only attached for true TV episodes, while movies cleanly display `Title` on line 1 and `[Year • ]Movie` on line 2.
+> - Channels Search Toolbar Polish (`13_tab-channels.js`):
+>   1. Upgraded `#myChannelsSearchInput` into a `.search-input-box` container with the standard embedded SVG magnifying glass icon (`padding-left: 38px`).
+>   2. Aligned `border-radius: var(--radius-pill)` between the search box and the adjacent `#myChannelsSortSelect`.
+> - Merge Channels Section Ergonomics (`13_tab-channels.js`, `20_client-channel-builder.js`):
+>   1. Removed redundant debug `[Refresh list]` button.
+>   2. Constrained `#channelMergeNameInput` to `max-width: 380px` with pill border-radius.
+>   3. When `< 2` channels exist, `#channelMergeSelectAllWrap` and `#channelMergeControls` are automatically hidden, showing friendly contextual guidance prompting the user to build or quick-add channels first.
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK (5,477,501 bytes).
+>   - `node --check worker_entry_combined.js`: OK (0 syntax errors).
+>   - `python gen_map.py`: 2,670 symbols, 211 routes.
+>   - Targeted test suite (`tests/client.test.mjs`, `tests/imdb-ids.test.mjs`, `tests/better-posters.test.mjs`): 458/458 tests pass (0 failures).
+>   - Full test suite (`tests/*.test.mjs`): 2,072/2,072 tests pass (0 failures).
+> - Branch: `feat/design-system-phase-1`
+>
+
 > **HANDOFF, 2026-10-04 (Antigravity): Custom List Design System Consistency — Soft Brand-Tinted + Add Buttons and Subnav-Pill Content Type Toggles.**
 >
 > **Where things stand**
