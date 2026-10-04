@@ -54,11 +54,13 @@
   <!-- Discover Shared Lists Feed (All / Movies / Shows / Hidden Gems / Kids / Holidays / Genres) -->
   <div class="discover-subpanel" id="discoverSubSharedFeed" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" id="discoverListsFeedHeader" style="margin-bottom:10px;">
-        <h2 class="shelf-title" id="discoverListsFeedTitle">Movies</h2>
+      <div class="shelf-header" id="discoverListsFeedHeader" style="margin-bottom:12px; align-items:flex-start;">
+        <div>
+          <h2 class="shelf-title" id="discoverListsFeedTitle">Movies</h2>
+          <p id="discoverListsFeedDesc" style="margin:4px 0 0; color:var(--muted); font-size:0.85rem; line-height:1.45;">Top charts, new releases, and popular movie collections across streaming platforms.</p>
+        </div>
         <button type="button" class="secondary lc-btn" data-act="appActRefreshDiscoverCharts">Refresh</button>
       </div>
-      <p id="discoverListsFeedDesc" style="margin:0 0 14px; color:var(--muted); font-size:0.85rem; line-height:1.45;">Top charts, new releases, and popular movie collections across streaming platforms.</p>
       <div id="discoverListsFeed"></div>
     </div>
   </div>
@@ -66,11 +68,13 @@
   <!-- Popular Lists Feed in Discover -->
   <div class="discover-subpanel" id="discoverSubPopular" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="shelf-title">Popular Community Lists</h2>
+      <div class="shelf-header" style="margin-bottom:12px; align-items:flex-start;">
+        <div>
+          <h2 class="shelf-title">Popular Community Lists</h2>
+          <p style="margin:4px 0 0; color:var(--muted); font-size:0.85rem; line-height:1.45;">Top trending and highly-rated community lists shared by creators and viewers.</p>
+        </div>
         <button type="button" class="secondary lc-btn" data-act="loadPopularListsFeed" data-act-args="[true]">Refresh</button>
       </div>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem; line-height:1.45;">Top trending and highly-rated community lists shared by creators and viewers.</p>
       <div id="popularListsFeed"></div>
     </div>
   </div>
@@ -78,11 +82,13 @@
   <!-- Curated Lists Feed in Discover -->
   <div class="discover-subpanel" id="discoverSubCurated" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="shelf-title">Curated For You</h2>
+      <div class="shelf-header" style="margin-bottom:12px; align-items:flex-start;">
+        <div>
+          <h2 class="shelf-title">Curated For You</h2>
+          <p style="margin:4px 0 0; color:var(--muted); font-size:0.85rem; line-height:1.45;">Personalized recommendations and curated lists tailored to your watch history and tastes.</p>
+        </div>
         <button type="button" class="secondary lc-btn" data-act="loadCuratedListsFeed" data-act-args="[true]">Refresh</button>
       </div>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem; line-height:1.45;">Personalized recommendations and curated lists tailored to your watch history and tastes.</p>
       <div id="curatedListsFeed"></div>
     </div>
   </div>

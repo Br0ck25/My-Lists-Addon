@@ -3085,10 +3085,12 @@ function renderDiscoverChartsList(type, forceRefresh) {
   // Helper: push a pair entry
   function pushPair(name, movieUrl, showUrl, group) {
     if ((type === 'movie' || type === 'all') && movieUrl) {
-      lists.push({ name: name, url: movieUrl, type: 'movie', user: group, likes: 0 });
+      const displayName = (type === 'all' && showUrl) ? (name + ': Movies') : name;
+      lists.push({ name: displayName, url: movieUrl, type: 'movie', user: group, likes: 0 });
     }
     if ((type === 'series' || type === 'all') && showUrl) {
-      lists.push({ name: name, url: showUrl, type: 'series', user: group, likes: 0 });
+      const displayName = (type === 'all' && movieUrl) ? (name + ': Shows') : name;
+      lists.push({ name: displayName, url: showUrl, type: 'series', user: group, likes: 0 });
     }
   }
   // Helper: push single-type entry
@@ -3108,10 +3110,10 @@ function renderDiscoverChartsList(type, forceRefresh) {
       window._CHARTS_MY_LISTS_ADDON.forEach(function(p) { pushPair(p.name, p.movieUrl, p.showUrl, 'My Lists Addon'); });
     }
     if (type === 'movie' || type === 'all') {
-      pushSingle('New Releases', 'tmdb:chart:new_movies', 'movie', 'TMDB');
+      pushSingle(type === 'all' ? 'New Releases: Movies' : 'New Releases', 'tmdb:chart:new_movies', 'movie', 'TMDB');
     }
     if (type === 'series' || type === 'all') {
-      pushSingle('New Releases', 'tmdb:chart:new_shows', 'series', 'TMDB');
+      pushSingle(type === 'all' ? 'New Releases: Shows' : 'New Releases', 'tmdb:chart:new_shows', 'series', 'TMDB');
     }
     if (window._CHARTS_TMDB) {
       window._CHARTS_TMDB.forEach(function(p) {
@@ -3161,8 +3163,8 @@ function renderDiscoverChartsList(type, forceRefresh) {
   if (type === 'kids' || type === 'all') {
     if (window._CHARTS_KIDS) {
       window._CHARTS_KIDS.forEach(function(item) {
-        if (item.movieUrl) pushSingle(item.name, item.movieUrl, 'movie', 'Kids');
-        if (item.showUrl) pushSingle(item.name, item.showUrl, 'series', 'Kids');
+        if (item.movieUrl) pushSingle((type === 'all' && item.showUrl) ? (item.name + ': Movies') : item.name, item.movieUrl, 'movie', 'Kids');
+        if (item.showUrl) pushSingle((type === 'all' && item.movieUrl) ? (item.name + ': Shows') : item.name, item.showUrl, 'series', 'Kids');
       });
     }
   }
@@ -3170,8 +3172,8 @@ function renderDiscoverChartsList(type, forceRefresh) {
   if (type === 'holidays' || type === 'all') {
     if (window._CHARTS_HOLIDAYS) {
       window._CHARTS_HOLIDAYS.forEach(function(item) {
-        if (item.movieUrl) pushSingle(item.name, item.movieUrl, 'movie', 'Holidays');
-        if (item.showUrl) pushSingle(item.name, item.showUrl, 'series', 'Holidays');
+        if (item.movieUrl) pushSingle((type === 'all' && item.showUrl) ? (item.name + ': Movies') : item.name, item.movieUrl, 'movie', 'Holidays');
+        if (item.showUrl) pushSingle((type === 'all' && item.movieUrl) ? (item.name + ': Shows') : item.name, item.showUrl, 'series', 'Holidays');
       });
     }
   }
@@ -3179,8 +3181,8 @@ function renderDiscoverChartsList(type, forceRefresh) {
   if (type === 'genres' || type === 'all') {
     if (window._CHARTS_GENRES) {
       window._CHARTS_GENRES.forEach(function(item) {
-        if (item.movieUrl) pushSingle(item.name, item.movieUrl, 'movie', 'Genres');
-        if (item.showUrl) pushSingle(item.name, item.showUrl, 'series', 'Genres');
+        if (item.movieUrl) pushSingle((type === 'all' && item.showUrl) ? (item.name + ': Movies') : item.name, item.movieUrl, 'movie', 'Genres');
+        if (item.showUrl) pushSingle((type === 'all' && item.movieUrl) ? (item.name + ': Shows') : item.name, item.showUrl, 'series', 'Genres');
       });
     }
   }

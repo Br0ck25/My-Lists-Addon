@@ -1073,7 +1073,7 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
       (creatorLabel ? '<span class="list-card-meta-sep">&middot;</span>' : '') +
       '<span>' + typeLabel + '</span>' +
       (itemCountLabel ? '<span class="list-card-meta-sep">&middot;</span><span>' + itemCountLabel + '</span>' : '') +
-      (item.likes !== undefined ? '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes like-count">&#9829; <span class="like-num">' + (item.likes || 0) + '</span></span>' : '') +
+      (Number(item.likes) > 0 ? '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes like-count">&#9829; <span class="like-num">' + (item.likes || 0) + '</span></span>' : '') +
       '</div>' +
       '</div>' +
       '<div class="list-card-actions">' +
@@ -1530,7 +1530,8 @@ document.addEventListener('click', async (e) => {
   }
   const viewBtn = e.target.closest('.searchViewListBtn');
   if (viewBtn) {
-    openListDetailsPage(viewBtn.dataset.name, viewBtn.dataset.type, viewBtn.dataset.url, null, {
+    const listName = (viewBtn.dataset.name || '').replace(/:\\s*(Movies|Shows)$/i, '').trim();
+    openListDetailsPage(listName, viewBtn.dataset.type, viewBtn.dataset.url, null, {
       creatorName: viewBtn.dataset.creator,
       itemCount: viewBtn.dataset.items,
       likes: viewBtn.dataset.likes
@@ -1539,7 +1540,8 @@ document.addEventListener('click', async (e) => {
   }
   const addBtn = e.target.closest('.searchAddBtn');
   if (addBtn) {
-    const listName = addBtn.dataset.name || 'List';
+    const rawName = addBtn.dataset.name || 'List';
+    const listName = rawName.replace(/:\\s*(Movies|Shows)$/i, '').trim();
     const listUrl = addBtn.dataset.url || '';
     const listType = addBtn.dataset.type || 'movie';
     const isAdded = addBtn.classList.contains('is-added') || (typeof isListAddedToConfig === 'function' && (isListAddedToConfig(listUrl, listType) || isListAddedToConfig(listUrl, 'movie') || isListAddedToConfig(listUrl, 'series') || isListAddedToConfig(listUrl)));
@@ -1577,7 +1579,8 @@ document.addEventListener('click', async (e) => {
   const customizeBtn = e.target.closest('.customizeListBtn');
   if (customizeBtn) {
     e.stopPropagation();
-    const listName = customizeBtn.dataset.name || 'List';
+    const rawName = customizeBtn.dataset.name || 'List';
+    const listName = rawName.replace(/:\\s*(Movies|Shows)$/i, '').trim();
     const listUrl = customizeBtn.dataset.url || '';
     const listType = customizeBtn.dataset.type || 'movie';
     if (typeof loadListToCustomListDraft === 'function') {
@@ -1670,10 +1673,19 @@ document.addEventListener('click', async (e) => {
       if (card) {
         card.dataset.likes = finalLikes;
         const numEl = card.querySelector('.like-num');
-        if (numEl) numEl.textContent = finalLikes;
-        else {
-          const countEl = card.querySelector('.like-count, .list-card-likes');
-          if (countEl) countEl.innerHTML = '&#9829; <span class="like-num">' + finalLikes + '</span>';
+        if (numEl) {
+          numEl.textContent = finalLikes;
+          const likesSpan = numEl.closest('.list-card-likes');
+          if (likesSpan) {
+            likesSpan.style.display = finalLikes > 0 ? '' : 'none';
+            const sep = likesSpan.previousElementSibling;
+            if (sep && sep.classList.contains('list-card-meta-sep')) sep.style.display = finalLikes > 0 ? '' : 'none';
+          }
+        } else if (finalLikes > 0) {
+          const metaEl = card.querySelector('.list-card-meta');
+          if (metaEl) {
+            metaEl.insertAdjacentHTML('beforeend', '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + finalLikes + '</span></span>');
+          }
         }
       }
       if (window._currentListDetailsUpdateLikes) {
@@ -1751,10 +1763,19 @@ document.addEventListener('click', async (e) => {
       if (card) {
         card.dataset.likes = finalLikes;
         const numEl = card.querySelector('.like-num');
-        if (numEl) numEl.textContent = finalLikes;
-        else {
-          const countEl = card.querySelector('.like-count, .list-card-likes');
-          if (countEl) countEl.innerHTML = '&#9829; <span class="like-num">' + finalLikes + '</span>';
+        if (numEl) {
+          numEl.textContent = finalLikes;
+          const likesSpan = numEl.closest('.list-card-likes');
+          if (likesSpan) {
+            likesSpan.style.display = finalLikes > 0 ? '' : 'none';
+            const sep = likesSpan.previousElementSibling;
+            if (sep && sep.classList.contains('list-card-meta-sep')) sep.style.display = finalLikes > 0 ? '' : 'none';
+          }
+        } else if (finalLikes > 0) {
+          const metaEl = card.querySelector('.list-card-meta');
+          if (metaEl) {
+            metaEl.insertAdjacentHTML('beforeend', '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + finalLikes + '</span></span>');
+          }
         }
       }
       if (window._currentListDetailsUpdateLikes) {
@@ -2136,7 +2157,7 @@ async function loadCuratedListsFeed(forceRefresh) {
                   '<span class="list-card-meta-sep">&middot;</span>' +
                   '<span>' + (type === 'series' ? 'Shows' : 'Movies') + '</span>' +
                   (l.items ? '<span class="list-card-meta-sep">&middot;</span><span>' + l.items + ' items</span>' : '') +
-                  '<span class="list-card-likes">&#9829; <span class="like-num">' + (l.likes || 0) + '</span></span>' +
+                  (Number(l.likes) > 0 ? '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + (l.likes || 0) + '</span></span>' : '') +
                 '</div>' +
               '</div>' +
               '<div class="list-card-actions">' +
@@ -2187,7 +2208,7 @@ async function loadCuratedListsFeed(forceRefresh) {
                   '<span class="list-card-meta-sep">&middot;</span>' +
                   '<span>' + (type === 'series' ? 'Shows' : 'Movies') + '</span>' +
                   (l.items ? '<span class="list-card-meta-sep">&middot;</span><span>' + l.items + ' items</span>' : '') +
-                  '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + (l.likes || 0) + '</span></span>' +
+                  (Number(l.likes) > 0 ? '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + (l.likes || 0) + '</span></span>' : '') +
                 '</div>' +
               '</div>' +
               '<div class="list-card-actions">' +
@@ -2373,24 +2394,29 @@ function render5PosterListsFeed(container, lists) {
     let badgeClass = 'badge-custom';
     let badgeText = 'Community';
     const uLower = (l.url || '').toLowerCase();
-    if (isOwn || l.kind === 'own' || l.source === 'My Lists Addon' || l.source === 'Profile') {
+    const userClean = (author || l.user || l.creatorName || '').trim();
+
+    if (userClean === 'My Lists Addon' || isOwn || l.kind === 'own' || l.source === 'My Lists Addon' || l.source === 'Profile' || uLower.startsWith('mylists:')) {
       badgeClass = 'badge-mylists';
       badgeText = 'My Lists Addon';
-    } else if (l.source === 'MDBList' || uLower.includes('mdblist')) {
+    } else if (userClean === 'MDBList' || l.source === 'MDBList' || uLower.includes('mdblist')) {
       badgeClass = 'badge-mdblist';
       badgeText = 'MDBList';
-    } else if (l.source === 'Trakt' || uLower.includes('trakt')) {
+    } else if (userClean === 'Trakt' || l.source === 'Trakt' || uLower.includes('trakt')) {
       badgeClass = 'badge-trakt';
       badgeText = 'Trakt';
-    } else if (l.source === 'TMDB' || uLower.includes('tmdb') || uLower.includes('themoviedb')) {
+    } else if (userClean === 'TMDB' || l.source === 'TMDB' || uLower.includes('tmdb') || uLower.includes('themoviedb')) {
       badgeClass = 'badge-tmdb';
       badgeText = 'TMDB';
-    } else if (l.source === 'Simkl' || uLower.includes('simkl')) {
+    } else if (userClean === 'Simkl' || l.source === 'Simkl' || uLower.includes('simkl')) {
       badgeClass = 'badge-simkl';
       badgeText = 'Simkl';
-    } else if (l.source === 'IMDb' || uLower.includes('imdb')) {
+    } else if (userClean === 'IMDb' || l.source === 'IMDb' || uLower.includes('imdb')) {
       badgeClass = 'badge-imdb';
       badgeText = 'IMDb';
+    } else if (userClean.includes('Streaming') || l.source === 'Streaming') {
+      badgeClass = 'badge-streaming';
+      badgeText = 'Streaming';
     } else if (/^tmdb:/i.test(l.name || '')) {
       badgeClass = 'badge-tmdb';
       badgeText = 'TMDB';
@@ -2418,7 +2444,7 @@ function render5PosterListsFeed(container, lists) {
             '<span class="list-card-meta-sep">&middot;</span>' +
             '<span>' + (type === 'series' ? 'Shows' : 'Movies') + '</span>' +
             (itemCount ? '<span class="list-card-meta-sep">&middot;</span><span>' + itemCount + ' items</span>' : '') +
-            '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + (l.likes || 0) + '</span></span>' +
+            (Number(l.likes) > 0 ? '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + (l.likes || 0) + '</span></span>' : '') +
           '</div>' +
         '</div>' +
         '<div class="list-card-actions">' +
@@ -2428,7 +2454,7 @@ function render5PosterListsFeed(container, lists) {
             ' data-name="' + escapeAttr(displayName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '">' +
             (added ? 'Remove' : '+ Add') +
           '</button>' +
-          renderCustomizeButtonHtml(displayName, l.url || '', type) +
+          renderCustomizeButtonHtml(displayName.replace(/:\\s*(Movies|Shows)$/i, '').trim(), l.url || '', type) +
         '</div>' +
       '</div>' +
       '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(displayName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '"></div>' +

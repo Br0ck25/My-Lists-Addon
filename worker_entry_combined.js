@@ -34285,11 +34285,13 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
   <!-- Discover Shared Lists Feed (All / Movies / Shows / Hidden Gems / Kids / Holidays / Genres) -->
   <div class="discover-subpanel" id="discoverSubSharedFeed" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" id="discoverListsFeedHeader" style="margin-bottom:10px;">
-        <h2 class="shelf-title" id="discoverListsFeedTitle">Movies</h2>
+      <div class="shelf-header" id="discoverListsFeedHeader" style="margin-bottom:12px; align-items:flex-start;">
+        <div>
+          <h2 class="shelf-title" id="discoverListsFeedTitle">Movies</h2>
+          <p id="discoverListsFeedDesc" style="margin:4px 0 0; color:var(--muted); font-size:0.85rem; line-height:1.45;">Top charts, new releases, and popular movie collections across streaming platforms.</p>
+        </div>
         <button type="button" class="secondary lc-btn" data-act="appActRefreshDiscoverCharts">Refresh</button>
       </div>
-      <p id="discoverListsFeedDesc" style="margin:0 0 14px; color:var(--muted); font-size:0.85rem; line-height:1.45;">Top charts, new releases, and popular movie collections across streaming platforms.</p>
       <div id="discoverListsFeed"></div>
     </div>
   </div>
@@ -34297,11 +34299,13 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
   <!-- Popular Lists Feed in Discover -->
   <div class="discover-subpanel" id="discoverSubPopular" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="shelf-title">Popular Community Lists</h2>
+      <div class="shelf-header" style="margin-bottom:12px; align-items:flex-start;">
+        <div>
+          <h2 class="shelf-title">Popular Community Lists</h2>
+          <p style="margin:4px 0 0; color:var(--muted); font-size:0.85rem; line-height:1.45;">Top trending and highly-rated community lists shared by creators and viewers.</p>
+        </div>
         <button type="button" class="secondary lc-btn" data-act="loadPopularListsFeed" data-act-args="[true]">Refresh</button>
       </div>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem; line-height:1.45;">Top trending and highly-rated community lists shared by creators and viewers.</p>
       <div id="popularListsFeed"></div>
     </div>
   </div>
@@ -34309,11 +34313,13 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
   <!-- Curated Lists Feed in Discover -->
   <div class="discover-subpanel" id="discoverSubCurated" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="shelf-title">Curated For You</h2>
+      <div class="shelf-header" style="margin-bottom:12px; align-items:flex-start;">
+        <div>
+          <h2 class="shelf-title">Curated For You</h2>
+          <p style="margin:4px 0 0; color:var(--muted); font-size:0.85rem; line-height:1.45;">Personalized recommendations and curated lists tailored to your watch history and tastes.</p>
+        </div>
         <button type="button" class="secondary lc-btn" data-act="loadCuratedListsFeed" data-act-args="[true]">Refresh</button>
       </div>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem; line-height:1.45;">Personalized recommendations and curated lists tailored to your watch history and tastes.</p>
       <div id="curatedListsFeed"></div>
     </div>
   </div>
@@ -38792,10 +38798,12 @@ function renderDiscoverChartsList(type, forceRefresh) {
   // Helper: push a pair entry
   function pushPair(name, movieUrl, showUrl, group) {
     if ((type === 'movie' || type === 'all') && movieUrl) {
-      lists.push({ name: name, url: movieUrl, type: 'movie', user: group, likes: 0 });
+      const displayName = (type === 'all' && showUrl) ? (name + ': Movies') : name;
+      lists.push({ name: displayName, url: movieUrl, type: 'movie', user: group, likes: 0 });
     }
     if ((type === 'series' || type === 'all') && showUrl) {
-      lists.push({ name: name, url: showUrl, type: 'series', user: group, likes: 0 });
+      const displayName = (type === 'all' && movieUrl) ? (name + ': Shows') : name;
+      lists.push({ name: displayName, url: showUrl, type: 'series', user: group, likes: 0 });
     }
   }
   // Helper: push single-type entry
@@ -38815,10 +38823,10 @@ function renderDiscoverChartsList(type, forceRefresh) {
       window._CHARTS_MY_LISTS_ADDON.forEach(function(p) { pushPair(p.name, p.movieUrl, p.showUrl, 'My Lists Addon'); });
     }
     if (type === 'movie' || type === 'all') {
-      pushSingle('New Releases', 'tmdb:chart:new_movies', 'movie', 'TMDB');
+      pushSingle(type === 'all' ? 'New Releases: Movies' : 'New Releases', 'tmdb:chart:new_movies', 'movie', 'TMDB');
     }
     if (type === 'series' || type === 'all') {
-      pushSingle('New Releases', 'tmdb:chart:new_shows', 'series', 'TMDB');
+      pushSingle(type === 'all' ? 'New Releases: Shows' : 'New Releases', 'tmdb:chart:new_shows', 'series', 'TMDB');
     }
     if (window._CHARTS_TMDB) {
       window._CHARTS_TMDB.forEach(function(p) {
@@ -38868,8 +38876,8 @@ function renderDiscoverChartsList(type, forceRefresh) {
   if (type === 'kids' || type === 'all') {
     if (window._CHARTS_KIDS) {
       window._CHARTS_KIDS.forEach(function(item) {
-        if (item.movieUrl) pushSingle(item.name, item.movieUrl, 'movie', 'Kids');
-        if (item.showUrl) pushSingle(item.name, item.showUrl, 'series', 'Kids');
+        if (item.movieUrl) pushSingle((type === 'all' && item.showUrl) ? (item.name + ': Movies') : item.name, item.movieUrl, 'movie', 'Kids');
+        if (item.showUrl) pushSingle((type === 'all' && item.movieUrl) ? (item.name + ': Shows') : item.name, item.showUrl, 'series', 'Kids');
       });
     }
   }
@@ -38877,8 +38885,8 @@ function renderDiscoverChartsList(type, forceRefresh) {
   if (type === 'holidays' || type === 'all') {
     if (window._CHARTS_HOLIDAYS) {
       window._CHARTS_HOLIDAYS.forEach(function(item) {
-        if (item.movieUrl) pushSingle(item.name, item.movieUrl, 'movie', 'Holidays');
-        if (item.showUrl) pushSingle(item.name, item.showUrl, 'series', 'Holidays');
+        if (item.movieUrl) pushSingle((type === 'all' && item.showUrl) ? (item.name + ': Movies') : item.name, item.movieUrl, 'movie', 'Holidays');
+        if (item.showUrl) pushSingle((type === 'all' && item.movieUrl) ? (item.name + ': Shows') : item.name, item.showUrl, 'series', 'Holidays');
       });
     }
   }
@@ -38886,8 +38894,8 @@ function renderDiscoverChartsList(type, forceRefresh) {
   if (type === 'genres' || type === 'all') {
     if (window._CHARTS_GENRES) {
       window._CHARTS_GENRES.forEach(function(item) {
-        if (item.movieUrl) pushSingle(item.name, item.movieUrl, 'movie', 'Genres');
-        if (item.showUrl) pushSingle(item.name, item.showUrl, 'series', 'Genres');
+        if (item.movieUrl) pushSingle((type === 'all' && item.showUrl) ? (item.name + ': Movies') : item.name, item.movieUrl, 'movie', 'Genres');
+        if (item.showUrl) pushSingle((type === 'all' && item.movieUrl) ? (item.name + ': Shows') : item.name, item.showUrl, 'series', 'Genres');
       });
     }
   }
@@ -45252,7 +45260,7 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
       (creatorLabel ? '<span class="list-card-meta-sep">&middot;</span>' : '') +
       '<span>' + typeLabel + '</span>' +
       (itemCountLabel ? '<span class="list-card-meta-sep">&middot;</span><span>' + itemCountLabel + '</span>' : '') +
-      (item.likes !== undefined ? '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes like-count">&#9829; <span class="like-num">' + (item.likes || 0) + '</span></span>' : '') +
+      (Number(item.likes) > 0 ? '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes like-count">&#9829; <span class="like-num">' + (item.likes || 0) + '</span></span>' : '') +
       '</div>' +
       '</div>' +
       '<div class="list-card-actions">' +
@@ -45709,7 +45717,8 @@ document.addEventListener('click', async (e) => {
   }
   const viewBtn = e.target.closest('.searchViewListBtn');
   if (viewBtn) {
-    openListDetailsPage(viewBtn.dataset.name, viewBtn.dataset.type, viewBtn.dataset.url, null, {
+    const listName = (viewBtn.dataset.name || '').replace(/:\\s*(Movies|Shows)$/i, '').trim();
+    openListDetailsPage(listName, viewBtn.dataset.type, viewBtn.dataset.url, null, {
       creatorName: viewBtn.dataset.creator,
       itemCount: viewBtn.dataset.items,
       likes: viewBtn.dataset.likes
@@ -45718,7 +45727,8 @@ document.addEventListener('click', async (e) => {
   }
   const addBtn = e.target.closest('.searchAddBtn');
   if (addBtn) {
-    const listName = addBtn.dataset.name || 'List';
+    const rawName = addBtn.dataset.name || 'List';
+    const listName = rawName.replace(/:\\s*(Movies|Shows)$/i, '').trim();
     const listUrl = addBtn.dataset.url || '';
     const listType = addBtn.dataset.type || 'movie';
     const isAdded = addBtn.classList.contains('is-added') || (typeof isListAddedToConfig === 'function' && (isListAddedToConfig(listUrl, listType) || isListAddedToConfig(listUrl, 'movie') || isListAddedToConfig(listUrl, 'series') || isListAddedToConfig(listUrl)));
@@ -45756,7 +45766,8 @@ document.addEventListener('click', async (e) => {
   const customizeBtn = e.target.closest('.customizeListBtn');
   if (customizeBtn) {
     e.stopPropagation();
-    const listName = customizeBtn.dataset.name || 'List';
+    const rawName = customizeBtn.dataset.name || 'List';
+    const listName = rawName.replace(/:\\s*(Movies|Shows)$/i, '').trim();
     const listUrl = customizeBtn.dataset.url || '';
     const listType = customizeBtn.dataset.type || 'movie';
     if (typeof loadListToCustomListDraft === 'function') {
@@ -45849,10 +45860,19 @@ document.addEventListener('click', async (e) => {
       if (card) {
         card.dataset.likes = finalLikes;
         const numEl = card.querySelector('.like-num');
-        if (numEl) numEl.textContent = finalLikes;
-        else {
-          const countEl = card.querySelector('.like-count, .list-card-likes');
-          if (countEl) countEl.innerHTML = '&#9829; <span class="like-num">' + finalLikes + '</span>';
+        if (numEl) {
+          numEl.textContent = finalLikes;
+          const likesSpan = numEl.closest('.list-card-likes');
+          if (likesSpan) {
+            likesSpan.style.display = finalLikes > 0 ? '' : 'none';
+            const sep = likesSpan.previousElementSibling;
+            if (sep && sep.classList.contains('list-card-meta-sep')) sep.style.display = finalLikes > 0 ? '' : 'none';
+          }
+        } else if (finalLikes > 0) {
+          const metaEl = card.querySelector('.list-card-meta');
+          if (metaEl) {
+            metaEl.insertAdjacentHTML('beforeend', '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + finalLikes + '</span></span>');
+          }
         }
       }
       if (window._currentListDetailsUpdateLikes) {
@@ -45930,10 +45950,19 @@ document.addEventListener('click', async (e) => {
       if (card) {
         card.dataset.likes = finalLikes;
         const numEl = card.querySelector('.like-num');
-        if (numEl) numEl.textContent = finalLikes;
-        else {
-          const countEl = card.querySelector('.like-count, .list-card-likes');
-          if (countEl) countEl.innerHTML = '&#9829; <span class="like-num">' + finalLikes + '</span>';
+        if (numEl) {
+          numEl.textContent = finalLikes;
+          const likesSpan = numEl.closest('.list-card-likes');
+          if (likesSpan) {
+            likesSpan.style.display = finalLikes > 0 ? '' : 'none';
+            const sep = likesSpan.previousElementSibling;
+            if (sep && sep.classList.contains('list-card-meta-sep')) sep.style.display = finalLikes > 0 ? '' : 'none';
+          }
+        } else if (finalLikes > 0) {
+          const metaEl = card.querySelector('.list-card-meta');
+          if (metaEl) {
+            metaEl.insertAdjacentHTML('beforeend', '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + finalLikes + '</span></span>');
+          }
         }
       }
       if (window._currentListDetailsUpdateLikes) {
@@ -46315,7 +46344,7 @@ async function loadCuratedListsFeed(forceRefresh) {
                   '<span class="list-card-meta-sep">&middot;</span>' +
                   '<span>' + (type === 'series' ? 'Shows' : 'Movies') + '</span>' +
                   (l.items ? '<span class="list-card-meta-sep">&middot;</span><span>' + l.items + ' items</span>' : '') +
-                  '<span class="list-card-likes">&#9829; <span class="like-num">' + (l.likes || 0) + '</span></span>' +
+                  (Number(l.likes) > 0 ? '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + (l.likes || 0) + '</span></span>' : '') +
                 '</div>' +
               '</div>' +
               '<div class="list-card-actions">' +
@@ -46366,7 +46395,7 @@ async function loadCuratedListsFeed(forceRefresh) {
                   '<span class="list-card-meta-sep">&middot;</span>' +
                   '<span>' + (type === 'series' ? 'Shows' : 'Movies') + '</span>' +
                   (l.items ? '<span class="list-card-meta-sep">&middot;</span><span>' + l.items + ' items</span>' : '') +
-                  '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + (l.likes || 0) + '</span></span>' +
+                  (Number(l.likes) > 0 ? '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + (l.likes || 0) + '</span></span>' : '') +
                 '</div>' +
               '</div>' +
               '<div class="list-card-actions">' +
@@ -46552,24 +46581,29 @@ function render5PosterListsFeed(container, lists) {
     let badgeClass = 'badge-custom';
     let badgeText = 'Community';
     const uLower = (l.url || '').toLowerCase();
-    if (isOwn || l.kind === 'own' || l.source === 'My Lists Addon' || l.source === 'Profile') {
+    const userClean = (author || l.user || l.creatorName || '').trim();
+
+    if (userClean === 'My Lists Addon' || isOwn || l.kind === 'own' || l.source === 'My Lists Addon' || l.source === 'Profile' || uLower.startsWith('mylists:')) {
       badgeClass = 'badge-mylists';
       badgeText = 'My Lists Addon';
-    } else if (l.source === 'MDBList' || uLower.includes('mdblist')) {
+    } else if (userClean === 'MDBList' || l.source === 'MDBList' || uLower.includes('mdblist')) {
       badgeClass = 'badge-mdblist';
       badgeText = 'MDBList';
-    } else if (l.source === 'Trakt' || uLower.includes('trakt')) {
+    } else if (userClean === 'Trakt' || l.source === 'Trakt' || uLower.includes('trakt')) {
       badgeClass = 'badge-trakt';
       badgeText = 'Trakt';
-    } else if (l.source === 'TMDB' || uLower.includes('tmdb') || uLower.includes('themoviedb')) {
+    } else if (userClean === 'TMDB' || l.source === 'TMDB' || uLower.includes('tmdb') || uLower.includes('themoviedb')) {
       badgeClass = 'badge-tmdb';
       badgeText = 'TMDB';
-    } else if (l.source === 'Simkl' || uLower.includes('simkl')) {
+    } else if (userClean === 'Simkl' || l.source === 'Simkl' || uLower.includes('simkl')) {
       badgeClass = 'badge-simkl';
       badgeText = 'Simkl';
-    } else if (l.source === 'IMDb' || uLower.includes('imdb')) {
+    } else if (userClean === 'IMDb' || l.source === 'IMDb' || uLower.includes('imdb')) {
       badgeClass = 'badge-imdb';
       badgeText = 'IMDb';
+    } else if (userClean.includes('Streaming') || l.source === 'Streaming') {
+      badgeClass = 'badge-streaming';
+      badgeText = 'Streaming';
     } else if (/^tmdb:/i.test(l.name || '')) {
       badgeClass = 'badge-tmdb';
       badgeText = 'TMDB';
@@ -46597,7 +46631,7 @@ function render5PosterListsFeed(container, lists) {
             '<span class="list-card-meta-sep">&middot;</span>' +
             '<span>' + (type === 'series' ? 'Shows' : 'Movies') + '</span>' +
             (itemCount ? '<span class="list-card-meta-sep">&middot;</span><span>' + itemCount + ' items</span>' : '') +
-            '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + (l.likes || 0) + '</span></span>' +
+            (Number(l.likes) > 0 ? '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + (l.likes || 0) + '</span></span>' : '') +
           '</div>' +
         '</div>' +
         '<div class="list-card-actions">' +
@@ -46607,7 +46641,7 @@ function render5PosterListsFeed(container, lists) {
             ' data-name="' + escapeAttr(displayName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '">' +
             (added ? 'Remove' : '+ Add') +
           '</button>' +
-          renderCustomizeButtonHtml(displayName, l.url || '', type) +
+          renderCustomizeButtonHtml(displayName.replace(/:\\s*(Movies|Shows)$/i, '').trim(), l.url || '', type) +
         '</div>' +
       '</div>' +
       '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(displayName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '"></div>' +

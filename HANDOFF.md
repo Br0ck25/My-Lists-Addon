@@ -2,6 +2,34 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-03 (Antigravity): Discover Subnav Header Hierarchy, Movie/Show Title Disambiguation, & Attribution Badge Alignment.**
+>
+> **Where things stand**
+> - Discover Feed Subnav Hierarchy & Headers (`11_tab-quick-add.js`):
+>   1. **Header + Description Grouping**:
+>      - Compacted section headers across all subnav tabs (`All`, `Movies`, `Shows`, `Popular Lists`, `Curated`, `Hidden Gems`, `Kids`, `Holidays`, `Genres`).
+>      - Nested `h2.shelf-title` and `<p>` description into a unified left flex-column group with the `[Refresh]` button aligned cleanly on the right inside `.shelf-header`.
+>      - Preserves DOM hierarchy (`#discoverListsFeedHeader`, `#discoverListsFeedTitle`, `#discoverListsFeedDesc`) for test invariants while eliminating 3-tier navigation visual fragmentation.
+> - Movie/Show Title Disambiguation & Catalog Stripping (`16_client-row-core.js`, `19_client-search-and-likes.js`):
+>   1. **Disambiguation in All Feed Only**:
+>      - In `16_client-row-core.js`, for paired movie and show charts (*New on Streaming*, *New Releases*, and genre/holiday pairs), `: Movies` and `: Shows` suffixes are appended only when viewing the `All` subnav feed.
+>      - When viewing dedicated `Movies` or `Shows` subnavs, titles remain clean without suffixes (e.g. `New on Streaming`).
+>   2. **Catalog Clean Name Preservation**:
+>      - In `19_client-search-and-likes.js`, when a list is added to catalogs (`+ Add`), customized (`Customize`), or opened in details (`View`), the disambiguation suffix (`:\s*(Movies|Shows)$`) is stripped so user catalogs and list drafts receive clean names without suffixes.
+> - Contradictory Attribution & Source Badge Alignment (`19_client-search-and-likes.js`):
+>   1. **Author-to-Badge Consistency**:
+>      - Updated source badge assignment in `render5PosterListsFeed` to match the list's author attribution (`by [author]`).
+>      - Lists authored by or credited to `My Lists Addon` (such as *New on Streaming* and *Most Watched Today* which use `tmdb:` under the hood) now receive the purple `[My Lists Addon]` badge (`badge-mylists`) rather than `[TMDB]`.
+>   2. **Social Proof 0-Likes Cleanup**:
+>      - Suppressed `· ♥ 0` like counts across search cards, curated lists, and 5-poster Discover feeds when `likes` is 0.
+>      - Like counts only display when `likes > 0`. Liking/unliking dynamically shows/hides the like counter element.
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK (5,446,039 bytes).
+>   - `node --check worker_entry_combined.js`: OK (0 syntax errors).
+>   - `python gen_map.py`: 2,665 symbols, 211 routes.
+>   - Node test suite passed (`tests/bundle-budget.test.mjs`, `tests/app-shell*.test.mjs`, `tests/client*.test.mjs`, `tests/my-lists-addon-charts.test.mjs`, `tests/new-on-streaming.test.mjs`).
+> - Branch: `feat/design-system-phase-1`
+
 > **HANDOFF, 2026-10-03 (Antigravity): New Catalog Modal Naming, Form Checkbox Unification, & Mobile Header Group Hierarchy.**
 >
 > **Where things stand**
