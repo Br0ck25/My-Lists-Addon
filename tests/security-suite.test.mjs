@@ -403,8 +403,8 @@ describe("P9-4: Security Regression Suite", () => {
       // Redirects to /admin/login or serves login form
       assert.ok(res1.status === 302 || res1.text.includes("admin/login") || res1.text.includes("Password"));
 
-      // Unauthenticated POST /admin/api/backfill-title-daily-stats
-      const res2 = await call(env, "/admin/api/backfill-title-daily-stats", { method: "POST" });
+      // Unauthenticated POST to an admin maintenance API
+      const res2 = await call(env, "/admin/api/recover-stats-from-analytics", { method: "POST" });
       assert.equal(res2.status, 401);
       assert.equal(res2.body.ok, false);
 

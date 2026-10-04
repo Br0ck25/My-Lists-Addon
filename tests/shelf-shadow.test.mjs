@@ -85,7 +85,12 @@ describe("P5-4: shelf.shadow", () => {
     // Airing Next: show 10 in both; the ended show only in the old one.
     assert.deepEqual([last.an.both, last.an.legacyOnly, last.an.v2Only], [1, 1, 0]);
     assert.equal(last.rate, 1 / 3);
-    assert.deepEqual(last.examples, [{ accountId: 1, shelf: "an", legacyOnly: ["m11"], v2Only: [] }]);
+    // The stored entry is the stale one: the show has ended.
+    assert.deepEqual(last.examples, [{
+      accountId: 1, shelf: "an", legacyOnly: ["m11"], v2Only: [],
+      why: { m11: "no-upcoming: stored (no date): last aired S1E3, no next episode (Ended)" },
+    }]);
+    assert.deepEqual(last.an.whyOld, { "no-upcoming": 1 });
 
     const shadowPoints = points.filter((p) => p.indexes && p.indexes[0] === "shelf-shadow");
     assert.deepEqual(shadowPoints.map((p) => p.blobs[1]), ["cw", "an"]);
@@ -93,6 +98,107 @@ describe("P5-4: shelf.shadow", () => {
     const status = await call(env, "/admin/api/jobs/status", { cookie: await adminCookie(env) });
     const job = status.body.jobs.periodic.find((j) => j.type === "shelf.shadow");
     assert.equal(job.last.accounts, 1);
+  });
+
+  it("says why each difference is there, and does not count a show the schedule does not know", async () => {
+    const env = shadowEnv();
+    const db = env.DB._db;
+    const media = db.prepare("INSERT INTO media (id, kind, imdb_id, tmdb_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 0, 0)");
+    // 13: resolved as a movie by mistake and never refreshed. Its stored entry
+    // used to count as a difference: the comparison only matched series rows.
+    media.run(13, "movie", "tt0000013", 130, "Wrong Kind");
+    db.prepare("INSERT INTO show_schedule (media_id, watcher_count, next_check_at) VALUES (13, 1, 9999999999999)").run();
+    // 14: S2E5 is the last episode TMDB has; nothing after it yet.
+    media.run(14, "series", "tt0000014", 140, "Season Break");
+    // 15: watched up to S1E6 since the stored shelf was last written.
+    media.run(15, "series", "tt0000015", 150, "Moved On");
+    const sched = db.prepare(`INSERT INTO show_schedule (media_id, status, last_aired_season, last_aired_episode, last_aired_date, next_season, next_episode, next_air_date, season_episode_counts, watcher_count, checked_at, next_check_at)
+      VALUES (?, 'Returning Series', ?, ?, ?, NULL, NULL, NULL, ?, 1, 1, 9999999999999)`);
+    sched.run(14, 2, 5, day(-30), JSON.stringify({ 1: 10, 2: 5 }));
+    sched.run(15, 1, 8, day(-3), JSON.stringify({ 1: 8 }));
+    const p = env.DB_ACTIVITY._db.prepare("INSERT INTO show_progress (account_id, media_id, last_season, last_episode, last_watched_at, status, updated_at) VALUES (1, ?, ?, ?, ?, 'watching', 0)");
+    p.run(13, 1, 1, Date.now() - 4 * DAY);
+    p.run(14, 2, 5, Date.now() - 5 * DAY);
+    p.run(15, 1, 6, Date.now() - 6 * DAY);
+    const record = JSON.parse(env.CONFIGS._store.get("creatorsynctracking:ann"));
+    record.continueWatching.push(
+      { id: "tt0000013:1:2", showId: "tt0000013", type: "episode", seasonNum: 1, episodeNum: 2 },
+      { id: "tt0000014:2:6", showId: "tt0000014", type: "episode", seasonNum: 2, episodeNum: 6 },
+      { id: "tt0000015:1:6", showId: "tt0000015", type: "episode", seasonNum: 1, episodeNum: 6 },
+    );
+    env.CONFIGS._store.set("creatorsynctracking:ann", JSON.stringify(record));
+
+    await runScheduledTick(env);
+    env.JOBS._pending.length = 0;
+    await runShadow(env);
+    const last = JSON.parse(env.DB._db.prepare("SELECT progress_json FROM jobs WHERE dedupe_key = 'periodic:shelf.shadow'").get().progress_json).last;
+
+    assert.equal(last.cw.unknown, 2, "12 and 13 are not known yet");
+    assert.deepEqual([last.cw.both, last.cw.legacyOnly, last.cw.v2Only], [1, 2, 1], "13 is not a difference");
+    assert.deepEqual(last.cw.whyOld, { "schedule-nothing-after": 1, "already-watched": 1 });
+    assert.deepEqual(last.cw.whyNew, { "different-episode": 1 });
+    const cw = last.examples.find((e) => e.shelf === "cw");
+    assert.deepEqual(cw.why, {
+      "m14:2:6": "schedule-nothing-after: nothing after S2E5 (stored S2E6): last aired S2E5, no next episode (Returning Series)",
+      "m15:1:6": "already-watched: stored S1E6, but progress is at S1E6",
+      "m15:1:7": "different-episode: stored m15:1:6",
+    });
+
+    const status = await call(env, "/admin", { cookie: await adminCookie(env) });
+    assert.match(status.text, /Why: Continue Watching only in the old: /);
+  });
+
+  it("Compare shelves now runs the whole round from the admin page, a batch per request", async () => {
+    const env = shadowEnv();
+    const db = env.DB._db;
+    // 24 more accounts, each with Show 10's S1E4 stored and worked out alike:
+    // more than one batch of 20.
+    const acct = db.prepare("INSERT INTO accounts (id, username, display_name, key_hash, created_at) VALUES (?, ?, ?, 'x', 0)");
+    const done = db.prepare("INSERT INTO jobs (type, dedupe_key, account_id, status, run_after, created_at, updated_at) VALUES ('migrate.activity', ?, ?, 'done', 0, 0, 0)");
+    const p = env.DB_ACTIVITY._db.prepare("INSERT INTO show_progress (account_id, media_id, last_season, last_episode, last_watched_at, status, updated_at) VALUES (?, 10, 1, 3, ?, 'watching', 0)");
+    for (let id = 3; id <= 26; id++) {
+      acct.run(id, `user${id}`, `User ${id}`);
+      done.run(`migrate.activity:acct:${id}`, id);
+      p.run(id, Date.now() - DAY);
+      env.CONFIGS._store.set(`creatorsynctracking:user${id}`, JSON.stringify({
+        continueWatching: [{ id: "tt0000010:1:4", showId: "tt0000010", type: "episode", seasonNum: 1, episodeNum: 4 }],
+        airingNext: [],
+      }));
+    }
+    // The periodic row exists, as on the live site.
+    await runScheduledTick(env);
+    env.JOBS._pending.length = 0;
+
+    const cookie = await adminCookie(env);
+    assert.equal((await call(env, "/admin/api/jobs/shelf-shadow-now", { method: "POST", json: {} })).status, 401, "admins only");
+
+    let state = {};
+    const calls = [];
+    for (let i = 0; i < 10; i++) {
+      const r = await call(env, "/admin/api/jobs/shelf-shadow-now", { method: "POST", cookie, json: state });
+      assert.equal(r.status, 200, JSON.stringify(r.body));
+      calls.push(r.body);
+      if (r.body.done) break;
+      state = { afterId: r.body.afterId, round: r.body.round };
+    }
+    assert.equal(calls.length, 2, "26 accounts, 20 a batch");
+    assert.equal(calls[0].total, 26);
+    assert.equal(calls.reduce((n, c) => n + c.scanned, 0), 26);
+    const last = calls[1].last;
+    assert.equal(last.accounts, 25, "Bob has nothing stored");
+    assert.deepEqual([last.cw.both, last.cw.legacyOnly, last.cw.v2Only], [25, 0, 0]);
+    assert.deepEqual([last.an.both, last.an.legacyOnly], [1, 1]);
+    assert.deepEqual(last.an.whyOld, { "no-upcoming": 1 });
+
+    // Check jobs shows it.
+    const status = await call(env, "/admin/api/jobs/status", { cookie });
+    const job = status.body.jobs.periodic.find((j) => j.type === "shelf.shadow");
+    assert.equal(job.last.accounts, 25);
+    assert.equal(job.last.finishedAt, last.finishedAt);
+
+    const page = await call(env, "/admin", { cookie });
+    assert.match(page.text, /data-act="runShelfCompareNow"/);
+    assert.match(page.text, /async function runShelfCompareNow\(\)/);
   });
 
   it("walks the accounts in steps and does nothing without the activity database", async () => {

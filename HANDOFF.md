@@ -2,6 +2,33 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-04 (Claude Code). Start here; the 2026-10-01 block below is history.**
+>
+> **Where things stand**
+> - **Live:** `main` at `a6785d6` (other assistants finished P7-6 and Phases 8–10 and merged everything into `main`). The Worker is now named **`my-lists-addon`** (it was `wako`). Deploying is still pasting `worker_entry_combined.js` in the dashboard.
+> - **Release 14** is on `claude/elegant-ride-o7m8fh`: `main` plus the fixes from the owner-requested review of Phases 8–10 (`docs/RELEASES.md` → Release 14, with steps). It is **not merged into `main`** — ask the owner before opening a PR. `bash verify.sh` and the `MLA_TEST_V2_LISTS_READ=1` run pass.
+> - **Variables on (owner's screenshot, 2026-10-04):** `FF_CHART_SNAPSHOTS`, `FF_EVENT_TRACKING`, `FF_NEW_UI`, `FF_PROVIDER_BREAKER`, `FF_SCROBBLE_ST_ONLY`, `FF_SESSIONS`, `FF_V2_LISTS_ONLY`, `FF_V2_LISTS_READ`. Bindings: `ANALYTICS` (`mylists_events`), `BLOBS`, `CONFIGS`, `DB`, `DB_ACTIVITY`, `JOBS`. **Never delete `FF_V2_LISTS_ONLY` or `FF_EVENT_TRACKING`.** Release 14 asks the owner to delete `FF_SCROBBLE_ST_ONLY`.
+>
+> **What Release 14 fixes (each has tests)**
+> - Counters (page views, installs, pings, Most Watched, searches) went only to Analytics Engine from 2026-10-02, which nothing reads → back on D1 (D-33), and a one-time recovery tool in `/admin` (`recoverStatsFromAnalyticsEngine`, needs `CF_ANALYTICS_TOKEN` + `CF_ANALYTICS_ACCOUNT_ID`).
+> - Badged posters were blank (an SVG used as an image cannot load an external `href`) → poster embedded again, cache bounded by bytes.
+> - Read replicas: `/subtitles/` (the playback ping writes) and `/api/lists/:id` kept on the primary.
+> - `ensureTrackingMigrated` restored (emptying it let an autosave wipe old accounts' history).
+> - KV → R2 export rewritten (per-batch parts, manifest last, binary kept) with an admin panel; `docs/CUTOVER.md` P10-3 rewritten: **no KV or D1 deletion is safe yet** (D-34).
+> - Only the webhook sunset notice is shown; **do not set `SUNSET_60DAY_START_DATE`** (the page itself uses the routes the other notices retire).
+> - `wrangler.toml`: `keep_vars = true`, warning, `DB_ACTIVITY` placeholder that fails a deploy.
+>
+> **Update, later on 2026-10-04:** Release 14 is live as **14c** and the missing counts were put back (14 and 14b failed on Analytics Engine SQL rules: no `concat`; `GROUP BY` takes column names or `AS` names only — the test stand-in now enforces both). **Release 15** is prepared: reasons for every `shelf.shadow` difference (`whyOld` / `whyNew`, shown as a "Why:" line in Check jobs) plus a counting fix, and the backup workflow now fails when secrets are missing. Until 2026-10-04 no backup had been made (every run skipped, secrets not set, while showing green); the owner then added the secrets and the first real backup ran (both databases, run 37226668219). `/admin` shows the release (`WORKER_RELEASE`, `00_constants.js`: change it every release).
+>
+> **Open items, in order**
+> 0. **Cloudflare Workers Builds is connected to the repo**: every push triggers a Cloudflare build, and a build of `main` would deploy production. All attempts so far failed (main 2026-10-03; branch preview: "Authentication error"). The `DB_ACTIVITY` placeholder in `wrangler.toml` must stay until the owner chooses automatic deploys on purpose, which would also need the build token fixed in Cloudflare.
+> 1. Owner deploys **Release 16** and presses `/admin` → Maintenance → **Compare shelves now** (the whole `shelf.shadow` round in minutes, with reasons), then sends the result. Read the reasons before changing any shelf code. PR #12 brings `main` up to date with Releases 14–16.
+> 2. **`FF_SHOW_SCHEDULE` stays off.** `shelf.shadow` (2026-10-04): 709 accounts, 20.36% different — CW 836 same / 206 only old / 25 only new / 17 not known; Airing Next 212 / 15 / 22 / 3. Example (account 26): CW items only in the old shelf, e.g. `id:tt19231492:2:7`, `m20890:5:8`, none only in the new. Next: find why the schedule-derived shelf drops these (start in `47_shelf-shadow.js` and `39_activity-shelves.js`), ideally by recording a reason per legacy-only item.
+> 3. Backups: the owner still needs the five GitHub secrets (`docs/OPERATIONS.md` §5). The new workflow is on `main`.
+> 4. Do not enable D1 read replication until Release 14 has run cleanly for a few days.
+>
+> ---
+>
 > **HANDOFF, 2026-10-01 (Claude Code, out of credits). Start here.**
 >
 > **Where things stand**

@@ -76,14 +76,11 @@ async function d1BumpStat(env, kind, buckets, amount) {
 async function bumpStat(env, kind) {
   if (!env || !env.CONFIGS) return;
   try {
-    if (env.ANALYTICS && typeof env.ANALYTICS.writeDataPoint === "function") {
-      env.ANALYTICS.writeDataPoint({
-        blobs: ["stat", String(kind), statsToday()],
-        doubles: [1],
-        indexes: [String(kind).slice(0, 96)],
-      });
-      return;
-    }
+    // D1 is where every counter is read from (readStatCount, loadStatsByDay,
+    // the leaderboards), so it is where every counter is written. From
+    // 2026-10-02 to the fix these went to Analytics Engine only, which
+    // nothing reads, and the admin dashboard froze at zero
+    // (recoverStatsFromAnalyticsEngine puts those days back).
     if (env.DB) {
       await d1BumpStat(env, kind, ["total", statsToday()], 1);
       return;
@@ -123,22 +120,6 @@ async function bumpStatBy(env, kind, amount) {
   if (!env || !env.CONFIGS || !amount) return;
   try {
     const totalKey = `stats:${kind}:total`;
-    
-    if (env.ANALYTICS && typeof env.ANALYTICS.writeDataPoint === "function") {
-      env.ANALYTICS.writeDataPoint({
-        blobs: ["stat", String(kind), "total"],
-        doubles: [Number(amount) || 1],
-        indexes: [String(kind).slice(0, 96)],
-      });
-      if (env.DB && kind.startsWith("sourcegroup:")) {
-        const groupName = kind.slice("sourcegroup:".length);
-        await env.DB.prepare(
-          "INSERT INTO source_groups (id, name, install_count) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET install_count = source_groups.install_count + excluded.install_count"
-        ).bind(groupName, groupName, amount).run();
-      }
-      return;
-    }
-
     if (env.DB && kind.startsWith("sourcegroup:")) {
       // Left exactly as it was: source groups have their own table, their
       // own read path in renderAdminDashboard, and their own branch in
@@ -445,15 +426,6 @@ async function recordTrackedEvent(env, eventType, id, title, mediaType) {
   if (!env || !env.CONFIGS || !id || isJunkTrackedId(id)) return;
   try {
     const day = statsToday();
-    if (env.ANALYTICS && typeof env.ANALYTICS.writeDataPoint === "function") {
-      env.ANALYTICS.writeDataPoint({
-        blobs: ["event", String(eventType), String(id), String(title || "").slice(0, 80), String(mediaType || "")],
-        doubles: [1],
-        indexes: [`evt:${eventType}:${id}`.slice(0, 96)],
-      });
-      await writeEventMetaIfChanged(env, eventType, id, title, mediaType);
-      return;
-    }
     // With D1 bound the counts go there and cost ZERO KV writes, the same way
     // bumpStat's counters already did. This function was the biggest consumer
     // of the free plan's 1,000-writes-a-day budget that bumpStat's move left
@@ -644,75 +616,6 @@ async function d1LeaderboardCounts(env, eventType, window, candidateCap) {
   return rows.map((r) => ({ id: r.key, count: r.count }));
 }
 
-// P8-2: Reads Most Watched from title_daily_stats (populated by rollup.daily)
-// joined with media table, avoiding table scans over stats.
-async function d1MostWatchedFromTitleDailyStats(env, window, mediaTypeFilter, candidateCap) {
-  if (!env || !env.DB) return null;
-  try {
-    const wantType = mediaTypeFilter === "movie" || mediaTypeFilter === "series" ? mediaTypeFilter : null;
-    let rows;
-    if (window === "alltime") {
-      const sql = wantType
-        ? `SELECT m.imdb_id, m.tmdb_id, m.kind AS media_type, m.title, SUM(t.n) AS total
-           FROM title_daily_stats t
-           JOIN media m ON m.id = t.media_id
-           WHERE (t.event_type = 'play' OR t.event_type = 'watched') AND m.kind = ?
-           GROUP BY t.media_id
-           ORDER BY total DESC
-           LIMIT ?`
-        : `SELECT m.imdb_id, m.tmdb_id, m.kind AS media_type, m.title, SUM(t.n) AS total
-           FROM title_daily_stats t
-           JOIN media m ON m.id = t.media_id
-           WHERE (t.event_type = 'play' OR t.event_type = 'watched')
-           GROUP BY t.media_id
-           ORDER BY total DESC
-           LIMIT ?`;
-      const stmt = wantType ? env.DB.prepare(sql).bind(wantType, candidateCap) : env.DB.prepare(sql).bind(candidateCap);
-      const res = await stmt.all();
-      rows = res && res.results ? res.results : [];
-    } else {
-      const days = window === "today" ? 1 : parseInt(window, 10) || 7;
-      const nowMs = Date.now();
-      const oldest = easternDateKey(new Date(nowMs - (days - 1) * 86400000));
-      const newest = easternDateKey(new Date(nowMs));
-      const sql = wantType
-        ? `SELECT m.imdb_id, m.tmdb_id, m.kind AS media_type, m.title, SUM(t.n) AS total
-           FROM title_daily_stats t
-           JOIN media m ON m.id = t.media_id
-           WHERE (t.event_type = 'play' OR t.event_type = 'watched') AND t.day >= ? AND t.day <= ? AND m.kind = ?
-           GROUP BY t.media_id
-           ORDER BY total DESC
-           LIMIT ?`
-        : `SELECT m.imdb_id, m.tmdb_id, m.kind AS media_type, m.title, SUM(t.n) AS total
-           FROM title_daily_stats t
-           JOIN media m ON m.id = t.media_id
-           WHERE (t.event_type = 'play' OR t.event_type = 'watched') AND t.day >= ? AND t.day <= ?
-           GROUP BY t.media_id
-           ORDER BY total DESC
-           LIMIT ?`;
-      const stmt = wantType
-        ? env.DB.prepare(sql).bind(oldest, newest, wantType, candidateCap)
-        : env.DB.prepare(sql).bind(oldest, newest, candidateCap);
-      const res = await stmt.all();
-      rows = res && res.results ? res.results : [];
-    }
-    if (rows && rows.length > 0) {
-      return rows.map((r) => {
-        const id = r.imdb_id || (r.tmdb_id ? `tmdb:${r.tmdb_id}` : "");
-        return {
-          id,
-          count: Number(r.total) || 0,
-          title: r.title || id,
-          mediaType: r.media_type,
-        };
-      }).filter((e) => e.id);
-    }
-  } catch (err) {
-    // Graceful fallback if title_daily_stats is not ready or throws
-  }
-  return null;
-}
-
 async function computeLeaderboard(env, eventType, window, mediaTypeFilter) {
   if (!env || !env.CONFIGS) return [];
   const prefix = `evtcount:${eventType}:`;
@@ -732,16 +635,11 @@ async function computeLeaderboard(env, eventType, window, mediaTypeFilter) {
   let dropZero = false;
 
   if (env.DB) {
-    if (eventType === "watched") {
-      const dailyStatsRows = await d1MostWatchedFromTitleDailyStats(env, window, wantType, CANDIDATE_CAP);
-      if (dailyStatsRows && dailyStatsRows.length > 0) {
-        candidates = dailyStatsRows;
-      } else {
-        candidates = await d1LeaderboardCounts(env, eventType, window, CANDIDATE_CAP);
-      }
-    } else {
-      candidates = await d1LeaderboardCounts(env, eventType, window, CANDIDATE_CAP);
-    }
+    // Every watch is counted in `stats` (recordTrackedEvent). title_daily_stats
+    // holds only the plays of accounts on event tracking, by UTC day, up to
+    // yesterday: reading it instead (as P8-2 did) dropped everyone else's
+    // watches and today's.
+    candidates = await d1LeaderboardCounts(env, eventType, window, CANDIDATE_CAP);
   } else if (window === "alltime") {
     const listResult = await listAllKeys(env.CONFIGS, prefix);
     const alltimeKeys = listResult.keys
@@ -887,14 +785,6 @@ async function recordSearchQuery(env, query) {
   if (q.length < 2) return;
   try {
     const day = statsToday();
-    if (env.ANALYTICS && typeof env.ANALYTICS.writeDataPoint === "function") {
-      env.ANALYTICS.writeDataPoint({
-        blobs: ["search", q, day],
-        doubles: [1],
-        indexes: ["search:" + q.slice(0, 88)],
-      });
-      return;
-    }
     // Same move as recordTrackedEvent above, and the same reason: three KV
     // writes per search, none of which the free plan's write budget can
     // afford. Nothing but counts here, so there is no meta to keep.
@@ -1425,62 +1315,171 @@ function recordListCopySlug(rawId, origin) {
   return /^[a-z0-9][a-z0-9-]{0,80}$/.test(slug) ? slug : null;
 }
 
-// Analytics Engine SQL API query helper (P8-2).
-// Queries the Analytics Engine SQL API using CF_ANALYTICS_TOKEN (or CLOUDFLARE_API_TOKEN)
-// and CF_ANALYTICS_ACCOUNT_ID (or CLOUDFLARE_ACCOUNT_ID).
-async function queryAnalyticsEngine(env, query) {
+// --- Putting back the counts Analytics Engine took (2026-10-02 onward) ----------
+//
+// From the P8-2 deploy (2026-10-02) to its fix, bumpStat, bumpStatBy,
+// recordTrackedEvent and recordSearchQuery wrote to Analytics Engine INSTEAD
+// of D1. Nothing reads Analytics Engine, so the admin dashboard and Most
+// Watched froze. Those writes are still in the dataset (it keeps 90 days), and
+// they are the only rows there whose blob1 is "stat", "event" or "search":
+// the per-request metrics (writeRequestMetrics) put a route family there.
+//
+// This adds them to D1 the way the counters would have. Each source row
+// (counter, day) is recorded as `aerecovery:<counter>` in the same batch --
+// one transaction -- as the additions, and an addition only happens while that
+// record is absent: a second run, or a run after a failed one, adds nothing
+// twice. Needs the Analytics Engine SQL API: CF_ANALYTICS_TOKEN (an API token
+// with Account Analytics: Read) and CF_ANALYTICS_ACCOUNT_ID.
+const AE_RECOVERY_LEDGER_PREFIX = "aerecovery:";
+const AE_RECOVERY_ROW_LIMIT = 50000;
+
+async function analyticsEngineRows(env, sql) {
   const token = env && (env.CF_ANALYTICS_TOKEN || env.CLOUDFLARE_API_TOKEN);
   const accountId = env && (env.CF_ANALYTICS_ACCOUNT_ID || env.CLOUDFLARE_ACCOUNT_ID);
-  if (!token || !accountId || !query) return null;
+  if (!token || !accountId) return { ok: false, error: "Set CF_ANALYTICS_TOKEN (Account Analytics: Read) and CF_ANALYTICS_ACCOUNT_ID first." };
+  let res;
   try {
-    const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/analytics_engine/sql`;
-    const resp = await fetch(url, {
+    res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/analytics_engine/sql`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: query,
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "text/plain" },
+      body: sql + " FORMAT JSON",
     });
-    if (!resp.ok) return null;
-    const json = await resp.json();
-    return json && Array.isArray(json.data) ? json.data : null;
-  } catch {
-    return null;
+  } catch (err) {
+    return { ok: false, error: "Analytics Engine could not be reached: " + safeErrorMessage(err) };
   }
+  const text = await res.text().catch(() => "");
+  if (!res.ok) return { ok: false, error: `Analytics Engine answered ${res.status}: ${text.slice(0, 200)}` };
+  let body = null;
+  try { body = JSON.parse(text); } catch {}
+  if (!body || !Array.isArray(body.data)) return { ok: false, error: "Analytics Engine sent an answer this could not read." };
+  return { ok: true, rows: body.data };
 }
 
-// P8-2: Backfill title_daily_stats from legacy stats table
-async function backfillTitleDailyStatsFromStats(env) {
-  if (!env || !env.DB) return { ok: false, error: "No DB binding" };
-  try {
-    let rowsWritten = 0;
-    // 1. Items with IMDb id (tt...)
-    const r1 = await env.DB.prepare(
-      `INSERT INTO title_daily_stats (day, event_type, media_id, n)
-       SELECT s.day, 'watched', m.id, s.n
-       FROM stats s
-       JOIN media m ON m.imdb_id = substr(s.kind, 13)
-       WHERE s.day != 'total' AND s.kind >= 'evt:watched:tt' AND s.kind < 'evt:watched:tu'
-       ON CONFLICT(day, event_type, media_id) DO UPDATE SET n = max(excluded.n, title_daily_stats.n)`
-    ).run();
-    rowsWritten += (r1?.meta?.changes || 0);
-
-    // 2. Items with TMDB id (tmdb:...)
-    const r2 = await env.DB.prepare(
-      `INSERT INTO title_daily_stats (day, event_type, media_id, n)
-       SELECT s.day, 'watched', m.id, s.n
-       FROM stats s
-       JOIN media m ON m.tmdb_id = CAST(substr(s.kind, 17) AS INTEGER)
-       WHERE s.day != 'total' AND s.kind >= 'evt:watched:tmdb:' AND s.kind < 'evt:watched:tmdb;'
-       ON CONFLICT(day, event_type, media_id) DO UPDATE SET n = max(excluded.n, title_daily_stats.n)`
-    ).run();
-    rowsWritten += (r2?.meta?.changes || 0);
-
-    return { ok: true, rowsWritten };
-  } catch (err) {
-    return { ok: false, error: err && err.message ? err.message : String(err) };
+// What there is to put back, per counter and day. `day` is "total" for a
+// counter bumpStatBy keeps as an all-time total only.
+async function readAnalyticsEngineCounts(env) {
+  const dataset = String((env && env.CF_ANALYTICS_DATASET) || "mylists_events");
+  if (!/^[A-Za-z0-9_]+$/.test(dataset)) return { ok: false, error: "CF_ANALYTICS_DATASET is not a dataset name." };
+  const limit = ` LIMIT ${AE_RECOVERY_ROW_LIMIT}`;
+  // Kept inside what the live API accepts (it refused both of these, 422):
+  //  - only functions its SQL reference lists. There is no concat ("unknown
+  //    function call: CONCAT"), so each query returns the raw blobs and the
+  //    counter names are put together here;
+  //  - GROUP BY takes column names only ("in the GROUP BY clause you may only
+  //    provide column names: formatDateTime(...)"). A name given with AS
+  //    counts: Cloudflare's own example groups "intDiv(...) * 60 AS t" by `t`.
+  //    Not `hour` or `day`, which the SQL also has as keywords (INTERVAL).
+  const sum = "SUM(_sample_interval * double1) AS n";
+  // An event carries no day of its own: the day is when it was written, in
+  // the Eastern time statsToday() counts in. Asked for by the hour, as a plain
+  // number, and turned into the Eastern day here (an hour never straddles two
+  // Eastern days), so the query needs no time zone support from the service.
+  const hourOf = "toUnixTimestamp(toStartOfHour(timestamp))";
+  const queries = {
+    stat: {
+      label: "Reading page views and other counters",
+      sql: `SELECT blob2, blob3, ${sum} FROM ${dataset} WHERE blob1 = 'stat' GROUP BY blob2, blob3${limit}`,
+      kindOf: (row) => String(row.blob2 || ""),
+      dayOf: (row) => String(row.blob3 || ""),
+    },
+    event: {
+      label: "Reading Most Watched and list adds",
+      sql: `SELECT blob2, blob3, ${hourOf} AS event_hour, ${sum} FROM ${dataset} WHERE blob1 = 'event' GROUP BY blob2, blob3, event_hour${limit}`,
+      kindOf: (row) => (row.blob2 && row.blob3 ? `evt:${row.blob2}:${row.blob3}` : ""),
+      dayOf: (row) => {
+        const seconds = Number(row.event_hour);
+        return Number.isFinite(seconds) && seconds > 0 ? easternDateKey(new Date(seconds * 1000)) : "";
+      },
+    },
+    search: {
+      label: "Reading searches",
+      sql: `SELECT blob2, blob3, ${sum} FROM ${dataset} WHERE blob1 = 'search' GROUP BY blob2, blob3${limit}`,
+      kindOf: (row) => (row.blob2 ? `searchq:${row.blob2}` : ""),
+      dayOf: (row) => String(row.blob3 || ""),
+    },
+  };
+  // Rows that end up on the same counter and day (none expected) are added
+  // together, so the ledger has one entry for each.
+  const merged = new Map();
+  const truncated = [];
+  for (const [source, q] of Object.entries(queries)) {
+    const r = await analyticsEngineRows(env, q.sql);
+    if (!r.ok) return { ...r, error: `${q.label}: ${r.error}` };
+    if (r.rows.length >= AE_RECOVERY_ROW_LIMIT) truncated.push(source);
+    for (const row of r.rows) {
+      const kind = q.kindOf(row);
+      const day = q.dayOf(row);
+      const n = Number(row.n) || 0;
+      if (!kind || n <= 0 || kind.length > 300) continue;
+      if (day !== "total" && !/^\d{4}-\d{2}-\d{2}$/.test(day)) continue;
+      // bumpStatBy kept writing source groups to D1 all along.
+      if (kind.startsWith("sourcegroup:")) continue;
+      const key = kind + "\u0000" + day;
+      const prev = merged.get(key);
+      if (prev) prev.n += n;
+      else merged.set(key, { source, kind, day, n });
+    }
   }
+  const out = [];
+  for (const r of merged.values()) {
+    const n = Math.round(r.n);
+    if (n > 0) out.push({ ...r, n });
+  }
+  return { ok: true, rows: out, truncated };
+}
+
+// Preview (apply false) or put back (apply true).
+async function recoverStatsFromAnalyticsEngine(env, { apply = false } = {}) {
+  if (!env || !env.DB) return { ok: false, error: "No database binding." };
+  const read = await readAnalyticsEngineCounts(env);
+  if (!read.ok) return read;
+  const rows = read.rows;
+  // Which of them were put back already.
+  const done = new Set();
+  for (let i = 0; i < rows.length; i += 50) {
+    const chunk = rows.slice(i, i + 50);
+    const { results } = await env.DB.prepare(
+      `SELECT kind, day FROM stats WHERE (kind, day) IN (${chunk.map(() => "(?, ?)").join(", ")})`
+    ).bind(...chunk.flatMap((r) => [AE_RECOVERY_LEDGER_PREFIX + r.kind, r.day])).all();
+    for (const x of results || []) done.add(x.kind + "\u0000" + x.day);
+  }
+  const todo = rows.filter((r) => !done.has(AE_RECOVERY_LEDGER_PREFIX + r.kind + "\u0000" + r.day));
+  const summary = { stat: 0, event: 0, search: 0 };
+  for (const r of todo) summary[r.source] += r.n;
+  const byKind = {};
+  for (const r of todo.filter((x) => x.source === "stat")) byKind[r.kind] = (byKind[r.kind] || 0) + r.n;
+  const result = {
+    ok: true,
+    applied: false,
+    rows: rows.length,
+    alreadyPutBack: rows.length - todo.length,
+    toPutBack: todo.length,
+    totals: summary,
+    counters: Object.fromEntries(Object.entries(byKind).sort((a, b) => b[1] - a[1]).slice(0, 25)),
+    truncated: read.truncated,
+  };
+  if (!apply || !todo.length) return result;
+
+  // One row = its additions plus its ledger record, all conditional on that
+  // record being absent; 15 rows (45 statements) per batch.
+  const ledgerAbsent = "WHERE NOT EXISTS (SELECT 1 FROM stats WHERE kind = ? AND day = ?)";
+  for (let i = 0; i < todo.length; i += 15) {
+    const stmts = [];
+    for (const r of todo.slice(i, i + 15)) {
+      const ledgerKind = AE_RECOVERY_LEDGER_PREFIX + r.kind;
+      const buckets = r.day === "total" ? ["total"] : ["total", r.day];
+      for (const bucket of buckets) {
+        stmts.push(env.DB.prepare(
+          `INSERT INTO stats (kind, day, n) SELECT ?, ?, ? ${ledgerAbsent} ON CONFLICT(kind, day) DO UPDATE SET n = n + excluded.n`
+        ).bind(r.kind, bucket, r.n, ledgerKind, r.day));
+      }
+      stmts.push(env.DB.prepare(
+        "INSERT INTO stats (kind, day, n) VALUES (?, ?, ?) ON CONFLICT(kind, day) DO NOTHING"
+      ).bind(ledgerKind, r.day, r.n));
+    }
+    await env.DB.batch(stmts);
+  }
+  return { ...result, applied: true };
 }
 
 // --- Counter reads -----------------------------------------------------------
@@ -1495,18 +1494,6 @@ async function backfillTitleDailyStatsFromStats(env) {
 // Deliberately NOT "D1 + KV summed": /admin/api/migrate-d1 COPIES the KV
 // value into D1, so summing would double every migrated counter.
 async function readStatCount(env, kind, bucket) {
-  if (env && (env.CF_ANALYTICS_TOKEN || env.CLOUDFLARE_API_TOKEN) && (env.CF_ANALYTICS_ACCOUNT_ID || env.CLOUDFLARE_ACCOUNT_ID)) {
-    try {
-      const sanitizedKind = String(kind || "").replace(/'/g, "''");
-      const sql = bucket === "total"
-        ? `SELECT SUM(_sample_interval * double1) AS total FROM mylists_events WHERE blob1 = 'stat' AND blob2 = '${sanitizedKind}'`
-        : `SELECT SUM(_sample_interval * double1) AS total FROM mylists_events WHERE blob1 = 'stat' AND blob2 = '${sanitizedKind}' AND blob3 = '${String(bucket || "").replace(/'/g, "''")}'`;
-      const rows = await queryAnalyticsEngine(env, sql);
-      if (rows && rows.length && rows[0].total != null) {
-        return Number(rows[0].total) || 0;
-      }
-    } catch {}
-  }
   if (env && env.DB) {
     try {
       const { results } = await env.DB.prepare(
@@ -2007,7 +1994,7 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/migrate-accounts": "admin.migrate.accounts",
   "/admin/api/migrate-day-counts": "admin.migrate.day-counts",
   "/admin/api/backfill-trending": "admin.backfill.trending",
-  "/admin/api/backfill-title-daily-stats": "admin.backfill.title-daily-stats",
+  "/admin/api/recover-stats-from-analytics": "admin.recover.stats-from-analytics",
   "/admin/api/new-on-streaming/sweep": "admin.new-on-streaming.sweep",
   "/admin/api/new-on-streaming/add": "admin.new-on-streaming.add",
   "/admin/api/installs/restore": "admin.installs.undo-move",
@@ -2016,6 +2003,7 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/activity-backfill/step": "admin.backfill.activity",
   "/admin/api/activity-backfill/restart": "admin.backfill.activity.restart",
   "/admin/api/jobs/ping": "admin.jobs.test",
+  "/admin/api/jobs/shelf-shadow-now": "admin.jobs.shelf-compare",
   "/admin/api/revoke-admin-session": "admin.session.revoke",
   "/admin/api/revoke-all-admin-sessions": "admin.session.revoke-all",
 };
@@ -2637,7 +2625,7 @@ async function renderAdminDashboard(env) {
 </style></head>
 <body>
   <h1>Admin Dashboard</h1>
-  <p style="color:#8E8E93; margin-top:0;">My Lists Addon usage stats.</p>
+  <p style="color:#8E8E93; margin-top:0;">My Lists Addon usage stats. <span id="workerRelease">Release ${WORKER_RELEASE}</span></p>
   ${isD1Bound ? '' : '<div style="background:rgba(255,59,48,0.12); border:1px solid #FF3B30; border-radius:8px; padding:12px 16px; margin:0 0 18px; color:#FF3B30; font-size:0.88rem; line-height:1.4;"><strong>Warning: No D1 database bound.</strong> D1 is required for authoritative accounts, lists, full-text search, likes, feedback, and tracking. Please bind your D1 database as <code>DB</code> in the Cloudflare Dashboard (Worker Settings &rarr; Bindings).</div>'}
 
   <!-- Not a tablist: these three buttons do not reveal panels, they choose
@@ -3057,6 +3045,10 @@ async function renderAdminDashboard(env) {
       <button type="button" class="admin-select" style="cursor:pointer;" id="jobsStatusBtn" data-act="runJobsStatus" ${isD1Bound ? '' : 'disabled'}>Check jobs</button>
       <span id="jobsStatusStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
       <div id="jobsStatusResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
+      <p style="color:#8E8E93; margin:12px 0 8px; font-size:0.8rem;"><strong>Compare shelves now</strong> runs the whole Continue Watching and Airing Next comparison (<code>shelf.shadow</code>) from this page, a few minutes instead of the hourly job's 15 hours, and shows why each difference is there. Keep the page open until it says Done. It only reads.</p>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="shelfCompareBtn" data-act="runShelfCompareNow" ${isD1Bound ? '' : 'disabled'}>Compare shelves now</button>
+      <span id="shelfCompareStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <div id="shelfCompareResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93; white-space:pre-wrap; word-break:break-word;"></div>
     </div>
 
     <div class="panel" style="margin:0; padding:14px 16px;">
@@ -3065,6 +3057,23 @@ async function renderAdminDashboard(env) {
       <button type="button" class="admin-select" style="cursor:pointer;" id="schemaCheckBtn" data-act="runSchemaCheck">Check schema</button>
       <span id="schemaCheckStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
       <div id="schemaCheckResult" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="panel" style="margin:0; padding:14px 16px;">
+      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Counts missing since 2 October</div>
+      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">From 2 October until the fix, page views, install links, playback pings, Most Watched, list adds and searches were counted in Cloudflare Analytics instead of here, so this dashboard showed zeros. This puts them back. It needs the secret <code>CF_ANALYTICS_TOKEN</code> (an API token with <em>Account Analytics: Read</em>) and the variable <code>CF_ANALYTICS_ACCOUNT_ID</code>. <strong>Preview</strong> shows what would be added; <strong>Put them back</strong> adds it. Running it again adds nothing twice.</p>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="statsRecoveryPreviewBtn" data-act="runStatsRecovery" data-act-args="${adminActArgs([false])}">Preview</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="statsRecoveryApplyBtn" data-act="runStatsRecovery" data-act-args="${adminActArgs([true])}">Put them back</button>
+      <span id="statsRecoveryStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <div id="statsRecoveryResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
+    </div>
+
+    <div class="panel" style="margin:0; padding:14px 16px;">
+      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Export old data to R2 (a copy)</div>
+      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Copies every KV key that starts with the text below into the <code>BLOBS</code> bucket, under <code>kv-archive/</code>, a batch at a time, then writes a <code>manifest.json</code> when the copy is complete. It deletes nothing. Type the prefix exactly, with no <code>*</code> (for example <code>stats:</code>). Deleting old data is not safe yet: see docs/CUTOVER.md.</p>
+      <input type="text" id="kvExportPrefix" class="admin-select" placeholder="creator:" style="min-width:180px;">
+      <button type="button" class="admin-select" style="cursor:pointer;" id="kvExportBtn" data-act="runKvExport">Export</button>
+      <span id="kvExportStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
     </div>
 
     <div class="panel" style="margin:0; padding:14px 16px;">
@@ -4145,6 +4154,14 @@ async function renderAdminDashboard(env) {
             if (j.type === 'shelf.shadow' && j.last) {
               const t = j.last;
               lines.push('  Last full comparison (' + t.accounts + ' accounts, finished ' + jobsAgo(t.finishedAt) + '): ' + (t.rate * 100).toFixed(2) + '% different. Continue Watching: ' + t.cw.both + ' the same, ' + t.cw.legacyOnly + ' only in the old, ' + t.cw.v2Only + ' only in the new, ' + t.cw.unknown + ' shows not known yet. Airing Next: ' + t.an.both + ' the same, ' + t.an.legacyOnly + ' only in the old, ' + t.an.v2Only + ' only in the new, ' + t.an.unknown + ' not known yet.' + (t.examples && t.examples.length ? ' Examples: ' + JSON.stringify(t.examples.slice(0, 3)) : ''));
+              // Why each difference is there (47_shelf-shadow.js), most common first.
+              if (t.cw.whyOld) {
+                const whyText = function (w) {
+                  const keys = Object.keys(w || {}).sort(function (a, b) { return w[b] - w[a]; });
+                  return keys.length ? keys.map(function (k) { return k + ' ' + w[k]; }).join(', ') : 'none';
+                };
+                lines.push('  Why: Continue Watching only in the old: ' + whyText(t.cw.whyOld) + '; only in the new: ' + whyText(t.cw.whyNew) + '. Airing Next only in the old: ' + whyText(t.an.whyOld) + '; only in the new: ' + whyText(t.an.whyNew) + '.');
+              }
             }
           });
           Object.keys(d.jobs.durable || {}).forEach(function (type) {
@@ -4639,6 +4656,112 @@ async function renderAdminDashboard(env) {
     // and what each omission silently costs. The consequence text is the
     // useful part: "creator_tombstones is missing" is not something an
     // operator can act on.
+    // The whole shelf comparison, a batch per request (runShelfShadowNow).
+    function shelfCompareWhy(w) {
+      const keys = Object.keys(w || {}).sort(function (a, b) { return w[b] - w[a]; });
+      return keys.length ? keys.map(function (k) { return k + ' ' + w[k]; }).join(', ') : 'none';
+    }
+
+    async function runShelfCompareNow() {
+      const btn = document.getElementById('shelfCompareBtn');
+      const status = document.getElementById('shelfCompareStatus');
+      const out = document.getElementById('shelfCompareResult');
+      btn.disabled = true;
+      out.textContent = '';
+      status.textContent = 'Starting...';
+      let state = { afterId: 0, round: null };
+      let total = null;
+      let scanned = 0;
+      try {
+        for (let i = 0; i < 2000; i++) {
+          const res = await fetch('/admin/api/jobs/shelf-shadow-now', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state) });
+          const data = await res.json();
+          if (!data.ok) { status.textContent = 'Stopped: ' + (data.error || 'unknown error'); break; }
+          if (data.total != null) total = data.total;
+          scanned += Number(data.scanned) || 0;
+          if (data.done) {
+            const t = data.last;
+            status.textContent = 'Done: ' + t.accounts + ' accounts compared.';
+            out.textContent = [
+              (t.rate * 100).toFixed(2) + '% different (the switch waits for under 1%).',
+              'Continue Watching: ' + t.cw.both + ' the same, ' + t.cw.legacyOnly + ' only in the old, ' + t.cw.v2Only + ' only in the new, ' + t.cw.unknown + ' shows not known yet.',
+              '  Why only in the old: ' + shelfCompareWhy(t.cw.whyOld),
+              '  Why only in the new: ' + shelfCompareWhy(t.cw.whyNew),
+              'Airing Next: ' + t.an.both + ' the same, ' + t.an.legacyOnly + ' only in the old, ' + t.an.v2Only + ' only in the new, ' + t.an.unknown + ' not known yet.',
+              '  Why only in the old: ' + shelfCompareWhy(t.an.whyOld),
+              '  Why only in the new: ' + shelfCompareWhy(t.an.whyNew),
+              'Examples: ' + JSON.stringify(t.examples || []),
+            ].join(String.fromCharCode(10));
+            break;
+          }
+          status.textContent = 'Comparing... ' + scanned + (total ? ' of ' + total : '') + ' accounts so far.';
+          state = { afterId: data.afterId, round: data.round };
+        }
+      } catch (e) {
+        status.textContent = 'Stopped: network error. Press it again to start over.';
+      }
+      btn.disabled = false;
+    }
+
+    async function runKvExport() {
+      const btn = document.getElementById('kvExportBtn');
+      const status = document.getElementById('kvExportStatus');
+      const prefix = String(document.getElementById('kvExportPrefix').value || '').trim();
+      if (!prefix) { status.textContent = 'Type a prefix first.'; return; }
+      btn.disabled = true;
+      let state = { prefix: prefix };
+      try {
+        for (let i = 0; i < 5000; i++) {
+          const res = await fetch('/admin/api/export-kv-to-r2', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state) });
+          const data = await res.json();
+          if (!data.ok) { status.textContent = 'Stopped: ' + (data.error || 'unknown error') + ' (nothing is marked complete).'; break; }
+          if (data.done) { status.textContent = 'Done: ' + data.keysSoFar + ' keys copied, manifest at ' + data.manifestKey + '.'; break; }
+          status.textContent = 'Copying\u2026 ' + data.keysSoFar + ' keys so far.';
+          state = { prefix: prefix, runId: data.runId, part: data.part + 1, keysSoFar: data.keysSoFar, cursor: data.cursor };
+        }
+      } catch (e) {
+        status.textContent = 'Stopped: network error (nothing is marked complete).';
+      }
+      btn.disabled = false;
+    }
+
+    async function runStatsRecovery(apply) {
+      const status = document.getElementById('statsRecoveryStatus');
+      const out = document.getElementById('statsRecoveryResult');
+      const buttons = [document.getElementById('statsRecoveryPreviewBtn'), document.getElementById('statsRecoveryApplyBtn')];
+      buttons.forEach(function (b) { if (b) b.disabled = true; });
+      status.textContent = apply ? 'Putting the counts back\u2026' : 'Reading Cloudflare Analytics\u2026';
+      out.textContent = '';
+      try {
+        const res = await fetch('/admin/api/recover-stats-from-analytics', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apply: apply === true }),
+        });
+        const data = await res.json();
+        if (!data.ok) {
+          status.textContent = 'Failed: ' + (data.error || 'unknown error') + (data.release ? ' (Release ' + data.release + ')' : '');
+        } else {
+          status.textContent = data.applied
+            ? 'Done: ' + data.toPutBack + ' counts put back.'
+            : (data.toPutBack ? data.toPutBack + ' counts to put back' : 'Nothing left to put back') + (data.alreadyPutBack ? ' (' + data.alreadyPutBack + ' already back).' : '.');
+          const lines = [
+            'Page views, installs, pings and other counters: ' + data.totals.stat + '. Watched and list adds: ' + data.totals.event + '. Searches: ' + data.totals.search + '.',
+          ];
+          Object.keys(data.counters || {}).forEach(function (k) { lines.push(k + ': ' + data.counters[k]); });
+          if (data.truncated && data.truncated.length) lines.push('More rows than one pass reads (' + data.truncated.join(', ') + '): run it again.');
+          lines.forEach(function (line) {
+            const div = document.createElement('div');
+            div.textContent = line;
+            out.appendChild(div);
+          });
+        }
+      } catch (e) {
+        status.textContent = 'Failed: network error.';
+      }
+      buttons.forEach(function (b) { if (b) b.disabled = false; });
+    }
+
     async function runSchemaCheck() {
       const btn = document.getElementById('schemaCheckBtn');
       const status = document.getElementById('schemaCheckStatus');

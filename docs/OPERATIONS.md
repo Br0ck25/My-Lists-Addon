@@ -131,9 +131,9 @@ When it nears D1's size limit it can be split: create and bind `DB_ACTIVITY_1`, 
     - `CLOUDFLARE_API_TOKEN`: an API token with *Account → D1 → Read* only;
     - `CLOUDFLARE_ACCOUNT_ID`;
     - `D1_DATABASE_ID`: `my-lists-db`'s id, shown on the database's overview page;
-    - `ACTIVITY_D1_DATABASE_ID`: `mylists-activity`'s id. Since `FF_EVENT_TRACKING`, Watch History lives only there. Optional for the job, not for you;
+    - `ACTIVITY_D1_DATABASE_ID`: `mylists-activity`'s id. Since `FF_EVENT_TRACKING`, Watch History lives only there;
     - `BACKUP_PASSPHRASE`: a long random string.
-  - Until the four required ones are set, the job skips itself with a warning.
+  - Until all five are set, the run **fails** (a red ✗, and GitHub emails the owner) and names the missing ones. It used to pass with only a warning, so from 2026-09-30 to 2026-10-04 every daily run showed a green tick while copying nothing.
   - Keep a copy of the passphrase outside GitHub. Without it no backup can be read.
   - The export is encrypted because this repository's Actions artifacts can be downloaded by other people, and the export holds every account's data.
   - The daily run uses the copy of the workflow on `main`. A run by hand can pick a branch (*Use workflow from*).
@@ -582,29 +582,34 @@ Read replication is configured in Cloudflare's dashboard (no Worker environment 
 - **Immutable Caching & Service Worker:** Both bundles are served with content-addressed query strings (`?v=<hash>`), `Cache-Control: public, max-age=31536000, immutable`, and 304 revalidation support. The service worker (`sw.js`) caches both bundles as immutable assets for complete offline PWA reliability.
 - **CI Budget Enforcement:** `check_bundle_budget.mjs` runs on every pull request and push in GitHub Actions (`.github/workflows/ci.yml`) and local verification (`verify.sh`). The build automatically fails if `/app.js` exceeds 150 KB gzip.
 
-## 30. Analytics Engine Stat Counters & Zero D1 Writes (P8-2)
+## 30. Counters (D1) and Analytics Engine (P8-2, corrected 2026-10-04)
 
-### Cloudflare Dashboard Setup
+The admin dashboard's counters (page views, install links, playback pings), Most Watched, Most
+Added and the search log are written to the D1 `stats` table and read from it
+(docs/DECISIONS.md D-33). Analytics Engine (`ANALYTICS`, dataset `mylists_events`) keeps one data
+point per request for measuring (§ above) and is not read by the site.
 
-To stream telemetry and stat counters directly into Cloudflare Analytics Engine without writing to D1:
+### What went wrong, and the one-time repair
 
-1. In the **Cloudflare Dashboard**, navigate to **Workers & Pages**.
-2. Select your Worker (**wako** or **My Lists Addon**).
-3. Go to **Settings** → **Bindings** → **Add**.
-4. Choose **Analytics Engine** and enter:
-   - **Variable name**: `ANALYTICS`
-   - **Dataset**: `mylists_events`
-5. Click **Save and deploy**.
+P8-2 (live 2026-10-02) sent those counters to Analytics Engine **instead of** D1 whenever
+`ANALYTICS` was bound. Nothing reads Analytics Engine, so the dashboard showed zeros from that
+day and Most Watched stopped moving. Release 14 writes them to D1 again. The days in between are
+still in Analytics Engine (it keeps 90 days) and can be put back once:
 
-### How it works
+1. Cloudflare → My Profile → API Tokens → Create Token → Custom token: permission
+   **Account → Account Analytics → Read**, for this account. Copy the token.
+2. Worker **my-lists-addon** → Settings → Variables and Secrets:
+   - add the secret `CF_ANALYTICS_TOKEN` = the token;
+   - add the variable `CF_ANALYTICS_ACCOUNT_ID` = the account id (the 32 characters in the
+     dashboard address after `dash.cloudflare.com/`).
+   Deploy.
+3. `/admin` → Maintenance → **Counts missing since 2 October** → **Preview**. It lists what it
+   found, by kind, and writes nothing.
+4. **Put them back.** Each day's count is added to that day and to the running total, once:
+   a ledger row (`stats` kind `aerecovery:…`) records each one, so pressing it again adds nothing.
+5. The token is not needed after this; delete `CF_ANALYTICS_TOKEN` (and the token in My Profile).
 
-- **Zero D1 Writes on Page Views:** Telemetry calls (`bumpStat("pageviews")`, `bumpStatBy("apiuse:tmdb", ...)`, `recordSearchQuery`, and `recordTrackedEvent`) automatically write non-blocking datapoints to `env.ANALYTICS` whenever the binding is present. D1 database writes (`stats` table) are bypassed completely, removing write lock contention and row churn on user visits.
-- **Graceful Fallback:** If `ANALYTICS` is not yet bound, the Worker safely falls back to writing to D1 `stats` (or KV) so no telemetry data is dropped.
-- **Most Watched via `title_daily_stats`:** `computeLeaderboard` reads rankings directly from `title_daily_stats` (aggregated daily by `rollup.daily`) joined with `media`, avoiding expensive scans over the unbounded `stats` table.
-- **Backfill Tool:** Historical watch statistics can be backfilled into `title_daily_stats` via the authenticated admin endpoint `POST /admin/api/backfill-title-daily-stats`.
-- **Analytics Engine SQL API:** The admin dashboard can query Analytics Engine through `https://api.cloudflare.com/client/v4/accounts/{accountId}/analytics_engine/sql` if `CF_ANALYTICS_TOKEN` (or `CLOUDFLARE_API_TOKEN`) and `CLOUDFLARE_ACCOUNT_ID` are configured as Worker secrets.
-
-
-
-
+`CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` are accepted in place of the two names above.
+`CF_ANALYTICS_DATASET` is needed only if the binding uses a dataset other than `mylists_events`.
+Source groups (`sourcegroup:` counts) were never moved to Analytics Engine, so they are skipped.
 

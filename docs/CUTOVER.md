@@ -245,79 +245,85 @@ show the appropriate in-app banner. See `docs/OPERATIONS.md` §3 for the variabl
 | SHA-256 key lookups (`creator_key_lookups` table) | Day 0 | Day 60 |
 | List tombstones for old clients | Day 0 | Day 60 |
 
+> **Do not set `SUNSET_60DAY_START_DATE` yet (2026-10-04).** The site's own page still signs its
+> sync requests with the key in the body and calls `/api/creator/sync/*`, so the notices would
+> tell every visitor that the page they are using is going away, and removing those routes on
+> Day 60 would break it. The page must first move to the session routes. When the date is set,
+> the page shows visitors only the one notice they can act on (the media server webhook address);
+> the others are for people with their own scripts.
+
 ---
 
 ## P10-3: Legacy KV Export & Retirement
 
-After `FF_V2_LISTS_ONLY` and `FF_EVENT_TRACKING` have been on for at least 30 days:
+> **Rewritten 2026-10-04.** The first version of this section would have lost data. Its delete
+> list named KV prefixes and D1 tables that the code running on the live site still reads and
+> writes (checked by search, 2026-10-04: every one of them), several of its prefixes used `*`,
+> which KV treats as a literal character, so those exports would have copied nothing, and the
+> admin button it named did not exist. Only Steps 1 and 2 below are safe to do today.
 
-### Step 1 — Export KV prefixes to R2
+### Step 1 — Copy KV prefixes to R2 (safe at any time; deletes nothing)
 
-Use `/admin` → Maintenance → **Export KV to R2** for each prefix below. Each export writes a
-gzip-compressed JSON file to the `BLOBS` bucket under `kv-archive/{prefix}/{YYYY-MM-DD}.json.gz`.
+`/admin` → Maintenance → **Export old data to R2 (a copy)**. Type one prefix exactly as below —
+no `*` — and press the button once; the page keeps going until the whole prefix is copied, then
+shows how many keys it copied. Each run writes, in the `BLOBS` bucket:
 
-KV prefixes to export before deletion:
+- `kv-archive/{prefix}/{runId}/part-00001.json.gz`, `part-00002…` — 50 keys each, gzipped JSON
+  `{prefix, runId, part, entries: [{key, text | base64, expiration?, metadata?}]}`. A value that
+  is not text (a Better Poster image under `bpimg:`) is kept byte for byte as `base64`.
+- `kv-archive/{prefix}/{runId}/manifest.json` — written **last**, only when every part is in:
+  `{prefix, runId, parts, keys, completedAt}`. A run without a manifest did not finish; run the
+  prefix again (it starts a new `runId` and leaves the old parts alone).
+
+Prefixes worth a copy (one run each):
 
 ```
-creator:             creatorsync*:        creatorlist:
-creatorlistorder:    creatorliststamp:    creatorlistdeleted:
-creatorshare:        listlikevoters:      extlikevoters:
-externallike:        channellikevoters:   index:publicchannels
-channelshare:        evt*:                stats:*
-searchquery*:        feedback:            ratelimit:*
-authfail:*           cron:*               migrated*:
-creatortrack:        creatorscrobblequeue: trackingd1behind:
-airingnextchecked:   bpimg:*              backfilltrending:cursor
+creator:              creatorsync:          creatorsynctracking:
+creatorsyncpresets:   creatorlist:          creatorlistorder:
+creatorliststamp:     creatorlistdeleted:   creatorshare:
+listlikevoters:       extlikevoters:        externallike:
+channellikevoters:    channelshare:         creatortrack:
+creatorscrobblequeue: feedback:             stats:
 ```
+
+Short-lived keys (`ratelimit:`, `authfail:`, `cron:`, `trackingd1behind:`, `airingnextchecked:`)
+expire by themselves and need no copy. `bpimg:` is a cache of Better Poster images; copy it only
+if you want the images.
+
+### Step 2 — Check the D1 backup
+
+`Actions → D1 backup → Run workflow` and confirm it went green (docs/OPERATIONS.md §20). This is
+the copy of every table; nothing in D1 is dropped by this phase.
+
+### Step 3 — Delete KV keys — ⛔ DO NOT RUN YET
+
+Every prefix in Step 1 is still read or written by the live code (2026-10-04). Deleting one
+removes data the site shows or depends on: accounts (`creator:`), settings and history
+(`creatorsync:`, `creatorsynctracking:`), share codes (`creatorshare:`, `channelshare:`), likes,
+feedback, the admin counters (`stats:`), and Better Posters (`bpimg:`). A prefix may be deleted
+only after a release has removed **every** reader of it, that release has run for 30 days, and
+its Step 1 copy has a manifest. Each such deletion gets its own entry in docs/RELEASES.md, with
+the literal prefix and the command; there is no bulk delete.
 
 **Keep `cfg:` records** — until every install whose `legacy_cfg_id` is set has been served from D1
 for 30 days. Delete them one-by-one as `installs.legacy_cfg_id` rows age out, not in bulk.
 
-### Step 2 — Export D1 legacy tables
+### Step 4 — Drop legacy D1 tables — ⛔ DO NOT RUN YET
 
-Run the daily backup workflow first (`Actions → D1 backup → Run workflow`), then:
+These tables are all still queried by the live code (2026-10-04), so dropping any of them breaks
+the site, and D1 Time Travel is the only way back:
 
-```sql
--- Verify each legacy table is empty or superseded before dropping
-SELECT COUNT(*) FROM creators;          -- should match accounts count
-SELECT COUNT(*) FROM creator_lists;     -- should be 0 writes since FF_V2_LISTS_ONLY
-SELECT COUNT(*) FROM watch_history;     -- should be 0 writes since FF_EVENT_TRACKING
+```
+creators            creator_key_lookups   creator_tombstones    list_tombstones
+creator_lists       published_lists       list_likes            creator_user_lists
+creator_show_states creator_tracking_meta continue_watching     airing_next
+watch_history       scrobble_tokens       source_groups         event_meta
 ```
 
-### Step 3 — Delete KV keys
-
-```bash
-# For each prefix, list and delete in batches
-wrangler kv key list --binding=CONFIGS --prefix="creator:" --remote | \
-  jq '.[].name' -r | \
-  xargs -I{} wrangler kv key delete --binding=CONFIGS "{}" --remote
-```
-
-### Step 4 — Drop legacy D1 tables
-
-Apply a new migration (`migrations/1001_drop_legacy_tables.sql`) containing the `DROP TABLE IF EXISTS`
-statements for each legacy table — **only after the export confirms data is preserved in D1 v2**.
-Legacy tables to drop (in order, to avoid foreign-key issues):
-
-```sql
-DROP TABLE IF EXISTS creator_key_lookups;
-DROP TABLE IF EXISTS list_tombstones;
-DROP TABLE IF EXISTS creator_tombstones;
-DROP TABLE IF EXISTS event_meta;
-DROP TABLE IF EXISTS source_groups;
-DROP TABLE IF EXISTS scrobble_tokens;         -- after tokens moved to installs
-DROP TABLE IF EXISTS creator_show_states;
-DROP TABLE IF EXISTS creator_user_lists;
-DROP TABLE IF EXISTS creator_tracking_meta;
-DROP TABLE IF EXISTS airing_next;
-DROP TABLE IF EXISTS continue_watching;
-DROP TABLE IF EXISTS watch_history;
-DROP TABLE IF EXISTS published_lists;
-DROP TABLE IF EXISTS list_likes;
-DROP TABLE IF EXISTS creator_lists;
-DROP TABLE IF EXISTS creators;               -- LAST; verify count = accounts first
--- Note: stats table kept until Analytics Engine backfill confirmed complete
-```
+A table may be dropped only after a release has removed every query of it and run for 30 days,
+with a backup from Step 2 taken after that. Each drop is its own numbered migration recorded in
+docs/RELEASES.md. The `stats` table is **kept**: it is where the admin dashboard's counters live
+(docs/DECISIONS.md D-33).
 
 ---
 
@@ -331,18 +337,14 @@ Remove from `26_api-creator-and-admin-routes.js`:
 - `/admin/api/backfill-trending` route and its handler (FT-42)
 - `/admin/api/rebuild-search-index` and `/admin/api/rebuild-public-index` routes and handlers
 
-Remove from `05_catalog-core.js`:
-- `ensureTrackingMigrated` function definition and all call sites in that file
+**Keep `ensureTrackingMigrated`** (`05_catalog-core.js`) and its call sites. P10-4 emptied it once
+(2026-10-01); that let `/api/creator/sync/save` erase the watch history of any account whose
+tracking still sat inside its `creatorsync:` record. It was restored on 2026-10-04 and goes only
+together with the `creatorsync:` tracking fields themselves (see P10-3, Step 3).
 
 Remove from `03_admin.js`:
 - `migrateGenreDecadeStatsIfNeeded` function definition and its call site
 - `backfillCreatorLastActive` function definition and its call site (BE-M19)
-
-Remove from `07_source-fetchers-tmdb-simkl.js`:
-- `ensureTrackingMigrated` call site
-
-Remove from `26_api-creator-and-admin-routes.js`:
-- All `ensureTrackingMigrated` call sites (five locations)
 
 After removal: `python build.py && python check_sync.py && node --check worker_entry_combined.js && python gen_map.py && node --test tests/*.test.mjs`.
 
@@ -352,9 +354,9 @@ After removal: `python build.py && python check_sync.py && node --check worker_e
 
 - [ ] All six flags are on and have been stable for 7+ days each.
 - [ ] Sunset 60-day clock has elapsed; legacy auth removed.
-- [ ] KV prefixes exported to R2 and confirmed.
-- [ ] Legacy KV keys deleted.
-- [ ] Legacy D1 tables dropped (migration `1001` applied).
+- [ ] KV prefixes copied to R2, each with a `manifest.json`.
+- [ ] Legacy KV keys deleted — prefix by prefix, each only after a release removed its readers.
+- [ ] Legacy D1 tables dropped — table by table, likewise.
 - [ ] `cfg:` records cleaned up (30-day per-install window).
 - [ ] Admin migration tools removed from source.
 - [ ] `FUNCTION-MAP.md` regenerated (`python gen_map.py`).

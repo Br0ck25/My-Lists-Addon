@@ -17,7 +17,15 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Release 10** (Phase 7 so far, PR #9) went live on 2026-09-30. The owner does not want Cloudflare Access on `/admin`.
 - **Release 11** went live on 2026-10-01 with migration `0020`, after the list copy's and the history copy's *Start over* (results under each). **`FF_V2_LISTS_ONLY` and `FF_EVENT_TRACKING` are both on** (2026-10-01, one-way: never delete either). The owner reports everything correct, and found one problem, fixed in Release 11b: a Search tile could show its poster and a "No poster" box under it.
 - **Release 12** (prepared, not yet live; it includes 11b) answers the owner's review of the new interface before it goes to everyone, and fixes New on Streaming titles too new for TMDB (details under Release 12).
-- **Release 13** (handed over 2026-10-01; the owner reports `FF_PROVIDER_BREAKER`, `FF_CHART_SNAPSHOTS` and `FF_NEW_UI` added, which implies 13 is deployed; still to confirm. The `shelf.shadow` numbers for `FF_SHOW_SCHEDULE` have not been sent yet; includes 12) adds the `FF_NEW_UI` switch, stronger hashing for recovery answers, and a daily backup that works. With it come the switches the owner asked for now: `FF_PROVIDER_BREAKER`, `FF_CHART_SNAPSHOTS`, then `FF_SHOW_SCHEDULE` once its comparison is read. The owner dropped one-time recovery codes (D-31).
+- **Release 13** is live: the owner added `FF_PROVIDER_BREAKER`, `FF_CHART_SNAPSHOTS` and `FF_NEW_UI`. It added the `FF_NEW_UI` switch, stronger hashing for recovery answers, and a daily backup that works. The owner dropped one-time recovery codes (D-31).
+- **`main` at `a6785d6`** is live (2026-10-02 onward): other assistants finished P7-6 and Phases 8–10 and merged everything into `main`, and the Worker was renamed from `wako` to **`my-lists-addon`**. The owner also added `FF_SCROBBLE_ST_ONLY`. The review of that work (2026-10-04) found the admin counters writing nowhere anyone reads, blank badged posters, and a cleanup guide that would have deleted live data: Release 14 fixes them.
+- **`shelf.shadow`** (sent 2026-10-04): last full comparison of 709 accounts, 20.36% different (Continue Watching 836 the same, 206 only in the old, 25 only in the new, 17 shows not known yet; Airing Next 212 / 15 / 22 / 3). Far above the 1% gate: **`FF_SHOW_SCHEDULE` stays off.**
+- **Release 14** (as 14c) went live on 2026-10-04. The counts missing since 2 October were put back (the owner: *done and it worked*). 14 and 14b each failed on a rule of Analytics Engine's SQL (details under Release 14).
+- **Release 15** (prepared 2026-10-04) — details under Release 15. Later on 2026-10-04 the owner's Check jobs still showed the comparison without reasons, so 15 was not yet running when that round finished.
+- **Release 16** (prepared 2026-10-04, not yet live; includes 15) — **Compare shelves now**: the whole comparison in minutes. Details under Release 16.
+- **`main`** is brought up to date by PR #12 (Releases 14–16).
+- **Cloudflare Workers Builds is connected to this repository** (found 2026-10-04). Every push makes Cloudflare try to build the Worker from GitHub. On `main` it would deploy to production. So far every attempt has failed, so nothing has been deployed that way: `main` at `a6785d6` on 2026-10-03, and this branch's preview with *Authentication error*. The `wrangler.toml` guard (Release 14: `keep_vars`, the `DB_ACTIVITY` placeholder) keeps such a deploy from replacing the dashboard's settings. Deploying stays manual (pasting) unless the owner decides otherwise.
+- **Backups work** (2026-10-04): the owner added the five GitHub secrets, and the first real backup ran (Actions run 37226668219). It copied both databases, encrypted: `my-lists-db` (9.3 MB, 709 accounts' settings, 1,147 lists, 53,082 list items) and `mylists-activity` (0.96 MB, 46,956 plays). From here it runs daily at 04:17 UTC.
 
 The owner decided to release the new version **one phase at a time, straight to the live site**, with no separate test site. Each release waits until the one before it has run cleanly for at least a day.
 
@@ -1026,3 +1034,196 @@ The owner asked for the recommended next steps, and for `FF_PROVIDER_BREAKER`, `
 6. Backups: the five GitHub secrets (`docs/OPERATIONS.md` §5), then Actions → **D1 backup** → **Run workflow**, choosing this branch.
 
 **Rollback:** paste the previous file and remove any switch that misbehaves. One thing does not roll back: a recovery answer set or used after Release 13 is stored in the new shape, which older code cannot read. On an older release that answer fails until Release 13 is back. Account Keys are unaffected.
+
+---
+
+## Release 14: the review of Phases 8–10 — counters, badged posters, and a cleanup that keeps data
+
+**Branch point:** `main` at `a6785d6`, which is what is live. Everything below is on top of it.
+
+The owner asked for every problem from the review to be fixed, and reported that the admin panel has missing and broken data.
+
+### What it changes
+
+- **The admin counters count again** (`03_`, D-33).
+  - Since 2026-10-02 (P8-2), page views, install links, playback pings, Most Watched, Most Added and the search log were sent to Analytics Engine **instead of** the database, because the `ANALYTICS` binding is set. Nothing reads Analytics Engine, so the dashboard showed zeros and Most Watched stopped moving.
+  - They are written to D1 again, and Most Watched reads them again (not `title_daily_stats`, which only has the plays of event-tracked accounts, up to yesterday).
+  - **The missing days can be put back**: `/admin` → Maintenance → **Counts missing since 2 October** reads them from Analytics Engine, shows a preview, and adds each one once. Pressing it again adds nothing. It needs a read-only API token (steps below).
+- **Badged posters show the poster again** (`25_`).
+  - P8-4 made a badged poster ("Season Premiere", an air date) link to the poster instead of containing it. An SVG shown as an image may not load anything from outside itself, so those tiles showed the badge on a blank card. Checked with a real browser and a real local server: no request was made.
+  - The poster is embedded again. When the poster cannot be fetched, or is not an image, the plain poster is sent instead of a blank badge. The memory cache that P8-4 added stays, now limited by size (24 MB, at most 1 MB per poster).
+- **Read replicas, for when they are switched on** (`02_`). Two kinds of request now always use the main database:
+  - `/subtitles/` — with playback tracking, this is the ping that reads Continue Watching and writes it back. From a replica that is behind, it would write old data over new, so a removed title would come back.
+  - `/api/lists/:id` — the owner reads a list just after changing it, and needs the change.
+- **Watch history of old accounts is protected again** (`05_`, `07_`, `26_`).
+  - P10-4 emptied `ensureTrackingMigrated`. An account that had not been used since watch history moved to its own record lost that history on its first autosave.
+  - Restored as it was, with all six of its calls.
+- **Copying old data to R2, without losing any** (`26_`, `03_`, docs/CUTOVER.md P10-3).
+  - The old tool wrote all the batches of an export to one file name, so each batch replaced the one before. It also turned images into text.
+  - Each batch is now its own file, images are kept byte for byte, and `manifest.json` is written last, once everything is in. `/admin` → Maintenance → **Export old data to R2 (a copy)** runs it.
+  - The cleanup guide (P10-3) is rewritten. Its delete list named data the site still uses: accounts, settings, history, likes, share codes, the counters, Better Posters. Its D1 list named 16 tables, all still in use. Deleting is now marked **do not run**, until a release removes what reads each one (D-34).
+- **The sunset notices are shown** (`22_`), but only the one a visitor can act on: the media server webhook address. The others name routes this page itself still uses. **Do not set `SUNSET_60DAY_START_DATE` yet** (docs/CUTOVER.md P10-2).
+- **`wrangler.toml` is safe to keep** (not used by a pasted deploy). It names the live Worker with its real ids, so a plain `wrangler deploy` would have:
+  - replaced every dashboard variable, including the two that must never be removed;
+  - dropped `DB_ACTIVITY`.
+
+  It now has `keep_vars = true`, a warning at the top, and a `DB_ACTIVITY` binding whose placeholder id makes such a deploy fail.
+
+### `FF_SCROBBLE_ST_ONLY` should come off
+
+With it on, a media server (Plex, Jellyfin, Emby) that still uses a webhook address from before scrobble tokens (`config=` or `creator=&key=`) is refused, and its plays are not recorded. Nobody is told: the server gets an error, not the person. The plan was to turn it on only at the end of the 60-day sunset. Deleting it changes nothing else, and it can be added again later.
+
+### Checked
+
+- `bash verify.sh` passes, and so does the suite with `MLA_TEST_V2_LISTS_READ=1` (counts in the commit).
+- New or rewritten tests:
+  - `tests/analytics-engine-stats.test.mjs`: counters in D1 with Analytics Engine bound; recovery preview, apply, apply again, no token, admin only.
+  - `tests/poster-optimization.test.mjs`: the poster's own bytes inside the SVG; plain poster when it cannot be had; the cache and its size limit.
+  - `tests/d1-read-replication.test.mjs`: `/subtitles/` and `/api/lists/:id` on the main database.
+  - `tests/phase10-cutover.test.mjs`: export parts, manifest last, metadata kept, images kept, a failed R2 write leaves no manifest, `*` refused.
+  - `tests/review-fixes-2026-10-04.test.mjs`: an old account's history survives an autosave (this test fails with the P10-4 version); the notice shown once; `wrangler.toml` guards.
+
+**Steps:**
+1. Keep the file now live as the rollback file.
+2. Deploy `release-14-NEW-worker.js`. No database step.
+3. Worker **my-lists-addon** → Settings → Variables and Secrets → delete `FF_SCROBBLE_ST_ONLY` → Deploy.
+4. Check: open the site, then `/admin`. Total page views should go up by one, and today's count should no longer be 0.
+5. Put the missing days back (docs/OPERATIONS.md §30):
+   1. Cloudflare → My Profile → API Tokens → **Create Token** → **Create Custom Token**. Give it the permission **Account → Account Analytics → Read**, for your account. Copy the token.
+   2. Worker **my-lists-addon** → Settings → Variables and Secrets:
+      - add a **Secret** `CF_ANALYTICS_TOKEN` = the token;
+      - add a **Text** variable `CF_ANALYTICS_ACCOUNT_ID` = your account id (the 32 letters and numbers in the dashboard's address, right after `dash.cloudflare.com/`).
+
+      Deploy.
+   3. `/admin` → Maintenance → **Counts missing since 2 October** → **Preview**. Send the result.
+   4. **Put them back**. Then delete `CF_ANALYTICS_TOKEN` and the token itself.
+6. Backups: if not done yet, add the five GitHub secrets (docs/OPERATIONS.md §5), then Actions → **D1 backup** → **Run workflow**.
+
+**Not yet:**
+- Do not switch on D1 read replication.
+- Do not set `SUNSET_60DAY_START_DATE`.
+- Do not run any deletion from docs/CUTOVER.md.
+- `FF_SHOW_SCHEDULE` stays off (20% different).
+
+**Rollback:** paste the previous file. Two things to know:
+- Counts recorded while Release 14 ran stay in D1.
+- Any days already put back stay put back.
+
+### Release 14b: the recovery query Analytics Engine refused
+
+**What happened:** the owner deployed Release 14 and followed its steps. Preview answered *Failed: Analytics Engine answered 422: Input was invalid: unknown function call: CONCAT*.
+
+**Why:** the query joined text with `concat`, and Analytics Engine's SQL has no such function. Its reference lists only `format` for joining text. The tests' stand-in for Analytics Engine accepted anything, so they could not see this.
+
+**Fix** (`03_admin.js`, `readAnalyticsEngineCounts`):
+- The three queries now return the stored values as they are, and the Worker builds the counter names itself.
+- The only functions they use are `SUM` and `formatDateTime`, both in Cloudflare's SQL reference.
+- `GROUP BY` repeats the expressions instead of relying on names given with `AS`.
+- The stand-in now refuses any function the reference does not list, with the same 422 the real service sent. Putting `concat` back makes 3 tests fail.
+
+Nothing was written by the failed Preview: it stops before touching the database.
+
+**Steps:**
+1. Deploy `release-14b-NEW-worker.js`. Keep `CF_ANALYTICS_TOKEN` and `CF_ANALYTICS_ACCOUNT_ID` as they are.
+2. `/admin` → Maintenance → **Counts missing since 2 October** → **Preview**. Send the result.
+3. If it looks right, **Put them back**. Then delete `CF_ANALYTICS_TOKEN` and the token itself.
+
+### Release 14c: the next rule Analytics Engine enforces
+
+**What happened:** Release 14b's Preview answered *Failed: Analytics Engine answered 422: Input was invalid: in the GROUP BY clause you may only provide column names: formatDateTime("timestamp", '%Y-%m-%d', 'America/New_York')*.
+
+**Why:** Analytics Engine groups only by a column. A worked-out value has to be named with `AS` first, as in Cloudflare's own example (`intDiv(...) * 60 AS t` … `GROUP BY blob1, t`). 14b grouped by the formula itself. The stand-in used by the tests accepted that too.
+
+**Fix** (`03_admin.js`, `readAnalyticsEngineCounts`):
+- Plays and list adds are now asked for by the hour: `toUnixTimestamp(toStartOfHour(timestamp)) AS event_hour`, grouped by `event_hour`. The Worker turns each hour into its Eastern day, so the service's time zone support is no longer needed.
+- `event_hour` rather than `hour` or `day`, which the SQL also uses as words of its own.
+- The other two queries already grouped by plain columns.
+- The stand-in now refuses anything in `GROUP BY` that is not a column or an `AS` name, with the same message. Grouping by the formula again makes 3 tests fail with exactly the error the owner saw.
+- `/admin` now shows **Release 14c** under its title, so it is plain which file is live.
+- A failure names the query that failed (page views, Most Watched, or searches) and the release that asked.
+
+The failed Preview wrote nothing.
+
+**Steps:**
+1. Deploy `release-14c-NEW-worker.js`. Check that `/admin` says **Release 14c** under "Admin Dashboard".
+2. `/admin` → Maintenance → **Counts missing since 2 October** → **Preview**. Send the result.
+3. If it looks right, **Put them back**. Then delete `CF_ANALYTICS_TOKEN` and the token itself.
+
+---
+
+## Release 15: why the shelf comparison differs, and a backup that cannot look fine while doing nothing
+
+**Branch point:** this branch after Release 14c, which is live.
+
+### What it changes
+
+- **The shelf comparison says why** (`47_shelf-shadow.js`, `03_admin.js`).
+  - The last full comparison was 20.36% different, which is far above the 1% that `FF_SHOW_SCHEDULE` waits for, and it gave no reason. An item "only in the old" Continue Watching can mean two things:
+    - the old list is stale, for example an episode already watched, or a show that has ended;
+    - or the new list is wrong.
+  - Every difference now gets a reason. `/admin` → Check jobs shows a **Why:** line under the `shelf.shadow` comparison, counting each reason, for example `already-watched 120, schedule-nothing-after 40, no-progress 12`. The examples carry one line of detail each.
+  - Reasons for Continue Watching, only in the old: `already-watched`, `schedule-nothing-after`, `different-episode`, `no-progress`, `dismissed`, `dropped`, `no-title`, `suggestion`, `schedule-unknown`.
+  - Reasons for Airing Next, only in the old: `no-upcoming`, `next-already-aired`, `hidden`, `no-progress`, `nothing-watched`, `not-a-series`.
+  - Reasons for anything only in the new: `different-episode`, `not-stored`.
+  - **One counting mistake fixed.** A stored show whose title record was not marked as a series was counted as a difference even when the schedule simply did not know it yet. That case belongs with "not known yet". The fix matches the stored show through the account's own progress rows.
+  - Nothing a visitor sees changes: the comparison only reads.
+- **The daily backup fails when it cannot run** (`.github/workflows/d1-backup.yml`).
+  - **No backup has been made so far.** Every daily run since 30 September skipped itself, because the repository secrets are not set, and showed a green tick anyway.
+  - It now fails (a red ✗, and GitHub sends an email) and names the missing secrets. The watch history database is required as well, since it is the only copy of watch history.
+  - The scheduled run uses the copy of the workflow on `main`, so this takes effect once this branch is merged into `main`.
+- `/admin` shows **Release 15**.
+
+`bash verify.sh` passes, and so does the suite with `MLA_TEST_V2_LISTS_READ=1` (counts in the commit). New tests are in `tests/shelf-shadow.test.mjs`:
+- each reason, on a stale entry, a show with nothing after the last episode watched, and an episode the new list works out differently;
+- the counting fix: this test fails without it.
+
+**Steps:**
+1. Deploy `release-15-NEW-worker.js`. Check that `/admin` says **Release 15**. There is no database step.
+2. Wait for one full comparison. `shelf.shadow` checks 50 accounts an hour, so 709 accounts take about 15 hours.
+3. Then `/admin` → **Check jobs**, and send the two `shelf.shadow` lines: "Last full comparison…" and "Why:…".
+4. Backups: add the five repository secrets (docs/OPERATIONS.md §5), then Actions → **D1 backup** → **Run workflow**, and check that the run made a file (under *Artifacts*).
+
+**Rollback:** paste the 14c file. Nothing is stored differently.
+
+---
+
+## Release 16: the shelf comparison in minutes, not days
+
+**Branch point:** this branch after Release 15. It includes 15: deploy this one if 15 is not live yet.
+
+The owner had been waiting days for the comparison. The hourly `shelf.shadow` job compares 50 accounts an hour, so a full pass over 709 accounts takes about 15 hours. The Check jobs output the owner sent still showed the same 20.36% with no reasons, because Release 15 was not running when that pass finished.
+
+### What it changes
+
+- **Compare shelves now** (`/admin` → Maintenance, under Check jobs; `03_admin.js`, `44_jobs-queue.js`, `47_shelf-shadow.js`).
+  - It runs the whole comparison from the page. Each request handles 20 accounts, and the page carries the running totals from one request to the next.
+  - It is the same comparison as the hourly job (`runShelfShadow`), with the Release 15 reasons. When it finishes, the page shows:
+    - the difference rate;
+    - the counts;
+    - why each difference is there;
+    - examples.
+  - The result is also stored where Check jobs reads it. The hourly job's own pass carries on as before.
+  - It only reads. Each batch is one line in the admin audit log (`admin.jobs.shelf-compare`).
+- `/admin` shows **Release 16**.
+
+### Checked
+
+- In a real browser, against a local copy of the Worker with 45 test accounts:
+  - signed in, opened Maintenance and pressed the button;
+  - 3 batches ran, and the page reported *Done: 45 accounts compared*;
+  - it named the 23 stale entries as `already-watched`;
+  - no page errors.
+- `tests/shelf-shadow.test.mjs` checks:
+  - one round spread over two batches;
+  - totals carried between batches;
+  - the result saved for Check jobs;
+  - admin-only access.
+- `bash verify.sh` and the `MLA_TEST_V2_LISTS_READ=1` run pass (counts in the commit).
+
+**Steps:**
+1. Deploy `release-16-NEW-worker.js`. Check that `/admin` says **Release 16**. There is no database step.
+2. `/admin` → **Maintenance** → **Compare shelves now**. Keep the page open until it says **Done** (a few minutes for 709 accounts).
+3. Send everything it shows under the button.
+
+**Rollback:** paste the previous file. Nothing is stored differently.
+
