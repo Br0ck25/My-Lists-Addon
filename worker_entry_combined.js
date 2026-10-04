@@ -29677,6 +29677,74 @@ ${seoHeadHtml}
     color: var(--accent);
   }
 
+  /* --- Search Tab Toolbar & Filter Selects ------------------------------- */
+  .search-filters-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .search-filter-select {
+    flex: none;
+    width: auto;
+    min-width: 105px;
+    font-size: 0.82rem;
+    padding: 5px 24px 5px 10px;
+    background: var(--surface);
+    color: var(--text);
+    border: 1.5px solid var(--border-strong);
+    border-radius: var(--radius-pill);
+    min-height: 31px;
+    height: 31px;
+    cursor: pointer;
+    box-shadow: none;
+  }
+  .search-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    gap: 8px;
+  }
+  .search-input-box {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: center;
+  }
+  .search-input-icon {
+    position: absolute;
+    left: 14px;
+    color: var(--muted);
+    pointer-events: none;
+    z-index: 2;
+  }
+  .search-clear-btn {
+    display: none;
+    position: absolute;
+    right: 12px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    color: var(--muted);
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    font-size: 11px;
+    line-height: 1;
+    z-index: 2;
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+  .search-clear-btn:hover {
+    background: var(--border-strong);
+    color: var(--text);
+  }
+
   /* --- Streaming Providers Chips Bar (Discover Tab) ----------------------- */
   .provider-bar {
     display: flex;
@@ -32898,9 +32966,13 @@ ${seoHeadHtml}
     font-weight: 600;
     line-height: 1.25;
     padding: 2px 4px 4px 4px;
-    white-space: nowrap;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
+    word-break: break-word;
+    min-height: 2.5em;
   }
   /* Second line under a poster for episode entries -- e.g. the episode's
      own title under a "Show Name S03E07" first line (see
@@ -34936,20 +35008,71 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
 
 <div class="tab-panel" data-tab-panel="search" id="content-search" role="tabpanel" aria-labelledby="tab-desktop-search" hidden>
   <div class="panel">
-    <div class="shelf-header" style="margin-bottom:10px;">
+    <div class="shelf-header" style="margin-bottom:12px;">
       <h2 class="shelf-title">Search Movies, TV Shows &amp; Lists</h2>
     </div>
-    <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Search to find movies, shows and lists to add to your lists.</p>
     
-    <div class="row">
-      <input type="text" id="catalogSearchInput" aria-label="Search by title or list name" placeholder="Search by title or list name..." data-act="appActCatalogSearchInput" data-act-on="input,keydown" data-act-args="[&quot;@self&quot;,&quot;@event&quot;]">
-      <button type="button" class="primary" id="catalogSearchBtn" data-act="runCatalogSearch" style="flex:none; padding:7px 16px; min-height:36px; height:36px; font-size:0.86rem; font-weight:600; border-radius:var(--radius-pill); align-self:center;">Search</button>
+    <div class="search-input-wrapper">
+      <div class="search-input-box">
+        <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <input type="text" id="catalogSearchInput" aria-label="Search by title or list name" placeholder="Search movies by title..." style="padding-left:38px; padding-right:36px;" data-act="appActCatalogSearchInput" data-act-on="input,keydown" data-act-args="[&quot;@self&quot;,&quot;@event&quot;]">
+        <button type="button" id="catalogSearchClearBtn" class="search-clear-btn" aria-label="Clear search" data-act="clearCatalogSearch">&#x2715;</button>
+      </div>
+      <button type="button" class="primary" id="catalogSearchBtn" data-act="runCatalogSearch" style="flex:none; padding:7px 18px; min-height:42px; height:42px; font-size:0.88rem; font-weight:600; border-radius:var(--radius-pill); align-self:center;">Search</button>
     </div>
 
-    <div class="subnav-pills-bar" id="catalogSearchTypeChips" style="margin-top:10px;">
-      <button type="button" class="subnav-pill active" data-act="setCatalogSearchFilter" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> Movies</button>
-      <button type="button" class="subnav-pill" data-act="setCatalogSearchFilter" data-act-args="[&quot;tv&quot;,&quot;@self&quot;]">Shows</button>
-      <button type="button" class="subnav-pill" data-act="setCatalogSearchFilter" data-act-args="[&quot;lists&quot;,&quot;@self&quot;]">Lists</button>
+    <div class="search-filters-toolbar">
+      <div class="subnav-pills-bar" id="catalogSearchTypeChips" style="margin:0; width:auto; padding:0; flex-shrink:0;">
+        <button type="button" class="subnav-pill active" data-act="setCatalogSearchFilter" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> Movies</button>
+        <button type="button" class="subnav-pill" data-act="setCatalogSearchFilter" data-act-args="[&quot;tv&quot;,&quot;@self&quot;]">Shows</button>
+        <button type="button" class="subnav-pill" data-act="setCatalogSearchFilter" data-act-args="[&quot;lists&quot;,&quot;@self&quot;]">Lists</button>
+      </div>
+
+      <!-- Quick Filter Dropdowns for Movies & Shows -->
+      <div id="catalogSearchFiltersRow" style="display:flex; flex-wrap:wrap; gap:8px; margin:0; align-items:center;">
+        <select id="catalogSearchGenreSelect" class="search-filter-select" aria-label="Filter by genre" data-act="applySearchFilters">
+          <option value="">All Genres</option>
+          <option value="28,10759">Action &amp; Adventure</option>
+          <option value="16">Animation</option>
+          <option value="35">Comedy</option>
+          <option value="80">Crime</option>
+          <option value="99">Documentary</option>
+          <option value="18">Drama</option>
+          <option value="10751,10762">Family &amp; Kids</option>
+          <option value="14,878,10765">Fantasy &amp; Sci-Fi</option>
+          <option value="36">History</option>
+          <option value="27">Horror</option>
+          <option value="10402">Music</option>
+          <option value="9648">Mystery</option>
+          <option value="10749">Romance</option>
+          <option value="53">Thriller</option>
+          <option value="10752,10768">War &amp; Politics</option>
+          <option value="37">Western</option>
+        </select>
+
+        <select id="catalogSearchYearSelect" class="search-filter-select" aria-label="Filter by year" data-act="applySearchFilters">
+          <option value="">All Years</option>
+          <option value="2026">2026</option>
+          <option value="2025">2025</option>
+          <option value="2024">2024</option>
+          <option value="2023">2023</option>
+          <option value="2020-2022">2020–2022</option>
+          <option value="2010-2019">2010s</option>
+          <option value="2000-2009">2000s</option>
+          <option value="1990-1999">1990s</option>
+          <option value="<1990">1980s &amp; Older</option>
+        </select>
+
+        <select id="catalogSearchRatingSelect" class="search-filter-select" aria-label="Filter by minimum rating" data-act="applySearchFilters">
+          <option value="">All Ratings</option>
+          <option value="8.0">8.0+ ⭐</option>
+          <option value="7.0">7.0+ ⭐</option>
+          <option value="6.0">6.0+ ⭐</option>
+          <option value="5.0">5.0+ ⭐</option>
+        </select>
+
+        <button type="button" id="catalogSearchResetFiltersBtn" class="secondary lc-btn" data-act="resetSearchFilters" style="font-size:0.8rem; padding:4px 10px; min-height:30px; height:30px; border-radius:var(--radius-pill); display:none;">Reset</button>
+      </div>
     </div>
 ${newUi ? `    <!-- Where the lists come from, and in what order (new UI only): the chips
          Discover's Explore section had, on Search's own list results. See
@@ -34969,52 +35092,6 @@ ${newUi ? `    <!-- Where the lists come from, and in what order (new UI only): 
       </div>
     </div>
 ` : ''}
-
-    <!-- Quick Filter Dropdowns for Movies & Shows -->
-    <div id="catalogSearchFiltersRow" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; align-items:center;">
-      <select id="catalogSearchGenreSelect" aria-label="Filter by genre" data-act="applySearchFilters" style="flex:1; min-width:130px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
-        <option value="">All Genres</option>
-        <option value="28,10759">Action &amp; Adventure</option>
-        <option value="16">Animation</option>
-        <option value="35">Comedy</option>
-        <option value="80">Crime</option>
-        <option value="99">Documentary</option>
-        <option value="18">Drama</option>
-        <option value="10751,10762">Family &amp; Kids</option>
-        <option value="14,878,10765">Fantasy &amp; Sci-Fi</option>
-        <option value="36">History</option>
-        <option value="27">Horror</option>
-        <option value="10402">Music</option>
-        <option value="9648">Mystery</option>
-        <option value="10749">Romance</option>
-        <option value="53">Thriller</option>
-        <option value="10752,10768">War &amp; Politics</option>
-        <option value="37">Western</option>
-      </select>
-
-      <select id="catalogSearchYearSelect" aria-label="Filter by year" data-act="applySearchFilters" style="flex:1; min-width:115px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
-        <option value="">All Years</option>
-        <option value="2026">2026</option>
-        <option value="2025">2025</option>
-        <option value="2024">2024</option>
-        <option value="2023">2023</option>
-        <option value="2020-2022">2020–2022</option>
-        <option value="2010-2019">2010s</option>
-        <option value="2000-2009">2000s</option>
-        <option value="1990-1999">1990s</option>
-        <option value="<1990">1980s &amp; Older</option>
-      </select>
-
-      <select id="catalogSearchRatingSelect" aria-label="Filter by minimum rating" data-act="applySearchFilters" style="flex:1; min-width:115px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
-        <option value="">All Ratings</option>
-        <option value="8.0">8.0+ ⭐</option>
-        <option value="7.0">7.0+ ⭐</option>
-        <option value="6.0">6.0+ ⭐</option>
-        <option value="5.0">5.0+ ⭐</option>
-      </select>
-
-      <button type="button" id="catalogSearchResetFiltersBtn" class="secondary lc-btn" data-act="resetSearchFilters" style="font-size:0.8rem; padding:6px 10px; height:auto; display:none;">Reset</button>
-    </div>
 
     <div id="catalogSearchResult" style="margin-top:14px;"></div>
   </div>
@@ -49217,6 +49294,10 @@ function catalogSearchViewIsCurrent() {
 
 function handleCatalogSearchInput(input) {
   const q = (input ? input.value : '').trim();
+  const clearBtn = document.getElementById('catalogSearchClearBtn');
+  if (clearBtn) {
+    clearBtn.style.display = q ? 'inline-flex' : 'none';
+  }
   if (!q) {
     if (catalogSearchDebounceTimer) clearTimeout(catalogSearchDebounceTimer);
     renderDefaultCatalogSearch();
@@ -49226,6 +49307,21 @@ function handleCatalogSearchInput(input) {
   catalogSearchDebounceTimer = setTimeout(() => {
     runCatalogSearch();
   }, 350);
+}
+
+function clearCatalogSearch() {
+  const input = document.getElementById('catalogSearchInput');
+  if (input) {
+    input.value = '';
+    input.focus();
+  }
+  const clearBtn = document.getElementById('catalogSearchClearBtn');
+  if (clearBtn) clearBtn.style.display = 'none';
+  if (catalogSearchDebounceTimer) clearTimeout(catalogSearchDebounceTimer);
+  renderDefaultCatalogSearch();
+}
+if (typeof window !== 'undefined') {
+  window.clearCatalogSearch = clearCatalogSearch;
 }
 
 function setCatalogSearchFilter(filter, btn) {
@@ -49242,6 +49338,12 @@ function setCatalogSearchFilter(filter, btn) {
     btn.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
   }
   currentCatalogSearchType = filter;
+  const inputEl = document.getElementById('catalogSearchInput');
+  if (inputEl) {
+    if (filter === 'movie') inputEl.placeholder = 'Search movies by title...';
+    else if (filter === 'tv') inputEl.placeholder = 'Search TV shows by title...';
+    else if (filter === 'lists') inputEl.placeholder = 'Search community & provider lists...';
+  }
   const filtersRow = document.getElementById('catalogSearchFiltersRow');
   if (filtersRow) {
     filtersRow.style.display = (filter === 'lists') ? 'none' : 'flex';
@@ -49325,9 +49427,18 @@ function renderTitlePosterCards(items, totalCount, resEl) {
     return;
   }
 
-  const countBadge = (typeof totalCount === 'number' && totalCount > items.length)
-    ? '<div style="margin-bottom:10px; font-size:0.82rem; color:var(--muted);">Showing ' + items.length + ' of ' + totalCount + ' results</div>'
-    : ((typeof totalCount === 'number' && totalCount > 20) ? '<div style="margin-bottom:10px; font-size:0.82rem; color:var(--muted);">' + items.length + ' results found</div>' : '');
+  const inputEl = document.getElementById('catalogSearchInput');
+  const q = (inputEl ? inputEl.value : '').trim();
+  const typeLabel = currentCatalogSearchType === 'tv' ? 'TV Shows' : 'Movies';
+
+  let countBadge = '';
+  if (q) {
+    countBadge = (typeof totalCount === 'number' && totalCount > items.length)
+      ? '<div style="margin-bottom:12px; font-size:0.86rem; font-weight:600; color:var(--muted);">Showing ' + items.length + ' of ' + totalCount + ' results for "' + escapeHtml(q) + '"</div>'
+      : '<div style="margin-bottom:12px; font-size:0.86rem; font-weight:600; color:var(--muted);">' + items.length + ' results found for "' + escapeHtml(q) + '"</div>';
+  } else {
+    countBadge = '<div style="margin-bottom:12px; font-size:0.86rem; font-weight:600; color:var(--muted);">Top Trending ' + typeLabel + ' Right Now</div>';
+  }
 
   const postersHtml = items.map(m => {
     const effectivePoster = resolveClientPoster(m, m.poster);

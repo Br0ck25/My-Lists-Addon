@@ -4969,6 +4969,10 @@ function catalogSearchViewIsCurrent() {
 
 function handleCatalogSearchInput(input) {
   const q = (input ? input.value : '').trim();
+  const clearBtn = document.getElementById('catalogSearchClearBtn');
+  if (clearBtn) {
+    clearBtn.style.display = q ? 'inline-flex' : 'none';
+  }
   if (!q) {
     if (catalogSearchDebounceTimer) clearTimeout(catalogSearchDebounceTimer);
     renderDefaultCatalogSearch();
@@ -4978,6 +4982,21 @@ function handleCatalogSearchInput(input) {
   catalogSearchDebounceTimer = setTimeout(() => {
     runCatalogSearch();
   }, 350);
+}
+
+function clearCatalogSearch() {
+  const input = document.getElementById('catalogSearchInput');
+  if (input) {
+    input.value = '';
+    input.focus();
+  }
+  const clearBtn = document.getElementById('catalogSearchClearBtn');
+  if (clearBtn) clearBtn.style.display = 'none';
+  if (catalogSearchDebounceTimer) clearTimeout(catalogSearchDebounceTimer);
+  renderDefaultCatalogSearch();
+}
+if (typeof window !== 'undefined') {
+  window.clearCatalogSearch = clearCatalogSearch;
 }
 
 function setCatalogSearchFilter(filter, btn) {
@@ -4994,6 +5013,12 @@ function setCatalogSearchFilter(filter, btn) {
     btn.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
   }
   currentCatalogSearchType = filter;
+  const inputEl = document.getElementById('catalogSearchInput');
+  if (inputEl) {
+    if (filter === 'movie') inputEl.placeholder = 'Search movies by title...';
+    else if (filter === 'tv') inputEl.placeholder = 'Search TV shows by title...';
+    else if (filter === 'lists') inputEl.placeholder = 'Search community & provider lists...';
+  }
   const filtersRow = document.getElementById('catalogSearchFiltersRow');
   if (filtersRow) {
     filtersRow.style.display = (filter === 'lists') ? 'none' : 'flex';
@@ -5077,9 +5102,18 @@ function renderTitlePosterCards(items, totalCount, resEl) {
     return;
   }
 
-  const countBadge = (typeof totalCount === 'number' && totalCount > items.length)
-    ? '<div style="margin-bottom:10px; font-size:0.82rem; color:var(--muted);">Showing ' + items.length + ' of ' + totalCount + ' results</div>'
-    : ((typeof totalCount === 'number' && totalCount > 20) ? '<div style="margin-bottom:10px; font-size:0.82rem; color:var(--muted);">' + items.length + ' results found</div>' : '');
+  const inputEl = document.getElementById('catalogSearchInput');
+  const q = (inputEl ? inputEl.value : '').trim();
+  const typeLabel = currentCatalogSearchType === 'tv' ? 'TV Shows' : 'Movies';
+
+  let countBadge = '';
+  if (q) {
+    countBadge = (typeof totalCount === 'number' && totalCount > items.length)
+      ? '<div style="margin-bottom:12px; font-size:0.86rem; font-weight:600; color:var(--muted);">Showing ' + items.length + ' of ' + totalCount + ' results for "' + escapeHtml(q) + '"</div>'
+      : '<div style="margin-bottom:12px; font-size:0.86rem; font-weight:600; color:var(--muted);">' + items.length + ' results found for "' + escapeHtml(q) + '"</div>';
+  } else {
+    countBadge = '<div style="margin-bottom:12px; font-size:0.86rem; font-weight:600; color:var(--muted);">Top Trending ' + typeLabel + ' Right Now</div>';
+  }
 
   const postersHtml = items.map(m => {
     const effectivePoster = resolveClientPoster(m, m.poster);

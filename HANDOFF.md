@@ -2,6 +2,43 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-03 (Antigravity): Search Page UX/UI Polish, Unified Filter Toolbar, & Global 2-Line Poster Title Clamping.**
+>
+> **Where things stand**
+> - Global 2-Line Poster Title Clamping (`09_page-shell.js`):
+>   1. **Resolved Aggressive Title Ellipsis**:
+>      - Replaced single-line `white-space: nowrap` on `.live-preview-poster-name` with a standard 2-line clamp (`display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; min-height: 2.5em;`).
+>      - Titles like *Spider-Man: Brand New Day*, *The Love Hypothesis*, and *The End of Oak Street* now wrap cleanly onto two lines without premature truncation.
+>      - Consistent `min-height: 2.5em` maintains uniform baseline alignment across all poster cards.
+>      - Better Poster overlays (format badges, ratings, (+) button) remained untouched as requested.
+> - Search Page Hierarchy & Filter Toolbar Unification (`09_page-shell.js`, `13_tab-channels.js`):
+>   1. **Header Streamlining**:
+>      - Removed redundant subtitle `Search to find movies, shows and lists to add to your lists.` under the Search panel heading.
+>   2. **Single-Row Filter Toolbar**:
+>      - Merged content type pills (`#catalogSearchTypeChips`: `Movies | Shows | Lists`) and quick filter dropdowns (`#catalogSearchFiltersRow`: `All Genres`, `All Years`, `All Ratings`) into a single responsive `.search-filters-toolbar`.
+>      - Replaced edge-to-edge stretched dropdowns (`flex: 1`) with compact `.search-filter-select` pills (`min-width: 105px; max-width: 150px; min-height: 31px; border-radius: var(--radius-pill); border: 1.5px solid var(--border-strong);`).
+>      - Saves ~50px of vertical headroom, keeping results visible above the fold.
+> - Search Input Ergonomics & Context Labeling (`13_tab-channels.js`, `19_client-search-and-likes.js`):
+>   1. **Input Icon & Quick-Clear (✕) Button**:
+>      - Embedded subtle SVG magnifying glass inside the left edge of `#catalogSearchInput`.
+>      - Added inline `#catalogSearchClearBtn` on the right edge, which appears dynamically when text is typed.
+>      - Clicking clear resets the search input, hides the button, and re-renders default trending titles.
+>   2. **Dynamic Context-Aware Placeholders**:
+>      - Updated `setCatalogSearchFilter` to adaptively update `#catalogSearchInput.placeholder`:
+>        - Movies: `Search movies by title...`
+>        - Shows: `Search TV shows by title...`
+>        - Lists: `Search community & provider lists...`
+>   3. **Results Context Labeling**:
+>      - In `renderTitlePosterCards`, added clean context labeling:
+>        - Default state: `Top Trending Movies Right Now` / `Top Trending TV Shows Right Now`
+>        - Search query state: `Showing X of Y results for "query"`
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK (5,451,759 bytes).
+>   - `node --check worker_entry_combined.js`: OK (0 syntax errors).
+>   - `python gen_map.py`: 2,666 symbols, 211 routes.
+>   - Node test suite passed (406/406 client tests, 119/119 app-shell tests).
+> - Branch: `feat/design-system-phase-1`
+
 > **HANDOFF, 2026-10-03 (Antigravity): New Catalog Modal Input Token Alignment & Global Modal Form Rules.**
 >
 > **Where things stand**

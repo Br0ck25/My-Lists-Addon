@@ -1254,6 +1254,74 @@ ${seoHeadHtml}
     color: var(--accent);
   }
 
+  /* --- Search Tab Toolbar & Filter Selects ------------------------------- */
+  .search-filters-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .search-filter-select {
+    flex: none;
+    width: auto;
+    min-width: 105px;
+    font-size: 0.82rem;
+    padding: 5px 24px 5px 10px;
+    background: var(--surface);
+    color: var(--text);
+    border: 1.5px solid var(--border-strong);
+    border-radius: var(--radius-pill);
+    min-height: 31px;
+    height: 31px;
+    cursor: pointer;
+    box-shadow: none;
+  }
+  .search-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    gap: 8px;
+  }
+  .search-input-box {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: center;
+  }
+  .search-input-icon {
+    position: absolute;
+    left: 14px;
+    color: var(--muted);
+    pointer-events: none;
+    z-index: 2;
+  }
+  .search-clear-btn {
+    display: none;
+    position: absolute;
+    right: 12px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    color: var(--muted);
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    font-size: 11px;
+    line-height: 1;
+    z-index: 2;
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+  .search-clear-btn:hover {
+    background: var(--border-strong);
+    color: var(--text);
+  }
+
   /* --- Streaming Providers Chips Bar (Discover Tab) ----------------------- */
   .provider-bar {
     display: flex;
@@ -4475,9 +4543,13 @@ ${seoHeadHtml}
     font-weight: 600;
     line-height: 1.25;
     padding: 2px 4px 4px 4px;
-    white-space: nowrap;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
+    word-break: break-word;
+    min-height: 2.5em;
   }
   /* Second line under a poster for episode entries -- e.g. the episode's
      own title under a "Show Name S03E07" first line (see
