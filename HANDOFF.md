@@ -2,6 +2,35 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **NEXT STEPS (2026-10-04, after Release 19 was merged into `main` by PR #14).** The list given to the owner, in order:
+>
+> **Owner, now (no code):**
+> 1. Remove the Cloudflare app's access to this repository: GitHub → Settings → Applications → Cloudflare Workers and Pages → Configure.
+> 2. Move install-link keys into encrypted storage (docs/OPERATIONS.md §8). Every prerequisite is in place: migration 0015, `TOKEN_ENCRYPTION_KEY`, working backups. Set `INSTALL_MIGRATION_PERCENT` to `10`, check `/admin` → Maintenance → Install links the next day, then `50`, then `100`.
+> 3. Delete `CF_ANALYTICS_TOKEN`, if it is still there.
+> 4. Decide on PRs #10 and #11 (the unmerged branches): close or keep.
+>
+> **Around 2026-10-07, three days after `FF_SHOW_SCHEDULE` and Release 14:**
+> 5. Compare shelves now again. The "not known yet" shows should have dropped as `show.watchers` / `show.refresh` reach the newly copied accounts.
+> 6. Remove the legacy Continue Watching / Airing Next writers (P5-4, second half). First make sure shows the schedule does not know are rare: `shelfStoredForUnknown` serves their stored entries, which those writers keep current. The persistent cause is a show whose media row is kind `movie`, which never gets a schedule row.
+> 7. Turn on D1 read replication for `my-lists-db` (P8-1). Since Release 14, `/subtitles/` and `/api/lists/:id` stay on the primary.
+>
+> **Sign-in move (the owner chose it as the main line of work):**
+> 8. Stage 2: `restore` (run on every page load) and the remaining account requests signed by the session.
+> 9. When `/admin` → Creators *Saves that sent the Account Key* stays near zero for a week, rewrite the sunset notices before setting `SUNSET_60DAY_START_DATE`. `getLegacySunsetNotices` (02_) still says `/api/creator/sync/*` goes away, and the page uses those routes, now signed by the session.
+> 10. Day 60: remove key-in-body auth on the session routes, the legacy scrobble forms, and the other sunset items.
+> 11. Then the old storage, one prefix or table at a time: copy to R2, remove its readers, delete (docs/CUTOVER.md P10-3).
+>
+> **Smaller cleanups (any time):**
+> 12. Better Posters: the old KV keys and `prewarmBetterPosters` (P5-9).
+> 13. `/api/bulk-resolve` goes when the classic page goes (owner's decision: retire `?ff_new_ui=0`?). The new interface uses `/api/imports`.
+> 14. Unreachable new-interface modules in `24_` (Explore, Your lists, the shell's Account and Connections cards): delete if the owner agrees.
+> 15. Backups: a check in the workflow that each dump decrypts and loads into SQLite, so a broken backup is caught the day it happens. Optionally, a restore test into a scratch D1.
+>
+> **Optional switches (owner's call):** `FF_V2_LISTS_API` (Unlisted lists; safe now, needs `APP_SHELL_UNLISTED_READY` wired to it), `FF_CANONICAL_IDS`, `FF_MATERIALIZER`.
+>
+> ---
+>
 > **HANDOFF, 2026-10-04 (Claude Code). Start here; the 2026-10-01 block below is history.**
 >
 > **Where things stand**
