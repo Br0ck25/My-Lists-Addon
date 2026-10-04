@@ -262,7 +262,7 @@ async function compareAccountShelves(env, account, { now = Date.now() } = {}) {
   return { cw: cwDiff, an: anDiff };
 }
 
-async function runShelfShadow(env, job = {}) {
+async function runShelfShadow(env, job = {}, { accounts: batchSize = SHELF_SHADOW_ACCOUNTS } = {}) {
   if (!env || !env.DB || typeof activityDbs !== "function" || !activityDbs(env).length) return { progress: job.progress || {}, skipped: "no activity database" };
   const progress = { ...(job.progress || {}) };
   const round = progress.round || shelfShadowEmpty();
@@ -272,7 +272,7 @@ async function runShelfShadow(env, job = {}) {
     ({ results: accounts } = await env.DB.prepare(
       `SELECT a.id, a.username FROM jobs j JOIN accounts a ON a.id = j.account_id
        WHERE j.type = ? AND j.status = 'done' AND j.account_id > ? ORDER BY j.account_id LIMIT ?`
-    ).bind(ACTIVITY_BACKFILL_TYPE, afterId, SHELF_SHADOW_ACCOUNTS).all());
+    ).bind(ACTIVITY_BACKFILL_TYPE, afterId, batchSize).all());
   } catch (err) {
     if (/no such table/i.test(jobErrorText(err))) return { progress, skipped: "no 0016" };
     throw err;
@@ -334,11 +334,73 @@ async function runShelfShadow(env, job = {}) {
       }
     }
   }
-  if (!accounts || accounts.length < SHELF_SHADOW_ACCOUNTS) {
+  if (!accounts || accounts.length < batchSize) {
     // The round is over: keep its totals, start the next one.
-    return { progress: { afterId: 0, round: shelfShadowEmpty(), last: { ...round, rate: shelfShadowRate(round), finishedAt: Date.now() } } };
+    return { scanned: (accounts || []).length, progress: { afterId: 0, round: shelfShadowEmpty(), last: { ...round, rate: shelfShadowRate(round), finishedAt: Date.now() } } };
   }
-  return { progress: { ...progress, afterId: lastId, round } };
+  return { scanned: accounts.length, progress: { ...progress, afterId: lastId, round } };
+}
+
+// --- Compare now (/admin -> Maintenance -> Check jobs, Release 16) -------------
+//
+// The hourly job compares 50 accounts an hour, so one full comparison takes
+// about 15 hours. The admin page can instead run the whole round itself, a
+// batch of SHELF_SHADOW_NOW_ACCOUNTS accounts per request, carrying the round
+// from one request to the next (POST /admin/api/jobs/shelf-shadow-now). It is
+// the same comparison: runShelfShadow, with the round kept by the page instead
+// of the jobs row. The finished round is also stored as the job's `last`, so
+// Check jobs shows it; the hourly job's own round carries on untouched.
+const SHELF_SHADOW_NOW_ACCOUNTS = 20;
+
+// A round as the page sends it back: only the known fields, as numbers.
+function shelfShadowRoundFrom(raw) {
+  const round = shelfShadowEmpty();
+  if (!raw || typeof raw !== "object") return round;
+  round.accounts = Math.max(0, Number(raw.accounts) || 0);
+  for (const shelf of ["cw", "an"]) {
+    const from = raw[shelf] && typeof raw[shelf] === "object" ? raw[shelf] : {};
+    for (const k of ["legacy", "v2", "both", "legacyOnly", "v2Only", "unknown"]) round[shelf][k] = Math.max(0, Number(from[k]) || 0);
+    for (const w of ["whyOld", "whyNew"]) {
+      const tally = from[w] && typeof from[w] === "object" ? from[w] : {};
+      for (const [code, n] of Object.entries(tally)) {
+        if (/^[a-z-]{1,40}$/.test(code) && Number(n) > 0) round[shelf][w][code] = Number(n);
+      }
+    }
+  }
+  if (Array.isArray(raw.examples)) round.examples = raw.examples.slice(0, SHELF_SHADOW_EXAMPLES);
+  return round;
+}
+
+async function runShelfShadowNow(env, { afterId = 0, round = null } = {}) {
+  if (!env || !env.DB || typeof activityDbs !== "function" || !activityDbs(env).length) {
+    return { ok: false, error: "Needs the activity database (DB_ACTIVITY)." };
+  }
+  const start = Math.max(0, Number(afterId) || 0);
+  let total = null;
+  if (!start) {
+    // How many accounts the round will cover, for the page's progress line.
+    try {
+      const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM jobs j JOIN accounts a ON a.id = j.account_id WHERE j.type = ? AND j.status = 'done'")
+        .bind(ACTIVITY_BACKFILL_TYPE).first();
+      total = row ? Number(row.n) || 0 : null;
+    } catch {
+      total = null;
+    }
+  }
+  const out = await runShelfShadow(env, { progress: { afterId: start, round: shelfShadowRoundFrom(round) } }, { accounts: SHELF_SHADOW_NOW_ACCOUNTS });
+  if (out.skipped) return { ok: false, error: `Not run: ${out.skipped}.` };
+  const last = out.progress && out.progress.last;
+  if (!last) return { ok: true, done: false, total, scanned: out.scanned, afterId: out.progress.afterId, round: out.progress.round };
+  // Check jobs reads the job's `last`. Not while the hourly run is mid-way:
+  // its own write at the end would replace this anyway.
+  try {
+    await env.DB.prepare(
+      "UPDATE jobs SET progress_json = json_set(COALESCE(progress_json, '{}'), '$.last', json(?)) WHERE dedupe_key = 'periodic:shelf.shadow' AND status != 'running'"
+    ).bind(JSON.stringify(last)).run();
+  } catch (err) {
+    console.warn(`[Jobs] shelf.shadow: could not store the comparison: ${jobErrorText(err)}`);
+  }
+  return { ok: true, done: true, total, scanned: out.scanned, last };
 }
 
 definePeriodicJob("shelf.shadow", {

@@ -148,6 +148,59 @@ describe("P5-4: shelf.shadow", () => {
     assert.match(status.text, /Why: Continue Watching only in the old: /);
   });
 
+  it("Compare shelves now runs the whole round from the admin page, a batch per request", async () => {
+    const env = shadowEnv();
+    const db = env.DB._db;
+    // 24 more accounts, each with Show 10's S1E4 stored and worked out alike:
+    // more than one batch of 20.
+    const acct = db.prepare("INSERT INTO accounts (id, username, display_name, key_hash, created_at) VALUES (?, ?, ?, 'x', 0)");
+    const done = db.prepare("INSERT INTO jobs (type, dedupe_key, account_id, status, run_after, created_at, updated_at) VALUES ('migrate.activity', ?, ?, 'done', 0, 0, 0)");
+    const p = env.DB_ACTIVITY._db.prepare("INSERT INTO show_progress (account_id, media_id, last_season, last_episode, last_watched_at, status, updated_at) VALUES (?, 10, 1, 3, ?, 'watching', 0)");
+    for (let id = 3; id <= 26; id++) {
+      acct.run(id, `user${id}`, `User ${id}`);
+      done.run(`migrate.activity:acct:${id}`, id);
+      p.run(id, Date.now() - DAY);
+      env.CONFIGS._store.set(`creatorsynctracking:user${id}`, JSON.stringify({
+        continueWatching: [{ id: "tt0000010:1:4", showId: "tt0000010", type: "episode", seasonNum: 1, episodeNum: 4 }],
+        airingNext: [],
+      }));
+    }
+    // The periodic row exists, as on the live site.
+    await runScheduledTick(env);
+    env.JOBS._pending.length = 0;
+
+    const cookie = await adminCookie(env);
+    assert.equal((await call(env, "/admin/api/jobs/shelf-shadow-now", { method: "POST", json: {} })).status, 401, "admins only");
+
+    let state = {};
+    const calls = [];
+    for (let i = 0; i < 10; i++) {
+      const r = await call(env, "/admin/api/jobs/shelf-shadow-now", { method: "POST", cookie, json: state });
+      assert.equal(r.status, 200, JSON.stringify(r.body));
+      calls.push(r.body);
+      if (r.body.done) break;
+      state = { afterId: r.body.afterId, round: r.body.round };
+    }
+    assert.equal(calls.length, 2, "26 accounts, 20 a batch");
+    assert.equal(calls[0].total, 26);
+    assert.equal(calls.reduce((n, c) => n + c.scanned, 0), 26);
+    const last = calls[1].last;
+    assert.equal(last.accounts, 25, "Bob has nothing stored");
+    assert.deepEqual([last.cw.both, last.cw.legacyOnly, last.cw.v2Only], [25, 0, 0]);
+    assert.deepEqual([last.an.both, last.an.legacyOnly], [1, 1]);
+    assert.deepEqual(last.an.whyOld, { "no-upcoming": 1 });
+
+    // Check jobs shows it.
+    const status = await call(env, "/admin/api/jobs/status", { cookie });
+    const job = status.body.jobs.periodic.find((j) => j.type === "shelf.shadow");
+    assert.equal(job.last.accounts, 25);
+    assert.equal(job.last.finishedAt, last.finishedAt);
+
+    const page = await call(env, "/admin", { cookie });
+    assert.match(page.text, /data-act="runShelfCompareNow"/);
+    assert.match(page.text, /async function runShelfCompareNow\(\)/);
+  });
+
   it("walks the accounts in steps and does nothing without the activity database", async () => {
     const env = makeEnv({ DB: makeD1(), JOBS: makeQueue() });
     await runScheduledTick(env);

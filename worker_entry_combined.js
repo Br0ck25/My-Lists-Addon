@@ -26,7 +26,7 @@
 // Shown at the top of /admin and in the answer of the "Counts missing" tool,
 // so the owner can see which pasted file is live (docs/RELEASES.md). Change it
 // with every release.
-const WORKER_RELEASE = "15";
+const WORKER_RELEASE = "16";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -12118,6 +12118,7 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/activity-backfill/step": "admin.backfill.activity",
   "/admin/api/activity-backfill/restart": "admin.backfill.activity.restart",
   "/admin/api/jobs/ping": "admin.jobs.test",
+  "/admin/api/jobs/shelf-shadow-now": "admin.jobs.shelf-compare",
   "/admin/api/revoke-admin-session": "admin.session.revoke",
   "/admin/api/revoke-all-admin-sessions": "admin.session.revoke-all",
 };
@@ -13159,6 +13160,10 @@ async function renderAdminDashboard(env) {
       <button type="button" class="admin-select" style="cursor:pointer;" id="jobsStatusBtn" data-act="runJobsStatus" ${isD1Bound ? '' : 'disabled'}>Check jobs</button>
       <span id="jobsStatusStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
       <div id="jobsStatusResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
+      <p style="color:#8E8E93; margin:12px 0 8px; font-size:0.8rem;"><strong>Compare shelves now</strong> runs the whole Continue Watching and Airing Next comparison (<code>shelf.shadow</code>) from this page, a few minutes instead of the hourly job's 15 hours, and shows why each difference is there. Keep the page open until it says Done. It only reads.</p>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="shelfCompareBtn" data-act="runShelfCompareNow" ${isD1Bound ? '' : 'disabled'}>Compare shelves now</button>
+      <span id="shelfCompareStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <div id="shelfCompareResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93; white-space:pre-wrap; word-break:break-word;"></div>
     </div>
 
     <div class="panel" style="margin:0; padding:14px 16px;">
@@ -14766,6 +14771,53 @@ async function renderAdminDashboard(env) {
     // and what each omission silently costs. The consequence text is the
     // useful part: "creator_tombstones is missing" is not something an
     // operator can act on.
+    // The whole shelf comparison, a batch per request (runShelfShadowNow).
+    function shelfCompareWhy(w) {
+      const keys = Object.keys(w || {}).sort(function (a, b) { return w[b] - w[a]; });
+      return keys.length ? keys.map(function (k) { return k + ' ' + w[k]; }).join(', ') : 'none';
+    }
+
+    async function runShelfCompareNow() {
+      const btn = document.getElementById('shelfCompareBtn');
+      const status = document.getElementById('shelfCompareStatus');
+      const out = document.getElementById('shelfCompareResult');
+      btn.disabled = true;
+      out.textContent = '';
+      status.textContent = 'Starting...';
+      let state = { afterId: 0, round: null };
+      let total = null;
+      let scanned = 0;
+      try {
+        for (let i = 0; i < 2000; i++) {
+          const res = await fetch('/admin/api/jobs/shelf-shadow-now', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state) });
+          const data = await res.json();
+          if (!data.ok) { status.textContent = 'Stopped: ' + (data.error || 'unknown error'); break; }
+          if (data.total != null) total = data.total;
+          scanned += Number(data.scanned) || 0;
+          if (data.done) {
+            const t = data.last;
+            status.textContent = 'Done: ' + t.accounts + ' accounts compared.';
+            out.textContent = [
+              (t.rate * 100).toFixed(2) + '% different (the switch waits for under 1%).',
+              'Continue Watching: ' + t.cw.both + ' the same, ' + t.cw.legacyOnly + ' only in the old, ' + t.cw.v2Only + ' only in the new, ' + t.cw.unknown + ' shows not known yet.',
+              '  Why only in the old: ' + shelfCompareWhy(t.cw.whyOld),
+              '  Why only in the new: ' + shelfCompareWhy(t.cw.whyNew),
+              'Airing Next: ' + t.an.both + ' the same, ' + t.an.legacyOnly + ' only in the old, ' + t.an.v2Only + ' only in the new, ' + t.an.unknown + ' not known yet.',
+              '  Why only in the old: ' + shelfCompareWhy(t.an.whyOld),
+              '  Why only in the new: ' + shelfCompareWhy(t.an.whyNew),
+              'Examples: ' + JSON.stringify(t.examples || []),
+            ].join(String.fromCharCode(10));
+            break;
+          }
+          status.textContent = 'Comparing... ' + scanned + (total ? ' of ' + total : '') + ' accounts so far.';
+          state = { afterId: data.afterId, round: data.round };
+        }
+      } catch (e) {
+        status.textContent = 'Stopped: network error. Press it again to start over.';
+      }
+      btn.disabled = false;
+    }
+
     async function runKvExport() {
       const btn = document.getElementById('kvExportBtn');
       const status = document.getElementById('kvExportStatus');
@@ -108638,6 +108690,8 @@ function newJobPingNonce() {
 //   GET  /admin/api/jobs/status          is JOBS bound; the job types known
 //   POST /admin/api/jobs/ping            send a test job -> { nonce }
 //   GET  /admin/api/jobs/ping?nonce=...  has it come back yet
+//   POST /admin/api/jobs/shelf-shadow-now  one batch of the shelf comparison
+//                                          (runShelfShadowNow, 47_shelf-shadow.js)
 async function handleJobsAdminApi(request, env, url, path) {
   if (!path.startsWith("/admin/api/jobs/")) return null;
   if (!(await isAdminRequest(request, env))) return json({ ok: false, error: "Not authorized." }, 401);
@@ -108671,6 +108725,16 @@ async function handleJobsAdminApi(request, env, url, path) {
       const sent = await enqueueJob(env, "jobs.ping", { nonce, sentAt: Date.now() });
       if (!sent.ok) return json({ ok: false, error: `Could not send to the queue (${sent.reason}). See the Worker's logs.` }, 502);
       return json({ ok: true, nonce });
+    }
+    if (path === "/admin/api/jobs/shelf-shadow-now" && request.method === "POST") {
+      let body = {};
+      try {
+        body = (await request.json()) || {};
+      } catch {
+        body = {};
+      }
+      const result = await runShelfShadowNow(env, { afterId: body.afterId, round: body.round });
+      return json(result, result.ok ? 200 : 400, { "Cache-Control": "no-store" });
     }
     if (path === "/admin/api/jobs/ping" && request.method === "GET") {
       const nonce = url.searchParams.get("nonce") || "";
@@ -109858,7 +109922,7 @@ async function compareAccountShelves(env, account, { now = Date.now() } = {}) {
   return { cw: cwDiff, an: anDiff };
 }
 
-async function runShelfShadow(env, job = {}) {
+async function runShelfShadow(env, job = {}, { accounts: batchSize = SHELF_SHADOW_ACCOUNTS } = {}) {
   if (!env || !env.DB || typeof activityDbs !== "function" || !activityDbs(env).length) return { progress: job.progress || {}, skipped: "no activity database" };
   const progress = { ...(job.progress || {}) };
   const round = progress.round || shelfShadowEmpty();
@@ -109868,7 +109932,7 @@ async function runShelfShadow(env, job = {}) {
     ({ results: accounts } = await env.DB.prepare(
       `SELECT a.id, a.username FROM jobs j JOIN accounts a ON a.id = j.account_id
        WHERE j.type = ? AND j.status = 'done' AND j.account_id > ? ORDER BY j.account_id LIMIT ?`
-    ).bind(ACTIVITY_BACKFILL_TYPE, afterId, SHELF_SHADOW_ACCOUNTS).all());
+    ).bind(ACTIVITY_BACKFILL_TYPE, afterId, batchSize).all());
   } catch (err) {
     if (/no such table/i.test(jobErrorText(err))) return { progress, skipped: "no 0016" };
     throw err;
@@ -109930,11 +109994,73 @@ async function runShelfShadow(env, job = {}) {
       }
     }
   }
-  if (!accounts || accounts.length < SHELF_SHADOW_ACCOUNTS) {
+  if (!accounts || accounts.length < batchSize) {
     // The round is over: keep its totals, start the next one.
-    return { progress: { afterId: 0, round: shelfShadowEmpty(), last: { ...round, rate: shelfShadowRate(round), finishedAt: Date.now() } } };
+    return { scanned: (accounts || []).length, progress: { afterId: 0, round: shelfShadowEmpty(), last: { ...round, rate: shelfShadowRate(round), finishedAt: Date.now() } } };
   }
-  return { progress: { ...progress, afterId: lastId, round } };
+  return { scanned: accounts.length, progress: { ...progress, afterId: lastId, round } };
+}
+
+// --- Compare now (/admin -> Maintenance -> Check jobs, Release 16) -------------
+//
+// The hourly job compares 50 accounts an hour, so one full comparison takes
+// about 15 hours. The admin page can instead run the whole round itself, a
+// batch of SHELF_SHADOW_NOW_ACCOUNTS accounts per request, carrying the round
+// from one request to the next (POST /admin/api/jobs/shelf-shadow-now). It is
+// the same comparison: runShelfShadow, with the round kept by the page instead
+// of the jobs row. The finished round is also stored as the job's `last`, so
+// Check jobs shows it; the hourly job's own round carries on untouched.
+const SHELF_SHADOW_NOW_ACCOUNTS = 20;
+
+// A round as the page sends it back: only the known fields, as numbers.
+function shelfShadowRoundFrom(raw) {
+  const round = shelfShadowEmpty();
+  if (!raw || typeof raw !== "object") return round;
+  round.accounts = Math.max(0, Number(raw.accounts) || 0);
+  for (const shelf of ["cw", "an"]) {
+    const from = raw[shelf] && typeof raw[shelf] === "object" ? raw[shelf] : {};
+    for (const k of ["legacy", "v2", "both", "legacyOnly", "v2Only", "unknown"]) round[shelf][k] = Math.max(0, Number(from[k]) || 0);
+    for (const w of ["whyOld", "whyNew"]) {
+      const tally = from[w] && typeof from[w] === "object" ? from[w] : {};
+      for (const [code, n] of Object.entries(tally)) {
+        if (/^[a-z-]{1,40}$/.test(code) && Number(n) > 0) round[shelf][w][code] = Number(n);
+      }
+    }
+  }
+  if (Array.isArray(raw.examples)) round.examples = raw.examples.slice(0, SHELF_SHADOW_EXAMPLES);
+  return round;
+}
+
+async function runShelfShadowNow(env, { afterId = 0, round = null } = {}) {
+  if (!env || !env.DB || typeof activityDbs !== "function" || !activityDbs(env).length) {
+    return { ok: false, error: "Needs the activity database (DB_ACTIVITY)." };
+  }
+  const start = Math.max(0, Number(afterId) || 0);
+  let total = null;
+  if (!start) {
+    // How many accounts the round will cover, for the page's progress line.
+    try {
+      const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM jobs j JOIN accounts a ON a.id = j.account_id WHERE j.type = ? AND j.status = 'done'")
+        .bind(ACTIVITY_BACKFILL_TYPE).first();
+      total = row ? Number(row.n) || 0 : null;
+    } catch {
+      total = null;
+    }
+  }
+  const out = await runShelfShadow(env, { progress: { afterId: start, round: shelfShadowRoundFrom(round) } }, { accounts: SHELF_SHADOW_NOW_ACCOUNTS });
+  if (out.skipped) return { ok: false, error: `Not run: ${out.skipped}.` };
+  const last = out.progress && out.progress.last;
+  if (!last) return { ok: true, done: false, total, scanned: out.scanned, afterId: out.progress.afterId, round: out.progress.round };
+  // Check jobs reads the job's `last`. Not while the hourly run is mid-way:
+  // its own write at the end would replace this anyway.
+  try {
+    await env.DB.prepare(
+      "UPDATE jobs SET progress_json = json_set(COALESCE(progress_json, '{}'), '$.last', json(?)) WHERE dedupe_key = 'periodic:shelf.shadow' AND status != 'running'"
+    ).bind(JSON.stringify(last)).run();
+  } catch (err) {
+    console.warn(`[Jobs] shelf.shadow: could not store the comparison: ${jobErrorText(err)}`);
+  }
+  return { ok: true, done: true, total, scanned: out.scanned, last };
 }
 
 definePeriodicJob("shelf.shadow", {

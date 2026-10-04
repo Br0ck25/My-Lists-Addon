@@ -2003,6 +2003,7 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/activity-backfill/step": "admin.backfill.activity",
   "/admin/api/activity-backfill/restart": "admin.backfill.activity.restart",
   "/admin/api/jobs/ping": "admin.jobs.test",
+  "/admin/api/jobs/shelf-shadow-now": "admin.jobs.shelf-compare",
   "/admin/api/revoke-admin-session": "admin.session.revoke",
   "/admin/api/revoke-all-admin-sessions": "admin.session.revoke-all",
 };
@@ -3044,6 +3045,10 @@ async function renderAdminDashboard(env) {
       <button type="button" class="admin-select" style="cursor:pointer;" id="jobsStatusBtn" data-act="runJobsStatus" ${isD1Bound ? '' : 'disabled'}>Check jobs</button>
       <span id="jobsStatusStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
       <div id="jobsStatusResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
+      <p style="color:#8E8E93; margin:12px 0 8px; font-size:0.8rem;"><strong>Compare shelves now</strong> runs the whole Continue Watching and Airing Next comparison (<code>shelf.shadow</code>) from this page, a few minutes instead of the hourly job's 15 hours, and shows why each difference is there. Keep the page open until it says Done. It only reads.</p>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="shelfCompareBtn" data-act="runShelfCompareNow" ${isD1Bound ? '' : 'disabled'}>Compare shelves now</button>
+      <span id="shelfCompareStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <div id="shelfCompareResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93; white-space:pre-wrap; word-break:break-word;"></div>
     </div>
 
     <div class="panel" style="margin:0; padding:14px 16px;">
@@ -4651,6 +4656,53 @@ async function renderAdminDashboard(env) {
     // and what each omission silently costs. The consequence text is the
     // useful part: "creator_tombstones is missing" is not something an
     // operator can act on.
+    // The whole shelf comparison, a batch per request (runShelfShadowNow).
+    function shelfCompareWhy(w) {
+      const keys = Object.keys(w || {}).sort(function (a, b) { return w[b] - w[a]; });
+      return keys.length ? keys.map(function (k) { return k + ' ' + w[k]; }).join(', ') : 'none';
+    }
+
+    async function runShelfCompareNow() {
+      const btn = document.getElementById('shelfCompareBtn');
+      const status = document.getElementById('shelfCompareStatus');
+      const out = document.getElementById('shelfCompareResult');
+      btn.disabled = true;
+      out.textContent = '';
+      status.textContent = 'Starting...';
+      let state = { afterId: 0, round: null };
+      let total = null;
+      let scanned = 0;
+      try {
+        for (let i = 0; i < 2000; i++) {
+          const res = await fetch('/admin/api/jobs/shelf-shadow-now', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state) });
+          const data = await res.json();
+          if (!data.ok) { status.textContent = 'Stopped: ' + (data.error || 'unknown error'); break; }
+          if (data.total != null) total = data.total;
+          scanned += Number(data.scanned) || 0;
+          if (data.done) {
+            const t = data.last;
+            status.textContent = 'Done: ' + t.accounts + ' accounts compared.';
+            out.textContent = [
+              (t.rate * 100).toFixed(2) + '% different (the switch waits for under 1%).',
+              'Continue Watching: ' + t.cw.both + ' the same, ' + t.cw.legacyOnly + ' only in the old, ' + t.cw.v2Only + ' only in the new, ' + t.cw.unknown + ' shows not known yet.',
+              '  Why only in the old: ' + shelfCompareWhy(t.cw.whyOld),
+              '  Why only in the new: ' + shelfCompareWhy(t.cw.whyNew),
+              'Airing Next: ' + t.an.both + ' the same, ' + t.an.legacyOnly + ' only in the old, ' + t.an.v2Only + ' only in the new, ' + t.an.unknown + ' not known yet.',
+              '  Why only in the old: ' + shelfCompareWhy(t.an.whyOld),
+              '  Why only in the new: ' + shelfCompareWhy(t.an.whyNew),
+              'Examples: ' + JSON.stringify(t.examples || []),
+            ].join(String.fromCharCode(10));
+            break;
+          }
+          status.textContent = 'Comparing... ' + scanned + (total ? ' of ' + total : '') + ' accounts so far.';
+          state = { afterId: data.afterId, round: data.round };
+        }
+      } catch (e) {
+        status.textContent = 'Stopped: network error. Press it again to start over.';
+      }
+      btn.disabled = false;
+    }
+
     async function runKvExport() {
       const btn = document.getElementById('kvExportBtn');
       const status = document.getElementById('kvExportStatus');

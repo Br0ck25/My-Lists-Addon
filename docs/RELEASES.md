@@ -21,7 +21,9 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **`main` at `a6785d6`** is live (2026-10-02 onward): other assistants finished P7-6 and Phases 8–10 and merged everything into `main`, and the Worker was renamed from `wako` to **`my-lists-addon`**. The owner also added `FF_SCROBBLE_ST_ONLY`. The review of that work (2026-10-04) found the admin counters writing nowhere anyone reads, blank badged posters, and a cleanup guide that would have deleted live data: Release 14 fixes them.
 - **`shelf.shadow`** (sent 2026-10-04): last full comparison of 709 accounts, 20.36% different (Continue Watching 836 the same, 206 only in the old, 25 only in the new, 17 shows not known yet; Airing Next 212 / 15 / 22 / 3). Far above the 1% gate: **`FF_SHOW_SCHEDULE` stays off.**
 - **Release 14** (as 14c) went live on 2026-10-04. The counts missing since 2 October were put back (the owner: *done and it worked*). 14 and 14b each failed on a rule of Analytics Engine's SQL (details under Release 14).
-- **Release 15** (prepared 2026-10-04, not yet live) — details under Release 15.
+- **Release 15** (prepared 2026-10-04) — details under Release 15. On 2026-10-06 the owner's Check jobs still showed the comparison without reasons, so 15 was not yet running when that round finished.
+- **Release 16** (prepared 2026-10-06, not yet live; includes 15) — **Compare shelves now**: the whole comparison in minutes. Details under Release 16.
+- **`main`** is brought up to date by PR #12 (Releases 14–16).
 - **Backups work** (2026-10-04): the owner added the five GitHub secrets, and the first real backup ran (Actions run 37226668219). It copied both databases, encrypted: `my-lists-db` (9.3 MB, 709 accounts' settings, 1,147 lists, 53,082 list items) and `mylists-activity` (0.96 MB, 46,956 plays). From here it runs daily at 04:17 UTC.
 
 The owner decided to release the new version **one phase at a time, straight to the live site**, with no separate test site. Each release waits until the one before it has run cleanly for at least a day.
@@ -1181,4 +1183,46 @@ The failed Preview wrote nothing.
 4. Backups: add the five repository secrets (docs/OPERATIONS.md §5), then Actions → **D1 backup** → **Run workflow**, and check that the run made a file (under *Artifacts*).
 
 **Rollback:** paste the 14c file. Nothing is stored differently.
+
+---
+
+## Release 16: the shelf comparison in minutes, not days
+
+**Branch point:** this branch after Release 15. It includes 15: deploy this one if 15 is not live yet.
+
+The owner had been waiting days for the comparison. The hourly `shelf.shadow` job compares 50 accounts an hour, so a full pass over 709 accounts takes about 15 hours. The Check jobs output (2026-10-06) still showed the same 20.36% with no reasons, because Release 15 was not running when that pass finished.
+
+### What it changes
+
+- **Compare shelves now** (`/admin` → Maintenance, under Check jobs; `03_admin.js`, `44_jobs-queue.js`, `47_shelf-shadow.js`).
+  - It runs the whole comparison from the page. Each request handles 20 accounts, and the page carries the running totals from one request to the next.
+  - It is the same comparison as the hourly job (`runShelfShadow`), with the Release 15 reasons. When it finishes, the page shows:
+    - the difference rate;
+    - the counts;
+    - why each difference is there;
+    - examples.
+  - The result is also stored where Check jobs reads it. The hourly job's own pass carries on as before.
+  - It only reads. Each batch is one line in the admin audit log (`admin.jobs.shelf-compare`).
+- `/admin` shows **Release 16**.
+
+### Checked
+
+- In a real browser, against a local copy of the Worker with 45 test accounts:
+  - signed in, opened Maintenance and pressed the button;
+  - 3 batches ran, and the page reported *Done: 45 accounts compared*;
+  - it named the 23 stale entries as `already-watched`;
+  - no page errors.
+- `tests/shelf-shadow.test.mjs` checks:
+  - one round spread over two batches;
+  - totals carried between batches;
+  - the result saved for Check jobs;
+  - admin-only access.
+- `bash verify.sh` and the `MLA_TEST_V2_LISTS_READ=1` run pass (counts in the commit).
+
+**Steps:**
+1. Deploy `release-16-NEW-worker.js`. Check that `/admin` says **Release 16**. There is no database step.
+2. `/admin` → **Maintenance** → **Compare shelves now**. Keep the page open until it says **Done** (a few minutes for 709 accounts).
+3. Send everything it shows under the button.
+
+**Rollback:** paste the previous file. Nothing is stored differently.
 
