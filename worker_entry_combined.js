@@ -30423,6 +30423,9 @@ ${seoHeadHtml}
   .list-card-actions {
     display: flex; gap: 5px; align-items: center; flex-shrink: 0; flex-wrap: wrap;
   }
+  .list-card-actions :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .channelAddBtn, .curatedAddBtn, .searchAddBtn, .list-search-add-btn, .myListAddBtn):not(:first-child) {
+    margin-left: 6px;
+  }
   .lc-btn,
   button.lc-btn,
   .actions button.lc-btn {
@@ -40652,8 +40655,8 @@ function renderMyMdblistLists(lists) {
         '</div>' +
         '<div class="list-card-actions">' +
           copyBtn +
-          addBtns +
           deleteBtn +
+          addBtns +
         '</div>' +
       '</div>' +
       postersHtml +
@@ -41626,8 +41629,8 @@ function renderMyPrivateTraktLists(lists) {
         '</div>' +
         '<div class="list-card-actions">' +
           copyBtn +
-          addBtns +
           deleteBtn +
+          addBtns +
         '</div>' +
       '</div>' +
       postersHtml +
@@ -41945,8 +41948,8 @@ function renderMyTmdbLists(lists) {
         '</div>' +
         '<div class="list-card-actions">' +
           copyBtn +
-          addBtns +
           deleteBtn +
+          addBtns +
         '</div>' +
       '</div>' +
       posterThumbs +
@@ -45612,25 +45615,27 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
 
     const sourceBadgeHtml = '<span class="list-source-badge ' + badgeClass + '">' + escapeHtml(item.source === 'Profile' ? 'My Lists Addon' : item.source) + '</span>';
 
-    let actionsHtml = '';
+    let likeBtnHtml = '';
+    let addBtnHtml = '';
     if ((item.source === 'My Lists Addon' || item.source === 'Profile') && usernameSlug) {
-      actionsHtml += '<button type="button" class="lc-btn searchLikeBtn' + (alreadyLikedProfile ? ' liked' : '') + '" data-username-slug="' + escapeAttr(usernameSlug) + '">' + (alreadyLikedProfile ? '&#9829;' : '&#9825;') + '</button>';
-      actionsHtml += '<button type="button" class="lc-btn ' + (addedDirect ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
+      likeBtnHtml = '<button type="button" class="lc-btn searchLikeBtn' + (alreadyLikedProfile ? ' liked' : '') + '" data-username-slug="' + escapeAttr(usernameSlug) + '">' + (alreadyLikedProfile ? '&#9829;' : '&#9825;') + '</button>';
+      addBtnHtml = '<button type="button" class="lc-btn ' + (addedDirect ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
         (addedDirect ? 'style="color:var(--danger);"' : '') +
         ' data-name="' + escapeAttr(item.name) + '" data-url="' + escapeAttr(item.url) + '" data-type="' + (item.type || 'movie') + '">' +
         (addedDirect ? 'Remove' : '+ Add') +
         '</button>';
     } else {
-      actionsHtml += '<button type="button" class="lc-btn searchLikeExternalBtn' + (alreadyLikedExt ? ' liked' : '') + '" data-url="' + escapeAttr(item.url) + '">' +
+      likeBtnHtml = '<button type="button" class="lc-btn searchLikeExternalBtn' + (alreadyLikedExt ? ' liked' : '') + '" data-url="' + escapeAttr(item.url) + '">' +
         (alreadyLikedExt ? '&#9829;' : '&#9825;') +
         '</button>';
-      actionsHtml += '<button type="button" class="lc-btn ' + (addedDirect ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
+      addBtnHtml = '<button type="button" class="lc-btn ' + (addedDirect ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
         (addedDirect ? 'style="color:var(--danger);"' : '') +
         ' data-name="' + escapeAttr(item.name) + '" data-url="' + escapeAttr(item.url) + '" data-type="' + escapeAttr(item.type || 'movie') + '">' +
         (addedDirect ? 'Remove' : '+ Add') +
         '</button>';
     }
-    actionsHtml += renderCustomizeButtonHtml(item.name, item.url, item.type || 'movie');
+    const customizeBtnHtml = renderCustomizeButtonHtml(item.name, item.url, item.type || 'movie');
+    const actionsHtml = likeBtnHtml + customizeBtnHtml + addBtnHtml;
 
     const creatorLabel = item.user ? (item.user.includes('Official') || item.user.includes('Franchise') ? escapeHtml(item.user) : 'by ' + escapeHtml(item.user)) : '';
     const itemCountLabel = typeof item.items === 'number' ? (item.items + ' items') : (item.items ? escapeHtml(String(item.items)) : '');
@@ -46437,12 +46442,12 @@ function buildCuratedRecommendationCard(title, type, customUrl, subtitle, items)
   window._curatedRecs[customUrl] = { title, type, items };
 
   const isAdded = typeof isListAddedToConfig === 'function' && (isListAddedToConfig(null, type, customUrl) || isListAddedToConfig(customUrl, type));
-  const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary curatedAddBtn is-added' : 'primary curatedAddBtn') + '" ' +
-    (isAdded ? 'style="color:var(--danger);"' : '') +
-    ' data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '">' +
-    (isAdded ? 'Remove' : '+ Add') +
-  '</button>' +
-  renderCustomizeButtonHtml(title, customUrl, type);
+  const addBtnHtml = renderCustomizeButtonHtml(title, customUrl, type) +
+    '<button type="button" class="lc-btn ' + (isAdded ? 'secondary curatedAddBtn is-added' : 'primary curatedAddBtn') + '" ' +
+      (isAdded ? 'style="color:var(--danger);"' : '') +
+      ' data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '">' +
+      (isAdded ? 'Remove' : '+ Add') +
+    '</button>';
 
   return '<div class="list-card" data-name="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '">' +
     '<div class="list-card-header">' +
@@ -47020,12 +47025,12 @@ function render5PosterListsFeed(container, lists) {
         '</div>' +
         '<div class="list-card-actions">' +
           likeBtnHtml +
+          renderCustomizeButtonHtml(displayName.replace(/:\s*(Movies|Shows)$/i, '').trim(), l.url || '', type) +
           '<button type="button" class="lc-btn ' + (added ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
             (added ? 'style="color:var(--danger);"' : '') +
             ' data-name="' + escapeAttr(displayName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '">' +
             (added ? 'Remove' : '+ Add') +
           '</button>' +
-          renderCustomizeButtonHtml(displayName.replace(/:\\s*(Movies|Shows)$/i, '').trim(), l.url || '', type) +
         '</div>' +
       '</div>' +
       '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(displayName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '"></div>' +
@@ -59474,8 +59479,8 @@ function renderStorylinesUniverseList(category = activeStorylineCategory) {
           '</div>' +
         '</div>' +
         '<div class="list-card-actions">' +
-          '<button type="button" class="lc-btn channelAddBtn ' + (isAdded ? 'secondary is-added' : 'primary') + '" data-act="createInstantStorylineChannel" data-act-args="' + appActArgs([event.id, "@self"]) + '" ' + (isAdded ? 'style="color:var(--danger);"' : '') + '>' + (isAdded ? 'Remove' : '+ Add') + '</button>' +
           '<button type="button" class="lc-btn secondary" data-act="loadStorylineToDraft" data-act-args="' + appActArgs([event.id, "@self"]) + '" title="Customize in Channel Builder">Customize</button>' +
+          '<button type="button" class="lc-btn channelAddBtn ' + (isAdded ? 'secondary is-added' : 'primary') + '" data-act="createInstantStorylineChannel" data-act-args="' + appActArgs([event.id, "@self"]) + '" ' + (isAdded ? 'style="color:var(--danger);"' : '') + '>' + (isAdded ? 'Remove' : '+ Add') + '</button>' +
         '</div>' +
       '</div>' +
       '<div class="list-card-posters">' +
@@ -60575,12 +60580,12 @@ function renderMyCreatedChannelsList() {
           (summaryLine ? '<div class="list-card-meta"><span>' + escapeHtml(summaryLine) + '</span></div>' : '') +
         '</div>' +
         '<div class="list-card-actions">' +
-          addBtnHtml +
           '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="editChannelById" data-act-args="' + appActArgs([ch.channelId]) + '">Edit</button>' +
           ((ch.sharePublished || ch.visibility === 'public')
             ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="shareChannelById" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '" title="Share this channel">Share</button>'
             : '') +
           '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="deleteLocalChannel" data-act-args="' + appActArgs([ch.channelId, ch.name]) + '">Delete</button>' +
+          addBtnHtml +
         '</div>' +
       '</div>' +
       (posterThumbs ? '<div class="list-card-posters poster-preview-static">' + posterThumbs + '</div>' : '') +
@@ -63269,8 +63274,8 @@ function renderChannelMergeList() {
               '</div>' +
             '</div>' +
             '<div class="list-card-actions">' +
-              addBtnHtml +
               '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger);" data-act="deleteLocalMergedChannel" data-act-args="' + appActArgs([merged.mergedId]) + '">Delete</button>' +
+              addBtnHtml +
             '</div>' +
           '</div>' +
         '</div>';
@@ -72790,15 +72795,15 @@ async function renderCreatorDashboard(options) {
             '</div>' +
           '</div>' +
           '<div class="list-card-actions">' +
+            '<button type="button" class="lc-btn secondary creatorListEditBtn" data-slug="' + escapeAttr(l.slug) + '">Edit</button>' +
+            syncBtnHtml +
+            shareBtn +
+            deleteBtnHtml +
             '<button type="button" class="lc-btn secondary creatorListAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
               (isAdded ? 'style="color:var(--danger);"' : '') +
               ' data-slug="' + escapeAttr(l.slug) + '">' +
               (isAdded ? 'Remove' : '+ Add') +
             '</button>' +
-            '<button type="button" class="lc-btn secondary creatorListEditBtn" data-slug="' + escapeAttr(l.slug) + '">Edit</button>' +
-            syncBtnHtml +
-            shareBtn +
-            deleteBtnHtml +
           '</div>' +
         '</div>' +
         (posterThumbs ? '<div class="list-card-posters poster-preview-static creatorListViewTrigger" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' + posterThumbs + '</div>' : '') +
@@ -73195,11 +73200,11 @@ function buildLocalListCardHtml(l) {
             addBtnHtml +
           '</div>'
         : '<div class="list-card-actions">' +
-            addBtnHtml +
             '<button type="button" class="lc-btn secondary localListEditBtn" data-slug="' + escapeAttr(l.slug) + '">Edit</button>' +
             syncBtnHtml +
             shareBtn +
             deleteBtnHtml +
+            addBtnHtml +
           '</div>') +
     '</div>' +
     (posterThumbs ? '<div class="list-card-posters poster-preview-static localListViewTrigger" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type || 'movie') + '" style="cursor:pointer;">' + posterThumbs + '</div>' : '') +

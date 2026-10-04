@@ -466,8 +466,8 @@ function renderMyMdblistLists(lists) {
         '</div>' +
         '<div class="list-card-actions">' +
           copyBtn +
-          addBtns +
           deleteBtn +
+          addBtns +
         '</div>' +
       '</div>' +
       postersHtml +
@@ -1440,8 +1440,8 @@ function renderMyPrivateTraktLists(lists) {
         '</div>' +
         '<div class="list-card-actions">' +
           copyBtn +
-          addBtns +
           deleteBtn +
+          addBtns +
         '</div>' +
       '</div>' +
       postersHtml +
@@ -1759,8 +1759,8 @@ function renderMyTmdbLists(lists) {
         '</div>' +
         '<div class="list-card-actions">' +
           copyBtn +
-          addBtns +
           deleteBtn +
+          addBtns +
         '</div>' +
       '</div>' +
       posterThumbs +

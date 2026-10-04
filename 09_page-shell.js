@@ -2000,6 +2000,9 @@ ${seoHeadHtml}
   .list-card-actions {
     display: flex; gap: 5px; align-items: center; flex-shrink: 0; flex-wrap: wrap;
   }
+  .list-card-actions :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .channelAddBtn, .curatedAddBtn, .searchAddBtn, .list-search-add-btn, .myListAddBtn):not(:first-child) {
+    margin-left: 6px;
+  }
   .lc-btn,
   button.lc-btn,
   .actions button.lc-btn {
