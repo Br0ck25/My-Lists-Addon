@@ -2337,7 +2337,7 @@ async function renderAdminDashboard(env) {
   const [
     totalPV, todayPV, totalIN, todayIN, totalPP, todayPP,
     pvByDay, inByDay, ppByDay,
-    creatorResult, sourceGroupResult
+    creatorResult, sourceGroupResult, authKeyByDay
   ] = await Promise.all([
     readStatCount(env, "pageviews", "total"),
     readStatCount(env, "pageviews", today),
@@ -2353,7 +2353,13 @@ async function renderAdminDashboard(env) {
     // so this can't accidentally sweep those in as if they were accounts.
     listAllKeys(env.CONFIGS, "creator:"),
     listAllKeys(env.CONFIGS, "stats:sourcegroup:"),
+    loadStatsByDay(env, "authkey"),
   ]);
+  // Requests that still sent the Account Key where the session would do
+  // (Release 19): today, and the last 7 days.
+  let authKeyWeek = 0;
+  for (let i = 0; i < 7; i++) authKeyWeek += Number(authKeyByDay[easternDateKey(new Date(Date.now() - i * 86400000))]) || 0;
+  const authKeyToday = Number(authKeyByDay[today]) || 0;
 
   // Walks the last 30 calendar days explicitly (rather than just listing
   // whatever KV happens to have) so days with zero activity still show up
@@ -2679,6 +2685,8 @@ async function renderAdminDashboard(env) {
   <div class="admin-tab-panel" data-admin-panel="creators">
     <div class="stat-cards">
       <div class="stat-card"><div class="stat-value">${totalCreatorCount}</div><div class="stat-label">Creator accounts${creatorTruncatedNote}</div></div>
+      <div class="stat-card"><div class="stat-value">${authKeyToday}</div><div class="stat-label">Saves that sent the Account Key today</div></div>
+      <div class="stat-card"><div class="stat-value">${authKeyWeek}</div><div class="stat-label">... in the last 7 days</div></div>
     </div>
     <div class="table-wrap">
       <table>

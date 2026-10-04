@@ -1642,7 +1642,7 @@ document.addEventListener('click', async (e) => {
       }
       if (activeCreator) {
         const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-        fetch(ORIGIN + '/api/creator/sync/like', {
+        creatorApiFetch(ORIGIN + '/api/creator/sync/like', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, usernameSlug: usernameSlug, liked: !wasLiked }),
@@ -1723,7 +1723,7 @@ document.addEventListener('click', async (e) => {
       }
       if (activeCreator) {
         const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-        fetch(ORIGIN + '/api/creator/sync/like', {
+        creatorApiFetch(ORIGIN + '/api/creator/sync/like', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, usernameSlug: listUrl, liked: !wasLiked }),

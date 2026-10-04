@@ -173,7 +173,7 @@ async function saveItemsAsNewCustomList(name, type, items, visibility, extraProp
       };
       if (lastSyncedAt !== undefined) payload.lastSyncedAt = lastSyncedAt;
       if (baseItemIds !== undefined) payload.baseItemIds = baseItemIds;
-      const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+      const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -456,7 +456,7 @@ async function syncCustomListWithExternalSource(slug, btn, options) {
           baseItemIds: mergeResult.newBaseItemIds,
         };
         if (Number.isFinite(listMeta.updatedAt)) body.expectedUpdatedAt = listMeta.updatedAt;
-        const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+        const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
