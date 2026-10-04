@@ -18,8 +18,10 @@
 > - Only the webhook sunset notice is shown; **do not set `SUNSET_60DAY_START_DATE`** (the page itself uses the routes the other notices retire).
 > - `wrangler.toml`: `keep_vars = true`, warning, `DB_ACTIVITY` placeholder that fails a deploy.
 >
+> **Update, later on 2026-10-04:** Release 14 is live as **14c** and the missing counts were put back (14 and 14b failed on Analytics Engine SQL rules: no `concat`; `GROUP BY` takes column names or `AS` names only — the test stand-in now enforces both). **Release 15** is prepared: reasons for every `shelf.shadow` difference (`whyOld` / `whyNew`, shown as a "Why:" line in Check jobs) plus a counting fix, and the backup workflow now fails when secrets are missing. **No backup has ever been made**: every run skipped (secrets not set) while showing green. `/admin` shows the release (`WORKER_RELEASE`, `00_constants.js`: change it every release).
+>
 > **Open items, in order**
-> 1. Owner deploys Release 14 and runs its steps (delete `FF_SCROBBLE_ST_ONLY`; token + Preview + Put them back). Then ask whether to open the PR into `main`.
+> 1. Owner deploys Release 15, waits ~15 hours for a full comparison, and sends the two `shelf.shadow` lines. Read the reasons before changing any shelf code. Ask whether to open the PR into `main` (the backup change only takes effect there).
 > 2. **`FF_SHOW_SCHEDULE` stays off.** `shelf.shadow` (2026-10-04): 709 accounts, 20.36% different — CW 836 same / 206 only old / 25 only new / 17 not known; Airing Next 212 / 15 / 22 / 3. Example (account 26): CW items only in the old shelf, e.g. `id:tt19231492:2:7`, `m20890:5:8`, none only in the new. Next: find why the schedule-derived shelf drops these (start in `47_shelf-shadow.js` and `39_activity-shelves.js`), ideally by recording a reason per legacy-only item.
 > 3. Backups: the owner still needs the five GitHub secrets (`docs/OPERATIONS.md` §5). The new workflow is on `main`.
 > 4. Do not enable D1 read replication until Release 14 has run cleanly for a few days.

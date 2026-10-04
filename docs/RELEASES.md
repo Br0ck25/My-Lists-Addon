@@ -20,7 +20,8 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Release 13** is live: the owner added `FF_PROVIDER_BREAKER`, `FF_CHART_SNAPSHOTS` and `FF_NEW_UI`. It added the `FF_NEW_UI` switch, stronger hashing for recovery answers, and a daily backup that works. The owner dropped one-time recovery codes (D-31).
 - **`main` at `a6785d6`** is live (2026-10-02 onward): other assistants finished P7-6 and Phases 8–10 and merged everything into `main`, and the Worker was renamed from `wako` to **`my-lists-addon`**. The owner also added `FF_SCROBBLE_ST_ONLY`. The review of that work (2026-10-04) found the admin counters writing nowhere anyone reads, blank badged posters, and a cleanup guide that would have deleted live data: Release 14 fixes them.
 - **`shelf.shadow`** (sent 2026-10-04): last full comparison of 709 accounts, 20.36% different (Continue Watching 836 the same, 206 only in the old, 25 only in the new, 17 shows not known yet; Airing Next 212 / 15 / 22 / 3). Far above the 1% gate: **`FF_SHOW_SCHEDULE` stays off.**
-- **Release 14** went live on 2026-10-04. Its *Counts missing since 2 October* Preview failed: *Analytics Engine answered 422: unknown function call: CONCAT*. **Release 14b** fixed that, and its Preview then failed on the next rule (*in the GROUP BY clause you may only provide column names*): **Release 14c** fixes that (details under Release 14).
+- **Release 14** (as 14c) went live on 2026-10-04. The counts missing since 2 October were put back (the owner: *done and it worked*). 14 and 14b each failed on a rule of Analytics Engine's SQL (details under Release 14).
+- **Release 15** (prepared 2026-10-04, not yet live) — details under Release 15.
 
 The owner decided to release the new version **one phase at a time, straight to the live site**, with no separate test site. Each release waits until the one before it has run cleanly for at least a day.
 
@@ -1143,4 +1144,40 @@ The failed Preview wrote nothing.
 1. Deploy `release-14c-NEW-worker.js`. Check that `/admin` says **Release 14c** under "Admin Dashboard".
 2. `/admin` → Maintenance → **Counts missing since 2 October** → **Preview**. Send the result.
 3. If it looks right, **Put them back**. Then delete `CF_ANALYTICS_TOKEN` and the token itself.
+
+---
+
+## Release 15: why the shelf comparison differs, and a backup that cannot look fine while doing nothing
+
+**Branch point:** this branch after Release 14c, which is live.
+
+### What it changes
+
+- **The shelf comparison says why** (`47_shelf-shadow.js`, `03_admin.js`).
+  - The last full comparison was 20.36% different, which is far above the 1% that `FF_SHOW_SCHEDULE` waits for, and it gave no reason. An item "only in the old" Continue Watching can mean two things:
+    - the old list is stale, for example an episode already watched, or a show that has ended;
+    - or the new list is wrong.
+  - Every difference now gets a reason. `/admin` → Check jobs shows a **Why:** line under the `shelf.shadow` comparison, counting each reason, for example `already-watched 120, schedule-nothing-after 40, no-progress 12`. The examples carry one line of detail each.
+  - Reasons for Continue Watching, only in the old: `already-watched`, `schedule-nothing-after`, `different-episode`, `no-progress`, `dismissed`, `dropped`, `no-title`, `suggestion`, `schedule-unknown`.
+  - Reasons for Airing Next, only in the old: `no-upcoming`, `next-already-aired`, `hidden`, `no-progress`, `nothing-watched`, `not-a-series`.
+  - Reasons for anything only in the new: `different-episode`, `not-stored`.
+  - **One counting mistake fixed.** A stored show whose title record was not marked as a series was counted as a difference even when the schedule simply did not know it yet. That case belongs with "not known yet". The fix matches the stored show through the account's own progress rows.
+  - Nothing a visitor sees changes: the comparison only reads.
+- **The daily backup fails when it cannot run** (`.github/workflows/d1-backup.yml`).
+  - **No backup has been made so far.** Every daily run since 30 September skipped itself, because the repository secrets are not set, and showed a green tick anyway.
+  - It now fails (a red ✗, and GitHub sends an email) and names the missing secrets. The watch history database is required as well, since it is the only copy of watch history.
+  - The scheduled run uses the copy of the workflow on `main`, so this takes effect once this branch is merged into `main`.
+- `/admin` shows **Release 15**.
+
+`bash verify.sh` passes, and so does the suite with `MLA_TEST_V2_LISTS_READ=1` (counts in the commit). New tests are in `tests/shelf-shadow.test.mjs`:
+- each reason, on a stale entry, a show with nothing after the last episode watched, and an episode the new list works out differently;
+- the counting fix: this test fails without it.
+
+**Steps:**
+1. Deploy `release-15-NEW-worker.js`. Check that `/admin` says **Release 15**. There is no database step.
+2. Wait for one full comparison. `shelf.shadow` checks 50 accounts an hour, so 709 accounts take about 15 hours.
+3. Then `/admin` → **Check jobs**, and send the two `shelf.shadow` lines: "Last full comparison…" and "Why:…".
+4. Backups: add the five repository secrets (docs/OPERATIONS.md §5), then Actions → **D1 backup** → **Run workflow**, and check that the run made a file (under *Artifacts*).
+
+**Rollback:** paste the 14c file. Nothing is stored differently.
 

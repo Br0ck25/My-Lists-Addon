@@ -19,9 +19,8 @@ name: D1 backup
 #   CLOUDFLARE_API_TOKEN     an API token with "D1: Read" on the account
 #   CLOUDFLARE_ACCOUNT_ID    the account id
 #   D1_DATABASE_ID           my-lists-db's id (D1 -> my-lists-db -> overview)
-#   ACTIVITY_D1_DATABASE_ID  mylists-activity's id (watch history since
-#                            FF_EVENT_TRACKING). Optional: left out, only the
-#                            main database is copied.
+#   ACTIVITY_D1_DATABASE_ID  mylists-activity's id (watch history lives only
+#                            there since FF_EVENT_TRACKING)
 #   BACKUP_PASSPHRASE        a long random passphrase, also kept somewhere safe
 #                            outside GitHub -- without it a backup is unreadable
 
@@ -43,33 +42,28 @@ jobs:
       ACTIVITY_D1_DATABASE_ID: ${{ secrets.ACTIVITY_D1_DATABASE_ID }}
       BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
     steps:
+      # A missing secret fails the run. It used to pass with a warning, which
+      # showed a green tick every day while nothing was copied (2026-09-30 to
+      # 2026-10-04: every run skipped). Watch history lives only in
+      # mylists-activity since FF_EVENT_TRACKING, so its id is required too.
       - name: Check the secrets are set
-        id: secrets
         run: |
           missing=""
-          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID D1_DATABASE_ID BACKUP_PASSPHRASE; do
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID D1_DATABASE_ID ACTIVITY_D1_DATABASE_ID BACKUP_PASSPHRASE; do
             if [ -z "${!name}" ]; then missing="$missing $name"; fi
           done
           if [ -n "$missing" ]; then
-            echo "::warning::D1 backup skipped. Missing repository secrets:$missing (see docs/OPERATIONS.md §5)."
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          fi
-          if [ -z "$ACTIVITY_D1_DATABASE_ID" ]; then
-            echo "::warning::ACTIVITY_D1_DATABASE_ID is not set: watch history (mylists-activity) is not being copied."
+            echo "::error::No backup was made. Missing repository secrets:$missing (see docs/OPERATIONS.md §5)."
+            exit 1
           fi
 
       - uses: actions/checkout@v4
-        if: steps.secrets.outputs.ready == 'true'
 
       - uses: actions/setup-node@v4
-        if: steps.secrets.outputs.ready == 'true'
         with:
           node-version: "22"
 
       - name: Read and encrypt
-        if: steps.secrets.outputs.ready == 'true'
         run: |
           set -euo pipefail
           mkdir -p backup
@@ -85,13 +79,10 @@ jobs:
             rm -f "backup/${name}-${stamp}.sql.gz"
           }
           dump my-lists-db "$D1_DATABASE_ID"
-          if [ -n "$ACTIVITY_D1_DATABASE_ID" ]; then
-            dump mylists-activity "$ACTIVITY_D1_DATABASE_ID"
-          fi
+          dump mylists-activity "$ACTIVITY_D1_DATABASE_ID"
           ls -l backup
 
       - uses: actions/upload-artifact@v4
-        if: steps.secrets.outputs.ready == 'true'
         with:
           name: d1-backup-${{ github.run_id }}
           path: backup/*.sql.gz.gpg

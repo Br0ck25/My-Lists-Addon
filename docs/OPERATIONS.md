@@ -131,9 +131,9 @@ When it nears D1's size limit it can be split: create and bind `DB_ACTIVITY_1`, 
     - `CLOUDFLARE_API_TOKEN`: an API token with *Account → D1 → Read* only;
     - `CLOUDFLARE_ACCOUNT_ID`;
     - `D1_DATABASE_ID`: `my-lists-db`'s id, shown on the database's overview page;
-    - `ACTIVITY_D1_DATABASE_ID`: `mylists-activity`'s id. Since `FF_EVENT_TRACKING`, Watch History lives only there. Optional for the job, not for you;
+    - `ACTIVITY_D1_DATABASE_ID`: `mylists-activity`'s id. Since `FF_EVENT_TRACKING`, Watch History lives only there;
     - `BACKUP_PASSPHRASE`: a long random string.
-  - Until the four required ones are set, the job skips itself with a warning.
+  - Until all five are set, the run **fails** (a red ✗, and GitHub emails the owner) and names the missing ones. It used to pass with only a warning, so from 2026-09-30 to 2026-10-04 every daily run showed a green tick while copying nothing.
   - Keep a copy of the passphrase outside GitHub. Without it no backup can be read.
   - The export is encrypted because this repository's Actions artifacts can be downloaded by other people, and the export holds every account's data.
   - The daily run uses the copy of the workflow on `main`. A run by hand can pick a branch (*Use workflow from*).

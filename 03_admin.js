@@ -4149,6 +4149,14 @@ async function renderAdminDashboard(env) {
             if (j.type === 'shelf.shadow' && j.last) {
               const t = j.last;
               lines.push('  Last full comparison (' + t.accounts + ' accounts, finished ' + jobsAgo(t.finishedAt) + '): ' + (t.rate * 100).toFixed(2) + '% different. Continue Watching: ' + t.cw.both + ' the same, ' + t.cw.legacyOnly + ' only in the old, ' + t.cw.v2Only + ' only in the new, ' + t.cw.unknown + ' shows not known yet. Airing Next: ' + t.an.both + ' the same, ' + t.an.legacyOnly + ' only in the old, ' + t.an.v2Only + ' only in the new, ' + t.an.unknown + ' not known yet.' + (t.examples && t.examples.length ? ' Examples: ' + JSON.stringify(t.examples.slice(0, 3)) : ''));
+              // Why each difference is there (47_shelf-shadow.js), most common first.
+              if (t.cw.whyOld) {
+                const whyText = function (w) {
+                  const keys = Object.keys(w || {}).sort(function (a, b) { return w[b] - w[a]; });
+                  return keys.length ? keys.map(function (k) { return k + ' ' + w[k]; }).join(', ') : 'none';
+                };
+                lines.push('  Why: Continue Watching only in the old: ' + whyText(t.cw.whyOld) + '; only in the new: ' + whyText(t.cw.whyNew) + '. Airing Next only in the old: ' + whyText(t.an.whyOld) + '; only in the new: ' + whyText(t.an.whyNew) + '.');
+              }
             }
           });
           Object.keys(d.jobs.durable || {}).forEach(function (type) {

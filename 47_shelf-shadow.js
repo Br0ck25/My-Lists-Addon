@@ -23,6 +23,12 @@
 // schedule does not know yet (missingSchedule) are counted apart, not as
 // differences: they mean show.refresh (P5-3) has not reached them.
 //
+// Every difference also gets a reason (shelfShadowWhy): a code, counted per
+// shelf in `whyOld` / `whyNew`, and a line of detail in the examples. The first
+// full comparison on the live site was 20% different with nothing to say why
+// (2026-10-04); "only in the old" can as well mean the stored shelf is stale
+// (an episode already watched, a show that ended) as that the new one is wrong.
+//
 // Each account also writes one Analytics Engine point per shelf, index
 // `shelf-shadow`: blobs ["shelf-shadow", "cw" | "an"], doubles [legacy, new,
 // both, legacy only, new only, not known yet].
@@ -35,8 +41,8 @@ const SHELF_SHADOW_EXAMPLES = 10;
 function shelfShadowEmpty() {
   return {
     accounts: 0,
-    cw: { legacy: 0, v2: 0, both: 0, legacyOnly: 0, v2Only: 0, unknown: 0 },
-    an: { legacy: 0, v2: 0, both: 0, legacyOnly: 0, v2Only: 0, unknown: 0 },
+    cw: { legacy: 0, v2: 0, both: 0, legacyOnly: 0, v2Only: 0, unknown: 0, whyOld: {}, whyNew: {} },
+    an: { legacy: 0, v2: 0, both: 0, legacyOnly: 0, v2Only: 0, unknown: 0, whyOld: {}, whyNew: {} },
     examples: [],
   };
 }
@@ -74,6 +80,21 @@ async function shelfShadowMediaIds(env, showIds) {
   return out;
 }
 
+// The titles the account's progress rows name, by their ids too, so a stored
+// item is matched to its media row even when shelfShadowMediaIds did not find
+// it (and a show the schedule does not know yet is then recognized as such).
+function shelfShadowAddTitleIds(ids, titles) {
+  for (const [mediaId, t] of titles) {
+    const m = t && t.media;
+    if (!m) continue;
+    if (m.imdb_id && !ids.has(m.imdb_id)) ids.set(m.imdb_id, mediaId);
+    if (m.tmdb_id) {
+      if (!ids.has(`tmdb:${m.tmdb_id}`)) ids.set(`tmdb:${m.tmdb_id}`, mediaId);
+      if (!ids.has(`tmdb:tv:${m.tmdb_id}`)) ids.set(`tmdb:tv:${m.tmdb_id}`, mediaId);
+    }
+  }
+}
+
 function shelfShadowShowKey(showId, ids) {
   const id = String(showId || "");
   const m = ids.get(id.startsWith("tt") ? id.split(":")[0] : id);
@@ -99,6 +120,81 @@ function shelfShadowDiff(legacyKeys, v2Keys) {
   return { legacy: a.size, v2: b.size, both: a.size - legacyOnly.length, legacyOnly, v2Only };
 }
 
+// --- Why one shelf has an item the other has not -------------------------------
+
+function shelfShadowEp(season, episode) {
+  return `S${season}E${episode}`;
+}
+
+function shelfShadowScheduleText(sched) {
+  if (!sched) return "no schedule";
+  const last = sched.last_aired_season != null ? `last aired ${shelfShadowEp(sched.last_aired_season, sched.last_aired_episode)}` : "nothing aired";
+  const next = sched.next_season != null ? `next ${shelfShadowEp(sched.next_season, sched.next_episode)} ${sched.next_air_date || "(no date)"}` : "no next episode";
+  return `${last}, ${next}${sched.season_episode_counts ? "" : ", no episode counts"}${sched.s_status ? ` (${sched.s_status})` : ""}`;
+}
+
+function shelfShadowMediaIdOf(key) {
+  const m = /^m(\d+)(?::|$)/.exec(String(key || ""));
+  return m ? Number(m[1]) : null;
+}
+
+// Why a stored Continue Watching item is not on the worked-out shelf.
+function shelfShadowCwWhyOld(item, key, ctx) {
+  if (String(key).startsWith("c:")) {
+    return ["suggestion", "a storyline suggestion or movie the activity database does not keep"];
+  }
+  const mediaId = shelfShadowMediaIdOf(key);
+  if (mediaId == null) return ["no-title", `no media row for ${item && item.showId}`];
+  const row = ctx.rows.get(mediaId);
+  if (!row) return ["no-progress", "no show_progress row for the show"];
+  if (row.status === "dropped") return ["dropped", "the show is marked dropped"];
+  if (row.last_season == null || row.last_episode == null) return ["no-episode-progress", "show_progress has no episode"];
+  const lastS = Number(row.last_season);
+  const lastE = Number(row.last_episode);
+  const S = Number(item.seasonNum);
+  const E = Number(item.episodeNum);
+  if (row.dismissed_at_season != null && shelfAtOrBefore(lastS, lastE, Number(row.dismissed_at_season), Number(row.dismissed_at_episode) || 0)) {
+    return ["dismissed", `dismissed at ${shelfShadowEp(row.dismissed_at_season, row.dismissed_at_episode)}, progress ${shelfShadowEp(lastS, lastE)}`];
+  }
+  if (shelfAtOrBefore(S, E, lastS, lastE)) return ["already-watched", `stored ${shelfShadowEp(S, E)}, but progress is at ${shelfShadowEp(lastS, lastE)}`];
+  const t = ctx.titles.get(mediaId);
+  if (!t || !t.sched) return ["schedule-unknown", "the schedule does not know the show yet"];
+  const next = shelfEpisodeAfter(t.sched, lastS, lastE, ctx.today);
+  if (!next) return ["schedule-nothing-after", `nothing after ${shelfShadowEp(lastS, lastE)} (stored ${shelfShadowEp(S, E)}): ${shelfShadowScheduleText(t.sched)}`];
+  if (next.season !== S || next.episode !== E) return ["different-episode", `stored ${shelfShadowEp(S, E)}, worked out ${shelfShadowEp(next.season, next.episode)} after ${shelfShadowEp(lastS, lastE)}`];
+  return ["other", `progress ${shelfShadowEp(lastS, lastE)}: ${shelfShadowScheduleText(t.sched)}`];
+}
+
+// Why a stored Airing Next show is not on the worked-out shelf.
+function shelfShadowAnWhyOld(item, key, ctx) {
+  const mediaId = shelfShadowMediaIdOf(key);
+  if (mediaId == null) return ["no-title", `no media row for ${item && (item.showId || item.id)}`];
+  const t = ctx.titles.get(mediaId);
+  if (t && t.media && t.media.kind !== "series") return ["not-a-series", `media row ${mediaId} is a ${t.media.kind}`];
+  const row = ctx.rows.get(mediaId);
+  if (!row) return ["no-progress", "no show_progress row for the show"];
+  if (row.status === "dropped") return ["dropped", "the show is marked dropped"];
+  if (row.last_season == null && row.status !== "completed") return ["nothing-watched", "no episode watched"];
+  if (row.airing_hidden_at_season != null) {
+    const stands = row.last_season == null
+      || shelfAtOrBefore(Number(row.last_season), Number(row.last_episode) || 0, Number(row.airing_hidden_at_season), Number(row.airing_hidden_at_episode) || 0);
+    if (stands) return ["hidden", `removed from Airing Next at ${shelfShadowEp(row.airing_hidden_at_season, row.airing_hidden_at_episode)}`];
+  }
+  if (!t || !t.sched) return ["schedule-unknown", "the schedule does not know the show yet"];
+  const s = t.sched;
+  if (!s.next_air_date || s.next_season == null || s.next_episode == null) return ["no-upcoming", `stored ${item && item.airDate ? item.airDate : "(no date)"}: ${shelfShadowScheduleText(s)}`];
+  if (shelfAired(s.next_air_date, ctx.today)) return ["next-already-aired", `${shelfShadowScheduleText(s)}, which is not after today`];
+  return ["other", shelfShadowScheduleText(s)];
+}
+
+// Why the worked-out shelf has an item the stored one has not.
+function shelfShadowWhyNew(shelf, key, ctx) {
+  const show = String(key).split(":")[0];
+  const stored = ctx.legacyKeys[shelf].filter((k) => k && k.split(":")[0] === show);
+  if (shelf === "cw" && stored.length) return ["different-episode", `stored ${stored.join(", ")}`];
+  return ["not-stored", "the stored shelf does not have it"];
+}
+
 // Compares one account. Returns { cw, an } diffs, or null when it has no
 // stored record to compare with.
 async function compareAccountShelves(env, account, { now = Date.now() } = {}) {
@@ -112,15 +208,57 @@ async function compareAccountShelves(env, account, { now = Date.now() } = {}) {
   if (!legacy || typeof legacy !== "object") return null;
   const legacyCw = Array.isArray(legacy.continueWatching) ? legacy.continueWatching : [];
   const legacyAn = Array.isArray(legacy.airingNext) ? legacy.airingNext : [];
-  const [cw, an] = await Promise.all([continueWatching(env, account.id, { now }), airingNext(env, account.id, { now })]);
+  const [cw, an, progressRows] = await Promise.all([
+    continueWatching(env, account.id, { now }),
+    airingNext(env, account.id, { now }),
+    shelfProgressRows(env, account.id),
+  ]);
   const ids = await shelfShadowMediaIds(env, [...legacyCw, ...legacyAn].map((i) => i && (i.showId || i.id)));
+  const titles = await shelfTitles(env, progressRows.map((r) => r.media_id));
+  shelfShadowAddTitleIds(ids, titles);
   // A show the schedule does not know yet is left out of both sides.
   const unknown = new Set([...(cw.missingSchedule || []), ...(an.missingSchedule || [])].map((m) => `m${m}`));
   const known = (k) => k && !unknown.has(k.split(":")[0]);
-  const cwDiff = shelfShadowDiff(legacyCw.map((i) => shelfShadowCwKey(i, ids)).filter(known), cw.items.map((i) => shelfShadowCwKey(i, ids)));
-  const anDiff = shelfShadowDiff(legacyAn.map((i) => shelfShadowAnKey(i, ids)).filter(known), an.items.map((i) => shelfShadowAnKey(i, ids)));
+  const legacyCwKeyed = legacyCw.map((i) => [shelfShadowCwKey(i, ids), i]).filter(([k]) => known(k));
+  const legacyAnKeyed = legacyAn.map((i) => [shelfShadowAnKey(i, ids), i]).filter(([k]) => known(k));
+  const cwDiff = shelfShadowDiff(legacyCwKeyed.map(([k]) => k), cw.items.map((i) => shelfShadowCwKey(i, ids)));
+  const anDiff = shelfShadowDiff(legacyAnKeyed.map(([k]) => k), an.items.map((i) => shelfShadowAnKey(i, ids)));
   cwDiff.unknown = (cw.missingSchedule || []).length;
   anDiff.unknown = (an.missingSchedule || []).length;
+
+  // The reasons. Progress rows beyond the shelves' own limit, and titles no
+  // progress row names, are looked up for the items that need them.
+  if (cwDiff.legacyOnly.length || anDiff.legacyOnly.length || cwDiff.v2Only.length || anDiff.v2Only.length) {
+    const rows = new Map(progressRows.map((r) => [r.media_id, r]));
+    const wanted = [...cwDiff.legacyOnly, ...anDiff.legacyOnly].map(shelfShadowMediaIdOf).filter((m) => m != null);
+    const missingRows = [...new Set(wanted.filter((m) => !rows.has(m)))];
+    const actDb = activityDb(env, account.id);
+    for (let i = 0; actDb && i < missingRows.length; i += SHELF_JOIN_CHUNK) {
+      const part = missingRows.slice(i, i + SHELF_JOIN_CHUNK);
+      const { results } = await actDb.prepare(
+        `SELECT * FROM show_progress WHERE account_id = ? AND media_id IN (${part.map(() => "?").join(", ")})`
+      ).bind(account.id, ...part).all();
+      for (const r of results || []) rows.set(r.media_id, r);
+    }
+    const moreTitles = await shelfTitles(env, [...new Set(wanted.filter((m) => !titles.has(m)))]);
+    for (const [k, v] of moreTitles) titles.set(k, v);
+    const ctx = {
+      rows, titles, today: shelfToday(now),
+      legacyKeys: { cw: legacyCwKeyed.map(([k]) => k), an: legacyAnKeyed.map(([k]) => k) },
+    };
+    const byKey = { cw: new Map(legacyCwKeyed), an: new Map(legacyAnKeyed) };
+    for (const [shelf, diff, whyOld] of [["cw", cwDiff, shelfShadowCwWhyOld], ["an", anDiff, shelfShadowAnWhyOld]]) {
+      diff.why = {};
+      for (const key of diff.legacyOnly) {
+        try {
+          diff.why[key] = whyOld(byKey[shelf].get(key) || {}, key, ctx);
+        } catch (err) {
+          diff.why[key] = ["error", jobErrorText(err)];
+        }
+      }
+      for (const key of diff.v2Only) diff.why[key] = shelfShadowWhyNew(shelf, key, ctx);
+    }
+  }
   return { cw: cwDiff, an: anDiff };
 }
 
@@ -162,8 +300,26 @@ async function runShelfShadow(env, job = {}) {
       t.legacyOnly += d.legacyOnly.length;
       t.v2Only += d.v2Only.length;
       t.unknown += d.unknown;
+      // A round started before the reasons existed has no tallies yet.
+      t.whyOld = t.whyOld || {};
+      t.whyNew = t.whyNew || {};
+      const why = d.why || {};
+      for (const key of d.legacyOnly) {
+        const code = (why[key] || ["other"])[0];
+        t.whyOld[code] = (t.whyOld[code] || 0) + 1;
+      }
+      for (const key of d.v2Only) {
+        const code = (why[key] || ["other"])[0];
+        t.whyNew[code] = (t.whyNew[code] || 0) + 1;
+      }
       if ((d.legacyOnly.length || d.v2Only.length) && round.examples.length < SHELF_SHADOW_EXAMPLES) {
-        round.examples.push({ accountId: account.id, shelf, legacyOnly: d.legacyOnly.slice(0, 5), v2Only: d.v2Only.slice(0, 5) });
+        const legacyOnly = d.legacyOnly.slice(0, 5);
+        const v2Only = d.v2Only.slice(0, 5);
+        const example = { accountId: account.id, shelf, legacyOnly, v2Only, why: {} };
+        for (const key of [...legacyOnly, ...v2Only]) {
+          if (why[key]) example.why[key] = `${why[key][0]}: ${why[key][1]}`;
+        }
+        round.examples.push(example);
       }
       if (analytics) {
         try {
