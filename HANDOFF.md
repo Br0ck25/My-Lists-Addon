@@ -2,6 +2,28 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-04 (Antigravity): Custom List Design System Consistency — Soft Brand-Tinted + Add Buttons and Subnav-Pill Content Type Toggles.**
+>
+> **Where things stand**
+> - Design System Alignment (`09_page-shell.js`, `12_tab-custom-lists.js`, `21_client-custom-list-builder.js`):
+>   1. **`+ Add` Buttons on Search Candidate Cards**:
+>      - Replaced solid blue primary fill (`.lc-btn.primary`) with the global design system standard: **Soft Brand-Tinted Action Buttons**.
+>      - Added `.customListAddBtn` to the shared `:is(...)` selector in `09_page-shell.js` alongside `.myListAddBtn`, `.channelAddBtn`, `.curatedAddBtn`, etc.
+>      - Styled with soft brand wash (`rgba(0, 122, 255, 0.08)` light / `rgba(10, 132, 255, 0.14)` dark), subtle border (`rgba(0, 122, 255, 0.35)`), and accent text (`var(--accent)`).
+>      - Eliminated primary CTA competition with the form's "Create List" / "Save Changes" action.
+>      - When added, cleanly transitions to neutral disabled secondary `Added ✓` state (`.lc-btn.secondary:disabled`).
+>   2. **Content Type Toggles (`Movies` / `Shows` / `Mixed`)**:
+>      - Replaced solid opaque blue pill fill (`background: var(--accent); color: #fff`) with the site-wide `.subnav-pill` active pattern.
+>      - Styled `.custom-list-type-pill.active` and `:has(input:checked)` with soft blue wash (`rgba(0, 122, 255, 0.12)` light / `rgba(10, 132, 255, 0.22)` dark), accent border (`rgba(0, 122, 255, 0.40)`), accent text, and zero box-shadow.
+>      - Added `<span class="check-icon">&#x2713;</span>` checkmark support to each pill, displaying automatically when checked/active and matching `#catalogSearchTypeChips` on the Search page.
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK (5,475,937 bytes).
+>   - `node --check worker_entry_combined.js`: OK (0 syntax errors).
+>   - `python gen_map.py`: 2,670 symbols, 211 routes.
+>   - All 458 targeted tests passing with 0 failures (`tests/imdb-ids.test.mjs`, `tests/client.test.mjs`, `tests/better-posters.test.mjs`).
+> - Branch: `feat/design-system-phase-1`
+>
+
 > **HANDOFF, 2026-10-04 (Antigravity): Custom List Search Results Better Posters Resolution.**
 >
 > **Where things stand**
