@@ -300,7 +300,7 @@ function renderCustomListSearchResults(results) {
 
     const isAlreadyAdded = existingTitles.has((r.title || '').toLowerCase().trim());
     const btnText = isAlreadyAdded ? 'Added \u2713' : '+ Add';
-    const btnClass = isAlreadyAdded ? 'lc-btn secondary customListAddBtn' : 'lc-btn primary customListAddBtn';
+    const btnClass = isAlreadyAdded ? 'lc-btn secondary customListAddBtn' : 'lc-btn customListAddBtn';
     const disabledAttr = isAlreadyAdded ? ' disabled' : '';
 
     return '<div class="custom-list-search-card"' +
@@ -391,7 +391,6 @@ async function addToCustomListDraft(searchType, tmdbId, title, year, poster, btn
     if (btn) {
       btn.textContent = 'Added \u2713';
       btn.disabled = true;
-      btn.classList.remove('primary');
       btn.classList.add('secondary');
     }
     if (typeof trackEvent === 'function') trackEvent('list-add', data.imdbId, title, itemType);
@@ -400,6 +399,7 @@ async function addToCustomListDraft(searchType, tmdbId, title, year, poster, btn
     if (btn) {
       btn.disabled = false;
       btn.textContent = '+ Add';
+      btn.classList.remove('secondary');
     }
   }
 }

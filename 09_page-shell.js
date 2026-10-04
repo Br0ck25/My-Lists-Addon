@@ -2055,28 +2055,28 @@ ${seoHeadHtml}
     background: var(--color-danger-subtle);
   }
   /* --- Soft Brand-Tinted Add/Remove Action Buttons (one shared selector list) --- */
-  :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, #detailAddBtn):not(.is-added) {
+  :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, .customListAddBtn, #detailAddBtn):not(.is-added):not(:disabled) {
     background: rgba(0, 122, 255, 0.08) !important;
     border-color: rgba(0, 122, 255, 0.35) !important;
     color: var(--accent) !important;
     box-shadow: 0 1px 3px rgba(0, 122, 255, 0.08);
   }
-  :root.dark-theme :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, #detailAddBtn):not(.is-added) {
+  :root.dark-theme :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, .customListAddBtn, #detailAddBtn):not(.is-added):not(:disabled) {
     background: rgba(10, 132, 255, 0.14) !important;
     border-color: rgba(10, 132, 255, 0.4) !important;
     color: var(--accent) !important;
   }
-  :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, #detailAddBtn):not(.is-added):hover:not(:disabled) {
+  :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, .customListAddBtn, #detailAddBtn):not(.is-added):hover:not(:disabled) {
     background: rgba(0, 122, 255, 0.16) !important;
     border-color: var(--accent) !important;
     color: var(--accent) !important;
   }
-  :root.dark-theme :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, #detailAddBtn):not(.is-added):hover:not(:disabled) {
+  :root.dark-theme :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, .customListAddBtn, #detailAddBtn):not(.is-added):hover:not(:disabled) {
     background: rgba(10, 132, 255, 0.24) !important;
     border-color: var(--accent) !important;
     color: var(--accent) !important;
   }
-  :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, #detailAddBtn):not(.is-added):active:not(:disabled) {
+  :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, .customListAddBtn, #detailAddBtn):not(.is-added):active:not(:disabled) {
     transform: scale(0.97);
     background: rgba(0, 122, 255, 0.22) !important;
   }
@@ -4933,33 +4933,53 @@ ${seoHeadHtml}
     outline-offset: 2px;
   }
 
-  /* Custom List Content Type Standalone Pills */
+  /* Custom List Content Type Standalone Pills (matches .subnav-pill) */
   .custom-list-type-pill {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 7px 16px;
-    font-size: 0.84rem;
+    gap: 6px;
+    padding: 5px 14px;
+    min-height: 31px;
+    font-size: 0.82rem;
     font-weight: 600;
     border-radius: var(--radius-pill);
-    border: 1.5px solid var(--border-strong);
-    background: var(--surface);
-    color: var(--text);
+    border: 1.5px solid var(--color-border-strong);
+    background: var(--color-bg-surface);
+    color: var(--color-text-secondary);
     cursor: pointer;
     user-select: none;
     transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    box-shadow: none;
+    font-family: inherit;
   }
   .custom-list-type-pill:hover:not(.active):not(:has(input:checked)) {
-    border-color: var(--accent);
+    border-color: rgba(0, 122, 255, 0.40);
     color: var(--accent);
   }
   .custom-list-type-pill:has(input:checked),
   .custom-list-type-pill.active {
-    background: var(--accent) !important;
-    border-color: var(--accent) !important;
-    color: #fff !important;
+    background: rgba(0, 122, 255, 0.12) !important;
+    border-color: rgba(0, 122, 255, 0.40) !important;
+    color: var(--accent) !important;
     font-weight: 700 !important;
-    box-shadow: 0 2px 8px var(--color-brand-subtle);
+    box-shadow: none !important;
+  }
+  :root.dark-theme .custom-list-type-pill:has(input:checked),
+  :root.dark-theme .custom-list-type-pill.active {
+    background: rgba(10, 132, 255, 0.22) !important;
+    border-color: rgba(10, 132, 255, 0.50) !important;
+    color: var(--accent) !important;
+  }
+  .custom-list-type-pill .check-icon {
+    display: none;
+    font-weight: 800;
+    font-size: 0.82rem;
+    color: var(--accent);
+  }
+  .custom-list-type-pill:has(input:checked) .check-icon,
+  .custom-list-type-pill.active .check-icon {
+    display: inline;
   }
   .custom-list-type-pill input[type="radio"] {
     position: absolute;

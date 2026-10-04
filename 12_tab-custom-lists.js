@@ -108,15 +108,15 @@ ${newUi ? '    <div id="appShellAddTitles"></div>' : ''}
           <div id="customListTypeToggles" style="display:flex; gap:8px; align-items:center;">
             <label class="custom-list-type-pill active">
               <input type="radio" name="customListTypeRadio" value="movie" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;movie&quot;]" checked>
-              <span>Movies</span>
+              <span class="check-icon">&#x2713;</span><span>Movies</span>
             </label>
             <label class="custom-list-type-pill">
               <input type="radio" name="customListTypeRadio" value="series" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;series&quot;]">
-              <span>Shows</span>
+              <span class="check-icon">&#x2713;</span><span>Shows</span>
             </label>
             <label class="custom-list-type-pill">
               <input type="radio" name="customListTypeRadio" value="mixed" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;mixed&quot;]">
-              <span>Mixed</span>
+              <span class="check-icon">&#x2713;</span><span>Mixed</span>
             </label>
           </div>
         </div>
