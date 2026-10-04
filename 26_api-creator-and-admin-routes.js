@@ -5741,7 +5741,7 @@
       let body = {};
       try { body = await request.json(); } catch {}
       const result = await recoverStatsFromAnalyticsEngine(env, { apply: body && body.apply === true });
-      return json(result, result.ok ? 200 : 400, { "Cache-Control": "no-store" });
+      return json({ ...result, release: WORKER_RELEASE }, result.ok ? 200 : 400, { "Cache-Control": "no-store" });
     }
 
     // /admin/api/migrate-d1 (POST) -> { ok, done, results, thisCall, scanned }

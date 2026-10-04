@@ -34,6 +34,8 @@ function loadSourceFunctions(...relFiles) {
 
 const adminFns = loadSourceFunctions("00_constants.js", "01_icon-asset.js", "02_http-and-creator-utils.js", "03_admin.js");
 const { bumpStatBy, recordSearchQuery, computeLeaderboard } = adminFns;
+// A top-level const is not a property of the sandbox; read it from its scope.
+const WORKER_RELEASE = vm.runInContext("WORKER_RELEASE", adminFns);
 
 const analyticsBound = (points) => ({ writeDataPoint: (p) => points.push(p) });
 
@@ -104,10 +106,12 @@ let restoreFetch = null;
 afterEach(() => { if (restoreFetch) restoreFetch(); restoreFetch = null; });
 
 // The Analytics Engine SQL API, answering from points written the way the
-// P8-2 code wrote them. Like the real one, it refuses a function its SQL
-// reference does not list: the first version of the tool used concat, which
-// this fake accepted and the real API answered with 422 "unknown function
-// call: CONCAT".
+// P8-2 code wrote them. It refuses what the real one refused on the live site,
+// with the same 422s -- both were accepted by this fake at first:
+//  - a function its SQL reference does not list ("unknown function call:
+//    CONCAT");
+//  - anything in GROUP BY but a column or a name given with AS ("in the GROUP
+//    BY clause you may only provide column names: formatDateTime(...)").
 const AE_FUNCTIONS = new Set([
   // developers.cloudflare.com/analytics/analytics-engine/sql-reference/
   // (aggregate, string, and date and time functions), lower-cased.
@@ -135,14 +139,26 @@ function fakeAnalyticsEngine(points) {
         return new Response(`Input was invalid: unknown function call: ${m[1].toUpperCase()}`, { status: 422 });
       }
     }
+    const groupBy = (sql.match(/ GROUP BY (.*?)(?: ORDER BY | LIMIT | FORMAT |$)/) || [])[1] || "";
+    const aliases = new Set([...sql.matchAll(/ AS ([A-Za-z_][A-Za-z0-9_]*)/g)].map((m) => m[1]));
+    for (const item of groupBy.split(",").map((x) => x.trim()).filter(Boolean)) {
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(item)) {
+        return new Response(`Input was invalid: in the GROUP BY clause you may only provide column names: ${item}`, { status: 422 });
+      }
+      if (!/^(blob\d+|double\d+|index1|timestamp)$/.test(item) && !aliases.has(item)) {
+        return new Response(`Input was invalid: unknown column ${item}`, { status: 422 });
+      }
+    }
     assert.match(sql, /FORMAT JSON$/);
-    const eventDays = /blob1 = 'event'/.test(sql);
+    const eventHours = /blob1 = 'event'/.test(sql);
     const want = (sql.match(/blob1 = '(\w+)'/) || [])[1];
     const group = new Map();
     for (const p of points) {
       if (p.blobs[0] !== want) continue;
-      const row = eventDays
-        ? { blob2: p.blobs[1], blob3: p.blobs[2], day: p.day }
+      // toUnixTimestamp(toStartOfHour(timestamp)); sent as a string, as JSON
+      // output may quote integers.
+      const row = eventHours
+        ? { blob2: p.blobs[1], blob3: p.blobs[2], event_hour: String(Math.floor(p.at / 3600000) * 3600) }
         : { blob2: p.blobs[1], blob3: p.blobs[2] };
       const k = JSON.stringify(row);
       group.set(k, { ...row, n: (group.get(k) ? group.get(k).n : 0) + p.doubles[0] });
@@ -164,7 +180,9 @@ const GAP_POINTS = [
   { blobs: ["stat", "installs", "2026-10-03"], doubles: [9] },
   { blobs: ["stat", "apiuse:tmdb", "total"], doubles: [40] },
   { blobs: ["stat", "sourcegroup:trakt", "total"], doubles: [2] },
-  { blobs: ["event", "watched", "tt0137523", "Fight Club", "movie"], doubles: [4], day: "2026-10-03" },
+  // Watched at noon and at 10:30 pm Eastern on 3 October (02:30 UTC on the 4th).
+  { blobs: ["event", "watched", "tt0137523", "Fight Club", "movie"], doubles: [3], at: Date.parse("2026-10-03T16:05:00Z") },
+  { blobs: ["event", "watched", "tt0137523", "Fight Club", "movie"], doubles: [1], at: Date.parse("2026-10-04T02:30:00Z") },
   { blobs: ["search", "dune", "2026-10-03"], doubles: [2] },
 ];
 
@@ -190,7 +208,8 @@ describe("putting back the counts Analytics Engine took (2 October onward)", () 
     assert.equal(db._stat("pageviews", "total"), 12388);
     assert.equal(asked[0].auth, "Bearer ae-token");
     assert.match(asked[0].sql, /FROM mylists_events/);
-    assert.match(asked[1].sql, /formatDateTime\(timestamp, '%Y-%m-%d', 'America\/New_York'\)/, "a watch counts on its Eastern day");
+    assert.match(asked[1].sql, /toUnixTimestamp\(toStartOfHour\(timestamp\)\) AS event_hour/, "events by the hour");
+    for (const { sql } of asked) assert.match(sql, / GROUP BY [a-z0-9_]+(, [a-z0-9_]+)* LIMIT /, "GROUP BY names columns only");
   });
 
   it("puts every counter back on its day and in its total, once", async () => {
@@ -202,7 +221,8 @@ describe("putting back the counts Analytics Engine took (2 October onward)", () 
     assert.equal(db._stat("pageviews", "2026-10-03"), 120);
     assert.equal(db._stat("installs", "2026-10-03"), 9);
     assert.equal(db._stat("apiuse:tmdb", "total"), 1040);
-    assert.equal(db._stat("evt:watched:tt0137523", "2026-10-03"), 4);
+    assert.equal(db._stat("evt:watched:tt0137523", "2026-10-03"), 4, "10:30 pm Eastern is still the 3rd");
+    assert.equal(db._stat("evt:watched:tt0137523", "2026-10-04"), undefined, "nothing on the 4th");
     assert.equal(db._stat("searchq:dune", "total"), 2);
 
     // Again: nothing is added twice.
@@ -231,7 +251,16 @@ describe("putting back the counts Analytics Engine took (2 October onward)", () 
     restoreFetch = () => { globalThis.fetch = realFetch; };
     const refused = await recover(env, cookie, false);
     assert.equal(refused.status, 400);
-    assert.match(refused.body.error, /422/);
+    assert.match(refused.body.error, /^Reading page views and other counters: Analytics Engine answered 422/, "which query was refused");
+    assert.equal(refused.body.release, WORKER_RELEASE, "and which release asked");
+  });
+
+  it("the admin page names the release that is live", async () => {
+    const { env, cookie } = await setup();
+    const page = await call(env, "/admin", { cookie });
+    assert.equal(page.status, 200);
+    assert.match(WORKER_RELEASE, /^\d+[a-z]?$/);
+    assert.ok(page.text.includes(`<span id="workerRelease">Release ${WORKER_RELEASE}</span>`));
   });
 
   it("says what is missing instead of guessing without the API token", async () => {

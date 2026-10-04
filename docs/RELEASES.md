@@ -20,7 +20,7 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Release 13** is live: the owner added `FF_PROVIDER_BREAKER`, `FF_CHART_SNAPSHOTS` and `FF_NEW_UI`. It added the `FF_NEW_UI` switch, stronger hashing for recovery answers, and a daily backup that works. The owner dropped one-time recovery codes (D-31).
 - **`main` at `a6785d6`** is live (2026-10-02 onward): other assistants finished P7-6 and Phases 8–10 and merged everything into `main`, and the Worker was renamed from `wako` to **`my-lists-addon`**. The owner also added `FF_SCROBBLE_ST_ONLY`. The review of that work (2026-10-04) found the admin counters writing nowhere anyone reads, blank badged posters, and a cleanup guide that would have deleted live data: Release 14 fixes them.
 - **`shelf.shadow`** (sent 2026-10-04): last full comparison of 709 accounts, 20.36% different (Continue Watching 836 the same, 206 only in the old, 25 only in the new, 17 shows not known yet; Airing Next 212 / 15 / 22 / 3). Far above the 1% gate: **`FF_SHOW_SCHEDULE` stays off.**
-- **Release 14** went live on 2026-10-04. Its *Counts missing since 2 October* Preview failed: *Analytics Engine answered 422: unknown function call: CONCAT*. **Release 14b** fixes that (details under Release 14).
+- **Release 14** went live on 2026-10-04. Its *Counts missing since 2 October* Preview failed: *Analytics Engine answered 422: unknown function call: CONCAT*. **Release 14b** fixed that, and its Preview then failed on the next rule (*in the GROUP BY clause you may only provide column names*): **Release 14c** fixes that (details under Release 14).
 
 The owner decided to release the new version **one phase at a time, straight to the live site**, with no separate test site. Each release waits until the one before it has run cleanly for at least a day.
 
@@ -1120,6 +1120,27 @@ Nothing was written by the failed Preview: it stops before touching the database
 
 **Steps:**
 1. Deploy `release-14b-NEW-worker.js`. Keep `CF_ANALYTICS_TOKEN` and `CF_ANALYTICS_ACCOUNT_ID` as they are.
+2. `/admin` → Maintenance → **Counts missing since 2 October** → **Preview**. Send the result.
+3. If it looks right, **Put them back**. Then delete `CF_ANALYTICS_TOKEN` and the token itself.
+
+### Release 14c: the next rule Analytics Engine enforces
+
+**What happened:** Release 14b's Preview answered *Failed: Analytics Engine answered 422: Input was invalid: in the GROUP BY clause you may only provide column names: formatDateTime("timestamp", '%Y-%m-%d', 'America/New_York')*.
+
+**Why:** Analytics Engine groups only by a column. A worked-out value has to be named with `AS` first, as in Cloudflare's own example (`intDiv(...) * 60 AS t` … `GROUP BY blob1, t`). 14b grouped by the formula itself. The stand-in used by the tests accepted that too.
+
+**Fix** (`03_admin.js`, `readAnalyticsEngineCounts`):
+- Plays and list adds are now asked for by the hour: `toUnixTimestamp(toStartOfHour(timestamp)) AS event_hour`, grouped by `event_hour`. The Worker turns each hour into its Eastern day, so the service's time zone support is no longer needed.
+- `event_hour` rather than `hour` or `day`, which the SQL also uses as words of its own.
+- The other two queries already grouped by plain columns.
+- The stand-in now refuses anything in `GROUP BY` that is not a column or an `AS` name, with the same message. Grouping by the formula again makes 3 tests fail with exactly the error the owner saw.
+- `/admin` now shows **Release 14c** under its title, so it is plain which file is live.
+- A failure names the query that failed (page views, Most Watched, or searches) and the release that asked.
+
+The failed Preview wrote nothing.
+
+**Steps:**
+1. Deploy `release-14c-NEW-worker.js`. Check that `/admin` says **Release 14c** under "Admin Dashboard".
 2. `/admin` → Maintenance → **Counts missing since 2 October** → **Preview**. Send the result.
 3. If it looks right, **Put them back**. Then delete `CF_ANALYTICS_TOKEN` and the token itself.
 

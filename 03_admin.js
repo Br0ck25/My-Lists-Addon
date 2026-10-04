@@ -1361,26 +1361,38 @@ async function readAnalyticsEngineCounts(env) {
   const dataset = String((env && env.CF_ANALYTICS_DATASET) || "mylists_events");
   if (!/^[A-Za-z0-9_]+$/.test(dataset)) return { ok: false, error: "CF_ANALYTICS_DATASET is not a dataset name." };
   const limit = ` LIMIT ${AE_RECOVERY_ROW_LIMIT}`;
-  // Only functions the Analytics Engine SQL reference lists: it has no
-  // concat (it answered 422 "unknown function call: CONCAT"), so each query
-  // returns the raw blobs and the counter names are put together here. GROUP BY
-  // repeats expressions rather than relying on aliases.
+  // Kept inside what the live API accepts (it refused both of these, 422):
+  //  - only functions its SQL reference lists. There is no concat ("unknown
+  //    function call: CONCAT"), so each query returns the raw blobs and the
+  //    counter names are put together here;
+  //  - GROUP BY takes column names only ("in the GROUP BY clause you may only
+  //    provide column names: formatDateTime(...)"). A name given with AS
+  //    counts: Cloudflare's own example groups "intDiv(...) * 60 AS t" by `t`.
+  //    Not `hour` or `day`, which the SQL also has as keywords (INTERVAL).
   const sum = "SUM(_sample_interval * double1) AS n";
   // An event carries no day of its own: the day is when it was written, in
-  // the Eastern time statsToday() counts in.
-  const easternDay = "formatDateTime(timestamp, '%Y-%m-%d', 'America/New_York')";
+  // the Eastern time statsToday() counts in. Asked for by the hour, as a plain
+  // number, and turned into the Eastern day here (an hour never straddles two
+  // Eastern days), so the query needs no time zone support from the service.
+  const hourOf = "toUnixTimestamp(toStartOfHour(timestamp))";
   const queries = {
     stat: {
+      label: "Reading page views and other counters",
       sql: `SELECT blob2, blob3, ${sum} FROM ${dataset} WHERE blob1 = 'stat' GROUP BY blob2, blob3${limit}`,
       kindOf: (row) => String(row.blob2 || ""),
       dayOf: (row) => String(row.blob3 || ""),
     },
     event: {
-      sql: `SELECT blob2, blob3, ${easternDay} AS day, ${sum} FROM ${dataset} WHERE blob1 = 'event' GROUP BY blob2, blob3, ${easternDay}${limit}`,
+      label: "Reading Most Watched and list adds",
+      sql: `SELECT blob2, blob3, ${hourOf} AS event_hour, ${sum} FROM ${dataset} WHERE blob1 = 'event' GROUP BY blob2, blob3, event_hour${limit}`,
       kindOf: (row) => (row.blob2 && row.blob3 ? `evt:${row.blob2}:${row.blob3}` : ""),
-      dayOf: (row) => String(row.day || ""),
+      dayOf: (row) => {
+        const seconds = Number(row.event_hour);
+        return Number.isFinite(seconds) && seconds > 0 ? easternDateKey(new Date(seconds * 1000)) : "";
+      },
     },
     search: {
+      label: "Reading searches",
       sql: `SELECT blob2, blob3, ${sum} FROM ${dataset} WHERE blob1 = 'search' GROUP BY blob2, blob3${limit}`,
       kindOf: (row) => (row.blob2 ? `searchq:${row.blob2}` : ""),
       dayOf: (row) => String(row.blob3 || ""),
@@ -1392,7 +1404,7 @@ async function readAnalyticsEngineCounts(env) {
   const truncated = [];
   for (const [source, q] of Object.entries(queries)) {
     const r = await analyticsEngineRows(env, q.sql);
-    if (!r.ok) return r;
+    if (!r.ok) return { ...r, error: `${q.label}: ${r.error}` };
     if (r.rows.length >= AE_RECOVERY_ROW_LIMIT) truncated.push(source);
     for (const row of r.rows) {
       const kind = q.kindOf(row);
@@ -2612,7 +2624,7 @@ async function renderAdminDashboard(env) {
 </style></head>
 <body>
   <h1>Admin Dashboard</h1>
-  <p style="color:#8E8E93; margin-top:0;">My Lists Addon usage stats.</p>
+  <p style="color:#8E8E93; margin-top:0;">My Lists Addon usage stats. <span id="workerRelease">Release ${WORKER_RELEASE}</span></p>
   ${isD1Bound ? '' : '<div style="background:rgba(255,59,48,0.12); border:1px solid #FF3B30; border-radius:8px; padding:12px 16px; margin:0 0 18px; color:#FF3B30; font-size:0.88rem; line-height:1.4;"><strong>Warning: No D1 database bound.</strong> D1 is required for authoritative accounts, lists, full-text search, likes, feedback, and tracking. Please bind your D1 database as <code>DB</code> in the Cloudflare Dashboard (Worker Settings &rarr; Bindings).</div>'}
 
   <!-- Not a tablist: these three buttons do not reveal panels, they choose
@@ -4668,7 +4680,7 @@ async function renderAdminDashboard(env) {
         });
         const data = await res.json();
         if (!data.ok) {
-          status.textContent = 'Failed: ' + (data.error || 'unknown error');
+          status.textContent = 'Failed: ' + (data.error || 'unknown error') + (data.release ? ' (Release ' + data.release + ')' : '');
         } else {
           status.textContent = data.applied
             ? 'Done: ' + data.toPutBack + ' counts put back.'
