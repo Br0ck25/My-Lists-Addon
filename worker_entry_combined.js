@@ -63571,13 +63571,15 @@ function renderCustomListSearchResults(results) {
   const existingTitles = new Set(customListDraftItems.map(it => (it.title || it.name || '').toLowerCase().trim()));
 
   const cardsHtml = results.map(r => {
+    const tmdbIdNum = r.tmdbId || r.id || '';
     const itemType = (r.searchType === 'tv' || r.type === 'tv' || r.type === 'series') ? 'tv' : 'movie';
+    const itemKind = itemType === 'tv' ? 'series' : 'movie';
     const isShow = itemType === 'tv';
     const typeLabel = isShow ? 'Show' : 'Movie';
     const rPoster = typeof resolveClientPoster === 'function' ? resolveClientPoster(r, r.poster || '') : r.poster;
     const posterImg = rPoster
-      ? '<img class="custom-list-search-poster" src="' + escapeAttr(rPoster) + '" alt="" loading="lazy">'
-      : '<div class="custom-list-search-poster" style="display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:0.72rem; text-align:center; padding:4px;">No poster</div>';
+      ? '<img class="custom-list-search-poster" src="' + escapeAttr(rPoster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
+      : '<div class="custom-list-search-poster live-preview-poster-placeholder" style="display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:0.72rem; text-align:center; padding:4px;" data-needs-fallback="1"><small style="color:var(--muted); font-size:0.72rem;">No poster</small></div>';
 
     const isAlreadyAdded = existingTitles.has((r.title || '').toLowerCase().trim());
     const btnText = isAlreadyAdded ? 'Added \u2713' : '+ Add';
@@ -63585,8 +63587,10 @@ function renderCustomListSearchResults(results) {
     const disabledAttr = isAlreadyAdded ? ' disabled' : '';
 
     return '<div class="custom-list-search-card"' +
+      (tmdbIdNum ? ' data-id="tmdb:' + escapeAttr(String(tmdbIdNum)) + '"' : '') +
+      ' data-type="' + itemKind + '"' +
       ' data-searchtype="' + itemType + '"' +
-      ' data-tmdbid="' + escapeAttr(String(r.tmdbId || r.id || '')) + '"' +
+      ' data-tmdbid="' + escapeAttr(String(tmdbIdNum)) + '"' +
       ' data-title="' + escapeAttr(r.title || '') + '"' +
       ' data-year="' + escapeAttr(r.year || '') + '"' +
       ' data-poster="' + escapeAttr(r.poster || '') + '">' +
@@ -63602,7 +63606,7 @@ function renderCustomListSearchResults(results) {
       '<button type="button" class="' + btnClass + '" style="width:100%; padding:4px 6px; font-size:0.72rem; font-weight:600; border-radius:var(--radius-pill);"' +
         disabledAttr +
         ' data-searchtype="' + itemType + '"' +
-        ' data-tmdbid="' + escapeAttr(String(r.tmdbId || r.id || '')) + '"' +
+        ' data-tmdbid="' + escapeAttr(String(tmdbIdNum)) + '"' +
         ' data-title="' + escapeAttr(r.title || '') + '"' +
         ' data-year="' + escapeAttr(r.year || '') + '"' +
         ' data-poster="' + escapeAttr(r.poster || '') + '">' +
@@ -63612,6 +63616,15 @@ function renderCustomListSearchResults(results) {
   }).join('');
 
   box.innerHTML = '<div class="poster-grid-3" style="margin-top:12px;">' + cardsHtml + '</div>';
+  if (typeof resolveMissingPostersInDom === 'function') {
+    resolveMissingPostersInDom(box);
+  }
+  // Title search answers with TMDB ids only, so resolveClientPoster above
+  // had no IMDB id to build a Better Poster from and every tile kept its
+  // plain TMDB artwork. Same fix as catalog search -- see applyBetterPostersToTmdbTiles.
+  if (typeof applyBetterPostersToTmdbTiles === 'function') {
+    applyBetterPostersToTmdbTiles(box);
+  }
 }
 
 if (typeof document !== 'undefined') {

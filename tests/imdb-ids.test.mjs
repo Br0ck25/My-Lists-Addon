@@ -194,4 +194,13 @@ describe("Search results get Better Posters", () => {
     assert.deepEqual(c.__seen[0] && c.__seen[0].items, [{ id: "tmdb:278", type: "movie" }]);
     assert.equal(tile._img.src, "https://example.com/bp/poster/tt0068646.jpg");
   });
+
+  it("renderCustomListSearchResults produces cards with data-id, data-type and error handlers", () => {
+    const c = tileClient({ "myListAddon:betterPosters": "1" }, { "tmdb:278": "tt0068646" });
+    const box = c.document.getElementById("customListSearchResult");
+    c.call("renderCustomListSearchResults", [{ tmdbId: 278, title: "The Shawshank Redemption", year: "1994", poster: "https://image.tmdb.org/t/p/w500/q6y0Go1tsGEsmtFryDOJo3dEmqu.jpg", searchType: "movie" }]);
+    assert.ok(box.innerHTML.includes('data-id="tmdb:278"'), "card must have data-id for Better Posters resolution");
+    assert.ok(box.innerHTML.includes('data-type="movie"'), "card must have data-type");
+    assert.ok(box.innerHTML.includes('handlePosterImgError'), "card image must wire handlePosterImgError fallback");
+  });
 });
