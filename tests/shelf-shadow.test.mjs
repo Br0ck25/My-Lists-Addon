@@ -135,17 +135,19 @@ describe("P5-4: shelf.shadow", () => {
 
     assert.equal(last.cw.unknown, 2, "12 and 13 are not known yet");
     assert.deepEqual([last.cw.both, last.cw.legacyOnly, last.cw.v2Only], [1, 2, 1], "13 is not a difference");
-    assert.deepEqual(last.cw.whyOld, { "schedule-nothing-after": 1, "already-watched": 1 });
-    assert.deepEqual(last.cw.whyNew, { "different-episode": 1 });
-    // 4 differences in 6; leaving out the old list's own mistake (15's
-    // already-watched entry), 3 in 5.
+    // 14's stored S2E6 has not aired (TMDB's last is S2E5, nothing dated after).
+    assert.deepEqual(last.cw.whyOld, { "not-aired-yet": 1, "already-watched": 1 });
+    assert.deepEqual(last.cw.whyNew, { "replaces-old-mistake": 1 });
+    // 4 differences in 6, and every one is the old list's mistake (or its
+    // correction): ended show 11 in Airing Next, 14 not aired, 15 watched.
     assert.equal(last.rate, 4 / 6);
-    assert.equal(last.rateNew, 3 / 5);
+    assert.equal(last.rateNew, 0);
+    assert.deepEqual(last.verdict, { lost: 0, changed: 0, added: 0, oldWrong: 4, lostWhy: {} });
     const cw = last.examples.find((e) => e.shelf === "cw");
     assert.deepEqual(cw.why, {
-      "m14:2:6": "schedule-nothing-after: nothing after S2E5 (stored S2E6): last aired S2E5, no next episode (Returning Series)",
+      "m14:2:6": "not-aired-yet: nothing after S2E5 (stored S2E6): last aired S2E5, no next episode (Returning Series)",
       "m15:1:6": "already-watched: stored S1E6, but progress is at S1E6",
-      "m15:1:7": "different-episode: stored m15:1:6",
+      "m15:1:7": "replaces-old-mistake: stored m15:1:6 (already-watched)",
     });
 
     const status = await call(env, "/admin", { cookie: await adminCookie(env) });

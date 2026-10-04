@@ -23,7 +23,8 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Release 14** (as 14c) went live on 2026-10-04. The counts missing since 2 October were put back (the owner: *done and it worked*). 14 and 14b each failed on a rule of Analytics Engine's SQL (details under Release 14).
 - **Release 15** (prepared 2026-10-04) — details under Release 15. Later on 2026-10-04 the owner's Check jobs still showed the comparison without reasons, so 15 was not yet running when that round finished.
 - **Release 16** went live on 2026-10-04 (includes 15). **Compare shelves now** ran over 709 accounts: 19.42% different, with a reason for every difference (under Release 17).
-- **Release 17** (prepared 2026-10-04, not yet live) — fixes from those reasons, and copies accounts made after the history copy. Details under Release 17.
+- **Release 17** went live on 2026-10-04. Its comparison: 15.76% different, 9.22% leaving out `already-watched`; the 50 `other` were gone (the 200-show limit). Details under Release 18.
+- **Release 18** (prepared 2026-10-04, not yet live) — the verdict on `FF_SHOW_SCHEDULE`, and a safety net for shows the schedule does not know. Details under Release 18.
 - **`main`** is brought up to date by PR #12 (Releases 14–16).
 - **Cloudflare Workers Builds was connected to this repository** (found 2026-10-04). The owner reports the Worker it was connected to has since been deleted, and merging PR #12 started no build. Every push makes Cloudflare try to build the Worker from GitHub. On `main` it would deploy to production. So far every attempt has failed, so nothing has been deployed that way: `main` at `a6785d6` on 2026-10-03, and this branch's preview with *Authentication error*. The `wrangler.toml` guard (Release 14: `keep_vars`, the `DB_ACTIVITY` placeholder) keeps such a deploy from replacing the dashboard's settings. Deploying stays manual (pasting) unless the owner decides otherwise.
 - **Backups work** (2026-10-04): the owner added the five GitHub secrets, and the first real backup ran (Actions run 37226668219). It copied both databases, encrypted: `my-lists-db` (9.3 MB, 709 accounts' settings, 1,147 lists, 53,082 list items) and `mylists-activity` (0.96 MB, 46,956 plays). From here it runs daily at 04:17 UTC.
@@ -1285,4 +1286,80 @@ Tests in `tests/review-fixes-2026-10-04.test.mjs`, `tests/activity.test.mjs` and
 3. Within a few hours `activity.copy-new` copies the newer accounts. Check jobs shows it under `activity.copy-new`.
 
 **Rollback:** paste the 16 file. Accounts already copied stay copied. That is correct: they are served from the activity database the same way as every other copied account.
+
+---
+
+## Release 18: what switching would lose, and a safety net for shows the schedule does not know
+
+**Branch point:** this branch after Release 17, which is live.
+
+Release 17's comparison (709 accounts):
+- **The rates:** 15.76% different, and 9.22% leaving out `already-watched`.
+- **The 50 `other` are gone.** "The same" rose from 840 to 892, which confirms the 200-show limit was their cause.
+- **Continue Watching, only in the old:**
+  - `already-watched` 95;
+  - `schedule-nothing-after` 44;
+  - `dismissed` 6;
+  - `different-episode` 5.
+- **Continue Watching, only in the new:** `not-stored` 16, `different-episode` 10.
+- **Airing Next:**
+  - only in the old: `no-upcoming` 4, `next-already-aired` 1;
+  - only in the new: `not-stored` 27.
+- 27 Continue Watching shows and 12 Airing Next shows were "not known yet".
+
+### Reading the remaining differences
+
+The 1% gate assumed the stored shelves were right. They are often not:
+- **`schedule-nothing-after` (44): each stored episode comes after TMDB's last aired episode, and has no date.** In the examples:
+  - S3E1 of a cancelled show;
+  - S25E1 and S3E1 premieres of returning shows that have no air date;
+  - S28E42 when TMDB's last aired is S28E41 and nothing is scheduled.
+
+  The playback ping and the webhook take TMDB's next episode whether or not it has aired, so the old list offered episodes nobody can watch yet. These are now `not-aired-yet`.
+- **`dismissed` (6):** the person dismissed the show, and has watched nothing since. By the rule both lists share, the dismissal stands.
+- **Airing Next `no-upcoming` / `next-already-aired` (5):** the old entry is for an episode that has already aired, or for a show with nothing coming.
+- **New list only, Airing Next `not-stored` (27):** the old Airing Next looks at only a person's 60 most recently watched shows (`AIRING_NEXT_SERVER_MAX_SHOWS`), and rebuilds each account at most every 6 hours. These are real upcoming episodes it missed.
+- **New list only, Continue Watching `not-stored` (16):** the next aired episode of a show in progress, which the old list does not have.
+- **New list only, `different-episode` (10):** most are the new list's correct episode standing in for an `already-watched` old one. They are now `replaces-old-mistake`.
+- **Shows "not known yet":** these would have dropped off the shelves with `FF_SHOW_SCHEDULE` on. The daily `show.watchers` job only makes schedule rows for titles stored as series, so a show matched to a movie row never gets one.
+
+### What it changes
+
+- **Safety net** (`39_` `shelfStoredForUnknown`, `40_`). With `FF_SHOW_SCHEDULE` on, a show the schedule does not know yet keeps the entry it had, in both Continue Watching and Airing Next, instead of dropping off. The switch had no test until now; it has one.
+- **A verdict on switching** (`47_`, `03_`). The comparison now ends with *If FF_SHOW_SCHEDULE were on now*:
+  - **lost:** entries the old list has that are not its mistakes;
+  - **changed:** shows offered at another episode;
+  - **added:** entries only the new list has;
+  - **old-list mistakes put right.**
+
+  Old-list mistakes, by the rules both lists share:
+  - `already-watched`;
+  - `not-aired-yet`;
+  - `dismissed`, `dropped`, `hidden`;
+  - `no-upcoming`, `next-already-aired`;
+  - `replaces-old-mistake`.
+
+  `rateNew` leaves all of these out.
+- `/admin` shows **Release 18**.
+
+### Recommendation
+
+From Release 17's numbers, the verdict should read about **0 lost, 5 changed, 43 added**:
+- the 5 changed are One Piece-style numbering, where the old entry had S23E1156 and the new list has S23E26;
+- the 43 added are upcoming or aired episodes the old lists missed.
+
+If Release 18's comparison shows 0 lost, turn `FF_SHOW_SCHEDULE` on. It is reversible: delete the variable to go back to the stored shelves. That replaces the 1% rule, which measured agreement with a list we now know to be wrong in about 160 places.
+
+### Checked
+
+- **`tests/shelf-shadow.test.mjs`:** the reasons, `rateNew`, and the verdict on a known case.
+- **`tests/activity.test.mjs`:** with `FF_SHOW_SCHEDULE` on, a show without a schedule keeps its stored entry; once its schedule arrives, the entry is worked out. This test fails without the safety net.
+- `bash verify.sh` and the `MLA_TEST_V2_LISTS_READ=1` run pass (counts in the commit).
+
+**Steps:**
+1. Deploy `release-18-NEW-worker.js`. Check that `/admin` says **Release 18**. There is no database step.
+2. `/admin` → Maintenance → **Compare shelves now**, and send the result. Mainly the line starting *If FF_SHOW_SCHEDULE were on now*.
+3. If it says 0 lost: Worker → Settings → Variables and Secrets → add Text `FF_SHOW_SCHEDULE` = `1` → Deploy. Look at your own Continue Watching and Airing Next in Stremio and on the site. To undo, delete the variable.
+
+**Rollback:** paste the 17 file, after deleting `FF_SHOW_SCHEDULE` if it was added.
 

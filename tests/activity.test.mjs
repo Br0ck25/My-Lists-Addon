@@ -979,6 +979,28 @@ describe("P3c-6: with FF_EVENT_TRACKING, a copied account is served from the act
 
 // --- Episode names, and no cap on Watch History (the release branch) ----------
 //
+// FF_SHOW_SCHEDULE: Continue Watching and Airing Next worked out from the show
+// schedule (39_) instead of served as the writers stored them (Release 18).
+describe("FF_SHOW_SCHEDULE: the shelves worked out from the schedule", () => {
+  it("keeps the stored entry of a show the schedule does not know yet, and works out the rest", async () => {
+    const { env, user } = await eventTrackingSetup({ FF_SHOW_SCHEDULE: "1" });
+    // No schedule rows yet: Breaking Bad and The Office are not known, so they
+    // keep their stored entries; the storyline suggestion is kept whole.
+    let data = await loadTracking(env, user);
+    assert.deepEqual(data.continueWatching.map((it) => it.id).sort(), ["e3", "tt0120737", "x1"]);
+
+    // The Office's schedule arrives: its entry is worked out (S2E1, after the
+    // copy's "nothing of season 2 yet"), and the stored one is not repeated.
+    const office = mediaIdBy(env, "imdb_id", "tt0386676");
+    env.DB._db.prepare(
+      `INSERT INTO show_schedule (media_id, status, last_aired_season, last_aired_episode, last_aired_date, season_episode_counts, watcher_count, checked_at, next_check_at)
+       VALUES (?, 'Ended', 9, 23, '2013-05-16', '{"2":22,"9":23}', 1, 1, 9999999999999)`
+    ).run(office);
+    data = await loadTracking(env, user);
+    assert.deepEqual(data.continueWatching.map((it) => it.id).sort(), ["e3", "tt0120737", "tt0386676:2:1"]);
+  });
+});
+
 // With FF_EVENT_TRACKING, Watch History comes from the activity database, which
 // records a play as a title and an episode number -- so every episode showed as
 // "Episode N" with the show poster, and the record stopped at the newest 5,000
