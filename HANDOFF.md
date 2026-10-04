@@ -2,6 +2,24 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-03 (Antigravity): Mobile List Card Header Horizontal Alignment & Action Placement.**
+>
+> **Where things stand**
+> - Mobile List Card Action Button Placement (`09_page-shell.js`):
+>   - Replaced legacy mobile `.list-card-header { flex-wrap: wrap; }` and `.list-card-actions { width: 100%; margin-top: 4px; }` with a clean horizontal flex header (`flex-wrap: nowrap; justify-content: space-between; align-items: flex-start; gap: 8px;`).
+>   - `.list-card-body` is now `flex: 1 1 auto; min-width: 0;`, allowing long list titles to cleanly truncate with `text-overflow: ellipsis;` without colliding with actions.
+>   - `.list-card-actions` now rests inline on the top right (`flex: 0 0 auto; width: auto; margin-top: 0; display: flex; align-items: center; justify-content: flex-end; gap: 5px; flex-wrap: wrap;`).
+>   - Action buttons (`Edit`, `+ Add`, `Delete`, `Sync`, etc.) on mobile have touch-optimized compact pill styling (`padding: 5px 9px !important; font-size: 0.78rem !important; line-height: 1.2; min-height: 28px !important; white-space: nowrap;`).
+>   - Drag handles on mobile (`.drag-handle-list`) have tightened padding and margin (`margin-right: 8px; padding: 2px 4px;`).
+>   - Applies globally across all list cards in the application: Custom Lists, Liked Lists, Provider Lists (Trakt, MDBList, Simkl, TMDB), Channels, and Search result cards.
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK (5,434,869 bytes).
+>   - `node --check worker_entry_combined.js`: OK (0 syntax errors).
+>   - `python gen_map.py`: 2,662 symbols, 211 routes.
+>   - All 2,071 tests passing in `tests/*.test.mjs`.
+> - Branch: `feat/design-system-phase-1`
+>
+
 > **HANDOFF, 2026-10-03 (Antigravity): Normal Refresh Route Retention, Discover Feed Initialization, & Service Worker v4.**
 >
 > **Where things stand**

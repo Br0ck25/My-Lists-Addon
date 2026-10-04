@@ -30784,14 +30784,37 @@ ${seoHeadHtml}
       display: none;
     }
     .list-card-header {
-      flex-wrap: wrap;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: nowrap;
     }
     .list-card-body {
-      flex-basis: calc(100% - 54px);
+      flex: 1 1 auto;
+      min-width: 0;
     }
     .list-card-actions {
-      width: 100%;
-      margin-top: 4px;
+      flex: 0 0 auto;
+      width: auto;
+      margin-top: 0;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+    .list-card-actions .lc-btn {
+      padding: 5px 9px !important;
+      font-size: 0.78rem !important;
+      line-height: 1.2;
+      min-height: 28px !important;
+      box-sizing: border-box;
+      white-space: nowrap;
+    }
+    .drag-handle-list {
+      margin-right: 8px;
+      padding: 2px 4px;
     }
   }
   @media (min-width: 641px) {
