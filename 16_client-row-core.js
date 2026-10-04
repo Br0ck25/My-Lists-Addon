@@ -2104,6 +2104,7 @@ const STATIC_MODALS = [
   { id: 'selectListModal', close: 'closeSelectListModal' },
   { id: 'addShelfModal', close: null },
   { id: 'importListModal', close: 'closeImportListModal' },
+  { id: 'importChannelModal', close: 'closeImportChannelModal' },
   { id: 'traktDeviceModal', close: 'closeTraktDeviceModal' },
 ];
 

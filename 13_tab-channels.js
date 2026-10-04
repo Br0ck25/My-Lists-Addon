@@ -5,18 +5,18 @@
     <button type="button" class="subnav-pill" data-sub="storylines" data-act="switchChannelsSubmenu" data-act-args="[&quot;storylines&quot;,&quot;@self&quot;]">Storylines &amp; Universes</button>
     <button type="button" class="subnav-pill" data-sub="quickadd" data-act="switchChannelsSubmenu" data-act-args="[&quot;quickadd&quot;,&quot;@self&quot;]">Quick Add</button>
     <button type="button" class="subnav-pill" data-sub="explore" data-act="switchChannelsSubmenu" data-act-args="[&quot;explore&quot;,&quot;@self&quot;]">Explore Channels</button>
-    <button type="button" class="subnav-pill" data-sub="import" data-act="switchChannelsSubmenu" data-act-args="[&quot;import&quot;,&quot;@self&quot;]">Import</button>
+    <button type="button" class="subnav-pill" data-sub="import" data-act="switchChannelsSubmenu" data-act-args="[&quot;import&quot;,&quot;@self&quot;]" style="display:none;">Import</button>
   </div>
 
   <!-- Submenu: Storylines & Universes (Canon Timelines, Sagas & Bridges) -->
   <div class="channels-subpanel" id="channelsSubStorylines" style="display:none;">
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:8px;">
-        <h2 class="shelf-title">Storylines, Sagas &amp; Universes</h2>
+        <h2 class="shelf-title sr-only">Storylines, Sagas &amp; Universes</h2>
+        <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem; line-height:1.4;">
+          Complete franchise timelines, movie trilogies &amp; sagas (3+ films), and TV-to-movie universes in canon chronological watch order. Add any saga directly to your Catalogs or launch it as a continuous 24/7 channel with 1-click.
+        </p>
       </div>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">
-        Complete franchise timelines, movie trilogies &amp; sagas (3+ films), and TV-to-movie universes in canon chronological watch order. Add any saga directly to your Catalogs or launch it as a continuous 24/7 channel with 1-click.
-      </p>
 
       <!-- Category Filter Tabs -->
       <div class="subnav-pills-bar" id="storylineCategoryFilterBar" style="margin-bottom:16px; flex-wrap:wrap;">
@@ -41,14 +41,18 @@
          builder itself until that is rewritten. -->
 ${newUi ? '    <div id="appShellChannels"></div>' : ''}
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="shelf-title">My Channels</h2>
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <div class="shelf-header" style="margin-bottom:10px; align-items:center; justify-content:space-between; gap:12px;">
+        <div>
+          <h2 class="shelf-title sr-only">My Channels</h2>
+          <p style="margin:0; color:var(--muted); font-size:0.85rem;">Your custom built and saved 24/7 TV channels. Play episodes continuously in broadcast order or daily shuffle.</p>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; flex-shrink:0;">
           <button type="button" class="secondary lc-btn" data-act="createNextUpChannel" data-act-args="[&quot;@self&quot;]" title="A channel that always plays the next episode of everything you have on the go">+ Next Up Channel</button>
           <button type="button" class="primary lc-btn" data-act="openBuildCustomChannel">+ New Channel</button>
+          <button type="button" class="secondary lc-btn" data-act="openImportChannelModal" title="Import channel from link or share code">Import</button>
+          <button type="button" class="secondary lc-btn" data-act="refreshMyChannelsAction" title="Refresh channels">Refresh</button>
         </div>
       </div>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Your custom built and saved 24/7 TV channels. Play episodes continuously in broadcast order or daily shuffle.</p>
       <div id="channelNextUpStatus" style="margin-bottom:8px;"></div>
       <div class="row" id="myChannelsToolbar" style="margin-bottom:10px; gap:8px;">
         <div class="search-input-box" style="flex:1;">
@@ -100,7 +104,7 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
   <div class="channels-subpanel" id="channelsSubQuickAdd" style="display:none;">
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:8px;">
-        <h2 class="shelf-title">Quick Add Popular Networks</h2>
+        <h2 class="shelf-title sr-only">Quick Add Popular Networks</h2>
       </div>
       <p class="qa-shelf-sub">Instant 1-click TV channels with up to 5,000 episodes, rotating 24 shows with 3 episodes every 24 hours:</p>
       <div class="channel-quick-grid">
@@ -140,13 +144,15 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
   <!-- Submenu: Explore Channels (the community directory) -->
   <div class="channels-subpanel" id="channelsSubExplore" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:8px;">
-        <h2 class="shelf-title">Explore Channels</h2>
+      <div class="shelf-header" style="margin-bottom:8px; align-items:center; justify-content:space-between; gap:12px;">
+        <div>
+          <h2 class="shelf-title sr-only">Explore Channels</h2>
+          <p style="margin:0; color:var(--muted); font-size:0.85rem;">
+            24/7 channels built and published by other people &mdash; &ldquo;Saturday Morning 90s&rdquo;, &ldquo;80s VHS Sci-Fi Vault&rdquo;, whatever anyone has put together. Add one to your own setup in a single click, then edit it however you like.
+          </p>
+        </div>
         <button type="button" class="secondary lc-btn" data-act="loadChannelDirectory" data-act-args="[true]">Refresh</button>
       </div>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">
-        24/7 channels built and published by other people &mdash; &ldquo;Saturday Morning 90s&rdquo;, &ldquo;80s VHS Sci-Fi Vault&rdquo;, whatever anyone has put together. Add one to your own setup in a single click, then edit it however you like.
-      </p>
       <div class="row" style="margin-bottom:10px; gap:8px;">
         <input type="text" id="channelDirectorySearchInput" aria-label="Filter published channels" placeholder="Filter by name, description or creator..." data-act-on="input" data-act="renderChannelDirectory">
         <select id="channelDirectorySortSelect" aria-label="Order published channels" data-act="setChannelDirectorySort" data-act-args="[&quot;@value&quot;]" style="flex:none; width:auto;">

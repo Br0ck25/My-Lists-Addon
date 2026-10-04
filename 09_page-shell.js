@@ -5792,6 +5792,57 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
     </div>
   </div>
 
+  <!-- Import Channel Modal -->
+  <div id="importChannelModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Import Channel" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
+    <div class="modal-card" style="width: 100%; max-width: 440px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+        <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);">Import Channel</h2>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeImportChannelModal">&#x2715;</button>
+      </div>
+
+      <!-- Segmented Mode Selector: From Link vs From Share Code -->
+      <div class="subnav-pills-bar" id="importChannelModePills" style="margin-bottom: 14px; gap: 6px; padding: 0;">
+        <button type="button" class="subnav-pill active" id="importChannelModeLinkBtn" data-act="switchImportChannelMode" data-act-args="[&quot;link&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> From List Link</button>
+        <button type="button" class="subnav-pill" id="importChannelModeCodeBtn" data-act="switchImportChannelMode" data-act-args="[&quot;code&quot;,&quot;@self&quot;]">From Share Code</button>
+      </div>
+
+      <!-- Mode 1: From List Link -->
+      <div id="importChannelPanelLink">
+        <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem; line-height:1.4;">Paste any MDBList, Trakt, or TMDB show list URL to import directly as a 24/7 TV channel.</p>
+        <div style="margin-bottom: 12px;">
+          <label for="modalChannelImportUrlInput" style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Show List URL</label>
+          <input type="text" id="modalChannelImportUrlInput" placeholder="mdblist.com, trakt.tv, or themoviedb.org show list URL" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem; box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom: 12px;">
+          <label for="modalChannelImportNameInput" style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Channel Name</label>
+          <input type="text" id="modalChannelImportNameInput" placeholder="e.g. Sitcom Central" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem; box-sizing:border-box;">
+        </div>
+        <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; margin-bottom:18px;">
+          <input type="checkbox" id="modalChannelImportLiveSyncCheck" checked style="margin-top:2px;">
+          <span style="font-size:0.82rem; color:var(--text); line-height:1.35;">Live Cloud Sync &mdash; keep this channel following the list in the background</span>
+        </label>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
+          <button type="button" class="lc-btn secondary" data-act="closeImportChannelModal">Cancel</button>
+          <button type="button" class="lc-btn primary" id="modalChannelImportBtn" data-act="importChannelFromLink" data-act-args="[&quot;@self&quot;]" style="min-width: 90px;">Import Channel</button>
+        </div>
+      </div>
+
+      <!-- Mode 2: From Share Code -->
+      <div id="importChannelPanelCode" style="display:none;">
+        <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem; line-height:1.4;">Paste a channel share link or code to rebuild that exact community channel lineup here.</p>
+        <div style="margin-bottom: 14px;">
+          <label for="modalChannelShareCodeInput" style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Channel Share Link or Code</label>
+          <input type="text" id="modalChannelShareCodeInput" placeholder="https://... /channel/AbC123 or code" data-act-on="keydown" data-act="importSharedChannel" data-act-keys="Enter" data-act-prevent data-act-args="[&quot;@self&quot;]" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem; box-sizing:border-box;">
+        </div>
+        <div id="modalChannelShareImportStatus" style="margin-bottom:14px; font-size:0.85rem;"></div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
+          <button type="button" class="lc-btn secondary" data-act="closeImportChannelModal">Cancel</button>
+          <button type="button" class="lc-btn primary" id="modalChannelShareAddBtn" data-act="importSharedChannel" data-act-args="[&quot;@self&quot;]" style="min-width: 90px;">Add Channel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="selectListModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Choose a list" style="display:none; z-index: 10001; justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px; background: var(--color-bg-overlay);">
     <div class="modal-card" style="width: 100%; max-width: 480px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; max-height: 85vh;">
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">

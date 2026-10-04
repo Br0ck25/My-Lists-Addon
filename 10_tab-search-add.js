@@ -9,15 +9,17 @@
   <div class="lists-subpanel" id="catalogsSubShelves">
   <!-- Catalogs Management Card -->
   <div class="panel">
-    <div class="shelf-header" style="margin-bottom:12px;">
-      <h2 class="shelf-title">Live Preview &amp; Editor</h2>
-      <div class="actions" style="flex-direction:row; flex-wrap:wrap; align-items:center; gap:6px;">
+    <div class="shelf-header" style="margin-bottom:12px; align-items:center; justify-content:space-between; gap:12px;">
+      <div>
+        <h2 class="shelf-title sr-only">Live Preview &amp; Editor</h2>
+        <p style="margin:0; color:var(--muted); font-size:0.85rem;">Catalogs and lists you've added to your add-on. Reorder, edit, and preview your active shelves.</p>
+      </div>
+      <div class="actions" style="flex-direction:row; flex-wrap:wrap; align-items:center; gap:6px; flex-shrink:0;">
         <button type="button" class="primary lc-btn" data-act="openAddShelfModal">+ New Catalog</button>
         <button type="button" class="secondary lc-btn" id="livePreviewEditBtn" data-act="toggleLivePreviewEdit">Edit</button>
-        <button type="button" class="secondary lc-btn" data-act="renderLivePreview">Refresh Preview</button>
+        <button type="button" class="secondary lc-btn" data-act="renderLivePreview" title="Refresh catalogs preview">Refresh</button>
       </div>
     </div>
-    <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Catalogs and lists you've added to your add-on. Reorder, edit, and preview your active shelves.</p>
 
     <div class="row" style="margin-bottom:12px; gap:8px;">
       <input type="text" id="listFilterInput" aria-label="Filter catalogs by name" placeholder="Filter catalogs by name..." data-act-on="input" data-act="filterLists">

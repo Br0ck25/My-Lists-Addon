@@ -34215,6 +34215,57 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
     </div>
   </div>
 
+  <!-- Import Channel Modal -->
+  <div id="importChannelModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Import Channel" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
+    <div class="modal-card" style="width: 100%; max-width: 440px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+        <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);">Import Channel</h2>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeImportChannelModal">&#x2715;</button>
+      </div>
+
+      <!-- Segmented Mode Selector: From Link vs From Share Code -->
+      <div class="subnav-pills-bar" id="importChannelModePills" style="margin-bottom: 14px; gap: 6px; padding: 0;">
+        <button type="button" class="subnav-pill active" id="importChannelModeLinkBtn" data-act="switchImportChannelMode" data-act-args="[&quot;link&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> From List Link</button>
+        <button type="button" class="subnav-pill" id="importChannelModeCodeBtn" data-act="switchImportChannelMode" data-act-args="[&quot;code&quot;,&quot;@self&quot;]">From Share Code</button>
+      </div>
+
+      <!-- Mode 1: From List Link -->
+      <div id="importChannelPanelLink">
+        <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem; line-height:1.4;">Paste any MDBList, Trakt, or TMDB show list URL to import directly as a 24/7 TV channel.</p>
+        <div style="margin-bottom: 12px;">
+          <label for="modalChannelImportUrlInput" style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Show List URL</label>
+          <input type="text" id="modalChannelImportUrlInput" placeholder="mdblist.com, trakt.tv, or themoviedb.org show list URL" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem; box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom: 12px;">
+          <label for="modalChannelImportNameInput" style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Channel Name</label>
+          <input type="text" id="modalChannelImportNameInput" placeholder="e.g. Sitcom Central" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem; box-sizing:border-box;">
+        </div>
+        <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; margin-bottom:18px;">
+          <input type="checkbox" id="modalChannelImportLiveSyncCheck" checked style="margin-top:2px;">
+          <span style="font-size:0.82rem; color:var(--text); line-height:1.35;">Live Cloud Sync &mdash; keep this channel following the list in the background</span>
+        </label>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
+          <button type="button" class="lc-btn secondary" data-act="closeImportChannelModal">Cancel</button>
+          <button type="button" class="lc-btn primary" id="modalChannelImportBtn" data-act="importChannelFromLink" data-act-args="[&quot;@self&quot;]" style="min-width: 90px;">Import Channel</button>
+        </div>
+      </div>
+
+      <!-- Mode 2: From Share Code -->
+      <div id="importChannelPanelCode" style="display:none;">
+        <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem; line-height:1.4;">Paste a channel share link or code to rebuild that exact community channel lineup here.</p>
+        <div style="margin-bottom: 14px;">
+          <label for="modalChannelShareCodeInput" style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Channel Share Link or Code</label>
+          <input type="text" id="modalChannelShareCodeInput" placeholder="https://... /channel/AbC123 or code" data-act-on="keydown" data-act="importSharedChannel" data-act-keys="Enter" data-act-prevent data-act-args="[&quot;@self&quot;]" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem; box-sizing:border-box;">
+        </div>
+        <div id="modalChannelShareImportStatus" style="margin-bottom:14px; font-size:0.85rem;"></div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
+          <button type="button" class="lc-btn secondary" data-act="closeImportChannelModal">Cancel</button>
+          <button type="button" class="lc-btn primary" id="modalChannelShareAddBtn" data-act="importSharedChannel" data-act-args="[&quot;@self&quot;]" style="min-width: 90px;">Add Channel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="selectListModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Choose a list" style="display:none; z-index: 10001; justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px; background: var(--color-bg-overlay);">
     <div class="modal-card" style="width: 100%; max-width: 480px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; max-height: 85vh;">
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
@@ -34295,15 +34346,17 @@ if ('serviceWorker' in navigator) {
   <div class="lists-subpanel" id="catalogsSubShelves">
   <!-- Catalogs Management Card -->
   <div class="panel">
-    <div class="shelf-header" style="margin-bottom:12px;">
-      <h2 class="shelf-title">Live Preview &amp; Editor</h2>
-      <div class="actions" style="flex-direction:row; flex-wrap:wrap; align-items:center; gap:6px;">
+    <div class="shelf-header" style="margin-bottom:12px; align-items:center; justify-content:space-between; gap:12px;">
+      <div>
+        <h2 class="shelf-title sr-only">Live Preview &amp; Editor</h2>
+        <p style="margin:0; color:var(--muted); font-size:0.85rem;">Catalogs and lists you've added to your add-on. Reorder, edit, and preview your active shelves.</p>
+      </div>
+      <div class="actions" style="flex-direction:row; flex-wrap:wrap; align-items:center; gap:6px; flex-shrink:0;">
         <button type="button" class="primary lc-btn" data-act="openAddShelfModal">+ New Catalog</button>
         <button type="button" class="secondary lc-btn" id="livePreviewEditBtn" data-act="toggleLivePreviewEdit">Edit</button>
-        <button type="button" class="secondary lc-btn" data-act="renderLivePreview">Refresh Preview</button>
+        <button type="button" class="secondary lc-btn" data-act="renderLivePreview" title="Refresh catalogs preview">Refresh</button>
       </div>
     </div>
-    <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Catalogs and lists you've added to your add-on. Reorder, edit, and preview your active shelves.</p>
 
     <div class="row" style="margin-bottom:12px; gap:8px;">
       <input type="text" id="listFilterInput" aria-label="Filter catalogs by name" placeholder="Filter catalogs by name..." data-act-on="input" data-act="filterLists">
@@ -34624,12 +34677,12 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
   <!-- Submenu 1: User's Connected Account & Custom Lists -->
   <div class="lists-subpanel" id="listsSubMyLists">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:12px; align-items:flex-start;">
+      <div class="shelf-header" style="margin-bottom:12px; align-items:center; justify-content:space-between; gap:12px;">
         <div>
-          <h2 class="shelf-title">Your Custom Lists</h2>
-          <p style="margin:4px 0 0; color:var(--muted); font-size:0.85rem;">Custom lists you've created locally or on your profile.</p>
+          <h2 class="shelf-title sr-only">Your Custom Lists</h2>
+          <p style="margin:0; color:var(--muted); font-size:0.85rem;">Custom lists you've created locally or on your profile.</p>
         </div>
-        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; flex-shrink:0;">
           <button type="button" class="primary lc-btn" data-act="openCreateListModal" data-act-args="[&quot;custom&quot;]">+ Create List</button>
           <button type="button" class="secondary lc-btn" data-act="openImportListModal">Import</button>
           <button type="button" class="secondary lc-btn" data-act="appActRefreshCreatorDashboard">Refresh</button>
@@ -34857,18 +34910,18 @@ ${newUi ? '    <div id="appShellImports"></div>' : ''}
     <button type="button" class="subnav-pill" data-sub="storylines" data-act="switchChannelsSubmenu" data-act-args="[&quot;storylines&quot;,&quot;@self&quot;]">Storylines &amp; Universes</button>
     <button type="button" class="subnav-pill" data-sub="quickadd" data-act="switchChannelsSubmenu" data-act-args="[&quot;quickadd&quot;,&quot;@self&quot;]">Quick Add</button>
     <button type="button" class="subnav-pill" data-sub="explore" data-act="switchChannelsSubmenu" data-act-args="[&quot;explore&quot;,&quot;@self&quot;]">Explore Channels</button>
-    <button type="button" class="subnav-pill" data-sub="import" data-act="switchChannelsSubmenu" data-act-args="[&quot;import&quot;,&quot;@self&quot;]">Import</button>
+    <button type="button" class="subnav-pill" data-sub="import" data-act="switchChannelsSubmenu" data-act-args="[&quot;import&quot;,&quot;@self&quot;]" style="display:none;">Import</button>
   </div>
 
   <!-- Submenu: Storylines & Universes (Canon Timelines, Sagas & Bridges) -->
   <div class="channels-subpanel" id="channelsSubStorylines" style="display:none;">
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:8px;">
-        <h2 class="shelf-title">Storylines, Sagas &amp; Universes</h2>
+        <h2 class="shelf-title sr-only">Storylines, Sagas &amp; Universes</h2>
+        <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem; line-height:1.4;">
+          Complete franchise timelines, movie trilogies &amp; sagas (3+ films), and TV-to-movie universes in canon chronological watch order. Add any saga directly to your Catalogs or launch it as a continuous 24/7 channel with 1-click.
+        </p>
       </div>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">
-        Complete franchise timelines, movie trilogies &amp; sagas (3+ films), and TV-to-movie universes in canon chronological watch order. Add any saga directly to your Catalogs or launch it as a continuous 24/7 channel with 1-click.
-      </p>
 
       <!-- Category Filter Tabs -->
       <div class="subnav-pills-bar" id="storylineCategoryFilterBar" style="margin-bottom:16px; flex-wrap:wrap;">
@@ -34893,14 +34946,18 @@ ${newUi ? '    <div id="appShellImports"></div>' : ''}
          builder itself until that is rewritten. -->
 ${newUi ? '    <div id="appShellChannels"></div>' : ''}
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="shelf-title">My Channels</h2>
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <div class="shelf-header" style="margin-bottom:10px; align-items:center; justify-content:space-between; gap:12px;">
+        <div>
+          <h2 class="shelf-title sr-only">My Channels</h2>
+          <p style="margin:0; color:var(--muted); font-size:0.85rem;">Your custom built and saved 24/7 TV channels. Play episodes continuously in broadcast order or daily shuffle.</p>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; flex-shrink:0;">
           <button type="button" class="secondary lc-btn" data-act="createNextUpChannel" data-act-args="[&quot;@self&quot;]" title="A channel that always plays the next episode of everything you have on the go">+ Next Up Channel</button>
           <button type="button" class="primary lc-btn" data-act="openBuildCustomChannel">+ New Channel</button>
+          <button type="button" class="secondary lc-btn" data-act="openImportChannelModal" title="Import channel from link or share code">Import</button>
+          <button type="button" class="secondary lc-btn" data-act="refreshMyChannelsAction" title="Refresh channels">Refresh</button>
         </div>
       </div>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Your custom built and saved 24/7 TV channels. Play episodes continuously in broadcast order or daily shuffle.</p>
       <div id="channelNextUpStatus" style="margin-bottom:8px;"></div>
       <div class="row" id="myChannelsToolbar" style="margin-bottom:10px; gap:8px;">
         <div class="search-input-box" style="flex:1;">
@@ -34952,7 +35009,7 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
   <div class="channels-subpanel" id="channelsSubQuickAdd" style="display:none;">
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:8px;">
-        <h2 class="shelf-title">Quick Add Popular Networks</h2>
+        <h2 class="shelf-title sr-only">Quick Add Popular Networks</h2>
       </div>
       <p class="qa-shelf-sub">Instant 1-click TV channels with up to 5,000 episodes, rotating 24 shows with 3 episodes every 24 hours:</p>
       <div class="channel-quick-grid">
@@ -34992,13 +35049,15 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
   <!-- Submenu: Explore Channels (the community directory) -->
   <div class="channels-subpanel" id="channelsSubExplore" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:8px;">
-        <h2 class="shelf-title">Explore Channels</h2>
+      <div class="shelf-header" style="margin-bottom:8px; align-items:center; justify-content:space-between; gap:12px;">
+        <div>
+          <h2 class="shelf-title sr-only">Explore Channels</h2>
+          <p style="margin:0; color:var(--muted); font-size:0.85rem;">
+            24/7 channels built and published by other people &mdash; &ldquo;Saturday Morning 90s&rdquo;, &ldquo;80s VHS Sci-Fi Vault&rdquo;, whatever anyone has put together. Add one to your own setup in a single click, then edit it however you like.
+          </p>
+        </div>
         <button type="button" class="secondary lc-btn" data-act="loadChannelDirectory" data-act-args="[true]">Refresh</button>
       </div>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">
-        24/7 channels built and published by other people &mdash; &ldquo;Saturday Morning 90s&rdquo;, &ldquo;80s VHS Sci-Fi Vault&rdquo;, whatever anyone has put together. Add one to your own setup in a single click, then edit it however you like.
-      </p>
       <div class="row" style="margin-bottom:10px; gap:8px;">
         <input type="text" id="channelDirectorySearchInput" aria-label="Filter published channels" placeholder="Filter by name, description or creator..." data-act-on="input" data-act="renderChannelDirectory">
         <select id="channelDirectorySortSelect" aria-label="Order published channels" data-act="setChannelDirectorySort" data-act-args="[&quot;@value&quot;]" style="flex:none; width:auto;">
@@ -38193,6 +38252,7 @@ const STATIC_MODALS = [
   { id: 'selectListModal', close: 'closeSelectListModal' },
   { id: 'addShelfModal', close: null },
   { id: 'importListModal', close: 'closeImportListModal' },
+  { id: 'importChannelModal', close: 'closeImportChannelModal' },
   { id: 'traktDeviceModal', close: 'closeTraktDeviceModal' },
 ];
 
@@ -61071,13 +61131,90 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
 // quickAddChannel machinery, just fed a pasted list link instead of a
 // TMDB network id. The server side (/api/quick-channel-shows) requests
 // type "series" from that link regardless of source, so any movies mixed
+function openImportChannelModal(mode = 'link') {
+  const modal = document.getElementById('importChannelModal');
+  if (!modal) return;
+  switchImportChannelMode(mode);
+  modal.style.display = 'flex';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll(true);
+  const input = mode === 'code'
+    ? (document.getElementById('modalChannelShareCodeInput') || document.getElementById('channelShareCodeInput'))
+    : (document.getElementById('modalChannelImportUrlInput') || document.getElementById('channelImportUrlInput'));
+  if (input) setTimeout(() => { try { input.focus(); } catch (e) {} }, 50);
+}
+window.openImportChannelModal = openImportChannelModal;
+
+function closeImportChannelModal() {
+  const modal = document.getElementById('importChannelModal');
+  if (!modal || modal.style.display === 'none') return;
+  modal.style.display = 'none';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll(false);
+}
+window.closeImportChannelModal = closeImportChannelModal;
+
+function switchImportChannelMode(mode, btn) {
+  const pLink = document.getElementById('importChannelPanelLink');
+  const pCode = document.getElementById('importChannelPanelCode');
+  const bLink = document.getElementById('importChannelModeLinkBtn');
+  const bCode = document.getElementById('importChannelModeCodeBtn');
+  if (mode === 'code') {
+    if (pLink) pLink.style.display = 'none';
+    if (pCode) pCode.style.display = 'block';
+    if (bLink) {
+      bLink.classList.remove('active');
+      const c = bLink.querySelector('.check-icon');
+      if (c) c.remove();
+    }
+    if (bCode) {
+      bCode.classList.add('active');
+      if (!bCode.querySelector('.check-icon')) {
+        bCode.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
+      }
+    }
+  } else {
+    if (pLink) pLink.style.display = 'block';
+    if (pCode) pCode.style.display = 'none';
+    if (bCode) {
+      bCode.classList.remove('active');
+      const c = bCode.querySelector('.check-icon');
+      if (c) c.remove();
+    }
+    if (bLink) {
+      bLink.classList.add('active');
+      if (!bLink.querySelector('.check-icon')) {
+        bLink.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
+      }
+    }
+  }
+}
+window.switchImportChannelMode = switchImportChannelMode;
+
+function refreshMyChannelsAction(btn) {
+  renderMyCreatedChannelsList();
+  renderChannelMergeList();
+  if (btn) {
+    const orig = btn.textContent;
+    btn.textContent = 'Refreshed \u2713';
+    setTimeout(() => { if (btn) btn.textContent = orig; }, 1200);
+  }
+}
+window.refreshMyChannelsAction = refreshMyChannelsAction;
+
+// Companion to the fixed Quick Add network buttons above -- same
+// quickAddChannel machinery, just fed a pasted list link instead of a
+// TMDB network id. The server side (/api/quick-channel-shows) requests
+// type "series" from that link regardless of source, so any movies mixed
 // into the list are silently dropped rather than erroring out.
 async function importChannelFromLink(btn) {
   if (!requireSignedInFor('add channels')) return; // docs/DECISIONS.md D-8
-  const urlInput = document.getElementById('channelImportUrlInput');
-  const nameInput = document.getElementById('channelImportNameInput');
-  const listUrl = urlInput.value.trim();
-  const name = nameInput.value.trim();
+  const modalUrl = document.getElementById('modalChannelImportUrlInput');
+  const pageUrl = document.getElementById('channelImportUrlInput');
+  const urlInput = (modalUrl && modalUrl.value && modalUrl.value.trim()) ? modalUrl : (pageUrl || modalUrl);
+  const modalName = document.getElementById('modalChannelImportNameInput');
+  const pageName = document.getElementById('channelImportNameInput');
+  const nameInput = (modalName && modalName.value && modalName.value.trim()) ? modalName : (pageName || modalName);
+  const listUrl = urlInput ? urlInput.value.trim() : '';
+  const name = nameInput ? nameInput.value.trim() : '';
   if (!listUrl) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Import Channel', 'Paste a list URL first.');
@@ -61094,10 +61231,15 @@ async function importChannelFromLink(btn) {
     }
     return;
   }
-  const liveCheck = document.getElementById('channelImportLiveSyncCheck');
+  const modalLive = document.getElementById('modalChannelImportLiveSyncCheck');
+  const pageLive = document.getElementById('channelImportLiveSyncCheck');
+  const liveCheck = (modalLive && modalLive.checked !== undefined) ? modalLive : pageLive;
   await quickAddChannel(name, listUrl, null, btn, { liveSync: !liveCheck || liveCheck.checked });
-  urlInput.value = '';
-  nameInput.value = '';
+  if (urlInput) urlInput.value = '';
+  if (nameInput) nameInput.value = '';
+  if (pageUrl) pageUrl.value = '';
+  if (pageName) pageName.value = '';
+  closeImportChannelModal();
 }
 
 
@@ -62212,9 +62354,18 @@ async function fetchSharedChannel(code) {
 
 async function importSharedChannel(btn) {
   if (!requireSignedInFor('add channels')) return; // docs/DECISIONS.md D-8
-  const input = document.getElementById('channelShareCodeInput');
-  const statusBox = document.getElementById('channelShareImportStatus');
-  const say = (html) => { if (statusBox) statusBox.innerHTML = html; };
+  const modalInput = document.getElementById('modalChannelShareCodeInput');
+  const pageInput = document.getElementById('channelShareCodeInput');
+  const input = (modalInput && modalInput.value && modalInput.value.trim())
+    ? modalInput
+    : ((pageInput && pageInput.value && pageInput.value.trim()) ? pageInput : (modalInput || pageInput));
+  const isModalOpen = document.getElementById('importChannelModal') && document.getElementById('importChannelModal').style.display === 'flex';
+  const modalStatus = document.getElementById('modalChannelShareImportStatus');
+  const pageStatus = document.getElementById('channelShareImportStatus');
+  const say = (html) => {
+    if (modalStatus) modalStatus.innerHTML = html;
+    if (pageStatus) pageStatus.innerHTML = html;
+  };
   const code = parseChannelShareCode(input ? input.value : '');
   if (!code) {
     say('<p class="testresult err" style="margin:4px 0 0;">✗ That does not look like a channel share link or code.</p>');
@@ -62236,6 +62387,14 @@ async function importSharedChannel(btn) {
     say('<p class="testresult ok" style="margin:4px 0 0;">✓ "' + escapeHtml(data.channel.name || 'Channel') + '" added (' +
       (data.channel.items || []).length + ' picks).</p>');
     if (input) input.value = '';
+    if (modalInput) modalInput.value = '';
+    if (pageInput) pageInput.value = '';
+    if (isModalOpen) {
+      setTimeout(() => {
+        closeImportChannelModal();
+        if (modalStatus) modalStatus.innerHTML = '';
+      }, 900);
+    }
   } catch (e) {
     say('<p class="testresult err" style="margin:4px 0 0;">✗ Network error while fetching that channel.</p>');
   } finally {

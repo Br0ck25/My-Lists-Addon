@@ -11192,13 +11192,90 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
 // quickAddChannel machinery, just fed a pasted list link instead of a
 // TMDB network id. The server side (/api/quick-channel-shows) requests
 // type "series" from that link regardless of source, so any movies mixed
+function openImportChannelModal(mode = 'link') {
+  const modal = document.getElementById('importChannelModal');
+  if (!modal) return;
+  switchImportChannelMode(mode);
+  modal.style.display = 'flex';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll(true);
+  const input = mode === 'code'
+    ? (document.getElementById('modalChannelShareCodeInput') || document.getElementById('channelShareCodeInput'))
+    : (document.getElementById('modalChannelImportUrlInput') || document.getElementById('channelImportUrlInput'));
+  if (input) setTimeout(() => { try { input.focus(); } catch (e) {} }, 50);
+}
+window.openImportChannelModal = openImportChannelModal;
+
+function closeImportChannelModal() {
+  const modal = document.getElementById('importChannelModal');
+  if (!modal || modal.style.display === 'none') return;
+  modal.style.display = 'none';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll(false);
+}
+window.closeImportChannelModal = closeImportChannelModal;
+
+function switchImportChannelMode(mode, btn) {
+  const pLink = document.getElementById('importChannelPanelLink');
+  const pCode = document.getElementById('importChannelPanelCode');
+  const bLink = document.getElementById('importChannelModeLinkBtn');
+  const bCode = document.getElementById('importChannelModeCodeBtn');
+  if (mode === 'code') {
+    if (pLink) pLink.style.display = 'none';
+    if (pCode) pCode.style.display = 'block';
+    if (bLink) {
+      bLink.classList.remove('active');
+      const c = bLink.querySelector('.check-icon');
+      if (c) c.remove();
+    }
+    if (bCode) {
+      bCode.classList.add('active');
+      if (!bCode.querySelector('.check-icon')) {
+        bCode.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
+      }
+    }
+  } else {
+    if (pLink) pLink.style.display = 'block';
+    if (pCode) pCode.style.display = 'none';
+    if (bCode) {
+      bCode.classList.remove('active');
+      const c = bCode.querySelector('.check-icon');
+      if (c) c.remove();
+    }
+    if (bLink) {
+      bLink.classList.add('active');
+      if (!bLink.querySelector('.check-icon')) {
+        bLink.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
+      }
+    }
+  }
+}
+window.switchImportChannelMode = switchImportChannelMode;
+
+function refreshMyChannelsAction(btn) {
+  renderMyCreatedChannelsList();
+  renderChannelMergeList();
+  if (btn) {
+    const orig = btn.textContent;
+    btn.textContent = 'Refreshed \u2713';
+    setTimeout(() => { if (btn) btn.textContent = orig; }, 1200);
+  }
+}
+window.refreshMyChannelsAction = refreshMyChannelsAction;
+
+// Companion to the fixed Quick Add network buttons above -- same
+// quickAddChannel machinery, just fed a pasted list link instead of a
+// TMDB network id. The server side (/api/quick-channel-shows) requests
+// type "series" from that link regardless of source, so any movies mixed
 // into the list are silently dropped rather than erroring out.
 async function importChannelFromLink(btn) {
   if (!requireSignedInFor('add channels')) return; // docs/DECISIONS.md D-8
-  const urlInput = document.getElementById('channelImportUrlInput');
-  const nameInput = document.getElementById('channelImportNameInput');
-  const listUrl = urlInput.value.trim();
-  const name = nameInput.value.trim();
+  const modalUrl = document.getElementById('modalChannelImportUrlInput');
+  const pageUrl = document.getElementById('channelImportUrlInput');
+  const urlInput = (modalUrl && modalUrl.value && modalUrl.value.trim()) ? modalUrl : (pageUrl || modalUrl);
+  const modalName = document.getElementById('modalChannelImportNameInput');
+  const pageName = document.getElementById('channelImportNameInput');
+  const nameInput = (modalName && modalName.value && modalName.value.trim()) ? modalName : (pageName || modalName);
+  const listUrl = urlInput ? urlInput.value.trim() : '';
+  const name = nameInput ? nameInput.value.trim() : '';
   if (!listUrl) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Import Channel', 'Paste a list URL first.');
@@ -11215,10 +11292,15 @@ async function importChannelFromLink(btn) {
     }
     return;
   }
-  const liveCheck = document.getElementById('channelImportLiveSyncCheck');
+  const modalLive = document.getElementById('modalChannelImportLiveSyncCheck');
+  const pageLive = document.getElementById('channelImportLiveSyncCheck');
+  const liveCheck = (modalLive && modalLive.checked !== undefined) ? modalLive : pageLive;
   await quickAddChannel(name, listUrl, null, btn, { liveSync: !liveCheck || liveCheck.checked });
-  urlInput.value = '';
-  nameInput.value = '';
+  if (urlInput) urlInput.value = '';
+  if (nameInput) nameInput.value = '';
+  if (pageUrl) pageUrl.value = '';
+  if (pageName) pageName.value = '';
+  closeImportChannelModal();
 }
 
 
@@ -12333,9 +12415,18 @@ async function fetchSharedChannel(code) {
 
 async function importSharedChannel(btn) {
   if (!requireSignedInFor('add channels')) return; // docs/DECISIONS.md D-8
-  const input = document.getElementById('channelShareCodeInput');
-  const statusBox = document.getElementById('channelShareImportStatus');
-  const say = (html) => { if (statusBox) statusBox.innerHTML = html; };
+  const modalInput = document.getElementById('modalChannelShareCodeInput');
+  const pageInput = document.getElementById('channelShareCodeInput');
+  const input = (modalInput && modalInput.value && modalInput.value.trim())
+    ? modalInput
+    : ((pageInput && pageInput.value && pageInput.value.trim()) ? pageInput : (modalInput || pageInput));
+  const isModalOpen = document.getElementById('importChannelModal') && document.getElementById('importChannelModal').style.display === 'flex';
+  const modalStatus = document.getElementById('modalChannelShareImportStatus');
+  const pageStatus = document.getElementById('channelShareImportStatus');
+  const say = (html) => {
+    if (modalStatus) modalStatus.innerHTML = html;
+    if (pageStatus) pageStatus.innerHTML = html;
+  };
   const code = parseChannelShareCode(input ? input.value : '');
   if (!code) {
     say('<p class="testresult err" style="margin:4px 0 0;">✗ That does not look like a channel share link or code.</p>');
@@ -12357,6 +12448,14 @@ async function importSharedChannel(btn) {
     say('<p class="testresult ok" style="margin:4px 0 0;">✓ "' + escapeHtml(data.channel.name || 'Channel') + '" added (' +
       (data.channel.items || []).length + ' picks).</p>');
     if (input) input.value = '';
+    if (modalInput) modalInput.value = '';
+    if (pageInput) pageInput.value = '';
+    if (isModalOpen) {
+      setTimeout(() => {
+        closeImportChannelModal();
+        if (modalStatus) modalStatus.innerHTML = '';
+      }, 900);
+    }
   } catch (e) {
     say('<p class="testresult err" style="margin:4px 0 0;">✗ Network error while fetching that channel.</p>');
   } finally {

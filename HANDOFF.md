@@ -2,6 +2,34 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-04 (Antigravity): Subnav Title Deduplication, Catalogs Refresh Alignment, and Channels Import Modal Architecture.**
+>
+> **Where things stand**
+> - Subnav Header Deduplication (`10_tab-search-add.js`, `12_tab-custom-lists.js`, `13_tab-channels.js`):
+>   1. **Problem Solved**:
+>      - Having large `<h2>` page titles repeating the exact name of the active subnav pill (`Storylines, Sagas & Universes`, `My Channels`, `Live Preview & Editor`, `Your Custom Lists`, `Quick Add Popular Networks`, `Explore Channels`) caused visual stutter ("Double-Title Stutter") and wasted 50-80px of vertical viewport real estate.
+>   2. **Implementation**:
+>      - Followed the pattern established under Discover (commit `3a67bcb`): changed redundant headings to `<h2 class="shelf-title sr-only">`, preserving semantic document outline and WCAG accessibility while visually removing duplicate title banners.
+>      - Converted shelf headers into compact flex rows with helpful explanatory subtitles on the left and toolbar actions on the right.
+> - Catalogs "Refresh Preview" &rarr; "Refresh" Alignment (`10_tab-search-add.js`):
+>   1. Standardized `Refresh Preview` button to `Refresh` (`title="Refresh catalogs preview"`), harmonizing with Custom Lists, Discover, and Channels.
+> - Channels Import Modal & Refresh Architecture (`09_page-shell.js`, `13_tab-channels.js`, `16_client-row-core.js`, `20_client-channel-builder.js`):
+>   1. **Moved Import to Modal**:
+>      - Hid the `Import` subnav pill in `#channelsSubnavBar` (`style="display:none;"`), perfectly matching Custom Lists (`12_tab-custom-lists.js`).
+>      - Added `[Import]` modal trigger button (`data-act="openImportChannelModal"`) beside `+ New Channel` in `#channelsSubMyChannels`.
+>      - Added `[Refresh]` button (`data-act="refreshMyChannelsAction"`) beside `[Import]` with instant feedback confirmation (`Refreshed ✓`).
+>   2. **#importChannelModal**:
+>      - Added `#importChannelModal` dialog overlay in `09_page-shell.js` with segmented pills for "From List Link" and "From Share Code".
+>      - Registered `#importChannelModal` in `STATIC_MODALS` (`16_client-row-core.js`) for full keyboard ESC, backdrop click, and focus trapping support.
+>      - Updated `importChannelFromLink` and `importSharedChannel` in `20_client-channel-builder.js` to read from modal inputs while maintaining 100% backward compatibility with legacy page inputs and test harnesses.
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK (5,488,452 bytes).
+>   - `node --check worker_entry_combined.js`: OK (0 syntax errors).
+>   - `python gen_map.py`: 2,674 symbols, 211 routes.
+>   - Test suites: 490/490 tests pass in targeted client suite, 100% pass across repository.
+> - Branch: `feat/design-system-phase-1`
+>
+
 > **HANDOFF, 2026-10-04 (Antigravity): Globally Anchoring +Add Button to Far Right with Action Zone Separation.**
 >
 > **Where things stand**
