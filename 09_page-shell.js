@@ -960,6 +960,9 @@ ${seoHeadHtml}
   }
 
   /* Discover */
+  #discoverShelvesContainer {
+    display: none !important;
+  }
   html[data-initial-discover-sub="popular"] #discoverShelvesContainer,
   html[data-initial-discover-sub="popular"] #discoverListsFeedHeader,
   html[data-initial-discover-sub="popular"] #discoverListsFeed,

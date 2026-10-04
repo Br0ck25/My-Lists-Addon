@@ -6365,7 +6365,13 @@ function appShellApplyRoute(route) {
   if (!route) return false;
   const tab = appShellTab(route.tab);
   if (!tab) return false;
-  const sub = (route.sub && tab.subs.indexOf(route.sub) !== -1) ? String(route.sub) : '';
+  let rawSub = route.sub ? String(route.sub) : '';
+  if (tab.id === 'discover') {
+    if (rawSub === 'movies') rawSub = 'movie';
+    if (rawSub === 'shows') rawSub = 'series';
+    if (!rawSub) rawSub = 'movie';
+  }
+  const sub = (rawSub && tab.subs.indexOf(rawSub) !== -1) ? rawSub : '';
   appShellApplyingRoute = true;
   try {
     if (typeof switchTab === 'function') switchTab(tab.id);
@@ -6515,6 +6521,7 @@ function initAppShell() {
     appShellApplyRoute(route);
   } else if (appShellTrimSlashes(location.pathname) === '/') {
     try { history.replaceState({ appShell: true }, '', appShellPathFor('discover', '')); } catch (e) {}
+    appShellApplyRoute({ tab: 'discover', sub: 'movie' });
   }
 
   appShellRefreshInstallBar();

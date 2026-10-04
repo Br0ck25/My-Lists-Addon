@@ -13,7 +13,7 @@
   </div>
 
   <!-- Discover Shelves Feed -->
-  <div id="discoverShelvesContainer">
+  <div id="discoverShelvesContainer" style="display:none;">
     <!-- My Lists Addon Charts Shelf -->
     ${myListsAddonChartsHtml}
 

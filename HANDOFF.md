@@ -2,25 +2,21 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
-> **HANDOFF, 2026-10-03 (Antigravity): Service Worker Navigation Cache & Signed-Out Account Icon Fix.**
+> **HANDOFF, 2026-10-03 (Antigravity): Normal Refresh Route Retention, Discover Feed Initialization, & Service Worker v4.**
 >
 > **Where things stand**
-> - Service Worker Navigation & Reload Cache Fix (`25_api-catalog-routes.js`):
->   - Root Cause: During normal reload (F5), the browser sends conditional headers (`If-None-Match`). The Cloudflare Worker origin responds with HTTP 304 (empty body). When the Service Worker returned this 304 to a navigation request, Chromium/browsers failed the fetch, triggering the SW's `catch (err)` block. This served the old cached root shell (`/` in `mylists-shell-v2`) which had Discover active and pre-dated our recent styling updates. Additionally, `SHELL` was never updated on `/catalogs`, `/lists`, etc.
->   - Fix:
->     1. Stripped `if-none-match` and `if-modified-since` on navigation fetches in `sw.js` so the origin always serves a clean HTTP 200 OK with the full HTML page instead of a body-less 304.
->     2. Expanded shell cache updates to all top-level shell routes (`/`, `/catalogs`, `/lists`, `/channels`, `/discover`, `/search`, `/settings`) to keep the offline cache perpetually fresh.
->     3. Bumped Service Worker cache versions from `mylists-shell-v2` / `mylists-assets-v2` to `v3`. On activation, the SW automatically purges all orphaned `v2` caches from client disk.
->     4. Added `reg.update().catch(...)` to `09_page-shell.js` on registration to actively revalidate the SW script on every page visit without waiting for the 24-hour browser interval.
-> - Signed-Out Profile Button Invisibility Fix (`09_page-shell.js`):
->   - Pre-rendered the signed-out avatar button (`<button class="header-avatar-btn signed-out" id="headerProfileBtn" ...>`) directly inside `<div id="creatorProfileBar">` in the server-rendered HTML shell.
->   - The account icon is now immediately painted on first paint, preventing any disappearance or layout shift during normal reloads or before script evaluation. When signed in, the client script swaps it seamlessly to the avatar initial pill.
+> - Normal Refresh Route Jumping & Quick Add Grid Fix:
+>   - Root Cause 1 (Route Jumping): In `16_client-row-core.js:2507` (`restoreActiveTab`), bundle initialization ran before `initAppShell` set `appShellActive = true`. It read `localStorage.getItem('myListAddon:activeTab') || 'discover'` and called `switchTab(tab)`. In `switchTab`, `if (!appShellActive)` triggered `history.replaceState(..., '', '/')`, wiping the URL from `/catalogs`, `/settings`, etc. to `'/'`. Then `initAppShell` saw `'/'` and redirected to `/discover`.
+>   - Fix 1: Added `isAppShell` check in `switchTab` checking `document.documentElement.getAttribute('data-app-shell') === '1'` so the address bar is never rewritten to `'/'` on shell pages. Updated `restoreActiveTab` to read `data-initial-tab` first from the pre-rendered shell DOM.
+>   - Root Cause 2 (Quick Add Grid vs Poster Shelves): In `11_tab-quick-add.js`, `#discoverShelvesContainer` (the legacy 2-column quick add grid) had no `display: none` in the server markup, while `#discoverSubSharedFeed` had `style="display:none;"`. When navigating to `/discover`, `route.sub` was empty (`""`), which bypassed `filterDiscoverShelves` in `appShellApplyRoute`.
+>   - Fix 2: Set `style="display:none;"` on `#discoverShelvesContainer` by default and added `#discoverShelvesContainer { display: none !important; }` in `09_page-shell.js`. In `24_client-backup-restore-presets.js`, `appShellApplyRoute` now normalizes Discover subs (mapping empty/missing or `movies` to `movie` and `shows` to `series`) so `filterDiscoverShelves` is always reliably executed. Also in `initAppShell`, landing on `/` applies `{ tab: 'discover', sub: 'movie' }`.
+>   - Root Cause 3 (Service Worker Navigation Fetch CORS & Cache v4): In `25_api-catalog-routes.js` (`SERVICE_WORKER_JS`), the synthesized `netReq` in the navigate handler omitted `mode: 'same-origin'`, causing Chromium/Safari to fail the fetch with a CORS TypeError and fall back to the cached `'/'` shell on normal reloads.
+>   - Fix 3: Set `mode: 'same-origin'` and `credentials: 'same-origin'` on `netReq`, bumped Service Worker caches to `v4` (`mylists-assets-v4`, `mylists-shell-v4`) to automatically purge stale caches from user disks, and ensured `cache.put` only stores `SHELL_URL` for the root path.
 > - Verification & Tests:
->   - `python build.py` & `python check_sync.py`: OK (5,433,172 bytes).
+>   - `python build.py` & `python check_sync.py`: OK (5,433,823 bytes).
 >   - `node --check worker_entry_combined.js`: OK (0 syntax errors).
->   - `node render_check.js sw.js --sw` & `node --check sw.js`: OK.
 >   - `python gen_map.py`: 2,662 symbols, 211 routes.
->   - All 549 targeted tests passing (`node --test tests/bundle-budget.test.mjs tests/app-shell*.test.mjs tests/client*.test.mjs`).
+>   - All 2,071 tests in the repository passing (`node --test tests/*.test.mjs`: 2,071 pass, 0 fail).
 > - Branch: `feat/design-system-phase-1`
 >
 > **HANDOFF, 2026-10-03 (Antigravity): Global Drag Handle Modernization, 2-Line Poster Title Clamp, & Soft Brand-Tinted Add Pills.**

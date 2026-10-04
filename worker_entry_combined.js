@@ -29383,6 +29383,9 @@ ${seoHeadHtml}
   }
 
   /* Discover */
+  #discoverShelvesContainer {
+    display: none !important;
+  }
   html[data-initial-discover-sub="popular"] #discoverShelvesContainer,
   html[data-initial-discover-sub="popular"] #discoverListsFeedHeader,
   html[data-initial-discover-sub="popular"] #discoverListsFeed,
@@ -34191,7 +34194,7 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
   </div>
 
   <!-- Discover Shelves Feed -->
-  <div id="discoverShelvesContainer">
+  <div id="discoverShelvesContainer" style="display:none;">
     <!-- My Lists Addon Charts Shelf -->
     ${myListsAddonChartsHtml}
 
@@ -36918,7 +36921,8 @@ function switchTab(name) {
     } catch (e) {}
     // On a shell page the router wrote the URL (a real path per view) before
     // calling this, so rewriting it to "/" here would undo that.
-    if (!appShellActive) {
+    const isAppShell = appShellActive || (typeof document !== 'undefined' && document.documentElement && document.documentElement.getAttribute('data-app-shell') === '1');
+    if (!isAppShell) {
       const hash = location.hash || '';
       const isDetailUrl = hash.startsWith('#/item?') || hash.startsWith('#/list?') || (location.pathname.startsWith('/lists/') && location.pathname !== '/lists');
       try {
@@ -38172,11 +38176,20 @@ function restoreActiveTab() {
     return;
   }
 
-  let tab = 'discover';
-  try {
-    tab = localStorage.getItem('myListAddon:activeTab') || 'discover';
-  } catch (e) {}
-  if (tab === 'item-details' || tab === 'list-details') tab = 'discover';
+  let tab = '';
+  const isShell = typeof document !== 'undefined' && document.documentElement && document.documentElement.getAttribute('data-app-shell') === '1';
+  if (isShell) {
+    const initTab = document.documentElement.getAttribute('data-initial-tab');
+    if (initTab && initTab !== 'item-details' && initTab !== 'list-details') {
+      tab = initTab;
+    }
+  }
+  if (!tab) {
+    try {
+      tab = localStorage.getItem('myListAddon:activeTab') || 'discover';
+    } catch (e) {}
+  }
+  if (!tab || tab === 'item-details' || tab === 'list-details') tab = 'discover';
   switchTab(tab);
 }
 
@@ -84108,7 +84121,13 @@ function appShellApplyRoute(route) {
   if (!route) return false;
   const tab = appShellTab(route.tab);
   if (!tab) return false;
-  const sub = (route.sub && tab.subs.indexOf(route.sub) !== -1) ? String(route.sub) : '';
+  let rawSub = route.sub ? String(route.sub) : '';
+  if (tab.id === 'discover') {
+    if (rawSub === 'movies') rawSub = 'movie';
+    if (rawSub === 'shows') rawSub = 'series';
+    if (!rawSub) rawSub = 'movie';
+  }
+  const sub = (rawSub && tab.subs.indexOf(rawSub) !== -1) ? rawSub : '';
   appShellApplyingRoute = true;
   try {
     if (typeof switchTab === 'function') switchTab(tab.id);
@@ -84258,6 +84277,7 @@ function initAppShell() {
     appShellApplyRoute(route);
   } else if (appShellTrimSlashes(location.pathname) === '/') {
     try { history.replaceState({ appShell: true }, '', appShellPathFor('discover', '')); } catch (e) {}
+    appShellApplyRoute({ tab: 'discover', sub: 'movie' });
   }
 
   appShellRefreshInstallBar();
@@ -85334,8 +85354,8 @@ const BADGED_POSTER_CACHE = new Map();
 // reading a Trakt or Letterboxd export no longer needs the network; the fonts
 // are the device's own (no third-party origin left in the page at all).
 const SERVICE_WORKER_JS = `
-const ASSETS = 'mylists-assets-v3';
-const SHELL = 'mylists-shell-v3';
+const ASSETS = 'mylists-assets-v4';
+const SHELL = 'mylists-shell-v4';
 const SHELL_URL = '/';
 const KEEP = [ASSETS, SHELL];
 
@@ -85414,26 +85434,22 @@ self.addEventListener('fetch', (e) => {
     e.respondWith((async () => {
       try {
         // Strip conditional cache validation headers (If-None-Match, If-Modified-Since)
-        // so origin server returns full 200 OK HTML instead of an empty 304 response
-        // which breaks Service Worker navigation resolution and strands reloads on stale shells.
+        // so origin server returns full 200 OK HTML instead of an empty 304 response.
+        // Use mode: 'same-origin' and credentials: 'same-origin' to prevent CORS failures.
         const netHeaders = new Headers(req.headers);
         netHeaders.delete('if-none-match');
         netHeaders.delete('if-modified-since');
         const netReq = new Request(req.url, {
           method: 'GET',
           headers: netHeaders,
-          credentials: req.credentials,
+          credentials: 'same-origin',
+          mode: 'same-origin',
           cache: 'no-cache'
         });
 
         const res = await fetch(netReq);
-        const isShellPath = url.pathname === SHELL_URL ||
-          url.pathname === '/catalogs' || url.pathname === '/lists' ||
-          url.pathname === '/channels' || url.pathname === '/discover' ||
-          url.pathname === '/search' || url.pathname === '/settings';
-
         if (res && res.ok) {
-          if (isShellPath && !url.search) {
+          if (url.pathname === SHELL_URL && !url.search) {
             try {
               const cache = await caches.open(SHELL);
               await cache.put(SHELL_URL, res.clone());

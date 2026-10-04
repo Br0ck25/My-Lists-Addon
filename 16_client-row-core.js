@@ -1267,7 +1267,8 @@ function switchTab(name) {
     } catch (e) {}
     // On a shell page the router wrote the URL (a real path per view) before
     // calling this, so rewriting it to "/" here would undo that.
-    if (!appShellActive) {
+    const isAppShell = appShellActive || (typeof document !== 'undefined' && document.documentElement && document.documentElement.getAttribute('data-app-shell') === '1');
+    if (!isAppShell) {
       const hash = location.hash || '';
       const isDetailUrl = hash.startsWith('#/item?') || hash.startsWith('#/list?') || (location.pathname.startsWith('/lists/') && location.pathname !== '/lists');
       try {
@@ -2521,11 +2522,20 @@ function restoreActiveTab() {
     return;
   }
 
-  let tab = 'discover';
-  try {
-    tab = localStorage.getItem('myListAddon:activeTab') || 'discover';
-  } catch (e) {}
-  if (tab === 'item-details' || tab === 'list-details') tab = 'discover';
+  let tab = '';
+  const isShell = typeof document !== 'undefined' && document.documentElement && document.documentElement.getAttribute('data-app-shell') === '1';
+  if (isShell) {
+    const initTab = document.documentElement.getAttribute('data-initial-tab');
+    if (initTab && initTab !== 'item-details' && initTab !== 'list-details') {
+      tab = initTab;
+    }
+  }
+  if (!tab) {
+    try {
+      tab = localStorage.getItem('myListAddon:activeTab') || 'discover';
+    } catch (e) {}
+  }
+  if (!tab || tab === 'item-details' || tab === 'list-details') tab = 'discover';
   switchTab(tab);
 }
 
