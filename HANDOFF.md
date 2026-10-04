@@ -2,6 +2,30 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-03 (Antigravity): 3-Tier Navigation Stacking Resolution, Subnav Pill Differentiation (Pill Fatigue Fix), & Header Compaction.**
+>
+> **Where things stand**
+> - Subnav Pill Differentiation & Pill Fatigue Elimination (`09_page-shell.js`):
+>   1. **Visual Hierarchy Tiering**:
+>      - Primary navigation (`.tab-btn`): High-contrast solid brand blue (`#007aff` / `var(--brand)`) with white text and elevation.
+>      - Secondary subnav pills (`.subnav-pill`): Compact scale (`min-height: 31px; padding: 5px 14px; font-size: 0.82rem; font-weight: 600;`).
+>      - Active subnav state (`.subnav-pill.active`): Refined soft brand-tinted pill (`background: rgba(0, 122, 255, 0.12); color: var(--accent); border-color: rgba(0, 122, 255, 0.40); box-shadow: none; font-weight: 700;` / dark theme: `background: rgba(10, 132, 255, 0.22); border-color: rgba(10, 132, 255, 0.50);`).
+>      - Updated all pre-hydration active CSS selectors (`html[data-initial-...-sub]`) across Catalogs, Lists, Channels, Settings, and Discover to match the soft brand tint.
+>      - Eliminates visual competition between primary and secondary navigation tiers.
+> - Discover Section Header Compaction & Redundancy Removal (`09_page-shell.js`, `11_tab-quick-add.js`):
+>   1. **Accessible Redundant Header Hiding**:
+>      - Applied `.sr-only` to `h2.shelf-title` (`#discoverListsFeedTitle`, `#discoverSubPopular .shelf-title`, `#discoverSubCurated .shelf-title`).
+>      - Removes the redundant ~70px header that repeated the clicked pill label ("All", "Movies", "Shows", etc.) while preserving screen reader semantics and test DOM invariants.
+>   2. **Sleek Single-Line Filter Description & Action Bar**:
+>      - Styled `#discoverListsFeedHeader`, `#discoverSubPopular .shelf-header`, and `#discoverSubCurated .shelf-header` as a compact single-line flex toolbar (`min-height: 32px; gap: 12px; align-items: center; justify-content: space-between;`).
+>      - Integrated the lonely `[Refresh]` button into the right side of the toolbar as a dedicated `.discover-refresh-btn` with SVG refresh icon.
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK (5,448,243 bytes).
+>   - `node --check worker_entry_combined.js`: OK (0 syntax errors).
+>   - `python gen_map.py`: 2,665 symbols, 211 routes.
+>   - Node test suite: passed.
+> - Branch: `feat/design-system-phase-1`
+
 > **HANDOFF, 2026-10-03 (Antigravity): Discover Subnav Header Hierarchy, Movie/Show Title Disambiguation, & Attribution Badge Alignment.**
 >
 > **Where things stand**

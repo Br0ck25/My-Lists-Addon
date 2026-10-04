@@ -835,10 +835,10 @@ ${seoHeadHtml}
   html[data-initial-catalogs-sub="shelves"] #catalogsFilterBar .subnav-pill[data-sub="all"],
   html[data-initial-catalogs-sub="quickadd"] #catalogsFilterBar .subnav-pill[data-sub="quickadd"],
   html[data-initial-catalogs-sub="bulk"] #catalogsFilterBar .subnav-pill[data-sub="bulk"] {
-    background: var(--accent) !important;
-    color: #ffffff !important;
-    border-color: var(--accent) !important;
-    box-shadow: 0 2px 8px rgba(0,122,255,0.28) !important;
+    background: rgba(0, 122, 255, 0.12) !important;
+    color: var(--accent) !important;
+    border-color: rgba(0, 122, 255, 0.40) !important;
+    box-shadow: none !important;
   }
 
   /* Lists */
@@ -874,10 +874,10 @@ ${seoHeadHtml}
   html[data-initial-lists-sub="import"] #listsSubnavBar .subnav-pill[data-sub="import"],
   html[data-initial-lists-sub="bulk"] #listsSubnavBar .subnav-pill[data-sub="bulk"],
   html[data-initial-lists-sub="create-list"] #listsSubnavBar .subnav-pill[data-sub="create-list"] {
-    background: var(--accent) !important;
-    color: #ffffff !important;
-    border-color: var(--accent) !important;
-    box-shadow: 0 2px 8px rgba(0,122,255,0.28) !important;
+    background: rgba(0, 122, 255, 0.12) !important;
+    color: var(--accent) !important;
+    border-color: rgba(0, 122, 255, 0.40) !important;
+    box-shadow: none !important;
   }
 
   /* Channels */
@@ -913,10 +913,10 @@ ${seoHeadHtml}
   html[data-initial-channels-sub="storylines"] #channelsSubnavBar .subnav-pill[data-sub="storylines"],
   html[data-initial-channels-sub="quickadd"] #channelsSubnavBar .subnav-pill[data-sub="quickadd"],
   html[data-initial-channels-sub="import"] #channelsSubnavBar .subnav-pill[data-sub="import"] {
-    background: var(--accent) !important;
-    color: #ffffff !important;
-    border-color: var(--accent) !important;
-    box-shadow: 0 2px 8px rgba(0,122,255,0.28) !important;
+    background: rgba(0, 122, 255, 0.12) !important;
+    color: var(--accent) !important;
+    border-color: rgba(0, 122, 255, 0.40) !important;
+    box-shadow: none !important;
   }
 
   /* Settings */
@@ -953,10 +953,10 @@ ${seoHeadHtml}
   html[data-initial-settings-sub="external"] #settingsSubnavBar .subnav-pill[data-sub="external"],
   html[data-initial-settings-sub="backup"] #settingsSubnavBar .subnav-pill[data-sub="backup"],
   html[data-initial-settings-sub="feedback"] #settingsSubnavBar .subnav-pill[data-sub="feedback"] {
-    background: var(--accent) !important;
-    color: #ffffff !important;
-    border-color: var(--accent) !important;
-    box-shadow: 0 2px 8px rgba(0,122,255,0.28) !important;
+    background: rgba(0, 122, 255, 0.12) !important;
+    color: var(--accent) !important;
+    border-color: rgba(0, 122, 255, 0.40) !important;
+    box-shadow: none !important;
   }
 
   /* Discover */
@@ -1006,10 +1006,10 @@ ${seoHeadHtml}
   html[data-initial-discover-sub="kids"] #discoverSubnavBar .subnav-pill[data-sub="kids"],
   html[data-initial-discover-sub="holidays"] #discoverSubnavBar .subnav-pill[data-sub="holidays"],
   html[data-initial-discover-sub="genres"] #discoverSubnavBar .subnav-pill[data-sub="genres"] {
-    background: var(--accent) !important;
-    color: #ffffff !important;
-    border-color: var(--accent) !important;
-    box-shadow: 0 2px 8px rgba(0,122,255,0.28) !important;
+    background: rgba(0, 122, 255, 0.12) !important;
+    color: var(--accent) !important;
+    border-color: rgba(0, 122, 255, 0.40) !important;
+    box-shadow: none !important;
   }
   /* Each direct child of .tab-panel (the subnav pill bar, each
      .lists-subpanel) is a grid item and inherits the same default
@@ -1215,13 +1215,13 @@ ${seoHeadHtml}
   .subnav-pill {
     flex: none;
     flex-shrink: 0;
-    padding: 7px 16px;
-    min-height: 36px;
+    padding: 5px 14px;
+    min-height: 31px;
     border-radius: var(--radius-pill);
     border: 1.5px solid var(--color-border-strong);
     background: var(--color-bg-surface);
     color: var(--color-text-secondary);
-    font-size: 0.86rem;
+    font-size: 0.82rem;
     font-weight: 600;
     cursor: pointer;
     white-space: nowrap;
@@ -1229,22 +1229,29 @@ ${seoHeadHtml}
     align-items: center;
     gap: 6px;
     transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
-    box-shadow: var(--shadow-sm);
+    box-shadow: none;
     font-family: inherit;
   }
   .subnav-pill.active {
-    background: var(--color-brand);
-    color: #ffffff;
-    border-color: var(--color-brand);
-    box-shadow: 0 2px 8px var(--color-brand-subtle);
+    background: rgba(0, 122, 255, 0.12);
+    color: var(--accent);
+    border-color: rgba(0, 122, 255, 0.40);
+    box-shadow: none;
+    font-weight: 700;
+  }
+  :root.dark-theme .subnav-pill.active {
+    background: rgba(10, 132, 255, 0.22);
+    color: var(--accent);
+    border-color: rgba(10, 132, 255, 0.50);
   }
   .subnav-pill:hover:not(.active) {
-    border-color: var(--color-brand);
-    color: var(--color-brand);
+    border-color: rgba(0, 122, 255, 0.40);
+    color: var(--accent);
   }
   .subnav-pill .check-icon {
     font-weight: 800;
-    font-size: 0.85rem;
+    font-size: 0.82rem;
+    color: var(--accent);
   }
 
   /* --- Streaming Providers Chips Bar (Discover Tab) ----------------------- */
@@ -1501,6 +1508,50 @@ ${seoHeadHtml}
     color: var(--text);
     margin: 0;
     letter-spacing: -0.015em;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+  #discoverListsFeedHeader,
+  #discoverSubPopular .shelf-header,
+  #discoverSubCurated .shelf-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding: 0 2px;
+    min-height: 32px;
+  }
+  #discoverListsFeedDesc,
+  #discoverSubPopular .shelf-header p,
+  #discoverSubCurated .shelf-header p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.84rem;
+    line-height: 1.4;
+    flex: 1;
+    min-width: 0;
+  }
+  .discover-refresh-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 11px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    min-height: 28px;
+    border-radius: var(--radius-pill);
+    flex-shrink: 0;
+    cursor: pointer;
   }
   .see-all-link {
     font-size: 0.82rem;

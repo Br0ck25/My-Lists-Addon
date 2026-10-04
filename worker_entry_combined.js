@@ -29258,10 +29258,10 @@ ${seoHeadHtml}
   html[data-initial-catalogs-sub="shelves"] #catalogsFilterBar .subnav-pill[data-sub="all"],
   html[data-initial-catalogs-sub="quickadd"] #catalogsFilterBar .subnav-pill[data-sub="quickadd"],
   html[data-initial-catalogs-sub="bulk"] #catalogsFilterBar .subnav-pill[data-sub="bulk"] {
-    background: var(--accent) !important;
-    color: #ffffff !important;
-    border-color: var(--accent) !important;
-    box-shadow: 0 2px 8px rgba(0,122,255,0.28) !important;
+    background: rgba(0, 122, 255, 0.12) !important;
+    color: var(--accent) !important;
+    border-color: rgba(0, 122, 255, 0.40) !important;
+    box-shadow: none !important;
   }
 
   /* Lists */
@@ -29297,10 +29297,10 @@ ${seoHeadHtml}
   html[data-initial-lists-sub="import"] #listsSubnavBar .subnav-pill[data-sub="import"],
   html[data-initial-lists-sub="bulk"] #listsSubnavBar .subnav-pill[data-sub="bulk"],
   html[data-initial-lists-sub="create-list"] #listsSubnavBar .subnav-pill[data-sub="create-list"] {
-    background: var(--accent) !important;
-    color: #ffffff !important;
-    border-color: var(--accent) !important;
-    box-shadow: 0 2px 8px rgba(0,122,255,0.28) !important;
+    background: rgba(0, 122, 255, 0.12) !important;
+    color: var(--accent) !important;
+    border-color: rgba(0, 122, 255, 0.40) !important;
+    box-shadow: none !important;
   }
 
   /* Channels */
@@ -29336,10 +29336,10 @@ ${seoHeadHtml}
   html[data-initial-channels-sub="storylines"] #channelsSubnavBar .subnav-pill[data-sub="storylines"],
   html[data-initial-channels-sub="quickadd"] #channelsSubnavBar .subnav-pill[data-sub="quickadd"],
   html[data-initial-channels-sub="import"] #channelsSubnavBar .subnav-pill[data-sub="import"] {
-    background: var(--accent) !important;
-    color: #ffffff !important;
-    border-color: var(--accent) !important;
-    box-shadow: 0 2px 8px rgba(0,122,255,0.28) !important;
+    background: rgba(0, 122, 255, 0.12) !important;
+    color: var(--accent) !important;
+    border-color: rgba(0, 122, 255, 0.40) !important;
+    box-shadow: none !important;
   }
 
   /* Settings */
@@ -29376,10 +29376,10 @@ ${seoHeadHtml}
   html[data-initial-settings-sub="external"] #settingsSubnavBar .subnav-pill[data-sub="external"],
   html[data-initial-settings-sub="backup"] #settingsSubnavBar .subnav-pill[data-sub="backup"],
   html[data-initial-settings-sub="feedback"] #settingsSubnavBar .subnav-pill[data-sub="feedback"] {
-    background: var(--accent) !important;
-    color: #ffffff !important;
-    border-color: var(--accent) !important;
-    box-shadow: 0 2px 8px rgba(0,122,255,0.28) !important;
+    background: rgba(0, 122, 255, 0.12) !important;
+    color: var(--accent) !important;
+    border-color: rgba(0, 122, 255, 0.40) !important;
+    box-shadow: none !important;
   }
 
   /* Discover */
@@ -29429,10 +29429,10 @@ ${seoHeadHtml}
   html[data-initial-discover-sub="kids"] #discoverSubnavBar .subnav-pill[data-sub="kids"],
   html[data-initial-discover-sub="holidays"] #discoverSubnavBar .subnav-pill[data-sub="holidays"],
   html[data-initial-discover-sub="genres"] #discoverSubnavBar .subnav-pill[data-sub="genres"] {
-    background: var(--accent) !important;
-    color: #ffffff !important;
-    border-color: var(--accent) !important;
-    box-shadow: 0 2px 8px rgba(0,122,255,0.28) !important;
+    background: rgba(0, 122, 255, 0.12) !important;
+    color: var(--accent) !important;
+    border-color: rgba(0, 122, 255, 0.40) !important;
+    box-shadow: none !important;
   }
   /* Each direct child of .tab-panel (the subnav pill bar, each
      .lists-subpanel) is a grid item and inherits the same default
@@ -29638,13 +29638,13 @@ ${seoHeadHtml}
   .subnav-pill {
     flex: none;
     flex-shrink: 0;
-    padding: 7px 16px;
-    min-height: 36px;
+    padding: 5px 14px;
+    min-height: 31px;
     border-radius: var(--radius-pill);
     border: 1.5px solid var(--color-border-strong);
     background: var(--color-bg-surface);
     color: var(--color-text-secondary);
-    font-size: 0.86rem;
+    font-size: 0.82rem;
     font-weight: 600;
     cursor: pointer;
     white-space: nowrap;
@@ -29652,22 +29652,29 @@ ${seoHeadHtml}
     align-items: center;
     gap: 6px;
     transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
-    box-shadow: var(--shadow-sm);
+    box-shadow: none;
     font-family: inherit;
   }
   .subnav-pill.active {
-    background: var(--color-brand);
-    color: #ffffff;
-    border-color: var(--color-brand);
-    box-shadow: 0 2px 8px var(--color-brand-subtle);
+    background: rgba(0, 122, 255, 0.12);
+    color: var(--accent);
+    border-color: rgba(0, 122, 255, 0.40);
+    box-shadow: none;
+    font-weight: 700;
+  }
+  :root.dark-theme .subnav-pill.active {
+    background: rgba(10, 132, 255, 0.22);
+    color: var(--accent);
+    border-color: rgba(10, 132, 255, 0.50);
   }
   .subnav-pill:hover:not(.active) {
-    border-color: var(--color-brand);
-    color: var(--color-brand);
+    border-color: rgba(0, 122, 255, 0.40);
+    color: var(--accent);
   }
   .subnav-pill .check-icon {
     font-weight: 800;
-    font-size: 0.85rem;
+    font-size: 0.82rem;
+    color: var(--accent);
   }
 
   /* --- Streaming Providers Chips Bar (Discover Tab) ----------------------- */
@@ -29924,6 +29931,50 @@ ${seoHeadHtml}
     color: var(--text);
     margin: 0;
     letter-spacing: -0.015em;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+  #discoverListsFeedHeader,
+  #discoverSubPopular .shelf-header,
+  #discoverSubCurated .shelf-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding: 0 2px;
+    min-height: 32px;
+  }
+  #discoverListsFeedDesc,
+  #discoverSubPopular .shelf-header p,
+  #discoverSubCurated .shelf-header p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.84rem;
+    line-height: 1.4;
+    flex: 1;
+    min-width: 0;
+  }
+  .discover-refresh-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 11px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    min-height: 28px;
+    border-radius: var(--radius-pill);
+    flex-shrink: 0;
+    cursor: pointer;
   }
   .see-all-link {
     font-size: 0.82rem;
@@ -34285,12 +34336,13 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
   <!-- Discover Shared Lists Feed (All / Movies / Shows / Hidden Gems / Kids / Holidays / Genres) -->
   <div class="discover-subpanel" id="discoverSubSharedFeed" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" id="discoverListsFeedHeader" style="margin-bottom:12px; align-items:flex-start;">
-        <div>
-          <h2 class="shelf-title" id="discoverListsFeedTitle">Movies</h2>
-          <p id="discoverListsFeedDesc" style="margin:4px 0 0; color:var(--muted); font-size:0.85rem; line-height:1.45;">Top charts, new releases, and popular movie collections across streaming platforms.</p>
-        </div>
-        <button type="button" class="secondary lc-btn" data-act="appActRefreshDiscoverCharts">Refresh</button>
+      <div class="shelf-header" id="discoverListsFeedHeader">
+        <h2 class="shelf-title sr-only" id="discoverListsFeedTitle">Movies</h2>
+        <p id="discoverListsFeedDesc">Top charts, new releases, and popular movie collections across streaming platforms.</p>
+        <button type="button" class="secondary lc-btn discover-refresh-btn" data-act="appActRefreshDiscoverCharts" title="Refresh charts" aria-label="Refresh charts">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none;"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+          <span>Refresh</span>
+        </button>
       </div>
       <div id="discoverListsFeed"></div>
     </div>
@@ -34299,12 +34351,13 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
   <!-- Popular Lists Feed in Discover -->
   <div class="discover-subpanel" id="discoverSubPopular" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:12px; align-items:flex-start;">
-        <div>
-          <h2 class="shelf-title">Popular Community Lists</h2>
-          <p style="margin:4px 0 0; color:var(--muted); font-size:0.85rem; line-height:1.45;">Top trending and highly-rated community lists shared by creators and viewers.</p>
-        </div>
-        <button type="button" class="secondary lc-btn" data-act="loadPopularListsFeed" data-act-args="[true]">Refresh</button>
+      <div class="shelf-header">
+        <h2 class="shelf-title sr-only">Popular Community Lists</h2>
+        <p>Top trending and highly-rated community lists shared by creators and viewers.</p>
+        <button type="button" class="secondary lc-btn discover-refresh-btn" data-act="loadPopularListsFeed" data-act-args="[true]" title="Refresh popular lists" aria-label="Refresh popular lists">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none;"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+          <span>Refresh</span>
+        </button>
       </div>
       <div id="popularListsFeed"></div>
     </div>
@@ -34313,12 +34366,13 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
   <!-- Curated Lists Feed in Discover -->
   <div class="discover-subpanel" id="discoverSubCurated" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:12px; align-items:flex-start;">
-        <div>
-          <h2 class="shelf-title">Curated For You</h2>
-          <p style="margin:4px 0 0; color:var(--muted); font-size:0.85rem; line-height:1.45;">Personalized recommendations and curated lists tailored to your watch history and tastes.</p>
-        </div>
-        <button type="button" class="secondary lc-btn" data-act="loadCuratedListsFeed" data-act-args="[true]">Refresh</button>
+      <div class="shelf-header">
+        <h2 class="shelf-title sr-only">Curated For You</h2>
+        <p>Personalized recommendations and curated lists tailored to your watch history and tastes.</p>
+        <button type="button" class="secondary lc-btn discover-refresh-btn" data-act="loadCuratedListsFeed" data-act-args="[true]" title="Refresh curated recommendations" aria-label="Refresh curated recommendations">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none;"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+          <span>Refresh</span>
+        </button>
       </div>
       <div id="curatedListsFeed"></div>
     </div>

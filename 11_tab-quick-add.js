@@ -54,12 +54,13 @@
   <!-- Discover Shared Lists Feed (All / Movies / Shows / Hidden Gems / Kids / Holidays / Genres) -->
   <div class="discover-subpanel" id="discoverSubSharedFeed" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" id="discoverListsFeedHeader" style="margin-bottom:12px; align-items:flex-start;">
-        <div>
-          <h2 class="shelf-title" id="discoverListsFeedTitle">Movies</h2>
-          <p id="discoverListsFeedDesc" style="margin:4px 0 0; color:var(--muted); font-size:0.85rem; line-height:1.45;">Top charts, new releases, and popular movie collections across streaming platforms.</p>
-        </div>
-        <button type="button" class="secondary lc-btn" data-act="appActRefreshDiscoverCharts">Refresh</button>
+      <div class="shelf-header" id="discoverListsFeedHeader">
+        <h2 class="shelf-title sr-only" id="discoverListsFeedTitle">Movies</h2>
+        <p id="discoverListsFeedDesc">Top charts, new releases, and popular movie collections across streaming platforms.</p>
+        <button type="button" class="secondary lc-btn discover-refresh-btn" data-act="appActRefreshDiscoverCharts" title="Refresh charts" aria-label="Refresh charts">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none;"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+          <span>Refresh</span>
+        </button>
       </div>
       <div id="discoverListsFeed"></div>
     </div>
@@ -68,12 +69,13 @@
   <!-- Popular Lists Feed in Discover -->
   <div class="discover-subpanel" id="discoverSubPopular" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:12px; align-items:flex-start;">
-        <div>
-          <h2 class="shelf-title">Popular Community Lists</h2>
-          <p style="margin:4px 0 0; color:var(--muted); font-size:0.85rem; line-height:1.45;">Top trending and highly-rated community lists shared by creators and viewers.</p>
-        </div>
-        <button type="button" class="secondary lc-btn" data-act="loadPopularListsFeed" data-act-args="[true]">Refresh</button>
+      <div class="shelf-header">
+        <h2 class="shelf-title sr-only">Popular Community Lists</h2>
+        <p>Top trending and highly-rated community lists shared by creators and viewers.</p>
+        <button type="button" class="secondary lc-btn discover-refresh-btn" data-act="loadPopularListsFeed" data-act-args="[true]" title="Refresh popular lists" aria-label="Refresh popular lists">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none;"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+          <span>Refresh</span>
+        </button>
       </div>
       <div id="popularListsFeed"></div>
     </div>
@@ -82,12 +84,13 @@
   <!-- Curated Lists Feed in Discover -->
   <div class="discover-subpanel" id="discoverSubCurated" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:12px; align-items:flex-start;">
-        <div>
-          <h2 class="shelf-title">Curated For You</h2>
-          <p style="margin:4px 0 0; color:var(--muted); font-size:0.85rem; line-height:1.45;">Personalized recommendations and curated lists tailored to your watch history and tastes.</p>
-        </div>
-        <button type="button" class="secondary lc-btn" data-act="loadCuratedListsFeed" data-act-args="[true]">Refresh</button>
+      <div class="shelf-header">
+        <h2 class="shelf-title sr-only">Curated For You</h2>
+        <p>Personalized recommendations and curated lists tailored to your watch history and tastes.</p>
+        <button type="button" class="secondary lc-btn discover-refresh-btn" data-act="loadCuratedListsFeed" data-act-args="[true]" title="Refresh curated recommendations" aria-label="Refresh curated recommendations">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none;"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+          <span>Refresh</span>
+        </button>
       </div>
       <div id="curatedListsFeed"></div>
     </div>
