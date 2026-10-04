@@ -95,32 +95,86 @@ ${newUi ? '    <div id="appShellAddTitles"></div>' : ''}
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title" id="customListEditorTitle">Create a Custom List</h2>
       </div>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Manage items and settings for this custom list. You can reorder items by dragging or typing a position number, remove items with the &#x2715; button, or add new items from Search, Discover, or Charts.</p>
+      <p style="margin:0 0 16px; color:var(--muted); font-size:0.85rem;">Curate, reorder, and manage titles for this custom list.</p>
 
-      <p style="margin-top:14px; margin-bottom:6px; font-weight:600; font-size:0.85rem;">Picks in this list:</p>
-      <div id="customListDraftList"><p style="color:var(--muted); font-size:0.85rem;"><small>No items in this list yet &mdash; tap + on any movie or show across Discover, Search, or Charts to add it.</small></p></div>
-      <div class="actions" style="margin-top:8px; justify-content:flex-start; gap:8px;">
-        <button type="button" class="secondary lc-btn" data-act="shuffleCustomListDraft">Shuffle Picks Now</button>
-        <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" data-act="removeAllCustomListDraftPicks">Remove All</button>
+      <!-- 1. List Name & Content Type Header Group -->
+      <div style="display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap; margin-bottom:14px;">
+        <div style="flex:1 1 280px; min-width:0;">
+          <label for="customListNameInput" style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:6px;">List Name</label>
+          <input type="text" id="customListNameInput" placeholder="List name (e.g. My Favorites)" style="width:100%; padding:9px 14px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.92rem; box-sizing:border-box;">
+        </div>
+        <div style="flex:0 0 auto;">
+          <label style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:6px;">Content Type</label>
+          <div id="customListTypeToggles" style="display:flex; gap:4px; background:var(--surface-2, rgba(255,255,255,0.04)); padding:3px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong);">
+            <label class="custom-list-type-pill" style="display:flex; align-items:center; gap:6px; cursor:pointer; padding:5px 12px; border-radius:var(--radius-pill); font-size:0.82rem; font-weight:600; user-select:none; margin:0;">
+              <input type="radio" name="customListTypeRadio" value="movie" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;movie&quot;]" checked style="margin:0;">
+              <span>Movies</span>
+            </label>
+            <label class="custom-list-type-pill" style="display:flex; align-items:center; gap:6px; cursor:pointer; padding:5px 12px; border-radius:var(--radius-pill); font-size:0.82rem; font-weight:600; user-select:none; margin:0;">
+              <input type="radio" name="customListTypeRadio" value="series" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;series&quot;]" style="margin:0;">
+              <span>Shows</span>
+            </label>
+            <label class="custom-list-type-pill" style="display:flex; align-items:center; gap:6px; cursor:pointer; padding:5px 12px; border-radius:var(--radius-pill); font-size:0.82rem; font-weight:600; user-select:none; margin:0;">
+              <input type="radio" name="customListTypeRadio" value="mixed" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;mixed&quot;]" style="margin:0;">
+              <span>Mixed</span>
+            </label>
+          </div>
+        </div>
       </div>
-      <div id="customListVisibilityRow" style="margin-top:12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; max-width:280px;">
-        <span style="font-size:0.95rem; font-weight:500; color:var(--text);">Public</span>
-        <label class="ui-toggle">
+
+      <!-- 2. Public List Toggle -->
+      <div id="customListVisibilityRow" style="padding:10px 14px; background:var(--surface); border:1px solid var(--border); border-radius:10px; display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px;">
+        <div>
+          <span style="font-size:0.88rem; font-weight:600; color:var(--text);">Public List</span>
+          <p style="margin:2px 0 0; font-size:0.78rem; color:var(--muted);">Make this list visible on your public creator profile and discoverable in the community directory</p>
+        </div>
+        <label class="ui-toggle" aria-label="Make list public">
           <input type="checkbox" id="customListPublicToggle" checked>
           <span class="ui-toggle-slider"></span>
         </label>
       </div>
 
-      <!-- Advanced Settings (Progressive Disclosure) -->
-      <details class="channel-advanced-details" style="margin-top:12px; border:1px solid var(--border); border-radius:8px; padding:10px 14px; background:var(--surface);">
+      <!-- 3. Inline Search & Quick Add Bar -->
+      <div class="custom-list-search-section" style="border:1px solid var(--border); border-radius:12px; padding:16px; background:var(--surface); margin-bottom:16px; box-shadow:var(--shadow-sm);">
+        <label for="customListSearchInput" style="display:block; font-size:0.88rem; font-weight:700; color:var(--text); margin-bottom:4px;">Add Titles to List</label>
+        <p style="margin:0 0 10px; font-size:0.8rem; color:var(--muted);">Search for movies or shows and tap "+ Add" to add them straight to this list.</p>
+        <div style="position:relative; width:100%;">
+          <input type="text" id="customListSearchInput" placeholder="Search a title to add..." style="width:100%; padding:10px 14px 10px 38px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.9rem; box-sizing:border-box;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none;" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <button type="button" id="customListSearchClearBtn" class="search-clear-btn" aria-label="Clear search" style="display:none; position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--muted); cursor:pointer; padding:4px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm4.3 14.3a.996.996 0 0 1-1.41 0L12 13.41 9.11 16.3a.996.996 0 1 1-1.41-1.41L10.59 12 7.7 9.11A.996.996 0 1 1 9.11 7.7L12 10.59l2.89-2.89a.996.996 0 1 1 1.41 1.41L13.41 12l2.89 2.89c.38.38.38 1.02 0 1.41z"/></svg>
+          </button>
+        </div>
+        <div id="customListSearchResult" style="margin-top:10px;"></div>
+      </div>
+
+      <!-- 4. Picks in This List -->
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:8px; margin-bottom:8px;">
+        <div style="font-weight:700; font-size:0.92rem; color:var(--text);">
+          Picks in this list <span id="customListDraftCount" style="font-weight:normal; font-size:0.8rem; color:var(--muted);">(0 items)</span>
+        </div>
+        <div class="actions" id="customListDraftActions" style="margin:0; gap:8px; display:none;">
+          <button type="button" class="secondary lc-btn" data-act="shuffleCustomListDraft" style="font-size:0.8rem;">Shuffle Picks Now</button>
+          <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25); font-size:0.8rem;" data-act="removeAllCustomListDraftPicks">Remove All</button>
+        </div>
+      </div>
+      <div id="customListDraftList">
+        <p style="color:var(--muted); font-size:0.85rem;"><small>No items in this list yet &mdash; search above or tap + on any movie or show across Discover, Search, or Charts to add it.</small></p>
+      </div>
+
+      <!-- 5. Advanced Settings (Progressive Disclosure) -->
+      <details class="channel-advanced-details" style="margin-top:16px; border:1px solid var(--border); border-radius:10px; padding:12px 16px; background:var(--surface); box-shadow:var(--shadow-sm);">
         <summary style="font-weight:600; font-size:0.88rem; cursor:pointer; user-select:none; color:var(--text); display:flex; align-items:center; justify-content:space-between;">
           <span>Advanced Settings</span>
           <span style="font-size:0.75rem; color:var(--muted); font-weight:normal;">Play order &amp; watch history rules</span>
         </summary>
         <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px;">
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
-            <label for="customListPlayOrderSelect" style="font-size:0.85rem; font-weight:600; white-space:nowrap;">Play order:</label>
-            <select id="customListPlayOrderSelect" data-act="applyCustomListPlayOrder" data-act-args="[&quot;@value&quot;]" style="flex:1; min-width:210px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px; flex-wrap:wrap;">
+            <label for="customListPlayOrderSelect" style="font-size:0.85rem; font-weight:600; white-space:nowrap; color:var(--text);">Play order:</label>
+            <select id="customListPlayOrderSelect" data-act="applyCustomListPlayOrder" data-act-args="[&quot;@value&quot;]" style="max-width:320px; font-size:0.86rem; padding:7px 12px; background:var(--surface); color:var(--text); border:1.5px solid var(--border-strong); border-radius:var(--radius-pill);">
               <option value="as-listed">Creation order (as listed)</option>
               <option value="aired-asc">Air date &mdash; oldest first</option>
               <option value="aired-desc">Air date &mdash; newest first</option>
@@ -137,24 +191,11 @@ ${newUi ? '    <div id="appShellAddTitles"></div>' : ''}
           <p style="margin:2px 0 0 24px; color:var(--muted); font-size:0.78rem;">Needs Auto-track playback signed in. Once every pick has been seen, the whole list comes back rather than going dark.</p>
         </div>
       </details>
-      <div id="customListTypeToggles" style="margin-top:8px; display:flex; gap:16px; flex-wrap:wrap;">
-        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-          <input type="radio" name="customListTypeRadio" value="movie" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;movie&quot;]" checked>
-          <span style="font-size:0.85rem;">Movies</span>
-        </label>
-        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-          <input type="radio" name="customListTypeRadio" value="series" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;series&quot;]">
-          <span style="font-size:0.85rem;">Shows</span>
-        </label>
-        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-          <input type="radio" name="customListTypeRadio" value="mixed" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;mixed&quot;]">
-          <span style="font-size:0.85rem;">Mixed (Movies &amp; Shows)</span>
-        </label>
-      </div>
-      <div class="row" style="margin-top:10px;">
-        <input type="text" id="customListNameInput" placeholder="List name (e.g. My Favorites)">
-        <button type="button" class="primary" id="customListSaveBtn" data-act="saveCustomList">Save</button>
-        <button type="button" id="customListCancelEditBtn" class="secondary" style="display:none;" data-act="cancelEditCustomList">Cancel</button>
+
+      <!-- 6. Bottom Action Bar -->
+      <div class="actions" style="margin-top:18px; border-top:1px solid var(--border); padding-top:14px; justify-content:flex-end; gap:10px;">
+        <button type="button" id="customListCancelEditBtn" class="secondary lc-btn" style="display:none;" data-act="cancelEditCustomList">Cancel</button>
+        <button type="button" class="primary lc-btn" id="customListSaveBtn" data-act="saveCustomList" style="padding:8px 24px; font-weight:600;">Save</button>
       </div>
     </div>
   </div>

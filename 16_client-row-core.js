@@ -2620,6 +2620,11 @@ function switchListsSubmenu(name, btn) {
       renderLikedListsFeed();
     }
   }
+  if (name === 'create-list') {
+    if (typeof initCustomListSearch === 'function') {
+      initCustomListSearch();
+    }
+  }
 }
 
 function switchSettingsSubmenu(name, btn) {

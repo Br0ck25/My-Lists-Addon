@@ -4933,6 +4933,29 @@ ${seoHeadHtml}
     outline-offset: 2px;
   }
 
+  /* Custom List Content Type Segmented Pills */
+  .custom-list-type-pill {
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    color: var(--muted);
+  }
+  .custom-list-type-pill:hover {
+    color: var(--text);
+  }
+  .custom-list-type-pill:has(input:checked),
+  .custom-list-type-pill.active {
+    background: var(--accent) !important;
+    color: #fff !important;
+    font-weight: 700 !important;
+  }
+  .custom-list-type-pill input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    margin: 0;
+  }
+
   @media (max-width: 640px) {
     .customListMoveBtn { display: none !important; }
     .customListPosInput { display: none !important; }

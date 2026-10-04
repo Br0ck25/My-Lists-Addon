@@ -151,13 +151,185 @@ async function loadListToCustomListDraft(name, listUrl, contentType, btn) {
   }
 }
 
-const customListSearchBox = document.getElementById('customListSearchResult');
-if (customListSearchBox) {
-  customListSearchBox.addEventListener('click', (e) => {
-    const btn = e.target.closest('.customListAddBtn');
-    if (!btn) return;
-    addToCustomListDraft(btn.dataset.searchtype, btn.dataset.tmdbid, btn.dataset.title, btn.dataset.year, btn.dataset.poster, btn);
-  });
+let customListSearchTimer = null;
+let customListSearchSeq = 0;
+let customListSearchInitialized = false;
+
+function updateCustomListSearchPlaceholder() {
+  const input = document.getElementById('customListSearchInput');
+  if (!input) return;
+  if (customListDraftType === 'movie') {
+    input.placeholder = 'Search a movie to add...';
+  } else if (customListDraftType === 'series') {
+    input.placeholder = 'Search a show to add...';
+  } else {
+    input.placeholder = 'Search a movie or show to add...';
+  }
+}
+
+function initCustomListSearch() {
+  const input = document.getElementById('customListSearchInput');
+  const clearBtn = document.getElementById('customListSearchClearBtn');
+  const searchBox = document.getElementById('customListSearchResult');
+  if (!input) return;
+
+  updateCustomListSearchPlaceholder();
+
+  if (!customListSearchInitialized) {
+    customListSearchInitialized = true;
+
+    input.addEventListener('input', () => {
+      const q = input.value.trim();
+      if (clearBtn) clearBtn.style.display = input.value ? 'block' : 'none';
+      if (customListSearchTimer) clearTimeout(customListSearchTimer);
+      if (!q) {
+        if (searchBox) searchBox.innerHTML = '';
+        return;
+      }
+      customListSearchTimer = setTimeout(() => {
+        runCustomListTitleSearch(q);
+      }, 300);
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (customListSearchTimer) clearTimeout(customListSearchTimer);
+        const q = input.value.trim();
+        if (q) runCustomListTitleSearch(q);
+      }
+    });
+
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        input.value = '';
+        clearBtn.style.display = 'none';
+        if (searchBox) searchBox.innerHTML = '';
+        input.focus();
+      });
+    }
+
+    if (searchBox && !searchBox.__customListAddBound) {
+      searchBox.__customListAddBound = true;
+      searchBox.addEventListener('click', (e) => {
+        const btn = e.target.closest('.customListAddBtn');
+        if (!btn || btn.disabled) return;
+        addToCustomListDraft(btn.dataset.searchtype, btn.dataset.tmdbid, btn.dataset.title, btn.dataset.year, btn.dataset.poster, btn);
+      });
+    }
+  }
+}
+
+async function runCustomListTitleSearch(query) {
+  const q = String(query || '').trim();
+  const box = document.getElementById('customListSearchResult');
+  if (!box) return [];
+  if (!q) {
+    box.innerHTML = '';
+    return [];
+  }
+  const seq = ++customListSearchSeq;
+  box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem; padding:8px 0;"><small>Searching\u2026</small></p>';
+
+  try {
+    const isAdult = typeof isAdultContentFilterEnabled === 'function' ? isAdultContentFilterEnabled() : false;
+    const adultParam = isAdult ? '&adultContentFilter=1' : '';
+
+    let results = [];
+    if (customListDraftType === 'series') {
+      const res = await fetch(ORIGIN + '/api/title-search?q=' + encodeURIComponent(q) + '&type=tv' + adultParam, { cache: 'no-store' });
+      const data = await res.json();
+      if (seq !== customListSearchSeq) return [];
+      if (data && data.ok && Array.isArray(data.results)) {
+        results = data.results.map(r => Object.assign({}, r, { searchType: 'tv' }));
+      }
+    } else if (customListDraftType === 'movie') {
+      const res = await fetch(ORIGIN + '/api/title-search?q=' + encodeURIComponent(q) + '&type=movie' + adultParam, { cache: 'no-store' });
+      const data = await res.json();
+      if (seq !== customListSearchSeq) return [];
+      if (data && data.ok && Array.isArray(data.results)) {
+        results = data.results.map(r => Object.assign({}, r, { searchType: 'movie' }));
+      }
+    } else {
+      const [resMovie, resTv] = await Promise.all([
+        fetch(ORIGIN + '/api/title-search?q=' + encodeURIComponent(q) + '&type=movie' + adultParam, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ ok: false })),
+        fetch(ORIGIN + '/api/title-search?q=' + encodeURIComponent(q) + '&type=tv' + adultParam, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ ok: false }))
+      ]);
+      if (seq !== customListSearchSeq) return [];
+      const movies = (resMovie && resMovie.ok && Array.isArray(resMovie.results)) ? resMovie.results.map(r => Object.assign({}, r, { searchType: 'movie' })) : [];
+      const tvs = (resTv && resTv.ok && Array.isArray(resTv.results)) ? resTv.results.map(r => Object.assign({}, r, { searchType: 'tv' })) : [];
+      const maxLen = Math.max(movies.length, tvs.length);
+      for (let i = 0; i < maxLen; i++) {
+        if (i < movies.length) results.push(movies[i]);
+        if (i < tvs.length) results.push(tvs[i]);
+      }
+    }
+
+    if (seq !== customListSearchSeq) return [];
+    renderCustomListSearchResults(results.slice(0, 12));
+    return results;
+  } catch (e) {
+    if (seq !== customListSearchSeq) return [];
+    box.innerHTML = '<p class="testresult err" style="margin:8px 0; font-size:0.85rem;">\u2717 Network error while searching.</p>';
+    return [];
+  }
+}
+
+function renderCustomListSearchResults(results) {
+  const box = document.getElementById('customListSearchResult');
+  if (!box) return;
+  if (!results.length) {
+    box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem; padding:8px 0;"><small>No titles found matching that search.</small></p>';
+    return;
+  }
+
+  const existingTitles = new Set(customListDraftItems.map(it => (it.title || it.name || '').toLowerCase().trim()));
+
+  const cardsHtml = results.map(r => {
+    const itemType = (r.searchType === 'tv' || r.type === 'tv' || r.type === 'series') ? 'tv' : 'movie';
+    const isShow = itemType === 'tv';
+    const typeLabel = isShow ? 'Show' : 'Movie';
+    const rPoster = typeof resolveClientPoster === 'function' ? resolveClientPoster(r, r.poster || '') : r.poster;
+    const posterImg = rPoster
+      ? '<img class="preview-thumb" src="' + escapeAttr(rPoster) + '" alt="" loading="lazy" style="border-radius:6px; aspect-ratio:2/3; object-fit:cover; width:100%;">'
+      : '<div class="preview-thumb" style="border-radius:6px; aspect-ratio:2/3; background:var(--surface-2, rgba(255,255,255,0.06)); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:0.72rem; text-align:center; padding:4px;">No poster</div>';
+
+    const isAlreadyAdded = existingTitles.has((r.title || '').toLowerCase().trim());
+    const btnText = isAlreadyAdded ? 'Added \u2713' : '+ Add';
+    const btnClass = isAlreadyAdded ? 'lc-btn secondary customListAddBtn' : 'lc-btn primary customListAddBtn';
+    const disabledAttr = isAlreadyAdded ? ' disabled' : '';
+
+    return '<div class="custom-list-search-card" style="display:flex; flex-direction:column; align-items:center; width:100%; min-width:0; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px; box-sizing:border-box;">' +
+      '<div style="width:100%; position:relative; margin-bottom:6px;">' +
+        posterImg +
+      '</div>' +
+      '<div style="width:100%; font-size:0.78rem; font-weight:600; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom:2px; color:var(--text);" title="' + escapeAttr(r.title || '') + '">' +
+        escapeHtml(r.title || '') +
+      '</div>' +
+      '<div style="font-size:0.72rem; color:var(--muted); text-align:center; margin-bottom:6px;">' +
+        (r.year ? escapeHtml(r.year) + ' \u2022 ' : '') + typeLabel +
+      '</div>' +
+      '<button type="button" class="' + btnClass + '" style="width:100%; padding:5px 8px; font-size:0.75rem; font-weight:600;"' +
+        disabledAttr +
+        ' data-searchtype="' + itemType + '"' +
+        ' data-tmdbid="' + escapeAttr(String(r.tmdbId || r.id || '')) + '"' +
+        ' data-title="' + escapeAttr(r.title || '') + '"' +
+        ' data-year="' + escapeAttr(r.year || '') + '"' +
+        ' data-poster="' + escapeAttr(r.poster || '') + '">' +
+        btnText +
+      '</button>' +
+    '</div>';
+  }).join('');
+
+  box.innerHTML = '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(110px, 1fr)); gap:10px; margin-top:8px; max-height:420px; overflow-y:auto; padding:4px 2px;">' + cardsHtml + '</div>';
+}
+
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initCustomListSearch);
+  } else {
+    initCustomListSearch();
+  }
 }
 
 async function addToCustomListDraft(searchType, tmdbId, title, year, poster, btn) {
@@ -196,7 +368,12 @@ async function addToCustomListDraft(searchType, tmdbId, title, year, poster, btn
     });
     if (!customListDraftType) customListDraftType = itemType;
     renderCustomListDraftList();
-    if (btn) btn.textContent = 'Added \u2713';
+    if (btn) {
+      btn.textContent = 'Added \u2713';
+      btn.disabled = true;
+      btn.classList.remove('primary');
+      btn.classList.add('secondary');
+    }
     if (typeof trackEvent === 'function') trackEvent('list-add', data.imdbId, title, itemType);
   } catch (e) {
     showToast('Network error adding "' + title + '".', 'error');
@@ -208,9 +385,24 @@ async function addToCustomListDraft(searchType, tmdbId, title, year, poster, btn
 }
 
 function renderCustomListDraftList() {
+  const countEl = document.getElementById('customListDraftCount');
+  if (countEl) {
+    const len = customListDraftItems.length;
+    countEl.textContent = '(' + len + ' ' + (len === 1 ? 'item' : 'items') + ')';
+  }
+  const actionsEl = document.getElementById('customListDraftActions');
+  if (actionsEl) {
+    actionsEl.style.display = customListDraftItems.length >= 2 ? 'flex' : 'none';
+  }
+
   const box = document.getElementById('customListDraftList');
+  if (!box) return;
   if (!customListDraftItems.length) {
-    box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem;"><small>No items in this list yet &mdash; tap + on any movie or show across Discover, Search, or Charts to add it.</small></p>';
+    box.innerHTML = '<div style="text-align:center; padding:28px 16px; border:1.5px dashed var(--border); border-radius:10px; background:var(--surface); margin-top:8px;">' +
+      '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted); margin-bottom:8px; opacity:0.7;" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg>' +
+      '<div style="font-weight:600; font-size:0.9rem; color:var(--text); margin-bottom:4px;">No titles in this list yet</div>' +
+      '<p style="color:var(--muted); font-size:0.82rem; margin:0 auto; max-width:340px;">Search above to add movies or shows, or tap "+" on any title while browsing Discover, Charts, or Search.</p>' +
+    '</div>';
     return;
   }
   const cardsHtml = customListDraftItems.map((it, i) => {
@@ -593,6 +785,8 @@ function saveCustomList() {
   if (searchInput) searchInput.value = '';
   const searchRes = document.getElementById('customListSearchResult');
   if (searchRes) searchRes.innerHTML = '';
+  const clearBtn = document.getElementById('customListSearchClearBtn');
+  if (clearBtn) clearBtn.style.display = 'none';
   renderCustomListDraftList();
   updateCustomListSaveButtonLabel();
 }
@@ -935,6 +1129,8 @@ function cancelEditCustomList() {
   if (searchInput) searchInput.value = '';
   const searchRes = document.getElementById('customListSearchResult');
   if (searchRes) searchRes.innerHTML = '';
+  const clearBtn = document.getElementById('customListSearchClearBtn');
+  if (clearBtn) clearBtn.style.display = 'none';
   const playOrderSel = document.getElementById('customListPlayOrderSelect');
   if (playOrderSel) {
     playOrderSel.value = 'as-listed';
@@ -987,6 +1183,8 @@ function setCustomListDraftTypeToggle(type) {
   if (type === 'mixed') {
     customListDraftType = 'mixed';
     updateCustomListTypeRadio('mixed');
+    const input = document.getElementById('customListSearchInput');
+    if (input && input.value.trim()) runCustomListTitleSearch(input.value.trim());
     return;
   }
   if (customListDraftItems.length > 0 && customListDraftType !== type) {
@@ -1002,14 +1200,23 @@ function setCustomListDraftTypeToggle(type) {
   }
   customListDraftType = type;
   updateCustomListTypeRadio(type);
+  const input = document.getElementById('customListSearchInput');
+  if (input && input.value.trim()) runCustomListTitleSearch(input.value.trim());
 }
 
 function updateCustomListTypeRadio(type) {
   const radios = document.getElementsByName('customListTypeRadio');
   for (let i = 0; i < radios.length; i++) {
-    if (radios[i].value === type) {
-      radios[i].checked = true;
+    const isMatch = (radios[i].value === type);
+    radios[i].checked = isMatch;
+    const pill = radios[i].closest('.custom-list-type-pill');
+    if (pill) {
+      if (isMatch) pill.classList.add('active');
+      else pill.classList.remove('active');
     }
+  }
+  if (typeof updateCustomListSearchPlaceholder === 'function') {
+    updateCustomListSearchPlaceholder();
   }
 }
 

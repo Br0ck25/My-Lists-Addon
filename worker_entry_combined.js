@@ -33356,6 +33356,29 @@ ${seoHeadHtml}
     outline-offset: 2px;
   }
 
+  /* Custom List Content Type Segmented Pills */
+  .custom-list-type-pill {
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    color: var(--muted);
+  }
+  .custom-list-type-pill:hover {
+    color: var(--text);
+  }
+  .custom-list-type-pill:has(input:checked),
+  .custom-list-type-pill.active {
+    background: var(--accent) !important;
+    color: #fff !important;
+    font-weight: 700 !important;
+  }
+  .custom-list-type-pill input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    margin: 0;
+  }
+
   @media (max-width: 640px) {
     .customListMoveBtn { display: none !important; }
     .customListPosInput { display: none !important; }
@@ -34599,32 +34622,86 @@ ${newUi ? '    <div id="appShellAddTitles"></div>' : ''}
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title" id="customListEditorTitle">Create a Custom List</h2>
       </div>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Manage items and settings for this custom list. You can reorder items by dragging or typing a position number, remove items with the &#x2715; button, or add new items from Search, Discover, or Charts.</p>
+      <p style="margin:0 0 16px; color:var(--muted); font-size:0.85rem;">Curate, reorder, and manage titles for this custom list.</p>
 
-      <p style="margin-top:14px; margin-bottom:6px; font-weight:600; font-size:0.85rem;">Picks in this list:</p>
-      <div id="customListDraftList"><p style="color:var(--muted); font-size:0.85rem;"><small>No items in this list yet &mdash; tap + on any movie or show across Discover, Search, or Charts to add it.</small></p></div>
-      <div class="actions" style="margin-top:8px; justify-content:flex-start; gap:8px;">
-        <button type="button" class="secondary lc-btn" data-act="shuffleCustomListDraft">Shuffle Picks Now</button>
-        <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" data-act="removeAllCustomListDraftPicks">Remove All</button>
+      <!-- 1. List Name & Content Type Header Group -->
+      <div style="display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap; margin-bottom:14px;">
+        <div style="flex:1 1 280px; min-width:0;">
+          <label for="customListNameInput" style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:6px;">List Name</label>
+          <input type="text" id="customListNameInput" placeholder="List name (e.g. My Favorites)" style="width:100%; padding:9px 14px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.92rem; box-sizing:border-box;">
+        </div>
+        <div style="flex:0 0 auto;">
+          <label style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:6px;">Content Type</label>
+          <div id="customListTypeToggles" style="display:flex; gap:4px; background:var(--surface-2, rgba(255,255,255,0.04)); padding:3px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong);">
+            <label class="custom-list-type-pill" style="display:flex; align-items:center; gap:6px; cursor:pointer; padding:5px 12px; border-radius:var(--radius-pill); font-size:0.82rem; font-weight:600; user-select:none; margin:0;">
+              <input type="radio" name="customListTypeRadio" value="movie" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;movie&quot;]" checked style="margin:0;">
+              <span>Movies</span>
+            </label>
+            <label class="custom-list-type-pill" style="display:flex; align-items:center; gap:6px; cursor:pointer; padding:5px 12px; border-radius:var(--radius-pill); font-size:0.82rem; font-weight:600; user-select:none; margin:0;">
+              <input type="radio" name="customListTypeRadio" value="series" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;series&quot;]" style="margin:0;">
+              <span>Shows</span>
+            </label>
+            <label class="custom-list-type-pill" style="display:flex; align-items:center; gap:6px; cursor:pointer; padding:5px 12px; border-radius:var(--radius-pill); font-size:0.82rem; font-weight:600; user-select:none; margin:0;">
+              <input type="radio" name="customListTypeRadio" value="mixed" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;mixed&quot;]" style="margin:0;">
+              <span>Mixed</span>
+            </label>
+          </div>
+        </div>
       </div>
-      <div id="customListVisibilityRow" style="margin-top:12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; max-width:280px;">
-        <span style="font-size:0.95rem; font-weight:500; color:var(--text);">Public</span>
-        <label class="ui-toggle">
+
+      <!-- 2. Public List Toggle -->
+      <div id="customListVisibilityRow" style="padding:10px 14px; background:var(--surface); border:1px solid var(--border); border-radius:10px; display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px;">
+        <div>
+          <span style="font-size:0.88rem; font-weight:600; color:var(--text);">Public List</span>
+          <p style="margin:2px 0 0; font-size:0.78rem; color:var(--muted);">Make this list visible on your public creator profile and discoverable in the community directory</p>
+        </div>
+        <label class="ui-toggle" aria-label="Make list public">
           <input type="checkbox" id="customListPublicToggle" checked>
           <span class="ui-toggle-slider"></span>
         </label>
       </div>
 
-      <!-- Advanced Settings (Progressive Disclosure) -->
-      <details class="channel-advanced-details" style="margin-top:12px; border:1px solid var(--border); border-radius:8px; padding:10px 14px; background:var(--surface);">
+      <!-- 3. Inline Search & Quick Add Bar -->
+      <div class="custom-list-search-section" style="border:1px solid var(--border); border-radius:12px; padding:16px; background:var(--surface); margin-bottom:16px; box-shadow:var(--shadow-sm);">
+        <label for="customListSearchInput" style="display:block; font-size:0.88rem; font-weight:700; color:var(--text); margin-bottom:4px;">Add Titles to List</label>
+        <p style="margin:0 0 10px; font-size:0.8rem; color:var(--muted);">Search for movies or shows and tap "+ Add" to add them straight to this list.</p>
+        <div style="position:relative; width:100%;">
+          <input type="text" id="customListSearchInput" placeholder="Search a title to add..." style="width:100%; padding:10px 14px 10px 38px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.9rem; box-sizing:border-box;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none;" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <button type="button" id="customListSearchClearBtn" class="search-clear-btn" aria-label="Clear search" style="display:none; position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--muted); cursor:pointer; padding:4px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm4.3 14.3a.996.996 0 0 1-1.41 0L12 13.41 9.11 16.3a.996.996 0 1 1-1.41-1.41L10.59 12 7.7 9.11A.996.996 0 1 1 9.11 7.7L12 10.59l2.89-2.89a.996.996 0 1 1 1.41 1.41L13.41 12l2.89 2.89c.38.38.38 1.02 0 1.41z"/></svg>
+          </button>
+        </div>
+        <div id="customListSearchResult" style="margin-top:10px;"></div>
+      </div>
+
+      <!-- 4. Picks in This List -->
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:8px; margin-bottom:8px;">
+        <div style="font-weight:700; font-size:0.92rem; color:var(--text);">
+          Picks in this list <span id="customListDraftCount" style="font-weight:normal; font-size:0.8rem; color:var(--muted);">(0 items)</span>
+        </div>
+        <div class="actions" id="customListDraftActions" style="margin:0; gap:8px; display:none;">
+          <button type="button" class="secondary lc-btn" data-act="shuffleCustomListDraft" style="font-size:0.8rem;">Shuffle Picks Now</button>
+          <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25); font-size:0.8rem;" data-act="removeAllCustomListDraftPicks">Remove All</button>
+        </div>
+      </div>
+      <div id="customListDraftList">
+        <p style="color:var(--muted); font-size:0.85rem;"><small>No items in this list yet &mdash; search above or tap + on any movie or show across Discover, Search, or Charts to add it.</small></p>
+      </div>
+
+      <!-- 5. Advanced Settings (Progressive Disclosure) -->
+      <details class="channel-advanced-details" style="margin-top:16px; border:1px solid var(--border); border-radius:10px; padding:12px 16px; background:var(--surface); box-shadow:var(--shadow-sm);">
         <summary style="font-weight:600; font-size:0.88rem; cursor:pointer; user-select:none; color:var(--text); display:flex; align-items:center; justify-content:space-between;">
           <span>Advanced Settings</span>
           <span style="font-size:0.75rem; color:var(--muted); font-weight:normal;">Play order &amp; watch history rules</span>
         </summary>
         <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px;">
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
-            <label for="customListPlayOrderSelect" style="font-size:0.85rem; font-weight:600; white-space:nowrap;">Play order:</label>
-            <select id="customListPlayOrderSelect" data-act="applyCustomListPlayOrder" data-act-args="[&quot;@value&quot;]" style="flex:1; min-width:210px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px; flex-wrap:wrap;">
+            <label for="customListPlayOrderSelect" style="font-size:0.85rem; font-weight:600; white-space:nowrap; color:var(--text);">Play order:</label>
+            <select id="customListPlayOrderSelect" data-act="applyCustomListPlayOrder" data-act-args="[&quot;@value&quot;]" style="max-width:320px; font-size:0.86rem; padding:7px 12px; background:var(--surface); color:var(--text); border:1.5px solid var(--border-strong); border-radius:var(--radius-pill);">
               <option value="as-listed">Creation order (as listed)</option>
               <option value="aired-asc">Air date &mdash; oldest first</option>
               <option value="aired-desc">Air date &mdash; newest first</option>
@@ -34641,24 +34718,11 @@ ${newUi ? '    <div id="appShellAddTitles"></div>' : ''}
           <p style="margin:2px 0 0 24px; color:var(--muted); font-size:0.78rem;">Needs Auto-track playback signed in. Once every pick has been seen, the whole list comes back rather than going dark.</p>
         </div>
       </details>
-      <div id="customListTypeToggles" style="margin-top:8px; display:flex; gap:16px; flex-wrap:wrap;">
-        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-          <input type="radio" name="customListTypeRadio" value="movie" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;movie&quot;]" checked>
-          <span style="font-size:0.85rem;">Movies</span>
-        </label>
-        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-          <input type="radio" name="customListTypeRadio" value="series" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;series&quot;]">
-          <span style="font-size:0.85rem;">Shows</span>
-        </label>
-        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-          <input type="radio" name="customListTypeRadio" value="mixed" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;mixed&quot;]">
-          <span style="font-size:0.85rem;">Mixed (Movies &amp; Shows)</span>
-        </label>
-      </div>
-      <div class="row" style="margin-top:10px;">
-        <input type="text" id="customListNameInput" placeholder="List name (e.g. My Favorites)">
-        <button type="button" class="primary" id="customListSaveBtn" data-act="saveCustomList">Save</button>
-        <button type="button" id="customListCancelEditBtn" class="secondary" style="display:none;" data-act="cancelEditCustomList">Cancel</button>
+
+      <!-- 6. Bottom Action Bar -->
+      <div class="actions" style="margin-top:18px; border-top:1px solid var(--border); padding-top:14px; justify-content:flex-end; gap:10px;">
+        <button type="button" id="customListCancelEditBtn" class="secondary lc-btn" style="display:none;" data-act="cancelEditCustomList">Cancel</button>
+        <button type="button" class="primary lc-btn" id="customListSaveBtn" data-act="saveCustomList" style="padding:8px 24px; font-weight:600;">Save</button>
       </div>
     </div>
   </div>
@@ -38548,6 +38612,11 @@ function switchListsSubmenu(name, btn) {
     // already being made one level down.
     if (typeof renderLikedListsFeed === 'function') {
       renderLikedListsFeed();
+    }
+  }
+  if (name === 'create-list') {
+    if (typeof initCustomListSearch === 'function') {
+      initCustomListSearch();
     }
   }
 }
@@ -63295,13 +63364,185 @@ async function loadListToCustomListDraft(name, listUrl, contentType, btn) {
   }
 }
 
-const customListSearchBox = document.getElementById('customListSearchResult');
-if (customListSearchBox) {
-  customListSearchBox.addEventListener('click', (e) => {
-    const btn = e.target.closest('.customListAddBtn');
-    if (!btn) return;
-    addToCustomListDraft(btn.dataset.searchtype, btn.dataset.tmdbid, btn.dataset.title, btn.dataset.year, btn.dataset.poster, btn);
-  });
+let customListSearchTimer = null;
+let customListSearchSeq = 0;
+let customListSearchInitialized = false;
+
+function updateCustomListSearchPlaceholder() {
+  const input = document.getElementById('customListSearchInput');
+  if (!input) return;
+  if (customListDraftType === 'movie') {
+    input.placeholder = 'Search a movie to add...';
+  } else if (customListDraftType === 'series') {
+    input.placeholder = 'Search a show to add...';
+  } else {
+    input.placeholder = 'Search a movie or show to add...';
+  }
+}
+
+function initCustomListSearch() {
+  const input = document.getElementById('customListSearchInput');
+  const clearBtn = document.getElementById('customListSearchClearBtn');
+  const searchBox = document.getElementById('customListSearchResult');
+  if (!input) return;
+
+  updateCustomListSearchPlaceholder();
+
+  if (!customListSearchInitialized) {
+    customListSearchInitialized = true;
+
+    input.addEventListener('input', () => {
+      const q = input.value.trim();
+      if (clearBtn) clearBtn.style.display = input.value ? 'block' : 'none';
+      if (customListSearchTimer) clearTimeout(customListSearchTimer);
+      if (!q) {
+        if (searchBox) searchBox.innerHTML = '';
+        return;
+      }
+      customListSearchTimer = setTimeout(() => {
+        runCustomListTitleSearch(q);
+      }, 300);
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (customListSearchTimer) clearTimeout(customListSearchTimer);
+        const q = input.value.trim();
+        if (q) runCustomListTitleSearch(q);
+      }
+    });
+
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        input.value = '';
+        clearBtn.style.display = 'none';
+        if (searchBox) searchBox.innerHTML = '';
+        input.focus();
+      });
+    }
+
+    if (searchBox && !searchBox.__customListAddBound) {
+      searchBox.__customListAddBound = true;
+      searchBox.addEventListener('click', (e) => {
+        const btn = e.target.closest('.customListAddBtn');
+        if (!btn || btn.disabled) return;
+        addToCustomListDraft(btn.dataset.searchtype, btn.dataset.tmdbid, btn.dataset.title, btn.dataset.year, btn.dataset.poster, btn);
+      });
+    }
+  }
+}
+
+async function runCustomListTitleSearch(query) {
+  const q = String(query || '').trim();
+  const box = document.getElementById('customListSearchResult');
+  if (!box) return [];
+  if (!q) {
+    box.innerHTML = '';
+    return [];
+  }
+  const seq = ++customListSearchSeq;
+  box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem; padding:8px 0;"><small>Searching\u2026</small></p>';
+
+  try {
+    const isAdult = typeof isAdultContentFilterEnabled === 'function' ? isAdultContentFilterEnabled() : false;
+    const adultParam = isAdult ? '&adultContentFilter=1' : '';
+
+    let results = [];
+    if (customListDraftType === 'series') {
+      const res = await fetch(ORIGIN + '/api/title-search?q=' + encodeURIComponent(q) + '&type=tv' + adultParam, { cache: 'no-store' });
+      const data = await res.json();
+      if (seq !== customListSearchSeq) return [];
+      if (data && data.ok && Array.isArray(data.results)) {
+        results = data.results.map(r => Object.assign({}, r, { searchType: 'tv' }));
+      }
+    } else if (customListDraftType === 'movie') {
+      const res = await fetch(ORIGIN + '/api/title-search?q=' + encodeURIComponent(q) + '&type=movie' + adultParam, { cache: 'no-store' });
+      const data = await res.json();
+      if (seq !== customListSearchSeq) return [];
+      if (data && data.ok && Array.isArray(data.results)) {
+        results = data.results.map(r => Object.assign({}, r, { searchType: 'movie' }));
+      }
+    } else {
+      const [resMovie, resTv] = await Promise.all([
+        fetch(ORIGIN + '/api/title-search?q=' + encodeURIComponent(q) + '&type=movie' + adultParam, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ ok: false })),
+        fetch(ORIGIN + '/api/title-search?q=' + encodeURIComponent(q) + '&type=tv' + adultParam, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ ok: false }))
+      ]);
+      if (seq !== customListSearchSeq) return [];
+      const movies = (resMovie && resMovie.ok && Array.isArray(resMovie.results)) ? resMovie.results.map(r => Object.assign({}, r, { searchType: 'movie' })) : [];
+      const tvs = (resTv && resTv.ok && Array.isArray(resTv.results)) ? resTv.results.map(r => Object.assign({}, r, { searchType: 'tv' })) : [];
+      const maxLen = Math.max(movies.length, tvs.length);
+      for (let i = 0; i < maxLen; i++) {
+        if (i < movies.length) results.push(movies[i]);
+        if (i < tvs.length) results.push(tvs[i]);
+      }
+    }
+
+    if (seq !== customListSearchSeq) return [];
+    renderCustomListSearchResults(results.slice(0, 12));
+    return results;
+  } catch (e) {
+    if (seq !== customListSearchSeq) return [];
+    box.innerHTML = '<p class="testresult err" style="margin:8px 0; font-size:0.85rem;">\u2717 Network error while searching.</p>';
+    return [];
+  }
+}
+
+function renderCustomListSearchResults(results) {
+  const box = document.getElementById('customListSearchResult');
+  if (!box) return;
+  if (!results.length) {
+    box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem; padding:8px 0;"><small>No titles found matching that search.</small></p>';
+    return;
+  }
+
+  const existingTitles = new Set(customListDraftItems.map(it => (it.title || it.name || '').toLowerCase().trim()));
+
+  const cardsHtml = results.map(r => {
+    const itemType = (r.searchType === 'tv' || r.type === 'tv' || r.type === 'series') ? 'tv' : 'movie';
+    const isShow = itemType === 'tv';
+    const typeLabel = isShow ? 'Show' : 'Movie';
+    const rPoster = typeof resolveClientPoster === 'function' ? resolveClientPoster(r, r.poster || '') : r.poster;
+    const posterImg = rPoster
+      ? '<img class="preview-thumb" src="' + escapeAttr(rPoster) + '" alt="" loading="lazy" style="border-radius:6px; aspect-ratio:2/3; object-fit:cover; width:100%;">'
+      : '<div class="preview-thumb" style="border-radius:6px; aspect-ratio:2/3; background:var(--surface-2, rgba(255,255,255,0.06)); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:0.72rem; text-align:center; padding:4px;">No poster</div>';
+
+    const isAlreadyAdded = existingTitles.has((r.title || '').toLowerCase().trim());
+    const btnText = isAlreadyAdded ? 'Added \u2713' : '+ Add';
+    const btnClass = isAlreadyAdded ? 'lc-btn secondary customListAddBtn' : 'lc-btn primary customListAddBtn';
+    const disabledAttr = isAlreadyAdded ? ' disabled' : '';
+
+    return '<div class="custom-list-search-card" style="display:flex; flex-direction:column; align-items:center; width:100%; min-width:0; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px; box-sizing:border-box;">' +
+      '<div style="width:100%; position:relative; margin-bottom:6px;">' +
+        posterImg +
+      '</div>' +
+      '<div style="width:100%; font-size:0.78rem; font-weight:600; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom:2px; color:var(--text);" title="' + escapeAttr(r.title || '') + '">' +
+        escapeHtml(r.title || '') +
+      '</div>' +
+      '<div style="font-size:0.72rem; color:var(--muted); text-align:center; margin-bottom:6px;">' +
+        (r.year ? escapeHtml(r.year) + ' \u2022 ' : '') + typeLabel +
+      '</div>' +
+      '<button type="button" class="' + btnClass + '" style="width:100%; padding:5px 8px; font-size:0.75rem; font-weight:600;"' +
+        disabledAttr +
+        ' data-searchtype="' + itemType + '"' +
+        ' data-tmdbid="' + escapeAttr(String(r.tmdbId || r.id || '')) + '"' +
+        ' data-title="' + escapeAttr(r.title || '') + '"' +
+        ' data-year="' + escapeAttr(r.year || '') + '"' +
+        ' data-poster="' + escapeAttr(r.poster || '') + '">' +
+        btnText +
+      '</button>' +
+    '</div>';
+  }).join('');
+
+  box.innerHTML = '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(110px, 1fr)); gap:10px; margin-top:8px; max-height:420px; overflow-y:auto; padding:4px 2px;">' + cardsHtml + '</div>';
+}
+
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initCustomListSearch);
+  } else {
+    initCustomListSearch();
+  }
 }
 
 async function addToCustomListDraft(searchType, tmdbId, title, year, poster, btn) {
@@ -63340,7 +63581,12 @@ async function addToCustomListDraft(searchType, tmdbId, title, year, poster, btn
     });
     if (!customListDraftType) customListDraftType = itemType;
     renderCustomListDraftList();
-    if (btn) btn.textContent = 'Added \u2713';
+    if (btn) {
+      btn.textContent = 'Added \u2713';
+      btn.disabled = true;
+      btn.classList.remove('primary');
+      btn.classList.add('secondary');
+    }
     if (typeof trackEvent === 'function') trackEvent('list-add', data.imdbId, title, itemType);
   } catch (e) {
     showToast('Network error adding "' + title + '".', 'error');
@@ -63352,9 +63598,24 @@ async function addToCustomListDraft(searchType, tmdbId, title, year, poster, btn
 }
 
 function renderCustomListDraftList() {
+  const countEl = document.getElementById('customListDraftCount');
+  if (countEl) {
+    const len = customListDraftItems.length;
+    countEl.textContent = '(' + len + ' ' + (len === 1 ? 'item' : 'items') + ')';
+  }
+  const actionsEl = document.getElementById('customListDraftActions');
+  if (actionsEl) {
+    actionsEl.style.display = customListDraftItems.length >= 2 ? 'flex' : 'none';
+  }
+
   const box = document.getElementById('customListDraftList');
+  if (!box) return;
   if (!customListDraftItems.length) {
-    box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem;"><small>No items in this list yet &mdash; tap + on any movie or show across Discover, Search, or Charts to add it.</small></p>';
+    box.innerHTML = '<div style="text-align:center; padding:28px 16px; border:1.5px dashed var(--border); border-radius:10px; background:var(--surface); margin-top:8px;">' +
+      '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted); margin-bottom:8px; opacity:0.7;" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg>' +
+      '<div style="font-weight:600; font-size:0.9rem; color:var(--text); margin-bottom:4px;">No titles in this list yet</div>' +
+      '<p style="color:var(--muted); font-size:0.82rem; margin:0 auto; max-width:340px;">Search above to add movies or shows, or tap "+" on any title while browsing Discover, Charts, or Search.</p>' +
+    '</div>';
     return;
   }
   const cardsHtml = customListDraftItems.map((it, i) => {
@@ -63737,6 +63998,8 @@ function saveCustomList() {
   if (searchInput) searchInput.value = '';
   const searchRes = document.getElementById('customListSearchResult');
   if (searchRes) searchRes.innerHTML = '';
+  const clearBtn = document.getElementById('customListSearchClearBtn');
+  if (clearBtn) clearBtn.style.display = 'none';
   renderCustomListDraftList();
   updateCustomListSaveButtonLabel();
 }
@@ -64079,6 +64342,8 @@ function cancelEditCustomList() {
   if (searchInput) searchInput.value = '';
   const searchRes = document.getElementById('customListSearchResult');
   if (searchRes) searchRes.innerHTML = '';
+  const clearBtn = document.getElementById('customListSearchClearBtn');
+  if (clearBtn) clearBtn.style.display = 'none';
   const playOrderSel = document.getElementById('customListPlayOrderSelect');
   if (playOrderSel) {
     playOrderSel.value = 'as-listed';
@@ -64131,6 +64396,8 @@ function setCustomListDraftTypeToggle(type) {
   if (type === 'mixed') {
     customListDraftType = 'mixed';
     updateCustomListTypeRadio('mixed');
+    const input = document.getElementById('customListSearchInput');
+    if (input && input.value.trim()) runCustomListTitleSearch(input.value.trim());
     return;
   }
   if (customListDraftItems.length > 0 && customListDraftType !== type) {
@@ -64146,14 +64413,23 @@ function setCustomListDraftTypeToggle(type) {
   }
   customListDraftType = type;
   updateCustomListTypeRadio(type);
+  const input = document.getElementById('customListSearchInput');
+  if (input && input.value.trim()) runCustomListTitleSearch(input.value.trim());
 }
 
 function updateCustomListTypeRadio(type) {
   const radios = document.getElementsByName('customListTypeRadio');
   for (let i = 0; i < radios.length; i++) {
-    if (radios[i].value === type) {
-      radios[i].checked = true;
+    const isMatch = (radios[i].value === type);
+    radios[i].checked = isMatch;
+    const pill = radios[i].closest('.custom-list-type-pill');
+    if (pill) {
+      if (isMatch) pill.classList.add('active');
+      else pill.classList.remove('active');
     }
+  }
+  if (typeof updateCustomListSearchPlaceholder === 'function') {
+    updateCustomListSearchPlaceholder();
   }
 }
 
