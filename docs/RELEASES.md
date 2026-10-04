@@ -21,9 +21,10 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **`main` at `a6785d6`** is live (2026-10-02 onward): other assistants finished P7-6 and Phases 8–10 and merged everything into `main`, and the Worker was renamed from `wako` to **`my-lists-addon`**. The owner also added `FF_SCROBBLE_ST_ONLY`. The review of that work (2026-10-04) found the admin counters writing nowhere anyone reads, blank badged posters, and a cleanup guide that would have deleted live data: Release 14 fixes them.
 - **`shelf.shadow`** (sent 2026-10-04): last full comparison of 709 accounts, 20.36% different (Continue Watching 836 the same, 206 only in the old, 25 only in the new, 17 shows not known yet; Airing Next 212 / 15 / 22 / 3). Far above the 1% gate: **`FF_SHOW_SCHEDULE` stays off.**
 - **Release 14** (as 14c) went live on 2026-10-04. The counts missing since 2 October were put back (the owner: *done and it worked*). 14 and 14b each failed on a rule of Analytics Engine's SQL (details under Release 14).
-- **Release 15** (prepared 2026-10-04) — details under Release 15. On 2026-10-06 the owner's Check jobs still showed the comparison without reasons, so 15 was not yet running when that round finished.
-- **Release 16** (prepared 2026-10-06, not yet live; includes 15) — **Compare shelves now**: the whole comparison in minutes. Details under Release 16.
+- **Release 15** (prepared 2026-10-04) — details under Release 15. Later on 2026-10-04 the owner's Check jobs still showed the comparison without reasons, so 15 was not yet running when that round finished.
+- **Release 16** (prepared 2026-10-04, not yet live; includes 15) — **Compare shelves now**: the whole comparison in minutes. Details under Release 16.
 - **`main`** is brought up to date by PR #12 (Releases 14–16).
+- **Cloudflare Workers Builds is connected to this repository** (found 2026-10-04). Every push makes Cloudflare try to build the Worker from GitHub. On `main` it would deploy to production. So far every attempt has failed, so nothing has been deployed that way: `main` at `a6785d6` on 2026-10-03, and this branch's preview with *Authentication error*. The `wrangler.toml` guard (Release 14: `keep_vars`, the `DB_ACTIVITY` placeholder) keeps such a deploy from replacing the dashboard's settings. Deploying stays manual (pasting) unless the owner decides otherwise.
 - **Backups work** (2026-10-04): the owner added the five GitHub secrets, and the first real backup ran (Actions run 37226668219). It copied both databases, encrypted: `my-lists-db` (9.3 MB, 709 accounts' settings, 1,147 lists, 53,082 list items) and `mylists-activity` (0.96 MB, 46,956 plays). From here it runs daily at 04:17 UTC.
 
 The owner decided to release the new version **one phase at a time, straight to the live site**, with no separate test site. Each release waits until the one before it has run cleanly for at least a day.
@@ -1190,7 +1191,7 @@ The failed Preview wrote nothing.
 
 **Branch point:** this branch after Release 15. It includes 15: deploy this one if 15 is not live yet.
 
-The owner had been waiting days for the comparison. The hourly `shelf.shadow` job compares 50 accounts an hour, so a full pass over 709 accounts takes about 15 hours. The Check jobs output (2026-10-06) still showed the same 20.36% with no reasons, because Release 15 was not running when that pass finished.
+The owner had been waiting days for the comparison. The hourly `shelf.shadow` job compares 50 accounts an hour, so a full pass over 709 accounts takes about 15 hours. The Check jobs output the owner sent still showed the same 20.36% with no reasons, because Release 15 was not running when that pass finished.
 
 ### What it changes
 
