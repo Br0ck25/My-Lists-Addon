@@ -2,6 +2,31 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-04 (Antigravity): Custom List Search Results Better Posters Resolution.**
+>
+> **Where things stand**
+> - Better Posters Resolution in Custom List Search (`21_client-custom-list-builder.js`, `tests/imdb-ids.test.mjs`):
+>   1. **Problem Solved**:
+>      - Custom list title search queries `/api/title-search`, which returns TMDB IDs rather than IMDb IDs.
+>      - When Better Posters was enabled in settings, search results in `#customListSearchResult` previously fell back to raw TMDB posters, while items added to the draft list below showed the rich Better Posters artwork (ratings, badges, styles).
+>   2. **Implementation**:
+>      - Updated `renderCustomListSearchResults(results)` in `21_client-custom-list-builder.js`:
+>        - Added `data-id="tmdb:${tmdbIdNum}"` and `data-type="${itemKind}"` (`movie` or `series`) to each `.custom-list-search-card`.
+>        - Added `data-act="handlePosterImgError"` and `data-act-args="[&quot;@self&quot;]"` to `<img>` tags for graceful fallback if a Better Poster fails.
+>        - Added `.live-preview-poster-placeholder` with `data-needs-fallback="1"` on empty poster slots.
+>        - Called `resolveMissingPostersInDom(box)` and `applyBetterPostersToTmdbTiles(box)` immediately after inserting search results into the DOM.
+>        - `applyBetterPostersToTmdbTiles` batches the TMDB IDs, queries `/api/imdb-ids`, generates the Better Poster URL (`betterPostersWebUrl(imdbId)`), swaps `img.src`, and updates `dataset.poster`.
+>        - MutationObserver `warmBetterPostersOnPage` automatically warms the cache with `/api/bp/warm`.
+>   3. **Tests & Verification**:
+>      - Added test in `tests/imdb-ids.test.mjs` verifying that `renderCustomListSearchResults` outputs `data-id`, `data-type`, and wires `handlePosterImgError`.
+>      - Rebuilt and validated: `python build.py` & `python check_sync.py` OK (5,475,017 bytes).
+>      - Checked JS syntax: `node --check worker_entry_combined.js` OK (0 syntax errors).
+>      - Ran `python gen_map.py` (2,670 symbols, 211 routes).
+>      - Ran targeted tests (`tests/imdb-ids.test.mjs`, `tests/client.test.mjs`, `tests/better-posters.test.mjs`): all 457 tests pass with 0 failures.
+>      - Full test suite: 2071 tests pass with 0 failures.
+> - Branch: `feat/design-system-phase-1`
+>
+
 > **HANDOFF, 2026-10-04 (Antigravity): Custom List Editor Modernization & Inline Title Search Polish.**
 >
 > **Where things stand**
