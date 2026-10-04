@@ -2389,6 +2389,23 @@ ${seoHeadHtml}
       box-sizing: border-box;
       white-space: nowrap;
     }
+    .list-card-title {
+      white-space: normal;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      word-break: break-word;
+      line-height: 1.25;
+    }
+    .customizeListBtn {
+      padding: 5px 8px !important;
+      min-width: 28px !important;
+      justify-content: center;
+    }
+    .customizeListBtn .customize-btn-text {
+      display: none !important;
+    }
     .drag-handle-list {
       margin-right: 8px;
       padding: 2px 4px;

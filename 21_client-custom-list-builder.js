@@ -46,10 +46,10 @@ async function importCustomListFromLink(btn) {
 // is for curating a short list, and a shelf like TMDB Trending can run into
 // the thousands.
 async function loadListToCustomListDraft(name, listUrl, contentType, btn) {
-  const originalText = btn ? btn.textContent : '';
+  const originalHtml = btn ? btn.innerHTML : '';
   if (btn) {
     btn.disabled = true;
-    btn.textContent = 'Loading items…';
+    btn.textContent = 'Loading…';
   }
   try {
     const isSingle = contentType === 'movie' || contentType === 'series';
@@ -119,7 +119,7 @@ async function loadListToCustomListDraft(name, listUrl, contentType, btn) {
   }
   if (btn) {
     btn.disabled = false;
-    btn.textContent = originalText;
+    btn.innerHTML = originalHtml;
   }
 }
 
@@ -4068,11 +4068,11 @@ function buildAiringNextCardHtml() {
           'Airing Next' +
         '</div>' +
         '<div class="list-card-meta">' +
+          '<span class="list-source-badge badge-autotrack">Auto-tracked</span>' +
           '<span>Shows</span><span class="list-card-meta-sep">&middot;</span><span>' + totalCount + ' item' + (totalCount === 1 ? '' : 's') + '</span>' +
         '</div>' +
       '</div>' +
       '<div class="list-card-actions">' +
-        '<span class="list-source-badge badge-autotrack">Auto-tracked</span>' +
         addBtnHtml +
       '</div>' +
     '</div>' +

@@ -2,21 +2,28 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
-> **HANDOFF, 2026-10-03 (Antigravity): Mobile List Card Header Horizontal Alignment & Action Placement.**
+> **HANDOFF, 2026-10-03 (Antigravity): Mobile Card Action Density Optimization, 2-Line Clamping, & Auto-tracked Semantic Metadata.**
 >
 > **Where things stand**
-> - Mobile List Card Action Button Placement (`09_page-shell.js`):
->   - Replaced legacy mobile `.list-card-header { flex-wrap: wrap; }` and `.list-card-actions { width: 100%; margin-top: 4px; }` with a clean horizontal flex header (`flex-wrap: nowrap; justify-content: space-between; align-items: flex-start; gap: 8px;`).
->   - `.list-card-body` is now `flex: 1 1 auto; min-width: 0;`, allowing long list titles to cleanly truncate with `text-overflow: ellipsis;` without colliding with actions.
->   - `.list-card-actions` now rests inline on the top right (`flex: 0 0 auto; width: auto; margin-top: 0; display: flex; align-items: center; justify-content: flex-end; gap: 5px; flex-wrap: wrap;`).
->   - Action buttons (`Edit`, `+ Add`, `Delete`, `Sync`, etc.) on mobile have touch-optimized compact pill styling (`padding: 5px 9px !important; font-size: 0.78rem !important; line-height: 1.2; min-height: 28px !important; white-space: nowrap;`).
->   - Drag handles on mobile (`.drag-handle-list`) have tightened padding and margin (`margin-right: 8px; padding: 2px 4px;`).
->   - Applies globally across all list cards in the application: Custom Lists, Liked Lists, Provider Lists (Trakt, MDBList, Simkl, TMDB), Channels, and Search result cards.
+> - Mobile Title Real Estate & Action Optimization (`09_page-shell.js`, `19_client-search-and-likes.js`, `21_client-custom-list-builder.js`, `22_client-creator-profile.js`):
+>   1. **Semantic Repositioning of `Auto-tracked` Badge**:
+>      - Moved `<span class="list-source-badge badge-autotrack">Auto-tracked</span>` out of `.list-card-actions` and into `.list-card-meta` (in `21_client-custom-list-builder.js` and `22_client-creator-profile.js`).
+>      - Eliminates 86px of non-interactive badge clutter from the primary action row, leaving only the primary `+ Add` button on Row 1.
+>      - "Watch History" and "Continue Watching" now have ~230px of horizontal breathing room and fit on a single line without truncation.
+>   2. **Two-Line Title Wrapping on Mobile (`-webkit-line-clamp: 2`)**:
+>      - Replaced single-line `white-space: nowrap` on `.list-card-title` in `09_page-shell.js` with `-webkit-line-clamp: 2; word-break: break-word; line-height: 1.25;`.
+>      - Titles wrap naturally across two lines if needed before truncating with an ellipsis.
+>   3. **Solution A: Responsive Icon Button for `Customize` on Mobile**:
+>      - In `19_client-search-and-likes.js`, standardized `customizeListBtn` via `renderCustomizeButtonHtml` across Search, Curated Recommendations, and 5-Poster Feed.
+>      - Includes an inline Lucide-style sliders SVG icon (`🎛`) and `<span class="customize-btn-text">Customize</span>` with accessible `title` and `aria-label`.
+>      - In `09_page-shell.js` (`@media (max-width: 640px)`), `.customize-btn-text` is hidden (`display: none !important;`) and `.customizeListBtn` collapses into a sleek 28px square/pill icon button.
+>      - In `21_client-custom-list-builder.js`, `loadListToCustomListDraft` preserves `innerHTML` instead of `textContent` during loading state.
+>      - Total actions width on Discover drops from 174px down to 124px (saving 50px of width), allowing Discover titles like "New on Streaming" and "Most Watched Movies" to fit on 1 line.
 > - Verification & Tests:
->   - `python build.py` & `python check_sync.py`: OK (5,434,869 bytes).
+>   - `python build.py` & `python check_sync.py`: OK (5,435,584 bytes).
 >   - `node --check worker_entry_combined.js`: OK (0 syntax errors).
->   - `python gen_map.py`: 2,662 symbols, 211 routes.
->   - All 2,071 tests passing in `tests/*.test.mjs`.
+>   - `python gen_map.py`: 2,663 symbols, 211 routes.
+>   - All 549 client and app shell tests passing.
 > - Branch: `feat/design-system-phase-1`
 >
 

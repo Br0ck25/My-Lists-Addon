@@ -5351,7 +5351,7 @@ function buildLocalListCardHtml(l) {
           escapeHtml(l.name) +
         '</div>' +
         '<div class="list-card-meta">' +
-          (!isAutoTracked ? ('<span>' + (isPublic ? 'Public' : 'Private') + '</span><span class="list-card-meta-sep">&middot;</span>') : '') +
+          (isAutoTracked ? '<span class="list-source-badge badge-autotrack">Auto-tracked</span>' : ('<span>' + (isPublic ? 'Public' : 'Private') + '</span><span class="list-card-meta-sep">&middot;</span>')) +
           '<span>' + typeLabel + '</span>' +
           '<span class="list-card-meta-sep">&middot;</span>' +
           '<span>' + totalCount + ' item' + (totalCount === 1 ? '' : 's') + '</span>' +
@@ -5361,7 +5361,6 @@ function buildLocalListCardHtml(l) {
       '</div>' +
       (isAutoTracked
         ? '<div class="list-card-actions">' +
-            '<span class="list-source-badge badge-autotrack" style="margin-right:8px;">Auto-tracked</span>' +
             addBtnHtml +
           '</div>'
         : '<div class="list-card-actions">' +

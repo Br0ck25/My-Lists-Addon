@@ -30812,6 +30812,23 @@ ${seoHeadHtml}
       box-sizing: border-box;
       white-space: nowrap;
     }
+    .list-card-title {
+      white-space: normal;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      word-break: break-word;
+      line-height: 1.25;
+    }
+    .customizeListBtn {
+      padding: 5px 8px !important;
+      min-width: 28px !important;
+      justify-content: center;
+    }
+    .customizeListBtn .customize-btn-text {
+      display: none !important;
+    }
     .drag-handle-list {
       margin-right: 8px;
       padding: 2px 4px;
@@ -45024,6 +45041,13 @@ async function executeUnifiedListSearch(rawQuery, targetBox) {
   renderListSearchResults(mdblistMatches, traktMatches, traktError, myListsMatches, tmdbMatches, box, intent);
 }
 
+function renderCustomizeButtonHtml(name, url, type) {
+  return '<button type="button" class="lc-btn secondary customizeListBtn" data-name="' + escapeAttr(name || '') + '" data-url="' + escapeAttr(url || '') + '" data-type="' + escapeAttr(type || 'movie') + '" title="Customize in List Builder" aria-label="Customize in List Builder">' +
+    '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none; flex-shrink:0;"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>' +
+    '<span class="customize-btn-text">Customize</span>' +
+  '</button>';
+}
+
 function renderListSearchResults(mdblistMatches, traktMatches, traktError, myListsMatches, tmdbMatches, targetBox, queryOrIntent) {
   // Kept so a list chip can filter and sort this answer again without asking
   // every source a second time (setCatalogListSearchChip).
@@ -45180,7 +45204,7 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
         (addedDirect ? 'Remove' : '+ Add') +
         '</button>';
     }
-    actionsHtml += '<button type="button" class="lc-btn secondary customizeListBtn" data-name="' + escapeAttr(item.name) + '" data-url="' + escapeAttr(item.url) + '" data-type="' + escapeAttr(item.type || 'movie') + '" title="Load into the Custom List Builder to add, remove, or reorder before saving">Customize</button>';
+    actionsHtml += renderCustomizeButtonHtml(item.name, item.url, item.type || 'movie');
 
     const creatorLabel = item.user ? (item.user.includes('Official') || item.user.includes('Franchise') ? escapeHtml(item.user) : 'by ' + escapeHtml(item.user)) : '';
     const itemCountLabel = typeof item.items === 'number' ? (item.items + ' items') : (item.items ? escapeHtml(String(item.items)) : '');
@@ -45971,7 +45995,7 @@ function buildCuratedRecommendationCard(title, type, customUrl, subtitle, items)
     ' data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '">' +
     (isAdded ? 'Remove' : '+ Add') +
   '</button>' +
-  '<button type="button" class="lc-btn secondary customizeListBtn" data-name="' + escapeAttr(title) + '" data-url="' + escapeAttr(customUrl) + '" data-type="' + escapeAttr(type) + '" title="Load into the Custom List Builder to add, remove, or reorder before saving">Customize</button>';
+  renderCustomizeButtonHtml(title, customUrl, type);
 
   return '<div class="list-card" data-name="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '">' +
     '<div class="list-card-header">' +
@@ -46499,7 +46523,7 @@ function render5PosterListsFeed(container, lists) {
             ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '">' +
             (added ? 'Remove' : '+ Add') +
           '</button>' +
-          '<button type="button" class="lc-btn secondary customizeListBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '" title="Load into the Custom List Builder to add, remove, or reorder before saving">Customize</button>' +
+          renderCustomizeButtonHtml(l.name, l.url || '', type) +
         '</div>' +
       '</div>' +
       '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '"></div>' +
@@ -62791,10 +62815,10 @@ async function importCustomListFromLink(btn) {
 // is for curating a short list, and a shelf like TMDB Trending can run into
 // the thousands.
 async function loadListToCustomListDraft(name, listUrl, contentType, btn) {
-  const originalText = btn ? btn.textContent : '';
+  const originalHtml = btn ? btn.innerHTML : '';
   if (btn) {
     btn.disabled = true;
-    btn.textContent = 'Loading items…';
+    btn.textContent = 'Loading…';
   }
   try {
     const isSingle = contentType === 'movie' || contentType === 'series';
@@ -62864,7 +62888,7 @@ async function loadListToCustomListDraft(name, listUrl, contentType, btn) {
   }
   if (btn) {
     btn.disabled = false;
-    btn.textContent = originalText;
+    btn.innerHTML = originalHtml;
   }
 }
 
@@ -66813,11 +66837,11 @@ function buildAiringNextCardHtml() {
           'Airing Next' +
         '</div>' +
         '<div class="list-card-meta">' +
+          '<span class="list-source-badge badge-autotrack">Auto-tracked</span>' +
           '<span>Shows</span><span class="list-card-meta-sep">&middot;</span><span>' + totalCount + ' item' + (totalCount === 1 ? '' : 's') + '</span>' +
         '</div>' +
       '</div>' +
       '<div class="list-card-actions">' +
-        '<span class="list-source-badge badge-autotrack">Auto-tracked</span>' +
         addBtnHtml +
       '</div>' +
     '</div>' +
@@ -72353,7 +72377,7 @@ function buildLocalListCardHtml(l) {
           escapeHtml(l.name) +
         '</div>' +
         '<div class="list-card-meta">' +
-          (!isAutoTracked ? ('<span>' + (isPublic ? 'Public' : 'Private') + '</span><span class="list-card-meta-sep">&middot;</span>') : '') +
+          (isAutoTracked ? '<span class="list-source-badge badge-autotrack">Auto-tracked</span>' : ('<span>' + (isPublic ? 'Public' : 'Private') + '</span><span class="list-card-meta-sep">&middot;</span>')) +
           '<span>' + typeLabel + '</span>' +
           '<span class="list-card-meta-sep">&middot;</span>' +
           '<span>' + totalCount + ' item' + (totalCount === 1 ? '' : 's') + '</span>' +
@@ -72363,7 +72387,6 @@ function buildLocalListCardHtml(l) {
       '</div>' +
       (isAutoTracked
         ? '<div class="list-card-actions">' +
-            '<span class="list-source-badge badge-autotrack" style="margin-right:8px;">Auto-tracked</span>' +
             addBtnHtml +
           '</div>'
         : '<div class="list-card-actions">' +
