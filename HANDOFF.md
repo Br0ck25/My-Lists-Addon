@@ -2,6 +2,34 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-04 (Antigravity): Primary Creation Verb Alignment (+ Create Channel) & Mobile Card Header Viewport Ergonomics.**
+>
+> **Where things stand**
+> - Primary Action Verb Alignment (`13_tab-channels.js`, `20_client-channel-builder.js`, `24_client-backup-restore-presets.js`):
+>   1. **Problem Solved**:
+>      - Custom Lists used `+ Create List`, while Channels used `+ New Channel`. This caused cognitive friction across adjacent builder features.
+>   2. **Implementation**:
+>      - Aligned `+ New Channel` &rarr; `+ Create Channel` across the Channels toolbar, empty state prompts, and help guide modals.
+>      - Conforms strictly to Design System verb rules: `+ Add` is reserved for installing existing items into catalog rows; `+ Create` is reserved for building new assets from scratch (`+ Create List`, `+ Create Channel`, `Create Merged Catalog`).
+> - Mobile Card Header & Shelf Layout Fix (`09_page-shell.js`, `13_tab-channels.js`):
+>   1. **Problem Solved**:
+>      - On mobile viewports (<640px), `.list-card-header { flex-wrap: nowrap; }` left only ~60px for `.list-card-body` when 4 action buttons were present. Titles truncated prematurely to 4 characters (`Star...`, `Mar...`) and metadata descriptions crushed into a 15-line vertical stack of single words.
+>      - In `.shelf-header`, 4 fixed action buttons overflowed past the right viewport boundary, clipping the `[Refresh]` button.
+>   2. **Implementation**:
+>      - Updated `@media (max-width: 640px)` in `09_page-shell.js`:
+>        - `.shelf-header`: stacked vertically (`flex-direction: column !important; align-items: stretch !important; gap: 8px !important;`) allowing subtitle full width and buttons to wrap neatly within the screen.
+>        - `.list-card-header`: switched to `flex-direction: column; align-items: stretch; gap: 8px;`.
+>        - `.list-card-body`: expanded to `width: 100%; min-width: 0;`, giving titles and metadata full horizontal width.
+>        - `.list-card-actions`: set to `width: 100%; justify-content: flex-end; gap: 6px; flex-wrap: wrap;`, placing action buttons on their own line with generous touch targets.
+>      - Removed `flex-shrink: 0;` on the Channels shelf toolbar button container in `13_tab-channels.js` to ensure clean wrapping on small screens.
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK (5,488,595 bytes).
+>   - `node --check worker_entry_combined.js`: OK (0 syntax errors).
+>   - `python gen_map.py`: 2,674 symbols, 211 routes.
+>   - Test suites: 458/458 tests pass (0 failures).
+> - Branch: `feat/design-system-phase-1`
+>
+
 > **HANDOFF, 2026-10-04 (Antigravity): Subnav Title Deduplication, Catalogs Refresh Alignment, and Channels Import Modal Architecture.**
 >
 > **Where things stand**

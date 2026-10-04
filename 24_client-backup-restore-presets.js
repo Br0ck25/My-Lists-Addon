@@ -7308,11 +7308,11 @@ function renderGuidePage(origin) {
     <p>Four submenus: <strong>My Channels</strong>, <strong>Storylines &amp; Universes</strong>, <strong>Quick Add</strong>, and <strong>Import</strong>.</p>
 
     <h3>My Channels</h3>
-    <p>Lists everything you've built. <strong>+ New Channel</strong> opens the channel builder. Below that, <strong>Merge Saved Channels into One Catalog</strong> lets you select multiple saved channels with checkboxes, name the merge, and click <strong>Merge into catalog</strong> to combine them into a single row.</p>
+    <p>Lists everything you've built. <strong>+ Create Channel</strong> opens the channel builder. Below that, <strong>Merge Saved Channels into One Catalog</strong> lets you select multiple saved channels with checkboxes, name the merge, and click <strong>Merge into catalog</strong> to combine them into a single row.</p>
 
     <h3>Building a Channel from Scratch:</h3>
     <ol>
-      <li>Click <strong>+ New Channel</strong>.</li>
+      <li>Click <strong>+ Create Channel</strong>.</li>
       <li>Use the <strong>Shows / Movies</strong> toggle to set what you're searching for.</li>
       <li>Search a title and add picks &mdash; for shows, an episode picker lets you choose specific seasons/episodes.</li>
       <li>Drag a pick, or type a new position, to reorder <strong>Picks in this channel</strong>. Where a pick sits in this list is the order it plays in.</li>

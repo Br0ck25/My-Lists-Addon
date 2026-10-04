@@ -2511,25 +2511,32 @@ ${seoHeadHtml}
     .list-card-5posters .list-card-mini-poster-tile:nth-child(n+4) {
       display: none;
     }
+    .shelf-header {
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 8px !important;
+    }
+    .shelf-header > div {
+      width: 100%;
+      min-width: 0;
+    }
     .list-card-header {
       display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
+      flex-direction: column;
+      align-items: stretch;
       gap: 8px;
-      flex-wrap: nowrap;
     }
     .list-card-body {
-      flex: 1 1 auto;
+      width: 100%;
       min-width: 0;
     }
     .list-card-actions {
-      flex: 0 0 auto;
-      width: auto;
+      width: 100%;
       margin-top: 0;
       display: flex;
       align-items: center;
       justify-content: flex-end;
-      gap: 5px;
+      gap: 6px;
       flex-wrap: wrap;
     }
     .list-card-actions .lc-btn {

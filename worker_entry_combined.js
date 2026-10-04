@@ -30934,25 +30934,32 @@ ${seoHeadHtml}
     .list-card-5posters .list-card-mini-poster-tile:nth-child(n+4) {
       display: none;
     }
+    .shelf-header {
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 8px !important;
+    }
+    .shelf-header > div {
+      width: 100%;
+      min-width: 0;
+    }
     .list-card-header {
       display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
+      flex-direction: column;
+      align-items: stretch;
       gap: 8px;
-      flex-wrap: nowrap;
     }
     .list-card-body {
-      flex: 1 1 auto;
+      width: 100%;
       min-width: 0;
     }
     .list-card-actions {
-      flex: 0 0 auto;
-      width: auto;
+      width: 100%;
       margin-top: 0;
       display: flex;
       align-items: center;
       justify-content: flex-end;
-      gap: 5px;
+      gap: 6px;
       flex-wrap: wrap;
     }
     .list-card-actions .lc-btn {
@@ -34951,9 +34958,9 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
           <h2 class="shelf-title sr-only">My Channels</h2>
           <p style="margin:0; color:var(--muted); font-size:0.85rem;">Your custom built and saved 24/7 TV channels. Play episodes continuously in broadcast order or daily shuffle.</p>
         </div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; flex-shrink:0;">
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
           <button type="button" class="secondary lc-btn" data-act="createNextUpChannel" data-act-args="[&quot;@self&quot;]" title="A channel that always plays the next episode of everything you have on the go">+ Next Up Channel</button>
-          <button type="button" class="primary lc-btn" data-act="openBuildCustomChannel">+ New Channel</button>
+          <button type="button" class="primary lc-btn" data-act="openBuildCustomChannel">+ Create Channel</button>
           <button type="button" class="secondary lc-btn" data-act="openImportChannelModal" title="Import channel from link or share code">Import</button>
           <button type="button" class="secondary lc-btn" data-act="refreshMyChannelsAction" title="Refresh channels">Refresh</button>
         </div>
@@ -34973,7 +34980,7 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
         </select>
       </div>
       <div id="myChannelsUndoBar" style="display:none; margin-bottom:10px;"></div>
-      <div id="myCreatedChannelsList"><p style="color:var(--muted); font-size:0.85rem;"><small>No channels created yet. Tap <strong>+ New Channel</strong> above or add a popular network in <strong>Quick Add</strong>.</small></p></div>
+      <div id="myCreatedChannelsList"><p style="color:var(--muted); font-size:0.85rem;"><small>No channels created yet. Tap <strong>+ Create Channel</strong> above or add a popular network in <strong>Quick Add</strong>.</small></p></div>
     </div>
 
     <div class="panel" style="margin-top:12px;">
@@ -60488,7 +60495,7 @@ function renderMyCreatedChannelsList() {
   const map = ensureAllChannelsSyncedFromRows(loadLocalChannels());
   const channels = Object.values(map);
   if (!channels.length) {
-    box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem;"><small>No channels created yet. Tap <strong>+ New Channel</strong> above or add a popular network in <strong>Quick Add</strong>.</small></p>';
+    box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem;"><small>No channels created yet. Tap <strong>+ Create Channel</strong> above or add a popular network in <strong>Quick Add</strong>.</small></p>';
     return;
   }
   
@@ -86059,11 +86066,11 @@ function renderGuidePage(origin) {
     <p>Four submenus: <strong>My Channels</strong>, <strong>Storylines &amp; Universes</strong>, <strong>Quick Add</strong>, and <strong>Import</strong>.</p>
 
     <h3>My Channels</h3>
-    <p>Lists everything you've built. <strong>+ New Channel</strong> opens the channel builder. Below that, <strong>Merge Saved Channels into One Catalog</strong> lets you select multiple saved channels with checkboxes, name the merge, and click <strong>Merge into catalog</strong> to combine them into a single row.</p>
+    <p>Lists everything you've built. <strong>+ Create Channel</strong> opens the channel builder. Below that, <strong>Merge Saved Channels into One Catalog</strong> lets you select multiple saved channels with checkboxes, name the merge, and click <strong>Merge into catalog</strong> to combine them into a single row.</p>
 
     <h3>Building a Channel from Scratch:</h3>
     <ol>
-      <li>Click <strong>+ New Channel</strong>.</li>
+      <li>Click <strong>+ Create Channel</strong>.</li>
       <li>Use the <strong>Shows / Movies</strong> toggle to set what you're searching for.</li>
       <li>Search a title and add picks &mdash; for shows, an episode picker lets you choose specific seasons/episodes.</li>
       <li>Drag a pick, or type a new position, to reorder <strong>Picks in this channel</strong>. Where a pick sits in this list is the order it plays in.</li>
