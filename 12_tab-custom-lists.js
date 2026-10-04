@@ -9,15 +9,17 @@
   <!-- Submenu 1: User's Connected Account & Custom Lists -->
   <div class="lists-subpanel" id="listsSubMyLists">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="shelf-title">Your Custom Lists</h2>
-        <div style="display:flex; gap:8px;">
+      <div class="shelf-header" style="margin-bottom:12px; align-items:flex-start;">
+        <div>
+          <h2 class="shelf-title">Your Custom Lists</h2>
+          <p style="margin:4px 0 0; color:var(--muted); font-size:0.85rem;">Custom lists you've created locally or on your profile.</p>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
           <button type="button" class="primary lc-btn" data-act="openCreateListModal" data-act-args="[&quot;custom&quot;]">+ Create List</button>
           <button type="button" class="secondary lc-btn" data-act="openImportListModal">Import</button>
           <button type="button" class="secondary lc-btn" data-act="appActRefreshCreatorDashboard">Refresh</button>
         </div>
       </div>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Custom lists you've created locally or on your profile.</p>
       <div id="creatorDashboard"></div>
     </div>
 

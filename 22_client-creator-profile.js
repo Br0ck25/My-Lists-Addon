@@ -6162,7 +6162,7 @@ function openCreateListModal(presetDestination) {
 function onChangeCreateListDestination() {
   const pubWrap = document.getElementById('createListModalPublicWrap');
   if (pubWrap) {
-    pubWrap.style.display = 'flex';
+    pubWrap.style.display = 'block';
   }
 }
 

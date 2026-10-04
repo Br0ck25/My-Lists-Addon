@@ -5424,14 +5424,13 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
       </div>
       
       <div id="createListModalPublicWrap" style="margin-bottom: 18px;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span style="font-size: 0.95rem; font-weight:500; color: var(--text);">Public</span>
-          <label class="ui-toggle">
-            <input type="checkbox" id="createListModalPublic">
-            <span class="ui-toggle-slider"></span>
-          </label>
-        </div>
-        <span style="font-size:0.78rem; color:var(--muted); display:block; margin-top:4px;">When enabled, this list is visible on your public creator profile and community directory.</span>
+        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer;">
+          <input type="checkbox" id="createListModalPublic" style="margin-top:3px; flex-shrink:0;">
+          <div>
+            <span style="font-size:0.92rem; font-weight:600; color:var(--text); display:block;">Make list public</span>
+            <span style="font-size:0.78rem; color:var(--muted); display:block; margin-top:2px; line-height:1.35;">When enabled, this list is visible on your public creator profile and community directory.</span>
+          </div>
+        </label>
       </div>
       
       <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
@@ -5442,10 +5441,10 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
   </div>
 
   <!-- Add Catalog Modal -->
-  <div id="addShelfModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Add a catalog" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
+  <div id="addShelfModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="New catalog" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
     <div class="modal-card" style="width: 100%; max-width: 420px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
-        <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);">Add Catalog</h2>
+        <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);">New Catalog</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="appActHideAddShelfModal">&#x2715;</button>
       </div>
       
@@ -5475,7 +5474,7 @@ ${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria
       
       <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
         <button type="button" class="lc-btn secondary" data-act="appActHideAddShelfModal">Cancel</button>
-        <button type="button" class="lc-btn primary" id="addShelfModalBtn" style="opacity: 0.5; min-width: 80px;" disabled data-act="submitAddShelfModal">Add</button>
+        <button type="button" class="lc-btn primary" id="addShelfModalBtn" style="opacity: 0.5; min-width: 80px;" disabled data-act="submitAddShelfModal">Add Catalog</button>
       </div>
     </div>
   </div>
