@@ -2521,10 +2521,10 @@ ${seoHeadHtml}
       min-width: 0;
     }
     .list-card-header {
-      display: flex;
-      flex-direction: column;
-      align-items: stretch;
-      gap: 8px;
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 8px !important;
     }
     .list-card-body {
       width: 100%;
