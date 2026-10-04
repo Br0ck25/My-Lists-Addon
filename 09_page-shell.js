@@ -4956,6 +4956,57 @@ ${seoHeadHtml}
     margin: 0;
   }
 
+  /* Custom List Search Cards (Media Tile Layout) */
+  .custom-list-search-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.15s ease;
+  }
+  .custom-list-search-card:hover:not(:has(.customListAddBtn:disabled)) {
+    transform: translateY(-2px);
+  }
+  .custom-list-search-card:hover .custom-list-search-poster {
+    box-shadow: var(--shadow-md);
+  }
+  .custom-list-search-poster {
+    width: 100%;
+    aspect-ratio: 2/3;
+    object-fit: cover;
+    border-radius: 8px;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.15s ease;
+    background: var(--surface-2, rgba(255,255,255,0.06));
+  }
+  .custom-list-search-title {
+    width: 100%;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-align: center;
+    color: var(--text);
+    margin: 6px 0 2px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.25;
+    min-height: 2.5em;
+  }
+  .custom-list-search-meta {
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-align: center;
+    margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+  }
+
   @media (max-width: 640px) {
     .customListMoveBtn { display: none !important; }
     .customListPosInput { display: none !important; }

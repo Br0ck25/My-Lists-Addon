@@ -2,31 +2,34 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
-> **HANDOFF, 2026-10-04 (Antigravity): Custom List Editor Modernization & Inline Title Search.**
+> **HANDOFF, 2026-10-04 (Antigravity): Custom List Editor Modernization & Inline Title Search Polish.**
 >
 > **Where things stand**
 > - Custom List Editor Layout Redesign & Inline Search (`09_page-shell.js`, `12_tab-custom-lists.js`, `16_client-row-core.js`, `21_client-custom-list-builder.js`):
 >   1. **Inline Title Search & Quick Add**:
 >      - Added a dedicated search section (`#customListSearchInput`, `#customListSearchClearBtn`, `#customListSearchResult`) directly in the editor panel (`#listsSubCreateList`).
 >      - Implemented debounced (300ms) live search via `runCustomListTitleSearch()` querying `/api/title-search?q=...&type=movie|tv` (and parallel multi-search when `mixed`).
->      - Renders results in `#customListSearchResult` with poster, title, year/type, and `+ Add` button (`.customListAddBtn`).
->      - Clicking `+ Add` resolves TMDB to IMDb, adds directly to `customListDraftItems`, updates button to disabled `Added ✓`, updates draft count, and refreshes the draft list.
+>      - Upgraded search results to clean media tiles (`.custom-list-search-card`, `.custom-list-search-poster`, `.custom-list-search-title`, `.custom-list-search-meta`).
+>      - Eliminated inner scroll trapping (`max-height: 420px; overflow-y: auto`) so up to 12 results flow naturally in a responsive `minmax(140px, 1fr)` grid without awkward browser scrollbars.
+>      - Enabled 2-line title clamping (`-webkit-line-clamp: 2`) preventing premature title cutoffs.
+>      - Whole card clickability: clicking anywhere on a search card or its `+ Add` button resolves TMDB to IMDb, adds directly to `customListDraftItems`, updates button to disabled `Added ✓`, updates draft count, and refreshes the draft list.
 >      - Wire-up initialized on page load and dynamically on switching to the `create-list` subpanel via `initCustomListSearch()`.
 >   2. **Inverted Form Hierarchy & Design System Elements**:
->      - Placed List Name (`#customListNameInput`) and Content Type segmented pill selector (`#customListTypeToggles`) at the top of the editor.
+>      - Placed List Name (`#customListNameInput`) with constrained `max-width: 480px` and Content Type segmented pill selector (`#customListTypeToggles`) at the top of the editor.
 >      - Added `.custom-list-type-pill` styling in `09_page-shell.js` with active pill indicators synced to `customListDraftType`.
 >      - Modernized Public List toggle row with descriptive subtitle explaining community discoverability.
+>      - Upgraded "Hide watched" in Advanced Settings to the unified `.ui-toggle` pattern.
 >      - Constrained "Play order" select (`#customListPlayOrderSelect`) to `max-width: 320px` with pill border radius.
->      - Moved Cancel (`#customListCancelEditBtn`) and Save (`#customListSaveBtn`) to a dedicated bottom-right action footer.
+>      - Action button semantics: button dynamically displays "Create List" when creating a new list, or "Save Changes" when editing an existing list.
 >   3. **Cognitive Clutter Elimination & Empty State**:
 >      - Dynamic count badge (`#customListDraftCount`) displaying `(N items)`.
 >      - Action buttons (`#customListDraftActions` — Shuffle Picks Now, Remove All) automatically hidden when draft items < 2.
 >      - Clean, branded empty state with film icon and helpful instructions guiding users to search or add from Discover/Charts/Search.
 > - Verification & Tests:
->   - `python build.py` & `python check_sync.py`: OK (5,472,981 bytes).
+>   - `python build.py` & `python check_sync.py`: OK (5,474,416 bytes).
 >   - `node --check worker_entry_combined.js`: OK (0 syntax errors).
 >   - `python gen_map.py`: 2,670 symbols, 211 routes.
->   - All 2,071 tests across 446 suites passing with 0 failures (`tests/*.test.mjs`).
+>   - All 521 client and app-shell tests passing with 0 failures (`tests/client.test.mjs`, `tests/app-shell*.test.mjs`).
 > - Branch: `feat/design-system-phase-1`
 >
 

@@ -98,8 +98,8 @@ ${newUi ? '    <div id="appShellAddTitles"></div>' : ''}
       <p style="margin:0 0 16px; color:var(--muted); font-size:0.85rem;">Curate, reorder, and manage titles for this custom list.</p>
 
       <!-- 1. List Name & Content Type Header Group -->
-      <div style="display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap; margin-bottom:14px;">
-        <div style="flex:1 1 280px; min-width:0;">
+      <div style="display:flex; gap:20px; align-items:flex-end; flex-wrap:wrap; margin-bottom:16px;">
+        <div style="flex:1 1 320px; max-width:480px; min-width:0;">
           <label for="customListNameInput" style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:6px;">List Name</label>
           <input type="text" id="customListNameInput" placeholder="List name (e.g. My Favorites)" style="width:100%; padding:9px 14px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.92rem; box-sizing:border-box;">
         </div>
@@ -184,18 +184,23 @@ ${newUi ? '    <div id="appShellAddTitles"></div>' : ''}
           </div>
           <p id="customListPlayOrderHint" style="margin:0 0 14px; color:var(--muted); font-size:0.78rem;">Picks play in the order you created above &mdash; drag one, or type a new position, to change it.</p>
 
-          <label class="channel-rule-row" style="margin-top:10px;">
-            <input type="checkbox" id="customListHideWatchedCheck">
-            <span>Hide watched &mdash; skip items already in my watch history</span>
-          </label>
-          <p style="margin:2px 0 0 24px; color:var(--muted); font-size:0.78rem;">Needs Auto-track playback signed in. Once every pick has been seen, the whole list comes back rather than going dark.</p>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:12px; padding-top:10px; border-top:1px solid var(--border-subtle, rgba(255,255,255,0.08));">
+            <div>
+              <span style="font-size:0.86rem; font-weight:600; color:var(--text);">Hide watched</span>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Skip items already in your watch history (requires Auto-track playback signed in)</p>
+            </div>
+            <label class="ui-toggle" aria-label="Hide watched items">
+              <input type="checkbox" id="customListHideWatchedCheck">
+              <span class="ui-toggle-slider"></span>
+            </label>
+          </div>
         </div>
       </details>
 
       <!-- 6. Bottom Action Bar -->
       <div class="actions" style="margin-top:18px; border-top:1px solid var(--border); padding-top:14px; justify-content:flex-end; gap:10px;">
         <button type="button" id="customListCancelEditBtn" class="secondary lc-btn" style="display:none;" data-act="cancelEditCustomList">Cancel</button>
-        <button type="button" class="primary lc-btn" id="customListSaveBtn" data-act="saveCustomList" style="padding:8px 24px; font-weight:600;">Save</button>
+        <button type="button" class="primary lc-btn" id="customListSaveBtn" data-act="saveCustomList" style="padding:8px 24px; font-weight:600;">Create List</button>
       </div>
     </div>
   </div>

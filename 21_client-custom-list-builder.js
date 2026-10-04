@@ -212,7 +212,9 @@ function initCustomListSearch() {
     if (searchBox && !searchBox.__customListAddBound) {
       searchBox.__customListAddBound = true;
       searchBox.addEventListener('click', (e) => {
-        const btn = e.target.closest('.customListAddBtn');
+        const card = e.target.closest('.custom-list-search-card');
+        if (!card) return;
+        const btn = card.querySelector('.customListAddBtn');
         if (!btn || btn.disabled) return;
         addToCustomListDraft(btn.dataset.searchtype, btn.dataset.tmdbid, btn.dataset.title, btn.dataset.year, btn.dataset.poster, btn);
       });
@@ -291,22 +293,27 @@ function renderCustomListSearchResults(results) {
     const typeLabel = isShow ? 'Show' : 'Movie';
     const rPoster = typeof resolveClientPoster === 'function' ? resolveClientPoster(r, r.poster || '') : r.poster;
     const posterImg = rPoster
-      ? '<img class="preview-thumb" src="' + escapeAttr(rPoster) + '" alt="" loading="lazy" style="border-radius:6px; aspect-ratio:2/3; object-fit:cover; width:100%;">'
-      : '<div class="preview-thumb" style="border-radius:6px; aspect-ratio:2/3; background:var(--surface-2, rgba(255,255,255,0.06)); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:0.72rem; text-align:center; padding:4px;">No poster</div>';
+      ? '<img class="custom-list-search-poster" src="' + escapeAttr(rPoster) + '" alt="" loading="lazy">'
+      : '<div class="custom-list-search-poster" style="display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:0.72rem; text-align:center; padding:4px;">No poster</div>';
 
     const isAlreadyAdded = existingTitles.has((r.title || '').toLowerCase().trim());
     const btnText = isAlreadyAdded ? 'Added \u2713' : '+ Add';
     const btnClass = isAlreadyAdded ? 'lc-btn secondary customListAddBtn' : 'lc-btn primary customListAddBtn';
     const disabledAttr = isAlreadyAdded ? ' disabled' : '';
 
-    return '<div class="custom-list-search-card" style="display:flex; flex-direction:column; align-items:center; width:100%; min-width:0; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px; box-sizing:border-box;">' +
-      '<div style="width:100%; position:relative; margin-bottom:6px;">' +
+    return '<div class="custom-list-search-card"' +
+      ' data-searchtype="' + itemType + '"' +
+      ' data-tmdbid="' + escapeAttr(String(r.tmdbId || r.id || '')) + '"' +
+      ' data-title="' + escapeAttr(r.title || '') + '"' +
+      ' data-year="' + escapeAttr(r.year || '') + '"' +
+      ' data-poster="' + escapeAttr(r.poster || '') + '">' +
+      '<div style="width:100%; position:relative;">' +
         posterImg +
       '</div>' +
-      '<div style="width:100%; font-size:0.78rem; font-weight:600; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom:2px; color:var(--text);" title="' + escapeAttr(r.title || '') + '">' +
+      '<div class="custom-list-search-title" title="' + escapeAttr(r.title || '') + '">' +
         escapeHtml(r.title || '') +
       '</div>' +
-      '<div style="font-size:0.72rem; color:var(--muted); text-align:center; margin-bottom:6px;">' +
+      '<div class="custom-list-search-meta">' +
         (r.year ? escapeHtml(r.year) + ' \u2022 ' : '') + typeLabel +
       '</div>' +
       '<button type="button" class="' + btnClass + '" style="width:100%; padding:5px 8px; font-size:0.75rem; font-weight:600;"' +
@@ -321,7 +328,7 @@ function renderCustomListSearchResults(results) {
     '</div>';
   }).join('');
 
-  box.innerHTML = '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(110px, 1fr)); gap:10px; margin-top:8px; max-height:420px; overflow-y:auto; padding:4px 2px;">' + cardsHtml + '</div>';
+  box.innerHTML = '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:14px; margin-top:12px; padding:2px;">' + cardsHtml + '</div>';
 }
 
 if (typeof document !== 'undefined') {
@@ -1167,7 +1174,7 @@ function updateCustomListSaveButtonLabel() {
     }
   }
 
-  saveBtn.textContent = 'Save';
+  saveBtn.textContent = isEditing ? 'Save Changes' : 'Create List';
   if (cancelBtn) {
     cancelBtn.textContent = 'Cancel';
     cancelBtn.style.display = isEditing ? '' : 'none';

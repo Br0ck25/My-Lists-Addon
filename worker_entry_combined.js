@@ -33379,6 +33379,57 @@ ${seoHeadHtml}
     margin: 0;
   }
 
+  /* Custom List Search Cards (Media Tile Layout) */
+  .custom-list-search-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.15s ease;
+  }
+  .custom-list-search-card:hover:not(:has(.customListAddBtn:disabled)) {
+    transform: translateY(-2px);
+  }
+  .custom-list-search-card:hover .custom-list-search-poster {
+    box-shadow: var(--shadow-md);
+  }
+  .custom-list-search-poster {
+    width: 100%;
+    aspect-ratio: 2/3;
+    object-fit: cover;
+    border-radius: 8px;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.15s ease;
+    background: var(--surface-2, rgba(255,255,255,0.06));
+  }
+  .custom-list-search-title {
+    width: 100%;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-align: center;
+    color: var(--text);
+    margin: 6px 0 2px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.25;
+    min-height: 2.5em;
+  }
+  .custom-list-search-meta {
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-align: center;
+    margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+  }
+
   @media (max-width: 640px) {
     .customListMoveBtn { display: none !important; }
     .customListPosInput { display: none !important; }
@@ -34625,8 +34676,8 @@ ${newUi ? '    <div id="appShellAddTitles"></div>' : ''}
       <p style="margin:0 0 16px; color:var(--muted); font-size:0.85rem;">Curate, reorder, and manage titles for this custom list.</p>
 
       <!-- 1. List Name & Content Type Header Group -->
-      <div style="display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap; margin-bottom:14px;">
-        <div style="flex:1 1 280px; min-width:0;">
+      <div style="display:flex; gap:20px; align-items:flex-end; flex-wrap:wrap; margin-bottom:16px;">
+        <div style="flex:1 1 320px; max-width:480px; min-width:0;">
           <label for="customListNameInput" style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:6px;">List Name</label>
           <input type="text" id="customListNameInput" placeholder="List name (e.g. My Favorites)" style="width:100%; padding:9px 14px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.92rem; box-sizing:border-box;">
         </div>
@@ -34711,18 +34762,23 @@ ${newUi ? '    <div id="appShellAddTitles"></div>' : ''}
           </div>
           <p id="customListPlayOrderHint" style="margin:0 0 14px; color:var(--muted); font-size:0.78rem;">Picks play in the order you created above &mdash; drag one, or type a new position, to change it.</p>
 
-          <label class="channel-rule-row" style="margin-top:10px;">
-            <input type="checkbox" id="customListHideWatchedCheck">
-            <span>Hide watched &mdash; skip items already in my watch history</span>
-          </label>
-          <p style="margin:2px 0 0 24px; color:var(--muted); font-size:0.78rem;">Needs Auto-track playback signed in. Once every pick has been seen, the whole list comes back rather than going dark.</p>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:12px; padding-top:10px; border-top:1px solid var(--border-subtle, rgba(255,255,255,0.08));">
+            <div>
+              <span style="font-size:0.86rem; font-weight:600; color:var(--text);">Hide watched</span>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Skip items already in your watch history (requires Auto-track playback signed in)</p>
+            </div>
+            <label class="ui-toggle" aria-label="Hide watched items">
+              <input type="checkbox" id="customListHideWatchedCheck">
+              <span class="ui-toggle-slider"></span>
+            </label>
+          </div>
         </div>
       </details>
 
       <!-- 6. Bottom Action Bar -->
       <div class="actions" style="margin-top:18px; border-top:1px solid var(--border); padding-top:14px; justify-content:flex-end; gap:10px;">
         <button type="button" id="customListCancelEditBtn" class="secondary lc-btn" style="display:none;" data-act="cancelEditCustomList">Cancel</button>
-        <button type="button" class="primary lc-btn" id="customListSaveBtn" data-act="saveCustomList" style="padding:8px 24px; font-weight:600;">Save</button>
+        <button type="button" class="primary lc-btn" id="customListSaveBtn" data-act="saveCustomList" style="padding:8px 24px; font-weight:600;">Create List</button>
       </div>
     </div>
   </div>
@@ -63425,7 +63481,9 @@ function initCustomListSearch() {
     if (searchBox && !searchBox.__customListAddBound) {
       searchBox.__customListAddBound = true;
       searchBox.addEventListener('click', (e) => {
-        const btn = e.target.closest('.customListAddBtn');
+        const card = e.target.closest('.custom-list-search-card');
+        if (!card) return;
+        const btn = card.querySelector('.customListAddBtn');
         if (!btn || btn.disabled) return;
         addToCustomListDraft(btn.dataset.searchtype, btn.dataset.tmdbid, btn.dataset.title, btn.dataset.year, btn.dataset.poster, btn);
       });
@@ -63504,22 +63562,27 @@ function renderCustomListSearchResults(results) {
     const typeLabel = isShow ? 'Show' : 'Movie';
     const rPoster = typeof resolveClientPoster === 'function' ? resolveClientPoster(r, r.poster || '') : r.poster;
     const posterImg = rPoster
-      ? '<img class="preview-thumb" src="' + escapeAttr(rPoster) + '" alt="" loading="lazy" style="border-radius:6px; aspect-ratio:2/3; object-fit:cover; width:100%;">'
-      : '<div class="preview-thumb" style="border-radius:6px; aspect-ratio:2/3; background:var(--surface-2, rgba(255,255,255,0.06)); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:0.72rem; text-align:center; padding:4px;">No poster</div>';
+      ? '<img class="custom-list-search-poster" src="' + escapeAttr(rPoster) + '" alt="" loading="lazy">'
+      : '<div class="custom-list-search-poster" style="display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:0.72rem; text-align:center; padding:4px;">No poster</div>';
 
     const isAlreadyAdded = existingTitles.has((r.title || '').toLowerCase().trim());
     const btnText = isAlreadyAdded ? 'Added \u2713' : '+ Add';
     const btnClass = isAlreadyAdded ? 'lc-btn secondary customListAddBtn' : 'lc-btn primary customListAddBtn';
     const disabledAttr = isAlreadyAdded ? ' disabled' : '';
 
-    return '<div class="custom-list-search-card" style="display:flex; flex-direction:column; align-items:center; width:100%; min-width:0; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px; box-sizing:border-box;">' +
-      '<div style="width:100%; position:relative; margin-bottom:6px;">' +
+    return '<div class="custom-list-search-card"' +
+      ' data-searchtype="' + itemType + '"' +
+      ' data-tmdbid="' + escapeAttr(String(r.tmdbId || r.id || '')) + '"' +
+      ' data-title="' + escapeAttr(r.title || '') + '"' +
+      ' data-year="' + escapeAttr(r.year || '') + '"' +
+      ' data-poster="' + escapeAttr(r.poster || '') + '">' +
+      '<div style="width:100%; position:relative;">' +
         posterImg +
       '</div>' +
-      '<div style="width:100%; font-size:0.78rem; font-weight:600; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom:2px; color:var(--text);" title="' + escapeAttr(r.title || '') + '">' +
+      '<div class="custom-list-search-title" title="' + escapeAttr(r.title || '') + '">' +
         escapeHtml(r.title || '') +
       '</div>' +
-      '<div style="font-size:0.72rem; color:var(--muted); text-align:center; margin-bottom:6px;">' +
+      '<div class="custom-list-search-meta">' +
         (r.year ? escapeHtml(r.year) + ' \u2022 ' : '') + typeLabel +
       '</div>' +
       '<button type="button" class="' + btnClass + '" style="width:100%; padding:5px 8px; font-size:0.75rem; font-weight:600;"' +
@@ -63534,7 +63597,7 @@ function renderCustomListSearchResults(results) {
     '</div>';
   }).join('');
 
-  box.innerHTML = '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(110px, 1fr)); gap:10px; margin-top:8px; max-height:420px; overflow-y:auto; padding:4px 2px;">' + cardsHtml + '</div>';
+  box.innerHTML = '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:14px; margin-top:12px; padding:2px;">' + cardsHtml + '</div>';
 }
 
 if (typeof document !== 'undefined') {
@@ -64380,7 +64443,7 @@ function updateCustomListSaveButtonLabel() {
     }
   }
 
-  saveBtn.textContent = 'Save';
+  saveBtn.textContent = isEditing ? 'Save Changes' : 'Create List';
   if (cancelBtn) {
     cancelBtn.textContent = 'Cancel';
     cancelBtn.style.display = isEditing ? '' : 'none';
