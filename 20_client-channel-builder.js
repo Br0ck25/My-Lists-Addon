@@ -9600,7 +9600,7 @@ function renderStorylinesUniverseList(category = activeStorylineCategory) {
           '</div>' +
         '</div>' +
         '<div class="list-card-actions">' +
-          '<button type="button" class="lc-btn ' + (isAdded ? 'secondary is-added' : 'primary') + '" data-act="createInstantStorylineChannel" data-act-args="' + appActArgs([event.id, "@self"]) + '" ' + (isAdded ? 'style="color:var(--danger);"' : '') + '>' + (isAdded ? 'Remove' : '+ Add') + '</button>' +
+          '<button type="button" class="lc-btn channelAddBtn ' + (isAdded ? 'secondary is-added' : 'primary') + '" data-act="createInstantStorylineChannel" data-act-args="' + appActArgs([event.id, "@self"]) + '" ' + (isAdded ? 'style="color:var(--danger);"' : '') + '>' + (isAdded ? 'Remove' : '+ Add') + '</button>' +
           '<button type="button" class="lc-btn secondary" data-act="loadStorylineToDraft" data-act-args="' + appActArgs([event.id, "@self"]) + '" title="Customize in Channel Builder">Customize</button>' +
         '</div>' +
       '</div>' +
@@ -10680,7 +10680,7 @@ function renderMyCreatedChannelsList() {
       '</div>';
     }).join('');
     
-    const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleChannelInCatalog" data-act-args="' + appActArgs([ch.channelId]) + '">' +
+    const addBtnHtml = '<button type="button" class="lc-btn channelAddBtn ' + (isAdded ? 'secondary is-added' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleChannelInCatalog" data-act-args="' + appActArgs([ch.channelId]) + '">' +
       (isAdded ? 'Remove' : '+ Add') +
     '</button>';
 
@@ -12499,7 +12499,7 @@ function renderChannelDirectory() {
     const isAdded = isDirectoryChannelAdded(e.code);
     const actionBtn = isAdded
       ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger); border-color:var(--danger);" data-act="removeDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">Remove</button>'
-      : '<button type="button" class="lc-btn primary" style="padding:6px 12px; font-size:0.8rem;" data-act="addDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">+ Add</button>';
+      : '<button type="button" class="lc-btn channelAddBtn primary" style="padding:6px 12px; font-size:0.8rem;" data-act="addDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">+ Add</button>';
     return channelListingCardHtml(
       e,
       '<button type="button" class="lc-btn searchLikeExternalBtn' + (_channelDirectoryLiked[e.code] ? ' liked' : '') + '"' +
@@ -13376,7 +13376,7 @@ function renderChannelMergeList() {
         
         const countText = (merged.channelIds ? merged.channelIds.length : 0) + ' channels &middot; ' + totalEpisodes + ' episodes';
         
-        const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleMergedChannelInCatalog" data-act-args="' + appActArgs([merged.mergedId]) + '">' +
+        const addBtnHtml = '<button type="button" class="lc-btn channelAddBtn ' + (isAdded ? 'secondary is-added' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleMergedChannelInCatalog" data-act-args="' + appActArgs([merged.mergedId]) + '">' +
           (isAdded ? 'Remove' : '+ Add') +
         '</button>';
 

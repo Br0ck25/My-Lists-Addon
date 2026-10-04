@@ -4945,7 +4945,7 @@ async function renderCreatorDashboard(options) {
         '<div class="list-card-header">' +
           '<div class="list-card-body creatorListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' +
             '<div class="list-card-title">' +
-              '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
+              '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
               escapeHtml(l.name) +
             '</div>' +
             '<div class="list-card-meta">' +
@@ -5347,7 +5347,7 @@ function buildLocalListCardHtml(l) {
     '<div class="list-card-header">' +
       '<div class="list-card-body localListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type || 'movie') + '" style="cursor:pointer;">' +
         '<div class="list-card-title">' +
-          '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
+          '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
           escapeHtml(l.name) +
         '</div>' +
         '<div class="list-card-meta">' +

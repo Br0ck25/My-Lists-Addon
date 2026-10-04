@@ -30329,74 +30329,54 @@ ${seoHeadHtml}
     border-color: rgba(255,59,48,0.4);
     background: var(--color-danger-subtle);
   }
-  /* --- Soft Brand-Tinted Add/Remove Action Buttons on List Cards --- */
-  .localListAddToConfigBtn:not(.is-added),
-  .creatorListAddToConfigBtn:not(.is-added),
-  .myListAddBtn:not(.is-added) {
+  /* --- Soft Brand-Tinted Add/Remove Action Buttons (one shared selector list) --- */
+  :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, #detailAddBtn):not(.is-added) {
     background: rgba(0, 122, 255, 0.08) !important;
     border-color: rgba(0, 122, 255, 0.35) !important;
     color: var(--accent) !important;
     box-shadow: 0 1px 3px rgba(0, 122, 255, 0.08);
   }
-  :root.dark-theme .localListAddToConfigBtn:not(.is-added),
-  :root.dark-theme .creatorListAddToConfigBtn:not(.is-added),
-  :root.dark-theme .myListAddBtn:not(.is-added) {
+  :root.dark-theme :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, #detailAddBtn):not(.is-added) {
     background: rgba(10, 132, 255, 0.14) !important;
     border-color: rgba(10, 132, 255, 0.4) !important;
     color: var(--accent) !important;
   }
-  .localListAddToConfigBtn:not(.is-added):hover:not(:disabled),
-  .creatorListAddToConfigBtn:not(.is-added):hover:not(:disabled),
-  .myListAddBtn:not(.is-added):hover:not(:disabled) {
+  :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, #detailAddBtn):not(.is-added):hover:not(:disabled) {
     background: rgba(0, 122, 255, 0.16) !important;
     border-color: var(--accent) !important;
     color: var(--accent) !important;
   }
-  :root.dark-theme .localListAddToConfigBtn:not(.is-added):hover:not(:disabled),
-  :root.dark-theme .creatorListAddToConfigBtn:not(.is-added):hover:not(:disabled),
-  :root.dark-theme .myListAddBtn:not(.is-added):hover:not(:disabled) {
+  :root.dark-theme :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, #detailAddBtn):not(.is-added):hover:not(:disabled) {
     background: rgba(10, 132, 255, 0.24) !important;
     border-color: var(--accent) !important;
     color: var(--accent) !important;
   }
-  .localListAddToConfigBtn:not(.is-added):active:not(:disabled),
-  .creatorListAddToConfigBtn:not(.is-added):active:not(:disabled),
-  .myListAddBtn:not(.is-added):active:not(:disabled) {
+  :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, #detailAddBtn):not(.is-added):active:not(:disabled) {
     transform: scale(0.97);
     background: rgba(0, 122, 255, 0.22) !important;
   }
-  .localListAddToConfigBtn.is-added,
-  .creatorListAddToConfigBtn.is-added,
-  .myListAddBtn.is-added {
+  :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, #detailAddBtn).is-added {
     color: var(--color-danger, #d70015) !important;
     background: rgba(255, 59, 48, 0.08) !important;
     border-color: rgba(255, 59, 48, 0.35) !important;
     box-shadow: 0 1px 3px rgba(255, 59, 48, 0.08);
   }
-  :root.dark-theme .localListAddToConfigBtn.is-added,
-  :root.dark-theme .creatorListAddToConfigBtn.is-added,
-  :root.dark-theme .myListAddBtn.is-added {
+  :root.dark-theme :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, #detailAddBtn).is-added {
     color: var(--color-danger, #ff453a) !important;
     background: rgba(255, 69, 58, 0.15) !important;
     border-color: rgba(255, 69, 58, 0.4) !important;
   }
-  .localListAddToConfigBtn.is-added:hover:not(:disabled),
-  .creatorListAddToConfigBtn.is-added:hover:not(:disabled),
-  .myListAddBtn.is-added:hover:not(:disabled) {
+  :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, #detailAddBtn).is-added:hover:not(:disabled) {
     background: rgba(255, 59, 48, 0.16) !important;
     border-color: var(--danger) !important;
     color: var(--danger) !important;
   }
-  :root.dark-theme .localListAddToConfigBtn.is-added:hover:not(:disabled),
-  :root.dark-theme .creatorListAddToConfigBtn.is-added:hover:not(:disabled),
-  :root.dark-theme .myListAddBtn.is-added:hover:not(:disabled) {
+  :root.dark-theme :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, #detailAddBtn).is-added:hover:not(:disabled) {
     background: rgba(255, 69, 58, 0.24) !important;
     border-color: var(--danger) !important;
     color: var(--danger) !important;
   }
-  .localListAddToConfigBtn.is-added:active:not(:disabled),
-  .creatorListAddToConfigBtn.is-added:active:not(:disabled),
-  .myListAddBtn.is-added:active:not(:disabled) {
+  :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, #detailAddBtn).is-added:active:not(:disabled) {
     transform: scale(0.97);
     background: rgba(255, 59, 48, 0.22) !important;
   }
@@ -58911,7 +58891,7 @@ function renderStorylinesUniverseList(category = activeStorylineCategory) {
           '</div>' +
         '</div>' +
         '<div class="list-card-actions">' +
-          '<button type="button" class="lc-btn ' + (isAdded ? 'secondary is-added' : 'primary') + '" data-act="createInstantStorylineChannel" data-act-args="' + appActArgs([event.id, "@self"]) + '" ' + (isAdded ? 'style="color:var(--danger);"' : '') + '>' + (isAdded ? 'Remove' : '+ Add') + '</button>' +
+          '<button type="button" class="lc-btn channelAddBtn ' + (isAdded ? 'secondary is-added' : 'primary') + '" data-act="createInstantStorylineChannel" data-act-args="' + appActArgs([event.id, "@self"]) + '" ' + (isAdded ? 'style="color:var(--danger);"' : '') + '>' + (isAdded ? 'Remove' : '+ Add') + '</button>' +
           '<button type="button" class="lc-btn secondary" data-act="loadStorylineToDraft" data-act-args="' + appActArgs([event.id, "@self"]) + '" title="Customize in Channel Builder">Customize</button>' +
         '</div>' +
       '</div>' +
@@ -59991,7 +59971,7 @@ function renderMyCreatedChannelsList() {
       '</div>';
     }).join('');
     
-    const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleChannelInCatalog" data-act-args="' + appActArgs([ch.channelId]) + '">' +
+    const addBtnHtml = '<button type="button" class="lc-btn channelAddBtn ' + (isAdded ? 'secondary is-added' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleChannelInCatalog" data-act-args="' + appActArgs([ch.channelId]) + '">' +
       (isAdded ? 'Remove' : '+ Add') +
     '</button>';
 
@@ -61810,7 +61790,7 @@ function renderChannelDirectory() {
     const isAdded = isDirectoryChannelAdded(e.code);
     const actionBtn = isAdded
       ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger); border-color:var(--danger);" data-act="removeDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">Remove</button>'
-      : '<button type="button" class="lc-btn primary" style="padding:6px 12px; font-size:0.8rem;" data-act="addDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">+ Add</button>';
+      : '<button type="button" class="lc-btn channelAddBtn primary" style="padding:6px 12px; font-size:0.8rem;" data-act="addDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">+ Add</button>';
     return channelListingCardHtml(
       e,
       '<button type="button" class="lc-btn searchLikeExternalBtn' + (_channelDirectoryLiked[e.code] ? ' liked' : '') + '"' +
@@ -62687,7 +62667,7 @@ function renderChannelMergeList() {
         
         const countText = (merged.channelIds ? merged.channelIds.length : 0) + ' channels &middot; ' + totalEpisodes + ' episodes';
         
-        const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleMergedChannelInCatalog" data-act-args="' + appActArgs([merged.mergedId]) + '">' +
+        const addBtnHtml = '<button type="button" class="lc-btn channelAddBtn ' + (isAdded ? 'secondary is-added' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleMergedChannelInCatalog" data-act-args="' + appActArgs([merged.mergedId]) + '">' +
           (isAdded ? 'Remove' : '+ Add') +
         '</button>';
 
@@ -71944,7 +71924,7 @@ async function renderCreatorDashboard(options) {
         '<div class="list-card-header">' +
           '<div class="list-card-body creatorListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' +
             '<div class="list-card-title">' +
-              '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
+              '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
               escapeHtml(l.name) +
             '</div>' +
             '<div class="list-card-meta">' +
@@ -72346,7 +72326,7 @@ function buildLocalListCardHtml(l) {
     '<div class="list-card-header">' +
       '<div class="list-card-body localListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type || 'movie') + '" style="cursor:pointer;">' +
         '<div class="list-card-title">' +
-          '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
+          '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
           escapeHtml(l.name) +
         '</div>' +
         '<div class="list-card-meta">' +
