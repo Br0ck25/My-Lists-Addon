@@ -4837,6 +4837,7 @@ async function checkForNewEpisodes(env, maxShowChecks) {
     // It is skipped rather than retried because the next full cycle will come
     // back to it anyway.
     try {
+    await ensureTrackingMigrated(env, username);
     let blob = null;
     if (env.DB) {
       blob = await readCreatorTrackingD1(env, username);

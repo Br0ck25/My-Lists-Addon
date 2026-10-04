@@ -1,7 +1,11 @@
-// Badged posters & icon precomputation optimization (P8-4, PF-B4, PF-B5).
-// Removes base64 inlining from /api/poster-badge and serves SVG overlays
-// referencing allowlisted image URLs directly.
-// Precomputes /icon.png bytes at module load.
+// Badged posters and the precomputed icon (P8-4, PF-B4, PF-B5).
+//
+// P8-4 also stopped putting the poster inside a badged poster's SVG and linked
+// to it instead. An SVG shown as an image (an <img>, a Stremio tile) may not
+// load anything from outside itself, so every badged TMDB or Metahub poster
+// showed the badge on a blank card on the live site (2026-10-02 to the fix).
+// The poster is embedded again; what P8-4 keeps is the isolate cache, now
+// bounded by size.
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -35,130 +39,124 @@ describe("P8-4: Badged Posters & Icon Precomputation Optimization", () => {
     });
   });
 
-  describe("/api/poster-badge optimized SVG overlay", () => {
+  describe("/api/poster-badge", () => {
+    // A 1x1 PNG, as TMDB would send a poster.
+    const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==", "base64");
+
+    function fakePosterHost(answer) {
+      const realFetch = globalThis.fetch;
+      const asked = [];
+      globalThis.fetch = async (input, init) => {
+        const u = String(input && input.url ? input.url : input);
+        if (u.startsWith("https://image.tmdb.org/")) {
+          asked.push(u);
+          return answer(u);
+        }
+        return realFetch(input, init);
+      };
+      return { asked, restore: () => { globalThis.fetch = realFetch; } };
+    }
+    const png = () => new Response(PNG, { status: 200, headers: { "Content-Type": "image/png" } });
+
     it("rejects non-allowlisted poster hosts with 404 (SSRF & open redirect prevention)", async () => {
       const env = makeEnv();
-
-      // No badge params (would be open redirect if not rejected)
       const res1 = await call(env, "/api/poster-badge?poster=" + encodeURIComponent("https://malicious.example/phish.jpg"));
       assert.equal(res1.status, 404);
-
-      // With badge param (would be SSRF/open proxy if not rejected)
       const res2 = await call(env, "/api/poster-badge?poster=" + encodeURIComponent("https://evil.site/bad.jpg") + "&premiere=1");
       assert.equal(res2.status, 404);
     });
 
-    it("redirects directly to untouched poster when no badges are requested or all aired", async () => {
+    it("redirects to the untouched poster when no badge is due", async () => {
       const env = makeEnv();
       const poster = "https://image.tmdb.org/t/p/w500/sample.jpg";
-
-      // No badge params
       const resNoBadges = await call(env, "/api/poster-badge?poster=" + encodeURIComponent(poster));
       assert.equal(resNoBadges.status, 302);
       assert.equal(resNoBadges.headers.get("location"), poster);
-
-      // Air date in the past
       const resAired = await call(env, "/api/poster-badge?poster=" + encodeURIComponent(poster) + "&airDate=2020-01-01");
       assert.equal(resAired.status, 302);
       assert.equal(resAired.headers.get("location"), poster);
     });
 
-    it("serves compact SVG overlay referencing the image URL without base64 inlining or outbound fetch", async () => {
-      const env = makeEnv();
-      const poster = "https://image.tmdb.org/t/p/w500/test_poster.jpg";
-
-      let outboundFetches = 0;
-      const originalFetch = globalThis.fetch;
-      globalThis.fetch = async (...args) => {
-        outboundFetches++;
-        return originalFetch(...args);
-      };
-
+    it("puts the poster inside the SVG, because an SVG shown as an image loads nothing from outside", async () => {
+      const host = fakePosterHost(png);
       try {
+        const env = makeEnv();
+        const poster = "https://image.tmdb.org/t/p/w500/embedded.jpg";
         const res = await call(env, "/api/poster-badge?poster=" + encodeURIComponent(poster) + "&airDate=2028-09-15&premiere=1");
-
         assert.equal(res.status, 200);
         assert.equal(res.headers.get("content-type"), "image/svg+xml; charset=utf-8");
-        assert.ok(res.headers.get("cache-control").includes("max-age="));
-
-        // CRITICAL P8-4 assertion: NO outbound fetch to download the poster image!
-        assert.equal(outboundFetches, 0, "must not download the poster image from TMDB or external hosts");
-
         const svg = res.text;
-
-        // CRITICAL P8-4 assertion: NO data-URI base64 inlining!
-        assert.ok(!svg.includes("data:image/"), "SVG must not contain base64 data URIs");
-        assert.ok(!svg.includes(";base64,"), "SVG must not contain base64 content");
-
-        // The image URL must be referenced directly in href and xlink:href
-        assert.ok(svg.includes(`href="${poster}"`), "SVG must reference the poster URL directly in href");
-        assert.ok(svg.includes(`xlink:href="${poster}"`), "SVG must reference the poster URL directly in xlink:href");
-
-        // Badge content
-        assert.ok(svg.includes("Season Premiere"), "SVG must include premiere badge text");
-
-        // Payload size must be tiny (~1.5 KB), not hundreds of KB
-        assert.ok(svg.length < 3000, `SVG payload should be compact (${svg.length} bytes)`);
+        assert.ok(svg.includes("data:image/png;base64," + PNG.toString("base64")), "the poster's own bytes");
+        assert.ok(!svg.includes(`href="${poster}"`), "no link out to the poster host");
+        assert.ok(svg.includes("Season Premiere"));
+        assert.equal(host.asked.length, 1);
       } finally {
-        globalThis.fetch = originalFetch;
+        host.restore();
       }
     });
 
-    it("renders finale and air date badges correctly", async () => {
-      const env = makeEnv();
-      const poster = "https://image.tmdb.org/t/p/w500/finale_show.jpg";
-
-      const res = await call(env, "/api/poster-badge?poster=" + encodeURIComponent(poster) + "&finale=1&airDate=2028-04-10");
-      assert.equal(res.status, 200);
-
-      const svg = res.text;
-      assert.ok(svg.includes("Season Finale"));
-      assert.ok(svg.includes("#ff9500"));
-      assert.ok(svg.includes(`href="${poster}"`));
-      assert.ok(!svg.includes("data:image/"));
-    });
-
-    it("renders companion badge with custom accent colors", async () => {
-      const env = makeEnv();
-      const poster = "https://image.tmdb.org/t/p/w500/companion.jpg";
-
-      const res = await call(env, "/api/poster-badge?poster=" + encodeURIComponent(poster) + "&companion=" + encodeURIComponent("Sequel Film"));
-      assert.equal(res.status, 200);
-
-      const svg = res.text;
-      assert.ok(svg.includes("Sequel Film"));
-      assert.ok(svg.includes("rgba(37, 99, 235, 0.95)"));
-      assert.ok(svg.includes(`href="${poster}"`));
-      assert.ok(!svg.includes("data:image/"));
-    });
-
-    it("serves from isolate memo cache on repeated requests", async () => {
-      const env = makeEnv();
-      const poster = "https://image.tmdb.org/t/p/w500/cached_poster.jpg";
-      const path = "/api/poster-badge?poster=" + encodeURIComponent(poster) + "&airDate=2028-11-20";
-
-      const res1 = await call(env, path);
-      assert.equal(res1.status, 200);
-
-      const res2 = await call(env, path);
-      assert.equal(res2.status, 200);
-      assert.equal(res1.text, res2.text);
-    });
-
-    it("demonstrates sub-millisecond execution time over 100 badged poster requests", async () => {
-      const env = makeEnv();
-      const poster = "https://image.tmdb.org/t/p/w500/bench.jpg";
-
-      const t0 = performance.now();
-      for (let i = 0; i < 100; i++) {
-        const res = await call(env, `/api/poster-badge?poster=${encodeURIComponent(poster)}&airDate=2028-12-0${i % 9 + 1}&premiere=1`);
-        assert.equal(res.status, 200);
+    it("renders finale, air date and companion badges", async () => {
+      const host = fakePosterHost(png);
+      try {
+        const env = makeEnv();
+        const finale = await call(env, "/api/poster-badge?poster=" + encodeURIComponent("https://image.tmdb.org/t/p/w500/finale_show.jpg") + "&finale=1&airDate=2028-04-10");
+        assert.equal(finale.status, 200);
+        assert.ok(finale.text.includes("Season Finale"));
+        assert.ok(finale.text.includes("#ff9500"));
+        const companion = await call(env, "/api/poster-badge?poster=" + encodeURIComponent("https://image.tmdb.org/t/p/w500/companion.jpg") + "&companion=" + encodeURIComponent("Sequel Film"));
+        assert.equal(companion.status, 200);
+        assert.ok(companion.text.includes("Sequel Film"));
+        assert.ok(companion.text.includes("rgba(37, 99, 235, 0.95)"));
+        assert.ok(companion.text.includes("data:image/png;base64,"));
+      } finally {
+        host.restore();
       }
-      const durationMs = performance.now() - t0;
-      const perReqMs = durationMs / 100;
+    });
 
-      // In Node/V8 on Windows, 100 requests without network I/O or base64 loops finish in < 50ms (< 0.5ms each)
-      assert.ok(perReqMs < 2.0, `Each badged poster request should average < 2.0ms (was ${perReqMs.toFixed(3)}ms)`);
+    it("sends the plain poster rather than a blank badge when the poster cannot be had", async () => {
+      const host = fakePosterHost((u) => (u.includes("missing") ? new Response("nope", { status: 404 }) : new Response("<html>", { status: 200, headers: { "Content-Type": "text/html" } })));
+      try {
+        const env = makeEnv();
+        for (const name of ["missing.jpg", "not-an-image.jpg"]) {
+          const poster = "https://image.tmdb.org/t/p/w500/" + name;
+          const res = await call(env, "/api/poster-badge?poster=" + encodeURIComponent(poster) + "&airDate=2028-11-20");
+          assert.equal(res.status, 302, name);
+          assert.equal(res.headers.get("location"), poster);
+        }
+      } finally {
+        host.restore();
+      }
+    });
+
+    it("answers a repeat from the isolate cache, without fetching the poster again", async () => {
+      const host = fakePosterHost(png);
+      try {
+        const env = makeEnv();
+        const path = "/api/poster-badge?poster=" + encodeURIComponent("https://image.tmdb.org/t/p/w500/cached_poster.jpg") + "&airDate=2028-11-21";
+        const res1 = await call(env, path);
+        const res2 = await call(env, path);
+        assert.equal(res1.status, 200);
+        assert.equal(res1.text, res2.text);
+        assert.equal(host.asked.length, 1);
+      } finally {
+        host.restore();
+      }
+    });
+
+    it("does not keep a poster too big for the cache's share of memory", async () => {
+      // A 900 KB poster is ~1.2 MB as base64: over the per-entry cap, so it is
+      // fetched again rather than held.
+      const big = Buffer.alloc(900 * 1024, 7);
+      const host = fakePosterHost(() => new Response(big, { status: 200, headers: { "Content-Type": "image/jpeg" } }));
+      try {
+        const env = makeEnv();
+        const path = "/api/poster-badge?poster=" + encodeURIComponent("https://image.tmdb.org/t/p/w500/huge.jpg") + "&airDate=2028-11-22";
+        assert.equal((await call(env, path)).status, 200);
+        assert.equal((await call(env, path)).status, 200);
+        assert.equal(host.asked.length, 2);
+      } finally {
+        host.restore();
+      }
     });
   });
 });

@@ -633,15 +633,23 @@ function isD1ReplicaReadRequest(request) {
   // Exclude admin, session, auth, me, save, create, and maintenance routes
   if (/^\/(admin|api\/(session|me|creator|save|imports))\b/.test(pathname)) return false;
 
-  // Stremio / Nuvio catalog and install paths (including v2 /i/{token}/...)
-  if (/\/(manifest\.json|catalog\/|meta\/|subtitles\/)/.test(pathname)) return true;
+  // Stremio / Nuvio catalog and install paths (including v2 /i/{token}/...).
+  // Not /subtitles/: with a tracking install it is the playback ping, which
+  // reads the account's tracking and writes it back (handleSubtitlesTrack).
+  // Read from a replica that has not caught up, it writes the old state over
+  // the new one -- a title just removed from Continue Watching comes back.
+  if (/\/subtitles\//.test(pathname)) return false;
+  if (/\/(manifest\.json|catalog\/|meta\/)/.test(pathname)) return true;
 
   // Directory and search
   if (pathname === "/lists/public.json" || pathname === "/api/public-lists.json" || pathname === "/api/search-published-lists") return true;
 
   // Public lists and channels
   if (/^\/(lists|channel|channels)\//.test(pathname)) return true;
-  if (/^\/api\/lists\/[^/]+(\/items)?$/.test(pathname)) return true;
+  // Not /api/lists/:id: its owner reads it right after a change (PATCH, items)
+  // and sends the ETag back with the next one. No client sends the bookmark
+  // that would keep that read on a replica that has the change, so it could
+  // see the old list and get a 412 on its next write.
   if (pathname === "/api/channel-lineup" || pathname === "/api/channel-preset") return true;
 
   return false;

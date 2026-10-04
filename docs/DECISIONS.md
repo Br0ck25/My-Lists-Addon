@@ -2,6 +2,13 @@
 
 Decisions the owner has made. They are recorded here so the code, the plan documents and future work agree. The newest entries are at the top.
 
+## 2026-10-04 — Where the counters live, and what cleanup may delete (review of P8–P10)
+
+| # | Decision | Consequence in the code |
+|---|---|---|
+| D-33 | **The site's counters are D1 rows; Analytics Engine is for measuring requests only.** Page views, install links, playback pings, tracked events (Most Watched, Most Added) and the search log are written to the D1 `stats` table and read from it, whether or not `ANALYTICS` is bound. | P8-2 had made Analytics Engine the only store for them; nothing reads it, so the dashboard showed zeros from 2026-10-02 and Most Watched stopped. `bumpStat`, `bumpStatBy`, `recordTrackedEvent` and `recordSearchQuery` (`03_`) write D1 again, and `computeLeaderboard` reads `stats` (not `title_daily_stats`, which holds only event-tracked accounts' plays by UTC day). The gap is put back once by `recoverStatsFromAnalyticsEngine` (admin → Counts missing since 2 October), idempotent through `aerecovery:` ledger rows. Moving the counters off D1 again would need a reader first — the dashboard querying the SQL API — and is not planned. |
+| D-34 | **Cleanup copies; it never deletes what live code still reads.** The KV export (`/admin/api/export-kv-to-r2`) only copies, a prefix is literal, and a run is complete when its `manifest.json` exists. | A KV prefix or D1 table is removed only after a release has taken out every reader and run for 30 days, one prefix or table per recorded step (docs/CUTOVER.md P10-3). `ensureTrackingMigrated` stays until the `creatorsync:` tracking fields are retired: emptying it let a routine autosave erase old accounts' history. |
+
 ## 2026-10-01 — Account recovery stays as it is (P7-5), and stronger hashing where it counts (P7-4)
 
 | # | Decision | Consequence in the code |

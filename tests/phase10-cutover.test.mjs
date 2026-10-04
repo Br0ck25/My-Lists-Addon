@@ -128,58 +128,98 @@ describe("P10-3: KV Export to R2 Admin Tool", () => {
     assert.match(res.body.error, /No R2 BLOBS binding/);
   });
 
-  it("exports KV prefix to R2 with gzip compression and verifiable content", async () => {
+  // Reads one archived object back: gunzip, then JSON.
+  async function readArchive(env, key) {
+    const obj = await env.BLOBS.get(key);
+    assert.ok(obj, "missing " + key);
+    const text = await new Response(new Blob([await obj.arrayBuffer()]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
+    return { obj, body: JSON.parse(text) };
+  }
+
+  // What the admin page does: call until done, carrying the run along.
+  async function exportAll(env, cookie, prefix) {
+    let state = { prefix };
+    const calls = [];
+    for (let i = 0; i < 50; i++) {
+      const res = await call(env, "/admin/api/export-kv-to-r2", { method: "POST", cookie, json: state });
+      calls.push(res);
+      if (!res.body.ok || res.body.done) break;
+      state = { prefix, runId: res.body.runId, part: res.body.part + 1, keysSoFar: res.body.keysSoFar, cursor: res.body.cursor };
+    }
+    return calls;
+  }
+
+  it("copies a prefix into R2, gzipped, and writes the manifest last", async () => {
     const env = makeEnv({ CONFIGS: makeKv(), BLOBS: makeR2() });
     const cookie = await adminCookie(env);
-
-    // Seed test KV data under creator: prefix
     await env.CONFIGS.put("creator:alice", JSON.stringify({ username: "alice", created: 100 }));
-    await env.CONFIGS.put("creator:bob", JSON.stringify({ username: "bob", created: 200 }));
+    await env.CONFIGS.put("creator:bob", JSON.stringify({ username: "bob", created: 200 }), { metadata: { v: 2 } });
     await env.CONFIGS.put("other:ignored", "do not export");
 
-    const res = await call(env, "/admin/api/export-kv-to-r2", {
-      method: "POST",
-      cookie,
-      json: { prefix: "creator:" },
-    });
-
+    const [res] = await exportAll(env, cookie, "creator:");
     assert.equal(res.status, 200);
-    assert.equal(res.body.ok, true);
     assert.equal(res.body.done, true);
     assert.equal(res.body.keysExported, 2);
-    assert.equal(res.body.totalKeysInArchive, 2);
-    assert.ok(res.body.archiveKey.startsWith("kv-archive/creator/"));
-    assert.ok(res.body.archiveKey.endsWith(".json.gz"));
+    assert.match(res.body.partKey, /^kv-archive\/creator\/[0-9TZ-]+\/part-00001\.json\.gz$/);
 
-    // Verify R2 object existence and metadata
-    const r2Obj = await env.BLOBS.get(res.body.archiveKey);
-    assert.ok(r2Obj, "R2 archive object must exist");
-    assert.equal(r2Obj.httpMetadata.contentEncoding, "gzip");
-    assert.equal(r2Obj.customMetadata.kvPrefix, "creator:");
-    assert.equal(r2Obj.customMetadata.keyCount, "2");
+    const { obj, body } = await readArchive(env, res.body.partKey);
+    assert.equal(obj.httpMetadata.contentEncoding, "gzip");
+    assert.equal(obj.customMetadata.kvPrefix, "creator:");
+    assert.deepEqual(body.entries.map((e) => e.key), ["creator:alice", "creator:bob"]);
+    assert.deepEqual(JSON.parse(body.entries[0].text), { username: "alice", created: 100 });
+    assert.deepEqual(body.entries[1].metadata, { v: 2 }, "a key's metadata comes with it");
 
-    // Decompress and verify JSON contents
-    const bytes = await r2Obj.arrayBuffer();
-    const ds = new DecompressionStream("gzip");
-    const writer = ds.writable.getWriter();
-    writer.write(new Uint8Array(bytes));
-    writer.close();
-    const reader = ds.readable.getReader();
-    const chunks = [];
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (value) chunks.push(value);
-      if (done) break;
-    }
-    const totalLen = chunks.reduce((s, c) => s + c.length, 0);
-    const merged = new Uint8Array(totalLen);
-    let off = 0;
-    for (const c of chunks) { merged.set(c, off); off += c.length; }
-    const decoded = JSON.parse(new TextDecoder().decode(merged));
+    const manifest = JSON.parse(await (await env.BLOBS.get(res.body.manifestKey)).text());
+    assert.equal(manifest.keys, 2);
+    assert.equal(manifest.parts, 1);
+  });
 
-    assert.equal(Object.keys(decoded).length, 2);
-    assert.deepEqual(JSON.parse(decoded["creator:alice"]), { username: "alice", created: 100 });
-    assert.deepEqual(JSON.parse(decoded["creator:bob"]), { username: "bob", created: 200 });
-    assert.equal(decoded["other:ignored"], undefined);
+  it("keeps a binary value (a Better Poster image) byte for byte", async () => {
+    const env = makeEnv({ CONFIGS: makeKv(), BLOBS: makeR2() });
+    const cookie = await adminCookie(env);
+    const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x80, 0x81, 0xfe, 0xff]);
+    await env.CONFIGS.put("bpimg:v1:poster:tt1", jpeg.buffer);
+    const [res] = await exportAll(env, cookie, "bpimg:");
+    const { body } = await readArchive(env, res.body.partKey);
+    assert.equal(body.entries[0].text, undefined);
+    assert.deepEqual([...Buffer.from(body.entries[0].base64, "base64")], [...jpeg]);
+  });
+
+  it("writes each batch as its own object, in one run, and counts every key", async () => {
+    const env = makeEnv({ CONFIGS: makeKv(), BLOBS: makeR2() });
+    const cookie = await adminCookie(env);
+    for (let i = 0; i < 120; i++) await env.CONFIGS.put("stats:k" + String(i).padStart(3, "0") + ":total", String(i));
+    const calls = await exportAll(env, cookie, "stats:");
+    assert.equal(calls.length, 3, "50 keys a batch");
+    const runIds = new Set(calls.map((c) => c.body.runId));
+    assert.equal(runIds.size, 1, "one run from the first call to the last");
+    const last = calls[calls.length - 1].body;
+    assert.equal(last.keysSoFar, 120);
+    let seen = 0;
+    for (const c of calls) seen += (await readArchive(env, c.body.partKey)).body.entries.length;
+    assert.equal(seen, 120);
+    assert.equal(JSON.parse(await (await env.BLOBS.get(last.manifestKey)).text()).keys, 120);
+  });
+
+  it("a storage failure fails that call, and writes no manifest", async () => {
+    const env = makeEnv({ CONFIGS: makeKv(), BLOBS: makeR2() });
+    const cookie = await adminCookie(env);
+    for (let i = 0; i < 60; i++) await env.CONFIGS.put("feedback:" + String(i).padStart(2, "0"), "x");
+    const first = await call(env, "/admin/api/export-kv-to-r2", { method: "POST", cookie, json: { prefix: "feedback:" } });
+    assert.equal(first.body.done, false);
+    env.BLOBS._hooks.beforePut = async () => { throw new Error("R2 down"); };
+    const second = await call(env, "/admin/api/export-kv-to-r2", { method: "POST", cookie, json: { prefix: "feedback:", runId: first.body.runId, part: 2, keysSoFar: 50, cursor: first.body.cursor } });
+    env.BLOBS._hooks.beforePut = null;
+    assert.notEqual(second.status, 200);
+    assert.equal([...env.BLOBS._store.keys()].filter((k) => k.endsWith("manifest.json")).length, 0);
+    assert.ok(env.BLOBS._store.has(first.body.partKey), "the first batch is untouched");
+  });
+
+  it("refuses a wildcard, which KV would match literally and find nothing", async () => {
+    const env = makeEnv({ CONFIGS: makeKv(), BLOBS: makeR2() });
+    const cookie = await adminCookie(env);
+    const res = await call(env, "/admin/api/export-kv-to-r2", { method: "POST", cookie, json: { prefix: "stats:*" } });
+    assert.equal(res.status, 400);
+    assert.match(res.body.error, /leave out the \*/);
   });
 });

@@ -323,6 +323,7 @@
       let matched = "no";
 
       try {
+        await ensureTrackingMigrated(env, auth.username);
         const syncKey = `creatorsynctracking:${auth.username}`;
 
         // Resolve what we're actually recording (TMDB lookups) exactly
@@ -741,6 +742,9 @@
       // tokens existed are sitting in people's media servers, and breaking
       // them would silently stop their history syncing with no error anyone
       // would see. The dashboard only ever shows the token form now, so
+      // these age out as people re-copy the URL.
+      await ensureTrackingMigrated(env, authUser);
+
       // P7-6: Log usage of legacy scrobble authentication forms
       if (authForm !== "st") {
         console.warn(`[scrobble] legacy auth form '${authForm}' used by user '${authUser}'`);
@@ -3609,6 +3613,18 @@
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) return authFailureResponse(auth);
 
+      // Same one-time forward migration, this time for tracking data
+      // (watchHistory/continueWatching/fullyWatchedShowIds/
+      // dismissedContinueWatching/trackPlayback) -- see
+      // ensureTrackingMigrated's own comment. Critical to run here
+      // specifically: this endpoint is the most frequent write to
+      // creatorsync:{username} of any of them (any routine autosave), and
+      // the blob built below no longer includes tracking fields at all --
+      // without migrating first, the very next autosave after this
+      // shipped would silently erase anyone's tracking data before
+      // save-tracking ever got a chance to run for them.
+      await ensureTrackingMigrated(env, auth.username);
+
       // One-time forward migration: presets used to live embedded in this
       // same blob, but as of this endpoint no longer accepts them here at
       // all (see /api/creator/sync/save-presets below) -- an updated client
@@ -4522,7 +4538,10 @@
       }
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) return authFailureResponse(auth);
+      await ensureTrackingMigrated(env, auth.username);
       // These reads are independent of one another and awaited in parallel.
+      // (ensureTrackingMigrated above runs first on purpose: it can WRITE the
+      // tracking key, so reading it alongside would be a race.)
       const [raw, presetsRawInit, channelsRawInit, trackingRawInit, orderRawInit, d1Tracking, d1UserLists, syncResetAt] = await Promise.all([
         env.CONFIGS.get(`creatorsync:${auth.username}`),
         env.CONFIGS.get(`creatorsyncpresets:${auth.username}`),
@@ -5714,18 +5733,15 @@
       return json({ ok: true, done: false, accountsThisCall: 1, titlesThisCall, username });
     }
 
-    // /admin/api/backfill-title-daily-stats  (POST) -> { ok, rowsWritten }
-    // P8-2: Backfills title_daily_stats from legacy stats table
-    if (path === "/admin/api/backfill-title-daily-stats" && request.method === "POST") {
+    // /admin/api/recover-stats-from-analytics  (POST) { apply } -> what was
+    // (or would be) put back. See recoverStatsFromAnalyticsEngine (03_admin.js).
+    if (path === "/admin/api/recover-stats-from-analytics" && request.method === "POST") {
       const authed = await isAdminRequest(request, env);
       if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
-      if (!env || !env.DB) return json({ ok: false, error: "No database binding." }, 500);
-
-      const result = await backfillTitleDailyStatsFromStats(env);
-      if (!result.ok) {
-        return json({ ok: false, error: result.error }, 500, { "Cache-Control": "no-store" });
-      }
-      return json({ ok: true, rowsWritten: result.rowsWritten }, 200, { "Cache-Control": "no-store" });
+      let body = {};
+      try { body = await request.json(); } catch {}
+      const result = await recoverStatsFromAnalyticsEngine(env, { apply: body && body.apply === true });
+      return json(result, result.ok ? 200 : 400, { "Cache-Control": "no-store" });
     }
 
     // /admin/api/migrate-d1 (POST) -> { ok, done, results, thisCall, scanned }
@@ -7174,15 +7190,27 @@
       return json({ ok: true, done, keysMigratedThisCall, prefix, prefixDone });
     }
 
-    // /admin/api/export-kv-to-r2  (POST) { prefix, cursor? }
-    //   -> { ok, done, keysExported, totalKeysInArchive, archiveKey, cursor? }
+    // /admin/api/export-kv-to-r2  (POST) { prefix, runId?, part?, cursor? }
+    //   -> { ok, done, runId, part, keysExported, keysSoFar, partKey, manifestKey?, cursor? }
     //
-    // P10-3: Exports one KV prefix in batches of up to 100 keys to the BLOBS
-    // R2 bucket under kv-archive/{sanitisedPrefix}/{YYYY-MM-DD}.json.gz.  The
-    // caller loops until done:true, then deletes the KV keys.  Each batch
-    // appends to the running archive so the final file is a single complete
-    // snapshot of all keys under the prefix for today.  Idempotent: running
-    // again for the same prefix+date rewrites the same R2 key.
+    // P10-3: copies one KV prefix to the BLOBS bucket, a batch per call. The
+    // page calls it until done:true (Maintenance -> Export old data).
+    //
+    //   kv-archive/<prefix>/<runId>/part-00001.json.gz   one per batch
+    //   kv-archive/<prefix>/<runId>/manifest.json        written last
+    //
+    // Each batch is its own object, so no call reads, merges or rewrites what
+    // an earlier one wrote: a storage error fails that call alone, and the
+    // work per call does not grow with the export. A run keeps one runId from
+    // its first call to its last, whatever the clock does. The manifest exists
+    // only once every batch is written, so its presence is what "complete"
+    // means. Values are read as bytes and kept as text when they are UTF-8,
+    // as base64 otherwise (Better Poster images), with each key's expiration
+    // and metadata. The prefix is matched literally: "stats:*" is refused,
+    // because KV would look for keys starting with a star and find none.
+    //
+    // It only copies. Deleting the old data is not safe yet: see
+    // docs/CUTOVER.md P10-3.
     if (path === "/admin/api/export-kv-to-r2" && request.method === "POST") {
       const authed = await isAdminRequest(request, env);
       if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
@@ -7193,80 +7221,67 @@
       try { body = await request.json(); } catch { body = {}; }
       const prefix = typeof body.prefix === "string" ? body.prefix.trim() : "";
       if (!prefix) return json({ ok: false, error: "prefix is required." }, 400);
-
-      // Sanitise the prefix for use as an R2 key segment.
-      const safePrefix = prefix.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
-      const dateStr = new Date().toISOString().slice(0, 10);
-      const archiveKey = `kv-archive/${safePrefix}/${dateStr}.json.gz`;
-
-      const BATCH = 100;
-      const listOpts = { prefix, limit: BATCH };
-      if (body.cursor) listOpts.cursor = body.cursor;
-
-      const listResult = await env.CONFIGS.list(listOpts);
-      const keys = listResult.keys.map((k) => k.name);
-
-      // Fetch existing archive (previous batches) plus the new values.
-      const [existingArchiveR2, ...values] = await Promise.all([
-        env.BLOBS.get(archiveKey).catch(() => null),
-        ...keys.map((k) => env.CONFIGS.get(k)),
-      ]);
-
-      let existingEntries = {};
-      if (existingArchiveR2) {
-        try {
-          const ab = await existingArchiveR2.arrayBuffer();
-          const ds = new DecompressionStream("gzip");
-          const dw = ds.writable.getWriter();
-          dw.write(new Uint8Array(ab));
-          dw.close();
-          const dr = ds.readable.getReader();
-          const parts = [];
-          for (;;) {
-            const { value, done: d } = await dr.read();
-            if (value) parts.push(value);
-            if (d) break;
-          }
-          const len = parts.reduce((s, p) => s + p.length, 0);
-          const merged = new Uint8Array(len);
-          let off = 0;
-          for (const p of parts) { merged.set(p, off); off += p.length; }
-          existingEntries = JSON.parse(new TextDecoder().decode(merged));
-        } catch {
-          existingEntries = {};
-        }
+      if (/[*?]/.test(prefix)) {
+        return json({ ok: false, error: "A prefix is matched literally: leave out the * (\"stats:\", not \"stats:*\")." }, 400);
       }
+      const runId = typeof body.runId === "string" && /^[0-9TZ-]{10,30}$/.test(body.runId)
+        ? body.runId
+        : new Date().toISOString().replace(/[:.]/g, "-");
+      const part = Number.isInteger(body.part) && body.part > 0 ? body.part : 1;
+      const keysBefore = Number.isInteger(body.keysSoFar) && body.keysSoFar >= 0 ? body.keysSoFar : 0;
 
-      keys.forEach((k, i) => { existingEntries[k] = values[i]; });
+      const safePrefix = prefix.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "") || "_";
+      const base = `kv-archive/${safePrefix}/${runId}`;
+      const partKey = `${base}/part-${String(part).padStart(5, "0")}.json.gz`;
+
+      const listOpts = { prefix, limit: 50 };
+      if (body.cursor) listOpts.cursor = body.cursor;
+      const listResult = await env.CONFIGS.list(listOpts);
+      const listed = listResult.keys || [];
+
+      const utf8 = new TextDecoder("utf-8", { fatal: true });
+      const entries = [];
+      for (const k of listed) {
+        const buf = await env.CONFIGS.get(k.name, { type: "arrayBuffer" });
+        if (buf === null) continue;   // deleted since it was listed
+        const entry = { key: k.name };
+        try {
+          entry.text = utf8.decode(buf);
+        } catch {
+          entry.base64 = bytesToBase64(buf);
+        }
+        if (k.expiration) entry.expiration = k.expiration;
+        if (k.metadata !== undefined && k.metadata !== null) entry.metadata = k.metadata;
+        entries.push(entry);
+      }
 
       const cs = new CompressionStream("gzip");
-      const cw = cs.writable.getWriter();
-      cw.write(new TextEncoder().encode(JSON.stringify(existingEntries)));
-      cw.close();
-      const cr = cs.readable.getReader();
-      const gzChunks = [];
-      for (;;) {
-        const { value, done: d } = await cr.read();
-        if (value) gzChunks.push(value);
-        if (d) break;
-      }
-      const totalLen = gzChunks.reduce((s, c) => s + c.length, 0);
-      const gzipped = new Uint8Array(totalLen);
-      let gzOff = 0;
-      for (const c of gzChunks) { gzipped.set(c, gzOff); gzOff += c.length; }
-
-      await env.BLOBS.put(archiveKey, gzipped, {
+      const gzipped = new Uint8Array(await new Response(
+        new Blob([JSON.stringify({ prefix, runId, part, entries })]).stream().pipeThrough(cs)
+      ).arrayBuffer());
+      await env.BLOBS.put(partKey, gzipped, {
         httpMetadata: { contentType: "application/json", contentEncoding: "gzip" },
-        customMetadata: { kvPrefix: prefix, exportDate: dateStr, keyCount: String(Object.keys(existingEntries).length) },
+        customMetadata: { kvPrefix: prefix, runId, part: String(part), keyCount: String(entries.length) },
       });
 
+      const keysSoFar = keysBefore + entries.length;
       const done = listResult.list_complete || !listResult.cursor;
+      let manifestKey;
+      if (done) {
+        manifestKey = `${base}/manifest.json`;
+        await env.BLOBS.put(manifestKey, JSON.stringify({
+          prefix, runId, parts: part, keys: keysSoFar, completedAt: new Date().toISOString(),
+        }), { httpMetadata: { contentType: "application/json" } });
+      }
       return json({
         ok: true,
         done,
-        keysExported: keys.length,
-        totalKeysInArchive: Object.keys(existingEntries).length,
-        archiveKey,
+        runId,
+        part,
+        keysExported: entries.length,
+        keysSoFar,
+        partKey,
+        manifestKey,
         cursor: done ? undefined : listResult.cursor,
       }, 200, { "Cache-Control": "no-store" });
     }

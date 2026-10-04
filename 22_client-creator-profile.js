@@ -2102,6 +2102,23 @@ function currentSyncAccountName() {
 // re-uploads every local list the account is missing. So a reset undid itself
 // as soon as another device woke up.
 //
+// What the server is retiring (P10-2, getLegacySunsetNotices; empty until
+// SUNSET_60DAY_START_DATE is set). Most entries name API routes this page
+// itself calls, which nobody visiting can do anything about, so only the one
+// a person acts on -- the media server webhook address -- is shown, once per
+// browser session.
+function showSunsetNoticesOnce(notices) {
+  if (!Array.isArray(notices) || !notices.length) return;
+  const forPeople = notices.filter((n) => n && n.feature === 'scrobble-legacy-auth' && typeof n.message === 'string');
+  if (!forPeople.length) return;
+  try {
+    if (sessionStorage.getItem('myListAddon:sunsetShown')) return;
+    sessionStorage.setItem('myListAddon:sunsetShown', '1');
+  } catch (e) {}
+  const n = forPeople[0];
+  if (typeof showToast === 'function') showToast(n.message, n.urgency === 'urgent' ? 'error' : 'info', { duration: 12000 });
+}
+
 // The server now stamps the reset and hands it back on /sync/load and
 // /sync/meta. This is the device's side: the last reset it has SEEN. A stamp
 // newer than this one means the account was emptied while this browser was not
@@ -3034,6 +3051,7 @@ async function loadCreatorSync(opts) {
       return;
     }
     window._lastCreatorSyncLoadedAt = Date.now();
+    showSunsetNoticesOnce(data.sunset_notices);
     // Before anything below adopts local state or pushes it up: was this
     // account emptied while this browser was asleep? If so its copy is stale by
     // definition, and uploading it is exactly how a reset used to undo itself.

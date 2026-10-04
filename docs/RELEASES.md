@@ -17,7 +17,10 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Release 10** (Phase 7 so far, PR #9) went live on 2026-09-30. The owner does not want Cloudflare Access on `/admin`.
 - **Release 11** went live on 2026-10-01 with migration `0020`, after the list copy's and the history copy's *Start over* (results under each). **`FF_V2_LISTS_ONLY` and `FF_EVENT_TRACKING` are both on** (2026-10-01, one-way: never delete either). The owner reports everything correct, and found one problem, fixed in Release 11b: a Search tile could show its poster and a "No poster" box under it.
 - **Release 12** (prepared, not yet live; it includes 11b) answers the owner's review of the new interface before it goes to everyone, and fixes New on Streaming titles too new for TMDB (details under Release 12).
-- **Release 13** (handed over 2026-10-01; the owner reports `FF_PROVIDER_BREAKER`, `FF_CHART_SNAPSHOTS` and `FF_NEW_UI` added, which implies 13 is deployed; still to confirm. The `shelf.shadow` numbers for `FF_SHOW_SCHEDULE` have not been sent yet; includes 12) adds the `FF_NEW_UI` switch, stronger hashing for recovery answers, and a daily backup that works. With it come the switches the owner asked for now: `FF_PROVIDER_BREAKER`, `FF_CHART_SNAPSHOTS`, then `FF_SHOW_SCHEDULE` once its comparison is read. The owner dropped one-time recovery codes (D-31).
+- **Release 13** is live: the owner added `FF_PROVIDER_BREAKER`, `FF_CHART_SNAPSHOTS` and `FF_NEW_UI`. It added the `FF_NEW_UI` switch, stronger hashing for recovery answers, and a daily backup that works. The owner dropped one-time recovery codes (D-31).
+- **`main` at `a6785d6`** is live (2026-10-02 onward): other assistants finished P7-6 and Phases 8–10 and merged everything into `main`, and the Worker was renamed from `wako` to **`my-lists-addon`**. The owner also added `FF_SCROBBLE_ST_ONLY`. The review of that work (2026-10-04) found the admin counters writing nowhere anyone reads, blank badged posters, and a cleanup guide that would have deleted live data: Release 14 fixes them.
+- **`shelf.shadow`** (sent 2026-10-04): last full comparison of 709 accounts, 20.36% different (Continue Watching 836 the same, 206 only in the old, 25 only in the new, 17 shows not known yet; Airing Next 212 / 15 / 22 / 3). Far above the 1% gate: **`FF_SHOW_SCHEDULE` stays off.**
+- **Release 14** (prepared 2026-10-04, not yet live) — details under Release 14.
 
 The owner decided to release the new version **one phase at a time, straight to the live site**, with no separate test site. Each release waits until the one before it has run cleanly for at least a day.
 
@@ -1026,3 +1029,78 @@ The owner asked for the recommended next steps, and for `FF_PROVIDER_BREAKER`, `
 6. Backups: the five GitHub secrets (`docs/OPERATIONS.md` §5), then Actions → **D1 backup** → **Run workflow**, choosing this branch.
 
 **Rollback:** paste the previous file and remove any switch that misbehaves. One thing does not roll back: a recovery answer set or used after Release 13 is stored in the new shape, which older code cannot read. On an older release that answer fails until Release 13 is back. Account Keys are unaffected.
+
+---
+
+## Release 14: the review of Phases 8–10 — counters, badged posters, and a cleanup that keeps data
+
+**Branch point:** `main` at `a6785d6`, which is what is live. Everything below is on top of it.
+
+The owner asked for every problem from the review to be fixed, and reported that the admin panel has missing and broken data.
+
+### What it changes
+
+- **The admin counters count again** (`03_`, D-33).
+  - Since 2026-10-02 (P8-2), page views, install links, playback pings, Most Watched, Most Added and the search log were sent to Analytics Engine **instead of** the database, because the `ANALYTICS` binding is set. Nothing reads Analytics Engine, so the dashboard showed zeros and Most Watched stopped moving.
+  - They are written to D1 again, and Most Watched reads them again (not `title_daily_stats`, which only has the plays of event-tracked accounts, up to yesterday).
+  - **The missing days can be put back**: `/admin` → Maintenance → **Counts missing since 2 October** reads them from Analytics Engine, shows a preview, and adds each one once. Pressing it again adds nothing. It needs a read-only API token (steps below).
+- **Badged posters show the poster again** (`25_`).
+  - P8-4 made a badged poster ("Season Premiere", an air date) link to the poster instead of containing it. An SVG shown as an image may not load anything from outside itself, so those tiles showed the badge on a blank card. Checked with a real browser and a real local server: no request was made.
+  - The poster is embedded again. When the poster cannot be fetched, or is not an image, the plain poster is sent instead of a blank badge. The memory cache that P8-4 added stays, now limited by size (24 MB, at most 1 MB per poster).
+- **Read replicas, for when they are switched on** (`02_`). Two kinds of request now always use the main database:
+  - `/subtitles/` — with playback tracking, this is the ping that reads Continue Watching and writes it back. From a replica that is behind, it would write old data over new, so a removed title would come back.
+  - `/api/lists/:id` — the owner reads a list just after changing it, and needs the change.
+- **Watch history of old accounts is protected again** (`05_`, `07_`, `26_`).
+  - P10-4 emptied `ensureTrackingMigrated`. An account that had not been used since watch history moved to its own record lost that history on its first autosave.
+  - Restored as it was, with all six of its calls.
+- **Copying old data to R2, without losing any** (`26_`, `03_`, docs/CUTOVER.md P10-3).
+  - The old tool wrote all the batches of an export to one file name, so each batch replaced the one before. It also turned images into text.
+  - Each batch is now its own file, images are kept byte for byte, and `manifest.json` is written last, once everything is in. `/admin` → Maintenance → **Export old data to R2 (a copy)** runs it.
+  - The cleanup guide (P10-3) is rewritten. Its delete list named data the site still uses: accounts, settings, history, likes, share codes, the counters, Better Posters. Its D1 list named 16 tables, all still in use. Deleting is now marked **do not run**, until a release removes what reads each one (D-34).
+- **The sunset notices are shown** (`22_`), but only the one a visitor can act on: the media server webhook address. The others name routes this page itself still uses. **Do not set `SUNSET_60DAY_START_DATE` yet** (docs/CUTOVER.md P10-2).
+- **`wrangler.toml` is safe to keep** (not used by a pasted deploy). It names the live Worker with its real ids, so a plain `wrangler deploy` would have:
+  - replaced every dashboard variable, including the two that must never be removed;
+  - dropped `DB_ACTIVITY`.
+
+  It now has `keep_vars = true`, a warning at the top, and a `DB_ACTIVITY` binding whose placeholder id makes such a deploy fail.
+
+### `FF_SCROBBLE_ST_ONLY` should come off
+
+With it on, a media server (Plex, Jellyfin, Emby) that still uses a webhook address from before scrobble tokens (`config=` or `creator=&key=`) is refused, and its plays are not recorded. Nobody is told: the server gets an error, not the person. The plan was to turn it on only at the end of the 60-day sunset. Deleting it changes nothing else, and it can be added again later.
+
+### Checked
+
+- `bash verify.sh` passes, and so does the suite with `MLA_TEST_V2_LISTS_READ=1` (counts in the commit).
+- New or rewritten tests:
+  - `tests/analytics-engine-stats.test.mjs`: counters in D1 with Analytics Engine bound; recovery preview, apply, apply again, no token, admin only.
+  - `tests/poster-optimization.test.mjs`: the poster's own bytes inside the SVG; plain poster when it cannot be had; the cache and its size limit.
+  - `tests/d1-read-replication.test.mjs`: `/subtitles/` and `/api/lists/:id` on the main database.
+  - `tests/phase10-cutover.test.mjs`: export parts, manifest last, metadata kept, images kept, a failed R2 write leaves no manifest, `*` refused.
+  - `tests/review-fixes-2026-10-04.test.mjs`: an old account's history survives an autosave (this test fails with the P10-4 version); the notice shown once; `wrangler.toml` guards.
+
+**Steps:**
+1. Keep the file now live as the rollback file.
+2. Deploy `release-14-NEW-worker.js`. No database step.
+3. Worker **my-lists-addon** → Settings → Variables and Secrets → delete `FF_SCROBBLE_ST_ONLY` → Deploy.
+4. Check: open the site, then `/admin`. Total page views should go up by one, and today's count should no longer be 0.
+5. Put the missing days back (docs/OPERATIONS.md §30):
+   1. Cloudflare → My Profile → API Tokens → **Create Token** → **Create Custom Token**. Give it the permission **Account → Account Analytics → Read**, for your account. Copy the token.
+   2. Worker **my-lists-addon** → Settings → Variables and Secrets:
+      - add a **Secret** `CF_ANALYTICS_TOKEN` = the token;
+      - add a **Text** variable `CF_ANALYTICS_ACCOUNT_ID` = your account id (the 32 letters and numbers in the dashboard's address, right after `dash.cloudflare.com/`).
+
+      Deploy.
+   3. `/admin` → Maintenance → **Counts missing since 2 October** → **Preview**. Send the result.
+   4. **Put them back**. Then delete `CF_ANALYTICS_TOKEN` and the token itself.
+6. Backups: if not done yet, add the five GitHub secrets (docs/OPERATIONS.md §5), then Actions → **D1 backup** → **Run workflow**.
+
+**Not yet:**
+- Do not switch on D1 read replication.
+- Do not set `SUNSET_60DAY_START_DATE`.
+- Do not run any deletion from docs/CUTOVER.md.
+- `FF_SHOW_SCHEDULE` stays off (20% different).
+
+**Rollback:** paste the previous file. Two things to know:
+- Counts recorded while Release 14 ran stay in D1.
+- Any days already put back stay put back.
+

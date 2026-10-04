@@ -55,6 +55,26 @@ describe("P8-1: D1 Read Replication with withSession()", () => {
     assert.equal(res.headers.get("x-d1-bookmark"), "bmk_1");
   });
 
+  // The playback ping reads the account's tracking and writes it back: from a
+  // replica that has not caught up, it would write old state over new (a
+  // title just removed from Continue Watching coming back).
+  it("keeps the playback ping (/subtitles/) on the primary", async () => {
+    const db = makeD1();
+    const env = makeEnv({ DB: db });
+    await call(env, "/someconfig/subtitles/series/tt0944947:1:1.json");
+    await call(env, "/i/sometoken/subtitles/movie/tt0137523.json");
+    assert.equal(db._state.sessions || 0, 0);
+  });
+
+  // Its owner reads a list right after changing it and sends the ETag back.
+  it("keeps /api/lists/:id reads on the primary", async () => {
+    const db = makeD1();
+    const env = makeEnv({ DB: db });
+    await call(env, "/api/lists/abc123");
+    await call(env, "/api/lists/abc123/items");
+    assert.equal(db._state.sessions || 0, 0);
+  });
+
   it("does not use read replica session on admin routes", async () => {
     const db = makeD1();
     const env = makeEnv({ DB: db });
