@@ -7414,19 +7414,29 @@ function renderGuidePage(origin) {
       </div>
     </div>
 
-    <p>Four submenus: <strong>Account &amp; Sync</strong>, <strong>External Accounts &amp; API Keys</strong>, <strong>Presets &amp; Backup</strong>, <strong>Feedback and Support</strong>.</p>
+    <p>Settings submenus include: <strong>Account &amp; Security</strong>, <strong>Catalog &amp; Display</strong>, <strong>Tracking &amp; Scrobble</strong>, <strong>Connected Services</strong>, <strong>Presets &amp; Backup</strong>, and <strong>Feedback &amp; Support</strong>.</p>
 
-    <h3>Account &amp; Sync</h3>
+    <h3>Account &amp; Security</h3>
     <ul>
-      <li><strong>Watchlist Preferences</strong> &mdash; controls how watched titles are handled in your Watchlist.</li>
-      <li><strong>Hidden Lists</strong> &mdash; hide specific lists from My Lists, Airing Next, and Simkl Airing Next without un-tracking them; they keep updating and can be un-hidden anytime.</li>
-      <li><strong>Region</strong> &mdash; sets your country for streaming-availability catalogs (Netflix, Disney+, etc.), Stream Releases, and content ratings.</li>
-      <li><strong>Trending &amp; Popular Catalogs</strong> &mdash; toggle "Hide items with no digital release" to skip still-in-theaters movies from Trending/Popular rows. Requires Save/Update to take effect.</li>
-      <li><strong>Watch History</strong> &mdash; clear/reset all recorded history.</li>
-      <li><strong>Auto-Track &amp; Media Server Scrobbling</strong> &mdash; automatically records watched movies/episodes from your streaming apps and home media servers (Plex, Jellyfin, Emby) into Watch History and Continue Watching.</li>
+      <li><strong>Creator Profile &amp; Account Key</strong> &mdash; manage your account credentials, public lists, and profile settings.</li>
+      <li><strong>Danger Zone</strong> &mdash; securely delete your account and associated server records.</li>
     </ul>
 
-    <h3>External Accounts &amp; API Keys</h3>
+    <h3>Catalog &amp; Display</h3>
+    <ul>
+      <li><strong>Catalog &amp; Content Rules</strong> &mdash; configure Region, Deduplication, Digital Release, and Adult Content filters.</li>
+      <li><strong>Better Posters &amp; Badge Overlays</strong> &mdash; customize artwork badges and labels across website and Stremio/Nuvio.</li>
+      <li><strong>Hidden Lists</strong> &mdash; hide specific lists from My Lists and Airing Next without un-tracking them.</li>
+    </ul>
+
+    <h3>Tracking &amp; Scrobble</h3>
+    <ul>
+      <li><strong>Watchlist Preferences</strong> &mdash; controls how watched titles are handled in your personal Watchlist.</li>
+      <li><strong>Watch History</strong> &mdash; view and clear/reset your recorded playback history.</li>
+      <li><strong>Auto-Track &amp; Media Server Scrobbling</strong> &mdash; scrobble playback from home media servers (Plex, Jellyfin, Emby).</li>
+    </ul>
+
+    <h3>Connected Services</h3>
     <p>Connect MDBList, Trakt, TMDB, and Simkl. Each provider offers <strong>Connect Account</strong> (OAuth/PIN flow &mdash; for Trakt, enter a code at <code>trakt.tv/activate</code>, your password is never entered here), <strong>Disconnect</strong>, <strong>Sync Watch History</strong> (push watched items back to that provider), and an advanced custom API key/Client ID field:</p>
     <ul>
       <li>TMDB key: <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org/settings/api</a></li>
@@ -7436,7 +7446,7 @@ function renderGuidePage(origin) {
     </ul>
     <p>You only need any of this for private lists, personal watchlists/history, or your own dedicated rate limit &mdash; public lists and charts work with zero setup.</p>
 
-    <h3>Feedback and Support</h3>
+    <h3>Feedback &amp; Support</h3>
     <p>A built-in chat with the developer &mdash; pick a category (Bug Report, Improvement/Feature Request, Idea/Suggestion, General Question), write your message, and send. Use <strong>&#8635; Refresh</strong> to check for a reply.</p>
   </section>
 

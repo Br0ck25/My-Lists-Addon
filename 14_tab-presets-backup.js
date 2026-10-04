@@ -6,21 +6,23 @@
     <button type="button" class="subnav-pill" data-sub="scrobble" data-act="switchSettingsSubmenu" data-act-args="[&quot;scrobble&quot;,&quot;@self&quot;]">Tracking &amp; Scrobble</button>
     <button type="button" class="subnav-pill" data-sub="external" data-act="switchSettingsSubmenu" data-act-args="[&quot;external&quot;,&quot;@self&quot;]">Connected Services</button>
     <button type="button" class="subnav-pill" data-sub="backup" data-act="switchSettingsSubmenu" data-act-args="[&quot;backup&quot;,&quot;@self&quot;]">Presets &amp; Backup</button>
-    <button type="button" class="subnav-pill" data-sub="feedback" data-act="switchSettingsSubmenu" data-act-args="[&quot;feedback&quot;,&quot;@self&quot;]">Feedback and Support</button>
+    <button type="button" class="subnav-pill" data-sub="feedback" data-act="switchSettingsSubmenu" data-act-args="[&quot;feedback&quot;,&quot;@self&quot;]">Feedback &amp; Support</button>
   </div>
 
   <!-- Submenu 2: Presets & Backup -->
   <div class="settings-subpanel" id="settingsSubBackup" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="shelf-title">My Presets <span class="badge" id="presetsCountBadge"></span></h2>
+      <div class="shelf-header" style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <h2 class="shelf-title" style="margin:0;">My Presets <span class="badge" id="presetsCountBadge"></span></h2>
+        <div>
+          <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;presetFileInput&quot;]" style="white-space:nowrap; padding:6px 14px; font-size:0.82rem;">Upload preset file</button>
+          <input type="file" id="presetFileInput" aria-label="Choose a preset file to upload" accept="application/json,.json" style="display:none;" data-act="uploadPresetFile" data-act-args="[&quot;@self&quot;]">
+        </div>
       </div>
       <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Save your current setup as a named preset to reuse or download as a file.</p>
-      <div class="preset-create-group" style="display:flex; gap:8px; align-items:stretch; margin-bottom:10px; flex-wrap:wrap;">
-        <input type="text" id="presetNameInput" placeholder="Preset name (e.g. Home Cinema)" style="flex:1 1 200px; min-width:0; padding:8px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.9rem;">
-        <button type="button" class="primary lc-btn" data-act="saveCurrentAsPreset" style="white-space:nowrap; padding:0 16px;">Save preset</button>
-        <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;presetFileInput&quot;]" style="white-space:nowrap; padding:0 14px;">Upload preset file</button>
-        <input type="file" id="presetFileInput" aria-label="Choose a preset file to upload" accept="application/json,.json" style="display:none;" data-act="uploadPresetFile" data-act-args="[&quot;@self&quot;]">
+      <div class="preset-create-group" style="display:flex; gap:8px; align-items:stretch; margin-bottom:10px; max-width:540px;">
+        <input type="text" id="presetNameInput" placeholder="Preset name (e.g. Home Cinema)" style="flex:1; min-width:0; padding:8px 12px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.9rem;">
+        <button type="button" class="primary lc-btn" data-act="saveCurrentAsPreset" style="white-space:nowrap; padding:0 18px;">Save preset</button>
       </div>
       <div id="presetsList" style="margin-top:10px;"></div>
     </div>
@@ -30,7 +32,7 @@
       <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">Export a complete backup snapshot of your catalogs, custom lists, watchlist, watch history, continue watching, channels, presets, and settings &mdash; or restore from a previous JSON backup.</p>
       
       <div class="backup-quick-grid">
-        <div style="border:1px solid var(--border); border-radius:10px; padding:14px; background:var(--color-bg-sunken, rgba(255,255,255,0.02)); display:flex; flex-direction:column; justify-content:space-between; gap:10px;">
+        <div style="border:1px solid var(--border); border-radius:12px; padding:16px 18px; background:var(--surface); box-shadow:var(--shadow-sm); display:flex; flex-direction:column; justify-content:space-between; gap:12px;">
           <div>
             <div style="font-weight:700; font-size:0.92rem; color:var(--text);">
               Download Backup
@@ -40,7 +42,7 @@
           <button type="button" class="secondary lc-btn" data-act="downloadConfigJson" style="align-self:flex-start; padding:8px 18px; font-weight:600;">Download Backup File</button>
         </div>
 
-        <div style="border:1px solid var(--border); border-radius:10px; padding:14px; background:var(--color-bg-sunken, rgba(255,255,255,0.02)); display:flex; flex-direction:column; justify-content:space-between; gap:10px;">
+        <div style="border:1px solid var(--border); border-radius:12px; padding:16px 18px; background:var(--surface); box-shadow:var(--shadow-sm); display:flex; flex-direction:column; justify-content:space-between; gap:12px;">
           <div>
             <div style="font-weight:700; font-size:0.92rem; color:var(--text);">
               Restore from File
@@ -90,7 +92,7 @@ ${newUi ? '' : `      <div style="margin-top:16px; border-top:1px solid var(--bo
       <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">Export your Watch History, Continue Watching, and Custom Lists in standard CSV or JSON format for easy import into Trakt, Letterboxd, MDBList, Simkl, or IMDb.</p>
       
       <div style="display:flex; flex-direction:column; gap:12px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:12px 14px; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:10px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:14px 18px; background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow-sm); border-radius:12px;">
           <div>
             <div style="font-weight:700; font-size:0.92rem; color:var(--text);">Watch History</div>
             <div style="font-size:0.8rem; color:var(--muted);">All watched movies, shows, and episodes with timestamps</div>
@@ -102,7 +104,7 @@ ${newUi ? '' : `      <div style="margin-top:16px; border-top:1px solid var(--bo
           </div>
         </div>
 
-        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:12px 14px; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:10px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:14px 18px; background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow-sm); border-radius:12px;">
           <div>
             <div style="font-weight:700; font-size:0.92rem; color:var(--text);">All Custom Lists &amp; Watchlist</div>
             <div style="font-size:0.8rem; color:var(--muted);">Export all created lists, watchlist, and continue watching items</div>

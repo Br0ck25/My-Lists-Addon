@@ -3381,8 +3381,13 @@ ${seoHeadHtml}
   }
   .settings-check-group.two-col-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 4px 12px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 16px;
+  }
+  @media (max-width: 720px) {
+    .settings-check-group.two-col-grid {
+      grid-template-columns: 1fr;
+    }
   }
   .settings-check-item {
     display: flex;
@@ -4125,13 +4130,15 @@ ${seoHeadHtml}
   .provider-card {
     border: 1px solid var(--border);
     border-radius: 12px;
-    background: var(--color-bg-sunken, rgba(255, 255, 255, 0.02));
-    padding: 16px;
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    padding: 18px 20px;
     margin-bottom: 16px;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
   }
   .provider-card:hover {
     border-color: var(--color-border-strong, var(--border));
+    box-shadow: var(--shadow-md);
   }
   .provider-card-header {
     display: flex;
@@ -4174,11 +4181,12 @@ ${seoHeadHtml}
   .provider-status-badge {
     display: inline-flex;
     align-items: center;
-    padding: 2px 8px;
+    padding: 3px 10px;
     border-radius: 9999px;
-    background: var(--surface-2, rgba(255, 255, 255, 0.05));
-    border: 1px solid var(--border);
+    background: var(--surface);
+    border: 1.5px solid var(--color-border-strong, var(--border));
     font-size: 0.78rem;
+    font-weight: 600;
     line-height: 1.2;
     flex-shrink: 0;
   }
@@ -4259,18 +4267,20 @@ ${seoHeadHtml}
   .resource-card {
     border: 1px solid var(--border);
     border-radius: 12px;
-    padding: 16px;
-    background: var(--color-bg-sunken, rgba(255, 255, 255, 0.02));
+    padding: 18px 20px;
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    gap: 12px;
+    gap: 14px;
     text-decoration: none;
-    transition: border-color 0.2s ease, transform 0.15s ease;
+    transition: border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
   }
   .resource-card:hover {
     border-color: var(--color-border-strong, var(--border));
-    transform: translateY(-1px);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
   }
   .resource-card-top {
     display: flex;

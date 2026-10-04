@@ -31804,8 +31804,13 @@ ${seoHeadHtml}
   }
   .settings-check-group.two-col-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 4px 12px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 16px;
+  }
+  @media (max-width: 720px) {
+    .settings-check-group.two-col-grid {
+      grid-template-columns: 1fr;
+    }
   }
   .settings-check-item {
     display: flex;
@@ -32548,13 +32553,15 @@ ${seoHeadHtml}
   .provider-card {
     border: 1px solid var(--border);
     border-radius: 12px;
-    background: var(--color-bg-sunken, rgba(255, 255, 255, 0.02));
-    padding: 16px;
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    padding: 18px 20px;
     margin-bottom: 16px;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
   }
   .provider-card:hover {
     border-color: var(--color-border-strong, var(--border));
+    box-shadow: var(--shadow-md);
   }
   .provider-card-header {
     display: flex;
@@ -32597,11 +32604,12 @@ ${seoHeadHtml}
   .provider-status-badge {
     display: inline-flex;
     align-items: center;
-    padding: 2px 8px;
+    padding: 3px 10px;
     border-radius: 9999px;
-    background: var(--surface-2, rgba(255, 255, 255, 0.05));
-    border: 1px solid var(--border);
+    background: var(--surface);
+    border: 1.5px solid var(--color-border-strong, var(--border));
     font-size: 0.78rem;
+    font-weight: 600;
     line-height: 1.2;
     flex-shrink: 0;
   }
@@ -32682,18 +32690,20 @@ ${seoHeadHtml}
   .resource-card {
     border: 1px solid var(--border);
     border-radius: 12px;
-    padding: 16px;
-    background: var(--color-bg-sunken, rgba(255, 255, 255, 0.02));
+    padding: 18px 20px;
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    gap: 12px;
+    gap: 14px;
     text-decoration: none;
-    transition: border-color 0.2s ease, transform 0.15s ease;
+    transition: border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
   }
   .resource-card:hover {
     border-color: var(--color-border-strong, var(--border));
-    transform: translateY(-1px);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
   }
   .resource-card-top {
     display: flex;
@@ -35139,21 +35149,23 @@ ${newUi ? `    <!-- Where the lists come from, and in what order (new UI only): 
     <button type="button" class="subnav-pill" data-sub="scrobble" data-act="switchSettingsSubmenu" data-act-args="[&quot;scrobble&quot;,&quot;@self&quot;]">Tracking &amp; Scrobble</button>
     <button type="button" class="subnav-pill" data-sub="external" data-act="switchSettingsSubmenu" data-act-args="[&quot;external&quot;,&quot;@self&quot;]">Connected Services</button>
     <button type="button" class="subnav-pill" data-sub="backup" data-act="switchSettingsSubmenu" data-act-args="[&quot;backup&quot;,&quot;@self&quot;]">Presets &amp; Backup</button>
-    <button type="button" class="subnav-pill" data-sub="feedback" data-act="switchSettingsSubmenu" data-act-args="[&quot;feedback&quot;,&quot;@self&quot;]">Feedback and Support</button>
+    <button type="button" class="subnav-pill" data-sub="feedback" data-act="switchSettingsSubmenu" data-act-args="[&quot;feedback&quot;,&quot;@self&quot;]">Feedback &amp; Support</button>
   </div>
 
   <!-- Submenu 2: Presets & Backup -->
   <div class="settings-subpanel" id="settingsSubBackup" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="shelf-title">My Presets <span class="badge" id="presetsCountBadge"></span></h2>
+      <div class="shelf-header" style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <h2 class="shelf-title" style="margin:0;">My Presets <span class="badge" id="presetsCountBadge"></span></h2>
+        <div>
+          <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;presetFileInput&quot;]" style="white-space:nowrap; padding:6px 14px; font-size:0.82rem;">Upload preset file</button>
+          <input type="file" id="presetFileInput" aria-label="Choose a preset file to upload" accept="application/json,.json" style="display:none;" data-act="uploadPresetFile" data-act-args="[&quot;@self&quot;]">
+        </div>
       </div>
       <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Save your current setup as a named preset to reuse or download as a file.</p>
-      <div class="preset-create-group" style="display:flex; gap:8px; align-items:stretch; margin-bottom:10px; flex-wrap:wrap;">
-        <input type="text" id="presetNameInput" placeholder="Preset name (e.g. Home Cinema)" style="flex:1 1 200px; min-width:0; padding:8px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.9rem;">
-        <button type="button" class="primary lc-btn" data-act="saveCurrentAsPreset" style="white-space:nowrap; padding:0 16px;">Save preset</button>
-        <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;presetFileInput&quot;]" style="white-space:nowrap; padding:0 14px;">Upload preset file</button>
-        <input type="file" id="presetFileInput" aria-label="Choose a preset file to upload" accept="application/json,.json" style="display:none;" data-act="uploadPresetFile" data-act-args="[&quot;@self&quot;]">
+      <div class="preset-create-group" style="display:flex; gap:8px; align-items:stretch; margin-bottom:10px; max-width:540px;">
+        <input type="text" id="presetNameInput" placeholder="Preset name (e.g. Home Cinema)" style="flex:1; min-width:0; padding:8px 12px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.9rem;">
+        <button type="button" class="primary lc-btn" data-act="saveCurrentAsPreset" style="white-space:nowrap; padding:0 18px;">Save preset</button>
       </div>
       <div id="presetsList" style="margin-top:10px;"></div>
     </div>
@@ -35163,7 +35175,7 @@ ${newUi ? `    <!-- Where the lists come from, and in what order (new UI only): 
       <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">Export a complete backup snapshot of your catalogs, custom lists, watchlist, watch history, continue watching, channels, presets, and settings &mdash; or restore from a previous JSON backup.</p>
       
       <div class="backup-quick-grid">
-        <div style="border:1px solid var(--border); border-radius:10px; padding:14px; background:var(--color-bg-sunken, rgba(255,255,255,0.02)); display:flex; flex-direction:column; justify-content:space-between; gap:10px;">
+        <div style="border:1px solid var(--border); border-radius:12px; padding:16px 18px; background:var(--surface); box-shadow:var(--shadow-sm); display:flex; flex-direction:column; justify-content:space-between; gap:12px;">
           <div>
             <div style="font-weight:700; font-size:0.92rem; color:var(--text);">
               Download Backup
@@ -35173,7 +35185,7 @@ ${newUi ? `    <!-- Where the lists come from, and in what order (new UI only): 
           <button type="button" class="secondary lc-btn" data-act="downloadConfigJson" style="align-self:flex-start; padding:8px 18px; font-weight:600;">Download Backup File</button>
         </div>
 
-        <div style="border:1px solid var(--border); border-radius:10px; padding:14px; background:var(--color-bg-sunken, rgba(255,255,255,0.02)); display:flex; flex-direction:column; justify-content:space-between; gap:10px;">
+        <div style="border:1px solid var(--border); border-radius:12px; padding:16px 18px; background:var(--surface); box-shadow:var(--shadow-sm); display:flex; flex-direction:column; justify-content:space-between; gap:12px;">
           <div>
             <div style="font-weight:700; font-size:0.92rem; color:var(--text);">
               Restore from File
@@ -35223,7 +35235,7 @@ ${newUi ? '' : `      <div style="margin-top:16px; border-top:1px solid var(--bo
       <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">Export your Watch History, Continue Watching, and Custom Lists in standard CSV or JSON format for easy import into Trakt, Letterboxd, MDBList, Simkl, or IMDb.</p>
       
       <div style="display:flex; flex-direction:column; gap:12px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:12px 14px; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:10px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:14px 18px; background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow-sm); border-radius:12px;">
           <div>
             <div style="font-weight:700; font-size:0.92rem; color:var(--text);">Watch History</div>
             <div style="font-size:0.8rem; color:var(--muted);">All watched movies, shows, and episodes with timestamps</div>
@@ -35235,7 +35247,7 @@ ${newUi ? '' : `      <div style="margin-top:16px; border-top:1px solid var(--bo
           </div>
         </div>
 
-        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:12px 14px; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:10px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:14px 18px; background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow-sm); border-radius:12px;">
           <div>
             <div style="font-weight:700; font-size:0.92rem; color:var(--text);">All Custom Lists &amp; Watchlist</div>
             <div style="font-size:0.8rem; color:var(--muted);">Export all created lists, watchlist, and continue watching items</div>
@@ -35612,7 +35624,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
           </div>
         </div>
         <div class="provider-card-actions">
-          <button type="button" class="primary lc-btn" id="tmdbConnectBtn" data-act="startTmdbConnect">Connect TMDB Account</button>
+          <button type="button" class="secondary lc-btn" id="tmdbConnectBtn" data-act="startTmdbConnect" style="font-weight:600;">Connect TMDB Account</button>
           <button type="button" class="secondary lc-btn btn-danger" id="tmdbDisconnectBtn" style="display:none;" data-act="disconnectTmdb">Disconnect</button>
         </div>
         <details class="provider-advanced-disclosure">
@@ -35621,7 +35633,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
             <span class="provider-advanced-arrow">&#x25BE;</span>
           </summary>
           <div style="margin-top:10px;">
-            <input type="text" id="tmdbKeyInput" placeholder="Optional: TMDB API Key (v3) or Read Access Token (v4)" value="${escapeHtmlServer(initialTmdbKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;tmdb&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); box-sizing:border-box;">
+            <input type="text" id="tmdbKeyInput" placeholder="Optional: TMDB API Key (v3) or Read Access Token (v4)" value="${escapeHtmlServer(initialTmdbKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;tmdb&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
             <p style="margin:6px 0 0; font-size:0.78rem; color:var(--muted);">Get a free TMDB API key at <a href="https://www.themoviedb.org/settings/api" target="_blank" style="color:var(--accent-2);">themoviedb.org/settings/api</a>.</p>
           </div>
         </details>
@@ -35639,7 +35651,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
           </div>
         </div>
         <div class="provider-card-actions trakt-connect-actions">
-          <button type="button" class="primary lc-btn" id="traktConnectBtn" data-act="startTraktConnect">Connect Trakt Account</button>
+          <button type="button" class="secondary lc-btn" id="traktConnectBtn" data-act="startTraktConnect" style="font-weight:600;">Connect Trakt Account</button>
           <button type="button" class="secondary lc-btn" id="traktDeviceBtn" data-act="startTraktDeviceLogin" title="Connect from a TV or secondary device via trakt.tv/activate">Connect with PIN / Code</button>
           <button type="button" class="secondary lc-btn btn-danger" id="traktDisconnectBtn" style="display:none;" data-act="disconnectTrakt">Disconnect</button>
         </div>
@@ -35664,8 +35676,8 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
             <span class="provider-advanced-arrow">&#x25BE;</span>
           </summary>
           <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">
-            <input type="text" id="traktKeyInput" placeholder="Optional: Trakt Client ID" value="${escapeHtmlServer(initialTraktKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); box-sizing:border-box;">
-            <input type="text" id="traktUsernameInput" placeholder="Optional: Trakt username" value="${escapeHtmlServer(initialTraktUsername)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); box-sizing:border-box;">
+            <input type="text" id="traktKeyInput" placeholder="Optional: Trakt Client ID" value="${escapeHtmlServer(initialTraktKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
+            <input type="text" id="traktUsernameInput" placeholder="Optional: Trakt username" value="${escapeHtmlServer(initialTraktUsername)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
             <p style="margin:2px 0 0; font-size:0.78rem; color:var(--muted);">Create a free Trakt Client ID at <a href="https://trakt.tv/oauth/applications" target="_blank" style="color:var(--accent-2);">trakt.tv/oauth/applications</a>.</p>
           </div>
         </details>
@@ -35683,7 +35695,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
           </div>
         </div>
         <div class="provider-card-actions">
-          <button type="button" class="primary lc-btn" id="mdblistConnectBtn" data-act="startMdblistConnect">Connect MDBList Account</button>
+          <button type="button" class="secondary lc-btn" id="mdblistConnectBtn" data-act="startMdblistConnect" style="font-weight:600;">Connect MDBList Account</button>
           <button type="button" class="secondary lc-btn btn-danger" id="mdblistDisconnectBtn" style="display:none;" data-act="disconnectMdblist">Disconnect</button>
         </div>
         <div id="mdblistSyncHistoryWrap" style="margin:10px 0; padding:12px 14px; background:var(--surface-2, rgba(255,255,255,0.04)); border-radius:8px; border:1px solid var(--border);">
@@ -35707,7 +35719,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
             <span class="provider-advanced-arrow">&#x25BE;</span>
           </summary>
           <div style="margin-top:10px;">
-            <input type="text" id="mdblistKeyInput" placeholder="Optional: MDBList API key" value="${escapeHtmlServer(initialMdblistKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;mdblist&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); box-sizing:border-box;">
+            <input type="text" id="mdblistKeyInput" placeholder="Optional: MDBList API key" value="${escapeHtmlServer(initialMdblistKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;mdblist&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
             <p style="margin:6px 0 0; font-size:0.78rem; color:var(--muted);">Get a free MDBList key at <a href="https://mdblist.com/preferences" target="_blank" style="color:var(--accent-2);">mdblist.com/preferences</a>.</p>
           </div>
         </details>
@@ -35725,7 +35737,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
           </div>
         </div>
         <div class="provider-card-actions">
-          <button type="button" class="primary lc-btn" id="simklConnectBtn" data-act="startSimklConnect">Connect Simkl Account</button>
+          <button type="button" class="secondary lc-btn" id="simklConnectBtn" data-act="startSimklConnect" style="font-weight:600;">Connect Simkl Account</button>
           <button type="button" class="secondary lc-btn btn-danger" id="simklDisconnectBtn" style="display:none;" data-act="disconnectSimkl">Disconnect</button>
         </div>
         <div id="simklSyncHistoryWrap" style="margin:10px 0; padding:12px 14px; background:var(--surface-2, rgba(255,255,255,0.04)); border-radius:8px; border:1px solid var(--border);">
@@ -35749,7 +35761,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
             <span class="provider-advanced-arrow">&#x25BE;</span>
           </summary>
           <div style="margin-top:10px;">
-            <input type="text" id="simklKeyInput" placeholder="Optional: Simkl Client ID" value="${escapeHtmlServer(initialSimklKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;simkl&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); box-sizing:border-box;">
+            <input type="text" id="simklKeyInput" placeholder="Optional: Simkl Client ID" value="${escapeHtmlServer(initialSimklKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;simkl&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
             <p style="margin:6px 0 0; font-size:0.78rem; color:var(--muted);">Create a free Simkl Client ID at <a href="https://simkl.com/settings/developer/" target="_blank" style="color:var(--accent-2);">simkl.com/settings/developer/</a>.</p>
           </div>
         </details>
@@ -35764,7 +35776,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px; margin-bottom:12px;">
         <div>
           <label for="importListSourceSelect" style="display:block; font-weight:600; font-size:0.85rem; margin-bottom:6px; color:var(--text);">Source (optional)</label>
-          <select id="importListSourceSelect" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.92rem; box-sizing:border-box;">
+          <select id="importListSourceSelect" style="width:100%; max-width:320px; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.88rem; box-sizing:border-box;">
             <option value="auto">Auto-detect</option>
             <option value="imdb">IMDb</option>
             <option value="letterboxd">Letterboxd</option>
@@ -35777,7 +35789,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
 
         <div>
           <label for="importTargetListSelect" style="display:block; font-weight:600; font-size:0.85rem; margin-bottom:6px; color:var(--text);">Import to which list?</label>
-          <select id="importTargetListSelect" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.92rem; box-sizing:border-box;" data-act="onImportTargetListChange">
+          <select id="importTargetListSelect" style="width:100%; max-width:320px; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.88rem; box-sizing:border-box;" data-act="onImportTargetListChange">
             <!-- Populated dynamically -->
           </select>
         </div>
@@ -35785,7 +35797,7 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
 
       <div id="importNewListInputWrap" style="display:none; margin-bottom:12px;">
         <label for="importNewListNameInput" style="display:block; font-weight:600; font-size:0.85rem; margin-bottom:6px; color:var(--text);">New List Name</label>
-        <input type="text" id="importNewListNameInput" placeholder="e.g. My Favorite Movies" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.92rem; box-sizing:border-box;">
+        <input type="text" id="importNewListNameInput" placeholder="e.g. My Favorite Movies" style="width:100%; max-width:400px; padding:9px 12px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.9rem; box-sizing:border-box;">
       </div>
 
       <div style="margin-bottom:14px;">
@@ -35849,24 +35861,24 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
         <!-- New Message / Initial Form -->
         <div id="newFeedbackFormWrap">
           <div class="row">
-            <label style="font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:2px;">Category</label>
-            <select id="feedbackCategorySelect" aria-label="Feedback category">
+            <label style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:4px;">Category</label>
+            <select id="feedbackCategorySelect" aria-label="Feedback category" style="max-width:320px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); padding:7px 12px; font-size:0.88rem;">
               <option value="bug">Bug Report</option>
               <option value="improvement">Improvement / Feature Request</option>
               <option value="idea">Idea / Suggestion</option>
               <option value="other">General Question / Other</option>
             </select>
           </div>
-          <div class="row" style="margin-top:8px;">
-            <label style="font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:2px;">Message</label>
-            <textarea id="feedbackMessageInput" rows="4" style="width:100%;" placeholder="What would you like help with or what did you find?"></textarea>
+          <div class="row" style="margin-top:10px;">
+            <label style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:4px;">Message</label>
+            <textarea id="feedbackMessageInput" rows="4" style="width:100%; max-width:680px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); padding:10px 12px; font-size:0.88rem; box-sizing:border-box;" placeholder="What would you like help with or what did you find?"></textarea>
           </div>
-          <div class="row" style="margin-top:8px;">
-            <label style="font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:2px;">Contact Info (optional)</label>
-            <input type="text" id="feedbackContactInput" placeholder="Email, Discord username, etc. (optional)">
+          <div class="row" style="margin-top:10px;">
+            <label style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:4px;">Contact Info (optional)</label>
+            <input type="text" id="feedbackContactInput" placeholder="Email, Discord username, etc. (optional)" style="width:100%; max-width:440px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); padding:8px 12px; font-size:0.88rem; box-sizing:border-box;">
           </div>
-          <div class="actions" style="margin-top:10px; gap:8px; justify-content:flex-start;">
-            <button type="button" class="primary lc-btn" id="feedbackSubmitBtn" data-act="submitFeedback">Send Message</button>
+          <div class="actions" style="margin-top:12px; gap:8px; justify-content:flex-start;">
+            <button type="button" class="primary lc-btn" id="feedbackSubmitBtn" data-act="submitFeedback" style="padding:8px 20px; font-size:0.88rem; font-weight:600;">Send Message</button>
             <button type="button" class="secondary lc-btn" id="feedbackCancelNewBtn" style="display:none;" data-act="toggleNewFeedbackForm" data-act-args="[false]">Cancel</button>
           </div>
           <p id="feedbackStatus" style="margin-top:8px; font-size:0.85rem;"></p>
@@ -85581,19 +85593,29 @@ function renderGuidePage(origin) {
       </div>
     </div>
 
-    <p>Four submenus: <strong>Account &amp; Sync</strong>, <strong>External Accounts &amp; API Keys</strong>, <strong>Presets &amp; Backup</strong>, <strong>Feedback and Support</strong>.</p>
+    <p>Settings submenus include: <strong>Account &amp; Security</strong>, <strong>Catalog &amp; Display</strong>, <strong>Tracking &amp; Scrobble</strong>, <strong>Connected Services</strong>, <strong>Presets &amp; Backup</strong>, and <strong>Feedback &amp; Support</strong>.</p>
 
-    <h3>Account &amp; Sync</h3>
+    <h3>Account &amp; Security</h3>
     <ul>
-      <li><strong>Watchlist Preferences</strong> &mdash; controls how watched titles are handled in your Watchlist.</li>
-      <li><strong>Hidden Lists</strong> &mdash; hide specific lists from My Lists, Airing Next, and Simkl Airing Next without un-tracking them; they keep updating and can be un-hidden anytime.</li>
-      <li><strong>Region</strong> &mdash; sets your country for streaming-availability catalogs (Netflix, Disney+, etc.), Stream Releases, and content ratings.</li>
-      <li><strong>Trending &amp; Popular Catalogs</strong> &mdash; toggle "Hide items with no digital release" to skip still-in-theaters movies from Trending/Popular rows. Requires Save/Update to take effect.</li>
-      <li><strong>Watch History</strong> &mdash; clear/reset all recorded history.</li>
-      <li><strong>Auto-Track &amp; Media Server Scrobbling</strong> &mdash; automatically records watched movies/episodes from your streaming apps and home media servers (Plex, Jellyfin, Emby) into Watch History and Continue Watching.</li>
+      <li><strong>Creator Profile &amp; Account Key</strong> &mdash; manage your account credentials, public lists, and profile settings.</li>
+      <li><strong>Danger Zone</strong> &mdash; securely delete your account and associated server records.</li>
     </ul>
 
-    <h3>External Accounts &amp; API Keys</h3>
+    <h3>Catalog &amp; Display</h3>
+    <ul>
+      <li><strong>Catalog &amp; Content Rules</strong> &mdash; configure Region, Deduplication, Digital Release, and Adult Content filters.</li>
+      <li><strong>Better Posters &amp; Badge Overlays</strong> &mdash; customize artwork badges and labels across website and Stremio/Nuvio.</li>
+      <li><strong>Hidden Lists</strong> &mdash; hide specific lists from My Lists and Airing Next without un-tracking them.</li>
+    </ul>
+
+    <h3>Tracking &amp; Scrobble</h3>
+    <ul>
+      <li><strong>Watchlist Preferences</strong> &mdash; controls how watched titles are handled in your personal Watchlist.</li>
+      <li><strong>Watch History</strong> &mdash; view and clear/reset your recorded playback history.</li>
+      <li><strong>Auto-Track &amp; Media Server Scrobbling</strong> &mdash; scrobble playback from home media servers (Plex, Jellyfin, Emby).</li>
+    </ul>
+
+    <h3>Connected Services</h3>
     <p>Connect MDBList, Trakt, TMDB, and Simkl. Each provider offers <strong>Connect Account</strong> (OAuth/PIN flow &mdash; for Trakt, enter a code at <code>trakt.tv/activate</code>, your password is never entered here), <strong>Disconnect</strong>, <strong>Sync Watch History</strong> (push watched items back to that provider), and an advanced custom API key/Client ID field:</p>
     <ul>
       <li>TMDB key: <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org/settings/api</a></li>
@@ -85603,7 +85625,7 @@ function renderGuidePage(origin) {
     </ul>
     <p>You only need any of this for private lists, personal watchlists/history, or your own dedicated rate limit &mdash; public lists and charts work with zero setup.</p>
 
-    <h3>Feedback and Support</h3>
+    <h3>Feedback &amp; Support</h3>
     <p>A built-in chat with the developer &mdash; pick a category (Bug Report, Improvement/Feature Request, Idea/Suggestion, General Question), write your message, and send. Use <strong>&#8635; Refresh</strong> to check for a reply.</p>
   </section>
 

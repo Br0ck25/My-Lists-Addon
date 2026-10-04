@@ -2,6 +2,36 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **HANDOFF, 2026-10-04 (Antigravity): Settings Design System Polish — Checkbox 2-Column Cap, Connected Services Cards, Presets & Backup Ergonomics, and Feedback & Support Renaming.**
+>
+> **Where things stand**
+> - Settings Design System Polish (`09_page-shell.js`, `14_tab-presets-backup.js`, `15_tab-settings-html.js`, `24_client-backup-restore-presets.js`):
+>   1. **Subnav Pill Consistency (`Feedback & Support`)**:
+>      - Renamed `Feedback and Support` pill to `Feedback & Support` in `14_tab-presets-backup.js`, achieving uniform ampersand rhythm with `Account & Security`, `Catalog & Display`, `Tracking & Scrobble`, and `Presets & Backup`.
+>      - Updated user guide overview in `24_client-backup-restore-presets.js` to describe all 6 settings subpanels and match the `Feedback & Support` heading.
+>   2. **Checkbox Grid Sprawl Fixed (Strict 2-Column Cap)**:
+>      - Capped `.settings-check-group.two-col-grid` at strictly `repeat(2, minmax(0, 1fr))` on desktop/tablet, collapsing cleanly to 1 column on mobile (`max-width: 720px`).
+>      - Prevents the awkward 4-column blowout on wide displays while eliminating visual competition with single-column sections below.
+>   3. **Connected Services Elevated Cards & Button De-escalation**:
+>      - Replaced sunken gray boxes (`background: var(--color-bg-sunken)`) on `.provider-card` with clean, elevated surface cards (`background: var(--surface); box-shadow: var(--shadow-sm); border: 1px solid var(--border)`).
+>      - Upgraded `.provider-status-badge` to high-contrast border and surface background.
+>      - Converted `tmdbConnectBtn`, `traktConnectBtn`, `mdblistConnectBtn`, and `simklConnectBtn` from screaming primary blue buttons to clean, polished secondary buttons (`class="secondary lc-btn"`).
+>      - Aligned provider input fields with `background: var(--surface); border: 1.5px solid var(--border-strong)`.
+>   4. **Presets & Backup Ergonomics**:
+>      - Uncoupled `Upload preset file` from the preset name input flex row, moving it to the shelf header as a clean utility action.
+>      - Grouped preset name input and `[Save preset]` with a max-width container and unified input token styling.
+>      - Replaced gray boxes in `Backup & Restore` and `Export Lists & History` with clean white surface cards (`background: var(--surface); box-shadow: var(--shadow-sm); border-radius: 12px`).
+>   5. **Feedback & Support Form Polish**:
+>      - Constrained `#feedbackCategorySelect` dropdown to `max-width: 320px` with pill border radius.
+>      - Styled `#feedbackMessageInput` and `#feedbackContactInput` with clean surface tokens and responsive max-widths.
+>      - Elevated `.resource-card` items from flat gray rectangles into interactive cards with subtle hover lift (`translateY(-2px)` and `box-shadow: var(--shadow-md)`).
+> - Verification & Tests:
+>   - `python build.py` & `python check_sync.py`: OK (5,457,145 bytes).
+>   - `node --check worker_entry_combined.js`: OK (0 syntax errors).
+>   - `python gen_map.py`: 2,666 symbols, 211 routes.
+>   - All 534 client, app-shell, and badge tests passing.
+> - Branch: `feat/design-system-phase-1`
+>
 > **HANDOFF, 2026-10-04 (Antigravity): Settings Subnav Restructure (Option A) & Design System Polish.**
 >
 > **Where things stand**
