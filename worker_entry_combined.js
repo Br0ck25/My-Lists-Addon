@@ -33356,19 +33356,33 @@ ${seoHeadHtml}
     outline-offset: 2px;
   }
 
-  /* Custom List Content Type Segmented Pills */
+  /* Custom List Content Type Standalone Pills */
   .custom-list-type-pill {
-    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-    color: var(--muted);
-  }
-  .custom-list-type-pill:hover {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 16px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    border-radius: var(--radius-pill);
+    border: 1.5px solid var(--border-strong);
+    background: var(--surface);
     color: var(--text);
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .custom-list-type-pill:hover:not(.active):not(:has(input:checked)) {
+    border-color: var(--accent);
+    color: var(--accent);
   }
   .custom-list-type-pill:has(input:checked),
   .custom-list-type-pill.active {
     background: var(--accent) !important;
+    border-color: var(--accent) !important;
     color: #fff !important;
     font-weight: 700 !important;
+    box-shadow: 0 2px 8px var(--color-brand-subtle);
   }
   .custom-list-type-pill input[type="radio"] {
     position: absolute;
@@ -33379,7 +33393,7 @@ ${seoHeadHtml}
     margin: 0;
   }
 
-  /* Custom List Search Cards (Media Tile Layout) */
+  /* Custom List Search Cards (Media Tile Layout, matches 9-column grid) */
   .custom-list-search-card {
     display: flex;
     flex-direction: column;
@@ -33407,11 +33421,11 @@ ${seoHeadHtml}
   }
   .custom-list-search-title {
     width: 100%;
-    font-size: 0.8rem;
+    font-size: 0.74rem;
     font-weight: 600;
     text-align: center;
     color: var(--text);
-    margin: 6px 0 2px;
+    margin: 4px 0 2px;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -33420,10 +33434,10 @@ ${seoHeadHtml}
     min-height: 2.5em;
   }
   .custom-list-search-meta {
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     color: var(--muted);
     text-align: center;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -34683,17 +34697,17 @@ ${newUi ? '    <div id="appShellAddTitles"></div>' : ''}
         </div>
         <div style="flex:0 0 auto;">
           <label style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:6px;">Content Type</label>
-          <div id="customListTypeToggles" style="display:flex; gap:4px; background:var(--surface-2, rgba(255,255,255,0.04)); padding:3px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong);">
-            <label class="custom-list-type-pill" style="display:flex; align-items:center; gap:6px; cursor:pointer; padding:5px 12px; border-radius:var(--radius-pill); font-size:0.82rem; font-weight:600; user-select:none; margin:0;">
-              <input type="radio" name="customListTypeRadio" value="movie" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;movie&quot;]" checked style="margin:0;">
+          <div id="customListTypeToggles" style="display:flex; gap:8px; align-items:center;">
+            <label class="custom-list-type-pill active">
+              <input type="radio" name="customListTypeRadio" value="movie" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;movie&quot;]" checked>
               <span>Movies</span>
             </label>
-            <label class="custom-list-type-pill" style="display:flex; align-items:center; gap:6px; cursor:pointer; padding:5px 12px; border-radius:var(--radius-pill); font-size:0.82rem; font-weight:600; user-select:none; margin:0;">
-              <input type="radio" name="customListTypeRadio" value="series" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;series&quot;]" style="margin:0;">
+            <label class="custom-list-type-pill">
+              <input type="radio" name="customListTypeRadio" value="series" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;series&quot;]">
               <span>Shows</span>
             </label>
-            <label class="custom-list-type-pill" style="display:flex; align-items:center; gap:6px; cursor:pointer; padding:5px 12px; border-radius:var(--radius-pill); font-size:0.82rem; font-weight:600; user-select:none; margin:0;">
-              <input type="radio" name="customListTypeRadio" value="mixed" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;mixed&quot;]" style="margin:0;">
+            <label class="custom-list-type-pill">
+              <input type="radio" name="customListTypeRadio" value="mixed" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;mixed&quot;]">
               <span>Mixed</span>
             </label>
           </div>
@@ -63585,7 +63599,7 @@ function renderCustomListSearchResults(results) {
       '<div class="custom-list-search-meta">' +
         (r.year ? escapeHtml(r.year) + ' \u2022 ' : '') + typeLabel +
       '</div>' +
-      '<button type="button" class="' + btnClass + '" style="width:100%; padding:5px 8px; font-size:0.75rem; font-weight:600;"' +
+      '<button type="button" class="' + btnClass + '" style="width:100%; padding:4px 6px; font-size:0.72rem; font-weight:600; border-radius:var(--radius-pill);"' +
         disabledAttr +
         ' data-searchtype="' + itemType + '"' +
         ' data-tmdbid="' + escapeAttr(String(r.tmdbId || r.id || '')) + '"' +
@@ -63597,7 +63611,7 @@ function renderCustomListSearchResults(results) {
     '</div>';
   }).join('');
 
-  box.innerHTML = '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:14px; margin-top:12px; padding:2px;">' + cardsHtml + '</div>';
+  box.innerHTML = '<div class="poster-grid-3" style="margin-top:12px;">' + cardsHtml + '</div>';
 }
 
 if (typeof document !== 'undefined') {

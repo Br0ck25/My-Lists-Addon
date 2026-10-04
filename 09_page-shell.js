@@ -4933,19 +4933,33 @@ ${seoHeadHtml}
     outline-offset: 2px;
   }
 
-  /* Custom List Content Type Segmented Pills */
+  /* Custom List Content Type Standalone Pills */
   .custom-list-type-pill {
-    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-    color: var(--muted);
-  }
-  .custom-list-type-pill:hover {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 16px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    border-radius: var(--radius-pill);
+    border: 1.5px solid var(--border-strong);
+    background: var(--surface);
     color: var(--text);
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .custom-list-type-pill:hover:not(.active):not(:has(input:checked)) {
+    border-color: var(--accent);
+    color: var(--accent);
   }
   .custom-list-type-pill:has(input:checked),
   .custom-list-type-pill.active {
     background: var(--accent) !important;
+    border-color: var(--accent) !important;
     color: #fff !important;
     font-weight: 700 !important;
+    box-shadow: 0 2px 8px var(--color-brand-subtle);
   }
   .custom-list-type-pill input[type="radio"] {
     position: absolute;
@@ -4956,7 +4970,7 @@ ${seoHeadHtml}
     margin: 0;
   }
 
-  /* Custom List Search Cards (Media Tile Layout) */
+  /* Custom List Search Cards (Media Tile Layout, matches 9-column grid) */
   .custom-list-search-card {
     display: flex;
     flex-direction: column;
@@ -4984,11 +4998,11 @@ ${seoHeadHtml}
   }
   .custom-list-search-title {
     width: 100%;
-    font-size: 0.8rem;
+    font-size: 0.74rem;
     font-weight: 600;
     text-align: center;
     color: var(--text);
-    margin: 6px 0 2px;
+    margin: 4px 0 2px;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -4997,10 +5011,10 @@ ${seoHeadHtml}
     min-height: 2.5em;
   }
   .custom-list-search-meta {
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     color: var(--muted);
     text-align: center;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

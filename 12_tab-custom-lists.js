@@ -105,17 +105,17 @@ ${newUi ? '    <div id="appShellAddTitles"></div>' : ''}
         </div>
         <div style="flex:0 0 auto;">
           <label style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:6px;">Content Type</label>
-          <div id="customListTypeToggles" style="display:flex; gap:4px; background:var(--surface-2, rgba(255,255,255,0.04)); padding:3px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong);">
-            <label class="custom-list-type-pill" style="display:flex; align-items:center; gap:6px; cursor:pointer; padding:5px 12px; border-radius:var(--radius-pill); font-size:0.82rem; font-weight:600; user-select:none; margin:0;">
-              <input type="radio" name="customListTypeRadio" value="movie" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;movie&quot;]" checked style="margin:0;">
+          <div id="customListTypeToggles" style="display:flex; gap:8px; align-items:center;">
+            <label class="custom-list-type-pill active">
+              <input type="radio" name="customListTypeRadio" value="movie" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;movie&quot;]" checked>
               <span>Movies</span>
             </label>
-            <label class="custom-list-type-pill" style="display:flex; align-items:center; gap:6px; cursor:pointer; padding:5px 12px; border-radius:var(--radius-pill); font-size:0.82rem; font-weight:600; user-select:none; margin:0;">
-              <input type="radio" name="customListTypeRadio" value="series" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;series&quot;]" style="margin:0;">
+            <label class="custom-list-type-pill">
+              <input type="radio" name="customListTypeRadio" value="series" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;series&quot;]">
               <span>Shows</span>
             </label>
-            <label class="custom-list-type-pill" style="display:flex; align-items:center; gap:6px; cursor:pointer; padding:5px 12px; border-radius:var(--radius-pill); font-size:0.82rem; font-weight:600; user-select:none; margin:0;">
-              <input type="radio" name="customListTypeRadio" value="mixed" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;mixed&quot;]" style="margin:0;">
+            <label class="custom-list-type-pill">
+              <input type="radio" name="customListTypeRadio" value="mixed" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;mixed&quot;]">
               <span>Mixed</span>
             </label>
           </div>
