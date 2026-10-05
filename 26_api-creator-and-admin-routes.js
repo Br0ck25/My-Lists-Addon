@@ -42,6 +42,10 @@
 
       const v = validateCreatorUsername(creatorNameRaw);
       if (!v.ok) return { ok: false, error: "Username or Key is incorrect." };
+      // No key and no live session for the account: the page signing with a
+      // session that has ended (it then sends the key). Nothing to verify --
+      // an empty key cannot match -- so no PBKDF2 run and no throttle spent.
+      if (!creatorKey) return { ok: false, error: "Username or Key is incorrect.", noKey: true };
       // A username being deleted right now stops authenticating, whatever the
       // record says. Two things this catches that the record cannot: a request
       // arriving mid-purge, which would otherwise write its key back after the
@@ -2208,7 +2212,8 @@
       }
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) {
-        if (auth.error !== "no-kv") {
+        // A request without a key guessed nothing (see noKey above).
+        if (auth.error !== "no-kv" && !auth.noKey) {
           await noteAuthFailure(env, restoreFailScope, restoreFailDay);
           await noteRateLimit(env, ctx, "creatorrestore", ip, 60);
         }
@@ -8363,7 +8368,8 @@ export default {
     // be signed with the session instead of the Account Key (creatorApiFetch,
     // 16_; Release 19). The page cannot see the HttpOnly cookie itself.
     try {
-      if (request && request.account && new URL(request.url).pathname.startsWith("/api/creator/")) {
+      const p = new URL(request && request.url ? request.url : "https://x/").pathname;
+      if (request && request.account && (p.startsWith("/api/creator/") || CREATOR_SESSION_PATH_PREFIXES.some((x) => p.startsWith(x)))) {
         secured.headers.set("X-MLA-Session", String(request.account.username || "").toLowerCase());
       }
     } catch {

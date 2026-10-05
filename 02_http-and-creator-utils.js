@@ -1252,6 +1252,13 @@ const CREATOR_SESSION_PATH_PREFIXES = [
   "/api/creator/track-status",
   "/api/creator/scrobble-token",
   "/api/creator/scrobble-seen-users",
+  "/api/creator/restore",
+  "/api/preview",
+  "/api/save",
+  "/api/feedback",
+  "/api/lists/like",
+  "/api/channel/like",
+  "/api/channel/unpublish",
 ];
 
 // --- Session management (P3a-4) -------------------------------------------

@@ -16,16 +16,16 @@
 > 7. Turn on D1 read replication for `my-lists-db` (P8-1). Since Release 14, `/subtitles/` and `/api/lists/:id` stay on the primary.
 >
 > **Sign-in move (the owner chose it as the main line of work):**
-> 8. Stage 2: `restore` (run on every page load) and the remaining account requests signed by the session.
+> 8. ~~Stage 2~~ done in Release 20 (restore, preview, save, feedback, likes, unpublish by session).
 > 9. When `/admin` → Creators *Saves that sent the Account Key* stays near zero for a week, rewrite the sunset notices before setting `SUNSET_60DAY_START_DATE`. `getLegacySunsetNotices` (02_) still says `/api/creator/sync/*` goes away, and the page uses those routes, now signed by the session.
 > 10. Day 60: remove key-in-body auth on the session routes, the legacy scrobble forms, and the other sunset items.
 > 11. Then the old storage, one prefix or table at a time: copy to R2, remove its readers, delete (docs/CUTOVER.md P10-3).
 >
 > **Smaller cleanups (any time):**
-> 12. Better Posters: the old KV keys and `prewarmBetterPosters` (P5-9).
-> 13. `/api/bulk-resolve` goes when the classic page goes (owner's decision: retire `?ff_new_ui=0`?). The new interface uses `/api/imports`.
-> 14. Unreachable new-interface modules in `24_` (Explore, Your lists, the shell's Account and Connections cards): delete if the owner agrees.
-> 15. Backups: a check in the workflow that each dump decrypts and loads into SQLite, so a broken backup is caught the day it happens. Optionally, a restore test into a scratch D1.
+> 12. Better Posters: the old KV copies expire by about 2026-11-29 (60-day TTL); remove the KV fallback code after that. Keep `prewarmBetterPosters` (it fills R2 ahead).
+> 13. **Owner decided: retire the classic page** (and with it `/api/bulk-resolve`). Next release (21).
+> 14. **Owner decided: delete** the unreachable new-interface modules in `24_`. Next release (21), with 13.
+> 15. ~~Backup check~~ done (Release 20 branch; daily on `main` once merged).
 >
 > **Optional switches (owner's call):** `FF_V2_LISTS_API` (Unlisted lists; safe now, needs `APP_SHELL_UNLISTED_READY` wired to it), `FF_CANONICAL_IDS`, `FF_MATERIALIZER`.
 >

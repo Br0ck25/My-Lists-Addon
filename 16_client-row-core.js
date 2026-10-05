@@ -37,13 +37,24 @@ const ORIGIN = (typeof location !== 'undefined' && location.origin) ? location.o
 // included, which also starts a new session -- nobody is signed out by this.
 // Until a session is known (a fresh browser, a server without sessions),
 // nothing changes. Signing in, creating an account, recovery, key resets and
-// deleting always send the key: there the key is what is being checked.
+// deleting always send the key: there the key is what is being checked. (A key
+// reset ends every session of the account, so a browser left with the old key
+// is signed out by the retry, as before.)
 const CREATOR_SESSION_ROUTES = [
   '/api/creator/sync/',
   '/api/creator/lists',
   '/api/creator/track-status',
   '/api/creator/scrobble-token',
   '/api/creator/scrobble-seen-users',
+  // Release 20: the sign-in check every page load makes, previews and install
+  // links with personal rows, feedback, likes, and unpublishing a channel.
+  '/api/creator/restore',
+  '/api/preview',
+  '/api/save',
+  '/api/feedback',
+  '/api/lists/like',
+  '/api/channel/like',
+  '/api/channel/unpublish',
 ];
 const CREATOR_SESSION_SEEN_KEY = 'myListAddon:sessionFor';
 
@@ -2777,7 +2788,7 @@ async function loadUserFeedbackThreads() {
   const creatorKey = creatorName ? (localStorage.getItem('myListAddon:creatorKey') || '') : '';
 
   try {
-    const res = await fetch(ORIGIN + '/api/feedback/threads', {
+    const res = await creatorApiFetch(ORIGIN + '/api/feedback/threads', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2917,7 +2928,7 @@ async function sendUserFeedbackReply() {
   const creatorAuth = feedbackCreatorAuth();
 
   try {
-    const res = await fetch(ORIGIN + '/api/feedback', {
+    const res = await creatorApiFetch(ORIGIN + '/api/feedback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2960,7 +2971,7 @@ async function submitFeedback() {
   if (btn) btn.disabled = true;
   if (statusEl) { statusEl.textContent = 'Sending\u2026'; statusEl.style.color = 'var(--muted)'; }
   try {
-    const res = await fetch(ORIGIN + '/api/feedback', {
+    const res = await creatorApiFetch(ORIGIN + '/api/feedback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

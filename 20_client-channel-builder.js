@@ -12577,7 +12577,7 @@ async function toggleChannelDirectoryLike(code, btn) {
       body.creatorName = activeCreator.creatorName;
       body.creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
     }
-    const res = await fetch(ORIGIN + '/api/channel/like', {
+    const res = await creatorApiFetch(ORIGIN + '/api/channel/like', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -12985,7 +12985,7 @@ async function publishChannelToDirectory(channelId, btn) {
 // listing all do exactly the same thing.
 async function unpublishChannelByCode(code) {
   if (!code) return { ok: false, error: 'No code.' };
-  const res = await fetch(ORIGIN + '/api/channel/unpublish', {
+  const res = await creatorApiFetch(ORIGIN + '/api/channel/unpublish', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
