@@ -285,7 +285,10 @@ function renderCustomListSearchResults(results) {
     return;
   }
 
-  const existingTitles = new Set(customListDraftItems.map(it => (it.title || it.name || '').toLowerCase().trim()));
+  // Type + title + year: a title alone blocks a remake or a show that shares
+  // a movie's name ("Dune" 1984 vs 2021, "The Office" UK vs US).
+  const draftKey = (type, title, year) => (type === 'series' ? 'series' : 'movie') + '|' + String(title || '').toLowerCase().trim() + '|' + String(year || '');
+  const existingKeys = new Set(customListDraftItems.map(it => draftKey(it.type, it.title || it.name, it.year)));
 
   const cardsHtml = results.map(r => {
     const tmdbIdNum = r.tmdbId || r.id || '';
@@ -298,7 +301,7 @@ function renderCustomListSearchResults(results) {
       ? '<img class="custom-list-search-poster" src="' + escapeAttr(rPoster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
       : '<div class="custom-list-search-poster live-preview-poster-placeholder" style="display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:0.72rem; text-align:center; padding:4px;" data-needs-fallback="1"><small style="color:var(--muted); font-size:0.72rem;">No poster</small></div>';
 
-    const isAlreadyAdded = existingTitles.has((r.title || '').toLowerCase().trim());
+    const isAlreadyAdded = existingKeys.has(draftKey(itemKind, r.title, r.year));
     const btnText = isAlreadyAdded ? 'Added \u2713' : '+ Add';
     const btnClass = isAlreadyAdded ? 'lc-btn secondary customListAddBtn' : 'lc-btn customListAddBtn';
     const disabledAttr = isAlreadyAdded ? ' disabled' : '';
