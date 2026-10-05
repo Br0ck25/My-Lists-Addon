@@ -4017,7 +4017,7 @@ function renderGuidePage(origin) {
         acceptedAnswer: {
           "@type": "Answer",
           text:
-            "Yes, 100% free with no subscriptions, ads, or paywalls. Use the hosted instance at mylistsaddon.com -- optional support is available via Buy Me a Coffee.",
+            "Yes, 100% free with no subscriptions, ads, or paywalls. Use the hosted instance at mylistsaddon.com -- optional support is available on Ko-fi.",
         },
       },
     ],
@@ -4885,7 +4885,7 @@ function renderGuidePage(origin) {
 
     <div class="faq-item">
       <div class="faq-q">Is My Lists Addon completely free?</div>
-      <div class="faq-a">Yes! It runs on your own free Cloudflare Workers account, which comfortably covers normal personal use at no cost. There's no subscription, no ads, and no paid tier. Optional support is available via Buy Me a Coffee.</div>
+      <div class="faq-a">Yes! It runs on your own free Cloudflare Workers account, which comfortably covers normal personal use at no cost. There's no subscription, no ads, and no paid tier. Optional support is available on Ko-fi.</div>
     </div>
     <div class="faq-item">
       <div class="faq-q">Do I need to sign up or create an account?</div>
@@ -4918,7 +4918,7 @@ function renderGuidePage(origin) {
 
   <!-- Footer Navigation -->
   <footer class="footer-nav">
-    <p>&copy; ${new Date().getFullYear()} ${ADDON_NAME} &bull; <a href="${origin}/">Web App</a> &bull; <a href="https://buymeacoffee.com/brock25" target="_blank" rel="noopener">Support on Buy Me a Coffee</a></p>
+    <p>&copy; ${new Date().getFullYear()} ${ADDON_NAME} &bull; <a href="${origin}/">Web App</a> &bull; <a href="https://ko-fi.com/mylistsaddon" target="_blank" rel="noopener">Support on Ko-fi</a></p>
   </footer>
 </div>
 

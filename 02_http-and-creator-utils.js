@@ -447,6 +447,7 @@ async function schemaWriteGate(request, env) {
 // 1. Webhook ingestion routes (/api/scrobble*) - called by media servers/Stremio
 // 2. OAuth provider callbacks and starts (/api/*/oauth/*)
 // 3. Admin form login and logout (/admin/login, /admin/logout)
+// 4. Ko-fi's payment webhook (/api/kofi-webhook), which carries its own token
 function verifyCsrf(request) {
   const method = (request.method || "GET").toUpperCase();
   if (method !== "POST" && method !== "PUT" && method !== "PATCH" && method !== "DELETE") {
@@ -466,6 +467,11 @@ function verifyCsrf(request) {
     return null;
   }
   if (path.includes("/oauth/")) {
+    return null;
+  }
+  // Ko-fi's payment webhook is posted by Ko-fi's servers, not by a page, and
+  // proves itself with its verification token (handled in the route).
+  if (path === "/api/kofi-webhook") {
     return null;
   }
   if (path === "/admin/login" || path === "/admin/logout") {

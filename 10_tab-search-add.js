@@ -1,5 +1,5 @@
 <div class="tab-panel" data-tab-panel="catalogs" id="content-catalogs" role="tabpanel" aria-labelledby="tab-desktop-catalogs" hidden>
-  <!-- The Buy Me a Coffee strip: filled in, and shown, by initSupportStrip
+  <!-- The Ko-fi support strip: filled in, and shown, by initSupportStrip
        (16_client-row-core.js) only when the admin has turned it on. -->
   <div class="support-strip" id="supportStrip" hidden>
     <button type="button" class="support-strip-main" data-act="openSupportGoal" aria-label="Server costs this month: see details">

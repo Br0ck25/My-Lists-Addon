@@ -246,7 +246,7 @@ export function loadClient(opts = {}) {
     async fetch(input, init = {}) {
       const url = String(input && input.url ? input.url : input);
       const { pathname } = new URL(url, "https://example.com");
-      // The page asks for the Buy Me a Coffee strip's goal as it loads. That is
+      // The page asks for the Ko-fi support strip's goal as it loads. That is
       // not what a test is about, so it is answered (strip off) and not
       // counted, unless the test stubs the route itself.
       if (pathname === "/api/support-goal" && !routes[pathname]) {

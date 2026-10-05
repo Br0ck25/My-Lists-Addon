@@ -3641,6 +3641,7 @@ async function schemaWriteGate(request, env) {
 // 1. Webhook ingestion routes (/api/scrobble*) - called by media servers/Stremio
 // 2. OAuth provider callbacks and starts (/api/*/oauth/*)
 // 3. Admin form login and logout (/admin/login, /admin/logout)
+// 4. Ko-fi's payment webhook (/api/kofi-webhook), which carries its own token
 function verifyCsrf(request) {
   const method = (request.method || "GET").toUpperCase();
   if (method !== "POST" && method !== "PUT" && method !== "PATCH" && method !== "DELETE") {
@@ -3660,6 +3661,11 @@ function verifyCsrf(request) {
     return null;
   }
   if (path.includes("/oauth/")) {
+    return null;
+  }
+  // Ko-fi's payment webhook is posted by Ko-fi's servers, not by a page, and
+  // proves itself with its verification token (handled in the route).
+  if (path === "/api/kofi-webhook") {
     return null;
   }
   if (path === "/admin/login" || path === "/admin/logout") {
@@ -12504,13 +12510,19 @@ function adminActArgs(values) {
 
 // --- The support goal (the strip at the top of Catalogs) ---------------------
 //
-// What the Buy Me a Coffee strip shows: a monthly hosting goal and how much has
+// What the Ko-fi support strip shows: a monthly hosting goal and how much has
 // been given so far this month, both typed in under Management & Tools ->
 // Support Goal. It stays hidden until it is turned on there. The amount given
 // belongs to the month it was entered in and counts as 0 in the next one, so
 // the bar starts over on the 1st by itself.
 const SUPPORT_GOAL_KEY = "support:goal:v1";
-const SUPPORT_GOAL_URL = "https://buymeacoffee.com/brock25";
+const SUPPORT_GOAL_URL = "https://ko-fi.com/mylistsaddon";
+// Ko-fi's webhook (POST /api/kofi-webhook, below) adds each USD donation to the
+// month's total by itself. These are the payment types it counts: tips and
+// monthly memberships. Commissions and shop orders are sales, not support.
+const KOFI_COUNTED_TYPES = new Set(["Donation", "Subscription"]);
+const KOFI_WEBHOOK_BODY_MAX = 20000;
+const KOFI_MESSAGE_ID_RE = /^[A-Za-z0-9-]{8,64}$/;
 const SUPPORT_GOAL_MAX = 100000;
 
 function supportGoalMonth(now = new Date()) {
@@ -12534,6 +12546,38 @@ async function readSupportGoal(env) {
     raised: num(s.raised, SUPPORT_GOAL_MAX * 10),
     raisedMonth: typeof s.raisedMonth === "string" ? s.raisedMonth : "",
     updatedAt: Number.isFinite(s.updatedAt) ? s.updatedAt : 0,
+    // The last payment Ko-fi told us about, for the admin page.
+    lastPayment: s.lastPayment && Number.isFinite(s.lastPayment.at) && Number.isFinite(s.lastPayment.amount)
+      ? { at: s.lastPayment.at, amount: s.lastPayment.amount }
+      : null,
+  };
+}
+
+// One Ko-fi payment (the webhook's `data` object) as a dollar amount to count,
+// or null when it is not one: the wrong type, not US dollars (the goal is in
+// dollars, and there is no exchange rate to convert with), or a number that
+// makes no sense. Whether the donor chose to be public does not matter here:
+// only the total is ever shown, never who gave.
+function kofiAmountToCount(data) {
+  if (!data || typeof data !== "object") return null;
+  if (!KOFI_COUNTED_TYPES.has(String(data.type || ""))) return null;
+  if (String(data.currency || "").toUpperCase() !== "USD") return null;
+  const amount = Number(data.amount);
+  if (!Number.isFinite(amount) || amount <= 0 || amount > SUPPORT_GOAL_MAX) return null;
+  return Math.round(amount * 100) / 100;
+}
+
+// The stored goal with one payment added to the month's total. A total that
+// belongs to an earlier month starts again from 0 first.
+function addKofiPaymentToSupportGoal(stored, amount, now = new Date()) {
+  const month = supportGoalMonth(now);
+  const base = stored.raisedMonth === month ? stored.raised : 0;
+  return {
+    ...stored,
+    raised: Math.round((base + amount) * 100) / 100,
+    raisedMonth: month,
+    lastPayment: { at: now.getTime(), amount },
+    updatedAt: now.getTime(),
   };
 }
 
@@ -13144,7 +13188,7 @@ async function renderAdminDashboard(env) {
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="supportgoal">
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">The <strong>Buy Me a Coffee strip</strong> at the top of Catalogs on the main site: a goal for the month's hosting bill and how much has been given toward it. It stays hidden until you turn it on. Visitors can hide it for the rest of the month with its &#x2715;; that only hides it for them.</p>
+    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">The <strong>Ko-fi support strip</strong> at the top of Catalogs on the main site: a goal for the month's hosting bill and how much has been given toward it. It stays hidden until you turn it on. Visitors can hide it for the rest of the month with its &#x2715;; that only hides it for them.</p>
     <div class="panel" style="margin:0 0 18px; padding:14px 16px; max-width:520px;">
       <label style="display:flex; align-items:center; gap:8px; font-weight:600; font-size:0.9rem; margin-bottom:14px;">
         <input type="checkbox" id="supportGoalEnabled"> Show the strip on the site
@@ -13155,11 +13199,23 @@ async function renderAdminDashboard(env) {
       <label style="display:block; font-size:0.85rem; color:#8E8E93; margin-bottom:6px;">Given so far this month (US dollars)
         <input type="number" id="supportGoalRaised" class="admin-select" min="0" step="0.01" style="display:block; margin:4px 0 0; width:160px;" placeholder="0">
       </label>
-      <div style="font-size:0.8rem; color:#8E8E93; margin-bottom:14px;">Type the total from your Buy Me a Coffee page. It counts toward <span id="supportGoalMonth">this month</span> only and starts again at 0 on the 1st.</div>
+      <div style="font-size:0.8rem; color:#8E8E93; margin-bottom:14px;">Ko-fi adds each US-dollar donation and membership payment to this by itself (set up below); type a number here to correct it. It counts toward <span id="supportGoalMonth">this month</span> only and starts again at 0 on the 1st.</div>
       <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
         <button type="button" class="primary lc-btn" data-act="saveSupportGoal">Save</button>
         <span id="supportGoalStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
       </div>
+    </div>
+    <div class="panel" style="margin:0 0 18px; padding:14px 16px; max-width:520px;">
+      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Automatic totals from Ko-fi</div>
+      <ol style="margin:0 0 12px 18px; padding:0; font-size:0.85rem; color:#8E8E93; line-height:1.5;">
+        <li>In Ko-fi, go to <strong>Settings &rarr; API &rarr; Webhooks</strong> and paste this as the Webhook URL, then press Update:
+          <div><code id="supportGoalWebhookUrl" style="user-select:all;"></code></div></li>
+        <li>Copy Ko-fi's <strong>verification token</strong> and add it to this Worker as a secret named <code>KOFI_VERIFICATION_TOKEN</code> (Cloudflare dashboard &rarr; Worker &rarr; Settings &rarr; Variables and Secrets).</li>
+        <li>Use Ko-fi's <strong>Send a test</strong>. It shows up below.</li>
+      </ol>
+      <div style="font-size:0.85rem;">Token: <span id="supportGoalTokenState" style="color:#8E8E93;">checking&hellip;</span></div>
+      <div style="font-size:0.85rem; margin-top:4px;">Last payment counted: <span id="supportGoalLastPayment" style="color:#8E8E93;">none yet</span></div>
+      <div style="font-size:0.78rem; color:#8E8E93; margin-top:10px;">Counts donations and membership payments made in US dollars. Other currencies, shop orders and commissions are skipped; type those in above if you want them counted. Who gave is never shown.</div>
     </div>
   </div>
 
@@ -13529,6 +13585,12 @@ async function renderAdminDashboard(env) {
         document.getElementById('supportGoalRaised').value = data.raised ? data.raised : '';
         const m = document.getElementById('supportGoalMonth');
         if (m) m.textContent = data.month || 'this month';
+        const w = document.getElementById('supportGoalWebhookUrl');
+        if (w) w.textContent = data.webhookUrl || '';
+        const t = document.getElementById('supportGoalTokenState');
+        if (t) { t.textContent = data.kofiTokenSet ? 'set' : 'not set yet'; t.style.color = data.kofiTokenSet ? '#30d158' : '#ff9f0a'; }
+        const l = document.getElementById('supportGoalLastPayment');
+        if (l && data.lastPayment) l.textContent = '$' + data.lastPayment.amount + ' on ' + new Date(data.lastPayment.at).toLocaleString();
       } catch (e) {
         if (status) status.textContent = 'Could not load.';
       }
@@ -30706,7 +30768,7 @@ ${seoHeadHtml}
      needs. The larger gap is because these are now separate cards rather
      than headings on one continuous background -- at 8px they read as one
      block with lines through it. */
-  /* The Buy Me a Coffee strip at the top of Catalogs (initSupportStrip). */
+  /* The Ko-fi support strip at the top of Catalogs (initSupportStrip). */
   .support-strip {
     display: flex;
     align-items: center;
@@ -35032,7 +35094,7 @@ if ('serviceWorker' in navigator) {
 </script>
 
 <div class="tab-panel" data-tab-panel="catalogs" id="content-catalogs" role="tabpanel" aria-labelledby="tab-desktop-catalogs" hidden>
-  <!-- The Buy Me a Coffee strip: filled in, and shown, by initSupportStrip
+  <!-- The Ko-fi support strip: filled in, and shown, by initSupportStrip
        (16_client-row-core.js) only when the admin has turned it on. -->
   <div class="support-strip" id="supportStrip" hidden>
     <button type="button" class="support-strip-main" data-act="openSupportGoal" aria-label="Server costs this month: see details">
@@ -36915,9 +36977,9 @@ if ('serviceWorker' in navigator) {
           <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:0.8rem; pointer-events:none;">Open Guide &rarr;</span>
         </a>
 
-        <a href="https://buymeacoffee.com/brock25" target="_blank" rel="noopener" class="resource-card">
+        <a href="https://ko-fi.com/mylistsaddon" target="_blank" rel="noopener" class="resource-card">
           <div>
-            <div class="resource-card-title">Buy Me a Coffee</div>
+            <div class="resource-card-title">Support on Ko-fi</div>
             <div class="resource-card-desc">Support the continued development and hosting costs of the free public server.</div>
           </div>
           <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:0.8rem; pointer-events:none;">Support Project &rarr;</span>
@@ -39235,7 +39297,7 @@ function closeModal() {
   _modalReturnFocus = null;
 }
 
-// --- The Buy Me a Coffee strip -------------------------------------------------
+// --- The Ko-fi support strip ---------------------------------------------------
 //
 // A goal for the month's hosting and how much has been given, set by the admin
 // (Management & Tools -> Support Goal) and read from /api/support-goal. The
@@ -39306,7 +39368,7 @@ function openSupportGoal() {
       row('Given so far', supportMoney(g.raised), false) +
       row(left > 0 ? 'Still needed' : 'Covered', left > 0 ? supportMoney(left) : 'Thank you!', true) +
     '</div>' +
-    '<a href="' + escapeAttr(g.url) + '" target="_blank" rel="noopener noreferrer" style="display:block; text-align:center; background:#ffdd00; color:#1c1c1e; border-radius:26px; padding:12px; font-weight:800; text-decoration:none;">&#9749; Buy me a coffee</a>' +
+    '<a href="' + escapeAttr(g.url) + '" target="_blank" rel="noopener noreferrer" style="display:block; text-align:center; background:#ff5e5b; color:#fff; border-radius:26px; padding:12px; font-weight:800; text-decoration:none;">&#9749; Support on Ko-fi</a>' +
     '<p style="margin:10px 0 0; text-align:center; color:var(--muted); font-size:0.78rem;">Starts again on the 1st of each month.</p>';
   showModal(html);
 }
@@ -83957,7 +84019,7 @@ function renderGuidePage(origin) {
         acceptedAnswer: {
           "@type": "Answer",
           text:
-            "Yes, 100% free with no subscriptions, ads, or paywalls. Use the hosted instance at mylistsaddon.com -- optional support is available via Buy Me a Coffee.",
+            "Yes, 100% free with no subscriptions, ads, or paywalls. Use the hosted instance at mylistsaddon.com -- optional support is available on Ko-fi.",
         },
       },
     ],
@@ -84825,7 +84887,7 @@ function renderGuidePage(origin) {
 
     <div class="faq-item">
       <div class="faq-q">Is My Lists Addon completely free?</div>
-      <div class="faq-a">Yes! It runs on your own free Cloudflare Workers account, which comfortably covers normal personal use at no cost. There's no subscription, no ads, and no paid tier. Optional support is available via Buy Me a Coffee.</div>
+      <div class="faq-a">Yes! It runs on your own free Cloudflare Workers account, which comfortably covers normal personal use at no cost. There's no subscription, no ads, and no paid tier. Optional support is available on Ko-fi.</div>
     </div>
     <div class="faq-item">
       <div class="faq-q">Do I need to sign up or create an account?</div>
@@ -84858,7 +84920,7 @@ function renderGuidePage(origin) {
 
   <!-- Footer Navigation -->
   <footer class="footer-nav">
-    <p>&copy; ${new Date().getFullYear()} ${ADDON_NAME} &bull; <a href="${origin}/">Web App</a> &bull; <a href="https://buymeacoffee.com/brock25" target="_blank" rel="noopener">Support on Buy Me a Coffee</a></p>
+    <p>&copy; ${new Date().getFullYear()} ${ADDON_NAME} &bull; <a href="${origin}/">Web App</a> &bull; <a href="https://ko-fi.com/mylistsaddon" target="_blank" rel="noopener">Support on Ko-fi</a></p>
   </footer>
 </div>
 
@@ -85267,11 +85329,53 @@ async function handleFetch(request, env, ctx) {
       return await serveRpdbPoster(env, ctx, decodeURIComponent(rpdbMatch[1]), rpdbMatch[2]);
     }
 
-    // /api/support-goal -> what the Buy Me a Coffee strip shows, or enabled:false
+    // /api/support-goal -> what the Ko-fi support strip shows, or enabled:false
     // until the admin turns it on. See readSupportGoal (03_admin.js).
     if (path === "/api/support-goal" && request.method === "GET") {
       const view = publicSupportGoal(await readSupportGoal(env));
       return jsonPublic({ ok: true, ...view }, 200, { "Cache-Control": "public, max-age=300" });
+    }
+
+    // /api/kofi-webhook (POST, from Ko-fi) -> adds a donation or membership
+    // payment to the support strip's total. Ko-fi posts form data whose `data`
+    // field is a JSON string; the verification token inside it has to match the
+    // KOFI_VERIFICATION_TOKEN secret. Ko-fi retries until it gets a 200, so a
+    // message_id already counted is answered 200 and not counted twice.
+    if (path === "/api/kofi-webhook" && request.method === "POST") {
+      if (!env || !env.KOFI_VERIFICATION_TOKEN || !env.CONFIGS) {
+        return json({ ok: false, error: "Not set up." }, 503, { "Cache-Control": "no-store" });
+      }
+      const kofiIp = clientIpKey(request);
+      if (!kofiIp || await consumeRateLimit(env, ctx, "kofiwebhook", kofiIp, 120, 60)) {
+        return json({ ok: false, error: "Too many requests." }, 429, { "Cache-Control": "no-store" });
+      }
+      if ((Number(request.headers.get("content-length")) || 0) > KOFI_WEBHOOK_BODY_MAX) {
+        return json({ ok: false, error: "Too large." }, 413, { "Cache-Control": "no-store" });
+      }
+      let data = null;
+      try {
+        // Ko-fi posts application/x-www-form-urlencoded; formData() reads that
+        // (and multipart) alike.
+        const raw = (await request.formData()).get("data");
+        if (typeof raw !== "string" || raw.length > KOFI_WEBHOOK_BODY_MAX) throw new Error("no data");
+        data = JSON.parse(raw);
+      } catch {
+        return json({ ok: false, error: "Bad request." }, 400, { "Cache-Control": "no-store" });
+      }
+      if (!data || typeof data !== "object" || !(await timingSafeEqualSecret(data.verification_token, env.KOFI_VERIFICATION_TOKEN))) {
+        return json({ ok: false, error: "Not authorized." }, 401, { "Cache-Control": "no-store" });
+      }
+      const amount = kofiAmountToCount(data);
+      const messageId = String(data.message_id || "");
+      if (amount === null || !KOFI_MESSAGE_ID_RE.test(messageId)) {
+        return json({ ok: true, counted: false }, 200, { "Cache-Control": "no-store" });
+      }
+      const seenKey = `kofi:msg:${messageId}`;
+      if (await env.CONFIGS.get(seenKey)) return json({ ok: true, counted: false, duplicate: true }, 200, { "Cache-Control": "no-store" });
+      const next = addKofiPaymentToSupportGoal(await readSupportGoal(env), amount);
+      await env.CONFIGS.put(SUPPORT_GOAL_KEY, JSON.stringify(next));
+      await env.CONFIGS.put(seenKey, "1", { expirationTtl: 40 * 86400 });
+      return json({ ok: true, counted: true }, 200, { "Cache-Control": "no-store" });
     }
 
     // /api/rpdb-check  (POST)  { key } -> { ok, valid, used, limit }: whether a
@@ -100573,7 +100677,7 @@ function generateSearchVariations(query) {
     // against) versus observed (a genuine arrival this add-on watched happen).
     // The seeded/observed split is the one number that says whether the list
     // is working yet: observed only starts growing after walk 0 completes.
-    // /admin/api/support-goal -> the Buy Me a Coffee strip's goal and the amount
+    // /admin/api/support-goal -> the Ko-fi support strip's goal and the amount
     // given so far (GET), and the save (POST). See readSupportGoal (03_admin.js).
     if (path === "/admin/api/support-goal" && (request.method === "GET" || request.method === "POST")) {
       const authed = await isAdminRequest(request, env);
@@ -100589,7 +100693,12 @@ function generateSearchVariations(query) {
         return json({ ok: true, ...publicSupportGoal(next.value), goal: next.value.goal, raised: next.value.raised, enabled: next.value.enabled }, 200, { "Cache-Control": "no-store" });
       }
       const month = supportGoalMonth();
-      return json({ ok: true, enabled: stored.enabled, goal: stored.goal, raised: stored.raisedMonth === month ? stored.raised : 0, month }, 200, { "Cache-Control": "no-store" });
+      return json({
+        ok: true, enabled: stored.enabled, goal: stored.goal, raised: stored.raisedMonth === month ? stored.raised : 0, month,
+        webhookUrl: `${url.origin}/api/kofi-webhook`,
+        kofiTokenSet: !!(env && env.KOFI_VERIFICATION_TOKEN),
+        lastPayment: stored.lastPayment,
+      }, 200, { "Cache-Control": "no-store" });
     }
 
     if (path === "/admin/api/new-on-streaming" && request.method === "GET") {

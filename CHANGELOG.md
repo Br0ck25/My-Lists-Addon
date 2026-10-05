@@ -6,10 +6,12 @@ All notable changes to **My Lists Addon** ([mylistsaddon.com](https://mylistsadd
 
 ## [Unreleased]
 
-### ☕ Buy Me a Coffee strip, with the goal set in the admin page
+### ☕ Ko-fi support strip, with the goal set in the admin page
 
-- **A slim strip at the top of Catalogs** shows "Server costs: $42 of $60" with a progress bar. Tapping it opens a small window with the amounts and a **Buy me a coffee** button. When the goal is met it turns green and says "Covered this month. Thank you!". Its ✕ hides it for the rest of the month in that browser only.
-- **Admin → Management & Tools → Support Goal:** turn the strip on or off, set the monthly goal, and type the amount given so far from your Buy Me a Coffee page. The strip stays hidden until you turn it on. The amount belongs to the month it was entered in and counts as 0 the month after, so the bar starts again on the 1st. The site picks up a change within five minutes.
+- **Donations moved from Buy Me a Coffee to [Ko-fi](https://ko-fi.com/mylistsaddon)**: the Settings card, the FAQ, the footer, the README and the new strip all point there now.
+- **A slim strip at the top of Catalogs** shows "Server costs: $42 of $60" with a progress bar. Tapping it opens a small window with the amounts and a **Support on Ko-fi** button. When the goal is met it turns green and says "Covered this month. Thank you!". Its ✕ hides it for the rest of the month in that browser only.
+- **Admin → Management & Tools → Support Goal:** turn the strip on or off, set the monthly goal, and correct the amount given so far if needed. The strip stays hidden until you turn it on. The amount belongs to the month it counts for and is 0 the month after, so the bar starts again on the 1st. The site picks up a change within five minutes.
+- **Ko-fi adds payments by itself.** Give Ko-fi the webhook address shown in that admin tab (`/api/kofi-webhook`) and add Ko-fi's verification token as the Worker secret `KOFI_VERIFICATION_TOKEN`. Each US-dollar donation or membership payment then goes into the month's total (a payment Ko-fi sends again is counted once). Other currencies, shop orders and commissions are skipped, and who gave is never shown.
 
 ### 🐛 Quick Add, Lists and Discover fixes
 

@@ -399,11 +399,53 @@ async function handleFetch(request, env, ctx) {
       return await serveRpdbPoster(env, ctx, decodeURIComponent(rpdbMatch[1]), rpdbMatch[2]);
     }
 
-    // /api/support-goal -> what the Buy Me a Coffee strip shows, or enabled:false
+    // /api/support-goal -> what the Ko-fi support strip shows, or enabled:false
     // until the admin turns it on. See readSupportGoal (03_admin.js).
     if (path === "/api/support-goal" && request.method === "GET") {
       const view = publicSupportGoal(await readSupportGoal(env));
       return jsonPublic({ ok: true, ...view }, 200, { "Cache-Control": "public, max-age=300" });
+    }
+
+    // /api/kofi-webhook (POST, from Ko-fi) -> adds a donation or membership
+    // payment to the support strip's total. Ko-fi posts form data whose `data`
+    // field is a JSON string; the verification token inside it has to match the
+    // KOFI_VERIFICATION_TOKEN secret. Ko-fi retries until it gets a 200, so a
+    // message_id already counted is answered 200 and not counted twice.
+    if (path === "/api/kofi-webhook" && request.method === "POST") {
+      if (!env || !env.KOFI_VERIFICATION_TOKEN || !env.CONFIGS) {
+        return json({ ok: false, error: "Not set up." }, 503, { "Cache-Control": "no-store" });
+      }
+      const kofiIp = clientIpKey(request);
+      if (!kofiIp || await consumeRateLimit(env, ctx, "kofiwebhook", kofiIp, 120, 60)) {
+        return json({ ok: false, error: "Too many requests." }, 429, { "Cache-Control": "no-store" });
+      }
+      if ((Number(request.headers.get("content-length")) || 0) > KOFI_WEBHOOK_BODY_MAX) {
+        return json({ ok: false, error: "Too large." }, 413, { "Cache-Control": "no-store" });
+      }
+      let data = null;
+      try {
+        // Ko-fi posts application/x-www-form-urlencoded; formData() reads that
+        // (and multipart) alike.
+        const raw = (await request.formData()).get("data");
+        if (typeof raw !== "string" || raw.length > KOFI_WEBHOOK_BODY_MAX) throw new Error("no data");
+        data = JSON.parse(raw);
+      } catch {
+        return json({ ok: false, error: "Bad request." }, 400, { "Cache-Control": "no-store" });
+      }
+      if (!data || typeof data !== "object" || !(await timingSafeEqualSecret(data.verification_token, env.KOFI_VERIFICATION_TOKEN))) {
+        return json({ ok: false, error: "Not authorized." }, 401, { "Cache-Control": "no-store" });
+      }
+      const amount = kofiAmountToCount(data);
+      const messageId = String(data.message_id || "");
+      if (amount === null || !KOFI_MESSAGE_ID_RE.test(messageId)) {
+        return json({ ok: true, counted: false }, 200, { "Cache-Control": "no-store" });
+      }
+      const seenKey = `kofi:msg:${messageId}`;
+      if (await env.CONFIGS.get(seenKey)) return json({ ok: true, counted: false, duplicate: true }, 200, { "Cache-Control": "no-store" });
+      const next = addKofiPaymentToSupportGoal(await readSupportGoal(env), amount);
+      await env.CONFIGS.put(SUPPORT_GOAL_KEY, JSON.stringify(next));
+      await env.CONFIGS.put(seenKey, "1", { expirationTtl: 40 * 86400 });
+      return json({ ok: true, counted: true }, 200, { "Cache-Control": "no-store" });
     }
 
     // /api/rpdb-check  (POST)  { key } -> { ok, valid, used, limit }: whether a

@@ -7759,7 +7759,7 @@
     // against) versus observed (a genuine arrival this add-on watched happen).
     // The seeded/observed split is the one number that says whether the list
     // is working yet: observed only starts growing after walk 0 completes.
-    // /admin/api/support-goal -> the Buy Me a Coffee strip's goal and the amount
+    // /admin/api/support-goal -> the Ko-fi support strip's goal and the amount
     // given so far (GET), and the save (POST). See readSupportGoal (03_admin.js).
     if (path === "/admin/api/support-goal" && (request.method === "GET" || request.method === "POST")) {
       const authed = await isAdminRequest(request, env);
@@ -7775,7 +7775,12 @@
         return json({ ok: true, ...publicSupportGoal(next.value), goal: next.value.goal, raised: next.value.raised, enabled: next.value.enabled }, 200, { "Cache-Control": "no-store" });
       }
       const month = supportGoalMonth();
-      return json({ ok: true, enabled: stored.enabled, goal: stored.goal, raised: stored.raisedMonth === month ? stored.raised : 0, month }, 200, { "Cache-Control": "no-store" });
+      return json({
+        ok: true, enabled: stored.enabled, goal: stored.goal, raised: stored.raisedMonth === month ? stored.raised : 0, month,
+        webhookUrl: `${url.origin}/api/kofi-webhook`,
+        kofiTokenSet: !!(env && env.KOFI_VERIFICATION_TOKEN),
+        lastPayment: stored.lastPayment,
+      }, 200, { "Cache-Control": "no-store" });
     }
 
     if (path === "/admin/api/new-on-streaming" && request.method === "GET") {

@@ -1516,7 +1516,7 @@ ${seoHeadHtml}
      needs. The larger gap is because these are now separate cards rather
      than headings on one continuous background -- at 8px they read as one
      block with lines through it. */
-  /* The Buy Me a Coffee strip at the top of Catalogs (initSupportStrip). */
+  /* The Ko-fi support strip at the top of Catalogs (initSupportStrip). */
   .support-strip {
     display: flex;
     align-items: center;

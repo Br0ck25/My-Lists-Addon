@@ -718,9 +718,9 @@
           <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:0.8rem; pointer-events:none;">Open Guide &rarr;</span>
         </a>
 
-        <a href="https://buymeacoffee.com/brock25" target="_blank" rel="noopener" class="resource-card">
+        <a href="https://ko-fi.com/mylistsaddon" target="_blank" rel="noopener" class="resource-card">
           <div>
-            <div class="resource-card-title">Buy Me a Coffee</div>
+            <div class="resource-card-title">Support on Ko-fi</div>
             <div class="resource-card-desc">Support the continued development and hosting costs of the free public server.</div>
           </div>
           <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:0.8rem; pointer-events:none;">Support Project &rarr;</span>

@@ -2324,13 +2324,19 @@ function adminActArgs(values) {
 
 // --- The support goal (the strip at the top of Catalogs) ---------------------
 //
-// What the Buy Me a Coffee strip shows: a monthly hosting goal and how much has
+// What the Ko-fi support strip shows: a monthly hosting goal and how much has
 // been given so far this month, both typed in under Management & Tools ->
 // Support Goal. It stays hidden until it is turned on there. The amount given
 // belongs to the month it was entered in and counts as 0 in the next one, so
 // the bar starts over on the 1st by itself.
 const SUPPORT_GOAL_KEY = "support:goal:v1";
-const SUPPORT_GOAL_URL = "https://buymeacoffee.com/brock25";
+const SUPPORT_GOAL_URL = "https://ko-fi.com/mylistsaddon";
+// Ko-fi's webhook (POST /api/kofi-webhook, below) adds each USD donation to the
+// month's total by itself. These are the payment types it counts: tips and
+// monthly memberships. Commissions and shop orders are sales, not support.
+const KOFI_COUNTED_TYPES = new Set(["Donation", "Subscription"]);
+const KOFI_WEBHOOK_BODY_MAX = 20000;
+const KOFI_MESSAGE_ID_RE = /^[A-Za-z0-9-]{8,64}$/;
 const SUPPORT_GOAL_MAX = 100000;
 
 function supportGoalMonth(now = new Date()) {
@@ -2354,6 +2360,38 @@ async function readSupportGoal(env) {
     raised: num(s.raised, SUPPORT_GOAL_MAX * 10),
     raisedMonth: typeof s.raisedMonth === "string" ? s.raisedMonth : "",
     updatedAt: Number.isFinite(s.updatedAt) ? s.updatedAt : 0,
+    // The last payment Ko-fi told us about, for the admin page.
+    lastPayment: s.lastPayment && Number.isFinite(s.lastPayment.at) && Number.isFinite(s.lastPayment.amount)
+      ? { at: s.lastPayment.at, amount: s.lastPayment.amount }
+      : null,
+  };
+}
+
+// One Ko-fi payment (the webhook's `data` object) as a dollar amount to count,
+// or null when it is not one: the wrong type, not US dollars (the goal is in
+// dollars, and there is no exchange rate to convert with), or a number that
+// makes no sense. Whether the donor chose to be public does not matter here:
+// only the total is ever shown, never who gave.
+function kofiAmountToCount(data) {
+  if (!data || typeof data !== "object") return null;
+  if (!KOFI_COUNTED_TYPES.has(String(data.type || ""))) return null;
+  if (String(data.currency || "").toUpperCase() !== "USD") return null;
+  const amount = Number(data.amount);
+  if (!Number.isFinite(amount) || amount <= 0 || amount > SUPPORT_GOAL_MAX) return null;
+  return Math.round(amount * 100) / 100;
+}
+
+// The stored goal with one payment added to the month's total. A total that
+// belongs to an earlier month starts again from 0 first.
+function addKofiPaymentToSupportGoal(stored, amount, now = new Date()) {
+  const month = supportGoalMonth(now);
+  const base = stored.raisedMonth === month ? stored.raised : 0;
+  return {
+    ...stored,
+    raised: Math.round((base + amount) * 100) / 100,
+    raisedMonth: month,
+    lastPayment: { at: now.getTime(), amount },
+    updatedAt: now.getTime(),
   };
 }
 
@@ -2964,7 +3002,7 @@ async function renderAdminDashboard(env) {
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="supportgoal">
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">The <strong>Buy Me a Coffee strip</strong> at the top of Catalogs on the main site: a goal for the month's hosting bill and how much has been given toward it. It stays hidden until you turn it on. Visitors can hide it for the rest of the month with its &#x2715;; that only hides it for them.</p>
+    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">The <strong>Ko-fi support strip</strong> at the top of Catalogs on the main site: a goal for the month's hosting bill and how much has been given toward it. It stays hidden until you turn it on. Visitors can hide it for the rest of the month with its &#x2715;; that only hides it for them.</p>
     <div class="panel" style="margin:0 0 18px; padding:14px 16px; max-width:520px;">
       <label style="display:flex; align-items:center; gap:8px; font-weight:600; font-size:0.9rem; margin-bottom:14px;">
         <input type="checkbox" id="supportGoalEnabled"> Show the strip on the site
@@ -2975,11 +3013,23 @@ async function renderAdminDashboard(env) {
       <label style="display:block; font-size:0.85rem; color:#8E8E93; margin-bottom:6px;">Given so far this month (US dollars)
         <input type="number" id="supportGoalRaised" class="admin-select" min="0" step="0.01" style="display:block; margin:4px 0 0; width:160px;" placeholder="0">
       </label>
-      <div style="font-size:0.8rem; color:#8E8E93; margin-bottom:14px;">Type the total from your Buy Me a Coffee page. It counts toward <span id="supportGoalMonth">this month</span> only and starts again at 0 on the 1st.</div>
+      <div style="font-size:0.8rem; color:#8E8E93; margin-bottom:14px;">Ko-fi adds each US-dollar donation and membership payment to this by itself (set up below); type a number here to correct it. It counts toward <span id="supportGoalMonth">this month</span> only and starts again at 0 on the 1st.</div>
       <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
         <button type="button" class="primary lc-btn" data-act="saveSupportGoal">Save</button>
         <span id="supportGoalStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
       </div>
+    </div>
+    <div class="panel" style="margin:0 0 18px; padding:14px 16px; max-width:520px;">
+      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Automatic totals from Ko-fi</div>
+      <ol style="margin:0 0 12px 18px; padding:0; font-size:0.85rem; color:#8E8E93; line-height:1.5;">
+        <li>In Ko-fi, go to <strong>Settings &rarr; API &rarr; Webhooks</strong> and paste this as the Webhook URL, then press Update:
+          <div><code id="supportGoalWebhookUrl" style="user-select:all;"></code></div></li>
+        <li>Copy Ko-fi's <strong>verification token</strong> and add it to this Worker as a secret named <code>KOFI_VERIFICATION_TOKEN</code> (Cloudflare dashboard &rarr; Worker &rarr; Settings &rarr; Variables and Secrets).</li>
+        <li>Use Ko-fi's <strong>Send a test</strong>. It shows up below.</li>
+      </ol>
+      <div style="font-size:0.85rem;">Token: <span id="supportGoalTokenState" style="color:#8E8E93;">checking&hellip;</span></div>
+      <div style="font-size:0.85rem; margin-top:4px;">Last payment counted: <span id="supportGoalLastPayment" style="color:#8E8E93;">none yet</span></div>
+      <div style="font-size:0.78rem; color:#8E8E93; margin-top:10px;">Counts donations and membership payments made in US dollars. Other currencies, shop orders and commissions are skipped; type those in above if you want them counted. Who gave is never shown.</div>
     </div>
   </div>
 
@@ -3349,6 +3399,12 @@ async function renderAdminDashboard(env) {
         document.getElementById('supportGoalRaised').value = data.raised ? data.raised : '';
         const m = document.getElementById('supportGoalMonth');
         if (m) m.textContent = data.month || 'this month';
+        const w = document.getElementById('supportGoalWebhookUrl');
+        if (w) w.textContent = data.webhookUrl || '';
+        const t = document.getElementById('supportGoalTokenState');
+        if (t) { t.textContent = data.kofiTokenSet ? 'set' : 'not set yet'; t.style.color = data.kofiTokenSet ? '#30d158' : '#ff9f0a'; }
+        const l = document.getElementById('supportGoalLastPayment');
+        if (l && data.lastPayment) l.textContent = '$' + data.lastPayment.amount + ' on ' + new Date(data.lastPayment.at).toLocaleString();
       } catch (e) {
         if (status) status.textContent = 'Could not load.';
       }
