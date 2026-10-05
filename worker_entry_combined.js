@@ -85117,36 +85117,16 @@ self.addEventListener('fetch', (e) => {
   if (req.mode === 'navigate') {
     e.respondWith((async () => {
       try {
-        // Strip conditional cache validation headers (If-None-Match, If-Modified-Since)
-        // so origin server returns full 200 OK HTML instead of an empty 304 response.
-        // Use mode: 'same-origin' and credentials: 'same-origin' to prevent CORS failures.
-        const netHeaders = new Headers(req.headers);
-        netHeaders.delete('if-none-match');
-        netHeaders.delete('if-modified-since');
-        const netReq = new Request(req.url, {
-          method: 'GET',
-          headers: netHeaders,
-          credentials: 'same-origin',
-          mode: 'same-origin',
-          cache: 'no-cache'
-        });
-
-        const res = await fetch(netReq);
-        if (res && res.ok) {
-          if (url.pathname === SHELL_URL && !url.search) {
-            try {
-              const cache = await caches.open(SHELL);
-              await cache.put(SHELL_URL, res.clone());
-            } catch (err) {}
-          }
-          return res;
-        }
-
-        // On server 5xx or bad response, fall back to cached shell if available
-        if (res && res.status >= 500) {
-          const cache = await caches.open(SHELL);
-          const cached = await cache.match(SHELL_URL);
-          if (cached) return cached;
+        // The browser's own request, untouched: a rebuilt one follows redirects itself, and a sign-in redirect then fails.
+        const res = await fetch(req);
+        // Only the plain page is worth keeping. A deep link renders
+        // per-request data, and replaying yesterday's copy of it later would
+        // be worse than not answering.
+        if (res && res.ok && url.pathname === SHELL_URL && !url.search) {
+          try {
+            const cache = await caches.open(SHELL);
+            await cache.put(SHELL_URL, res.clone());
+          } catch (err) {}
         }
         return res;
       } catch (err) {
