@@ -10850,8 +10850,6 @@ function updateQuickAddButtonsState() {
           if (netId && (val.includes('"presetNetworkId":"' + netId + '"') || val.includes('"presetNetworkId":' + netId))) return true;
           if (netName && val.includes('"name":"' + netName + '"')) return true;
         }
-        const nameInput = row.querySelector('.name');
-        if (nameInput && nameInput.value === netName) return true;
         return false;
       });
     }
