@@ -91,4 +91,12 @@ describe("client: Discover reopens on the tab it was on", () => {
     fresh.call("appShellApplyRoute", { tab: "discover", sub: "" });
     assert.deepEqual(opened, ["gems", "movie"]);
   });
+
+  it("keeps All on a first visit after a reload, like every other tab", () => {
+    const client = loadClient({ storage: { "myListAddon:discoverSubmenu": "all" } });
+    const opened = [];
+    client.set("filterDiscoverShelves", (sub) => { opened.push(sub); });
+    client.call("switchTab", "discover");
+    assert.deepEqual(opened, ["all"]);
+  });
 });

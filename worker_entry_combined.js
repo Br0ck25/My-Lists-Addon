@@ -29335,7 +29335,6 @@ ${seoHeadHtml}
       if (['account', 'display', 'scrobble', 'external', 'backup', 'feedback'].indexOf(setSub) === -1) setSub = 'account';
       document.documentElement.setAttribute('data-initial-settings-sub', setSub);
       var discSub = (shellRoute && shellRoute.tab === 'discover' && shellSub) || localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
-      if (discSub === 'all') discSub = 'movie';
       document.documentElement.setAttribute('data-initial-discover-sub', discSub);
     } catch (e) {}
   })();
@@ -37003,7 +37002,6 @@ function normalizeListsSubmenu(raw) {
 
     // 5. Discover submenu early sync
     var discSub = localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
-    if (discSub === 'all') discSub = 'movie';
     var discBar = document.getElementById('discoverSubnavBar');
     if (discBar) {
       discBar.querySelectorAll('.subnav-pill').forEach(function(p) {
@@ -38171,8 +38169,7 @@ function switchTab(name) {
       try {
         savedFilter = localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
       } catch (e) {}
-      if (savedFilter === 'all') savedFilter = 'movie';
-      const activeFilter = (window._currentDiscoverFilter && window._currentDiscoverFilter !== 'all') ? window._currentDiscoverFilter : savedFilter;
+      const activeFilter = window._currentDiscoverFilter || savedFilter;
       window._currentDiscoverFilter = activeFilter;
       const pills = document.querySelectorAll('#discoverSubnavBar .subnav-pill');
       let targetBtn = null;
