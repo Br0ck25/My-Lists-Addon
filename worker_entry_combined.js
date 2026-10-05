@@ -33928,44 +33928,6 @@ ${seoHeadHtml}
     border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size: 0.95rem;
   }
 
-  /* Channels (P6-7): the template cards, the schedule panel, and the lineup
-     the server answers with. The lineup tiles are the same shape as the
-     list preview's posters (P6-5), deliberately. */
-  html[data-app-shell="1"] .app-shell-template-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 10px; margin: 12px 0;
-  }
-  html[data-app-shell="1"] button.app-shell-template-card {
-    display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
-    text-align: left; padding: 12px 14px; cursor: pointer; font: inherit;
-    border: 1px solid var(--border); border-radius: 10px;
-    background: var(--surface); color: var(--text);
-  }
-  html[data-app-shell="1"] button.app-shell-template-card:hover { border-color: var(--accent); }
-  html[data-app-shell="1"] .app-shell-template-card .app-shell-muted { font-size: 0.8rem; }
-  html[data-app-shell="1"] .app-shell-template-note { font-size: 0.74rem; }
-  html[data-app-shell="1"] .app-shell-schedule {
-    margin: 12px 0; padding: 10px 12px; border: 1px solid var(--border);
-    border-radius: 10px; background: var(--surface);
-  }
-  html[data-app-shell="1"] .app-shell-schedule summary { cursor: pointer; font-weight: 600; }
-  html[data-app-shell="1"] .app-shell-schedule input[type="number"] { width: 84px; }
-  html[data-app-shell="1"] .app-shell-schedule .app-shell-muted { font-size: 0.8rem; }
-  html[data-app-shell="1"] .app-shell-person-grid { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
-  html[data-app-shell="1"] .app-shell-lineup {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-    gap: 8px; margin: 8px 0 10px;
-  }
-  html[data-app-shell="1"] .app-shell-lineup-tile { display: flex; flex-direction: column; gap: 4px; }
-  html[data-app-shell="1"] .app-shell-lineup-tile img,
-  html[data-app-shell="1"] .app-shell-lineup-blank {
-    width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 6px;
-    background: var(--panel-strong); border: 1px solid var(--border);
-  }
-  html[data-app-shell="1"] .app-shell-lineup-tile span {
-    font-size: 0.72rem; color: var(--muted);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
 
 /*MYLISTS_APP_CSS_END*/</style>
 <!-- fflate, for reading Trakt/Letterboxd export .zips entirely client-side.
@@ -80597,12 +80559,6 @@ function computeConfigStateHash() {
   }
 }
 
-// Called by saveState() after every change to the rows or the settings: keeps
-// the install link's state (live / unsaved) current for Settings.
-function checkUnsavedInstallLink() {
-  if (typeof appShellActive !== 'undefined' && appShellActive) appShellRefreshInstallBar();
-}
-
 // myListAddon:state is this browser's copy of the rows and settings, and it
 // carried the provider keys and tokens too: collectKeys() returns them, and
 // saveState wrote the whole object on every change -- so moving the
@@ -80640,7 +80596,6 @@ function saveState() {
   }
   if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
   scheduleCreatorSyncSave();
-  checkUnsavedInstallLink();
   // The new UI's live preview follows the rows (see appShellSchedulePreview,
   // spliced in below). Guarded because saveState also runs from the legacy
   // page, where the shell's module is not loaded... it is the same script, so
@@ -81418,12 +81373,6 @@ window.addEventListener('popstate', (e) => {
 // Every visitor gets the shell since the classic page was retired (Release
 // 21); it used to be switched on per browser by a flag in the page preamble.
 
-// The last install link this browser generated, and the configuration it was
-// generated from. Browser state, not account state: the Worker cannot know it,
-// which is why the bar's first paint says "not installed yet" and this refines
-// it as soon as the bundle runs.
-const APP_SHELL_INSTALL_KEY = 'myListAddon:installLink';
-
 // The sub-tab bars, by view, and the pill that names a sub-tab inside one.
 // These are the legacy bars' own ids; the shell routes to them rather than
 // rendering a second set of controls.
@@ -81512,7 +81461,7 @@ function appShellRouteForName(name) {
 // without ever re-rendering for nothing.
 const appShellState = (function () {
   const listeners = new Set();
-  const state = { ready: false, route: null, account: null, install: { state: 'none', link: '' } };
+  const state = { ready: false, route: null, account: null };
 
   function get(key) {
     if (key === undefined) return Object.assign({}, state);
@@ -81660,61 +81609,6 @@ function appShellDialog(options) {
       });
     }
   });
-}
-
-// --- the install bar ---------------------------------------------------------
-//
-// Three states, all of them about this browser's own install link:
-//   none    -- nothing generated here yet
-//   unsaved -- a link exists, and the rows/settings have changed since
-//   live    -- the link matches what the builder currently holds
-function appShellReadInstallLink() {
-  try {
-    const raw = localStorage.getItem(APP_SHELL_INSTALL_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object' || !parsed.url) return null;
-    return { url: String(parsed.url), hash: String(parsed.hash || '') };
-  } catch (e) {
-    return null;
-  }
-}
-
-function appShellInstallLinkState() {
-  const saved = appShellReadInstallLink();
-  if (!saved) return { state: 'none', link: '' };
-  let current = '';
-  try {
-    if (typeof computeConfigStateHash === 'function') current = computeConfigStateHash();
-  } catch (e) {
-    current = '';
-  }
-  // No hash stored (an older link, or a stubbed environment): treat it as
-  // current rather than telling somebody their up-to-date link is stale.
-  const live = !saved.hash || !current || saved.hash === current;
-  return { state: live ? 'live' : 'unsaved', link: saved.url };
-}
-
-function appShellRecordInstallLink(url) {
-  const link = String(url || '').trim();
-  if (!link) return;
-  let hash = '';
-  try {
-    if (typeof computeConfigStateHash === 'function') hash = computeConfigStateHash();
-  } catch (e) {
-    hash = '';
-  }
-  try {
-    localStorage.setItem(APP_SHELL_INSTALL_KEY, JSON.stringify({ url: link, hash: hash }));
-  } catch (e) {}
-}
-
-// The bar itself was taken off the page at the owner's request (its drawing
-// code was deleted in Release 21); Settings' Install link card still reads
-// this state.
-function appShellRefreshInstallBar() {
-  const info = appShellInstallLinkState();
-  appShellState.set({ install: { state: info.state, link: info.link } });
 }
 
 // The signed-in account, over the session cookie (GET /api/me). Kept in
@@ -82800,7 +82694,6 @@ function initAppShell() {
     appShellApplyRoute({ tab: open.tab, sub: '' });
   }
 
-  appShellRefreshInstallBar();
   appShellRenderHomeEditor();
   if (typeof appShellImportsHost === 'function' && appShellImportsHost() && appShellImportsIsOpen()) {
     appShellRenderImports();

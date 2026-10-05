@@ -254,22 +254,6 @@ describe("the shell's shared state", () => {
   });
 });
 
-describe("the shell's install bar", () => {
-  it("knows nothing, current and stale apart", () => {
-    const client = loadClient();
-    assert.deepEqual(plain(client.call("appShellInstallLinkState")), { state: "none", link: "" });
-
-    client.call("appShellRecordInstallLink", "https://example.com/abc/manifest.json");
-    const live = client.call("appShellInstallLinkState");
-    assert.equal(live.state, "live");
-    assert.equal(live.link, "https://example.com/abc/manifest.json");
-
-    // A link generated from a different configuration is not current.
-    client.localStorage.setItem("myListAddon:installLink", JSON.stringify({ url: "https://example.com/abc/manifest.json", hash: "something-else" }));
-    assert.equal(client.call("appShellInstallLinkState").state, "unsaved");
-  });
-});
-
 describe("the shell's dialog", () => {
   it("resolves true on confirm and false when it is dismissed", async () => {
     const client = loadClient();

@@ -5338,44 +5338,6 @@ ${seoHeadHtml}
     border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size: 0.95rem;
   }
 
-  /* Channels (P6-7): the template cards, the schedule panel, and the lineup
-     the server answers with. The lineup tiles are the same shape as the
-     list preview's posters (P6-5), deliberately. */
-  html[data-app-shell="1"] .app-shell-template-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 10px; margin: 12px 0;
-  }
-  html[data-app-shell="1"] button.app-shell-template-card {
-    display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
-    text-align: left; padding: 12px 14px; cursor: pointer; font: inherit;
-    border: 1px solid var(--border); border-radius: 10px;
-    background: var(--surface); color: var(--text);
-  }
-  html[data-app-shell="1"] button.app-shell-template-card:hover { border-color: var(--accent); }
-  html[data-app-shell="1"] .app-shell-template-card .app-shell-muted { font-size: 0.8rem; }
-  html[data-app-shell="1"] .app-shell-template-note { font-size: 0.74rem; }
-  html[data-app-shell="1"] .app-shell-schedule {
-    margin: 12px 0; padding: 10px 12px; border: 1px solid var(--border);
-    border-radius: 10px; background: var(--surface);
-  }
-  html[data-app-shell="1"] .app-shell-schedule summary { cursor: pointer; font-weight: 600; }
-  html[data-app-shell="1"] .app-shell-schedule input[type="number"] { width: 84px; }
-  html[data-app-shell="1"] .app-shell-schedule .app-shell-muted { font-size: 0.8rem; }
-  html[data-app-shell="1"] .app-shell-person-grid { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
-  html[data-app-shell="1"] .app-shell-lineup {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-    gap: 8px; margin: 8px 0 10px;
-  }
-  html[data-app-shell="1"] .app-shell-lineup-tile { display: flex; flex-direction: column; gap: 4px; }
-  html[data-app-shell="1"] .app-shell-lineup-tile img,
-  html[data-app-shell="1"] .app-shell-lineup-blank {
-    width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 6px;
-    background: var(--panel-strong); border: 1px solid var(--border);
-  }
-  html[data-app-shell="1"] .app-shell-lineup-tile span {
-    font-size: 0.72rem; color: var(--muted);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
 
 /*MYLISTS_APP_CSS_END*/</style>
 <!-- fflate, for reading Trakt/Letterboxd export .zips entirely client-side.
