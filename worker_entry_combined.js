@@ -26,7 +26,7 @@
 // Shown at the top of /admin and in the answer of the "Counts missing" tool,
 // so the owner can see which pasted file is live (docs/RELEASES.md). Change it
 // with every release.
-const WORKER_RELEASE = "21";
+const WORKER_RELEASE = "22";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
