@@ -62,7 +62,7 @@ describe("the new interface is the only page (the classic page retired)", () => 
     assert.equal(shell.status, 200);
     assert.ok(isShell(shell), "the shell marker");
     // The install bar across the top was taken out at the owner's request;
-    // Catalogs' Generate Install Link and Settings' Install link card remain.
+    // Catalogs' Generate Install Link remains.
     assert.equal(shell.text.includes('id="appShellInstallBar"'), false, "the install bar is back");
     assert.ok(shell.text.includes('data-act="generate"'), "Catalogs keeps its install link button");
     // Every view is a real link, in both navs (desktop bar and mobile bar).
@@ -73,8 +73,8 @@ describe("the new interface is the only page (the classic page retired)", () => 
     }
     assert.equal((shell.text.match(/<a class="tab-btn[^>]*href="\/catalogs"/g) || []).length, 1);
     assert.equal((shell.text.match(/<a class="bottom-nav-item[^>]*href="\/catalogs"/g) || []).length, 1);
-    // The shell's Settings view (P6-2) has its own container.
-    assert.ok(shell.text.includes('id="appShellSettingsHome"'), "the shell's Settings cards have a home");
+    // Settings' Devices and Install link cards are removed.
+    assert.equal(shell.text.includes('id="appShellSettingsHome"'), false, "the Devices / Install link cards are gone");
     // The head script (which runs before the body exists) gets the same routes.
     assert.ok(shell.text.includes("var APP_SHELL_HEAD_ROUTES ="), "the head script needs the route table");
     for (const view of VIEWS) {
@@ -204,16 +204,12 @@ describe("the new interface is the only page (the classic page retired)", () => 
       "Import a file should be below Import list from a link");
   });
 
-  it("has the Channels templates (P6-7)", async () => {
+  it("no longer has the New channel templates panel", async () => {
     const env = makeEnv();
     const shell = await call(env, "/channels");
     assert.equal(shell.status, 200);
-    assert.ok(shell.text.includes('id="appShellChannels"'), "the channel templates need a home");
-    // ...above the My Channels panel, which stays exactly as it is, and before
-    // the merge tools under it.
-    assert.ok(shell.text.includes('id="myCreatedChannelsList"'), "the old My Channels panel should still be there");
-    assert.ok(shell.text.indexOf('id="appShellChannels"') < shell.text.indexOf('id="myCreatedChannelsList"'),
-      "the templates come first");
+    assert.ok(!shell.text.includes('id="appShellChannels"'), "the New channel panel is removed");
+    assert.ok(shell.text.includes('id="myCreatedChannelsList"'), "the My Channels panel should still be there");
   });
 
   it("names its bundle and stylesheet by hash and does not inline the bundle", async () => {

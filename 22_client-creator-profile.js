@@ -1728,7 +1728,6 @@ async function switchCreatorProfile() {
   if (typeof appShellState !== 'undefined' && appShellState && typeof appShellState.set === 'function') {
     appShellState.set({ account: null });
   }
-  if (typeof appShellRefreshSettingsHome === 'function') appShellRefreshSettingsHome();
   if (typeof showAddedToast === 'function') {
     showAddedToast('Signed out \u2713');
   }

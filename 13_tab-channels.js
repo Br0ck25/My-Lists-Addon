@@ -34,11 +34,6 @@
 
   <!-- Submenu 1: My Channels -->
   <div class="channels-subpanel" id="channelsSubMyChannels">
-    <!-- The shell's own channel templates (P6-7): choose a template, look at
-         what is playing today, then add the channel to the home screen.
-         Every panel below is unchanged, and the Custom template hands off to
-         the older builder itself until that is rewritten. -->
-    <div id="appShellChannels"></div>
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px; align-items:center; justify-content:space-between; gap:12px;">
         <div>
@@ -49,7 +44,7 @@
           <button type="button" class="secondary lc-btn" data-act="createNextUpChannel" data-act-args="[&quot;@self&quot;]" title="A channel that always plays the next episode of everything you have on the go">+ Next Up Channel</button>
           <button type="button" class="primary lc-btn" data-act="openBuildCustomChannel">+ Create Channel</button>
           <button type="button" class="secondary lc-btn" data-act="openImportChannelModal" title="Import channel from link or share code">Import</button>
-          <button type="button" class="secondary lc-btn" data-act="refreshMyChannelsAction" title="Refresh channels">Refresh</button>
+          ${refreshButtonHtml('refreshMyChannelsAction', 'Refresh channels')}
         </div>
       </div>
       <div id="channelNextUpStatus" style="margin-bottom:8px;"></div>
@@ -189,7 +184,7 @@
           <option value="liked">Most liked</option>
           <option value="name">Name (A&ndash;Z)</option>
         </select>
-        <button type="button" class="secondary lc-btn" data-act="loadChannelDirectory" data-act-args="[true]" title="Refresh published channels">Refresh</button>
+        ${refreshButtonHtml('loadChannelDirectory', 'Refresh published channels', [true])}
       </div>
       <div id="channelDirectoryFeed"><p style="color:var(--muted); font-size:0.85rem;"><small>Loading published channels&hellip;</small></p></div>
     </div>

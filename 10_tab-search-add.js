@@ -17,7 +17,7 @@
       <div class="actions" style="flex-direction:row; flex-wrap:wrap; align-items:center; gap:6px; flex-shrink:0;">
         <button type="button" class="primary lc-btn" data-act="openAddShelfModal">+ New Catalog</button>
         <button type="button" class="secondary lc-btn" id="livePreviewEditBtn" data-act="toggleLivePreviewEdit">Edit</button>
-        <button type="button" class="secondary lc-btn" data-act="renderLivePreview" title="Refresh catalogs preview">Refresh</button>
+        ${refreshButtonHtml('renderLivePreview', 'Refresh catalogs preview')}
       </div>
     </div>
 

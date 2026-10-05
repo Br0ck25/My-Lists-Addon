@@ -1542,6 +1542,10 @@ The owner decided both on 2026-10-05: retire the classic page (13) and delete th
 - **Quick Add networks are grouped into categories**, with an "added" state on the ones already in the lineup.
 - **Discover → All names rows "X: Movies" and "X: Shows"**, and Customize on one opens it named "X".
 - **A ⋯ menu on presets.**
+- **Owner's review changes (2026-10-05):**
+  - Channels → My Channels: the **New channel** template panel is removed (`24_`, `13_`), with its tests. A saga can no longer be added from there signed out.
+  - **One Refresh button** (`refreshButtonHtml`, `09_`) in Discover's look, used by Catalogs, Lists (My Lists, Liked), Channels (My Channels, Published) and Discover. It replaces the plain text buttons.
+  - Settings → Account & Security: the **Devices** and **Install link** cards are removed (`24_`, `15_`), with their tests. Catalogs' Generate Install Link stays.
 - **New service worker cache names** (`mylists-assets-v4`, `mylists-shell-v4`). Each browser drops its old page cache once.
 - `/admin` shows **Release 22**.
 

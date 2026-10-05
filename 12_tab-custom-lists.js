@@ -17,7 +17,7 @@
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; flex-shrink:0;">
           <button type="button" class="primary lc-btn" data-act="openCreateListModal" data-act-args="[&quot;custom&quot;]">+ Create List</button>
           <button type="button" class="secondary lc-btn" data-act="openImportListModal">Import</button>
-          <button type="button" class="secondary lc-btn" data-act="appActRefreshCreatorDashboard">Refresh</button>
+          ${refreshButtonHtml('appActRefreshCreatorDashboard', 'Refresh lists')}
         </div>
       </div>
       <div id="creatorDashboard"></div>
@@ -74,7 +74,7 @@
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">Lists You Liked</h2>
-        <button type="button" class="secondary lc-btn" data-act="renderLikedListsFeed" data-act-args="[true]">Refresh</button>
+        ${refreshButtonHtml('renderLikedListsFeed', 'Refresh liked lists', [true])}
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Lists you've saved with the heart, from the community directory and from your connected accounts.</p>
       <!-- The placeholder here is the pre-JS state only. renderLikedListsFeed

@@ -77,6 +77,17 @@ function appActArgsServer(values) {
   return escapeHtmlServer(JSON.stringify(values || []));
 }
 
+// The one Refresh button (Discover's look) used by every view that has one:
+// Catalogs, Lists, Channels and Discover. Change it here, not per view.
+function refreshButtonHtml(act, title, args) {
+  const label = escapeHtmlServer(title || 'Refresh');
+  return '<button type="button" class="secondary lc-btn refresh-btn" data-act="' + escapeHtmlServer(act) + '"' +
+    (args ? ' data-act-args="' + appActArgsServer(args) + '"' : '') +
+    ' title="' + label + '" aria-label="' + label + '">' +
+    '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none;"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>' +
+    '<span>Refresh</span></button>';
+}
+
 function renderBuilder(
   origin,
   { initialEntries = [], initialKeys = {}, isConfigureMode = false, deepLinkList = null } = {}
@@ -1627,7 +1638,7 @@ ${seoHeadHtml}
     flex: 1;
     min-width: 0;
   }
-  .discover-refresh-btn {
+  .refresh-btn {
     display: inline-flex;
     align-items: center;
     gap: 5px;
@@ -5364,10 +5375,6 @@ ${seoHeadHtml}
   html[data-app-shell="1"] .app-shell-lineup-tile span {
     font-size: 0.72rem; color: var(--muted);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  html[data-app-shell="1"] #appShellChannels input[type="text"] {
-    width: 100%; padding: 10px 12px; border-radius: 10px;
-    border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size: 0.95rem;
   }
 
 /*MYLISTS_APP_CSS_END*/</style>
