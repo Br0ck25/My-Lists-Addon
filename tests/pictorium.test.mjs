@@ -86,11 +86,12 @@ describe("Use My Lists Addon metadata", () => {
     assert.deepEqual(m.idPrefixes, ["tt", "tmdb:", "channel_"]);
   });
 
-  it("off: the manifest is lists only, but still has the catalogs and search", async () => {
+  it("off: only TV Channel ids are answered here, and the catalogs and search stay", async () => {
     const { env, id } = await saveAndFetch({ provideMetadata: false });
     const m = (await call(env, `/${id}/manifest.json`)).body;
-    assert.deepEqual(resourceNames(m), ["catalog"]);
-    assert.equal(m.idPrefixes, undefined);
+    assert.deepEqual(resourceNames(m), ["catalog", "meta"]);
+    assert.deepEqual(m.resources[1].idPrefixes, ["channel_"]);
+    assert.deepEqual(m.idPrefixes, ["channel_"]);
     assert.ok(m.catalogs.some((c) => c.id === "pic-roundtrip"));
     assert.ok(m.catalogs.some((c) => c.id === "search_movies") && m.catalogs.some((c) => c.id === "search_series"));
   });

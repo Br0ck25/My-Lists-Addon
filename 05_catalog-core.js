@@ -21,10 +21,12 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
   // tiles get filtered out of the row by strict clients and their detail pages
   // are never routed back here by any client. This file's own placeholder tile
   // already cites that behaviour ("some clients filter out anything else").
-  // "Use My Lists Addon metadata" off: no meta resource and no id prefixes, so
-  // every title's detail page is answered by whichever other add-on has it.
-  const resources = provideMetadata ? ["catalog", { name: "meta", types: ["movie", "series"], idPrefixes: ["tt", "tmdb:", "channel_"] }] : ["catalog"];
-  const idPrefixes = provideMetadata ? ["tt", "tmdb:", "channel_"] : undefined;
+  // "Use My Lists Addon metadata" off: this add-on answers only for its own TV
+  // Channel ids (no other add-on has those), so every real title's detail page
+  // goes to whichever other add-on has it.
+  const metaPrefixes = provideMetadata ? ["tt", "tmdb:", "channel_"] : ["channel_"];
+  const resources = ["catalog", { name: "meta", types: ["movie", "series"], idPrefixes: metaPrefixes }];
+  const idPrefixes = metaPrefixes;
   // Stremio/wako call every installed addon's subtitles resource the
   // instant ANY video starts playing (checking for subtitle tracks) --
   // regardless of which addon's catalog the video came from, or whether
