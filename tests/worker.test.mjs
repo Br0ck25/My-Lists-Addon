@@ -2387,7 +2387,8 @@ describe("P2-8: every install setting survives a save, from one schema", () => {
     if (f.kind === "account") return "V-" + f.name;
     if (f.kind === "flag") return true;
     if (f.kind === "flagOn") return false;
-    if (f.valid) return "https://pictorium.example.com/api/poster/{type}/{tmdb_id|imdb_id}?u=x";
+    // A value this field's own check accepts.
+    if (f.valid) return ["https://pictorium.example.com/api/poster/{type}/{tmdb_id|imdb_id}?u=x", "t2-example-key"].find((v) => f.valid(v));
     return f.allowed ? f.allowed.find((v) => v !== f.default) : "GB";
   }
 

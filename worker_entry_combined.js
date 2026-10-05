@@ -1453,6 +1453,36 @@ function isValidPictoriumTemplate(v) {
   return u.pathname.startsWith("/api/poster/");
 }
 
+// RatingPosterDB (https://ratingposterdb.com) -- optional replacement artwork
+// with the ratings drawn on. Needs the person's own paid RPDB key (t1- to t4-),
+// and every image fetched counts against that key's MONTHLY request limit
+// (50,000 to 750,000 by tier), so posters are never pointed at RPDB directly:
+// they go through this Worker's own /rpdb/ route (serveRpdbPoster, 05), which
+// keeps each poster per key for a few days, caps how fast it asks RPDB, and
+// stops asking altogether near the key's limit. RPDB's docs allow caching.
+const RPDB_ORIGIN = "https://api.ratingposterdb.com";
+const RPDB_KEY_RE = /^t[0-9]-[A-Za-z0-9_-]{3,64}$/;
+function isValidRpdbKey(v) {
+  return typeof v === "string" && RPDB_KEY_RE.test(v);
+}
+// A stored poster is good this long before it is fetched again (RPDB's ratings
+// move slowly), and kept this long so an RPDB outage or a spent limit still
+// has something to show.
+const RPDB_REFRESH_MS = 3 * 86400 * 1000;
+const RPDB_KEEP_SECONDS = 30 * 86400;
+// New posters fetched per key per minute. A page of uncached titles is spread
+// over several minutes (the rest show the ordinary poster meanwhile) instead of
+// being fired at RPDB at once.
+const RPDB_FETCHES_PER_MINUTE = 20;
+// Stop asking RPDB once this share of the key's monthly limit is used, per its
+// own /requests answer (kept RPDB_USAGE_TTL_SECONDS).
+const RPDB_STOP_AT_SHARE = 0.95;
+const RPDB_USAGE_TTL_SECONDS = 3600;
+// After a 429 or a server error from RPDB, ask nothing for this long.
+const RPDB_BACKOFF_SECONDS = 300;
+const RPDB_FETCH_TIMEOUT_MS = 8000;
+const RPDB_MAX_BYTES = 5 * 1024 * 1024;
+
 // The Stremio/Nuvio artwork-overlay toggles, as stored in an install config.
 // Named in one place because they have to agree across four: the builder
 // page's save request, /api/save's stored payload, resolveConfig's read, and
@@ -1518,6 +1548,8 @@ const INSTALL_CONFIG_FIELDS = [
   { name: "betterPostersQuality", kind: "flag", requires: "betterPosters" },
   { name: "betterPostersAge", kind: "flag", requires: "betterPosters" },
   { name: "betterPostersTodayOrder", kind: "flag", requires: "betterPosters" },
+  { name: "rpdb", kind: "flag" },
+  { name: "rpdbKey", kind: "choice", default: "", requires: "rpdb", valid: isValidRpdbKey },
   { name: "pictorium", kind: "flag" },
   { name: "pictoriumUrl", kind: "choice", default: "", requires: "pictorium", valid: isValidPictoriumTemplate },
   // Off hands every title's detail page to another add-on: the manifest stops
@@ -17142,10 +17174,10 @@ async function fetchCatalog(entry, skip = 0, keys = {}) {
   // poster is a badge drawn over BetterPosters artwork, which is the point.
   // The adult-content filter still runs after both and still wins.
   const bpo = keys.betterPostersOptions || {};
-  if ((keys.betterPosters || bpo.pictoriumTemplate) && Array.isArray(result) && result.length > 0) {
+  if ((keys.betterPosters || bpo.pictoriumTemplate || bpo.rpdbBase) && Array.isArray(result) && result.length > 0) {
     result = applyBetterPostersToMetas(result, bpo);
     // "Keep Today tags in order": only meaningful while Better Posters' tags are drawn.
-    if (bpo.todayOrder && bpo.trendTags !== false && !bpo.pictoriumTemplate) {
+    if (bpo.todayOrder && bpo.trendTags !== false && !bpo.pictoriumTemplate && !bpo.rpdbBase) {
       result = await orderByBetterPostersToday(result, entry.type, keys.env, keys.ctx);
     }
   }
@@ -18322,11 +18354,206 @@ async function serveBetterPoster(env, ctx, bp, origin, request) {
   return new Response(null, { status: 502, headers: unavailable });
 }
 
+// --- RatingPosterDB posters, through this Worker -------------------------------
+//
+// /rpdb/<install config>/<imdb id>.jpg. The person's RPDB key lives in their
+// install config and never appears in a poster URL; every image RPDB serves is
+// one request against that key's monthly limit, so this route is what keeps
+// the add-on from spending it:
+//
+//   - a poster is fetched from RPDB once and kept (R2 when bound, else KV),
+//     per key, so a hundred renders on any number of devices cost one request;
+//     a copy is re-fetched when RPDB_REFRESH_MS old, and an older one is still
+//     served when RPDB cannot be asked;
+//   - fetches are capped at RPDB_FETCHES_PER_MINUTE per key, so a page of
+//     titles never seen before is filled in over a few minutes -- the rest get
+//     the title's ordinary poster until their turn;
+//   - the key's own usage is read from RPDB (/requests, kept an hour) and
+//     nothing is fetched once RPDB_STOP_AT_SHARE of the limit is used;
+//   - a 429 or server error backs off for RPDB_BACKOFF_SECONDS, and a key RPDB
+//     refuses (401/403) is not asked with again for the same time.
+// Whatever cannot be served from RPDB is a redirect to the ordinary poster,
+// never an error tile.
+
+const RPDB_IMDB_RE = /^tt\d{5,12}$/;
+const RPDB_IN_FLIGHT = new Map();
+const RPDB_BACKOFF = new Map();   // key hash -> ms until which RPDB is not asked
+const RPDB_USAGE = new Map();     // key hash -> { req, limit, at }
+
+async function rpdbKeyHash(key) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("rpdb:" + key));
+  return [...new Uint8Array(digest).slice(0, 8)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function rpdbStoredKey(hash, imdbId) {
+  return `rpdbimg:v1:${hash}:${imdbId}`;
+}
+
+async function rpdbReadStored(env, hash, imdbId) {
+  try {
+    if (env && env.BLOBS && typeof env.BLOBS.get === "function") {
+      const obj = await env.BLOBS.get(`img/rpdb/${hash}/${imdbId}.jpg`);
+      if (obj) {
+        const m = obj.customMetadata || {};
+        return { bytes: await obj.arrayBuffer(), contentType: m.ct || "image/jpeg", at: Number(m.at) || 0 };
+      }
+    }
+    if (env && env.CONFIGS) {
+      const got = await env.CONFIGS.getWithMetadata(rpdbStoredKey(hash, imdbId), { type: "arrayBuffer" });
+      if (got && got.value) {
+        const meta = got.metadata || {};
+        return { bytes: got.value, contentType: meta.ct || "image/jpeg", at: Number(meta.at) || 0 };
+      }
+    }
+  } catch {}
+  return null;
+}
+
+async function rpdbWriteStored(env, hash, imdbId, bytes, contentType) {
+  try {
+    if (env && env.BLOBS && typeof env.BLOBS.put === "function") {
+      await env.BLOBS.put(`img/rpdb/${hash}/${imdbId}.jpg`, bytes, {
+        httpMetadata: { contentType },
+        customMetadata: { ct: contentType, at: String(Date.now()) },
+      });
+    } else if (env && env.CONFIGS) {
+      await env.CONFIGS.put(rpdbStoredKey(hash, imdbId), bytes, {
+        expirationTtl: RPDB_KEEP_SECONDS,
+        metadata: { ct: contentType, at: Date.now() },
+      });
+    }
+  } catch {}
+}
+
+// { req, limit } for a key, from RPDB's own /requests, or null when it cannot
+// be read (then only the per-minute cap holds). Kept an hour in this isolate
+// and in KV, so it costs about one call an hour per key, not one per poster.
+async function rpdbUsage(env, key, hash) {
+  const now = Date.now();
+  const mem = RPDB_USAGE.get(hash);
+  if (mem && now - mem.at < RPDB_USAGE_TTL_SECONDS * 1000) return mem;
+  const kvKey = `rpdb:usage:v1:${hash}`;
+  try {
+    if (env && env.CONFIGS) {
+      const raw = await env.CONFIGS.get(kvKey);
+      const kv = raw ? JSON.parse(raw) : null;
+      if (kv && Number.isFinite(kv.req) && Number.isFinite(kv.limit) && now - kv.at < RPDB_USAGE_TTL_SECONDS * 1000) {
+        RPDB_USAGE.set(hash, kv);
+        return kv;
+      }
+    }
+  } catch {}
+  try {
+    const res = await fetchWithTimeout(`${RPDB_ORIGIN}/${key}/requests`, { headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` } }, RPDB_FETCH_TIMEOUT_MS);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data || !Number.isFinite(data.req) || !Number.isFinite(data.limit)) return null;
+    const usage = { req: data.req, limit: data.limit, at: now };
+    RPDB_USAGE.set(hash, usage);
+    if (env && env.CONFIGS) await env.CONFIGS.put(kvKey, JSON.stringify(usage), { expirationTtl: RPDB_USAGE_TTL_SECONDS * 2 }).catch(() => {});
+    return usage;
+  } catch {
+    return null;
+  }
+}
+
+// May one more poster be asked of RPDB for this key right now?
+async function rpdbMayFetch(env, ctx, key, hash) {
+  if ((RPDB_BACKOFF.get(hash) || 0) > Date.now()) return false;
+  const usage = await rpdbUsage(env, key, hash);
+  if (usage && usage.limit > 0 && usage.req >= usage.limit * RPDB_STOP_AT_SHARE) return false;
+  // True from consumeRateLimit means over the limit.
+  return !(await consumeRateLimit(env, ctx, "rpdbfetch", hash, RPDB_FETCHES_PER_MINUTE, 60));
+}
+
+// One request to RPDB. fallback=true makes RPDB itself answer with the ordinary
+// poster for a title it has no ratings for, so a miss is still a picture.
+async function rpdbFetchUpstream(env, ctx, key, hash, imdbId) {
+  const flightKey = hash + ":" + imdbId;
+  if (RPDB_IN_FLIGHT.has(flightKey)) return RPDB_IN_FLIGHT.get(flightKey);
+  const p = (async () => {
+    try {
+      const res = await fetchWithTimeout(`${RPDB_ORIGIN}/${key}/imdb/poster-default/${imdbId}.jpg?fallback=true`, {
+        headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` },
+      }, RPDB_FETCH_TIMEOUT_MS);
+      if (res.status === 401 || res.status === 403 || res.status === 429 || res.status >= 500) {
+        // A refused key and a spent or struggling service are both left alone
+        // for a while rather than asked again poster by poster.
+        RPDB_BACKOFF.set(hash, Date.now() + RPDB_BACKOFF_SECONDS * 1000);
+        return null;
+      }
+      const contentType = res.headers.get("content-type") || "";
+      if (!res.ok || !contentType.startsWith("image/")) return null;
+      const bytes = await res.arrayBuffer();
+      if (!bytes.byteLength || bytes.byteLength > RPDB_MAX_BYTES) return null;
+      await rpdbWriteStored(env, hash, imdbId, bytes, contentType);
+      return { bytes, contentType };
+    } catch {
+      return null;
+    } finally {
+      RPDB_IN_FLIGHT.delete(flightKey);
+    }
+  })();
+  RPDB_IN_FLIGHT.set(flightKey, p);
+  return p;
+}
+
+function rpdbImageResponse(bytes, contentType) {
+  return new Response(bytes, {
+    status: 200,
+    headers: {
+      "Content-Type": contentType || "image/jpeg",
+      "Cache-Control": "public, max-age=21600, stale-while-revalidate=86400",
+      "Access-Control-Allow-Origin": "*",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+}
+
+// Short-lived, so the RPDB poster takes over as soon as it can.
+function rpdbFallbackResponse(imdbId) {
+  return new Response(null, {
+    status: 302,
+    headers: {
+      "Location": `https://images.metahub.space/poster/medium/${imdbId}/img`,
+      "Cache-Control": "public, max-age=300",
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+}
+
+async function serveRpdbPoster(env, ctx, configParam, imdbId) {
+  if (!RPDB_IMDB_RE.test(imdbId)) return new Response(null, { status: 404 });
+  let cfg = null;
+  try { cfg = await resolveConfig(configParam, env); } catch {}
+  if (!cfg || !cfg.rpdb || !isValidRpdbKey(cfg.rpdbKey)) return rpdbFallbackResponse(imdbId);
+  const key = cfg.rpdbKey;
+  const hash = await rpdbKeyHash(key);
+
+  const stored = await rpdbReadStored(env, hash, imdbId);
+  const fresh = stored && Date.now() - stored.at < RPDB_REFRESH_MS;
+  if (fresh) return rpdbImageResponse(stored.bytes, stored.contentType);
+
+  // Stale or missing: ask RPDB only if the budget allows. A stale copy is
+  // served at once and refreshed behind the response.
+  if (stored) {
+    if (ctx && typeof ctx.waitUntil === "function") {
+      ctx.waitUntil((async () => {
+        if (await rpdbMayFetch(env, ctx, key, hash)) await rpdbFetchUpstream(env, ctx, key, hash, imdbId);
+      })());
+    }
+    return rpdbImageResponse(stored.bytes, stored.contentType);
+  }
+  if (!(await rpdbMayFetch(env, ctx, key, hash))) return rpdbFallbackResponse(imdbId);
+  const got = await rpdbFetchUpstream(env, ctx, key, hash, imdbId);
+  return got ? rpdbImageResponse(got.bytes, got.contentType) : rpdbFallbackResponse(imdbId);
+}
+
 // Packs a resolved config's betterPosters* keys into the shape
 // buildBetterPosterUrl reads. Each default matches btttr.cc's own default for
 // that option, so an install that never touched the style controls gets the
 // same artwork its configurator hands out.
-function betterPostersOptionsFrom(cfg, origin) {
+function betterPostersOptionsFrom(cfg, origin, configParam) {
   const c = cfg || {};
   return {
     // This Worker's own origin, so posters are served from its copy (see
@@ -18341,6 +18568,10 @@ function betterPostersOptionsFrom(cfg, origin) {
     // Pictorium wins over Better Posters when both are on: only one of them
     // can draw a poster.
     pictoriumTemplate: c.pictorium && isValidPictoriumTemplate(c.pictoriumUrl) ? c.pictoriumUrl : "",
+    // RatingPosterDB, through this Worker's /rpdb/ route (serveRpdbPoster):
+    // the base every poster URL starts with, or "" when it is off. Pictorium
+    // wins over it, and it wins over Better Posters.
+    rpdbBase: c.rpdb && isValidRpdbKey(c.rpdbKey) && origin && configParam ? `${origin}/rpdb/${encodeURIComponent(configParam)}` : "",
     lang: c.betterPostersLang || "en",
     ratingSource: c.betterPostersRatingSource || "avg",
   };
@@ -18376,6 +18607,7 @@ function applyBetterPostersToMetas(metas, opts) {
     const imdbId = betterPostersImdbId(m);
     if (!imdbId) return m;
     if (opts && opts.pictoriumTemplate) return { ...m, poster: fillPictoriumTemplate(opts.pictoriumTemplate, imdbId, m.type) };
+    if (opts && opts.rpdbBase) return { ...m, poster: `${opts.rpdbBase}/${imdbId}.jpg` };
     return { ...m, poster: buildBetterPosterUrl(imdbId, opts) };
   });
   mapped.totalItems = tot;
@@ -18386,7 +18618,7 @@ function applyBadgedPostersToMetas(metas, origin) {
   if (!Array.isArray(metas) || !metas.length || !origin) return metas;
   const tot = metas.totalItems;
   const mapped = metas.map((m) => {
-    if (!m || !m.poster || m.poster.startsWith("data:image/svg") || m.poster.includes("/api/poster-badge") || m.poster.includes("/api/safe-poster") || m.poster.includes("/api/poster/")) return m;
+    if (!m || !m.poster || m.poster.startsWith("data:image/svg") || m.poster.includes("/api/poster-badge") || m.poster.includes("/api/safe-poster") || m.poster.includes("/api/poster/") || m.poster.includes("/rpdb/")) return m;
     const isPremiereEp = m.episodeNumber === 1 || m.episodeNum === 1 || (m.episodeNum == null && m.episodeNumber == null);
     const hasAired = m.airDate && typeof isEpisodeAired === "function" ? isEpisodeAired(m.airDate) : false;
     const hasPremiere = !!(m.isSeasonPremiere && isPremiereEp && !hasAired);
@@ -28924,6 +29156,8 @@ function renderBuilder(
   // Pictorium (opt-in, with the poster link pasted from the person's own space)
   // and "Use My Lists Addon metadata" (on unless switched off) -- see
   // INSTALL_CONFIG_FIELDS (00_constants.js).
+  const initialRpdb = !!initialKeys.rpdb;
+  const initialRpdbKey = typeof initialKeys.rpdbKey === "string" ? initialKeys.rpdbKey : "";
   const initialPictorium = !!initialKeys.pictorium;
   const initialPictoriumUrl = typeof initialKeys.pictoriumUrl === "string" ? initialKeys.pictoriumUrl : "";
   const initialProvideMetadata = initialKeys.provideMetadata !== false;
@@ -35882,6 +36116,36 @@ if ('serviceWorker' in navigator) {
       </div>
     </div>
 
+    <!-- RatingPosterDB Panel -->
+    <div class="panel" style="margin-top:12px;">
+      <h2 class="panel-title">RatingPosterDB</h2>
+      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Swap plain poster artwork for <a href="https://ratingposterdb.com/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">RatingPosterDB</a> posters with ratings drawn on, styled the way you set them up at <a href="https://manager.ratingposterdb.com/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">manager.ratingposterdb.com</a>. Needs your own paid RPDB API key.</p>
+      <div class="settings-toggle-row" style="padding:0 0 12px; border-bottom:none;">
+        <div style="flex:1; min-width:0; padding-right:12px;">
+          <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Use RatingPosterDB artwork</span>
+          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Replaces poster artwork in Stremio and Nuvio. Turns Better Posters and Pictorium off, because only one can draw a poster.</p>
+          <details style="margin-top:6px; font-size:0.8rem; color:var(--muted);">
+            <summary style="cursor:pointer; color:var(--accent); font-weight:600;">How your request limit is protected</summary>
+            <p style="margin:4px 0 0;">Every poster RatingPosterDB sends counts against your key's monthly limit, so posters are not loaded from it directly. This add-on fetches each poster once, keeps it for three days, and shows it to every device from that copy. It asks RatingPosterDB for at most 20 new posters a minute, so a page of new titles fills in over a few minutes (the ordinary poster shows meanwhile), and it stops asking once 95% of your monthly limit is used. Only titles with an IMDb ID are affected. Airing Next and date badges are not drawn over these posters. The website keeps its normal posters.</p>
+          </details>
+        </div>
+        <label class="ui-toggle" aria-label="Use RatingPosterDB artwork">
+          <input type="checkbox" id="rpdbCheckbox" ${initialRpdb ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;rpdb&quot;,&quot;@checked&quot;]">
+          <span class="ui-toggle-slider"></span>
+        </label>
+      </div>
+      <div id="rpdbOptions" style="display:${initialRpdb ? 'flex' : 'none'}; flex-direction:column; gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
+        <div>
+          <label for="rpdbKeyInput" style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:4px;">API key</label>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <input type="password" id="rpdbKeyInput" value="${escapeHtmlServer(initialRpdbKey)}" placeholder="t1-..." autocomplete="off" spellcheck="false" data-act="toggleBetterPostersSetting" data-act-args="[&quot;rpdbKey&quot;,&quot;@value&quot;]" style="flex:1; min-width:200px; max-width:380px; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.86rem; box-sizing:border-box;">
+            <button type="button" class="secondary lc-btn" data-act="testRpdbKey" data-act-args="[&quot;@self&quot;]" style="border-radius:var(--radius-pill);">Test key</button>
+          </div>
+          <p id="rpdbKeyStatus" style="margin:4px 0 0; color:var(--muted); font-size:0.78rem;">Your key starts with t1- to t4- and is in the email RatingPosterDB sent you, or at ratingposterdb.com after you log in with Patreon. Test key shows whether it works and how much of this month's limit is used.</p>
+        </div>
+      </div>
+    </div>
+
     <!-- Pictorium Panel -->
     <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Pictorium</h2>
@@ -35889,7 +36153,7 @@ if ('serviceWorker' in navigator) {
       <div class="settings-toggle-row" style="padding:0 0 12px; border-bottom:none;">
         <div style="flex:1; min-width:0; padding-right:12px;">
           <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Use Pictorium artwork</span>
-          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Replaces poster artwork in Stremio and Nuvio and across the website. Turns Better Posters off, because only one can draw a poster.</p>
+          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Replaces poster artwork in Stremio and Nuvio and across the website. Turns Better Posters and RatingPosterDB off, because only one can draw a poster.</p>
           <details style="margin-top:6px; font-size:0.8rem; color:var(--muted);">
             <summary style="cursor:pointer; color:var(--accent); font-weight:600;">Artwork compatibility details</summary>
             <p style="margin:4px 0 0;">Only titles with an IMDb ID are affected. Pictorium draws its own badges, so the Airing Next and date badges are not drawn over its posters. Adult Content Filter still overrides it on the website. TV Channel artwork and episode stills are preserved.</p>
@@ -72047,6 +72311,7 @@ async function loadCreatorSync(opts) {
         { key: 'betterPostersQuality', id: 'betterPostersQualityCheckbox' },
         { key: 'betterPostersAge', id: 'betterPostersAgeCheckbox' },
         { key: 'betterPostersTodayOrder', id: 'betterPostersTodayOrderCheckbox' },
+        { key: 'rpdb', id: 'rpdbCheckbox' },
         { key: 'pictorium', id: 'pictoriumCheckbox' },
         { key: 'provideMetadata', id: 'provideMetadataCheckbox' },
       ].forEach(({ key, id }) => {
@@ -72060,6 +72325,7 @@ async function loadCreatorSync(opts) {
         { key: 'betterPostersLang', id: 'betterPostersLangSelect' },
         { key: 'betterPostersRatingSource', id: 'betterPostersRatingSourceSelect' },
         { key: 'pictoriumUrl', id: 'pictoriumUrlInput' },
+        { key: 'rpdbKey', id: 'rpdbKeyInput' },
       ].forEach(({ key, id }) => {
         if (typeof synced.keys[key] === 'string' && synced.keys[key]) {
           try { localStorage.setItem('myListAddon:' + key, synced.keys[key]); } catch (e) {}
@@ -76089,6 +76355,8 @@ function collectKeys() {
     betterPostersQuality: getBetterPostersSetting('betterPostersQuality', false),
     betterPostersAge: getBetterPostersSetting('betterPostersAge', false),
     betterPostersTodayOrder: getBetterPostersSetting('betterPostersTodayOrder', false),
+    rpdb: getBetterPostersSetting('rpdb', false),
+    rpdbKey: getBetterPostersChoice('rpdbKey', ''),
     pictorium: getBetterPostersSetting('pictorium', false),
     pictoriumUrl: getBetterPostersChoice('pictoriumUrl', ''),
     provideMetadata: getBetterPostersSetting('provideMetadata', true),
@@ -76288,19 +76556,24 @@ window.getBetterPostersChoice = getBetterPostersChoice;
 
 // One handler for both the checkboxes and the two dropdowns -- a boolean is
 // stored as 1/0, a dropdown value as itself.
+// Each has its own "<key>Checkbox" on the Settings page.
+const BETTER_POSTERS_ARTWORK_SOURCES = ['betterPosters', 'pictorium', 'rpdb'];
+
 function toggleBetterPostersSetting(key, value) {
   try {
     localStorage.setItem('myListAddon:' + key, typeof value === 'boolean' ? (value ? '1' : '0') : String(value));
   } catch (e) {}
-  // Better Posters and Pictorium both replace the poster, so switching one on
-  // switches the other off.
-  if (value === true && (key === 'betterPosters' || key === 'pictorium')) {
-    const other = key === 'pictorium' ? 'betterPosters' : 'pictorium';
-    try { localStorage.setItem('myListAddon:' + other, '0'); } catch (e) {}
-    const otherBox = document.getElementById(other === 'pictorium' ? 'pictoriumCheckbox' : 'betterPostersCheckbox');
-    if (otherBox) otherBox.checked = false;
+  // Better Posters, Pictorium and RatingPosterDB all replace the poster, so
+  // switching one on switches the others off.
+  if (value === true && BETTER_POSTERS_ARTWORK_SOURCES.indexOf(key) >= 0) {
+    BETTER_POSTERS_ARTWORK_SOURCES.forEach((other) => {
+      if (other === key) return;
+      try { localStorage.setItem('myListAddon:' + other, '0'); } catch (e) {}
+      const otherBox = document.getElementById(other + 'Checkbox');
+      if (otherBox) otherBox.checked = false;
+    });
   }
-  if (key === 'betterPosters' || key === 'pictorium') applyBetterPostersOptionsVisibility();
+  if (BETTER_POSTERS_ARTWORK_SOURCES.indexOf(key) >= 0) applyBetterPostersOptionsVisibility();
   if (key === 'pictoriumUrl') updatePictoriumUrlHint(value);
   refreshBetterPostersSurfaces();
   if (typeof scheduleCreatorSyncSave === 'function') scheduleCreatorSyncSave();
@@ -76335,6 +76608,8 @@ function applyBetterPostersOptionsVisibility() {
   wrap.style.display = getBetterPostersSetting('betterPosters', false) ? 'flex' : 'none';
   const pic = document.getElementById('pictoriumOptions');
   if (pic) pic.style.display = getBetterPostersSetting('pictorium', false) ? 'flex' : 'none';
+  const rp = document.getElementById('rpdbOptions');
+  if (rp) rp.style.display = getBetterPostersSetting('rpdb', false) ? 'flex' : 'none';
 }
 window.applyBetterPostersOptionsVisibility = applyBetterPostersOptionsVisibility;
 
@@ -76357,6 +76632,38 @@ function updatePictoriumUrlHint(v) {
 }
 window.updatePictoriumUrlHint = updatePictoriumUrlHint;
 
+// Settings -> RatingPosterDB -> Test key: whether the key works and how much of
+// its monthly limit is used, asked of RatingPosterDB by the Worker (the key is
+// never put in a URL the browser loads).
+async function testRpdbKey(btn) {
+  const input = document.getElementById('rpdbKeyInput');
+  const status = document.getElementById('rpdbKeyStatus');
+  if (!input || !status) return;
+  const say = (text, color) => { status.textContent = text; status.style.color = color || 'var(--muted)'; };
+  const key = String(input.value || '').trim();
+  if (!key) { say('Paste your RatingPosterDB key first.', 'var(--danger, #d33)'); return; }
+  if (btn) btn.disabled = true;
+  say('Checking…');
+  try {
+    const res = await fetch(ORIGIN + '/api/rpdb-check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: key }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!data || !data.ok) { say((data && data.error) || 'Could not check the key just now.', 'var(--danger, #d33)'); return; }
+    if (!data.valid) { say('RatingPosterDB does not accept this key.', 'var(--danger, #d33)'); return; }
+    say(data.used != null && data.limit != null
+      ? 'The key works. ' + data.used.toLocaleString() + ' of ' + data.limit.toLocaleString() + ' requests used this month.'
+      : 'The key works.');
+  } catch (e) {
+    say('Could not check the key just now.', 'var(--danger, #d33)');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+window.testRpdbKey = testRpdbKey;
+
 const BETTER_POSTERS_TOGGLES = [
   { key: 'betterPosters', id: 'betterPostersCheckbox', on: false },
   { key: 'betterPostersGenre', id: 'betterPostersGenreCheckbox', on: true },
@@ -76365,6 +76672,7 @@ const BETTER_POSTERS_TOGGLES = [
   { key: 'betterPostersQuality', id: 'betterPostersQualityCheckbox', on: false },
   { key: 'betterPostersAge', id: 'betterPostersAgeCheckbox', on: false },
   { key: 'betterPostersTodayOrder', id: 'betterPostersTodayOrderCheckbox', on: false },
+  { key: 'rpdb', id: 'rpdbCheckbox', on: false },
   { key: 'pictorium', id: 'pictoriumCheckbox', on: false },
   { key: 'provideMetadata', id: 'provideMetadataCheckbox', on: true },
 ];
@@ -76380,6 +76688,8 @@ function initBetterPostersSettingsUI() {
   if (rsEl) rsEl.value = getBetterPostersChoice('betterPostersRatingSource', 'avg');
   const picEl = document.getElementById('pictoriumUrlInput');
   if (picEl) picEl.value = getBetterPostersChoice('pictoriumUrl', '');
+  const rpdbEl = document.getElementById('rpdbKeyInput');
+  if (rpdbEl) rpdbEl.value = getBetterPostersChoice('rpdbKey', '');
   applyBetterPostersOptionsVisibility();
 }
 window.initBetterPostersSettingsUI = initBetterPostersSettingsUI;
@@ -84573,6 +84883,35 @@ async function handleFetch(request, env, ctx) {
       return await serveBetterPoster(env, ctx, bp, url.origin, request);
     }
 
+    // /rpdb/<config>/<imdb id>.jpg -> a RatingPosterDB poster from this Worker's
+    // own copy, see serveRpdbPoster (05_catalog-core.js).
+    const rpdbMatch = path.match(/^\/rpdb\/([^/]+)\/(tt\d+)\.jpg$/);
+    if (rpdbMatch && (request.method === "GET" || request.method === "HEAD")) {
+      return await serveRpdbPoster(env, ctx, decodeURIComponent(rpdbMatch[1]), rpdbMatch[2]);
+    }
+
+    // /api/rpdb-check  (POST)  { key } -> { ok, valid, used, limit }: whether a
+    // key works and how much of its monthly limit is spent, for Settings.
+    if (path === "/api/rpdb-check" && request.method === "POST") {
+      let body;
+      try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400, { "Cache-Control": "no-store" }); }
+      const key = body && typeof body.key === "string" ? body.key.trim() : "";
+      if (!isValidRpdbKey(key)) return json({ ok: false, error: "That does not look like an RPDB key (it starts with t1- to t4-)." }, 400, { "Cache-Control": "no-store" });
+      const checkIp = clientIpKey(request);
+      if (!checkIp || await consumeRateLimit(env, ctx, "rpdbcheck", checkIp, 10, 60)) {
+        return json({ ok: false, error: "Too many requests just now." }, 429, { "Cache-Control": "no-store" });
+      }
+      try {
+        const valid = await fetchWithTimeout(`${RPDB_ORIGIN}/${key}/isValid`, { headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` } }, RPDB_FETCH_TIMEOUT_MS);
+        if (!valid.ok) return json({ ok: true, valid: false }, 200, { "Cache-Control": "no-store" });
+        const usage = await fetchWithTimeout(`${RPDB_ORIGIN}/${key}/requests`, { headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` } }, RPDB_FETCH_TIMEOUT_MS);
+        const data = usage.ok ? await usage.json() : null;
+        return json({ ok: true, valid: true, used: data && Number.isFinite(data.req) ? data.req : null, limit: data && Number.isFinite(data.limit) ? data.limit : null }, 200, { "Cache-Control": "no-store" });
+      } catch {
+        return json({ ok: false, error: "RatingPosterDB did not answer. Try again in a moment." }, 502, { "Cache-Control": "no-store" });
+      }
+    }
+
     // /api/bp/warm  (POST)  { urls: ["/bp/...", ...] } -> { ok, stored, fetched, ready: [...] }
     //
     // Fetches, from btttr.cc, any of these posters this Worker does not hold
@@ -85403,8 +85742,8 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // This route builds its metas directly rather than through
         // fetchCatalog, so it needs its own call -- otherwise search results
         // would be the one row in Stremio still showing the old artwork.
-        const searchArt = betterPostersOptionsFrom(searchConfig, url.origin);
-        if (searchConfig.betterPosters || searchArt.pictoriumTemplate) {
+        const searchArt = betterPostersOptionsFrom(searchConfig, url.origin, config);
+        if (searchConfig.betterPosters || searchArt.pictoriumTemplate || searchArt.rpdbBase) {
           metas = applyBetterPostersToMetas(metas, searchArt);
         }
         return jsonPublic({ metas }, 200, { "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400" });
@@ -85485,7 +85824,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // to a config that PROVED it belongs to that account. See resolveConfig
         // (04_config-resolution.js) for how that is established and
         // mayReadTrackedShelf (02_http-and-creator-utils.js) for what it gates.
-        const catalogKeys = { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, adultContentFilter, isStremioCatalog: true, canonicalIds: true, betterPosters, betterPostersOptions: betterPostersOptionsFrom(resolvedConfig, url.origin), showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, env, ctx, origin: url.origin };
+        const catalogKeys = { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, adultContentFilter, isStremioCatalog: true, canonicalIds: true, betterPosters, betterPostersOptions: betterPostersOptionsFrom(resolvedConfig, url.origin, config), showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, env, ctx, origin: url.origin };
         // FF_MATERIALIZER (P5-11, 54_materializer.js): with de-duplication, the
         // first page of every non-personal row is built once per install and
         // de-duplicated in one pass, instead of each row rebuilding the rows
@@ -85887,8 +86226,8 @@ Sitemap: ${url.origin}/sitemap.xml`;
           // opened. Only the poster is touched -- background, logo, cast and
           // the episode list all stay exactly as fetchStandardItemMeta built
           // them, and a non-IMDB id (tmdb:...) is left alone.
-          const metaArt = betterPostersOptionsFrom(metaConfig, url.origin);
-          if (metaConfig.betterPosters || metaArt.pictoriumTemplate) {
+          const metaArt = betterPostersOptionsFrom(metaConfig, url.origin, config);
+          if (metaConfig.betterPosters || metaArt.pictoriumTemplate || metaArt.rpdbBase) {
             meta = applyBetterPosterToMeta(meta, metaArt);
           }
           return jsonPublic(

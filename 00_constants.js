@@ -1430,6 +1430,36 @@ function isValidPictoriumTemplate(v) {
   return u.pathname.startsWith("/api/poster/");
 }
 
+// RatingPosterDB (https://ratingposterdb.com) -- optional replacement artwork
+// with the ratings drawn on. Needs the person's own paid RPDB key (t1- to t4-),
+// and every image fetched counts against that key's MONTHLY request limit
+// (50,000 to 750,000 by tier), so posters are never pointed at RPDB directly:
+// they go through this Worker's own /rpdb/ route (serveRpdbPoster, 05), which
+// keeps each poster per key for a few days, caps how fast it asks RPDB, and
+// stops asking altogether near the key's limit. RPDB's docs allow caching.
+const RPDB_ORIGIN = "https://api.ratingposterdb.com";
+const RPDB_KEY_RE = /^t[0-9]-[A-Za-z0-9_-]{3,64}$/;
+function isValidRpdbKey(v) {
+  return typeof v === "string" && RPDB_KEY_RE.test(v);
+}
+// A stored poster is good this long before it is fetched again (RPDB's ratings
+// move slowly), and kept this long so an RPDB outage or a spent limit still
+// has something to show.
+const RPDB_REFRESH_MS = 3 * 86400 * 1000;
+const RPDB_KEEP_SECONDS = 30 * 86400;
+// New posters fetched per key per minute. A page of uncached titles is spread
+// over several minutes (the rest show the ordinary poster meanwhile) instead of
+// being fired at RPDB at once.
+const RPDB_FETCHES_PER_MINUTE = 20;
+// Stop asking RPDB once this share of the key's monthly limit is used, per its
+// own /requests answer (kept RPDB_USAGE_TTL_SECONDS).
+const RPDB_STOP_AT_SHARE = 0.95;
+const RPDB_USAGE_TTL_SECONDS = 3600;
+// After a 429 or a server error from RPDB, ask nothing for this long.
+const RPDB_BACKOFF_SECONDS = 300;
+const RPDB_FETCH_TIMEOUT_MS = 8000;
+const RPDB_MAX_BYTES = 5 * 1024 * 1024;
+
 // The Stremio/Nuvio artwork-overlay toggles, as stored in an install config.
 // Named in one place because they have to agree across four: the builder
 // page's save request, /api/save's stored payload, resolveConfig's read, and
@@ -1495,6 +1525,8 @@ const INSTALL_CONFIG_FIELDS = [
   { name: "betterPostersQuality", kind: "flag", requires: "betterPosters" },
   { name: "betterPostersAge", kind: "flag", requires: "betterPosters" },
   { name: "betterPostersTodayOrder", kind: "flag", requires: "betterPosters" },
+  { name: "rpdb", kind: "flag" },
+  { name: "rpdbKey", kind: "choice", default: "", requires: "rpdb", valid: isValidRpdbKey },
   { name: "pictorium", kind: "flag" },
   { name: "pictoriumUrl", kind: "choice", default: "", requires: "pictorium", valid: isValidPictoriumTemplate },
   // Off hands every title's detail page to another add-on: the manifest stops

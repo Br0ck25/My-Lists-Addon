@@ -119,6 +119,8 @@ function renderBuilder(
   // Pictorium (opt-in, with the poster link pasted from the person's own space)
   // and "Use My Lists Addon metadata" (on unless switched off) -- see
   // INSTALL_CONFIG_FIELDS (00_constants.js).
+  const initialRpdb = !!initialKeys.rpdb;
+  const initialRpdbKey = typeof initialKeys.rpdbKey === "string" ? initialKeys.rpdbKey : "";
   const initialPictorium = !!initialKeys.pictorium;
   const initialPictoriumUrl = typeof initialKeys.pictoriumUrl === "string" ? initialKeys.pictoriumUrl : "";
   const initialProvideMetadata = initialKeys.provideMetadata !== false;

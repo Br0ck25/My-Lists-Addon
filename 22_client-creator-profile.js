@@ -3501,6 +3501,7 @@ async function loadCreatorSync(opts) {
         { key: 'betterPostersQuality', id: 'betterPostersQualityCheckbox' },
         { key: 'betterPostersAge', id: 'betterPostersAgeCheckbox' },
         { key: 'betterPostersTodayOrder', id: 'betterPostersTodayOrderCheckbox' },
+        { key: 'rpdb', id: 'rpdbCheckbox' },
         { key: 'pictorium', id: 'pictoriumCheckbox' },
         { key: 'provideMetadata', id: 'provideMetadataCheckbox' },
       ].forEach(({ key, id }) => {
@@ -3514,6 +3515,7 @@ async function loadCreatorSync(opts) {
         { key: 'betterPostersLang', id: 'betterPostersLangSelect' },
         { key: 'betterPostersRatingSource', id: 'betterPostersRatingSourceSelect' },
         { key: 'pictoriumUrl', id: 'pictoriumUrlInput' },
+        { key: 'rpdbKey', id: 'rpdbKeyInput' },
       ].forEach(({ key, id }) => {
         if (typeof synced.keys[key] === 'string' && synced.keys[key]) {
           try { localStorage.setItem('myListAddon:' + key, synced.keys[key]); } catch (e) {}

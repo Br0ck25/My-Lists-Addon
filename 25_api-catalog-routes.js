@@ -392,6 +392,35 @@ async function handleFetch(request, env, ctx) {
       return await serveBetterPoster(env, ctx, bp, url.origin, request);
     }
 
+    // /rpdb/<config>/<imdb id>.jpg -> a RatingPosterDB poster from this Worker's
+    // own copy, see serveRpdbPoster (05_catalog-core.js).
+    const rpdbMatch = path.match(/^\/rpdb\/([^/]+)\/(tt\d+)\.jpg$/);
+    if (rpdbMatch && (request.method === "GET" || request.method === "HEAD")) {
+      return await serveRpdbPoster(env, ctx, decodeURIComponent(rpdbMatch[1]), rpdbMatch[2]);
+    }
+
+    // /api/rpdb-check  (POST)  { key } -> { ok, valid, used, limit }: whether a
+    // key works and how much of its monthly limit is spent, for Settings.
+    if (path === "/api/rpdb-check" && request.method === "POST") {
+      let body;
+      try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400, { "Cache-Control": "no-store" }); }
+      const key = body && typeof body.key === "string" ? body.key.trim() : "";
+      if (!isValidRpdbKey(key)) return json({ ok: false, error: "That does not look like an RPDB key (it starts with t1- to t4-)." }, 400, { "Cache-Control": "no-store" });
+      const checkIp = clientIpKey(request);
+      if (!checkIp || await consumeRateLimit(env, ctx, "rpdbcheck", checkIp, 10, 60)) {
+        return json({ ok: false, error: "Too many requests just now." }, 429, { "Cache-Control": "no-store" });
+      }
+      try {
+        const valid = await fetchWithTimeout(`${RPDB_ORIGIN}/${key}/isValid`, { headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` } }, RPDB_FETCH_TIMEOUT_MS);
+        if (!valid.ok) return json({ ok: true, valid: false }, 200, { "Cache-Control": "no-store" });
+        const usage = await fetchWithTimeout(`${RPDB_ORIGIN}/${key}/requests`, { headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` } }, RPDB_FETCH_TIMEOUT_MS);
+        const data = usage.ok ? await usage.json() : null;
+        return json({ ok: true, valid: true, used: data && Number.isFinite(data.req) ? data.req : null, limit: data && Number.isFinite(data.limit) ? data.limit : null }, 200, { "Cache-Control": "no-store" });
+      } catch {
+        return json({ ok: false, error: "RatingPosterDB did not answer. Try again in a moment." }, 502, { "Cache-Control": "no-store" });
+      }
+    }
+
     // /api/bp/warm  (POST)  { urls: ["/bp/...", ...] } -> { ok, stored, fetched, ready: [...] }
     //
     // Fetches, from btttr.cc, any of these posters this Worker does not hold
@@ -1222,8 +1251,8 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // This route builds its metas directly rather than through
         // fetchCatalog, so it needs its own call -- otherwise search results
         // would be the one row in Stremio still showing the old artwork.
-        const searchArt = betterPostersOptionsFrom(searchConfig, url.origin);
-        if (searchConfig.betterPosters || searchArt.pictoriumTemplate) {
+        const searchArt = betterPostersOptionsFrom(searchConfig, url.origin, config);
+        if (searchConfig.betterPosters || searchArt.pictoriumTemplate || searchArt.rpdbBase) {
           metas = applyBetterPostersToMetas(metas, searchArt);
         }
         return jsonPublic({ metas }, 200, { "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400" });
@@ -1304,7 +1333,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // to a config that PROVED it belongs to that account. See resolveConfig
         // (04_config-resolution.js) for how that is established and
         // mayReadTrackedShelf (02_http-and-creator-utils.js) for what it gates.
-        const catalogKeys = { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, adultContentFilter, isStremioCatalog: true, canonicalIds: true, betterPosters, betterPostersOptions: betterPostersOptionsFrom(resolvedConfig, url.origin), showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, env, ctx, origin: url.origin };
+        const catalogKeys = { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, adultContentFilter, isStremioCatalog: true, canonicalIds: true, betterPosters, betterPostersOptions: betterPostersOptionsFrom(resolvedConfig, url.origin, config), showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, env, ctx, origin: url.origin };
         // FF_MATERIALIZER (P5-11, 54_materializer.js): with de-duplication, the
         // first page of every non-personal row is built once per install and
         // de-duplicated in one pass, instead of each row rebuilding the rows
@@ -1706,8 +1735,8 @@ Sitemap: ${url.origin}/sitemap.xml`;
           // opened. Only the poster is touched -- background, logo, cast and
           // the episode list all stay exactly as fetchStandardItemMeta built
           // them, and a non-IMDB id (tmdb:...) is left alone.
-          const metaArt = betterPostersOptionsFrom(metaConfig, url.origin);
-          if (metaConfig.betterPosters || metaArt.pictoriumTemplate) {
+          const metaArt = betterPostersOptionsFrom(metaConfig, url.origin, config);
+          if (metaConfig.betterPosters || metaArt.pictoriumTemplate || metaArt.rpdbBase) {
             meta = applyBetterPosterToMeta(meta, metaArt);
           }
           return jsonPublic(

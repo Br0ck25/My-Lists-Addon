@@ -613,6 +613,8 @@ function collectKeys() {
     betterPostersQuality: getBetterPostersSetting('betterPostersQuality', false),
     betterPostersAge: getBetterPostersSetting('betterPostersAge', false),
     betterPostersTodayOrder: getBetterPostersSetting('betterPostersTodayOrder', false),
+    rpdb: getBetterPostersSetting('rpdb', false),
+    rpdbKey: getBetterPostersChoice('rpdbKey', ''),
     pictorium: getBetterPostersSetting('pictorium', false),
     pictoriumUrl: getBetterPostersChoice('pictoriumUrl', ''),
     provideMetadata: getBetterPostersSetting('provideMetadata', true),
@@ -812,19 +814,24 @@ window.getBetterPostersChoice = getBetterPostersChoice;
 
 // One handler for both the checkboxes and the two dropdowns -- a boolean is
 // stored as 1/0, a dropdown value as itself.
+// Each has its own "<key>Checkbox" on the Settings page.
+const BETTER_POSTERS_ARTWORK_SOURCES = ['betterPosters', 'pictorium', 'rpdb'];
+
 function toggleBetterPostersSetting(key, value) {
   try {
     localStorage.setItem('myListAddon:' + key, typeof value === 'boolean' ? (value ? '1' : '0') : String(value));
   } catch (e) {}
-  // Better Posters and Pictorium both replace the poster, so switching one on
-  // switches the other off.
-  if (value === true && (key === 'betterPosters' || key === 'pictorium')) {
-    const other = key === 'pictorium' ? 'betterPosters' : 'pictorium';
-    try { localStorage.setItem('myListAddon:' + other, '0'); } catch (e) {}
-    const otherBox = document.getElementById(other === 'pictorium' ? 'pictoriumCheckbox' : 'betterPostersCheckbox');
-    if (otherBox) otherBox.checked = false;
+  // Better Posters, Pictorium and RatingPosterDB all replace the poster, so
+  // switching one on switches the others off.
+  if (value === true && BETTER_POSTERS_ARTWORK_SOURCES.indexOf(key) >= 0) {
+    BETTER_POSTERS_ARTWORK_SOURCES.forEach((other) => {
+      if (other === key) return;
+      try { localStorage.setItem('myListAddon:' + other, '0'); } catch (e) {}
+      const otherBox = document.getElementById(other + 'Checkbox');
+      if (otherBox) otherBox.checked = false;
+    });
   }
-  if (key === 'betterPosters' || key === 'pictorium') applyBetterPostersOptionsVisibility();
+  if (BETTER_POSTERS_ARTWORK_SOURCES.indexOf(key) >= 0) applyBetterPostersOptionsVisibility();
   if (key === 'pictoriumUrl') updatePictoriumUrlHint(value);
   refreshBetterPostersSurfaces();
   if (typeof scheduleCreatorSyncSave === 'function') scheduleCreatorSyncSave();
@@ -859,6 +866,8 @@ function applyBetterPostersOptionsVisibility() {
   wrap.style.display = getBetterPostersSetting('betterPosters', false) ? 'flex' : 'none';
   const pic = document.getElementById('pictoriumOptions');
   if (pic) pic.style.display = getBetterPostersSetting('pictorium', false) ? 'flex' : 'none';
+  const rp = document.getElementById('rpdbOptions');
+  if (rp) rp.style.display = getBetterPostersSetting('rpdb', false) ? 'flex' : 'none';
 }
 window.applyBetterPostersOptionsVisibility = applyBetterPostersOptionsVisibility;
 
@@ -881,6 +890,38 @@ function updatePictoriumUrlHint(v) {
 }
 window.updatePictoriumUrlHint = updatePictoriumUrlHint;
 
+// Settings -> RatingPosterDB -> Test key: whether the key works and how much of
+// its monthly limit is used, asked of RatingPosterDB by the Worker (the key is
+// never put in a URL the browser loads).
+async function testRpdbKey(btn) {
+  const input = document.getElementById('rpdbKeyInput');
+  const status = document.getElementById('rpdbKeyStatus');
+  if (!input || !status) return;
+  const say = (text, color) => { status.textContent = text; status.style.color = color || 'var(--muted)'; };
+  const key = String(input.value || '').trim();
+  if (!key) { say('Paste your RatingPosterDB key first.', 'var(--danger, #d33)'); return; }
+  if (btn) btn.disabled = true;
+  say('Checking…');
+  try {
+    const res = await fetch(ORIGIN + '/api/rpdb-check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: key }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!data || !data.ok) { say((data && data.error) || 'Could not check the key just now.', 'var(--danger, #d33)'); return; }
+    if (!data.valid) { say('RatingPosterDB does not accept this key.', 'var(--danger, #d33)'); return; }
+    say(data.used != null && data.limit != null
+      ? 'The key works. ' + data.used.toLocaleString() + ' of ' + data.limit.toLocaleString() + ' requests used this month.'
+      : 'The key works.');
+  } catch (e) {
+    say('Could not check the key just now.', 'var(--danger, #d33)');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+window.testRpdbKey = testRpdbKey;
+
 const BETTER_POSTERS_TOGGLES = [
   { key: 'betterPosters', id: 'betterPostersCheckbox', on: false },
   { key: 'betterPostersGenre', id: 'betterPostersGenreCheckbox', on: true },
@@ -889,6 +930,7 @@ const BETTER_POSTERS_TOGGLES = [
   { key: 'betterPostersQuality', id: 'betterPostersQualityCheckbox', on: false },
   { key: 'betterPostersAge', id: 'betterPostersAgeCheckbox', on: false },
   { key: 'betterPostersTodayOrder', id: 'betterPostersTodayOrderCheckbox', on: false },
+  { key: 'rpdb', id: 'rpdbCheckbox', on: false },
   { key: 'pictorium', id: 'pictoriumCheckbox', on: false },
   { key: 'provideMetadata', id: 'provideMetadataCheckbox', on: true },
 ];
@@ -904,6 +946,8 @@ function initBetterPostersSettingsUI() {
   if (rsEl) rsEl.value = getBetterPostersChoice('betterPostersRatingSource', 'avg');
   const picEl = document.getElementById('pictoriumUrlInput');
   if (picEl) picEl.value = getBetterPostersChoice('pictoriumUrl', '');
+  const rpdbEl = document.getElementById('rpdbKeyInput');
+  if (rpdbEl) rpdbEl.value = getBetterPostersChoice('rpdbKey', '');
   applyBetterPostersOptionsVisibility();
 }
 window.initBetterPostersSettingsUI = initBetterPostersSettingsUI;
