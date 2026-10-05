@@ -11,6 +11,7 @@ All notable changes to **My Lists Addon** ([mylistsaddon.com](https://mylistsadd
 - **Quick Add: "+ Add all" sits beside the title** at the far right on a phone too, instead of stretching full width under it.
 - **Lists → Liked** has its refresh button where the other pages have it (after the description), and each liked list says who it is by: "My Lists Addon" for the add-on's own charts, the service for a provider's chart (TMDB, Trakt, Simkl), or the owner of an MDBList, Trakt or Letterboxd list. It said "Community" for all of them. Charts of ours now show their real names.
 - **Discover → All: adding "New on Streaming: Movies" no longer turns the Shows button into Remove.** Both share one link, and the add buttons treated a list as added in any type. Each button now follows its own type, and Remove removes only that one.
+- **Search → Lists: the TMDB chip is gone** (TMDB has no list directory to browse; its lists still turn up when you type a search under All sources), and **"My Lists community" is now "My Lists Addon"**.
 - **Discover reopens on the tab you were on** (All, Shows and so on) when you come back from another page, instead of always Movies. A full page reload now keeps All too (it used to turn All into Movies), like the other pages.
 
 ### 🐛 Liking this add-on's own charts

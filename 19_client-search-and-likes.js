@@ -4895,7 +4895,6 @@ const CATALOG_LIST_SEARCH_SOURCES = {
   mylists: ['My Lists Addon', 'Profile'],
   mdblist: ['MDBList'],
   trakt: ['Trakt'],
-  tmdb: ['TMDB', 'Simkl'],
 };
 
 function catalogListSearchChipsOn() {
@@ -5271,13 +5270,9 @@ async function renderDefaultCatalogSearch(force) {
     window._rawCatalogTitleItems = [];
     // With the source chips (new UI) the lists to browse follow the chosen
     // source: MDBList's and Trakt's popular lists as well as this site's.
-    // TMDB publishes no list directory, so it can only be searched.
+    // TMDB publishes no list directory, so it has no chip here; its lists
+    // turn up in a typed search under All sources.
     const chips = catalogListSearchChipsOn();
-    if (chips && catalogListSearchSource === 'tmdb') {
-      resEl.innerHTML = '<p><small>TMDB has no list directory to browse. Type a search above to find TMDB lists.</small></p>';
-      markCatalogSearchRendered();
-      return;
-    }
     try {
       const [pubRes, mdbPopular, traktPopular] = await Promise.all([
         (!chips || catalogListSearchWants('mylists'))

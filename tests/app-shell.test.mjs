@@ -179,9 +179,10 @@ describe("the new interface is the only page (the classic page retired)", () => 
     assert.equal(shell.status, 200);
     assert.equal(shell.text.includes('id="appShellExplore"'), false, "Explore was taken off Discover");
     assert.ok(shell.text.includes('id="catalogListSearchChips"'), "Search -> Lists carries the chips");
-    for (const label of ["All sources", "My Lists community", "MDBList", "Trakt", "TMDB", "Most liked", "Newest", "Most added"]) {
+    for (const label of ["All sources", "My Lists Addon", "MDBList", "Trakt", "Most liked", "Newest", "Most added"]) {
       assert.ok(new RegExp(`class="catalog-list-chip[^"]*"[^>]*>${label}</button>`).test(shell.text), `${label} chip`);
     }
+    assert.equal(/data-chip-value="tmdb"/.test(shell.text), false, "TMDB has no list directory to browse, so no chip");
     const css = await call(env, "/app.css");
     assert.ok(css.text.includes(".catalog-list-chip {"), "the smaller chips are styled");
   });

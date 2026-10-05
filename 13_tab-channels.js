@@ -464,10 +464,9 @@
     <div id="catalogListSearchChips" class="catalog-list-chips" style="display:none;">
       <div class="catalog-list-chip-row" role="group" aria-label="Where the lists come from">
         <button type="button" class="catalog-list-chip active" data-chip-kind="source" data-chip-value="all" aria-pressed="true" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;all&quot;]">All sources</button>
-        <button type="button" class="catalog-list-chip" data-chip-kind="source" data-chip-value="mylists" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;mylists&quot;]">My Lists community</button>
+        <button type="button" class="catalog-list-chip" data-chip-kind="source" data-chip-value="mylists" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;mylists&quot;]">My Lists Addon</button>
         <button type="button" class="catalog-list-chip" data-chip-kind="source" data-chip-value="mdblist" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;mdblist&quot;]">MDBList</button>
         <button type="button" class="catalog-list-chip" data-chip-kind="source" data-chip-value="trakt" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;trakt&quot;]">Trakt</button>
-        <button type="button" class="catalog-list-chip" data-chip-kind="source" data-chip-value="tmdb" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;tmdb&quot;]">TMDB</button>
       </div>
       <div class="catalog-list-chip-row" role="group" aria-label="Order">
         <button type="button" class="catalog-list-chip" data-chip-kind="sort" data-chip-value="popular" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;sort&quot;,&quot;popular&quot;]">Most liked</button>

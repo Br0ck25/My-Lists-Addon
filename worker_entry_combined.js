@@ -35855,10 +35855,9 @@ if ('serviceWorker' in navigator) {
     <div id="catalogListSearchChips" class="catalog-list-chips" style="display:none;">
       <div class="catalog-list-chip-row" role="group" aria-label="Where the lists come from">
         <button type="button" class="catalog-list-chip active" data-chip-kind="source" data-chip-value="all" aria-pressed="true" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;all&quot;]">All sources</button>
-        <button type="button" class="catalog-list-chip" data-chip-kind="source" data-chip-value="mylists" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;mylists&quot;]">My Lists community</button>
+        <button type="button" class="catalog-list-chip" data-chip-kind="source" data-chip-value="mylists" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;mylists&quot;]">My Lists Addon</button>
         <button type="button" class="catalog-list-chip" data-chip-kind="source" data-chip-value="mdblist" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;mdblist&quot;]">MDBList</button>
         <button type="button" class="catalog-list-chip" data-chip-kind="source" data-chip-value="trakt" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;trakt&quot;]">Trakt</button>
-        <button type="button" class="catalog-list-chip" data-chip-kind="source" data-chip-value="tmdb" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;tmdb&quot;]">TMDB</button>
       </div>
       <div class="catalog-list-chip-row" role="group" aria-label="Order">
         <button type="button" class="catalog-list-chip" data-chip-kind="sort" data-chip-value="popular" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;sort&quot;,&quot;popular&quot;]">Most liked</button>
@@ -50183,7 +50182,6 @@ const CATALOG_LIST_SEARCH_SOURCES = {
   mylists: ['My Lists Addon', 'Profile'],
   mdblist: ['MDBList'],
   trakt: ['Trakt'],
-  tmdb: ['TMDB', 'Simkl'],
 };
 
 function catalogListSearchChipsOn() {
@@ -50559,13 +50557,9 @@ async function renderDefaultCatalogSearch(force) {
     window._rawCatalogTitleItems = [];
     // With the source chips (new UI) the lists to browse follow the chosen
     // source: MDBList's and Trakt's popular lists as well as this site's.
-    // TMDB publishes no list directory, so it can only be searched.
+    // TMDB publishes no list directory, so it has no chip here; its lists
+    // turn up in a typed search under All sources.
     const chips = catalogListSearchChipsOn();
-    if (chips && catalogListSearchSource === 'tmdb') {
-      resEl.innerHTML = '<p><small>TMDB has no list directory to browse. Type a search above to find TMDB lists.</small></p>';
-      markCatalogSearchRendered();
-      return;
-    }
     try {
       const [pubRes, mdbPopular, traktPopular] = await Promise.all([
         (!chips || catalogListSearchWants('mylists'))
