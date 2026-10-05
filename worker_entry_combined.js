@@ -47199,7 +47199,7 @@ function render5PosterListsFeed(container, lists) {
         '</div>' +
         '<div class="list-card-actions">' +
           likeBtnHtml +
-          renderCustomizeButtonHtml(displayName.replace(/:\s*(Movies|Shows)$/i, '').trim(), l.url || '', type) +
+          renderCustomizeButtonHtml(displayName.replace(/:\\s*(Movies|Shows)$/i, '').trim(), l.url || '', type) +
           '<button type="button" class="lc-btn ' + (added ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
             (added ? 'style="color:var(--danger);"' : '') +
             ' data-name="' + escapeAttr(displayName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '">' +
