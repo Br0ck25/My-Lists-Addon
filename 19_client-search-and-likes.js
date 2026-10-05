@@ -291,8 +291,23 @@ function isBetterPosterUrl(p) {
   return typeof p === 'string' && (p.indexOf(BETTER_POSTERS_ORIGIN_WEB) === 0 || p.indexOf(betterPosterMirrorPrefix()) === 0);
 }
 
+// The Pictorium poster link when Pictorium is on and the link is usable, else
+// ''. While it is set, Better Posters stands down on the website: only one of
+// them draws a poster. Plain string checks, as above (no regex in here).
+function pictoriumTemplateWeb() {
+  if (typeof getBetterPostersSetting !== 'function' || !getBetterPostersSetting('pictorium', false)) return '';
+  const t = (typeof getBetterPostersChoice === 'function' ? getBetterPostersChoice('pictoriumUrl', '') : '').trim();
+  if (t.indexOf('https://') !== 0 || t.indexOf('/api/poster/') < 0 || t.indexOf('{type}') < 0 || t.indexOf('{tmdb_id|imdb_id}') < 0) return '';
+  return t;
+}
+function pictoriumWebUrl(template, imdbId, type) {
+  return template.split('&shape={shape}').join('')
+    .replace('{type}', type === 'series' ? 'series' : 'movie')
+    .replace('{tmdb_id|imdb_id}', imdbId);
+}
+
 function betterPostersOnWeb() {
-  return typeof getBetterPostersSetting === 'function' && getBetterPostersSetting('betterPosters', false);
+  return typeof getBetterPostersSetting === 'function' && getBetterPostersSetting('betterPosters', false) && !pictoriumTemplateWeb();
 }
 window.betterPostersOnWeb = betterPostersOnWeb;
 
@@ -383,6 +398,17 @@ function betterPosterOriginalFor(url) {
 }
 
 function applyBetterPosterWeb(it, poster) {
+  const pictorium = pictoriumTemplateWeb();
+  if (pictorium) {
+    // Same exclusions as Better Posters below: generated artwork, landscape
+    // tiles and an episode's own still keep what they have.
+    if (isGeneratedPosterUrl(poster)) return poster;
+    if (it && it.posterShape === 'landscape') return poster;
+    if (it && it.thumbnail && poster === it.thumbnail) return poster;
+    const picId = betterPostersWebImdbId(it);
+    if (!picId) return poster;
+    return pictoriumWebUrl(pictorium, picId, it && (it.type === 'series' || it.mediaType === 'series' || it.mediaType === 'tv') ? 'series' : 'movie');
+  }
   if (!betterPostersOnWeb()) return poster;
   const alreadyBetter = isBetterPosterUrl(poster);
   if (!alreadyBetter) {

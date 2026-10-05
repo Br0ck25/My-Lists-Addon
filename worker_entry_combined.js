@@ -1420,6 +1420,39 @@ function isPersonalShelfUrl(url) {
 const IMDB_ID_LOOKUP_MAX = 100;
 const IMDB_ID_LOOKUP_CONCURRENCY = 8;
 
+// Pictorium (https://github.com/Eful97/Pictorium) -- optional replacement
+// artwork, drawn by the person's OWN Pictorium space (it needs their TMDB key,
+// so there is no shared instance to point at). They paste the "AIOMetadata"
+// poster link from their space's editor:
+//
+//   https://<host>/api/poster/{type}/{tmdb_id|imdb_id}?u=<space>&live=1&rv=<n>[&shape={shape}]
+//
+// Kept as the template it was pasted as; fillPictoriumTemplate (05) swaps in
+// the type and IMDb id and drops the optional shape, which Pictorium leaves to
+// its default. It ends up as a poster URL in the apps, so it is checked at the
+// door like every other install field: https, a real host name (no IP address
+// or local name), the /api/poster/ path, no credentials.
+const PICTORIUM_TYPE_TOKEN = "{type}";
+const PICTORIUM_ID_TOKEN = "{tmdb_id|imdb_id}";
+const PICTORIUM_SHAPE_PARAM = "&shape={shape}";
+const PICTORIUM_URL_MAX = 600;
+
+function isValidPictoriumTemplate(v) {
+  if (typeof v !== "string" || !v || v.length > PICTORIUM_URL_MAX) return false;
+  if (!v.includes(PICTORIUM_TYPE_TOKEN) || !v.includes(PICTORIUM_ID_TOKEN)) return false;
+  let u;
+  try {
+    u = new URL(v.split(PICTORIUM_SHAPE_PARAM).join("").replace(PICTORIUM_TYPE_TOKEN, "movie").replace(PICTORIUM_ID_TOKEN, "tt0000001"));
+  } catch (e) {
+    return false;
+  }
+  if (u.protocol !== "https:" || u.username || u.password || u.hash) return false;
+  const host = u.hostname.toLowerCase();
+  if (!host.includes(".") || host.startsWith("[") || /^[0-9.]+$/.test(host)) return false;
+  if (host.endsWith(".local") || host.endsWith(".internal") || host.endsWith(".localhost")) return false;
+  return u.pathname.startsWith("/api/poster/");
+}
+
 // The Stremio/Nuvio artwork-overlay toggles, as stored in an install config.
 // Named in one place because they have to agree across four: the builder
 // page's save request, /api/save's stored payload, resolveConfig's read, and
@@ -1485,6 +1518,11 @@ const INSTALL_CONFIG_FIELDS = [
   { name: "betterPostersQuality", kind: "flag", requires: "betterPosters" },
   { name: "betterPostersAge", kind: "flag", requires: "betterPosters" },
   { name: "betterPostersTodayOrder", kind: "flag", requires: "betterPosters" },
+  { name: "pictorium", kind: "flag" },
+  { name: "pictoriumUrl", kind: "choice", default: "", requires: "pictorium", valid: isValidPictoriumTemplate },
+  // Off hands every title's detail page to another add-on: the manifest stops
+  // declaring the meta resource (buildManifest), so this one is lists only.
+  { name: "provideMetadata", kind: "flagOn" },
   {
     name: "betterPostersLang", kind: "choice", default: "en", requires: "betterPosters",
     allowed: BETTER_POSTERS_LANGS.map((l) => l.value),
@@ -1506,7 +1544,7 @@ function readInstallConfigFields(parsed) {
     if (f.kind === "account") out[f.name] = typeof v === "string" ? v : "";
     else if (f.kind === "flag") out[f.name] = !!v;
     else if (f.kind === "flagOn") out[f.name] = v !== false;
-    else out[f.name] = (typeof v === "string" && v) ? v : f.default;
+    else out[f.name] = (typeof v === "string" && v && (!f.valid || f.valid(v))) ? v : f.default;
   }
   return out;
 }
@@ -1526,7 +1564,7 @@ function storedInstallConfigFields(body, withAccountFields) {
       if (v) out[f.name] = true;
     } else if (f.kind === "flagOn") {
       if (v === false) out[f.name] = false;
-    } else if (typeof v === "string" && v && v !== f.default && (!f.allowed || f.allowed.includes(v))) {
+    } else if (typeof v === "string" && v && v !== f.default && (!f.allowed || f.allowed.includes(v)) && (!f.valid || f.valid(v))) {
       out[f.name] = v;
     }
   }
@@ -16927,7 +16965,7 @@ async function searchTraktLists(query, traktKeyOverride) {
 // the link said the day it was generated. A name that is absent or unchanged
 // leaves the config's own name alone -- a row with nothing live behind it has
 // nothing newer to say.
-function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveNames = null) {
+function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveNames = null, provideMetadata = true) {
   let active = entries.filter((e) => e.enabled !== false);
   if (shuffleShelves && active.length > 1) {
     active = deterministicDailyShuffle(active, `shelves:${configSeed || ''}`);
@@ -16942,8 +16980,10 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
   // tiles get filtered out of the row by strict clients and their detail pages
   // are never routed back here by any client. This file's own placeholder tile
   // already cites that behaviour ("some clients filter out anything else").
-  const resources = ["catalog", { name: "meta", types: ["movie", "series"], idPrefixes: ["tt", "tmdb:", "channel_"] }];
-  const idPrefixes = ["tt", "tmdb:", "channel_"];
+  // "Use My Lists Addon metadata" off: no meta resource and no id prefixes, so
+  // every title's detail page is answered by whichever other add-on has it.
+  const resources = provideMetadata ? ["catalog", { name: "meta", types: ["movie", "series"], idPrefixes: ["tt", "tmdb:", "channel_"] }] : ["catalog"];
+  const idPrefixes = provideMetadata ? ["tt", "tmdb:", "channel_"] : undefined;
   // Stremio/wako call every installed addon's subtitles resource the
   // instant ANY video starts playing (checking for subtitle tracks) --
   // regardless of which addon's catalog the video came from, or whether
@@ -17099,11 +17139,11 @@ async function fetchCatalog(entry, skip = 0, keys = {}) {
   // would throw the badged poster away. Running it first means a badged
   // poster is a badge drawn over BetterPosters artwork, which is the point.
   // The adult-content filter still runs after both and still wins.
-  if (keys.betterPosters && Array.isArray(result) && result.length > 0) {
-    result = applyBetterPostersToMetas(result, keys.betterPostersOptions || {});
-    // "Keep Today tags in order": only meaningful while the tags are drawn.
-    const bpo = keys.betterPostersOptions || {};
-    if (bpo.todayOrder && bpo.trendTags !== false) {
+  const bpo = keys.betterPostersOptions || {};
+  if ((keys.betterPosters || bpo.pictoriumTemplate) && Array.isArray(result) && result.length > 0) {
+    result = applyBetterPostersToMetas(result, bpo);
+    // "Keep Today tags in order": only meaningful while Better Posters' tags are drawn.
+    if (bpo.todayOrder && bpo.trendTags !== false && !bpo.pictoriumTemplate) {
       result = await orderByBetterPostersToday(result, entry.type, keys.env, keys.ctx);
     }
   }
@@ -18296,9 +18336,22 @@ function betterPostersOptionsFrom(cfg, origin) {
     age: !!c.betterPostersAge,
     trendTags: c.betterPostersTrendTags !== false,
     todayOrder: !!c.betterPostersTodayOrder,
+    // Pictorium wins over Better Posters when both are on: only one of them
+    // can draw a poster.
+    pictoriumTemplate: c.pictorium && isValidPictoriumTemplate(c.pictoriumUrl) ? c.pictoriumUrl : "",
     lang: c.betterPostersLang || "en",
     ratingSource: c.betterPostersRatingSource || "avg",
   };
+}
+
+// A Pictorium poster link for one title, from the link as pasted in Settings.
+// Only the type and id are filled in; "shape" is dropped (Pictorium's default
+// is the portrait poster) and any other placeholder is left as it is.
+function fillPictoriumTemplate(template, imdbId, type) {
+  return String(template)
+    .split(PICTORIUM_SHAPE_PARAM).join("")
+    .replace(PICTORIUM_TYPE_TOKEN, type === "series" ? "series" : "movie")
+    .replace(PICTORIUM_ID_TOKEN, imdbId);
 }
 
 // Single-meta form, for the /meta/ detail route.
@@ -18320,6 +18373,7 @@ function applyBetterPostersToMetas(metas, opts) {
     if (m.posterShape === "landscape") return m;
     const imdbId = betterPostersImdbId(m);
     if (!imdbId) return m;
+    if (opts && opts.pictoriumTemplate) return { ...m, poster: fillPictoriumTemplate(opts.pictoriumTemplate, imdbId, m.type) };
     return { ...m, poster: buildBetterPosterUrl(imdbId, opts) };
   });
   mapped.totalItems = tot;
@@ -18330,7 +18384,7 @@ function applyBadgedPostersToMetas(metas, origin) {
   if (!Array.isArray(metas) || !metas.length || !origin) return metas;
   const tot = metas.totalItems;
   const mapped = metas.map((m) => {
-    if (!m || !m.poster || m.poster.startsWith("data:image/svg") || m.poster.includes("/api/poster-badge") || m.poster.includes("/api/safe-poster")) return m;
+    if (!m || !m.poster || m.poster.startsWith("data:image/svg") || m.poster.includes("/api/poster-badge") || m.poster.includes("/api/safe-poster") || m.poster.includes("/api/poster/")) return m;
     const isPremiereEp = m.episodeNumber === 1 || m.episodeNum === 1 || (m.episodeNum == null && m.episodeNumber == null);
     const hasAired = m.airDate && typeof isEpisodeAired === "function" ? isEpisodeAired(m.airDate) : false;
     const hasPremiere = !!(m.isSeasonPremiere && isPremiereEp && !hasAired);
@@ -28865,6 +28919,12 @@ function renderBuilder(
   const initialBetterPostersQuality = !!initialKeys.betterPostersQuality;
   const initialBetterPostersAge = !!initialKeys.betterPostersAge;
   const initialBetterPostersTodayOrder = !!initialKeys.betterPostersTodayOrder;
+  // Pictorium (opt-in, with the poster link pasted from the person's own space)
+  // and "Use My Lists Addon metadata" (on unless switched off) -- see
+  // INSTALL_CONFIG_FIELDS (00_constants.js).
+  const initialPictorium = !!initialKeys.pictorium;
+  const initialPictoriumUrl = typeof initialKeys.pictoriumUrl === "string" ? initialKeys.pictoriumUrl : "";
+  const initialProvideMetadata = initialKeys.provideMetadata !== false;
   const initialBetterPostersTrendTags = initialKeys.betterPostersTrendTags !== false;
   const betterPostersLangOptionsHtml = buildBetterPostersLangOptionsHtml(initialKeys.betterPostersLang || "en");
   const betterPostersRatingSourceOptionsHtml = buildBetterPostersRatingSourceOptionsHtml(initialKeys.betterPostersRatingSource || "avg");
@@ -35816,6 +35876,48 @@ if ('serviceWorker' in navigator) {
             <p style="margin:4px 0 0; color:var(--muted); font-size:0.78rem;">Language BetterPosters draws text in.</p>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Pictorium Panel -->
+    <div class="panel" style="margin-top:12px;">
+      <h2 class="panel-title">Pictorium</h2>
+      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Swap plain poster artwork for posters drawn by your own <a href="https://github.com/Eful97/Pictorium" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">Pictorium</a> space &mdash; ratings, streaming quality, Netflix Top 10 ribbons, awards and more, styled the way you set them up there. Needs a Pictorium space with your own TMDB key.</p>
+      <div class="settings-toggle-row" style="padding:0 0 12px; border-bottom:none;">
+        <div style="flex:1; min-width:0; padding-right:12px;">
+          <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Use Pictorium artwork</span>
+          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Replaces poster artwork in Stremio and Nuvio and across the website. Turns Better Posters off, because only one can draw a poster.</p>
+          <details style="margin-top:6px; font-size:0.8rem; color:var(--muted);">
+            <summary style="cursor:pointer; color:var(--accent); font-weight:600;">Artwork compatibility details</summary>
+            <p style="margin:4px 0 0;">Only titles with an IMDb ID are affected. Pictorium draws its own badges, so the Airing Next and date badges are not drawn over its posters. Adult Content Filter still overrides it on the website. TV Channel artwork and episode stills are preserved.</p>
+          </details>
+        </div>
+        <label class="ui-toggle" aria-label="Use Pictorium artwork">
+          <input type="checkbox" id="pictoriumCheckbox" ${initialPictorium ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;pictorium&quot;,&quot;@checked&quot;]">
+          <span class="ui-toggle-slider"></span>
+        </label>
+      </div>
+      <div id="pictoriumOptions" style="display:${initialPictorium ? 'flex' : 'none'}; flex-direction:column; gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
+        <div>
+          <label for="pictoriumUrlInput" style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:4px;">Poster link</label>
+          <input type="url" id="pictoriumUrlInput" value="${escapeHtmlServer(initialPictoriumUrl)}" placeholder="https://your-pictorium-host/api/poster/{type}/{tmdb_id|imdb_id}?u=..." autocomplete="off" spellcheck="false" data-act="toggleBetterPostersSetting" data-act-args="[&quot;pictoriumUrl&quot;,&quot;@value&quot;]" style="width:100%; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.86rem; box-sizing:border-box;">
+          <p id="pictoriumUrlHint" style="margin:4px 0 0; color:var(--muted); font-size:0.78rem;">In your Pictorium space, copy the <strong>AIOMetadata</strong> poster link and paste it here as it is. It has to start with https:// and contain <code>/api/poster/</code>, <code>{type}</code> and <code>{tmdb_id|imdb_id}</code>.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Metadata Panel -->
+    <div class="panel" style="margin-top:12px;">
+      <h2 class="panel-title">Metadata</h2>
+      <div class="settings-toggle-row" style="padding:0; border-bottom:none;">
+        <div style="flex:1; min-width:0; padding-right:12px;">
+          <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Use My Lists Addon metadata</span>
+          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Lets this add-on supply a title's details page (synopsis, cast, trailers, episodes) in Stremio and Nuvio. Turn it off to use My Lists Addon for lists only and let another add-on supply the details. TV Channel titles have no details page elsewhere. Reinstall the add-on after changing this.</p>
+        </div>
+        <label class="ui-toggle" aria-label="Use My Lists Addon metadata">
+          <input type="checkbox" id="provideMetadataCheckbox" ${initialProvideMetadata ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;provideMetadata&quot;,&quot;@checked&quot;]">
+          <span class="ui-toggle-slider"></span>
+        </label>
       </div>
     </div>
 
@@ -45180,8 +45282,23 @@ function isBetterPosterUrl(p) {
   return typeof p === 'string' && (p.indexOf(BETTER_POSTERS_ORIGIN_WEB) === 0 || p.indexOf(betterPosterMirrorPrefix()) === 0);
 }
 
+// The Pictorium poster link when Pictorium is on and the link is usable, else
+// ''. While it is set, Better Posters stands down on the website: only one of
+// them draws a poster. Plain string checks, as above (no regex in here).
+function pictoriumTemplateWeb() {
+  if (typeof getBetterPostersSetting !== 'function' || !getBetterPostersSetting('pictorium', false)) return '';
+  const t = (typeof getBetterPostersChoice === 'function' ? getBetterPostersChoice('pictoriumUrl', '') : '').trim();
+  if (t.indexOf('https://') !== 0 || t.indexOf('/api/poster/') < 0 || t.indexOf('{type}') < 0 || t.indexOf('{tmdb_id|imdb_id}') < 0) return '';
+  return t;
+}
+function pictoriumWebUrl(template, imdbId, type) {
+  return template.split('&shape={shape}').join('')
+    .replace('{type}', type === 'series' ? 'series' : 'movie')
+    .replace('{tmdb_id|imdb_id}', imdbId);
+}
+
 function betterPostersOnWeb() {
-  return typeof getBetterPostersSetting === 'function' && getBetterPostersSetting('betterPosters', false);
+  return typeof getBetterPostersSetting === 'function' && getBetterPostersSetting('betterPosters', false) && !pictoriumTemplateWeb();
 }
 window.betterPostersOnWeb = betterPostersOnWeb;
 
@@ -45272,6 +45389,17 @@ function betterPosterOriginalFor(url) {
 }
 
 function applyBetterPosterWeb(it, poster) {
+  const pictorium = pictoriumTemplateWeb();
+  if (pictorium) {
+    // Same exclusions as Better Posters below: generated artwork, landscape
+    // tiles and an episode's own still keep what they have.
+    if (isGeneratedPosterUrl(poster)) return poster;
+    if (it && it.posterShape === 'landscape') return poster;
+    if (it && it.thumbnail && poster === it.thumbnail) return poster;
+    const picId = betterPostersWebImdbId(it);
+    if (!picId) return poster;
+    return pictoriumWebUrl(pictorium, picId, it && (it.type === 'series' || it.mediaType === 'series' || it.mediaType === 'tv') ? 'series' : 'movie');
+  }
   if (!betterPostersOnWeb()) return poster;
   const alreadyBetter = isBetterPosterUrl(poster);
   if (!alreadyBetter) {
@@ -71806,6 +71934,8 @@ async function loadCreatorSync(opts) {
         { key: 'betterPostersQuality', id: 'betterPostersQualityCheckbox' },
         { key: 'betterPostersAge', id: 'betterPostersAgeCheckbox' },
         { key: 'betterPostersTodayOrder', id: 'betterPostersTodayOrderCheckbox' },
+        { key: 'pictorium', id: 'pictoriumCheckbox' },
+        { key: 'provideMetadata', id: 'provideMetadataCheckbox' },
       ].forEach(({ key, id }) => {
         if (typeof synced.keys[key] === 'boolean') {
           try { localStorage.setItem('myListAddon:' + key, synced.keys[key] ? '1' : '0'); } catch (e) {}
@@ -71816,6 +71946,7 @@ async function loadCreatorSync(opts) {
       [
         { key: 'betterPostersLang', id: 'betterPostersLangSelect' },
         { key: 'betterPostersRatingSource', id: 'betterPostersRatingSourceSelect' },
+        { key: 'pictoriumUrl', id: 'pictoriumUrlInput' },
       ].forEach(({ key, id }) => {
         if (typeof synced.keys[key] === 'string' && synced.keys[key]) {
           try { localStorage.setItem('myListAddon:' + key, synced.keys[key]); } catch (e) {}
@@ -75845,6 +75976,9 @@ function collectKeys() {
     betterPostersQuality: getBetterPostersSetting('betterPostersQuality', false),
     betterPostersAge: getBetterPostersSetting('betterPostersAge', false),
     betterPostersTodayOrder: getBetterPostersSetting('betterPostersTodayOrder', false),
+    pictorium: getBetterPostersSetting('pictorium', false),
+    pictoriumUrl: getBetterPostersChoice('pictoriumUrl', ''),
+    provideMetadata: getBetterPostersSetting('provideMetadata', true),
     betterPostersLang: getBetterPostersChoice('betterPostersLang', 'en'),
     betterPostersRatingSource: getBetterPostersChoice('betterPostersRatingSource', 'avg'),
     showBadgesAiringNext: getBadgeSetting('showBadgesAiringNext'),
@@ -76045,7 +76179,16 @@ function toggleBetterPostersSetting(key, value) {
   try {
     localStorage.setItem('myListAddon:' + key, typeof value === 'boolean' ? (value ? '1' : '0') : String(value));
   } catch (e) {}
-  if (key === 'betterPosters') applyBetterPostersOptionsVisibility();
+  // Better Posters and Pictorium both replace the poster, so switching one on
+  // switches the other off.
+  if (value === true && (key === 'betterPosters' || key === 'pictorium')) {
+    const other = key === 'pictorium' ? 'betterPosters' : 'pictorium';
+    try { localStorage.setItem('myListAddon:' + other, '0'); } catch (e) {}
+    const otherBox = document.getElementById(other === 'pictorium' ? 'pictoriumCheckbox' : 'betterPostersCheckbox');
+    if (otherBox) otherBox.checked = false;
+  }
+  if (key === 'betterPosters' || key === 'pictorium') applyBetterPostersOptionsVisibility();
+  if (key === 'pictoriumUrl') updatePictoriumUrlHint(value);
   refreshBetterPostersSurfaces();
   if (typeof scheduleCreatorSyncSave === 'function') scheduleCreatorSyncSave();
   if (typeof saveState === 'function') saveState();
@@ -76077,8 +76220,29 @@ function applyBetterPostersOptionsVisibility() {
   const wrap = document.getElementById('betterPostersOptions');
   if (!wrap) return;
   wrap.style.display = getBetterPostersSetting('betterPosters', false) ? 'flex' : 'none';
+  const pic = document.getElementById('pictoriumOptions');
+  if (pic) pic.style.display = getBetterPostersSetting('pictorium', false) ? 'flex' : 'none';
 }
 window.applyBetterPostersOptionsVisibility = applyBetterPostersOptionsVisibility;
+
+// The same checks the Worker makes (isValidPictoriumTemplate, 00_constants.js),
+// roughly, so a bad paste is said out loud instead of silently not saving.
+function pictoriumLinkProblem(v) {
+  const s = String(v || '').trim();
+  if (!s) return '';
+  if (s.indexOf('https://') !== 0) return 'The link has to start with https://';
+  if (s.indexOf('/api/poster/') < 0) return 'This does not look like a Pictorium poster link (no /api/poster/ in it).';
+  if (s.indexOf('{type}') < 0 || s.indexOf('{tmdb_id|imdb_id}') < 0) return 'Paste the AIOMetadata link as it is, with {type} and {tmdb_id|imdb_id} left in.';
+  return '';
+}
+function updatePictoriumUrlHint(v) {
+  const hint = document.getElementById('pictoriumUrlHint');
+  if (!hint) return;
+  const problem = pictoriumLinkProblem(v);
+  hint.style.color = problem ? 'var(--danger, #d33)' : 'var(--muted)';
+  if (problem) hint.textContent = problem;
+}
+window.updatePictoriumUrlHint = updatePictoriumUrlHint;
 
 const BETTER_POSTERS_TOGGLES = [
   { key: 'betterPosters', id: 'betterPostersCheckbox', on: false },
@@ -76088,6 +76252,8 @@ const BETTER_POSTERS_TOGGLES = [
   { key: 'betterPostersQuality', id: 'betterPostersQualityCheckbox', on: false },
   { key: 'betterPostersAge', id: 'betterPostersAgeCheckbox', on: false },
   { key: 'betterPostersTodayOrder', id: 'betterPostersTodayOrderCheckbox', on: false },
+  { key: 'pictorium', id: 'pictoriumCheckbox', on: false },
+  { key: 'provideMetadata', id: 'provideMetadataCheckbox', on: true },
 ];
 
 function initBetterPostersSettingsUI() {
@@ -76099,6 +76265,8 @@ function initBetterPostersSettingsUI() {
   if (langEl) langEl.value = getBetterPostersChoice('betterPostersLang', 'en');
   const rsEl = document.getElementById('betterPostersRatingSourceSelect');
   if (rsEl) rsEl.value = getBetterPostersChoice('betterPostersRatingSource', 'avg');
+  const picEl = document.getElementById('pictoriumUrlInput');
+  if (picEl) picEl.value = getBetterPostersChoice('pictoriumUrl', '');
   applyBetterPostersOptionsVisibility();
 }
 window.initBetterPostersSettingsUI = initBetterPostersSettingsUI;
@@ -84839,7 +85007,7 @@ async function handleFetch(request, env, ctx) {
         customListRowIsLive(e.url, !!resolved.trackCreatorName) || !!parsePublishedListUrl(e.url)
       ));
       return jsonPublic(
-        buildManifest(entries, url.origin, track, shuffleShelves, m[1], liveNames),
+        buildManifest(entries, url.origin, track, shuffleShelves, m[1], liveNames, resolved.provideMetadata !== false),
         200,
         hasLiveShelf ? { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" } : {}
       );
@@ -85122,8 +85290,9 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // This route builds its metas directly rather than through
         // fetchCatalog, so it needs its own call -- otherwise search results
         // would be the one row in Stremio still showing the old artwork.
-        if (searchConfig.betterPosters) {
-          metas = applyBetterPostersToMetas(metas, betterPostersOptionsFrom(searchConfig, url.origin));
+        const searchArt = betterPostersOptionsFrom(searchConfig, url.origin);
+        if (searchConfig.betterPosters || searchArt.pictoriumTemplate) {
+          metas = applyBetterPostersToMetas(metas, searchArt);
         }
         return jsonPublic({ metas }, 200, { "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400" });
       }
@@ -85605,8 +85774,9 @@ Sitemap: ${url.origin}/sitemap.xml`;
           // opened. Only the poster is touched -- background, logo, cast and
           // the episode list all stay exactly as fetchStandardItemMeta built
           // them, and a non-IMDB id (tmdb:...) is left alone.
-          if (metaConfig.betterPosters) {
-            meta = applyBetterPosterToMeta(meta, betterPostersOptionsFrom(metaConfig, url.origin));
+          const metaArt = betterPostersOptionsFrom(metaConfig, url.origin);
+          if (metaConfig.betterPosters || metaArt.pictoriumTemplate) {
+            meta = applyBetterPosterToMeta(meta, metaArt);
           }
           return jsonPublic(
             { meta },

@@ -613,6 +613,9 @@ function collectKeys() {
     betterPostersQuality: getBetterPostersSetting('betterPostersQuality', false),
     betterPostersAge: getBetterPostersSetting('betterPostersAge', false),
     betterPostersTodayOrder: getBetterPostersSetting('betterPostersTodayOrder', false),
+    pictorium: getBetterPostersSetting('pictorium', false),
+    pictoriumUrl: getBetterPostersChoice('pictoriumUrl', ''),
+    provideMetadata: getBetterPostersSetting('provideMetadata', true),
     betterPostersLang: getBetterPostersChoice('betterPostersLang', 'en'),
     betterPostersRatingSource: getBetterPostersChoice('betterPostersRatingSource', 'avg'),
     showBadgesAiringNext: getBadgeSetting('showBadgesAiringNext'),
@@ -813,7 +816,16 @@ function toggleBetterPostersSetting(key, value) {
   try {
     localStorage.setItem('myListAddon:' + key, typeof value === 'boolean' ? (value ? '1' : '0') : String(value));
   } catch (e) {}
-  if (key === 'betterPosters') applyBetterPostersOptionsVisibility();
+  // Better Posters and Pictorium both replace the poster, so switching one on
+  // switches the other off.
+  if (value === true && (key === 'betterPosters' || key === 'pictorium')) {
+    const other = key === 'pictorium' ? 'betterPosters' : 'pictorium';
+    try { localStorage.setItem('myListAddon:' + other, '0'); } catch (e) {}
+    const otherBox = document.getElementById(other === 'pictorium' ? 'pictoriumCheckbox' : 'betterPostersCheckbox');
+    if (otherBox) otherBox.checked = false;
+  }
+  if (key === 'betterPosters' || key === 'pictorium') applyBetterPostersOptionsVisibility();
+  if (key === 'pictoriumUrl') updatePictoriumUrlHint(value);
   refreshBetterPostersSurfaces();
   if (typeof scheduleCreatorSyncSave === 'function') scheduleCreatorSyncSave();
   if (typeof saveState === 'function') saveState();
@@ -845,8 +857,29 @@ function applyBetterPostersOptionsVisibility() {
   const wrap = document.getElementById('betterPostersOptions');
   if (!wrap) return;
   wrap.style.display = getBetterPostersSetting('betterPosters', false) ? 'flex' : 'none';
+  const pic = document.getElementById('pictoriumOptions');
+  if (pic) pic.style.display = getBetterPostersSetting('pictorium', false) ? 'flex' : 'none';
 }
 window.applyBetterPostersOptionsVisibility = applyBetterPostersOptionsVisibility;
+
+// The same checks the Worker makes (isValidPictoriumTemplate, 00_constants.js),
+// roughly, so a bad paste is said out loud instead of silently not saving.
+function pictoriumLinkProblem(v) {
+  const s = String(v || '').trim();
+  if (!s) return '';
+  if (s.indexOf('https://') !== 0) return 'The link has to start with https://';
+  if (s.indexOf('/api/poster/') < 0) return 'This does not look like a Pictorium poster link (no /api/poster/ in it).';
+  if (s.indexOf('{type}') < 0 || s.indexOf('{tmdb_id|imdb_id}') < 0) return 'Paste the AIOMetadata link as it is, with {type} and {tmdb_id|imdb_id} left in.';
+  return '';
+}
+function updatePictoriumUrlHint(v) {
+  const hint = document.getElementById('pictoriumUrlHint');
+  if (!hint) return;
+  const problem = pictoriumLinkProblem(v);
+  hint.style.color = problem ? 'var(--danger, #d33)' : 'var(--muted)';
+  if (problem) hint.textContent = problem;
+}
+window.updatePictoriumUrlHint = updatePictoriumUrlHint;
 
 const BETTER_POSTERS_TOGGLES = [
   { key: 'betterPosters', id: 'betterPostersCheckbox', on: false },
@@ -856,6 +889,8 @@ const BETTER_POSTERS_TOGGLES = [
   { key: 'betterPostersQuality', id: 'betterPostersQualityCheckbox', on: false },
   { key: 'betterPostersAge', id: 'betterPostersAgeCheckbox', on: false },
   { key: 'betterPostersTodayOrder', id: 'betterPostersTodayOrderCheckbox', on: false },
+  { key: 'pictorium', id: 'pictoriumCheckbox', on: false },
+  { key: 'provideMetadata', id: 'provideMetadataCheckbox', on: true },
 ];
 
 function initBetterPostersSettingsUI() {
@@ -867,6 +902,8 @@ function initBetterPostersSettingsUI() {
   if (langEl) langEl.value = getBetterPostersChoice('betterPostersLang', 'en');
   const rsEl = document.getElementById('betterPostersRatingSourceSelect');
   if (rsEl) rsEl.value = getBetterPostersChoice('betterPostersRatingSource', 'avg');
+  const picEl = document.getElementById('pictoriumUrlInput');
+  if (picEl) picEl.value = getBetterPostersChoice('pictoriumUrl', '');
   applyBetterPostersOptionsVisibility();
 }
 window.initBetterPostersSettingsUI = initBetterPostersSettingsUI;

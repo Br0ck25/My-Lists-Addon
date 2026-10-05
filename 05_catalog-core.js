@@ -6,7 +6,7 @@
 // the link said the day it was generated. A name that is absent or unchanged
 // leaves the config's own name alone -- a row with nothing live behind it has
 // nothing newer to say.
-function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveNames = null) {
+function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveNames = null, provideMetadata = true) {
   let active = entries.filter((e) => e.enabled !== false);
   if (shuffleShelves && active.length > 1) {
     active = deterministicDailyShuffle(active, `shelves:${configSeed || ''}`);
@@ -21,8 +21,10 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
   // tiles get filtered out of the row by strict clients and their detail pages
   // are never routed back here by any client. This file's own placeholder tile
   // already cites that behaviour ("some clients filter out anything else").
-  const resources = ["catalog", { name: "meta", types: ["movie", "series"], idPrefixes: ["tt", "tmdb:", "channel_"] }];
-  const idPrefixes = ["tt", "tmdb:", "channel_"];
+  // "Use My Lists Addon metadata" off: no meta resource and no id prefixes, so
+  // every title's detail page is answered by whichever other add-on has it.
+  const resources = provideMetadata ? ["catalog", { name: "meta", types: ["movie", "series"], idPrefixes: ["tt", "tmdb:", "channel_"] }] : ["catalog"];
+  const idPrefixes = provideMetadata ? ["tt", "tmdb:", "channel_"] : undefined;
   // Stremio/wako call every installed addon's subtitles resource the
   // instant ANY video starts playing (checking for subtitle tracks) --
   // regardless of which addon's catalog the video came from, or whether
@@ -178,11 +180,11 @@ async function fetchCatalog(entry, skip = 0, keys = {}) {
   // would throw the badged poster away. Running it first means a badged
   // poster is a badge drawn over BetterPosters artwork, which is the point.
   // The adult-content filter still runs after both and still wins.
-  if (keys.betterPosters && Array.isArray(result) && result.length > 0) {
-    result = applyBetterPostersToMetas(result, keys.betterPostersOptions || {});
-    // "Keep Today tags in order": only meaningful while the tags are drawn.
-    const bpo = keys.betterPostersOptions || {};
-    if (bpo.todayOrder && bpo.trendTags !== false) {
+  const bpo = keys.betterPostersOptions || {};
+  if ((keys.betterPosters || bpo.pictoriumTemplate) && Array.isArray(result) && result.length > 0) {
+    result = applyBetterPostersToMetas(result, bpo);
+    // "Keep Today tags in order": only meaningful while Better Posters' tags are drawn.
+    if (bpo.todayOrder && bpo.trendTags !== false && !bpo.pictoriumTemplate) {
       result = await orderByBetterPostersToday(result, entry.type, keys.env, keys.ctx);
     }
   }
@@ -1375,9 +1377,22 @@ function betterPostersOptionsFrom(cfg, origin) {
     age: !!c.betterPostersAge,
     trendTags: c.betterPostersTrendTags !== false,
     todayOrder: !!c.betterPostersTodayOrder,
+    // Pictorium wins over Better Posters when both are on: only one of them
+    // can draw a poster.
+    pictoriumTemplate: c.pictorium && isValidPictoriumTemplate(c.pictoriumUrl) ? c.pictoriumUrl : "",
     lang: c.betterPostersLang || "en",
     ratingSource: c.betterPostersRatingSource || "avg",
   };
+}
+
+// A Pictorium poster link for one title, from the link as pasted in Settings.
+// Only the type and id are filled in; "shape" is dropped (Pictorium's default
+// is the portrait poster) and any other placeholder is left as it is.
+function fillPictoriumTemplate(template, imdbId, type) {
+  return String(template)
+    .split(PICTORIUM_SHAPE_PARAM).join("")
+    .replace(PICTORIUM_TYPE_TOKEN, type === "series" ? "series" : "movie")
+    .replace(PICTORIUM_ID_TOKEN, imdbId);
 }
 
 // Single-meta form, for the /meta/ detail route.
@@ -1399,6 +1414,7 @@ function applyBetterPostersToMetas(metas, opts) {
     if (m.posterShape === "landscape") return m;
     const imdbId = betterPostersImdbId(m);
     if (!imdbId) return m;
+    if (opts && opts.pictoriumTemplate) return { ...m, poster: fillPictoriumTemplate(opts.pictoriumTemplate, imdbId, m.type) };
     return { ...m, poster: buildBetterPosterUrl(imdbId, opts) };
   });
   mapped.totalItems = tot;
@@ -1409,7 +1425,7 @@ function applyBadgedPostersToMetas(metas, origin) {
   if (!Array.isArray(metas) || !metas.length || !origin) return metas;
   const tot = metas.totalItems;
   const mapped = metas.map((m) => {
-    if (!m || !m.poster || m.poster.startsWith("data:image/svg") || m.poster.includes("/api/poster-badge") || m.poster.includes("/api/safe-poster")) return m;
+    if (!m || !m.poster || m.poster.startsWith("data:image/svg") || m.poster.includes("/api/poster-badge") || m.poster.includes("/api/safe-poster") || m.poster.includes("/api/poster/")) return m;
     const isPremiereEp = m.episodeNumber === 1 || m.episodeNum === 1 || (m.episodeNum == null && m.episodeNumber == null);
     const hasAired = m.airDate && typeof isEpisodeAired === "function" ? isEpisodeAired(m.airDate) : false;
     const hasPremiere = !!(m.isSeasonPremiere && isPremiereEp && !hasAired);

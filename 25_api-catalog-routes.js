@@ -939,7 +939,7 @@ async function handleFetch(request, env, ctx) {
         customListRowIsLive(e.url, !!resolved.trackCreatorName) || !!parsePublishedListUrl(e.url)
       ));
       return jsonPublic(
-        buildManifest(entries, url.origin, track, shuffleShelves, m[1], liveNames),
+        buildManifest(entries, url.origin, track, shuffleShelves, m[1], liveNames, resolved.provideMetadata !== false),
         200,
         hasLiveShelf ? { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" } : {}
       );
@@ -1222,8 +1222,9 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // This route builds its metas directly rather than through
         // fetchCatalog, so it needs its own call -- otherwise search results
         // would be the one row in Stremio still showing the old artwork.
-        if (searchConfig.betterPosters) {
-          metas = applyBetterPostersToMetas(metas, betterPostersOptionsFrom(searchConfig, url.origin));
+        const searchArt = betterPostersOptionsFrom(searchConfig, url.origin);
+        if (searchConfig.betterPosters || searchArt.pictoriumTemplate) {
+          metas = applyBetterPostersToMetas(metas, searchArt);
         }
         return jsonPublic({ metas }, 200, { "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400" });
       }
@@ -1705,8 +1706,9 @@ Sitemap: ${url.origin}/sitemap.xml`;
           // opened. Only the poster is touched -- background, logo, cast and
           // the episode list all stay exactly as fetchStandardItemMeta built
           // them, and a non-IMDB id (tmdb:...) is left alone.
-          if (metaConfig.betterPosters) {
-            meta = applyBetterPosterToMeta(meta, betterPostersOptionsFrom(metaConfig, url.origin));
+          const metaArt = betterPostersOptionsFrom(metaConfig, url.origin);
+          if (metaConfig.betterPosters || metaArt.pictoriumTemplate) {
+            meta = applyBetterPosterToMeta(meta, metaArt);
           }
           return jsonPublic(
             { meta },

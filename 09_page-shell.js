@@ -116,6 +116,12 @@ function renderBuilder(
   const initialBetterPostersQuality = !!initialKeys.betterPostersQuality;
   const initialBetterPostersAge = !!initialKeys.betterPostersAge;
   const initialBetterPostersTodayOrder = !!initialKeys.betterPostersTodayOrder;
+  // Pictorium (opt-in, with the poster link pasted from the person's own space)
+  // and "Use My Lists Addon metadata" (on unless switched off) -- see
+  // INSTALL_CONFIG_FIELDS (00_constants.js).
+  const initialPictorium = !!initialKeys.pictorium;
+  const initialPictoriumUrl = typeof initialKeys.pictoriumUrl === "string" ? initialKeys.pictoriumUrl : "";
+  const initialProvideMetadata = initialKeys.provideMetadata !== false;
   const initialBetterPostersTrendTags = initialKeys.betterPostersTrendTags !== false;
   const betterPostersLangOptionsHtml = buildBetterPostersLangOptionsHtml(initialKeys.betterPostersLang || "en");
   const betterPostersRatingSourceOptionsHtml = buildBetterPostersRatingSourceOptionsHtml(initialKeys.betterPostersRatingSource || "avg");
