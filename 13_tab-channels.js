@@ -69,7 +69,7 @@
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Merge Saved Channels into One Catalog</h2>
       </div>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Combine multiple saved TV channels into a single catalog row on your Catalogs shelf.</p>
+      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Combine multiple saved TV channels. <strong>Merge into catalog</strong> puts them in one catalog row and keeps each channel separate. <strong>Combine into one channel</strong> makes a new channel with all of their episodes, counting an episode that is in more than one of them once.</p>
       
       <div id="savedMergedChannelsSection" style="margin-bottom:16px;">
         <div id="savedMergedChannelsList"></div>
@@ -77,7 +77,7 @@
 
       <div style="border-top:1px solid var(--border); padding-top:12px; margin-top:12px;">
         <div class="shelf-header" style="margin-bottom:8px;">
-          <h3 style="font-size:0.95rem; font-weight:700; margin:0;">Create Merged Catalog</h3>
+          <h3 style="font-size:0.95rem; font-weight:700; margin:0;">Create Merged Catalog or Channel</h3>
         </div>
         <div id="channelMergeSelectAllWrap" class="actions" style="margin-bottom:8px; justify-content:flex-end; display:none;">
           <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:0.85rem; user-select:none;">
@@ -87,8 +87,9 @@
         </div>
         <div id="channelMergeList"><p style="color:var(--muted); font-size:0.85rem;"><small>No saved channels yet.</small></p></div>
         <div class="row" id="channelMergeControls" style="margin-top:10px; gap:8px; display:none;">
-          <input type="text" id="channelMergeNameInput" aria-label="Combined catalog name" placeholder="Combined catalog name (e.g. Live TV)" style="max-width:380px; width:100%; border-radius:var(--radius-pill);">
+          <input type="text" id="channelMergeNameInput" aria-label="Combined catalog or channel name" placeholder="Combined name (e.g. Live TV)" style="max-width:380px; width:100%; border-radius:var(--radius-pill);">
           <button type="button" class="secondary lc-btn" data-act="mergeChannelsIntoRow" style="border-radius:var(--radius-pill);">Merge into catalog</button>
+          <button type="button" class="secondary lc-btn" data-act="combineChannelsIntoChannel" data-act-args="[&quot;@self&quot;]" title="Make a new channel with every episode of the checked channels, duplicates left out" style="border-radius:var(--radius-pill);">Combine into one channel</button>
         </div>
       </div>
     </div>
