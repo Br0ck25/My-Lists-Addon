@@ -52,7 +52,6 @@ function importRoutes(overrides) {
 
 function loadImportsClient(overrides, opts) {
   const client = loadClient({
-    newUi: true,
     signedIn: true,
     routes: importRoutes(overrides),
     storage: (opts && opts.storage) || {},
@@ -111,15 +110,8 @@ describe("the shell's Imports screen", () => {
     assert.equal(/on[a-z]+=/.test(markup), false, "the screen must not add inline handlers");
   });
 
-  it("does nothing at all on the old page", async () => {
-    const client = loadClient({ newUi: false, routes: importRoutes({}) });
-    assert.equal(client.call("appShellRenderImports"), false);
-    assert.equal(await client.call("appShellResumeImport"), false);
-    assert.equal(host(client), "");
-  });
-
   it("signed out, points at signing in and asks nobody", async () => {
-    const client = loadClient({ newUi: true, routes: importRoutes({}) });
+    const client = loadClient({ routes: importRoutes({}) });
     client.call("appShellRenderImports");
     const markup = host(client);
     assert.match(markup, /Sign in first/);

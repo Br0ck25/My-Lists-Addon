@@ -4633,7 +4633,7 @@ const CATALOG_LIST_SEARCH_SOURCES = {
 };
 
 function catalogListSearchChipsOn() {
-  return !!document.getElementById('catalogListSearchChips') && typeof NEW_UI !== 'undefined' && !!NEW_UI;
+  return !!document.getElementById('catalogListSearchChips');
 }
 
 function catalogListSearchWants(sourceId) {

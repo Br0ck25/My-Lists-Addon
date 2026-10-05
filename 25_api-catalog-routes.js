@@ -217,13 +217,10 @@ async function handleFetch(request, env, ctx) {
     // token as its config segment (see v2InstallPath, 27_installs.js).
     const path = v2InstallPath(url.pathname) || url.pathname;
 
-    // Whether a browser that has not chosen gets the new interface
-    // (FF_NEW_UI; isNewUiRequest, 02_).
-    request.newUiDefault = newUiDefaultOn(env);
-
-    // ?ff_new_ui=1 (or 0) turns the new UI shell on or off for this browser,
-    // then bounces to the same address without the parameter (P6-1). Handled
-    // before anything else so it works from any page of the site.
+    // ?ff_new_ui=1 (or 0) used to switch between the classic page and the new
+    // interface. The classic page is retired (Release 21): a link that still
+    // carries it bounces to the same address without it (appShellSwitchResponse,
+    // 02_). Handled before anything else so it works from any page of the site.
     if (request.method === "GET" || request.method === "HEAD") {
       const shellSwitch = appShellSwitchResponse(url);
       if (shellSwitch) return shellSwitch;
@@ -298,24 +295,20 @@ async function handleFetch(request, env, ctx) {
 
     // The new UI shell's own paths (Phase 6, P6-1): /catalogs, /lists,
     // /channels, /discover, /search, /settings and a sub-tab below any of them
-    // (/settings/connections, /catalogs/quickadd). Served only to a browser
-    // that gets the new interface (its cookie, or the FF_NEW_UI variable);
-    // for any other these addresses 404, as they always did.
+    // (/settings/connections, /catalogs/quickadd).
     //
     // Exact paths only: /lists/<slug> and /channels/<user>/<slug> are share
     // links and keep their own routes below.
-    if (APP_SHELL_PATHS.has(path) && isNewUiRequest(request)) {
+    if (APP_SHELL_PATHS.has(path)) {
       ctx.waitUntil(bumpStat(env, "pageviews"));
       return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
     }
-    if (isNewUiRequest(request)) {
-      for (const shellTab of APP_SHELL_TABS) {
-        if (path.indexOf(shellTab.path + "/") !== 0) continue;
-        const shellSub = path.slice(shellTab.path.length + 1);
-        if (shellTab.subs.indexOf(shellSub) === -1) continue;
-        ctx.waitUntil(bumpStat(env, "pageviews"));
-        return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
-      }
+    for (const shellTab of APP_SHELL_TABS) {
+      if (path.indexOf(shellTab.path + "/") !== 0) continue;
+      const shellSub = path.slice(shellTab.path.length + 1);
+      if (shellTab.subs.indexOf(shellSub) === -1) continue;
+      ctx.waitUntil(bumpStat(env, "pageviews"));
+      return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
     }
 
     // add-on icon, served straight from this Worker using precomputed bytes (P8-4)

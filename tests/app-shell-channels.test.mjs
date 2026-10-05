@@ -59,7 +59,6 @@ function channelRoutes(overrides) {
 function loadChannelsClient(overrides, opts) {
   const o = opts || {};
   const client = loadClient({
-    newUi: true,
     signedIn: o.signedIn === false ? false : true,
     routes: channelRoutes(overrides),
     storage: o.storage || {},
@@ -108,13 +107,6 @@ describe("the shell's Channels screen", () => {
     }
     assert.equal((markup.match(/data-app-shell-action="chan-template"/g) || []).length, 5);
     assert.equal(/on[a-z]+=/.test(markup), false, "the screen must not add inline handlers");
-  });
-
-  it("does nothing at all on the old page", async () => {
-    const client = loadClient({ newUi: false, routes: channelRoutes({}) });
-    assert.equal(client.call("appShellRenderChannels"), false);
-    assert.equal(client.call("appShellOpenChannels"), false);
-    assert.equal(host(client), "");
   });
 
   it("renders when the Channels view is opened, and when the page is served at it", async () => {

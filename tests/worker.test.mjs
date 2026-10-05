@@ -4167,10 +4167,18 @@ describe("audit fix 5: shared-key fan-out endpoints are bounded", () => {
   it("gives bring-your-own-key callers more headroom on /api/recommendations, not an exemption", async () => {
     // Up to ~72 outbound subrequests per call, so this is the bigger
     // amplifier of the two.
+    //
+    // The limits are per minute (30 shared, 120 with a key). Each loop that
+    // must hit one sends twice the limit and some, so a run that crosses a
+    // minute boundary part-way still puts more than the limit into one of the
+    // two minutes. 140 against 120 failed when the minute turned after the
+    // first 20 or so.
+    const SHARED_CAP = 30;
+    const OWN_KEY_CAP = 120;
     const env = makeEnv();
     const sharedIp = nextIp();
     let sharedLimited = 0;
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 2 * SHARED_CAP + 15; i++) {
       const r = await call(env, "/api/recommendations", {
         method: "POST", ip: sharedIp, json: { movieIds: [], showIds: [] },
       });
@@ -4190,7 +4198,7 @@ describe("audit fix 5: shared-key fan-out endpoints are bounded", () => {
 
     const floodIp = nextIp();
     let floodLimited = 0;
-    for (let i = 0; i < 140; i++) {
+    for (let i = 0; i < 2 * OWN_KEY_CAP + 15; i++) {
       const r = await call(env, "/api/recommendations", {
         method: "POST", ip: floodIp, json: { movieIds: [], showIds: [], tmdbKey: "x" },
       });

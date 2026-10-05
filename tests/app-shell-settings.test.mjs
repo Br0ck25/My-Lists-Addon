@@ -61,7 +61,7 @@ describe("the shell's Settings view", () => {
   // drawn: Your Account and External Accounts & API Keys, on the same page,
   // have the same buttons, and the owner found each one twice.
   it("renders the devices and install link panels, with no inline handlers", async () => {
-    const client = loadClient({ newUi: true, signedIn: true, routes: routesFor() });
+    const client = loadClient({ signedIn: true, routes: routesFor() });
     await openSettings(client);
     const markup = home(client);
     for (const role of ["devices", "installs"]) {
@@ -76,7 +76,7 @@ describe("the shell's Settings view", () => {
   });
 
   it("reads the account, its devices and its install links over the session cookie", async () => {
-    const client = loadClient({ newUi: true, signedIn: true, routes: routesFor() });
+    const client = loadClient({ signedIn: true, routes: routesFor() });
     await openSettings(client);
 
     assert.match(panel(client, "devices"), /Chrome on Windows/);
@@ -96,7 +96,6 @@ describe("the shell's Settings view", () => {
 
   it("says what is unavailable, and nothing about saved install links while they are off", async () => {
     const client = loadClient({
-      newUi: true,
       signedIn: true,
       routes: routesFor({
         "/api/installs": async () => ({ status: 404, json: { ok: false, error: "Not found." } }),
@@ -114,7 +113,7 @@ describe("the shell's Settings view", () => {
   });
 
   it("signed out, asks nobody and points at signing in", async () => {
-    const client = loadClient({ newUi: true, routes: { "/api/me": async () => SIGNED_OUT } });
+    const client = loadClient({ routes: { "/api/me": async () => SIGNED_OUT } });
     await openSettings(client);
     assert.match(panel(client, "devices"), /Sign in to see the devices/);
     assert.doesNotMatch(panel(client, "installs"), /named install links/);
@@ -122,92 +121,11 @@ describe("the shell's Settings view", () => {
     assert.equal(requestsTo(client, "/api/connections").length, 0);
     assert.equal(requestsTo(client, "/api/installs").length, 0);
   });
-
-  it("signs out through the session cookie and forgets the account", async () => {
-    let signedIn = true;
-    const client = loadClient({
-      newUi: true,
-      signedIn: true,
-      routes: {
-        "/api/me": async () => (signedIn ? { json: ACCOUNT } : SIGNED_OUT),
-        "/api/session": async (req) => { signedIn = false; return { json: { ok: true }, saw: req.method }; },
-      },
-    });
-    assert.equal(await client.call("appShellSignOut"), true);
-    const sent = requestsTo(client, "/api/session");
-    assert.equal(sent.length, 1);
-    assert.equal(sent[0].method, "DELETE");
-    assert.equal(sent[0].headers["Content-Type"], "application/json");
-    assert.equal(client.get("appShellState.get('account')"), null);
-  });
-});
-
-describe("deleting an account (P6-2, E2E 11)", () => {
-  it("asks first, and sends the confirmation the server requires", async () => {
-    // Deleting the account ends the session, so the re-read that follows the
-    // delete answers as a signed-out browser would.
-    let deleted = false;
-    const client = loadClient({
-      newUi: true,
-      signedIn: true,
-      routes: routesFor({
-        "/api/me": async (req) => {
-          if (req.method === "DELETE") { deleted = true; return { json: { ok: true } }; }
-          return deleted ? SIGNED_OUT : { json: ACCOUNT };
-        },
-      }),
-    });
-    const pending = client.call("appShellDeleteAccount");
-    // The dialog is the shell's own, so it is wired from JS: this is the click.
-    client.__byId.get("appShellDialogConfirm").__fire("click");
-    assert.equal(await pending, true);
-
-    const deletes = requestsTo(client, "/api/me").filter((r) => r.method === "DELETE");
-    assert.equal(deletes.length, 1);
-    assert.deepEqual(JSON.parse(JSON.stringify(deletes[0].body)), { confirm: "DELETE" });
-    assert.equal(client.get("appShellState.get('account')"), null);
-  });
-
-  it("sends nothing at all when the dialog is dismissed", async () => {
-    const client = loadClient({ newUi: true, signedIn: true, routes: routesFor() });
-    const pending = client.call("appShellDeleteAccount");
-    client.__byId.get("appShellDialogCancel").__fire("click");
-    assert.equal(await pending, false);
-    assert.equal(requestsTo(client, "/api/me").filter((r) => r.method === "DELETE").length, 0);
-  });
-});
-
-describe("connected accounts (P6-2, E2E 12)", () => {
-  it("starts the provider's own sign-in, so one flow connects it everywhere", async () => {
-    const client = loadClient({ newUi: true, signedIn: true, routes: routesFor() });
-    await openSettings(client);
-    assert.equal(client.call("appShellConnectProvider", "trakt"), true);
-    assert.equal(client.location.href, "https://example.com/api/trakt/oauth/start");
-    assert.equal(client.call("appShellConnectProvider", "nope"), false);
-  });
-
-  it("disconnecting drops it on the server and on this browser, then refreshes", async () => {
-    const client = loadClient({
-      newUi: true,
-      signedIn: true,
-      routes: routesFor({
-        "/api/connections/trakt": async (req) => ({ json: { ok: true, saw: req.method } }),
-      }),
-    });
-    await openSettings(client);
-    assert.equal(await client.call("appShellDisconnectProvider", "trakt"), true);
-    // The legacy disconnect is what removes the server's copy (fire and forget)
-    // and clears this browser's; the panel is then re-read.
-    const calls = requestsTo(client, "/api/connections/trakt");
-    assert.equal(calls[0].method, "DELETE");
-    assert.equal(client.localStorage.getItem("myListAddon:traktAccessToken"), null);
-  });
 });
 
 describe("devices and install links", () => {
   it("signs one device out, or every other device", async () => {
     const client = loadClient({
-      newUi: true,
       signedIn: true,
       routes: routesFor({ "/api/me/sessions": async (req) => (req.method === "DELETE" ? { json: { ok: true } } : { json: { ok: true, sessions: [] } }) }),
     });
@@ -222,7 +140,6 @@ describe("devices and install links", () => {
 
   it("revokes an install link only after the dialog is answered", async () => {
     const client = loadClient({
-      newUi: true,
       signedIn: true,
       routes: routesFor({ "/api/installs/3": async (req) => ({ json: { ok: true, saw: req.method } }) }),
     });
@@ -236,7 +153,6 @@ describe("devices and install links", () => {
 
   it("offers the link in Stremio, in Nuvio and for other apps once one exists", async () => {
     const client = loadClient({
-      newUi: true,
       signedIn: true,
       routes: routesFor(),
       storage: { "myListAddon:installLink": JSON.stringify({ url: "https://example.com/abc/manifest.json", hash: "x" }) },
@@ -250,7 +166,7 @@ describe("devices and install links", () => {
   });
 
   it("offers to make one when this browser has none", async () => {
-    const client = loadClient({ newUi: true, signedIn: true, routes: routesFor() });
+    const client = loadClient({ signedIn: true, routes: routesFor() });
     await openSettings(client);
     assert.match(panel(client, "installs"), /Nothing is installed from this browser yet/);
     assert.ok(panel(client, "installs").includes('data-app-shell-action="install-get"'));

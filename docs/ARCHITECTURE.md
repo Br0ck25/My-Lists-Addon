@@ -88,8 +88,8 @@ All flags are plain Worker environment variables (`1` = on, unset = off).
 | `FF_CHART_SNAPSHOTS` | Shared chart snapshots in KV | No |
 | `FF_CANONICAL_IDS` | IMDb-preferred IDs in catalog rows | No |
 
-See [`docs/OPERATIONS.md`](OPERATIONS.md) §3 for the full list including `FF_NEW_UI` and
-`FF_SHOW_SCHEDULE`. See [`docs/CUTOVER.md`](CUTOVER.md) for the Phase 10 flag-flip runbook.
+See [`docs/OPERATIONS.md`](OPERATIONS.md) §3 for the full list including `FF_SHOW_SCHEDULE`
+(`FF_NEW_UI` is no longer read: the classic page was retired in Release 21). See [`docs/CUTOVER.md`](CUTOVER.md) for the Phase 10 flag-flip runbook.
 
 ---
 

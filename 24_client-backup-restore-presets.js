@@ -707,294 +707,6 @@ function applyImportedConfig(data) {
   else showToast('Your setup, lists, watch history, channels, and settings have been restored successfully.', 'success');
 }
 
-// --- import from an existing link -------------------------------------------
-//
-// Reads this add-on's own install link / configure link / stremio:// /
-// wako:// link back into rows, via the server's /api/resolve (same
-// resolveConfig() the manifest/configure routes use, so it works whether
-// the link is a short KV id or a legacy self-contained base64 blob). This
-// can only work for THIS add-on's own links -- a manifest from a different
-// Stremio add-on, or a screenshot of one, doesn't carry the original list
-// URLs anywhere recoverable, so there's no reliable way to reconstruct rows
-// from either of those; Bulk Add below is the practical fallback there.
-async function resolveInstallLinkData(raw) {
-  const cleaned = raw.replace(/^(?:stremio|nuvio|wako):\\/\\//i, 'https://');
-  const m = cleaned.match(/^(https?:\\/\\/[^/]+)?\\/([^/]+)\\/(?:manifest\\.json|configure)(?:[/?#]|$)/i);
-  let targetOrigin = null;
-  let config = null;
-  if (m) {
-    if (m[1]) targetOrigin = m[1];
-    config = m[2];
-  } else if (/^[A-Za-z0-9_-]{6,}$/.test(cleaned)) {
-    config = cleaned;
-  }
-  if (!config) {
-    return { ok: false, error: 'Could not find a config in that link -- paste the full install link (ending in /manifest.json) or a configure link.' };
-  }
-
-  // Only this site's own install links can be imported. This used to fetch
-  // /api/resolve (and, failing that, the manifest) from whatever origin the
-  // pasted link named, so one self-hosted deployment could import another's
-  // links -- which also pulled a stranger's provider tokens into this page.
-  // The hosted site is the only deployment now.
-  if (targetOrigin && targetOrigin.toLowerCase() !== ORIGIN.toLowerCase() && !/^https:\\/\\/(www\\.)?mylistsaddon\\.com$/i.test(targetOrigin)) {
-    return { ok: false, error: 'Only My Lists install links can be imported here.' };
-  }
-
-  try {
-    const res = await fetch(ORIGIN + '/api/resolve?config=' + encodeURIComponent(config));
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.ok && Array.isArray(data.entries) && data.entries.length) {
-        return data;
-      }
-      if (data && data.ok === false && data.error) {
-        return data;
-      }
-    }
-  } catch (e) {}
-
-  return { ok: false, error: 'That link has no lists in it.' };
-}
-
-async function importFromLink() {
-  const raw = document.getElementById('importLinkInput').value.trim();
-  if (!raw) {
-    if (typeof showAppAlert === 'function') showAppAlert('Link Required', 'Paste an install link, configure link, or stremio:// / wako:// link first.', false);
-    else showToast('Paste an install link, configure link, or stremio://\\/wako:// link first.', 'error');
-    return;
-  }
-  try {
-    const data = await resolveInstallLinkData(raw);
-    if (!data || !data.ok) {
-      if (typeof showAppAlert === 'function') showAppAlert('Link Error', 'Could not load that link: ' + ((data && data.error) || 'unknown error'), false);
-      else showToast('Could not load that link: ' + ((data && data.error) || 'unknown error'), 'error');
-      return;
-    }
-    restoreRows(data.entries);
-    // A link carries no provider keys or tokens any more (/api/resolve): the
-    // accounts connected in this browser, or synced to the signed-in account,
-    // are the ones used.
-    if (data.traktUsername) document.getElementById('traktUsernameInput').value = data.traktUsername;
-    renumber();
-    checkAllDuplicateUrls();
-    saveState();
-    renderChannelMergeList();
-
-    // Rebuild & restore custom lists and channels from the imported link
-    // The link path never went through validateAndRepairBackup, so the same
-    // id check has to happen here: the payload came from a pasted link and
-    // is treated as untrusted JSON.
-    const unsafeFromLink = dropUnsafeImportedIds(data);
-    const { lists: extractedLists, channels: extractedChannels } = extractCustomListsAndChannelsFromPreset(data);
-    const listSlugs = Object.keys(extractedLists);
-    const channelIds = Object.keys(extractedChannels);
-
-    let restoredListsCount = 0;
-    const restoredListNames = [];
-    let hasTrackingChanges = false;
-    if (listSlugs.length > 0) {
-      let localCustomListsMap = (typeof loadLocalCustomLists === 'function') ? loadLocalCustomLists() : {};
-      listSlugs.forEach((slug) => {
-        const rebuilt = extractedLists[slug];
-        if (!localCustomListsMap[slug]) {
-          localCustomListsMap[slug] = rebuilt;
-          restoredListsCount++;
-          restoredListNames.push(rebuilt.name || slug);
-          if (slug === 'watch-history' || slug === 'continue-watching' || slug === 'watchlist') {
-            hasTrackingChanges = true;
-          }
-        } else {
-          const existing = localCustomListsMap[slug];
-          const seenKeys = new Set((existing.items || []).map((it) => String(it.id || it.imdbId || it.tmdbId || it.title || '')));
-          let addedItems = 0;
-          (rebuilt.items || []).forEach((it) => {
-            const key = String(it.id || it.imdbId || it.tmdbId || it.title || '');
-            if (!seenKeys.has(key)) {
-              if (!existing.items) existing.items = [];
-              existing.items.push(it);
-              seenKeys.add(key);
-              addedItems++;
-            }
-          });
-          if (addedItems > 0) {
-            existing.updatedAt = Date.now();
-            restoredListsCount++;
-            restoredListNames.push((existing.name || slug) + ' (+' + addedItems + ' items)');
-            if (slug === 'watch-history' || slug === 'continue-watching' || slug === 'watchlist') {
-              hasTrackingChanges = true;
-            }
-          }
-        }
-      });
-      if (typeof saveLocalCustomListsMap === 'function') saveLocalCustomListsMap(localCustomListsMap);
-      if (localCustomListsMap['watch-history'] && Array.isArray(localCustomListsMap['watch-history'].items)) {
-        window._rawWatchHistoryItems = localCustomListsMap['watch-history'].items;
-        window._watchedItemIds = new Set((window._rawWatchHistoryItems || []).map((it) => String(it.id || it.imdbId || (it.tmdbId ? 'tmdb:' + it.tmdbId : '') || '')));
-      }
-    }
-
-    if (channelIds.length > 0) {
-      let localChannelsMap = (typeof loadLocalChannels === 'function') ? loadLocalChannels() : {};
-      channelIds.forEach((chId) => {
-        if (!localChannelsMap[chId]) localChannelsMap[chId] = extractedChannels[chId];
-      });
-      if (typeof saveLocalChannelsMap === 'function') saveLocalChannelsMap(localChannelsMap);
-    }
-
-    if (hasTrackingChanges) {
-      if (typeof pushTrackingSync === 'function') pushTrackingSync();
-      if (typeof renderWatchHistoryGrid === 'function') renderWatchHistoryGrid();
-    }
-
-    if (listSlugs.length > 0 || channelIds.length > 0) {
-      if (typeof renderCreatorDashboard === 'function') renderCreatorDashboard();
-      if (typeof renderMyCustomListsList === 'function') renderMyCustomListsList();
-      if (typeof renderChannelsList === 'function') renderChannelsList();
-      if (typeof renderMyCreatedChannelsList === 'function') renderMyCreatedChannelsList();
-      if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
-      if (typeof activeCreator !== 'undefined' && activeCreator) {
-        if (typeof scheduleCreatorSyncSave === 'function') scheduleCreatorSyncSave();
-        if (typeof pushCreatorSync === 'function') pushCreatorSync();
-        if (typeof pushChannelsSync === 'function') pushChannelsSync();
-      }
-    }
-
-    document.getElementById('importLinkInput').value = '';
-    let msg = 'Imported ' + data.entries.length + ' list' + (data.entries.length === 1 ? '' : 's') + ' from that link.';
-    if (listSlugs.length > 0 || channelIds.length > 0) {
-      const parts = [];
-      if (listSlugs.length) parts.push(listSlugs.length + ' custom list' + (listSlugs.length === 1 ? '' : 's'));
-      if (channelIds.length) parts.push(channelIds.length + ' channel' + (channelIds.length === 1 ? '' : 's'));
-      msg += '\\n\\nRestored ' + parts.join(' and ') + ' to your My Lists tab.';
-      if (restoredListNames.length) msg += '\\n\\n• ' + restoredListNames.join('\\n• ');
-    }
-    if (unsafeFromLink.length) {
-      msg += '\\n\\nSkipped ' + unsafeFromLink.length + ' item(s) whose id contained characters this app never produces. A link from this app cannot contain those.';
-    }
-    if (typeof showAppAlert === 'function') showAppAlert('Import Complete', msg, true);
-    else showToast(msg, 'error');
-  } catch (e) {
-    if (typeof showAppAlert === 'function') showAppAlert('Network Error', 'Network error while resolving that link.', false);
-    else showToast('Network error while resolving that link.', 'error');
-  }
-}
-
-async function restoreListsFromLink() {
-  const raw = document.getElementById('importLinkInput').value.trim();
-  if (!raw) {
-    if (typeof showAppAlert === 'function') showAppAlert('Link Required', 'Paste an install link, configure link, or stremio:// / wako:// link first.', false);
-    else showToast('Paste an install link, configure link, or stremio://\\/wako:// link first.', 'error');
-    return;
-  }
-  try {
-    const data = await resolveInstallLinkData(raw);
-    if (!data || !data.ok) {
-      if (typeof showAppAlert === 'function') showAppAlert('Link Error', 'Could not load that link: ' + ((data && data.error) || 'unknown error'), false);
-      else showToast('Could not load that link: ' + ((data && data.error) || 'unknown error'), 'error');
-      return;
-    }
-
-    // The link path never went through validateAndRepairBackup, so the same
-    // id check has to happen here: the payload came from a pasted link and
-    // is treated as untrusted JSON.
-    const unsafeFromLink = dropUnsafeImportedIds(data);
-    const { lists: extractedLists, channels: extractedChannels } = extractCustomListsAndChannelsFromPreset(data);
-    const listSlugs = Object.keys(extractedLists);
-    const channelIds = Object.keys(extractedChannels);
-
-    if (!listSlugs.length && !channelIds.length) {
-      if (typeof showAppAlert === 'function') showAppAlert('No Custom Lists Found', 'That link does not contain any custom lists or custom channels.', false);
-      else showToast('That link does not contain any custom lists or custom channels.', 'error');
-      return;
-    }
-
-    let localCustomListsMap = (typeof loadLocalCustomLists === 'function') ? loadLocalCustomLists() : {};
-    let restoredListsCount = 0;
-    const restoredListNames = [];
-    let hasTrackingChanges = false;
-    listSlugs.forEach((slug) => {
-      const rebuilt = extractedLists[slug];
-      if (!localCustomListsMap[slug]) {
-        localCustomListsMap[slug] = rebuilt;
-        restoredListsCount++;
-        restoredListNames.push(rebuilt.name || slug);
-        if (slug === 'watch-history' || slug === 'continue-watching' || slug === 'watchlist') {
-          hasTrackingChanges = true;
-        }
-      } else {
-        const existing = localCustomListsMap[slug];
-        const seenKeys = new Set((existing.items || []).map((it) => String(it.id || it.imdbId || it.tmdbId || it.title || '')));
-        let addedItems = 0;
-        (rebuilt.items || []).forEach((it) => {
-          const key = String(it.id || it.imdbId || it.tmdbId || it.title || '');
-          if (!seenKeys.has(key)) {
-            if (!existing.items) existing.items = [];
-            existing.items.push(it);
-            seenKeys.add(key);
-            addedItems++;
-          }
-        });
-        if (addedItems > 0) {
-          existing.updatedAt = Date.now();
-          restoredListsCount++;
-          restoredListNames.push((existing.name || slug) + ' (+' + addedItems + ' items)');
-          if (slug === 'watch-history' || slug === 'continue-watching' || slug === 'watchlist') {
-            hasTrackingChanges = true;
-          }
-        }
-      }
-    });
-    if (typeof saveLocalCustomListsMap === 'function') saveLocalCustomListsMap(localCustomListsMap);
-    if (localCustomListsMap['watch-history'] && Array.isArray(localCustomListsMap['watch-history'].items)) {
-      window._rawWatchHistoryItems = localCustomListsMap['watch-history'].items;
-      window._watchedItemIds = new Set((window._rawWatchHistoryItems || []).map((it) => String(it.id || it.imdbId || (it.tmdbId ? 'tmdb:' + it.tmdbId : '') || '')));
-    }
-
-    if (channelIds.length > 0) {
-      let localChannelsMap = (typeof loadLocalChannels === 'function') ? loadLocalChannels() : {};
-      channelIds.forEach((chId) => {
-        if (!localChannelsMap[chId]) localChannelsMap[chId] = extractedChannels[chId];
-      });
-      if (typeof saveLocalChannelsMap === 'function') saveLocalChannelsMap(localChannelsMap);
-    }
-
-    if (hasTrackingChanges) {
-      if (typeof pushTrackingSync === 'function') pushTrackingSync();
-      if (typeof renderWatchHistoryGrid === 'function') renderWatchHistoryGrid();
-    }
-
-    if (typeof renderCreatorDashboard === 'function') renderCreatorDashboard();
-    if (typeof renderMyCustomListsList === 'function') renderMyCustomListsList();
-    if (typeof renderChannelsList === 'function') renderChannelsList();
-    if (typeof renderMyCreatedChannelsList === 'function') renderMyCreatedChannelsList();
-    if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
-    if (typeof activeCreator !== 'undefined' && activeCreator) {
-      if (typeof scheduleCreatorSyncSave === 'function') scheduleCreatorSyncSave();
-      if (typeof pushCreatorSync === 'function') pushCreatorSync();
-      if (typeof pushChannelsSync === 'function') pushChannelsSync();
-    }
-
-    document.getElementById('importLinkInput').value = '';
-    let msg = 'Restored ' + listSlugs.length + ' custom list' + (listSlugs.length === 1 ? '' : 's');
-    if (channelIds.length) {
-      msg += ' and ' + channelIds.length + ' channel' + (channelIds.length === 1 ? '' : 's');
-    }
-    msg += ' from that link into your My Lists tab.';
-    if (restoredListNames.length) {
-      msg += '\\n\\n• ' + restoredListNames.join('\\n• ');
-    }
-    if (unsafeFromLink.length) {
-      msg += '\\n\\nSkipped ' + unsafeFromLink.length + ' item(s) whose id contained characters this app never produces. A link from this app cannot contain those.';
-    }
-    if (typeof showAppAlert === 'function') showAppAlert('Custom Lists Rebuilt', msg, true);
-    else showToast(msg, 'error');
-  } catch (e) {
-    if (typeof showAppAlert === 'function') showAppAlert('Network Error', 'Network error while resolving that link.', false);
-    else showToast('Network error while resolving that link.', 'error');
-  }
-}
-
 // --- personal presets --------------------------------------------------------
 //
 // Named local saves of a row selection, for reuse ("my usual setup") or
@@ -2047,16 +1759,10 @@ function computeConfigStateHash() {
   }
 }
 
-// Called by saveState() after every change to the rows or the settings. On a
-// shell page this is what keeps the install bar honest; on the legacy page the
-// call stays the no-op it has been (the shell replaces the floating banner).
+// Called by saveState() after every change to the rows or the settings: keeps
+// the install link's state (live / unsaved) current for Settings.
 function checkUnsavedInstallLink() {
   if (typeof appShellActive !== 'undefined' && appShellActive) appShellRefreshInstallBar();
-}
-
-// The legacy banner's Update Link button. The shell's bar uses the same work.
-function updateInstallLinkFromBanner() {
-  if (typeof appShellActive !== 'undefined' && appShellActive) appShellInstallBarAction();
 }
 
 // myListAddon:state is this browser's copy of the rows and settings, and it
@@ -2333,8 +2039,6 @@ async function generate() {
   // rows, so bring the result into view rather than leaving it rendered
   // off-screen above the fold the person's currently scrolled past.
   lastGeneratedConfigHash = computeConfigStateHash();
-  const banner = document.getElementById('unsavedInstallBanner');
-  if (banner) banner.classList.remove('show');
   box.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -2873,11 +2577,8 @@ window.addEventListener('popstate', (e) => {
 //   * the install bar: what this browser's install link currently is, and the
 //     one action that changes it.
 //
-// Everything here is inert unless NEW_UI (the per-request preamble flag) is
-// true, so a browser without the cookie runs the legacy page exactly as it did.
-// The bundle itself is shared and content-hashed (splitAppBundle, 02_), which
-// is why this lives in the bundle and branches on NEW_UI rather than being
-// emitted from the server.
+// Every visitor gets the shell since the classic page was retired (Release
+// 21); it used to be switched on per browser by a flag in the page preamble.
 
 // The last install link this browser generated, and the configuration it was
 // generated from. Browser state, not account state: the Worker cannot know it,
@@ -3170,32 +2871,12 @@ function appShellRecordInstallLink(url) {
   } catch (e) {}
 }
 
+// The bar itself was taken off the page at the owner's request (its drawing
+// code was deleted in Release 21); Settings' Install link card still reads
+// this state.
 function appShellRefreshInstallBar() {
   const info = appShellInstallLinkState();
-  // Kept whether or not the bar is on the page: the bar was taken off the
-  // shell at the owner's request, and Settings still reads this state.
   appShellState.set({ install: { state: info.state, link: info.link } });
-  const bar = document.getElementById('appShellInstallBar');
-  if (!bar) return;
-  bar.setAttribute('data-state', info.state);
-  const text = document.getElementById('appShellInstallText');
-  const btn = document.getElementById('appShellInstallBtn');
-  const words = {
-    none: 'Not installed yet',
-    unsaved: 'Unsaved changes to your install link',
-    live: 'Install link up to date',
-  };
-  const actions = {
-    none: { action: 'install', label: 'Get install link' },
-    unsaved: { action: 'update', label: 'Update link' },
-    live: { action: 'copy', label: 'Copy link' },
-  };
-  const a = actions[info.state] || actions.none;
-  if (text) text.textContent = words[info.state] || words.none;
-  if (btn) {
-    btn.setAttribute('data-action', a.action);
-    btn.textContent = a.label;
-  }
 }
 
 // Builds the install link through the builder's own generate() (which renders
@@ -3250,27 +2931,17 @@ async function appShellRefreshAccount() {
 
 // --- Settings (P6-2) ---------------------------------------------------------
 //
-// The Settings view in the shell, in one place: the account, its devices, its
-// connected accounts and its install links. It is additive -- the legacy panels
-// below it are untouched -- and it exists only on a shell page: the container it
-// renders into is emitted by the server (15_tab-settings-html.js) when, and only
-// when, the request carries the FF_NEW_UI cookie.
+// The Settings view's own cards: the account's devices and this browser's
+// install link. It is additive -- the older panels below it are untouched --
+// and renders into the container the server emits (15_tab-settings-html.js).
+// The account and connections cards it started with were deleted in Release
+// 21: Your Account (renderAccountKeySection, 22_) and External Accounts & API
+// Keys hold the same buttons, and the owner found every one of them twice.
 //
 // Everything here talks to the account APIs over the session cookie
 // (appShellApiFetch), and every control is wired with a data-app-shell-action
 // attribute instead of an inline handler: new UI code adds none of those
 // (P6-8 removes the rest of the page's).
-
-// The providers the site can hold a sign-in for. The start and stop entries are
-// the legacy functions that already do the OAuth dance and the local clean-up,
-// so this screen cannot drift from the rest of the page about how a connection
-// is made, or dropped.
-const APP_SHELL_CONNECTIONS = [
-  { id: 'trakt', label: 'Trakt', what: 'Watchlist, history and your personal Trakt rows.', start: startTraktConnect, stop: disconnectTrakt },
-  { id: 'mdblist', label: 'MDBList', what: 'Your MDBList lists, watchlist and charts.', start: startMdblistConnect, stop: disconnectMdblist },
-  { id: 'simkl', label: 'Simkl', what: 'Watchlist, history and Airing Next.', start: startSimklConnect, stop: disconnectSimkl },
-  { id: 'tmdb', label: 'TMDB', what: 'Personal lists, favorites and watchlist, plus unlimited requests.', start: startTmdbConnect, stop: disconnectTmdb },
-];
 
 function appShellSettingsHost() {
   return document.getElementById('appShellSettingsHome');
@@ -3318,31 +2989,6 @@ function appShellWhen(ms) {
   }
 }
 
-function appShellProvider(id) {
-  const want = String(id || '');
-  for (let i = 0; i < APP_SHELL_CONNECTIONS.length; i++) {
-    if (APP_SHELL_CONNECTIONS[i].id === want) return APP_SHELL_CONNECTIONS[i];
-  }
-  return null;
-}
-
-function appShellConnectionWords(conn) {
-  const status = String((conn && conn.status) || '');
-  const who = conn && conn.username ? '@' + conn.username : '';
-  if (status === 'ok') return who ? 'Connected as ' + who : 'Connected';
-  if (status === 'reauth_required') return who ? 'Reconnect as ' + who : 'Reconnect needed';
-  if (status === 'invalid') return who ? 'Sign-in expired (' + who + ')' : 'Sign-in expired';
-  if (status === 'unreachable') return 'Could not be checked';
-  return 'Not connected';
-}
-
-function appShellConnectionTone(conn) {
-  const status = String((conn && conn.status) || '');
-  if (status === 'ok') return 'ok';
-  if (status === 'reauth_required' || status === 'invalid' || status === 'unreachable') return 'warn';
-  return '';
-}
-
 function appShellDeviceLabel(session) {
   const ua = String((session && session.userAgent) || '');
   if (!ua) return 'Unknown device';
@@ -3377,25 +3023,6 @@ function appShellInstallLinkStateSafe() {
 
 // --- the panels --------------------------------------------------------------
 
-function appShellAccountBody(account) {
-  if (!account) {
-    return '<p class="app-shell-muted">You are not signed in. What you build right now is kept in this browser only.</p>' +
-      '<div class="app-shell-actions">' +
-      appShellSettingsButton('account-signin', 'Sign in or restore') +
-      appShellSettingsButton('account-import-backup', 'Import a backup file') +
-      '</div>' +
-      '<p class="app-shell-muted">Signing in restores your lists, channels, connections and install links from your account. Lost your Account Key? Use "Forgot your key?" under Your Account below: the site has no email recovery, so keep the key somewhere safe.</p>';
-  }
-  const name = account.displayName || account.username || '';
-  return '<p class="app-shell-kv"><strong>' + appShellSettingsEscape(name) + '</strong>' +
-    (account.username ? ' <span class="app-shell-muted">@' + appShellSettingsEscape(account.username) + '</span>' : '') + '</p>' +
-    '<p class="app-shell-muted">Signed in. Your lists, channels, connections and install links are kept on your account and follow you to any device.</p>' +
-    '<div class="app-shell-actions">' +
-    appShellSettingsButton('account-signout', 'Sign out') +
-    appShellSettingsButton('account-delete', 'Delete account', '', 'secondary lc-btn app-shell-danger') +
-    '</div>';
-}
-
 function appShellDevicesBody(res, sessions) {
   if (!res || !res.ok) {
     if (res && res.signInRequired) return '<p class="app-shell-muted">Sign in to see the devices using your account.</p>';
@@ -3415,32 +3042,6 @@ function appShellDevicesBody(res, sessions) {
   if (list.length > 1) {
     html += '<div class="app-shell-actions">' + appShellSettingsButton('devices-signout-others', 'Sign out my other devices') + '</div>';
   }
-  return html;
-}
-
-function appShellConnectionsBody(res, byProvider) {
-  if (res && res.signInRequired) {
-    return '<p class="app-shell-muted">Sign in to connect Trakt, MDBList, Simkl or TMDB. A connection is kept on your account, so your personal rows keep working without a new install link.</p>';
-  }
-  if (res && !res.ok) {
-    return '<p class="app-shell-muted">' + appShellSettingsEscape(res.error || 'Could not load your connected accounts.') + '</p>' +
-      '<div class="app-shell-actions">' + appShellSettingsButton('settings-refresh', 'Try again') + '</div>';
-  }
-  const map = byProvider || {};
-  let html = APP_SHELL_CONNECTIONS.map(function (p) {
-    const conn = map[p.id] || null;
-    const connected = Boolean(conn) && conn.status === 'ok';
-    const control = (connected || conn)
-      ? appShellSettingsButton('connection-disconnect', connected ? 'Disconnect' : 'Reconnect', p.id)
-      : appShellSettingsButton('connection-connect', 'Connect', p.id);
-    const who = conn && conn.username ? ' <span class="app-shell-muted">@' + appShellSettingsEscape(conn.username) + '</span>' : '';
-    return appShellSettingsRow(
-      '<strong>' + appShellSettingsEscape(p.label) + '</strong>' + who + '<br><span class="app-shell-muted">' + appShellSettingsEscape(p.what) + '</span>',
-      control,
-      appShellChip(appShellConnectionWords(conn), appShellConnectionTone(conn))
-    );
-  }).join('');
-  html += '<div class="app-shell-actions">' + appShellSettingsButton('settings-refresh', 'Refresh') + '</div>';
   return html;
 }
 
@@ -3488,30 +3089,16 @@ function appShellInstallsBody(linkState, res, installs) {
 
 // --- loading -----------------------------------------------------------------
 
-function appShellSettingsHeadline() {
-  return {
-    account: 'Loading...',
-    devices: 'Loading...',
-    connections: 'Loading...',
-    installs: 'Loading...',
-  };
-}
-
 function appShellRenderSettingsSkeleton() {
   const loading = '<p class="app-shell-muted">Loading...</p>';
   appShellSettingsBody('devices', loading);
   appShellSettingsBody('installs', loading);
 }
 
-// Devices and the install link only. The account and connections cards this
-// view used to start with are no longer drawn: Your Account (just above,
-// renderAccountKeySection, 22_) and External Accounts & API Keys hold the same
-// sign-in, sign-out, delete and connect buttons, and the owner found every one
-// of them twice. appShellAccountBody, appShellConnectionsBody and their actions
-// are left in place, unreached.
+// Devices and the install link (see the top of this section).
 async function appShellRefreshSettingsHome() {
   const host = appShellSettingsHost();
-  if (!host || !NEW_UI) return false;
+  if (!host) return false;
   appShellRenderSettingsSkeleton();
   const account = await appShellRefreshAccount();
   if (!account) {
@@ -3531,7 +3118,7 @@ async function appShellRefreshSettingsHome() {
 // action that changes what it shows.
 function appShellRenderSettingsHome() {
   const host = appShellSettingsHost();
-  if (!host || !NEW_UI) return false;
+  if (!host) return false;
   host.innerHTML =
     appShellSettingsPanel('devices', 'Devices', '<p class="app-shell-muted">Loading...</p>') +
     appShellSettingsPanel('installs', 'Install link', '<p class="app-shell-muted">Loading...</p>');
@@ -3554,16 +3141,6 @@ function appShellFocusSignIn() {
   return true;
 }
 
-function appShellImportBackup() {
-  const input = document.getElementById('configFileInput');
-  if (input && input.click) {
-    input.click();
-    return true;
-  }
-  appShellGo(appShellPathFor('settings', 'backup'));
-  return true;
-}
-
 async function appShellCopyText(text, message) {
   const value = String(text || '');
   if (!value) return false;
@@ -3576,61 +3153,6 @@ async function appShellCopyText(text, message) {
   } catch (e) {}
   showToast('Select the link and copy it by hand.', 'info');
   return false;
-}
-
-async function appShellSignOut() {
-  const res = await appShellApiFetch('/api/session', { method: 'DELETE' });
-  if (!res.ok) {
-    showToast(res.error || 'Could not sign out just now.', 'error');
-    return false;
-  }
-  if (typeof clearLocalAccountData === 'function') {
-    try { clearLocalAccountData(); } catch (e) {}
-  }
-  appShellState.set({ account: null });
-  showToast('Signed out.', 'success');
-  await appShellRefreshSettingsHome();
-  return true;
-}
-
-async function appShellDeleteAccount() {
-  const confirmed = await appShellDialog({
-    title: 'Delete your account?',
-    message: 'Everything on your account is deleted: your lists, channels, connections and install links. This cannot be undone.',
-    confirmLabel: 'Delete everything',
-    cancelLabel: 'Keep my account',
-  });
-  if (!confirmed) return false;
-  const res = await appShellApiFetch('/api/me', { method: 'DELETE', body: { confirm: 'DELETE' } });
-  if (!res.ok) {
-    showToast(res.error || 'Could not delete the account just now.', 'error');
-    return false;
-  }
-  if (typeof clearLocalAccountData === 'function') {
-    try { clearLocalAccountData(); } catch (e) {}
-  }
-  appShellState.set({ account: null });
-  showToast('Your account and its data have been deleted.', 'success');
-  await appShellRefreshSettingsHome();
-  return true;
-}
-
-function appShellConnectProvider(id) {
-  const provider = appShellProvider(id);
-  if (!provider || typeof provider.start !== 'function') return false;
-  provider.start();
-  return true;
-}
-
-async function appShellDisconnectProvider(id) {
-  const provider = appShellProvider(id);
-  if (!provider || typeof provider.stop !== 'function') return false;
-  try {
-    provider.stop();
-  } catch (e) {}
-  showToast(provider.label + ' disconnected.', 'success');
-  await appShellRefreshSettingsHome();
-  return true;
 }
 
 async function appShellRevokeSession(id) {
@@ -3678,13 +3200,7 @@ async function appShellRevokeInstall(id) {
 // no inline handlers.
 async function appShellSettingsAction(action, id) {
   const what = String(action || '');
-  if (what === 'account-signin') return appShellFocusSignIn();
-  if (what === 'account-import-backup') return appShellImportBackup();
-  if (what === 'account-signout') return appShellSignOut();
-  if (what === 'account-delete') return appShellDeleteAccount();
   if (what === 'settings-refresh') return appShellRefreshSettingsHome();
-  if (what === 'connection-connect') return appShellConnectProvider(id);
-  if (what === 'connection-disconnect') return appShellDisconnectProvider(id);
   if (what === 'device-signout') return appShellRevokeSession(id);
   if (what === 'devices-signout-others') return appShellRevokeOtherSessions();
   if (what === 'install-revoke') return appShellRevokeInstall(id);
@@ -3723,7 +3239,7 @@ function appShellDedupeOn() {
 
 function appShellRenderHomeEditor() {
   const host = document.getElementById('appShellHomeEditor');
-  if (!host || !NEW_UI) return false;
+  if (!host) return false;
   const dedupe = appShellDedupeOn();
 
   // Just the duplicate toggle now, in its own box right above the Daily
@@ -3772,7 +3288,6 @@ function appShellSetDedupe(on) {
 // initialization". Same trap, same fix, as appShellDialogClose.
 var appShellPreviewTimer = null;
 function appShellSchedulePreview() {
-  if (!NEW_UI) return false;
   if (typeof renderLivePreview !== 'function') return false;
   if (appShellPreviewTimer) clearTimeout(appShellPreviewTimer);
   appShellPreviewTimer = setTimeout(function () {
@@ -3782,397 +3297,27 @@ function appShellSchedulePreview() {
   return true;
 }
 
-// --- the Lists view (P6-4) ---------------------------------------------------
+// --- the inline "Add titles" search (P6-4) -----------------------------------
 //
-// Your lists, as cards you can act on: open one, add titles to it without
-// leaving the page, put it on the home screen, and share it. It is additive --
-// the dashboard the page already has stays underneath -- and it exists only on
-// a shell page: the containers it fills are emitted by the server (12_) when,
-// and only when, the request carries the FF_NEW_UI cookie.
+// In the list editor (12_), so creating a list and editing one are the same
+// thing: type, tap Add, and the title is in the draft. Save (the panel's own
+// button) writes it, which is where "Saved" comes from. The search is
+// /api/title-search, the same endpoint the Search tab uses, and adding is
+// addToCustomListDraft (21_).
 //
-// Everything reuses the page's own machinery rather than re-implementing it:
-// editing a list is editCreatorList(slug)/editLocalCustomList(slug) (the same
-// entry points the dashboard's Edit button uses), adding a title is
-// addToCustomListDraft (21_), putting a list on the home screen builds the same
-// customlist:v1: snapshot the dashboard's "+ Add" builds, and the search is
-// /api/title-search -- the same endpoint the Search tab uses.
+// The rest of the Lists view (the "Your lists" cards, with Share, Show on home
+// screen, Save to an account and Export) was taken off the page at the
+// owner's request and deleted in Release 21. The list dashboard underneath has
+// all of it.
 
-// E2E 7 wants one share control with three states. The legacy list store only
-// knows private and public: normalizeListVisibility (02_) maps anything that is
-// not "public" to "private", so offering Unlisted there would quietly save a
-// private list. Unlisted is part of the next list service (31_lists-api.js,
-// PUT /api/lists/:publicId/visibility), which is behind FF_V2_LISTS_API and is
-// off until reads move to the new tables. It is therefore shown, with what it
-// means, and disabled with the reason -- and turning it on is this one flag.
-const APP_SHELL_UNLISTED_READY = false;
-
-const APP_SHELL_LIST_VISIBILITIES = [
-  { id: 'private', label: 'Private', what: 'Only you can open it. Not reachable by link.' },
-  { id: 'unlisted', label: 'Unlisted', what: 'Anyone with the link can open it; it is not listed in Explore.' },
-  { id: 'public', label: 'Public', what: 'Anyone can find it in Explore, and it can be liked.' },
-];
-
-// Which list's share panel is open, and the results of the last title search.
-let appShellShareSlug = null;
+// The results of the last title search.
 let appShellTitleResults = [];
 let appShellTitleSearchSeq = 0;
 var appShellTitleSearchTimer = null;
 
-function appShellListsHomeHost() {
-  return document.getElementById('appShellListsHome');
-}
-
 function appShellListsEscape(value) {
   return escapeHtml(String(value === null || value === undefined ? '' : value));
 }
-
-// The lists this browser can act on: the account's, when it is signed in, and
-// the ones kept in this browser on their own (D-8).
-//
-// P6-9: both, not either. Until this task the signed-in branch returned the
-// account's lists and nothing else, so a list built while signed out -- which
-// survives signing in, because nothing migrates it then -- was simply not on
-// screen anywhere in the new UI, and there was no way to save it. A list the
-// account does not have is marked local, which is what the card's "Saved in
-// this browser only" line, its Save/Export buttons and the Share control all
-// read.
-function appShellOwnLists() {
-  const out = [];
-  const signedIn = (typeof activeCreator !== 'undefined' && !!activeCreator && !!activeCreator.creatorName);
-  const accountSlugs = {};
-  if (signedIn && typeof lastCreatorListsData !== 'undefined' && Array.isArray(lastCreatorListsData)) {
-    lastCreatorListsData.forEach(function (l) {
-      if (l && l.slug) {
-        out.push(l);
-        accountSlugs[String(l.slug)] = true;
-      }
-    });
-  }
-  const map = (typeof loadLocalCustomLists === 'function') ? (loadLocalCustomLists() || {}) : {};
-  Object.keys(map).forEach(function (key) {
-    const l = map[key];
-    if (!l) return;
-    // The auto-tracked lists are not hand-built ones and are not "browser
-    // only" in the sense this view means: their content travels in the
-    // account's own tracking record (pushTrackingSync, 22_), and the sign-up
-    // migration deliberately leaves them out of the per-list upload for that
-    // reason. Offering "Save to an account" on one would either duplicate it
-    // as a second list or, signed out, pretend a generated shelf is something
-    // the person built.
-    if (APP_SHELL_AUTO_TRACKED_SLUGS.indexOf(String(l.slug || key)) !== -1) return;
-    const slug = String(l.slug || key);
-    // While signed in, this store is also the account's own copy: every list
-    // the account has is mirrored into it with a creatorSlug (backfill /
-    // upload), so an entry carrying one is not browser-only, it is the
-    // account's list seen through the cache. An entry without one is a list
-    // the account has never been told about.
-    if (signedIn && (l.creatorSlug || accountSlugs[slug])) return;
-    out.push(Object.assign({}, l, { slug: slug, local: true }));
-  });
-  return out;
-}
-
-// The generated lists that live in the same browser store but are not
-// browser-only lists -- see appShellOwnLists.
-const APP_SHELL_AUTO_TRACKED_SLUGS = ['watchlist', 'watch-history', 'continue-watching', 'airing-next'];
-
-// A list the account does not have. See appShellOwnLists.
-function appShellListIsLocal(list) {
-  return !!(list && list.local);
-}
-
-function appShellListBySlug(slug) {
-  const want = String(slug || '');
-  const all = appShellOwnLists();
-  for (let i = 0; i < all.length; i++) {
-    if (String(all[i].slug) === want) return all[i];
-  }
-  return null;
-}
-
-function appShellListCount(list) {
-  if (!list) return 0;
-  if (Array.isArray(list.items)) return list.items.length;
-  if (typeof list.itemCount === 'number') return list.itemCount;
-  if (typeof list.count === 'number') return list.count;
-  return 0;
-}
-
-function appShellListKind(list) {
-  const t = list && list.type;
-  if (t === 'series') return 'Shows';
-  if (t === 'movie') return 'Movies';
-  return 'Movies and Shows';
-}
-
-function appShellListVisibility(list) {
-  const v = list && list.visibility;
-  if (v === 'public' || v === 'unlisted' || v === 'private') return v;
-  return 'private';
-}
-
-// The link to a list as other people would open it: the published address when
-// the list has one, otherwise the account's own /lists/<you>/<slug>.
-function appShellListShareUrl(list) {
-  if (!list) return '';
-  if (list.url) return String(list.url);
-  const who = (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) ? activeCreator.creatorName : '';
-  const slug = String(list.slug || '');
-  if (who && slug) return location.origin + '/lists/' + encodeURIComponent(who) + '/' + encodeURIComponent(slug);
-  return location.origin + '/lists/' + encodeURIComponent(slug);
-}
-
-function appShellListOnHomeScreen(slug) {
-  const want = String(slug || '');
-  // The page's own answer first: isListAddedToConfig (16_) is what the
-  // dashboard's own "+ Add" / "Remove" buttons read, so the card and those
-  // buttons can never disagree about whether a list is on the home screen.
-  const list = appShellListBySlug(slug);
-  if (typeof isListAddedToConfig === 'function' && list) {
-    if (isListAddedToConfig(null, list.type, want)) return true;
-    if (isListAddedToConfig(null, 'movie', want) || isListAddedToConfig(null, 'series', want)) return true;
-  }
-  const rows = document.querySelectorAll('#lists .entry');
-  for (let i = 0; i < rows.length; i++) {
-    const urlInput = rows[i].querySelector ? rows[i].querySelector('.url') : null;
-    if (!urlInput) continue;
-    const payload = (typeof parseCustomListPayloadClient === 'function') ? parseCustomListPayloadClient(urlInput.value) : null;
-    if (payload && (String(payload.localSlug || '') === want || String(payload.listSlug || '') === want)) return true;
-  }
-  return false;
-}
-
-// The card's home-screen button, doing exactly what the dashboard's own
-// "+ Add" / "Remove" does for the same list (see 22_client-creator-profile.js).
-function appShellListToggleHomeScreen(slug) {
-  const list = appShellListBySlug(slug);
-  if (!list) {
-    showToast('Could not find that list -- try refreshing.', 'error');
-    return false;
-  }
-  if (appShellListOnHomeScreen(slug)) {
-    if (typeof removeListFromConfig === 'function') {
-      removeListFromConfig(null, list.type, slug);
-      removeListFromConfig(null, 'movie', slug);
-      removeListFromConfig(null, 'series', slug);
-    }
-    const rows = document.querySelectorAll('#lists .entry');
-    for (let i = 0; i < rows.length; i++) {
-      const urlInput = rows[i].querySelector ? rows[i].querySelector('.url') : null;
-      if (!urlInput) continue;
-      const payload = (typeof parseCustomListPayloadClient === 'function') ? parseCustomListPayloadClient(urlInput.value) : null;
-      if (payload && (String(payload.localSlug || '') === String(slug) || String(payload.listSlug || '') === String(slug))) rows[i].remove();
-    }
-    if (typeof renumber === 'function') renumber();
-    if (typeof saveState === 'function') saveState();
-    appShellRenderListsHome();
-    showToast('"' + list.name + '" removed from your home screen.', 'success');
-    return true;
-  }
-  const items = (typeof normalizeSnapshotItemsForCatalog === 'function') ? normalizeSnapshotItemsForCatalog(list.items || []) : (list.items || []);
-  const snapshot = { listId: generateChannelId(), localSlug: slug, listSlug: slug, type: list.type || 'movie', items: items, shuffle: false };
-  addRow(list.name, 'customlist:v1:' + JSON.stringify(snapshot), list.type || 'movie', true, 'My Lists');
-  if (typeof renumber === 'function') renumber();
-  if (typeof saveState === 'function') saveState();
-  appShellRenderListsHome();
-  showToast('"' + list.name + '" added to your home screen.', 'success');
-  return true;
-}
-
-function appShellListChoiceHtml(slug, choice, current) {
-  const on = choice.id === current;
-  const ready = choice.id !== 'unlisted' || APP_SHELL_UNLISTED_READY;
-  return '<button type="button" class="app-shell-chip' + (on ? ' is-on' : '') + '"' +
-    ' data-app-shell-action="list-visibility" data-app-shell-id="' + appShellListsEscape(slug) + '|' + choice.id + '"' +
-    (ready ? '' : ' disabled title="' + appShellListsEscape(choice.what + ' This needs the new list service, which is not switched on yet.') + '"') +
-    '>' + appShellListsEscape(choice.label) + '</button>';
-}
-
-function appShellListShareHtml(list) {
-  const slug = String(list.slug || '');
-  const current = appShellListVisibility(list);
-  let html = '<div class="app-shell-actions" style="margin:6px 0 6px;">';
-  APP_SHELL_LIST_VISIBILITIES.forEach(function (choice) {
-    html += appShellListChoiceHtml(slug, choice, current);
-  });
-  html += '</div>';
-  const chosen = APP_SHELL_LIST_VISIBILITIES.filter(function (c) { return c.id === current; })[0];
-  if (chosen) html += '<p class="app-shell-muted">' + appShellListsEscape(chosen.what) + '</p>';
-  if (!APP_SHELL_UNLISTED_READY) {
-    html += '<p class="app-shell-muted">Unlisted needs the new list service, which is not switched on yet -- until then a list is private or public.</p>';
-  }
-  const url = appShellListShareUrl(list);
-  html += '<p class="app-shell-kv"><span class="app-shell-review-url">' + appShellListsEscape(url) + '</span></p>';
-  html += '<div class="app-shell-actions">' +
-    '<button type="button" class="secondary lc-btn" data-app-shell-action="list-copy" data-app-shell-id="' + appShellListsEscape(slug) + '">Copy link</button>' +
-    (current === 'private' ? '' : '<button type="button" class="secondary lc-btn" data-app-shell-action="list-preview" data-app-shell-id="' + appShellListsEscape(slug) + '">Open the page</button>') +
-    '</div>';
-  return html;
-}
-
-function appShellListCardHtml(list) {
-  const slug = String(list.slug || '');
-  const onHome = appShellListOnHomeScreen(slug);
-  const vis = appShellListVisibility(list);
-  const local = appShellListIsLocal(list);
-  const count = appShellListCount(list);
-  const meta = (local ? 'Saved in this browser only' : appShellListsEscape(vis.charAt(0).toUpperCase() + vis.slice(1))) +
-    ' &middot; ' + appShellListsEscape(appShellListKind(list)) + ' &middot; ' + count + (count === 1 ? ' title' : ' titles');
-  let html = '<div class="app-shell-row">' +
-    '<div class="app-shell-row-main"><strong>' + appShellListsEscape(list.name || slug) + '</strong>' +
-    '<br><span class="app-shell-muted">' + meta + '</span>' +
-    (local ? '<br><span class="app-shell-muted">It lives in this browser alone, so clearing this browser\u2019s data loses it. Save it to an account to keep it, or Export a copy.</span>' : '') +
-    '</div>' +
-    '<div class="app-shell-row-controls">' +
-    '<button type="button" class="secondary lc-btn" data-app-shell-action="list-open" data-app-shell-id="' + appShellListsEscape(slug) + '">Open</button>' +
-    '<button type="button" class="secondary lc-btn" data-app-shell-action="list-edit" data-app-shell-id="' + appShellListsEscape(slug) + '">Add titles</button>' +
-    '<button type="button" class="' + (onHome ? 'secondary lc-btn' : 'primary lc-btn') + '" data-app-shell-action="list-home" data-app-shell-id="' + appShellListsEscape(slug) + '">' +
-    (onHome ? 'On your home screen' : 'Show on home screen') + '</button>' +
-    (local
-      ? '<button type="button" class="primary lc-btn" data-app-shell-action="list-save-account" data-app-shell-id="' + appShellListsEscape(slug) + '">Save to an account</button>' +
-        '<button type="button" class="secondary lc-btn" data-app-shell-action="list-export" data-app-shell-id="' + appShellListsEscape(slug) + '">Export</button>'
-      : '<button type="button" class="secondary lc-btn" data-app-shell-action="list-share" data-app-shell-id="' + appShellListsEscape(slug) + '">Share</button>') +
-    '</div></div>';
-  if (!local && appShellShareSlug === slug) html += appShellListShareHtml(list);
-  return html;
-}
-
-// --- browser-only lists (P6-9) ----------------------------------------------
-//
-// The Lists view shows the lists this browser keeps on its own (D-8) beside the
-// account's, says which is which, and gives each of those two ways out. Both
-// end up in 22_client-creator-profile.js: the push is the same request the
-// sign-up migration makes (saveLocalListToAccount), and the export is a file
-// this same page can restore.
-
-// The button on a card. Signed in, it saves the list and the browser's copy
-// goes (the account has it now). Signed out, it copies the list out of the
-// store first and asks the person to sign in -- signing in empties this
-// browser's store (clearLocalAccountData), so the push happens right after it
-// completes, from that copy (flushPendingListSaves). Without the copy the list
-// would be gone by the time there was an account to save it to.
-async function appShellSaveLocalListToAccount(slug) {
-  const list = appShellListBySlug(slug);
-  if (!list) {
-    showToast('Could not find that list -- try refreshing.', 'error');
-    return false;
-  }
-  const signedIn = (typeof activeCreator !== 'undefined' && !!activeCreator && !!activeCreator.creatorName);
-  if (!signedIn) {
-    if (typeof rememberPendingListSave !== 'function' || !rememberPendingListSave(slug)) {
-      showToast('Could not read that list -- try refreshing.', 'error');
-      return false;
-    }
-    showToast('"' + (list.name || slug) + '" will be saved to the account you sign in to.', 'info', { duration: 8000 });
-    if (typeof openRestoreModal === 'function') openRestoreModal();
-    return true;
-  }
-  if (typeof saveLocalListToAccount !== 'function') return false;
-  const result = await saveLocalListToAccount(slug, { visibility: 'private' });
-  if (!result || !result.ok) {
-    showToast(result && result.error === 'signed-out'
-      ? 'Sign in to save this list to an account.'
-      : 'Could not save that list to your account -- try again.', 'error');
-    return false;
-  }
-  // Ask the account what it has before re-rendering: the list has just changed
-  // hands, and the card must come back from the account's own answer rather
-  // than flicker out because the cache predates the save.
-  if (typeof renderCreatorDashboard === 'function') {
-    try { await renderCreatorDashboard({ silent: true }); } catch (e) {}
-  }
-  showToast('"' + (list.name || slug) + '" is saved to your account now. It is private until you share it.', 'success');
-  appShellRenderListsHome();
-  return true;
-}
-
-// Export one list as the small JSON file this page's own restore reads
-// (Settings -> Backups -> Restore, which merges customLists into the browser's
-// store). Deliberately not the whole-library file: the point of the button is
-// that one list is only in this browser, and the person wants a copy of it.
-function appShellExportList(slug) {
-  const list = appShellListBySlug(slug);
-  if (!list) {
-    showToast('Could not find that list -- try refreshing.', 'error');
-    return false;
-  }
-  const key = String(list.slug || slug);
-  const payload = {
-    version: BACKUP_FORMAT_VERSION,
-    exportedAt: new Date().toISOString(),
-    exportedFrom: 'My Lists Addon (a list saved in one browser)',
-    customLists: {},
-  };
-  payload.customLists[key] = {
-    slug: key,
-    name: list.name || key,
-    type: list.type || 'movie',
-    items: Array.isArray(list.items) ? list.items : [],
-    visibility: appShellListVisibility(list),
-    updatedAt: Number(list.updatedAt) || Date.now(),
-  };
-  const filename = (slugify(list.name || key) || key) + '-list.json';
-  if (typeof downloadJsonFile !== 'function') return false;
-  downloadJsonFile(filename, payload);
-  showToast('Exported "' + (list.name || key) + '" as ' + filename + '.', 'success');
-  return true;
-}
-
-// Whether this view has already asked the page to fetch the account's lists.
-// One ask only: an account with no lists must end up on the empty state, not
-// on a loop of requests.
-var appShellListsLoadRequested = false;
-
-function appShellRenderListsHome() {
-  const host = appShellListsHomeHost();
-  if (!host || !NEW_UI) return false;
-  const lists = appShellOwnLists();
-  const signedIn = (typeof activeCreator !== 'undefined' && !!activeCreator && !!activeCreator.creatorName);
-  // P6-9: "no lists" and "the account's lists have not arrived yet" are
-  // different states, and only the second one is worth waiting for. The
-  // browser's own store is a *cache* of the account's lists while signed in, so
-  // rendering from it before the account answers would label an account list as
-  // browser-only for as long as the request takes.
-  const accountKnown = !signedIn || (typeof lastCreatorListsData !== 'undefined' && Array.isArray(lastCreatorListsData));
-  if (!accountKnown && !appShellListsLoadRequested) {
-    appShellListsLoadRequested = true;
-    host.innerHTML = '<div class="panel" style="margin-bottom:12px;">' +
-      '<h2 class="panel-title">Your lists</h2>' +
-      '<p class="app-shell-muted">Loading your lists...</p></div>';
-    appShellListsRefresh();
-    return true;
-  }
-  if (!lists.length) {
-    host.innerHTML = '<div class="panel" style="margin-bottom:12px;">' +
-      '<h2 class="panel-title">Your lists</h2>' +
-      '<p class="app-shell-muted">' + (signedIn
-        ? 'No lists yet. Start one below, then add titles to it right here.'
-        : 'No lists in this browser yet. Sign in to keep them on your account, or start one below -- it is saved in this browser until then.') + '</p>' +
-      '<div class="app-shell-actions"><button type="button" class="primary lc-btn" data-app-shell-action="list-new">+ New list</button></div>' +
-      '</div>';
-    return true;
-  }
-  let html = '<div class="panel" style="margin-bottom:12px;">' +
-    '<h2 class="panel-title">Your lists</h2>' +
-    '<p class="app-shell-muted">Open one, add titles to it, put it on your home screen, or share it. ' +
-    (signedIn
-      ? 'Each list says where it is saved. Anything marked "Saved in this browser only" is not on your account yet.'
-      : 'Everything here is saved in this browser only. Save a list to an account to keep it, or export a copy.') + '</p>';
-  lists.forEach(function (list) {
-    html += appShellListCardHtml(list);
-  });
-  html += '<div class="app-shell-actions" style="margin-top:10px;">' +
-    '<button type="button" class="primary lc-btn" data-app-shell-action="list-new">+ New list</button>' +
-    '<button type="button" class="secondary lc-btn" data-app-shell-action="lists-refresh">Refresh</button></div></div>';
-  host.innerHTML = html;
-  return true;
-}
-
-// --- the inline "Add titles" search -----------------------------------------
-//
-// In the list editor (12_), so creating a list and editing one are the same
-// thing: type, tap Add, and the title is in the draft. Save (the panel's own
-// button) writes it, which is where "Saved" comes from.
 
 function appShellAddTitlesHost() {
   return document.getElementById('appShellAddTitles');
@@ -4188,7 +3333,7 @@ function appShellTitleResultHtml(result, index) {
 
 function appShellRenderAddTitles(message) {
   const host = appShellAddTitlesHost();
-  if (!host || !NEW_UI) return false;
+  if (!host) return false;
   let html = '<div class="panel" style="margin-bottom:12px;">' +
     '<h2 class="panel-title">Add titles</h2>' +
     '<p class="app-shell-muted">Search for a movie or a show and add it straight to this list.</p>' +
@@ -4247,581 +3392,12 @@ async function appShellAddTitle(index) {
   return true;
 }
 
-// --- actions -----------------------------------------------------------------
-
-function appShellStartListEdit(slug) {
-  const list = appShellListBySlug(slug);
-  if (!list) {
-    showToast('Could not find that list -- try refreshing.', 'error');
-    return false;
-  }
-  if (list.local && typeof editLocalCustomList === 'function') {
-    editLocalCustomList(slug);
-  } else if (typeof editCreatorList === 'function') {
-    editCreatorList(slug);
-  }
-  if (typeof switchListsSubmenu === 'function') switchListsSubmenu('create-list');
-  appShellRenderAddTitles('');
-  const input = document.getElementById('appShellAddTitlesInput');
-  if (input && input.focus) {
-    try { input.focus(); } catch (e) {}
-  }
-  return true;
-}
-
-async function appShellSetListVisibility(slug, visibility) {
-  const list = appShellListBySlug(slug);
-  if (!list) return false;
-  const want = String(visibility || '');
-  if (want !== 'private' && want !== 'public') {
-    showToast('Unlisted is not switched on yet -- a list is private or public for now.', 'info');
-    return false;
-  }
-  if (appShellListVisibility(list) === want) {
-    appShellRenderListsHome();
-    return true;
-  }
-  const body = {
-    creatorName: (activeCreator && activeCreator.creatorName) || '',
-    creatorKey: localStorage.getItem('myListAddon:creatorKey') || '',
-    name: list.name,
-    type: list.type || 'movie',
-    items: list.items || [],
-    visibility: want,
-  };
-  const res = await appShellApiFetch('/api/creator/lists/save', { method: 'POST', body: body });
-  if (!res.ok) {
-    showToast(res.error || 'Could not save that change.', 'error');
-    return false;
-  }
-  list.visibility = want;
-  appShellRenderListsHome();
-  showToast(want === 'public' ? 'Anyone with the link can open it, and it is listed in Explore.' : 'Now private -- only you can open it.', 'success');
-  return true;
-}
-
-async function appShellListsRefresh() {
-  if (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) {
-    if (typeof loadCreatorSync === 'function') {
-      try { await loadCreatorSync(); } catch (e) {}
-    } else if (typeof renderCreatorDashboard === 'function') {
-      try { await renderCreatorDashboard(); } catch (e) {}
-    }
-  }
-  return appShellRenderListsHome();
-}
-
-// Which of the three dispatchers an action belongs to (see appShellOnClick).
-const APP_SHELL_LISTS_ACTION = /^(list-|lists-|title-)/;
-const APP_SHELL_EXPLORE_ACTION = /^explore-/;
+// Which of the dispatchers an action belongs to (see appShellOnClick).
+const APP_SHELL_LISTS_ACTION = /^title-/;
 const APP_SHELL_IMPORTS_ACTION = /^import-/;
 
 async function appShellListsAction(action, id) {
-  const what = String(action || '');
-  const slug = String(id || '');
-  if (what === 'list-new') {
-    if (typeof openCreateListModal === 'function') openCreateListModal('custom');
-    return true;
-  }
-  if (what === 'lists-refresh') return appShellListsRefresh();
-  if (what === 'list-open') {
-    const list = appShellListBySlug(slug);
-    if (!list) return false;
-    if (typeof openListDetailsPage === 'function') {
-      openListDetailsPage(list.name, list.type || 'movie', 'custom:' + slug);
-      return true;
-    }
-    return false;
-  }
-  if (what === 'list-edit') return appShellStartListEdit(slug);
-  if (what === 'list-home') return appShellListToggleHomeScreen(slug);
-  if (what === 'list-share') {
-    appShellShareSlug = (appShellShareSlug === slug) ? null : slug;
-    appShellRenderListsHome();
-    return true;
-  }
-  if (what === 'list-copy') {
-    const list = appShellListBySlug(slug);
-    if (!list) return false;
-    return appShellCopyText(appShellListShareUrl(list), 'List link copied.');
-  }
-  if (what === 'list-preview') {
-    const list = appShellListBySlug(slug);
-    if (!list) return false;
-    if (typeof openListDetailsPage === 'function') {
-      openListDetailsPage(list.name, list.type || 'movie', 'custom:' + slug);
-      return true;
-    }
-    return false;
-  }
-  if (what === 'list-visibility') {
-    const parts = slug.split('|');
-    return appShellSetListVisibility(parts[0], parts[1]);
-  }
-  if (what === 'list-save-account') return appShellSaveLocalListToAccount(slug);
-  if (what === 'list-export') return appShellExportList(slug);
-  if (what === 'title-add') return appShellAddTitle(id);
-  return false;
-}
-
-// --- Explore (P6-5) ----------------------------------------------------------
-//
-// Somebody else's public lists, in one place: pick where to look, type, and see
-// what comes back with one button to put it on your home screen. It is additive
-// -- the Discover feeds underneath are untouched -- and it exists only on a
-// shell page: the container comes from the server (11_tab-quick-add.js) when,
-// and only when, the request carries the FF_NEW_UI cookie.
-//
-// Every source here is one the page already talks to, with the page's own
-// helpers where they exist:
-//
-//   My Lists community   /lists/public.json (browse) and
-//                        /api/search-published-lists (search)
-//   MDBList              /api/toplists -- cached by ensureMdblistPopularLoaded
-//                        (19_), which is also what the legacy list search
-//                        matches MDBList against: MDBList has no list search of
-//                        its own, so this filters the popular set by name.
-//   Trakt                /api/trakt-popular-lists (browse) and
-//                        /api/trakt-search (search)
-//   TMDB                 /api/tmdb-search-lists -- search only; TMDB publishes
-//                        no list directory to browse.
-
-// What the sort chips can honestly do today. Most liked works everywhere: it is
-// the order the server sends and every source reports likes. Newest works for
-// the lists that report when they changed, which is this site's own; the
-// providers do not, so those are kept and shown after the dated ones rather
-// than pretending they are new. "Most added" counts how many people put a list
-// on a home screen -- a column that exists only in the next list service
-// (add_count, 33_lists-directory.js, /lists/public.json?sort=added), which is
-// behind FF_V2_LISTS_READ and must stay off until reads move to the new tables.
-const APP_SHELL_EXPLORE_SORTS = [
-  { id: 'popular', label: 'Most liked', ready: true },
-  { id: 'new', label: 'Newest', ready: true },
-  { id: 'added', label: 'Most added', ready: false, why: 'Counting how many people put a list on their home screen needs the new list service, which is not switched on yet.' },
-];
-
-const APP_SHELL_EXPLORE_SOURCES = [
-  { id: 'mylists', label: 'My Lists community' },
-  { id: 'mdblist', label: 'MDBList' },
-  { id: 'trakt', label: 'Trakt' },
-  { id: 'tmdb', label: 'TMDB' },
-];
-
-const APP_SHELL_EXPLORE_MAX = 24;
-
-let appShellExploreSource = 'all';
-let appShellExploreSort = 'popular';
-let appShellExploreQuery = '';
-let appShellExploreResults = [];
-let appShellExploreNote = '';
-let appShellExplorePreview = -1;
-let appShellExplorePreviewData = null;
-let appShellExploreSeq = 0;
-var appShellExploreTimer = null;
-var appShellExploreLoaded = false;
-
-function appShellExploreHost() {
-  return document.getElementById('appShellExplore');
-}
-
-// Whether the Discover view is the one currently on screen. A shell page can be
-// served straight at /discover (or at /, which is Discover), and then the view
-// is worth its fetch at boot; served at any other view it is not, and the fetch
-// waits until somebody opens Discover.
-function appShellDiscoverIsOpen() {
-  const panel = document.getElementById('content-discover');
-  return !!(panel && !panel.hidden);
-}
-
-function appShellExploreEscape(value) {
-  return escapeHtml(String(value === null || value === undefined ? '' : value));
-}
-
-// Every source's own idea of a list, in one shape. The timestamp field is
-// only ever set by a source that actually reports one.
-function appShellExploreNormalize(entry, source) {
-  const e = entry || {};
-  const items = (typeof e.items === 'number') ? e.items : (typeof e.itemCount === 'number' ? e.itemCount : 0);
-  return {
-    name: e.name || 'Untitled list',
-    url: e.url || '',
-    type: e.type || e.contentType || 'movie',
-    items: items,
-    likes: Number(e.likes) || 0,
-    by: e.creatorName || e.creator || e.user || '',
-    source: source,
-    when: Number(e.updatedAt) || 0,
-  };
-}
-
-function appShellExploreSortRows(rows) {
-  const list = rows.slice();
-  if (appShellExploreSort === 'new') {
-    // Dated first, newest first; a source that does not say when a list
-    // changed keeps its place after them rather than being guessed at.
-    list.sort(function (a, b) {
-      if (!!a.when !== !!b.when) return a.when ? -1 : 1;
-      if (a.when !== b.when) return b.when - a.when;
-      return b.likes - a.likes;
-    });
-    return list;
-  }
-  list.sort(function (a, b) {
-    if (b.likes !== a.likes) return b.likes - a.likes;
-    return b.items - a.items;
-  });
-  return list;
-}
-
-function appShellExploreDedupe(rows) {
-  const seen = {};
-  const out = [];
-  rows.forEach(function (row) {
-    const key = String(row.url || '').toLowerCase() || (String(row.name).toLowerCase() + '|' + row.source);
-    if (seen[key]) return;
-    seen[key] = true;
-    out.push(row);
-  });
-  return out;
-}
-
-function appShellExploreWants(source) {
-  return appShellExploreSource === 'all' || appShellExploreSource === source;
-}
-
-// --- fetching ----------------------------------------------------------------
-
-async function appShellExploreMdbList() {
-  if (typeof ensureMdblistPopularLoaded !== 'function') return [];
-  const rows = await ensureMdblistPopularLoaded();
-  return (Array.isArray(rows) ? rows : []).map(function (r) { return appShellExploreNormalize(r, 'mdblist'); });
-}
-
-async function appShellExploreTraktBrowse() {
-  if (typeof ensureTraktPopularLoaded !== 'function') return [];
-  const rows = await ensureTraktPopularLoaded();
-  return (Array.isArray(rows) ? rows : []).map(function (r) { return appShellExploreNormalize(r, 'trakt'); });
-}
-
-async function appShellExploreMyListsBrowse() {
-  const res = await appShellApiFetch('/lists/public.json?limit=' + APP_SHELL_EXPLORE_MAX);
-  if (!res.ok) return null;
-  const rows = (res.data && res.data.lists) || [];
-  return rows.map(function (r) { return appShellExploreNormalize(r, 'mylists'); });
-}
-
-async function appShellExploreMyListsSearch(q) {
-  const res = await appShellApiFetch('/api/search-published-lists?q=' + encodeURIComponent(q));
-  if (!res.ok) return null;
-  const rows = (res.data && res.data.lists) || [];
-  return rows.map(function (r) { return appShellExploreNormalize(r, 'mylists'); });
-}
-
-async function appShellExploreTraktSearch(q) {
-  const key = (document.getElementById('traktKeyInput') ? document.getElementById('traktKeyInput').value.trim() : '') || readProviderSecret('myListAddon:traktKey') || '';
-  const res = await appShellApiFetch('/api/trakt-search?q=' + encodeURIComponent(q) + (key ? '&traktKey=' + encodeURIComponent(key) : ''));
-  if (!res.ok) return null;
-  return ((res.data && res.data.lists) || []).map(function (r) { return appShellExploreNormalize(r, 'trakt'); });
-}
-
-async function appShellExploreTmdbSearch(q) {
-  const key = (document.getElementById('tmdbKeyInput') ? document.getElementById('tmdbKeyInput').value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
-  const adult = (typeof isAdultContentFilterEnabled === 'function' && isAdultContentFilterEnabled()) ? '&adultContentFilter=1' : '';
-  const res = await appShellApiFetch('/api/tmdb-search-lists?q=' + encodeURIComponent(q) + (key ? '&tmdbKey=' + encodeURIComponent(key) : '') + adult);
-  if (!res.ok) return null;
-  return ((res.data && res.data.lists) || []).map(function (r) { return appShellExploreNormalize(r, 'tmdb'); });
-}
-
-// The provider lists in the popular sets, narrowed to the words somebody typed.
-// MDBList has no list search (see the note at the top of this module), so this
-// is what the legacy search does too -- said out loud in the note below.
-function appShellExploreFilterByName(rows, q) {
-  const words = String(q || '').toLowerCase().split(/\\s+/).filter(Boolean);
-  if (!words.length) return rows;
-  return rows.filter(function (row) {
-    const text = (String(row.name) + ' ' + String(row.by)).toLowerCase();
-    return words.every(function (w) { return text.indexOf(w) !== -1; });
-  });
-}
-
-async function appShellExploreRun() {
-  const q = String(appShellExploreQuery || '').trim();
-  const seq = ++appShellExploreSeq;
-  const want = appShellExploreSource;
-  const results = [];
-  const notes = [];
-  const jobs = [];
-
-  // This site's own lists: the directory when nothing has been typed, its
-  // search when something has.
-  if (appShellExploreWants('mylists')) {
-    jobs.push((q ? appShellExploreMyListsSearch(q) : appShellExploreMyListsBrowse()).then(function (rows) {
-      if (rows) results.push.apply(results, rows);
-      else notes.push('The My Lists directory could not be reached.');
-    }));
-  }
-  if (appShellExploreWants('mdblist')) {
-    jobs.push(appShellExploreMdbList().then(function (rows) {
-      const matching = appShellExploreFilterByName(rows, q);
-      results.push.apply(results, q ? matching.slice(0, APP_SHELL_EXPLORE_MAX) : matching);
-      if (q && want !== 'mylists') notes.push('MDBList has no list search of its own, so the MDBList results are the popular ones matching your words.');
-    }));
-  }
-  if (appShellExploreWants('trakt')) {
-    jobs.push((q ? appShellExploreTraktSearch(q) : appShellExploreTraktBrowse()).then(function (rows) {
-      if (rows) results.push.apply(results, rows);
-      else if (q) notes.push('trakt.tv could not be searched just now.');
-    }));
-  }
-  if (appShellExploreWants('tmdb')) {
-    jobs.push((q ? appShellExploreTmdbSearch(q) : Promise.resolve(null)).then(function (rows) {
-      if (rows) results.push.apply(results, rows);
-      else if (q) notes.push('TMDB could not be searched just now.');
-      else if (want === 'tmdb') notes.push('TMDB publishes no list directory to browse -- search for one by name.');
-    }));
-  }
-
-  await Promise.all(jobs);
-  // A newer search already went out while this one was running: drop this
-  // answer rather than landing it on top of the newer one.
-  if (seq !== appShellExploreSeq) return appShellExploreResults;
-
-  appShellExploreResults = appShellExploreSortRows(appShellExploreDedupe(results)).slice(0, APP_SHELL_EXPLORE_MAX);
-  appShellExploreNote = notes.join(' ');
-  appShellExploreLoaded = true;
-  appShellExplorePreview = -1;
-  appShellExplorePreviewData = null;
-  appShellRenderExplore(true);
-  return appShellExploreResults;
-}
-
-// The preview: what is actually in the list, fetched the way the home editor
-// fetches it, so nothing is added before it has been seen.
-async function appShellExplorePreviewRow(index) {
-  const row = appShellExploreResults[Number(index)];
-  if (!row) return null;
-  if (appShellExplorePreview === Number(index)) {
-    appShellExplorePreview = -1;
-    appShellExploreRenderPreview();
-    return null;
-  }
-  appShellExplorePreview = Number(index);
-  appShellExplorePreviewData = { loading: true };
-  appShellExploreRenderPreview();
-  const auth = (typeof previewCreatorAuth === 'function') ? previewCreatorAuth() : {};
-  const body = Object.assign({ url: row.url, type: row.type === 'series' ? 'series' : 'movie', sample: 6 }, auth);
-  const res = await appShellApiFetch('/api/preview', { method: 'POST', body: body });
-  if (appShellExplorePreview !== Number(index)) return null;
-  appShellExplorePreviewData = res.ok
-    ? { sample: (res.data && res.data.sample) || [], count: Number(res.data && (res.data.totalItems || res.data.count)) || 0, error: '' }
-    : { sample: [], count: 0, error: res.error || 'That list could not be read.' };
-  appShellExploreRenderPreview();
-  return appShellExplorePreviewData;
-}
-
-function appShellExplorePosterHtml(item) {
-  const poster = item && (item.poster || item.showPoster);
-  if (!poster) return '<div class="app-shell-explore-poster app-shell-explore-poster-none"></div>';
-  return '<img class="app-shell-explore-poster" loading="lazy" alt="" src="' + appShellExploreEscape(poster) + '">';
-}
-
-function appShellExploreOnHomeScreen(row) {
-  if (typeof isListAddedToConfig !== 'function') return false;
-  const type = row.type === 'series' ? 'series' : (row.type === 'movie' ? 'movie' : null);
-  if (isListAddedToConfig(row.url, type)) return true;
-  return isListAddedToConfig(row.url, 'movie') || isListAddedToConfig(row.url, 'series');
-}
-
-// Exactly what the legacy search's own "+ Add" does for a result list (19_,
-// the .searchAddBtn handler), including the two rows a mixed list becomes.
-function appShellExploreToggleHomeScreen(index) {
-  const row = appShellExploreResults[Number(index)];
-  if (!row) return false;
-  if (appShellExploreOnHomeScreen(row)) {
-    if (typeof removeListFromConfig === 'function') {
-      removeListFromConfig(row.url, row.type);
-      removeListFromConfig(row.url, 'movie');
-      removeListFromConfig(row.url, 'series');
-      removeListFromConfig(row.url, null);
-    }
-    const rows = document.querySelectorAll('#lists .entry');
-    for (let i = 0; i < rows.length; i++) {
-      const urlInput = rows[i].querySelector ? rows[i].querySelector('.url') : null;
-      if (urlInput && String(urlInput.value).indexOf(row.url) !== -1) rows[i].remove();
-    }
-    if (typeof renumber === 'function') renumber();
-    if (typeof saveState === 'function') saveState();
-    appShellRenderExplore(false);
-    showToast('Removed "' + row.name + '" from your Catalogs.', 'success');
-    return true;
-  }
-  if (row.type === 'mixed' || row.type === 'unknown') {
-    addRow(row.name + ' (Movies)', row.url, 'movie', true, 'Custom');
-    addRow(row.name + ' (Shows)', row.url, 'series', true, 'Custom');
-  } else {
-    addRow(row.name, row.url, row.type, true, 'Custom');
-  }
-  if (typeof renumber === 'function') renumber();
-  if (typeof saveState === 'function') saveState();
-  appShellRenderExplore(false);
-  showToast('Added "' + row.name + '" to your home screen.', 'success');
-  return true;
-}
-
-function appShellExploreSourceLabel(id) {
-  for (let i = 0; i < APP_SHELL_EXPLORE_SOURCES.length; i++) {
-    if (APP_SHELL_EXPLORE_SOURCES[i].id === id) return APP_SHELL_EXPLORE_SOURCES[i].label;
-  }
-  return id === 'mylists' ? 'My Lists community' : id;
-}
-
-function appShellExploreCardHtml(row, index) {
-  const meta = appShellExploreEscape(appShellExploreSourceLabel(row.source)) +
-    ' &middot; ' + appShellExploreEscape(row.type === 'series' ? 'Shows' : (row.type === 'movie' ? 'Movies' : 'Movies and Shows')) +
-    (row.items ? ' &middot; ' + row.items + (row.items === 1 ? ' title' : ' titles') : '') +
-    (row.likes ? ' &middot; &#9829; ' + row.likes : '') +
-    (row.by ? ' &middot; ' + appShellExploreEscape(row.by) : '');
-  const onHome = appShellExploreOnHomeScreen(row);
-  const open = appShellExplorePreview === index;
-  return '<div class="app-shell-row">' +
-    '<div class="app-shell-row-main"><strong>' + appShellExploreEscape(row.name) + '</strong>' +
-    '<br><span class="app-shell-muted">' + meta + '</span>' +
-    '<br><span class="app-shell-muted app-shell-review-url">' + appShellExploreEscape(row.url) + '</span></div>' +
-    '<div class="app-shell-row-controls">' +
-    '<button type="button" class="secondary lc-btn" data-app-shell-action="explore-preview" data-app-shell-id="' + index + '">' + (open ? 'Hide preview' : 'Preview') + '</button>' +
-    '<button type="button" class="' + (onHome ? 'secondary lc-btn' : 'primary lc-btn') + '" data-app-shell-action="explore-add" data-app-shell-id="' + index + '">' + (onHome ? 'On your home screen' : 'Add to home screen') + '</button>' +
-    '</div></div>' +
-    (open ? '<div class="app-shell-explore-preview" id="appShellExplorePreviewArea-' + index + '"></div>' : '');
-}
-
-function appShellExplorePreviewInnerHtml(index) {
-  const row = appShellExploreResults[index];
-  const data = appShellExplorePreviewData;
-  if (!row || !data) return '';
-  if (data.loading) return '<p class="app-shell-muted">Looking inside...</p>';
-  if (data.error) return '<p class="app-shell-muted app-shell-review-bad">' + appShellExploreEscape(data.error) + '</p>';
-  const sample = data.sample || [];
-  const count = data.count || sample.length;
-  let html = '<div class="app-shell-explore-posters">' + sample.map(appShellExplorePosterHtml).join('') + '</div>';
-  html += '<p class="app-shell-muted">' + (count ? 'First ' + Math.min(sample.length, count) + ' of ' + count + (count === 1 ? ' title' : ' titles') : 'This list is empty.') + '</p>';
-  html += '<div class="app-shell-actions">' +
-    '<button type="button" class="primary lc-btn" data-app-shell-action="explore-add" data-app-shell-id="' + index + '">Add to home screen</button>' +
-    '</div>';
-  return html;
-}
-
-// Rewrites just the open preview in place, the same way the settings panels
-// refresh without rebuilding the screen around them.
-function appShellExploreRenderPreview() {
-  const area = document.getElementById('appShellExplorePreviewArea-' + appShellExplorePreview);
-  if (!area) return false;
-  area.innerHTML = appShellExplorePreviewInnerHtml(appShellExplorePreview);
-  return true;
-}
-
-function appShellExploreChips(rows, current, action) {
-  return rows.map(function (row) {
-    const on = row.id === current;
-    const ready = row.ready !== false;
-    return '<button type="button" class="app-shell-chip' + (on ? ' is-on' : '') + '"' +
-      ' data-app-shell-action="' + action + '" data-app-shell-id="' + appShellExploreEscape(row.id) + '"' +
-      (ready ? '' : ' disabled title="' + appShellExploreEscape(row.why || '') + '"') +
-      '>' + appShellExploreEscape(row.label) + '</button>';
-  }).join('');
-}
-
-function appShellRenderExplore(scrollToResults) {
-  const host = appShellExploreHost();
-  if (!host || !NEW_UI) return false;
-  const sources = [{ id: 'all', label: 'All sources', ready: true }].concat(APP_SHELL_EXPLORE_SOURCES);
-  let html = '<div class="panel" style="margin-bottom:12px;">' +
-    '<h2 class="panel-title">Explore</h2>' +
-    '<p class="app-shell-muted">Community lists from this site and from MDBList, Trakt and TMDB. Preview one, then put it on your home screen.</p>' +
-    '<div class="app-shell-actions" style="margin-bottom:8px;">' + appShellExploreChips(sources, appShellExploreSource, 'explore-source') + '</div>' +
-    '<div class="app-shell-actions" style="margin-bottom:8px;">' + appShellExploreChips(APP_SHELL_EXPLORE_SORTS, appShellExploreSort, 'explore-sort') + '</div>' +
-    '<div class="row"><input type="text" id="appShellExploreSearch" placeholder="Search lists\u2026" aria-label="Search public lists" spellcheck="false" value="' + appShellExploreEscape(appShellExploreQuery) + '"></div>';
-
-  if (!appShellExploreLoaded) {
-    html += '<p class="app-shell-muted" id="appShellExploreStatus">Loading\u2026</p>';
-  } else if (!appShellExploreResults.length) {
-    html += '<p class="app-shell-muted" id="appShellExploreStatus">' +
-      (appShellExploreQuery ? 'Nothing found for those words.' : 'Nothing to show right now.') + '</p>';
-  } else {
-    html += '<p class="app-shell-muted" id="appShellExploreStatus">' + appShellExploreResults.length +
-      (appShellExploreResults.length === 1 ? ' list' : ' lists') +
-      (appShellExploreQuery ? ' matching "' + appShellExploreEscape(appShellExploreQuery) + '"' : '') + '.</p>';
-    html += '<div class="app-shell-review" id="appShellExploreResults">' +
-      appShellExploreResults.map(appShellExploreCardHtml).join('') + '</div>';
-  }
-  if (appShellExploreNote) html += '<p class="app-shell-muted" id="appShellExploreNote">' + appShellExploreEscape(appShellExploreNote) + '</p>';
-  html += '<p class="app-shell-muted">Most added is not offered yet: it counts how many people put a list on their home screen, which the new list service keeps and which is not switched on yet.</p>';
-  html += '</div>';
-  host.innerHTML = html;
-
-  const input = document.getElementById('appShellExploreSearch');
-  if (input && input.addEventListener) {
-    input.addEventListener('input', function () {
-      appShellExploreQuery = input.value || '';
-      if (appShellExploreTimer) clearTimeout(appShellExploreTimer);
-      appShellExploreTimer = setTimeout(function () {
-        appShellExploreTimer = null;
-        appShellExploreRun();
-      }, 300);
-    });
-  }
-  // Results are fetched in full, so a card's own re-render keeps the open
-  // preview; only its placeholder needs filling.
-  if (appShellExplorePreview >= 0) appShellExploreRenderPreview();
-  if (scrollToResults) {
-    const box = document.getElementById('appShellExploreResults');
-    if (box && box.scrollIntoView) {
-      try { box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {}
-    }
-  }
-  return true;
-}
-
-// Opening the view: render the frame, then fetch once. Coming back to the tab
-// keeps what is already there.
-function appShellOpenExplore() {
-  // No section, no fetch: Explore was taken off Discover at the owner's
-  // request (its source and sort chips are on Search -> Lists now), and
-  // opening Discover must not ask four providers for lists nobody will see.
-  if (!NEW_UI || !appShellExploreHost()) return false;
-  const first = !appShellExploreLoaded;
-  appShellRenderExplore(false);
-  if (first) {
-    appShellExploreRun();
-  } else {
-    appShellRenderExplore(false);
-  }
-  return true;
-}
-
-async function appShellExploreAction(action, id) {
-  const what = String(action || '');
-  if (what === 'explore-source') {
-    appShellExploreSource = String(id || 'all');
-    return appShellExploreRun();
-  }
-  if (what === 'explore-sort') {
-    const want = String(id || 'popular');
-    const sort = APP_SHELL_EXPLORE_SORTS.filter(function (s) { return s.id === want && s.ready !== false; })[0];
-    if (!sort) {
-      showToast('That order is not switched on yet.', 'info');
-      return false;
-    }
-    appShellExploreSort = sort.id;
-    appShellExploreResults = appShellExploreSortRows(appShellExploreResults);
-    appShellRenderExplore(false);
-    return true;
-  }
-  if (what === 'explore-preview') return appShellExplorePreviewRow(id);
-  if (what === 'explore-add') return appShellExploreToggleHomeScreen(id);
-  if (what === 'explore-refresh') {
-    appShellExploreLoaded = false;
-    return appShellExploreRun();
-  }
+  if (String(action || '') === 'title-add') return appShellAddTitle(id);
   return false;
 }
 
@@ -5187,7 +3763,7 @@ async function appShellImportSaveList() {
   }
   const name = appShellImportListName();
   const type = (appShellImportJob && appShellImportJob.kind === 'series') ? 'series' : (appShellImportKind === 'series' ? 'series' : 'movie');
-  // Same authentication as the Lists view's own save (appShellSetListVisibility):
+  // The list save's own authentication:
   // the route checks creatorName + creatorKey, and empty strings let a session
   // cookie stand in for them when the browser has one.
   const saveBody = {
@@ -5365,7 +3941,7 @@ function appShellImportKindChip(kind, label, count) {
 
 function appShellRenderImports() {
   const host = appShellImportsHost();
-  if (!host || !NEW_UI) return false;
+  if (!host) return false;
   const typed = document.getElementById('appShellImportName');
   const typedValue = typed ? typed.value : '';
   let html = '<div class="panel" style="margin-bottom:12px;">' +
@@ -5474,7 +4050,6 @@ async function appShellImportReadFiles(files) {
 // at it. The remembered import is looked up only for a screen that is actually
 // being shown, and only once per page load.
 async function appShellResumeImport() {
-  if (!NEW_UI) return false;
   if (appShellImportsResumed) return true;
   appShellImportsResumed = true;
   const id = appShellImportRemembered();
@@ -6246,7 +4821,7 @@ function appShellChannelFlowHtml() {
 
 function appShellRenderChannels() {
   const host = appShellChannelsHost();
-  if (!host || !NEW_UI) return false;
+  if (!host) return false;
   let html = '<div class="panel">' +
     '<h2 class="panel-title">New channel</h2>' +
     '<p class="app-shell-muted">Choose a template, look at what is playing today, then add it to your home screen. The full builder is still there under Custom.</p>';
@@ -6309,7 +4884,6 @@ async function appShellChannelsAction(action, id) {
 // Called when the view is opened, and once at boot for a page served straight
 // at Channels.
 function appShellOpenChannels() {
-  if (!NEW_UI) return false;
   if (!appShellChannelsHost() || !appShellChannelsIsOpen()) return false;
   return appShellRenderChannels();
 }
@@ -6359,14 +4933,12 @@ function appShellApplyRoute(route) {
   if (tab.id === 'settings') appShellRenderSettingsHome();
   if (tab.id === 'catalogs') appShellRenderHomeEditor();
   if (tab.id === 'lists') {
-    appShellRenderListsHome();
     if (sub === 'create-list') appShellRenderAddTitles('');
     if (sub === 'import') {
       appShellRenderImports();
       appShellResumeImport();
     }
   }
-  if (tab.id === 'discover') appShellOpenExplore();
   if (tab.id === 'channels') appShellOpenChannels();
   return true;
 }
@@ -6399,7 +4971,7 @@ function appShellGo(path, options) {
 // when the shell has taken the navigation, false to leave both the switcher and
 // the address bar exactly as they were.
 function appShellHandleNav(kind, a, b) {
-  if (!appShellActive || appShellApplyingRoute || !NEW_UI) return false;
+  if (!appShellActive || appShellApplyingRoute) return false;
   if (kind === 'tab') {
     const route = appShellRouteForName(a);
     if (!route) return false;   // list-details, item-details: not shell views
@@ -6427,12 +4999,11 @@ function appShellOnClick(e) {
     e.preventDefault();
     const action = actionEl.getAttribute('data-app-shell-action');
     const id = actionEl.getAttribute('data-app-shell-id') || '';
-    // The Lists view (P6-4) and the Settings view (P6-2) share this one
+    // The Add titles search (P6-4) and the Settings view (P6-2) share this one
     // listener, so the action names decide which module answers. The prefix
     // test is here rather than a truthy return because appShellSettingsAction
     // is async -- its promise is truthy for every action, handled or not.
     if (APP_SHELL_LISTS_ACTION.test(action)) appShellListsAction(action, id);
-    else if (APP_SHELL_EXPLORE_ACTION.test(action)) appShellExploreAction(action, id);
     else if (APP_SHELL_IMPORTS_ACTION.test(action)) appShellImportsAction(action, id);
     else if (APP_SHELL_CHANNELS_ACTION.test(action)) appShellChannelsAction(action, id);
     else appShellSettingsAction(action, id);
@@ -6464,35 +5035,29 @@ function appShellRenderFromLocation() {
 // --- boot --------------------------------------------------------------------
 
 function initAppShell() {
-  if (!NEW_UI) return;
   appShellActive = true;
   document.addEventListener('click', appShellOnClick);
   window.addEventListener('popstate', appShellOnPopState);
 
-  const bar = document.getElementById('appShellInstallBar');
-  if (bar) {
-    bar.addEventListener('click', function (e) {
-      const target = e.target;
-      if (!target || !target.closest) return;
-      if (!target.closest('#appShellInstallBtn')) return;
-      e.preventDefault();
-      appShellInstallBarAction();
-    });
-  }
-
   // The server already opened the right view (data-initial-tab in the head
-  // script). This only settles the address bar: a real path for the view, and
-  // "/" becomes the Discover path so every view has one.
+  // script). This only settles the address bar: a real path for the view.
+  // "/" opens the view this browser used last (the head script reads it), so
+  // it becomes that view's path -- not always Discover's, which left the bar
+  // naming one view while the page showed another. A "/#/item?..." or
+  // "/#/list?..." share link keeps its address as it is.
   const route = appShellRouteFromPath(location.pathname);
   if (route) {
     appShellApplyRoute(route);
-  } else if (appShellTrimSlashes(location.pathname) === '/') {
-    try { history.replaceState({ appShell: true }, '', appShellPathFor('discover', '')); } catch (e) {}
+  } else if (appShellTrimSlashes(location.pathname) === '/' && !location.hash) {
+    const open = appShellRouteForName(window._originTab || '') || { tab: 'discover', sub: '' };
+    try { history.replaceState({ appShell: true }, '', appShellPathFor(open.tab, '')); } catch (e) {}
+    // ...and the page is then the page at that path, with the view's own
+    // cards drawn (Settings' were missing when "/" reopened Settings).
+    appShellApplyRoute({ tab: open.tab, sub: '' });
   }
 
   appShellRefreshInstallBar();
   appShellRenderHomeEditor();
-  if (typeof appShellExploreHost === 'function' && appShellExploreHost() && appShellDiscoverIsOpen()) appShellOpenExplore();
   if (typeof appShellImportsHost === 'function' && appShellImportsHost() && appShellImportsIsOpen()) {
     appShellRenderImports();
     appShellResumeImport();

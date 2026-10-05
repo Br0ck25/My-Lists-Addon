@@ -30,9 +30,8 @@
     <div id="lists"></div>
 
     <!-- The shell's "Hide titles already shown in rows above" toggle (P6-3),
-         right above the Daily Randomizer. Emitted only for a browser with the
-         FF_NEW_UI cookie; the old page keeps it in Settings. -->
-${newUi ? '    <div id="appShellHomeEditor"></div>' : ''}
+         right above the Daily Randomizer. -->
+    <div id="appShellHomeEditor"></div>
 
     <!-- 24-Hour Randomizer Controls -->
     <div style="margin-top:16px; padding:14px 16px; background:var(--surface); border-radius:12px; border:1px solid var(--border);">
