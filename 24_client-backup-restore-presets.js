@@ -2221,7 +2221,7 @@ async function generate() {
   let config = null;
   let saveErrorMessage = null;
   try {
-    const res = await fetch(ORIGIN + '/api/save', {
+    const res = await creatorApiFetch(ORIGIN + '/api/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(withAccountProof(installSaveBody(entries, keys))),

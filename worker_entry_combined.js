@@ -26,7 +26,7 @@
 // Shown at the top of /admin and in the answer of the "Counts missing" tool,
 // so the owner can see which pasted file is live (docs/RELEASES.md). Change it
 // with every release.
-const WORKER_RELEASE = "19";
+const WORKER_RELEASE = "20";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -4362,6 +4362,13 @@ const CREATOR_SESSION_PATH_PREFIXES = [
   "/api/creator/track-status",
   "/api/creator/scrobble-token",
   "/api/creator/scrobble-seen-users",
+  "/api/creator/restore",
+  "/api/preview",
+  "/api/save",
+  "/api/feedback",
+  "/api/lists/like",
+  "/api/channel/like",
+  "/api/channel/unpublish",
 ];
 
 // --- Session management (P3a-4) -------------------------------------------
@@ -34458,13 +34465,24 @@ const ORIGIN = (typeof location !== 'undefined' && location.origin) ? location.o
 // included, which also starts a new session -- nobody is signed out by this.
 // Until a session is known (a fresh browser, a server without sessions),
 // nothing changes. Signing in, creating an account, recovery, key resets and
-// deleting always send the key: there the key is what is being checked.
+// deleting always send the key: there the key is what is being checked. (A key
+// reset ends every session of the account, so a browser left with the old key
+// is signed out by the retry, as before.)
 const CREATOR_SESSION_ROUTES = [
   '/api/creator/sync/',
   '/api/creator/lists',
   '/api/creator/track-status',
   '/api/creator/scrobble-token',
   '/api/creator/scrobble-seen-users',
+  // Release 20: the sign-in check every page load makes, previews and install
+  // links with personal rows, feedback, likes, and unpublishing a channel.
+  '/api/creator/restore',
+  '/api/preview',
+  '/api/save',
+  '/api/feedback',
+  '/api/lists/like',
+  '/api/channel/like',
+  '/api/channel/unpublish',
 ];
 const CREATOR_SESSION_SEEN_KEY = 'myListAddon:sessionFor';
 
@@ -37198,7 +37216,7 @@ async function loadUserFeedbackThreads() {
   const creatorKey = creatorName ? (localStorage.getItem('myListAddon:creatorKey') || '') : '';
 
   try {
-    const res = await fetch(ORIGIN + '/api/feedback/threads', {
+    const res = await creatorApiFetch(ORIGIN + '/api/feedback/threads', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -37338,7 +37356,7 @@ async function sendUserFeedbackReply() {
   const creatorAuth = feedbackCreatorAuth();
 
   try {
-    const res = await fetch(ORIGIN + '/api/feedback', {
+    const res = await creatorApiFetch(ORIGIN + '/api/feedback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -37381,7 +37399,7 @@ async function submitFeedback() {
   if (btn) btn.disabled = true;
   if (statusEl) { statusEl.textContent = 'Sending\u2026'; statusEl.style.color = 'var(--muted)'; }
   try {
-    const res = await fetch(ORIGIN + '/api/feedback', {
+    const res = await creatorApiFetch(ORIGIN + '/api/feedback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -41219,7 +41237,7 @@ async function fetchAllItemsForList(listUrl, type, btn, progressLabel) {
     // creatorName AND the key: an autotrack: source is this account's private
     // shelf and the server now requires proof rather than a claimed name.
     Object.assign(body, previewCreatorAuth());
-    const res = await fetch(ORIGIN + '/api/preview', {
+    const res = await creatorApiFetch(ORIGIN + '/api/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -42985,7 +43003,7 @@ function guessNameFromUrl(u) {
 async function detectListType(url, mdblistKey) {
   async function checkType(type) {
     try {
-      const res = await fetch(ORIGIN + '/api/preview', {
+      const res = await creatorApiFetch(ORIGIN + '/api/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(Object.assign({ url: url, type: type, mdblistKey: mdblistKey || '' }, previewCreatorAuth())),
@@ -44062,7 +44080,7 @@ async function fetchListPreviewOnce(listUrl, type, sample) {
   payload.simklKey = (skInput && skInput.value ? skInput.value.trim() : '') || readProviderSecret('myListAddon:simklKey') || '';
 
   try {
-    const res = await fetch(ORIGIN + '/api/preview', {
+    const res = await creatorApiFetch(ORIGIN + '/api/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -44528,7 +44546,7 @@ document.addEventListener('click', async (e) => {
 
     likeBtn.disabled = true;
     try {
-      const res = await fetch(ORIGIN + '/api/lists/like', {
+      const res = await creatorApiFetch(ORIGIN + '/api/lists/like', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // Likes need an account (checked above): one like per account,
@@ -44604,7 +44622,7 @@ document.addEventListener('click', async (e) => {
 
     likeExternalBtn.disabled = true;
     try {
-      const res = await fetch(ORIGIN + '/api/lists/like-external', {
+      const res = await creatorApiFetch(ORIGIN + '/api/lists/like-external', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -60590,7 +60608,7 @@ async function toggleChannelDirectoryLike(code, btn) {
       body.creatorName = activeCreator.creatorName;
       body.creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
     }
-    const res = await fetch(ORIGIN + '/api/channel/like', {
+    const res = await creatorApiFetch(ORIGIN + '/api/channel/like', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -60998,7 +61016,7 @@ async function publishChannelToDirectory(channelId, btn) {
 // listing all do exactly the same thing.
 async function unpublishChannelByCode(code) {
   if (!code) return { ok: false, error: 'No code.' };
-  const res = await fetch(ORIGIN + '/api/channel/unpublish', {
+  const res = await creatorApiFetch(ORIGIN + '/api/channel/unpublish', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -72952,7 +72970,7 @@ async function testSourceRow(btn) {
     const previewKey = previewCreatorKey(url);
     if (previewKey) body.creatorKey = previewKey;
     if (keys.adultContentFilter || (typeof isAdultContentFilterEnabled === 'function' && isAdultContentFilterEnabled())) body.adultContentFilter = true;
-    const res = await fetch(ORIGIN + '/api/preview', {
+    const res = await creatorApiFetch(ORIGIN + '/api/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -73864,7 +73882,7 @@ async function renderLivePreview() {
         if (previewKey) body.creatorKey = previewKey;
         if (keys.hideNonDigitalReleases) body.hideNonDigitalReleases = true;
         if (keys.adultContentFilter) body.adultContentFilter = true;
-        const res = await fetch(ORIGIN + '/api/preview', {
+        const res = await creatorApiFetch(ORIGIN + '/api/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
@@ -76330,7 +76348,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
       if (keys.simklAccessToken) body.simklAccessToken = keys.simklAccessToken;
       if (creatorName) body.creatorName = creatorName;
       if (keys.adultContentFilter || (typeof isAdultContentFilterEnabled === 'function' && isAdultContentFilterEnabled())) body.adultContentFilter = true;
-      const res = await fetch(ORIGIN + '/api/preview', {
+      const res = await creatorApiFetch(ORIGIN + '/api/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -78646,7 +78664,7 @@ async function generate() {
   let config = null;
   let saveErrorMessage = null;
   try {
-    const res = await fetch(ORIGIN + '/api/save', {
+    const res = await creatorApiFetch(ORIGIN + '/api/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(withAccountProof(installSaveBody(entries, keys))),
@@ -91874,6 +91892,10 @@ function generateSearchVariations(query) {
 
       const v = validateCreatorUsername(creatorNameRaw);
       if (!v.ok) return { ok: false, error: "Username or Key is incorrect." };
+      // No key and no live session for the account: the page signing with a
+      // session that has ended (it then sends the key). Nothing to verify --
+      // an empty key cannot match -- so no PBKDF2 run and no throttle spent.
+      if (!creatorKey) return { ok: false, error: "Username or Key is incorrect.", noKey: true };
       // A username being deleted right now stops authenticating, whatever the
       // record says. Two things this catches that the record cannot: a request
       // arriving mid-purge, which would otherwise write its key back after the
@@ -94040,7 +94062,8 @@ function generateSearchVariations(query) {
       }
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) {
-        if (auth.error !== "no-kv") {
+        // A request without a key guessed nothing (see noKey above).
+        if (auth.error !== "no-kv" && !auth.noKey) {
           await noteAuthFailure(env, restoreFailScope, restoreFailDay);
           await noteRateLimit(env, ctx, "creatorrestore", ip, 60);
         }
@@ -100195,7 +100218,8 @@ export default {
     // be signed with the session instead of the Account Key (creatorApiFetch,
     // 16_; Release 19). The page cannot see the HttpOnly cookie itself.
     try {
-      if (request && request.account && new URL(request.url).pathname.startsWith("/api/creator/")) {
+      const p = new URL(request && request.url ? request.url : "https://x/").pathname;
+      if (request && request.account && (p.startsWith("/api/creator/") || CREATOR_SESSION_PATH_PREFIXES.some((x) => p.startsWith(x)))) {
         secured.headers.set("X-MLA-Session", String(request.account.username || "").toLowerCase());
       }
     } catch {

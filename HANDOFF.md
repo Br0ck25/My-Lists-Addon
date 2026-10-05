@@ -2,6 +2,27 @@
 
 > **Notice to Incoming AI**: Read this file first, then `AGENTS.md` and `docs/DECISIONS.md`. It records the current progress, what must not be undone, and what to do next. Do not start over or undo existing work.
 
+> **NEXT STEPS (2026-10-05, Release 20 live and merged into `main`).** The list given to the owner, with dates. Done since 2026-10-04: Cloudflare's GitHub access removed, `CF_ANALYTICS_TOKEN` deleted, `INSTALL_MIGRATION_PERCENT=10`, sign-in stage 2 and the backup restore check (Release 20), `FF_MATERIALIZER` and `FF_CANONICAL_IDS` on. PRs #10 and #11: owner says ignore.
+>
+> **Owner (dashboard only):**
+> 1. `INSTALL_MIGRATION_PERCENT`: check `/admin` → Maintenance → Install links, then `50` about 2026-10-07, then `100` about 2026-10-10 if nothing failed.
+> 2. Any time, optional: delete `CF_ANALYTICS_ACCOUNT_ID` (only the finished one-time stats recovery read it).
+> 3. Tell Claude if a Stremio tile opens to "not found" or a home screen with "Remove duplicate items across lists" looks wrong (the two switches turned on 2026-10-05).
+>
+> **Claude (code), in order:**
+> 4. **Release 21, next:** retire the classic page (always serve the new interface, ignore `?ff_new_ui=0`) and remove `/api/bulk-resolve` if only the classic page uses it (18_; the new shell uses `/api/imports`); delete the unreachable `24_` modules (Explore, Your lists, the shell's Account/Connections cards: `appShellAccountBody`, `appShellConnectionsBody`). Owner decided both.
+> 5. **About 2026-10-07:** owner presses *Compare shelves now* and sends the result. If "not known yet" is rare, remove the legacy Continue Watching / Airing Next writers (P5-4 second half: `checkForNewEpisodes`, `refreshAiringNextSweep`, `cron.episodes` / `cron.airing-next`, the client shelf builders). Keep the stored lists while `shelfStoredForUnknown` reads them; a media row of kind `movie` never gets a schedule row.
+> 6. **About 2026-10-07:** owner turns on D1 read replication for `my-lists-db` (P8-1), with steps from Claude.
+> 7. **About 2026-10-12** (a week after Release 20): if `/admin` → Creators *Saves that sent the Account Key* stays near zero, rewrite the sunset notices (`getLegacySunsetNotices`, 02_, still says `/api/creator/sync/*` goes away, and the page uses those routes, now signed by the session). Then the owner sets `SUNSET_60DAY_START_DATE`.
+> 8. **Day 60 after that (about mid-December):** remove key-in-body auth on the session routes, the legacy scrobble forms and the other sunset items.
+> 9. **After 8 (about late December onward):** the old storage, one prefix or table at a time: copy to R2, remove its readers, delete (docs/CUTOVER.md P10-3).
+> 10. **After 2026-11-29:** remove the Better Posters KV fallback (`bpimg:v1:` reads in 52_ and the KV-only path in 05_; the copies expire by then, 60-day TTL). Keep `prewarmBetterPosters` (it fills R2 ahead). Low priority: it saves one wasted KV read per poster not yet in R2, and code.
+> 11. **Optional, owner's call:** Unlisted lists (`FF_V2_LISTS_API` plus wiring `APP_SHELL_UNLISTED_READY` in 24_), after Release 21.
+>
+> After each release the owner confirms live: merge the branch into `main` by PR. The daily backup (04:17 UTC) now also restores each file and compares row counts; a failed check fails the run.
+>
+> ---
+>
 > **HANDOFF, 2026-10-04 (Claude Code). Start here; the 2026-10-01 block below is history.**
 >
 > **Where things stand**

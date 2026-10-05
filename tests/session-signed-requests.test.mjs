@@ -44,6 +44,34 @@ describe("the server: a session signs a save in place of the key", () => {
     assert.equal(r.headers.get("x-mla-session"), null, "FF_SESSIONS off: nothing to say");
   });
 
+  it("the sign-in check on page load works with the session alone, and a keyless miss is not a failed attempt", async () => {
+    const { env, db, user, cookie } = await setup();
+    const ok = await call(env, "/api/creator/restore", { method: "POST", cookie, json: { creatorName: user.creatorName } });
+    assert.equal(ok.status, 200, JSON.stringify(ok.body));
+    assert.equal(ok.body.creatorName, user.creatorName);
+    assert.equal(ok.headers.get("x-mla-session"), user.creatorName.toLowerCase());
+    // Without the cookie (an ended session): refused, and no failed attempt noted.
+    const ip = "198.51.100.77";
+    for (let i = 0; i < 3; i++) {
+      const miss = await call(env, "/api/creator/restore", { method: "POST", ip, json: { creatorName: user.creatorName } });
+      assert.equal(miss.status, 401);
+    }
+    // Failed attempts are stats rows "authfail:restore:<ip>" (noteAuthFailure),
+    // and the per-minute bucket is a rate_counters row.
+    const failRows = db._db.prepare("SELECT count(*) AS n FROM stats WHERE kind LIKE 'authfail:restore:%'").get();
+    const bucketRows = db._db.prepare("SELECT count(*) AS n FROM rate_counters WHERE scope LIKE 'creatorrestore%'").get();
+    assert.equal(Number(failRows.n) + Number(bucketRows.n), 0, "a keyless miss spends nothing");
+    // A wrong key still does.
+    await call(env, "/api/creator/restore", { method: "POST", ip, json: { creatorName: user.creatorName, creatorKey: "MYL-WRONG-KEY1-KEY2" } });
+    assert.equal(Number(db._db.prepare("SELECT count(*) AS n FROM stats WHERE kind LIKE 'authfail:restore:%'").get().n), 1, "a wrong key is noted");
+  });
+
+  it("a preview of a personal row is signed by the session", async () => {
+    const { env, user, cookie } = await setup();
+    const r = await call(env, "/api/preview", { method: "POST", cookie, json: { creatorName: user.creatorName, entry: { type: "movie", url: `autotrack:watchlist:movie:${user.creatorName}` } } });
+    assert.notEqual(r.status, 401, JSON.stringify(r.body));
+  });
+
   it("refuses a session for another account, and a request with neither", async () => {
     const { env, cookie } = await setup();
     const other = await createUser(env, "someoneelse");
@@ -56,7 +84,6 @@ describe("the server: a session signs a save in place of the key", () => {
 
 describe("the page: creatorApiFetch", () => {
   const SAVE = "/api/creator/sync/save";
-  const RESTORE = "/api/creator/restore";
   const body = (o) => JSON.stringify(o);
   const HELD = "myListAddon:sessionFor";
   // The server's answer: X-MLA-Session names the account whose session this
@@ -103,8 +130,9 @@ describe("the page: creatorApiFetch", () => {
 
   it("keeps the key where the key is what is checked", async () => {
     const seen = [];
-    const client = loadClient({ storage: { [HELD]: "ann" }, routes: { [RESTORE]: (req) => { seen.push(req.body); return { json: { ok: true } }; } } });
-    await client.call("creatorApiFetch", "https://example.com" + RESTORE, { method: "POST", body: body({ creatorName: "ann", creatorKey: "MYL-K" }) });
+    const DELETE = "/api/creator/delete-account";
+    const client = loadClient({ storage: { [HELD]: "ann" }, routes: { [DELETE]: (req) => { seen.push(req.body); return { json: { ok: true } }; } } });
+    await client.call("creatorApiFetch", "https://example.com" + DELETE, { method: "POST", body: body({ creatorName: "ann", creatorKey: "MYL-K", confirm: "DELETE" }) });
     assert.equal(seen[0].creatorKey, "MYL-K");
   });
 
@@ -116,7 +144,7 @@ describe("the page: creatorApiFetch", () => {
     const direct = [];
     for (const f of files) {
       fs.readFileSync(path.join(root, f), "utf8").split(/\r?\n/).forEach((line, i) => {
-        if (/(^|[^A-Za-z])fetch\(ORIGIN \+ '\/api\/creator\//.test(line)) direct.push(`${f}:${i + 1}`);
+        if (/(^|[^A-Za-z])fetch\(ORIGIN \+ '\/api\/(creator\/|preview|save|feedback|lists\/like|channel\/like|channel\/unpublish)/.test(line)) direct.push(`${f}:${i + 1}`);
       });
     }
     assert.deepEqual(direct, []);

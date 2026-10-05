@@ -32,7 +32,9 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
   The 35 accounts added since the last comparison are those `activity.copy-new` copied. The "not known yet" counts grew with them, because their shows are not in the schedule until `show.watchers` (daily) and `show.refresh` (hourly) reach them. Meanwhile the safety net keeps their entries.
 - **`FF_SHOW_SCHEDULE` is on** (2026-10-04). The owner reports Continue Watching and Airing Next working correctly.
 - **Release 19** went live on 2026-10-04. The owner reports it working correctly. It is the first stage of the sign-in move, and fixes pages that loaded with no scripts running after a reload. Details under Release 19.
-- **`main`** is brought up to date by PR #12 (Releases 14–16).
+- **Release 20** went live on 2026-10-05. The owner reports no issues. It is sign-in move stage 2, plus a daily check that each backup restores. Details under Release 20.
+- **`FF_MATERIALIZER` and `FF_CANONICAL_IDS` are on** (2026-10-05, owner's screenshot). `INSTALL_MIGRATION_PERCENT` is `10`. `CF_ANALYTICS_TOKEN` and `FF_SCROBBLE_ST_ONLY` are gone; `CF_ANALYTICS_ACCOUNT_ID` is still set and no longer needed (only the one-time recovery used it).
+- **`main`** is brought up to date by PR #12 (Releases 14–16), PR #13 (17–18), PR #14 (19) and the Release 20 PR.
 - **Cloudflare Workers Builds was connected to this repository** (found 2026-10-04). The owner reports the Worker it was connected to has since been deleted, and merging PR #12 started no build. Every push makes Cloudflare try to build the Worker from GitHub. On `main` it would deploy to production. So far every attempt has failed, so nothing has been deployed that way: `main` at `a6785d6` on 2026-10-03, and this branch's preview with *Authentication error*. The `wrangler.toml` guard (Release 14: `keep_vars`, the `DB_ACTIVITY` placeholder) keeps such a deploy from replacing the dashboard's settings. Deploying stays manual (pasting) unless the owner decides otherwise.
 - **Backups work** (2026-10-04): the owner added the five GitHub secrets, and the first real backup ran (Actions run 37226668219). It copied both databases, encrypted: `my-lists-db` (9.3 MB, 709 accounts' settings, 1,147 lists, 53,082 list items) and `mylists-activity` (0.96 MB, 46,956 plays). From here it runs daily at 04:17 UTC.
 
@@ -1409,4 +1411,65 @@ The test signs in as the page does, with the name and key in storage, against a 
 3. After a day, open `/admin` → **Creators**. *Saves that sent the Account Key today* should be small: one burst per browser that had no session yet.
 
 **Rollback:** paste the 18 file. Sessions and keys both keep working either way.
+
+---
+
+## Release 20: sign-in move stage 2, and backups that are checked every day
+
+**Branch point:** this branch after Release 19, which is live.
+
+The owner's answers to the next-steps list (2026-10-05):
+- They set `INSTALL_MIGRATION_PERCENT=10`.
+- They removed the Cloudflare app's GitHub access and `CF_ANALYTICS_TOKEN`.
+- They asked for:
+  - sign-in stage 2 (8);
+  - the backup check (15);
+  - Better Posters cleanup "if they keep working" (12);
+  - retiring the classic page (13);
+  - deleting the unused screens (14).
+
+### What it changes
+
+- **Sign-in move, stage 2** (`16_` `CREATOR_SESSION_ROUTES`, `02_` `CREATOR_SESSION_PATH_PREFIXES`; 14 more page calls go through `creatorApiFetch`).
+  - These requests are now signed by the session as well:
+    - the sign-in check every page load makes (`/api/creator/restore`);
+    - previews and install links with personal rows (`/api/preview`, `/api/save`);
+    - feedback;
+    - likes (`/api/lists/like`, `/api/channel/like`);
+    - unpublishing a channel.
+  - A key reset ends every session of the account, so a browser left with the old key is still signed out, through the retry.
+  - **A request with neither a key nor a live session is refused at once.** It used to run PBKDF2 on an empty key.
+  - **A keyless miss on `restore` is not noted as a failed attempt:** nothing was guessed.
+  - The `X-MLA-Session` header is now also sent on those routes.
+  - Real browser, after a reload: no request sends the key, the sign-in check included.
+- **Backups prove they restore** (`.github/scripts/d1-backup-verify.mjs`, `d1-backup.yml`). Before uploading, the daily job:
+  1. decrypts the file it keeps;
+  2. loads it into an empty database;
+  3. compares every table's row count with what it read from D1.
+
+  A backup that does not open fails the run that day, with the reason. Run by hand from this branch on 2026-10-05: both databases restored with every count matching. The daily run picks it up once this is on `main`.
+- **Better Posters (12): nothing removed yet, on purpose.** Production serves them from R2. The old KV copies (`bpimg:v1:`) expire by themselves 60 days after they were stored, so the last ones go by about 2026-11-29. The leftover KV code goes after that, when it can no longer serve anything.
+
+  `prewarmBetterPosters` stays: it is what has posters ready in R2 before anyone asks for them. Removing it would show the plain poster first for every title nobody had viewed yet.
+- `/admin` shows **Release 20**.
+
+### Checked
+
+- **`tests/session-signed-requests.test.mjs`:**
+  - `restore` with the session alone;
+  - a keyless miss not noted, while a wrong key still is;
+  - a personal-row preview;
+  - that every page call to these routes goes through the helper.
+- **`tests/d1-backup.test.mjs`:**
+  - a whole dump restores;
+  - a cut-short dump, wrong counts and garbage fail;
+  - both live schemas, whose CREATE statements span lines, restore when read from a file line by line. That case failed the first version of the check.
+- `bash verify.sh` and the `MLA_TEST_V2_LISTS_READ=1` run pass (counts in the commit).
+
+**Steps:**
+1. Deploy `release-20-NEW-worker.js`. Check that `/admin` says **Release 20**.
+2. Use the site as normal, including a reload or two.
+3. `INSTALL_MIGRATION_PERCENT`: if `/admin` → Maintenance → **Install links** looks fine a day after you set it to 10, raise it to `50`, then to `100` a day later.
+
+**Rollback:** paste the 19 file.
 

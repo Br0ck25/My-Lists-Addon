@@ -220,3 +220,41 @@ describe("the D1 query API", () => {
     assert.ok(waits[0] > 200 && waits[0] <= 260);
   });
 });
+
+// The workflow's check that the file it keeps restores (d1-backup-verify.mjs).
+describe("d1-backup-verify: a kept backup must restore", () => {
+  it("passes a whole dump, every table's rows counted", async () => {
+    const { verifyDump } = await import("../.github/scripts/d1-backup-verify.mjs");
+    const { lines, counts } = await dump(sampleDb());
+    const r = await verifyDump(lines, counts);
+    assert.equal(r.ok, true, r.problems.join("; "));
+    assert.equal(r.tables, Object.keys(counts).length);
+  });
+
+  it("fails a dump cut short, and counts that do not match", async () => {
+    const { verifyDump } = await import("../.github/scripts/d1-backup-verify.mjs");
+    const { lines, counts } = await dump(sampleDb());
+    const cut = lines.slice(0, Math.floor(lines.length / 2));
+    const short = await verifyDump(cut, counts);
+    assert.equal(short.ok, false);
+    const wrong = await verifyDump(lines, { ...counts, accounts: counts.accounts + 1 });
+    assert.equal(wrong.ok, false);
+    assert.match(wrong.problems.join(" "), /accounts: 2 rows restored, 3 read from D1/);
+    const garbage = await verifyDump(["not sql at all"], counts);
+    assert.equal(garbage.ok, false);
+  });
+
+  it("restores the live schema, whose CREATE statements span lines, read from a file line by line", async () => {
+    const { verifyDump } = await import("../.github/scripts/d1-backup-verify.mjs");
+    for (const schemaFile of ["schema.sql", "schema_activity.sql"]) {
+      const db = new DatabaseSync(":memory:");
+      db.exec(fs.readFileSync(path.join(ROOT, schemaFile), "utf8"));
+      const { lines, counts } = await dump(db);
+      // As the workflow reads it: the file split at its line breaks.
+      const fileLines = lines.join("\n").split("\n");
+      assert.ok(fileLines.length > lines.length, "some statement spans lines");
+      const r = await verifyDump(fileLines, counts);
+      assert.equal(r.ok, true, `${schemaFile}: ${r.problems.join("; ")}`);
+    }
+  });
+});
