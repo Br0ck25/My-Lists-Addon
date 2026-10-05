@@ -1318,6 +1318,20 @@ const D1_SCHEMA_MANIFEST = [
 // buildBetterPosterUrl (05_catalog-core.js) assembles the base properly.
 const BETTER_POSTERS_ORIGIN = "https://btttr.cc";
 
+// btttr.cc's own public Stremio catalogs, which the Better Posters lists
+// (mylists:better-posters:<key>, BETTER_POSTERS_CHARTS in 08) are read from.
+// "today" is the ranking its "#N Today" corner tag is drawn from: the catalog
+// is in rank order and each entry carries that rank as "_rank". btttr.cc names
+// the shows catalog differently from the movies one.
+const BETTER_POSTERS_CATALOGS = {
+  today: { movie: "tmdb-today", series: "tmdb-today-shows" },
+  trending: { movie: "trakt-trending", series: "trakt-trending" },
+  popular: { movie: "trakt-popular", series: "trakt-popular" },
+  top: { movie: "tmdb-top", series: "tmdb-top" },
+};
+// Its catalogs move through the day, so a stored copy is good for half an hour.
+const BETTER_POSTERS_CATALOG_REFRESH_SECONDS = 1800;
+
 // Rating sources btttr.cc accepts for "rs", straight off its configurator's
 // own dropdown. "avg" is its default and is sent as no parameter at all.
 const BETTER_POSTERS_RATING_SOURCES = [
@@ -1470,6 +1484,7 @@ const INSTALL_CONFIG_FIELDS = [
   { name: "betterPostersTrendTags", kind: "flagOn", requires: "betterPosters" },
   { name: "betterPostersQuality", kind: "flag", requires: "betterPosters" },
   { name: "betterPostersAge", kind: "flag", requires: "betterPosters" },
+  { name: "betterPostersTodayOrder", kind: "flag", requires: "betterPosters" },
   {
     name: "betterPostersLang", kind: "choice", default: "en", requires: "betterPosters",
     allowed: BETTER_POSTERS_LANGS.map((l) => l.value),
@@ -16407,6 +16422,14 @@ const CATALOG_SOURCES = [
     match: (s) => s.startsWith("mylists:most-watched:"),
     fetchPage: (ref, { entry, skip, keys }) => fetchMostWatchedCatalog(entry, skip, keys),
   },
+  // The Better Posters lists ("mylists:better-posters:today|trending|popular|top"),
+  // read from btttr.cc's public catalogs (fetchBetterPostersCatalog). No
+  // provider key is spent.
+  {
+    name: "mylists-better-posters", provider: "mylists", kind: "chart", apiUse: null,
+    match: (s) => s.startsWith("mylists:better-posters:"),
+    fetchPage: (ref, { entry, skip, keys }) => fetchBetterPostersCatalog(entry, skip, keys),
+  },
   {
     name: "trakt-chart", provider: "trakt", kind: "chart", apiUse: "trakt",
     snapshot: {},
@@ -16688,7 +16711,8 @@ function isAllowedCatalogSourceUrl(raw) {
     s.startsWith("autotrack:") ||
     s.startsWith("custom:") ||
     s.startsWith("curated:") ||
-    s.startsWith("mylists:most-watched:")
+    s.startsWith("mylists:most-watched:") ||
+    s.startsWith("mylists:better-posters:")
   ) {
     return true;
   }
@@ -17077,6 +17101,11 @@ async function fetchCatalog(entry, skip = 0, keys = {}) {
   // The adult-content filter still runs after both and still wins.
   if (keys.betterPosters && Array.isArray(result) && result.length > 0) {
     result = applyBetterPostersToMetas(result, keys.betterPostersOptions || {});
+    // "Keep Today tags in order": only meaningful while the tags are drawn.
+    const bpo = keys.betterPostersOptions || {};
+    if (bpo.todayOrder && bpo.trendTags !== false) {
+      result = await orderByBetterPostersToday(result, entry.type, keys.env, keys.ctx);
+    }
   }
 
   if (keys.isStremioCatalog === true && keys.origin && Array.isArray(result) && result.length > 0) {
@@ -18266,6 +18295,7 @@ function betterPostersOptionsFrom(cfg, origin) {
     quality: !!c.betterPostersQuality,
     age: !!c.betterPostersAge,
     trendTags: c.betterPostersTrendTags !== false,
+    todayOrder: !!c.betterPostersTodayOrder,
     lang: c.betterPostersLang || "en",
     ratingSource: c.betterPostersRatingSource || "avg",
   };
@@ -25960,6 +25990,98 @@ async function fetchMostWatchedCatalog(entry, skip = 0, keys = {}) {
   return page;
 }
 
+// --- Better Posters lists ------------------------------------------------------
+//
+// mylists:better-posters:today|trending|popular|top -- btttr.cc's own public
+// catalogs (BETTER_POSTERS_CATALOGS, 00_constants.js). "today" is the ranking
+// its "#N Today" corner tag comes from, in rank order.
+
+function parseBetterPostersChart(url) {
+  const m = /^mylists:better-posters:([a-z]+)$/i.exec(String(url || "").trim());
+  const key = m ? m[1].toLowerCase() : "";
+  return Object.prototype.hasOwnProperty.call(BETTER_POSTERS_CATALOGS, key) ? key : null;
+}
+
+// One btttr.cc catalog, in its own order, kept 30 minutes and served stale
+// (up to a day) when btttr.cc is down. Each item: { id, type, name, poster,
+// releaseInfo, rank } -- rank is btttr.cc's "_rank" where it gives one.
+async function loadBetterPostersCatalog(env, ctx, key, type) {
+  const catalogId = BETTER_POSTERS_CATALOGS[key][type];
+  const kvKey = `bp:catalog:${catalogId}:${type}`;
+  return await fetchWithPerUserCacheAndCircuitBreaker({
+    cacheKey: `user_cache:${kvKey}`,
+    kvKey,
+    env,
+    ctx,
+    freshTtlSec: BETTER_POSTERS_CATALOG_REFRESH_SECONDS,
+    staleTtlSec: 86400,
+    kvTtlSec: 86400,
+    refuseEmptyOverwrite: true,
+    providerLabel: "Better Posters",
+    fetchFn: async () => {
+      const res = await fetchWithTimeout(`${BETTER_POSTERS_ORIGIN}/catalog/${type}/${catalogId}.json`, {
+        headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}`, "Accept": "application/json" },
+      });
+      if (!res.ok) throw new Error(`Better Posters list request failed (HTTP ${res.status}).`);
+      const data = await res.json();
+      const out = [];
+      for (const m of (data && Array.isArray(data.metas) ? data.metas : [])) {
+        const id = m && typeof m.id === "string" ? m.id.trim() : "";
+        // Only a real title id charts, as in Most Watched.
+        if (!/^(tt\d+|tmdb:\d+)$/.test(id) || !m.name) continue;
+        const poster = /^tt\d+$/.test(id) ? `https://images.metahub.space/poster/medium/${id}/img` : m.poster;
+        if (!poster) continue;
+        out.push({
+          id, type, name: m.name, poster,
+          releaseInfo: m.releaseInfo ? String(m.releaseInfo) : undefined,
+          rank: Number.isFinite(m._rank) ? m._rank : undefined,
+        });
+      }
+      return out;
+    },
+  });
+}
+
+async function fetchBetterPostersCatalog(entry, skip = 0, keys = {}) {
+  const key = parseBetterPostersChart(entry && entry.url);
+  if (!key) throw new Error("Unknown Better Posters list.");
+  const type = entry && entry.type === "series" ? "series" : "movie";
+  const pageSize = Number.isFinite(keys.limit) && keys.limit > 0 ? Math.min(100, Math.floor(keys.limit)) : PAGE_SIZE;
+  const all = await loadBetterPostersCatalog(keys.env, keys.ctx, key, type);
+  const start = Math.max(0, skip);
+  const page = all.slice(start, start + pageSize).map(({ rank, ...m }) => m);
+  page.totalItems = all.length;
+  page.limit = pageSize;
+  page.skip = start;
+  return page;
+}
+
+// The "keep Today tags in order" setting (betterPostersTodayOrder): a title
+// the poster tags "#N Today" is moved so #2 never sits in front of #1 -- the
+// tagged titles keep the places they already had in the list and are put in
+// rank order among those places; everything else stays exactly where it was.
+// A failed lookup leaves the list as it was.
+async function orderByBetterPostersToday(metas, type, env, ctx) {
+  if (!Array.isArray(metas) || metas.length < 2 || (type !== "movie" && type !== "series")) return metas;
+  try {
+    const ranked = await loadBetterPostersCatalog(env, ctx, "today", type);
+    const rankOf = new Map(ranked.filter((r) => r.rank !== undefined).map((r) => [r.id, r.rank]));
+    const slots = [];
+    metas.forEach((m, i) => {
+      const id = betterPostersImdbId(m);
+      if (id && rankOf.has(id)) slots.push(i);
+    });
+    if (slots.length < 2) return metas;
+    const sorted = slots.map((i) => metas[i]).sort((a, b) => rankOf.get(betterPostersImdbId(a)) - rankOf.get(betterPostersImdbId(b)));
+    const out = metas.slice();
+    slots.forEach((i, n) => { out[i] = sorted[n]; });
+    out.totalItems = metas.totalItems;
+    return out;
+  } catch (e) {
+    return metas;
+  }
+}
+
 // --- Anime Unpacking & Multi-Season Parts Resolution -------------------------
 // Fixes TMDB cataloging that compresses multi-season anime (e.g. MASHLE 24 eps,
 // Re:ZERO 85 eps, Jujutsu Kaisen 59 eps) into a single monolithic season.
@@ -28476,6 +28598,28 @@ function buildMyListsAddonChartsHtml() {
   return buildStreamingRowsHtml(MY_LISTS_ADDON_CHARTS, "", "My Lists Addon Charts");
 }
 
+// --- Better Posters lists -----------------------------------------------------
+//
+// Lists that go with the Better Posters corner tags (Settings -> Better
+// Posters): "#2 Today" is a title's place in btttr.cc's own daily ranking, so
+// the Top Today list IS that ranking, in that order. Trending, Popular and Top
+// Rated are btttr.cc's other public catalogs (BETTER_POSTERS_CATALOGS, 00).
+// In Cinema is what is in theatres now (TMDB Now Playing), movies only.
+// They work with Better Posters off too; the tags are just not drawn then.
+// Same shape as MY_LISTS_ADDON_CHARTS, except In Cinema, which has no shows
+// side and so carries url/type as the Trakt Box Office row does.
+const BETTER_POSTERS_CHARTS = [
+  { name: "Better Posters Top Today", movieUrl: "mylists:better-posters:today", showUrl: "mylists:better-posters:today" },
+  { name: "Better Posters Trending", movieUrl: "mylists:better-posters:trending", showUrl: "mylists:better-posters:trending" },
+  { name: "Better Posters Popular", movieUrl: "mylists:better-posters:popular", showUrl: "mylists:better-posters:popular" },
+  { name: "Better Posters Top Rated", movieUrl: "mylists:better-posters:top", showUrl: "mylists:better-posters:top" },
+  { name: "Better Posters In Cinema", url: "tmdb:chart:now_playing", type: "movie" },
+];
+
+function buildBetterPostersChartsHtml() {
+  return buildStreamingRowsHtml(BETTER_POSTERS_CHARTS, "", "Better Posters");
+}
+
 // --- Clean, shareable /lists/<slug> urls for every native/official chart ---
 //
 // "TMDB Trending" -> "TMDB-Trending" -- title case preserved, everything
@@ -28520,7 +28664,8 @@ const CHART_SLUG_ENTRIES = (() => {
     ...HOLIDAY_LISTS,
     ...GENRE_LISTS,
     ...MY_LISTS_ADDON_CHARTS,
-  ].forEach((p) => add(p.name, p.movieUrl, p.showUrl));
+    ...BETTER_POSTERS_CHARTS,
+  ].forEach((p) => add(p.name, p.movieUrl || p.url, p.showUrl || p.url));
   [...TRAKT_BOXOFFICE_LIST, SIMKL_ANIME_LIST[0]].forEach((p) => add(p.name, p.url, p.url));
   COMBINED_CHART_LISTS.forEach((p) => add(p.name, p.movieUrls.join("\n"), p.showUrls.join("\n")));
   return entries;
@@ -28705,6 +28850,7 @@ function renderBuilder(
   const initialBetterPostersRating = initialKeys.betterPostersRating !== false;
   const initialBetterPostersQuality = !!initialKeys.betterPostersQuality;
   const initialBetterPostersAge = !!initialKeys.betterPostersAge;
+  const initialBetterPostersTodayOrder = !!initialKeys.betterPostersTodayOrder;
   const initialBetterPostersTrendTags = initialKeys.betterPostersTrendTags !== false;
   const betterPostersLangOptionsHtml = buildBetterPostersLangOptionsHtml(initialKeys.betterPostersLang || "en");
   const betterPostersRatingSourceOptionsHtml = buildBetterPostersRatingSourceOptionsHtml(initialKeys.betterPostersRatingSource || "avg");
@@ -28721,6 +28867,8 @@ function renderBuilder(
   const genresHtml = buildGenresHtml();
   // New on Streaming + My Lists Addon Most Watched -- see MY_LISTS_ADDON_CHARTS (08).
   const myListsAddonChartsHtml = buildMyListsAddonChartsHtml();
+  // Better Posters lists -- see BETTER_POSTERS_CHARTS (08).
+  const betterPostersChartsHtml = buildBetterPostersChartsHtml();
   // Precomputed here (same pattern as the *Html fragments above) rather
   // than built inline inside the giant HTML template literal below --
   // this file's template literal has bitten past changes before with
@@ -34330,6 +34478,7 @@ window._CHARTS_KIDS = ${jsonForScript(KIDS_LISTS)};
 window._CHARTS_HOLIDAYS = ${jsonForScript(HOLIDAY_LISTS)};
 window._CHARTS_GENRES = ${jsonForScript(GENRE_LISTS)};
 window._CHARTS_MY_LISTS_ADDON = ${jsonForScript(MY_LISTS_ADDON_CHARTS)};
+window._CHARTS_BETTER_POSTERS = ${jsonForScript(BETTER_POSTERS_CHARTS)};
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').then(function(reg) {
     if (reg) reg.update().catch(function() {});
@@ -34457,6 +34606,16 @@ if ('serviceWorker' in navigator) {
       ${myListsAddonChartsHtml}
     </div>
 
+    <!-- Better Posters Shelf (BETTER_POSTERS_CHARTS, 08). -->
+    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
+      <div class="shelf-header" style="margin-bottom:8px;">
+        <h2 class="shelf-title">Better Posters</h2>
+        <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="better-posters-charts">+ Add all</button>
+      </div>
+      <p class="qa-shelf-sub">Lists that go with the Better Posters tags: what is #1, #2, #3 Today, what is trending and popular, and what is in cinemas now. Turn on Better Posters in Settings to see the tags on the posters:</p>
+      ${betterPostersChartsHtml}
+    </div>
+
     <!-- Combined Charts Shelf -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
@@ -34578,6 +34737,9 @@ if ('serviceWorker' in navigator) {
   <div id="discoverShelvesContainer" style="display:none;">
     <!-- My Lists Addon Charts Shelf -->
     ${myListsAddonChartsHtml}
+
+    <!-- Better Posters Shelf -->
+    ${betterPostersChartsHtml}
 
     <!-- Combined Charts Shelf -->
     ${combinedChartsHtml}
@@ -35614,6 +35776,13 @@ if ('serviceWorker' in navigator) {
             <div style="flex:1; min-width:0;">
               <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Age rating</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Certification chip (PG-13, TV-MA, and so on).</p>
+            </div>
+          </label>
+          <label class="settings-check-item">
+            <input type="checkbox" id="betterPostersTodayOrderCheckbox" ${initialBetterPostersTodayOrder ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersTodayOrder&quot;,&quot;@checked&quot;]">
+            <div style="flex:1; min-width:0;">
+              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Order Today tags</span>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">In a list, titles tagged #1 Today, #2 Today and so on are put in that order, so #3 never comes before #2. Needs Trend tags. Applies to the lists in Stremio and Nuvio.</p>
             </div>
           </label>
         </div>
@@ -39337,6 +39506,14 @@ function renderDiscoverChartsList(type, forceRefresh) {
     if (window._CHARTS_MY_LISTS_ADDON) {
       window._CHARTS_MY_LISTS_ADDON.forEach(function(p) { pushPair(p.name, p.movieUrl, p.showUrl, 'My Lists Addon'); });
     }
+    // Better Posters lists (BETTER_POSTERS_CHARTS, 08). A row with a url is
+    // single-type (In Cinema: movies only).
+    if (window._CHARTS_BETTER_POSTERS) {
+      window._CHARTS_BETTER_POSTERS.forEach(function(p) {
+        if (p.url) pushSingle(p.name, p.url, p.type, 'Better Posters');
+        else pushPair(p.name, p.movieUrl, p.showUrl, 'Better Posters');
+      });
+    }
     if (type === 'movie' || type === 'all') {
       pushSingle(type === 'all' ? 'New Releases: Movies' : 'New Releases', 'tmdb:chart:new_movies', 'movie', 'TMDB');
     }
@@ -40175,6 +40352,7 @@ ${buildAddAllFnJs("addAllKidsCharts", buildAddAllPairsCallsJs(KIDS_LISTS, "Kids"
 ${buildAddAllFnJs("addAllHolidayCharts", buildAddAllPairsCallsJs(HOLIDAY_LISTS, "Holidays", ""))}
 ${buildAddAllFnJs("addAllGenreCharts", buildAddAllPairsCallsJs(GENRE_LISTS, "Genres", ""))}
 ${buildAddAllFnJs("addAllMyListsAddonCharts", buildAddAllPairsCallsJs(MY_LISTS_ADDON_CHARTS, "My Lists Addon Charts", ""))}
+${buildAddAllFnJs("addAllBetterPostersCharts", buildAddAllPairsCallsJs(BETTER_POSTERS_CHARTS.filter((p) => p.movieUrl), "Better Posters", "") + "\n" + buildAddAllSimpleCallsJs(BETTER_POSTERS_CHARTS.filter((p) => p.url), "Better Posters"))}
 
 function addAllHiddenGems() {
   addRow("Hidden Gems", "tmdb:hidden-gems", "movie", true, "Hidden Gems");
@@ -40200,6 +40378,7 @@ document.addEventListener('click', (e) => {
   else if (action === 'holidays') addAllHolidayCharts();
   else if (action === 'genres') addAllGenreCharts();
   else if (action === 'mylists-charts') addAllMyListsAddonCharts();
+  else if (action === 'better-posters-charts') addAllBetterPostersCharts();
 });
 
 // Adds a blank source row to an existing entry -- this is how a normal
@@ -71612,6 +71791,7 @@ async function loadCreatorSync(opts) {
         { key: 'betterPostersTrendTags', id: 'betterPostersTrendTagsCheckbox' },
         { key: 'betterPostersQuality', id: 'betterPostersQualityCheckbox' },
         { key: 'betterPostersAge', id: 'betterPostersAgeCheckbox' },
+        { key: 'betterPostersTodayOrder', id: 'betterPostersTodayOrderCheckbox' },
       ].forEach(({ key, id }) => {
         if (typeof synced.keys[key] === 'boolean') {
           try { localStorage.setItem('myListAddon:' + key, synced.keys[key] ? '1' : '0'); } catch (e) {}
@@ -75650,6 +75830,7 @@ function collectKeys() {
     betterPostersTrendTags: getBetterPostersSetting('betterPostersTrendTags', true),
     betterPostersQuality: getBetterPostersSetting('betterPostersQuality', false),
     betterPostersAge: getBetterPostersSetting('betterPostersAge', false),
+    betterPostersTodayOrder: getBetterPostersSetting('betterPostersTodayOrder', false),
     betterPostersLang: getBetterPostersChoice('betterPostersLang', 'en'),
     betterPostersRatingSource: getBetterPostersChoice('betterPostersRatingSource', 'avg'),
     showBadgesAiringNext: getBadgeSetting('showBadgesAiringNext'),
@@ -75892,6 +76073,7 @@ const BETTER_POSTERS_TOGGLES = [
   { key: 'betterPostersTrendTags', id: 'betterPostersTrendTagsCheckbox', on: true },
   { key: 'betterPostersQuality', id: 'betterPostersQualityCheckbox', on: false },
   { key: 'betterPostersAge', id: 'betterPostersAgeCheckbox', on: false },
+  { key: 'betterPostersTodayOrder', id: 'betterPostersTodayOrderCheckbox', on: false },
 ];
 
 function initBetterPostersSettingsUI() {

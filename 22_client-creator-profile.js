@@ -3500,6 +3500,7 @@ async function loadCreatorSync(opts) {
         { key: 'betterPostersTrendTags', id: 'betterPostersTrendTagsCheckbox' },
         { key: 'betterPostersQuality', id: 'betterPostersQualityCheckbox' },
         { key: 'betterPostersAge', id: 'betterPostersAgeCheckbox' },
+        { key: 'betterPostersTodayOrder', id: 'betterPostersTodayOrderCheckbox' },
       ].forEach(({ key, id }) => {
         if (typeof synced.keys[key] === 'boolean') {
           try { localStorage.setItem('myListAddon:' + key, synced.keys[key] ? '1' : '0'); } catch (e) {}

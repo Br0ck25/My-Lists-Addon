@@ -118,6 +118,16 @@
       ${myListsAddonChartsHtml}
     </div>
 
+    <!-- Better Posters Shelf (BETTER_POSTERS_CHARTS, 08). -->
+    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
+      <div class="shelf-header" style="margin-bottom:8px;">
+        <h2 class="shelf-title">Better Posters</h2>
+        <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="better-posters-charts">+ Add all</button>
+      </div>
+      <p class="qa-shelf-sub">Lists that go with the Better Posters tags: what is #1, #2, #3 Today, what is trending and popular, and what is in cinemas now. Turn on Better Posters in Settings to see the tags on the posters:</p>
+      ${betterPostersChartsHtml}
+    </div>
+
     <!-- Combined Charts Shelf -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">

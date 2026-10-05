@@ -488,6 +488,28 @@ function buildMyListsAddonChartsHtml() {
   return buildStreamingRowsHtml(MY_LISTS_ADDON_CHARTS, "", "My Lists Addon Charts");
 }
 
+// --- Better Posters lists -----------------------------------------------------
+//
+// Lists that go with the Better Posters corner tags (Settings -> Better
+// Posters): "#2 Today" is a title's place in btttr.cc's own daily ranking, so
+// the Top Today list IS that ranking, in that order. Trending, Popular and Top
+// Rated are btttr.cc's other public catalogs (BETTER_POSTERS_CATALOGS, 00).
+// In Cinema is what is in theatres now (TMDB Now Playing), movies only.
+// They work with Better Posters off too; the tags are just not drawn then.
+// Same shape as MY_LISTS_ADDON_CHARTS, except In Cinema, which has no shows
+// side and so carries url/type as the Trakt Box Office row does.
+const BETTER_POSTERS_CHARTS = [
+  { name: "Better Posters Top Today", movieUrl: "mylists:better-posters:today", showUrl: "mylists:better-posters:today" },
+  { name: "Better Posters Trending", movieUrl: "mylists:better-posters:trending", showUrl: "mylists:better-posters:trending" },
+  { name: "Better Posters Popular", movieUrl: "mylists:better-posters:popular", showUrl: "mylists:better-posters:popular" },
+  { name: "Better Posters Top Rated", movieUrl: "mylists:better-posters:top", showUrl: "mylists:better-posters:top" },
+  { name: "Better Posters In Cinema", url: "tmdb:chart:now_playing", type: "movie" },
+];
+
+function buildBetterPostersChartsHtml() {
+  return buildStreamingRowsHtml(BETTER_POSTERS_CHARTS, "", "Better Posters");
+}
+
 // --- Clean, shareable /lists/<slug> urls for every native/official chart ---
 //
 // "TMDB Trending" -> "TMDB-Trending" -- title case preserved, everything
@@ -532,7 +554,8 @@ const CHART_SLUG_ENTRIES = (() => {
     ...HOLIDAY_LISTS,
     ...GENRE_LISTS,
     ...MY_LISTS_ADDON_CHARTS,
-  ].forEach((p) => add(p.name, p.movieUrl, p.showUrl));
+    ...BETTER_POSTERS_CHARTS,
+  ].forEach((p) => add(p.name, p.movieUrl || p.url, p.showUrl || p.url));
   [...TRAKT_BOXOFFICE_LIST, SIMKL_ANIME_LIST[0]].forEach((p) => add(p.name, p.url, p.url));
   COMBINED_CHART_LISTS.forEach((p) => add(p.name, p.movieUrls.join("\n"), p.showUrls.join("\n")));
   return entries;

@@ -3319,6 +3319,98 @@ async function fetchMostWatchedCatalog(entry, skip = 0, keys = {}) {
   return page;
 }
 
+// --- Better Posters lists ------------------------------------------------------
+//
+// mylists:better-posters:today|trending|popular|top -- btttr.cc's own public
+// catalogs (BETTER_POSTERS_CATALOGS, 00_constants.js). "today" is the ranking
+// its "#N Today" corner tag comes from, in rank order.
+
+function parseBetterPostersChart(url) {
+  const m = /^mylists:better-posters:([a-z]+)$/i.exec(String(url || "").trim());
+  const key = m ? m[1].toLowerCase() : "";
+  return Object.prototype.hasOwnProperty.call(BETTER_POSTERS_CATALOGS, key) ? key : null;
+}
+
+// One btttr.cc catalog, in its own order, kept 30 minutes and served stale
+// (up to a day) when btttr.cc is down. Each item: { id, type, name, poster,
+// releaseInfo, rank } -- rank is btttr.cc's "_rank" where it gives one.
+async function loadBetterPostersCatalog(env, ctx, key, type) {
+  const catalogId = BETTER_POSTERS_CATALOGS[key][type];
+  const kvKey = `bp:catalog:${catalogId}:${type}`;
+  return await fetchWithPerUserCacheAndCircuitBreaker({
+    cacheKey: `user_cache:${kvKey}`,
+    kvKey,
+    env,
+    ctx,
+    freshTtlSec: BETTER_POSTERS_CATALOG_REFRESH_SECONDS,
+    staleTtlSec: 86400,
+    kvTtlSec: 86400,
+    refuseEmptyOverwrite: true,
+    providerLabel: "Better Posters",
+    fetchFn: async () => {
+      const res = await fetchWithTimeout(`${BETTER_POSTERS_ORIGIN}/catalog/${type}/${catalogId}.json`, {
+        headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}`, "Accept": "application/json" },
+      });
+      if (!res.ok) throw new Error(`Better Posters list request failed (HTTP ${res.status}).`);
+      const data = await res.json();
+      const out = [];
+      for (const m of (data && Array.isArray(data.metas) ? data.metas : [])) {
+        const id = m && typeof m.id === "string" ? m.id.trim() : "";
+        // Only a real title id charts, as in Most Watched.
+        if (!/^(tt\d+|tmdb:\d+)$/.test(id) || !m.name) continue;
+        const poster = /^tt\d+$/.test(id) ? `https://images.metahub.space/poster/medium/${id}/img` : m.poster;
+        if (!poster) continue;
+        out.push({
+          id, type, name: m.name, poster,
+          releaseInfo: m.releaseInfo ? String(m.releaseInfo) : undefined,
+          rank: Number.isFinite(m._rank) ? m._rank : undefined,
+        });
+      }
+      return out;
+    },
+  });
+}
+
+async function fetchBetterPostersCatalog(entry, skip = 0, keys = {}) {
+  const key = parseBetterPostersChart(entry && entry.url);
+  if (!key) throw new Error("Unknown Better Posters list.");
+  const type = entry && entry.type === "series" ? "series" : "movie";
+  const pageSize = Number.isFinite(keys.limit) && keys.limit > 0 ? Math.min(100, Math.floor(keys.limit)) : PAGE_SIZE;
+  const all = await loadBetterPostersCatalog(keys.env, keys.ctx, key, type);
+  const start = Math.max(0, skip);
+  const page = all.slice(start, start + pageSize).map(({ rank, ...m }) => m);
+  page.totalItems = all.length;
+  page.limit = pageSize;
+  page.skip = start;
+  return page;
+}
+
+// The "keep Today tags in order" setting (betterPostersTodayOrder): a title
+// the poster tags "#N Today" is moved so #2 never sits in front of #1 -- the
+// tagged titles keep the places they already had in the list and are put in
+// rank order among those places; everything else stays exactly where it was.
+// A failed lookup leaves the list as it was.
+async function orderByBetterPostersToday(metas, type, env, ctx) {
+  if (!Array.isArray(metas) || metas.length < 2 || (type !== "movie" && type !== "series")) return metas;
+  try {
+    const ranked = await loadBetterPostersCatalog(env, ctx, "today", type);
+    const rankOf = new Map(ranked.filter((r) => r.rank !== undefined).map((r) => [r.id, r.rank]));
+    const slots = [];
+    metas.forEach((m, i) => {
+      const id = betterPostersImdbId(m);
+      if (id && rankOf.has(id)) slots.push(i);
+    });
+    if (slots.length < 2) return metas;
+    const sorted = slots.map((i) => metas[i]).sort((a, b) => rankOf.get(betterPostersImdbId(a)) - rankOf.get(betterPostersImdbId(b)));
+    const out = metas.slice();
+    slots.forEach((i, n) => { out[i] = sorted[n]; });
+    out.totalItems = metas.totalItems;
+    return out;
+  } catch (e) {
+    return metas;
+  }
+}
+
 // --- Anime Unpacking & Multi-Season Parts Resolution -------------------------
 // Fixes TMDB cataloging that compresses multi-season anime (e.g. MASHLE 24 eps,
 // Re:ZERO 85 eps, Jujutsu Kaisen 59 eps) into a single monolithic season.

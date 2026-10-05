@@ -180,6 +180,11 @@ async function fetchCatalog(entry, skip = 0, keys = {}) {
   // The adult-content filter still runs after both and still wins.
   if (keys.betterPosters && Array.isArray(result) && result.length > 0) {
     result = applyBetterPostersToMetas(result, keys.betterPostersOptions || {});
+    // "Keep Today tags in order": only meaningful while the tags are drawn.
+    const bpo = keys.betterPostersOptions || {};
+    if (bpo.todayOrder && bpo.trendTags !== false) {
+      result = await orderByBetterPostersToday(result, entry.type, keys.env, keys.ctx);
+    }
   }
 
   if (keys.isStremioCatalog === true && keys.origin && Array.isArray(result) && result.length > 0) {
@@ -1369,6 +1374,7 @@ function betterPostersOptionsFrom(cfg, origin) {
     quality: !!c.betterPostersQuality,
     age: !!c.betterPostersAge,
     trendTags: c.betterPostersTrendTags !== false,
+    todayOrder: !!c.betterPostersTodayOrder,
     lang: c.betterPostersLang || "en",
     ratingSource: c.betterPostersRatingSource || "avg",
   };

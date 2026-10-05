@@ -60,6 +60,7 @@ function legacyDetectSource(input, parseTmdbWebChartUrl, parsePublishedListUrl) 
     s === "streaming:new-on-streaming" || s.startsWith("streaming:new-on-streaming:")
   ) return "tmdb-new-on-streaming";
   if (s.startsWith("mylists:most-watched:")) return "mylists-most-watched";
+  if (s.startsWith("mylists:better-posters:")) return "mylists-better-posters";
   if (s.startsWith("trakt:chart:")) return "trakt-chart";
   if (s.startsWith("simkl:chart:")) return "simkl-chart";
   if (s.startsWith("simkl:user:")) return "simkl-user";
@@ -109,6 +110,7 @@ async function legacyDispatch(entry, skip, keys, f, K, detect) {
   else if (source === "tmdb-genre") { trackSharedApiUse(keys, true, "tmdb"); result = await f.fetchTmdbGenre(entry, skip, TMDB_API_KEY, entry.url.trim().slice("tmdb:genre:".length), keys.region); }
   else if (source === "tmdb-new-on-streaming") { result = await f.fetchNewOnStreaming(entry, skip, keys); }
   else if (source === "mylists-most-watched") { result = await f.fetchMostWatchedCatalog(entry, skip, keys); }
+  else if (source === "mylists-better-posters") { result = await f.fetchBetterPostersCatalog(entry, skip, keys); }
   else if (source === "trakt-chart") { trackSharedApiUse(keys, !keys.traktKey, "trakt"); result = await f.fetchTraktChart(entry, skip, traktKey, entry.url.trim().slice("trakt:chart:".length), keys.env, keys.ctx); }
   else if (source === "simkl-chart") { trackSharedApiUse(keys, true, "simkl"); result = await f.fetchSimklChart(entry, skip, SIMKL_CLIENT_ID, entry.url.trim().slice("simkl:chart:".length), keys.env, keys.ctx); }
   else if (source === "simkl-user") { trackSharedApiUse(keys, true, "simkl"); result = await f.fetchSimklUserList(entry, skip, keys.simklAccessToken, SIMKL_CLIENT_ID, entry.url.trim().slice("simkl:user:".length), keys.tmdbKey, keys.env, keys.ctx); }
@@ -128,7 +130,7 @@ const FETCHERS = [
   "fetchMdblist", "fetchMdblistWatchlist", "fetchMdblistHistory", "fetchMdblistAiringNext", "fetchMdblistUpNext",
   "fetchTrakt", "fetchTraktWatchlist", "fetchTraktHistory", "fetchTraktAiringNext", "fetchTraktContinueWatching", "fetchTraktChart",
   "fetchTmdb", "fetchTmdbChart", "fetchTmdbCollection", "fetchTmdbProviderTop10", "fetchTmdbHiddenGems", "fetchTmdbKids",
-  "fetchTmdbHoliday", "fetchTmdbGenre", "fetchNewOnStreaming", "fetchMostWatchedCatalog", "fetchSimklChart",
+  "fetchTmdbHoliday", "fetchTmdbGenre", "fetchNewOnStreaming", "fetchMostWatchedCatalog", "fetchBetterPostersCatalog", "fetchSimklChart",
   "fetchSimklUserList", "fetchChannelCatalog", "fetchCustomListCatalog", "fetchAutoTrackedCatalog",
   "fetchCuratedCatalog", "fetchPublishedListCatalog",
 ];
@@ -158,6 +160,7 @@ const SOURCE_CORPUS = [
   "tmdb:new-on-streaming", "tmdb:new-on-streaming:netflix+hulu", "rapidapi:new-on-streaming", "rapidapi:new-on-streaming:max",
   "streaming:new-on-streaming", "streaming:new-on-streaming:prime", "tmdb:new-on-streamingx",
   "mylists:most-watched:today", "mylists:most-watched:7", "mylists:most-watched",
+  "mylists:better-posters:today", "mylists:better-posters:top", "mylists:better-posters:",
   "trakt:chart:trending-movies", "trakt:chart:", "simkl:chart:week", "simkl:user:watchlist:shows", "simkl:user:",
   "simkl:watchlist", "simkl:history:shows", "simkl:airing-next",
   "channel:v1:" + JSON.stringify({ name: "C", items: [] }), "channel:v1:{not json", "channel:v2:x",
@@ -200,7 +203,7 @@ describe("P4-1: the provider registry", () => {
   it("maps every source to an adapter, and each adapter lists its own sources", () => {
     const names = CATALOG_SOURCES.map((s) => s.name);
     assert.equal(new Set(names).size, names.length, "source names are unique");
-    assert.equal(names.length, 28);
+    assert.equal(names.length, 29);
     for (const src of CATALOG_SOURCES) {
       const adapter = sb.providerAdapter(src.provider);
       assert.ok(adapter, `${src.name} names an unknown provider ${src.provider}`);
