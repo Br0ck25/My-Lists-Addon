@@ -779,6 +779,10 @@ const TMDB_CHART_PATHS = {
   top_rated: { movie: "movie/top_rated", tv: "tv/top_rated" },
   now_playing: { movie: "movie/now_playing", tv: "tv/airing_today" },
   upcoming: { movie: "movie/upcoming", tv: "tv/on_the_air" },
+  // Shows only (the Better Posters lists, 08): TMDB's "Returning Series"
+  // status, and its "Miniseries" type, most popular first.
+  returning: { tv: "discover/tv?sort_by=popularity.desc&with_status=0" },
+  limited: { tv: "discover/tv?sort_by=popularity.desc&with_type=2" },
   netflix: tmdbProviderChartPaths(8),
   netflixkids: tmdbProviderChartPaths(175),
   appletv: tmdbProviderChartPaths(350),

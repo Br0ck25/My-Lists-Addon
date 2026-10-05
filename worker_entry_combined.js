@@ -23450,6 +23450,10 @@ const TMDB_CHART_PATHS = {
   top_rated: { movie: "movie/top_rated", tv: "tv/top_rated" },
   now_playing: { movie: "movie/now_playing", tv: "tv/airing_today" },
   upcoming: { movie: "movie/upcoming", tv: "tv/on_the_air" },
+  // Shows only (the Better Posters lists, 08): TMDB's "Returning Series"
+  // status, and its "Miniseries" type, most popular first.
+  returning: { tv: "discover/tv?sort_by=popularity.desc&with_status=0" },
+  limited: { tv: "discover/tv?sort_by=popularity.desc&with_type=2" },
   netflix: tmdbProviderChartPaths(8),
   netflixkids: tmdbProviderChartPaths(175),
   appletv: tmdbProviderChartPaths(350),
@@ -28604,16 +28608,26 @@ function buildMyListsAddonChartsHtml() {
 // Posters): "#2 Today" is a title's place in btttr.cc's own daily ranking, so
 // the Top Today list IS that ranking, in that order. Trending, Popular and Top
 // Rated are btttr.cc's other public catalogs (BETTER_POSTERS_CATALOGS, 00).
-// In Cinema is what is in theatres now (TMDB Now Playing), movies only.
+// The rest are built from TMDB and this add-on's own New on Streaming list,
+// to match what the tag says rather than read from btttr.cc (which publishes
+// no title lists for them): In Cinema is TMDB Now Playing (movies), New Movie
+// and New Series are TMDB titles released in the last 30 days, Just Added is
+// New on Streaming, Returning is shows TMDB marks "Returning Series" and
+// Limited Series is shows it types "Miniseries".
 // They work with Better Posters off too; the tags are just not drawn then.
 // Same shape as MY_LISTS_ADDON_CHARTS, except In Cinema, which has no shows
-// side and so carries url/type as the Trakt Box Office row does.
+// side (or no movies side) and so carries url/type as the Trakt Box Office row does.
 const BETTER_POSTERS_CHARTS = [
   { name: "Better Posters Top Today", movieUrl: "mylists:better-posters:today", showUrl: "mylists:better-posters:today" },
   { name: "Better Posters Trending", movieUrl: "mylists:better-posters:trending", showUrl: "mylists:better-posters:trending" },
   { name: "Better Posters Popular", movieUrl: "mylists:better-posters:popular", showUrl: "mylists:better-posters:popular" },
   { name: "Better Posters Top Rated", movieUrl: "mylists:better-posters:top", showUrl: "mylists:better-posters:top" },
   { name: "Better Posters In Cinema", url: "tmdb:chart:now_playing", type: "movie" },
+  { name: "Better Posters New Movie", url: "tmdb:chart:new_movies", type: "movie" },
+  { name: "Better Posters New Series", url: "tmdb:chart:new_shows", type: "series" },
+  { name: "Better Posters Just Added", movieUrl: "tmdb:new-on-streaming", showUrl: "tmdb:new-on-streaming" },
+  { name: "Better Posters Returning", url: "tmdb:chart:returning", type: "series" },
+  { name: "Better Posters Limited Series", url: "tmdb:chart:limited", type: "series" },
 ];
 
 function buildBetterPostersChartsHtml() {
@@ -34612,7 +34626,7 @@ if ('serviceWorker' in navigator) {
         <h2 class="shelf-title">Better Posters</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="better-posters-charts">+ Add all</button>
       </div>
-      <p class="qa-shelf-sub">Lists that go with the Better Posters tags: what is #1, #2, #3 Today, what is trending and popular, and what is in cinemas now. Turn on Better Posters in Settings to see the tags on the posters:</p>
+      <p class="qa-shelf-sub">Lists that go with the Better Posters tags: what is #1, #2, #3 Today, what is trending and popular, what is in cinemas, and new, just added, returning and limited series. Turn on Better Posters in Settings to see the tags on the posters:</p>
       ${betterPostersChartsHtml}
     </div>
 

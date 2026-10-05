@@ -107,9 +107,32 @@ describe("Better Posters lists", () => {
     assert.ok(m, "Discover table missing");
     assert.deepEqual(JSON.parse(m[1]).map((c) => c.name), [
       "Better Posters Top Today", "Better Posters Trending", "Better Posters Popular", "Better Posters Top Rated", "Better Posters In Cinema",
+      "Better Posters New Movie", "Better Posters New Series", "Better Posters Just Added", "Better Posters Returning", "Better Posters Limited Series",
     ]);
+    assert.ok(html.includes("&quot;tmdb:chart:returning&quot;,&quot;series&quot;,true"), "Returning (shows) missing");
+    assert.ok(html.includes("&quot;tmdb:new-on-streaming&quot;,&quot;movie&quot;,true") && html.includes("&quot;Better Posters Just Added&quot;"), "Just Added missing");
+    assert.equal(html.includes("&quot;tmdb:chart:returning&quot;,&quot;movie&quot;"), false, "Returning has no movies side");
     const page = await call(env, "/lists/Better-Posters-Top-Today");
     assert.equal(page.status, 200);
+  });
+});
+
+describe("Returning and Limited Series use TMDB's own filters", () => {
+  it("asks TMDB for Returning Series and Miniseries, shows only", async () => {
+    const asked = [];
+    const real = globalThis.fetch;
+    globalThis.fetch = async (input, init) => {
+      const url = typeof input === "string" ? input : input.url;
+      if (url.startsWith("https://api.themoviedb.org/3/discover/tv")) { asked.push(url); return new Response(JSON.stringify({ results: [], total_results: 0 }), { status: 200 }); }
+      return real(input, init);
+    };
+    const env = makeEnv({ CONFIGS: makeKv(), TMDB_API_KEY: "k" });
+    await call(env, "/api/preview", { method: "POST", json: { url: "tmdb:chart:returning", type: "series", sample: 5 } });
+    await call(env, "/api/preview", { method: "POST", json: { url: "tmdb:chart:limited", type: "series", sample: 5 } });
+    assert.ok(asked.some((u) => u.includes("with_status=0")), asked.join("\n"));
+    assert.ok(asked.some((u) => u.includes("with_type=2")), asked.join("\n"));
+    const movies = await call(env, "/api/preview", { method: "POST", json: { url: "tmdb:chart:returning", type: "movie", sample: 5 } });
+    assert.notEqual(movies.body.ok, true);
   });
 });
 
