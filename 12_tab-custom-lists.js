@@ -86,7 +86,7 @@
   <div class="lists-subpanel" id="listsSubCreateList" style="display:none;">
     <!-- Inline "Add titles" search (P6-4), shell only: type, tap Add, and the
          title is in the draft this panel already saves. -->
-${newUi ? '    <div id="appShellAddTitles"></div>' : ''}
+    <div id="appShellAddTitles"></div>
 
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
@@ -178,9 +178,8 @@ ${newUi ? '    <div id="appShellAddTitles"></div>' : ''}
 
     <!-- The shell's own importer (P6-6): choose a Letterboxd, IMDb or Trakt
          file and the server does the matching, with real progress, a review
-         step, and the result saved as a list. Emitted only for a browser with
-         the FF_NEW_UI cookie, below the link importer. -->
-${newUi ? '    <div id="appShellImports"></div>' : ''}
+         step, and the result saved as a list. Below the link importer. -->
+    <div id="appShellImports"></div>
   </div>
 
 

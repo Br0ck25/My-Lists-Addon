@@ -30,7 +30,6 @@ function previewRoutes(counts) {
 // editor hands them.
 function loadEditorClient(overrides, opts) {
   const client = loadClient(Object.assign({
-    newUi: true,
     signedIn: true,
     routes: Object.assign(previewRoutes({
       "https://mdblist.com/lists/you/horror": { movie: 41, series: 3 },
@@ -67,12 +66,6 @@ describe("the shell's home-screen editor", () => {
     assert.equal(/on[a-z]+=/.test(markup), false, "the editor must not add inline handlers");
   });
 
-  it("does nothing at all on the old page", () => {
-    const client = loadClient({ newUi: false, routes: previewRoutes({}) });
-    assert.equal(client.call("appShellRenderHomeEditor"), false);
-    assert.equal(editor(client), "");
-  });
-
   it("writes the duplicate toggle to the one key the server reads back", () => {
     const client = loadEditorClient();
     client.call("appShellSetDedupe", true);
@@ -83,17 +76,14 @@ describe("the shell's home-screen editor", () => {
     assert.equal(client.__byId.get("dedupeAcrossListsCheckbox").checked, false);
   });
 
-  it("keeps the live preview following the rows, on the new UI only", () => {
+  it("keeps the live preview following the rows", () => {
     // The debounce itself is a timer, and timers are stubbed out in this
-    // harness on purpose, so what is checked here is the two things that can
-    // regress without anybody noticing: that a row change schedules it at all,
-    // and that the old page gets nothing scheduled for it.
-    const shell = loadClient({ newUi: true, signedIn: true, routes: previewRoutes({}) });
+    // harness on purpose, so what is checked here is the thing that can
+    // regress without anybody noticing: that a row change schedules it at all.
+    const shell = loadClient({ signedIn: true, routes: previewRoutes({}) });
     assert.equal(shell.call("appShellSchedulePreview"), true);
     assert.match(shell.get("saveState").toString(), /appShellSchedulePreview\(\)/,
       "every row change goes through saveState, so that is where the refresh is scheduled");
-    const legacy = loadClient({ newUi: false, routes: previewRoutes({}) });
-    assert.equal(legacy.call("appShellSchedulePreview"), false);
   });
 
   it("refreshes the preview right away when the editor itself changes a row", () => {

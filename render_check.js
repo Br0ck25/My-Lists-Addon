@@ -10,10 +10,6 @@
 //   node render_check.js hostile.html --hostile -> the builder page with every
 //                                                  caller-supplied field set to
 //                                                  an XSS payload
-//   node render_check.js shell.html --shell     -> the builder page as a browser
-//                                                  carrying the FF_NEW_UI cookie
-//                                                  gets it (the shell chrome,
-//                                                  nav and install bar)
 //
 // The admin page needs its own pass. It is a template literal like the builder
 // page, and a single backslash inside one is eaten before the browser sees it
@@ -28,7 +24,6 @@ const outPath = process.argv[2] || 'rendered.html';
 const wantAdmin = process.argv.includes('--admin');
 const wantSw = process.argv.includes('--sw');
 const wantHostile = process.argv.includes('--hostile');
-const wantShell = process.argv.includes('--shell');
 let src = fs.readFileSync('worker_entry_combined.js', 'utf8');
 
 const idx = src.lastIndexOf('export default');
@@ -139,7 +134,7 @@ async function main() {
       ? await sandbox.renderAdminDashboard({ CONFIGS: emptyKv })
       : sandbox.renderBuilder(
           'https://example.com',
-          wantHostile ? hostileOpts : (wantShell ? { newUi: true } : {})
+          wantHostile ? hostileOpts : {}
         );
   } catch (e) {
     console.error('FAIL: ' + fnName + '() threw:', e.message);
@@ -151,7 +146,7 @@ async function main() {
     process.exit(1);
   }
   fs.writeFileSync(outPath, html);
-  const variant = wantHostile ? ' (hostile input)' : (wantShell ? ' (new UI shell)' : '');
+  const variant = wantHostile ? ' (hostile input)' : '';
   console.log(fnName + variant + ' OK  ->', outPath, html.length, 'chars');
 }
 

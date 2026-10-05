@@ -8,10 +8,9 @@
          24_client-backup-restore-presets.js: this account's devices and this
          browser's install link. Its account and connections cards are gone:
          Your Account above and External Accounts & API Keys already have both,
-         and the owner found every button twice. Emitted only for a browser
-         carrying the FF_NEW_UI cookie; the legacy panels are unchanged for
-         everyone. -->
-${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
+         and the owner found every button twice. The older panels below are
+         unchanged. -->
+    <div id="appShellSettingsHome"></div>
 
     <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Watchlist Preferences</h2>

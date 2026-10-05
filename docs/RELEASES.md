@@ -34,7 +34,8 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Release 19** went live on 2026-10-04. The owner reports it working correctly. It is the first stage of the sign-in move, and fixes pages that loaded with no scripts running after a reload. Details under Release 19.
 - **Release 20** went live on 2026-10-05. The owner reports no issues. It is sign-in move stage 2, plus a daily check that each backup restores. Details under Release 20.
 - **`FF_MATERIALIZER` and `FF_CANONICAL_IDS` are on** (2026-10-05, owner's screenshot). `INSTALL_MIGRATION_PERCENT` is `10`. `CF_ANALYTICS_TOKEN` and `FF_SCROBBLE_ST_ONLY` are gone; `CF_ANALYTICS_ACCOUNT_ID` is still set and no longer needed (only the one-time recovery used it).
-- **`main`** is brought up to date by PR #12 (Releases 14–16), PR #13 (17–18), PR #14 (19) and the Release 20 PR.
+- **`main`** is brought up to date by PR #12 (Releases 14–16), PR #13 (17–18), PR #14 (19) and PR #15 (20).
+- **Release 21** went live on 2026-10-05. The owner reports everything looks good, and deleted the `FF_NEW_UI` variable. The classic page is retired, and the screens taken off the new interface are deleted. Details under Release 21.
 - **Cloudflare Workers Builds was connected to this repository** (found 2026-10-04). The owner reports the Worker it was connected to has since been deleted, and merging PR #12 started no build. Every push makes Cloudflare try to build the Worker from GitHub. On `main` it would deploy to production. So far every attempt has failed, so nothing has been deployed that way: `main` at `a6785d6` on 2026-10-03, and this branch's preview with *Authentication error*. The `wrangler.toml` guard (Release 14: `keep_vars`, the `DB_ACTIVITY` placeholder) keeps such a deploy from replacing the dashboard's settings. Deploying stays manual (pasting) unless the owner decides otherwise.
 - **Backups work** (2026-10-04): the owner added the five GitHub secrets, and the first real backup ran (Actions run 37226668219). It copied both databases, encrypted: `my-lists-db` (9.3 MB, 709 accounts' settings, 1,147 lists, 53,082 list items) and `mylists-activity` (0.96 MB, 46,956 plays). From here it runs daily at 04:17 UTC.
 
@@ -1472,4 +1473,58 @@ The owner's answers to the next-steps list (2026-10-05):
 3. `INSTALL_MIGRATION_PERCENT`: if `/admin` → Maintenance → **Install links** looks fine a day after you set it to 10, raise it to `50`, then to `100` a day later.
 
 **Rollback:** paste the 19 file.
+
+## Release 21: one page, and the unused screens deleted
+
+**Branch point:** `main` after PR #15 (Release 20, live).
+
+The owner decided both on 2026-10-05: retire the classic page (13) and delete the screens nobody can reach (14).
+
+### What it changes
+
+- **The classic page is retired** (`02_`, `09_`–`16_`, `25_`).
+  - Every visitor gets the new interface. The `FF_NEW_UI` cookie and the `FF_NEW_UI` variable are no longer read. The variable can be deleted from the dashboard; leaving it does nothing.
+  - An old link with `?ff_new_ui=0` or `=1` is sent to the same address without it, and the old cookie is cleared.
+  - Deleted with it:
+    - the classic tab bar and bottom bar;
+    - the floating "Unsaved changes to install link" banner (it never showed on the new interface);
+    - Settings → Backup's "Import from Install / Configure Link" box. The new interface never offered it: an install id hands back connected accounts' tokens (SECURITY_AUDIT.md S-02).
+  - The page flag the browser code checked (`NEW_UI`) is gone, so there is one page to render, cache and test.
+- **`/api/bulk-resolve` stays.** The new interface still uses it: Settings → External Accounts & API Keys → **Import List** resolves titles through it. Only the classic page was expected to use it, and it was not the only one.
+- **Screens taken off the new interface are deleted** (`24_`, `22_`, `09_` CSS). Each had no place on the page any more:
+  - Discover's **Explore** section (its source and sort chips moved to Search → Lists, which stays);
+  - the Lists view's **Your lists** cards, with Share, Show on home screen, Save to an account and Export. The **Add titles** search in the list editor stays;
+  - the queue behind a signed-out "Save to an account" (`22_`). It could never be filled without the button. Creating an account still moves every browser-only list up;
+  - Settings' **Account** and **Connections** cards. Your Account and External Accounts & API Keys hold the same buttons. **Devices** and **Install link** stay;
+  - the install bar's drawing code. Its state stays: the Install link card reads it.
+- **Fixed: a page opened at a view's own address came up on Discover** (`16_` `switchTab` / `switchCatalogsSubmenu`, `24_` `initAppShell`). This is live today, found in a real browser while checking this release.
+  - Opening `/settings`, `/channels`, `/search` or `/catalogs` directly (a bookmark, a reload while on that view) showed Discover. At startup the classic page's tab code rewrote the address to `/` before the new interface's router read it.
+  - Those rewrites were classic-only and are deleted, so the router reads the address the page was opened at.
+  - Opening `/` reopens the view used last, as before. The address now names that view, not always `/discover`, and the view's own cards are drawn (Settings' Devices and Install link were missing).
+  - Real browser: every view's address opens that view; `/lists/<slug>` and `/#/item?...` share links still open the list or the title; Back returns to the previous view; no page errors.
+- About 1,800 lines of source removed; the Worker file is about 90 KB smaller.
+- A timing test that could fail when its run crossed a minute boundary (`/api/recommendations` limits) now sends twice the limit and some, like the other one fixed earlier.
+- `/admin` shows **Release 21**.
+
+### Checked
+
+- `tests/app-shell.test.mjs` is rewritten for one page:
+  - every combination of cookie and variable gets the new interface;
+  - none of the classic page's parts are left;
+  - an old `?ff_new_ui=` link is redirected and the cookie cleared, never off the site;
+  - the browser code reads no `NEW_UI`.
+- Tests for the deleted screens are deleted with them. That includes `app-shell-explore` and `app-shell-local-lists`, and the cases that checked a screen did nothing on the classic page.
+- The browser-side tests now load the one page. Two tests that counted every request a page makes now pass, because Explore no longer fetches lists at startup.
+- `verify.sh` renders and checks one page. Its separate "new UI shell page" step, and the CI step of the same name, are gone: that page is the one step 4 checks.
+- `tests/app-shell-client.test.mjs` adds two tests for the address fix. Both fail on Release 20 and pass on 21:
+  - nothing rewrites the address before the router reads it;
+  - `/` settles on the view used last, and draws it.
+- `bash verify.sh` and the `MLA_TEST_V2_LISTS_READ=1` run pass (counts in the commit).
+
+**Steps:**
+1. Deploy `release-21-NEW-worker.js`. Check that `/admin` says **Release 21**.
+2. Look around the site: Catalogs, Lists (make or edit a list, use Add titles), Search → Lists, Settings (Devices, Install link, External Accounts → Import List).
+3. Optional: delete the `FF_NEW_UI` variable. It does nothing now.
+
+**Rollback:** paste the 20 file. The classic page comes back for browsers that chose it, as before.
 

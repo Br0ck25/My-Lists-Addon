@@ -33,8 +33,8 @@ const REPO_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 // Rendering the page and concatenating 1.4MB of script is the slow part, so it
 // happens once per process and every loadClient() re-evaluates the same text.
-// Two variants are cached: the legacy page and the new UI shell page (P6-1),
-// which is the same bundle with `const NEW_UI = true` in its preamble.
+// There is one page: the new interface (the classic page was retired in
+// Release 21).
 const CACHED_SCRIPT = new Map();
 
 export function renderPage(opts = {}) {
@@ -60,7 +60,7 @@ export function renderPage(opts = {}) {
 }
 
 function clientScript(opts = {}) {
-  const cacheKey = opts.newUi ? "shell" : "legacy";
+  const cacheKey = "page";
   if (CACHED_SCRIPT.has(cacheKey)) return CACHED_SCRIPT.get(cacheKey);
   const html = renderPage(opts);
   const blocks = [...html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/g)];

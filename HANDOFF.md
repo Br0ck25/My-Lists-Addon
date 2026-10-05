@@ -10,14 +10,14 @@
 > 3. Tell Claude if a Stremio tile opens to "not found" or a home screen with "Remove duplicate items across lists" looks wrong (the two switches turned on 2026-10-05).
 >
 > **Claude (code), in order:**
-> 4. **Release 21, next:** retire the classic page (always serve the new interface, ignore `?ff_new_ui=0`) and remove `/api/bulk-resolve` if only the classic page uses it (18_; the new shell uses `/api/imports`); delete the unreachable `24_` modules (Explore, Your lists, the shell's Account/Connections cards: `appShellAccountBody`, `appShellConnectionsBody`). Owner decided both.
+> 4. ~~Release 21~~ **live 2026-10-05, merged into `main`; the owner deleted `FF_NEW_UI`**: classic page retired (`FF_NEW_UI` cookie and variable no longer read; `?ff_new_ui=` redirects and clears the cookie), and the unreachable screens deleted (Explore, Your lists cards, the signed-out Save-to-account queue in 22_, Settings' Account/Connections cards, the install bar's drawing). `/api/bulk-resolve` **stays**: Settings → External Accounts → Import List uses it.
 > 5. **About 2026-10-07:** owner presses *Compare shelves now* and sends the result. If "not known yet" is rare, remove the legacy Continue Watching / Airing Next writers (P5-4 second half: `checkForNewEpisodes`, `refreshAiringNextSweep`, `cron.episodes` / `cron.airing-next`, the client shelf builders). Keep the stored lists while `shelfStoredForUnknown` reads them; a media row of kind `movie` never gets a schedule row.
 > 6. **About 2026-10-07:** owner turns on D1 read replication for `my-lists-db` (P8-1), with steps from Claude.
 > 7. **About 2026-10-12** (a week after Release 20): if `/admin` → Creators *Saves that sent the Account Key* stays near zero, rewrite the sunset notices (`getLegacySunsetNotices`, 02_, still says `/api/creator/sync/*` goes away, and the page uses those routes, now signed by the session). Then the owner sets `SUNSET_60DAY_START_DATE`.
 > 8. **Day 60 after that (about mid-December):** remove key-in-body auth on the session routes, the legacy scrobble forms and the other sunset items.
 > 9. **After 8 (about late December onward):** the old storage, one prefix or table at a time: copy to R2, remove its readers, delete (docs/CUTOVER.md P10-3).
 > 10. **After 2026-11-29:** remove the Better Posters KV fallback (`bpimg:v1:` reads in 52_ and the KV-only path in 05_; the copies expire by then, 60-day TTL). Keep `prewarmBetterPosters` (it fills R2 ahead). Low priority: it saves one wasted KV read per poster not yet in R2, and code.
-> 11. **Optional, owner's call:** Unlisted lists (`FF_V2_LISTS_API` plus wiring `APP_SHELL_UNLISTED_READY` in 24_), after Release 21.
+> 11. **Optional, owner's call:** Unlisted lists (`FF_V2_LISTS_API`). Release 21 deleted the share control that offered it (it lived on the Your lists cards, with `APP_SHELL_UNLISTED_READY`), so it needs a place on the page first, likely the list editor's privacy setting.
 >
 > After each release the owner confirms live: merge the branch into `main` by PR. The daily backup (04:17 UTC) now also restores each file and compares row counts; a failed check fails the run.
 >

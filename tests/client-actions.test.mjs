@@ -71,8 +71,7 @@ describe("P6-8: controls name their action instead of carrying one", () => {
       const found = code.match(/\son(?:click|change|input|keydown|keyup|keypress|submit|error|load|dblclick|mouseover|mouseout|mouseenter|mouseleave|mouseup|mousedown|focus|blur|scroll|paste|drop|dragover|dragstart|contextmenu|touchstart|touchend)\s*=/g) || [];
       assert.deepEqual(found, [], `${file} still carries ${found.length} inline handler(s)`);
     }
-    assert.deepEqual(markupHandlers(renderPage()), [], "the legacy page has no inline handlers left");
-    assert.deepEqual(markupHandlers(renderPage({ newUi: true })), [], "nor does the new UI shell page");
+    assert.deepEqual(markupHandlers(renderPage()), [], "the page has no inline handlers left");
   });
 
   it("every data-act on the page names a function the client actually defines", () => {

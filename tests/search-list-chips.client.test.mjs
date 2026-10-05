@@ -17,8 +17,8 @@ function namesIn(html) {
   return [...html.matchAll(/data-name="([^"]+)" data-url/g)].map((m) => m[1]).filter((n, i, a) => a.indexOf(n) === i);
 }
 
-function searchClient(newUi) {
-  const client = loadClient({ newUi, routes: { "/api/preview": async () => ({ json: { ok: true, sample: [] } }) } });
+function searchClient() {
+  const client = loadClient({ routes: { "/api/preview": async () => ({ json: { ok: true, sample: [] } }) } });
   const box = client.document.getElementById("catalogSearchResult");
   box.id = "catalogSearchResult";
   client.document.getElementById("catalogSearchInput").value = "list";
@@ -27,14 +27,14 @@ function searchClient(newUi) {
   return { client, box };
 }
 
-describe("Search -> Lists source and sort chips (new UI)", () => {
+describe("Search -> Lists source and sort chips", () => {
   it("shows every source, best first, until a chip is pressed", () => {
-    const { box } = searchClient(true);
+    const { box } = searchClient();
     assert.deepEqual(namesIn(box.innerHTML), ["Trakt Picks", "Loved List", "Mdb Horror", "Fresh List"]);
   });
 
   it("keeps one source", () => {
-    const { client, box } = searchClient(true);
+    const { client, box } = searchClient();
     client.call("setCatalogListSearchChip", "source", "mylists");
     assert.deepEqual(namesIn(box.innerHTML).sort(), ["Fresh List", "Loved List"]);
     client.call("setCatalogListSearchChip", "source", "mdblist");
@@ -44,7 +44,7 @@ describe("Search -> Lists source and sort chips (new UI)", () => {
   });
 
   it("sorts by likes, newest and most added -- lists without the figure after", () => {
-    const { client, box } = searchClient(true);
+    const { client, box } = searchClient();
     client.call("setCatalogListSearchChip", "sort", "new");
     assert.deepEqual(namesIn(box.innerHTML).slice(0, 2), ["Fresh List", "Loved List"], "dated lists first, newest first");
     client.call("setCatalogListSearchChip", "sort", "added");
@@ -54,12 +54,5 @@ describe("Search -> Lists source and sort chips (new UI)", () => {
     // Pressing the pressed one again goes back to best match.
     client.call("setCatalogListSearchChip", "sort", "popular");
     assert.equal(client.get("catalogListSearchSort"), "");
-  });
-
-  it("leaves the old page's results alone", () => {
-    const { client, box } = searchClient(false);
-    client.set("catalogListSearchSource", "mdblist");
-    client.call("renderListSearchResults", MDB, TRAKT, null, MINE, [], box, "");
-    assert.equal(namesIn(box.innerHTML).length, 4, "no chips on the old page, so nothing is filtered");
   });
 });

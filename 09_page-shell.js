@@ -1,12 +1,8 @@
 // --- The new UI shell's chrome (Phase 6, P6-1) ------------------------------
 //
-// Everything here is emitted only for a browser carrying the FF_NEW_UI cookie
-// (isNewUiRequest, 02_http-and-creator-utils.js), so the page every other
-// visitor gets is byte-for-byte the page they got before. The client bundle is
-// shared by both variants -- it is one content-hashed file (splitAppBundle,
-// 02_) -- so the shell's behaviour is not emitted from here: it lives in
-// 24_client-backup-restore-presets.js and keys off the NEW_UI flag in the
-// per-request preamble.
+// Every visitor gets this chrome (the classic page was retired in Release 21).
+// The shell's behaviour is not emitted from here: it lives in the shared,
+// content-hashed bundle (24_client-backup-restore-presets.js).
 //
 // The tabs are real links. Middle-click, copy-link, open-in-a-new-tab and the
 // back button all work with no JavaScript at all; the client intercepts a
@@ -82,7 +78,7 @@ function appActArgsServer(values) {
 
 function renderBuilder(
   origin,
-  { initialEntries = [], initialKeys = {}, isConfigureMode = false, deepLinkList = null, newUi = false } = {}
+  { initialEntries = [], initialKeys = {}, isConfigureMode = false, deepLinkList = null } = {}
 ) {
   const initialTmdbKey = initialKeys.tmdbKey || "";
   const initialMdblistKey = initialKeys.mdblistKey || "";
@@ -181,15 +177,14 @@ function renderBuilder(
     hasInitial ? initialEntries : STARTER_PACK_ENTRIES
   );
 
-  // The shell variant of the chrome. Both navs keep the legacy wrappers
-  // (`.tab-bar`, `.bottom-nav`) so the existing CSS -- including the mobile
-  // bottom bar -- applies to them unchanged; only the items differ, from
-  // buttons to links.
-  const appShellDesktopNavHtml = newUi ? buildAppShellNavHtml("desktop") : "";
-  const appShellMobileNavHtml = newUi ? buildAppShellNavHtml("mobile") : "";
+  // The shell's chrome. Both navs keep the old wrappers (`.tab-bar`,
+  // `.bottom-nav`) so the existing CSS -- including the mobile bottom bar --
+  // applies to them unchanged; the items are links rather than buttons.
+  const appShellDesktopNavHtml = buildAppShellNavHtml("desktop");
+  const appShellMobileNavHtml = buildAppShellNavHtml("mobile");
 
   return `<!DOCTYPE html>
-<html lang="en"${newUi ? ' data-app-shell="1"' : ''}>
+<html lang="en" data-app-shell="1">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -209,7 +204,7 @@ ${seoHeadHtml}
      on Android), so the page has no third-party origin at all and paints
      without waiting on one. See docs/DECISIONS.md D-20. -->
 <script nonce="${CSP_NONCE_PLACEHOLDER}">
-  ${newUi ? `var APP_SHELL_HEAD_ROUTES = ${jsonForScript(buildAppShellHeadRoutes())};` : ""}
+  var APP_SHELL_HEAD_ROUTES = ${jsonForScript(buildAppShellHeadRoutes())};
   if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
     document.documentElement.classList.add('dark-theme');
     try {
@@ -233,13 +228,7 @@ ${seoHeadHtml}
     // The new UI shell routes on real paths (/catalogs, /settings, ...), so
     // there the path -- not the last tab this browser used -- decides which
     // view opens. Same table the Worker rendered the nav from.
-    // APP_SHELL_HEAD_ROUTES is declared just above only on a shell page; this
-    // script is shared by both variants, so it must not name it unconditionally
-    // -- scope_check.mjs catches exactly that, and a legacy page would throw.
-    var shellRoute = null;
-    if (document.documentElement.getAttribute('data-app-shell') === '1' && typeof APP_SHELL_HEAD_ROUTES !== 'undefined') {
-      shellRoute = APP_SHELL_HEAD_ROUTES[p] || null;
-    }
+    var shellRoute = APP_SHELL_HEAD_ROUTES[p] || null;
     if (isDeep) {
       tab = h.startsWith('#/item?') ? 'item-details' : 'list-details';
     } else if (shellRoute) {
@@ -3661,10 +3650,6 @@ ${seoHeadHtml}
   }
   html[data-app-shell="1"] .catalog-list-chip:hover { border-color: var(--accent); color: var(--accent); }
   html[data-app-shell="1"] .catalog-list-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-  /* The floating "Unsaved changes to install link" banner is never shown on
-     a shell page: Catalogs' Generate Install Link button and Settings' Install
-     links card are where the link is made. */
-  html[data-app-shell="1"] #unsavedInstallBanner { display: none !important; }
 
   /* The shell's Settings cards (P6-2). The card itself is the ordinary
      .panel; these are the rows, the small action row and the status chip
@@ -3717,9 +3702,8 @@ ${seoHeadHtml}
   html[data-app-shell="1"] .app-shell-dedupe .app-shell-muted { margin: 4px 0 0; }
   html[data-app-shell="1"] .app-shell-dedupe input { margin-top: 2px; cursor: pointer; width: 16px; height: 16px; }
 
-  /* A visibility choice (P6-4) is a chip you can press: Private, Unlisted,
-     Public. The chosen one is highlighted; the one that needs the new list
-     service is disabled and says why. */
+  /* A chip you can press (the Imports and Channels screens). The chosen one
+     is highlighted; a disabled one is dimmed. */
   html[data-app-shell="1"] button.app-shell-chip {
     background: none; font: inherit; cursor: pointer;
   }
@@ -3727,17 +3711,6 @@ ${seoHeadHtml}
     color: var(--accent); border-color: var(--accent);
   }
   html[data-app-shell="1"] button.app-shell-chip[disabled] { cursor: not-allowed; opacity: 0.55; }
-
-  /* What is actually in a list, previewed before it is added (P6-5). */
-  html[data-app-shell="1"] .app-shell-explore-preview { padding: 2px 0 10px; }
-  html[data-app-shell="1"] .app-shell-explore-posters {
-    display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 8px;
-  }
-  html[data-app-shell="1"] .app-shell-explore-poster {
-    width: 58px; height: 87px; object-fit: cover; border-radius: 6px;
-    background: var(--panel-strong); border: 1px solid var(--border);
-  }
-  html[data-app-shell="1"] .app-shell-explore-poster-none { display: block; }
 
   /* Import progress (P6-6): how far the server has got, and a heading for the
      blocks under it. */
@@ -3797,88 +3770,6 @@ ${seoHeadHtml}
     border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.95rem;
   }
 
-  /* --- Floating Unsaved Changes to Install Link Banner -------------------- */
-  .unsaved-install-banner {
-    position: fixed;
-    bottom: calc(72px + env(safe-area-inset-bottom));
-    left: 50%;
-    transform: translateX(-50%) translateY(30px);
-    background: var(--surface);
-    color: var(--text);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-pill);
-    padding: 8px 14px 8px 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    box-shadow: var(--shadow-md);
-    z-index: 999;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-    white-space: nowrap;
-    max-width: calc(100vw - 24px);
-    font-size: 0.86rem;
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-  }
-  .unsaved-install-banner.show {
-    opacity: 1;
-    pointer-events: auto;
-    transform: translateX(-50%) translateY(0);
-  }
-  .unsaved-install-banner-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--warn);
-    box-shadow: 0 0 0 3px rgba(255, 149, 0, 0.2);
-    flex-shrink: 0;
-    animation: pulseDot 2s infinite ease-in-out;
-  }
-  .unsaved-install-banner-dot.up-to-date {
-    background: var(--success);
-    box-shadow: 0 0 0 3px rgba(52, 199, 89, 0.2);
-    animation: none;
-  }
-  @keyframes pulseDot {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.55; transform: scale(0.85); }
-  }
-  .unsaved-install-banner-btn {
-    background: var(--accent);
-    color: #ffffff;
-    border: none;
-    border-radius: var(--radius-pill);
-    padding: 5px 12px;
-    font-size: 0.80rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: background 0.15s ease, transform 0.1s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    flex-shrink: 0;
-  }
-  /* The label is what gives way when the banner runs out of room, not the
-     button. The banner is a nowrap flex row capped at calc(100vw - 24px),
-     and a flex item's default min-width:auto will not shrink below its
-     content -- which under white-space:nowrap is the full sentence. So the
-     line overflowed the banner's own box and pushed the button (flex-shrink:0)
-     past it: at 320px only 37px of the 111px "Update Link" button was on
-     screen, with .page's overflow-x:hidden leaving no way to reach the rest.
-     min-width:0 lets the text shrink; the ellipsis keeps it readable. */
-  #unsavedInstallText {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .unsaved-install-banner-btn:hover {
-    background: var(--accent-hover);
-  }
-  .unsaved-install-banner-btn:active {
-    transform: scale(0.96);
-  }
 /*MYLISTS_APP_CSS_END*/</style>
 <!-- fflate, for reading Trakt/Letterboxd export .zips entirely client-side.
      It used to be a cdn.jsdelivr.net script with an SRI hash: a third-party
@@ -3930,65 +3821,10 @@ ${seoHeadHtml}
   </header>
 
   <!-- Top Tab Bar (Desktop View) -->
-${newUi ? appShellDesktopNavHtml : `  <div class="tab-bar" role="tablist" aria-label="Main navigation">
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-catalogs" aria-controls="content-catalogs" aria-selected="false" tabindex="-1" data-tab="catalogs" data-act="switchTab" data-act-args="[&quot;catalogs&quot;]">Catalogs</button>
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-lists" aria-controls="content-lists" aria-selected="false" tabindex="-1" data-tab="lists" data-act="switchTab" data-act-args="[&quot;lists&quot;]">Lists</button>
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-channels" aria-controls="content-channels" aria-selected="false" tabindex="-1" data-tab="channels" data-act="switchTab" data-act-args="[&quot;channels&quot;]">Channels</button>
-    <button type="button" class="tab-btn active" role="tab" id="tab-desktop-discover" aria-controls="content-discover" aria-selected="true" tabindex="0" data-tab="discover" data-act="switchTab" data-act-args="[&quot;discover&quot;]">Discover</button>
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-search" aria-controls="content-search" aria-selected="false" tabindex="-1" data-tab="search" data-act="switchTab" data-act-args="[&quot;search&quot;]">Search</button>
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-settings" aria-controls="content-settings" aria-selected="false" tabindex="-1" data-tab="settings" data-act="switchTab" data-act-args="[&quot;settings&quot;]">Settings</button>
-  </div>`}
-
-  <!-- Unsaved Changes Floating Banner -->
-  <div id="unsavedInstallBanner" class="unsaved-install-banner">
-    <span id="unsavedInstallText" style="font-weight:600;">Unsaved changes to install link</span>
-    <button type="button" class="unsaved-install-banner-btn" id="unsavedInstallBtn" data-act="updateInstallLinkFromBanner">Update Link</button>
-  </div>
+${appShellDesktopNavHtml}
 
   <!-- Bottom Nav Bar (Mobile View - Persistent Glassmorphism) -->
-${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria-label="Main navigation">
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-catalogs" aria-controls="content-catalogs" aria-selected="false" tabindex="-1" data-tab="catalogs" data-act="switchTab" data-act-args="[&quot;catalogs&quot;]" title="Catalogs">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
-      </svg>
-      Catalogs
-    </button>
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-lists" aria-controls="content-lists" aria-selected="false" tabindex="-1" data-tab="lists" data-act="switchTab" data-act-args="[&quot;lists&quot;]" title="Lists">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line>
-        <line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line>
-        <line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line>
-      </svg>
-      Lists
-    </button>
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-channels" aria-controls="content-channels" aria-selected="false" tabindex="-1" data-tab="channels" data-act="switchTab" data-act-args="[&quot;channels&quot;]" title="Channels">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>
-        <polyline points="17 2 12 7 7 2"></polyline>
-      </svg>
-      Channels
-    </button>
-    <button type="button" class="bottom-nav-item active" role="tab" id="tab-mobile-discover" aria-controls="content-discover" aria-selected="true" tabindex="0" data-tab="discover" data-act="switchTab" data-act-args="[&quot;discover&quot;]" title="Discover">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect>
-        <rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect>
-      </svg>
-      Discover
-    </button>
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-search" aria-controls="content-search" aria-selected="false" tabindex="-1" data-tab="search" data-act="switchTab" data-act-args="[&quot;search&quot;]" title="Search">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-      </svg>
-      Search
-    </button>
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-settings" aria-controls="content-settings" aria-selected="false" tabindex="-1" data-tab="settings" data-act="switchTab" data-act-args="[&quot;settings&quot;]" title="Settings">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="3"></circle>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-      </svg>
-      Settings
-    </button>
-  </nav>`}
+${appShellMobileNavHtml}
 
   <script nonce="${CSP_NONCE_PLACEHOLDER}">
     (function() {
