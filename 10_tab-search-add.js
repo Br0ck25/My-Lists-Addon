@@ -1,4 +1,17 @@
 <div class="tab-panel" data-tab-panel="catalogs" id="content-catalogs" role="tabpanel" aria-labelledby="tab-desktop-catalogs" hidden>
+  <!-- The Buy Me a Coffee strip: filled in, and shown, by initSupportStrip
+       (16_client-row-core.js) only when the admin has turned it on. -->
+  <div class="support-strip" id="supportStrip" hidden>
+    <button type="button" class="support-strip-main" data-act="openSupportGoal" aria-label="Server costs this month: see details">
+      <span class="support-strip-cup" aria-hidden="true">&#9749;</span>
+      <span class="support-strip-body">
+        <span class="support-strip-row"><span id="supportStripText"></span><span class="support-strip-go">Support &rsaquo;</span></span>
+        <span class="support-strip-bar" aria-hidden="true"><i id="supportStripFill"></i></span>
+      </span>
+    </button>
+    <button type="button" class="support-strip-x" data-act="dismissSupportStrip" aria-label="Hide this for the rest of the month">&#10005;</button>
+  </div>
+
   <!-- Top Submenu Pills for Catalogs -->
   <div class="subnav-pills-bar" id="catalogsFilterBar">
     <button type="button" class="subnav-pill active" data-sub="all" data-act="switchCatalogsSubmenu" data-act-args="[&quot;all&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> My Catalogs</button>

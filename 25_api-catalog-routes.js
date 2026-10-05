@@ -399,6 +399,13 @@ async function handleFetch(request, env, ctx) {
       return await serveRpdbPoster(env, ctx, decodeURIComponent(rpdbMatch[1]), rpdbMatch[2]);
     }
 
+    // /api/support-goal -> what the Buy Me a Coffee strip shows, or enabled:false
+    // until the admin turns it on. See readSupportGoal (03_admin.js).
+    if (path === "/api/support-goal" && request.method === "GET") {
+      const view = publicSupportGoal(await readSupportGoal(env));
+      return jsonPublic({ ok: true, ...view }, 200, { "Cache-Control": "public, max-age=300" });
+    }
+
     // /api/rpdb-check  (POST)  { key } -> { ok, valid, used, limit }: whether a
     // key works and how much of its monthly limit is spent, for Settings.
     if (path === "/api/rpdb-check" && request.method === "POST") {

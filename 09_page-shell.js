@@ -1516,6 +1516,73 @@ ${seoHeadHtml}
      needs. The larger gap is because these are now separate cards rather
      than headings on one continuous background -- at 8px they read as one
      block with lines through it. */
+  /* The Buy Me a Coffee strip at the top of Catalogs (initSupportStrip). */
+  .support-strip {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0 0 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--shadow-sm);
+  }
+  .support-strip[hidden] { display: none; }
+  .support-strip-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 4px 8px 12px;
+    background: none;
+    border: 0;
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+  }
+  .support-strip-cup { font-size: 17px; line-height: 1; }
+  .support-strip-body { flex: 1; min-width: 0; display: block; }
+  .support-strip-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+    font-size: 0.78rem;
+    line-height: 1.25;
+  }
+  .support-strip-go { color: var(--accent); font-weight: 700; white-space: nowrap; }
+  .support-strip-bar {
+    display: block;
+    height: 5px;
+    margin-top: 5px;
+    border-radius: 5px;
+    background: var(--border);
+    overflow: hidden;
+  }
+  .support-strip-bar i {
+    display: block;
+    height: 100%;
+    width: 0;
+    border-radius: 5px;
+    background: linear-gradient(90deg, #ffb020, #ff8a00);
+  }
+  .support-strip.is-covered { border-color: #bfe8c9; }
+  .support-strip.is-covered .support-strip-bar i { background: #34c759; }
+  .support-strip-x {
+    flex: none;
+    width: 30px;
+    height: 30px;
+    margin-right: 4px;
+    padding: 0;
+    min-height: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: var(--muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
   .qa-shelf-card {
     margin-bottom: 16px;
     gap: 0;

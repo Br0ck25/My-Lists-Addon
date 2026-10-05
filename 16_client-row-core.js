@@ -2296,6 +2296,87 @@ function closeModal() {
   _modalReturnFocus = null;
 }
 
+// --- The Buy Me a Coffee strip -------------------------------------------------
+//
+// A goal for the month's hosting and how much has been given, set by the admin
+// (Management & Tools -> Support Goal) and read from /api/support-goal. The
+// strip stays hidden until the admin has turned it on. Its X hides it for the
+// rest of the month in this browser only; the next month it is back.
+let _supportGoal = null;
+
+function supportMoney(n) {
+  const v = Number(n) || 0;
+  return '$' + (Math.abs(v - Math.round(v)) < 0.005 ? String(Math.round(v)) : v.toFixed(2));
+}
+
+function supportDismissedThisMonth(month) {
+  try { return localStorage.getItem('myListAddon:supportDismissed') === month; } catch (e) { return false; }
+}
+
+function renderSupportStrip() {
+  const strip = document.getElementById('supportStrip');
+  const g = _supportGoal;
+  if (!strip) return;
+  if (!g || !g.enabled || !(g.goal > 0) || supportDismissedThisMonth(g.month)) { strip.hidden = true; return; }
+  const covered = g.raised >= g.goal;
+  strip.classList.toggle('is-covered', covered);
+  const text = document.getElementById('supportStripText');
+  if (text) text.textContent = covered ? 'Covered this month. Thank you!' : 'Server costs: ' + supportMoney(g.raised) + ' of ' + supportMoney(g.goal);
+  const fill = document.getElementById('supportStripFill');
+  if (fill) fill.style.width = Math.max(0, Math.min(100, (g.raised / g.goal) * 100)) + '%';
+  strip.hidden = false;
+}
+
+function initSupportStrip() {
+  if (!document.getElementById('supportStrip')) return;
+  try {
+    fetch(ORIGIN + '/api/support-goal')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data && data.ok) { _supportGoal = data; renderSupportStrip(); }
+      })
+      .catch(function() {});
+  } catch (e) {}
+}
+
+function dismissSupportStrip() {
+  if (_supportGoal && _supportGoal.month) {
+    try { localStorage.setItem('myListAddon:supportDismissed', _supportGoal.month); } catch (e) {}
+  }
+  renderSupportStrip();
+}
+
+function openSupportGoal() {
+  const g = _supportGoal;
+  if (!g || !g.enabled) return;
+  const left = Math.max(0, g.goal - g.raised);
+  const pct = Math.max(0, Math.min(100, (g.raised / g.goal) * 100));
+  const row = function(label, value, strong) {
+    return '<div style="display:flex; justify-content:space-between;"><span>' + label + '</span>' + (strong ? '<b>' + value + '</b>' : '<span>' + value + '</span>') + '</div>';
+  };
+  const html =
+    '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">' +
+      '<h3 style="margin:0; font-size:1.1rem;">Keeping My Lists Addon running</h3>' +
+      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+    '</div>' +
+    '<p style="margin:0 0 12px; color:var(--muted); font-size:0.88rem; line-height:1.4;">It is free, with no ads. Donations only cover the hosting bill.</p>' +
+    '<div style="font-size:1.8rem; font-weight:800;">' + supportMoney(g.raised) + ' <small style="font-size:0.85rem; font-weight:600; color:var(--muted);">of ' + supportMoney(g.goal) + ' this month</small></div>' +
+    '<div style="height:10px; border-radius:10px; background:var(--border); overflow:hidden; margin:8px 0 12px;"><i style="display:block; height:100%; width:' + pct + '%; border-radius:10px; background:' + (g.raised >= g.goal ? '#34c759' : 'linear-gradient(90deg,#ffb020,#ff8a00)') + ';"></i></div>' +
+    '<div style="display:grid; gap:6px; font-size:0.88rem; color:var(--text); margin-bottom:14px;">' +
+      row('Hosting this month', supportMoney(g.goal), false) +
+      row('Given so far', supportMoney(g.raised), false) +
+      row(left > 0 ? 'Still needed' : 'Covered', left > 0 ? supportMoney(left) : 'Thank you!', true) +
+    '</div>' +
+    '<a href="' + escapeAttr(g.url) + '" target="_blank" rel="noopener noreferrer" style="display:block; text-align:center; background:#ffdd00; color:#1c1c1e; border-radius:26px; padding:12px; font-weight:800; text-decoration:none;">&#9749; Buy me a coffee</a>' +
+    '<p style="margin:10px 0 0; text-align:center; color:var(--muted); font-size:0.78rem;">Starts again on the 1st of each month.</p>';
+  showModal(html);
+}
+
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initSupportStrip);
+  else initSupportStrip();
+}
+
 function showAppAlert(title, message, isSuccess = false) {
   const icon = isSuccess ? '\u2713' : '\u2715';
   const iconColor = isSuccess ? 'var(--accent-2, #00b4d8)' : 'var(--danger, #e63946)';

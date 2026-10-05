@@ -12175,6 +12175,7 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/migrate-day-counts": "admin.migrate.day-counts",
   "/admin/api/backfill-trending": "admin.backfill.trending",
   "/admin/api/recover-stats-from-analytics": "admin.recover.stats-from-analytics",
+  "/admin/api/support-goal": "admin.support-goal.set",
   "/admin/api/new-on-streaming/sweep": "admin.new-on-streaming.sweep",
   "/admin/api/new-on-streaming/add": "admin.new-on-streaming.add",
   "/admin/api/installs/restore": "admin.installs.undo-move",
@@ -12499,6 +12500,77 @@ function adminActArgs(values) {
     out.push(v === undefined || v === null ? "" : v);
   }
   return escapeHtmlServer(JSON.stringify(out));
+}
+
+// --- The support goal (the strip at the top of Catalogs) ---------------------
+//
+// What the Buy Me a Coffee strip shows: a monthly hosting goal and how much has
+// been given so far this month, both typed in under Management & Tools ->
+// Support Goal. It stays hidden until it is turned on there. The amount given
+// belongs to the month it was entered in and counts as 0 in the next one, so
+// the bar starts over on the 1st by itself.
+const SUPPORT_GOAL_KEY = "support:goal:v1";
+const SUPPORT_GOAL_URL = "https://buymeacoffee.com/brock25";
+const SUPPORT_GOAL_MAX = 100000;
+
+function supportGoalMonth(now = new Date()) {
+  return easternDateKey(now).slice(0, 7);
+}
+
+// What is stored, as it is read: always complete, whatever was written.
+async function readSupportGoal(env) {
+  let stored = null;
+  try {
+    const raw = env && env.CONFIGS ? await env.CONFIGS.get(SUPPORT_GOAL_KEY) : null;
+    stored = raw ? JSON.parse(raw) : null;
+  } catch {
+    stored = null;
+  }
+  const s = stored && typeof stored === "object" ? stored : {};
+  const num = (v, max) => (Number.isFinite(v) && v >= 0 ? Math.min(max, Math.round(v * 100) / 100) : 0);
+  return {
+    enabled: s.enabled === true,
+    goal: num(s.goal, SUPPORT_GOAL_MAX),
+    raised: num(s.raised, SUPPORT_GOAL_MAX * 10),
+    raisedMonth: typeof s.raisedMonth === "string" ? s.raisedMonth : "",
+    updatedAt: Number.isFinite(s.updatedAt) ? s.updatedAt : 0,
+  };
+}
+
+// What the page gets: nothing at all until it is on and has a goal, and the
+// month's amount only while it is still that month's.
+function publicSupportGoal(stored, now = new Date()) {
+  const month = supportGoalMonth(now);
+  const on = stored.enabled && stored.goal > 0;
+  return {
+    enabled: on,
+    goal: on ? stored.goal : 0,
+    raised: on && stored.raisedMonth === month ? stored.raised : 0,
+    month,
+    url: SUPPORT_GOAL_URL,
+  };
+}
+
+// The admin's save: only what is a sensible number is accepted, and an amount
+// not sent keeps what was there.
+function applySupportGoalUpdate(stored, body, now = new Date()) {
+  const b = body && typeof body === "object" ? body : {};
+  const out = { ...stored };
+  if (typeof b.enabled === "boolean") out.enabled = b.enabled;
+  if (b.goal !== undefined) {
+    const goal = Number(b.goal);
+    if (!Number.isFinite(goal) || goal < 0 || goal > SUPPORT_GOAL_MAX) return { error: "The goal has to be a number from 0 to " + SUPPORT_GOAL_MAX + "." };
+    out.goal = Math.round(goal * 100) / 100;
+  }
+  if (b.raised !== undefined) {
+    const raised = Number(b.raised);
+    if (!Number.isFinite(raised) || raised < 0 || raised > SUPPORT_GOAL_MAX * 10) return { error: "The amount given has to be a number, 0 or more." };
+    out.raised = Math.round(raised * 100) / 100;
+    out.raisedMonth = supportGoalMonth(now);
+  }
+  if (out.enabled && !(out.goal > 0)) return { error: "Set a goal above 0 before turning the strip on." };
+  out.updatedAt = now.getTime();
+  return { value: out };
 }
 
 async function renderAdminDashboard(env) {
@@ -12842,6 +12914,7 @@ async function renderAdminDashboard(env) {
     <button type="button" class="subnav-pill" data-sub-tab="netflixpreview" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['netflixpreview'])}">Provider Preview</button>
     <button type="button" class="subnav-pill" data-sub-tab="newonstreaming" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['newonstreaming'])}">New on Streaming</button>
     <button type="button" class="subnav-pill" data-sub-tab="channelpresets" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['channelpresets'])}">Channel Presets</button>
+    <button type="button" class="subnav-pill" data-sub-tab="supportgoal" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['supportgoal'])}">Support Goal</button>
     <button type="button" class="subnav-pill" data-sub-tab="maintenance" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['maintenance'])}">Maintenance</button>
   </div>
 
@@ -13068,6 +13141,26 @@ async function renderAdminDashboard(env) {
     </div>
     <div id="netflixPreviewMovies"></div>
     <div id="netflixPreviewShows" style="margin-top:28px;"></div>
+  </div>
+
+  <div class="admin-tab-panel" data-admin-panel="supportgoal">
+    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">The <strong>Buy Me a Coffee strip</strong> at the top of Catalogs on the main site: a goal for the month's hosting bill and how much has been given toward it. It stays hidden until you turn it on. Visitors can hide it for the rest of the month with its &#x2715;; that only hides it for them.</p>
+    <div class="panel" style="margin:0 0 18px; padding:14px 16px; max-width:520px;">
+      <label style="display:flex; align-items:center; gap:8px; font-weight:600; font-size:0.9rem; margin-bottom:14px;">
+        <input type="checkbox" id="supportGoalEnabled"> Show the strip on the site
+      </label>
+      <label style="display:block; font-size:0.85rem; color:#8E8E93; margin-bottom:12px;">Monthly goal (US dollars)
+        <input type="number" id="supportGoalAmount" class="admin-select" min="0" max="100000" step="1" style="display:block; margin:4px 0 0; width:160px;" placeholder="60">
+      </label>
+      <label style="display:block; font-size:0.85rem; color:#8E8E93; margin-bottom:6px;">Given so far this month (US dollars)
+        <input type="number" id="supportGoalRaised" class="admin-select" min="0" step="0.01" style="display:block; margin:4px 0 0; width:160px;" placeholder="0">
+      </label>
+      <div style="font-size:0.8rem; color:#8E8E93; margin-bottom:14px;">Type the total from your Buy Me a Coffee page. It counts toward <span id="supportGoalMonth">this month</span> only and starts again at 0 on the 1st.</div>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <button type="button" class="primary lc-btn" data-act="saveSupportGoal">Save</button>
+        <span id="supportGoalStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
+      </div>
+    </div>
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="newonstreaming">
@@ -13371,6 +13464,7 @@ async function renderAdminDashboard(env) {
       netflixpreview: 'management',
       newonstreaming: 'management',
       channelpresets: 'management',
+      supportgoal: 'management',
       maintenance: 'management',
     };
 
@@ -13421,6 +13515,48 @@ async function renderAdminDashboard(env) {
       if (tabId === 'netflixpreview' && !window._netflixPreviewLoadedOnce) { window._netflixPreviewLoadedOnce = true; loadNetflixPreview(); }
       if (tabId === 'newonstreaming' && !window._newOnStreamingLoadedOnce) { window._newOnStreamingLoadedOnce = true; loadNewOnStreaming(); }
       if (tabId === 'channelpresets' && !window._channelPresetsLoadedOnce) { window._channelPresetsLoadedOnce = true; loadChannelPresets(); }
+      if (tabId === 'supportgoal' && !window._supportGoalLoadedOnce) { window._supportGoalLoadedOnce = true; loadSupportGoal(); }
+    }
+
+    async function loadSupportGoal() {
+      const status = document.getElementById('supportGoalStatus');
+      try {
+        const res = await fetch('/admin/api/support-goal', { cache: 'no-store' });
+        const data = await res.json();
+        if (!data || !data.ok) { if (status) status.textContent = (data && data.error) || 'Could not load.'; return; }
+        document.getElementById('supportGoalEnabled').checked = !!data.enabled;
+        document.getElementById('supportGoalAmount').value = data.goal ? data.goal : '';
+        document.getElementById('supportGoalRaised').value = data.raised ? data.raised : '';
+        const m = document.getElementById('supportGoalMonth');
+        if (m) m.textContent = data.month || 'this month';
+      } catch (e) {
+        if (status) status.textContent = 'Could not load.';
+      }
+    }
+
+    async function saveSupportGoal() {
+      const status = document.getElementById('supportGoalStatus');
+      const say = (text, color) => { if (status) { status.textContent = text; status.style.color = color || '#8E8E93'; } };
+      const goalText = document.getElementById('supportGoalAmount').value.trim();
+      const raisedText = document.getElementById('supportGoalRaised').value.trim();
+      say('Saving...');
+      try {
+        const res = await fetch('/admin/api/support-goal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            enabled: document.getElementById('supportGoalEnabled').checked,
+            goal: goalText === '' ? 0 : Number(goalText),
+            raised: raisedText === '' ? 0 : Number(raisedText),
+          }),
+        });
+        const data = await res.json();
+        if (!data || !data.ok) { say((data && data.error) || 'Could not save.', '#ff453a'); return; }
+        say('Saved. The site shows it within five minutes.', '#30d158');
+        loadSupportGoal();
+      } catch (e) {
+        say('Could not save.', '#ff453a');
+      }
     }
 
     function restoreAdminActiveTab() {
@@ -30570,6 +30706,73 @@ ${seoHeadHtml}
      needs. The larger gap is because these are now separate cards rather
      than headings on one continuous background -- at 8px they read as one
      block with lines through it. */
+  /* The Buy Me a Coffee strip at the top of Catalogs (initSupportStrip). */
+  .support-strip {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0 0 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--shadow-sm);
+  }
+  .support-strip[hidden] { display: none; }
+  .support-strip-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 4px 8px 12px;
+    background: none;
+    border: 0;
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+  }
+  .support-strip-cup { font-size: 17px; line-height: 1; }
+  .support-strip-body { flex: 1; min-width: 0; display: block; }
+  .support-strip-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+    font-size: 0.78rem;
+    line-height: 1.25;
+  }
+  .support-strip-go { color: var(--accent); font-weight: 700; white-space: nowrap; }
+  .support-strip-bar {
+    display: block;
+    height: 5px;
+    margin-top: 5px;
+    border-radius: 5px;
+    background: var(--border);
+    overflow: hidden;
+  }
+  .support-strip-bar i {
+    display: block;
+    height: 100%;
+    width: 0;
+    border-radius: 5px;
+    background: linear-gradient(90deg, #ffb020, #ff8a00);
+  }
+  .support-strip.is-covered { border-color: #bfe8c9; }
+  .support-strip.is-covered .support-strip-bar i { background: #34c759; }
+  .support-strip-x {
+    flex: none;
+    width: 30px;
+    height: 30px;
+    margin-right: 4px;
+    padding: 0;
+    min-height: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: var(--muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
   .qa-shelf-card {
     margin-bottom: 16px;
     gap: 0;
@@ -34829,6 +35032,19 @@ if ('serviceWorker' in navigator) {
 </script>
 
 <div class="tab-panel" data-tab-panel="catalogs" id="content-catalogs" role="tabpanel" aria-labelledby="tab-desktop-catalogs" hidden>
+  <!-- The Buy Me a Coffee strip: filled in, and shown, by initSupportStrip
+       (16_client-row-core.js) only when the admin has turned it on. -->
+  <div class="support-strip" id="supportStrip" hidden>
+    <button type="button" class="support-strip-main" data-act="openSupportGoal" aria-label="Server costs this month: see details">
+      <span class="support-strip-cup" aria-hidden="true">&#9749;</span>
+      <span class="support-strip-body">
+        <span class="support-strip-row"><span id="supportStripText"></span><span class="support-strip-go">Support &rsaquo;</span></span>
+        <span class="support-strip-bar" aria-hidden="true"><i id="supportStripFill"></i></span>
+      </span>
+    </button>
+    <button type="button" class="support-strip-x" data-act="dismissSupportStrip" aria-label="Hide this for the rest of the month">&#10005;</button>
+  </div>
+
   <!-- Top Submenu Pills for Catalogs -->
   <div class="subnav-pills-bar" id="catalogsFilterBar">
     <button type="button" class="subnav-pill active" data-sub="all" data-act="switchCatalogsSubmenu" data-act-args="[&quot;all&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> My Catalogs</button>
@@ -39017,6 +39233,87 @@ function closeModal() {
     try { _modalReturnFocus.focus(); } catch (e) {}
   }
   _modalReturnFocus = null;
+}
+
+// --- The Buy Me a Coffee strip -------------------------------------------------
+//
+// A goal for the month's hosting and how much has been given, set by the admin
+// (Management & Tools -> Support Goal) and read from /api/support-goal. The
+// strip stays hidden until the admin has turned it on. Its X hides it for the
+// rest of the month in this browser only; the next month it is back.
+let _supportGoal = null;
+
+function supportMoney(n) {
+  const v = Number(n) || 0;
+  return '$' + (Math.abs(v - Math.round(v)) < 0.005 ? String(Math.round(v)) : v.toFixed(2));
+}
+
+function supportDismissedThisMonth(month) {
+  try { return localStorage.getItem('myListAddon:supportDismissed') === month; } catch (e) { return false; }
+}
+
+function renderSupportStrip() {
+  const strip = document.getElementById('supportStrip');
+  const g = _supportGoal;
+  if (!strip) return;
+  if (!g || !g.enabled || !(g.goal > 0) || supportDismissedThisMonth(g.month)) { strip.hidden = true; return; }
+  const covered = g.raised >= g.goal;
+  strip.classList.toggle('is-covered', covered);
+  const text = document.getElementById('supportStripText');
+  if (text) text.textContent = covered ? 'Covered this month. Thank you!' : 'Server costs: ' + supportMoney(g.raised) + ' of ' + supportMoney(g.goal);
+  const fill = document.getElementById('supportStripFill');
+  if (fill) fill.style.width = Math.max(0, Math.min(100, (g.raised / g.goal) * 100)) + '%';
+  strip.hidden = false;
+}
+
+function initSupportStrip() {
+  if (!document.getElementById('supportStrip')) return;
+  try {
+    fetch(ORIGIN + '/api/support-goal')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data && data.ok) { _supportGoal = data; renderSupportStrip(); }
+      })
+      .catch(function() {});
+  } catch (e) {}
+}
+
+function dismissSupportStrip() {
+  if (_supportGoal && _supportGoal.month) {
+    try { localStorage.setItem('myListAddon:supportDismissed', _supportGoal.month); } catch (e) {}
+  }
+  renderSupportStrip();
+}
+
+function openSupportGoal() {
+  const g = _supportGoal;
+  if (!g || !g.enabled) return;
+  const left = Math.max(0, g.goal - g.raised);
+  const pct = Math.max(0, Math.min(100, (g.raised / g.goal) * 100));
+  const row = function(label, value, strong) {
+    return '<div style="display:flex; justify-content:space-between;"><span>' + label + '</span>' + (strong ? '<b>' + value + '</b>' : '<span>' + value + '</span>') + '</div>';
+  };
+  const html =
+    '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">' +
+      '<h3 style="margin:0; font-size:1.1rem;">Keeping My Lists Addon running</h3>' +
+      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+    '</div>' +
+    '<p style="margin:0 0 12px; color:var(--muted); font-size:0.88rem; line-height:1.4;">It is free, with no ads. Donations only cover the hosting bill.</p>' +
+    '<div style="font-size:1.8rem; font-weight:800;">' + supportMoney(g.raised) + ' <small style="font-size:0.85rem; font-weight:600; color:var(--muted);">of ' + supportMoney(g.goal) + ' this month</small></div>' +
+    '<div style="height:10px; border-radius:10px; background:var(--border); overflow:hidden; margin:8px 0 12px;"><i style="display:block; height:100%; width:' + pct + '%; border-radius:10px; background:' + (g.raised >= g.goal ? '#34c759' : 'linear-gradient(90deg,#ffb020,#ff8a00)') + ';"></i></div>' +
+    '<div style="display:grid; gap:6px; font-size:0.88rem; color:var(--text); margin-bottom:14px;">' +
+      row('Hosting this month', supportMoney(g.goal), false) +
+      row('Given so far', supportMoney(g.raised), false) +
+      row(left > 0 ? 'Still needed' : 'Covered', left > 0 ? supportMoney(left) : 'Thank you!', true) +
+    '</div>' +
+    '<a href="' + escapeAttr(g.url) + '" target="_blank" rel="noopener noreferrer" style="display:block; text-align:center; background:#ffdd00; color:#1c1c1e; border-radius:26px; padding:12px; font-weight:800; text-decoration:none;">&#9749; Buy me a coffee</a>' +
+    '<p style="margin:10px 0 0; text-align:center; color:var(--muted); font-size:0.78rem;">Starts again on the 1st of each month.</p>';
+  showModal(html);
+}
+
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initSupportStrip);
+  else initSupportStrip();
 }
 
 function showAppAlert(title, message, isSuccess = false) {
@@ -84970,6 +85267,13 @@ async function handleFetch(request, env, ctx) {
       return await serveRpdbPoster(env, ctx, decodeURIComponent(rpdbMatch[1]), rpdbMatch[2]);
     }
 
+    // /api/support-goal -> what the Buy Me a Coffee strip shows, or enabled:false
+    // until the admin turns it on. See readSupportGoal (03_admin.js).
+    if (path === "/api/support-goal" && request.method === "GET") {
+      const view = publicSupportGoal(await readSupportGoal(env));
+      return jsonPublic({ ok: true, ...view }, 200, { "Cache-Control": "public, max-age=300" });
+    }
+
     // /api/rpdb-check  (POST)  { key } -> { ok, valid, used, limit }: whether a
     // key works and how much of its monthly limit is spent, for Settings.
     if (path === "/api/rpdb-check" && request.method === "POST") {
@@ -100269,6 +100573,25 @@ function generateSearchVariations(query) {
     // against) versus observed (a genuine arrival this add-on watched happen).
     // The seeded/observed split is the one number that says whether the list
     // is working yet: observed only starts growing after walk 0 completes.
+    // /admin/api/support-goal -> the Buy Me a Coffee strip's goal and the amount
+    // given so far (GET), and the save (POST). See readSupportGoal (03_admin.js).
+    if (path === "/admin/api/support-goal" && (request.method === "GET" || request.method === "POST")) {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      if (!env || !env.CONFIGS) return json({ ok: false, error: "No CONFIGS namespace is bound." });
+      const stored = await readSupportGoal(env);
+      if (request.method === "POST") {
+        let body = {};
+        try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400); }
+        const next = applySupportGoalUpdate(stored, body);
+        if (next.error) return json({ ok: false, error: next.error }, 400);
+        await env.CONFIGS.put(SUPPORT_GOAL_KEY, JSON.stringify(next.value));
+        return json({ ok: true, ...publicSupportGoal(next.value), goal: next.value.goal, raised: next.value.raised, enabled: next.value.enabled }, 200, { "Cache-Control": "no-store" });
+      }
+      const month = supportGoalMonth();
+      return json({ ok: true, enabled: stored.enabled, goal: stored.goal, raised: stored.raisedMonth === month ? stored.raised : 0, month }, 200, { "Cache-Control": "no-store" });
+    }
+
     if (path === "/admin/api/new-on-streaming" && request.method === "GET") {
       const authed = await isAdminRequest(request, env);
       if (!authed) return json({ ok: false, error: "Not authorized." }, 401);

@@ -6,6 +6,11 @@ All notable changes to **My Lists Addon** ([mylistsaddon.com](https://mylistsadd
 
 ## [Unreleased]
 
+### ☕ Buy Me a Coffee strip, with the goal set in the admin page
+
+- **A slim strip at the top of Catalogs** shows "Server costs: $42 of $60" with a progress bar. Tapping it opens a small window with the amounts and a **Buy me a coffee** button. When the goal is met it turns green and says "Covered this month. Thank you!". Its ✕ hides it for the rest of the month in that browser only.
+- **Admin → Management & Tools → Support Goal:** turn the strip on or off, set the monthly goal, and type the amount given so far from your Buy Me a Coffee page. The strip stays hidden until you turn it on. The amount belongs to the month it was entered in and counts as 0 the month after, so the bar starts again on the 1st. The site picks up a change within five minutes.
+
 ### 🐛 Quick Add, Lists and Discover fixes
 
 - **Quick Add: "+ Add all" sits beside the title** at the far right on a phone too, instead of stretching full width under it.
