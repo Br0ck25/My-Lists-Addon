@@ -26,7 +26,7 @@
 // Shown at the top of /admin and in the answer of the "Counts missing" tool,
 // so the owner can see which pasted file is live (docs/RELEASES.md). Change it
 // with every release.
-const WORKER_RELEASE = "21";
+const WORKER_RELEASE = "22";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -119,7 +119,7 @@ function isSecretFieldName(name) {
 }
 
 const ADDON_ID = "app.my-list";
-const ADDON_VERSION = "1.5.5";
+const ADDON_VERSION = "1.5.6";
 const ADDON_NAME = "My Lists";
 
 // How many items a "Recommended Movies"/"Recommended Shows" list holds --
@@ -1639,7 +1639,7 @@ const APP_SHELL_TABS = [
   { id: "channels", label: "Channels", path: "/channels", subs: ["my-channels", "storylines", "quickadd", "explore", "import", "build"] },
   { id: "discover", label: "Discover", path: "/discover", subs: ["movie", "all", "series", "popular", "curated", "gems", "kids", "holidays", "genres"] },
   { id: "search", label: "Search", path: "/search", subs: [] },
-  { id: "settings", label: "Settings", path: "/settings", subs: ["account", "external", "backup", "feedback"] },
+  { id: "settings", label: "Settings", path: "/settings", subs: ["account", "display", "scrobble", "external", "backup", "feedback"] },
 ];
 
 // The paths the shell answers on. Exact matches only: /lists/<slug> and
@@ -28132,7 +28132,6 @@ function buildStreamingRowsHtml(list, labelSuffix, group) {
       <div class="discover-chart-header">
         <div class="discover-chart-info">
           <div class="discover-chart-title">${p.name}</div>
-          <div class="discover-chart-sub">${labelSuffix ? labelSuffix : (p.type === 'movie' ? 'Theatrical Box Office' : (p.type === 'series' ? 'Anime Trending' : 'Movies & Shows'))}</div>
         </div>
         ${seeAllLink}
       </div>
@@ -28338,7 +28337,6 @@ function buildCombinedChartsHtml() {
       <div class="discover-chart-header">
         <div class="discover-chart-info">
           <div class="discover-chart-title">${p.name}</div>
-          <div class="discover-chart-sub">Blended Multi-Source Catalog</div>
         </div>
         <a href="javascript:void(0)" class="discover-chart-seeall" data-act="openListDetailsPage" data-act-args="${appActArgsServer([p.name, "movie", movieUrlsJoined])}">See All &rsaquo;</a>
       </div>
@@ -28626,7 +28624,8 @@ function appShellTabForPath(pathname) {
 
 function buildAppShellNavHtml(style) {
   const isDesktop = style === "desktop";
-  const items = APP_SHELL_TABS.map((t) => {
+  const tabs = isDesktop ? APP_SHELL_TABS : APP_SHELL_TABS.filter((t) => t.id !== "search");
+  const items = tabs.map((t) => {
     const active = t.id === "discover";
     const cls = (isDesktop ? "tab-btn" : "bottom-nav-item") + (active ? " active" : "");
     // The id and aria-controls keep the panels' own aria-labelledby="tab-..."
@@ -28666,6 +28665,17 @@ function buildAppShellHeadRoutes() {
 // template literal below and is not in scope here.
 function appActArgsServer(values) {
   return escapeHtmlServer(JSON.stringify(values || []));
+}
+
+// The one Refresh button (Discover's look) used by every view that has one:
+// Catalogs, Lists, Channels and Discover. Change it here, not per view.
+function refreshButtonHtml(act, title, args) {
+  const label = escapeHtmlServer(title || 'Refresh');
+  return '<button type="button" class="secondary lc-btn refresh-btn" data-act="' + escapeHtmlServer(act) + '"' +
+    (args ? ' data-act-args="' + appActArgsServer(args) + '"' : '') +
+    ' title="' + label + '" aria-label="' + label + '">' +
+    '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none;"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>' +
+    '<span>Refresh</span></button>';
 }
 
 function renderBuilder(
@@ -28847,6 +28857,7 @@ ${seoHeadHtml}
       var chSub = (shellRoute && shellRoute.tab === 'channels' && shellSub) || localStorage.getItem('myListAddon:channelsSubmenu') || 'my-channels';
       document.documentElement.setAttribute('data-initial-channels-sub', chSub);
       var setSub = (shellRoute && shellRoute.tab === 'settings' && shellSub) || localStorage.getItem('myListAddon:settingsSubmenu') || 'account';
+      if (['account', 'display', 'scrobble', 'external', 'backup', 'feedback'].indexOf(setSub) === -1) setSub = 'account';
       document.documentElement.setAttribute('data-initial-settings-sub', setSub);
       var discSub = (shellRoute && shellRoute.tab === 'discover' && shellSub) || localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
       if (discSub === 'all') discSub = 'movie';
@@ -28864,65 +28875,183 @@ ${seoHeadHtml}
 -->
 <style nonce="${CSP_NONCE_PLACEHOLDER}">/*MYLISTS_APP_CSS_START*/
   :root {
-    /* Wako-inspired iOS-native modern light theme */
+    /* Modern iOS/macOS human-interface design system tokens */
     color-scheme: light;
-    --bg:           #F2F2F7;
-    --surface:      #FFFFFF;
-    --panel:        #FFFFFF;
-    --panel-strong: #E5E5EA;
-    --border:       rgba(0,0,0,0.08);
-    --border-strong:rgba(0,0,0,0.13);
-    --text:         #1C1C1E;
-    --text-2:       #3A3A3C;
-    --muted:        #636366;
-    --accent:       #007AFF;
-    --brand:        #007AFF;
-    --accent-hover: #0062CC;
-    --accent-2:     #34AADC;
-    --danger:       #FF3B30;
-    --success:      #34C759;
-    --warn:         #FF9500;
-    --rating-high:  #34C759;
-    --rating-mid:   #FF9500;
-    --rating-low:   #FF3B30;
-    --shadow-sm:    0 1px 3px rgba(0,0,0,0.06);
-    --shadow:       0 2px 10px rgba(0,0,0,0.08);
-    --shadow-md:    0 4px 20px rgba(0,0,0,0.10);
-    /* The device's own fonts (P7-1) -- no webfont request, no third-party
-       origin. The display stack is the body stack: headings keep their weight
-       and size, which is what carried the hierarchy, and an OS UI font at 700
-       or 800 is the look the webfonts were standing in for. */
-    --font-display: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
-    --font-body:    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
-    --font-mono:    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
-    --sb-track:     transparent;
-    --sb-thumb:     rgba(0,0,0,0.15);
-    --sb-thumb-hover:rgba(0,0,0,0.25);
-    --radius:       14px;
-    --radius-sm:    10px;
-    --radius-pill:  999px;
+
+    /* Semantic Surfaces & Backgrounds */
+    --color-bg-canvas:      #F2F2F7;
+    --color-bg-surface:     #FFFFFF;
+    --color-bg-elevated:    #FFFFFF;
+    --color-bg-sunken:      #E5E5EA;
+    --color-bg-overlay:     rgba(0, 0, 0, 0.45);
+
+    /* Semantic Borders */
+    --color-border-subtle:  rgba(0, 0, 0, 0.08);
+    --color-border-strong:  rgba(0, 0, 0, 0.14);
+    --color-border-focus:   #007AFF;
+
+    /* Semantic Typography / Foreground */
+    --color-text-primary:   #1C1C1E;
+    --color-text-secondary: #3A3A3C;
+    --color-text-muted:     #636366;
+    --color-text-inverse:   #FFFFFF;
+
+    /* Brand & Accent */
+    --color-brand:          #007AFF;
+    --color-brand-hover:    #0062CC;
+    --color-brand-active:   #004FB3;
+    --color-brand-subtle:   rgba(0, 122, 255, 0.12);
+    --color-brand-2:        #34AADC;
+
+    /* Status & Feedback */
+    --color-danger:         #FF3B30;
+    --color-danger-hover:   #D70015;
+    --color-danger-subtle:  rgba(255, 59, 48, 0.12);
+    --color-success:        #34C759;
+    --color-success-hover:  #248A3D;
+    --color-success-subtle: rgba(52, 199, 89, 0.12);
+    --color-warn:           #FF9500;
+    --color-warn-hover:     #C97000;
+    --color-warn-subtle:    rgba(255, 149, 0, 0.12);
+
+    /* Rating Colors */
+    --color-rating-high:    #34C759;
+    --color-rating-mid:     #FF9500;
+    --color-rating-low:     #FF3B30;
+
+    /* Elevation & Shadows */
+    --shadow-sm:            0 1px 3px rgba(0, 0, 0, 0.06);
+    --shadow:               0 2px 10px rgba(0, 0, 0, 0.08);
+    --shadow-md:            0 4px 20px rgba(0, 0, 0, 0.10);
+    --shadow-lg:            0 8px 30px rgba(0, 0, 0, 0.16);
+    --shadow-focus:         0 0 0 3px rgba(0, 122, 255, 0.35);
+
+    /* Spacing Scale (8pt grid system with half-steps) */
+    --space-0-5:            2px;
+    --space-1:              4px;
+    --space-1-5:            6px;
+    --space-2:              8px;
+    --space-2-5:            10px;
+    --space-3:              12px;
+    --space-3-5:            14px;
+    --space-4:              16px;
+    --space-5:              20px;
+    --space-6:              24px;
+    --space-8:              32px;
+
+    /* Border Radius Scale */
+    --radius-xs:            4px;
+    --radius-sm:            8px;
+    --radius-md:            12px;
+    --radius-lg:            16px;
+    --radius-xl:            20px;
+    --radius-pill:          999px;
+
+    /* Interactive Component Controls & Touch Targets */
+    --control-height-sm:    32px;
+    --control-height-md:    40px;
+    --control-height-lg:    48px;
+    --control-touch-min:    44px;
+
+    /* Typography Scale */
+    --font-display:         -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
+    --font-body:            -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
+    --font-mono:            ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    --font-size-xs:         0.75rem;
+    --font-size-sm:         0.85rem;
+    --font-size-base:       0.925rem;
+    --font-size-md:         1rem;
+    --font-size-lg:         1.15rem;
+    --font-size-xl:         1.35rem;
+    --font-size-2xl:        1.6rem;
+
+    /* Scrollbars */
+    --sb-track:             transparent;
+    --sb-thumb:             rgba(0, 0, 0, 0.15);
+    --sb-thumb-hover:       rgba(0, 0, 0, 0.25);
+
+    /* Complete Backward-Compatibility Aliases */
+    --bg:                   var(--color-bg-canvas);
+    --surface:              var(--color-bg-surface);
+    --surface-2:            var(--color-bg-sunken);
+    --surface-3:            var(--color-border-strong);
+    --panel:                var(--color-bg-surface);
+    --panel-strong:         var(--color-bg-sunken);
+    --border:               var(--color-border-subtle);
+    --border-strong:        var(--color-border-strong);
+    --text:                 var(--color-text-primary);
+    --text-2:               var(--color-text-secondary);
+    --muted:                var(--color-text-muted);
+    --accent:               var(--color-brand);
+    --brand:                var(--color-brand);
+    --accent-hover:         var(--color-brand-hover);
+    --accent-2:             var(--color-brand-2);
+    --danger:               var(--color-danger);
+    --success:              var(--color-success);
+    --warn:                 var(--color-warn);
+    --rating-high:          var(--color-rating-high);
+    --rating-mid:           var(--color-rating-mid);
+    --rating-low:           var(--color-rating-low);
+    --radius:               14px;
   }
   :root.dark-theme {
-    /* Not decoration: this is what tells the OS the page is dark. An
-       installed PWA paints the areas it does not hand to the document --
-       the status bar, and the strip at the bottom holding the home
-       indicator / gesture bar -- from the UA's own surface color, and that
-       surface is white for as long as the document declares a light color
-       scheme, whatever <meta name="theme-color"> or the page background
-       say. It also gets the scrollbars, form controls and <select> popups
-       to match. */
     color-scheme: dark;
-    --bg:           #000000;
-    --surface:      #1C1C1E;
-    --panel:        #1C1C1E;
-    --panel-strong: #2C2C2E;
-    --border:       rgba(255,255,255,0.15);
-    --border-strong:rgba(255,255,255,0.25);
-    --text:         #FFFFFF;
-    --text-2:       #EBEBF5;
-    --muted:        #AEAEB2;
-    --sb-thumb:     rgba(255,255,255,0.15);
-    --sb-thumb-hover:rgba(255,255,255,0.25);
+
+    /* Semantic Surfaces & Backgrounds (Dark Mode) */
+    --color-bg-canvas:      #000000;
+    --color-bg-surface:     #1C1C1E;
+    --color-bg-elevated:    #2C2C2E;
+    --color-bg-sunken:      #161618;
+    --color-bg-overlay:     rgba(0, 0, 0, 0.65);
+
+    /* Semantic Borders (Dark Mode) */
+    --color-border-subtle:  rgba(255, 255, 255, 0.14);
+    --color-border-strong:  rgba(255, 255, 255, 0.24);
+    --color-border-focus:   #0A84FF;
+
+    /* Semantic Typography / Foreground (Dark Mode) */
+    --color-text-primary:   #FFFFFF;
+    --color-text-secondary: #EBEBF5;
+    --color-text-muted:     #AEAEB2;
+    --color-text-inverse:   #000000;
+
+    /* Brand & Accent (Dark Mode) */
+    --color-brand:          #0A84FF;
+    --color-brand-hover:    #0071E3;
+    --color-brand-active:   #0056B3;
+    --color-brand-subtle:   rgba(10, 132, 255, 0.18);
+    --color-brand-2:        #5AC8FA;
+
+    /* Status & Feedback (Dark Mode) */
+    --color-danger:         #FF453A;
+    --color-danger-hover:   #FF6961;
+    --color-danger-subtle:  rgba(255, 69, 58, 0.18);
+    --color-success:        #30D158;
+    --color-success-hover:  #34C759;
+    --color-success-subtle: rgba(48, 209, 88, 0.18);
+    --color-warn:           #FF9F0A;
+    --color-warn-hover:     #FFB340;
+    --color-warn-subtle:    rgba(255, 159, 10, 0.18);
+
+    /* Rating Colors (Dark Mode) */
+    --color-rating-high:    #30D158;
+    --color-rating-mid:     #FF9F0A;
+    --color-rating-low:     #FF453A;
+
+    /* Shadows & Elevation (Dark Mode) */
+    --shadow-sm:            0 1px 3px rgba(0, 0, 0, 0.35);
+    --shadow:               0 2px 10px rgba(0, 0, 0, 0.45);
+    --shadow-md:            0 4px 20px rgba(0, 0, 0, 0.55);
+    --shadow-lg:            0 8px 30px rgba(0, 0, 0, 0.70);
+    --shadow-focus:         0 0 0 3px rgba(10, 132, 255, 0.45);
+
+    /* Scrollbars (Dark Mode) */
+    --sb-thumb:             rgba(255, 255, 255, 0.15);
+    --sb-thumb-hover:       rgba(255, 255, 255, 0.25);
+
+    /* Backward-Compatibility Aliases (Dark Mode) */
+    --surface-2:            var(--color-bg-sunken);
+    --surface-3:            var(--color-border-strong);
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
@@ -28937,10 +29066,16 @@ ${seoHeadHtml}
      :focus-visible rather than :focus, so a mouse click does not draw a ring
      the way the removed outlines used to; and last in the cascade with
      !important because the rules that cleared it are more specific. */
-  :where(a[href], button, summary, select, input, textarea, [tabindex]):focus-visible {
+  :where(a[href], button, summary, select, [tabindex]):focus-visible,
+  :where(input[type="checkbox"], input[type="radio"]):focus-visible {
     outline: 2px solid var(--accent) !important;
     outline-offset: 2px;
     border-radius: 4px;
+  }
+  :where(input:not([type="checkbox"]):not([type="radio"]), textarea):focus-visible {
+    outline: none !important;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--color-brand-subtle, rgba(0, 122, 255, 0.25)) !important;
   }
 
   /* The page has four @keyframes animations and 33 transitions and said
@@ -29002,16 +29137,18 @@ ${seoHeadHtml}
     display: flex;
     align-items: center;
     justify-content: space-between;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 10px;
     padding: 6px 4px 8px;
+    min-width: 0;
   }
   .app-header-left {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     flex: 1 1 auto;
     min-width: 0;
+    overflow: hidden;
   }
   .app-header-avatar {
     width: 40px;
@@ -29024,6 +29161,7 @@ ${seoHeadHtml}
     display: flex;
     flex-direction: column;
     min-width: 0;
+    overflow: hidden;
   }
   .app-header-title {
     font-size: 1.35rem;
@@ -29049,13 +29187,15 @@ ${seoHeadHtml}
     display: flex;
     align-items: center;
     gap: 8px;
+    flex: 0 0 auto;
     margin-left: auto;
   }
-  .header-icon-btn {
+  .header-icon-btn, .header-avatar-btn {
     width: 36px;
     height: 36px;
     min-width: 36px;
     min-height: 36px;
+    max-height: 36px;
     box-sizing: border-box;
     border-radius: 50%;
     background: var(--surface);
@@ -29064,13 +29204,56 @@ ${seoHeadHtml}
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     color: var(--text-2);
     cursor: pointer;
     box-shadow: var(--shadow-sm);
     padding: 0;
+    font-family: inherit;
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease, color 0.2s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .header-icon-btn:hover, .header-avatar-btn:hover {
+    background: var(--panel-strong);
+    border-color: var(--accent);
+    color: var(--text);
+    transform: scale(1.06);
+    box-shadow: var(--shadow);
+  }
+  .header-icon-btn:active, .header-avatar-btn:active {
+    transform: scale(0.92);
+  }
+  .header-icon-btn:focus-visible, .header-avatar-btn:focus-visible, .theme-toggle-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .header-icon-btn.active, html[data-initial-tab="search"] #headerSearchBtn {
+    background: var(--panel-strong);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .header-avatar-btn.signed-in {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #ffffff;
+  }
+  .header-avatar-btn.signed-in:hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+    color: #ffffff;
+  }
+  .header-avatar-initial {
+    font-size: 0.95rem;
+    font-weight: 700;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+  button.header-icon-btn, button.header-avatar-btn, button.theme-toggle-btn {
+    padding: 0;
+    min-height: unset;
   }
   .theme-toggle-btn, .dark-mode-toggle {
     width: 36px;
@@ -29243,10 +29426,10 @@ ${seoHeadHtml}
   html[data-initial-catalogs-sub="shelves"] #catalogsFilterBar .subnav-pill[data-sub="all"],
   html[data-initial-catalogs-sub="quickadd"] #catalogsFilterBar .subnav-pill[data-sub="quickadd"],
   html[data-initial-catalogs-sub="bulk"] #catalogsFilterBar .subnav-pill[data-sub="bulk"] {
-    background: var(--accent) !important;
-    color: #ffffff !important;
-    border-color: var(--accent) !important;
-    box-shadow: 0 2px 8px rgba(0,122,255,0.28) !important;
+    background: rgba(0, 122, 255, 0.12) !important;
+    color: var(--accent) !important;
+    border-color: rgba(0, 122, 255, 0.40) !important;
+    box-shadow: none !important;
   }
 
   /* Lists */
@@ -29282,10 +29465,10 @@ ${seoHeadHtml}
   html[data-initial-lists-sub="import"] #listsSubnavBar .subnav-pill[data-sub="import"],
   html[data-initial-lists-sub="bulk"] #listsSubnavBar .subnav-pill[data-sub="bulk"],
   html[data-initial-lists-sub="create-list"] #listsSubnavBar .subnav-pill[data-sub="create-list"] {
-    background: var(--accent) !important;
-    color: #ffffff !important;
-    border-color: var(--accent) !important;
-    box-shadow: 0 2px 8px rgba(0,122,255,0.28) !important;
+    background: rgba(0, 122, 255, 0.12) !important;
+    color: var(--accent) !important;
+    border-color: rgba(0, 122, 255, 0.40) !important;
+    box-shadow: none !important;
   }
 
   /* Channels */
@@ -29321,14 +29504,16 @@ ${seoHeadHtml}
   html[data-initial-channels-sub="storylines"] #channelsSubnavBar .subnav-pill[data-sub="storylines"],
   html[data-initial-channels-sub="quickadd"] #channelsSubnavBar .subnav-pill[data-sub="quickadd"],
   html[data-initial-channels-sub="import"] #channelsSubnavBar .subnav-pill[data-sub="import"] {
-    background: var(--accent) !important;
-    color: #ffffff !important;
-    border-color: var(--accent) !important;
-    box-shadow: 0 2px 8px rgba(0,122,255,0.28) !important;
+    background: rgba(0, 122, 255, 0.12) !important;
+    color: var(--accent) !important;
+    border-color: rgba(0, 122, 255, 0.40) !important;
+    box-shadow: none !important;
   }
 
   /* Settings */
   html[data-initial-settings-sub] #settingsSubAccount,
+  html[data-initial-settings-sub] #settingsSubDisplay,
+  html[data-initial-settings-sub] #settingsSubScrobble,
   html[data-initial-settings-sub] #settingsSubExternal,
   html[data-initial-settings-sub] #settingsSubBackup,
   html[data-initial-settings-sub] #settingsSubFeedback {
@@ -29336,6 +29521,12 @@ ${seoHeadHtml}
   }
   html[data-initial-settings-sub="account"] #settingsSubAccount,
   html[data-initial-settings-sub="keys"] #settingsSubAccount {
+    display: block !important;
+  }
+  html[data-initial-settings-sub="display"] #settingsSubDisplay {
+    display: block !important;
+  }
+  html[data-initial-settings-sub="scrobble"] #settingsSubScrobble {
     display: block !important;
   }
   html[data-initial-settings-sub="external"] #settingsSubExternal {
@@ -29358,16 +29549,21 @@ ${seoHeadHtml}
   }
   html[data-initial-settings-sub="account"] #settingsSubnavBar .subnav-pill[data-sub="account"],
   html[data-initial-settings-sub="keys"] #settingsSubnavBar .subnav-pill[data-sub="account"],
+  html[data-initial-settings-sub="display"] #settingsSubnavBar .subnav-pill[data-sub="display"],
+  html[data-initial-settings-sub="scrobble"] #settingsSubnavBar .subnav-pill[data-sub="scrobble"],
   html[data-initial-settings-sub="external"] #settingsSubnavBar .subnav-pill[data-sub="external"],
   html[data-initial-settings-sub="backup"] #settingsSubnavBar .subnav-pill[data-sub="backup"],
   html[data-initial-settings-sub="feedback"] #settingsSubnavBar .subnav-pill[data-sub="feedback"] {
-    background: var(--accent) !important;
-    color: #ffffff !important;
-    border-color: var(--accent) !important;
-    box-shadow: 0 2px 8px rgba(0,122,255,0.28) !important;
+    background: rgba(0, 122, 255, 0.12) !important;
+    color: var(--accent) !important;
+    border-color: rgba(0, 122, 255, 0.40) !important;
+    box-shadow: none !important;
   }
 
   /* Discover */
+  #discoverShelvesContainer {
+    display: none !important;
+  }
   html[data-initial-discover-sub="popular"] #discoverShelvesContainer,
   html[data-initial-discover-sub="popular"] #discoverListsFeedHeader,
   html[data-initial-discover-sub="popular"] #discoverListsFeed,
@@ -29411,10 +29607,10 @@ ${seoHeadHtml}
   html[data-initial-discover-sub="kids"] #discoverSubnavBar .subnav-pill[data-sub="kids"],
   html[data-initial-discover-sub="holidays"] #discoverSubnavBar .subnav-pill[data-sub="holidays"],
   html[data-initial-discover-sub="genres"] #discoverSubnavBar .subnav-pill[data-sub="genres"] {
-    background: var(--accent) !important;
-    color: #ffffff !important;
-    border-color: var(--accent) !important;
-    box-shadow: 0 2px 8px rgba(0,122,255,0.28) !important;
+    background: rgba(0, 122, 255, 0.12) !important;
+    color: var(--accent) !important;
+    border-color: rgba(0, 122, 255, 0.40) !important;
+    box-shadow: none !important;
   }
   /* Each direct child of .tab-panel (the subnav pill bar, each
      .lists-subpanel) is a grid item and inherits the same default
@@ -29435,6 +29631,87 @@ ${seoHeadHtml}
      page past the viewport width on mobile, same as the two subpanels
      above. */
   #itemDetailsBody { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
+
+  /* --- Item details: compact hero, metadata pills, genre chips, synopsis --- */
+  #content-item-details { position: relative; }
+  .item-back-btn {
+    position: absolute; top: 12px; left: 12px; z-index: 3;
+    padding: 6px 14px; min-height: unset;
+    font-size: 0.9rem; font-weight: 600; font-family: inherit;
+    color: #fff; background: rgba(0,0,0,0.45);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: var(--radius-pill);
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+    cursor: pointer; box-shadow: none;
+  }
+  .item-back-btn:hover { background: rgba(0,0,0,0.6); }
+  .item-back-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  .item-hero {
+    position: relative; overflow: hidden; width: 100%;
+    height: clamp(220px, 62vw, 360px);
+    border-radius: var(--radius) var(--radius) 0 0;
+    background: var(--panel-strong);
+  }
+  .item-hero-bg {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover; object-position: center 20%;
+  }
+  .item-hero-shade {
+    position: absolute; inset: 0;
+    background: linear-gradient(to bottom, transparent 35%, var(--bg) 100%);
+  }
+  .item-head {
+    display: flex; gap: 16px; align-items: flex-end;
+    margin-top: calc(-1 * clamp(80px, 22vw, 130px));
+    padding: 0 16px; position: relative; z-index: 1; min-width: 0;
+  }
+  .item-head-poster {
+    flex: 0 0 auto; width: clamp(88px, 24vw, 140px);
+    border-radius: var(--radius-sm); box-shadow: var(--shadow-md);
+    border: 2px solid var(--bg); display: block;
+  }
+  .item-head-main { flex: 1 1 0; min-width: 0; padding-bottom: 4px; }
+  .item-title {
+    margin: 0 0 10px; font-size: clamp(1.4rem, 5vw, 2.2rem);
+    font-family: serif; line-height: 1.15; overflow-wrap: anywhere;
+  }
+  .item-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .item-pill {
+    display: inline-flex; align-items: center; padding: 3px 10px;
+    font-size: 0.82rem; font-weight: 600; white-space: nowrap;
+    color: var(--text-2); background: var(--panel-strong);
+    border: 1px solid var(--border-strong); border-radius: var(--radius-pill);
+  }
+  .item-pill-sep { color: var(--muted); font-size: 0.8rem; }
+  .item-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  .item-actions .lc-btn {
+    flex: 1 1 160px; justify-content: center;
+    padding: 10px 16px; font-size: 0.95rem;
+  }
+  .item-genres { display: flex; flex-wrap: wrap; gap: 8px; }
+  .item-genre-chip {
+    padding: 5px 14px; min-height: unset; font-size: 0.85rem; font-weight: 600; font-family: inherit;
+    color: var(--text-2); background: var(--surface);
+    border: 1.5px solid var(--border-strong); border-radius: var(--radius-pill);
+    cursor: pointer; transition: background 0.12s, color 0.12s, border-color 0.12s;
+  }
+  .item-genre-chip:hover { color: var(--accent); border-color: var(--accent); }
+  .item-genre-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .item-synopsis {
+    margin: 0; font-size: 1.05rem; line-height: 1.6; color: var(--text);
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3;
+    line-clamp: 3; overflow: hidden;
+  }
+  .item-synopsis.is-expanded { display: block; -webkit-line-clamp: unset; line-clamp: unset; overflow: visible; }
+  .item-synopsis-toggle {
+    margin-top: 6px; padding: 0; min-height: unset; background: none; border: 0;
+    color: var(--accent); font-size: 0.95rem; font-weight: 600;
+    font-family: inherit; cursor: pointer;
+  }
+  .item-synopsis-toggle:hover { text-decoration: underline; }
+  .item-synopsis-toggle[hidden] { display: none; }
+  .item-synopsis-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   /* --- Bottom Nav (Mobile Only - Persistent Glassmorphism) ---------------- */
   .bottom-nav { display: none; }
@@ -29469,9 +29746,10 @@ ${seoHeadHtml}
       gap: 3px;
       padding: 4px 1px;
       min-height: 62px;
-      background: none;
-      border: none;
-      border-radius: 0;
+      background: transparent !important;
+      border: none !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
       color: var(--muted);
       font-size: 0.78rem;
       font-weight: 600;
@@ -29538,36 +29816,129 @@ ${seoHeadHtml}
   .subnav-pill {
     flex: none;
     flex-shrink: 0;
-    padding: 7px 16px;
+    padding: 5px 14px;
+    min-height: 31px;
     border-radius: var(--radius-pill);
-    border: 1.5px solid var(--border-strong);
-    background: var(--surface);
-    color: var(--text-2);
-    font-size: 0.86rem;
+    border: 1.5px solid var(--color-border-strong);
+    background: var(--color-bg-surface);
+    color: var(--color-text-secondary);
+    font-size: 0.82rem;
     font-weight: 600;
     cursor: pointer;
     white-space: nowrap;
-    min-height: unset;
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    transition: background 0.12s, color 0.12s, border-color 0.12s, box-shadow 0.12s;
-    box-shadow: var(--shadow-sm);
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    box-shadow: none;
     font-family: inherit;
   }
   .subnav-pill.active {
-    background: var(--accent);
-    color: #ffffff;
-    border-color: var(--accent);
-    box-shadow: 0 2px 8px rgba(0,122,255,0.28);
+    background: rgba(0, 122, 255, 0.12);
+    color: var(--accent);
+    border-color: rgba(0, 122, 255, 0.40);
+    box-shadow: none;
+    font-weight: 700;
+  }
+  :root.dark-theme .subnav-pill.active {
+    background: rgba(10, 132, 255, 0.22);
+    color: var(--accent);
+    border-color: rgba(10, 132, 255, 0.50);
   }
   .subnav-pill:hover:not(.active) {
-    border-color: var(--accent);
+    border-color: rgba(0, 122, 255, 0.40);
     color: var(--accent);
   }
   .subnav-pill .check-icon {
     font-weight: 800;
-    font-size: 0.85rem;
+    font-size: 0.82rem;
+    color: var(--accent);
+  }
+
+  /* --- Search Tab Toolbar & Filter Selects ------------------------------- */
+  .search-filters-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .search-filter-select {
+    flex: none;
+    width: auto;
+    min-width: 105px;
+    font-size: 0.82rem;
+    padding: 5px 24px 5px 10px;
+    background: var(--surface);
+    color: var(--text);
+    border: 1.5px solid var(--border-strong);
+    border-radius: var(--radius-pill);
+    min-height: 31px;
+    height: 31px;
+    cursor: pointer;
+    box-shadow: none;
+  }
+  .search-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+  }
+  .search-input-box {
+    position: relative;
+    width: 100%;
+    flex: 1;
+    display: flex;
+    align-items: center;
+  }
+  .search-input-box input {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .search-input-icon {
+    position: absolute;
+    left: 14px;
+    color: var(--muted);
+    pointer-events: none;
+    z-index: 2;
+  }
+  .search-clear-btn {
+    display: none;
+    position: absolute;
+    right: 12px;
+    width: 22px;
+    height: 22px;
+    min-height: 22px !important;
+    max-height: 22px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    border-radius: 50% !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--muted);
+    opacity: 0.55;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 2;
+    transition: opacity 0.15s ease, color 0.15s ease, transform 0.12s ease;
+  }
+  .search-clear-btn:hover {
+    opacity: 1;
+    color: var(--text);
+    background: transparent !important;
+    border: none !important;
+    transform: scale(1.12);
+  }
+  .search-clear-btn:active {
+    transform: scale(0.92);
+    opacity: 0.75;
+  }
+  .search-clear-btn:focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
   }
 
   /* --- Streaming Providers Chips Bar (Discover Tab) ----------------------- */
@@ -29646,16 +30017,19 @@ ${seoHeadHtml}
     flex-direction: column;
     justify-content: space-between;
     gap: 10px;
-    transition: transform 0.12s, box-shadow 0.12s;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
   }
   .discover-chart-card:hover {
     box-shadow: var(--shadow);
-    transform: translateY(-1px);
+    border-color: var(--border-strong);
+    transform: translateY(-2px);
   }
   .discover-chart-header {
     display: flex;
-    align-items: center;
-    gap: 10px;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 38px;
   }
   .discover-chart-info {
     flex: 1;
@@ -29663,17 +30037,15 @@ ${seoHeadHtml}
   }
   .discover-chart-title {
     font-weight: 700;
-    font-size: 0.92rem;
+    font-size: 0.90rem;
     color: var(--text);
-    white-space: nowrap;
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .discover-chart-sub {
-    font-size: 0.74rem;
-    color: var(--muted);
-    font-weight: 500;
-    margin-top: 1px;
+    white-space: normal;
+    word-break: break-word;
   }
   .discover-chart-seeall {
     flex-shrink: 0;
@@ -29682,7 +30054,9 @@ ${seoHeadHtml}
     color: var(--accent);
     text-decoration: none;
     white-space: nowrap;
-    padding: 4px 2px;
+    padding: 2px 0;
+    margin-top: 1px;
+    align-self: flex-start;
   }
   .discover-chart-seeall:hover {
     text-decoration: underline;
@@ -29696,7 +30070,15 @@ ${seoHeadHtml}
     flex: 1;
     justify-content: center;
     font-size: 0.78rem;
+    font-weight: 600;
     padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    transition: all 0.15s ease;
+  }
+  .discover-chart-btns .lc-btn:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--panel-strong);
   }
 
   /* --- Shelves & Horizontal Poster Strips (Discover Tab) ------------------- */
@@ -29706,6 +30088,7 @@ ${seoHeadHtml}
     gap: 8px;
     margin-bottom: 8px;
   }
+
   /* Catalogs -> Quick Add sits each section in its own card, the way
      Channels -> Quick Add already did. Composed onto .panel rather than
      restating the surface/border/radius/shadow, so the two cannot drift:
@@ -29717,6 +30100,25 @@ ${seoHeadHtml}
     margin-bottom: 16px;
     gap: 0;
   }
+  .qa-shelf-card .shelf-header {
+    align-items: center;
+  }
+  .qa-add-all-btn {
+    font-size: 0.80rem !important;
+    font-weight: 600 !important;
+    padding: 4px 12px !important;
+    border-radius: var(--radius-pill) !important;
+    color: var(--accent) !important;
+    border: 1.5px solid var(--border-strong) !important;
+    background: var(--surface) !important;
+    box-shadow: var(--shadow-sm) !important;
+    transition: all 0.15s ease;
+  }
+  .qa-add-all-btn:hover:not(:disabled) {
+    background: var(--color-brand-subtle) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent-hover) !important;
+  }
   /* The line under a Quick Add card's title. Shared with Channels -> Quick
      Add, which is where the pattern comes from -- one class so a change to
      one is a change to both. */
@@ -29726,6 +30128,53 @@ ${seoHeadHtml}
     color: var(--muted);
     font-size: 0.85rem;
     line-height: 1.45;
+  }
+  /* Catalogs -> Bulk Import Subpanel */
+  #catalogsSubBulk .bulk-panel {
+    max-width: 860px;
+    margin-top: 0;
+  }
+  .bulk-provider-badges {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin: 0 0 14px;
+    padding: 0 2px;
+  }
+  .bulk-provider-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    margin-right: 2px;
+  }
+  #bulkPasteBox {
+    min-height: 140px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.88rem;
+    line-height: 1.6;
+    resize: vertical;
+    box-sizing: border-box;
+  }
+  .bulk-actions-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 14px;
+  }
+  .bulk-actions-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #bulkDetectedCount {
+    font-size: 0.82rem;
+    color: var(--muted);
+    font-weight: 500;
   }
   .shelf-header {
     display: flex;
@@ -29746,6 +30195,50 @@ ${seoHeadHtml}
     color: var(--text);
     margin: 0;
     letter-spacing: -0.015em;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+  #discoverListsFeedHeader,
+  #discoverSubPopular .shelf-header,
+  #discoverSubCurated .shelf-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding: 0 2px;
+    min-height: 32px;
+  }
+  #discoverListsFeedDesc,
+  #discoverSubPopular .shelf-header p,
+  #discoverSubCurated .shelf-header p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.84rem;
+    line-height: 1.4;
+    flex: 1;
+    min-width: 0;
+  }
+  .refresh-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 11px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    min-height: 28px;
+    border-radius: var(--radius-pill);
+    flex-shrink: 0;
+    cursor: pointer;
   }
   .see-all-link {
     font-size: 0.82rem;
@@ -30087,44 +30580,178 @@ ${seoHeadHtml}
   .list-source-badge.badge-simkl { background: rgba(0,122,255,0.12); color: #007aff; border-color: rgba(0,122,255,0.3); }
   .list-source-badge.badge-mylists, .list-source-badge.badge-profile { background: rgba(175,82,222,0.12); color: #af52de; border-color: rgba(175,82,222,0.3); }
   .list-source-badge.badge-streaming { background: rgba(255,149,0,0.12); color: #ff9500; border-color: rgba(255,149,0,0.3); }
+  .list-source-badge.badge-imdb { background: rgba(245,197,24,0.12); color: #b8860b; border-color: rgba(245,197,24,0.3); }
+  :root.dark-theme .list-source-badge.badge-imdb { color: #f5c518; }
+  .list-source-badge.badge-autotrack {
+    background: var(--surface-2, rgba(255,255,255,0.06));
+    color: var(--muted);
+    border-color: var(--border);
+  }
   .list-card-actions {
     display: flex; gap: 5px; align-items: center; flex-shrink: 0; flex-wrap: wrap;
   }
-  .lc-btn {
-    padding: 6px 12px; min-height: unset;
-    font-size: 0.8rem; font-weight: 600;
+  .list-card-actions :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .channelAddBtn, .curatedAddBtn, .searchAddBtn, .list-search-add-btn, .myListAddBtn):not(:first-child) {
+    margin-left: 6px;
+  }
+  .lc-btn,
+  button.lc-btn,
+  .actions button.lc-btn {
+    padding: 6px 12px !important;
+    min-height: unset !important;
+    height: auto !important;
+    font-size: var(--font-size-xs, 0.8rem) !important;
+    font-weight: 600;
     border-radius: var(--radius-pill);
-    border: 1.5px solid var(--border-strong);
-    background: var(--bg); color: var(--text-2);
-    cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
-    font-family: inherit; white-space: nowrap;
-    transition: background 0.12s, color 0.12s, border-color 0.12s;
+    border: 1.5px solid var(--color-border-strong);
+    background: var(--color-bg-surface);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: inherit;
+    white-space: nowrap;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
   }
-  .lc-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
-  .lc-btn.primary:hover:not(:disabled) { opacity: 0.85; }
-  /* Disabled meant "ignores clicks" and looked identical to a working
-     button, which is how a season that has not aired yet -- whose button
-     now says when it does -- would otherwise read as one that is simply
-     broken. Covers every disabled .lc-btn, including the ones already
-     disabled mid-fetch. */
-  .lc-btn:disabled { opacity: 0.55; cursor: default; }
-  /* The same surface 'button.secondary' gives every Connect / Disconnect /
-     Copy button, spelled with two classes so it also reaches the <a>s that
-     are styled as buttons. Those needed it: 'button, .actions a' (further
-     down this stylesheet) is more specific than a bare '.lc-btn', so an
-     <a class="lc-btn secondary"> inside .actions -- the Buy me a coffee and
-     TorBox referral links in Settings -- came out accent blue with white
-     text no matter which modifier class it carried. */
+  .lc-btn:active:not(:disabled) { transform: scale(0.98); }
+  .lc-btn.primary,
+  button.lc-btn.primary,
+  .actions button.lc-btn.primary {
+    background: var(--color-brand);
+    color: var(--color-text-inverse, #fff);
+    border-color: var(--color-brand);
+    box-shadow: 0 2px 6px var(--color-brand-subtle);
+    padding: 6px 12px !important;
+    min-height: unset !important;
+    height: auto !important;
+  }
+  .lc-btn.primary:hover:not(:disabled) {
+    background: var(--color-brand-hover);
+    border-color: var(--color-brand-hover);
+  }
+  .lc-btn:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
   .lc-btn.secondary {
-    background: var(--surface);
-    color: var(--text-2);
-    border: 1.5px solid var(--border-strong);
+    background: var(--color-bg-surface);
+    color: var(--color-text-secondary);
+    border: 1.5px solid var(--color-border-strong);
     box-shadow: var(--shadow-sm);
+    padding: 6px 12px;
+    min-height: unset;
   }
-  .lc-btn.liked { color: var(--danger); border-color: rgba(255,59,48,0.4); }
-  .lc-btn.view-btn { color: var(--accent); border-color: transparent; background: transparent; padding: 0; font-size: 0.82rem; }
+  .lc-btn.secondary:hover:not(:disabled) {
+    background: var(--color-bg-sunken);
+    color: var(--color-text-primary);
+  }
+  .lc-btn.liked {
+    color: var(--color-danger);
+    border-color: rgba(255,59,48,0.4);
+    background: var(--color-danger-subtle);
+  }
+  /* --- Soft Brand-Tinted Add/Remove Action Buttons (one shared selector list) --- */
+  :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, .customListAddBtn, #detailAddBtn):not(.is-added):not(:disabled) {
+    background: rgba(0, 122, 255, 0.08) !important;
+    border-color: rgba(0, 122, 255, 0.35) !important;
+    color: var(--accent) !important;
+    box-shadow: 0 1px 3px rgba(0, 122, 255, 0.08);
+  }
+  :root.dark-theme :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, .customListAddBtn, #detailAddBtn):not(.is-added):not(:disabled) {
+    background: rgba(10, 132, 255, 0.14) !important;
+    border-color: rgba(10, 132, 255, 0.4) !important;
+    color: var(--accent) !important;
+  }
+  :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, .customListAddBtn, #detailAddBtn):not(.is-added):hover:not(:disabled) {
+    background: rgba(0, 122, 255, 0.16) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+  }
+  :root.dark-theme :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, .customListAddBtn, #detailAddBtn):not(.is-added):hover:not(:disabled) {
+    background: rgba(10, 132, 255, 0.24) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+  }
+  :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, .customListAddBtn, #detailAddBtn):not(.is-added):active:not(:disabled) {
+    transform: scale(0.97);
+    background: rgba(0, 122, 255, 0.22) !important;
+  }
+  :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, #detailAddBtn).is-added {
+    color: var(--color-danger, #d70015) !important;
+    background: rgba(255, 59, 48, 0.08) !important;
+    border-color: rgba(255, 59, 48, 0.35) !important;
+    box-shadow: 0 1px 3px rgba(255, 59, 48, 0.08);
+  }
+  :root.dark-theme :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, #detailAddBtn).is-added {
+    color: var(--color-danger, #ff453a) !important;
+    background: rgba(255, 69, 58, 0.15) !important;
+    border-color: rgba(255, 69, 58, 0.4) !important;
+  }
+  :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, #detailAddBtn).is-added:hover:not(:disabled) {
+    background: rgba(255, 59, 48, 0.16) !important;
+    border-color: var(--danger) !important;
+    color: var(--danger) !important;
+  }
+  :root.dark-theme :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, #detailAddBtn).is-added:hover:not(:disabled) {
+    background: rgba(255, 69, 58, 0.24) !important;
+    border-color: var(--danger) !important;
+    color: var(--danger) !important;
+  }
+  :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, #detailAddBtn).is-added:active:not(:disabled) {
+    transform: scale(0.97);
+    background: rgba(255, 59, 48, 0.22) !important;
+  }
+  .channelQuickAddBtn.is-added {
+    border-color: var(--color-brand) !important;
+    color: var(--color-brand) !important;
+    background: var(--brand-glow, rgba(0, 113, 227, 0.08)) !important;
+    font-weight: 600;
+  }
+  :root.dark-theme .channelQuickAddBtn.is-added {
+    border-color: var(--color-brand) !important;
+    color: var(--color-brand) !important;
+    background: rgba(41, 151, 255, 0.15) !important;
+  }
+  .channelQuickAddBtn.is-added:hover:not(:disabled) {
+    background: rgba(0, 113, 227, 0.16) !important;
+  }
+  :root.dark-theme .channelQuickAddBtn.is-added:hover:not(:disabled) {
+    background: rgba(41, 151, 255, 0.24) !important;
+  }
+  .lc-btn.view-btn {
+    color: var(--color-brand);
+    border-color: transparent;
+    background: transparent;
+    padding: 0;
+    font-size: 0.82rem;
+    min-height: unset;
+  }
+  .lc-btn.searchLikeExternalBtn,
+  .lc-btn.searchLikeBtn,
+  #detailLikeBtn {
+    padding: 6px 10px;
+    min-width: 32px;
+    min-height: unset;
+    justify-content: center;
+    background: var(--color-bg-surface);
+    color: var(--color-text-secondary);
+    border: 1.5px solid var(--color-border-strong);
+    box-shadow: none;
+    font-size: 0.95rem;
+    line-height: 1;
+  }
+  .lc-btn.searchLikeExternalBtn:hover:not(:disabled),
+  .lc-btn.searchLikeBtn:hover:not(:disabled),
+  #detailLikeBtn:hover:not(:disabled) {
+    background: var(--color-bg-sunken);
+    color: var(--color-text-primary);
+  }
+  .lc-btn.searchLikeExternalBtn.liked,
+  .lc-btn.searchLikeBtn.liked,
+  #detailLikeBtn.liked {
+    color: var(--color-danger);
+    border-color: rgba(255,59,48,0.4);
+    background: var(--color-danger-subtle);
+  }
 
-  /* --- Presets & Backup 2x2 Mobile Layout & Unified Sizing ---------------- */
+  /* --- Presets & Backup Layout & Unified Sizing ---------------- */
   .preset-card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -30132,20 +30759,110 @@ ${seoHeadHtml}
     padding: 12px 14px;
     margin-bottom: 8px;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
     gap: 10px;
     box-shadow: var(--shadow-sm);
+    position: relative;
+  }
+  .preset-card:has(.preset-overflow-menu[open]) {
+    z-index: 50;
   }
   .preset-card-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 8px;
+    min-width: 0;
+    flex: 1 1 auto;
   }
   .preset-card-title {
     font-weight: 700;
     font-size: 0.92rem;
     color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .preset-actions-cluster {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    position: relative;
+  }
+  .preset-overflow-menu {
+    position: relative;
+    display: inline-block;
+  }
+  .preset-overflow-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    font-size: 1.15rem;
+    line-height: 1;
+    transition: background-color 0.12s ease, border-color 0.12s ease;
+  }
+  .preset-overflow-btn::-webkit-details-marker {
+    display: none;
+  }
+  .preset-overflow-btn:hover {
+    background: var(--color-bg-sunken, rgba(255, 255, 255, 0.06));
+    border-color: var(--color-border-strong, var(--border));
+  }
+  .preset-overflow-menu[open] .preset-overflow-btn {
+    background: var(--color-bg-sunken, rgba(255, 255, 255, 0.08));
+    border-color: var(--color-brand, var(--accent));
+  }
+  .preset-overflow-dropdown {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 4px);
+    z-index: 100;
+    min-width: 175px;
+    background: var(--color-bg-elevated, var(--surface-1, #1e1e24));
+    border: 1px solid var(--color-border-strong, var(--border));
+    border-radius: var(--radius-sm, 8px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .preset-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text);
+    background: none;
+    border: none;
+    border-radius: var(--radius-xs, 4px);
+    text-align: left;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: background-color 0.12s ease;
+    white-space: nowrap;
+  }
+  .preset-menu-item:hover {
+    background: var(--color-bg-sunken, rgba(255, 255, 255, 0.06));
+  }
+  .preset-menu-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 3px 0;
   }
   .preset-actions-grid, .backup-actions-grid, .export-actions-grid {
     display: grid;
@@ -30153,12 +30870,50 @@ ${seoHeadHtml}
     gap: 6px;
     width: 100%;
   }
+  .backup-quick-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .backup-advanced-disclosure {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md, 10px);
+    background: var(--surface-1, rgba(255, 255, 255, 0.02));
+    overflow: hidden;
+    transition: border-color 0.15s ease;
+  }
+  .backup-advanced-disclosure[open] {
+    border-color: var(--color-border-strong, var(--border));
+  }
+  .backup-advanced-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--muted);
+    list-style: none;
+  }
+  .backup-advanced-summary::-webkit-details-marker {
+    display: none;
+  }
+  .backup-advanced-summary:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.03);
+  }
+  .backup-advanced-disclosure[open] .backup-advanced-arrow {
+    transform: rotate(180deg);
+  }
+  .backup-advanced-arrow {
+    transition: transform 0.15s ease;
+    font-size: 0.8rem;
+    display: inline-block;
+  }
   @media (min-width: 641px) {
-    .preset-card {
-      flex-direction: row;
-      align-items: center;
-      justify-content: space-between;
-    }
     .preset-actions-grid {
       display: flex;
       gap: 6px;
@@ -30171,13 +30926,23 @@ ${seoHeadHtml}
       width: auto;
     }
   }
+  @media (max-width: 480px) {
+    .preset-card {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+    }
+    .preset-actions-cluster {
+      justify-content: flex-end;
+    }
+  }
   #settingsSubBackup .lc-btn,
   #settingsSubBackup .preset-actions-grid button,
   #settingsSubBackup .backup-actions-grid button,
   #settingsSubBackup .export-actions-grid button,
   #settingsSubBackup .row button {
-    padding: 6px 12px;
-    font-size: 0.8rem;
+    padding: 6px 14px;
+    font-size: 0.82rem;
     font-weight: 600;
     min-height: 34px;
     border-radius: var(--radius-pill);
@@ -30215,6 +30980,95 @@ ${seoHeadHtml}
     box-sizing: border-box;
     letter-spacing: 0.5px;
     margin: 4px 0 10px;
+  }
+  .account-key-group {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    margin: 4px 0 6px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .account-key-group .creator-key-display {
+    flex: 1 1 auto;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 8px 12px;
+  }
+  .account-key-actions {
+    display: flex;
+    gap: 6px;
+    align-items: stretch;
+    flex-shrink: 0;
+  }
+  .account-key-actions .lc-btn {
+    padding: 0 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.84rem;
+    font-weight: 600;
+    white-space: nowrap;
+    min-height: 40px;
+  }
+  @media (max-width: 520px) {
+    .account-key-group {
+      flex-direction: column;
+    }
+    .account-key-actions {
+      width: 100%;
+    }
+    .account-key-actions .lc-btn {
+      flex: 1;
+    }
+  }
+
+  .danger-zone-disclosure {
+    margin-top: 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md, 10px);
+    background: var(--surface-1, rgba(255, 255, 255, 0.02));
+    overflow: hidden;
+    transition: border-color 0.15s ease;
+  }
+  .danger-zone-disclosure[open] {
+    border-color: rgba(255, 59, 48, 0.3);
+  }
+  .danger-zone-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--muted);
+    list-style: none;
+  }
+  .danger-zone-summary::-webkit-details-marker {
+    display: none;
+  }
+  .danger-zone-summary:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.03);
+  }
+  .danger-zone-disclosure[open] .danger-zone-arrow {
+    transform: rotate(180deg);
+  }
+  .danger-zone-arrow {
+    transition: transform 0.15s ease;
+    font-size: 0.8rem;
+    display: inline-block;
+  }
+  .danger-zone-content {
+    padding: 0 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
   }
   .webhook-input-group {
     display: flex;
@@ -30264,15 +31118,62 @@ ${seoHeadHtml}
     .list-card-5posters .list-card-mini-poster-tile:nth-child(n+4) {
       display: none;
     }
+    .shelf-header {
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 8px !important;
+    }
+    .shelf-header > div {
+      width: 100%;
+      min-width: 0;
+    }
     .list-card-header {
-      flex-wrap: wrap;
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 8px !important;
     }
     .list-card-body {
-      flex-basis: calc(100% - 54px);
+      width: 100%;
+      min-width: 0;
     }
     .list-card-actions {
       width: 100%;
-      margin-top: 4px;
+      margin-top: 0;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .list-card-actions .lc-btn {
+      padding: 5px 9px !important;
+      font-size: 0.78rem !important;
+      line-height: 1.2;
+      min-height: 28px !important;
+      box-sizing: border-box;
+      white-space: nowrap;
+    }
+    .list-card-title {
+      white-space: normal;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      word-break: break-word;
+      line-height: 1.25;
+    }
+    .customizeListBtn {
+      padding: 5px 8px !important;
+      min-width: 28px !important;
+      justify-content: center;
+    }
+    .customizeListBtn .customize-btn-text {
+      display: none !important;
+    }
+    .drag-handle-list {
+      margin-right: 8px;
+      padding: 2px 4px;
     }
   }
   @media (min-width: 641px) {
@@ -30549,17 +31450,16 @@ ${seoHeadHtml}
     min-height: 24px;
     box-sizing: border-box;
     border-radius: 50%;
-    /* Solid theme color rather than a translucent black overlay -- the
-       translucent version blended with whatever poster sat underneath it
-       (often reading as a muddy brown against warm-toned posters). */
-    background: var(--danger);
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.22);
     color: #fff;
-    border: none;
     outline: none;
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
-    font-size: 16px;
+    font-size: 14px;
     font-weight: bold;
     box-shadow: 0 2px 4px rgba(0,0,0,0.35);
     line-height: 1;
@@ -30569,10 +31469,41 @@ ${seoHeadHtml}
     padding: 0;
     cursor: pointer;
     z-index: 10;
-    transition: filter 0.2s;
+    transition: opacity 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
   }
-  .cw-remove-btn:hover {
-    filter: brightness(0.88);
+  .cw-remove-btn:hover,
+  .cw-remove-btn:active {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #fff;
+  }
+  .cw-remove-btn::after {
+    content: '';
+    position: absolute;
+    top: -10px;
+    bottom: -10px;
+    left: -10px;
+    right: -10px;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .list-card-mini-poster-tile .cw-remove-btn,
+    .channel-pick-item .cw-remove-btn,
+    .custom-list-pick-item .cw-remove-btn,
+    .item-card .cw-remove-btn {
+      opacity: 0;
+      transform: scale(0.88);
+    }
+    .list-card-mini-poster-tile:hover .cw-remove-btn,
+    .list-card-mini-poster-tile:focus-within .cw-remove-btn,
+    .channel-pick-item:hover .cw-remove-btn,
+    .channel-pick-item:focus-within .cw-remove-btn,
+    .custom-list-pick-item:hover .cw-remove-btn,
+    .custom-list-pick-item:focus-within .cw-remove-btn,
+    .item-card:hover .cw-remove-btn,
+    .item-card:focus-within .cw-remove-btn {
+      opacity: 1;
+      transform: scale(1);
+    }
   }
   #lists .cw-remove-btn,
   .live-preview-shelf-row .cw-remove-btn,
@@ -30736,10 +31667,13 @@ ${seoHeadHtml}
     font-size: 0.68rem;
     color: var(--text);
     font-weight: 600;
-    line-height: 1.2;
-    white-space: nowrap;
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
+    word-break: break-word;
+    min-height: 2.5em;
   }
   .list-card-mini-poster-subtitle {
     font-size: 0.64rem;
@@ -30809,6 +31743,13 @@ ${seoHeadHtml}
     border-radius: var(--radius-sm);
     transition: color 0.15s, background-color 0.15s;
     vertical-align: middle;
+  }
+  .drag-handle-list svg,
+  .shelf-drag-handle svg,
+  .drag-handle svg {
+    display: block;
+    pointer-events: none;
+    flex-shrink: 0;
   }
   .drag-handle-list:hover {
     color: var(--text);
@@ -30926,7 +31867,7 @@ ${seoHeadHtml}
     padding: 16px;
     width: 100%;
     max-width: 100%;
-    overflow: hidden;
+    overflow: visible;
   }
   .panel-title {
     font-size: 1.1rem;
@@ -30969,13 +31910,30 @@ ${seoHeadHtml}
     padding: 11px 14px;
     border-radius: var(--radius-sm);
     border: 1.5px solid var(--border-strong);
-    background: var(--surface-2);
+    background: var(--surface);
     color: var(--text);
     outline: none;
     font-size: 16px;
     font-family: inherit;
     min-height: 44px;
-    transition: border-color 0.15s, box-shadow 0.15s;
+    box-shadow: var(--shadow-sm);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  }
+  input:disabled, select:disabled, textarea:disabled,
+  input[readonly], textarea[readonly] {
+    background: var(--surface-2);
+    border-color: var(--border);
+    color: var(--muted);
+    box-shadow: none;
+    cursor: default;
+  }
+  input:disabled, select:disabled, textarea:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+  input::placeholder, textarea::placeholder {
+    color: var(--muted);
+    opacity: 0.65;
   }
   input[type="file"] {
     padding: 0;
@@ -31006,22 +31964,77 @@ ${seoHeadHtml}
   
   /* Toggle Switch */
   .ui-toggle {
-    position: relative; display: inline-block; width: 44px; height: 24px;
+    position: relative; display: inline-block; width: 44px; height: 24px; flex: none; vertical-align: middle;
   }
-  .ui-toggle input { opacity: 0; width: 0; height: 0; }
+  .ui-toggle input { opacity: 0; width: 0; height: 0; position: absolute; pointer-events: none; }
   .ui-toggle-slider {
     position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
-    background-color: var(--border); transition: .3s; border-radius: 24px;
+    background-color: var(--color-border-strong, var(--border)); transition: background-color .25s ease; border-radius: 24px;
   }
   .ui-toggle-slider:before {
     position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px;
-    background-color: white; transition: .3s; border-radius: 50%; box-shadow: var(--shadow-sm);
+    background-color: white; transition: transform .25s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 50%; box-shadow: var(--shadow-sm);
   }
-  .ui-toggle input:checked + .ui-toggle-slider { background-color: var(--accent); }
+  .ui-toggle input:checked + .ui-toggle-slider { background-color: var(--color-brand, var(--accent)); }
   .ui-toggle input:checked + .ui-toggle-slider:before { transform: translateX(20px); }
+  .ui-toggle input:focus-visible + .ui-toggle-slider { outline: 2px solid var(--color-brand, var(--accent)); outline-offset: 2px; }
+
+  /* Settings Components: Toggles & Checklists */
+  .settings-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--color-border-subtle, rgba(255,255,255,0.06));
+  }
+  .settings-toggle-row:last-child {
+    border-bottom: none;
+  }
+  .settings-check-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .settings-check-group.two-col-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 16px;
+  }
+  @media (max-width: 720px) {
+    .settings-check-group.two-col-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  .settings-check-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm, 8px);
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.12s ease;
+    margin: 0;
+  }
+  .settings-check-item:hover {
+    background: var(--color-bg-sunken, rgba(255,255,255,0.03));
+  }
+  .settings-check-item input[type="checkbox"] {
+    width: 17px;
+    height: 17px;
+    margin-top: 2px;
+    cursor: pointer;
+    flex: none;
+    accent-color: var(--color-brand, var(--accent));
+  }
   input:focus, select:focus, textarea:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(0,122,255,0.15);
+    border-color: var(--color-brand, var(--accent));
+    box-shadow: 0 0 0 3px var(--color-brand-subtle, rgba(0, 122, 255, 0.18));
+  }
+  input[readonly]:focus, textarea[readonly]:focus {
+    border-color: var(--border-strong);
+    box-shadow: none;
   }
   .custom-list-pick-poster {
     width: 36px; height: 54px; object-fit: cover; border-radius: 4px; flex: none; cursor: pointer;
@@ -31287,42 +32300,253 @@ ${seoHeadHtml}
   }
   .row { display: flex; flex-direction: column; align-items: stretch; gap: 10px; margin-bottom: 10px; width: 100%; }
   .field-row { display: grid; grid-template-columns: 1fr; gap: 10px; width: 100%; }
-  button, .actions a {
-    padding: 11px 18px;
-    min-height: 44px;
-    border-radius: var(--radius-pill);
-    border: none;
-    background: var(--accent);
-    color: #fff;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 0.925rem;
-    text-decoration: none;
+  /* ==========================================================================
+     Design System: Standard Button Architecture (Phase 2)
+     ========================================================================== */
+
+  /* Base button reset & common layout */
+  .btn,
+  button,
+  .actions a {
+    box-sizing: border-box;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: opacity 0.12s, transform 0.12s;
+    gap: var(--space-1-5, 6px);
     font-family: inherit;
+    font-size: var(--font-size-base, 0.925rem);
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+    text-decoration: none;
+    white-space: nowrap;
+    border-radius: var(--radius-pill);
+    border: 1.5px solid transparent;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    vertical-align: middle;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease,
+                box-shadow 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
   }
-  button.secondary, .btn-copy, .btn-watchlist, .btn-test {
-    background: var(--surface);
-    color: var(--text-2);
-    border: 1.5px solid var(--border-strong);
+
+  /* Default button behavior (Primary brand style) */
+  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn, .text-action-btn, .search-clear-btn)),
+  .btn-primary,
+  .primary:not(.lc-btn) {
+    background: var(--color-brand);
+    color: var(--color-text-inverse, #fff);
+    border-color: var(--color-brand);
+    box-shadow: 0 2px 8px var(--color-brand-subtle);
+    min-height: var(--control-height-md, 40px);
+    padding: 10px 18px;
+  }
+
+  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn, .text-action-btn, .search-clear-btn)):hover:not(:disabled),
+  .btn-primary:hover:not(:disabled),
+  .primary:not(.lc-btn):hover:not(:disabled) {
+    background: var(--color-brand-hover);
+    border-color: var(--color-brand-hover);
+    color: var(--color-text-inverse, #fff);
+  }
+
+  :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn, .text-action-btn, .search-clear-btn)):active:not(:disabled),
+  .btn-primary:active:not(:disabled),
+  .primary:not(.lc-btn):active:not(:disabled) {
+    background: var(--color-brand-active);
+    border-color: var(--color-brand-active);
+    transform: scale(0.98);
+  }
+
+  /* Search Button (matches size and styling of subnav-pills: Movies, Shows, Lists) */
+  #catalogSearchBtn,
+  button[data-act="runCatalogSearch"] {
+    flex: none;
+    flex-shrink: 0;
+    padding: 7px 16px !important;
+    min-height: 36px !important;
+    height: 36px !important;
+    box-sizing: border-box !important;
+    border-radius: var(--radius-pill) !important;
+    font-size: 0.86rem !important;
+    font-weight: 600 !important;
+    align-self: center;
+  }
+
+  /* Secondary button style */
+  .btn-secondary,
+  button.secondary:not(.lc-btn, .ec-btn),
+  .secondary:not(.lc-btn, .ec-btn),
+  .btn-copy,
+  .btn-watchlist,
+  .btn-test {
+    background: var(--color-bg-surface);
+    color: var(--color-text-secondary);
+    border: 1.5px solid var(--color-border-strong);
     box-shadow: var(--shadow-sm);
+    min-height: var(--control-height-md, 40px);
+    padding: 9px 16px;
   }
+
+  .btn-secondary:hover:not(:disabled),
+  button.secondary:not(.lc-btn):hover:not(:disabled),
+  .secondary:not(.lc-btn):hover:not(:disabled),
+  .btn-copy:hover:not(:disabled),
+  .btn-watchlist:hover:not(:disabled),
+  .btn-test:hover:not(:disabled) {
+    background: var(--color-bg-sunken);
+    color: var(--color-text-primary);
+    border-color: var(--color-border-strong);
+  }
+
+  .btn-secondary:active:not(:disabled),
+  button.secondary:not(.lc-btn):active:not(:disabled),
+  .secondary:not(.lc-btn):active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  /* Ghost / Tertiary button style */
+  .btn-ghost,
+  .btn-tertiary {
+    background: transparent;
+    color: var(--color-text-secondary);
+    border: 1.5px solid transparent;
+    box-shadow: none;
+    min-height: var(--control-height-md, 40px);
+    padding: 8px 14px;
+  }
+
+  .btn-ghost:hover:not(:disabled),
+  .btn-tertiary:hover:not(:disabled) {
+    background: var(--color-brand-subtle);
+    color: var(--color-brand);
+  }
+
+  .btn-ghost:active:not(:disabled),
+  .btn-tertiary:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  /* Destructive / Danger button style */
+  .btn-danger,
+  .btn-destructive,
+  button.danger:not(.ec-btn),
+  .actions button[data-act="removeAllLists"],
+  .catalog-actions-bar button[data-act="removeAllLists"] {
+    background: var(--color-danger-subtle);
+    color: var(--color-danger);
+    border: 1.5px solid rgba(255, 59, 48, 0.3);
+    box-shadow: var(--shadow-sm);
+    min-height: var(--control-height-md, 40px);
+    padding: 9px 16px;
+  }
+
+  .btn-danger:hover:not(:disabled),
+  .btn-destructive:hover:not(:disabled),
+  button.danger:not(.ec-btn):hover:not(:disabled),
+  .actions button[data-act="removeAllLists"]:hover:not(:disabled),
+  .catalog-actions-bar button[data-act="removeAllLists"]:hover:not(:disabled) {
+    background: var(--color-danger);
+    color: #fff;
+    border-color: var(--color-danger);
+  }
+
+  .btn-danger:active:not(:disabled),
+  .btn-destructive:active:not(:disabled),
+  button.danger:not(.ec-btn):active:not(:disabled),
+  .actions button[data-act="removeAllLists"]:active:not(:disabled),
+  .catalog-actions-bar button[data-act="removeAllLists"]:active:not(:disabled) {
+    background: var(--color-danger-hover);
+    transform: scale(0.98);
+  }
+
+  /* Size Variants */
+  .btn-sm {
+    min-height: var(--control-height-sm, 32px);
+    padding: 5px 12px;
+    font-size: var(--font-size-xs, 0.8rem);
+    border-radius: var(--radius-pill);
+  }
+
+  .btn-md {
+    min-height: var(--control-height-md, 40px);
+    padding: 9px 16px;
+    font-size: var(--font-size-sm, 0.88rem);
+  }
+
+  .btn-lg {
+    min-height: var(--control-height-lg, 48px);
+    padding: 12px 22px;
+    font-size: var(--font-size-base, 0.95rem);
+  }
+
+  /* Disabled state across all buttons */
+  .btn:disabled,
+  button:disabled,
+  .actions a:disabled,
+  .btn[aria-disabled="true"],
+  button[aria-disabled="true"] {
+    opacity: 0.5;
+    cursor: not-allowed !important;
+    pointer-events: none;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+
   button.modal-close-x {
     width: 32px; height: 32px; min-height: unset;
     padding: 0; border-radius: 50%;
-    background: var(--bg); color: var(--muted);
-    border: 1px solid var(--border-strong);
+    background: var(--color-bg-sunken); color: var(--color-text-muted);
+    border: 1px solid var(--color-border-strong);
     display: inline-flex; align-items: center; justify-content: center;
     font-size: 1rem; line-height: 1; flex: none;
   }
-  button:hover:not(:disabled), .actions a:hover { opacity: 0.85; }
-  .btn-stremio { background: linear-gradient(135deg, #9B8FFF, #6D48FF); color: #fff; }
-  .btn-nuvio   { background: linear-gradient(135deg, #FF5E3A, #FF2A68); color: #fff; }
-  .btn-wako    { background: linear-gradient(135deg, #007AFF, #34AADC); color: #fff; }
+  button.modal-close-x:hover {
+    color: var(--color-text-primary);
+    background: var(--color-border-strong);
+  }
+
+  .btn-stremio { background: linear-gradient(135deg, #9B8FFF, #6D48FF); color: #fff; border: none; }
+  .btn-nuvio   { background: linear-gradient(135deg, #FF5E3A, #FF2A68); color: #fff; border: none; }
+  .btn-wako    { background: linear-gradient(135deg, #007AFF, #34AADC); color: #fff; border: none; }
   .actions { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+
+  /* Catalog actions bar: side-by-side on mobile, spread on desktop */
+  .catalog-actions-bar {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    margin-top: 16px;
+  }
+  .catalog-actions-bar button[data-act="removeAllLists"] {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+  .catalog-actions-bar button[data-act="generate"] {
+    flex: 0 0 auto;
+    margin-left: auto;
+    white-space: nowrap;
+  }
+  @media (max-width: 640px) {
+    .catalog-actions-bar {
+      gap: 8px;
+    }
+    .catalog-actions-bar button[data-act="removeAllLists"] {
+      flex: 0 0 auto;
+      padding: 9px 12px;
+      font-size: 0.85rem;
+    }
+    .catalog-actions-bar button[data-act="generate"] {
+      flex: 1 1 auto;
+      margin-left: 0;
+      text-align: center;
+      padding: 9px 14px;
+      font-size: 0.88rem;
+    }
+  }
 
   /* --- Install Result Card & Manifest Link Display ------------------------ */
   #result {
@@ -31420,6 +32644,20 @@ ${seoHeadHtml}
     border-color: var(--accent);
     color: var(--accent);
   }
+  .install-url-copy-btn.primary {
+    background: var(--color-brand) !important;
+    color: var(--color-text-inverse, #fff) !important;
+    border-color: var(--color-brand) !important;
+    box-shadow: 0 2px 6px var(--color-brand-subtle) !important;
+  }
+  .install-url-copy-btn.primary:hover {
+    background: var(--color-brand-hover) !important;
+    border-color: var(--color-brand-hover) !important;
+    color: var(--color-text-inverse, #fff) !important;
+  }
+  .install-url-copy-btn.primary svg {
+    stroke: #ffffff;
+  }
   .install-url-box {
     font-family: var(--font-mono, monospace);
     font-size: 0.84rem;
@@ -31505,10 +32743,193 @@ ${seoHeadHtml}
     }
   }
 
+  /* --- Provider Integration Cards (External Accounts & API Keys) --- */
+  .provider-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    padding: 18px 20px;
+    margin-bottom: 16px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .provider-card:hover {
+    border-color: var(--color-border-strong, var(--border));
+    box-shadow: var(--shadow-md);
+  }
+  .provider-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .provider-card-brand {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    flex: 1;
+    min-width: 200px;
+  }
+  .provider-card-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    background: var(--surface-2, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .provider-card-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .provider-card-desc {
+    margin: 3px 0 0;
+    color: var(--muted);
+    font-size: 0.82rem;
+    line-height: 1.35;
+  }
+  .provider-status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 9999px;
+    background: var(--surface);
+    border: 1.5px solid var(--color-border-strong, var(--border));
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1.2;
+    flex-shrink: 0;
+  }
+  .provider-status-badge > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .provider-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .provider-advanced-disclosure {
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+    margin-top: 12px;
+  }
+  .provider-advanced-summary {
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+    padding: 2px 0;
+  }
+  .provider-advanced-summary:hover {
+    color: var(--text);
+  }
+  .provider-advanced-arrow {
+    font-size: 0.75rem;
+    transition: transform 0.2s ease;
+  }
+  .provider-advanced-disclosure[open] .provider-advanced-arrow {
+    transform: rotate(180deg);
+  }
 
+  /* --- Import List Dropzone --- */
+  .import-dropzone {
+    border: 2px dashed var(--color-border-strong, var(--border));
+    border-radius: 12px;
+    padding: 28px 16px;
+    background: var(--surface);
+    text-align: center;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .import-dropzone:hover,
+  .import-dropzone.dragover {
+    border-color: var(--color-brand, #007aff);
+    background: var(--color-brand-subtle, rgba(0, 122, 255, 0.04));
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+  }
+  .import-dropzone-icon {
+    font-size: 2rem;
+    line-height: 1;
+  }
 
-  /* --- Catalog Shelves (#lists in My Catalogs Tab) ------------------------ */
-  #lists { display: grid; gap: 10px; grid-template-columns: 1fr; width: 100%; max-width: 100%; }
+  /* --- Feedback & External Resources Polish --- */
+  .feedback-container {
+    max-width: 680px;
+    width: 100%;
+  }
+  .resource-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+    margin-top: 10px;
+  }
+  .resource-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 14px;
+    text-decoration: none;
+    transition: border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+  }
+  .resource-card:hover {
+    border-color: var(--color-border-strong, var(--border));
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+  .resource-card-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .resource-card-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    background: var(--surface-2, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .resource-card-title {
+    font-weight: 700;
+    font-size: 0.92rem;
+    color: var(--text);
+  }
+  .resource-card-desc {
+    margin: 3px 0 0;
+    color: var(--muted);
+    font-size: 0.8rem;
+    line-height: 1.35;
+  }
+
+  #lists { display: grid; gap: 12px; grid-template-columns: 1fr; width: 100%; max-width: 100%; margin-bottom: 20px; }
   .entry {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -31551,21 +32972,65 @@ ${seoHeadHtml}
     border-radius: 8px; width: auto;
   }
   .entry-pos-wrap .pos {
-    width: 48px; min-height: unset; padding: 5px 6px;
-    font-size: 0.82rem; border-radius: 7px; text-align: center;
-    background: var(--bg); border: 1.5px solid var(--border-strong);
+    width: 48px;
+    height: 30px;
+    min-height: 30px !important;
+    max-height: 30px;
+    box-sizing: border-box;
+    padding: 0 6px;
+    font-size: 0.82rem;
+    border-radius: 7px;
+    text-align: center;
+    background: var(--bg);
+    border: 1.5px solid var(--border-strong);
+    line-height: 27px;
   }
   .entry-ctrl-row {
     display: flex; gap: 4px; align-items: center; flex-shrink: 0;
   }
   .ec-btn {
-    width: 32px; height: 32px; min-height: unset; padding: 0;
-    border-radius: 8px; background: var(--bg); border: 1.5px solid var(--border-strong);
-    color: var(--muted); display: inline-flex; align-items: center; justify-content: center;
-    cursor: pointer; font-size: 0.9rem;
+    width: 30px;
+    height: 30px;
+    min-height: 30px !important;
+    max-height: 30px;
+    box-sizing: border-box;
+    padding: 0;
+    border-radius: 7px;
+    background: var(--bg);
+    border: 1.5px solid var(--border-strong);
+    color: var(--muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.82rem;
+    line-height: 1;
+  }
+  .ec-btn:not(.movebtn):not(.drag-handle):not(.removebtn) {
+    width: auto;
+    padding: 0 10px;
   }
   .ec-btn:hover:not(:disabled) { color: var(--text); background: var(--panel-strong); }
-  .ec-btn.danger { color: var(--danger); border-color: rgba(255,59,48,0.25); background: rgba(255,59,48,0.07); }
+  .ec-btn.danger {
+    color: var(--color-danger, #d70015);
+    border-color: rgba(255, 59, 48, 0.35);
+    background: rgba(255, 59, 48, 0.08);
+  }
+  :root.dark-theme .ec-btn.danger {
+    color: var(--color-danger, #ff453a);
+    border-color: rgba(255, 69, 58, 0.45);
+    background: rgba(255, 69, 58, 0.15);
+  }
+  .ec-btn.danger:hover:not(:disabled) {
+    color: #ffffff;
+    background: var(--color-danger, #ff3b30);
+    border-color: var(--color-danger, #ff3b30);
+  }
+  .ec-btn.danger svg {
+    display: block;
+    stroke: currentColor;
+    flex-shrink: 0;
+  }
   .sources { display: flex; flex-direction: column; gap: 10px; width: 100%; }
   .source-row { width: 100%; }
   .source-row + .source-row { padding-top: 10px; border-top: 1px dashed var(--border-strong); }
@@ -31625,11 +33090,11 @@ ${seoHeadHtml}
 
   /* --- Live Preview Shelves (Home Screen) --------------------------------- */
   .live-preview-shelf {
-    background: var(--surface);
-    border: 1px solid var(--border);
+    background: transparent;
+    border: none;
     border-radius: var(--radius);
-    padding: 12px;
-    box-shadow: var(--shadow-sm);
+    padding: 0 0 14px 0;
+    box-shadow: none;
     margin-bottom: 12px;
     width: 100%;
   }
@@ -31651,25 +33116,47 @@ ${seoHeadHtml}
   }
   .live-preview-shelf-title .text-action-btn {
     margin-left: auto;
-    color: var(--accent);
-    background: none;
-    border: none;
-    font-size: 0.84rem;
+    color: var(--accent) !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    min-height: unset !important;
+    height: auto !important;
+    padding: 2px 4px !important;
+    font-size: 0.82rem;
     font-weight: 600;
     cursor: pointer;
-    padding: 2px 4px;
     flex: none;
+    text-decoration: none;
     white-space: nowrap;
+    outline: none;
+    line-height: inherit;
+  }
+  .live-preview-shelf-title .text-action-btn:hover:not(:disabled) {
+    background: transparent !important;
+    color: var(--accent) !important;
+    text-decoration: underline;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+  .live-preview-shelf-title .text-action-btn:active:not(:disabled) {
+    background: transparent !important;
+    color: var(--accent) !important;
+    transform: none !important;
   }
   .live-preview-shelf-title .text-action-btn:disabled {
     opacity: 0.35;
     cursor: default;
+    background: transparent !important;
+    text-decoration: none;
   }
   .live-preview-posters {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 8px;
     width: 100%;
+    padding-bottom: 6px;
   }
   @media (max-width: 640px) {
     .live-preview-posters .live-preview-poster-card:nth-child(n+4) {
@@ -31716,10 +33203,15 @@ ${seoHeadHtml}
     font-size: 0.70rem;
     color: var(--text);
     font-weight: 600;
-    line-height: 1.2;
-    white-space: nowrap;
+    line-height: 1.25;
+    padding: 2px 4px 4px 4px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
+    word-break: break-word;
+    min-height: 2.5em;
   }
   /* Second line under a poster for episode entries -- e.g. the episode's
      own title under a "Show Name S03E07" first line (see
@@ -31729,7 +33221,8 @@ ${seoHeadHtml}
   .live-preview-poster-subtitle {
     font-size: 0.66rem;
     color: var(--muted);
-    line-height: 1.2;
+    line-height: 1.25;
+    padding: 0 4px 2px 4px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -31846,18 +33339,25 @@ ${seoHeadHtml}
 
   /* --- Modals & Toasts ---------------------------------------------------- */
   .modal-overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    position: fixed; inset: 0; background: var(--color-bg-overlay);
     display: flex; align-items: center; justify-content: center;
     padding: 16px; z-index: 1000;
   }
   .modal-card {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 20px; padding: 22px; max-width: 440px; width: 100%;
-    max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-md);
+    background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-xl); padding: 22px; max-width: 440px; width: 100%;
+    max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-lg);
   }
   .modal-card.modal-card-wide {
     max-width: 1100px;
     width: 95vw;
+  }
+  .modal-card input:not([type="checkbox"]):not([type="radio"]),
+  .modal-card select,
+  .modal-card textarea {
+    background: var(--surface);
+    border: 1.5px solid var(--border-strong);
+    color: var(--text);
   }
   /* The one animation in here that is not decoration: it is the only signal
      a modal gives that a slow action (Reset Account Data, generating an
@@ -32050,6 +33550,114 @@ ${seoHeadHtml}
     outline-offset: 2px;
   }
 
+  /* Custom List Content Type Standalone Pills (matches .subnav-pill) */
+  .custom-list-type-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 5px 14px;
+    min-height: 31px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    border-radius: var(--radius-pill);
+    border: 1.5px solid var(--color-border-strong);
+    background: var(--color-bg-surface);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    box-shadow: none;
+    font-family: inherit;
+  }
+  .custom-list-type-pill:hover:not(.active):not(:has(input:checked)) {
+    border-color: rgba(0, 122, 255, 0.40);
+    color: var(--accent);
+  }
+  .custom-list-type-pill:has(input:checked),
+  .custom-list-type-pill.active {
+    background: rgba(0, 122, 255, 0.12) !important;
+    border-color: rgba(0, 122, 255, 0.40) !important;
+    color: var(--accent) !important;
+    font-weight: 700 !important;
+    box-shadow: none !important;
+  }
+  :root.dark-theme .custom-list-type-pill:has(input:checked),
+  :root.dark-theme .custom-list-type-pill.active {
+    background: rgba(10, 132, 255, 0.22) !important;
+    border-color: rgba(10, 132, 255, 0.50) !important;
+    color: var(--accent) !important;
+  }
+  .custom-list-type-pill .check-icon {
+    display: none;
+    font-weight: 800;
+    font-size: 0.82rem;
+    color: var(--accent);
+  }
+  .custom-list-type-pill:has(input:checked) .check-icon,
+  .custom-list-type-pill.active .check-icon {
+    display: inline;
+  }
+  .custom-list-type-pill input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    margin: 0;
+  }
+
+  /* Custom List Search Cards (Media Tile Layout, matches 9-column grid) */
+  .custom-list-search-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.15s ease;
+  }
+  .custom-list-search-card:hover:not(:has(.customListAddBtn:disabled)) {
+    transform: translateY(-2px);
+  }
+  .custom-list-search-card:hover .custom-list-search-poster {
+    box-shadow: var(--shadow-md);
+  }
+  .custom-list-search-poster {
+    width: 100%;
+    aspect-ratio: 2/3;
+    object-fit: cover;
+    border-radius: 8px;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.15s ease;
+    background: var(--surface-2, rgba(255,255,255,0.06));
+  }
+  .custom-list-search-title {
+    width: 100%;
+    font-size: 0.74rem;
+    font-weight: 600;
+    text-align: center;
+    color: var(--text);
+    margin: 4px 0 2px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.25;
+    min-height: 2.5em;
+  }
+  .custom-list-search-meta {
+    font-size: 0.68rem;
+    color: var(--muted);
+    text-align: center;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+  }
+
   @media (max-width: 640px) {
     .customListMoveBtn { display: none !important; }
     .customListPosInput { display: none !important; }
@@ -32190,7 +33798,8 @@ ${seoHeadHtml}
     color: var(--text);
     background: var(--panel-strong);
   }
-  .shelf-drag-handle:active {
+  .shelf-drag-handle:active,
+  .entry .drag-handle:active {
     cursor: grabbing;
   }
   /* The Edit-mode handle is dragged by pointer events too (createSortableList),
@@ -32316,51 +33925,9 @@ ${seoHeadHtml}
   }
   html[data-app-shell="1"] #appShellImportName, html[data-app-shell="1"] #appShellAddTitlesInput {
     width: 100%; padding: 10px 12px; border-radius: 10px;
-    border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.95rem;
+    border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size: 0.95rem;
   }
 
-  /* Channels (P6-7): the template cards, the schedule panel, and the lineup
-     the server answers with. The lineup tiles are the same shape as the
-     list preview's posters (P6-5), deliberately. */
-  html[data-app-shell="1"] .app-shell-template-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 10px; margin: 12px 0;
-  }
-  html[data-app-shell="1"] button.app-shell-template-card {
-    display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
-    text-align: left; padding: 12px 14px; cursor: pointer; font: inherit;
-    border: 1px solid var(--border); border-radius: 10px;
-    background: var(--surface); color: var(--text);
-  }
-  html[data-app-shell="1"] button.app-shell-template-card:hover { border-color: var(--accent); }
-  html[data-app-shell="1"] .app-shell-template-card .app-shell-muted { font-size: 0.8rem; }
-  html[data-app-shell="1"] .app-shell-template-note { font-size: 0.74rem; }
-  html[data-app-shell="1"] .app-shell-schedule {
-    margin: 12px 0; padding: 10px 12px; border: 1px solid var(--border);
-    border-radius: 10px; background: var(--surface);
-  }
-  html[data-app-shell="1"] .app-shell-schedule summary { cursor: pointer; font-weight: 600; }
-  html[data-app-shell="1"] .app-shell-schedule input[type="number"] { width: 84px; }
-  html[data-app-shell="1"] .app-shell-schedule .app-shell-muted { font-size: 0.8rem; }
-  html[data-app-shell="1"] .app-shell-person-grid { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
-  html[data-app-shell="1"] .app-shell-lineup {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-    gap: 8px; margin: 8px 0 10px;
-  }
-  html[data-app-shell="1"] .app-shell-lineup-tile { display: flex; flex-direction: column; gap: 4px; }
-  html[data-app-shell="1"] .app-shell-lineup-tile img,
-  html[data-app-shell="1"] .app-shell-lineup-blank {
-    width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 6px;
-    background: var(--panel-strong); border: 1px solid var(--border);
-  }
-  html[data-app-shell="1"] .app-shell-lineup-tile span {
-    font-size: 0.72rem; color: var(--muted);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  html[data-app-shell="1"] #appShellChannels input[type="text"] {
-    width: 100%; padding: 10px 12px; border-radius: 10px;
-    border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.95rem;
-  }
 
 /*MYLISTS_APP_CSS_END*/</style>
 <!-- fflate, for reading Trakt/Letterboxd export .zips entirely client-side.
@@ -32392,6 +33959,12 @@ ${seoHeadHtml}
       </div>
     </div>
     <div class="app-header-actions">
+      <button type="button" class="header-icon-btn header-search-btn" id="headerSearchBtn" data-act="switchTab" data-act-args="[&quot;search&quot;]" aria-label="Search" title="Search">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+      </button>
       <button type="button" class="theme-toggle-btn dark-mode-toggle" id="themeToggleBtn" data-act="toggleTheme" aria-label="Toggle Light or Dark Mode" title="Toggle Light / Dark Mode">
         <svg class="theme-icon-sun" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="12" cy="12" r="4" fill="currentColor"></circle>
@@ -32408,7 +33981,7 @@ ${seoHeadHtml}
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
         </svg>
       </button>
-      <div id="creatorProfileBar"></div>
+      <div id="creatorProfileBar"><button type="button" class="header-avatar-btn signed-out" id="headerProfileBtn" data-act="openRestoreModal" aria-label="Sign in or create account" title="Sign in or create account"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></button></div>
     </div>
   </header>
 
@@ -32421,6 +33994,10 @@ ${appShellMobileNavHtml}
   <script nonce="${CSP_NONCE_PLACEHOLDER}">
     (function() {
       var initTab = document.documentElement.getAttribute('data-initial-tab');
+      if (initTab === 'search') {
+        var sBtn = document.getElementById('headerSearchBtn');
+        if (sBtn) sBtn.classList.add('active');
+      }
       if (initTab) {
         var titles = {
           discover: { title: 'Discover', sub: 'Explore Popular & Streaming' },
@@ -32445,9 +34022,11 @@ ${appShellMobileNavHtml}
         var cBar = document.getElementById('creatorProfileBar');
         if (cBar) {
           if (cName && cKey) {
-            cBar.innerHTML = '<div style="display:flex; align-items:center; gap:8px;"><button type="button" class="subnav-pill active" style="margin:0; font-size:0.85rem; padding:8px 14px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px; border-radius:var(--radius-pill);" data-act="switchTab" data-act-args="[&quot;account&quot;]">&#x1F464; ' + String(cDisp || cName || '').replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}) + '</button></div>';
+            var disp = cDisp || cName || 'Account';
+            var init = (disp.charAt(0) || 'U').toUpperCase();
+            cBar.innerHTML = '<button type="button" class="header-avatar-btn signed-in" id="headerProfileBtn" data-act="switchTab" data-act-args="[&quot;account&quot;]" aria-label="Account: ' + String(disp).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}) + '" title="Signed in as ' + String(disp).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}) + '"><span class="header-avatar-initial">' + String(init).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}) + '</span></button>';
           } else {
-            cBar.innerHTML = '<div style="display:flex; align-items:center; gap:6px;"><button type="button" class="lc-btn primary" data-act="openRestoreModal" style="padding:8px 16px; font-size:0.85rem; font-weight:700; border-radius:var(--radius-pill);">Login</button></div>';
+            cBar.innerHTML = '<button type="button" class="header-avatar-btn signed-out" id="headerProfileBtn" data-act="openRestoreModal" aria-label="Sign in or create account" title="Sign in or create account"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></button>';
           }
         }
       } catch (e) {}
@@ -32489,13 +34068,13 @@ ${appShellMobileNavHtml}
           <input type="checkbox" id="whGroupShowsCheckbox" data-act="toggleWatchHistoryGroupShows" data-act-args="[&quot;@checked&quot;]" style="accent-color:var(--accent); cursor:pointer;">
           <span>Shows instead of episodes</span>
         </label>
-        <button type="button" class="subnav-pill" id="whClearHistoryBtn" data-act="clearWatchHistoryAll" style="color:var(--danger); border-color:rgba(255,59,48,0.35); margin-left:auto; font-weight:600;">Clear History</button>
+        <button type="button" class="btn-danger btn-sm" id="whClearHistoryBtn" data-act="clearWatchHistoryAll" style="margin-left:auto;">Clear History</button>
       </div>
       <div id="genericTypeFilterControls" style="display:none; gap:6px; flex-wrap:wrap; align-items:center; width:100%;">
         <button type="button" class="subnav-pill active generic-type-pill" id="detailTypeAllBtn" data-act="switchListDetailsType" data-act-args="[&quot;all&quot;]">All</button>
         <button type="button" class="subnav-pill generic-type-pill" id="detailTypeMovieBtn" data-act="switchListDetailsType" data-act-args="[&quot;movie&quot;]">Movies</button>
         <button type="button" class="subnav-pill generic-type-pill" id="detailTypeSeriesBtn" data-act="switchListDetailsType" data-act-args="[&quot;series&quot;]">Shows</button>
-        <button type="button" class="subnav-pill" id="cwClearHistoryBtn" data-act="clearContinueWatchingAll" style="display:none; color:var(--danger); border-color:rgba(255,59,48,0.35); margin-left:auto; font-weight:600;">Clear All</button>
+        <button type="button" class="btn-danger btn-sm" id="cwClearHistoryBtn" data-act="clearContinueWatchingAll" style="display:none; margin-left:auto;">Clear All</button>
       </div>
       <div id="whSortControls" style="display:flex; align-items:center; gap:8px;">
         <label for="whSortSelect" style="font-size:0.75rem; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.02em;">Sort</label>
@@ -32512,25 +34091,23 @@ ${appShellMobileNavHtml}
   </div>
 
   <div class="tab-panel" data-tab-panel="item-details" id="content-item-details" hidden>
-    <div style="margin-bottom: 20px;">
-      <button type="button" class="lc-btn secondary" data-act="navigateBackFromDetail" style="padding: 6px 12px; font-size: 0.9rem;">&larr; Back</button>
-    </div>
+    <button type="button" class="item-back-btn" data-act="navigateBackFromDetail" aria-label="Back">&larr; Back</button>
     <div id="itemDetailsBody" style="display: flex; flex-direction: column; gap: 24px;">
       <!-- Filled dynamically -->
     </div>
   </div>
 
-  <div id="createListModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Create a list" style="display:none; z-index: 10001; background: rgba(0,0,0,0.45); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
-    <div class="modal-card" style="width: 100%; max-width: 380px; padding: 22px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow); display: flex; flex-direction: column;">
+  <div id="createListModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Create a list" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
+    <div class="modal-card" style="width: 100%; max-width: 420px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
         <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);" id="createListModalTitle">Create List</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeCreateListModal">&#x2715;</button>
       </div>
 
       <div style="margin-bottom: 12px;">
-        <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Destination</label>
-        <select id="createListModalDestination" aria-label="Destination" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.95rem;" data-act="onChangeCreateListDestination">
-          <option value="custom">Custom List</option>
+        <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Save To</label>
+        <select id="createListModalDestination" aria-label="Destination" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act="onChangeCreateListDestination">
+          <option value="custom">My Lists (Local / Profile)</option>
           <option value="trakt">Trakt List</option>
           <option value="tmdb">TMDB List</option>
           <option value="mdblist">MDBList List</option>
@@ -32540,28 +34117,30 @@ ${appShellMobileNavHtml}
       
       <div style="margin-bottom: 12px;">
         <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">List Name *</label>
-        <input type="text" id="createListModalName" placeholder="e.g. My Favorite Sci-Fi" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="appActValidateCreateListName" data-act-args="[&quot;@value&quot;]">
+        <input type="text" id="createListModalName" placeholder="e.g. My Favorite Sci-Fi" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="appActValidateCreateListName" data-act-args="[&quot;@value&quot;]">
       </div>
 
       <div style="margin-bottom: 12px;">
         <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Description (Optional)</label>
-        <textarea id="createListModalDesc" placeholder="Brief summary of what is in this list..." rows="2" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.9rem; resize:vertical; font-family:inherit;"></textarea>
+        <textarea id="createListModalDesc" placeholder="Brief summary of what is in this list..." rows="2" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.9rem; resize:vertical; font-family:inherit;"></textarea>
       </div>
       
       <div style="margin-bottom: 14px;">
         <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Content Type</label>
-        <select id="createListModalType" aria-label="Content type" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:0.95rem;">
+        <select id="createListModalType" aria-label="Content type" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;">
           <option value="movie">Movies</option>
           <option value="series">Shows</option>
           <option value="mixed">Mixed (Movies &amp; Shows)</option>
         </select>
       </div>
       
-      <div id="createListModalPublicWrap" style="margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center;">
-        <span style="font-size: 0.95rem; font-weight:500; color: var(--text);">Public</span>
-        <label class="ui-toggle">
-          <input type="checkbox" id="createListModalPublic" checked>
-          <span class="ui-toggle-slider"></span>
+      <div id="createListModalPublicWrap" style="margin-bottom: 18px;">
+        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer;">
+          <input type="checkbox" id="createListModalPublic" style="margin-top:3px; flex-shrink:0;">
+          <div>
+            <span style="font-size:0.92rem; font-weight:600; color:var(--text); display:block;">Make list public</span>
+            <span style="font-size:0.78rem; color:var(--muted); display:block; margin-top:2px; line-height:1.35;">When enabled, this list is visible on your public creator profile and community directory.</span>
+          </div>
         </label>
       </div>
       
@@ -32573,36 +34152,124 @@ ${appShellMobileNavHtml}
   </div>
 
   <!-- Add Catalog Modal -->
-  <div id="addShelfModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Add a shelf" style="display:none; z-index: 10001; background: rgba(0,0,0,0.45); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
-    <div class="modal-card" style="width: 100%; max-width: 340px; padding: 22px; background: var(--bg); border-radius: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column;">
-      <h2 style="margin-top:0; font-size:1.3rem; font-weight:600; color:var(--text);">Add Catalog</h2>
+  <div id="addShelfModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="New catalog" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
+    <div class="modal-card" style="width: 100%; max-width: 420px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
+        <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);">New Catalog</h2>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="appActHideAddShelfModal">&#x2715;</button>
+      </div>
       
-      <div style="margin: 16px 0;">
-        <input type="text" id="addShelfModalName" placeholder="Catalog name" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem; margin-bottom:12px;" data-act-on="input" data-act="validateAddShelfModal">
-        
+      <div style="margin-bottom: 12px;">
+        <label for="addShelfModalName" style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Catalog Name</label>
+        <input type="text" id="addShelfModalName" placeholder="e.g. Trending Movies" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="validateAddShelfModal">
+      </div>
+      
+      <div style="margin-bottom: 12px;">
+        <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Catalog URL</label>
         <div id="addShelfModalLinksContainer">
-          <div class="add-shelf-link-row" style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
-            <input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd)" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">
+          <div class="add-shelf-link-row" style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+            <input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd, MDBList)" style="flex:1; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">
           </div>
         </div>
-        
-        <button type="button" class="lc-btn secondary" style="width: 100%; margin-bottom: 12px; font-size: 0.9rem;" data-act="addShelfModalAddLink">+ Add another link (Combined List)</button>
-        
-        <select id="addShelfModalType" aria-label="Catalog type" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem; margin-bottom:12px;" data-act="validateAddShelfModal">
+        <button type="button" class="lc-btn secondary" style="width: 100%; font-size: 0.84rem; padding: 6px 12px; margin-top: 4px;" data-act="addShelfModalAddLink">+ Add another link (Combined List)</button>
+        <small style="display:block; color:var(--muted); font-size:0.78rem; margin-top:4px;">Combine multiple list URLs into a single catalog row on your home screen.</small>
+      </div>
+      
+      <div style="margin-bottom: 16px;">
+        <label for="addShelfModalType" style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Content Type</label>
+        <select id="addShelfModalType" aria-label="Catalog type" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act="validateAddShelfModal">
           <option value="movie">Movies</option>
           <option value="series">Shows</option>
         </select>
       </div>
       
-      <div style="display:flex; justify-content:flex-end; gap:16px; margin-top: 8px;">
-        <button type="button" style="background:none; border:none; color:var(--text); font-weight:600; font-size:1rem; cursor:pointer;" data-act="appActHideAddShelfModal">Cancel</button>
-        <button type="button" id="addShelfModalBtn" style="background:none; border:none; color:var(--accent); font-weight:600; font-size:1rem; cursor:pointer; opacity: 0.5;" disabled data-act="submitAddShelfModal">Add</button>
+      <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
+        <button type="button" class="lc-btn secondary" data-act="appActHideAddShelfModal">Cancel</button>
+        <button type="button" class="lc-btn primary" id="addShelfModalBtn" style="opacity: 0.5; min-width: 80px;" disabled data-act="submitAddShelfModal">Add Catalog</button>
       </div>
     </div>
   </div>
 
-  <div id="selectListModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Choose a list" style="display:none; z-index: 10001; justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
-    <div class="modal-card" style="width: 100%; max-width: 480px; padding: 22px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow); display: flex; flex-direction: column; max-height: 85vh;">
+  <!-- Import List Modal -->
+  <div id="importListModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Import list from a link" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
+    <div class="modal-card" style="width: 100%; max-width: 420px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
+        <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);">Import List from Link</h2>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeImportListModal">&#x2715;</button>
+      </div>
+      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem; line-height:1.4;">Paste any MDBList, Trakt, or TMDB list URL to import directly as a Custom List.</p>
+      <div style="margin-bottom: 12px;">
+        <label for="modalCustomListImportUrlInput" style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">List URL</label>
+        <input type="text" id="modalCustomListImportUrlInput" placeholder="mdblist.com, trakt.tv, or themoviedb.org URL" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem; box-sizing:border-box;">
+      </div>
+      <div style="margin-bottom: 14px;">
+        <label for="modalCustomListImportNameInput" style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">List Name (Optional)</label>
+        <input type="text" id="modalCustomListImportNameInput" placeholder="e.g. My Favorites (leave blank to auto-detect)" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem; box-sizing:border-box;">
+      </div>
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:18px;">
+        <input type="checkbox" id="modalCustomListImportSyncCheck" checked>
+        <span style="font-size:0.85rem; color:var(--text);">Keep custom list synced with external link</span>
+      </label>
+      <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
+        <button type="button" class="lc-btn secondary" data-act="closeImportListModal">Cancel</button>
+        <button type="button" class="lc-btn primary" id="modalCustomListImportBtn" data-act="importCustomListFromLink" data-act-args="[&quot;@self&quot;]" style="min-width: 90px;">Import List</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import Channel Modal -->
+  <div id="importChannelModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Import Channel" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
+    <div class="modal-card" style="width: 100%; max-width: 440px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+        <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);">Import Channel</h2>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeImportChannelModal">&#x2715;</button>
+      </div>
+
+      <!-- Segmented Mode Selector: From Link vs From Share Code -->
+      <div class="subnav-pills-bar" id="importChannelModePills" style="margin-bottom: 14px; gap: 6px; padding: 0;">
+        <button type="button" class="subnav-pill active" id="importChannelModeLinkBtn" data-act="switchImportChannelMode" data-act-args="[&quot;link&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> From List Link</button>
+        <button type="button" class="subnav-pill" id="importChannelModeCodeBtn" data-act="switchImportChannelMode" data-act-args="[&quot;code&quot;,&quot;@self&quot;]">From Share Code</button>
+      </div>
+
+      <!-- Mode 1: From List Link -->
+      <div id="importChannelPanelLink">
+        <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem; line-height:1.4;">Paste any MDBList, Trakt, or TMDB show list URL to import directly as a 24/7 TV channel.</p>
+        <div style="margin-bottom: 12px;">
+          <label for="modalChannelImportUrlInput" style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Show List URL</label>
+          <input type="text" id="modalChannelImportUrlInput" placeholder="mdblist.com, trakt.tv, or themoviedb.org show list URL" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem; box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom: 12px;">
+          <label for="modalChannelImportNameInput" style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Channel Name</label>
+          <input type="text" id="modalChannelImportNameInput" placeholder="e.g. Sitcom Central" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem; box-sizing:border-box;">
+        </div>
+        <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; margin-bottom:18px;">
+          <input type="checkbox" id="modalChannelImportLiveSyncCheck" checked style="margin-top:2px;">
+          <span style="font-size:0.82rem; color:var(--text); line-height:1.35;">Live Cloud Sync &mdash; keep this channel following the list in the background</span>
+        </label>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
+          <button type="button" class="lc-btn secondary" data-act="closeImportChannelModal">Cancel</button>
+          <button type="button" class="lc-btn primary" id="modalChannelImportBtn" data-act="importChannelFromLink" data-act-args="[&quot;@self&quot;]" style="min-width: 90px;">Import Channel</button>
+        </div>
+      </div>
+
+      <!-- Mode 2: From Share Code -->
+      <div id="importChannelPanelCode" style="display:none;">
+        <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem; line-height:1.4;">Paste a channel share link or code to rebuild that exact community channel lineup here.</p>
+        <div style="margin-bottom: 14px;">
+          <label for="modalChannelShareCodeInput" style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Channel Share Link or Code</label>
+          <input type="text" id="modalChannelShareCodeInput" placeholder="https://... /channel/AbC123 or code" data-act-on="keydown" data-act="importSharedChannel" data-act-keys="Enter" data-act-prevent data-act-args="[&quot;@self&quot;]" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem; box-sizing:border-box;">
+        </div>
+        <div id="modalChannelShareImportStatus" style="margin-bottom:14px; font-size:0.85rem;"></div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
+          <button type="button" class="lc-btn secondary" data-act="closeImportChannelModal">Cancel</button>
+          <button type="button" class="lc-btn primary" id="modalChannelShareAddBtn" data-act="importSharedChannel" data-act-args="[&quot;@self&quot;]" style="min-width: 90px;">Add Channel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="selectListModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Choose a list" style="display:none; z-index: 10001; justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px; background: var(--color-bg-overlay);">
+    <div class="modal-card" style="width: 100%; max-width: 480px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; max-height: 85vh;">
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
         <div>
           <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);">Add / Remove from Lists</h2>
@@ -32621,8 +34288,8 @@ ${appShellMobileNavHtml}
   </div>
 
   <!-- Trakt Device Activation Modal -->
-  <div id="traktDeviceModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Connect Trakt" style="display:none; z-index: 10002; justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px; background: rgba(0,0,0,0.5);">
-    <div class="modal-card" style="width: 100%; max-width: 420px; padding: 24px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow); display: flex; flex-direction: column; text-align: center;">
+  <div id="traktDeviceModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Connect Trakt" style="display:none; z-index: 10002; justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px; background: var(--color-bg-overlay);">
+    <div class="modal-card" style="width: 100%; max-width: 420px; padding: 24px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; text-align: center;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
         <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);">Connect Trakt</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeTraktDeviceModal">&#x2715;</button>
@@ -32664,7 +34331,9 @@ window._CHARTS_HOLIDAYS = ${jsonForScript(HOLIDAY_LISTS)};
 window._CHARTS_GENRES = ${jsonForScript(GENRE_LISTS)};
 window._CHARTS_MY_LISTS_ADDON = ${jsonForScript(MY_LISTS_ADDON_CHARTS)};
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(e => console.error(e));
+  navigator.serviceWorker.register('/sw.js').then(function(reg) {
+    if (reg) reg.update().catch(function() {});
+  }).catch(function(e) { console.error(e); });
 }
 </script>
 
@@ -32679,15 +34348,17 @@ if ('serviceWorker' in navigator) {
   <div class="lists-subpanel" id="catalogsSubShelves">
   <!-- Catalogs Management Card -->
   <div class="panel">
-    <div class="shelf-header" style="margin-bottom:12px;">
-      <h2 class="shelf-title">Live Preview &amp; Editor</h2>
-      <div class="actions" style="flex-direction:row; flex-wrap:wrap; align-items:center; gap:6px;">
+    <div class="shelf-header" style="margin-bottom:12px; align-items:center; justify-content:space-between; gap:12px;">
+      <div>
+        <h2 class="shelf-title sr-only">Live Preview &amp; Editor</h2>
+        <p style="margin:0; color:var(--muted); font-size:0.85rem;">Catalogs and lists you've added to your add-on. Reorder, edit, and preview your active shelves.</p>
+      </div>
+      <div class="actions" style="flex-direction:row; flex-wrap:wrap; align-items:center; gap:6px; flex-shrink:0;">
         <button type="button" class="primary lc-btn" data-act="openAddShelfModal">+ New Catalog</button>
         <button type="button" class="secondary lc-btn" id="livePreviewEditBtn" data-act="toggleLivePreviewEdit">Edit</button>
-        <button type="button" class="secondary lc-btn" data-act="renderLivePreview">Refresh Preview</button>
+        ${refreshButtonHtml('renderLivePreview', 'Refresh catalogs preview')}
       </div>
     </div>
-    <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Catalogs and lists you've added to your add-on. Reorder, edit, and preview your active shelves.</p>
 
     <div class="row" style="margin-bottom:12px; gap:8px;">
       <input type="text" id="listFilterInput" aria-label="Filter catalogs by name" placeholder="Filter catalogs by name..." data-act-on="input" data-act="filterLists">
@@ -32704,25 +34375,38 @@ if ('serviceWorker' in navigator) {
     <div id="appShellHomeEditor"></div>
 
     <!-- 24-Hour Randomizer Controls -->
-    <div style="margin-top:16px; padding:14px 16px; background:var(--surface); border-radius:12px; border:1px solid var(--border);">
-      <div style="font-weight:600; font-size:0.92rem; margin-bottom:10px; display:flex; align-items:center; gap:6px;">
+    <div style="margin-top:16px; padding:12px 16px; background:var(--surface); border-radius:12px; border:1px solid var(--border);">
+      <div style="font-weight:600; font-size:0.92rem; margin-bottom:4px; display:flex; align-items:center; gap:6px;">
         <span>Daily Randomizer</span>
       </div>
-      <div style="display:flex; flex-direction:column; gap:8px;">
-        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.88rem; margin:0; user-select:none;">
-          <input type="checkbox" id="shuffleShelvesCheckbox" data-act="saveState" style="cursor:pointer; width:16px; height:16px;">
-          <span>Shuffle Catalogs daily (every 24h)</span>
-        </label>
-        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.88rem; margin:0; user-select:none;">
-          <input type="checkbox" id="shuffleItemsCheckbox" data-act="saveState" style="cursor:pointer; width:16px; height:16px;">
-          <span>Shuffle items in Catalogs daily (every 24h)</span>
-        </label>
+      <div>
+        <div class="settings-toggle-row">
+          <div style="flex:1; min-width:0; padding-right:12px;">
+            <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Shuffle Catalogs daily (every 24h)</span>
+            <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Rotates the order of your catalog rows once every 24 hours.</p>
+          </div>
+          <label class="ui-toggle" aria-label="Shuffle Catalogs daily (every 24h)">
+            <input type="checkbox" id="shuffleShelvesCheckbox" data-act="saveState">
+            <span class="ui-toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="settings-toggle-row">
+          <div style="flex:1; min-width:0; padding-right:12px;">
+            <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Shuffle items in Catalogs daily (every 24h)</span>
+            <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Randomizes the order of titles inside each catalog row every 24 hours.</p>
+          </div>
+          <label class="ui-toggle" aria-label="Shuffle items in Catalogs daily (every 24h)">
+            <input type="checkbox" id="shuffleItemsCheckbox" data-act="saveState">
+            <span class="ui-toggle-slider"></span>
+          </label>
+        </div>
       </div>
     </div>
 
-    <div class="actions" style="margin-top:16px;">
-      <button type="button" data-act="removeAllLists" class="secondary" style="color:var(--danger); border-color:rgba(255,59,48,0.25);">Remove All</button>
-      <button type="button" class="primary" data-act="generate">${isConfigureMode ? "Update Add-on" : "Generate Install Link"}</button>
+    <div class="catalog-actions-bar">
+      <button type="button" data-act="removeAllLists" class="btn-danger">Remove All</button>
+      <button type="button" class="btn-primary" data-act="generate">${isConfigureMode ? "Update Add-on" : "Generate Install Link"}</button>
     </div>
   </div>
 
@@ -32738,12 +34422,24 @@ if ('serviceWorker' in navigator) {
     </div>
   
   <div class="lists-subpanel" id="catalogsSubBulk" style="display:none;">
-  <div class="panel" style="margin-top:0;">
+  <div class="panel bulk-panel">
     <h2 class="panel-title">Bulk Import Lists</h2>
-    <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Paste multiple list URLs at once, one per line. Each list is automatically detected and added to your catalogs.</p>
-    <textarea id="bulkPasteBox" rows="5" style="width:100%;font-family:monospace;font-size:15px;" placeholder="https://mdblist.com/lists/user/list-one&#10;https://trakt.tv/users/user/lists/list-two&#10;https://www.themoviedb.org/list/12345"></textarea>
-    <div class="actions" style="margin-top:12px;">
-      <button type="button" class="primary" data-act="bulkAddLists" data-act-args="[&quot;@self&quot;]">Add All Lines as Catalogs</button>
+    <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem; line-height:1.45;">Paste multiple list URLs at once, one per line. Each list is automatically detected and added to your catalogs.</p>
+    <div class="bulk-provider-badges">
+      <span class="bulk-provider-label">Supported:</span>
+      <span class="list-source-badge badge-mdblist">MDBList</span>
+      <span class="list-source-badge badge-trakt">Trakt</span>
+      <span class="list-source-badge badge-tmdb">TMDB</span>
+      <span class="list-source-badge badge-simkl">Simkl</span>
+      <span class="list-source-badge badge-imdb">IMDb</span>
+    </div>
+    <textarea id="bulkPasteBox" rows="6" data-act-on="input" data-act="updateBulkAddUi" placeholder="https://mdblist.com/lists/user/list-one&#10;https://trakt.tv/users/user/lists/list-two&#10;https://www.themoviedb.org/list/12345"></textarea>
+    <div class="bulk-actions-bar">
+      <div class="bulk-actions-left">
+        <button type="button" id="bulkAddBtn" class="primary" data-act="bulkAddLists" data-act-args="[&quot;@self&quot;]">Add All Lines as Catalogs</button>
+        <button type="button" id="bulkClearBtn" class="secondary" data-act="clearBulkInput" style="display:none;">Clear</button>
+      </div>
+      <div id="bulkDetectedCount"></div>
     </div>
   </div>
   </div>
@@ -32755,7 +34451,7 @@ if ('serviceWorker' in navigator) {
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">My Lists Addon Charts</h2>
-        <button type="button" class="qa-add-all-btn lc-btn primary" data-add-all-action="mylists-charts">+ Add all</button>
+        <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="mylists-charts">+ Add all</button>
       </div>
       <p class="qa-shelf-sub">Our own charts, updated daily: what just arrived on Netflix, Prime Video, Disney+, HBO Max, Hulu, Apple TV+, Paramount+ and Peacock (a show moves back to the top when new episodes land), and what people using My Lists Addon are watching most today, this week and this month:</p>
       ${myListsAddonChartsHtml}
@@ -32765,7 +34461,7 @@ if ('serviceWorker' in navigator) {
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Combined Charts</h2>
-        <button type="button" class="qa-add-all-btn lc-btn primary" data-add-all-action="combined-charts">+ Add all</button>
+        <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="combined-charts">+ Add all</button>
       </div>
       <p class="qa-shelf-sub">One row that blends MDBList, TMDB, Trakt and Simkl together and de-duplicates the result, so a title that charts on several of them still appears once:</p>
       ${combinedChartsHtml}
@@ -32775,7 +34471,7 @@ if ('serviceWorker' in navigator) {
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">TMDB Charts</h2>
-        <button type="button" class="qa-add-all-btn lc-btn primary" data-add-all-action="tmdb-charts">+ Add all</button>
+        <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="tmdb-charts">+ Add all</button>
       </div>
       <p class="qa-shelf-sub">TheMovieDB's own charts &mdash; New Releases, Trending, Popular, Top Rated, Now Playing and Upcoming:</p>
       ${tmdbChartsHtml}
@@ -32785,7 +34481,7 @@ if ('serviceWorker' in navigator) {
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Trakt Charts</h2>
-        <button type="button" class="qa-add-all-btn lc-btn primary" data-add-all-action="trakt-charts">+ Add all</button>
+        <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="trakt-charts">+ Add all</button>
       </div>
       <p class="qa-shelf-sub">Trakt's community charts, straight from its API &mdash; what is trending and most played now, through to the weekly box office:</p>
       ${traktChartsHtml}
@@ -32795,7 +34491,7 @@ if ('serviceWorker' in navigator) {
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">MDBList Official</h2>
-        <button type="button" class="qa-add-all-btn lc-btn primary" data-add-all-action="mdblist-charts">+ Add all</button>
+        <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="mdblist-charts">+ Add all</button>
       </div>
       <p class="qa-shelf-sub">MDBList's official charts, including the JustWatch daily streaming rankings and IMDb's MovieMeter:</p>
       ${mdblistChartsHtml}
@@ -32805,7 +34501,7 @@ if ('serviceWorker' in navigator) {
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Simkl Anime &amp; Trending</h2>
-        <button type="button" class="qa-add-all-btn lc-btn primary" data-add-all-action="simkl-charts">+ Add all</button>
+        <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="simkl-charts">+ Add all</button>
       </div>
       <p class="qa-shelf-sub">Simkl's daily, weekly and monthly trending windows, plus its anime chart:</p>
       ${simklChartsHtml}
@@ -32815,7 +34511,7 @@ if ('serviceWorker' in navigator) {
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Streaming Top 10</h2>
-        <button type="button" class="qa-add-all-btn lc-btn primary" data-add-all-action="streaming-top10">+ Add all</button>
+        <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="streaming-top10">+ Add all</button>
       </div>
       <p class="qa-shelf-sub">What is in each service's current Top 10, as one catalog row per service:</p>
       ${streamingTop10Html}
@@ -32825,7 +34521,7 @@ if ('serviceWorker' in navigator) {
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Streaming Catalogs</h2>
-        <button type="button" class="qa-add-all-btn lc-btn primary" data-add-all-action="streaming-catalogs">+ Add all</button>
+        <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="streaming-catalogs">+ Add all</button>
       </div>
       <p class="qa-shelf-sub">The full catalog of each of the ten streaming services, browsable as its own row:</p>
       ${streamingHtml}
@@ -32835,7 +34531,7 @@ if ('serviceWorker' in navigator) {
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Kids</h2>
-        <button type="button" class="qa-add-all-btn lc-btn primary" data-add-all-action="kids">+ Add all</button>
+        <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="kids">+ Add all</button>
       </div>
       <p class="qa-shelf-sub">Filtered by certification rather than by genre, so nothing above the rating you pick can appear:</p>
       ${kidsHtml}
@@ -32845,7 +34541,7 @@ if ('serviceWorker' in navigator) {
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Holidays</h2>
-        <button type="button" class="qa-add-all-btn lc-btn primary" data-add-all-action="holidays">+ Add all</button>
+        <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="holidays">+ Add all</button>
       </div>
       <p class="qa-shelf-sub">Seasonal rows for Christmas, Halloween, Thanksgiving and the rest of the calendar:</p>
       ${holidaysHtml}
@@ -32855,7 +34551,7 @@ if ('serviceWorker' in navigator) {
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Genres</h2>
-        <button type="button" class="qa-add-all-btn lc-btn primary" data-add-all-action="genres">+ Add all</button>
+        <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="genres">+ Add all</button>
       </div>
       <p class="qa-shelf-sub">One row per genre, from Family and Fantasy through to War and Western:</p>
       ${genresHtml}
@@ -32879,7 +34575,7 @@ if ('serviceWorker' in navigator) {
   </div>
 
   <!-- Discover Shelves Feed -->
-  <div id="discoverShelvesContainer">
+  <div id="discoverShelvesContainer" style="display:none;">
     <!-- My Lists Addon Charts Shelf -->
     ${myListsAddonChartsHtml}
 
@@ -32920,11 +34616,11 @@ if ('serviceWorker' in navigator) {
   <!-- Discover Shared Lists Feed (All / Movies / Shows / Hidden Gems / Kids / Holidays / Genres) -->
   <div class="discover-subpanel" id="discoverSubSharedFeed" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" id="discoverListsFeedHeader" style="margin-bottom:10px;">
-        <h2 class="shelf-title" id="discoverListsFeedTitle">Movies</h2>
-        <button type="button" class="secondary lc-btn" data-act="appActRefreshDiscoverCharts">Refresh</button>
+      <div class="shelf-header" id="discoverListsFeedHeader">
+        <h2 class="shelf-title sr-only" id="discoverListsFeedTitle">Movies</h2>
+        <p id="discoverListsFeedDesc">Top charts, new releases, and popular movie collections across streaming platforms.</p>
+        ${refreshButtonHtml('appActRefreshDiscoverCharts', 'Refresh charts')}
       </div>
-      <p id="discoverListsFeedDesc" style="margin:0 0 14px; color:var(--muted); font-size:0.85rem; line-height:1.45;">Top charts, new releases, and popular movie collections across streaming platforms.</p>
       <div id="discoverListsFeed"></div>
     </div>
   </div>
@@ -32932,11 +34628,11 @@ if ('serviceWorker' in navigator) {
   <!-- Popular Lists Feed in Discover -->
   <div class="discover-subpanel" id="discoverSubPopular" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="shelf-title">Popular Community Lists</h2>
-        <button type="button" class="secondary lc-btn" data-act="loadPopularListsFeed" data-act-args="[true]">Refresh</button>
+      <div class="shelf-header">
+        <h2 class="shelf-title sr-only">Popular Community Lists</h2>
+        <p>Top trending and highly-rated community lists shared by creators and viewers.</p>
+        ${refreshButtonHtml('loadPopularListsFeed', 'Refresh popular lists', [true])}
       </div>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem; line-height:1.45;">Top trending and highly-rated community lists shared by creators and viewers.</p>
       <div id="popularListsFeed"></div>
     </div>
   </div>
@@ -32944,11 +34640,11 @@ if ('serviceWorker' in navigator) {
   <!-- Curated Lists Feed in Discover -->
   <div class="discover-subpanel" id="discoverSubCurated" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="shelf-title">Curated For You</h2>
-        <button type="button" class="secondary lc-btn" data-act="loadCuratedListsFeed" data-act-args="[true]">Refresh</button>
+      <div class="shelf-header">
+        <h2 class="shelf-title sr-only">Curated For You</h2>
+        <p>Personalized recommendations and curated lists tailored to your watch history and tastes.</p>
+        ${refreshButtonHtml('loadCuratedListsFeed', 'Refresh curated recommendations', [true])}
       </div>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem; line-height:1.45;">Personalized recommendations and curated lists tailored to your watch history and tastes.</p>
       <div id="curatedListsFeed"></div>
     </div>
   </div>
@@ -32958,20 +34654,23 @@ if ('serviceWorker' in navigator) {
   <div class="subnav-pills-bar" id="listsSubnavBar">
     <button type="button" class="subnav-pill active" data-sub="my-lists" data-act="switchListsSubmenu" data-act-args="[&quot;my-lists&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> My Lists</button>
     <button type="button" class="subnav-pill" data-sub="liked" data-act="switchListsSubmenu" data-act-args="[&quot;liked&quot;,&quot;@self&quot;]">Liked</button>
-    <button type="button" class="subnav-pill" data-sub="import" data-act="switchListsSubmenu" data-act-args="[&quot;import&quot;,&quot;@self&quot;]">Import</button>
+    <button type="button" class="subnav-pill" data-sub="import" data-act="switchListsSubmenu" data-act-args="[&quot;import&quot;,&quot;@self&quot;]" style="display:none;">Import</button>
   </div>
 
   <!-- Submenu 1: User's Connected Account & Custom Lists -->
   <div class="lists-subpanel" id="listsSubMyLists">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="shelf-title">Your Custom Lists</h2>
-        <div style="display:flex; gap:8px;">
-          <button type="button" class="primary lc-btn" data-act="openCreateListModal" data-act-args="[&quot;custom&quot;]">+ New List</button>
-          <button type="button" class="secondary lc-btn" data-act="appActRefreshCreatorDashboard">Refresh</button>
+      <div class="shelf-header" style="margin-bottom:12px; align-items:center; justify-content:space-between; gap:12px;">
+        <div>
+          <h2 class="shelf-title sr-only">Your Custom Lists</h2>
+          <p style="margin:0; color:var(--muted); font-size:0.85rem;">Custom lists you've created locally or on your profile.</p>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; flex-shrink:0;">
+          <button type="button" class="primary lc-btn" data-act="openCreateListModal" data-act-args="[&quot;custom&quot;]">+ Create List</button>
+          <button type="button" class="secondary lc-btn" data-act="openImportListModal">Import</button>
+          ${refreshButtonHtml('appActRefreshCreatorDashboard', 'Refresh lists')}
         </div>
       </div>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Custom lists you've created locally or on your profile.</p>
       <div id="creatorDashboard"></div>
     </div>
 
@@ -33026,7 +34725,7 @@ if ('serviceWorker' in navigator) {
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title">Lists You Liked</h2>
-        <button type="button" class="secondary lc-btn" data-act="renderLikedListsFeed" data-act-args="[true]">Refresh</button>
+        ${refreshButtonHtml('renderLikedListsFeed', 'Refresh liked lists', [true])}
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Lists you've saved with the heart, from the community directory and from your connected accounts.</p>
       <!-- The placeholder here is the pre-JS state only. renderLikedListsFeed
@@ -33047,32 +34746,86 @@ if ('serviceWorker' in navigator) {
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title" id="customListEditorTitle">Create a Custom List</h2>
       </div>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Manage items and settings for this custom list. You can reorder items by dragging or typing a position number, remove items with the &#x2715; button, or add new items from Search, Discover, or Charts.</p>
+      <p style="margin:0 0 16px; color:var(--muted); font-size:0.85rem;">Curate, reorder, and manage titles for this custom list.</p>
 
-      <p style="margin-top:14px; margin-bottom:6px; font-weight:600; font-size:0.85rem;">Picks in this list:</p>
-      <div id="customListDraftList"><p style="color:var(--muted); font-size:0.85rem;"><small>No items in this list yet &mdash; tap + on any movie or show across Discover, Search, or Charts to add it.</small></p></div>
-      <div class="actions" style="margin-top:8px; justify-content:flex-start; gap:8px;">
-        <button type="button" class="secondary lc-btn" data-act="shuffleCustomListDraft">Shuffle Picks Now</button>
-        <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" data-act="removeAllCustomListDraftPicks">Remove All</button>
+      <!-- 1. List Name & Content Type Header Group -->
+      <div style="display:flex; gap:20px; align-items:flex-end; flex-wrap:wrap; margin-bottom:16px;">
+        <div style="flex:1 1 320px; max-width:480px; min-width:0;">
+          <label for="customListNameInput" style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:6px;">List Name</label>
+          <input type="text" id="customListNameInput" placeholder="List name (e.g. My Favorites)" style="width:100%; padding:9px 14px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.92rem; box-sizing:border-box;">
+        </div>
+        <div style="flex:0 0 auto;">
+          <label style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:6px;">Content Type</label>
+          <div id="customListTypeToggles" style="display:flex; gap:8px; align-items:center;">
+            <label class="custom-list-type-pill active">
+              <input type="radio" name="customListTypeRadio" value="movie" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;movie&quot;]" checked>
+              <span class="check-icon">&#x2713;</span><span>Movies</span>
+            </label>
+            <label class="custom-list-type-pill">
+              <input type="radio" name="customListTypeRadio" value="series" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;series&quot;]">
+              <span class="check-icon">&#x2713;</span><span>Shows</span>
+            </label>
+            <label class="custom-list-type-pill">
+              <input type="radio" name="customListTypeRadio" value="mixed" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;mixed&quot;]">
+              <span class="check-icon">&#x2713;</span><span>Mixed</span>
+            </label>
+          </div>
+        </div>
       </div>
-      <div id="customListVisibilityRow" style="margin-top:12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; max-width:280px;">
-        <span style="font-size:0.95rem; font-weight:500; color:var(--text);">Public</span>
-        <label class="ui-toggle">
+
+      <!-- 2. Public List Toggle -->
+      <div id="customListVisibilityRow" style="padding:10px 14px; background:var(--surface); border:1px solid var(--border); border-radius:10px; display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px;">
+        <div>
+          <span style="font-size:0.88rem; font-weight:600; color:var(--text);">Public List</span>
+          <p style="margin:2px 0 0; font-size:0.78rem; color:var(--muted);">Make this list visible on your public creator profile and discoverable in the community directory</p>
+        </div>
+        <label class="ui-toggle" aria-label="Make list public">
           <input type="checkbox" id="customListPublicToggle" checked>
           <span class="ui-toggle-slider"></span>
         </label>
       </div>
 
-      <!-- Advanced Settings (Progressive Disclosure) -->
-      <details class="channel-advanced-details" style="margin-top:12px; border:1px solid var(--border); border-radius:8px; padding:10px 14px; background:var(--surface);">
+      <!-- 3. Inline Search & Quick Add Bar -->
+      <div class="custom-list-search-section" style="border:1px solid var(--border); border-radius:12px; padding:16px; background:var(--surface); margin-bottom:16px; box-shadow:var(--shadow-sm);">
+        <label for="customListSearchInput" style="display:block; font-size:0.88rem; font-weight:700; color:var(--text); margin-bottom:4px;">Add Titles to List</label>
+        <p style="margin:0 0 10px; font-size:0.8rem; color:var(--muted);">Search for movies or shows and tap "+ Add" to add them straight to this list.</p>
+        <div style="position:relative; width:100%;">
+          <input type="text" id="customListSearchInput" placeholder="Search a title to add..." style="width:100%; padding:10px 14px 10px 38px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.9rem; box-sizing:border-box;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none;" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <button type="button" id="customListSearchClearBtn" class="search-clear-btn" aria-label="Clear search" style="display:none; position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--muted); cursor:pointer; padding:4px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm4.3 14.3a.996.996 0 0 1-1.41 0L12 13.41 9.11 16.3a.996.996 0 1 1-1.41-1.41L10.59 12 7.7 9.11A.996.996 0 1 1 9.11 7.7L12 10.59l2.89-2.89a.996.996 0 1 1 1.41 1.41L13.41 12l2.89 2.89c.38.38.38 1.02 0 1.41z"/></svg>
+          </button>
+        </div>
+        <div id="customListSearchResult" style="margin-top:10px;"></div>
+      </div>
+
+      <!-- 4. Picks in This List -->
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:8px; margin-bottom:8px;">
+        <div style="font-weight:700; font-size:0.92rem; color:var(--text);">
+          Picks in this list <span id="customListDraftCount" style="font-weight:normal; font-size:0.8rem; color:var(--muted);">(0 items)</span>
+        </div>
+        <div class="actions" id="customListDraftActions" style="margin:0; gap:8px; display:none;">
+          <button type="button" class="secondary lc-btn" data-act="shuffleCustomListDraft" style="font-size:0.8rem;">Shuffle Picks Now</button>
+          <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25); font-size:0.8rem;" data-act="removeAllCustomListDraftPicks">Remove All</button>
+        </div>
+      </div>
+      <div id="customListDraftList">
+        <p style="color:var(--muted); font-size:0.85rem;"><small>No items in this list yet &mdash; search above or tap + on any movie or show across Discover, Search, or Charts to add it.</small></p>
+      </div>
+
+      <!-- 5. Advanced Settings (Progressive Disclosure) -->
+      <details class="channel-advanced-details" style="margin-top:16px; border:1px solid var(--border); border-radius:10px; padding:12px 16px; background:var(--surface); box-shadow:var(--shadow-sm);">
         <summary style="font-weight:600; font-size:0.88rem; cursor:pointer; user-select:none; color:var(--text); display:flex; align-items:center; justify-content:space-between;">
           <span>Advanced Settings</span>
           <span style="font-size:0.75rem; color:var(--muted); font-weight:normal;">Play order &amp; watch history rules</span>
         </summary>
         <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px;">
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
-            <label for="customListPlayOrderSelect" style="font-size:0.85rem; font-weight:600; white-space:nowrap;">Play order:</label>
-            <select id="customListPlayOrderSelect" data-act="applyCustomListPlayOrder" data-act-args="[&quot;@value&quot;]" style="flex:1; min-width:210px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px; flex-wrap:wrap;">
+            <label for="customListPlayOrderSelect" style="font-size:0.85rem; font-weight:600; white-space:nowrap; color:var(--text);">Play order:</label>
+            <select id="customListPlayOrderSelect" data-act="applyCustomListPlayOrder" data-act-args="[&quot;@value&quot;]" style="max-width:320px; font-size:0.86rem; padding:7px 12px; background:var(--surface); color:var(--text); border:1.5px solid var(--border-strong); border-radius:var(--radius-pill);">
               <option value="as-listed">Creation order (as listed)</option>
               <option value="aired-asc">Air date &mdash; oldest first</option>
               <option value="aired-desc">Air date &mdash; newest first</option>
@@ -33082,31 +34835,23 @@ if ('serviceWorker' in navigator) {
           </div>
           <p id="customListPlayOrderHint" style="margin:0 0 14px; color:var(--muted); font-size:0.78rem;">Picks play in the order you created above &mdash; drag one, or type a new position, to change it.</p>
 
-          <label class="channel-rule-row" style="margin-top:10px;">
-            <input type="checkbox" id="customListHideWatchedCheck">
-            <span>Hide watched &mdash; skip items already in my watch history</span>
-          </label>
-          <p style="margin:2px 0 0 24px; color:var(--muted); font-size:0.78rem;">Needs Auto-track playback signed in. Once every pick has been seen, the whole list comes back rather than going dark.</p>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:12px; padding-top:10px; border-top:1px solid var(--border-subtle, rgba(255,255,255,0.08));">
+            <div>
+              <span style="font-size:0.86rem; font-weight:600; color:var(--text);">Hide watched</span>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Skip items already in your watch history (requires Auto-track playback signed in)</p>
+            </div>
+            <label class="ui-toggle" aria-label="Hide watched items">
+              <input type="checkbox" id="customListHideWatchedCheck">
+              <span class="ui-toggle-slider"></span>
+            </label>
+          </div>
         </div>
       </details>
-      <div id="customListTypeToggles" style="margin-top:8px; display:flex; gap:16px; flex-wrap:wrap;">
-        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-          <input type="radio" name="customListTypeRadio" value="movie" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;movie&quot;]" checked>
-          <span style="font-size:0.85rem;">Movies</span>
-        </label>
-        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-          <input type="radio" name="customListTypeRadio" value="series" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;series&quot;]">
-          <span style="font-size:0.85rem;">Shows</span>
-        </label>
-        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-          <input type="radio" name="customListTypeRadio" value="mixed" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;mixed&quot;]">
-          <span style="font-size:0.85rem;">Mixed (Movies &amp; Shows)</span>
-        </label>
-      </div>
-      <div class="row" style="margin-top:10px;">
-        <input type="text" id="customListNameInput" placeholder="List name (e.g. My Favorites)">
-        <button type="button" class="primary" id="customListSaveBtn" data-act="saveCustomList">Save</button>
-        <button type="button" id="customListCancelEditBtn" class="secondary" style="display:none;" data-act="cancelEditCustomList">Cancel</button>
+
+      <!-- 6. Bottom Action Bar -->
+      <div class="actions" style="margin-top:18px; border-top:1px solid var(--border); padding-top:14px; justify-content:flex-end; gap:10px;">
+        <button type="button" id="customListCancelEditBtn" class="secondary lc-btn" style="display:none;" data-act="cancelEditCustomList">Cancel</button>
+        <button type="button" class="primary lc-btn" id="customListSaveBtn" data-act="saveCustomList" style="padding:8px 24px; font-weight:600;">Create List</button>
       </div>
     </div>
   </div>
@@ -33147,21 +34892,21 @@ if ('serviceWorker' in navigator) {
     <button type="button" class="subnav-pill" data-sub="storylines" data-act="switchChannelsSubmenu" data-act-args="[&quot;storylines&quot;,&quot;@self&quot;]">Storylines &amp; Universes</button>
     <button type="button" class="subnav-pill" data-sub="quickadd" data-act="switchChannelsSubmenu" data-act-args="[&quot;quickadd&quot;,&quot;@self&quot;]">Quick Add</button>
     <button type="button" class="subnav-pill" data-sub="explore" data-act="switchChannelsSubmenu" data-act-args="[&quot;explore&quot;,&quot;@self&quot;]">Explore Channels</button>
-    <button type="button" class="subnav-pill" data-sub="import" data-act="switchChannelsSubmenu" data-act-args="[&quot;import&quot;,&quot;@self&quot;]">Import</button>
+    <button type="button" class="subnav-pill" data-sub="import" data-act="switchChannelsSubmenu" data-act-args="[&quot;import&quot;,&quot;@self&quot;]" style="display:none;">Import</button>
   </div>
 
   <!-- Submenu: Storylines & Universes (Canon Timelines, Sagas & Bridges) -->
   <div class="channels-subpanel" id="channelsSubStorylines" style="display:none;">
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:8px;">
-        <h2 class="shelf-title">Storylines, Sagas &amp; Universes</h2>
+        <h2 class="shelf-title sr-only">Storylines, Sagas &amp; Universes</h2>
+        <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem; line-height:1.4;">
+          Complete franchise timelines, movie trilogies &amp; sagas (3+ films), and TV-to-movie universes in canon chronological watch order. Add any saga directly to your Catalogs or launch it as a continuous 24/7 channel with 1-click.
+        </p>
       </div>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">
-        Complete franchise timelines, movie trilogies &amp; sagas (3+ films), and TV-to-movie universes in canon chronological watch order. Add any saga directly to your Catalogs or launch it as a continuous 24/7 channel with 1-click.
-      </p>
 
       <!-- Category Filter Tabs -->
-      <div class="subnav-pills-bar" id="storylineCategoryFilterBar" style="margin-bottom:16px; flex-wrap:wrap;">
+      <div class="subnav-pills-bar" id="storylineCategoryFilterBar" style="margin-bottom:16px;">
         <button type="button" class="subnav-pill active" data-act="filterStorylinesCategory" data-act-args="[&quot;all&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> All Sagas</button>
         <button type="button" class="subnav-pill" data-act="filterStorylinesCategory" data-act-args="[&quot;moviesagas&quot;,&quot;@self&quot;]">Movie Sagas (3+ Films)</button>
         <button type="button" class="subnav-pill" data-act="filterStorylinesCategory" data-act-args="[&quot;tvuniverses&quot;,&quot;@self&quot;]">TV Universes &amp; Bridges</button>
@@ -33176,24 +34921,26 @@ if ('serviceWorker' in navigator) {
 
   <!-- Submenu 1: My Channels -->
   <div class="channels-subpanel" id="channelsSubMyChannels">
-    <!-- The shell's own channel templates (P6-7): choose a template, look at
-         what is playing today, then add the channel to the home screen.
-         Every panel below is unchanged, and the Custom template hands off to
-         the older builder itself until that is rewritten. -->
-    <div id="appShellChannels"></div>
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="shelf-title">My Channels</h2>
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <div class="shelf-header" style="margin-bottom:10px; align-items:center; justify-content:space-between; gap:12px;">
+        <div>
+          <h2 class="shelf-title sr-only">My Channels</h2>
+          <p style="margin:0; color:var(--muted); font-size:0.85rem;">Your custom built and saved 24/7 TV channels. Play episodes continuously in broadcast order or daily shuffle.</p>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
           <button type="button" class="secondary lc-btn" data-act="createNextUpChannel" data-act-args="[&quot;@self&quot;]" title="A channel that always plays the next episode of everything you have on the go">+ Next Up Channel</button>
-          <button type="button" class="primary lc-btn" data-act="openBuildCustomChannel">+ New Channel</button>
+          <button type="button" class="primary lc-btn" data-act="openBuildCustomChannel">+ Create Channel</button>
+          <button type="button" class="secondary lc-btn" data-act="openImportChannelModal" title="Import channel from link or share code">Import</button>
+          ${refreshButtonHtml('refreshMyChannelsAction', 'Refresh channels')}
         </div>
       </div>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Your custom built and saved 24/7 TV channels. Play episodes continuously in broadcast order or daily shuffle.</p>
       <div id="channelNextUpStatus" style="margin-bottom:8px;"></div>
       <div class="row" id="myChannelsToolbar" style="margin-bottom:10px; gap:8px;">
-        <input type="text" id="myChannelsSearchInput" aria-label="Search your channels" placeholder="Search your channels..." data-act-on="input" data-act="setMyChannelsSearch" data-act-args="[&quot;@value&quot;]">
-        <select id="myChannelsSortSelect" aria-label="Order your channels" data-act="setMyChannelsSort" data-act-args="[&quot;@value&quot;]" style="flex:none; width:auto;">
+        <div class="search-input-box" style="flex:1;">
+          <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="myChannelsSearchInput" aria-label="Search your channels" placeholder="Search your channels..." style="padding-left:38px; border-radius:var(--radius-pill);" data-act-on="input" data-act="setMyChannelsSearch" data-act-args="[&quot;@value&quot;]">
+        </div>
+        <select id="myChannelsSortSelect" aria-label="Order your channels" data-act="setMyChannelsSort" data-act-args="[&quot;@value&quot;]" style="flex:none; width:auto; border-radius:var(--radius-pill);">
           <option value="recent">Recently updated</option>
           <option value="created">Recently created</option>
           <option value="name">Name (A&ndash;Z)</option>
@@ -33202,7 +34949,7 @@ if ('serviceWorker' in navigator) {
         </select>
       </div>
       <div id="myChannelsUndoBar" style="display:none; margin-bottom:10px;"></div>
-      <div id="myCreatedChannelsList"><p style="color:var(--muted); font-size:0.85rem;"><small>No channels created yet. Tap <strong>+ New Channel</strong> above or add a popular network in <strong>Quick Add</strong>.</small></p></div>
+      <div id="myCreatedChannelsList"><p style="color:var(--muted); font-size:0.85rem;"><small>No channels created yet. Tap <strong>+ Create Channel</strong> above or add a popular network in <strong>Quick Add</strong>.</small></p></div>
     </div>
 
     <div class="panel" style="margin-top:12px;">
@@ -33219,17 +34966,16 @@ if ('serviceWorker' in navigator) {
         <div class="shelf-header" style="margin-bottom:8px;">
           <h3 style="font-size:0.95rem; font-weight:700; margin:0;">Create Merged Catalog</h3>
         </div>
-        <div class="actions" style="margin-bottom:8px; justify-content:space-between;">
-          <button type="button" class="secondary lc-btn" data-act="renderChannelMergeList">Refresh list</button>
+        <div id="channelMergeSelectAllWrap" class="actions" style="margin-bottom:8px; justify-content:flex-end; display:none;">
           <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:0.85rem; user-select:none;">
             <input type="checkbox" id="channelMergeSelectAllCheck" data-act="toggleAllChannelMergeChecks" data-act-args="[&quot;@self&quot;]">
             <span>Select all</span>
           </label>
         </div>
         <div id="channelMergeList"><p style="color:var(--muted); font-size:0.85rem;"><small>No saved channels yet.</small></p></div>
-        <div class="row" style="margin-top:8px;">
-          <input type="text" id="channelMergeNameInput" aria-label="Combined catalog name" placeholder="Combined catalog name (e.g. Live TV)">
-          <button type="button" class="secondary" data-act="mergeChannelsIntoRow">Merge into catalog</button>
+        <div class="row" id="channelMergeControls" style="margin-top:10px; gap:8px; display:none;">
+          <input type="text" id="channelMergeNameInput" aria-label="Combined catalog name" placeholder="Combined catalog name (e.g. Live TV)" style="max-width:380px; width:100%; border-radius:var(--radius-pill);">
+          <button type="button" class="secondary lc-btn" data-act="mergeChannelsIntoRow" style="border-radius:var(--radius-pill);">Merge into catalog</button>
         </div>
       </div>
     </div>
@@ -33239,38 +34985,67 @@ if ('serviceWorker' in navigator) {
   <div class="channels-subpanel" id="channelsSubQuickAdd" style="display:none;">
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:8px;">
-        <h2 class="shelf-title">Quick Add Popular Networks</h2>
+        <h2 class="shelf-title sr-only">Quick Add Popular Networks</h2>
       </div>
       <p class="qa-shelf-sub">Instant 1-click TV channels with up to 5,000 episodes, rotating 24 shows with 3 episodes every 24 hours:</p>
-      <div class="channel-quick-grid">
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="A&amp;E" data-networkid="129">A&amp;E</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="ABC" data-networkid="2">ABC</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Adult Swim" data-networkid="80">Adult Swim</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="AMC" data-networkid="174">AMC</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="BBC One" data-networkid="4">BBC One</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Cartoon Network" data-networkid="56">Cartoon Network</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="CBS" data-networkid="16">CBS</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Comedy Central" data-networkid="47">Comedy Central</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Discovery" data-networkid="64">Discovery</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Disney Channel" data-networkid="54">Disney Channel</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Food Network" data-networkid="143">Food Network</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="FOX" data-networkid="19">FOX</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="FX" data-networkid="88">FX</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Hallmark Channel" data-networkid="384">Hallmark Channel</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="HBO" data-networkid="49">HBO</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="HGTV" data-networkid="209">HGTV</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="History" data-networkid="65">History</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Ion Television" data-networkid="436">Ion Television</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="MeTV" data-networkid="738">MeTV</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="MTV" data-networkid="33">MTV</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="NBC" data-networkid="6">NBC</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Nickelodeon" data-networkid="13">Nickelodeon</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Syfy" data-networkid="149">Syfy</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="TBS" data-networkid="68">TBS</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="The CW" data-networkid="71">The CW</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="TLC" data-networkid="84">TLC</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="TNT" data-networkid="41">TNT</button>
-        <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="USA Network" data-networkid="30">USA Network</button>
+      <div class="channel-quick-sections" style="display:flex; flex-direction:column; gap:16px; margin-top:14px;">
+        <div>
+          <div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Major Broadcast</div>
+          <div class="channel-quick-grid">
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="ABC" data-networkid="2">ABC</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="CBS" data-networkid="16">CBS</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="FOX" data-networkid="19">FOX</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="NBC" data-networkid="6">NBC</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="The CW" data-networkid="71">The CW</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="BBC One" data-networkid="4">BBC One</button>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Cable &amp; Premium Drama</div>
+          <div class="channel-quick-grid">
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="AMC" data-networkid="174">AMC</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Comedy Central" data-networkid="47">Comedy Central</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="FX" data-networkid="88">FX</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="HBO" data-networkid="49">HBO</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Syfy" data-networkid="149">Syfy</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="TBS" data-networkid="68">TBS</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="TNT" data-networkid="41">TNT</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="USA Network" data-networkid="30">USA Network</button>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Animation &amp; Kids</div>
+          <div class="channel-quick-grid">
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Adult Swim" data-networkid="80">Adult Swim</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Cartoon Network" data-networkid="56">Cartoon Network</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Disney Channel" data-networkid="54">Disney Channel</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Nickelodeon" data-networkid="13">Nickelodeon</button>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Documentary &amp; Lifestyle</div>
+          <div class="channel-quick-grid">
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Discovery" data-networkid="64">Discovery</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Food Network" data-networkid="143">Food Network</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="HGTV" data-networkid="209">HGTV</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="History" data-networkid="65">History</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="TLC" data-networkid="84">TLC</button>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Classics &amp; Variety</div>
+          <div class="channel-quick-grid">
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="A&amp;E" data-networkid="129">A&amp;E</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Hallmark Channel" data-networkid="384">Hallmark Channel</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Ion Television" data-networkid="436">Ion Television</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="MeTV" data-networkid="738">MeTV</button>
+            <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="MTV" data-networkid="33">MTV</button>
+          </div>
+        </div>
       </div>
       <div id="channelQuickAddStatus" style="margin-top:8px;"></div>
     </div>
@@ -33280,20 +35055,23 @@ if ('serviceWorker' in navigator) {
   <div class="channels-subpanel" id="channelsSubExplore" style="display:none;">
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:8px;">
-        <h2 class="shelf-title">Explore Channels</h2>
-        <button type="button" class="secondary lc-btn" data-act="loadChannelDirectory" data-act-args="[true]">Refresh</button>
+        <h2 class="shelf-title sr-only">Explore Channels</h2>
+        <p style="margin:0; color:var(--muted); font-size:0.85rem;">
+          24/7 channels built and published by other people &mdash; &ldquo;Saturday Morning 90s&rdquo;, &ldquo;80s VHS Sci-Fi Vault&rdquo;, whatever anyone has put together. Add one to your own setup in a single click, then edit it however you like.
+        </p>
       </div>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">
-        24/7 channels built and published by other people &mdash; &ldquo;Saturday Morning 90s&rdquo;, &ldquo;80s VHS Sci-Fi Vault&rdquo;, whatever anyone has put together. Add one to your own setup in a single click, then edit it however you like.
-      </p>
-      <div class="row" style="margin-bottom:10px; gap:8px;">
-        <input type="text" id="channelDirectorySearchInput" aria-label="Filter published channels" placeholder="Filter by name, description or creator..." data-act-on="input" data-act="renderChannelDirectory">
-        <select id="channelDirectorySortSelect" aria-label="Order published channels" data-act="setChannelDirectorySort" data-act-args="[&quot;@value&quot;]" style="flex:none; width:auto;">
+      <div class="row" style="margin-bottom:10px; gap:8px; align-items:center;">
+        <div class="search-input-box" style="flex:1;">
+          <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="channelDirectorySearchInput" aria-label="Filter published channels" placeholder="Filter by name, description or creator..." style="padding-left:38px; border-radius:var(--radius-pill);" data-act-on="input" data-act="renderChannelDirectory">
+        </div>
+        <select id="channelDirectorySortSelect" aria-label="Order published channels" data-act="setChannelDirectorySort" data-act-args="[&quot;@value&quot;]" style="flex:none; width:auto; border-radius:var(--radius-pill);">
           <option value="newest">Newest</option>
           <option value="added">Most added</option>
           <option value="liked">Most liked</option>
           <option value="name">Name (A&ndash;Z)</option>
         </select>
+        ${refreshButtonHtml('loadChannelDirectory', 'Refresh published channels', [true])}
       </div>
       <div id="channelDirectoryFeed"><p style="color:var(--muted); font-size:0.85rem;"><small>Loading published channels&hellip;</small></p></div>
     </div>
@@ -33499,20 +35277,72 @@ if ('serviceWorker' in navigator) {
 
 <div class="tab-panel" data-tab-panel="search" id="content-search" role="tabpanel" aria-labelledby="tab-desktop-search" hidden>
   <div class="panel">
-    <div class="shelf-header" style="margin-bottom:10px;">
+    <div class="shelf-header" style="margin-bottom:12px;">
       <h2 class="shelf-title">Search Movies, TV Shows &amp; Lists</h2>
     </div>
-    <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Search to find movies, shows and lists to add to your lists.</p>
     
-    <div class="row">
-      <input type="text" id="catalogSearchInput" aria-label="Search by title or list name" placeholder="Search by title or list name..." data-act="appActCatalogSearchInput" data-act-on="input,keydown" data-act-args="[&quot;@self&quot;,&quot;@event&quot;]">
-      <button type="button" class="primary" data-act="runCatalogSearch">Search</button>
+    <div class="search-input-wrapper">
+      <div class="search-input-box">
+        <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <input type="text" id="catalogSearchInput" aria-label="Search by title or list name" placeholder="Search movies by title..." style="width:100%; padding-left:38px; padding-right:38px;" data-act="appActCatalogSearchInput" data-act-on="input,keydown" data-act-args="[&quot;@self&quot;,&quot;@event&quot;]">
+        <button type="button" id="catalogSearchClearBtn" class="search-clear-btn" aria-label="Clear search" data-act="clearCatalogSearch">
+          <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM8.28 7.22a.75.75 0 0 0-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 1 0 1.06 1.06L10 11.06l1.72 1.72a.75.75 0 1 0 1.06-1.06L11.06 10l1.72-1.72a.75.75 0 0 0-1.06-1.06L10 8.94 8.28 7.22Z" clip-rule="evenodd" /></svg>
+        </button>
+      </div>
     </div>
 
-    <div class="subnav-pills-bar" id="catalogSearchTypeChips" style="margin-top:10px;">
-      <button type="button" class="subnav-pill active" data-act="setCatalogSearchFilter" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> Movies</button>
-      <button type="button" class="subnav-pill" data-act="setCatalogSearchFilter" data-act-args="[&quot;tv&quot;,&quot;@self&quot;]">Shows</button>
-      <button type="button" class="subnav-pill" data-act="setCatalogSearchFilter" data-act-args="[&quot;lists&quot;,&quot;@self&quot;]">Lists</button>
+    <div class="search-filters-toolbar">
+      <div class="subnav-pills-bar" id="catalogSearchTypeChips" style="margin:0; width:auto; padding:0; flex-shrink:0;">
+        <button type="button" class="subnav-pill active" data-act="setCatalogSearchFilter" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> Movies</button>
+        <button type="button" class="subnav-pill" data-act="setCatalogSearchFilter" data-act-args="[&quot;tv&quot;,&quot;@self&quot;]">Shows</button>
+        <button type="button" class="subnav-pill" data-act="setCatalogSearchFilter" data-act-args="[&quot;lists&quot;,&quot;@self&quot;]">Lists</button>
+      </div>
+
+      <!-- Quick Filter Dropdowns for Movies & Shows -->
+      <div id="catalogSearchFiltersRow" style="display:flex; flex-wrap:wrap; gap:8px; margin:0; align-items:center;">
+        <select id="catalogSearchGenreSelect" class="search-filter-select" aria-label="Filter by genre" data-act="applySearchFilters">
+          <option value="">All Genres</option>
+          <option value="28,10759">Action &amp; Adventure</option>
+          <option value="16">Animation</option>
+          <option value="35">Comedy</option>
+          <option value="80">Crime</option>
+          <option value="99">Documentary</option>
+          <option value="18">Drama</option>
+          <option value="10751,10762">Family &amp; Kids</option>
+          <option value="14,878,10765">Fantasy &amp; Sci-Fi</option>
+          <option value="36">History</option>
+          <option value="27">Horror</option>
+          <option value="10402">Music</option>
+          <option value="9648">Mystery</option>
+          <option value="10749">Romance</option>
+          <option value="53">Thriller</option>
+          <option value="10752,10768">War &amp; Politics</option>
+          <option value="37">Western</option>
+        </select>
+
+        <select id="catalogSearchYearSelect" class="search-filter-select" aria-label="Filter by year" data-act="applySearchFilters">
+          <option value="">All Years</option>
+          <option value="2026">2026</option>
+          <option value="2025">2025</option>
+          <option value="2024">2024</option>
+          <option value="2023">2023</option>
+          <option value="2020-2022">2020–2022</option>
+          <option value="2010-2019">2010s</option>
+          <option value="2000-2009">2000s</option>
+          <option value="1990-1999">1990s</option>
+          <option value="<1990">1980s &amp; Older</option>
+        </select>
+
+        <select id="catalogSearchRatingSelect" class="search-filter-select" aria-label="Filter by minimum rating" data-act="applySearchFilters">
+          <option value="">All Ratings</option>
+          <option value="8.0">8.0+ ⭐</option>
+          <option value="7.0">7.0+ ⭐</option>
+          <option value="6.0">6.0+ ⭐</option>
+          <option value="5.0">5.0+ ⭐</option>
+        </select>
+
+        <button type="button" id="catalogSearchResetFiltersBtn" class="secondary lc-btn" data-act="resetSearchFilters" style="font-size:0.8rem; padding:4px 10px; min-height:30px; height:30px; border-radius:var(--radius-pill); display:none;">Reset</button>
+      </div>
     </div>
     <!-- Where the lists come from, and in what order: the chips
          Discover's Explore section had, on Search's own list results. See
@@ -33533,93 +35363,80 @@ if ('serviceWorker' in navigator) {
     </div>
 
 
-    <!-- Quick Filter Dropdowns for Movies & Shows -->
-    <div id="catalogSearchFiltersRow" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; align-items:center;">
-      <select id="catalogSearchGenreSelect" aria-label="Filter by genre" data-act="applySearchFilters" style="flex:1; min-width:130px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
-        <option value="">All Genres</option>
-        <option value="28,10759">Action &amp; Adventure</option>
-        <option value="16">Animation</option>
-        <option value="35">Comedy</option>
-        <option value="80">Crime</option>
-        <option value="99">Documentary</option>
-        <option value="18">Drama</option>
-        <option value="10751,10762">Family &amp; Kids</option>
-        <option value="14,878,10765">Fantasy &amp; Sci-Fi</option>
-        <option value="36">History</option>
-        <option value="27">Horror</option>
-        <option value="10402">Music</option>
-        <option value="9648">Mystery</option>
-        <option value="10749">Romance</option>
-        <option value="53">Thriller</option>
-        <option value="10752,10768">War &amp; Politics</option>
-        <option value="37">Western</option>
-      </select>
-
-      <select id="catalogSearchYearSelect" aria-label="Filter by year" data-act="applySearchFilters" style="flex:1; min-width:115px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
-        <option value="">All Years</option>
-        <option value="2026">2026</option>
-        <option value="2025">2025</option>
-        <option value="2024">2024</option>
-        <option value="2023">2023</option>
-        <option value="2020-2022">2020–2022</option>
-        <option value="2010-2019">2010s</option>
-        <option value="2000-2009">2000s</option>
-        <option value="1990-1999">1990s</option>
-        <option value="<1990">1980s &amp; Older</option>
-      </select>
-
-      <select id="catalogSearchRatingSelect" aria-label="Filter by minimum rating" data-act="applySearchFilters" style="flex:1; min-width:115px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
-        <option value="">All Ratings</option>
-        <option value="8.0">8.0+ ⭐</option>
-        <option value="7.0">7.0+ ⭐</option>
-        <option value="6.0">6.0+ ⭐</option>
-        <option value="5.0">5.0+ ⭐</option>
-      </select>
-
-      <button type="button" id="catalogSearchResetFiltersBtn" class="secondary lc-btn" data-act="resetSearchFilters" style="font-size:0.8rem; padding:6px 10px; height:auto; display:none;">Reset</button>
-    </div>
-
     <div id="catalogSearchResult" style="margin-top:14px;"></div>
   </div>
 </div>
 <div class="tab-panel" data-tab-panel="settings" id="content-settings" role="tabpanel" aria-labelledby="tab-desktop-settings" hidden>
   <!-- Settings Top Submenu Pills -->
   <div class="subnav-pills-bar" id="settingsSubnavBar">
-    <button type="button" class="subnav-pill active" data-sub="account" data-act="switchSettingsSubmenu" data-act-args="[&quot;account&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> Account &amp; Sync</button>
-    <button type="button" class="subnav-pill" data-sub="external" data-act="switchSettingsSubmenu" data-act-args="[&quot;external&quot;,&quot;@self&quot;]">External Accounts &amp; API Keys</button>
+    <button type="button" class="subnav-pill active" data-sub="account" data-act="switchSettingsSubmenu" data-act-args="[&quot;account&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> Account &amp; Security</button>
+    <button type="button" class="subnav-pill" data-sub="display" data-act="switchSettingsSubmenu" data-act-args="[&quot;display&quot;,&quot;@self&quot;]">Catalog &amp; Display</button>
+    <button type="button" class="subnav-pill" data-sub="scrobble" data-act="switchSettingsSubmenu" data-act-args="[&quot;scrobble&quot;,&quot;@self&quot;]">Tracking &amp; Scrobble</button>
+    <button type="button" class="subnav-pill" data-sub="external" data-act="switchSettingsSubmenu" data-act-args="[&quot;external&quot;,&quot;@self&quot;]">Connected Services</button>
     <button type="button" class="subnav-pill" data-sub="backup" data-act="switchSettingsSubmenu" data-act-args="[&quot;backup&quot;,&quot;@self&quot;]">Presets &amp; Backup</button>
-    <button type="button" class="subnav-pill" data-sub="feedback" data-act="switchSettingsSubmenu" data-act-args="[&quot;feedback&quot;,&quot;@self&quot;]">Feedback and Support</button>
+    <button type="button" class="subnav-pill" data-sub="feedback" data-act="switchSettingsSubmenu" data-act-args="[&quot;feedback&quot;,&quot;@self&quot;]">Feedback &amp; Support</button>
   </div>
 
   <!-- Submenu 2: Presets & Backup -->
   <div class="settings-subpanel" id="settingsSubBackup" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="shelf-title">My Presets <span class="badge" id="presetsCountBadge"></span></h2>
+      <div class="shelf-header" style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <h2 class="shelf-title" style="margin:0;">My Presets <span class="badge" id="presetsCountBadge"></span></h2>
+        <div>
+          <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;presetFileInput&quot;]" style="white-space:nowrap; padding:6px 14px; font-size:0.82rem;">Upload preset file</button>
+          <input type="file" id="presetFileInput" aria-label="Choose a preset file to upload" accept="application/json,.json" style="display:none;" data-act="uploadPresetFile" data-act-args="[&quot;@self&quot;]">
+        </div>
       </div>
       <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Save your current setup as a named preset to reuse or download as a file.</p>
-      <div class="row">
-        <input type="text" id="presetNameInput" placeholder="Preset name (e.g. Home Cinema)">
-        <button type="button" class="secondary lc-btn" data-act="saveCurrentAsPreset">Save preset</button>
-      </div>
-      <div class="actions" style="margin-top:8px;">
-        <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;presetFileInput&quot;]">Upload preset file</button>
-        <input type="file" id="presetFileInput" aria-label="Choose a preset file to upload" accept="application/json,.json" style="display:none;" data-act="uploadPresetFile" data-act-args="[&quot;@self&quot;]">
+      <div class="preset-create-group" style="display:flex; gap:8px; align-items:stretch; margin-bottom:10px; max-width:540px;">
+        <input type="text" id="presetNameInput" placeholder="Preset name (e.g. Home Cinema)" style="flex:1; min-width:0; padding:8px 12px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.9rem;">
+        <button type="button" class="primary lc-btn" data-act="saveCurrentAsPreset" style="white-space:nowrap; padding:0 18px;">Save preset</button>
       </div>
       <div id="presetsList" style="margin-top:10px;"></div>
     </div>
 
     <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Backup &amp; Restore</h2>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Export a complete backup snapshot of your catalogs, custom lists, watchlist, watch history, continue watching, channels, presets, and settings &mdash; or restore from a previous JSON backup.</p>
-      <textarea id="configJsonBox" rows="5" style="width:100%;font-family:monospace;font-size:14px;" placeholder="Paste config JSON here to restore..."></textarea>
-      <div class="backup-actions-grid" style="margin-top:8px;">
-        <button type="button" class="secondary lc-btn" data-act="exportConfigJson">Export current</button>
-        <button type="button" class="secondary lc-btn" data-act="importConfigJson">Import JSON</button>
-        <button type="button" class="secondary lc-btn" data-act="downloadConfigJson">Download file</button>
-        <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;configFileInput&quot;]">Upload file</button>
-        <input type="file" id="configFileInput" aria-label="Choose a backup file to restore" accept="application/json,.json" style="display:none;" data-act="uploadConfigFile" data-act-args="[&quot;@self&quot;]">
+      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">Export a complete backup snapshot of your catalogs, custom lists, watchlist, watch history, continue watching, channels, presets, and settings &mdash; or restore from a previous JSON backup.</p>
+      
+      <div class="backup-quick-grid">
+        <div style="border:1px solid var(--border); border-radius:12px; padding:16px 18px; background:var(--surface); box-shadow:var(--shadow-sm); display:flex; flex-direction:column; justify-content:space-between; gap:12px;">
+          <div>
+            <div style="font-weight:700; font-size:0.92rem; color:var(--text);">
+              Download Backup
+            </div>
+            <p style="margin:4px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Save a complete snapshot file (.json) with all your catalogs, lists, channels, history, and settings.</p>
+          </div>
+          <button type="button" class="secondary lc-btn" data-act="downloadConfigJson" style="align-self:flex-start; padding:8px 18px; font-weight:600;">Download Backup File</button>
+        </div>
+
+        <div style="border:1px solid var(--border); border-radius:12px; padding:16px 18px; background:var(--surface); box-shadow:var(--shadow-sm); display:flex; flex-direction:column; justify-content:space-between; gap:12px;">
+          <div>
+            <div style="font-weight:700; font-size:0.92rem; color:var(--text);">
+              Restore from File
+            </div>
+            <p style="margin:4px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Restore your previous setup from an exported backup .json file.</p>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;configFileInput&quot;]" style="padding:8px 18px; font-weight:600;">Upload &amp; Restore File</button>
+            <input type="file" id="configFileInput" aria-label="Choose a backup file to restore" accept="application/json,.json" style="display:none;" data-act="uploadConfigFile" data-act-args="[&quot;@self&quot;]">
+          </div>
+        </div>
       </div>
+
+      <details class="backup-advanced-disclosure">
+        <summary class="backup-advanced-summary">
+          <span>Advanced: Direct JSON Configuration Payload</span>
+          <span class="backup-advanced-arrow">&#x25BE;</span>
+        </summary>
+        <div style="padding:0 14px 14px; display:flex; flex-direction:column; gap:10px;">
+          <textarea id="configJsonBox" rows="5" style="width:100%; font-family:var(--font-mono, monospace); font-size:13px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); padding:8px 10px; box-sizing:border-box;" placeholder="Paste config JSON here to restore..."></textarea>
+          <div class="backup-actions-grid" style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" class="secondary lc-btn" data-act="exportConfigJson">Export current to box</button>
+            <button type="button" class="secondary lc-btn" data-act="importConfigJson">Import JSON from box</button>
+          </div>
+        </div>
+      </details>
 
       <!-- Importing from an install link is not offered: an install id is an
            unrevocable bearer credential that returns connected accounts'
@@ -33633,7 +35450,7 @@ if ('serviceWorker' in navigator) {
       <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">Export your Watch History, Continue Watching, and Custom Lists in standard CSV or JSON format for easy import into Trakt, Letterboxd, MDBList, Simkl, or IMDb.</p>
       
       <div style="display:flex; flex-direction:column; gap:12px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:12px 14px; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:10px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:14px 18px; background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow-sm); border-radius:12px;">
           <div>
             <div style="font-weight:700; font-size:0.92rem; color:var(--text);">Watch History</div>
             <div style="font-size:0.8rem; color:var(--muted);">All watched movies, shows, and episodes with timestamps</div>
@@ -33645,7 +35462,7 @@ if ('serviceWorker' in navigator) {
           </div>
         </div>
 
-        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:12px 14px; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:10px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:14px 18px; background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow-sm); border-radius:12px;">
           <div>
             <div style="font-weight:700; font-size:0.92rem; color:var(--text);">All Custom Lists &amp; Watchlist</div>
             <div style="font-size:0.8rem; color:var(--muted);">Export all created lists, watchlist, and continue watching items</div>
@@ -33658,280 +35475,338 @@ if ('serviceWorker' in navigator) {
       </div>
     </div>
   </div>
-  <!-- Submenu 1: Account & Sync -->
+  <!-- Subpanel 1: Account & Security -->
   <div class="settings-subpanel" id="settingsSubAccount">
     <div class="panel">
       <h2 class="panel-title">Your Account</h2>
       <div id="accountKeySection"></div>
     </div>
-    <!-- The shell's own Settings cards (P6-2), filled by
-         24_client-backup-restore-presets.js: this account's devices and this
-         browser's install link. Its account and connections cards are gone:
-         Your Account above and External Accounts & API Keys already have both,
-         and the owner found every button twice. The older panels below are
-         unchanged. -->
-    <div id="appShellSettingsHome"></div>
+  </div>
 
+  <!-- Subpanel 2: Catalog & Display -->
+  <div class="settings-subpanel" id="settingsSubDisplay" style="display:none;">
+    <!-- Consolidated Catalog & Content Rules (P1 & P2) -->
+    <div class="panel">
+      <div class="shelf-header" style="margin-bottom:8px;">
+        <h2 class="shelf-title">Catalog &amp; Content Rules</h2>
+      </div>
+      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">Configure streaming availability, digital release filters, cross-list deduplication, and adult content safety.</p>
+
+      <div class="settings-row-group">
+        <!-- Region -->
+        <div class="settings-row-item" style="padding-bottom:14px; border-bottom:1px solid var(--border);">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:240px;">
+              <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Content Region</span>
+              <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Used for streaming-availability catalogs (Netflix, Disney+, etc.), Stream Releases, and content ratings.</p>
+            </div>
+            <div style="flex:none; width:100%; max-width:320px;">
+              <select id="regionSelect" aria-label="Streaming region" data-act="appActStoreSettingValue" data-act-args="[&quot;myListAddon:region&quot;,&quot;@value&quot;]" style="width:100%; max-width:320px; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.86rem; box-sizing:border-box;">
+                ${buildRegionOptionsHtml(initialRegion)}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Digital Release Filter -->
+        <div class="settings-row-item" style="padding:14px 0; border-bottom:1px solid var(--border);">
+          <div class="settings-toggle-row" style="padding:0; border:none;">
+            <div style="flex:1; min-width:0; padding-right:12px;">
+              <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Hide items with no digital release</span>
+              <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Removes still-in-theaters movies with no known digital or physical release from TMDB Trending and Popular catalogs.</p>
+              <details style="margin-top:6px; font-size:0.8rem; color:var(--muted);">
+                <summary style="cursor:pointer; color:var(--accent); font-weight:600;">More details</summary>
+                <p style="margin:4px 0 0;">Useful for skipping in-theaters titles you cannot stream or buy yet. TV Shows are not affected. Requires Save/Update to take effect on an existing install link.</p>
+              </details>
+            </div>
+            <label class="ui-toggle" aria-label="Hide items with no digital release">
+              <input type="checkbox" id="hideNonDigitalReleasesCheckbox" ${initialHideNonDigitalReleases ? 'checked' : ''} data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:hideNonDigitalReleases&quot;,&quot;@checked&quot;]">
+              <span class="ui-toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Deduplication -->
+        <div class="settings-row-item" id="legacyDedupePanel" style="padding:14px 0; border-bottom:1px solid var(--border);">
+          <div class="settings-toggle-row" style="padding:0; border:none;">
+            <div style="flex:1; min-width:0; padding-right:12px;">
+              <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Remove duplicate items across lists</span>
+              <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Automatically removes titles from lower catalog rows if already shown in a row above.</p>
+              <details style="margin-top:6px; font-size:0.8rem; color:var(--muted);">
+                <summary style="cursor:pointer; color:var(--accent); font-weight:600;">How row deduplication works</summary>
+                <p style="margin:4px 0 0;">Keeps your top catalog row intact; every list below it has items shown in earlier lists filtered out. Drag lists in Catalogs to change priority. Requires Save/Update to take effect on an existing install link.</p>
+              </details>
+            </div>
+            <label class="ui-toggle" aria-label="Remove duplicate items across lists">
+              <input type="checkbox" id="dedupeAcrossListsCheckbox" ${initialDedupeAcrossLists ? 'checked' : ''} data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:dedupeAcrossLists&quot;,&quot;@checked&quot;]">
+              <span class="ui-toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Adult Content -->
+        <div class="settings-row-item" style="padding-top:14px;">
+          <div class="settings-toggle-row" style="padding:0; border:none;">
+            <div style="flex:1; min-width:0; padding-right:12px;">
+              <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Adult Content Filter</span>
+              <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Filter NSFW posters and replace default unfiltered posters with safe, age-appropriate ones across your catalogs, search, continue watching, and Stremio/Nuvio.</p>
+            </div>
+            <label class="ui-toggle" aria-label="Adult Content Filter">
+              <input type="checkbox" id="adultContentFilterCheckbox" ${initialAdultContentFilter ? 'checked' : ''} data-act="appActToggleAdultFilter" data-act-args="[&quot;@checked&quot;]">
+              <span class="ui-toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Better Posters Panel (P2 & P3) -->
     <div class="panel" style="margin-top:12px;">
+      <h2 class="panel-title">Better Posters</h2>
+      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Swap plain poster artwork for <a href="https://btttr.cc/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">BetterPosters</a> &mdash; posters with the genre, rating and tags drawn directly into the artwork. No API key or account needed.</p>
+      <div class="settings-toggle-row" style="padding:0 0 12px; border-bottom:none;">
+        <div style="flex:1; min-width:0; padding-right:12px;">
+          <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Use Better Posters artwork</span>
+          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Enriches artwork across Live Preview, Search, Discover, and your streaming catalog rows.</p>
+          <details style="margin-top:6px; font-size:0.8rem; color:var(--muted);">
+            <summary style="cursor:pointer; color:var(--accent); font-weight:600;">Artwork compatibility details</summary>
+            <p style="margin:4px 0 0;">Only titles with an IMDb ID are affected. Poster badges are drawn over this artwork rather than replacing it. Adult Content Filter still overrides it. TV Channel artwork and episode stills are preserved.</p>
+          </details>
+        </div>
+        <label class="ui-toggle" aria-label="Use Better Posters artwork">
+          <input type="checkbox" id="betterPostersCheckbox" ${initialBetterPosters ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPosters&quot;,&quot;@checked&quot;]">
+          <span class="ui-toggle-slider"></span>
+        </label>
+      </div>
+      <div id="betterPostersOptions" style="display:${initialBetterPosters ? 'flex' : 'none'}; flex-direction:column; gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
+        <div style="font-size:0.85rem; font-weight:700; color:var(--text);">What to draw on the poster</div>
+        <div class="settings-check-group two-col-grid">
+          <label class="settings-check-item">
+            <input type="checkbox" id="betterPostersGenreCheckbox" ${initialBetterPostersGenre ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersGenre&quot;,&quot;@checked&quot;]">
+            <div style="flex:1; min-width:0;">
+              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Genre</span>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Genre label along the bottom of the poster.</p>
+            </div>
+          </label>
+          <label class="settings-check-item">
+            <input type="checkbox" id="betterPostersRatingCheckbox" ${initialBetterPostersRating ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRating&quot;,&quot;@checked&quot;]">
+            <div style="flex:1; min-width:0;">
+              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Rating</span>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Star rating along the bottom of the poster.</p>
+            </div>
+          </label>
+          <label class="settings-check-item">
+            <input type="checkbox" id="betterPostersTrendTagsCheckbox" ${initialBetterPostersTrendTags ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersTrendTags&quot;,&quot;@checked&quot;]">
+            <div style="flex:1; min-width:0;">
+              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Trend tags</span>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">A corner tag on titles that are currently trending or newly released.</p>
+            </div>
+          </label>
+          <label class="settings-check-item">
+            <input type="checkbox" id="betterPostersQualityCheckbox" ${initialBetterPostersQuality ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersQuality&quot;,&quot;@checked&quot;]">
+            <div style="flex:1; min-width:0;">
+              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Quality tags</span>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">4K, Dolby Vision and Atmos badges, where BetterPosters knows them.</p>
+            </div>
+          </label>
+          <label class="settings-check-item">
+            <input type="checkbox" id="betterPostersAgeCheckbox" ${initialBetterPostersAge ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersAge&quot;,&quot;@checked&quot;]">
+            <div style="flex:1; min-width:0;">
+              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Age rating</span>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Certification chip (PG-13, TV-MA, and so on).</p>
+            </div>
+          </label>
+        </div>
+        <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:6px;">
+          <div style="flex:1; min-width:220px; max-width:320px;">
+            <label for="betterPostersRatingSourceSelect" style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:4px;">Rating source</label>
+            <select id="betterPostersRatingSourceSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRatingSource&quot;,&quot;@value&quot;]" style="width:100%; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.86rem; box-sizing:border-box;">
+              ${betterPostersRatingSourceOptionsHtml}
+            </select>
+            <p style="margin:4px 0 0; color:var(--muted); font-size:0.78rem;">Which score the rating is taken from.</p>
+          </div>
+          <div style="flex:1; min-width:220px; max-width:320px;">
+            <label for="betterPostersLangSelect" style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:4px;">Poster language</label>
+            <select id="betterPostersLangSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersLang&quot;,&quot;@value&quot;]" style="width:100%; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.86rem; box-sizing:border-box;">
+              ${betterPostersLangOptionsHtml}
+            </select>
+            <p style="margin:4px 0 0; color:var(--muted); font-size:0.78rem;">Language BetterPosters draws text in.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Poster Badges & Labels Panel (P3) -->
+    <div class="panel" style="margin-top:12px;">
+      <h2 class="panel-title">Poster Badges &amp; Labels</h2>
+      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">Customize which badges and indicators are displayed on posters across your website dashboard, catalogs, and Stremio/Nuvio.</p>
+      <div style="display:flex; flex-direction:column; gap:16px;">
+        <div style="border-bottom:1px solid var(--border); padding-bottom:14px; display:flex; flex-direction:column; gap:6px;">
+          <div style="font-size:0.85rem; font-weight:700; color:var(--text); margin-bottom:4px;">Website &amp; Dashboard</div>
+          <div class="settings-check-group two-col-grid">
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeAiringNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesAiringNext&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Airing Next (Dashboard)</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Airing Next shelf and provider lists on your dashboard</p>
+              </div>
+            </label>
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesContinueWatching&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Continue Watching</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">In-progress series on your website dashboard</p>
+              </div>
+            </label>
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeWatchlistCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesWatchlist&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Watchlist</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Shows in your Watchlist with upcoming episodes</p>
+              </div>
+            </label>
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeTraktContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesTraktContinueWatching&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Trakt Continue Watching</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Connected Trakt Continue Watching series</p>
+              </div>
+            </label>
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeMdblistUpNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesMdblistUpNext&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">MDBList Up Next</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Connected MDBList Up Next series</p>
+              </div>
+            </label>
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeCatalogsCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesCatalogs&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Catalogs &amp; Live Preview</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Catalog rows, Catalogs Live Preview &amp; Editor, and See All views</p>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div style="border-bottom:1px solid var(--border); padding-bottom:14px; display:flex; flex-direction:column; gap:6px;">
+          <div style="font-size:0.85rem; font-weight:700; color:var(--text); margin-bottom:4px;">Stremio &amp; Nuvio (Artwork Overlays)</div>
+          <div class="settings-check-group two-col-grid">
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeStremioAiringNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioAiringNext&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Airing Next Catalogs in Stremio &amp; Nuvio</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Overlay premiere, finale, and air date chips in Stremio and Nuvio</p>
+              </div>
+            </label>
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeStremioContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioContinueWatching&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Continue Watching Catalogs in Stremio &amp; Nuvio</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Overlay chips on Continue Watching artwork in Stremio and Nuvio</p>
+              </div>
+            </label>
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeStremioWatchlistCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioWatchlist&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Watchlist Catalogs in Stremio &amp; Nuvio</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Overlay chips on Watchlist artwork in Stremio and Nuvio</p>
+              </div>
+            </label>
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeStremioCatalogsCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioCatalogs&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Other Custom &amp; Provider Catalogs</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Overlay badges on MDBList, Trakt, Simkl, and Custom list rows</p>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          <div style="font-size:0.85rem; font-weight:700; color:var(--text); margin-bottom:4px;">Badge Types</div>
+          <div class="settings-check-group two-col-grid">
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeAirDateCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeAirDate&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Upcoming Air Date</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Air date countdown (e.g. <code>TODAY</code>, <code>TOMORROW</code>)</p>
+              </div>
+            </label>
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeSeasonPremiereCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonPremiere&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Season Premiere</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Green <code>Season Premiere</code> badge on un-aired Episode 1s</p>
+              </div>
+            </label>
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeSeasonFinaleCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonFinale&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Season Finale</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Orange <code>Season Finale</code> badge on season finales</p>
+              </div>
+            </label>
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeSeasonFinaleDateCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonFinaleDate&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Season Finale Date</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Date when the season finale will air on mid-season episodes</p>
+              </div>
+            </label>
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeTmdbRatingCheckbox" checked data-act="toggleTmdbRatingSetting" data-act-args="[&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">TMDb Ratings</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Star rating (e.g. <span style="color:#f5c518; font-weight:700;">★ 7.9</span>) beside the year/subtitle</p>
+              </div>
+            </label>
+            <label class="settings-check-item">
+              <input type="checkbox" id="badgeWatchedCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeWatched&quot;,&quot;@checked&quot;]">
+              <div style="flex:1; min-width:0;">
+                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Watched Status Badges</span>
+                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Checkmark badge on movies and shows you've already watched</p>
+              </div>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hidden Lists Panel -->
+    <div class="panel" style="margin-top:12px;">
+      <h2 class="panel-title">Hidden Lists</h2>
+      <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Hide specific lists from My Lists, Airing Next, and Simkl Airing Next. A hidden list is still tracked and updated normally underneath -- only its display is suppressed, and it can be shown again here at any time.</p>
+      <div id="hiddenListsSettingsSection"></div>
+    </div>
+  </div>
+
+  <!-- Subpanel 3: Tracking & Scrobble -->
+  <div class="settings-subpanel" id="settingsSubScrobble" style="display:none;">
+    <div class="panel">
       <h2 class="panel-title">Watchlist Preferences</h2>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Customize how watched movies and TV shows are managed in your personal Watchlist.</p>
       <div id="watchlistPreferencesSection"></div>
     </div>
 
     <div class="panel" style="margin-top:12px;">
-      <h2 class="panel-title">Hidden Lists</h2>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Hide specific lists from My Lists, Airing Next, and Simkl Airing Next. A hidden list is still tracked and updated normally underneath -- only its display is suppressed, and it can be shown again here at any time.</p>
-      <div id="hiddenListsSettingsSection"></div>
-    </div>
-
-    <div class="panel" style="margin-top:12px;">
-      <h2 class="panel-title">Region</h2>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Used for streaming-availability catalogs (Netflix, Disney+, etc.), Stream Releases, and content ratings -- so what shows up actually matches what's available where you are.</p>
-      <select id="regionSelect" aria-label="Streaming region" data-act="appActStoreSettingValue" data-act-args="[&quot;myListAddon:region&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
-        ${buildRegionOptionsHtml(initialRegion)}
-      </select>
-    </div>
-
-    <div class="panel" style="margin-top:12px;">
-      <h2 class="panel-title">Trending &amp; Popular Catalogs</h2>
-      <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">
-        <input type="checkbox" id="hideNonDigitalReleasesCheckbox" ${initialHideNonDigitalReleases ? 'checked' : ''} data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:hideNonDigitalReleases&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-        <div>
-          <span style="font-weight:600;">Hide items with no digital release</span>
-          <p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Removes movies with no known digital or physical release from TMDB Trending Movies and Popular Movies catalogs -- useful for skipping still-in-theaters titles you can't stream or buy yet. Shows aren't affected (no equivalent release-type data exists for TV). Requires Save/Update to take effect on an existing install link.</p>
-        </div>
-      </label>
-    </div>
-
-    <div class="panel" style="margin-top:12px;" id="legacyDedupePanel">
-      <h2 class="panel-title">Duplicate Items Across Lists</h2>
-      <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">
-        <input type="checkbox" id="dedupeAcrossListsCheckbox" ${initialDedupeAcrossLists ? 'checked' : ''} data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:dedupeAcrossLists&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-        <div>
-          <span style="font-weight:600;">Remove duplicate items across lists</span>
-          <p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Keeps your top list exactly as it is; every list below it has anything already shown in an earlier list removed. Order is whatever order your lists are in here -- drag a list to change which one keeps a shared title. Applies to Live Preview &amp; Editor and to the real catalogs Stremio/Nuvio see once you Save/Update. Requires Save/Update to take effect on an existing install link.</p>
-        </div>
-      </label>
-    </div>
-
-    <div class="panel" style="margin-top:12px;">
-      <h2 class="panel-title">Adult Content &amp; Poster Safety</h2>
-      <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">
-        <input type="checkbox" id="adultContentFilterCheckbox" ${initialAdultContentFilter ? 'checked' : ''} data-act="appActToggleAdultFilter" data-act-args="[&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-        <div>
-          <span style="font-weight:600;">Adult Content Filter</span>
-          <p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Filter NSFW posters and replace default unfiltered posters with safe, age-appropriate ones across your catalogs, search, continue watching, and Stremio/Nuvio.</p>
-        </div>
-      </label>
-    </div>
-
-    <div class="panel" style="margin-top:12px;">
-      <h2 class="panel-title">Better Posters</h2>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Swap plain poster artwork for <a href="https://btttr.cc/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">BetterPosters</a> &mdash; posters with the genre, rating and tags drawn into the image itself. No API key or account needed. Only movies and shows with an IMDb id are affected; anything else keeps the poster it already had.</p>
-      <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-        <input type="checkbox" id="betterPostersCheckbox" ${initialBetterPosters ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPosters&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-        <div>
-          <span style="font-weight:600;">Use Better Posters artwork</span>
-          <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Applies everywhere: Live Preview, Search, Discover, My Lists, creator profiles and the builders here on the website, and the catalog rows and title pages Stremio and Nuvio request from the add-on. The website updates as soon as you tick this; Stremio/Nuvio need a Save/Update on an existing install link. Poster badges, if you have them on, are drawn over this artwork rather than replacing it, and the Adult Content Filter still overrides it. TV Channel artwork and episode stills are left as they are.</p>
-        </div>
-      </label>
-      <div id="betterPostersOptions" style="display:${initialBetterPosters ? 'flex' : 'none'}; flex-direction:column; gap:10px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
-        <div style="font-size:0.85rem; font-weight:700; color:var(--text);">What to draw on the poster</div>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersGenreCheckbox" ${initialBetterPostersGenre ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersGenre&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Genre</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Genre label along the bottom of the poster.</p>
-          </div>
-        </label>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersRatingCheckbox" ${initialBetterPostersRating ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRating&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Rating</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Star rating along the bottom of the poster.</p>
-          </div>
-        </label>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersTrendTagsCheckbox" ${initialBetterPostersTrendTags ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersTrendTags&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Trend tags</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">A corner tag on titles that are currently trending or newly released.</p>
-          </div>
-        </label>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersQualityCheckbox" ${initialBetterPostersQuality ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersQuality&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Quality tags</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">4K, Dolby Vision and Atmos badges, where BetterPosters knows them.</p>
-          </div>
-        </label>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="betterPostersAgeCheckbox" ${initialBetterPostersAge ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersAge&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Age rating</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Certification chip (PG-13, TV-MA, and so on).</p>
-          </div>
-        </label>
-        <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
-          <label for="betterPostersRatingSourceSelect" style="font-size:0.85rem; font-weight:600; color:var(--text);">Rating source</label>
-          <select id="betterPostersRatingSourceSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRatingSource&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
-            ${betterPostersRatingSourceOptionsHtml}
-          </select>
-          <p style="margin:0; color:var(--muted); font-size:0.8rem;">Which score the rating is taken from. Only used when Rating is on above.</p>
-        </div>
-        <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
-          <label for="betterPostersLangSelect" style="font-size:0.85rem; font-weight:600; color:var(--text);">Poster language</label>
-          <select id="betterPostersLangSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersLang&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
-            ${betterPostersLangOptionsHtml}
-          </select>
-          <p style="margin:0; color:var(--muted); font-size:0.8rem;">Language BetterPosters draws the title and labels in, where it has artwork for it.</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="panel" style="margin-top:12px;">
-      <h2 class="panel-title">Poster Badges &amp; Labels</h2>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Customize which badges and indicators are displayed on posters across your website dashboard, catalogs, and Stremio/Nuvio.</p>
-      <div style="display:flex; flex-direction:column; gap:12px;">
-        <div style="border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:4px; display:flex; flex-direction:column; gap:10px;">
-          <div style="font-size:0.85rem; font-weight:700; color:var(--text);">Website &amp; Dashboard</div>
-          <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeAiringNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesAiringNext&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-            <div>
-              <span style="font-weight:600;">Airing Next (Dashboard)</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show premiere, finale, and upcoming air date badges on the Airing Next shelf and provider lists.</p>
-            </div>
-          </label>
-          <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesContinueWatching&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-            <div>
-              <span style="font-weight:600;">Continue Watching (Dashboard)</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show premiere, finale, and air date badges on your in-progress Continue Watching series.</p>
-            </div>
-          </label>
-          <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeWatchlistCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesWatchlist&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-            <div>
-              <span style="font-weight:600;">Watchlist (Dashboard)</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show premiere, finale, and air date badges on shows in your Watchlist that have an episode coming.</p>
-            </div>
-          </label>
-          <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeTraktContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesTraktContinueWatching&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-            <div>
-              <span style="font-weight:600;">Continue Watching (Trakt)</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show premiere, finale, and air date badges on your Trakt Continue Watching series.</p>
-            </div>
-          </label>
-          <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeMdblistUpNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesMdblistUpNext&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-            <div>
-              <span style="font-weight:600;">Up Next (MDBList)</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show premiere, finale, and air date badges on your MDBList Up Next series.</p>
-            </div>
-          </label>
-          <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeCatalogsCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesCatalogs&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-            <div>
-              <span style="font-weight:600;">Catalogs &amp; Live Preview</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show badges on catalog rows, the Catalogs Live Preview &amp; Editor, and catalog See All views.</p>
-            </div>
-          </label>
-        </div>
-
-        <div style="border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:4px; display:flex; flex-direction:column; gap:10px;">
-          <div style="font-size:0.85rem; font-weight:700; color:var(--text);">Stremio &amp; Nuvio (Artwork Overlays)</div>
-          <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeStremioAiringNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioAiringNext&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-            <div>
-              <span style="font-weight:600;">Airing Next Catalogs in Stremio &amp; Nuvio</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Overlay premiere, finale, and date chips on Airing Next poster artwork in Stremio and Nuvio.</p>
-            </div>
-          </label>
-          <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeStremioContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioContinueWatching&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-            <div>
-              <span style="font-weight:600;">Continue Watching Catalogs in Stremio &amp; Nuvio</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Overlay premiere, finale, and date chips on Continue Watching poster artwork in Stremio and Nuvio.</p>
-            </div>
-          </label>
-          <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeStremioWatchlistCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioWatchlist&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-            <div>
-              <span style="font-weight:600;">Watchlist Catalogs in Stremio &amp; Nuvio</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Overlay premiere, finale, and date chips on Watchlist poster artwork in Stremio and Nuvio.</p>
-            </div>
-          </label>
-          <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-            <input type="checkbox" id="badgeStremioCatalogsCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioCatalogs&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-            <div>
-              <span style="font-weight:600;">Other Custom &amp; Provider Catalogs in Stremio &amp; Nuvio</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Overlay badges on MDBList, Trakt, Simkl, and Custom list catalog rows in Stremio and Nuvio.</p>
-            </div>
-          </label>
-        </div>
-
-        <div style="font-size:0.85rem; font-weight:700; color:var(--text); margin-top:2px;">Badge Types</div>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeAirDateCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeAirDate&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Upcoming Air Date</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Shows the upcoming air date tag (e.g. <code>TODAY</code>, <code>TOMORROW</code>, <code>WED</code>, <code>SEP 4</code>) on upcoming episode posters.</p>
-          </div>
-        </label>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeSeasonPremiereCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonPremiere&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Season Premiere Badge</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Shows the green <code>Season Premiere</code> badge on upcoming Episode 1s (only when the episode has not yet aired).</p>
-          </div>
-        </label>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeSeasonFinaleCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonFinale&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Season Finale Badge</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Shows the orange <code>Season Finale</code> badge when the upcoming episode is the final episode of that season.</p>
-          </div>
-        </label>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeSeasonFinaleDateCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonFinaleDate&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Season Finale Date Badge</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Shows when the season finale will air (e.g. <code>Finale: Nov 12</code>) on mid-season episodes (Episodes 2–9).</p>
-          </div>
-        </label>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeTmdbRatingCheckbox" checked data-act="toggleTmdbRatingSetting" data-act-args="[&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">TMDb Ratings</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Show TMDb star ratings (e.g. <span style="color:#f5c518; font-weight:700;">★ 7.9</span>) beside the year/subtitle across the app (except in Live Preview).</p>
-          </div>
-        </label>
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="badgeWatchedCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeWatched&quot;,&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Watched Status Badges</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Shows the watched badge on movies and shows you've already watched.</p>
-          </div>
-        </label>
-      </div>
-    </div>
-
-    <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Watch History &amp; Continue Watching</h2>
       <div style="border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:12px;">
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none;">
-          <input type="checkbox" id="autoRecommendCompanionsCheckbox" checked data-act="toggleCompanionRecommendationSetting" data-act-args="[&quot;@checked&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">
-          <div>
-            <span style="font-weight:600;">Storyline &amp; Companion Recommendations</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">Automatically recommend canon bridge movies between seasons (e.g. <em>Demon Slayer: Mugen Train</em>) and sequel films or spin-off series when a show concludes (e.g. <em>Breaking Bad &rarr; El Camino &rarr; Better Call Saul</em>).</p>
+        <div class="settings-toggle-row" style="padding-top:4px;">
+          <div style="flex:1; min-width:0; padding-right:12px;">
+            <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Storyline &amp; Companion Recommendations</span>
+            <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Automatically recommend canon bridge movies between seasons (e.g. <em>Demon Slayer: Mugen Train</em>) and sequel films or spin-off series when a show concludes (e.g. <em>Breaking Bad &rarr; El Camino &rarr; Better Call Saul</em>).</p>
           </div>
-        </label>
+          <label class="ui-toggle" aria-label="Toggle Storyline and Companion Recommendations">
+            <input type="checkbox" id="autoRecommendCompanionsCheckbox" checked data-act="toggleCompanionRecommendationSetting" data-act-args="[&quot;@checked&quot;]">
+            <span class="ui-toggle-slider"></span>
+          </label>
+        </div>
       </div>
       <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Reset or clear all recorded movies and episodes from your personal Watch History or in-progress Continue Watching.</p>
       <div id="watchHistorySettingsSection" style="display:flex; gap:10px; flex-wrap:wrap;">
-        <button type="button" class="secondary lc-btn" data-act="clearWatchHistoryAll" style="color:var(--danger); border-color:rgba(255,59,48,0.3); font-weight:600; padding:8px 16px;">Clear Watch History</button>
-        <button type="button" class="secondary lc-btn" data-act="clearContinueWatchingAll" style="color:var(--danger); border-color:rgba(255,59,48,0.3); font-weight:600; padding:8px 16px;">Clear Continue Watching</button>
+        <button type="button" class="btn-danger btn-sm" data-act="clearWatchHistoryAll">Clear Watch History</button>
+        <button type="button" class="btn-danger btn-sm" data-act="clearContinueWatchingAll">Clear Continue Watching</button>
       </div>
     </div>
 
@@ -33949,163 +35824,222 @@ if ('serviceWorker' in navigator) {
       <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Connect your external service accounts and API keys. When signed in to your Profile, your connected accounts stay synchronized across devices and logouts.</p>
 
       <!-- TMDB Section -->
-      <div id="tmdbSection" style="padding-bottom:14px; margin-bottom:14px; border-bottom:1px solid var(--border);">
-        <p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">The Movie Database (TMDB)</p>
-        <p style="margin:0 0 10px; color:var(--muted); font-size:0.83rem;">Connect your TMDB account to import your personal lists, watchlist, and favorites, or use a custom API key / Token.</p>
-        <div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-          <button type="button" class="secondary" id="tmdbConnectBtn" data-act="startTmdbConnect">Connect TMDB Account</button>
-          <button type="button" class="secondary" id="tmdbDisconnectBtn" style="display:none;" data-act="disconnectTmdb">Disconnect</button>
+      <div class="provider-card" id="tmdbSection">
+        <div class="provider-card-header">
+          <div>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span class="provider-card-title">The Movie Database (TMDB)</span>
+              <span id="tmdbConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
+            </div>
+            <p class="provider-card-desc">Connect your TMDB account to import personal lists, watchlist, and favorites, or use a custom API key / Token.</p>
+          </div>
         </div>
-        <p id="tmdbConnectStatus" style="margin:0 0 10px; font-size:0.85rem;"></p>
-        <details style="font-size:0.85rem; color:var(--muted);">
-          <summary style="cursor:pointer; color:var(--text);">Advanced: Custom TMDB API Key / Token</summary>
-          <div style="margin-top:8px;">
-            <input type="text" id="tmdbKeyInput" placeholder="Optional: TMDB API Key (v3) or Read Access Token (v4)" value="${escapeHtmlServer(initialTmdbKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;tmdb&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
-            <p style="margin-top:4px;"><small>Get a free TMDB API key at <a href="https://www.themoviedb.org/settings/api" target="_blank" style="color:var(--accent-2);">themoviedb.org/settings/api</a>.</small></p>
+        <div class="provider-card-actions">
+          <button type="button" class="secondary lc-btn" id="tmdbConnectBtn" data-act="startTmdbConnect" style="font-weight:600;">Connect TMDB Account</button>
+          <button type="button" class="secondary lc-btn btn-danger" id="tmdbDisconnectBtn" style="display:none;" data-act="disconnectTmdb">Disconnect</button>
+        </div>
+        <details class="provider-advanced-disclosure">
+          <summary class="provider-advanced-summary">
+            <span>Advanced: Custom TMDB API Key / Token</span>
+            <span class="provider-advanced-arrow">&#x25BE;</span>
+          </summary>
+          <div style="margin-top:10px;">
+            <input type="text" id="tmdbKeyInput" placeholder="Optional: TMDB API Key (v3) or Read Access Token (v4)" value="${escapeHtmlServer(initialTmdbKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;tmdb&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
+            <p style="margin:6px 0 0; font-size:0.78rem; color:var(--muted);">Get a free TMDB API key at <a href="https://www.themoviedb.org/settings/api" target="_blank" style="color:var(--accent-2);">themoviedb.org/settings/api</a>.</p>
           </div>
         </details>
       </div>
 
       <!-- Trakt Section -->
-      <div id="traktSection" style="padding-bottom:14px; margin-bottom:14px; border-bottom:1px solid var(--border);">
-        <p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">Trakt</p>
-        <p style="margin:0 0 10px; color:var(--muted); font-size:0.83rem;">Connect your Trakt account to import your personal lists, watchlist, and collection, or use a custom Client ID.</p>
-        <div class="actions trakt-connect-actions">
-          <button type="button" class="secondary" id="traktConnectBtn" data-act="startTraktConnect">Connect Trakt Account</button>
-          <button type="button" class="secondary" id="traktDeviceBtn" data-act="startTraktDeviceLogin">Connect with PIN / Code</button>
-          <button type="button" class="secondary" id="traktDisconnectBtn" style="display:none;" data-act="disconnectTrakt">Disconnect</button>
+      <div class="provider-card" id="traktSection">
+        <div class="provider-card-header">
+          <div>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span class="provider-card-title">Trakt</span>
+              <span id="traktConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
+            </div>
+            <p class="provider-card-desc">Connect your Trakt account to import personal lists, watchlist, and collection, or use a custom Client ID.</p>
+          </div>
         </div>
-        <p id="traktConnectStatus" style="margin:0 0 10px; font-size:0.85rem;"></p>
-        <div id="traktSyncHistoryWrap" style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.04); border-radius:8px; border:1px solid var(--border);">
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0;">
-            <input type="checkbox" id="syncTraktHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;trakt&quot;,&quot;@checked&quot;]" style="width:16px; height:16px; cursor:pointer;">
-            <span style="font-weight:600;">Sync Watch History to Trakt</span>
-          </label>
-          <p style="margin:4px 0 8px 24px; color:var(--muted); font-size:0.78rem;">Automatically sync items marked as watched or played to your Trakt account history.</p>
-          <div style="margin-left:24px;">
+        <div class="provider-card-actions trakt-connect-actions">
+          <button type="button" class="secondary lc-btn" id="traktConnectBtn" data-act="startTraktConnect" style="font-weight:600;">Connect Trakt Account</button>
+          <button type="button" class="secondary lc-btn" id="traktDeviceBtn" data-act="startTraktDeviceLogin" title="Connect from a TV or secondary device via trakt.tv/activate">Connect with PIN / Code</button>
+          <button type="button" class="secondary lc-btn btn-danger" id="traktDisconnectBtn" style="display:none;" data-act="disconnectTrakt">Disconnect</button>
+        </div>
+        <div id="traktSyncHistoryWrap" style="margin:10px 0; padding:12px 14px; background:var(--surface-2, rgba(255,255,255,0.04)); border-radius:8px; border:1px solid var(--border);">
+          <div class="settings-toggle-row" style="padding:0 0 10px;">
+            <div style="flex:1; min-width:0; padding-right:12px;">
+              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Sync Watch History to Trakt</span>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Automatically sync items marked as watched or played to your Trakt account history.</p>
+            </div>
+            <label class="ui-toggle" aria-label="Sync Watch History to Trakt">
+              <input type="checkbox" id="syncTraktHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;trakt&quot;,&quot;@checked&quot;]">
+              <span class="ui-toggle-slider"></span>
+            </label>
+          </div>
+          <div style="margin-top:8px;">
             <button type="button" class="secondary lc-btn" id="syncTraktHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;trakt&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
           </div>
         </div>
-        <details style="font-size:0.85rem; color:var(--muted);">
-          <summary style="cursor:pointer; color:var(--text);">Advanced: Custom Trakt Client ID & Username</summary>
-          <div style="margin-top:8px;">
-            <div class="row">
-              <input type="text" id="traktKeyInput" placeholder="Optional: Trakt Client ID" value="${escapeHtmlServer(initialTraktKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
-            </div>
-            <div class="row" style="margin-top:8px;">
-              <input type="text" id="traktUsernameInput" placeholder="Optional: Trakt username" value="${escapeHtmlServer(initialTraktUsername)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
-            </div>
-            <p style="margin-top:4px;"><small>Create a free Trakt Client ID at <a href="https://trakt.tv/oauth/applications" target="_blank" style="color:var(--accent-2);">trakt.tv/oauth/applications</a>.</small></p>
+        <details class="provider-advanced-disclosure">
+          <summary class="provider-advanced-summary">
+            <span>Advanced: Custom Trakt Client ID &amp; Username</span>
+            <span class="provider-advanced-arrow">&#x25BE;</span>
+          </summary>
+          <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">
+            <input type="text" id="traktKeyInput" placeholder="Optional: Trakt Client ID" value="${escapeHtmlServer(initialTraktKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
+            <input type="text" id="traktUsernameInput" placeholder="Optional: Trakt username" value="${escapeHtmlServer(initialTraktUsername)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
+            <p style="margin:2px 0 0; font-size:0.78rem; color:var(--muted);">Create a free Trakt Client ID at <a href="https://trakt.tv/oauth/applications" target="_blank" style="color:var(--accent-2);">trakt.tv/oauth/applications</a>.</p>
           </div>
         </details>
       </div>
 
       <!-- MDBList Section -->
-      <div id="mdblistSection" style="padding-bottom:14px; margin-bottom:14px; border-bottom:1px solid var(--border);">
-        <p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">MDBList</p>
-        <p style="margin:0 0 10px; color:var(--muted); font-size:0.83rem;">Connect your MDBList account to import your personal lists, watchlist, and watch history, or use a custom API key.</p>
-        <div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-          <button type="button" class="secondary" id="mdblistConnectBtn" data-act="startMdblistConnect">Connect MDBList Account</button>
-          <button type="button" class="secondary" id="mdblistDisconnectBtn" style="display:none;" data-act="disconnectMdblist">Disconnect</button>
+      <div class="provider-card" id="mdblistSection">
+        <div class="provider-card-header">
+          <div>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span class="provider-card-title">MDBList</span>
+              <span id="mdblistConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
+            </div>
+            <p class="provider-card-desc">Connect your MDBList account to import personal lists, watchlist, and watch history, or use a custom API key.</p>
+          </div>
         </div>
-        <p id="mdblistConnectStatus" style="margin:0 0 10px; font-size:0.85rem;"></p>
-        <div id="mdblistSyncHistoryWrap" style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.04); border-radius:8px; border:1px solid var(--border);">
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0;">
-            <input type="checkbox" id="syncMdblistHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;mdblist&quot;,&quot;@checked&quot;]" style="width:16px; height:16px; cursor:pointer;">
-            <span style="font-weight:600;">Sync Watch History to MDBList</span>
-          </label>
-          <p style="margin:4px 0 8px 24px; color:var(--muted); font-size:0.78rem;">Automatically sync items marked as watched or played to your MDBList account history.</p>
-          <div style="margin-left:24px;">
+        <div class="provider-card-actions">
+          <button type="button" class="secondary lc-btn" id="mdblistConnectBtn" data-act="startMdblistConnect" style="font-weight:600;">Connect MDBList Account</button>
+          <button type="button" class="secondary lc-btn btn-danger" id="mdblistDisconnectBtn" style="display:none;" data-act="disconnectMdblist">Disconnect</button>
+        </div>
+        <div id="mdblistSyncHistoryWrap" style="margin:10px 0; padding:12px 14px; background:var(--surface-2, rgba(255,255,255,0.04)); border-radius:8px; border:1px solid var(--border);">
+          <div class="settings-toggle-row" style="padding:0 0 10px;">
+            <div style="flex:1; min-width:0; padding-right:12px;">
+              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Sync Watch History to MDBList</span>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Automatically sync items marked as watched or played to your MDBList account history.</p>
+            </div>
+            <label class="ui-toggle" aria-label="Sync Watch History to MDBList">
+              <input type="checkbox" id="syncMdblistHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;mdblist&quot;,&quot;@checked&quot;]">
+              <span class="ui-toggle-slider"></span>
+            </label>
+          </div>
+          <div style="margin-top:8px;">
             <button type="button" class="secondary lc-btn" id="syncMdblistHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;mdblist&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
           </div>
         </div>
-        <details style="font-size:0.85rem; color:var(--muted);">
-          <summary style="cursor:pointer; color:var(--text);">Advanced: Custom MDBList API Key</summary>
-          <div style="margin-top:8px;">
-            <input type="text" id="mdblistKeyInput" placeholder="Optional: MDBList API key" value="${escapeHtmlServer(initialMdblistKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;mdblist&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
-            <p style="margin-top:4px;"><small>Get a free MDBList key at <a href="https://mdblist.com/preferences" target="_blank" style="color:var(--accent-2);">mdblist.com/preferences</a>.</small></p>
+        <details class="provider-advanced-disclosure">
+          <summary class="provider-advanced-summary">
+            <span>Advanced: Custom MDBList API Key</span>
+            <span class="provider-advanced-arrow">&#x25BE;</span>
+          </summary>
+          <div style="margin-top:10px;">
+            <input type="text" id="mdblistKeyInput" placeholder="Optional: MDBList API key" value="${escapeHtmlServer(initialMdblistKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;mdblist&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
+            <p style="margin:6px 0 0; font-size:0.78rem; color:var(--muted);">Get a free MDBList key at <a href="https://mdblist.com/preferences" target="_blank" style="color:var(--accent-2);">mdblist.com/preferences</a>.</p>
           </div>
         </details>
       </div>
 
       <!-- Simkl Section -->
-      <div id="simklSection" style="padding-bottom:14px; margin-bottom:14px;">
-        <p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">Simkl</p>
-        <p style="margin:0 0 10px; color:var(--muted); font-size:0.83rem;">Connect your Simkl account to import your personal lists, watchlist, and history, or use a custom Client ID.</p>
-        <div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-          <button type="button" class="secondary" id="simklConnectBtn" data-act="startSimklConnect">Connect Simkl Account</button>
-          <button type="button" class="secondary" id="simklDisconnectBtn" style="display:none;" data-act="disconnectSimkl">Disconnect</button>
+      <div class="provider-card" id="simklSection">
+        <div class="provider-card-header">
+          <div>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span class="provider-card-title">Simkl</span>
+              <span id="simklConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
+            </div>
+            <p class="provider-card-desc">Connect your Simkl account to import personal lists, watchlist, and history, or use a custom Client ID.</p>
+          </div>
         </div>
-        <p id="simklConnectStatus" style="margin:0 0 10px; font-size:0.85rem;"></p>
-        <div id="simklSyncHistoryWrap" style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.04); border-radius:8px; border:1px solid var(--border);">
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0;">
-            <input type="checkbox" id="syncSimklHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;simkl&quot;,&quot;@checked&quot;]" style="width:16px; height:16px; cursor:pointer;">
-            <span style="font-weight:600;">Sync Watch History to Simkl</span>
-          </label>
-          <p style="margin:4px 0 8px 24px; color:var(--muted); font-size:0.78rem;">Automatically sync items marked as watched or played to your Simkl account history.</p>
-          <div style="margin-left:24px;">
+        <div class="provider-card-actions">
+          <button type="button" class="secondary lc-btn" id="simklConnectBtn" data-act="startSimklConnect" style="font-weight:600;">Connect Simkl Account</button>
+          <button type="button" class="secondary lc-btn btn-danger" id="simklDisconnectBtn" style="display:none;" data-act="disconnectSimkl">Disconnect</button>
+        </div>
+        <div id="simklSyncHistoryWrap" style="margin:10px 0; padding:12px 14px; background:var(--surface-2, rgba(255,255,255,0.04)); border-radius:8px; border:1px solid var(--border);">
+          <div class="settings-toggle-row" style="padding:0 0 10px;">
+            <div style="flex:1; min-width:0; padding-right:12px;">
+              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Sync Watch History to Simkl</span>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Automatically sync items marked as watched or played to your Simkl account history.</p>
+            </div>
+            <label class="ui-toggle" aria-label="Sync Watch History to Simkl">
+              <input type="checkbox" id="syncSimklHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;simkl&quot;,&quot;@checked&quot;]">
+              <span class="ui-toggle-slider"></span>
+            </label>
+          </div>
+          <div style="margin-top:8px;">
             <button type="button" class="secondary lc-btn" id="syncSimklHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;simkl&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
           </div>
         </div>
-        <details style="font-size:0.85rem; color:var(--muted);">
-          <summary style="cursor:pointer; color:var(--text);">Advanced: Custom Simkl Client ID</summary>
-          <div style="margin-top:8px;">
-            <input type="text" id="simklKeyInput" placeholder="Optional: Simkl Client ID" value="${escapeHtmlServer(initialSimklKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;simkl&quot;,&quot;@value&quot;]" style="width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
-            <p style="margin-top:4px;"><small>Create a free Simkl Client ID at <a href="https://simkl.com/settings/developer/" target="_blank" style="color:var(--accent-2);">simkl.com/settings/developer/</a>.</small></p>
+        <details class="provider-advanced-disclosure">
+          <summary class="provider-advanced-summary">
+            <span>Advanced: Custom Simkl Client ID</span>
+            <span class="provider-advanced-arrow">&#x25BE;</span>
+          </summary>
+          <div style="margin-top:10px;">
+            <input type="text" id="simklKeyInput" placeholder="Optional: Simkl Client ID" value="${escapeHtmlServer(initialSimklKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;simkl&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
+            <p style="margin:6px 0 0; font-size:0.78rem; color:var(--muted);">Create a free Simkl Client ID at <a href="https://simkl.com/settings/developer/" target="_blank" style="color:var(--accent-2);">simkl.com/settings/developer/</a>.</p>
           </div>
         </details>
       </div>
     </div>
 
     <!-- Unified Import List Panel -->
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel" style="margin-top:14px;">
       <h2 class="panel-title">Import List</h2>
-      <p style="margin:0 0 8px; color:var(--text); font-size:0.9rem;">Use the form below to import a file and have the items automatically imported to one of your account lists.</p>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:0.83rem;">We support CSV and JSON imports from sites like IMDb, Letterboxd, MovieLens, Trakt, Simkl and TMDB. You can also upload multiple files at once.</p>
+      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">Import files to automatically populate or create custom lists in your account. Supports CSV and JSON exports from IMDb, Letterboxd, MovieLens, Trakt, Simkl, and TMDB.</p>
 
-      <div style="margin-bottom:12px;">
-        <label for="importListSourceSelect" style="display:block; font-weight:600; font-size:0.88rem; margin-bottom:6px; color:var(--text);">Source (optional)</label>
-        <select id="importListSourceSelect" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.95rem;">
-          <option value="auto">Auto-detect</option>
-          <option value="imdb">IMDb</option>
-          <option value="letterboxd">Letterboxd</option>
-          <option value="movielens">MovieLens</option>
-          <option value="trakt">Trakt</option>
-          <option value="simkl">Simkl</option>
-          <option value="tmdb">TMDB</option>
-        </select>
-      </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px; margin-bottom:12px;">
+        <div>
+          <label for="importListSourceSelect" style="display:block; font-weight:600; font-size:0.85rem; margin-bottom:6px; color:var(--text);">Source (optional)</label>
+          <select id="importListSourceSelect" style="width:100%; max-width:320px; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.88rem; box-sizing:border-box;">
+            <option value="auto">Auto-detect</option>
+            <option value="imdb">IMDb</option>
+            <option value="letterboxd">Letterboxd</option>
+            <option value="movielens">MovieLens</option>
+            <option value="trakt">Trakt</option>
+            <option value="simkl">Simkl</option>
+            <option value="tmdb">TMDB</option>
+          </select>
+        </div>
 
-      <div style="margin-bottom:12px;">
-        <label for="importTargetListSelect" style="display:block; font-weight:600; font-size:0.88rem; margin-bottom:6px; color:var(--text);">Import to which list?</label>
-        <select id="importTargetListSelect" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.95rem;" data-act="onImportTargetListChange">
-          <!-- Populated dynamically -->
-        </select>
-      </div>
-
-      <div id="importNewListInputWrap" style="display:none; margin-bottom:12px;">
-        <label for="importNewListNameInput" style="display:block; font-weight:600; font-size:0.88rem; margin-bottom:6px; color:var(--text);">New List Name</label>
-        <input type="text" id="importNewListNameInput" placeholder="e.g. My Favorite Movies" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.95rem;">
-      </div>
-
-      <div style="margin-bottom:14px;">
-        <label style="display:block; font-weight:600; font-size:0.88rem; margin-bottom:6px; color:var(--text);">Select file(s)</label>
-        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-          <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;unifiedImportFileInput&quot;]" style="padding:8px 16px;">Select files&hellip;</button>
-          <input type="file" id="unifiedImportFileInput" aria-label="Choose a file to import" multiple accept=".csv,.json,.zip,.txt" style="display:none;" data-act="onUnifiedImportFilesSelected" data-act-args="[&quot;@self&quot;]">
-          <span id="unifiedImportSelectedCount" style="font-size:0.85rem; color:var(--muted);">No files selected</span>
+        <div>
+          <label for="importTargetListSelect" style="display:block; font-weight:600; font-size:0.85rem; margin-bottom:6px; color:var(--text);">Import to which list?</label>
+          <select id="importTargetListSelect" style="width:100%; max-width:320px; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.88rem; box-sizing:border-box;" data-act="onImportTargetListChange">
+            <!-- Populated dynamically -->
+          </select>
         </div>
       </div>
 
-      <div style="margin-bottom:14px; display:flex; flex-direction:column; gap:6px;">
-        <label style="font-size:0.85rem; display:flex; align-items:center; gap:6px; color:var(--text); cursor:pointer;">
+      <div id="importNewListInputWrap" style="display:none; margin-bottom:12px;">
+        <label for="importNewListNameInput" style="display:block; font-weight:600; font-size:0.85rem; margin-bottom:6px; color:var(--text);">New List Name</label>
+        <input type="text" id="importNewListNameInput" placeholder="e.g. My Favorite Movies" style="width:100%; max-width:400px; padding:9px 12px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.9rem; box-sizing:border-box;">
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <div class="import-dropzone" id="importDropzone" data-act="appActOpenFilePicker" data-act-args="[&quot;unifiedImportFileInput&quot;]">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted); opacity:0.8; margin-bottom:2px;" aria-hidden="true">
+            <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
+            <path d="M12 12v9"></path>
+            <path d="m16 16-4-4-4 4"></path>
+          </svg>
+          <div style="text-align:center;">
+            <div style="font-weight:600; font-size:0.92rem; color:var(--text);">Choose files or drag &amp; drop here</div>
+            <div style="margin-top:3px; color:var(--muted); font-size:0.78rem;">CSV, JSON, ZIP, or TXT exports (multi-file supported)</div>
+          </div>
+          <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;unifiedImportFileInput&quot;]" style="padding:6px 16px; font-size:0.82rem; margin-top:2px;">Select files&hellip;</button>
+          <input type="file" id="unifiedImportFileInput" aria-label="Choose a file to import" multiple accept=".csv,.json,.zip,.txt" style="display:none;" data-act="onUnifiedImportFilesSelected" data-act-args="[&quot;@self&quot;]">
+        </div>
+        <div id="unifiedImportSelectedCount" style="margin-top:6px; font-size:0.82rem; color:var(--muted);">No files selected</div>
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <label class="settings-check-item" style="padding:10px 12px; margin:0;">
           <input type="checkbox" id="importAlsoMarkWatchedCheck">
-          Also add watched items to Watch History (marks them watched)
+          <div class="settings-check-label">
+            <strong style="font-size:0.88rem; color:var(--text);">Also add watched items to Watch History</strong>
+            <span class="settings-check-desc">Automatically marks imported watched items in your Watch History</span>
+          </div>
         </label>
       </div>
 
-      <div class="actions" style="margin-top:6px;">
-        <button type="button" class="secondary lc-btn" id="btnUnifiedImport" style="padding:10px 24px; font-size:0.95rem;" data-act="runUnifiedListImport">Import</button>
+      <div class="actions" style="margin-top:8px;">
+        <button type="button" class="primary lc-btn" id="btnUnifiedImport" style="padding:10px 24px; font-size:0.92rem; font-weight:600;" data-act="runUnifiedListImport">Start Import</button>
       </div>
 
       <div id="unifiedImportResult" style="margin-top:12px;"></div>
@@ -34126,60 +36060,77 @@ if ('serviceWorker' in navigator) {
       <!-- Active Threads Selector -->
       <div id="supportThreadsBar" class="support-threads-bar" style="display:none; margin-bottom:12px;"></div>
 
-      <!-- Chat View -->
-      <div id="supportChatView" style="display:none;">
-        <div id="supportMessagesStream" class="support-messages-stream"></div>
-        <div class="support-reply-composer" style="margin-top:10px;">
-          <textarea id="supportReplyInput" placeholder="Type a reply to the developer..." data-act-on="keydown" data-act="appActFeedbackReplyOnEnter" data-act-args="[&quot;@event&quot;]"></textarea>
-          <button type="button" class="primary lc-btn" id="supportReplySendBtn" data-act="sendUserFeedbackReply" style="min-height:44px; padding:0 20px;">Send</button>
+      <div class="feedback-container">
+        <!-- Chat View -->
+        <div id="supportChatView" style="display:none;">
+          <div id="supportMessagesStream" class="support-messages-stream"></div>
+          <div class="support-reply-composer" style="margin-top:10px;">
+            <textarea id="supportReplyInput" placeholder="Type a reply to the developer..." data-act-on="keydown" data-act="appActFeedbackReplyOnEnter" data-act-args="[&quot;@event&quot;]"></textarea>
+            <button type="button" class="primary lc-btn" id="supportReplySendBtn" data-act="sendUserFeedbackReply" style="min-height:44px; padding:0 20px;">Send</button>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+            <span id="supportChatStatus" style="font-size:0.8rem; color:var(--muted);"></span>
+            <button type="button" class="secondary lc-btn" data-act="refreshUserFeedbackThreads" style="padding:2px 8px; font-size:0.75rem; border:none; background:none; color:var(--muted); cursor:pointer;">&#x21BB; Refresh</button>
+          </div>
         </div>
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
-          <span id="supportChatStatus" style="font-size:0.8rem; color:var(--muted);"></span>
-          <button type="button" class="secondary lc-btn" data-act="refreshUserFeedbackThreads" style="padding:2px 8px; font-size:0.75rem; border:none; background:none; color:var(--muted); cursor:pointer;">&#x21BB; Refresh</button>
-        </div>
-      </div>
 
-      <!-- New Message / Initial Form -->
-      <div id="newFeedbackFormWrap">
-        <div class="row">
-          <label style="font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:2px;">Category</label>
-          <select id="feedbackCategorySelect" aria-label="Feedback category">
-            <option value="bug">Bug Report</option>
-            <option value="improvement">Improvement / Feature Request</option>
-            <option value="idea">Idea / Suggestion</option>
-            <option value="other">General Question / Other</option>
-          </select>
+        <!-- New Message / Initial Form -->
+        <div id="newFeedbackFormWrap">
+          <div class="row">
+            <label style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:4px;">Category</label>
+            <select id="feedbackCategorySelect" aria-label="Feedback category" style="max-width:320px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); padding:7px 12px; font-size:0.88rem;">
+              <option value="bug">Bug Report</option>
+              <option value="improvement">Improvement / Feature Request</option>
+              <option value="idea">Idea / Suggestion</option>
+              <option value="other">General Question / Other</option>
+            </select>
+          </div>
+          <div class="row" style="margin-top:10px;">
+            <label style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:4px;">Message</label>
+            <textarea id="feedbackMessageInput" rows="4" style="width:100%; max-width:680px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); padding:10px 12px; font-size:0.88rem; box-sizing:border-box;" placeholder="What would you like help with or what did you find?"></textarea>
+          </div>
+          <div class="row" style="margin-top:10px;">
+            <label style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:4px;">Contact Info (optional)</label>
+            <input type="text" id="feedbackContactInput" placeholder="Email, Discord username, etc. (optional)" style="width:100%; max-width:440px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); padding:8px 12px; font-size:0.88rem; box-sizing:border-box;">
+          </div>
+          <div class="actions" style="margin-top:12px; gap:8px; justify-content:flex-start;">
+            <button type="button" class="primary lc-btn" id="feedbackSubmitBtn" data-act="submitFeedback" style="padding:8px 20px; font-size:0.88rem; font-weight:600;">Send Message</button>
+            <button type="button" class="secondary lc-btn" id="feedbackCancelNewBtn" style="display:none;" data-act="toggleNewFeedbackForm" data-act-args="[false]">Cancel</button>
+          </div>
+          <p id="feedbackStatus" style="margin-top:8px; font-size:0.85rem;"></p>
         </div>
-        <div class="row" style="margin-top:8px;">
-          <label style="font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:2px;">Message</label>
-          <textarea id="feedbackMessageInput" rows="4" style="width:100%;" placeholder="What would you like help with or what did you find?"></textarea>
-        </div>
-        <div class="row" style="margin-top:8px;">
-          <label style="font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:2px;">Contact Info (optional)</label>
-          <input type="text" id="feedbackContactInput" placeholder="Email, Discord username, etc. (optional)">
-        </div>
-        <div class="actions" style="margin-top:10px; gap:8px; justify-content:flex-start;">
-          <button type="button" class="primary lc-btn" id="feedbackSubmitBtn" data-act="submitFeedback">Send Message</button>
-          <button type="button" class="secondary lc-btn" id="feedbackCancelNewBtn" style="display:none;" data-act="toggleNewFeedbackForm" data-act-args="[false]">Cancel</button>
-        </div>
-        <p id="feedbackStatus" style="margin-top:8px; font-size:0.85rem;"></p>
       </div>
     </div>
 
-    <!-- Guide Link Section -->
-    <div class="panel" style="margin-top:12px;">
-      <h2 class="panel-title">Guide</h2>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Step-by-step how-to guides covering every tab: adding catalogs, building Channels, Storylines &amp; Universes, importing lists, and more.</p>
-      <a href="/guide" class="lc-btn secondary" style="display:inline-flex; align-items:center; gap:8px; text-decoration:none; padding:10px 20px; font-weight:700; font-size:0.92rem; border-radius:var(--radius-pill);">Open the Guide</a>
-    </div>
+    <!-- Resources & Documentation Section -->
+    <div class="panel" style="margin-top:14px;">
+      <h2 class="panel-title">Resources &amp; Support</h2>
+      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">Helpful guides, documentation, and ways to support continued hosting and development of My Lists Addon.</p>
+      
+      <div class="resource-cards-grid">
+        <a href="/guide" class="resource-card">
+          <div>
+            <div class="resource-card-title">User Guide &amp; Docs</div>
+            <div class="resource-card-desc">Step-by-step how-to guides covering catalogs, channels, storylines, and list importing.</div>
+          </div>
+          <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:0.8rem; pointer-events:none;">Open Guide &rarr;</span>
+        </a>
 
-    <!-- Support & Recommended Debrid Section -->
-    <div class="panel" style="margin-top:12px;">
-      <h2 class="panel-title">Support &amp; Recommended Debrid</h2>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Support the continued development and hosting of My Lists Addon, or sign up for TorBox debrid using our referral link.</p>
-      <div class="actions" style="flex-direction:row; width:auto; gap:10px; flex-wrap:wrap;">
-        <a href="https://buymeacoffee.com/brock25" target="_blank" rel="noopener" class="lc-btn secondary" style="display:inline-flex; align-items:center; gap:8px; text-decoration:none; padding:10px 20px; font-weight:700; font-size:0.92rem; border-radius:var(--radius-pill);">Buy me a coffee</a>
-        <a href="https://torbox.app/subscription?referral=af23795c-7706-4b02-a979-d84b5613cfd1" target="_blank" rel="noopener" class="lc-btn secondary" style="display:inline-flex; align-items:center; gap:8px; text-decoration:none; padding:10px 20px; font-weight:700; font-size:0.92rem; border-radius:var(--radius-pill);">Try TorBox Debrid (Referral)</a>
+        <a href="https://buymeacoffee.com/brock25" target="_blank" rel="noopener" class="resource-card">
+          <div>
+            <div class="resource-card-title">Buy Me a Coffee</div>
+            <div class="resource-card-desc">Support the continued development and hosting costs of the free public server.</div>
+          </div>
+          <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:0.8rem; pointer-events:none;">Support Project &rarr;</span>
+        </a>
+
+        <a href="https://torbox.app/subscription?referral=af23795c-7706-4b02-a979-d84b5613cfd1" target="_blank" rel="noopener" class="resource-card">
+          <div>
+            <div class="resource-card-title">TorBox Debrid</div>
+            <div class="resource-card-desc">Fast, modern debrid provider with fast torrent caching and Usenet support.</div>
+          </div>
+          <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:0.8rem; pointer-events:none;">Try TorBox (Referral) &rarr;</span>
+        </a>
       </div>
     </div>
   </div>
@@ -34453,10 +36404,14 @@ function normalizeListsSubmenu(raw) {
       });
     }
     var subAccount = document.getElementById('settingsSubAccount');
+    var subDisplay = document.getElementById('settingsSubDisplay');
+    var subScrobble = document.getElementById('settingsSubScrobble');
     var subExternal = document.getElementById('settingsSubExternal');
     var subBackup = document.getElementById('settingsSubBackup');
     var subFeedback = document.getElementById('settingsSubFeedback');
     if (subAccount) subAccount.style.display = (setSub === 'account' || setSub === 'keys') ? 'block' : 'none';
+    if (subDisplay) subDisplay.style.display = (setSub === 'display') ? 'block' : 'none';
+    if (subScrobble) subScrobble.style.display = (setSub === 'scrobble') ? 'block' : 'none';
     if (subExternal) subExternal.style.display = (setSub === 'external') ? 'block' : 'none';
     if (subBackup) subBackup.style.display = (setSub === 'backup') ? 'block' : 'none';
     if (subFeedback) subFeedback.style.display = (setSub === 'feedback') ? 'block' : 'none';
@@ -35032,6 +36987,13 @@ function appActStoreSettingValue(key, value) {
 
 function appActStoreSettingChecked(key, checked) {
   try { localStorage.setItem(String(key), checked ? '1' : '0'); } catch (e) {}
+  if (key === 'myListAddon:dedupeAcrossLists') {
+    const cb1 = document.getElementById('catalogsDedupeCheckbox');
+    const cb2 = document.getElementById('dedupeAcrossListsCheckbox');
+    if (cb1) cb1.checked = !!checked;
+    if (cb2) cb2.checked = !!checked;
+    if (typeof renderLivePreview === 'function') renderLivePreview();
+  }
   saveState();
   return true;
 }
@@ -35243,8 +37205,8 @@ function updateAllListAddButtons() {
     const type = card ? card.dataset.listType : null;
     const isAdded = isListAddedToConfig(null, type, slug);
     btn.classList.toggle('is-added', isAdded);
-    btn.classList.toggle('secondary', isAdded);
-    btn.classList.toggle('primary', !isAdded);
+    btn.classList.add('secondary');
+    btn.classList.remove('primary');
     btn.textContent = isAdded ? 'Remove' : '+ Add';
     btn.style.color = isAdded ? 'var(--danger)' : '';
   });
@@ -35257,8 +37219,8 @@ function updateAllListAddButtons() {
     const type = card ? card.dataset.listType : null;
     const isAdded = isListAddedToConfig(null, type, slug);
     btn.classList.toggle('is-added', isAdded);
-    btn.classList.toggle('secondary', isAdded);
-    btn.classList.toggle('primary', !isAdded);
+    btn.classList.add('secondary');
+    btn.classList.remove('primary');
     btn.textContent = isAdded ? 'Remove' : '+ Add';
     btn.style.color = isAdded ? 'var(--danger)' : '';
   });
@@ -35306,8 +37268,8 @@ function updateAllListAddButtons() {
     const type = btn.dataset.type;
     const isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(url, type) || isListAddedToConfig(null, type, url) || isListAddedToConfig(url, 'movie') || isListAddedToConfig(url, 'series') || isListAddedToConfig(url)) : false;
     btn.classList.toggle('is-added', isAdded);
-    btn.classList.toggle('secondary', isAdded);
-    btn.classList.toggle('primary', !isAdded);
+    btn.classList.add('secondary');
+    btn.classList.remove('primary');
     btn.textContent = isAdded ? 'Remove' : '+ Add';
     btn.style.color = isAdded ? 'var(--danger)' : '';
     btn.disabled = false;
@@ -35520,6 +37482,10 @@ function switchTab(name) {
     }
     b.setAttribute('aria-selected', on ? 'true' : 'false');
     b.setAttribute('tabindex', on ? '0' : '-1');
+  }
+  const headerSearchBtn = document.getElementById('headerSearchBtn');
+  if (headerSearchBtn) {
+    headerSearchBtn.classList.toggle('active', name === 'search');
   }
 
   if (name !== 'list-details' && name !== 'item-details') {
@@ -36353,6 +38319,8 @@ const STATIC_MODALS = [
   { id: 'createListModal', close: 'closeCreateListModal' },
   { id: 'selectListModal', close: 'closeSelectListModal' },
   { id: 'addShelfModal', close: null },
+  { id: 'importListModal', close: 'closeImportListModal' },
+  { id: 'importChannelModal', close: 'closeImportChannelModal' },
   { id: 'traktDeviceModal', close: 'closeTraktDeviceModal' },
 ];
 
@@ -36776,11 +38744,20 @@ function restoreActiveTab() {
     return;
   }
 
-  let tab = 'discover';
-  try {
-    tab = localStorage.getItem('myListAddon:activeTab') || 'discover';
-  } catch (e) {}
-  if (tab === 'item-details' || tab === 'list-details') tab = 'discover';
+  let tab = '';
+  const isShell = typeof document !== 'undefined' && document.documentElement && document.documentElement.getAttribute('data-app-shell') === '1';
+  if (isShell) {
+    const initTab = document.documentElement.getAttribute('data-initial-tab');
+    if (initTab && initTab !== 'item-details' && initTab !== 'list-details') {
+      tab = initTab;
+    }
+  }
+  if (!tab) {
+    try {
+      tab = localStorage.getItem('myListAddon:activeTab') || 'discover';
+    } catch (e) {}
+  }
+  if (!tab || tab === 'item-details' || tab === 'list-details') tab = 'discover';
   switchTab(tab);
 }
 
@@ -36860,6 +38837,11 @@ function switchListsSubmenu(name, btn) {
       renderLikedListsFeed();
     }
   }
+  if (name === 'create-list') {
+    if (typeof initCustomListSearch === 'function') {
+      initCustomListSearch();
+    }
+  }
 }
 
 function switchSettingsSubmenu(name, btn) {
@@ -36880,6 +38862,8 @@ function switchSettingsSubmenu(name, btn) {
   const subpanels = {
     'account': 'settingsSubAccount',
     'keys': 'settingsSubAccount',
+    'display': 'settingsSubDisplay',
+    'scrobble': 'settingsSubScrobble',
     'external': 'settingsSubExternal',
     'backup': 'settingsSubBackup',
     'feedback': 'settingsSubFeedback'
@@ -37329,10 +39313,12 @@ function renderDiscoverChartsList(type, forceRefresh) {
   // Helper: push a pair entry
   function pushPair(name, movieUrl, showUrl, group) {
     if ((type === 'movie' || type === 'all') && movieUrl) {
-      lists.push({ name: name, url: movieUrl, type: 'movie', user: group, likes: 0 });
+      const displayName = (type === 'all' && showUrl) ? (name + ': Movies') : name;
+      lists.push({ name: displayName, url: movieUrl, type: 'movie', user: group, likes: 0 });
     }
     if ((type === 'series' || type === 'all') && showUrl) {
-      lists.push({ name: name, url: showUrl, type: 'series', user: group, likes: 0 });
+      const displayName = (type === 'all' && movieUrl) ? (name + ': Shows') : name;
+      lists.push({ name: displayName, url: showUrl, type: 'series', user: group, likes: 0 });
     }
   }
   // Helper: push single-type entry
@@ -37352,10 +39338,10 @@ function renderDiscoverChartsList(type, forceRefresh) {
       window._CHARTS_MY_LISTS_ADDON.forEach(function(p) { pushPair(p.name, p.movieUrl, p.showUrl, 'My Lists Addon'); });
     }
     if (type === 'movie' || type === 'all') {
-      pushSingle('New Releases', 'tmdb:chart:new_movies', 'movie', 'TMDB');
+      pushSingle(type === 'all' ? 'New Releases: Movies' : 'New Releases', 'tmdb:chart:new_movies', 'movie', 'TMDB');
     }
     if (type === 'series' || type === 'all') {
-      pushSingle('New Releases', 'tmdb:chart:new_shows', 'series', 'TMDB');
+      pushSingle(type === 'all' ? 'New Releases: Shows' : 'New Releases', 'tmdb:chart:new_shows', 'series', 'TMDB');
     }
     if (window._CHARTS_TMDB) {
       window._CHARTS_TMDB.forEach(function(p) {
@@ -37405,8 +39391,8 @@ function renderDiscoverChartsList(type, forceRefresh) {
   if (type === 'kids' || type === 'all') {
     if (window._CHARTS_KIDS) {
       window._CHARTS_KIDS.forEach(function(item) {
-        if (item.movieUrl) pushSingle(item.name, item.movieUrl, 'movie', 'Kids');
-        if (item.showUrl) pushSingle(item.name, item.showUrl, 'series', 'Kids');
+        if (item.movieUrl) pushSingle((type === 'all' && item.showUrl) ? (item.name + ': Movies') : item.name, item.movieUrl, 'movie', 'Kids');
+        if (item.showUrl) pushSingle((type === 'all' && item.movieUrl) ? (item.name + ': Shows') : item.name, item.showUrl, 'series', 'Kids');
       });
     }
   }
@@ -37414,8 +39400,8 @@ function renderDiscoverChartsList(type, forceRefresh) {
   if (type === 'holidays' || type === 'all') {
     if (window._CHARTS_HOLIDAYS) {
       window._CHARTS_HOLIDAYS.forEach(function(item) {
-        if (item.movieUrl) pushSingle(item.name, item.movieUrl, 'movie', 'Holidays');
-        if (item.showUrl) pushSingle(item.name, item.showUrl, 'series', 'Holidays');
+        if (item.movieUrl) pushSingle((type === 'all' && item.showUrl) ? (item.name + ': Movies') : item.name, item.movieUrl, 'movie', 'Holidays');
+        if (item.showUrl) pushSingle((type === 'all' && item.movieUrl) ? (item.name + ': Shows') : item.name, item.showUrl, 'series', 'Holidays');
       });
     }
   }
@@ -37423,8 +39409,8 @@ function renderDiscoverChartsList(type, forceRefresh) {
   if (type === 'genres' || type === 'all') {
     if (window._CHARTS_GENRES) {
       window._CHARTS_GENRES.forEach(function(item) {
-        if (item.movieUrl) pushSingle(item.name, item.movieUrl, 'movie', 'Genres');
-        if (item.showUrl) pushSingle(item.name, item.showUrl, 'series', 'Genres');
+        if (item.movieUrl) pushSingle((type === 'all' && item.showUrl) ? (item.name + ': Movies') : item.name, item.movieUrl, 'movie', 'Genres');
+        if (item.showUrl) pushSingle((type === 'all' && item.movieUrl) ? (item.name + ': Shows') : item.name, item.showUrl, 'series', 'Genres');
       });
     }
   }
@@ -37487,6 +39473,7 @@ function switchCatalogsSubmenu(filter, btn) {
   if (filter !== 'all') {
     if (undoToast) undoToast.style.display = 'none';
     if (resultDiv) resultDiv.style.display = 'none';
+    if (filter === 'bulk' && typeof updateBulkAddUi === 'function') updateBulkAddUi();
   } else {
     // Make sure all list rows are visible since we no longer have row-level filters
     document.querySelectorAll('#lists .entry').forEach(function(e) {
@@ -37943,8 +39930,8 @@ function entryAvatarColor(s) {
 function openAddShelfModal() {
   document.getElementById('addShelfModalName').value = '';
   document.getElementById('addShelfModalLinksContainer').innerHTML = 
-    '<div class="add-shelf-link-row" style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">' +
-      '<input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd)" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
+    '<div class="add-shelf-link-row" style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">' +
+      '<input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd, MDBList)" style="flex:1; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
     '</div>';
   document.getElementById('addShelfModalType').value = 'movie';
   validateAddShelfModal();
@@ -37959,10 +39946,10 @@ function addShelfModalAddLink() {
   div.style.display = 'flex';
   div.style.alignItems = 'center';
   div.style.gap = '8px';
-  div.style.marginBottom = '12px';
+  div.style.marginBottom = '8px';
   div.innerHTML = 
-    '<input type="url" class="addShelfModalLinkInput" placeholder="Additional URL" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
-    '<button type="button" class="lc-btn secondary" aria-label="Remove this URL" style="padding: 12px;" data-act="appActRemoveShelfLinkRow" data-act-args="[&quot;@self&quot;]">\u2715</button>';
+    '<input type="url" class="addShelfModalLinkInput" placeholder="Additional URL" style="flex:1; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
+    '<button type="button" class="lc-btn secondary" aria-label="Remove this URL" style="padding: 6px 12px; height: 38px; min-height: 38px;" data-act="appActRemoveShelfLinkRow" data-act-args="[&quot;@self&quot;]">&#x2715;</button>';
   container.appendChild(div);
   validateAddShelfModal();
 }
@@ -38089,12 +40076,12 @@ function addRow(name, url, type, enabled, group, channelId) {
         '<div class="entry-pos-wrap" style="display:flex; align-items:center;">' +
           '<input type="number" class="pos" min="1" title="Type a position number to move this list there" data-act="movePosTo" data-act-args="[&quot;@self&quot;]">' +
         '</div>' +
-        '<span class="drag-handle ec-btn" title="Drag to reorder" style="cursor:grab; font-size:1rem;">&#9776;</span>' +
+        '<span class="drag-handle ec-btn" title="Drag to reorder" style="cursor:grab;"><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
         '<button type="button" class="ec-btn movebtn secondary" data-act="moveRow" data-act-args="[&quot;@self&quot;,-1]" title="Move up">&#8593;</button>' +
         '<button type="button" class="ec-btn movebtn secondary" data-act="moveRow" data-act-args="[&quot;@self&quot;,1]" title="Move down">&#8595;</button>' +
         ((isCustomList || isChannel) ? ('<button type="button" class="ec-btn secondary" style="margin-left: auto; margin-right: 6px; font-weight:600; padding: 2px 10px;" data-act="' + (isCustomList ? 'editEntryCustomList' : 'editEntryChannel') + '" data-act-args="[&quot;@self&quot;]">Edit</button>') : '') +
         '<button type="button" class="ec-btn movebtn removebtn danger" data-act="removeEntryWithUndo" data-act-args="[&quot;@self&quot;]" title="Remove this list" aria-label="Remove this list" style="' + (!(isCustomList || isChannel) ? 'margin-left: auto;' : '') + '">' +
-          '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none;">' +
+          '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none; display:block;">' +
             '<polyline points="3 6 5 6 21 6"></polyline>' +
             '<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>' +
             '<path d="M10 11v6"></path><path d="M14 11v6"></path>' +
@@ -38122,7 +40109,7 @@ function addRow(name, url, type, enabled, group, channelId) {
       : (isChannel || isCustomList || isPremade)
         ? ''
         : '<button type="button" class="secondary add-source-btn" data-act="addSourceRow" data-act-args="[&quot;@self&quot;]">+ Add another source (merge into one catalog)</button>') +
-    '<div class="live-preview-shelf" style="padding:0; margin:0; border:none; background:transparent;"><div class="live-preview-shelf-title"><span class="shelf-drag-handle" title="Drag to reorder catalog">&#x2630;</span><span class="shelf-title-text">' + escapeHtml(name || 'Unnamed') + ' - ' + (type === 'series' ? 'Series' : 'Movies') + '</span><span class="live-preview-shelf-status"></span><button type="button" class="text-action-btn" disabled>See All &rsaquo;</button></div><div class="live-preview-posters"><p style="color:var(--muted); font-size:0.88rem; text-align:center; padding: 20px;"><small>Click "Refresh Preview" above to load posters.</small></p></div></div>';
+    '<div class="live-preview-shelf"><div class="live-preview-shelf-title"><span class="shelf-drag-handle" title="Drag to reorder catalog"><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span><span class="shelf-title-text">' + escapeHtml(name || 'Unnamed') + ' - ' + (type === 'series' ? 'Series' : 'Movies') + '</span><span class="live-preview-shelf-status"></span><button type="button" class="text-action-btn" disabled>See All &rsaquo;</button></div><div class="live-preview-posters"><p style="color:var(--muted); font-size:0.88rem; text-align:center; padding: 20px;"><small>Click "Refresh Preview" above to load posters.</small></p></div></div>';
   container.appendChild(div);
   // Every custom-list row this browser owns gets a live server-side copy
   // (see withLiveListToken): the token is stamped into the row's URL here,
@@ -38630,7 +40617,7 @@ function renderMyMdblistLists(lists) {
     const isAdded = typeof isListAddedToConfig === 'function'
       ? (isListAddedToConfig(l.url, targetType) || isListAddedToConfig(null, targetType, l.url) || isListAddedToConfig(l.url, 'movie') || isListAddedToConfig(l.url, 'series') || isListAddedToConfig(l.url))
       : (alreadyAdded.has(l.url + '|' + targetType) || alreadyAdded.has(l.url + '|movie') || alreadyAdded.has(l.url + '|series'));
-    const addBtns = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary is-added' : 'primary') + ' myListAddBtn" ' +
+    const addBtns = '<button type="button" class="lc-btn secondary myListAddBtn' + (isAdded ? ' is-added' : '') + '" ' +
       (isAdded ? 'style="color:var(--danger);"' : '') +
       ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(targetType) + '">' +
       (isAdded ? 'Remove' : '+ Add') +
@@ -38790,8 +40777,8 @@ function renderMyMdblistLists(lists) {
         '</div>' +
         '<div class="list-card-actions">' +
           copyBtn +
-          addBtns +
           deleteBtn +
+          addBtns +
         '</div>' +
       '</div>' +
       postersHtml +
@@ -39599,7 +41586,7 @@ function renderMyPrivateTraktLists(lists) {
     const isAdded = typeof isListAddedToConfig === 'function'
       ? (isListAddedToConfig(l.url, targetType) || isListAddedToConfig(null, targetType, l.url) || isListAddedToConfig(l.url, 'movie') || isListAddedToConfig(l.url, 'series') || isListAddedToConfig(l.url))
       : (alreadyAdded.has(l.url + '|' + targetType) || alreadyAdded.has(l.url + '|movie') || alreadyAdded.has(l.url + '|series'));
-    const addBtns = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary is-added' : 'primary') + ' myListAddBtn myPrivateListAddBtn" ' +
+    const addBtns = '<button type="button" class="lc-btn secondary myListAddBtn myPrivateListAddBtn' + (isAdded ? ' is-added' : '') + '" ' +
       (isAdded ? 'style="color:var(--danger);"' : '') +
       ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(targetType) + '">' +
       (isAdded ? 'Remove' : '+ Add') +
@@ -39764,8 +41751,8 @@ function renderMyPrivateTraktLists(lists) {
         '</div>' +
         '<div class="list-card-actions">' +
           copyBtn +
-          addBtns +
           deleteBtn +
+          addBtns +
         '</div>' +
       '</div>' +
       postersHtml +
@@ -40029,7 +42016,7 @@ function renderMyTmdbLists(lists) {
     const isAdded = typeof isListAddedToConfig === 'function'
       ? (isListAddedToConfig(l.url, targetType) || isListAddedToConfig(null, targetType, l.url) || isListAddedToConfig(l.url, 'movie') || isListAddedToConfig(l.url, 'series') || isListAddedToConfig(l.url))
       : (alreadyAdded.has(l.url + '|' + targetType) || alreadyAdded.has(l.url + '|movie') || alreadyAdded.has(l.url + '|series'));
-    const addBtns = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary is-added' : 'primary') + ' myListAddBtn" ' +
+    const addBtns = '<button type="button" class="lc-btn secondary myListAddBtn' + (isAdded ? ' is-added' : '') + '" ' +
       (isAdded ? 'style="color:var(--danger);"' : '') +
       ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(targetType) + '">' +
       (isAdded ? 'Remove' : '+ Add') +
@@ -40083,8 +42070,8 @@ function renderMyTmdbLists(lists) {
         '</div>' +
         '<div class="list-card-actions">' +
           copyBtn +
-          addBtns +
           deleteBtn +
+          addBtns +
         '</div>' +
       '</div>' +
       posterThumbs +
@@ -40610,7 +42597,7 @@ function renderMySimklLists(lists) {
     const markWatchedBtn = isCompleted
       ? '<button type="button" class="lc-btn secondary" data-url="' + escapeAttr(l.url) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(type) + '" data-act="markSimklListAllWatched" data-act-args="[&quot;@self&quot;]">Mark all as Watched</button>'
       : '';
-    const addBtn = '<button type="button" class="lc-btn ' + (added ? 'secondary is-added' : 'primary') + ' myListAddBtn" ' + (added ? 'style="color:var(--danger);"' : '') + ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + type + '">' + (added ? 'Remove' : '+ Add') + '</button>';
+    const addBtn = '<button type="button" class="lc-btn secondary myListAddBtn' + (added ? ' is-added' : '') + '" ' + (added ? 'style="color:var(--danger);"' : '') + ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + type + '">' + (added ? 'Remove' : '+ Add') + '</button>';
 
     const previewItems = filteredItems.slice(0, 9);
     let posterThumbs = '';
@@ -42679,6 +44666,29 @@ async function runUnifiedListImport() {
   if (resultBox) resultBox.innerHTML = summaryHtml;
 }
 
+const importDropzone = document.getElementById('importDropzone');
+if (importDropzone) {
+  importDropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    importDropzone.classList.add('dragover');
+  });
+  importDropzone.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    importDropzone.classList.remove('dragover');
+  });
+  importDropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    importDropzone.classList.remove('dragover');
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+      const fileInput = document.getElementById('unifiedImportFileInput');
+      if (fileInput) {
+        fileInput.files = e.dataTransfer.files;
+        onUnifiedImportFilesSelected(fileInput);
+      }
+    }
+  });
+}
+
 /*MYLISTS_APP_BUNDLE_END*/</script>
 <script nonce="${CSP_NONCE_PLACEHOLDER}">/*MYLISTS_APP_FEATURES_START*/
 
@@ -42701,7 +44711,7 @@ function guessNameFromUrl(u) {
     const noQuery = String(u).split(/[?#]/)[0];
     const parts = noQuery.split('/').filter(Boolean);
     let last = parts[parts.length - 1] || noQuery || u;
-    last = last.replace(/[-_]+/g, ' ').trim();
+    last = last.replace(/^(tmdb|mdblist|trakt|simkl):chart:/i, '$1: ').replace(/[-_]+/g, ' ').trim();
     if (!last) return 'List';
     // Title-case each word. The doubled backslashes below (\\b\\w) are
     // required, not a typo or over-escaping: this file's own text is
@@ -42781,12 +44791,44 @@ async function bulkAddLists(btn) {
     const types = await Promise.all(lines.map((u) => detectListType(u, mdblistKey)));
     lines.forEach((u, i) => addRow(guessNameFromUrl(u), u, types[i], true, 'Custom'));
     box.value = '';
+    updateBulkAddUi();
     saveState();
   } finally {
     if (btn) {
       btn.disabled = false;
       btn.textContent = origLabel;
     }
+  }
+}
+
+function updateBulkAddUi() {
+  const box = document.getElementById('bulkPasteBox');
+  if (!box) return;
+  const lines = box.value.split('\\n').map((s) => s.trim()).filter(Boolean);
+  const btn = document.getElementById('bulkAddBtn') || document.querySelector('[data-act="bulkAddLists"]');
+  const clearBtn = document.getElementById('bulkClearBtn');
+  const countEl = document.getElementById('bulkDetectedCount');
+  if (btn) {
+    if (lines.length > 0) {
+      btn.textContent = 'Add ' + lines.length + (lines.length === 1 ? ' Catalog' : ' Catalogs');
+    } else {
+      btn.textContent = 'Add All Lines as Catalogs';
+    }
+  }
+  if (clearBtn) {
+    clearBtn.style.display = lines.length > 0 ? 'inline-flex' : 'none';
+  }
+  if (countEl) {
+    countEl.textContent = lines.length > 0 ? (lines.length + (lines.length === 1 ? ' list URL detected' : ' list URLs detected')) : '';
+  }
+}
+
+function clearBulkInput() {
+  const box = document.getElementById('bulkPasteBox');
+  if (box) {
+    box.value = '';
+    updateBulkAddUi();
+    box.focus();
   }
 }
 
@@ -43550,6 +45592,13 @@ async function executeUnifiedListSearch(rawQuery, targetBox) {
   renderListSearchResults(mdblistMatches, traktMatches, traktError, myListsMatches, tmdbMatches, box, intent);
 }
 
+function renderCustomizeButtonHtml(name, url, type) {
+  return '<button type="button" class="lc-btn secondary customizeListBtn" data-name="' + escapeAttr(name || '') + '" data-url="' + escapeAttr(url || '') + '" data-type="' + escapeAttr(type || 'movie') + '" title="Customize in List Builder" aria-label="Customize in List Builder">' +
+    '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none; flex-shrink:0;"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>' +
+    '<span class="customize-btn-text">Customize</span>' +
+  '</button>';
+}
+
 function renderListSearchResults(mdblistMatches, traktMatches, traktError, myListsMatches, tmdbMatches, targetBox, queryOrIntent) {
   // Kept so a list chip can filter and sort this answer again without asking
   // every source a second time (setCatalogListSearchChip).
@@ -43688,25 +45737,27 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
 
     const sourceBadgeHtml = '<span class="list-source-badge ' + badgeClass + '">' + escapeHtml(item.source === 'Profile' ? 'My Lists Addon' : item.source) + '</span>';
 
-    let actionsHtml = '';
+    let likeBtnHtml = '';
+    let addBtnHtml = '';
     if ((item.source === 'My Lists Addon' || item.source === 'Profile') && usernameSlug) {
-      actionsHtml += '<button type="button" class="lc-btn searchLikeBtn' + (alreadyLikedProfile ? ' liked' : '') + '" data-username-slug="' + escapeAttr(usernameSlug) + '">' + (alreadyLikedProfile ? '&#9829;' : '&#9825;') + '</button>';
-      actionsHtml += '<button type="button" class="lc-btn ' + (addedDirect ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
+      likeBtnHtml = '<button type="button" class="lc-btn searchLikeBtn' + (alreadyLikedProfile ? ' liked' : '') + '" data-username-slug="' + escapeAttr(usernameSlug) + '">' + (alreadyLikedProfile ? '&#9829;' : '&#9825;') + '</button>';
+      addBtnHtml = '<button type="button" class="lc-btn ' + (addedDirect ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
         (addedDirect ? 'style="color:var(--danger);"' : '') +
         ' data-name="' + escapeAttr(item.name) + '" data-url="' + escapeAttr(item.url) + '" data-type="' + (item.type || 'movie') + '">' +
         (addedDirect ? 'Remove' : '+ Add') +
         '</button>';
     } else {
-      actionsHtml += '<button type="button" class="lc-btn searchLikeExternalBtn' + (alreadyLikedExt ? ' liked' : '') + '" data-url="' + escapeAttr(item.url) + '">' +
+      likeBtnHtml = '<button type="button" class="lc-btn searchLikeExternalBtn' + (alreadyLikedExt ? ' liked' : '') + '" data-url="' + escapeAttr(item.url) + '">' +
         (alreadyLikedExt ? '&#9829;' : '&#9825;') +
         '</button>';
-      actionsHtml += '<button type="button" class="lc-btn ' + (addedDirect ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
+      addBtnHtml = '<button type="button" class="lc-btn ' + (addedDirect ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
         (addedDirect ? 'style="color:var(--danger);"' : '') +
         ' data-name="' + escapeAttr(item.name) + '" data-url="' + escapeAttr(item.url) + '" data-type="' + escapeAttr(item.type || 'movie') + '">' +
         (addedDirect ? 'Remove' : '+ Add') +
         '</button>';
     }
-    actionsHtml += '<button type="button" class="lc-btn secondary customizeListBtn" data-name="' + escapeAttr(item.name) + '" data-url="' + escapeAttr(item.url) + '" data-type="' + escapeAttr(item.type || 'movie') + '" title="Load into the Custom List Builder to add, remove, or reorder before saving">Customize</button>';
+    const customizeBtnHtml = renderCustomizeButtonHtml(item.name, item.url, item.type || 'movie');
+    const actionsHtml = likeBtnHtml + customizeBtnHtml + addBtnHtml;
 
     const creatorLabel = item.user ? (item.user.includes('Official') || item.user.includes('Franchise') ? escapeHtml(item.user) : 'by ' + escapeHtml(item.user)) : '';
     const itemCountLabel = typeof item.items === 'number' ? (item.items + ' items') : (item.items ? escapeHtml(String(item.items)) : '');
@@ -43720,7 +45771,7 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
       (creatorLabel ? '<span class="list-card-meta-sep">&middot;</span>' : '') +
       '<span>' + typeLabel + '</span>' +
       (itemCountLabel ? '<span class="list-card-meta-sep">&middot;</span><span>' + itemCountLabel + '</span>' : '') +
-      (item.likes !== undefined ? '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes like-count">&#9829; <span class="like-num">' + (item.likes || 0) + '</span></span>' : '') +
+      (Number(item.likes) > 0 ? '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes like-count">&#9829; <span class="like-num">' + (item.likes || 0) + '</span></span>' : '') +
       '</div>' +
       '</div>' +
       '<div class="list-card-actions">' +
@@ -44177,7 +46228,8 @@ document.addEventListener('click', async (e) => {
   }
   const viewBtn = e.target.closest('.searchViewListBtn');
   if (viewBtn) {
-    openListDetailsPage(viewBtn.dataset.name, viewBtn.dataset.type, viewBtn.dataset.url, null, {
+    const listName = (viewBtn.dataset.name || '').replace(/:\\s*(Movies|Shows)$/i, '').trim();
+    openListDetailsPage(listName, viewBtn.dataset.type, viewBtn.dataset.url, null, {
       creatorName: viewBtn.dataset.creator,
       itemCount: viewBtn.dataset.items,
       likes: viewBtn.dataset.likes
@@ -44186,7 +46238,8 @@ document.addEventListener('click', async (e) => {
   }
   const addBtn = e.target.closest('.searchAddBtn');
   if (addBtn) {
-    const listName = addBtn.dataset.name || 'List';
+    const rawName = addBtn.dataset.name || 'List';
+    const listName = rawName.replace(/:\\s*(Movies|Shows)$/i, '').trim();
     const listUrl = addBtn.dataset.url || '';
     const listType = addBtn.dataset.type || 'movie';
     const isAdded = addBtn.classList.contains('is-added') || (typeof isListAddedToConfig === 'function' && (isListAddedToConfig(listUrl, listType) || isListAddedToConfig(listUrl, 'movie') || isListAddedToConfig(listUrl, 'series') || isListAddedToConfig(listUrl)));
@@ -44224,7 +46277,8 @@ document.addEventListener('click', async (e) => {
   const customizeBtn = e.target.closest('.customizeListBtn');
   if (customizeBtn) {
     e.stopPropagation();
-    const listName = customizeBtn.dataset.name || 'List';
+    const rawName = customizeBtn.dataset.name || 'List';
+    const listName = rawName.replace(/:\\s*(Movies|Shows)$/i, '').trim();
     const listUrl = customizeBtn.dataset.url || '';
     const listType = customizeBtn.dataset.type || 'movie';
     if (typeof loadListToCustomListDraft === 'function') {
@@ -44317,10 +46371,19 @@ document.addEventListener('click', async (e) => {
       if (card) {
         card.dataset.likes = finalLikes;
         const numEl = card.querySelector('.like-num');
-        if (numEl) numEl.textContent = finalLikes;
-        else {
-          const countEl = card.querySelector('.like-count, .list-card-likes');
-          if (countEl) countEl.innerHTML = '&#9829; <span class="like-num">' + finalLikes + '</span>';
+        if (numEl) {
+          numEl.textContent = finalLikes;
+          const likesSpan = numEl.closest('.list-card-likes');
+          if (likesSpan) {
+            likesSpan.style.display = finalLikes > 0 ? '' : 'none';
+            const sep = likesSpan.previousElementSibling;
+            if (sep && sep.classList.contains('list-card-meta-sep')) sep.style.display = finalLikes > 0 ? '' : 'none';
+          }
+        } else if (finalLikes > 0) {
+          const metaEl = card.querySelector('.list-card-meta');
+          if (metaEl) {
+            metaEl.insertAdjacentHTML('beforeend', '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + finalLikes + '</span></span>');
+          }
         }
       }
       if (window._currentListDetailsUpdateLikes) {
@@ -44398,10 +46461,19 @@ document.addEventListener('click', async (e) => {
       if (card) {
         card.dataset.likes = finalLikes;
         const numEl = card.querySelector('.like-num');
-        if (numEl) numEl.textContent = finalLikes;
-        else {
-          const countEl = card.querySelector('.like-count, .list-card-likes');
-          if (countEl) countEl.innerHTML = '&#9829; <span class="like-num">' + finalLikes + '</span>';
+        if (numEl) {
+          numEl.textContent = finalLikes;
+          const likesSpan = numEl.closest('.list-card-likes');
+          if (likesSpan) {
+            likesSpan.style.display = finalLikes > 0 ? '' : 'none';
+            const sep = likesSpan.previousElementSibling;
+            if (sep && sep.classList.contains('list-card-meta-sep')) sep.style.display = finalLikes > 0 ? '' : 'none';
+          }
+        } else if (finalLikes > 0) {
+          const metaEl = card.querySelector('.list-card-meta');
+          if (metaEl) {
+            metaEl.insertAdjacentHTML('beforeend', '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + finalLikes + '</span></span>');
+          }
         }
       }
       if (window._currentListDetailsUpdateLikes) {
@@ -44492,12 +46564,12 @@ function buildCuratedRecommendationCard(title, type, customUrl, subtitle, items)
   window._curatedRecs[customUrl] = { title, type, items };
 
   const isAdded = typeof isListAddedToConfig === 'function' && (isListAddedToConfig(null, type, customUrl) || isListAddedToConfig(customUrl, type));
-  const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary curatedAddBtn is-added' : 'primary curatedAddBtn') + '" ' +
-    (isAdded ? 'style="color:var(--danger);"' : '') +
-    ' data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '">' +
-    (isAdded ? 'Remove' : '+ Add') +
-  '</button>' +
-  '<button type="button" class="lc-btn secondary customizeListBtn" data-name="' + escapeAttr(title) + '" data-url="' + escapeAttr(customUrl) + '" data-type="' + escapeAttr(type) + '" title="Load into the Custom List Builder to add, remove, or reorder before saving">Customize</button>';
+  const addBtnHtml = renderCustomizeButtonHtml(title, customUrl, type) +
+    '<button type="button" class="lc-btn ' + (isAdded ? 'secondary curatedAddBtn is-added' : 'primary curatedAddBtn') + '" ' +
+      (isAdded ? 'style="color:var(--danger);"' : '') +
+      ' data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '">' +
+      (isAdded ? 'Remove' : '+ Add') +
+    '</button>';
 
   return '<div class="list-card" data-name="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '">' +
     '<div class="list-card-header">' +
@@ -44783,7 +46855,7 @@ async function loadCuratedListsFeed(forceRefresh) {
                   '<span class="list-card-meta-sep">&middot;</span>' +
                   '<span>' + (type === 'series' ? 'Shows' : 'Movies') + '</span>' +
                   (l.items ? '<span class="list-card-meta-sep">&middot;</span><span>' + l.items + ' items</span>' : '') +
-                  '<span class="list-card-likes">&#9829; <span class="like-num">' + (l.likes || 0) + '</span></span>' +
+                  (Number(l.likes) > 0 ? '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + (l.likes || 0) + '</span></span>' : '') +
                 '</div>' +
               '</div>' +
               '<div class="list-card-actions">' +
@@ -44834,7 +46906,7 @@ async function loadCuratedListsFeed(forceRefresh) {
                   '<span class="list-card-meta-sep">&middot;</span>' +
                   '<span>' + (type === 'series' ? 'Shows' : 'Movies') + '</span>' +
                   (l.items ? '<span class="list-card-meta-sep">&middot;</span><span>' + l.items + ' items</span>' : '') +
-                  '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + (l.likes || 0) + '</span></span>' +
+                  (Number(l.likes) > 0 ? '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + (l.likes || 0) + '</span></span>' : '') +
                 '</div>' +
               '</div>' +
               '<div class="list-card-actions">' +
@@ -45006,29 +47078,84 @@ function render5PosterListsFeed(container, lists) {
           (alreadyLiked ? '&#x2665;' : '&#x2661;') +
         '</button>';
 
-    return '<div class="list-card" data-list-type="' + escapeAttr(type) + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
+    let displayName = l.name || 'Unnamed List';
+    if (/^(tmdb|mdblist|trakt|simkl):/i.test(displayName)) {
+      const parts = displayName.split(':');
+      const provRaw = parts[0].toLowerCase();
+      const provider = provRaw === 'tmdb' ? 'TMDb' : (provRaw === 'mdblist' ? 'MDBList' : (provRaw === 'trakt' ? 'Trakt' : 'Simkl'));
+      const chartParts = parts.slice(1).filter(p => p.toLowerCase() !== 'chart');
+      const chartSlug = chartParts.join(' ').replace(/[-_]+/g, ' ');
+      const chartName = chartSlug.split(' ').filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+      if (chartName) displayName = provider + ': ' + chartName;
+    }
+
+    let badgeClass = 'badge-custom';
+    let badgeText = 'Community';
+    const uLower = (l.url || '').toLowerCase();
+    const userClean = (author || l.user || l.creatorName || '').trim();
+
+    if (userClean === 'My Lists Addon' || isOwn || l.kind === 'own' || l.source === 'My Lists Addon' || l.source === 'Profile' || uLower.startsWith('mylists:')) {
+      badgeClass = 'badge-mylists';
+      badgeText = 'My Lists Addon';
+    } else if (userClean === 'MDBList' || l.source === 'MDBList' || uLower.includes('mdblist')) {
+      badgeClass = 'badge-mdblist';
+      badgeText = 'MDBList';
+    } else if (userClean === 'Trakt' || l.source === 'Trakt' || uLower.includes('trakt')) {
+      badgeClass = 'badge-trakt';
+      badgeText = 'Trakt';
+    } else if (userClean === 'TMDB' || l.source === 'TMDB' || uLower.includes('tmdb') || uLower.includes('themoviedb')) {
+      badgeClass = 'badge-tmdb';
+      badgeText = 'TMDB';
+    } else if (userClean === 'Simkl' || l.source === 'Simkl' || uLower.includes('simkl')) {
+      badgeClass = 'badge-simkl';
+      badgeText = 'Simkl';
+    } else if (userClean === 'IMDb' || l.source === 'IMDb' || uLower.includes('imdb')) {
+      badgeClass = 'badge-imdb';
+      badgeText = 'IMDb';
+    } else if (userClean.includes('Streaming') || l.source === 'Streaming') {
+      badgeClass = 'badge-streaming';
+      badgeText = 'Streaming';
+    } else if (/^tmdb:/i.test(l.name || '')) {
+      badgeClass = 'badge-tmdb';
+      badgeText = 'TMDB';
+    } else if (/^trakt:/i.test(l.name || '')) {
+      badgeClass = 'badge-trakt';
+      badgeText = 'Trakt';
+    } else if (/^mdblist:/i.test(l.name || '')) {
+      badgeClass = 'badge-mdblist';
+      badgeText = 'MDBList';
+    } else if (/^simkl:/i.test(l.name || '')) {
+      badgeClass = 'badge-simkl';
+      badgeText = 'Simkl';
+    }
+    const sourceBadgeHtml = '<span class="list-source-badge ' + badgeClass + '">' + escapeHtml(badgeText) + '</span>';
+
+    return '<div class="list-card" data-list-type="' + escapeAttr(type) + '" data-name="' + escapeAttr(displayName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
-          '<div class="list-card-title searchViewListBtn" style="cursor:pointer;">' + escapeHtml(l.name) + '</div>' +
+          '<div class="list-card-title searchViewListBtn" style="cursor:pointer;" data-name="' + escapeAttr(displayName) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(l.url || '') + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
+            sourceBadgeHtml +
+            escapeHtml(displayName) +
+          '</div>' +
           '<div class="list-card-meta">' +
             '<span>by ' + escapeHtml(author) + '</span>' +
             '<span class="list-card-meta-sep">&middot;</span>' +
             '<span>' + (type === 'series' ? 'Shows' : 'Movies') + '</span>' +
             (itemCount ? '<span class="list-card-meta-sep">&middot;</span><span>' + itemCount + ' items</span>' : '') +
-            '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + (l.likes || 0) + '</span></span>' +
+            (Number(l.likes) > 0 ? '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + (l.likes || 0) + '</span></span>' : '') +
           '</div>' +
         '</div>' +
         '<div class="list-card-actions">' +
           likeBtnHtml +
+          renderCustomizeButtonHtml(displayName.replace(/:\\s*(Movies|Shows)$/i, '').trim(), l.url || '', type) +
           '<button type="button" class="lc-btn ' + (added ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
             (added ? 'style="color:var(--danger);"' : '') +
-            ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '">' +
+            ' data-name="' + escapeAttr(displayName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '">' +
             (added ? 'Remove' : '+ Add') +
           '</button>' +
-          '<button type="button" class="lc-btn secondary customizeListBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '" title="Load into the Custom List Builder to add, remove, or reorder before saving">Customize</button>' +
         '</div>' +
       '</div>' +
-      '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '"></div>' +
+      '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(displayName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '"></div>' +
     '</div>';
   }).join('');
 
@@ -46138,15 +48265,17 @@ async function openItemDetailsModal(id, type, opts) {
     const budgetStr = formatMoney(d.budget);
     const revenueStr = formatMoney(d.revenue);
 
-    let infoHtml = '';
-    if (dateStr) infoHtml += '<div style="margin-bottom:6px;">' + escapeHtml(dateStr) + '</div>';
-    if (d.seasons) infoHtml += '<div style="margin-bottom:6px;">' + escapeHtml(d.seasons + ' season' + (d.seasons > 1 ? 's' : '')) + '</div>';
-    if (runtimeStr) infoHtml += '<div style="margin-bottom:6px;">' + escapeHtml(runtimeStr) + '</div>';
-    if (d.contentRating) infoHtml += '<div style="margin-bottom:6px;">' + escapeHtml(d.contentRating) + '</div>';
-    if (d.rating) infoHtml += '<div style="margin-bottom:6px;">\u2605 ' + escapeHtml(d.rating) + ' TMDB</div>';
-    if (budgetStr) infoHtml += '<div style="margin-bottom:6px;">Budget ' + escapeHtml(budgetStr) + '</div>';
-    if (revenueStr) infoHtml += '<div style="margin-bottom:6px;">Box Office ' + escapeHtml(revenueStr) + '</div>';
-    if (d.genres) infoHtml += '<div style="margin-bottom:20px;">' + escapeHtml(d.genres) + '</div>';
+    const yearStr = d.releaseYear || (d.releaseDate ? String(d.releaseDate).slice(0, 4) : '');
+    const pillParts = [];
+    const addPill = (text, tip) => pillParts.push('<span class="item-pill"' + (tip ? ' title="' + escapeAttr(tip) + '"' : '') + '>' + escapeHtml(text) + '</span>');
+    if (d.contentRating) addPill(d.contentRating);
+    if (runtimeStr) addPill(runtimeStr);
+    if (yearStr) addPill(yearStr, dateStr && dateStr !== yearStr ? dateStr : '');
+    if (d.seasons) addPill(d.seasons + ' season' + (d.seasons > 1 ? 's' : ''));
+    if (d.rating) addPill('\u2605 ' + d.rating + ' TMDB');
+    if (budgetStr) addPill('Budget ' + budgetStr);
+    if (revenueStr) addPill('Box Office ' + revenueStr);
+    const infoHtml = pillParts.join('<span class="item-pill-sep" aria-hidden="true">\u2022</span>');
     
     const trailerHtml = d.trailerKey ? 
       '<h3 style="margin: 0 0 16px; font-family:serif; font-size:1.5rem;">Trailer</h3>' +
@@ -46203,35 +48332,106 @@ async function openItemDetailsModal(id, type, opts) {
     // offering to mark what the person has already seen.
     const showBtnState = showWatchedButtonState(isShowFullyWatched(d));
 
+    const heroImg = d.background || d.poster || '';
+    const isSeriesItem = !!((d.seasonsData && d.seasonsData.length > 0) || type === 'series');
+    const genreList = (Array.isArray(d.genres) ? d.genres : String(d.genres || '').split(','))
+      .map((g) => String(g || '').trim()).filter(Boolean);
+    const genresHtml = genreList.length ?
+      '<div class="item-genres">' + genreList.map((g) =>
+        '<button type="button" class="item-genre-chip" data-act="openSearchByGenre" data-act-args="' + appActArgs([g, isSeriesItem ? 'tv' : 'movie']) + '">' + escapeHtml(g) + '</button>'
+      ).join('') + '</div>' : '';
+
     body.innerHTML = 
-      '<div style="display:flex; flex-direction:row; gap:32px; flex-wrap:wrap;">' +
-        '<div style="flex: 0 0 300px; max-width: 100%;">' +
-          (d.poster ? '<img src="' + escapeAttr(resolveClientPoster(d, d.poster)) + '" style="width:100%; border-radius:8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">' : '') +
+      '<div class="item-hero">' +
+        (heroImg ? '<img class="item-hero-bg" src="' + escapeAttr(d.background || resolveClientPoster(d, d.poster)) + '" alt="">' : '') +
+        '<div class="item-hero-shade"></div>' +
+      '</div>' +
+      '<div class="item-head">' +
+        (d.poster ? '<img class="item-head-poster" src="' + escapeAttr(resolveClientPoster(d, d.poster)) + '" alt="">' : '') +
+        '<div class="item-head-main">' +
+          '<h1 class="item-title">' + escapeHtml(d.title) + '</h1>' +
+          (infoHtml ? '<div class="item-pills">' + infoHtml + '</div>' : '') +
         '</div>' +
-        '<div style="flex: 1; min-width: 300px;">' +
-          '<h1 style="margin:0 0 16px; font-size:2.5rem; font-family: serif;">' + escapeHtml(d.title) + '</h1>' +
-          '<div style="margin-bottom:16px; color:var(--text); font-size:1.05rem;">' + infoHtml + '</div>' +
-          '<p style="font-size:1.05rem; line-height:1.6; color:var(--text); margin-bottom: 24px;">' + escapeHtml(d.overview || 'No overview available.') + '</p>' +
-          '<div style="display:flex; gap:16px; flex-wrap:wrap; align-items:center; margin-top:20px;">' +
-            '<button type="button" class="lc-btn primary" data-act="openSelectListModalFromItemModal">+ Add to list</button>' +
-            (((d.seasonsData && d.seasonsData.length > 0) || type === 'series') ?
-              '<button type="button" id="btnMarkShowWatched" class="lc-btn ' + showBtnState.className + '" data-act="markShowWatched" data-act-args="' + appActArgs([d.id]) + '">' +
-                showBtnState.label +
-              '</button>'
-              :
-              '<button type="button" id="btnMarkWatched" class="lc-btn ' + (isItemWatched(d.id, d.tmdbId, d.imdbId) ? 'secondary' : 'primary') + '" data-act="toggleMovieWatchStatusFromModal">' +
-                (isItemWatched(d.id, d.tmdbId, d.imdbId) ? '<span style="margin-right:4px;">&#x2713;</span> Mark as unwatched' : 'Mark as Watched') +
-              '</button>') +
-          '</div>' +
-        '</div>' +
+      '</div>' +
+      '<div class="item-actions">' +
+        '<button type="button" class="lc-btn primary" data-act="openSelectListModalFromItemModal">+ Add to List</button>' +
+        (((d.seasonsData && d.seasonsData.length > 0) || type === 'series') ?
+          '<button type="button" id="btnMarkShowWatched" class="lc-btn ' + showBtnState.className + '" data-act="markShowWatched" data-act-args="' + appActArgs([d.id]) + '">' +
+            showBtnState.label +
+          '</button>'
+          :
+          '<button type="button" id="btnMarkWatched" class="lc-btn ' + (isItemWatched(d.id, d.tmdbId, d.imdbId) ? 'secondary' : 'primary') + '" data-act="toggleMovieWatchStatusFromModal">' +
+            (isItemWatched(d.id, d.tmdbId, d.imdbId) ? '<span style="margin-right:4px;">&#x2713;</span> Mark as unwatched' : 'Mark as Watched') +
+          '</button>') +
+      '</div>' +
+      genresHtml +
+      '<div class="item-synopsis-wrap">' +
+        '<p class="item-synopsis" id="itemSynopsisText">' + escapeHtml(d.overview || 'No overview available.') + '</p>' +
+        '<button type="button" class="item-synopsis-toggle" id="itemSynopsisToggle" aria-controls="itemSynopsisText" aria-expanded="false" hidden data-act="toggleItemSynopsis" data-act-args="[&quot;@self&quot;]">Read More</button>' +
       '</div>' +
       (trailerHtml ? '<div style="margin-top:32px;">' + trailerHtml + '</div>' : '') +
       (seasonsHtml ? '<div style="margin-top:32px;">' + seasonsHtml + '</div>' : '') +
       (storylinesHtml ? '<div style="margin-top:32px;">' + storylinesHtml + '</div>' : '');
+    syncItemSynopsisToggle();
       
   } catch (err) {
-    body.innerHTML = '<p class="testresult err">\u2717 ' + escapeHtml(err.message) + '</p>';
+    body.innerHTML = '<p class="testresult err" style="margin-top:48px;">\u2717 ' + escapeHtml(err.message) + '</p>';
   }
+}
+
+// Shows the Read More button only when the 3-line clamp is actually hiding text.
+function syncItemSynopsisToggle() {
+  try {
+    const p = document.getElementById('itemSynopsisText');
+    const t = document.getElementById('itemSynopsisToggle');
+    if (!p || !t) return;
+    if (p.classList.contains('is-expanded')) { t.hidden = false; return; }
+    t.hidden = !(p.scrollHeight > p.clientHeight + 1);
+  } catch (e) {}
+}
+
+function toggleItemSynopsis(btn) {
+  const p = document.getElementById('itemSynopsisText');
+  if (!p || !btn) return;
+  const open = p.classList.toggle('is-expanded');
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  btn.textContent = open ? 'Show Less' : 'Read More';
+}
+
+// A genre chip on the details screen: open Search on the matching Movies/Shows
+// chip with that genre picked in the genre dropdown.
+function openSearchByGenre(genreName, kind) {
+  const ids = {
+    'action': 28, 'adventure': 10759, 'action & adventure': 10759,
+    'animation': 16, 'comedy': 35, 'crime': 80, 'documentary': 99, 'drama': 18,
+    'family': 10751, 'kids': 10762, 'fantasy': 14, 'science fiction': 878,
+    'sci-fi': 878, 'sci-fi & fantasy': 10765, 'history': 36, 'horror': 27,
+    'music': 10402, 'mystery': 9648, 'romance': 10749, 'thriller': 53,
+    'war': 10752, 'war & politics': 10768, 'western': 37,
+  };
+  const select = document.getElementById('catalogSearchGenreSelect');
+  const id = ids[String(genreName || '').trim().toLowerCase()];
+  let value = '';
+  if (select && id) {
+    const opt = Array.from(select.options).find((o) => o.value && o.value.split(',').indexOf(String(id)) !== -1);
+    if (opt) value = opt.value;
+  }
+  const input = document.getElementById('catalogSearchInput');
+  if (input) input.value = '';
+  if (select) select.value = value;
+  const filter = kind === 'tv' ? 'tv' : 'movie';
+  let chip = null;
+  document.querySelectorAll('#catalogSearchTypeChips .subnav-pill').forEach((p) => {
+    if ((p.getAttribute('data-act-args') || '').indexOf('["' + filter + '"') === 0) chip = p;
+  });
+  switchTab('search');
+  setCatalogSearchFilter(filter, chip);
+}
+
+if (typeof window !== 'undefined') {
+  window.toggleItemSynopsis = toggleItemSynopsis;
+  window.openSearchByGenre = openSearchByGenre;
+  if (typeof window.addEventListener === 'function') window.addEventListener('resize', syncItemSynopsisToggle);
 }
 
 async function toggleSeasonEpisodes(headerEl, seasonNum, imdbId) {
@@ -47467,6 +49667,10 @@ function catalogSearchViewIsCurrent() {
 
 function handleCatalogSearchInput(input) {
   const q = (input ? input.value : '').trim();
+  const clearBtn = document.getElementById('catalogSearchClearBtn');
+  if (clearBtn) {
+    clearBtn.style.display = q ? 'inline-flex' : 'none';
+  }
   if (!q) {
     if (catalogSearchDebounceTimer) clearTimeout(catalogSearchDebounceTimer);
     renderDefaultCatalogSearch();
@@ -47476,6 +49680,21 @@ function handleCatalogSearchInput(input) {
   catalogSearchDebounceTimer = setTimeout(() => {
     runCatalogSearch();
   }, 350);
+}
+
+function clearCatalogSearch() {
+  const input = document.getElementById('catalogSearchInput');
+  if (input) {
+    input.value = '';
+    input.focus();
+  }
+  const clearBtn = document.getElementById('catalogSearchClearBtn');
+  if (clearBtn) clearBtn.style.display = 'none';
+  if (catalogSearchDebounceTimer) clearTimeout(catalogSearchDebounceTimer);
+  renderDefaultCatalogSearch();
+}
+if (typeof window !== 'undefined') {
+  window.clearCatalogSearch = clearCatalogSearch;
 }
 
 function setCatalogSearchFilter(filter, btn) {
@@ -47492,6 +49711,12 @@ function setCatalogSearchFilter(filter, btn) {
     btn.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
   }
   currentCatalogSearchType = filter;
+  const inputEl = document.getElementById('catalogSearchInput');
+  if (inputEl) {
+    if (filter === 'movie') inputEl.placeholder = 'Search movies by title...';
+    else if (filter === 'tv') inputEl.placeholder = 'Search TV shows by title...';
+    else if (filter === 'lists') inputEl.placeholder = 'Search community & provider lists...';
+  }
   const filtersRow = document.getElementById('catalogSearchFiltersRow');
   if (filtersRow) {
     filtersRow.style.display = (filter === 'lists') ? 'none' : 'flex';
@@ -47575,9 +49800,18 @@ function renderTitlePosterCards(items, totalCount, resEl) {
     return;
   }
 
-  const countBadge = (typeof totalCount === 'number' && totalCount > items.length)
-    ? '<div style="margin-bottom:10px; font-size:0.82rem; color:var(--muted);">Showing ' + items.length + ' of ' + totalCount + ' results</div>'
-    : ((typeof totalCount === 'number' && totalCount > 20) ? '<div style="margin-bottom:10px; font-size:0.82rem; color:var(--muted);">' + items.length + ' results found</div>' : '');
+  const inputEl = document.getElementById('catalogSearchInput');
+  const q = (inputEl ? inputEl.value : '').trim();
+  const typeLabel = currentCatalogSearchType === 'tv' ? 'TV Shows' : 'Movies';
+
+  let countBadge = '';
+  if (q) {
+    countBadge = (typeof totalCount === 'number' && totalCount > items.length)
+      ? '<div style="margin-bottom:12px; font-size:0.86rem; font-weight:600; color:var(--muted);">Showing ' + items.length + ' of ' + totalCount + ' results for "' + escapeHtml(q) + '"</div>'
+      : '<div style="margin-bottom:12px; font-size:0.86rem; font-weight:600; color:var(--muted);">' + items.length + ' results found for "' + escapeHtml(q) + '"</div>';
+  } else {
+    countBadge = '<div style="margin-bottom:12px; font-size:0.86rem; font-weight:600; color:var(--muted);">Top Trending ' + typeLabel + ' Right Now</div>';
+  }
 
   const postersHtml = items.map(m => {
     const effectivePoster = resolveClientPoster(m, m.poster);
@@ -57367,8 +59601,8 @@ function renderStorylinesUniverseList(category = activeStorylineCategory) {
           '</div>' +
         '</div>' +
         '<div class="list-card-actions">' +
-          '<button type="button" class="lc-btn ' + (isAdded ? 'secondary is-added' : 'primary') + '" data-act="createInstantStorylineChannel" data-act-args="' + appActArgs([event.id, "@self"]) + '" ' + (isAdded ? 'style="color:var(--danger);"' : '') + '>' + (isAdded ? 'Remove' : '+ Add') + '</button>' +
           '<button type="button" class="lc-btn secondary" data-act="loadStorylineToDraft" data-act-args="' + appActArgs([event.id, "@self"]) + '" title="Customize in Channel Builder">Customize</button>' +
+          '<button type="button" class="lc-btn channelAddBtn ' + (isAdded ? 'secondary is-added' : 'primary') + '" data-act="createInstantStorylineChannel" data-act-args="' + appActArgs([event.id, "@self"]) + '" ' + (isAdded ? 'style="color:var(--danger);"' : '') + '>' + (isAdded ? 'Remove' : '+ Add') + '</button>' +
         '</div>' +
       '</div>' +
       '<div class="list-card-posters">' +
@@ -57922,6 +60156,8 @@ function switchChannelsSubmenu(name, btn) {
     renderChannelMergeList();
   } else if (name === 'storylines') {
     renderStorylinesUniverseList();
+  } else if (name === 'quickadd') {
+    updateQuickAddButtonsState();
   } else if (name === 'explore') {
     loadChannelDirectory(false);
     renderChannelPublishList();
@@ -58310,13 +60546,14 @@ function channelItemId(it, idx) {
 }
 
 function renderMyCreatedChannelsList() {
+  if (typeof updateQuickAddButtonsState === 'function') updateQuickAddButtonsState();
   const box = document.getElementById('myCreatedChannelsList');
   if (!box) return;
   
   const map = ensureAllChannelsSyncedFromRows(loadLocalChannels());
   const channels = Object.values(map);
   if (!channels.length) {
-    box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem;"><small>No channels created yet. Tap <strong>+ New Channel</strong> above or add a popular network in <strong>Quick Add</strong>.</small></p>';
+    box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem;"><small>No channels created yet. Tap <strong>+ Create Channel</strong> above or add a popular network in <strong>Quick Add</strong>.</small></p>';
     return;
   }
   
@@ -58376,13 +60613,14 @@ function renderMyCreatedChannelsList() {
       let showName = it.showName || '';
       let epName = it.epName || '';
       let seasonEp = '';
+      const isMovie = (it.kind === 'movie' || it.type === 'movie');
       
-      if (it.season != null && it.episode != null) {
+      if (!isMovie && it.season != null && it.episode != null) {
         seasonEp = 'S' + it.season + 'E' + it.episode;
       }
       
       if (!showName && it.title) {
-        if (it.title.indexOf(' S') !== -1 && it.title.indexOf('E') !== -1) {
+        if (!isMovie && it.title.indexOf(' S') !== -1 && it.title.indexOf('E') !== -1) {
           const sIdx = it.title.indexOf(' S');
           showName = it.title.slice(0, sIdx).trim();
           const rest = it.title.slice(sIdx + 1).trim();
@@ -58406,6 +60644,8 @@ function renderMyCreatedChannelsList() {
       if (!epName) {
         if (it.epName) {
           epName = it.epName;
+        } else if (isMovie) {
+          epName = (it.year ? String(it.year) + ' \u2022 ' : '') + 'Movie';
         } else if (it.title && it.title !== showName) {
           epName = it.title;
         } else if (seasonEp) {
@@ -58447,7 +60687,7 @@ function renderMyCreatedChannelsList() {
       '</div>';
     }).join('');
     
-    const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleChannelInCatalog" data-act-args="' + appActArgs([ch.channelId]) + '">' +
+    const addBtnHtml = '<button type="button" class="lc-btn channelAddBtn ' + (isAdded ? 'secondary is-added' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleChannelInCatalog" data-act-args="' + appActArgs([ch.channelId]) + '">' +
       (isAdded ? 'Remove' : '+ Add') +
     '</button>';
 
@@ -58455,7 +60695,7 @@ function renderMyCreatedChannelsList() {
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
           '<div class="list-card-title" style="cursor:pointer;" data-act="openChannelDetailsPage" data-act-args="' + appActArgs([ch.channelId]) + '" title="Open ' + escapeAttr(ch.name) + '">' +
-            '<span class="drag-handle-list channel-drag-handle" title="Drag to reorder" data-act="appActNothing" data-act-stop>&#x2630;</span>' +
+            '<span class="drag-handle-list channel-drag-handle" title="Drag to reorder" data-act="appActNothing" data-act-stop><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
             escapeHtml(ch.name) +
           '</div>' +
           (ch.description ? '<div style="font-size:0.8rem; color:var(--text); margin-top:2px;">' + escapeHtml(ch.description) + '</div>' : '') +
@@ -58466,10 +60706,10 @@ function renderMyCreatedChannelsList() {
         '</div>' +
         '<div class="list-card-actions">' +
           '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="editChannelById" data-act-args="' + appActArgs([ch.channelId]) + '">Edit</button>' +
-          '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="deleteLocalChannel" data-act-args="' + appActArgs([ch.channelId, ch.name]) + '">Delete</button>' +
           ((ch.sharePublished || ch.visibility === 'public')
             ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="shareChannelById" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '" title="Share this channel">Share</button>'
             : '') +
+          '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="deleteLocalChannel" data-act-args="' + appActArgs([ch.channelId, ch.name]) + '">Delete</button>' +
           addBtnHtml +
         '</div>' +
       '</div>' +
@@ -58579,6 +60819,54 @@ const _channelNameInputEl = document.getElementById('channelNameInput');
 if (_channelNameInputEl) {
   _channelNameInputEl.addEventListener('input', updateChannelSaveButtonLabel);
 }
+
+function updateQuickAddButtonsState() {
+  if (typeof document === 'undefined') return;
+  const container = document.getElementById('channelsSubQuickAdd');
+  if (!container) return;
+  const buttons = container.querySelectorAll('.channelQuickAddBtn');
+  if (!buttons.length) return;
+
+  const localMap = (typeof loadLocalChannels === 'function') ? (loadLocalChannels() || {}) : {};
+  const localChannels = Object.values(localMap);
+  const catalogRows = [...document.querySelectorAll('#lists .entry')];
+
+  buttons.forEach((btn) => {
+    const netId = String(btn.dataset.networkid || '');
+    const netName = btn.dataset.name || '';
+    if (!netName && !netId) return;
+
+    let isAdded = localChannels.some((ch) => {
+      if (!ch) return false;
+      if (netId && String(ch.presetNetworkId || '') === netId) return true;
+      if (netName && (ch.name === netName || ch.name === netName + ' Channel' || ch.name === netName + ' TV')) return true;
+      return false;
+    });
+
+    if (!isAdded && catalogRows.length) {
+      isAdded = catalogRows.some((row) => {
+        const urlInput = row.querySelector('.url');
+        const val = urlInput ? (urlInput.value || '') : '';
+        if (val.startsWith('channel:v1:')) {
+          if (netId && (val.includes('"presetNetworkId":"' + netId + '"') || val.includes('"presetNetworkId":' + netId))) return true;
+          if (netName && val.includes('"name":"' + netName + '"')) return true;
+        }
+        return false;
+      });
+    }
+
+    if (isAdded) {
+      btn.classList.add('is-added');
+      btn.innerHTML = '<span class="check-icon" style="margin-right:4px;">&#x2713;</span> ' + escapeHtml(netName);
+      btn.title = netName + ' (Already added to your channels)';
+    } else {
+      btn.classList.remove('is-added');
+      btn.textContent = netName;
+      btn.title = 'Add ' + netName + ' channel';
+    }
+  });
+}
+window.updateQuickAddButtonsState = updateQuickAddButtonsState;
 
 document.addEventListener('click', (e) => {
   const quickBtn = e.target.closest('.channelQuickAddBtn');
@@ -58949,8 +61237,82 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
       btn.disabled = false;
       btn.textContent = originalLabel;
     }
+    updateQuickAddButtonsState();
   }
 }
+
+// Companion to the fixed Quick Add network buttons above -- same
+// quickAddChannel machinery, just fed a pasted list link instead of a
+// TMDB network id. The server side (/api/quick-channel-shows) requests
+// type "series" from that link regardless of source, so any movies mixed
+function openImportChannelModal(mode = 'link') {
+  const modal = document.getElementById('importChannelModal');
+  if (!modal) return;
+  switchImportChannelMode(mode);
+  modal.style.display = 'flex';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll(true);
+  const input = mode === 'code'
+    ? (document.getElementById('modalChannelShareCodeInput') || document.getElementById('channelShareCodeInput'))
+    : (document.getElementById('modalChannelImportUrlInput') || document.getElementById('channelImportUrlInput'));
+  if (input) setTimeout(() => { try { input.focus(); } catch (e) {} }, 50);
+}
+window.openImportChannelModal = openImportChannelModal;
+
+function closeImportChannelModal() {
+  const modal = document.getElementById('importChannelModal');
+  if (!modal || modal.style.display === 'none') return;
+  modal.style.display = 'none';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll(false);
+}
+window.closeImportChannelModal = closeImportChannelModal;
+
+function switchImportChannelMode(mode, btn) {
+  const pLink = document.getElementById('importChannelPanelLink');
+  const pCode = document.getElementById('importChannelPanelCode');
+  const bLink = document.getElementById('importChannelModeLinkBtn');
+  const bCode = document.getElementById('importChannelModeCodeBtn');
+  if (mode === 'code') {
+    if (pLink) pLink.style.display = 'none';
+    if (pCode) pCode.style.display = 'block';
+    if (bLink) {
+      bLink.classList.remove('active');
+      const c = bLink.querySelector('.check-icon');
+      if (c) c.remove();
+    }
+    if (bCode) {
+      bCode.classList.add('active');
+      if (!bCode.querySelector('.check-icon')) {
+        bCode.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
+      }
+    }
+  } else {
+    if (pLink) pLink.style.display = 'block';
+    if (pCode) pCode.style.display = 'none';
+    if (bCode) {
+      bCode.classList.remove('active');
+      const c = bCode.querySelector('.check-icon');
+      if (c) c.remove();
+    }
+    if (bLink) {
+      bLink.classList.add('active');
+      if (!bLink.querySelector('.check-icon')) {
+        bLink.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
+      }
+    }
+  }
+}
+window.switchImportChannelMode = switchImportChannelMode;
+
+function refreshMyChannelsAction(btn) {
+  renderMyCreatedChannelsList();
+  renderChannelMergeList();
+  if (btn) {
+    const orig = btn.textContent;
+    btn.textContent = 'Refreshed \u2713';
+    setTimeout(() => { if (btn) btn.textContent = orig; }, 1200);
+  }
+}
+window.refreshMyChannelsAction = refreshMyChannelsAction;
 
 // Companion to the fixed Quick Add network buttons above -- same
 // quickAddChannel machinery, just fed a pasted list link instead of a
@@ -58959,10 +61321,14 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
 // into the list are silently dropped rather than erroring out.
 async function importChannelFromLink(btn) {
   if (!requireSignedInFor('add channels')) return; // docs/DECISIONS.md D-8
-  const urlInput = document.getElementById('channelImportUrlInput');
-  const nameInput = document.getElementById('channelImportNameInput');
-  const listUrl = urlInput.value.trim();
-  const name = nameInput.value.trim();
+  const modalUrl = document.getElementById('modalChannelImportUrlInput');
+  const pageUrl = document.getElementById('channelImportUrlInput');
+  const urlInput = (modalUrl && modalUrl.value && modalUrl.value.trim()) ? modalUrl : (pageUrl || modalUrl);
+  const modalName = document.getElementById('modalChannelImportNameInput');
+  const pageName = document.getElementById('channelImportNameInput');
+  const nameInput = (modalName && modalName.value && modalName.value.trim()) ? modalName : (pageName || modalName);
+  const listUrl = urlInput ? urlInput.value.trim() : '';
+  const name = nameInput ? nameInput.value.trim() : '';
   if (!listUrl) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Import Channel', 'Paste a list URL first.');
@@ -58979,10 +61345,15 @@ async function importChannelFromLink(btn) {
     }
     return;
   }
-  const liveCheck = document.getElementById('channelImportLiveSyncCheck');
+  const modalLive = document.getElementById('modalChannelImportLiveSyncCheck');
+  const pageLive = document.getElementById('channelImportLiveSyncCheck');
+  const liveCheck = (modalLive && modalLive.checked !== undefined) ? modalLive : pageLive;
   await quickAddChannel(name, listUrl, null, btn, { liveSync: !liveCheck || liveCheck.checked });
-  urlInput.value = '';
-  nameInput.value = '';
+  if (urlInput) urlInput.value = '';
+  if (nameInput) nameInput.value = '';
+  if (pageUrl) pageUrl.value = '';
+  if (pageName) pageName.value = '';
+  closeImportChannelModal();
 }
 
 
@@ -60097,9 +62468,18 @@ async function fetchSharedChannel(code) {
 
 async function importSharedChannel(btn) {
   if (!requireSignedInFor('add channels')) return; // docs/DECISIONS.md D-8
-  const input = document.getElementById('channelShareCodeInput');
-  const statusBox = document.getElementById('channelShareImportStatus');
-  const say = (html) => { if (statusBox) statusBox.innerHTML = html; };
+  const modalInput = document.getElementById('modalChannelShareCodeInput');
+  const pageInput = document.getElementById('channelShareCodeInput');
+  const input = (modalInput && modalInput.value && modalInput.value.trim())
+    ? modalInput
+    : ((pageInput && pageInput.value && pageInput.value.trim()) ? pageInput : (modalInput || pageInput));
+  const isModalOpen = document.getElementById('importChannelModal') && document.getElementById('importChannelModal').style.display === 'flex';
+  const modalStatus = document.getElementById('modalChannelShareImportStatus');
+  const pageStatus = document.getElementById('channelShareImportStatus');
+  const say = (html) => {
+    if (modalStatus) modalStatus.innerHTML = html;
+    if (pageStatus) pageStatus.innerHTML = html;
+  };
   const code = parseChannelShareCode(input ? input.value : '');
   if (!code) {
     say('<p class="testresult err" style="margin:4px 0 0;">✗ That does not look like a channel share link or code.</p>');
@@ -60121,6 +62501,14 @@ async function importSharedChannel(btn) {
     say('<p class="testresult ok" style="margin:4px 0 0;">✓ "' + escapeHtml(data.channel.name || 'Channel') + '" added (' +
       (data.channel.items || []).length + ' picks).</p>');
     if (input) input.value = '';
+    if (modalInput) modalInput.value = '';
+    if (pageInput) pageInput.value = '';
+    if (isModalOpen) {
+      setTimeout(() => {
+        closeImportChannelModal();
+        if (modalStatus) modalStatus.innerHTML = '';
+      }, 900);
+    }
   } catch (e) {
     say('<p class="testresult err" style="margin:4px 0 0;">✗ Network error while fetching that channel.</p>');
   } finally {
@@ -60266,7 +62654,7 @@ function renderChannelDirectory() {
     const isAdded = isDirectoryChannelAdded(e.code);
     const actionBtn = isAdded
       ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger); border-color:var(--danger);" data-act="removeDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">Remove</button>'
-      : '<button type="button" class="lc-btn primary" style="padding:6px 12px; font-size:0.8rem;" data-act="addDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">+ Add</button>';
+      : '<button type="button" class="lc-btn channelAddBtn primary" style="padding:6px 12px; font-size:0.8rem;" data-act="addDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">+ Add</button>';
     return channelListingCardHtml(
       e,
       '<button type="button" class="lc-btn searchLikeExternalBtn' + (_channelDirectoryLiked[e.code] ? ' liked' : '') + '"' +
@@ -61143,7 +63531,7 @@ function renderChannelMergeList() {
         
         const countText = (merged.channelIds ? merged.channelIds.length : 0) + ' channels &middot; ' + totalEpisodes + ' episodes';
         
-        const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleMergedChannelInCatalog" data-act-args="' + appActArgs([merged.mergedId]) + '">' +
+        const addBtnHtml = '<button type="button" class="lc-btn channelAddBtn ' + (isAdded ? 'secondary is-added' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleMergedChannelInCatalog" data-act-args="' + appActArgs([merged.mergedId]) + '">' +
           (isAdded ? 'Remove' : '+ Add') +
         '</button>';
 
@@ -61173,12 +63561,23 @@ function renderChannelMergeList() {
   if (!box) return;
   const selectAllCheck = document.getElementById('channelMergeSelectAllCheck');
   if (selectAllCheck) selectAllCheck.checked = false;
+  const selectAllWrap = document.getElementById('channelMergeSelectAllWrap');
+  const controlsRow = document.getElementById('channelMergeControls');
   
   const channels = Object.values(channelsMap);
-  if (!channels.length) {
-    box.innerHTML = '<p><small>No saved channels yet -- add or build a channel above first.</small></p>';
+  if (channels.length < 2) {
+    if (selectAllWrap) selectAllWrap.style.display = 'none';
+    if (controlsRow) controlsRow.style.display = 'none';
+    if (channels.length === 1) {
+      box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem; margin:0;"><small>You have 1 saved channel (<strong>' + escapeHtml(channels[0].name || 'Channel') + '</strong>). Create or quick-add at least one more channel to combine them into a merged catalog.</small></p>';
+    } else {
+      box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem; margin:0;"><small>No saved channels yet &mdash; build a custom channel or add a network above first.</small></p>';
+    }
     return;
   }
+
+  if (selectAllWrap) selectAllWrap.style.display = 'flex';
+  if (controlsRow) controlsRow.style.display = 'flex';
   
   channels.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   
@@ -61205,6 +63604,24 @@ function renderChannelMergeList() {
 let customListDraftItems = [];
 let customListDraftType = 'movie'; // 'movie' or 'series', set by user toggle
 
+function openImportListModal() {
+  const modal = document.getElementById('importListModal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll(true);
+  const urlInput = document.getElementById('modalCustomListImportUrlInput') || document.getElementById('customListImportUrlInput');
+  if (urlInput) urlInput.focus();
+}
+window.openImportListModal = openImportListModal;
+
+function closeImportListModal() {
+  const modal = document.getElementById('importListModal');
+  if (!modal || modal.style.display === 'none') return;
+  modal.style.display = 'none';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll(false);
+}
+window.closeImportListModal = closeImportListModal;
+
 // Skips the search-and-pick draft entirely -- copyListToCustomList already
 // does exactly "fetch this list's items and save them as a Custom List"
 // (splitting into "(Movies)"/"(Shows)" lists on its own if the source turns
@@ -61213,19 +63630,29 @@ let customListDraftType = 'movie'; // 'movie' or 'series', set by user toggle
 // name instead of a link the client already had metadata for.
 async function importCustomListFromLink(btn) {
   if (!requireSignedInFor('import lists')) return; // docs/DECISIONS.md D-8
-  const urlInput = document.getElementById('customListImportUrlInput');
-  const nameInput = document.getElementById('customListImportNameInput');
-  const syncCheck = document.getElementById('customListImportSyncCheck');
-  const listUrl = urlInput.value.trim();
+  const modalUrl = document.getElementById('modalCustomListImportUrlInput');
+  const pageUrl = document.getElementById('customListImportUrlInput');
+  const urlInput = (modalUrl && modalUrl.value.trim()) ? modalUrl : (pageUrl || modalUrl);
+  const modalName = document.getElementById('modalCustomListImportNameInput');
+  const pageName = document.getElementById('customListImportNameInput');
+  const nameInput = (modalUrl && modalUrl.value.trim()) ? modalName : (pageName || modalName);
+  const modalSync = document.getElementById('modalCustomListImportSyncCheck');
+  const pageSync = document.getElementById('customListImportSyncCheck');
+  const syncCheck = (modalUrl && modalUrl.value.trim()) ? modalSync : (pageSync || modalSync);
+
+  const listUrl = urlInput ? urlInput.value.trim() : '';
   if (!listUrl) {
     showToast('Paste a list URL first.', 'error');
     return;
   }
-  const name = nameInput.value.trim() || guessNameFromUrl(listUrl);
+  const name = (nameInput && nameInput.value.trim()) ? nameInput.value.trim() : guessNameFromUrl(listUrl);
   const syncWithLink = syncCheck ? syncCheck.checked : false;
   await copyListToCustomList(name, listUrl, 'unknown', btn, null, { sourceUrl: syncWithLink ? listUrl : '' });
-  urlInput.value = '';
-  nameInput.value = '';
+  if (modalUrl) modalUrl.value = '';
+  if (pageUrl) pageUrl.value = '';
+  if (modalName) modalName.value = '';
+  if (pageName) pageName.value = '';
+  closeImportListModal();
 }
 
 // The "Customize" button on a Discover/Search list card -- the same idea as
@@ -61244,10 +63671,10 @@ async function importCustomListFromLink(btn) {
 // is for curating a short list, and a shelf like TMDB Trending can run into
 // the thousands.
 async function loadListToCustomListDraft(name, listUrl, contentType, btn) {
-  const originalText = btn ? btn.textContent : '';
+  const originalHtml = btn ? btn.innerHTML : '';
   if (btn) {
     btn.disabled = true;
-    btn.textContent = 'Loading items…';
+    btn.textContent = 'Loading…';
   }
   try {
     const isSingle = contentType === 'movie' || contentType === 'series';
@@ -61317,17 +63744,212 @@ async function loadListToCustomListDraft(name, listUrl, contentType, btn) {
   }
   if (btn) {
     btn.disabled = false;
-    btn.textContent = originalText;
+    btn.innerHTML = originalHtml;
   }
 }
 
-const customListSearchBox = document.getElementById('customListSearchResult');
-if (customListSearchBox) {
-  customListSearchBox.addEventListener('click', (e) => {
-    const btn = e.target.closest('.customListAddBtn');
-    if (!btn) return;
-    addToCustomListDraft(btn.dataset.searchtype, btn.dataset.tmdbid, btn.dataset.title, btn.dataset.year, btn.dataset.poster, btn);
-  });
+let customListSearchTimer = null;
+let customListSearchSeq = 0;
+let customListSearchInitialized = false;
+
+function updateCustomListSearchPlaceholder() {
+  const input = document.getElementById('customListSearchInput');
+  if (!input) return;
+  if (customListDraftType === 'movie') {
+    input.placeholder = 'Search a movie to add...';
+  } else if (customListDraftType === 'series') {
+    input.placeholder = 'Search a show to add...';
+  } else {
+    input.placeholder = 'Search a movie or show to add...';
+  }
+}
+
+function initCustomListSearch() {
+  const input = document.getElementById('customListSearchInput');
+  const clearBtn = document.getElementById('customListSearchClearBtn');
+  const searchBox = document.getElementById('customListSearchResult');
+  if (!input) return;
+
+  updateCustomListSearchPlaceholder();
+
+  if (!customListSearchInitialized) {
+    customListSearchInitialized = true;
+
+    input.addEventListener('input', () => {
+      const q = input.value.trim();
+      if (clearBtn) clearBtn.style.display = input.value ? 'block' : 'none';
+      if (customListSearchTimer) clearTimeout(customListSearchTimer);
+      if (!q) {
+        if (searchBox) searchBox.innerHTML = '';
+        return;
+      }
+      customListSearchTimer = setTimeout(() => {
+        runCustomListTitleSearch(q);
+      }, 300);
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (customListSearchTimer) clearTimeout(customListSearchTimer);
+        const q = input.value.trim();
+        if (q) runCustomListTitleSearch(q);
+      }
+    });
+
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        input.value = '';
+        clearBtn.style.display = 'none';
+        if (searchBox) searchBox.innerHTML = '';
+        input.focus();
+      });
+    }
+
+    if (searchBox && !searchBox.__customListAddBound) {
+      searchBox.__customListAddBound = true;
+      searchBox.addEventListener('click', (e) => {
+        const card = e.target.closest('.custom-list-search-card');
+        if (!card) return;
+        const btn = card.querySelector('.customListAddBtn');
+        if (!btn || btn.disabled) return;
+        addToCustomListDraft(btn.dataset.searchtype, btn.dataset.tmdbid, btn.dataset.title, btn.dataset.year, btn.dataset.poster, btn);
+      });
+    }
+  }
+}
+
+async function runCustomListTitleSearch(query) {
+  const q = String(query || '').trim();
+  const box = document.getElementById('customListSearchResult');
+  if (!box) return [];
+  if (!q) {
+    box.innerHTML = '';
+    return [];
+  }
+  const seq = ++customListSearchSeq;
+  box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem; padding:8px 0;"><small>Searching\u2026</small></p>';
+
+  try {
+    const isAdult = typeof isAdultContentFilterEnabled === 'function' ? isAdultContentFilterEnabled() : false;
+    const adultParam = isAdult ? '&adultContentFilter=1' : '';
+
+    let results = [];
+    if (customListDraftType === 'series') {
+      const res = await fetch(ORIGIN + '/api/title-search?q=' + encodeURIComponent(q) + '&type=tv' + adultParam, { cache: 'no-store' });
+      const data = await res.json();
+      if (seq !== customListSearchSeq) return [];
+      if (data && data.ok && Array.isArray(data.results)) {
+        results = data.results.map(r => Object.assign({}, r, { searchType: 'tv' }));
+      }
+    } else if (customListDraftType === 'movie') {
+      const res = await fetch(ORIGIN + '/api/title-search?q=' + encodeURIComponent(q) + '&type=movie' + adultParam, { cache: 'no-store' });
+      const data = await res.json();
+      if (seq !== customListSearchSeq) return [];
+      if (data && data.ok && Array.isArray(data.results)) {
+        results = data.results.map(r => Object.assign({}, r, { searchType: 'movie' }));
+      }
+    } else {
+      const [resMovie, resTv] = await Promise.all([
+        fetch(ORIGIN + '/api/title-search?q=' + encodeURIComponent(q) + '&type=movie' + adultParam, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ ok: false })),
+        fetch(ORIGIN + '/api/title-search?q=' + encodeURIComponent(q) + '&type=tv' + adultParam, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ ok: false }))
+      ]);
+      if (seq !== customListSearchSeq) return [];
+      const movies = (resMovie && resMovie.ok && Array.isArray(resMovie.results)) ? resMovie.results.map(r => Object.assign({}, r, { searchType: 'movie' })) : [];
+      const tvs = (resTv && resTv.ok && Array.isArray(resTv.results)) ? resTv.results.map(r => Object.assign({}, r, { searchType: 'tv' })) : [];
+      const maxLen = Math.max(movies.length, tvs.length);
+      for (let i = 0; i < maxLen; i++) {
+        if (i < movies.length) results.push(movies[i]);
+        if (i < tvs.length) results.push(tvs[i]);
+      }
+    }
+
+    if (seq !== customListSearchSeq) return [];
+    renderCustomListSearchResults(results.slice(0, 12));
+    return results;
+  } catch (e) {
+    if (seq !== customListSearchSeq) return [];
+    box.innerHTML = '<p class="testresult err" style="margin:8px 0; font-size:0.85rem;">\u2717 Network error while searching.</p>';
+    return [];
+  }
+}
+
+function renderCustomListSearchResults(results) {
+  const box = document.getElementById('customListSearchResult');
+  if (!box) return;
+  if (!results.length) {
+    box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem; padding:8px 0;"><small>No titles found matching that search.</small></p>';
+    return;
+  }
+
+  // Type + title + year: a title alone blocks a remake or a show that shares
+  // a movie's name ("Dune" 1984 vs 2021, "The Office" UK vs US).
+  const draftKey = (type, title, year) => (type === 'series' ? 'series' : 'movie') + '|' + String(title || '').toLowerCase().trim() + '|' + String(year || '');
+  const existingKeys = new Set(customListDraftItems.map(it => draftKey(it.type, it.title || it.name, it.year)));
+
+  const cardsHtml = results.map(r => {
+    const tmdbIdNum = r.tmdbId || r.id || '';
+    const itemType = (r.searchType === 'tv' || r.type === 'tv' || r.type === 'series') ? 'tv' : 'movie';
+    const itemKind = itemType === 'tv' ? 'series' : 'movie';
+    const isShow = itemType === 'tv';
+    const typeLabel = isShow ? 'Show' : 'Movie';
+    const rPoster = typeof resolveClientPoster === 'function' ? resolveClientPoster(r, r.poster || '') : r.poster;
+    const posterImg = rPoster
+      ? '<img class="custom-list-search-poster" src="' + escapeAttr(rPoster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
+      : '<div class="custom-list-search-poster live-preview-poster-placeholder" style="display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:0.72rem; text-align:center; padding:4px;" data-needs-fallback="1"><small style="color:var(--muted); font-size:0.72rem;">No poster</small></div>';
+
+    const isAlreadyAdded = existingKeys.has(draftKey(itemKind, r.title, r.year));
+    const btnText = isAlreadyAdded ? 'Added \u2713' : '+ Add';
+    const btnClass = isAlreadyAdded ? 'lc-btn secondary customListAddBtn' : 'lc-btn customListAddBtn';
+    const disabledAttr = isAlreadyAdded ? ' disabled' : '';
+
+    return '<div class="custom-list-search-card"' +
+      (tmdbIdNum ? ' data-id="tmdb:' + escapeAttr(String(tmdbIdNum)) + '"' : '') +
+      ' data-type="' + itemKind + '"' +
+      ' data-searchtype="' + itemType + '"' +
+      ' data-tmdbid="' + escapeAttr(String(tmdbIdNum)) + '"' +
+      ' data-title="' + escapeAttr(r.title || '') + '"' +
+      ' data-year="' + escapeAttr(r.year || '') + '"' +
+      ' data-poster="' + escapeAttr(r.poster || '') + '">' +
+      '<div style="width:100%; position:relative;">' +
+        posterImg +
+      '</div>' +
+      '<div class="custom-list-search-title" title="' + escapeAttr(r.title || '') + '">' +
+        escapeHtml(r.title || '') +
+      '</div>' +
+      '<div class="custom-list-search-meta">' +
+        (r.year ? escapeHtml(r.year) + ' \u2022 ' : '') + typeLabel +
+      '</div>' +
+      '<button type="button" class="' + btnClass + '" style="width:100%; padding:4px 6px; font-size:0.72rem; font-weight:600; border-radius:var(--radius-pill);"' +
+        disabledAttr +
+        ' data-searchtype="' + itemType + '"' +
+        ' data-tmdbid="' + escapeAttr(String(tmdbIdNum)) + '"' +
+        ' data-title="' + escapeAttr(r.title || '') + '"' +
+        ' data-year="' + escapeAttr(r.year || '') + '"' +
+        ' data-poster="' + escapeAttr(r.poster || '') + '">' +
+        btnText +
+      '</button>' +
+    '</div>';
+  }).join('');
+
+  box.innerHTML = '<div class="poster-grid-3" style="margin-top:12px;">' + cardsHtml + '</div>';
+  if (typeof resolveMissingPostersInDom === 'function') {
+    resolveMissingPostersInDom(box);
+  }
+  // Title search answers with TMDB ids only, so resolveClientPoster above
+  // had no IMDB id to build a Better Poster from and every tile kept its
+  // plain TMDB artwork. Same fix as catalog search -- see applyBetterPostersToTmdbTiles.
+  if (typeof applyBetterPostersToTmdbTiles === 'function') {
+    applyBetterPostersToTmdbTiles(box);
+  }
+}
+
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initCustomListSearch);
+  } else {
+    initCustomListSearch();
+  }
 }
 
 async function addToCustomListDraft(searchType, tmdbId, title, year, poster, btn) {
@@ -61366,21 +63988,41 @@ async function addToCustomListDraft(searchType, tmdbId, title, year, poster, btn
     });
     if (!customListDraftType) customListDraftType = itemType;
     renderCustomListDraftList();
-    if (btn) btn.textContent = 'Added \u2713';
+    if (btn) {
+      btn.textContent = 'Added \u2713';
+      btn.disabled = true;
+      btn.classList.add('secondary');
+    }
     if (typeof trackEvent === 'function') trackEvent('list-add', data.imdbId, title, itemType);
   } catch (e) {
     showToast('Network error adding "' + title + '".', 'error');
     if (btn) {
       btn.disabled = false;
       btn.textContent = '+ Add';
+      btn.classList.remove('secondary');
     }
   }
 }
 
 function renderCustomListDraftList() {
+  const countEl = document.getElementById('customListDraftCount');
+  if (countEl) {
+    const len = customListDraftItems.length;
+    countEl.textContent = '(' + len + ' ' + (len === 1 ? 'item' : 'items') + ')';
+  }
+  const actionsEl = document.getElementById('customListDraftActions');
+  if (actionsEl) {
+    actionsEl.style.display = customListDraftItems.length >= 2 ? 'flex' : 'none';
+  }
+
   const box = document.getElementById('customListDraftList');
+  if (!box) return;
   if (!customListDraftItems.length) {
-    box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem;"><small>No items in this list yet &mdash; tap + on any movie or show across Discover, Search, or Charts to add it.</small></p>';
+    box.innerHTML = '<div style="text-align:center; padding:28px 16px; border:1.5px dashed var(--border); border-radius:10px; background:var(--surface); margin-top:8px;">' +
+      '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted); margin-bottom:8px; opacity:0.7;" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg>' +
+      '<div style="font-weight:600; font-size:0.9rem; color:var(--text); margin-bottom:4px;">No titles in this list yet</div>' +
+      '<p style="color:var(--muted); font-size:0.82rem; margin:0 auto; max-width:340px;">Search above to add movies or shows, or tap "+" on any title while browsing Discover, Charts, or Search.</p>' +
+    '</div>';
     return;
   }
   const cardsHtml = customListDraftItems.map((it, i) => {
@@ -61763,6 +64405,8 @@ function saveCustomList() {
   if (searchInput) searchInput.value = '';
   const searchRes = document.getElementById('customListSearchResult');
   if (searchRes) searchRes.innerHTML = '';
+  const clearBtn = document.getElementById('customListSearchClearBtn');
+  if (clearBtn) clearBtn.style.display = 'none';
   renderCustomListDraftList();
   updateCustomListSaveButtonLabel();
 }
@@ -62105,6 +64749,8 @@ function cancelEditCustomList() {
   if (searchInput) searchInput.value = '';
   const searchRes = document.getElementById('customListSearchResult');
   if (searchRes) searchRes.innerHTML = '';
+  const clearBtn = document.getElementById('customListSearchClearBtn');
+  if (clearBtn) clearBtn.style.display = 'none';
   const playOrderSel = document.getElementById('customListPlayOrderSelect');
   if (playOrderSel) {
     playOrderSel.value = 'as-listed';
@@ -62141,7 +64787,7 @@ function updateCustomListSaveButtonLabel() {
     }
   }
 
-  saveBtn.textContent = 'Save';
+  saveBtn.textContent = isEditing ? 'Save Changes' : 'Create List';
   if (cancelBtn) {
     cancelBtn.textContent = 'Cancel';
     cancelBtn.style.display = isEditing ? '' : 'none';
@@ -62157,6 +64803,8 @@ function setCustomListDraftTypeToggle(type) {
   if (type === 'mixed') {
     customListDraftType = 'mixed';
     updateCustomListTypeRadio('mixed');
+    const input = document.getElementById('customListSearchInput');
+    if (input && input.value.trim()) runCustomListTitleSearch(input.value.trim());
     return;
   }
   if (customListDraftItems.length > 0 && customListDraftType !== type) {
@@ -62172,14 +64820,23 @@ function setCustomListDraftTypeToggle(type) {
   }
   customListDraftType = type;
   updateCustomListTypeRadio(type);
+  const input = document.getElementById('customListSearchInput');
+  if (input && input.value.trim()) runCustomListTitleSearch(input.value.trim());
 }
 
 function updateCustomListTypeRadio(type) {
   const radios = document.getElementsByName('customListTypeRadio');
   for (let i = 0; i < radios.length; i++) {
-    if (radios[i].value === type) {
-      radios[i].checked = true;
+    const isMatch = (radios[i].value === type);
+    radios[i].checked = isMatch;
+    const pill = radios[i].closest('.custom-list-type-pill');
+    if (pill) {
+      if (isMatch) pill.classList.add('active');
+      else pill.classList.remove('active');
     }
+  }
+  if (typeof updateCustomListSearchPlaceholder === 'function') {
+    updateCustomListSearchPlaceholder();
   }
 }
 
@@ -65254,7 +67911,7 @@ function buildAiringNextCardHtml() {
   }).join('');
 
   const isAdded = typeof isListAddedToConfig === 'function' ? isListAddedToConfig(null, 'series', 'airing-next') : false;
-  const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary localListAddToConfigBtn airingNextAddToConfigBtn is-added' : 'primary localListAddToConfigBtn airingNextAddToConfigBtn') + '" ' +
+  const addBtnHtml = '<button type="button" class="lc-btn secondary localListAddToConfigBtn airingNextAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
     (isAdded ? 'style="color:var(--danger);"' : '') +
     ' data-slug="airing-next">' + (isAdded ? 'Remove' : '+ Add') + '</button>';
 
@@ -65262,15 +67919,15 @@ function buildAiringNextCardHtml() {
     '<div class="list-card-header">' +
       '<div class="list-card-body">' +
         '<div class="list-card-title">' +
-          '<span class="drag-handle-list" title="Drag to reorder">&#x2630;</span>' +
+          '<span class="drag-handle-list" title="Drag to reorder"><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
           'Airing Next' +
         '</div>' +
         '<div class="list-card-meta">' +
+          '<span class="list-source-badge badge-autotrack">Auto-tracked</span>' +
           '<span>Shows</span><span class="list-card-meta-sep">&middot;</span><span>' + totalCount + ' item' + (totalCount === 1 ? '' : 's') + '</span>' +
         '</div>' +
       '</div>' +
       '<div class="list-card-actions">' +
-        '<span style="font-size:0.78rem; color:var(--muted); white-space:nowrap;">Auto-tracked</span>' +
         addBtnHtml +
       '</div>' +
     '</div>' +
@@ -66007,15 +68664,17 @@ function renderCreatorProfileBar() {
   const bar = document.getElementById('creatorProfileBar');
   if (!bar) return;
   if (activeCreator) {
+    const disp = activeCreator.displayName || activeCreator.creatorName || 'Account';
+    const initial = (disp.charAt(0) || 'U').toUpperCase();
     bar.innerHTML =
-      '<div style="display:flex; align-items:center; gap:8px;">' +
-      '<button type="button" class="subnav-pill active" style="margin:0; font-size:0.85rem; padding:8px 14px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px; border-radius:var(--radius-pill);" data-act="switchTab" data-act-args="[&quot;account&quot;]">&#x1F464; ' + escapeHtml(activeCreator.displayName) + '</button>' +
-      '</div>';
+      '<button type="button" class="header-avatar-btn signed-in" id="headerProfileBtn" data-act="switchTab" data-act-args="[&quot;account&quot;]" aria-label="Account: ' + escapeAttr(disp) + '" title="Signed in as ' + escapeAttr(disp) + '">' +
+        '<span class="header-avatar-initial">' + escapeHtml(initial) + '</span>' +
+      '</button>';
   } else {
     bar.innerHTML =
-      '<div style="display:flex; align-items:center; gap:6px;">' +
-      '<button type="button" class="lc-btn primary" data-act="openRestoreModal" style="padding:8px 16px; font-size:0.85rem; font-weight:700; border-radius:var(--radius-pill);">Login</button>' +
-      '</div>';
+      '<button type="button" class="header-avatar-btn signed-out" id="headerProfileBtn" data-act="openRestoreModal" aria-label="Sign in or create account" title="Sign in or create account">' +
+        '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>' +
+      '</button>';
   }
 }
 
@@ -66042,13 +68701,17 @@ function renderAccountKeySection() {
     '</div>' +
     '<button type="button" class="secondary lc-btn" data-act="switchCreatorProfile">Sign Out / Switch</button>' +
     '</div>' +
-    '<p style="margin:0 0 4px;"><small>Account Key</small></p>' +
-    '<div class="creator-key-display" id="accountKeyDisplay">' + '\u2022'.repeat(Math.max(8, key.length)) + '</div>' +
-    '<div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-top:10px;">' +
-    '<button type="button" class="secondary" id="accountKeyToggleBtn" data-act="toggleAccountKeyVisibility">Show Key</button>' +
-    '<button type="button" class="secondary" data-act="copyAccountKey">Copy Key</button>' +
+    '<div style="margin-top:6px;">' +
+      '<div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); font-weight:700; margin-bottom:6px;">Account Key</div>' +
+      '<div class="account-key-group">' +
+        '<div class="creator-key-display" id="accountKeyDisplay">' + '\u2022'.repeat(Math.max(8, key.length)) + '</div>' +
+        '<div class="account-key-actions">' +
+          '<button type="button" class="secondary lc-btn" id="accountKeyToggleBtn" data-act="toggleAccountKeyVisibility">Show Key</button>' +
+          '<button type="button" class="secondary lc-btn" data-act="copyAccountKey">Copy Key</button>' +
+        '</div>' +
+      '</div>' +
+      '<p style="margin:4px 0 0; color:var(--muted); font-size:0.78rem;">Anyone with this key can sign in as you and edit your lists &mdash; keep it somewhere safe, and don&apos;t share it.</p>' +
     '</div>' +
-    '<p style="margin-top:10px;"><small>Anyone with this key can sign in as you and edit your lists &mdash; keep it somewhere safe, and don&apos;t share it.</small></p>' +
     '<div class="recovery-section" style="margin-top:16px; padding:14px 16px; border:1px solid rgba(255,255,255,0.12); border-radius:12px; background:rgba(255,255,255,0.03);">' +
       '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:6px;">' +
         '<div style="font-weight:700; font-size:0.9rem; color:var(--text);">Account Recovery</div>' +
@@ -66065,16 +68728,27 @@ function renderAccountKeySection() {
         (hasRecovery ? 'Update Recovery Answer' : 'Set Recovery Answer') +
       '</button>' +
     '</div>' +
-    '<div class="danger-zone" style="margin-top:20px; padding:14px 16px; border:1px solid rgba(255,149,0,0.35); border-radius:12px; background:rgba(255,149,0,0.06);">' +
-      '<div style="font-weight:700; font-size:0.9rem; color:#ff9500; margin-bottom:4px;">Reset Account</div>' +
-      '<p style="margin:0 0 10px; font-size:0.82rem; color:var(--muted);">Delete every list, channel, preset, watch history entry and catalog row on this account, returning it to how it was when you created it. Your account and key stay the same, and you stay signed in.</p>' +
-      '<button type="button" class="lc-btn" style="background:#ff9500; color:#fff; border:none; padding:7px 14px; font-weight:700; border-radius:8px; cursor:pointer;" data-act="openResetAccountModal">Reset Account Data</button>' +
-    '</div>' +
-    '<div class="danger-zone" style="margin-top:12px; padding:14px 16px; border:1px solid rgba(255,59,48,0.3); border-radius:12px; background:rgba(255,59,48,0.05);">' +
-      '<div style="font-weight:700; font-size:0.9rem; color:var(--danger, #ff3b30); margin-bottom:4px;">Delete Account</div>' +
-      '<p style="margin:0 0 10px; font-size:0.82rem; color:var(--muted);">Permanently delete your account, all published lists, and all synced data from the server.</p>' +
-      '<button type="button" class="lc-btn" style="background:#ff3b30; color:#fff; border:none; padding:7px 14px; font-weight:700; border-radius:8px; cursor:pointer;" data-act="openDeleteAccountModal">Delete Account &amp; All Data</button>' +
-    '</div>';
+    '<details class="danger-zone-disclosure">' +
+      '<summary class="danger-zone-summary">' +
+        '<span style="display:flex; align-items:center; gap:8px;">' +
+          '<span style="font-size:0.95rem;">&#x26A0;</span>' +
+          '<span>Danger Zone (Reset or Delete Account)</span>' +
+        '</span>' +
+        '<span class="danger-zone-arrow">&#x25BE;</span>' +
+      '</summary>' +
+      '<div class="danger-zone-content">' +
+        '<div style="border:1px solid rgba(255,149,0,0.3); border-radius:10px; padding:12px 14px; background:rgba(255,149,0,0.05);">' +
+          '<div style="font-weight:700; font-size:0.88rem; color:#ff9500; margin-bottom:4px;">Reset Account</div>' +
+          '<p style="margin:0 0 10px; font-size:0.8rem; color:var(--muted); line-height:1.4;">Delete every list, channel, preset, watch history entry and catalog row on this account, returning it to how it was when you created it. Your account and key stay the same, and you stay signed in.</p>' +
+          '<button type="button" class="lc-btn" style="background:#ff9500; color:#fff; border:none; padding:6px 14px; font-weight:700; font-size:0.84rem; border-radius:8px; cursor:pointer;" data-act="openResetAccountModal">Reset Account Data</button>' +
+        '</div>' +
+        '<div style="border:1px solid rgba(255,59,48,0.3); border-radius:10px; padding:12px 14px; background:rgba(255,59,48,0.05);">' +
+          '<div style="font-weight:700; font-size:0.88rem; color:var(--danger, #ff3b30); margin-bottom:4px;">Delete Account</div>' +
+          '<p style="margin:0 0 10px; font-size:0.8rem; color:var(--muted); line-height:1.4;">Permanently delete your account, all published lists, and all synced data from the server.</p>' +
+          '<button type="button" class="lc-btn" style="background:#ff3b30; color:#fff; border:none; padding:6px 14px; font-weight:700; font-size:0.84rem; border-radius:8px; cursor:pointer;" data-act="openDeleteAccountModal">Delete Account &amp; All Data</button>' +
+        '</div>' +
+      '</div>' +
+    '</details>';
 }
 
 function openSetRecoveryAnswerModal() {
@@ -66358,13 +69032,16 @@ function renderWatchlistPreferencesSection() {
     autoClean = val !== '0';
   } catch (e) {}
   box.innerHTML =
-    '<label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">' +
-      '<input type="checkbox" id="removeWatchedFromWatchlistCheck" ' + (autoClean ? 'checked' : '') + ' data-act="onRemoveWatchedFromWatchlistToggle" data-act-args="[&quot;@self&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">' +
-      '<div>' +
-        '<span style="font-weight:600;">Automatically remove watched items from Watchlist</span>' +
-        '<p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Movies are removed once watched. TV shows are only removed after every episode has been watched.</p>' +
+    '<div class="settings-toggle-row">' +
+      '<div style="flex:1; min-width:0; padding-right:12px;">' +
+        '<span style="font-weight:600; font-size:0.92rem; color:var(--text);">Automatically remove watched items from Watchlist</span>' +
+        '<p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Movies are removed once watched. TV shows are only removed after every episode has been watched.</p>' +
       '</div>' +
-    '</label>';
+      '<label class="ui-toggle" aria-label="Automatically remove watched items from Watchlist">' +
+        '<input type="checkbox" id="removeWatchedFromWatchlistCheck" ' + (autoClean ? 'checked' : '') + ' data-act="onRemoveWatchedFromWatchlistToggle" data-act-args="[&quot;@self&quot;]">' +
+        '<span class="ui-toggle-slider"></span>' +
+      '</label>' +
+    '</div>';
 }
 
 function onRemoveWatchedFromWatchlistToggle(cb) {
@@ -66489,30 +69166,36 @@ function renderHiddenListsSettingsSection() {
   // connected yet -- hiding ahead of connecting is harmless and saves a
   // trip back here after connecting.
   const sectionLabels = { mdblist: 'Your MDBList Lists', trakt: 'Your Trakt Lists', tmdb: 'Your TMDB Lists', simkl: 'Your Simkl Lists' };
-  const sectionsHtml = Object.keys(sectionLabels).map((section) => {
+  const sectionsHtml = '<div class="settings-check-group">' + Object.keys(sectionLabels).map((section) => {
     const checked = hiddenSections.has(section);
-    return '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none; padding:6px 0; border-bottom:1px solid var(--border);">' +
-      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-section-id="' + escapeAttr(section) + '" data-act="onHiddenSectionToggle" data-act-args="[&quot;@self&quot;]" style="cursor:pointer; width:16px; height:16px; flex-shrink:0;">' +
-      '<span style="font-weight:600;">' + escapeHtml(sectionLabels[section]) + '</span>' +
+    return '<label class="settings-check-item">' +
+      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-section-id="' + escapeAttr(section) + '" data-act="onHiddenSectionToggle" data-act-args="[&quot;@self&quot;]">' +
+      '<div style="flex:1; min-width:0;">' +
+        '<span style="font-weight:600; font-size:0.88rem; color:var(--text);">' + escapeHtml(sectionLabels[section]) + '</span>' +
+      '</div>' +
     '</label>';
-  }).join('');
+  }).join('') + '</div>';
 
-  const rowsHtml = rows.length ? rows.map((r) => {
+  const rowsHtml = rows.length ? ('<div class="settings-check-group">' + rows.map((r) => {
     const checked = hiddenIds.has(String(r.id));
-    return '<label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none; padding:6px 0; border-bottom:1px solid var(--border);">' +
-      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-list-id="' + escapeAttr(r.id) + '" data-act="onHiddenListToggle" data-act-args="[&quot;@self&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px; flex-shrink:0;">' +
-      '<div style="min-width:0;">' +
-        '<span style="font-weight:600; overflow-wrap:anywhere;">' + escapeHtml(r.name) + '</span>' +
+    return '<label class="settings-check-item">' +
+      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-list-id="' + escapeAttr(r.id) + '" data-act="onHiddenListToggle" data-act-args="[&quot;@self&quot;]">' +
+      '<div style="flex:1; min-width:0;">' +
+        '<span style="font-weight:600; font-size:0.88rem; color:var(--text); overflow-wrap:anywhere;">' + escapeHtml(r.name) + '</span>' +
         '<div style="color:var(--muted); font-size:0.78rem; margin-top:2px;">' + escapeHtml(r.source) + '</div>' +
       '</div>' +
     '</label>';
-  }).join('') : '<p style="color:var(--muted); font-size:0.85rem; margin-top:8px;"><small>No individual lists found yet -- visit My Lists (and connect any providers you use) first.</small></p>';
+  }).join('') + '</div>') : '<p style="color:var(--muted); font-size:0.85rem; margin-top:8px;"><small>No individual lists found yet -- visit My Lists (and connect any providers you use) first.</small></p>';
 
   box.innerHTML =
-    '<p style="margin:0 0 6px; font-weight:600; font-size:0.85rem;">Whole Sections</p>' +
-    sectionsHtml +
-    '<p style="margin:14px 0 6px; font-weight:600; font-size:0.85rem;">Individual Lists</p>' +
-    rowsHtml;
+    '<div style="margin-bottom:14px;">' +
+      '<div style="font-weight:700; font-size:0.85rem; color:var(--text); margin-bottom:6px;">Whole Sections</div>' +
+      sectionsHtml +
+    '</div>' +
+    '<div style="border-top:1px solid var(--border); padding-top:14px;">' +
+      '<div style="font-weight:700; font-size:0.85rem; color:var(--text); margin-bottom:6px;">Individual Lists</div>' +
+      rowsHtml +
+    '</div>';
 }
 
 function onHiddenListToggle(cb) {
@@ -66587,11 +69270,16 @@ function renderTrackPlaybackSection() {
   box.innerHTML =
     '<div style="margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid var(--border);">' +
       '<p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">Streaming Apps &amp; Addon Players (Stremio, Nuvio, Wako, etc.)</p>' +
-      '<label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.9rem;">' +
-        '<input type="checkbox" id="trackPlaybackCheck" ' + (enabled ? 'checked' : '') + ' data-act="onTrackPlaybackToggle" data-act-args="[&quot;@self&quot;]">' +
-        '<span>Enable In-App Playback Auto-Tracking</span>' +
-      '</label>' +
-      '<p style="margin:6px 0 0; color:var(--muted); font-size:0.8rem;">Automatically marks movies and episodes as watched whenever playback starts in any supported streaming app or addon player (Stremio, Nuvio, Wako, etc.) via the built-in playback hook. Takes effect on your next install link.</p>' +
+      '<div class="settings-toggle-row">' +
+        '<div style="flex:1; min-width:0; padding-right:12px;">' +
+          '<span style="font-weight:600; font-size:0.92rem; color:var(--text);">Enable In-App Playback Auto-Tracking</span>' +
+          '<p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Automatically marks movies and episodes as watched whenever playback starts in any supported streaming app or addon player (Stremio, Nuvio, Wako, etc.) via the built-in playback hook. Takes effect on your next install link.</p>' +
+        '</div>' +
+        '<label class="ui-toggle" aria-label="Enable In-App Playback Auto-Tracking">' +
+          '<input type="checkbox" id="trackPlaybackCheck" ' + (enabled ? 'checked' : '') + ' data-act="onTrackPlaybackToggle" data-act-args="[&quot;@self&quot;]">' +
+          '<span class="ui-toggle-slider"></span>' +
+        '</label>' +
+      '</div>' +
     '</div>' +
 
     '<div style="margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid var(--border);">' +
@@ -66603,12 +69291,17 @@ function renderTrackPlaybackSection() {
         '<button type="button" class="secondary lc-btn" data-act="regenerateScrobbleWebhookUrl" title="Issues a new webhook URL and stops the old one working. Use this if the URL has been shared or logged somewhere it should not have been." style="padding:8px 14px; font-size:0.84rem;">Regenerate</button>' +
       '</div>' +
 
-      '<div style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
-        '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0 0 4px;">' +
-          '<input type="checkbox" id="scrobbleFilterUsersCb" ' + (filterUsers ? 'checked' : '') + ' data-act="onScrobbleFilterUsersToggle" data-act-args="[&quot;@self&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
-          '<span style="font-weight:600;">Enable Media Server User Filtering</span>' +
-        '</label>' +
-        '<p style="margin:0 0 8px; color:var(--muted); font-size:0.8rem;">When enabled, only selected or specified media server user profiles will scrobble into your lists. Unselected users will be ignored.</p>' +
+      '<div style="margin:12px 0 0; padding:12px 0; border-top:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
+        '<div class="settings-toggle-row" style="padding:0 0 4px; border-bottom:none;">' +
+          '<div style="flex:1; min-width:0; padding-right:12px;">' +
+            '<span style="font-weight:600; font-size:0.88rem; color:var(--text);">Enable Media Server User Filtering</span>' +
+            '<p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">When enabled, only selected or specified media server user profiles will scrobble into your lists. Unselected users will be ignored.</p>' +
+          '</div>' +
+          '<label class="ui-toggle" aria-label="Enable Media Server User Filtering">' +
+            '<input type="checkbox" id="scrobbleFilterUsersCb" ' + (filterUsers ? 'checked' : '') + ' data-act="onScrobbleFilterUsersToggle" data-act-args="[&quot;@self&quot;]">' +
+            '<span class="ui-toggle-slider"></span>' +
+          '</label>' +
+        '</div>' +
         '<div id="scrobbleFilterDetails" style="' + (filterUsers ? '' : 'display:none;') + ' margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.06);">' +
           '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">' +
             '<p style="margin:0; font-size:0.8rem; font-weight:600; color:var(--text);">Select Allowed Users:</p>' +
@@ -66624,15 +69317,25 @@ function renderTrackPlaybackSection() {
         '</div>' +
       '</div>' +
 
-      '<div style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
-        '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0 0 8px;">' +
-          '<input type="checkbox" id="syncMediaServerHistoryCb" checked data-act="toggleMediaServerSync" data-act-args="[&quot;@checked&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
-          '<span style="font-weight:600;">Automatically sync media server scrobbles to your Watch History list</span>' +
-        '</label>' +
-        '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0 0 10px;">' +
-          '<input type="checkbox" id="forwardScrobbleToProvidersCb" checked data-act="toggleForwardScrobbles" data-act-args="[&quot;@checked&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
-          '<span style="font-weight:600;">Forward scrobbles to connected external accounts (Trakt, Simkl, MDBList)</span>' +
-        '</label>' +
+      '<div style="margin:12px 0 0; padding:12px 0; border-top:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
+        '<div class="settings-toggle-row" style="padding:0 0 10px;">' +
+          '<div style="flex:1; min-width:0; padding-right:12px;">' +
+            '<span style="font-weight:600; font-size:0.86rem; color:var(--text);">Automatically sync media server scrobbles to your Watch History list</span>' +
+          '</div>' +
+          '<label class="ui-toggle" aria-label="Sync media server scrobbles to Watch History">' +
+            '<input type="checkbox" id="syncMediaServerHistoryCb" checked data-act="toggleMediaServerSync" data-act-args="[&quot;@checked&quot;]">' +
+            '<span class="ui-toggle-slider"></span>' +
+          '</label>' +
+        '</div>' +
+        '<div class="settings-toggle-row" style="padding:10px 0 12px; border-bottom:none;">' +
+          '<div style="flex:1; min-width:0; padding-right:12px;">' +
+            '<span style="font-weight:600; font-size:0.86rem; color:var(--text);">Forward scrobbles to connected external accounts (Trakt, Simkl, MDBList)</span>' +
+          '</div>' +
+          '<label class="ui-toggle" aria-label="Forward scrobbles to connected external accounts">' +
+            '<input type="checkbox" id="forwardScrobbleToProvidersCb" checked data-act="toggleForwardScrobbles" data-act-args="[&quot;@checked&quot;]">' +
+            '<span class="ui-toggle-slider"></span>' +
+          '</label>' +
+        '</div>' +
         '<div>' +
           '<button type="button" class="secondary lc-btn" data-act="syncAllConnectedAccountsNow" data-act-args="[&quot;@self&quot;]" style="padding:8px 14px; font-size:0.82rem; white-space:normal; line-height:1.35; text-align:center; max-width:100%; width:100%; box-sizing:border-box;">Sync Current Watch History to Connected Accounts Now</button>' +
         '</div>' +
@@ -67137,7 +69840,6 @@ async function switchCreatorProfile() {
   if (typeof appShellState !== 'undefined' && appShellState && typeof appShellState.set === 'function') {
     appShellState.set({ account: null });
   }
-  if (typeof appShellRefreshSettingsHome === 'function') appShellRefreshSettingsHome();
   if (typeof showAddedToast === 'function') {
     showAddedToast('Signed out \u2713');
   }
@@ -68854,6 +71556,8 @@ async function loadCreatorSync(opts) {
       if (typeof synced.keys.dedupeAcrossLists === 'boolean') {
         const cb = document.getElementById('dedupeAcrossListsCheckbox');
         if (cb) cb.checked = synced.keys.dedupeAcrossLists;
+        const catCb = document.getElementById('catalogsDedupeCheckbox');
+        if (catCb) catCb.checked = synced.keys.dedupeAcrossLists;
         try { localStorage.setItem('myListAddon:dedupeAcrossLists', synced.keys.dedupeAcrossLists ? '1' : '0'); } catch (e) {}
       }
       if (typeof synced.keys.shuffleShelves === 'boolean') {
@@ -70267,7 +72971,7 @@ async function renderCreatorDashboard(options) {
         '<div class="list-card-header">' +
           '<div class="list-card-body creatorListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' +
             '<div class="list-card-title">' +
-              '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop>&#x2630;</span>' +
+              '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
               escapeHtml(l.name) +
             '</div>' +
             '<div class="list-card-meta">' +
@@ -70283,9 +72987,9 @@ async function renderCreatorDashboard(options) {
           '<div class="list-card-actions">' +
             '<button type="button" class="lc-btn secondary creatorListEditBtn" data-slug="' + escapeAttr(l.slug) + '">Edit</button>' +
             syncBtnHtml +
-            deleteBtnHtml +
             shareBtn +
-            '<button type="button" class="lc-btn ' + (isAdded ? 'secondary creatorListAddToConfigBtn is-added' : 'primary creatorListAddToConfigBtn') + '" ' +
+            deleteBtnHtml +
+            '<button type="button" class="lc-btn secondary creatorListAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
               (isAdded ? 'style="color:var(--danger);"' : '') +
               ' data-slug="' + escapeAttr(l.slug) + '">' +
               (isAdded ? 'Remove' : '+ Add') +
@@ -70650,7 +73354,7 @@ function buildLocalListCardHtml(l) {
     }
   }
 
-  const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary localListAddToConfigBtn is-added' : 'primary localListAddToConfigBtn') + '" ' +
+  const addBtnHtml = '<button type="button" class="lc-btn secondary localListAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
     (isAdded ? 'style="color:var(--danger);"' : '') +
     ' data-slug="' + escapeAttr(l.slug) + '">' +
     (isAdded ? 'Remove' : '+ Add') +
@@ -70669,11 +73373,11 @@ function buildLocalListCardHtml(l) {
     '<div class="list-card-header">' +
       '<div class="list-card-body localListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type || 'movie') + '" style="cursor:pointer;">' +
         '<div class="list-card-title">' +
-          '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop>&#x2630;</span>' +
+          '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
           escapeHtml(l.name) +
         '</div>' +
         '<div class="list-card-meta">' +
-          (!isAutoTracked ? ('<span>' + (isPublic ? 'Public' : 'Private') + '</span><span class="list-card-meta-sep">&middot;</span>') : '') +
+          (isAutoTracked ? '<span class="list-source-badge badge-autotrack">Auto-tracked</span>' : ('<span>' + (isPublic ? 'Public' : 'Private') + '</span><span class="list-card-meta-sep">&middot;</span>')) +
           '<span>' + typeLabel + '</span>' +
           '<span class="list-card-meta-sep">&middot;</span>' +
           '<span>' + totalCount + ' item' + (totalCount === 1 ? '' : 's') + '</span>' +
@@ -70683,14 +73387,13 @@ function buildLocalListCardHtml(l) {
       '</div>' +
       (isAutoTracked
         ? '<div class="list-card-actions">' +
-            '<span style="font-size:0.78rem; color:var(--muted); white-space:nowrap; margin-right:8px;">Auto-tracked</span>' +
             addBtnHtml +
           '</div>'
         : '<div class="list-card-actions">' +
             '<button type="button" class="lc-btn secondary localListEditBtn" data-slug="' + escapeAttr(l.slug) + '">Edit</button>' +
             syncBtnHtml +
-            deleteBtnHtml +
             shareBtn +
+            deleteBtnHtml +
             addBtnHtml +
           '</div>') +
     '</div>' +
@@ -70823,8 +73526,8 @@ if (_creatorDashEl) {
         if (typeof removeListFromConfig === 'function') removeListFromConfig(null, 'series', 'airing-next');
         if (typeof renumber === 'function') renumber();
         if (typeof saveState === 'function') saveState();
-        airingAddBtn.classList.remove('is-added', 'secondary');
-        airingAddBtn.classList.add('primary');
+        airingAddBtn.classList.remove('is-added');
+        airingAddBtn.classList.add('secondary');
         airingAddBtn.textContent = '+ Add';
         airingAddBtn.style.color = '';
         if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
@@ -70848,7 +73551,6 @@ if (_creatorDashEl) {
           });
       if (typeof addRow === 'function') addRow('Airing Next', url, 'series', true, 'My Lists');
       airingAddBtn.classList.add('is-added', 'secondary');
-      airingAddBtn.classList.remove('primary');
       airingAddBtn.textContent = 'Remove';
       airingAddBtn.style.color = 'var(--danger)';
       if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
@@ -71002,8 +73704,8 @@ if (_creatorDashEl) {
         removeListFromConfig(null, 'movie', slug);
         removeListFromConfig(null, 'series', slug);
       }
-      addToConfigBtn.classList.remove('is-added', 'secondary');
-      addToConfigBtn.classList.add('primary');
+      addToConfigBtn.classList.remove('is-added');
+      addToConfigBtn.classList.add('secondary');
       addToConfigBtn.textContent = '+ Add';
       addToConfigBtn.style.color = '';
       if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
@@ -71025,7 +73727,6 @@ if (_creatorDashEl) {
         addRow(listMeta.name, 'customlist:v1:' + JSON.stringify(payload), listMeta.type, true, 'Custom Lists');
       }
       addToConfigBtn.classList.add('is-added', 'secondary');
-      addToConfigBtn.classList.remove('primary');
       addToConfigBtn.textContent = 'Remove';
       addToConfigBtn.style.color = 'var(--danger)';
       if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
@@ -71149,8 +73850,8 @@ if (_creatorDashEl) {
       }
       if (typeof renumber === 'function') renumber();
       if (typeof saveState === 'function') saveState();
-      localAddToConfigBtn.classList.remove('is-added', 'secondary');
-      localAddToConfigBtn.classList.add('primary');
+      localAddToConfigBtn.classList.remove('is-added');
+      localAddToConfigBtn.classList.add('secondary');
       localAddToConfigBtn.textContent = '+ Add';
       localAddToConfigBtn.style.color = '';
       if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
@@ -71209,7 +73910,6 @@ if (_creatorDashEl) {
     }
     
     localAddToConfigBtn.classList.add('is-added', 'secondary');
-    localAddToConfigBtn.classList.remove('primary');
     localAddToConfigBtn.textContent = 'Remove';
     localAddToConfigBtn.style.color = 'var(--danger)';
     if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
@@ -71464,7 +74164,7 @@ function openCreateListModal(presetDestination) {
   const typeEl = document.getElementById('createListModalType');
   if (typeEl) typeEl.value = 'movie';
   const pubEl = document.getElementById('createListModalPublic');
-  if (pubEl) pubEl.checked = true;
+  if (pubEl) pubEl.checked = false; // Default to Private as requested
   
   if (typeof onChangeCreateListDestination === 'function') onChangeCreateListDestination();
 
@@ -71488,7 +74188,7 @@ function openCreateListModal(presetDestination) {
 function onChangeCreateListDestination() {
   const pubWrap = document.getElementById('createListModalPublicWrap');
   if (pubWrap) {
-    pubWrap.style.display = 'flex';
+    pubWrap.style.display = 'block';
   }
 }
 
@@ -72933,7 +75633,14 @@ function collectKeys() {
     })(),
     hideNonDigitalReleases: document.getElementById('hideNonDigitalReleasesCheckbox') ? document.getElementById('hideNonDigitalReleasesCheckbox').checked : false,
     adultContentFilter: typeof isAdultContentFilterEnabled === 'function' ? isAdultContentFilterEnabled() : (localStorage.getItem('myListAddon:adultContentFilter') === '1'),
-    dedupeAcrossLists: document.getElementById('dedupeAcrossListsCheckbox') ? document.getElementById('dedupeAcrossListsCheckbox').checked : (localStorage.getItem('myListAddon:dedupeAcrossLists') === '1'),
+    dedupeAcrossLists: (function() {
+      const cb1 = document.getElementById('catalogsDedupeCheckbox');
+      const cb2 = document.getElementById('dedupeAcrossListsCheckbox');
+      if (cb1 && cb1.checked) return true;
+      if (cb2 && cb2.checked) return true;
+      if (cb1 || cb2) return false;
+      try { return localStorage.getItem('myListAddon:dedupeAcrossLists') === '1'; } catch (e) { return false; }
+    })(),
     syncTraktHistory: localStorage.getItem('myListAddon:syncTraktHistory') === 'true',
     syncMdblistHistory: localStorage.getItem('myListAddon:syncMdblistHistory') === 'true',
     syncSimklHistory: localStorage.getItem('myListAddon:syncSimklHistory') === 'true',
@@ -76711,6 +79418,8 @@ function applyImportedConfig(data) {
   if (typeof s.dedupeAcrossLists === 'boolean') {
     const cb = document.getElementById('dedupeAcrossListsCheckbox');
     if (cb) cb.checked = s.dedupeAcrossLists;
+    const catCb = document.getElementById('catalogsDedupeCheckbox');
+    if (catCb) catCb.checked = s.dedupeAcrossLists;
     try { localStorage.setItem('myListAddon:dedupeAcrossLists', s.dedupeAcrossLists ? '1' : '0'); } catch (e) {}
   }
   if (typeof s.region === 'string' && s.region) {
@@ -77417,14 +80126,20 @@ function renderPresetsList() {
     const count = entries.length;
     return '<div class="preset-card" data-preset="' + escapeAttr(n) + '">' +
       '<div class="preset-card-header">' +
-        '<strong class="preset-card-title">' + escapeHtml(n) + '</strong> <small style="color:var(--muted);">(' + count + ' list' + (count === 1 ? '' : 's') + ')</small>' +
+        '<strong class="preset-card-title">' + escapeHtml(n) + '</strong> <small style="color:var(--muted); flex-shrink:0;">(' + count + ' list' + (count === 1 ? '' : 's') + ')</small>' +
       '</div>' +
-      '<div class="preset-actions-grid">' +
-        '<button type="button" class="secondary lc-btn preset-load-btn">Load</button>' +
-        '<button type="button" class="secondary lc-btn preset-restore-lists-btn" title="Rebuild and restore custom lists &amp; channels from this preset into My Lists">Restore Lists</button>' +
-        '<button type="button" class="secondary lc-btn preset-share-btn">Share</button>' +
-        '<button type="button" class="secondary lc-btn preset-download-btn">Download</button>' +
-        '<button type="button" class="secondary lc-btn preset-delete-btn">Delete</button>' +
+      '<div class="preset-actions-cluster">' +
+        '<button type="button" class="primary lc-btn preset-load-btn" title="Load this preset into your active catalogs">Load</button>' +
+        '<button type="button" class="secondary lc-btn preset-share-btn" title="Share this preset">Share</button>' +
+        '<details class="preset-overflow-menu">' +
+          '<summary class="preset-overflow-btn" aria-label="More actions for ' + escapeAttr(n) + '">&#x22EF;</summary>' +
+          '<div class="preset-overflow-dropdown">' +
+            '<button type="button" class="preset-menu-item preset-download-btn">Download .json</button>' +
+            '<button type="button" class="preset-menu-item preset-restore-lists-btn" title="Rebuild and restore custom lists &amp; channels from this preset into My Lists">Restore Lists</button>' +
+            '<div class="preset-menu-divider"></div>' +
+            '<button type="button" class="preset-menu-item preset-delete-btn" style="color:var(--danger, #ff3b30);">Delete Preset</button>' +
+          '</div>' +
+        '</details>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -77437,6 +80152,10 @@ if (presetsListEl) {
     const row = e.target.closest('[data-preset]');
     if (!row) return;
     const name = row.getAttribute('data-preset');
+    const menu = row.querySelector('.preset-overflow-menu[open]');
+    if (menu && (e.target.classList.contains('preset-menu-item') || e.target.closest('.preset-menu-item'))) {
+      menu.removeAttribute('open');
+    }
     if (e.target.classList.contains('preset-load-btn')) loadPreset(name);
     else if (e.target.classList.contains('preset-restore-lists-btn')) rebuildCustomListsFromPreset(name, false);
     else if (e.target.classList.contains('preset-share-btn')) sharePreset(name);
@@ -77444,6 +80163,12 @@ if (presetsListEl) {
     else if (e.target.classList.contains('preset-delete-btn')) deletePreset(name);
   });
 }
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.preset-overflow-menu')) {
+    document.querySelectorAll('.preset-overflow-menu[open]').forEach((d) => d.removeAttribute('open'));
+  }
+});
 
 function loadPreset(name) {
   const map = loadPresetsMap();
@@ -77834,12 +80559,6 @@ function computeConfigStateHash() {
   }
 }
 
-// Called by saveState() after every change to the rows or the settings: keeps
-// the install link's state (live / unsaved) current for Settings.
-function checkUnsavedInstallLink() {
-  if (typeof appShellActive !== 'undefined' && appShellActive) appShellRefreshInstallBar();
-}
-
 // myListAddon:state is this browser's copy of the rows and settings, and it
 // carried the provider keys and tokens too: collectKeys() returns them, and
 // saveState wrote the whole object on every change -- so moving the
@@ -77877,7 +80596,6 @@ function saveState() {
   }
   if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
   scheduleCreatorSyncSave();
-  checkUnsavedInstallLink();
   // The new UI's live preview follows the rows (see appShellSchedulePreview,
   // spliced in below). Guarded because saveState also runs from the legacy
   // page, where the shell's module is not loaded... it is the same script, so
@@ -78085,23 +80803,23 @@ async function generate() {
       </div>
 
       <div class="install-url-container">
-        <div class="install-url-header">
-          <div class="install-url-label">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
-            <span>Manifest Link</span>
-          </div>
-          <button type="button" class="install-url-copy-btn" id="copyUrlBtn" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Copy manifest link">
+        <div class="install-url-label">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+          <span>Manifest Link</span>
+        </div>
+        <div class="install-url-input-group" style="display:flex; align-items:stretch; gap:8px; width:100%; flex-wrap:wrap;">
+          <div class="install-url-box" id="manifestLinkDisplay" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Click to copy" style="flex:1 1 220px; min-width:0; margin:0; display:flex; align-items:center;">\${installUrl}</div>
+          <button type="button" class="install-url-copy-btn primary lc-btn" id="copyUrlBtn" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Copy manifest link" style="flex:none; padding:0 16px; min-height:38px; height:auto; display:inline-flex; align-items:center; gap:6px; font-weight:600; font-size:0.85rem; border-radius:var(--radius-pill);">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
             <span>Copy Link</span>
           </button>
         </div>
-        <div class="install-url-box" id="manifestLinkDisplay" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Click to copy">\${installUrl}</div>
       </div>
 
       <div class="install-hint-box">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:2px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
         <div>
-          <span>To install manually, copy the manifest link above and paste it into:</span>
+          <span style="font-weight:600; color:var(--text);">To install manually, copy the manifest link above and paste it into:</span>
           <div class="install-hint-steps">
             <span>&bull; <strong>Stremio</strong> &rarr; Addons &rarr; Community &rarr; Paste URL</span>
             <span>&bull; <strong>Nuvio</strong> &rarr; Settings &rarr; Content &amp; Discovery &rarr; Addons</span>
@@ -78218,11 +80936,11 @@ if (serverEntries.length && !serverEntriesAreDefaults) {
   const savedDedupeAcrossListsDirect = (function() {
     try { return localStorage.getItem('myListAddon:dedupeAcrossLists'); } catch (e) { return null; }
   })();
-  if (savedDedupeAcrossListsDirect !== null && document.getElementById('dedupeAcrossListsCheckbox')) {
-    document.getElementById('dedupeAcrossListsCheckbox').checked = savedDedupeAcrossListsDirect === '1';
-  } else if (saved && saved.keys && document.getElementById('dedupeAcrossListsCheckbox')) {
-    document.getElementById('dedupeAcrossListsCheckbox').checked = !!saved.keys.dedupeAcrossLists;
-  }
+  const isDedupeOn = savedDedupeAcrossListsDirect !== null ? (savedDedupeAcrossListsDirect === '1') : (saved && saved.keys ? !!saved.keys.dedupeAcrossLists : false);
+  const dedupeEl = document.getElementById('dedupeAcrossListsCheckbox');
+  if (dedupeEl) dedupeEl.checked = isDedupeOn;
+  const catDedupeEl = document.getElementById('catalogsDedupeCheckbox');
+  if (catDedupeEl) catDedupeEl.checked = isDedupeOn;
   const tmdbDisc = localStorage.getItem('myListAddon:tmdbDisconnected') === 'true';
   const mdblistDisc = localStorage.getItem('myListAddon:mdblistDisconnected') === 'true';
   const traktDisc = localStorage.getItem('myListAddon:traktDisconnected') === 'true';
@@ -78655,12 +81373,6 @@ window.addEventListener('popstate', (e) => {
 // Every visitor gets the shell since the classic page was retired (Release
 // 21); it used to be switched on per browser by a flag in the page preamble.
 
-// The last install link this browser generated, and the configuration it was
-// generated from. Browser state, not account state: the Worker cannot know it,
-// which is why the bar's first paint says "not installed yet" and this refines
-// it as soon as the bundle runs.
-const APP_SHELL_INSTALL_KEY = 'myListAddon:installLink';
-
 // The sub-tab bars, by view, and the pill that names a sub-tab inside one.
 // These are the legacy bars' own ids; the shell routes to them rather than
 // rendering a second set of controls.
@@ -78749,7 +81461,7 @@ function appShellRouteForName(name) {
 // without ever re-rendering for nothing.
 const appShellState = (function () {
   const listeners = new Set();
-  const state = { ready: false, route: null, account: null, install: { state: 'none', link: '' } };
+  const state = { ready: false, route: null, account: null };
 
   function get(key) {
     if (key === undefined) return Object.assign({}, state);
@@ -78899,100 +81611,6 @@ function appShellDialog(options) {
   });
 }
 
-// --- the install bar ---------------------------------------------------------
-//
-// Three states, all of them about this browser's own install link:
-//   none    -- nothing generated here yet
-//   unsaved -- a link exists, and the rows/settings have changed since
-//   live    -- the link matches what the builder currently holds
-function appShellReadInstallLink() {
-  try {
-    const raw = localStorage.getItem(APP_SHELL_INSTALL_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object' || !parsed.url) return null;
-    return { url: String(parsed.url), hash: String(parsed.hash || '') };
-  } catch (e) {
-    return null;
-  }
-}
-
-function appShellInstallLinkState() {
-  const saved = appShellReadInstallLink();
-  if (!saved) return { state: 'none', link: '' };
-  let current = '';
-  try {
-    if (typeof computeConfigStateHash === 'function') current = computeConfigStateHash();
-  } catch (e) {
-    current = '';
-  }
-  // No hash stored (an older link, or a stubbed environment): treat it as
-  // current rather than telling somebody their up-to-date link is stale.
-  const live = !saved.hash || !current || saved.hash === current;
-  return { state: live ? 'live' : 'unsaved', link: saved.url };
-}
-
-function appShellRecordInstallLink(url) {
-  const link = String(url || '').trim();
-  if (!link) return;
-  let hash = '';
-  try {
-    if (typeof computeConfigStateHash === 'function') hash = computeConfigStateHash();
-  } catch (e) {
-    hash = '';
-  }
-  try {
-    localStorage.setItem(APP_SHELL_INSTALL_KEY, JSON.stringify({ url: link, hash: hash }));
-  } catch (e) {}
-}
-
-// The bar itself was taken off the page at the owner's request (its drawing
-// code was deleted in Release 21); Settings' Install link card still reads
-// this state.
-function appShellRefreshInstallBar() {
-  const info = appShellInstallLinkState();
-  appShellState.set({ install: { state: info.state, link: info.link } });
-}
-
-// Builds the install link through the builder's own generate() (which renders
-// the result card), then remembers it here. The link is read back out of the
-// card rather than duplicated from generate(), so there is still one place that
-// knows how a link is made.
-async function appShellGenerateInstallLink() {
-  if (typeof collectEntries === 'function' && !collectEntries().length) {
-    showToast('Add at least one list first.', 'info');
-    appShellGo(appShellPathFor('catalogs', ''));
-    return false;
-  }
-  try {
-    if (typeof generate === 'function') await generate();
-  } catch (e) {
-    showToast('Could not make the install link. Please try again.', 'error');
-    return false;
-  }
-  const display = document.getElementById('manifestLinkDisplay');
-  const link = display ? String(display.textContent || '').trim() : '';
-  if (!link) return false;   // generate() showed its own reason (for example: sign in)
-  appShellRecordInstallLink(link);
-  appShellRefreshInstallBar();
-  showToast('Install link ready.', 'success');
-  return true;
-}
-
-async function appShellInstallBarAction() {
-  const info = appShellInstallLinkState();
-  if (info.state === 'live' && info.link) {
-    try {
-      if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(info.link);
-        showToast('Install link copied.', 'success');
-        return;
-      }
-    } catch (e) {}
-  }
-  await appShellGenerateInstallLink();
-}
-
 // The signed-in account, over the session cookie (GET /api/me). Kept in
 // appShellState so the Settings views can read it without asking twice.
 async function appShellRefreshAccount() {
@@ -79004,205 +81622,7 @@ async function appShellRefreshAccount() {
   return account;
 }
 
-// --- Settings (P6-2) ---------------------------------------------------------
-//
-// The Settings view's own cards: the account's devices and this browser's
-// install link. It is additive -- the older panels below it are untouched --
-// and renders into the container the server emits (15_tab-settings-html.js).
-// The account and connections cards it started with were deleted in Release
-// 21: Your Account (renderAccountKeySection, 22_) and External Accounts & API
-// Keys hold the same buttons, and the owner found every one of them twice.
-//
-// Everything here talks to the account APIs over the session cookie
-// (appShellApiFetch), and every control is wired with a data-app-shell-action
-// attribute instead of an inline handler: new UI code adds none of those
-// (P6-8 removes the rest of the page's).
-
-function appShellSettingsHost() {
-  return document.getElementById('appShellSettingsHome');
-}
-
-function appShellSettingsEscape(value) {
-  return escapeHtml(String(value === null || value === undefined ? '' : value));
-}
-
-function appShellSettingsButton(action, label, id, cls) {
-  return '<button type="button" class="' + (cls || 'secondary lc-btn') + '" data-app-shell-action="' + action + '"' +
-    (id ? ' data-app-shell-id="' + appShellSettingsEscape(id) + '"' : '') + '>' + appShellSettingsEscape(label) + '</button>';
-}
-
-function appShellSettingsPanel(role, title, body) {
-  return '<div class="panel" style="margin-top:12px;">' +
-    '<h2 class="panel-title">' + title + '</h2>' +
-    '<div id="appShellSettingsBody-' + role + '">' + body + '</div>' +
-    '</div>';
-}
-
-function appShellSettingsBody(role, html) {
-  const el = document.getElementById('appShellSettingsBody-' + role);
-  if (el) el.innerHTML = html;
-}
-
-function appShellSettingsRow(main, controls, chip) {
-  return '<div class="app-shell-row"><div class="app-shell-row-main">' + main + '</div>' +
-    '<div class="app-shell-row-controls">' + (chip || '') + (controls || '') + '</div></div>';
-}
-
-function appShellChip(text, tone) {
-  return '<span class="app-shell-chip' + (tone ? ' app-shell-chip-' + tone : '') + '">' + appShellSettingsEscape(text) + '</span>';
-}
-
-// A date, or "never". Kept short and forgiving: a session row whose timestamp
-// is missing must not print "Invalid Date".
-function appShellWhen(ms) {
-  const n = Number(ms);
-  if (!n || !isFinite(n)) return 'never';
-  try {
-    return new Date(n).toLocaleDateString();
-  } catch (e) {
-    return 'recently';
-  }
-}
-
-function appShellDeviceLabel(session) {
-  const ua = String((session && session.userAgent) || '');
-  if (!ua) return 'Unknown device';
-  const browser = ua.indexOf('Firefox/') !== -1 ? 'Firefox'
-    : ua.indexOf('Edg/') !== -1 ? 'Edge'
-      : ua.indexOf('Chrome/') !== -1 ? 'Chrome'
-        : ua.indexOf('Safari/') !== -1 ? 'Safari' : 'Browser';
-  const os = ua.indexOf('Windows') !== -1 ? 'Windows'
-    : ua.indexOf('Android') !== -1 ? 'Android'
-      : ua.indexOf('iPhone') !== -1 || ua.indexOf('iPad') !== -1 ? 'iOS'
-        : ua.indexOf('Mac OS') !== -1 ? 'macOS'
-          : ua.indexOf('Linux') !== -1 ? 'Linux' : '';
-  return os ? browser + ' on ' + os : browser;
-}
-
-// 'https://host/abc/manifest.json' -> 'stremio://host/abc/manifest.json'. Split
-// rather than a regex: this file lives inside the page's template literal, where
-// backslashes are eaten before the browser ever sees them.
-function appShellSchemeUrl(link, scheme) {
-  const s = String(link || '');
-  const i = s.indexOf('://');
-  return i === -1 ? s : scheme + s.slice(i);
-}
-
-function appShellInstallLinkStateSafe() {
-  try {
-    return appShellInstallLinkState();
-  } catch (e) {
-    return { state: 'none', link: '' };
-  }
-}
-
-// --- the panels --------------------------------------------------------------
-
-function appShellDevicesBody(res, sessions) {
-  if (!res || !res.ok) {
-    if (res && res.signInRequired) return '<p class="app-shell-muted">Sign in to see the devices using your account.</p>';
-    return '<p class="app-shell-muted">' + appShellSettingsEscape((res && res.error) || 'Could not load your devices.') + '</p>' +
-      '<div class="app-shell-actions">' + appShellSettingsButton('settings-refresh', 'Try again') + '</div>';
-  }
-  const list = sessions || [];
-  if (!list.length) return '<p class="app-shell-muted">No devices are signed in.</p>';
-  let html = list.map(function (s) {
-    const label = appShellDeviceLabel(s);
-    return appShellSettingsRow(
-      '<strong>' + appShellSettingsEscape(label) + '</strong><br><span class="app-shell-muted">Last used ' + appShellSettingsEscape(appShellWhen(s.lastSeenAt)) + '</span>',
-      s.current ? '' : appShellSettingsButton('device-signout', 'Sign out', s.id),
-      s.current ? appShellChip('This device', 'ok') : ''
-    );
-  }).join('');
-  if (list.length > 1) {
-    html += '<div class="app-shell-actions">' + appShellSettingsButton('devices-signout-others', 'Sign out my other devices') + '</div>';
-  }
-  return html;
-}
-
-function appShellInstallsBody(linkState, res, installs) {
-  const link = linkState && linkState.link ? String(linkState.link) : '';
-  let html = '';
-  if (!link) {
-    html += '<p class="app-shell-muted">Nothing is installed from this browser yet. Build the home screen you want, then get the install link here.</p>' +
-      '<div class="app-shell-actions">' + appShellSettingsButton('install-get', 'Get install link') + '</div>';
-  } else {
-    const live = (linkState && linkState.state === 'live');
-    html += appShellSettingsRow(
-      '<strong>Install link for this browser</strong><br><span class="app-shell-muted" style="word-break:break-all;">' + appShellSettingsEscape(link) + '</span>',
-      '<a class="secondary lc-btn" href="' + appShellSettingsEscape(appShellSchemeUrl(link, 'stremio')) + '">Install in Stremio</a>' +
-      '<a class="secondary lc-btn" href="' + appShellSettingsEscape(appShellSchemeUrl(link, 'nuvio')) + '">Install in Nuvio</a>' +
-      appShellSettingsButton('install-copy', 'Copy link') +
-      appShellSettingsButton('install-get', live ? 'Update link' : 'Update link'),
-      appShellChip(live ? 'Up to date' : 'Changed since', live ? 'ok' : 'warn')
-    );
-    html += '<details class="app-shell-details"><summary>Other apps (Wako, and anything else)</summary>' +
-      '<p class="app-shell-muted">In Wako, open Settings, then Add-ons, Add, and paste this manifest URL. The same URL works in any app that takes a Stremio add-on manifest.</p>' +
-      '<p class="app-shell-kv" style="word-break:break-all;">' + appShellSettingsEscape(link) + '</p></details>';
-  }
-
-  // Saved install links (FF_INSTALLS, /api/installs) are listed only when the
-  // account has some. Nothing on the site makes one yet -- the switch is off,
-  // and its screens were never built -- so a line about them ("not switched on
-  // for this site yet", "sign in to keep named install links") only raised the
-  // question of what they were.
-  if (res && res.ok && Array.isArray(installs) && installs.length) {
-    html += installs.map(function (inst) {
-      const name = inst && inst.name ? inst.name : 'Install link';
-      const rows = inst && inst.rows !== null && inst.rows !== undefined ? ' &middot; ' + inst.rows + ' rows' : '';
-      const used = ' <span class="app-shell-muted">Last used ' + appShellSettingsEscape(appShellWhen(inst && inst.lastUsedAt)) + '</span>';
-      const revoked = inst && inst.revokedAt ? appShellChip('Revoked', 'warn') : '';
-      return appShellSettingsRow(
-        '<strong>' + appShellSettingsEscape(name) + '</strong>' + rows + '<br>' + used,
-        inst && inst.revokedAt ? '' : appShellSettingsButton('install-revoke', 'Revoke', String(inst && inst.id)),
-        revoked
-      );
-    }).join('');
-  }
-  return html;
-}
-
-// --- loading -----------------------------------------------------------------
-
-function appShellRenderSettingsSkeleton() {
-  const loading = '<p class="app-shell-muted">Loading...</p>';
-  appShellSettingsBody('devices', loading);
-  appShellSettingsBody('installs', loading);
-}
-
-// Devices and the install link (see the top of this section).
-async function appShellRefreshSettingsHome() {
-  const host = appShellSettingsHost();
-  if (!host) return false;
-  appShellRenderSettingsSkeleton();
-  const account = await appShellRefreshAccount();
-  if (!account) {
-    const signedOut = { ok: false, status: 401, error: 'Sign in first.', signInRequired: true, data: null };
-    appShellSettingsBody('devices', appShellDevicesBody(signedOut, []));
-    appShellSettingsBody('installs', appShellInstallsBody(appShellInstallLinkStateSafe(), signedOut, []));
-    return true;
-  }
-  const sessionsRes = await appShellApiFetch('/api/me/sessions');
-  appShellSettingsBody('devices', appShellDevicesBody(sessionsRes, (sessionsRes.data && sessionsRes.data.sessions) || []));
-  const installsRes = await appShellApiFetch('/api/installs');
-  appShellSettingsBody('installs', appShellInstallsBody(appShellInstallLinkStateSafe(), installsRes, (installsRes.data && installsRes.data.installs) || []));
-  return true;
-}
-
-// Called when the Settings view is opened (appShellApplyRoute) and after any
-// action that changes what it shows.
-function appShellRenderSettingsHome() {
-  const host = appShellSettingsHost();
-  if (!host) return false;
-  host.innerHTML =
-    appShellSettingsPanel('devices', 'Devices', '<p class="app-shell-muted">Loading...</p>') +
-    appShellSettingsPanel('installs', 'Install link', '<p class="app-shell-muted">Loading...</p>');
-  appShellRefreshSettingsHome();
-  return true;
-}
-
-// --- actions -----------------------------------------------------------------
-
+// Scrolls to Your Account's sign-in fields (Import list -> "Go to Settings to sign in").
 function appShellFocusSignIn() {
   const section = document.getElementById('accountKeySection');
   if (section && section.scrollIntoView) {
@@ -79214,80 +81634,6 @@ function appShellFocusSignIn() {
   }
   showToast('Sign in under Your Account to restore everything.', 'info');
   return true;
-}
-
-async function appShellCopyText(text, message) {
-  const value = String(text || '');
-  if (!value) return false;
-  try {
-    if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
-      await navigator.clipboard.writeText(value);
-      showToast(message || 'Copied.', 'success');
-      return true;
-    }
-  } catch (e) {}
-  showToast('Select the link and copy it by hand.', 'info');
-  return false;
-}
-
-async function appShellRevokeSession(id) {
-  const res = await appShellApiFetch('/api/me/sessions', { method: 'DELETE', body: { id: String(id || '') } });
-  if (!res.ok) {
-    showToast(res.error || 'Could not sign that device out.', 'error');
-    return false;
-  }
-  showToast('That device was signed out.', 'success');
-  await appShellRefreshSettingsHome();
-  return true;
-}
-
-async function appShellRevokeOtherSessions() {
-  const res = await appShellApiFetch('/api/me/sessions', { method: 'DELETE', body: { allExceptCurrent: true } });
-  if (!res.ok) {
-    showToast(res.error || 'Could not sign the other devices out.', 'error');
-    return false;
-  }
-  showToast('Your other devices were signed out.', 'success');
-  await appShellRefreshSettingsHome();
-  return true;
-}
-
-async function appShellRevokeInstall(id) {
-  const confirmed = await appShellDialog({
-    title: 'Revoke this install link?',
-    message: 'Apps using it stop getting the add-on right away. You can install again from here at any time.',
-    confirmLabel: 'Revoke',
-    cancelLabel: 'Keep it',
-  });
-  if (!confirmed) return false;
-  const res = await appShellApiFetch('/api/installs/' + encodeURIComponent(String(id || '')), { method: 'DELETE' });
-  if (!res.ok) {
-    showToast(res.error || 'Could not revoke that install link.', 'error');
-    return false;
-  }
-  showToast('Install link revoked.', 'success');
-  await appShellRefreshSettingsHome();
-  return true;
-}
-
-// One dispatcher for the panel's controls. The attribute is on the button in
-// the markup above, and appShellOnClick routes it here -- so the panels contain
-// no inline handlers.
-async function appShellSettingsAction(action, id) {
-  const what = String(action || '');
-  if (what === 'settings-refresh') return appShellRefreshSettingsHome();
-  if (what === 'device-signout') return appShellRevokeSession(id);
-  if (what === 'devices-signout-others') return appShellRevokeOtherSessions();
-  if (what === 'install-revoke') return appShellRevokeInstall(id);
-  if (what === 'install-get') {
-    await appShellInstallBarAction();
-    return appShellRefreshSettingsHome();
-  }
-  if (what === 'install-copy') {
-    const state = appShellInstallLinkStateSafe();
-    return appShellCopyText(state.link, 'Install link copied.');
-  }
-  return false;
 }
 
 // --- the home-screen editor (P6-3) -------------------------------------------
@@ -79321,11 +81667,18 @@ function appShellRenderHomeEditor() {
   // Randomizer (10_tab-search-add.js). The paste box, the starter pack and
   // the check-links review that shared this panel were taken out at the
   // owner's request; + New Catalog and Catalogs -> Bulk Add do that job.
-  const html = '<label class="app-shell-dedupe" for="appShellDedupeToggle">' +
-    '<input type="checkbox" id="appShellDedupeToggle"' + (dedupe ? ' checked' : '') + '>' +
-    '<span><strong>Hide titles already shown in rows above</strong>' +
-    '<br><span class="app-shell-muted">The top row keeps everything; every row below it drops anything an earlier row already showed. Row order is what decides, so drag a row to change it. The preview updates now, and Stremio follows once you update your install link.</span></span>' +
-    '</label>';
+  const html = '<div style="margin-top:16px; padding:12px 16px; background:var(--surface); border-radius:12px; border:1px solid var(--border);">' +
+    '<div class="settings-toggle-row" style="padding:0;">' +
+      '<div style="flex:1; min-width:0; padding-right:12px;">' +
+        '<span style="font-weight:600; font-size:0.88rem; color:var(--text);">Hide titles already shown in rows above</span>' +
+        '<p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">The top row keeps everything; lower rows drop titles already shown above.</p>' +
+      '</div>' +
+      '<label class="ui-toggle" aria-label="Hide titles already shown in rows above">' +
+        '<input type="checkbox" id="appShellDedupeToggle"' + (dedupe ? ' checked' : '') + '>' +
+        '<span class="ui-toggle-slider"></span>' +
+      '</label>' +
+    '</div>' +
+  '</div>';
 
   host.innerHTML = html;
   const toggle = document.getElementById('appShellDedupeToggle');
@@ -79345,6 +81698,8 @@ function appShellSetDedupe(on) {
   try { localStorage.setItem('myListAddon:dedupeAcrossLists', value); } catch (e) {}
   const legacy = document.getElementById('dedupeAcrossListsCheckbox');
   if (legacy) legacy.checked = !!on;
+  const cat = document.getElementById('catalogsDedupeCheckbox');
+  if (cat) cat.checked = !!on;
   if (typeof saveState === 'function') saveState();
   if (typeof renderLivePreview === 'function') renderLivePreview();
   appShellRenderHomeEditor();
@@ -80173,796 +82528,6 @@ async function appShellImportsAction(action, id) {
   return false;
 }
 
-// --- Channels: the template flow (P6-7) --------------------------------------
-//
-// "I want to create a channel": choose a template, look at today's lineup,
-// then put it on the home screen. The five templates FRONTEND_UX_AUDIT
-// scenario 6 names, and what each one is underneath -- none of them builds a
-// channel a second way, which is what "wrap the legacy builder until it is
-// rewritten" means for this task:
-//
-//   TV network          quickAddChannel (20_), which prefers the server-built
-//                       network preset and falls back to the page's own
-//                       traversal with visible progress
-//   Franchise/universe  the saga registry the page already carries
-//                       (TV_CROSSOVER_EVENTS), through the same ordered-items
-//                       fetch the Storylines tab uses
-//   Actor or creator    /api/person-search -> /api/person-credits, then the
-//                       same pick builder the legacy Spotlight uses
-//                       (buildSpotlightItemsFromCredits, 20_)
-//   From a list         quickAddChannel with a pasted list URL
-//   Custom              openBuildCustomChannel -- the legacy builder itself
-//
-// The lineup in the preview is the server's answer (POST /api/channel-lineup),
-// not an arrangement made here: it is the same resolveChannelLineup that
-// answers a Stremio request, so what the preview shows is what plays. The two
-// rules that route cannot honour (Hide watched and a dynamic channel need an
-// account it has no way to prove) come back named, and are said rather than
-// quietly shown as if they applied.
-//
-// Nothing goes into the config until "Add to home screen" is pressed: the
-// channel is built and saved to this browser first (saveLocalChannel), so the
-// preview and the row that follows cannot describe two different channels.
-// Adding and removing is toggleChannelInCatalog (20_) -- the same button the
-// My Channels cards use -- except for a saga, which is a catalog-only row and
-// goes through createInstantStorylineChannel, exactly as the Storylines tab
-// adds one.
-//
-// Signed out: a saga can still be added (docs/DECISIONS.md D-8 -- a storyline
-// row is public and needs no account), and everything else asks for an account
-// the way every other builder button already does (requireSignedInFor).
-
-// The tiles a lineup preview draws. The rest of the lineup is counted, not
-// listed -- a day's block is 24 shows x 3 episodes and nobody reads that as a
-// poster grid.
-const APP_SHELL_CHANNEL_LINEUP_TILES = 12;
-const APP_SHELL_CHANNELS_ACTION = /^chan-/;
-
-// The five templates, in the order the audit lists them. needsAccount mirrors
-// rowNeedsAccount (16_): a saga is the one that works signed out.
-const APP_SHELL_CHANNEL_TEMPLATES = [
-  { id: 'network', title: 'TV network', blurb: 'A&E, HBO, NBC, Cartoon Network and the rest -- a rotating 24/7 channel for a whole network.', needsAccount: true },
-  { id: 'saga', title: 'Franchise or universe', blurb: 'A saga in its canon order: the Marvel Infinity Saga, a trilogy, a TV universe. Works without an account.', needsAccount: false },
-  { id: 'person', title: 'Actor or creator', blurb: 'Everything someone was in, as episodes -- a Christopher Lloyd marathon in one channel.', needsAccount: true },
-  { id: 'list', title: 'From a list', blurb: 'A TV list from MDBList, Trakt, TMDB or this site, kept in step with the list if you want.', needsAccount: true },
-  { id: 'custom', title: 'Custom', blurb: 'Pick the shows and episodes yourself, with the full builder. Nothing is decided for you.', needsAccount: true }
-];
-
-var appShellChannelTemplate = '';        // '' = the gallery, otherwise a template id
-var appShellChannelDraft = null;         // the built channel: { template, channelId, eventId, name, url, poolSize }
-var appShellChannelLineup = null;        // the last POST /api/channel-lineup answer
-var appShellChannelLineupFor = '';       // the url that answer belongs to
-var appShellChannelBusy = '';            // the sentence shown while something runs
-var appShellChannelNotice = '';          // the last thing that happened, in words
-var appShellChannelBuildInFlight = false;
-var appShellChannelPersonResults = [];
-var appShellChannelPersonPick = null;    // { personId, name }
-var appShellChannelSagaPick = '';
-var appShellChannelListName = '';        // the name field's last value, so a re-render keeps it
-
-// Schedule options (the details panel under every template except a saga,
-// which has a fixed canon order). The two toggles are buttons carrying their
-// state, so a re-render cannot lose it; the numbers are read from their inputs
-// when a build starts, with the same defaults the legacy builder starts from.
-var appShellChannelSchedule = { rotate: true, hideWatched: false, shows: 24, episodes: 3, order: 'listed', perShow: 50 };
-
-function appShellChannelsHost() {
-  return document.getElementById('appShellChannels');
-}
-
-// Whether Channels > My Channels is the sub on screen (the container is
-// emitted on every shell page; the panel is not).
-function appShellChannelsIsOpen() {
-  const panel = document.getElementById('channelsSubMyChannels');
-  return !!(panel && panel.style && panel.style.display !== 'none');
-}
-
-function appShellChannelEscape(value) {
-  return escapeHtml(String(value === null || value === undefined ? '' : value));
-}
-
-function appShellChannelAttr(value) {
-  return escapeAttr(String(value === null || value === undefined ? '' : value));
-}
-
-function appShellChannelNumber(n) {
-  return Number(n) || 0;
-}
-
-// The networks the Quick Add tab offers, read from that tab's own buttons
-// rather than a second list that could drift from it.
-function appShellChannelNetworks() {
-  const out = [];
-  const buttons = document.querySelectorAll('#channelsSubQuickAdd .channelQuickAddBtn');
-  for (let i = 0; i < buttons.length; i++) {
-    const b = buttons[i];
-    if (!b || !b.getAttribute) continue;
-    const networkId = b.getAttribute('data-networkid') || '';
-    const name = b.getAttribute('data-name') || '';
-    if (networkId && name) out.push({ networkId: networkId, name: name });
-  }
-  return out;
-}
-
-// The sagas and universes worth a channel: the same filter the Storylines grid
-// uses, so a single-episode crossover (which only ever lands on its parent
-// show's page) is not offered as a channel here either.
-function appShellChannelSagas() {
-  const events = (typeof TV_CROSSOVER_EVENTS === 'undefined' || !Array.isArray(TV_CROSSOVER_EVENTS)) ? [] : TV_CROSSOVER_EVENTS;
-  const out = [];
-  events.forEach(function (ev) {
-    if (!ev || !ev.id || !Array.isArray(ev.episodes) || !ev.episodes.length) return;
-    const episodeOnly = ev.episodes.every(function (ep) { return ep && ep.type === 'episode'; });
-    if (episodeOnly) return;
-    out.push({ id: String(ev.id), name: ev.name || String(ev.id), parts: ev.episodes.length, category: ev.category || '' });
-  });
-  return out;
-}
-
-// The schedule, as the payload fields the Worker reads (05_catalog_core):
-// dailyRotate + rotateShows/rotateEpisodes for a broadcast schedule, autoSort
-// for the one static arrangement it acts on, sortByAired, shuffle, hideWatched.
-function appShellChannelSchedulePayload() {
-  const s = appShellChannelSchedule;
-  const order = String(s.order || 'listed');
-  const shows = Math.max(1, Math.min(48, parseInt(s.shows, 10) || 24));
-  const episodes = Math.max(1, Math.min(12, parseInt(s.episodes, 10) || 3));
-  const payload = {
-    dailyRotate: !!s.rotate,
-    rotateShows: s.rotate ? shows : 0,
-    rotateEpisodes: s.rotate ? episodes : 0,
-    autoSort: order === 'interleave' ? 'interleave' : '',
-    sortByAired: order === 'aired',
-    shuffle: order === 'shuffle',
-    hideWatched: !!s.hideWatched
-  };
-  return payload;
-}
-
-// The inputs are the source of truth for the three numbers, read at build
-// time; a blank or missing input keeps the default above.
-function appShellChannelReadSchedule() {
-  const readNumber = function (id, fallback) {
-    const el = document.getElementById(id);
-    const n = el && el.value !== undefined && el.value !== null ? parseInt(el.value, 10) : NaN;
-    return (n > 0) ? n : fallback;
-  };
-  const orderSel = document.getElementById('appShellChannelOrderSelect');
-  const typedOrder = (orderSel && orderSel.value) ? String(orderSel.value) : '';
-  appShellChannelSchedule.shows = readNumber('appShellChannelRotateShows', appShellChannelSchedule.shows || 24);
-  appShellChannelSchedule.episodes = readNumber('appShellChannelRotateEpisodes', appShellChannelSchedule.episodes || 3);
-  appShellChannelSchedule.perShow = readNumber('appShellChannelPerShow', appShellChannelSchedule.perShow || 50);
-  if (typedOrder) appShellChannelSchedule.order = typedOrder;
-  return appShellChannelSchedule;
-}
-
-// Whether the schedule is still the one the server's network preset is built
-// with (rotation on, 24 shows x 3 episodes a day, no re-ordering, watched
-// kept). The preset is one request instead of a traversal, so it is worth
-// using -- but only while it would produce the same channel the options ask
-// for, never as a silent override of them.
-function appShellChannelScheduleIsDefault() {
-  const s = appShellChannelSchedule;
-  const order = String(s.order || 'listed');
-  return !!s.rotate &&
-    (parseInt(s.shows, 10) || 24) === 24 &&
-    (parseInt(s.episodes, 10) || 3) === 3 &&
-    !s.hideWatched &&
-    order === 'listed';
-}
-
-function appShellChannelSetNotice(text) {
-  appShellChannelNotice = String(text || '');
-}
-
-// Progress during a build touches one line, never a whole re-render: a
-// re-render would wipe out whatever the person had typed in the template's
-// own fields.
-function appShellChannelProgress(text) {
-  appShellChannelBusy = String(text || '');
-  const box = document.getElementById('appShellChannelProgress');
-  if (box) box.innerHTML = text ? appShellChannelEscape(text) : '';
-}
-
-// --- what the flow is doing --------------------------------------------------
-
-function appShellChannelPickTemplate(id) {
-  const wanted = String(id || '');
-  const known = APP_SHELL_CHANNEL_TEMPLATES.some(function (t) { return t.id === wanted; });
-  appShellChannelTemplate = known ? wanted : '';
-  appShellChannelDraft = null;
-  appShellChannelLineup = null;
-  appShellChannelLineupFor = '';
-  appShellChannelBusy = '';
-  appShellChannelNotice = '';
-  appShellChannelPersonPick = null;
-  appShellChannelPersonResults = [];
-  if (known && wanted !== 'saga') appShellChannelSchedule.rotate = true;
-  if (known && wanted === 'saga') appShellChannelSchedule.rotate = false;
-  appShellRenderChannels();
-  return true;
-}
-
-// The channel was built and saved to this browser -- the preview and the row
-// that may follow both come from this one record.
-function appShellChannelSetDraft(draft) {
-  appShellChannelDraft = draft;
-  appShellChannelBusy = '';
-  appShellChannelLineup = null;
-  appShellChannelLineupFor = '';
-  appShellRenderChannels();
-  return true;
-}
-
-function appShellChannelOnHome() {
-  const draft = appShellChannelDraft;
-  if (!draft || !draft.channelId) return false;
-  return (typeof isChannelInConfig === 'function') ? !!isChannelInConfig(String(draft.channelId)) : false;
-}
-
-async function appShellChannelBuild() {
-  const template = appShellChannelTemplate;
-  if (!template) return false;
-  if (appShellChannelBuildInFlight) return false;
-  appShellChannelReadSchedule();
-  appShellChannelNotice = '';
-  appShellChannelBuildInFlight = true;
-  appShellChannelProgress('Getting started\\u2026');
-  let built = false;
-  try {
-    if (template === 'network') built = await appShellChannelBuildNetwork();
-    else if (template === 'list') built = await appShellChannelBuildList();
-    else if (template === 'person') built = await appShellChannelBuildPerson();
-    else if (template === 'saga') built = await appShellChannelBuildSaga();
-  } finally {
-    appShellChannelBuildInFlight = false;
-  }
-  // Nothing built: the form has to come back with its button live again, and
-  // the sentence saying what happened is already in the notice above.
-  if (!built) {
-    appShellChannelProgress('');
-    appShellRenderChannels();
-  }
-  return built;
-}
-
-// TV network and From a list are the same journey -- a name, and either a
-// network id or a pasted list URL -- so both go through the page's own
-// quickAddChannel. addToCatalog is false because this screen shows the lineup
-// first: the channel is saved to this browser, and the row is added when
-// somebody presses the button under the preview.
-async function appShellChannelBuildNetwork() {
-  const sel = document.getElementById('appShellChannelNetworkSelect');
-  const networkId = (sel && sel.value) ? String(sel.value) : '';
-  const networks = appShellChannelNetworks();
-  let name = '';
-  networks.forEach(function (n) { if (n.networkId === networkId) name = n.name; });
-  if (!networkId || !name) {
-    appShellChannelSetNotice('Pick a network first.');
-    return false;
-  }
-  const typed = appShellChannelTypedName();
-  const channelName = typed || name;
-  const built = await quickAddChannel(channelName, null, networkId, null, {
-    schedule: appShellChannelSchedulePayload(),
-    addToCatalog: false,
-    preferPreset: appShellChannelScheduleIsDefault(),
-    maxEpisodesPerShow: appShellChannelSchedule.perShow,
-    onProgress: appShellChannelProgress
-  });
-  if (!built || !built.channelId) return false;
-  appShellChannelListName = channelName;
-  return appShellChannelFinishBuild(channelName, built, { template: 'network', networkId: networkId });
-}
-
-async function appShellChannelBuildList() {
-  const urlInput = document.getElementById('appShellChannelListUrl');
-  const listUrl = (urlInput && urlInput.value ? urlInput.value : '').trim();
-  if (!listUrl) {
-    appShellChannelSetNotice('Paste a list link first.');
-    return false;
-  }
-  const liveCheck = document.getElementById('appShellChannelLiveSyncCheck');
-  const liveSync = liveCheck ? liveCheck.checked !== false : true;
-  const channelName = appShellChannelTypedName() || appShellChannelListNameFromUrl(listUrl);
-  const built = await quickAddChannel(channelName, listUrl, null, null, {
-    liveSync: liveSync,
-    schedule: appShellChannelSchedulePayload(),
-    addToCatalog: false,
-    maxEpisodesPerShow: appShellChannelSchedule.perShow,
-    onProgress: appShellChannelProgress
-  });
-  if (!built || !built.channelId) return false;
-  appShellChannelListName = channelName;
-  return appShellChannelFinishBuild(channelName, built, { template: 'list', liveSync: liveSync });
-}
-
-// "https://mdblist.com/lists/kit/sitcoms" -> "Sitcoms". A name is asked for on
-// the screen; this is only what a blank one falls back to.
-function appShellChannelListNameFromUrl(url) {
-  let path = '';
-  try {
-    path = new URL(String(url), ORIGIN).pathname;
-  } catch (e) {
-    path = String(url || '');
-  }
-  const parts = path.split('/').filter(function (p) { return !!p; });
-  const last = parts.length ? parts[parts.length - 1] : 'My channel';
-  const words = last.replace(/[-_]+/g, ' ').trim();
-  if (!words) return 'My channel';
-  return words.charAt(0).toUpperCase() + words.slice(1);
-}
-
-function appShellChannelTypedName() {
-  const input = document.getElementById('appShellChannelNameInput');
-  const typed = (input && input.value ? String(input.value) : '').trim();
-  return typed ? typed.slice(0, 120) : '';
-}
-
-// --- Actor or creator --------------------------------------------------------
-
-async function appShellChannelPersonSearch() {
-  const input = document.getElementById('appShellChannelPersonQuery');
-  const q = (input && input.value ? String(input.value) : '').trim();
-  if (!q) {
-    appShellChannelSetNotice('Type a name first.');
-    appShellRenderChannels();
-    return false;
-  }
-  appShellChannelSetNotice('Searching\\u2026');
-  appShellRenderChannels();
-  const res = await appShellApiFetch('/api/person-search?q=' + encodeURIComponent(q));
-  if (!res.ok) {
-    appShellChannelPersonResults = [];
-    appShellChannelSetNotice(res.error || 'That search did not work.');
-    appShellRenderChannels();
-    return false;
-  }
-  appShellChannelPersonResults = (res.data && Array.isArray(res.data.results)) ? res.data.results : [];
-  appShellChannelSetNotice(appShellChannelPersonResults.length ? '' : 'No one by that name.');
-  appShellRenderChannels();
-  return true;
-}
-
-function appShellChannelPersonPickResult(personId) {
-  const wanted = String(personId || '');
-  let picked = null;
-  appShellChannelPersonResults.forEach(function (p) {
-    if (p && String(p.personId) === wanted) picked = p;
-  });
-  if (!picked) return false;
-  appShellChannelPersonPick = { personId: wanted, name: picked.name || '', knownFor: picked.knownFor || picked.department || '' };
-  appShellChannelSetNotice('');
-  appShellRenderChannels();
-  return true;
-}
-
-// Their credits, then the same pick builder the legacy Spotlight uses --
-// one implementation of "what does this person's channel hold".
-async function appShellChannelBuildPerson() {
-  const pick = appShellChannelPersonPick;
-  if (!pick) {
-    appShellChannelSetNotice('Pick someone first.');
-    return false;
-  }
-  const res = await appShellApiFetch('/api/person-credits?personId=' + encodeURIComponent(pick.personId) +
-    '&sort=chronological&movies=120&shows=60');
-  if (!res.ok || !res.data) {
-    appShellChannelSetNotice(res.error || 'Could not read that filmography.');
-    return false;
-  }
-  const credits = {
-    personId: pick.personId,
-    name: res.data.name || pick.name || '',
-    poster: res.data.poster || null,
-    backdrop: res.data.backdrop || null,
-    movies: Array.isArray(res.data.movies) ? res.data.movies : [],
-    shows: Array.isArray(res.data.shows) ? res.data.shows : []
-  };
-  const built = await buildSpotlightItemsFromCredits(credits, { onProgress: appShellChannelPersonProgress(credits.name) });
-  if (!built || !built.items.length) {
-    appShellChannelSetNotice('Nothing in that filmography resolved to something playable.');
-    return false;
-  }
-  const channelName = appShellChannelTypedName() || ((credits.name || pick.name || 'Spotlight') + ' Spotlight');
-  appShellChannelListName = channelName;
-  return appShellChannelFinishBuild(channelName, appShellChannelSaveLocal(credits, built, channelName), { template: 'person' });
-}
-
-// The legacy builder's own two progress sentences, so a build reads the same
-// wherever it was started from.
-function appShellChannelPersonProgress(personName) {
-  return function (stage, i, total, label) {
-    const who = appShellChannelEscape(personName || '');
-    if (stage === 'movies') {
-      appShellChannelProgress('Resolving films\\u2026 ' + (i + 1) + ' of ' + total + ' (' + appShellChannelEscape(label) + ')');
-    } else {
-      appShellChannelProgress('Finding ' + who + '\\u2019s episodes\\u2026 show ' + (i + 1) + ' of ' + total + ' (' + appShellChannelEscape(label) + ')');
-    }
-  };
-}
-
-function appShellChannelSaveLocal(credits, built, channelName) {
-  const channelId = generateChannelId();
-  const sched = appShellChannelSchedulePayload();
-  const payload = Object.assign({
-    channelId: channelId,
-    name: channelName,
-    poster: built.poster || credits.poster || null,
-    backdrop: built.backdrop || credits.backdrop || null,
-    items: built.items,
-    shuffle: !!sched.shuffle
-  }, sched);
-  saveLocalChannel(payload);
-  return payload;
-}
-
-// --- Franchise or universe ---------------------------------------------------
-
-async function appShellChannelBuildSaga() {
-  const sel = document.getElementById('appShellChannelSagaSelect');
-  const eventId = (sel && sel.value) ? String(sel.value) : appShellChannelSagaPick;
-  if (!eventId) {
-    appShellChannelSetNotice('Pick a saga first.');
-    return false;
-  }
-  appShellChannelSagaPick = eventId;
-  const found = await fetchStorylineOrderedItems(eventId);
-  if (!found || !found.items || !found.items.length) {
-    appShellChannelSetNotice('That saga has nothing the page could resolve.');
-    return false;
-  }
-  const event = found.event || {};
-  const firstWithPoster = found.items.filter(function (it) { return it && (it.poster || it.thumbnail); })[0];
-  const firstWithBackdrop = found.items.filter(function (it) { return it && (it.backdrop || it.showBackdrop); })[0];
-  // The same payload createInstantStorylineChannel builds when the + Add
-  // button on the Storylines tab is pressed: the stable channel-<event id>,
-  // storylineId (that is what makes the row public and account-free
-  // server-side) and catalogOnly, so it stays a row rather than a copy in
-  // My Channels.
-  const payload = {
-    channelId: 'channel-' + eventId,
-    storylineId: eventId,
-    catalogOnly: true,
-    name: event.name || eventId,
-    poster: firstWithPoster ? (firstWithPoster.poster || firstWithPoster.thumbnail) : null,
-    backdrop: firstWithBackdrop ? (firstWithBackdrop.backdrop || firstWithBackdrop.showBackdrop) : null,
-    items: found.items,
-    shuffle: false,
-    dailyRotate: false
-  };
-  return appShellChannelFinishBuild(payload.name, payload, { template: 'saga', eventId: eventId });
-}
-
-// --- the built channel --------------------------------------------------------
-
-function appShellChannelFinishBuild(name, channel, extra) {
-  const draft = Object.assign({
-    template: appShellChannelTemplate,
-    channelId: String(channel.channelId || ''),
-    name: name || channel.name || 'Channel',
-    url: 'channel:v1:' + JSON.stringify(channel),
-    poolSize: (channel.items || []).length
-  }, extra || {});
-  // The preview asks the server about exactly the url a row would carry, so
-  // it cannot describe a different channel from the one that gets added.
-  if (typeof channelRowUrl === 'function') draft.url = channelRowUrl(channel);
-  appShellChannelSetDraft(draft);
-  appShellChannelSetNotice('Built. This is what is playing today -- nothing is on your home screen until you say so.');
-  appShellRenderChannels();
-  appShellChannelLoadLineup();
-  return true;
-}
-
-async function appShellChannelLoadLineup() {
-  const draft = appShellChannelDraft;
-  if (!draft) return false;
-  appShellChannelLineupFor = draft.url;
-  const res = await appShellApiFetch('/api/channel-lineup', { method: 'POST', body: { url: draft.url } });
-  if (appShellChannelLineupFor !== draft.url) return false;   // a newer build won the race
-  if (!res.ok) {
-    appShellChannelLineup = { error: res.error || 'The lineup could not be read just now.' };
-  } else {
-    appShellChannelLineup = res.data || {};
-  }
-  appShellRenderChannels();
-  return true;
-}
-
-// Adding and removing is the page's own toggle (20_), so the button under the
-// preview, the My Channels card and the Storylines tab cannot disagree about
-// what is in the config.
-function appShellChannelSetHome(on) {
-  const draft = appShellChannelDraft;
-  if (!draft) return false;
-  const wants = String(on) !== 'off';
-  if (draft.template === 'saga' && draft.eventId && typeof createInstantStorylineChannel === 'function') {
-    createInstantStorylineChannel(draft.eventId, null);
-    if (typeof renderMyCreatedChannelsList === 'function') renderMyCreatedChannelsList();
-  } else if (draft.channelId && typeof toggleChannelInCatalog === 'function') {
-    toggleChannelInCatalog(draft.channelId);
-  } else {
-    return false;
-  }
-  appShellChannelSetNotice(wants ? 'On your home screen.' : 'Off your home screen. The channel is still saved in My Channels.');
-  appShellRenderChannels();
-  return true;
-}
-
-// --- drawing -----------------------------------------------------------------
-
-function appShellChannelGalleryHtml() {
-  let html = '<div class="app-shell-template-grid">';
-  APP_SHELL_CHANNEL_TEMPLATES.forEach(function (t) {
-    html += '<button type="button" class="app-shell-template-card" data-app-shell-action="chan-template" data-app-shell-id="' + appShellChannelAttr(t.id) + '">' +
-      '<strong>' + appShellChannelEscape(t.title) + '</strong>' +
-      '<span class="app-shell-muted">' + appShellChannelEscape(t.blurb) + '</span>' +
-      (t.needsAccount ? '<span class="app-shell-muted app-shell-template-note">Needs a free account</span>' : '') +
-      '</button>';
-  });
-  html += '</div>';
-  html += '<p class="app-shell-muted">A saga can be added without signing in. Everything that becomes a channel of your own asks for an account first, the same as the builder does.</p>';
-  return html;
-}
-
-function appShellChannelNetworkFormHtml() {
-  const networks = appShellChannelNetworks();
-  let html = '<label class="app-shell-muted" for="appShellChannelNetworkSelect">Which network?</label>';
-  if (!networks.length) {
-    return html + '<p class="app-shell-muted">The network list is not on this page yet. Reload, or use the Quick Add tab below.</p>' +
-      '<div class="app-shell-actions"><button type="button" class="secondary lc-btn" data-app-shell-action="chan-template" data-app-shell-id="">Back</button></div>';
-  }
-  html += '<select id="appShellChannelNetworkSelect">';
-  networks.forEach(function (n) {
-    html += '<option value="' + appShellChannelAttr(n.networkId) + '">' + appShellChannelEscape(n.name) + '</option>';
-  });
-  html += '</select>';
-  html += '<label class="app-shell-muted" for="appShellChannelNameInput">Channel name (optional)</label>' +
-    '<input type="text" id="appShellChannelNameInput" value="' + appShellChannelAttr(appShellChannelListName) + '" placeholder="Uses the network name">';
-  return html;
-}
-
-function appShellChannelSagaFormHtml() {
-  const sagas = appShellChannelSagas();
-  if (!sagas.length) {
-    return '<p class="app-shell-muted">The saga list is not on this page yet. Reload, or use Storylines &amp; Universes below.</p>';
-  }
-  let html = '<label class="app-shell-muted" for="appShellChannelSagaSelect">Which saga or universe?</label><select id="appShellChannelSagaSelect">';
-  sagas.forEach(function (s) {
-    html += '<option value="' + appShellChannelAttr(s.id) + '"' + (s.id === appShellChannelSagaPick ? ' selected' : '') + '>' +
-      appShellChannelEscape(s.name) + ' (' + appShellChannelNumber(s.parts) + ' parts)</option>';
-  });
-  html += '</select><p class="app-shell-muted">A saga plays in its canon order, so it has no schedule to set here.</p>';
-  return html;
-}
-
-function appShellChannelPersonFormHtml() {
-  let html = '<label class="app-shell-muted" for="appShellChannelPersonQuery">Who?</label>' +
-    '<div class="app-shell-row-controls"><input type="text" id="appShellChannelPersonQuery" placeholder="Actor or director name">' +
-    '<button type="button" class="secondary lc-btn" data-app-shell-action="chan-person-search">Search</button></div>';
-  if (appShellChannelPersonResults.length) {
-    html += '<div class="app-shell-person-grid">';
-    appShellChannelPersonResults.slice(0, 12).forEach(function (p) {
-      const on = appShellChannelPersonPick && String(appShellChannelPersonPick.personId) === String(p.personId);
-      html += '<button type="button" class="' + (on ? 'primary' : 'secondary') + ' lc-btn" data-app-shell-action="chan-person-pick" data-app-shell-id="' + appShellChannelAttr(String(p.personId)) + '">' +
-        appShellChannelEscape(p.name || 'Unknown') +
-        (on ? '' : '<br><span class="app-shell-muted">' + appShellChannelEscape(p.knownFor || p.department || '') + '</span>') +
-        '</button>';
-    });
-    html += '</div>';
-  }
-  if (appShellChannelPersonPick) {
-    html += '<p class="app-shell-kv">Building from <strong>' + appShellChannelEscape(appShellChannelPersonPick.name) + '</strong>. Their films and the episodes they were in.</p>' +
-      '<label class="app-shell-muted" for="appShellChannelNameInput">Channel name (optional)</label>' +
-      '<input type="text" id="appShellChannelNameInput" value="' + appShellChannelAttr(appShellChannelListName) + '" placeholder="Uses their name">';
-  }
-  return html;
-}
-
-function appShellChannelListFormHtml() {
-  return '<label class="app-shell-muted" for="appShellChannelListUrl">The list</label>' +
-    '<input type="text" id="appShellChannelListUrl" placeholder="A MDBList, Trakt or TMDB show list link">' +
-    '<label class="app-shell-muted" for="appShellChannelNameInput">Channel name (optional)</label>' +
-    '<input type="text" id="appShellChannelNameInput" value="' + appShellChannelAttr(appShellChannelListName) + '" placeholder="Named after the list">' +
-    '<label class="app-shell-dedupe" for="appShellChannelLiveSyncCheck">' +
-    '<input type="checkbox" id="appShellChannelLiveSyncCheck" checked>' +
-    '<span><strong>Keep it in step with the list</strong><br><span class="app-shell-muted">The channel remembers the link and picks up titles the list gains. Off, it is a one-time snapshot.</span></span></label>' +
-    '<p class="app-shell-muted">A list link is read as shows: films mixed into it are left out, because a channel plays episodes.</p>';
-}
-
-function appShellChannelCustomHtml() {
-  return '<p class="app-shell-muted">The full builder is still the page\\u2019s own: search shows and films, add a season at a time, choose the poster, lock a story, set the play order. It opens right below.</p>' +
-    '<div class="app-shell-actions">' +
-    '<button type="button" class="primary lc-btn" data-app-shell-action="chan-custom">Open the full builder</button>' +
-    '<button type="button" class="secondary lc-btn" data-app-shell-action="chan-template" data-app-shell-id="">Back</button>' +
-    '</div>';
-}
-
-function appShellChannelScheduleHtml() {
-  const s = appShellChannelSchedule;
-  const order = String(s.order || 'listed');
-  const option = function (value, label) {
-    return '<option value="' + appShellChannelAttr(value) + '"' + (order === value ? ' selected' : '') + '>' + label + '</option>';
-  };
-  return '<details class="app-shell-schedule" id="appShellChannelScheduleDetails">' +
-    '<summary>Schedule options</summary>' +
-    '<button type="button" class="app-shell-chip' + (s.rotate ? ' is-on' : '') + '" data-app-shell-action="chan-rotate" data-app-shell-id="' + (s.rotate ? 'off' : 'on') + '">' +
-    'Daily rotation: ' + (s.rotate ? 'on' : 'off') + '</button>' +
-    '<p class="app-shell-muted">On, the channel keeps a pool and deals a fresh day\\u2019s lineup out of it every day. Off, everything in the pool plays in the order below.</p>' +
-    '<div class="app-shell-row-controls">' +
-    '<label class="app-shell-muted" for="appShellChannelRotateShows">Shows a day</label>' +
-    '<input type="number" id="appShellChannelRotateShows" min="1" max="48" value="' + appShellChannelNumber(s.shows || 24) + '">' +
-    '<label class="app-shell-muted" for="appShellChannelRotateEpisodes">Episodes a block</label>' +
-    '<input type="number" id="appShellChannelRotateEpisodes" min="1" max="12" value="' + appShellChannelNumber(s.episodes || 3) + '">' +
-    '</div>' +
-    '<label class="app-shell-muted" for="appShellChannelOrderSelect">Play order</label>' +
-    '<select id="appShellChannelOrderSelect">' +
-    option('listed', 'As the channel is') +
-    option('interleave', 'Interleaved -- one episode per show, in turn') +
-    option('aired', 'Air date -- oldest first') +
-    option('shuffle', 'Shuffled') +
-    '</select>' +
-    '<div class="app-shell-row-controls">' +
-    '<label class="app-shell-muted" for="appShellChannelPerShow">Episodes kept per show</label>' +
-    '<input type="number" id="appShellChannelPerShow" min="1" max="200" value="' + appShellChannelNumber(s.perShow || 50) + '">' +
-    '</div>' +
-    '<button type="button" class="app-shell-chip' + (s.hideWatched ? ' is-on' : '') + '" data-app-shell-action="chan-hide-watched" data-app-shell-id="' + (s.hideWatched ? 'off' : 'on') + '">' +
-    'Hide watched: ' + (s.hideWatched ? 'on' : 'off') + '</button>' +
-    '<p class="app-shell-muted">Hide watched needs Auto-track playback signed in. The preview below says when the server cannot apply it.</p>' +
-    '</details>';
-}
-
-function appShellChannelLineupHtml() {
-  const draft = appShellChannelDraft;
-  if (!draft) return '';
-  if (!appShellChannelLineup) {
-    return '<h3 class="app-shell-h3">Today\\u2019s lineup</h3><p class="app-shell-muted">Asking the server what is playing\\u2026</p>';
-  }
-  if (appShellChannelLineup.error) {
-    return '<h3 class="app-shell-h3">Today\\u2019s lineup</h3><p class="app-shell-review-bad">' + appShellChannelEscape(appShellChannelLineup.error) + '</p>' +
-      '<div class="app-shell-actions"><button type="button" class="secondary lc-btn" data-app-shell-action="chan-preview">Try again</button></div>';
-  }
-  const items = Array.isArray(appShellChannelLineup.items) ? appShellChannelLineup.items : [];
-  // plan is channelRotationPlan's answer, the same numbers the Worker clamped
-  // the channel to -- { shows, episodes, turnover } -- so the sentence under
-  // the posters describes the channel that will actually play.
-  const plan = appShellChannelLineup.plan;
-  const pool = appShellChannelNumber(appShellChannelLineup.poolSize) || draft.poolSize;
-  const bits = [];
-  if (plan && plan.shows) bits.push(plan.shows + ' shows a day');
-  if (plan && plan.episodes) bits.push(plan.episodes + ' episodes a block');
-  if (pool) bits.push(pool + ' episode' + (pool === 1 ? '' : 's') + ' in the pool');
-  if (appShellChannelLineup.rotating) bits.push('rotates daily');
-  const bitsHtml = bits.map(appShellChannelEscape).join(' &middot; ');
-  let html = '<h3 class="app-shell-h3">Today\\u2019s lineup</h3>';
-  html += '<p class="app-shell-kv">' + (bitsHtml || 'Ready') + '</p>';
-  if (Array.isArray(appShellChannelLineup.unappliedRules) && appShellChannelLineup.unappliedRules.length) {
-    const named = appShellChannelLineup.unappliedRules.map(function (r) { return r === 'hideWatched' ? 'Hide watched' : 'This channel fills itself in from your account'; });
-    html += '<p class="app-shell-muted">A preview cannot prove which account is asking, so ' + appShellChannelEscape(named.join(' and ')) +
-      ' ' + (named.length === 1 ? 'is' : 'are') + ' not applied here. In Stremio they are.</p>';
-  }
-  if (!items.length) {
-    html += '<p class="app-shell-muted">The server has no lineup for this channel yet. A rotating channel needs its pool first -- try again in a moment.</p>';
-  } else {
-    html += '<div class="app-shell-lineup">';
-    items.slice(0, APP_SHELL_CHANNEL_LINEUP_TILES).forEach(function (it) {
-      const poster = it.thumbnail || it.poster || it.showPoster || '';
-      const label = it.showName ? (it.showName + (it.season != null && it.episode != null ? ' S' + it.season + 'E' + it.episode : '')) : (it.title || it.epName || '');
-      html += '<div class="app-shell-lineup-tile">' +
-        (poster ? '<img src="' + appShellChannelAttr(poster) + '" alt="" loading="lazy">' : '<div class="app-shell-lineup-blank"></div>') +
-        '<span title="' + appShellChannelAttr(label) + '">' + appShellChannelEscape(label) + '</span>' +
-        '</div>';
-    });
-    html += '</div>';
-    if (items.length > APP_SHELL_CHANNEL_LINEUP_TILES) {
-      html += '<p class="app-shell-muted">Showing the first ' + APP_SHELL_CHANNEL_LINEUP_TILES + ' of ' + items.length + ' in today\\u2019s lineup.</p>';
-    }
-  }
-  const onHome = appShellChannelOnHome();
-  html += '<div class="app-shell-actions">' +
-    '<button type="button" class="' + (onHome ? 'secondary' : 'primary') + ' lc-btn" data-app-shell-action="chan-home" data-app-shell-id="' + (onHome ? 'off' : 'on') + '">' +
-    (onHome ? 'On your home screen' : 'Add to home screen') + '</button>' +
-    '<button type="button" class="secondary lc-btn" data-app-shell-action="chan-preview">New lineup</button>' +
-    '<button type="button" class="secondary lc-btn" data-app-shell-action="chan-reset">Build another channel</button>' +
-    '</div>';
-  html += '<p class="app-shell-muted">It is saved in My Channels either way. Removing it from the home screen leaves it there to edit or add back.</p>';
-  return html;
-}
-
-function appShellChannelFlowHtml() {
-  const template = appShellChannelTemplate;
-  const found = APP_SHELL_CHANNEL_TEMPLATES.filter(function (t) { return t.id === template; })[0];
-  if (!found) return appShellChannelGalleryHtml();
-  let html = '<div class="app-shell-row-controls"><button type="button" class="secondary lc-btn" data-app-shell-action="chan-template" data-app-shell-id="">All templates</button>' +
-    '<strong>' + appShellChannelEscape(found.title) + '</strong></div>' +
-    '<p class="app-shell-muted">' + appShellChannelEscape(found.blurb) + '</p>';
-  if (template === 'custom') return html + appShellChannelCustomHtml();
-  if (appShellChannelDraft && appShellChannelDraft.template === template) {
-    html += '<p class="app-shell-kv">' + appShellChannelEscape(appShellChannelDraft.name) + ' &middot; ' +
-      appShellChannelNumber(appShellChannelDraft.poolSize) + ' episodes in the pool</p>' + appShellChannelLineupHtml();
-    return html;
-  }
-  if (template === 'network') html += appShellChannelNetworkFormHtml();
-  else if (template === 'saga') html += appShellChannelSagaFormHtml();
-  else if (template === 'person') html += appShellChannelPersonFormHtml();
-  else if (template === 'list') html += appShellChannelListFormHtml();
-  if (template !== 'saga') html += appShellChannelScheduleHtml();
-  html += '<div class="app-shell-actions">' +
-    '<button type="button" class="primary lc-btn"' + (appShellChannelBuildInFlight ? ' disabled' : '') + ' data-app-shell-action="chan-build">' +
-    (appShellChannelBuildInFlight ? 'Building\\u2026' : 'Build this channel') + '</button>' +
-    '</div>';
-  return html;
-}
-
-function appShellRenderChannels() {
-  const host = appShellChannelsHost();
-  if (!host) return false;
-  let html = '<div class="panel">' +
-    '<h2 class="panel-title">New channel</h2>' +
-    '<p class="app-shell-muted">Choose a template, look at what is playing today, then add it to your home screen. The full builder is still there under Custom.</p>';
-  if (appShellChannelNotice) html += '<p class="app-shell-kv" id="appShellChannelNotice">' + appShellChannelEscape(appShellChannelNotice) + '</p>';
-  html += '<p class="app-shell-muted" id="appShellChannelProgress">' + appShellChannelEscape(appShellChannelBusy) + '</p>';
-  const account = appShellState.get().account;
-  if (!account && appShellChannelTemplate && appShellChannelTemplate !== 'saga') {
-    html += '<p class="app-shell-muted">Sign in first: a channel of your own is kept on your account, so it follows you to another device.</p>' +
-      '<div class="app-shell-actions"><button type="button" class="primary lc-btn" data-app-shell-action="chan-account">Go to Settings to sign in</button></div>' +
-      '<div class="app-shell-actions"><button type="button" class="secondary lc-btn" data-app-shell-action="chan-template" data-app-shell-id="">All templates</button></div></div>';
-    host.innerHTML = html;
-    return true;
-  }
-  html += appShellChannelFlowHtml() + '</div>';
-  host.innerHTML = html;
-  return true;
-}
-
-// --- the one click listener's handler ----------------------------------------
-
-async function appShellChannelsAction(action, id) {
-  const what = String(action || '');
-  if (what === 'chan-template') return appShellChannelPickTemplate(id);
-  if (what === 'chan-build') return appShellChannelBuild();
-  if (what === 'chan-rotate') {
-    appShellChannelSchedule.rotate = String(id) !== 'off';
-    appShellRenderChannels();
-    return true;
-  }
-  if (what === 'chan-hide-watched') {
-    appShellChannelSchedule.hideWatched = String(id) !== 'off';
-    appShellRenderChannels();
-    return true;
-  }
-  if (what === 'chan-person-search') return appShellChannelPersonSearch();
-  if (what === 'chan-person-pick') return appShellChannelPersonPickResult(id);
-  if (what === 'chan-preview') return appShellChannelLoadLineup();
-  if (what === 'chan-home') return appShellChannelSetHome(id);
-  if (what === 'chan-reset') {
-    appShellChannelDraft = null;
-    appShellChannelLineup = null;
-    appShellChannelLineupFor = '';
-    appShellChannelNotice = '';
-    appShellChannelBusy = '';
-    appShellRenderChannels();
-    return true;
-  }
-  if (what === 'chan-custom') {
-    if (typeof openBuildCustomChannel === 'function') openBuildCustomChannel();
-    return true;
-  }
-  if (what === 'chan-account') {
-    appShellGo('/settings/account');
-    if (typeof appShellFocusSignIn === 'function') appShellFocusSignIn();
-    return true;
-  }
-  return false;
-}
-
-// Called when the view is opened, and once at boot for a page served straight
-// at Channels.
-function appShellOpenChannels() {
-  if (!appShellChannelsHost() || !appShellChannelsIsOpen()) return false;
-  return appShellRenderChannels();
-}
-
 // --- routing -----------------------------------------------------------------
 
 function appShellFindSubPill(tabId, sub) {
@@ -80987,7 +82552,13 @@ function appShellApplyRoute(route) {
   if (!route) return false;
   const tab = appShellTab(route.tab);
   if (!tab) return false;
-  const sub = (route.sub && tab.subs.indexOf(route.sub) !== -1) ? String(route.sub) : '';
+  let rawSub = route.sub ? String(route.sub) : '';
+  if (tab.id === 'discover') {
+    if (rawSub === 'movies') rawSub = 'movie';
+    if (rawSub === 'shows') rawSub = 'series';
+    if (!rawSub) rawSub = 'movie';
+  }
+  const sub = (rawSub && tab.subs.indexOf(rawSub) !== -1) ? rawSub : '';
   appShellApplyingRoute = true;
   try {
     if (typeof switchTab === 'function') switchTab(tab.id);
@@ -81003,9 +82574,6 @@ function appShellApplyRoute(route) {
     appShellApplyingRoute = false;
   }
   appShellState.set({ route: { tab: tab.id, sub: sub } });
-  // Settings is rendered by the shell itself (P6-2): the legacy panels below
-  // it stay, and these cards sit above them.
-  if (tab.id === 'settings') appShellRenderSettingsHome();
   if (tab.id === 'catalogs') appShellRenderHomeEditor();
   if (tab.id === 'lists') {
     if (sub === 'create-list') appShellRenderAddTitles('');
@@ -81014,7 +82582,6 @@ function appShellApplyRoute(route) {
       appShellResumeImport();
     }
   }
-  if (tab.id === 'channels') appShellOpenChannels();
   return true;
 }
 
@@ -81074,14 +82641,10 @@ function appShellOnClick(e) {
     e.preventDefault();
     const action = actionEl.getAttribute('data-app-shell-action');
     const id = actionEl.getAttribute('data-app-shell-id') || '';
-    // The Add titles search (P6-4) and the Settings view (P6-2) share this one
-    // listener, so the action names decide which module answers. The prefix
-    // test is here rather than a truthy return because appShellSettingsAction
-    // is async -- its promise is truthy for every action, handled or not.
+    // The Add titles search (P6-4) and the Import view share this one
+    // listener, so the action names decide which module answers.
     if (APP_SHELL_LISTS_ACTION.test(action)) appShellListsAction(action, id);
     else if (APP_SHELL_IMPORTS_ACTION.test(action)) appShellImportsAction(action, id);
-    else if (APP_SHELL_CHANNELS_ACTION.test(action)) appShellChannelsAction(action, id);
-    else appShellSettingsAction(action, id);
     return;
   }
   const link = target.closest('a[data-app-route]');
@@ -81131,13 +82694,11 @@ function initAppShell() {
     appShellApplyRoute({ tab: open.tab, sub: '' });
   }
 
-  appShellRefreshInstallBar();
   appShellRenderHomeEditor();
   if (typeof appShellImportsHost === 'function' && appShellImportsHost() && appShellImportsIsOpen()) {
     appShellRenderImports();
     appShellResumeImport();
   }
-  if (typeof appShellChannelsHost === 'function' && appShellChannelsHost() && appShellChannelsIsOpen()) appShellRenderChannels();
   if (typeof isSignedIn === 'function' && isSignedIn()) appShellRefreshAccount();
   appShellState.set({ ready: true });
 }
@@ -81914,11 +83475,11 @@ function renderGuidePage(origin) {
     <p>Four submenus: <strong>My Channels</strong>, <strong>Storylines &amp; Universes</strong>, <strong>Quick Add</strong>, and <strong>Import</strong>.</p>
 
     <h3>My Channels</h3>
-    <p>Lists everything you've built. <strong>+ New Channel</strong> opens the channel builder. Below that, <strong>Merge Saved Channels into One Catalog</strong> lets you select multiple saved channels with checkboxes, name the merge, and click <strong>Merge into catalog</strong> to combine them into a single row.</p>
+    <p>Lists everything you've built. <strong>+ Create Channel</strong> opens the channel builder. Below that, <strong>Merge Saved Channels into One Catalog</strong> lets you select multiple saved channels with checkboxes, name the merge, and click <strong>Merge into catalog</strong> to combine them into a single row.</p>
 
     <h3>Building a Channel from Scratch:</h3>
     <ol>
-      <li>Click <strong>+ New Channel</strong>.</li>
+      <li>Click <strong>+ Create Channel</strong>.</li>
       <li>Use the <strong>Shows / Movies</strong> toggle to set what you're searching for.</li>
       <li>Search a title and add picks &mdash; for shows, an episode picker lets you choose specific seasons/episodes.</li>
       <li>Drag a pick, or type a new position, to reorder <strong>Picks in this channel</strong>. Where a pick sits in this list is the order it plays in.</li>
@@ -82020,19 +83581,29 @@ function renderGuidePage(origin) {
       </div>
     </div>
 
-    <p>Four submenus: <strong>Account &amp; Sync</strong>, <strong>External Accounts &amp; API Keys</strong>, <strong>Presets &amp; Backup</strong>, <strong>Feedback and Support</strong>.</p>
+    <p>Settings submenus include: <strong>Account &amp; Security</strong>, <strong>Catalog &amp; Display</strong>, <strong>Tracking &amp; Scrobble</strong>, <strong>Connected Services</strong>, <strong>Presets &amp; Backup</strong>, and <strong>Feedback &amp; Support</strong>.</p>
 
-    <h3>Account &amp; Sync</h3>
+    <h3>Account &amp; Security</h3>
     <ul>
-      <li><strong>Watchlist Preferences</strong> &mdash; controls how watched titles are handled in your Watchlist.</li>
-      <li><strong>Hidden Lists</strong> &mdash; hide specific lists from My Lists, Airing Next, and Simkl Airing Next without un-tracking them; they keep updating and can be un-hidden anytime.</li>
-      <li><strong>Region</strong> &mdash; sets your country for streaming-availability catalogs (Netflix, Disney+, etc.), Stream Releases, and content ratings.</li>
-      <li><strong>Trending &amp; Popular Catalogs</strong> &mdash; toggle "Hide items with no digital release" to skip still-in-theaters movies from Trending/Popular rows. Requires Save/Update to take effect.</li>
-      <li><strong>Watch History</strong> &mdash; clear/reset all recorded history.</li>
-      <li><strong>Auto-Track &amp; Media Server Scrobbling</strong> &mdash; automatically records watched movies/episodes from your streaming apps and home media servers (Plex, Jellyfin, Emby) into Watch History and Continue Watching.</li>
+      <li><strong>Creator Profile &amp; Account Key</strong> &mdash; manage your account credentials, public lists, and profile settings.</li>
+      <li><strong>Danger Zone</strong> &mdash; securely delete your account and associated server records.</li>
     </ul>
 
-    <h3>External Accounts &amp; API Keys</h3>
+    <h3>Catalog &amp; Display</h3>
+    <ul>
+      <li><strong>Catalog &amp; Content Rules</strong> &mdash; configure Region, Deduplication, Digital Release, and Adult Content filters.</li>
+      <li><strong>Better Posters &amp; Badge Overlays</strong> &mdash; customize artwork badges and labels across website and Stremio/Nuvio.</li>
+      <li><strong>Hidden Lists</strong> &mdash; hide specific lists from My Lists and Airing Next without un-tracking them.</li>
+    </ul>
+
+    <h3>Tracking &amp; Scrobble</h3>
+    <ul>
+      <li><strong>Watchlist Preferences</strong> &mdash; controls how watched titles are handled in your personal Watchlist.</li>
+      <li><strong>Watch History</strong> &mdash; view and clear/reset your recorded playback history.</li>
+      <li><strong>Auto-Track &amp; Media Server Scrobbling</strong> &mdash; scrobble playback from home media servers (Plex, Jellyfin, Emby).</li>
+    </ul>
+
+    <h3>Connected Services</h3>
     <p>Connect MDBList, Trakt, TMDB, and Simkl. Each provider offers <strong>Connect Account</strong> (OAuth/PIN flow &mdash; for Trakt, enter a code at <code>trakt.tv/activate</code>, your password is never entered here), <strong>Disconnect</strong>, <strong>Sync Watch History</strong> (push watched items back to that provider), and an advanced custom API key/Client ID field:</p>
     <ul>
       <li>TMDB key: <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org/settings/api</a></li>
@@ -82042,7 +83613,7 @@ function renderGuidePage(origin) {
     </ul>
     <p>You only need any of this for private lists, personal watchlists/history, or your own dedicated rate limit &mdash; public lists and charts work with zero setup.</p>
 
-    <h3>Feedback and Support</h3>
+    <h3>Feedback &amp; Support</h3>
     <p>A built-in chat with the developer &mdash; pick a category (Bug Report, Improvement/Feature Request, Idea/Suggestion, General Question), write your message, and send. Use <strong>&#8635; Refresh</strong> to check for a reply.</p>
   </section>
 
@@ -82236,8 +83807,8 @@ function bytesToBase64(buffer) {
 // reading a Trakt or Letterboxd export no longer needs the network; the fonts
 // are the device's own (no third-party origin left in the page at all).
 const SERVICE_WORKER_JS = `
-const ASSETS = 'mylists-assets-v2';
-const SHELL = 'mylists-shell-v2';
+const ASSETS = 'mylists-assets-v4';
+const SHELL = 'mylists-shell-v4';
 const SHELL_URL = '/';
 const KEEP = [ASSETS, SHELL];
 
@@ -82315,6 +83886,7 @@ self.addEventListener('fetch', (e) => {
   if (req.mode === 'navigate') {
     e.respondWith((async () => {
       try {
+        // The browser's own request, untouched: a rebuilt one follows redirects itself, and a sign-in redirect then fails.
         const res = await fetch(req);
         // Only the plain page is worth keeping. A deep link renders
         // per-request data, and replaying yesterday's copy of it later would

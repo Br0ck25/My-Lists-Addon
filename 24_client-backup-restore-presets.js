@@ -636,6 +636,8 @@ function applyImportedConfig(data) {
   if (typeof s.dedupeAcrossLists === 'boolean') {
     const cb = document.getElementById('dedupeAcrossListsCheckbox');
     if (cb) cb.checked = s.dedupeAcrossLists;
+    const catCb = document.getElementById('catalogsDedupeCheckbox');
+    if (catCb) catCb.checked = s.dedupeAcrossLists;
     try { localStorage.setItem('myListAddon:dedupeAcrossLists', s.dedupeAcrossLists ? '1' : '0'); } catch (e) {}
   }
   if (typeof s.region === 'string' && s.region) {
@@ -1342,14 +1344,20 @@ function renderPresetsList() {
     const count = entries.length;
     return '<div class="preset-card" data-preset="' + escapeAttr(n) + '">' +
       '<div class="preset-card-header">' +
-        '<strong class="preset-card-title">' + escapeHtml(n) + '</strong> <small style="color:var(--muted);">(' + count + ' list' + (count === 1 ? '' : 's') + ')</small>' +
+        '<strong class="preset-card-title">' + escapeHtml(n) + '</strong> <small style="color:var(--muted); flex-shrink:0;">(' + count + ' list' + (count === 1 ? '' : 's') + ')</small>' +
       '</div>' +
-      '<div class="preset-actions-grid">' +
-        '<button type="button" class="secondary lc-btn preset-load-btn">Load</button>' +
-        '<button type="button" class="secondary lc-btn preset-restore-lists-btn" title="Rebuild and restore custom lists &amp; channels from this preset into My Lists">Restore Lists</button>' +
-        '<button type="button" class="secondary lc-btn preset-share-btn">Share</button>' +
-        '<button type="button" class="secondary lc-btn preset-download-btn">Download</button>' +
-        '<button type="button" class="secondary lc-btn preset-delete-btn">Delete</button>' +
+      '<div class="preset-actions-cluster">' +
+        '<button type="button" class="primary lc-btn preset-load-btn" title="Load this preset into your active catalogs">Load</button>' +
+        '<button type="button" class="secondary lc-btn preset-share-btn" title="Share this preset">Share</button>' +
+        '<details class="preset-overflow-menu">' +
+          '<summary class="preset-overflow-btn" aria-label="More actions for ' + escapeAttr(n) + '">&#x22EF;</summary>' +
+          '<div class="preset-overflow-dropdown">' +
+            '<button type="button" class="preset-menu-item preset-download-btn">Download .json</button>' +
+            '<button type="button" class="preset-menu-item preset-restore-lists-btn" title="Rebuild and restore custom lists &amp; channels from this preset into My Lists">Restore Lists</button>' +
+            '<div class="preset-menu-divider"></div>' +
+            '<button type="button" class="preset-menu-item preset-delete-btn" style="color:var(--danger, #ff3b30);">Delete Preset</button>' +
+          '</div>' +
+        '</details>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -1362,6 +1370,10 @@ if (presetsListEl) {
     const row = e.target.closest('[data-preset]');
     if (!row) return;
     const name = row.getAttribute('data-preset');
+    const menu = row.querySelector('.preset-overflow-menu[open]');
+    if (menu && (e.target.classList.contains('preset-menu-item') || e.target.closest('.preset-menu-item'))) {
+      menu.removeAttribute('open');
+    }
     if (e.target.classList.contains('preset-load-btn')) loadPreset(name);
     else if (e.target.classList.contains('preset-restore-lists-btn')) rebuildCustomListsFromPreset(name, false);
     else if (e.target.classList.contains('preset-share-btn')) sharePreset(name);
@@ -1369,6 +1381,12 @@ if (presetsListEl) {
     else if (e.target.classList.contains('preset-delete-btn')) deletePreset(name);
   });
 }
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.preset-overflow-menu')) {
+    document.querySelectorAll('.preset-overflow-menu[open]').forEach((d) => d.removeAttribute('open'));
+  }
+});
 
 function loadPreset(name) {
   const map = loadPresetsMap();
@@ -1759,12 +1777,6 @@ function computeConfigStateHash() {
   }
 }
 
-// Called by saveState() after every change to the rows or the settings: keeps
-// the install link's state (live / unsaved) current for Settings.
-function checkUnsavedInstallLink() {
-  if (typeof appShellActive !== 'undefined' && appShellActive) appShellRefreshInstallBar();
-}
-
 // myListAddon:state is this browser's copy of the rows and settings, and it
 // carried the provider keys and tokens too: collectKeys() returns them, and
 // saveState wrote the whole object on every change -- so moving the
@@ -1802,7 +1814,6 @@ function saveState() {
   }
   if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
   scheduleCreatorSyncSave();
-  checkUnsavedInstallLink();
   // The new UI's live preview follows the rows (see appShellSchedulePreview,
   // spliced in below). Guarded because saveState also runs from the legacy
   // page, where the shell's module is not loaded... it is the same script, so
@@ -2010,23 +2021,23 @@ async function generate() {
       </div>
 
       <div class="install-url-container">
-        <div class="install-url-header">
-          <div class="install-url-label">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
-            <span>Manifest Link</span>
-          </div>
-          <button type="button" class="install-url-copy-btn" id="copyUrlBtn" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Copy manifest link">
+        <div class="install-url-label">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+          <span>Manifest Link</span>
+        </div>
+        <div class="install-url-input-group" style="display:flex; align-items:stretch; gap:8px; width:100%; flex-wrap:wrap;">
+          <div class="install-url-box" id="manifestLinkDisplay" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Click to copy" style="flex:1 1 220px; min-width:0; margin:0; display:flex; align-items:center;">\${installUrl}</div>
+          <button type="button" class="install-url-copy-btn primary lc-btn" id="copyUrlBtn" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Copy manifest link" style="flex:none; padding:0 16px; min-height:38px; height:auto; display:inline-flex; align-items:center; gap:6px; font-weight:600; font-size:0.85rem; border-radius:var(--radius-pill);">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
             <span>Copy Link</span>
           </button>
         </div>
-        <div class="install-url-box" id="manifestLinkDisplay" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Click to copy">\${installUrl}</div>
       </div>
 
       <div class="install-hint-box">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:2px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
         <div>
-          <span>To install manually, copy the manifest link above and paste it into:</span>
+          <span style="font-weight:600; color:var(--text);">To install manually, copy the manifest link above and paste it into:</span>
           <div class="install-hint-steps">
             <span>&bull; <strong>Stremio</strong> &rarr; Addons &rarr; Community &rarr; Paste URL</span>
             <span>&bull; <strong>Nuvio</strong> &rarr; Settings &rarr; Content &amp; Discovery &rarr; Addons</span>
@@ -2143,11 +2154,11 @@ if (serverEntries.length && !serverEntriesAreDefaults) {
   const savedDedupeAcrossListsDirect = (function() {
     try { return localStorage.getItem('myListAddon:dedupeAcrossLists'); } catch (e) { return null; }
   })();
-  if (savedDedupeAcrossListsDirect !== null && document.getElementById('dedupeAcrossListsCheckbox')) {
-    document.getElementById('dedupeAcrossListsCheckbox').checked = savedDedupeAcrossListsDirect === '1';
-  } else if (saved && saved.keys && document.getElementById('dedupeAcrossListsCheckbox')) {
-    document.getElementById('dedupeAcrossListsCheckbox').checked = !!saved.keys.dedupeAcrossLists;
-  }
+  const isDedupeOn = savedDedupeAcrossListsDirect !== null ? (savedDedupeAcrossListsDirect === '1') : (saved && saved.keys ? !!saved.keys.dedupeAcrossLists : false);
+  const dedupeEl = document.getElementById('dedupeAcrossListsCheckbox');
+  if (dedupeEl) dedupeEl.checked = isDedupeOn;
+  const catDedupeEl = document.getElementById('catalogsDedupeCheckbox');
+  if (catDedupeEl) catDedupeEl.checked = isDedupeOn;
   const tmdbDisc = localStorage.getItem('myListAddon:tmdbDisconnected') === 'true';
   const mdblistDisc = localStorage.getItem('myListAddon:mdblistDisconnected') === 'true';
   const traktDisc = localStorage.getItem('myListAddon:traktDisconnected') === 'true';
@@ -2580,12 +2591,6 @@ window.addEventListener('popstate', (e) => {
 // Every visitor gets the shell since the classic page was retired (Release
 // 21); it used to be switched on per browser by a flag in the page preamble.
 
-// The last install link this browser generated, and the configuration it was
-// generated from. Browser state, not account state: the Worker cannot know it,
-// which is why the bar's first paint says "not installed yet" and this refines
-// it as soon as the bundle runs.
-const APP_SHELL_INSTALL_KEY = 'myListAddon:installLink';
-
 // The sub-tab bars, by view, and the pill that names a sub-tab inside one.
 // These are the legacy bars' own ids; the shell routes to them rather than
 // rendering a second set of controls.
@@ -2674,7 +2679,7 @@ function appShellRouteForName(name) {
 // without ever re-rendering for nothing.
 const appShellState = (function () {
   const listeners = new Set();
-  const state = { ready: false, route: null, account: null, install: { state: 'none', link: '' } };
+  const state = { ready: false, route: null, account: null };
 
   function get(key) {
     if (key === undefined) return Object.assign({}, state);
@@ -2824,100 +2829,6 @@ function appShellDialog(options) {
   });
 }
 
-// --- the install bar ---------------------------------------------------------
-//
-// Three states, all of them about this browser's own install link:
-//   none    -- nothing generated here yet
-//   unsaved -- a link exists, and the rows/settings have changed since
-//   live    -- the link matches what the builder currently holds
-function appShellReadInstallLink() {
-  try {
-    const raw = localStorage.getItem(APP_SHELL_INSTALL_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object' || !parsed.url) return null;
-    return { url: String(parsed.url), hash: String(parsed.hash || '') };
-  } catch (e) {
-    return null;
-  }
-}
-
-function appShellInstallLinkState() {
-  const saved = appShellReadInstallLink();
-  if (!saved) return { state: 'none', link: '' };
-  let current = '';
-  try {
-    if (typeof computeConfigStateHash === 'function') current = computeConfigStateHash();
-  } catch (e) {
-    current = '';
-  }
-  // No hash stored (an older link, or a stubbed environment): treat it as
-  // current rather than telling somebody their up-to-date link is stale.
-  const live = !saved.hash || !current || saved.hash === current;
-  return { state: live ? 'live' : 'unsaved', link: saved.url };
-}
-
-function appShellRecordInstallLink(url) {
-  const link = String(url || '').trim();
-  if (!link) return;
-  let hash = '';
-  try {
-    if (typeof computeConfigStateHash === 'function') hash = computeConfigStateHash();
-  } catch (e) {
-    hash = '';
-  }
-  try {
-    localStorage.setItem(APP_SHELL_INSTALL_KEY, JSON.stringify({ url: link, hash: hash }));
-  } catch (e) {}
-}
-
-// The bar itself was taken off the page at the owner's request (its drawing
-// code was deleted in Release 21); Settings' Install link card still reads
-// this state.
-function appShellRefreshInstallBar() {
-  const info = appShellInstallLinkState();
-  appShellState.set({ install: { state: info.state, link: info.link } });
-}
-
-// Builds the install link through the builder's own generate() (which renders
-// the result card), then remembers it here. The link is read back out of the
-// card rather than duplicated from generate(), so there is still one place that
-// knows how a link is made.
-async function appShellGenerateInstallLink() {
-  if (typeof collectEntries === 'function' && !collectEntries().length) {
-    showToast('Add at least one list first.', 'info');
-    appShellGo(appShellPathFor('catalogs', ''));
-    return false;
-  }
-  try {
-    if (typeof generate === 'function') await generate();
-  } catch (e) {
-    showToast('Could not make the install link. Please try again.', 'error');
-    return false;
-  }
-  const display = document.getElementById('manifestLinkDisplay');
-  const link = display ? String(display.textContent || '').trim() : '';
-  if (!link) return false;   // generate() showed its own reason (for example: sign in)
-  appShellRecordInstallLink(link);
-  appShellRefreshInstallBar();
-  showToast('Install link ready.', 'success');
-  return true;
-}
-
-async function appShellInstallBarAction() {
-  const info = appShellInstallLinkState();
-  if (info.state === 'live' && info.link) {
-    try {
-      if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(info.link);
-        showToast('Install link copied.', 'success');
-        return;
-      }
-    } catch (e) {}
-  }
-  await appShellGenerateInstallLink();
-}
-
 // The signed-in account, over the session cookie (GET /api/me). Kept in
 // appShellState so the Settings views can read it without asking twice.
 async function appShellRefreshAccount() {
@@ -2929,205 +2840,7 @@ async function appShellRefreshAccount() {
   return account;
 }
 
-// --- Settings (P6-2) ---------------------------------------------------------
-//
-// The Settings view's own cards: the account's devices and this browser's
-// install link. It is additive -- the older panels below it are untouched --
-// and renders into the container the server emits (15_tab-settings-html.js).
-// The account and connections cards it started with were deleted in Release
-// 21: Your Account (renderAccountKeySection, 22_) and External Accounts & API
-// Keys hold the same buttons, and the owner found every one of them twice.
-//
-// Everything here talks to the account APIs over the session cookie
-// (appShellApiFetch), and every control is wired with a data-app-shell-action
-// attribute instead of an inline handler: new UI code adds none of those
-// (P6-8 removes the rest of the page's).
-
-function appShellSettingsHost() {
-  return document.getElementById('appShellSettingsHome');
-}
-
-function appShellSettingsEscape(value) {
-  return escapeHtml(String(value === null || value === undefined ? '' : value));
-}
-
-function appShellSettingsButton(action, label, id, cls) {
-  return '<button type="button" class="' + (cls || 'secondary lc-btn') + '" data-app-shell-action="' + action + '"' +
-    (id ? ' data-app-shell-id="' + appShellSettingsEscape(id) + '"' : '') + '>' + appShellSettingsEscape(label) + '</button>';
-}
-
-function appShellSettingsPanel(role, title, body) {
-  return '<div class="panel" style="margin-top:12px;">' +
-    '<h2 class="panel-title">' + title + '</h2>' +
-    '<div id="appShellSettingsBody-' + role + '">' + body + '</div>' +
-    '</div>';
-}
-
-function appShellSettingsBody(role, html) {
-  const el = document.getElementById('appShellSettingsBody-' + role);
-  if (el) el.innerHTML = html;
-}
-
-function appShellSettingsRow(main, controls, chip) {
-  return '<div class="app-shell-row"><div class="app-shell-row-main">' + main + '</div>' +
-    '<div class="app-shell-row-controls">' + (chip || '') + (controls || '') + '</div></div>';
-}
-
-function appShellChip(text, tone) {
-  return '<span class="app-shell-chip' + (tone ? ' app-shell-chip-' + tone : '') + '">' + appShellSettingsEscape(text) + '</span>';
-}
-
-// A date, or "never". Kept short and forgiving: a session row whose timestamp
-// is missing must not print "Invalid Date".
-function appShellWhen(ms) {
-  const n = Number(ms);
-  if (!n || !isFinite(n)) return 'never';
-  try {
-    return new Date(n).toLocaleDateString();
-  } catch (e) {
-    return 'recently';
-  }
-}
-
-function appShellDeviceLabel(session) {
-  const ua = String((session && session.userAgent) || '');
-  if (!ua) return 'Unknown device';
-  const browser = ua.indexOf('Firefox/') !== -1 ? 'Firefox'
-    : ua.indexOf('Edg/') !== -1 ? 'Edge'
-      : ua.indexOf('Chrome/') !== -1 ? 'Chrome'
-        : ua.indexOf('Safari/') !== -1 ? 'Safari' : 'Browser';
-  const os = ua.indexOf('Windows') !== -1 ? 'Windows'
-    : ua.indexOf('Android') !== -1 ? 'Android'
-      : ua.indexOf('iPhone') !== -1 || ua.indexOf('iPad') !== -1 ? 'iOS'
-        : ua.indexOf('Mac OS') !== -1 ? 'macOS'
-          : ua.indexOf('Linux') !== -1 ? 'Linux' : '';
-  return os ? browser + ' on ' + os : browser;
-}
-
-// 'https://host/abc/manifest.json' -> 'stremio://host/abc/manifest.json'. Split
-// rather than a regex: this file lives inside the page's template literal, where
-// backslashes are eaten before the browser ever sees them.
-function appShellSchemeUrl(link, scheme) {
-  const s = String(link || '');
-  const i = s.indexOf('://');
-  return i === -1 ? s : scheme + s.slice(i);
-}
-
-function appShellInstallLinkStateSafe() {
-  try {
-    return appShellInstallLinkState();
-  } catch (e) {
-    return { state: 'none', link: '' };
-  }
-}
-
-// --- the panels --------------------------------------------------------------
-
-function appShellDevicesBody(res, sessions) {
-  if (!res || !res.ok) {
-    if (res && res.signInRequired) return '<p class="app-shell-muted">Sign in to see the devices using your account.</p>';
-    return '<p class="app-shell-muted">' + appShellSettingsEscape((res && res.error) || 'Could not load your devices.') + '</p>' +
-      '<div class="app-shell-actions">' + appShellSettingsButton('settings-refresh', 'Try again') + '</div>';
-  }
-  const list = sessions || [];
-  if (!list.length) return '<p class="app-shell-muted">No devices are signed in.</p>';
-  let html = list.map(function (s) {
-    const label = appShellDeviceLabel(s);
-    return appShellSettingsRow(
-      '<strong>' + appShellSettingsEscape(label) + '</strong><br><span class="app-shell-muted">Last used ' + appShellSettingsEscape(appShellWhen(s.lastSeenAt)) + '</span>',
-      s.current ? '' : appShellSettingsButton('device-signout', 'Sign out', s.id),
-      s.current ? appShellChip('This device', 'ok') : ''
-    );
-  }).join('');
-  if (list.length > 1) {
-    html += '<div class="app-shell-actions">' + appShellSettingsButton('devices-signout-others', 'Sign out my other devices') + '</div>';
-  }
-  return html;
-}
-
-function appShellInstallsBody(linkState, res, installs) {
-  const link = linkState && linkState.link ? String(linkState.link) : '';
-  let html = '';
-  if (!link) {
-    html += '<p class="app-shell-muted">Nothing is installed from this browser yet. Build the home screen you want, then get the install link here.</p>' +
-      '<div class="app-shell-actions">' + appShellSettingsButton('install-get', 'Get install link') + '</div>';
-  } else {
-    const live = (linkState && linkState.state === 'live');
-    html += appShellSettingsRow(
-      '<strong>Install link for this browser</strong><br><span class="app-shell-muted" style="word-break:break-all;">' + appShellSettingsEscape(link) + '</span>',
-      '<a class="secondary lc-btn" href="' + appShellSettingsEscape(appShellSchemeUrl(link, 'stremio')) + '">Install in Stremio</a>' +
-      '<a class="secondary lc-btn" href="' + appShellSettingsEscape(appShellSchemeUrl(link, 'nuvio')) + '">Install in Nuvio</a>' +
-      appShellSettingsButton('install-copy', 'Copy link') +
-      appShellSettingsButton('install-get', live ? 'Update link' : 'Update link'),
-      appShellChip(live ? 'Up to date' : 'Changed since', live ? 'ok' : 'warn')
-    );
-    html += '<details class="app-shell-details"><summary>Other apps (Wako, and anything else)</summary>' +
-      '<p class="app-shell-muted">In Wako, open Settings, then Add-ons, Add, and paste this manifest URL. The same URL works in any app that takes a Stremio add-on manifest.</p>' +
-      '<p class="app-shell-kv" style="word-break:break-all;">' + appShellSettingsEscape(link) + '</p></details>';
-  }
-
-  // Saved install links (FF_INSTALLS, /api/installs) are listed only when the
-  // account has some. Nothing on the site makes one yet -- the switch is off,
-  // and its screens were never built -- so a line about them ("not switched on
-  // for this site yet", "sign in to keep named install links") only raised the
-  // question of what they were.
-  if (res && res.ok && Array.isArray(installs) && installs.length) {
-    html += installs.map(function (inst) {
-      const name = inst && inst.name ? inst.name : 'Install link';
-      const rows = inst && inst.rows !== null && inst.rows !== undefined ? ' &middot; ' + inst.rows + ' rows' : '';
-      const used = ' <span class="app-shell-muted">Last used ' + appShellSettingsEscape(appShellWhen(inst && inst.lastUsedAt)) + '</span>';
-      const revoked = inst && inst.revokedAt ? appShellChip('Revoked', 'warn') : '';
-      return appShellSettingsRow(
-        '<strong>' + appShellSettingsEscape(name) + '</strong>' + rows + '<br>' + used,
-        inst && inst.revokedAt ? '' : appShellSettingsButton('install-revoke', 'Revoke', String(inst && inst.id)),
-        revoked
-      );
-    }).join('');
-  }
-  return html;
-}
-
-// --- loading -----------------------------------------------------------------
-
-function appShellRenderSettingsSkeleton() {
-  const loading = '<p class="app-shell-muted">Loading...</p>';
-  appShellSettingsBody('devices', loading);
-  appShellSettingsBody('installs', loading);
-}
-
-// Devices and the install link (see the top of this section).
-async function appShellRefreshSettingsHome() {
-  const host = appShellSettingsHost();
-  if (!host) return false;
-  appShellRenderSettingsSkeleton();
-  const account = await appShellRefreshAccount();
-  if (!account) {
-    const signedOut = { ok: false, status: 401, error: 'Sign in first.', signInRequired: true, data: null };
-    appShellSettingsBody('devices', appShellDevicesBody(signedOut, []));
-    appShellSettingsBody('installs', appShellInstallsBody(appShellInstallLinkStateSafe(), signedOut, []));
-    return true;
-  }
-  const sessionsRes = await appShellApiFetch('/api/me/sessions');
-  appShellSettingsBody('devices', appShellDevicesBody(sessionsRes, (sessionsRes.data && sessionsRes.data.sessions) || []));
-  const installsRes = await appShellApiFetch('/api/installs');
-  appShellSettingsBody('installs', appShellInstallsBody(appShellInstallLinkStateSafe(), installsRes, (installsRes.data && installsRes.data.installs) || []));
-  return true;
-}
-
-// Called when the Settings view is opened (appShellApplyRoute) and after any
-// action that changes what it shows.
-function appShellRenderSettingsHome() {
-  const host = appShellSettingsHost();
-  if (!host) return false;
-  host.innerHTML =
-    appShellSettingsPanel('devices', 'Devices', '<p class="app-shell-muted">Loading...</p>') +
-    appShellSettingsPanel('installs', 'Install link', '<p class="app-shell-muted">Loading...</p>');
-  appShellRefreshSettingsHome();
-  return true;
-}
-
-// --- actions -----------------------------------------------------------------
-
+// Scrolls to Your Account's sign-in fields (Import list -> "Go to Settings to sign in").
 function appShellFocusSignIn() {
   const section = document.getElementById('accountKeySection');
   if (section && section.scrollIntoView) {
@@ -3139,80 +2852,6 @@ function appShellFocusSignIn() {
   }
   showToast('Sign in under Your Account to restore everything.', 'info');
   return true;
-}
-
-async function appShellCopyText(text, message) {
-  const value = String(text || '');
-  if (!value) return false;
-  try {
-    if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
-      await navigator.clipboard.writeText(value);
-      showToast(message || 'Copied.', 'success');
-      return true;
-    }
-  } catch (e) {}
-  showToast('Select the link and copy it by hand.', 'info');
-  return false;
-}
-
-async function appShellRevokeSession(id) {
-  const res = await appShellApiFetch('/api/me/sessions', { method: 'DELETE', body: { id: String(id || '') } });
-  if (!res.ok) {
-    showToast(res.error || 'Could not sign that device out.', 'error');
-    return false;
-  }
-  showToast('That device was signed out.', 'success');
-  await appShellRefreshSettingsHome();
-  return true;
-}
-
-async function appShellRevokeOtherSessions() {
-  const res = await appShellApiFetch('/api/me/sessions', { method: 'DELETE', body: { allExceptCurrent: true } });
-  if (!res.ok) {
-    showToast(res.error || 'Could not sign the other devices out.', 'error');
-    return false;
-  }
-  showToast('Your other devices were signed out.', 'success');
-  await appShellRefreshSettingsHome();
-  return true;
-}
-
-async function appShellRevokeInstall(id) {
-  const confirmed = await appShellDialog({
-    title: 'Revoke this install link?',
-    message: 'Apps using it stop getting the add-on right away. You can install again from here at any time.',
-    confirmLabel: 'Revoke',
-    cancelLabel: 'Keep it',
-  });
-  if (!confirmed) return false;
-  const res = await appShellApiFetch('/api/installs/' + encodeURIComponent(String(id || '')), { method: 'DELETE' });
-  if (!res.ok) {
-    showToast(res.error || 'Could not revoke that install link.', 'error');
-    return false;
-  }
-  showToast('Install link revoked.', 'success');
-  await appShellRefreshSettingsHome();
-  return true;
-}
-
-// One dispatcher for the panel's controls. The attribute is on the button in
-// the markup above, and appShellOnClick routes it here -- so the panels contain
-// no inline handlers.
-async function appShellSettingsAction(action, id) {
-  const what = String(action || '');
-  if (what === 'settings-refresh') return appShellRefreshSettingsHome();
-  if (what === 'device-signout') return appShellRevokeSession(id);
-  if (what === 'devices-signout-others') return appShellRevokeOtherSessions();
-  if (what === 'install-revoke') return appShellRevokeInstall(id);
-  if (what === 'install-get') {
-    await appShellInstallBarAction();
-    return appShellRefreshSettingsHome();
-  }
-  if (what === 'install-copy') {
-    const state = appShellInstallLinkStateSafe();
-    return appShellCopyText(state.link, 'Install link copied.');
-  }
-  return false;
 }
 
 // --- the home-screen editor (P6-3) -------------------------------------------
@@ -3246,11 +2885,18 @@ function appShellRenderHomeEditor() {
   // Randomizer (10_tab-search-add.js). The paste box, the starter pack and
   // the check-links review that shared this panel were taken out at the
   // owner's request; + New Catalog and Catalogs -> Bulk Add do that job.
-  const html = '<label class="app-shell-dedupe" for="appShellDedupeToggle">' +
-    '<input type="checkbox" id="appShellDedupeToggle"' + (dedupe ? ' checked' : '') + '>' +
-    '<span><strong>Hide titles already shown in rows above</strong>' +
-    '<br><span class="app-shell-muted">The top row keeps everything; every row below it drops anything an earlier row already showed. Row order is what decides, so drag a row to change it. The preview updates now, and Stremio follows once you update your install link.</span></span>' +
-    '</label>';
+  const html = '<div style="margin-top:16px; padding:12px 16px; background:var(--surface); border-radius:12px; border:1px solid var(--border);">' +
+    '<div class="settings-toggle-row" style="padding:0;">' +
+      '<div style="flex:1; min-width:0; padding-right:12px;">' +
+        '<span style="font-weight:600; font-size:0.88rem; color:var(--text);">Hide titles already shown in rows above</span>' +
+        '<p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">The top row keeps everything; lower rows drop titles already shown above.</p>' +
+      '</div>' +
+      '<label class="ui-toggle" aria-label="Hide titles already shown in rows above">' +
+        '<input type="checkbox" id="appShellDedupeToggle"' + (dedupe ? ' checked' : '') + '>' +
+        '<span class="ui-toggle-slider"></span>' +
+      '</label>' +
+    '</div>' +
+  '</div>';
 
   host.innerHTML = html;
   const toggle = document.getElementById('appShellDedupeToggle');
@@ -3270,6 +2916,8 @@ function appShellSetDedupe(on) {
   try { localStorage.setItem('myListAddon:dedupeAcrossLists', value); } catch (e) {}
   const legacy = document.getElementById('dedupeAcrossListsCheckbox');
   if (legacy) legacy.checked = !!on;
+  const cat = document.getElementById('catalogsDedupeCheckbox');
+  if (cat) cat.checked = !!on;
   if (typeof saveState === 'function') saveState();
   if (typeof renderLivePreview === 'function') renderLivePreview();
   appShellRenderHomeEditor();
@@ -4098,796 +3746,6 @@ async function appShellImportsAction(action, id) {
   return false;
 }
 
-// --- Channels: the template flow (P6-7) --------------------------------------
-//
-// "I want to create a channel": choose a template, look at today's lineup,
-// then put it on the home screen. The five templates FRONTEND_UX_AUDIT
-// scenario 6 names, and what each one is underneath -- none of them builds a
-// channel a second way, which is what "wrap the legacy builder until it is
-// rewritten" means for this task:
-//
-//   TV network          quickAddChannel (20_), which prefers the server-built
-//                       network preset and falls back to the page's own
-//                       traversal with visible progress
-//   Franchise/universe  the saga registry the page already carries
-//                       (TV_CROSSOVER_EVENTS), through the same ordered-items
-//                       fetch the Storylines tab uses
-//   Actor or creator    /api/person-search -> /api/person-credits, then the
-//                       same pick builder the legacy Spotlight uses
-//                       (buildSpotlightItemsFromCredits, 20_)
-//   From a list         quickAddChannel with a pasted list URL
-//   Custom              openBuildCustomChannel -- the legacy builder itself
-//
-// The lineup in the preview is the server's answer (POST /api/channel-lineup),
-// not an arrangement made here: it is the same resolveChannelLineup that
-// answers a Stremio request, so what the preview shows is what plays. The two
-// rules that route cannot honour (Hide watched and a dynamic channel need an
-// account it has no way to prove) come back named, and are said rather than
-// quietly shown as if they applied.
-//
-// Nothing goes into the config until "Add to home screen" is pressed: the
-// channel is built and saved to this browser first (saveLocalChannel), so the
-// preview and the row that follows cannot describe two different channels.
-// Adding and removing is toggleChannelInCatalog (20_) -- the same button the
-// My Channels cards use -- except for a saga, which is a catalog-only row and
-// goes through createInstantStorylineChannel, exactly as the Storylines tab
-// adds one.
-//
-// Signed out: a saga can still be added (docs/DECISIONS.md D-8 -- a storyline
-// row is public and needs no account), and everything else asks for an account
-// the way every other builder button already does (requireSignedInFor).
-
-// The tiles a lineup preview draws. The rest of the lineup is counted, not
-// listed -- a day's block is 24 shows x 3 episodes and nobody reads that as a
-// poster grid.
-const APP_SHELL_CHANNEL_LINEUP_TILES = 12;
-const APP_SHELL_CHANNELS_ACTION = /^chan-/;
-
-// The five templates, in the order the audit lists them. needsAccount mirrors
-// rowNeedsAccount (16_): a saga is the one that works signed out.
-const APP_SHELL_CHANNEL_TEMPLATES = [
-  { id: 'network', title: 'TV network', blurb: 'A&E, HBO, NBC, Cartoon Network and the rest -- a rotating 24/7 channel for a whole network.', needsAccount: true },
-  { id: 'saga', title: 'Franchise or universe', blurb: 'A saga in its canon order: the Marvel Infinity Saga, a trilogy, a TV universe. Works without an account.', needsAccount: false },
-  { id: 'person', title: 'Actor or creator', blurb: 'Everything someone was in, as episodes -- a Christopher Lloyd marathon in one channel.', needsAccount: true },
-  { id: 'list', title: 'From a list', blurb: 'A TV list from MDBList, Trakt, TMDB or this site, kept in step with the list if you want.', needsAccount: true },
-  { id: 'custom', title: 'Custom', blurb: 'Pick the shows and episodes yourself, with the full builder. Nothing is decided for you.', needsAccount: true }
-];
-
-var appShellChannelTemplate = '';        // '' = the gallery, otherwise a template id
-var appShellChannelDraft = null;         // the built channel: { template, channelId, eventId, name, url, poolSize }
-var appShellChannelLineup = null;        // the last POST /api/channel-lineup answer
-var appShellChannelLineupFor = '';       // the url that answer belongs to
-var appShellChannelBusy = '';            // the sentence shown while something runs
-var appShellChannelNotice = '';          // the last thing that happened, in words
-var appShellChannelBuildInFlight = false;
-var appShellChannelPersonResults = [];
-var appShellChannelPersonPick = null;    // { personId, name }
-var appShellChannelSagaPick = '';
-var appShellChannelListName = '';        // the name field's last value, so a re-render keeps it
-
-// Schedule options (the details panel under every template except a saga,
-// which has a fixed canon order). The two toggles are buttons carrying their
-// state, so a re-render cannot lose it; the numbers are read from their inputs
-// when a build starts, with the same defaults the legacy builder starts from.
-var appShellChannelSchedule = { rotate: true, hideWatched: false, shows: 24, episodes: 3, order: 'listed', perShow: 50 };
-
-function appShellChannelsHost() {
-  return document.getElementById('appShellChannels');
-}
-
-// Whether Channels > My Channels is the sub on screen (the container is
-// emitted on every shell page; the panel is not).
-function appShellChannelsIsOpen() {
-  const panel = document.getElementById('channelsSubMyChannels');
-  return !!(panel && panel.style && panel.style.display !== 'none');
-}
-
-function appShellChannelEscape(value) {
-  return escapeHtml(String(value === null || value === undefined ? '' : value));
-}
-
-function appShellChannelAttr(value) {
-  return escapeAttr(String(value === null || value === undefined ? '' : value));
-}
-
-function appShellChannelNumber(n) {
-  return Number(n) || 0;
-}
-
-// The networks the Quick Add tab offers, read from that tab's own buttons
-// rather than a second list that could drift from it.
-function appShellChannelNetworks() {
-  const out = [];
-  const buttons = document.querySelectorAll('#channelsSubQuickAdd .channelQuickAddBtn');
-  for (let i = 0; i < buttons.length; i++) {
-    const b = buttons[i];
-    if (!b || !b.getAttribute) continue;
-    const networkId = b.getAttribute('data-networkid') || '';
-    const name = b.getAttribute('data-name') || '';
-    if (networkId && name) out.push({ networkId: networkId, name: name });
-  }
-  return out;
-}
-
-// The sagas and universes worth a channel: the same filter the Storylines grid
-// uses, so a single-episode crossover (which only ever lands on its parent
-// show's page) is not offered as a channel here either.
-function appShellChannelSagas() {
-  const events = (typeof TV_CROSSOVER_EVENTS === 'undefined' || !Array.isArray(TV_CROSSOVER_EVENTS)) ? [] : TV_CROSSOVER_EVENTS;
-  const out = [];
-  events.forEach(function (ev) {
-    if (!ev || !ev.id || !Array.isArray(ev.episodes) || !ev.episodes.length) return;
-    const episodeOnly = ev.episodes.every(function (ep) { return ep && ep.type === 'episode'; });
-    if (episodeOnly) return;
-    out.push({ id: String(ev.id), name: ev.name || String(ev.id), parts: ev.episodes.length, category: ev.category || '' });
-  });
-  return out;
-}
-
-// The schedule, as the payload fields the Worker reads (05_catalog_core):
-// dailyRotate + rotateShows/rotateEpisodes for a broadcast schedule, autoSort
-// for the one static arrangement it acts on, sortByAired, shuffle, hideWatched.
-function appShellChannelSchedulePayload() {
-  const s = appShellChannelSchedule;
-  const order = String(s.order || 'listed');
-  const shows = Math.max(1, Math.min(48, parseInt(s.shows, 10) || 24));
-  const episodes = Math.max(1, Math.min(12, parseInt(s.episodes, 10) || 3));
-  const payload = {
-    dailyRotate: !!s.rotate,
-    rotateShows: s.rotate ? shows : 0,
-    rotateEpisodes: s.rotate ? episodes : 0,
-    autoSort: order === 'interleave' ? 'interleave' : '',
-    sortByAired: order === 'aired',
-    shuffle: order === 'shuffle',
-    hideWatched: !!s.hideWatched
-  };
-  return payload;
-}
-
-// The inputs are the source of truth for the three numbers, read at build
-// time; a blank or missing input keeps the default above.
-function appShellChannelReadSchedule() {
-  const readNumber = function (id, fallback) {
-    const el = document.getElementById(id);
-    const n = el && el.value !== undefined && el.value !== null ? parseInt(el.value, 10) : NaN;
-    return (n > 0) ? n : fallback;
-  };
-  const orderSel = document.getElementById('appShellChannelOrderSelect');
-  const typedOrder = (orderSel && orderSel.value) ? String(orderSel.value) : '';
-  appShellChannelSchedule.shows = readNumber('appShellChannelRotateShows', appShellChannelSchedule.shows || 24);
-  appShellChannelSchedule.episodes = readNumber('appShellChannelRotateEpisodes', appShellChannelSchedule.episodes || 3);
-  appShellChannelSchedule.perShow = readNumber('appShellChannelPerShow', appShellChannelSchedule.perShow || 50);
-  if (typedOrder) appShellChannelSchedule.order = typedOrder;
-  return appShellChannelSchedule;
-}
-
-// Whether the schedule is still the one the server's network preset is built
-// with (rotation on, 24 shows x 3 episodes a day, no re-ordering, watched
-// kept). The preset is one request instead of a traversal, so it is worth
-// using -- but only while it would produce the same channel the options ask
-// for, never as a silent override of them.
-function appShellChannelScheduleIsDefault() {
-  const s = appShellChannelSchedule;
-  const order = String(s.order || 'listed');
-  return !!s.rotate &&
-    (parseInt(s.shows, 10) || 24) === 24 &&
-    (parseInt(s.episodes, 10) || 3) === 3 &&
-    !s.hideWatched &&
-    order === 'listed';
-}
-
-function appShellChannelSetNotice(text) {
-  appShellChannelNotice = String(text || '');
-}
-
-// Progress during a build touches one line, never a whole re-render: a
-// re-render would wipe out whatever the person had typed in the template's
-// own fields.
-function appShellChannelProgress(text) {
-  appShellChannelBusy = String(text || '');
-  const box = document.getElementById('appShellChannelProgress');
-  if (box) box.innerHTML = text ? appShellChannelEscape(text) : '';
-}
-
-// --- what the flow is doing --------------------------------------------------
-
-function appShellChannelPickTemplate(id) {
-  const wanted = String(id || '');
-  const known = APP_SHELL_CHANNEL_TEMPLATES.some(function (t) { return t.id === wanted; });
-  appShellChannelTemplate = known ? wanted : '';
-  appShellChannelDraft = null;
-  appShellChannelLineup = null;
-  appShellChannelLineupFor = '';
-  appShellChannelBusy = '';
-  appShellChannelNotice = '';
-  appShellChannelPersonPick = null;
-  appShellChannelPersonResults = [];
-  if (known && wanted !== 'saga') appShellChannelSchedule.rotate = true;
-  if (known && wanted === 'saga') appShellChannelSchedule.rotate = false;
-  appShellRenderChannels();
-  return true;
-}
-
-// The channel was built and saved to this browser -- the preview and the row
-// that may follow both come from this one record.
-function appShellChannelSetDraft(draft) {
-  appShellChannelDraft = draft;
-  appShellChannelBusy = '';
-  appShellChannelLineup = null;
-  appShellChannelLineupFor = '';
-  appShellRenderChannels();
-  return true;
-}
-
-function appShellChannelOnHome() {
-  const draft = appShellChannelDraft;
-  if (!draft || !draft.channelId) return false;
-  return (typeof isChannelInConfig === 'function') ? !!isChannelInConfig(String(draft.channelId)) : false;
-}
-
-async function appShellChannelBuild() {
-  const template = appShellChannelTemplate;
-  if (!template) return false;
-  if (appShellChannelBuildInFlight) return false;
-  appShellChannelReadSchedule();
-  appShellChannelNotice = '';
-  appShellChannelBuildInFlight = true;
-  appShellChannelProgress('Getting started\\u2026');
-  let built = false;
-  try {
-    if (template === 'network') built = await appShellChannelBuildNetwork();
-    else if (template === 'list') built = await appShellChannelBuildList();
-    else if (template === 'person') built = await appShellChannelBuildPerson();
-    else if (template === 'saga') built = await appShellChannelBuildSaga();
-  } finally {
-    appShellChannelBuildInFlight = false;
-  }
-  // Nothing built: the form has to come back with its button live again, and
-  // the sentence saying what happened is already in the notice above.
-  if (!built) {
-    appShellChannelProgress('');
-    appShellRenderChannels();
-  }
-  return built;
-}
-
-// TV network and From a list are the same journey -- a name, and either a
-// network id or a pasted list URL -- so both go through the page's own
-// quickAddChannel. addToCatalog is false because this screen shows the lineup
-// first: the channel is saved to this browser, and the row is added when
-// somebody presses the button under the preview.
-async function appShellChannelBuildNetwork() {
-  const sel = document.getElementById('appShellChannelNetworkSelect');
-  const networkId = (sel && sel.value) ? String(sel.value) : '';
-  const networks = appShellChannelNetworks();
-  let name = '';
-  networks.forEach(function (n) { if (n.networkId === networkId) name = n.name; });
-  if (!networkId || !name) {
-    appShellChannelSetNotice('Pick a network first.');
-    return false;
-  }
-  const typed = appShellChannelTypedName();
-  const channelName = typed || name;
-  const built = await quickAddChannel(channelName, null, networkId, null, {
-    schedule: appShellChannelSchedulePayload(),
-    addToCatalog: false,
-    preferPreset: appShellChannelScheduleIsDefault(),
-    maxEpisodesPerShow: appShellChannelSchedule.perShow,
-    onProgress: appShellChannelProgress
-  });
-  if (!built || !built.channelId) return false;
-  appShellChannelListName = channelName;
-  return appShellChannelFinishBuild(channelName, built, { template: 'network', networkId: networkId });
-}
-
-async function appShellChannelBuildList() {
-  const urlInput = document.getElementById('appShellChannelListUrl');
-  const listUrl = (urlInput && urlInput.value ? urlInput.value : '').trim();
-  if (!listUrl) {
-    appShellChannelSetNotice('Paste a list link first.');
-    return false;
-  }
-  const liveCheck = document.getElementById('appShellChannelLiveSyncCheck');
-  const liveSync = liveCheck ? liveCheck.checked !== false : true;
-  const channelName = appShellChannelTypedName() || appShellChannelListNameFromUrl(listUrl);
-  const built = await quickAddChannel(channelName, listUrl, null, null, {
-    liveSync: liveSync,
-    schedule: appShellChannelSchedulePayload(),
-    addToCatalog: false,
-    maxEpisodesPerShow: appShellChannelSchedule.perShow,
-    onProgress: appShellChannelProgress
-  });
-  if (!built || !built.channelId) return false;
-  appShellChannelListName = channelName;
-  return appShellChannelFinishBuild(channelName, built, { template: 'list', liveSync: liveSync });
-}
-
-// "https://mdblist.com/lists/kit/sitcoms" -> "Sitcoms". A name is asked for on
-// the screen; this is only what a blank one falls back to.
-function appShellChannelListNameFromUrl(url) {
-  let path = '';
-  try {
-    path = new URL(String(url), ORIGIN).pathname;
-  } catch (e) {
-    path = String(url || '');
-  }
-  const parts = path.split('/').filter(function (p) { return !!p; });
-  const last = parts.length ? parts[parts.length - 1] : 'My channel';
-  const words = last.replace(/[-_]+/g, ' ').trim();
-  if (!words) return 'My channel';
-  return words.charAt(0).toUpperCase() + words.slice(1);
-}
-
-function appShellChannelTypedName() {
-  const input = document.getElementById('appShellChannelNameInput');
-  const typed = (input && input.value ? String(input.value) : '').trim();
-  return typed ? typed.slice(0, 120) : '';
-}
-
-// --- Actor or creator --------------------------------------------------------
-
-async function appShellChannelPersonSearch() {
-  const input = document.getElementById('appShellChannelPersonQuery');
-  const q = (input && input.value ? String(input.value) : '').trim();
-  if (!q) {
-    appShellChannelSetNotice('Type a name first.');
-    appShellRenderChannels();
-    return false;
-  }
-  appShellChannelSetNotice('Searching\\u2026');
-  appShellRenderChannels();
-  const res = await appShellApiFetch('/api/person-search?q=' + encodeURIComponent(q));
-  if (!res.ok) {
-    appShellChannelPersonResults = [];
-    appShellChannelSetNotice(res.error || 'That search did not work.');
-    appShellRenderChannels();
-    return false;
-  }
-  appShellChannelPersonResults = (res.data && Array.isArray(res.data.results)) ? res.data.results : [];
-  appShellChannelSetNotice(appShellChannelPersonResults.length ? '' : 'No one by that name.');
-  appShellRenderChannels();
-  return true;
-}
-
-function appShellChannelPersonPickResult(personId) {
-  const wanted = String(personId || '');
-  let picked = null;
-  appShellChannelPersonResults.forEach(function (p) {
-    if (p && String(p.personId) === wanted) picked = p;
-  });
-  if (!picked) return false;
-  appShellChannelPersonPick = { personId: wanted, name: picked.name || '', knownFor: picked.knownFor || picked.department || '' };
-  appShellChannelSetNotice('');
-  appShellRenderChannels();
-  return true;
-}
-
-// Their credits, then the same pick builder the legacy Spotlight uses --
-// one implementation of "what does this person's channel hold".
-async function appShellChannelBuildPerson() {
-  const pick = appShellChannelPersonPick;
-  if (!pick) {
-    appShellChannelSetNotice('Pick someone first.');
-    return false;
-  }
-  const res = await appShellApiFetch('/api/person-credits?personId=' + encodeURIComponent(pick.personId) +
-    '&sort=chronological&movies=120&shows=60');
-  if (!res.ok || !res.data) {
-    appShellChannelSetNotice(res.error || 'Could not read that filmography.');
-    return false;
-  }
-  const credits = {
-    personId: pick.personId,
-    name: res.data.name || pick.name || '',
-    poster: res.data.poster || null,
-    backdrop: res.data.backdrop || null,
-    movies: Array.isArray(res.data.movies) ? res.data.movies : [],
-    shows: Array.isArray(res.data.shows) ? res.data.shows : []
-  };
-  const built = await buildSpotlightItemsFromCredits(credits, { onProgress: appShellChannelPersonProgress(credits.name) });
-  if (!built || !built.items.length) {
-    appShellChannelSetNotice('Nothing in that filmography resolved to something playable.');
-    return false;
-  }
-  const channelName = appShellChannelTypedName() || ((credits.name || pick.name || 'Spotlight') + ' Spotlight');
-  appShellChannelListName = channelName;
-  return appShellChannelFinishBuild(channelName, appShellChannelSaveLocal(credits, built, channelName), { template: 'person' });
-}
-
-// The legacy builder's own two progress sentences, so a build reads the same
-// wherever it was started from.
-function appShellChannelPersonProgress(personName) {
-  return function (stage, i, total, label) {
-    const who = appShellChannelEscape(personName || '');
-    if (stage === 'movies') {
-      appShellChannelProgress('Resolving films\\u2026 ' + (i + 1) + ' of ' + total + ' (' + appShellChannelEscape(label) + ')');
-    } else {
-      appShellChannelProgress('Finding ' + who + '\\u2019s episodes\\u2026 show ' + (i + 1) + ' of ' + total + ' (' + appShellChannelEscape(label) + ')');
-    }
-  };
-}
-
-function appShellChannelSaveLocal(credits, built, channelName) {
-  const channelId = generateChannelId();
-  const sched = appShellChannelSchedulePayload();
-  const payload = Object.assign({
-    channelId: channelId,
-    name: channelName,
-    poster: built.poster || credits.poster || null,
-    backdrop: built.backdrop || credits.backdrop || null,
-    items: built.items,
-    shuffle: !!sched.shuffle
-  }, sched);
-  saveLocalChannel(payload);
-  return payload;
-}
-
-// --- Franchise or universe ---------------------------------------------------
-
-async function appShellChannelBuildSaga() {
-  const sel = document.getElementById('appShellChannelSagaSelect');
-  const eventId = (sel && sel.value) ? String(sel.value) : appShellChannelSagaPick;
-  if (!eventId) {
-    appShellChannelSetNotice('Pick a saga first.');
-    return false;
-  }
-  appShellChannelSagaPick = eventId;
-  const found = await fetchStorylineOrderedItems(eventId);
-  if (!found || !found.items || !found.items.length) {
-    appShellChannelSetNotice('That saga has nothing the page could resolve.');
-    return false;
-  }
-  const event = found.event || {};
-  const firstWithPoster = found.items.filter(function (it) { return it && (it.poster || it.thumbnail); })[0];
-  const firstWithBackdrop = found.items.filter(function (it) { return it && (it.backdrop || it.showBackdrop); })[0];
-  // The same payload createInstantStorylineChannel builds when the + Add
-  // button on the Storylines tab is pressed: the stable channel-<event id>,
-  // storylineId (that is what makes the row public and account-free
-  // server-side) and catalogOnly, so it stays a row rather than a copy in
-  // My Channels.
-  const payload = {
-    channelId: 'channel-' + eventId,
-    storylineId: eventId,
-    catalogOnly: true,
-    name: event.name || eventId,
-    poster: firstWithPoster ? (firstWithPoster.poster || firstWithPoster.thumbnail) : null,
-    backdrop: firstWithBackdrop ? (firstWithBackdrop.backdrop || firstWithBackdrop.showBackdrop) : null,
-    items: found.items,
-    shuffle: false,
-    dailyRotate: false
-  };
-  return appShellChannelFinishBuild(payload.name, payload, { template: 'saga', eventId: eventId });
-}
-
-// --- the built channel --------------------------------------------------------
-
-function appShellChannelFinishBuild(name, channel, extra) {
-  const draft = Object.assign({
-    template: appShellChannelTemplate,
-    channelId: String(channel.channelId || ''),
-    name: name || channel.name || 'Channel',
-    url: 'channel:v1:' + JSON.stringify(channel),
-    poolSize: (channel.items || []).length
-  }, extra || {});
-  // The preview asks the server about exactly the url a row would carry, so
-  // it cannot describe a different channel from the one that gets added.
-  if (typeof channelRowUrl === 'function') draft.url = channelRowUrl(channel);
-  appShellChannelSetDraft(draft);
-  appShellChannelSetNotice('Built. This is what is playing today -- nothing is on your home screen until you say so.');
-  appShellRenderChannels();
-  appShellChannelLoadLineup();
-  return true;
-}
-
-async function appShellChannelLoadLineup() {
-  const draft = appShellChannelDraft;
-  if (!draft) return false;
-  appShellChannelLineupFor = draft.url;
-  const res = await appShellApiFetch('/api/channel-lineup', { method: 'POST', body: { url: draft.url } });
-  if (appShellChannelLineupFor !== draft.url) return false;   // a newer build won the race
-  if (!res.ok) {
-    appShellChannelLineup = { error: res.error || 'The lineup could not be read just now.' };
-  } else {
-    appShellChannelLineup = res.data || {};
-  }
-  appShellRenderChannels();
-  return true;
-}
-
-// Adding and removing is the page's own toggle (20_), so the button under the
-// preview, the My Channels card and the Storylines tab cannot disagree about
-// what is in the config.
-function appShellChannelSetHome(on) {
-  const draft = appShellChannelDraft;
-  if (!draft) return false;
-  const wants = String(on) !== 'off';
-  if (draft.template === 'saga' && draft.eventId && typeof createInstantStorylineChannel === 'function') {
-    createInstantStorylineChannel(draft.eventId, null);
-    if (typeof renderMyCreatedChannelsList === 'function') renderMyCreatedChannelsList();
-  } else if (draft.channelId && typeof toggleChannelInCatalog === 'function') {
-    toggleChannelInCatalog(draft.channelId);
-  } else {
-    return false;
-  }
-  appShellChannelSetNotice(wants ? 'On your home screen.' : 'Off your home screen. The channel is still saved in My Channels.');
-  appShellRenderChannels();
-  return true;
-}
-
-// --- drawing -----------------------------------------------------------------
-
-function appShellChannelGalleryHtml() {
-  let html = '<div class="app-shell-template-grid">';
-  APP_SHELL_CHANNEL_TEMPLATES.forEach(function (t) {
-    html += '<button type="button" class="app-shell-template-card" data-app-shell-action="chan-template" data-app-shell-id="' + appShellChannelAttr(t.id) + '">' +
-      '<strong>' + appShellChannelEscape(t.title) + '</strong>' +
-      '<span class="app-shell-muted">' + appShellChannelEscape(t.blurb) + '</span>' +
-      (t.needsAccount ? '<span class="app-shell-muted app-shell-template-note">Needs a free account</span>' : '') +
-      '</button>';
-  });
-  html += '</div>';
-  html += '<p class="app-shell-muted">A saga can be added without signing in. Everything that becomes a channel of your own asks for an account first, the same as the builder does.</p>';
-  return html;
-}
-
-function appShellChannelNetworkFormHtml() {
-  const networks = appShellChannelNetworks();
-  let html = '<label class="app-shell-muted" for="appShellChannelNetworkSelect">Which network?</label>';
-  if (!networks.length) {
-    return html + '<p class="app-shell-muted">The network list is not on this page yet. Reload, or use the Quick Add tab below.</p>' +
-      '<div class="app-shell-actions"><button type="button" class="secondary lc-btn" data-app-shell-action="chan-template" data-app-shell-id="">Back</button></div>';
-  }
-  html += '<select id="appShellChannelNetworkSelect">';
-  networks.forEach(function (n) {
-    html += '<option value="' + appShellChannelAttr(n.networkId) + '">' + appShellChannelEscape(n.name) + '</option>';
-  });
-  html += '</select>';
-  html += '<label class="app-shell-muted" for="appShellChannelNameInput">Channel name (optional)</label>' +
-    '<input type="text" id="appShellChannelNameInput" value="' + appShellChannelAttr(appShellChannelListName) + '" placeholder="Uses the network name">';
-  return html;
-}
-
-function appShellChannelSagaFormHtml() {
-  const sagas = appShellChannelSagas();
-  if (!sagas.length) {
-    return '<p class="app-shell-muted">The saga list is not on this page yet. Reload, or use Storylines &amp; Universes below.</p>';
-  }
-  let html = '<label class="app-shell-muted" for="appShellChannelSagaSelect">Which saga or universe?</label><select id="appShellChannelSagaSelect">';
-  sagas.forEach(function (s) {
-    html += '<option value="' + appShellChannelAttr(s.id) + '"' + (s.id === appShellChannelSagaPick ? ' selected' : '') + '>' +
-      appShellChannelEscape(s.name) + ' (' + appShellChannelNumber(s.parts) + ' parts)</option>';
-  });
-  html += '</select><p class="app-shell-muted">A saga plays in its canon order, so it has no schedule to set here.</p>';
-  return html;
-}
-
-function appShellChannelPersonFormHtml() {
-  let html = '<label class="app-shell-muted" for="appShellChannelPersonQuery">Who?</label>' +
-    '<div class="app-shell-row-controls"><input type="text" id="appShellChannelPersonQuery" placeholder="Actor or director name">' +
-    '<button type="button" class="secondary lc-btn" data-app-shell-action="chan-person-search">Search</button></div>';
-  if (appShellChannelPersonResults.length) {
-    html += '<div class="app-shell-person-grid">';
-    appShellChannelPersonResults.slice(0, 12).forEach(function (p) {
-      const on = appShellChannelPersonPick && String(appShellChannelPersonPick.personId) === String(p.personId);
-      html += '<button type="button" class="' + (on ? 'primary' : 'secondary') + ' lc-btn" data-app-shell-action="chan-person-pick" data-app-shell-id="' + appShellChannelAttr(String(p.personId)) + '">' +
-        appShellChannelEscape(p.name || 'Unknown') +
-        (on ? '' : '<br><span class="app-shell-muted">' + appShellChannelEscape(p.knownFor || p.department || '') + '</span>') +
-        '</button>';
-    });
-    html += '</div>';
-  }
-  if (appShellChannelPersonPick) {
-    html += '<p class="app-shell-kv">Building from <strong>' + appShellChannelEscape(appShellChannelPersonPick.name) + '</strong>. Their films and the episodes they were in.</p>' +
-      '<label class="app-shell-muted" for="appShellChannelNameInput">Channel name (optional)</label>' +
-      '<input type="text" id="appShellChannelNameInput" value="' + appShellChannelAttr(appShellChannelListName) + '" placeholder="Uses their name">';
-  }
-  return html;
-}
-
-function appShellChannelListFormHtml() {
-  return '<label class="app-shell-muted" for="appShellChannelListUrl">The list</label>' +
-    '<input type="text" id="appShellChannelListUrl" placeholder="A MDBList, Trakt or TMDB show list link">' +
-    '<label class="app-shell-muted" for="appShellChannelNameInput">Channel name (optional)</label>' +
-    '<input type="text" id="appShellChannelNameInput" value="' + appShellChannelAttr(appShellChannelListName) + '" placeholder="Named after the list">' +
-    '<label class="app-shell-dedupe" for="appShellChannelLiveSyncCheck">' +
-    '<input type="checkbox" id="appShellChannelLiveSyncCheck" checked>' +
-    '<span><strong>Keep it in step with the list</strong><br><span class="app-shell-muted">The channel remembers the link and picks up titles the list gains. Off, it is a one-time snapshot.</span></span></label>' +
-    '<p class="app-shell-muted">A list link is read as shows: films mixed into it are left out, because a channel plays episodes.</p>';
-}
-
-function appShellChannelCustomHtml() {
-  return '<p class="app-shell-muted">The full builder is still the page\\u2019s own: search shows and films, add a season at a time, choose the poster, lock a story, set the play order. It opens right below.</p>' +
-    '<div class="app-shell-actions">' +
-    '<button type="button" class="primary lc-btn" data-app-shell-action="chan-custom">Open the full builder</button>' +
-    '<button type="button" class="secondary lc-btn" data-app-shell-action="chan-template" data-app-shell-id="">Back</button>' +
-    '</div>';
-}
-
-function appShellChannelScheduleHtml() {
-  const s = appShellChannelSchedule;
-  const order = String(s.order || 'listed');
-  const option = function (value, label) {
-    return '<option value="' + appShellChannelAttr(value) + '"' + (order === value ? ' selected' : '') + '>' + label + '</option>';
-  };
-  return '<details class="app-shell-schedule" id="appShellChannelScheduleDetails">' +
-    '<summary>Schedule options</summary>' +
-    '<button type="button" class="app-shell-chip' + (s.rotate ? ' is-on' : '') + '" data-app-shell-action="chan-rotate" data-app-shell-id="' + (s.rotate ? 'off' : 'on') + '">' +
-    'Daily rotation: ' + (s.rotate ? 'on' : 'off') + '</button>' +
-    '<p class="app-shell-muted">On, the channel keeps a pool and deals a fresh day\\u2019s lineup out of it every day. Off, everything in the pool plays in the order below.</p>' +
-    '<div class="app-shell-row-controls">' +
-    '<label class="app-shell-muted" for="appShellChannelRotateShows">Shows a day</label>' +
-    '<input type="number" id="appShellChannelRotateShows" min="1" max="48" value="' + appShellChannelNumber(s.shows || 24) + '">' +
-    '<label class="app-shell-muted" for="appShellChannelRotateEpisodes">Episodes a block</label>' +
-    '<input type="number" id="appShellChannelRotateEpisodes" min="1" max="12" value="' + appShellChannelNumber(s.episodes || 3) + '">' +
-    '</div>' +
-    '<label class="app-shell-muted" for="appShellChannelOrderSelect">Play order</label>' +
-    '<select id="appShellChannelOrderSelect">' +
-    option('listed', 'As the channel is') +
-    option('interleave', 'Interleaved -- one episode per show, in turn') +
-    option('aired', 'Air date -- oldest first') +
-    option('shuffle', 'Shuffled') +
-    '</select>' +
-    '<div class="app-shell-row-controls">' +
-    '<label class="app-shell-muted" for="appShellChannelPerShow">Episodes kept per show</label>' +
-    '<input type="number" id="appShellChannelPerShow" min="1" max="200" value="' + appShellChannelNumber(s.perShow || 50) + '">' +
-    '</div>' +
-    '<button type="button" class="app-shell-chip' + (s.hideWatched ? ' is-on' : '') + '" data-app-shell-action="chan-hide-watched" data-app-shell-id="' + (s.hideWatched ? 'off' : 'on') + '">' +
-    'Hide watched: ' + (s.hideWatched ? 'on' : 'off') + '</button>' +
-    '<p class="app-shell-muted">Hide watched needs Auto-track playback signed in. The preview below says when the server cannot apply it.</p>' +
-    '</details>';
-}
-
-function appShellChannelLineupHtml() {
-  const draft = appShellChannelDraft;
-  if (!draft) return '';
-  if (!appShellChannelLineup) {
-    return '<h3 class="app-shell-h3">Today\\u2019s lineup</h3><p class="app-shell-muted">Asking the server what is playing\\u2026</p>';
-  }
-  if (appShellChannelLineup.error) {
-    return '<h3 class="app-shell-h3">Today\\u2019s lineup</h3><p class="app-shell-review-bad">' + appShellChannelEscape(appShellChannelLineup.error) + '</p>' +
-      '<div class="app-shell-actions"><button type="button" class="secondary lc-btn" data-app-shell-action="chan-preview">Try again</button></div>';
-  }
-  const items = Array.isArray(appShellChannelLineup.items) ? appShellChannelLineup.items : [];
-  // plan is channelRotationPlan's answer, the same numbers the Worker clamped
-  // the channel to -- { shows, episodes, turnover } -- so the sentence under
-  // the posters describes the channel that will actually play.
-  const plan = appShellChannelLineup.plan;
-  const pool = appShellChannelNumber(appShellChannelLineup.poolSize) || draft.poolSize;
-  const bits = [];
-  if (plan && plan.shows) bits.push(plan.shows + ' shows a day');
-  if (plan && plan.episodes) bits.push(plan.episodes + ' episodes a block');
-  if (pool) bits.push(pool + ' episode' + (pool === 1 ? '' : 's') + ' in the pool');
-  if (appShellChannelLineup.rotating) bits.push('rotates daily');
-  const bitsHtml = bits.map(appShellChannelEscape).join(' &middot; ');
-  let html = '<h3 class="app-shell-h3">Today\\u2019s lineup</h3>';
-  html += '<p class="app-shell-kv">' + (bitsHtml || 'Ready') + '</p>';
-  if (Array.isArray(appShellChannelLineup.unappliedRules) && appShellChannelLineup.unappliedRules.length) {
-    const named = appShellChannelLineup.unappliedRules.map(function (r) { return r === 'hideWatched' ? 'Hide watched' : 'This channel fills itself in from your account'; });
-    html += '<p class="app-shell-muted">A preview cannot prove which account is asking, so ' + appShellChannelEscape(named.join(' and ')) +
-      ' ' + (named.length === 1 ? 'is' : 'are') + ' not applied here. In Stremio they are.</p>';
-  }
-  if (!items.length) {
-    html += '<p class="app-shell-muted">The server has no lineup for this channel yet. A rotating channel needs its pool first -- try again in a moment.</p>';
-  } else {
-    html += '<div class="app-shell-lineup">';
-    items.slice(0, APP_SHELL_CHANNEL_LINEUP_TILES).forEach(function (it) {
-      const poster = it.thumbnail || it.poster || it.showPoster || '';
-      const label = it.showName ? (it.showName + (it.season != null && it.episode != null ? ' S' + it.season + 'E' + it.episode : '')) : (it.title || it.epName || '');
-      html += '<div class="app-shell-lineup-tile">' +
-        (poster ? '<img src="' + appShellChannelAttr(poster) + '" alt="" loading="lazy">' : '<div class="app-shell-lineup-blank"></div>') +
-        '<span title="' + appShellChannelAttr(label) + '">' + appShellChannelEscape(label) + '</span>' +
-        '</div>';
-    });
-    html += '</div>';
-    if (items.length > APP_SHELL_CHANNEL_LINEUP_TILES) {
-      html += '<p class="app-shell-muted">Showing the first ' + APP_SHELL_CHANNEL_LINEUP_TILES + ' of ' + items.length + ' in today\\u2019s lineup.</p>';
-    }
-  }
-  const onHome = appShellChannelOnHome();
-  html += '<div class="app-shell-actions">' +
-    '<button type="button" class="' + (onHome ? 'secondary' : 'primary') + ' lc-btn" data-app-shell-action="chan-home" data-app-shell-id="' + (onHome ? 'off' : 'on') + '">' +
-    (onHome ? 'On your home screen' : 'Add to home screen') + '</button>' +
-    '<button type="button" class="secondary lc-btn" data-app-shell-action="chan-preview">New lineup</button>' +
-    '<button type="button" class="secondary lc-btn" data-app-shell-action="chan-reset">Build another channel</button>' +
-    '</div>';
-  html += '<p class="app-shell-muted">It is saved in My Channels either way. Removing it from the home screen leaves it there to edit or add back.</p>';
-  return html;
-}
-
-function appShellChannelFlowHtml() {
-  const template = appShellChannelTemplate;
-  const found = APP_SHELL_CHANNEL_TEMPLATES.filter(function (t) { return t.id === template; })[0];
-  if (!found) return appShellChannelGalleryHtml();
-  let html = '<div class="app-shell-row-controls"><button type="button" class="secondary lc-btn" data-app-shell-action="chan-template" data-app-shell-id="">All templates</button>' +
-    '<strong>' + appShellChannelEscape(found.title) + '</strong></div>' +
-    '<p class="app-shell-muted">' + appShellChannelEscape(found.blurb) + '</p>';
-  if (template === 'custom') return html + appShellChannelCustomHtml();
-  if (appShellChannelDraft && appShellChannelDraft.template === template) {
-    html += '<p class="app-shell-kv">' + appShellChannelEscape(appShellChannelDraft.name) + ' &middot; ' +
-      appShellChannelNumber(appShellChannelDraft.poolSize) + ' episodes in the pool</p>' + appShellChannelLineupHtml();
-    return html;
-  }
-  if (template === 'network') html += appShellChannelNetworkFormHtml();
-  else if (template === 'saga') html += appShellChannelSagaFormHtml();
-  else if (template === 'person') html += appShellChannelPersonFormHtml();
-  else if (template === 'list') html += appShellChannelListFormHtml();
-  if (template !== 'saga') html += appShellChannelScheduleHtml();
-  html += '<div class="app-shell-actions">' +
-    '<button type="button" class="primary lc-btn"' + (appShellChannelBuildInFlight ? ' disabled' : '') + ' data-app-shell-action="chan-build">' +
-    (appShellChannelBuildInFlight ? 'Building\\u2026' : 'Build this channel') + '</button>' +
-    '</div>';
-  return html;
-}
-
-function appShellRenderChannels() {
-  const host = appShellChannelsHost();
-  if (!host) return false;
-  let html = '<div class="panel">' +
-    '<h2 class="panel-title">New channel</h2>' +
-    '<p class="app-shell-muted">Choose a template, look at what is playing today, then add it to your home screen. The full builder is still there under Custom.</p>';
-  if (appShellChannelNotice) html += '<p class="app-shell-kv" id="appShellChannelNotice">' + appShellChannelEscape(appShellChannelNotice) + '</p>';
-  html += '<p class="app-shell-muted" id="appShellChannelProgress">' + appShellChannelEscape(appShellChannelBusy) + '</p>';
-  const account = appShellState.get().account;
-  if (!account && appShellChannelTemplate && appShellChannelTemplate !== 'saga') {
-    html += '<p class="app-shell-muted">Sign in first: a channel of your own is kept on your account, so it follows you to another device.</p>' +
-      '<div class="app-shell-actions"><button type="button" class="primary lc-btn" data-app-shell-action="chan-account">Go to Settings to sign in</button></div>' +
-      '<div class="app-shell-actions"><button type="button" class="secondary lc-btn" data-app-shell-action="chan-template" data-app-shell-id="">All templates</button></div></div>';
-    host.innerHTML = html;
-    return true;
-  }
-  html += appShellChannelFlowHtml() + '</div>';
-  host.innerHTML = html;
-  return true;
-}
-
-// --- the one click listener's handler ----------------------------------------
-
-async function appShellChannelsAction(action, id) {
-  const what = String(action || '');
-  if (what === 'chan-template') return appShellChannelPickTemplate(id);
-  if (what === 'chan-build') return appShellChannelBuild();
-  if (what === 'chan-rotate') {
-    appShellChannelSchedule.rotate = String(id) !== 'off';
-    appShellRenderChannels();
-    return true;
-  }
-  if (what === 'chan-hide-watched') {
-    appShellChannelSchedule.hideWatched = String(id) !== 'off';
-    appShellRenderChannels();
-    return true;
-  }
-  if (what === 'chan-person-search') return appShellChannelPersonSearch();
-  if (what === 'chan-person-pick') return appShellChannelPersonPickResult(id);
-  if (what === 'chan-preview') return appShellChannelLoadLineup();
-  if (what === 'chan-home') return appShellChannelSetHome(id);
-  if (what === 'chan-reset') {
-    appShellChannelDraft = null;
-    appShellChannelLineup = null;
-    appShellChannelLineupFor = '';
-    appShellChannelNotice = '';
-    appShellChannelBusy = '';
-    appShellRenderChannels();
-    return true;
-  }
-  if (what === 'chan-custom') {
-    if (typeof openBuildCustomChannel === 'function') openBuildCustomChannel();
-    return true;
-  }
-  if (what === 'chan-account') {
-    appShellGo('/settings/account');
-    if (typeof appShellFocusSignIn === 'function') appShellFocusSignIn();
-    return true;
-  }
-  return false;
-}
-
-// Called when the view is opened, and once at boot for a page served straight
-// at Channels.
-function appShellOpenChannels() {
-  if (!appShellChannelsHost() || !appShellChannelsIsOpen()) return false;
-  return appShellRenderChannels();
-}
-
 // --- routing -----------------------------------------------------------------
 
 function appShellFindSubPill(tabId, sub) {
@@ -4912,7 +3770,13 @@ function appShellApplyRoute(route) {
   if (!route) return false;
   const tab = appShellTab(route.tab);
   if (!tab) return false;
-  const sub = (route.sub && tab.subs.indexOf(route.sub) !== -1) ? String(route.sub) : '';
+  let rawSub = route.sub ? String(route.sub) : '';
+  if (tab.id === 'discover') {
+    if (rawSub === 'movies') rawSub = 'movie';
+    if (rawSub === 'shows') rawSub = 'series';
+    if (!rawSub) rawSub = 'movie';
+  }
+  const sub = (rawSub && tab.subs.indexOf(rawSub) !== -1) ? rawSub : '';
   appShellApplyingRoute = true;
   try {
     if (typeof switchTab === 'function') switchTab(tab.id);
@@ -4928,9 +3792,6 @@ function appShellApplyRoute(route) {
     appShellApplyingRoute = false;
   }
   appShellState.set({ route: { tab: tab.id, sub: sub } });
-  // Settings is rendered by the shell itself (P6-2): the legacy panels below
-  // it stay, and these cards sit above them.
-  if (tab.id === 'settings') appShellRenderSettingsHome();
   if (tab.id === 'catalogs') appShellRenderHomeEditor();
   if (tab.id === 'lists') {
     if (sub === 'create-list') appShellRenderAddTitles('');
@@ -4939,7 +3800,6 @@ function appShellApplyRoute(route) {
       appShellResumeImport();
     }
   }
-  if (tab.id === 'channels') appShellOpenChannels();
   return true;
 }
 
@@ -4999,14 +3859,10 @@ function appShellOnClick(e) {
     e.preventDefault();
     const action = actionEl.getAttribute('data-app-shell-action');
     const id = actionEl.getAttribute('data-app-shell-id') || '';
-    // The Add titles search (P6-4) and the Settings view (P6-2) share this one
-    // listener, so the action names decide which module answers. The prefix
-    // test is here rather than a truthy return because appShellSettingsAction
-    // is async -- its promise is truthy for every action, handled or not.
+    // The Add titles search (P6-4) and the Import view share this one
+    // listener, so the action names decide which module answers.
     if (APP_SHELL_LISTS_ACTION.test(action)) appShellListsAction(action, id);
     else if (APP_SHELL_IMPORTS_ACTION.test(action)) appShellImportsAction(action, id);
-    else if (APP_SHELL_CHANNELS_ACTION.test(action)) appShellChannelsAction(action, id);
-    else appShellSettingsAction(action, id);
     return;
   }
   const link = target.closest('a[data-app-route]');
@@ -5056,13 +3912,11 @@ function initAppShell() {
     appShellApplyRoute({ tab: open.tab, sub: '' });
   }
 
-  appShellRefreshInstallBar();
   appShellRenderHomeEditor();
   if (typeof appShellImportsHost === 'function' && appShellImportsHost() && appShellImportsIsOpen()) {
     appShellRenderImports();
     appShellResumeImport();
   }
-  if (typeof appShellChannelsHost === 'function' && appShellChannelsHost() && appShellChannelsIsOpen()) appShellRenderChannels();
   if (typeof isSignedIn === 'function' && isSignedIn()) appShellRefreshAccount();
   appShellState.set({ ready: true });
 }
@@ -5839,11 +4693,11 @@ function renderGuidePage(origin) {
     <p>Four submenus: <strong>My Channels</strong>, <strong>Storylines &amp; Universes</strong>, <strong>Quick Add</strong>, and <strong>Import</strong>.</p>
 
     <h3>My Channels</h3>
-    <p>Lists everything you've built. <strong>+ New Channel</strong> opens the channel builder. Below that, <strong>Merge Saved Channels into One Catalog</strong> lets you select multiple saved channels with checkboxes, name the merge, and click <strong>Merge into catalog</strong> to combine them into a single row.</p>
+    <p>Lists everything you've built. <strong>+ Create Channel</strong> opens the channel builder. Below that, <strong>Merge Saved Channels into One Catalog</strong> lets you select multiple saved channels with checkboxes, name the merge, and click <strong>Merge into catalog</strong> to combine them into a single row.</p>
 
     <h3>Building a Channel from Scratch:</h3>
     <ol>
-      <li>Click <strong>+ New Channel</strong>.</li>
+      <li>Click <strong>+ Create Channel</strong>.</li>
       <li>Use the <strong>Shows / Movies</strong> toggle to set what you're searching for.</li>
       <li>Search a title and add picks &mdash; for shows, an episode picker lets you choose specific seasons/episodes.</li>
       <li>Drag a pick, or type a new position, to reorder <strong>Picks in this channel</strong>. Where a pick sits in this list is the order it plays in.</li>
@@ -5945,19 +4799,29 @@ function renderGuidePage(origin) {
       </div>
     </div>
 
-    <p>Four submenus: <strong>Account &amp; Sync</strong>, <strong>External Accounts &amp; API Keys</strong>, <strong>Presets &amp; Backup</strong>, <strong>Feedback and Support</strong>.</p>
+    <p>Settings submenus include: <strong>Account &amp; Security</strong>, <strong>Catalog &amp; Display</strong>, <strong>Tracking &amp; Scrobble</strong>, <strong>Connected Services</strong>, <strong>Presets &amp; Backup</strong>, and <strong>Feedback &amp; Support</strong>.</p>
 
-    <h3>Account &amp; Sync</h3>
+    <h3>Account &amp; Security</h3>
     <ul>
-      <li><strong>Watchlist Preferences</strong> &mdash; controls how watched titles are handled in your Watchlist.</li>
-      <li><strong>Hidden Lists</strong> &mdash; hide specific lists from My Lists, Airing Next, and Simkl Airing Next without un-tracking them; they keep updating and can be un-hidden anytime.</li>
-      <li><strong>Region</strong> &mdash; sets your country for streaming-availability catalogs (Netflix, Disney+, etc.), Stream Releases, and content ratings.</li>
-      <li><strong>Trending &amp; Popular Catalogs</strong> &mdash; toggle "Hide items with no digital release" to skip still-in-theaters movies from Trending/Popular rows. Requires Save/Update to take effect.</li>
-      <li><strong>Watch History</strong> &mdash; clear/reset all recorded history.</li>
-      <li><strong>Auto-Track &amp; Media Server Scrobbling</strong> &mdash; automatically records watched movies/episodes from your streaming apps and home media servers (Plex, Jellyfin, Emby) into Watch History and Continue Watching.</li>
+      <li><strong>Creator Profile &amp; Account Key</strong> &mdash; manage your account credentials, public lists, and profile settings.</li>
+      <li><strong>Danger Zone</strong> &mdash; securely delete your account and associated server records.</li>
     </ul>
 
-    <h3>External Accounts &amp; API Keys</h3>
+    <h3>Catalog &amp; Display</h3>
+    <ul>
+      <li><strong>Catalog &amp; Content Rules</strong> &mdash; configure Region, Deduplication, Digital Release, and Adult Content filters.</li>
+      <li><strong>Better Posters &amp; Badge Overlays</strong> &mdash; customize artwork badges and labels across website and Stremio/Nuvio.</li>
+      <li><strong>Hidden Lists</strong> &mdash; hide specific lists from My Lists and Airing Next without un-tracking them.</li>
+    </ul>
+
+    <h3>Tracking &amp; Scrobble</h3>
+    <ul>
+      <li><strong>Watchlist Preferences</strong> &mdash; controls how watched titles are handled in your personal Watchlist.</li>
+      <li><strong>Watch History</strong> &mdash; view and clear/reset your recorded playback history.</li>
+      <li><strong>Auto-Track &amp; Media Server Scrobbling</strong> &mdash; scrobble playback from home media servers (Plex, Jellyfin, Emby).</li>
+    </ul>
+
+    <h3>Connected Services</h3>
     <p>Connect MDBList, Trakt, TMDB, and Simkl. Each provider offers <strong>Connect Account</strong> (OAuth/PIN flow &mdash; for Trakt, enter a code at <code>trakt.tv/activate</code>, your password is never entered here), <strong>Disconnect</strong>, <strong>Sync Watch History</strong> (push watched items back to that provider), and an advanced custom API key/Client ID field:</p>
     <ul>
       <li>TMDB key: <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org/settings/api</a></li>
@@ -5967,7 +4831,7 @@ function renderGuidePage(origin) {
     </ul>
     <p>You only need any of this for private lists, personal watchlists/history, or your own dedicated rate limit &mdash; public lists and charts work with zero setup.</p>
 
-    <h3>Feedback and Support</h3>
+    <h3>Feedback &amp; Support</h3>
     <p>A built-in chat with the developer &mdash; pick a category (Bug Report, Improvement/Feature Request, Idea/Suggestion, General Question), write your message, and send. Use <strong>&#8635; Refresh</strong> to check for a reply.</p>
   </section>
 

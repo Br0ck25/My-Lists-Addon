@@ -552,15 +552,17 @@ function renderCreatorProfileBar() {
   const bar = document.getElementById('creatorProfileBar');
   if (!bar) return;
   if (activeCreator) {
+    const disp = activeCreator.displayName || activeCreator.creatorName || 'Account';
+    const initial = (disp.charAt(0) || 'U').toUpperCase();
     bar.innerHTML =
-      '<div style="display:flex; align-items:center; gap:8px;">' +
-      '<button type="button" class="subnav-pill active" style="margin:0; font-size:0.85rem; padding:8px 14px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px; border-radius:var(--radius-pill);" data-act="switchTab" data-act-args="[&quot;account&quot;]">&#x1F464; ' + escapeHtml(activeCreator.displayName) + '</button>' +
-      '</div>';
+      '<button type="button" class="header-avatar-btn signed-in" id="headerProfileBtn" data-act="switchTab" data-act-args="[&quot;account&quot;]" aria-label="Account: ' + escapeAttr(disp) + '" title="Signed in as ' + escapeAttr(disp) + '">' +
+        '<span class="header-avatar-initial">' + escapeHtml(initial) + '</span>' +
+      '</button>';
   } else {
     bar.innerHTML =
-      '<div style="display:flex; align-items:center; gap:6px;">' +
-      '<button type="button" class="lc-btn primary" data-act="openRestoreModal" style="padding:8px 16px; font-size:0.85rem; font-weight:700; border-radius:var(--radius-pill);">Login</button>' +
-      '</div>';
+      '<button type="button" class="header-avatar-btn signed-out" id="headerProfileBtn" data-act="openRestoreModal" aria-label="Sign in or create account" title="Sign in or create account">' +
+        '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>' +
+      '</button>';
   }
 }
 
@@ -587,13 +589,17 @@ function renderAccountKeySection() {
     '</div>' +
     '<button type="button" class="secondary lc-btn" data-act="switchCreatorProfile">Sign Out / Switch</button>' +
     '</div>' +
-    '<p style="margin:0 0 4px;"><small>Account Key</small></p>' +
-    '<div class="creator-key-display" id="accountKeyDisplay">' + '\u2022'.repeat(Math.max(8, key.length)) + '</div>' +
-    '<div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-top:10px;">' +
-    '<button type="button" class="secondary" id="accountKeyToggleBtn" data-act="toggleAccountKeyVisibility">Show Key</button>' +
-    '<button type="button" class="secondary" data-act="copyAccountKey">Copy Key</button>' +
+    '<div style="margin-top:6px;">' +
+      '<div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); font-weight:700; margin-bottom:6px;">Account Key</div>' +
+      '<div class="account-key-group">' +
+        '<div class="creator-key-display" id="accountKeyDisplay">' + '\u2022'.repeat(Math.max(8, key.length)) + '</div>' +
+        '<div class="account-key-actions">' +
+          '<button type="button" class="secondary lc-btn" id="accountKeyToggleBtn" data-act="toggleAccountKeyVisibility">Show Key</button>' +
+          '<button type="button" class="secondary lc-btn" data-act="copyAccountKey">Copy Key</button>' +
+        '</div>' +
+      '</div>' +
+      '<p style="margin:4px 0 0; color:var(--muted); font-size:0.78rem;">Anyone with this key can sign in as you and edit your lists &mdash; keep it somewhere safe, and don&apos;t share it.</p>' +
     '</div>' +
-    '<p style="margin-top:10px;"><small>Anyone with this key can sign in as you and edit your lists &mdash; keep it somewhere safe, and don&apos;t share it.</small></p>' +
     '<div class="recovery-section" style="margin-top:16px; padding:14px 16px; border:1px solid rgba(255,255,255,0.12); border-radius:12px; background:rgba(255,255,255,0.03);">' +
       '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:6px;">' +
         '<div style="font-weight:700; font-size:0.9rem; color:var(--text);">Account Recovery</div>' +
@@ -610,16 +616,27 @@ function renderAccountKeySection() {
         (hasRecovery ? 'Update Recovery Answer' : 'Set Recovery Answer') +
       '</button>' +
     '</div>' +
-    '<div class="danger-zone" style="margin-top:20px; padding:14px 16px; border:1px solid rgba(255,149,0,0.35); border-radius:12px; background:rgba(255,149,0,0.06);">' +
-      '<div style="font-weight:700; font-size:0.9rem; color:#ff9500; margin-bottom:4px;">Reset Account</div>' +
-      '<p style="margin:0 0 10px; font-size:0.82rem; color:var(--muted);">Delete every list, channel, preset, watch history entry and catalog row on this account, returning it to how it was when you created it. Your account and key stay the same, and you stay signed in.</p>' +
-      '<button type="button" class="lc-btn" style="background:#ff9500; color:#fff; border:none; padding:7px 14px; font-weight:700; border-radius:8px; cursor:pointer;" data-act="openResetAccountModal">Reset Account Data</button>' +
-    '</div>' +
-    '<div class="danger-zone" style="margin-top:12px; padding:14px 16px; border:1px solid rgba(255,59,48,0.3); border-radius:12px; background:rgba(255,59,48,0.05);">' +
-      '<div style="font-weight:700; font-size:0.9rem; color:var(--danger, #ff3b30); margin-bottom:4px;">Delete Account</div>' +
-      '<p style="margin:0 0 10px; font-size:0.82rem; color:var(--muted);">Permanently delete your account, all published lists, and all synced data from the server.</p>' +
-      '<button type="button" class="lc-btn" style="background:#ff3b30; color:#fff; border:none; padding:7px 14px; font-weight:700; border-radius:8px; cursor:pointer;" data-act="openDeleteAccountModal">Delete Account &amp; All Data</button>' +
-    '</div>';
+    '<details class="danger-zone-disclosure">' +
+      '<summary class="danger-zone-summary">' +
+        '<span style="display:flex; align-items:center; gap:8px;">' +
+          '<span style="font-size:0.95rem;">&#x26A0;</span>' +
+          '<span>Danger Zone (Reset or Delete Account)</span>' +
+        '</span>' +
+        '<span class="danger-zone-arrow">&#x25BE;</span>' +
+      '</summary>' +
+      '<div class="danger-zone-content">' +
+        '<div style="border:1px solid rgba(255,149,0,0.3); border-radius:10px; padding:12px 14px; background:rgba(255,149,0,0.05);">' +
+          '<div style="font-weight:700; font-size:0.88rem; color:#ff9500; margin-bottom:4px;">Reset Account</div>' +
+          '<p style="margin:0 0 10px; font-size:0.8rem; color:var(--muted); line-height:1.4;">Delete every list, channel, preset, watch history entry and catalog row on this account, returning it to how it was when you created it. Your account and key stay the same, and you stay signed in.</p>' +
+          '<button type="button" class="lc-btn" style="background:#ff9500; color:#fff; border:none; padding:6px 14px; font-weight:700; font-size:0.84rem; border-radius:8px; cursor:pointer;" data-act="openResetAccountModal">Reset Account Data</button>' +
+        '</div>' +
+        '<div style="border:1px solid rgba(255,59,48,0.3); border-radius:10px; padding:12px 14px; background:rgba(255,59,48,0.05);">' +
+          '<div style="font-weight:700; font-size:0.88rem; color:var(--danger, #ff3b30); margin-bottom:4px;">Delete Account</div>' +
+          '<p style="margin:0 0 10px; font-size:0.8rem; color:var(--muted); line-height:1.4;">Permanently delete your account, all published lists, and all synced data from the server.</p>' +
+          '<button type="button" class="lc-btn" style="background:#ff3b30; color:#fff; border:none; padding:6px 14px; font-weight:700; font-size:0.84rem; border-radius:8px; cursor:pointer;" data-act="openDeleteAccountModal">Delete Account &amp; All Data</button>' +
+        '</div>' +
+      '</div>' +
+    '</details>';
 }
 
 function openSetRecoveryAnswerModal() {
@@ -903,13 +920,16 @@ function renderWatchlistPreferencesSection() {
     autoClean = val !== '0';
   } catch (e) {}
   box.innerHTML =
-    '<label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.92rem; user-select:none;">' +
-      '<input type="checkbox" id="removeWatchedFromWatchlistCheck" ' + (autoClean ? 'checked' : '') + ' data-act="onRemoveWatchedFromWatchlistToggle" data-act-args="[&quot;@self&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px;">' +
-      '<div>' +
-        '<span style="font-weight:600;">Automatically remove watched items from Watchlist</span>' +
-        '<p style="margin:4px 0 0; color:var(--muted); font-size:0.82rem;">Movies are removed once watched. TV shows are only removed after every episode has been watched.</p>' +
+    '<div class="settings-toggle-row">' +
+      '<div style="flex:1; min-width:0; padding-right:12px;">' +
+        '<span style="font-weight:600; font-size:0.92rem; color:var(--text);">Automatically remove watched items from Watchlist</span>' +
+        '<p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Movies are removed once watched. TV shows are only removed after every episode has been watched.</p>' +
       '</div>' +
-    '</label>';
+      '<label class="ui-toggle" aria-label="Automatically remove watched items from Watchlist">' +
+        '<input type="checkbox" id="removeWatchedFromWatchlistCheck" ' + (autoClean ? 'checked' : '') + ' data-act="onRemoveWatchedFromWatchlistToggle" data-act-args="[&quot;@self&quot;]">' +
+        '<span class="ui-toggle-slider"></span>' +
+      '</label>' +
+    '</div>';
 }
 
 function onRemoveWatchedFromWatchlistToggle(cb) {
@@ -1034,30 +1054,36 @@ function renderHiddenListsSettingsSection() {
   // connected yet -- hiding ahead of connecting is harmless and saves a
   // trip back here after connecting.
   const sectionLabels = { mdblist: 'Your MDBList Lists', trakt: 'Your Trakt Lists', tmdb: 'Your TMDB Lists', simkl: 'Your Simkl Lists' };
-  const sectionsHtml = Object.keys(sectionLabels).map((section) => {
+  const sectionsHtml = '<div class="settings-check-group">' + Object.keys(sectionLabels).map((section) => {
     const checked = hiddenSections.has(section);
-    return '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none; padding:6px 0; border-bottom:1px solid var(--border);">' +
-      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-section-id="' + escapeAttr(section) + '" data-act="onHiddenSectionToggle" data-act-args="[&quot;@self&quot;]" style="cursor:pointer; width:16px; height:16px; flex-shrink:0;">' +
-      '<span style="font-weight:600;">' + escapeHtml(sectionLabels[section]) + '</span>' +
+    return '<label class="settings-check-item">' +
+      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-section-id="' + escapeAttr(section) + '" data-act="onHiddenSectionToggle" data-act-args="[&quot;@self&quot;]">' +
+      '<div style="flex:1; min-width:0;">' +
+        '<span style="font-weight:600; font-size:0.88rem; color:var(--text);">' + escapeHtml(sectionLabels[section]) + '</span>' +
+      '</div>' +
     '</label>';
-  }).join('');
+  }).join('') + '</div>';
 
-  const rowsHtml = rows.length ? rows.map((r) => {
+  const rowsHtml = rows.length ? ('<div class="settings-check-group">' + rows.map((r) => {
     const checked = hiddenIds.has(String(r.id));
-    return '<label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.9rem; user-select:none; padding:6px 0; border-bottom:1px solid var(--border);">' +
-      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-list-id="' + escapeAttr(r.id) + '" data-act="onHiddenListToggle" data-act-args="[&quot;@self&quot;]" style="margin-top:2px; cursor:pointer; width:16px; height:16px; flex-shrink:0;">' +
-      '<div style="min-width:0;">' +
-        '<span style="font-weight:600; overflow-wrap:anywhere;">' + escapeHtml(r.name) + '</span>' +
+    return '<label class="settings-check-item">' +
+      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-list-id="' + escapeAttr(r.id) + '" data-act="onHiddenListToggle" data-act-args="[&quot;@self&quot;]">' +
+      '<div style="flex:1; min-width:0;">' +
+        '<span style="font-weight:600; font-size:0.88rem; color:var(--text); overflow-wrap:anywhere;">' + escapeHtml(r.name) + '</span>' +
         '<div style="color:var(--muted); font-size:0.78rem; margin-top:2px;">' + escapeHtml(r.source) + '</div>' +
       '</div>' +
     '</label>';
-  }).join('') : '<p style="color:var(--muted); font-size:0.85rem; margin-top:8px;"><small>No individual lists found yet -- visit My Lists (and connect any providers you use) first.</small></p>';
+  }).join('') + '</div>') : '<p style="color:var(--muted); font-size:0.85rem; margin-top:8px;"><small>No individual lists found yet -- visit My Lists (and connect any providers you use) first.</small></p>';
 
   box.innerHTML =
-    '<p style="margin:0 0 6px; font-weight:600; font-size:0.85rem;">Whole Sections</p>' +
-    sectionsHtml +
-    '<p style="margin:14px 0 6px; font-weight:600; font-size:0.85rem;">Individual Lists</p>' +
-    rowsHtml;
+    '<div style="margin-bottom:14px;">' +
+      '<div style="font-weight:700; font-size:0.85rem; color:var(--text); margin-bottom:6px;">Whole Sections</div>' +
+      sectionsHtml +
+    '</div>' +
+    '<div style="border-top:1px solid var(--border); padding-top:14px;">' +
+      '<div style="font-weight:700; font-size:0.85rem; color:var(--text); margin-bottom:6px;">Individual Lists</div>' +
+      rowsHtml +
+    '</div>';
 }
 
 function onHiddenListToggle(cb) {
@@ -1132,11 +1158,16 @@ function renderTrackPlaybackSection() {
   box.innerHTML =
     '<div style="margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid var(--border);">' +
       '<p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">Streaming Apps &amp; Addon Players (Stremio, Nuvio, Wako, etc.)</p>' +
-      '<label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.9rem;">' +
-        '<input type="checkbox" id="trackPlaybackCheck" ' + (enabled ? 'checked' : '') + ' data-act="onTrackPlaybackToggle" data-act-args="[&quot;@self&quot;]">' +
-        '<span>Enable In-App Playback Auto-Tracking</span>' +
-      '</label>' +
-      '<p style="margin:6px 0 0; color:var(--muted); font-size:0.8rem;">Automatically marks movies and episodes as watched whenever playback starts in any supported streaming app or addon player (Stremio, Nuvio, Wako, etc.) via the built-in playback hook. Takes effect on your next install link.</p>' +
+      '<div class="settings-toggle-row">' +
+        '<div style="flex:1; min-width:0; padding-right:12px;">' +
+          '<span style="font-weight:600; font-size:0.92rem; color:var(--text);">Enable In-App Playback Auto-Tracking</span>' +
+          '<p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Automatically marks movies and episodes as watched whenever playback starts in any supported streaming app or addon player (Stremio, Nuvio, Wako, etc.) via the built-in playback hook. Takes effect on your next install link.</p>' +
+        '</div>' +
+        '<label class="ui-toggle" aria-label="Enable In-App Playback Auto-Tracking">' +
+          '<input type="checkbox" id="trackPlaybackCheck" ' + (enabled ? 'checked' : '') + ' data-act="onTrackPlaybackToggle" data-act-args="[&quot;@self&quot;]">' +
+          '<span class="ui-toggle-slider"></span>' +
+        '</label>' +
+      '</div>' +
     '</div>' +
 
     '<div style="margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid var(--border);">' +
@@ -1148,12 +1179,17 @@ function renderTrackPlaybackSection() {
         '<button type="button" class="secondary lc-btn" data-act="regenerateScrobbleWebhookUrl" title="Issues a new webhook URL and stops the old one working. Use this if the URL has been shared or logged somewhere it should not have been." style="padding:8px 14px; font-size:0.84rem;">Regenerate</button>' +
       '</div>' +
 
-      '<div style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
-        '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0 0 4px;">' +
-          '<input type="checkbox" id="scrobbleFilterUsersCb" ' + (filterUsers ? 'checked' : '') + ' data-act="onScrobbleFilterUsersToggle" data-act-args="[&quot;@self&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
-          '<span style="font-weight:600;">Enable Media Server User Filtering</span>' +
-        '</label>' +
-        '<p style="margin:0 0 8px; color:var(--muted); font-size:0.8rem;">When enabled, only selected or specified media server user profiles will scrobble into your lists. Unselected users will be ignored.</p>' +
+      '<div style="margin:12px 0 0; padding:12px 0; border-top:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
+        '<div class="settings-toggle-row" style="padding:0 0 4px; border-bottom:none;">' +
+          '<div style="flex:1; min-width:0; padding-right:12px;">' +
+            '<span style="font-weight:600; font-size:0.88rem; color:var(--text);">Enable Media Server User Filtering</span>' +
+            '<p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">When enabled, only selected or specified media server user profiles will scrobble into your lists. Unselected users will be ignored.</p>' +
+          '</div>' +
+          '<label class="ui-toggle" aria-label="Enable Media Server User Filtering">' +
+            '<input type="checkbox" id="scrobbleFilterUsersCb" ' + (filterUsers ? 'checked' : '') + ' data-act="onScrobbleFilterUsersToggle" data-act-args="[&quot;@self&quot;]">' +
+            '<span class="ui-toggle-slider"></span>' +
+          '</label>' +
+        '</div>' +
         '<div id="scrobbleFilterDetails" style="' + (filterUsers ? '' : 'display:none;') + ' margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.06);">' +
           '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">' +
             '<p style="margin:0; font-size:0.8rem; font-weight:600; color:var(--text);">Select Allowed Users:</p>' +
@@ -1169,15 +1205,25 @@ function renderTrackPlaybackSection() {
         '</div>' +
       '</div>' +
 
-      '<div style="margin:10px 0; padding:10px 12px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
-        '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0 0 8px;">' +
-          '<input type="checkbox" id="syncMediaServerHistoryCb" checked data-act="toggleMediaServerSync" data-act-args="[&quot;@checked&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
-          '<span style="font-weight:600;">Automatically sync media server scrobbles to your Watch History list</span>' +
-        '</label>' +
-        '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:0.86rem; user-select:none; margin:0 0 10px;">' +
-          '<input type="checkbox" id="forwardScrobbleToProvidersCb" checked data-act="toggleForwardScrobbles" data-act-args="[&quot;@checked&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
-          '<span style="font-weight:600;">Forward scrobbles to connected external accounts (Trakt, Simkl, MDBList)</span>' +
-        '</label>' +
+      '<div style="margin:12px 0 0; padding:12px 0; border-top:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
+        '<div class="settings-toggle-row" style="padding:0 0 10px;">' +
+          '<div style="flex:1; min-width:0; padding-right:12px;">' +
+            '<span style="font-weight:600; font-size:0.86rem; color:var(--text);">Automatically sync media server scrobbles to your Watch History list</span>' +
+          '</div>' +
+          '<label class="ui-toggle" aria-label="Sync media server scrobbles to Watch History">' +
+            '<input type="checkbox" id="syncMediaServerHistoryCb" checked data-act="toggleMediaServerSync" data-act-args="[&quot;@checked&quot;]">' +
+            '<span class="ui-toggle-slider"></span>' +
+          '</label>' +
+        '</div>' +
+        '<div class="settings-toggle-row" style="padding:10px 0 12px; border-bottom:none;">' +
+          '<div style="flex:1; min-width:0; padding-right:12px;">' +
+            '<span style="font-weight:600; font-size:0.86rem; color:var(--text);">Forward scrobbles to connected external accounts (Trakt, Simkl, MDBList)</span>' +
+          '</div>' +
+          '<label class="ui-toggle" aria-label="Forward scrobbles to connected external accounts">' +
+            '<input type="checkbox" id="forwardScrobbleToProvidersCb" checked data-act="toggleForwardScrobbles" data-act-args="[&quot;@checked&quot;]">' +
+            '<span class="ui-toggle-slider"></span>' +
+          '</label>' +
+        '</div>' +
         '<div>' +
           '<button type="button" class="secondary lc-btn" data-act="syncAllConnectedAccountsNow" data-act-args="[&quot;@self&quot;]" style="padding:8px 14px; font-size:0.82rem; white-space:normal; line-height:1.35; text-align:center; max-width:100%; width:100%; box-sizing:border-box;">Sync Current Watch History to Connected Accounts Now</button>' +
         '</div>' +
@@ -1682,7 +1728,6 @@ async function switchCreatorProfile() {
   if (typeof appShellState !== 'undefined' && appShellState && typeof appShellState.set === 'function') {
     appShellState.set({ account: null });
   }
-  if (typeof appShellRefreshSettingsHome === 'function') appShellRefreshSettingsHome();
   if (typeof showAddedToast === 'function') {
     showAddedToast('Signed out \u2713');
   }
@@ -3399,6 +3444,8 @@ async function loadCreatorSync(opts) {
       if (typeof synced.keys.dedupeAcrossLists === 'boolean') {
         const cb = document.getElementById('dedupeAcrossListsCheckbox');
         if (cb) cb.checked = synced.keys.dedupeAcrossLists;
+        const catCb = document.getElementById('catalogsDedupeCheckbox');
+        if (catCb) catCb.checked = synced.keys.dedupeAcrossLists;
         try { localStorage.setItem('myListAddon:dedupeAcrossLists', synced.keys.dedupeAcrossLists ? '1' : '0'); } catch (e) {}
       }
       if (typeof synced.keys.shuffleShelves === 'boolean') {
@@ -4812,7 +4859,7 @@ async function renderCreatorDashboard(options) {
         '<div class="list-card-header">' +
           '<div class="list-card-body creatorListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' +
             '<div class="list-card-title">' +
-              '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop>&#x2630;</span>' +
+              '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
               escapeHtml(l.name) +
             '</div>' +
             '<div class="list-card-meta">' +
@@ -4828,9 +4875,9 @@ async function renderCreatorDashboard(options) {
           '<div class="list-card-actions">' +
             '<button type="button" class="lc-btn secondary creatorListEditBtn" data-slug="' + escapeAttr(l.slug) + '">Edit</button>' +
             syncBtnHtml +
-            deleteBtnHtml +
             shareBtn +
-            '<button type="button" class="lc-btn ' + (isAdded ? 'secondary creatorListAddToConfigBtn is-added' : 'primary creatorListAddToConfigBtn') + '" ' +
+            deleteBtnHtml +
+            '<button type="button" class="lc-btn secondary creatorListAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
               (isAdded ? 'style="color:var(--danger);"' : '') +
               ' data-slug="' + escapeAttr(l.slug) + '">' +
               (isAdded ? 'Remove' : '+ Add') +
@@ -5195,7 +5242,7 @@ function buildLocalListCardHtml(l) {
     }
   }
 
-  const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary localListAddToConfigBtn is-added' : 'primary localListAddToConfigBtn') + '" ' +
+  const addBtnHtml = '<button type="button" class="lc-btn secondary localListAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
     (isAdded ? 'style="color:var(--danger);"' : '') +
     ' data-slug="' + escapeAttr(l.slug) + '">' +
     (isAdded ? 'Remove' : '+ Add') +
@@ -5214,11 +5261,11 @@ function buildLocalListCardHtml(l) {
     '<div class="list-card-header">' +
       '<div class="list-card-body localListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type || 'movie') + '" style="cursor:pointer;">' +
         '<div class="list-card-title">' +
-          '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop>&#x2630;</span>' +
+          '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
           escapeHtml(l.name) +
         '</div>' +
         '<div class="list-card-meta">' +
-          (!isAutoTracked ? ('<span>' + (isPublic ? 'Public' : 'Private') + '</span><span class="list-card-meta-sep">&middot;</span>') : '') +
+          (isAutoTracked ? '<span class="list-source-badge badge-autotrack">Auto-tracked</span>' : ('<span>' + (isPublic ? 'Public' : 'Private') + '</span><span class="list-card-meta-sep">&middot;</span>')) +
           '<span>' + typeLabel + '</span>' +
           '<span class="list-card-meta-sep">&middot;</span>' +
           '<span>' + totalCount + ' item' + (totalCount === 1 ? '' : 's') + '</span>' +
@@ -5228,14 +5275,13 @@ function buildLocalListCardHtml(l) {
       '</div>' +
       (isAutoTracked
         ? '<div class="list-card-actions">' +
-            '<span style="font-size:0.78rem; color:var(--muted); white-space:nowrap; margin-right:8px;">Auto-tracked</span>' +
             addBtnHtml +
           '</div>'
         : '<div class="list-card-actions">' +
             '<button type="button" class="lc-btn secondary localListEditBtn" data-slug="' + escapeAttr(l.slug) + '">Edit</button>' +
             syncBtnHtml +
-            deleteBtnHtml +
             shareBtn +
+            deleteBtnHtml +
             addBtnHtml +
           '</div>') +
     '</div>' +
@@ -5368,8 +5414,8 @@ if (_creatorDashEl) {
         if (typeof removeListFromConfig === 'function') removeListFromConfig(null, 'series', 'airing-next');
         if (typeof renumber === 'function') renumber();
         if (typeof saveState === 'function') saveState();
-        airingAddBtn.classList.remove('is-added', 'secondary');
-        airingAddBtn.classList.add('primary');
+        airingAddBtn.classList.remove('is-added');
+        airingAddBtn.classList.add('secondary');
         airingAddBtn.textContent = '+ Add';
         airingAddBtn.style.color = '';
         if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
@@ -5393,7 +5439,6 @@ if (_creatorDashEl) {
           });
       if (typeof addRow === 'function') addRow('Airing Next', url, 'series', true, 'My Lists');
       airingAddBtn.classList.add('is-added', 'secondary');
-      airingAddBtn.classList.remove('primary');
       airingAddBtn.textContent = 'Remove';
       airingAddBtn.style.color = 'var(--danger)';
       if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
@@ -5547,8 +5592,8 @@ if (_creatorDashEl) {
         removeListFromConfig(null, 'movie', slug);
         removeListFromConfig(null, 'series', slug);
       }
-      addToConfigBtn.classList.remove('is-added', 'secondary');
-      addToConfigBtn.classList.add('primary');
+      addToConfigBtn.classList.remove('is-added');
+      addToConfigBtn.classList.add('secondary');
       addToConfigBtn.textContent = '+ Add';
       addToConfigBtn.style.color = '';
       if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
@@ -5570,7 +5615,6 @@ if (_creatorDashEl) {
         addRow(listMeta.name, 'customlist:v1:' + JSON.stringify(payload), listMeta.type, true, 'Custom Lists');
       }
       addToConfigBtn.classList.add('is-added', 'secondary');
-      addToConfigBtn.classList.remove('primary');
       addToConfigBtn.textContent = 'Remove';
       addToConfigBtn.style.color = 'var(--danger)';
       if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
@@ -5694,8 +5738,8 @@ if (_creatorDashEl) {
       }
       if (typeof renumber === 'function') renumber();
       if (typeof saveState === 'function') saveState();
-      localAddToConfigBtn.classList.remove('is-added', 'secondary');
-      localAddToConfigBtn.classList.add('primary');
+      localAddToConfigBtn.classList.remove('is-added');
+      localAddToConfigBtn.classList.add('secondary');
       localAddToConfigBtn.textContent = '+ Add';
       localAddToConfigBtn.style.color = '';
       if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
@@ -5754,7 +5798,6 @@ if (_creatorDashEl) {
     }
     
     localAddToConfigBtn.classList.add('is-added', 'secondary');
-    localAddToConfigBtn.classList.remove('primary');
     localAddToConfigBtn.textContent = 'Remove';
     localAddToConfigBtn.style.color = 'var(--danger)';
     if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
@@ -6009,7 +6052,7 @@ function openCreateListModal(presetDestination) {
   const typeEl = document.getElementById('createListModalType');
   if (typeEl) typeEl.value = 'movie';
   const pubEl = document.getElementById('createListModalPublic');
-  if (pubEl) pubEl.checked = true;
+  if (pubEl) pubEl.checked = false; // Default to Private as requested
   
   if (typeof onChangeCreateListDestination === 'function') onChangeCreateListDestination();
 
@@ -6033,7 +6076,7 @@ function openCreateListModal(presetDestination) {
 function onChangeCreateListDestination() {
   const pubWrap = document.getElementById('createListModalPublicWrap');
   if (pubWrap) {
-    pubWrap.style.display = 'flex';
+    pubWrap.style.display = 'block';
   }
 }
 

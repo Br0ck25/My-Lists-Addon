@@ -9600,8 +9600,8 @@ function renderStorylinesUniverseList(category = activeStorylineCategory) {
           '</div>' +
         '</div>' +
         '<div class="list-card-actions">' +
-          '<button type="button" class="lc-btn ' + (isAdded ? 'secondary is-added' : 'primary') + '" data-act="createInstantStorylineChannel" data-act-args="' + appActArgs([event.id, "@self"]) + '" ' + (isAdded ? 'style="color:var(--danger);"' : '') + '>' + (isAdded ? 'Remove' : '+ Add') + '</button>' +
           '<button type="button" class="lc-btn secondary" data-act="loadStorylineToDraft" data-act-args="' + appActArgs([event.id, "@self"]) + '" title="Customize in Channel Builder">Customize</button>' +
+          '<button type="button" class="lc-btn channelAddBtn ' + (isAdded ? 'secondary is-added' : 'primary') + '" data-act="createInstantStorylineChannel" data-act-args="' + appActArgs([event.id, "@self"]) + '" ' + (isAdded ? 'style="color:var(--danger);"' : '') + '>' + (isAdded ? 'Remove' : '+ Add') + '</button>' +
         '</div>' +
       '</div>' +
       '<div class="list-card-posters">' +
@@ -10155,6 +10155,8 @@ function switchChannelsSubmenu(name, btn) {
     renderChannelMergeList();
   } else if (name === 'storylines') {
     renderStorylinesUniverseList();
+  } else if (name === 'quickadd') {
+    updateQuickAddButtonsState();
   } else if (name === 'explore') {
     loadChannelDirectory(false);
     renderChannelPublishList();
@@ -10543,13 +10545,14 @@ function channelItemId(it, idx) {
 }
 
 function renderMyCreatedChannelsList() {
+  if (typeof updateQuickAddButtonsState === 'function') updateQuickAddButtonsState();
   const box = document.getElementById('myCreatedChannelsList');
   if (!box) return;
   
   const map = ensureAllChannelsSyncedFromRows(loadLocalChannels());
   const channels = Object.values(map);
   if (!channels.length) {
-    box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem;"><small>No channels created yet. Tap <strong>+ New Channel</strong> above or add a popular network in <strong>Quick Add</strong>.</small></p>';
+    box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem;"><small>No channels created yet. Tap <strong>+ Create Channel</strong> above or add a popular network in <strong>Quick Add</strong>.</small></p>';
     return;
   }
   
@@ -10609,13 +10612,14 @@ function renderMyCreatedChannelsList() {
       let showName = it.showName || '';
       let epName = it.epName || '';
       let seasonEp = '';
+      const isMovie = (it.kind === 'movie' || it.type === 'movie');
       
-      if (it.season != null && it.episode != null) {
+      if (!isMovie && it.season != null && it.episode != null) {
         seasonEp = 'S' + it.season + 'E' + it.episode;
       }
       
       if (!showName && it.title) {
-        if (it.title.indexOf(' S') !== -1 && it.title.indexOf('E') !== -1) {
+        if (!isMovie && it.title.indexOf(' S') !== -1 && it.title.indexOf('E') !== -1) {
           const sIdx = it.title.indexOf(' S');
           showName = it.title.slice(0, sIdx).trim();
           const rest = it.title.slice(sIdx + 1).trim();
@@ -10639,6 +10643,8 @@ function renderMyCreatedChannelsList() {
       if (!epName) {
         if (it.epName) {
           epName = it.epName;
+        } else if (isMovie) {
+          epName = (it.year ? String(it.year) + ' \u2022 ' : '') + 'Movie';
         } else if (it.title && it.title !== showName) {
           epName = it.title;
         } else if (seasonEp) {
@@ -10680,7 +10686,7 @@ function renderMyCreatedChannelsList() {
       '</div>';
     }).join('');
     
-    const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleChannelInCatalog" data-act-args="' + appActArgs([ch.channelId]) + '">' +
+    const addBtnHtml = '<button type="button" class="lc-btn channelAddBtn ' + (isAdded ? 'secondary is-added' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleChannelInCatalog" data-act-args="' + appActArgs([ch.channelId]) + '">' +
       (isAdded ? 'Remove' : '+ Add') +
     '</button>';
 
@@ -10688,7 +10694,7 @@ function renderMyCreatedChannelsList() {
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
           '<div class="list-card-title" style="cursor:pointer;" data-act="openChannelDetailsPage" data-act-args="' + appActArgs([ch.channelId]) + '" title="Open ' + escapeAttr(ch.name) + '">' +
-            '<span class="drag-handle-list channel-drag-handle" title="Drag to reorder" data-act="appActNothing" data-act-stop>&#x2630;</span>' +
+            '<span class="drag-handle-list channel-drag-handle" title="Drag to reorder" data-act="appActNothing" data-act-stop><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
             escapeHtml(ch.name) +
           '</div>' +
           (ch.description ? '<div style="font-size:0.8rem; color:var(--text); margin-top:2px;">' + escapeHtml(ch.description) + '</div>' : '') +
@@ -10699,10 +10705,10 @@ function renderMyCreatedChannelsList() {
         '</div>' +
         '<div class="list-card-actions">' +
           '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="editChannelById" data-act-args="' + appActArgs([ch.channelId]) + '">Edit</button>' +
-          '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="deleteLocalChannel" data-act-args="' + appActArgs([ch.channelId, ch.name]) + '">Delete</button>' +
           ((ch.sharePublished || ch.visibility === 'public')
             ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="shareChannelById" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '" title="Share this channel">Share</button>'
             : '') +
+          '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="deleteLocalChannel" data-act-args="' + appActArgs([ch.channelId, ch.name]) + '">Delete</button>' +
           addBtnHtml +
         '</div>' +
       '</div>' +
@@ -10812,6 +10818,54 @@ const _channelNameInputEl = document.getElementById('channelNameInput');
 if (_channelNameInputEl) {
   _channelNameInputEl.addEventListener('input', updateChannelSaveButtonLabel);
 }
+
+function updateQuickAddButtonsState() {
+  if (typeof document === 'undefined') return;
+  const container = document.getElementById('channelsSubQuickAdd');
+  if (!container) return;
+  const buttons = container.querySelectorAll('.channelQuickAddBtn');
+  if (!buttons.length) return;
+
+  const localMap = (typeof loadLocalChannels === 'function') ? (loadLocalChannels() || {}) : {};
+  const localChannels = Object.values(localMap);
+  const catalogRows = [...document.querySelectorAll('#lists .entry')];
+
+  buttons.forEach((btn) => {
+    const netId = String(btn.dataset.networkid || '');
+    const netName = btn.dataset.name || '';
+    if (!netName && !netId) return;
+
+    let isAdded = localChannels.some((ch) => {
+      if (!ch) return false;
+      if (netId && String(ch.presetNetworkId || '') === netId) return true;
+      if (netName && (ch.name === netName || ch.name === netName + ' Channel' || ch.name === netName + ' TV')) return true;
+      return false;
+    });
+
+    if (!isAdded && catalogRows.length) {
+      isAdded = catalogRows.some((row) => {
+        const urlInput = row.querySelector('.url');
+        const val = urlInput ? (urlInput.value || '') : '';
+        if (val.startsWith('channel:v1:')) {
+          if (netId && (val.includes('"presetNetworkId":"' + netId + '"') || val.includes('"presetNetworkId":' + netId))) return true;
+          if (netName && val.includes('"name":"' + netName + '"')) return true;
+        }
+        return false;
+      });
+    }
+
+    if (isAdded) {
+      btn.classList.add('is-added');
+      btn.innerHTML = '<span class="check-icon" style="margin-right:4px;">&#x2713;</span> ' + escapeHtml(netName);
+      btn.title = netName + ' (Already added to your channels)';
+    } else {
+      btn.classList.remove('is-added');
+      btn.textContent = netName;
+      btn.title = 'Add ' + netName + ' channel';
+    }
+  });
+}
+window.updateQuickAddButtonsState = updateQuickAddButtonsState;
 
 document.addEventListener('click', (e) => {
   const quickBtn = e.target.closest('.channelQuickAddBtn');
@@ -11182,8 +11236,82 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
       btn.disabled = false;
       btn.textContent = originalLabel;
     }
+    updateQuickAddButtonsState();
   }
 }
+
+// Companion to the fixed Quick Add network buttons above -- same
+// quickAddChannel machinery, just fed a pasted list link instead of a
+// TMDB network id. The server side (/api/quick-channel-shows) requests
+// type "series" from that link regardless of source, so any movies mixed
+function openImportChannelModal(mode = 'link') {
+  const modal = document.getElementById('importChannelModal');
+  if (!modal) return;
+  switchImportChannelMode(mode);
+  modal.style.display = 'flex';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll(true);
+  const input = mode === 'code'
+    ? (document.getElementById('modalChannelShareCodeInput') || document.getElementById('channelShareCodeInput'))
+    : (document.getElementById('modalChannelImportUrlInput') || document.getElementById('channelImportUrlInput'));
+  if (input) setTimeout(() => { try { input.focus(); } catch (e) {} }, 50);
+}
+window.openImportChannelModal = openImportChannelModal;
+
+function closeImportChannelModal() {
+  const modal = document.getElementById('importChannelModal');
+  if (!modal || modal.style.display === 'none') return;
+  modal.style.display = 'none';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll(false);
+}
+window.closeImportChannelModal = closeImportChannelModal;
+
+function switchImportChannelMode(mode, btn) {
+  const pLink = document.getElementById('importChannelPanelLink');
+  const pCode = document.getElementById('importChannelPanelCode');
+  const bLink = document.getElementById('importChannelModeLinkBtn');
+  const bCode = document.getElementById('importChannelModeCodeBtn');
+  if (mode === 'code') {
+    if (pLink) pLink.style.display = 'none';
+    if (pCode) pCode.style.display = 'block';
+    if (bLink) {
+      bLink.classList.remove('active');
+      const c = bLink.querySelector('.check-icon');
+      if (c) c.remove();
+    }
+    if (bCode) {
+      bCode.classList.add('active');
+      if (!bCode.querySelector('.check-icon')) {
+        bCode.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
+      }
+    }
+  } else {
+    if (pLink) pLink.style.display = 'block';
+    if (pCode) pCode.style.display = 'none';
+    if (bCode) {
+      bCode.classList.remove('active');
+      const c = bCode.querySelector('.check-icon');
+      if (c) c.remove();
+    }
+    if (bLink) {
+      bLink.classList.add('active');
+      if (!bLink.querySelector('.check-icon')) {
+        bLink.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
+      }
+    }
+  }
+}
+window.switchImportChannelMode = switchImportChannelMode;
+
+function refreshMyChannelsAction(btn) {
+  renderMyCreatedChannelsList();
+  renderChannelMergeList();
+  if (btn) {
+    const orig = btn.textContent;
+    btn.textContent = 'Refreshed \u2713';
+    setTimeout(() => { if (btn) btn.textContent = orig; }, 1200);
+  }
+}
+window.refreshMyChannelsAction = refreshMyChannelsAction;
 
 // Companion to the fixed Quick Add network buttons above -- same
 // quickAddChannel machinery, just fed a pasted list link instead of a
@@ -11192,10 +11320,14 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
 // into the list are silently dropped rather than erroring out.
 async function importChannelFromLink(btn) {
   if (!requireSignedInFor('add channels')) return; // docs/DECISIONS.md D-8
-  const urlInput = document.getElementById('channelImportUrlInput');
-  const nameInput = document.getElementById('channelImportNameInput');
-  const listUrl = urlInput.value.trim();
-  const name = nameInput.value.trim();
+  const modalUrl = document.getElementById('modalChannelImportUrlInput');
+  const pageUrl = document.getElementById('channelImportUrlInput');
+  const urlInput = (modalUrl && modalUrl.value && modalUrl.value.trim()) ? modalUrl : (pageUrl || modalUrl);
+  const modalName = document.getElementById('modalChannelImportNameInput');
+  const pageName = document.getElementById('channelImportNameInput');
+  const nameInput = (modalName && modalName.value && modalName.value.trim()) ? modalName : (pageName || modalName);
+  const listUrl = urlInput ? urlInput.value.trim() : '';
+  const name = nameInput ? nameInput.value.trim() : '';
   if (!listUrl) {
     if (typeof showAppAlert === 'function') {
       showAppAlert('Import Channel', 'Paste a list URL first.');
@@ -11212,10 +11344,15 @@ async function importChannelFromLink(btn) {
     }
     return;
   }
-  const liveCheck = document.getElementById('channelImportLiveSyncCheck');
+  const modalLive = document.getElementById('modalChannelImportLiveSyncCheck');
+  const pageLive = document.getElementById('channelImportLiveSyncCheck');
+  const liveCheck = (modalLive && modalLive.checked !== undefined) ? modalLive : pageLive;
   await quickAddChannel(name, listUrl, null, btn, { liveSync: !liveCheck || liveCheck.checked });
-  urlInput.value = '';
-  nameInput.value = '';
+  if (urlInput) urlInput.value = '';
+  if (nameInput) nameInput.value = '';
+  if (pageUrl) pageUrl.value = '';
+  if (pageName) pageName.value = '';
+  closeImportChannelModal();
 }
 
 
@@ -12330,9 +12467,18 @@ async function fetchSharedChannel(code) {
 
 async function importSharedChannel(btn) {
   if (!requireSignedInFor('add channels')) return; // docs/DECISIONS.md D-8
-  const input = document.getElementById('channelShareCodeInput');
-  const statusBox = document.getElementById('channelShareImportStatus');
-  const say = (html) => { if (statusBox) statusBox.innerHTML = html; };
+  const modalInput = document.getElementById('modalChannelShareCodeInput');
+  const pageInput = document.getElementById('channelShareCodeInput');
+  const input = (modalInput && modalInput.value && modalInput.value.trim())
+    ? modalInput
+    : ((pageInput && pageInput.value && pageInput.value.trim()) ? pageInput : (modalInput || pageInput));
+  const isModalOpen = document.getElementById('importChannelModal') && document.getElementById('importChannelModal').style.display === 'flex';
+  const modalStatus = document.getElementById('modalChannelShareImportStatus');
+  const pageStatus = document.getElementById('channelShareImportStatus');
+  const say = (html) => {
+    if (modalStatus) modalStatus.innerHTML = html;
+    if (pageStatus) pageStatus.innerHTML = html;
+  };
   const code = parseChannelShareCode(input ? input.value : '');
   if (!code) {
     say('<p class="testresult err" style="margin:4px 0 0;">✗ That does not look like a channel share link or code.</p>');
@@ -12354,6 +12500,14 @@ async function importSharedChannel(btn) {
     say('<p class="testresult ok" style="margin:4px 0 0;">✓ "' + escapeHtml(data.channel.name || 'Channel') + '" added (' +
       (data.channel.items || []).length + ' picks).</p>');
     if (input) input.value = '';
+    if (modalInput) modalInput.value = '';
+    if (pageInput) pageInput.value = '';
+    if (isModalOpen) {
+      setTimeout(() => {
+        closeImportChannelModal();
+        if (modalStatus) modalStatus.innerHTML = '';
+      }, 900);
+    }
   } catch (e) {
     say('<p class="testresult err" style="margin:4px 0 0;">✗ Network error while fetching that channel.</p>');
   } finally {
@@ -12499,7 +12653,7 @@ function renderChannelDirectory() {
     const isAdded = isDirectoryChannelAdded(e.code);
     const actionBtn = isAdded
       ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger); border-color:var(--danger);" data-act="removeDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">Remove</button>'
-      : '<button type="button" class="lc-btn primary" style="padding:6px 12px; font-size:0.8rem;" data-act="addDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">+ Add</button>';
+      : '<button type="button" class="lc-btn channelAddBtn primary" style="padding:6px 12px; font-size:0.8rem;" data-act="addDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">+ Add</button>';
     return channelListingCardHtml(
       e,
       '<button type="button" class="lc-btn searchLikeExternalBtn' + (_channelDirectoryLiked[e.code] ? ' liked' : '') + '"' +
@@ -13376,7 +13530,7 @@ function renderChannelMergeList() {
         
         const countText = (merged.channelIds ? merged.channelIds.length : 0) + ' channels &middot; ' + totalEpisodes + ' episodes';
         
-        const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleMergedChannelInCatalog" data-act-args="' + appActArgs([merged.mergedId]) + '">' +
+        const addBtnHtml = '<button type="button" class="lc-btn channelAddBtn ' + (isAdded ? 'secondary is-added' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleMergedChannelInCatalog" data-act-args="' + appActArgs([merged.mergedId]) + '">' +
           (isAdded ? 'Remove' : '+ Add') +
         '</button>';
 
@@ -13406,12 +13560,23 @@ function renderChannelMergeList() {
   if (!box) return;
   const selectAllCheck = document.getElementById('channelMergeSelectAllCheck');
   if (selectAllCheck) selectAllCheck.checked = false;
+  const selectAllWrap = document.getElementById('channelMergeSelectAllWrap');
+  const controlsRow = document.getElementById('channelMergeControls');
   
   const channels = Object.values(channelsMap);
-  if (!channels.length) {
-    box.innerHTML = '<p><small>No saved channels yet -- add or build a channel above first.</small></p>';
+  if (channels.length < 2) {
+    if (selectAllWrap) selectAllWrap.style.display = 'none';
+    if (controlsRow) controlsRow.style.display = 'none';
+    if (channels.length === 1) {
+      box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem; margin:0;"><small>You have 1 saved channel (<strong>' + escapeHtml(channels[0].name || 'Channel') + '</strong>). Create or quick-add at least one more channel to combine them into a merged catalog.</small></p>';
+    } else {
+      box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem; margin:0;"><small>No saved channels yet &mdash; build a custom channel or add a network above first.</small></p>';
+    }
     return;
   }
+
+  if (selectAllWrap) selectAllWrap.style.display = 'flex';
+  if (controlsRow) controlsRow.style.display = 'flex';
   
   channels.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   

@@ -103,8 +103,8 @@ function bytesToBase64(buffer) {
 // reading a Trakt or Letterboxd export no longer needs the network; the fonts
 // are the device's own (no third-party origin left in the page at all).
 const SERVICE_WORKER_JS = `
-const ASSETS = 'mylists-assets-v2';
-const SHELL = 'mylists-shell-v2';
+const ASSETS = 'mylists-assets-v4';
+const SHELL = 'mylists-shell-v4';
 const SHELL_URL = '/';
 const KEEP = [ASSETS, SHELL];
 
@@ -182,6 +182,7 @@ self.addEventListener('fetch', (e) => {
   if (req.mode === 'navigate') {
     e.respondWith((async () => {
       try {
+        // The browser's own request, untouched: a rebuilt one follows redirects itself, and a sign-in redirect then fails.
         const res = await fetch(req);
         // Only the plain page is worth keeping. A deep link renders
         // per-request data, and replaying yesterday's copy of it later would

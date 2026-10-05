@@ -15,7 +15,7 @@ function guessNameFromUrl(u) {
     const noQuery = String(u).split(/[?#]/)[0];
     const parts = noQuery.split('/').filter(Boolean);
     let last = parts[parts.length - 1] || noQuery || u;
-    last = last.replace(/[-_]+/g, ' ').trim();
+    last = last.replace(/^(tmdb|mdblist|trakt|simkl):chart:/i, '$1: ').replace(/[-_]+/g, ' ').trim();
     if (!last) return 'List';
     // Title-case each word. The doubled backslashes below (\\b\\w) are
     // required, not a typo or over-escaping: this file's own text is
@@ -95,12 +95,44 @@ async function bulkAddLists(btn) {
     const types = await Promise.all(lines.map((u) => detectListType(u, mdblistKey)));
     lines.forEach((u, i) => addRow(guessNameFromUrl(u), u, types[i], true, 'Custom'));
     box.value = '';
+    updateBulkAddUi();
     saveState();
   } finally {
     if (btn) {
       btn.disabled = false;
       btn.textContent = origLabel;
     }
+  }
+}
+
+function updateBulkAddUi() {
+  const box = document.getElementById('bulkPasteBox');
+  if (!box) return;
+  const lines = box.value.split('\\n').map((s) => s.trim()).filter(Boolean);
+  const btn = document.getElementById('bulkAddBtn') || document.querySelector('[data-act="bulkAddLists"]');
+  const clearBtn = document.getElementById('bulkClearBtn');
+  const countEl = document.getElementById('bulkDetectedCount');
+  if (btn) {
+    if (lines.length > 0) {
+      btn.textContent = 'Add ' + lines.length + (lines.length === 1 ? ' Catalog' : ' Catalogs');
+    } else {
+      btn.textContent = 'Add All Lines as Catalogs';
+    }
+  }
+  if (clearBtn) {
+    clearBtn.style.display = lines.length > 0 ? 'inline-flex' : 'none';
+  }
+  if (countEl) {
+    countEl.textContent = lines.length > 0 ? (lines.length + (lines.length === 1 ? ' list URL detected' : ' list URLs detected')) : '';
+  }
+}
+
+function clearBulkInput() {
+  const box = document.getElementById('bulkPasteBox');
+  if (box) {
+    box.value = '';
+    updateBulkAddUi();
+    box.focus();
   }
 }
 
@@ -864,6 +896,13 @@ async function executeUnifiedListSearch(rawQuery, targetBox) {
   renderListSearchResults(mdblistMatches, traktMatches, traktError, myListsMatches, tmdbMatches, box, intent);
 }
 
+function renderCustomizeButtonHtml(name, url, type) {
+  return '<button type="button" class="lc-btn secondary customizeListBtn" data-name="' + escapeAttr(name || '') + '" data-url="' + escapeAttr(url || '') + '" data-type="' + escapeAttr(type || 'movie') + '" title="Customize in List Builder" aria-label="Customize in List Builder">' +
+    '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none; flex-shrink:0;"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>' +
+    '<span class="customize-btn-text">Customize</span>' +
+  '</button>';
+}
+
 function renderListSearchResults(mdblistMatches, traktMatches, traktError, myListsMatches, tmdbMatches, targetBox, queryOrIntent) {
   // Kept so a list chip can filter and sort this answer again without asking
   // every source a second time (setCatalogListSearchChip).
@@ -1002,25 +1041,27 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
 
     const sourceBadgeHtml = '<span class="list-source-badge ' + badgeClass + '">' + escapeHtml(item.source === 'Profile' ? 'My Lists Addon' : item.source) + '</span>';
 
-    let actionsHtml = '';
+    let likeBtnHtml = '';
+    let addBtnHtml = '';
     if ((item.source === 'My Lists Addon' || item.source === 'Profile') && usernameSlug) {
-      actionsHtml += '<button type="button" class="lc-btn searchLikeBtn' + (alreadyLikedProfile ? ' liked' : '') + '" data-username-slug="' + escapeAttr(usernameSlug) + '">' + (alreadyLikedProfile ? '&#9829;' : '&#9825;') + '</button>';
-      actionsHtml += '<button type="button" class="lc-btn ' + (addedDirect ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
+      likeBtnHtml = '<button type="button" class="lc-btn searchLikeBtn' + (alreadyLikedProfile ? ' liked' : '') + '" data-username-slug="' + escapeAttr(usernameSlug) + '">' + (alreadyLikedProfile ? '&#9829;' : '&#9825;') + '</button>';
+      addBtnHtml = '<button type="button" class="lc-btn ' + (addedDirect ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
         (addedDirect ? 'style="color:var(--danger);"' : '') +
         ' data-name="' + escapeAttr(item.name) + '" data-url="' + escapeAttr(item.url) + '" data-type="' + (item.type || 'movie') + '">' +
         (addedDirect ? 'Remove' : '+ Add') +
         '</button>';
     } else {
-      actionsHtml += '<button type="button" class="lc-btn searchLikeExternalBtn' + (alreadyLikedExt ? ' liked' : '') + '" data-url="' + escapeAttr(item.url) + '">' +
+      likeBtnHtml = '<button type="button" class="lc-btn searchLikeExternalBtn' + (alreadyLikedExt ? ' liked' : '') + '" data-url="' + escapeAttr(item.url) + '">' +
         (alreadyLikedExt ? '&#9829;' : '&#9825;') +
         '</button>';
-      actionsHtml += '<button type="button" class="lc-btn ' + (addedDirect ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
+      addBtnHtml = '<button type="button" class="lc-btn ' + (addedDirect ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
         (addedDirect ? 'style="color:var(--danger);"' : '') +
         ' data-name="' + escapeAttr(item.name) + '" data-url="' + escapeAttr(item.url) + '" data-type="' + escapeAttr(item.type || 'movie') + '">' +
         (addedDirect ? 'Remove' : '+ Add') +
         '</button>';
     }
-    actionsHtml += '<button type="button" class="lc-btn secondary customizeListBtn" data-name="' + escapeAttr(item.name) + '" data-url="' + escapeAttr(item.url) + '" data-type="' + escapeAttr(item.type || 'movie') + '" title="Load into the Custom List Builder to add, remove, or reorder before saving">Customize</button>';
+    const customizeBtnHtml = renderCustomizeButtonHtml(item.name, item.url, item.type || 'movie');
+    const actionsHtml = likeBtnHtml + customizeBtnHtml + addBtnHtml;
 
     const creatorLabel = item.user ? (item.user.includes('Official') || item.user.includes('Franchise') ? escapeHtml(item.user) : 'by ' + escapeHtml(item.user)) : '';
     const itemCountLabel = typeof item.items === 'number' ? (item.items + ' items') : (item.items ? escapeHtml(String(item.items)) : '');
@@ -1034,7 +1075,7 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
       (creatorLabel ? '<span class="list-card-meta-sep">&middot;</span>' : '') +
       '<span>' + typeLabel + '</span>' +
       (itemCountLabel ? '<span class="list-card-meta-sep">&middot;</span><span>' + itemCountLabel + '</span>' : '') +
-      (item.likes !== undefined ? '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes like-count">&#9829; <span class="like-num">' + (item.likes || 0) + '</span></span>' : '') +
+      (Number(item.likes) > 0 ? '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes like-count">&#9829; <span class="like-num">' + (item.likes || 0) + '</span></span>' : '') +
       '</div>' +
       '</div>' +
       '<div class="list-card-actions">' +
@@ -1491,7 +1532,8 @@ document.addEventListener('click', async (e) => {
   }
   const viewBtn = e.target.closest('.searchViewListBtn');
   if (viewBtn) {
-    openListDetailsPage(viewBtn.dataset.name, viewBtn.dataset.type, viewBtn.dataset.url, null, {
+    const listName = (viewBtn.dataset.name || '').replace(/:\\s*(Movies|Shows)$/i, '').trim();
+    openListDetailsPage(listName, viewBtn.dataset.type, viewBtn.dataset.url, null, {
       creatorName: viewBtn.dataset.creator,
       itemCount: viewBtn.dataset.items,
       likes: viewBtn.dataset.likes
@@ -1500,7 +1542,8 @@ document.addEventListener('click', async (e) => {
   }
   const addBtn = e.target.closest('.searchAddBtn');
   if (addBtn) {
-    const listName = addBtn.dataset.name || 'List';
+    const rawName = addBtn.dataset.name || 'List';
+    const listName = rawName.replace(/:\\s*(Movies|Shows)$/i, '').trim();
     const listUrl = addBtn.dataset.url || '';
     const listType = addBtn.dataset.type || 'movie';
     const isAdded = addBtn.classList.contains('is-added') || (typeof isListAddedToConfig === 'function' && (isListAddedToConfig(listUrl, listType) || isListAddedToConfig(listUrl, 'movie') || isListAddedToConfig(listUrl, 'series') || isListAddedToConfig(listUrl)));
@@ -1538,7 +1581,8 @@ document.addEventListener('click', async (e) => {
   const customizeBtn = e.target.closest('.customizeListBtn');
   if (customizeBtn) {
     e.stopPropagation();
-    const listName = customizeBtn.dataset.name || 'List';
+    const rawName = customizeBtn.dataset.name || 'List';
+    const listName = rawName.replace(/:\\s*(Movies|Shows)$/i, '').trim();
     const listUrl = customizeBtn.dataset.url || '';
     const listType = customizeBtn.dataset.type || 'movie';
     if (typeof loadListToCustomListDraft === 'function') {
@@ -1631,10 +1675,19 @@ document.addEventListener('click', async (e) => {
       if (card) {
         card.dataset.likes = finalLikes;
         const numEl = card.querySelector('.like-num');
-        if (numEl) numEl.textContent = finalLikes;
-        else {
-          const countEl = card.querySelector('.like-count, .list-card-likes');
-          if (countEl) countEl.innerHTML = '&#9829; <span class="like-num">' + finalLikes + '</span>';
+        if (numEl) {
+          numEl.textContent = finalLikes;
+          const likesSpan = numEl.closest('.list-card-likes');
+          if (likesSpan) {
+            likesSpan.style.display = finalLikes > 0 ? '' : 'none';
+            const sep = likesSpan.previousElementSibling;
+            if (sep && sep.classList.contains('list-card-meta-sep')) sep.style.display = finalLikes > 0 ? '' : 'none';
+          }
+        } else if (finalLikes > 0) {
+          const metaEl = card.querySelector('.list-card-meta');
+          if (metaEl) {
+            metaEl.insertAdjacentHTML('beforeend', '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + finalLikes + '</span></span>');
+          }
         }
       }
       if (window._currentListDetailsUpdateLikes) {
@@ -1712,10 +1765,19 @@ document.addEventListener('click', async (e) => {
       if (card) {
         card.dataset.likes = finalLikes;
         const numEl = card.querySelector('.like-num');
-        if (numEl) numEl.textContent = finalLikes;
-        else {
-          const countEl = card.querySelector('.like-count, .list-card-likes');
-          if (countEl) countEl.innerHTML = '&#9829; <span class="like-num">' + finalLikes + '</span>';
+        if (numEl) {
+          numEl.textContent = finalLikes;
+          const likesSpan = numEl.closest('.list-card-likes');
+          if (likesSpan) {
+            likesSpan.style.display = finalLikes > 0 ? '' : 'none';
+            const sep = likesSpan.previousElementSibling;
+            if (sep && sep.classList.contains('list-card-meta-sep')) sep.style.display = finalLikes > 0 ? '' : 'none';
+          }
+        } else if (finalLikes > 0) {
+          const metaEl = card.querySelector('.list-card-meta');
+          if (metaEl) {
+            metaEl.insertAdjacentHTML('beforeend', '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + finalLikes + '</span></span>');
+          }
         }
       }
       if (window._currentListDetailsUpdateLikes) {
@@ -1806,12 +1868,12 @@ function buildCuratedRecommendationCard(title, type, customUrl, subtitle, items)
   window._curatedRecs[customUrl] = { title, type, items };
 
   const isAdded = typeof isListAddedToConfig === 'function' && (isListAddedToConfig(null, type, customUrl) || isListAddedToConfig(customUrl, type));
-  const addBtnHtml = '<button type="button" class="lc-btn ' + (isAdded ? 'secondary curatedAddBtn is-added' : 'primary curatedAddBtn') + '" ' +
-    (isAdded ? 'style="color:var(--danger);"' : '') +
-    ' data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '">' +
-    (isAdded ? 'Remove' : '+ Add') +
-  '</button>' +
-  '<button type="button" class="lc-btn secondary customizeListBtn" data-name="' + escapeAttr(title) + '" data-url="' + escapeAttr(customUrl) + '" data-type="' + escapeAttr(type) + '" title="Load into the Custom List Builder to add, remove, or reorder before saving">Customize</button>';
+  const addBtnHtml = renderCustomizeButtonHtml(title, customUrl, type) +
+    '<button type="button" class="lc-btn ' + (isAdded ? 'secondary curatedAddBtn is-added' : 'primary curatedAddBtn') + '" ' +
+      (isAdded ? 'style="color:var(--danger);"' : '') +
+      ' data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '">' +
+      (isAdded ? 'Remove' : '+ Add') +
+    '</button>';
 
   return '<div class="list-card" data-name="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '">' +
     '<div class="list-card-header">' +
@@ -2097,7 +2159,7 @@ async function loadCuratedListsFeed(forceRefresh) {
                   '<span class="list-card-meta-sep">&middot;</span>' +
                   '<span>' + (type === 'series' ? 'Shows' : 'Movies') + '</span>' +
                   (l.items ? '<span class="list-card-meta-sep">&middot;</span><span>' + l.items + ' items</span>' : '') +
-                  '<span class="list-card-likes">&#9829; <span class="like-num">' + (l.likes || 0) + '</span></span>' +
+                  (Number(l.likes) > 0 ? '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + (l.likes || 0) + '</span></span>' : '') +
                 '</div>' +
               '</div>' +
               '<div class="list-card-actions">' +
@@ -2148,7 +2210,7 @@ async function loadCuratedListsFeed(forceRefresh) {
                   '<span class="list-card-meta-sep">&middot;</span>' +
                   '<span>' + (type === 'series' ? 'Shows' : 'Movies') + '</span>' +
                   (l.items ? '<span class="list-card-meta-sep">&middot;</span><span>' + l.items + ' items</span>' : '') +
-                  '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + (l.likes || 0) + '</span></span>' +
+                  (Number(l.likes) > 0 ? '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + (l.likes || 0) + '</span></span>' : '') +
                 '</div>' +
               '</div>' +
               '<div class="list-card-actions">' +
@@ -2320,29 +2382,84 @@ function render5PosterListsFeed(container, lists) {
           (alreadyLiked ? '&#x2665;' : '&#x2661;') +
         '</button>';
 
-    return '<div class="list-card" data-list-type="' + escapeAttr(type) + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
+    let displayName = l.name || 'Unnamed List';
+    if (/^(tmdb|mdblist|trakt|simkl):/i.test(displayName)) {
+      const parts = displayName.split(':');
+      const provRaw = parts[0].toLowerCase();
+      const provider = provRaw === 'tmdb' ? 'TMDb' : (provRaw === 'mdblist' ? 'MDBList' : (provRaw === 'trakt' ? 'Trakt' : 'Simkl'));
+      const chartParts = parts.slice(1).filter(p => p.toLowerCase() !== 'chart');
+      const chartSlug = chartParts.join(' ').replace(/[-_]+/g, ' ');
+      const chartName = chartSlug.split(' ').filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+      if (chartName) displayName = provider + ': ' + chartName;
+    }
+
+    let badgeClass = 'badge-custom';
+    let badgeText = 'Community';
+    const uLower = (l.url || '').toLowerCase();
+    const userClean = (author || l.user || l.creatorName || '').trim();
+
+    if (userClean === 'My Lists Addon' || isOwn || l.kind === 'own' || l.source === 'My Lists Addon' || l.source === 'Profile' || uLower.startsWith('mylists:')) {
+      badgeClass = 'badge-mylists';
+      badgeText = 'My Lists Addon';
+    } else if (userClean === 'MDBList' || l.source === 'MDBList' || uLower.includes('mdblist')) {
+      badgeClass = 'badge-mdblist';
+      badgeText = 'MDBList';
+    } else if (userClean === 'Trakt' || l.source === 'Trakt' || uLower.includes('trakt')) {
+      badgeClass = 'badge-trakt';
+      badgeText = 'Trakt';
+    } else if (userClean === 'TMDB' || l.source === 'TMDB' || uLower.includes('tmdb') || uLower.includes('themoviedb')) {
+      badgeClass = 'badge-tmdb';
+      badgeText = 'TMDB';
+    } else if (userClean === 'Simkl' || l.source === 'Simkl' || uLower.includes('simkl')) {
+      badgeClass = 'badge-simkl';
+      badgeText = 'Simkl';
+    } else if (userClean === 'IMDb' || l.source === 'IMDb' || uLower.includes('imdb')) {
+      badgeClass = 'badge-imdb';
+      badgeText = 'IMDb';
+    } else if (userClean.includes('Streaming') || l.source === 'Streaming') {
+      badgeClass = 'badge-streaming';
+      badgeText = 'Streaming';
+    } else if (/^tmdb:/i.test(l.name || '')) {
+      badgeClass = 'badge-tmdb';
+      badgeText = 'TMDB';
+    } else if (/^trakt:/i.test(l.name || '')) {
+      badgeClass = 'badge-trakt';
+      badgeText = 'Trakt';
+    } else if (/^mdblist:/i.test(l.name || '')) {
+      badgeClass = 'badge-mdblist';
+      badgeText = 'MDBList';
+    } else if (/^simkl:/i.test(l.name || '')) {
+      badgeClass = 'badge-simkl';
+      badgeText = 'Simkl';
+    }
+    const sourceBadgeHtml = '<span class="list-source-badge ' + badgeClass + '">' + escapeHtml(badgeText) + '</span>';
+
+    return '<div class="list-card" data-list-type="' + escapeAttr(type) + '" data-name="' + escapeAttr(displayName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
-          '<div class="list-card-title searchViewListBtn" style="cursor:pointer;">' + escapeHtml(l.name) + '</div>' +
+          '<div class="list-card-title searchViewListBtn" style="cursor:pointer;" data-name="' + escapeAttr(displayName) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(l.url || '') + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
+            sourceBadgeHtml +
+            escapeHtml(displayName) +
+          '</div>' +
           '<div class="list-card-meta">' +
             '<span>by ' + escapeHtml(author) + '</span>' +
             '<span class="list-card-meta-sep">&middot;</span>' +
             '<span>' + (type === 'series' ? 'Shows' : 'Movies') + '</span>' +
             (itemCount ? '<span class="list-card-meta-sep">&middot;</span><span>' + itemCount + ' items</span>' : '') +
-            '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + (l.likes || 0) + '</span></span>' +
+            (Number(l.likes) > 0 ? '<span class="list-card-meta-sep">&middot;</span><span class="list-card-likes">&#9829; <span class="like-num">' + (l.likes || 0) + '</span></span>' : '') +
           '</div>' +
         '</div>' +
         '<div class="list-card-actions">' +
           likeBtnHtml +
+          renderCustomizeButtonHtml(displayName.replace(/:\\s*(Movies|Shows)$/i, '').trim(), l.url || '', type) +
           '<button type="button" class="lc-btn ' + (added ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
             (added ? 'style="color:var(--danger);"' : '') +
-            ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '">' +
+            ' data-name="' + escapeAttr(displayName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '">' +
             (added ? 'Remove' : '+ Add') +
           '</button>' +
-          '<button type="button" class="lc-btn secondary customizeListBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '" title="Load into the Custom List Builder to add, remove, or reorder before saving">Customize</button>' +
         '</div>' +
       '</div>' +
-      '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '"></div>' +
+      '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(displayName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '"></div>' +
     '</div>';
   }).join('');
 
@@ -3452,15 +3569,17 @@ async function openItemDetailsModal(id, type, opts) {
     const budgetStr = formatMoney(d.budget);
     const revenueStr = formatMoney(d.revenue);
 
-    let infoHtml = '';
-    if (dateStr) infoHtml += '<div style="margin-bottom:6px;">' + escapeHtml(dateStr) + '</div>';
-    if (d.seasons) infoHtml += '<div style="margin-bottom:6px;">' + escapeHtml(d.seasons + ' season' + (d.seasons > 1 ? 's' : '')) + '</div>';
-    if (runtimeStr) infoHtml += '<div style="margin-bottom:6px;">' + escapeHtml(runtimeStr) + '</div>';
-    if (d.contentRating) infoHtml += '<div style="margin-bottom:6px;">' + escapeHtml(d.contentRating) + '</div>';
-    if (d.rating) infoHtml += '<div style="margin-bottom:6px;">\u2605 ' + escapeHtml(d.rating) + ' TMDB</div>';
-    if (budgetStr) infoHtml += '<div style="margin-bottom:6px;">Budget ' + escapeHtml(budgetStr) + '</div>';
-    if (revenueStr) infoHtml += '<div style="margin-bottom:6px;">Box Office ' + escapeHtml(revenueStr) + '</div>';
-    if (d.genres) infoHtml += '<div style="margin-bottom:20px;">' + escapeHtml(d.genres) + '</div>';
+    const yearStr = d.releaseYear || (d.releaseDate ? String(d.releaseDate).slice(0, 4) : '');
+    const pillParts = [];
+    const addPill = (text, tip) => pillParts.push('<span class="item-pill"' + (tip ? ' title="' + escapeAttr(tip) + '"' : '') + '>' + escapeHtml(text) + '</span>');
+    if (d.contentRating) addPill(d.contentRating);
+    if (runtimeStr) addPill(runtimeStr);
+    if (yearStr) addPill(yearStr, dateStr && dateStr !== yearStr ? dateStr : '');
+    if (d.seasons) addPill(d.seasons + ' season' + (d.seasons > 1 ? 's' : ''));
+    if (d.rating) addPill('\u2605 ' + d.rating + ' TMDB');
+    if (budgetStr) addPill('Budget ' + budgetStr);
+    if (revenueStr) addPill('Box Office ' + revenueStr);
+    const infoHtml = pillParts.join('<span class="item-pill-sep" aria-hidden="true">\u2022</span>');
     
     const trailerHtml = d.trailerKey ? 
       '<h3 style="margin: 0 0 16px; font-family:serif; font-size:1.5rem;">Trailer</h3>' +
@@ -3517,35 +3636,106 @@ async function openItemDetailsModal(id, type, opts) {
     // offering to mark what the person has already seen.
     const showBtnState = showWatchedButtonState(isShowFullyWatched(d));
 
+    const heroImg = d.background || d.poster || '';
+    const isSeriesItem = !!((d.seasonsData && d.seasonsData.length > 0) || type === 'series');
+    const genreList = (Array.isArray(d.genres) ? d.genres : String(d.genres || '').split(','))
+      .map((g) => String(g || '').trim()).filter(Boolean);
+    const genresHtml = genreList.length ?
+      '<div class="item-genres">' + genreList.map((g) =>
+        '<button type="button" class="item-genre-chip" data-act="openSearchByGenre" data-act-args="' + appActArgs([g, isSeriesItem ? 'tv' : 'movie']) + '">' + escapeHtml(g) + '</button>'
+      ).join('') + '</div>' : '';
+
     body.innerHTML = 
-      '<div style="display:flex; flex-direction:row; gap:32px; flex-wrap:wrap;">' +
-        '<div style="flex: 0 0 300px; max-width: 100%;">' +
-          (d.poster ? '<img src="' + escapeAttr(resolveClientPoster(d, d.poster)) + '" style="width:100%; border-radius:8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">' : '') +
+      '<div class="item-hero">' +
+        (heroImg ? '<img class="item-hero-bg" src="' + escapeAttr(d.background || resolveClientPoster(d, d.poster)) + '" alt="">' : '') +
+        '<div class="item-hero-shade"></div>' +
+      '</div>' +
+      '<div class="item-head">' +
+        (d.poster ? '<img class="item-head-poster" src="' + escapeAttr(resolveClientPoster(d, d.poster)) + '" alt="">' : '') +
+        '<div class="item-head-main">' +
+          '<h1 class="item-title">' + escapeHtml(d.title) + '</h1>' +
+          (infoHtml ? '<div class="item-pills">' + infoHtml + '</div>' : '') +
         '</div>' +
-        '<div style="flex: 1; min-width: 300px;">' +
-          '<h1 style="margin:0 0 16px; font-size:2.5rem; font-family: serif;">' + escapeHtml(d.title) + '</h1>' +
-          '<div style="margin-bottom:16px; color:var(--text); font-size:1.05rem;">' + infoHtml + '</div>' +
-          '<p style="font-size:1.05rem; line-height:1.6; color:var(--text); margin-bottom: 24px;">' + escapeHtml(d.overview || 'No overview available.') + '</p>' +
-          '<div style="display:flex; gap:16px; flex-wrap:wrap; align-items:center; margin-top:20px;">' +
-            '<button type="button" class="lc-btn primary" data-act="openSelectListModalFromItemModal">+ Add to list</button>' +
-            (((d.seasonsData && d.seasonsData.length > 0) || type === 'series') ?
-              '<button type="button" id="btnMarkShowWatched" class="lc-btn ' + showBtnState.className + '" data-act="markShowWatched" data-act-args="' + appActArgs([d.id]) + '">' +
-                showBtnState.label +
-              '</button>'
-              :
-              '<button type="button" id="btnMarkWatched" class="lc-btn ' + (isItemWatched(d.id, d.tmdbId, d.imdbId) ? 'secondary' : 'primary') + '" data-act="toggleMovieWatchStatusFromModal">' +
-                (isItemWatched(d.id, d.tmdbId, d.imdbId) ? '<span style="margin-right:4px;">&#x2713;</span> Mark as unwatched' : 'Mark as Watched') +
-              '</button>') +
-          '</div>' +
-        '</div>' +
+      '</div>' +
+      '<div class="item-actions">' +
+        '<button type="button" class="lc-btn primary" data-act="openSelectListModalFromItemModal">+ Add to List</button>' +
+        (((d.seasonsData && d.seasonsData.length > 0) || type === 'series') ?
+          '<button type="button" id="btnMarkShowWatched" class="lc-btn ' + showBtnState.className + '" data-act="markShowWatched" data-act-args="' + appActArgs([d.id]) + '">' +
+            showBtnState.label +
+          '</button>'
+          :
+          '<button type="button" id="btnMarkWatched" class="lc-btn ' + (isItemWatched(d.id, d.tmdbId, d.imdbId) ? 'secondary' : 'primary') + '" data-act="toggleMovieWatchStatusFromModal">' +
+            (isItemWatched(d.id, d.tmdbId, d.imdbId) ? '<span style="margin-right:4px;">&#x2713;</span> Mark as unwatched' : 'Mark as Watched') +
+          '</button>') +
+      '</div>' +
+      genresHtml +
+      '<div class="item-synopsis-wrap">' +
+        '<p class="item-synopsis" id="itemSynopsisText">' + escapeHtml(d.overview || 'No overview available.') + '</p>' +
+        '<button type="button" class="item-synopsis-toggle" id="itemSynopsisToggle" aria-controls="itemSynopsisText" aria-expanded="false" hidden data-act="toggleItemSynopsis" data-act-args="[&quot;@self&quot;]">Read More</button>' +
       '</div>' +
       (trailerHtml ? '<div style="margin-top:32px;">' + trailerHtml + '</div>' : '') +
       (seasonsHtml ? '<div style="margin-top:32px;">' + seasonsHtml + '</div>' : '') +
       (storylinesHtml ? '<div style="margin-top:32px;">' + storylinesHtml + '</div>' : '');
+    syncItemSynopsisToggle();
       
   } catch (err) {
-    body.innerHTML = '<p class="testresult err">\u2717 ' + escapeHtml(err.message) + '</p>';
+    body.innerHTML = '<p class="testresult err" style="margin-top:48px;">\u2717 ' + escapeHtml(err.message) + '</p>';
   }
+}
+
+// Shows the Read More button only when the 3-line clamp is actually hiding text.
+function syncItemSynopsisToggle() {
+  try {
+    const p = document.getElementById('itemSynopsisText');
+    const t = document.getElementById('itemSynopsisToggle');
+    if (!p || !t) return;
+    if (p.classList.contains('is-expanded')) { t.hidden = false; return; }
+    t.hidden = !(p.scrollHeight > p.clientHeight + 1);
+  } catch (e) {}
+}
+
+function toggleItemSynopsis(btn) {
+  const p = document.getElementById('itemSynopsisText');
+  if (!p || !btn) return;
+  const open = p.classList.toggle('is-expanded');
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  btn.textContent = open ? 'Show Less' : 'Read More';
+}
+
+// A genre chip on the details screen: open Search on the matching Movies/Shows
+// chip with that genre picked in the genre dropdown.
+function openSearchByGenre(genreName, kind) {
+  const ids = {
+    'action': 28, 'adventure': 10759, 'action & adventure': 10759,
+    'animation': 16, 'comedy': 35, 'crime': 80, 'documentary': 99, 'drama': 18,
+    'family': 10751, 'kids': 10762, 'fantasy': 14, 'science fiction': 878,
+    'sci-fi': 878, 'sci-fi & fantasy': 10765, 'history': 36, 'horror': 27,
+    'music': 10402, 'mystery': 9648, 'romance': 10749, 'thriller': 53,
+    'war': 10752, 'war & politics': 10768, 'western': 37,
+  };
+  const select = document.getElementById('catalogSearchGenreSelect');
+  const id = ids[String(genreName || '').trim().toLowerCase()];
+  let value = '';
+  if (select && id) {
+    const opt = Array.from(select.options).find((o) => o.value && o.value.split(',').indexOf(String(id)) !== -1);
+    if (opt) value = opt.value;
+  }
+  const input = document.getElementById('catalogSearchInput');
+  if (input) input.value = '';
+  if (select) select.value = value;
+  const filter = kind === 'tv' ? 'tv' : 'movie';
+  let chip = null;
+  document.querySelectorAll('#catalogSearchTypeChips .subnav-pill').forEach((p) => {
+    if ((p.getAttribute('data-act-args') || '').indexOf('["' + filter + '"') === 0) chip = p;
+  });
+  switchTab('search');
+  setCatalogSearchFilter(filter, chip);
+}
+
+if (typeof window !== 'undefined') {
+  window.toggleItemSynopsis = toggleItemSynopsis;
+  window.openSearchByGenre = openSearchByGenre;
+  if (typeof window.addEventListener === 'function') window.addEventListener('resize', syncItemSynopsisToggle);
 }
 
 async function toggleSeasonEpisodes(headerEl, seasonNum, imdbId) {
@@ -4781,6 +4971,10 @@ function catalogSearchViewIsCurrent() {
 
 function handleCatalogSearchInput(input) {
   const q = (input ? input.value : '').trim();
+  const clearBtn = document.getElementById('catalogSearchClearBtn');
+  if (clearBtn) {
+    clearBtn.style.display = q ? 'inline-flex' : 'none';
+  }
   if (!q) {
     if (catalogSearchDebounceTimer) clearTimeout(catalogSearchDebounceTimer);
     renderDefaultCatalogSearch();
@@ -4790,6 +4984,21 @@ function handleCatalogSearchInput(input) {
   catalogSearchDebounceTimer = setTimeout(() => {
     runCatalogSearch();
   }, 350);
+}
+
+function clearCatalogSearch() {
+  const input = document.getElementById('catalogSearchInput');
+  if (input) {
+    input.value = '';
+    input.focus();
+  }
+  const clearBtn = document.getElementById('catalogSearchClearBtn');
+  if (clearBtn) clearBtn.style.display = 'none';
+  if (catalogSearchDebounceTimer) clearTimeout(catalogSearchDebounceTimer);
+  renderDefaultCatalogSearch();
+}
+if (typeof window !== 'undefined') {
+  window.clearCatalogSearch = clearCatalogSearch;
 }
 
 function setCatalogSearchFilter(filter, btn) {
@@ -4806,6 +5015,12 @@ function setCatalogSearchFilter(filter, btn) {
     btn.insertAdjacentHTML('afterbegin', '<span class="check-icon">&#x2713;</span> ');
   }
   currentCatalogSearchType = filter;
+  const inputEl = document.getElementById('catalogSearchInput');
+  if (inputEl) {
+    if (filter === 'movie') inputEl.placeholder = 'Search movies by title...';
+    else if (filter === 'tv') inputEl.placeholder = 'Search TV shows by title...';
+    else if (filter === 'lists') inputEl.placeholder = 'Search community & provider lists...';
+  }
   const filtersRow = document.getElementById('catalogSearchFiltersRow');
   if (filtersRow) {
     filtersRow.style.display = (filter === 'lists') ? 'none' : 'flex';
@@ -4889,9 +5104,18 @@ function renderTitlePosterCards(items, totalCount, resEl) {
     return;
   }
 
-  const countBadge = (typeof totalCount === 'number' && totalCount > items.length)
-    ? '<div style="margin-bottom:10px; font-size:0.82rem; color:var(--muted);">Showing ' + items.length + ' of ' + totalCount + ' results</div>'
-    : ((typeof totalCount === 'number' && totalCount > 20) ? '<div style="margin-bottom:10px; font-size:0.82rem; color:var(--muted);">' + items.length + ' results found</div>' : '');
+  const inputEl = document.getElementById('catalogSearchInput');
+  const q = (inputEl ? inputEl.value : '').trim();
+  const typeLabel = currentCatalogSearchType === 'tv' ? 'TV Shows' : 'Movies';
+
+  let countBadge = '';
+  if (q) {
+    countBadge = (typeof totalCount === 'number' && totalCount > items.length)
+      ? '<div style="margin-bottom:12px; font-size:0.86rem; font-weight:600; color:var(--muted);">Showing ' + items.length + ' of ' + totalCount + ' results for "' + escapeHtml(q) + '"</div>'
+      : '<div style="margin-bottom:12px; font-size:0.86rem; font-weight:600; color:var(--muted);">' + items.length + ' results found for "' + escapeHtml(q) + '"</div>';
+  } else {
+    countBadge = '<div style="margin-bottom:12px; font-size:0.86rem; font-weight:600; color:var(--muted);">Top Trending ' + typeLabel + ' Right Now</div>';
+  }
 
   const postersHtml = items.map(m => {
     const effectivePoster = resolveClientPoster(m, m.poster);

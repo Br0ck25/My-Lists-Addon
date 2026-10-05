@@ -36,6 +36,7 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **`FF_MATERIALIZER` and `FF_CANONICAL_IDS` are on** (2026-10-05, owner's screenshot). `INSTALL_MIGRATION_PERCENT` is `10`. `CF_ANALYTICS_TOKEN` and `FF_SCROBBLE_ST_ONLY` are gone; `CF_ANALYTICS_ACCOUNT_ID` is still set and no longer needed (only the one-time recovery used it).
 - **`main`** is brought up to date by PR #12 (Releases 14–16), PR #13 (17–18), PR #14 (19) and PR #15 (20).
 - **Release 21** went live on 2026-10-05. The owner reports everything looks good, and deleted the `FF_NEW_UI` variable. The classic page is retired, and the screens taken off the new interface are deleted. Details under Release 21.
+- **Release 22** (prepared, not yet live): the design system, phase 1. Details under Release 22.
 - **Cloudflare Workers Builds was connected to this repository** (found 2026-10-04). The owner reports the Worker it was connected to has since been deleted, and merging PR #12 started no build. Every push makes Cloudflare try to build the Worker from GitHub. On `main` it would deploy to production. So far every attempt has failed, so nothing has been deployed that way: `main` at `a6785d6` on 2026-10-03, and this branch's preview with *Authentication error*. The `wrangler.toml` guard (Release 14: `keep_vars`, the `DB_ACTIVITY` placeholder) keeps such a deploy from replacing the dashboard's settings. Deploying stays manual (pasting) unless the owner decides otherwise.
 - **Backups work** (2026-10-04): the owner added the five GitHub secrets, and the first real backup ran (Actions run 37226668219). It copied both databases, encrypted: `my-lists-db` (9.3 MB, 709 accounts' settings, 1,147 lists, 53,082 list items) and `mylists-activity` (0.96 MB, 46,956 plays). From here it runs daily at 04:17 UTC.
 
@@ -1528,3 +1529,43 @@ The owner decided both on 2026-10-05: retire the classic page (13) and delete th
 
 **Rollback:** paste the 20 file. The classic page comes back for browsers that chose it, as before.
 
+## Release 22: the design system (phase 1)
+
+**Branch point:** `main` after PR #16 (Release 21, live). Branch `feat/design-system-phase-1`, brought up to date with `main` by a merge commit.
+
+### What it changes
+
+- **Design system:** design tokens, buttons, toggles and form controls share one look across the page.
+- **Settings is split into six tabs.** Two new addresses open on their tab, also after a reload: `/settings/display` and `/settings/scrobble`. They are served by the existing sub-path route (`25_`).
+- **Title search in the custom list editor:** search for a title and add it, with an "Added ✓" mark on the ones already in the list.
+- **Import List and Import Channel modals.**
+- **Quick Add networks are grouped into categories**, with an "added" state on the ones already in the lineup.
+- **Discover → All names rows "X: Movies" and "X: Shows"**, and Customize on one opens it named "X".
+- **A ⋯ menu on presets.**
+- **Owner's review changes (2026-10-05):**
+  - Channels → My Channels: the **New channel** template panel is removed (`24_`, `13_`), with its tests. A saga can no longer be added from there signed out.
+  - **One Refresh button** (`refreshButtonHtml`, `09_`) in Discover's look, used by Catalogs, Lists (My Lists, Liked), Channels (My Channels, Published) and Discover. It replaces the plain text buttons.
+  - Settings → Account & Security: the **Devices** and **Install link** cards are removed (`24_`, `15_`), with their tests. Catalogs' Generate Install Link stays.
+- **New service worker cache names** (`mylists-assets-v4`, `mylists-shell-v4`). Each browser drops its old page cache once.
+- `/admin` shows **Release 22**.
+
+### Fixed in review (never live)
+
+- **The service worker broke provider sign-ins** (`25_` `SERVICE_WORKER_JS`). It rebuilt each page load as a same-origin request, which follows redirects inside the service worker: Connect Trakt / Simkl / MDBList / TMDB showed the cached homepage, and the sign-in callback failed with `net::ERR_FAILED`. Page loads go to the network untouched again, as in Release 21. `tests/service-worker.test.mjs` covers it.
+- **A broken regex escape** (`19_`): `\s` reached the browser as `s`, so Customize on "Trending: Movies" was not named "Trending". CI had been red on `tests/client-escapes.test.mjs` since `8c0961b`.
+- **The custom list search marked a title "Added ✓" by title alone**, so a remake or a show sharing a movie's name could not be added. It now compares type, title and year (`21_`).
+- **Quick Add marked a network added when any catalog had the same name**, for example a Netflix streaming catalog (`20_`).
+
+### Checked
+
+- Merge with `main`: all conflicts resolved so the page renders one interface (no `newUi`), Backup → Export/Import JSON keeps its box, and the install-link import stays removed (SECURITY_AUDIT.md S-02).
+- `tests/service-worker.test.mjs` fails on the branch's service worker and passes on the fixed one.
+- Real Chromium, with the redirect harness: Connect Trakt reaches the provider, and the callback returns to `/?connected=trakt` (results in the commit).
+- `bash verify.sh` and the `MLA_TEST_V2_LISTS_READ=1` run pass (counts in the commit).
+
+**Owner steps:**
+1. Deploy `worker_entry_combined.js`. Check that `/admin` says **Release 22**.
+2. In a browser that has visited the site before, click **Connect** for Trakt (or any provider). Confirm it reaches the provider and comes back connected.
+3. Look around: Settings (all six tabs, `/settings/display`), Discover → All, the custom list editor search, Quick Add.
+
+**Rollback:** paste the 21 file.

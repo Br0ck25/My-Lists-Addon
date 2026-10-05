@@ -264,10 +264,14 @@ function normalizeListsSubmenu(raw) {
       });
     }
     var subAccount = document.getElementById('settingsSubAccount');
+    var subDisplay = document.getElementById('settingsSubDisplay');
+    var subScrobble = document.getElementById('settingsSubScrobble');
     var subExternal = document.getElementById('settingsSubExternal');
     var subBackup = document.getElementById('settingsSubBackup');
     var subFeedback = document.getElementById('settingsSubFeedback');
     if (subAccount) subAccount.style.display = (setSub === 'account' || setSub === 'keys') ? 'block' : 'none';
+    if (subDisplay) subDisplay.style.display = (setSub === 'display') ? 'block' : 'none';
+    if (subScrobble) subScrobble.style.display = (setSub === 'scrobble') ? 'block' : 'none';
     if (subExternal) subExternal.style.display = (setSub === 'external') ? 'block' : 'none';
     if (subBackup) subBackup.style.display = (setSub === 'backup') ? 'block' : 'none';
     if (subFeedback) subFeedback.style.display = (setSub === 'feedback') ? 'block' : 'none';
@@ -843,6 +847,13 @@ function appActStoreSettingValue(key, value) {
 
 function appActStoreSettingChecked(key, checked) {
   try { localStorage.setItem(String(key), checked ? '1' : '0'); } catch (e) {}
+  if (key === 'myListAddon:dedupeAcrossLists') {
+    const cb1 = document.getElementById('catalogsDedupeCheckbox');
+    const cb2 = document.getElementById('dedupeAcrossListsCheckbox');
+    if (cb1) cb1.checked = !!checked;
+    if (cb2) cb2.checked = !!checked;
+    if (typeof renderLivePreview === 'function') renderLivePreview();
+  }
   saveState();
   return true;
 }
@@ -1054,8 +1065,8 @@ function updateAllListAddButtons() {
     const type = card ? card.dataset.listType : null;
     const isAdded = isListAddedToConfig(null, type, slug);
     btn.classList.toggle('is-added', isAdded);
-    btn.classList.toggle('secondary', isAdded);
-    btn.classList.toggle('primary', !isAdded);
+    btn.classList.add('secondary');
+    btn.classList.remove('primary');
     btn.textContent = isAdded ? 'Remove' : '+ Add';
     btn.style.color = isAdded ? 'var(--danger)' : '';
   });
@@ -1068,8 +1079,8 @@ function updateAllListAddButtons() {
     const type = card ? card.dataset.listType : null;
     const isAdded = isListAddedToConfig(null, type, slug);
     btn.classList.toggle('is-added', isAdded);
-    btn.classList.toggle('secondary', isAdded);
-    btn.classList.toggle('primary', !isAdded);
+    btn.classList.add('secondary');
+    btn.classList.remove('primary');
     btn.textContent = isAdded ? 'Remove' : '+ Add';
     btn.style.color = isAdded ? 'var(--danger)' : '';
   });
@@ -1117,8 +1128,8 @@ function updateAllListAddButtons() {
     const type = btn.dataset.type;
     const isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(url, type) || isListAddedToConfig(null, type, url) || isListAddedToConfig(url, 'movie') || isListAddedToConfig(url, 'series') || isListAddedToConfig(url)) : false;
     btn.classList.toggle('is-added', isAdded);
-    btn.classList.toggle('secondary', isAdded);
-    btn.classList.toggle('primary', !isAdded);
+    btn.classList.add('secondary');
+    btn.classList.remove('primary');
     btn.textContent = isAdded ? 'Remove' : '+ Add';
     btn.style.color = isAdded ? 'var(--danger)' : '';
     btn.disabled = false;
@@ -1331,6 +1342,10 @@ function switchTab(name) {
     }
     b.setAttribute('aria-selected', on ? 'true' : 'false');
     b.setAttribute('tabindex', on ? '0' : '-1');
+  }
+  const headerSearchBtn = document.getElementById('headerSearchBtn');
+  if (headerSearchBtn) {
+    headerSearchBtn.classList.toggle('active', name === 'search');
   }
 
   if (name !== 'list-details' && name !== 'item-details') {
@@ -2164,6 +2179,8 @@ const STATIC_MODALS = [
   { id: 'createListModal', close: 'closeCreateListModal' },
   { id: 'selectListModal', close: 'closeSelectListModal' },
   { id: 'addShelfModal', close: null },
+  { id: 'importListModal', close: 'closeImportListModal' },
+  { id: 'importChannelModal', close: 'closeImportChannelModal' },
   { id: 'traktDeviceModal', close: 'closeTraktDeviceModal' },
 ];
 
@@ -2587,11 +2604,20 @@ function restoreActiveTab() {
     return;
   }
 
-  let tab = 'discover';
-  try {
-    tab = localStorage.getItem('myListAddon:activeTab') || 'discover';
-  } catch (e) {}
-  if (tab === 'item-details' || tab === 'list-details') tab = 'discover';
+  let tab = '';
+  const isShell = typeof document !== 'undefined' && document.documentElement && document.documentElement.getAttribute('data-app-shell') === '1';
+  if (isShell) {
+    const initTab = document.documentElement.getAttribute('data-initial-tab');
+    if (initTab && initTab !== 'item-details' && initTab !== 'list-details') {
+      tab = initTab;
+    }
+  }
+  if (!tab) {
+    try {
+      tab = localStorage.getItem('myListAddon:activeTab') || 'discover';
+    } catch (e) {}
+  }
+  if (!tab || tab === 'item-details' || tab === 'list-details') tab = 'discover';
   switchTab(tab);
 }
 
@@ -2671,6 +2697,11 @@ function switchListsSubmenu(name, btn) {
       renderLikedListsFeed();
     }
   }
+  if (name === 'create-list') {
+    if (typeof initCustomListSearch === 'function') {
+      initCustomListSearch();
+    }
+  }
 }
 
 function switchSettingsSubmenu(name, btn) {
@@ -2691,6 +2722,8 @@ function switchSettingsSubmenu(name, btn) {
   const subpanels = {
     'account': 'settingsSubAccount',
     'keys': 'settingsSubAccount',
+    'display': 'settingsSubDisplay',
+    'scrobble': 'settingsSubScrobble',
     'external': 'settingsSubExternal',
     'backup': 'settingsSubBackup',
     'feedback': 'settingsSubFeedback'
@@ -3140,10 +3173,12 @@ function renderDiscoverChartsList(type, forceRefresh) {
   // Helper: push a pair entry
   function pushPair(name, movieUrl, showUrl, group) {
     if ((type === 'movie' || type === 'all') && movieUrl) {
-      lists.push({ name: name, url: movieUrl, type: 'movie', user: group, likes: 0 });
+      const displayName = (type === 'all' && showUrl) ? (name + ': Movies') : name;
+      lists.push({ name: displayName, url: movieUrl, type: 'movie', user: group, likes: 0 });
     }
     if ((type === 'series' || type === 'all') && showUrl) {
-      lists.push({ name: name, url: showUrl, type: 'series', user: group, likes: 0 });
+      const displayName = (type === 'all' && movieUrl) ? (name + ': Shows') : name;
+      lists.push({ name: displayName, url: showUrl, type: 'series', user: group, likes: 0 });
     }
   }
   // Helper: push single-type entry
@@ -3163,10 +3198,10 @@ function renderDiscoverChartsList(type, forceRefresh) {
       window._CHARTS_MY_LISTS_ADDON.forEach(function(p) { pushPair(p.name, p.movieUrl, p.showUrl, 'My Lists Addon'); });
     }
     if (type === 'movie' || type === 'all') {
-      pushSingle('New Releases', 'tmdb:chart:new_movies', 'movie', 'TMDB');
+      pushSingle(type === 'all' ? 'New Releases: Movies' : 'New Releases', 'tmdb:chart:new_movies', 'movie', 'TMDB');
     }
     if (type === 'series' || type === 'all') {
-      pushSingle('New Releases', 'tmdb:chart:new_shows', 'series', 'TMDB');
+      pushSingle(type === 'all' ? 'New Releases: Shows' : 'New Releases', 'tmdb:chart:new_shows', 'series', 'TMDB');
     }
     if (window._CHARTS_TMDB) {
       window._CHARTS_TMDB.forEach(function(p) {
@@ -3216,8 +3251,8 @@ function renderDiscoverChartsList(type, forceRefresh) {
   if (type === 'kids' || type === 'all') {
     if (window._CHARTS_KIDS) {
       window._CHARTS_KIDS.forEach(function(item) {
-        if (item.movieUrl) pushSingle(item.name, item.movieUrl, 'movie', 'Kids');
-        if (item.showUrl) pushSingle(item.name, item.showUrl, 'series', 'Kids');
+        if (item.movieUrl) pushSingle((type === 'all' && item.showUrl) ? (item.name + ': Movies') : item.name, item.movieUrl, 'movie', 'Kids');
+        if (item.showUrl) pushSingle((type === 'all' && item.movieUrl) ? (item.name + ': Shows') : item.name, item.showUrl, 'series', 'Kids');
       });
     }
   }
@@ -3225,8 +3260,8 @@ function renderDiscoverChartsList(type, forceRefresh) {
   if (type === 'holidays' || type === 'all') {
     if (window._CHARTS_HOLIDAYS) {
       window._CHARTS_HOLIDAYS.forEach(function(item) {
-        if (item.movieUrl) pushSingle(item.name, item.movieUrl, 'movie', 'Holidays');
-        if (item.showUrl) pushSingle(item.name, item.showUrl, 'series', 'Holidays');
+        if (item.movieUrl) pushSingle((type === 'all' && item.showUrl) ? (item.name + ': Movies') : item.name, item.movieUrl, 'movie', 'Holidays');
+        if (item.showUrl) pushSingle((type === 'all' && item.movieUrl) ? (item.name + ': Shows') : item.name, item.showUrl, 'series', 'Holidays');
       });
     }
   }
@@ -3234,8 +3269,8 @@ function renderDiscoverChartsList(type, forceRefresh) {
   if (type === 'genres' || type === 'all') {
     if (window._CHARTS_GENRES) {
       window._CHARTS_GENRES.forEach(function(item) {
-        if (item.movieUrl) pushSingle(item.name, item.movieUrl, 'movie', 'Genres');
-        if (item.showUrl) pushSingle(item.name, item.showUrl, 'series', 'Genres');
+        if (item.movieUrl) pushSingle((type === 'all' && item.showUrl) ? (item.name + ': Movies') : item.name, item.movieUrl, 'movie', 'Genres');
+        if (item.showUrl) pushSingle((type === 'all' && item.movieUrl) ? (item.name + ': Shows') : item.name, item.showUrl, 'series', 'Genres');
       });
     }
   }
@@ -3298,6 +3333,7 @@ function switchCatalogsSubmenu(filter, btn) {
   if (filter !== 'all') {
     if (undoToast) undoToast.style.display = 'none';
     if (resultDiv) resultDiv.style.display = 'none';
+    if (filter === 'bulk' && typeof updateBulkAddUi === 'function') updateBulkAddUi();
   } else {
     // Make sure all list rows are visible since we no longer have row-level filters
     document.querySelectorAll('#lists .entry').forEach(function(e) {
@@ -3754,8 +3790,8 @@ function entryAvatarColor(s) {
 function openAddShelfModal() {
   document.getElementById('addShelfModalName').value = '';
   document.getElementById('addShelfModalLinksContainer').innerHTML = 
-    '<div class="add-shelf-link-row" style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">' +
-      '<input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd)" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
+    '<div class="add-shelf-link-row" style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">' +
+      '<input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd, MDBList)" style="flex:1; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
     '</div>';
   document.getElementById('addShelfModalType').value = 'movie';
   validateAddShelfModal();
@@ -3770,10 +3806,10 @@ function addShelfModalAddLink() {
   div.style.display = 'flex';
   div.style.alignItems = 'center';
   div.style.gap = '8px';
-  div.style.marginBottom = '12px';
+  div.style.marginBottom = '8px';
   div.innerHTML = 
-    '<input type="url" class="addShelfModalLinkInput" placeholder="Additional URL" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size:1rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
-    '<button type="button" class="lc-btn secondary" aria-label="Remove this URL" style="padding: 12px;" data-act="appActRemoveShelfLinkRow" data-act-args="[&quot;@self&quot;]">\u2715</button>';
+    '<input type="url" class="addShelfModalLinkInput" placeholder="Additional URL" style="flex:1; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
+    '<button type="button" class="lc-btn secondary" aria-label="Remove this URL" style="padding: 6px 12px; height: 38px; min-height: 38px;" data-act="appActRemoveShelfLinkRow" data-act-args="[&quot;@self&quot;]">&#x2715;</button>';
   container.appendChild(div);
   validateAddShelfModal();
 }
@@ -3900,12 +3936,12 @@ function addRow(name, url, type, enabled, group, channelId) {
         '<div class="entry-pos-wrap" style="display:flex; align-items:center;">' +
           '<input type="number" class="pos" min="1" title="Type a position number to move this list there" data-act="movePosTo" data-act-args="[&quot;@self&quot;]">' +
         '</div>' +
-        '<span class="drag-handle ec-btn" title="Drag to reorder" style="cursor:grab; font-size:1rem;">&#9776;</span>' +
+        '<span class="drag-handle ec-btn" title="Drag to reorder" style="cursor:grab;"><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
         '<button type="button" class="ec-btn movebtn secondary" data-act="moveRow" data-act-args="[&quot;@self&quot;,-1]" title="Move up">&#8593;</button>' +
         '<button type="button" class="ec-btn movebtn secondary" data-act="moveRow" data-act-args="[&quot;@self&quot;,1]" title="Move down">&#8595;</button>' +
         ((isCustomList || isChannel) ? ('<button type="button" class="ec-btn secondary" style="margin-left: auto; margin-right: 6px; font-weight:600; padding: 2px 10px;" data-act="' + (isCustomList ? 'editEntryCustomList' : 'editEntryChannel') + '" data-act-args="[&quot;@self&quot;]">Edit</button>') : '') +
         '<button type="button" class="ec-btn movebtn removebtn danger" data-act="removeEntryWithUndo" data-act-args="[&quot;@self&quot;]" title="Remove this list" aria-label="Remove this list" style="' + (!(isCustomList || isChannel) ? 'margin-left: auto;' : '') + '">' +
-          '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none;">' +
+          '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none; display:block;">' +
             '<polyline points="3 6 5 6 21 6"></polyline>' +
             '<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>' +
             '<path d="M10 11v6"></path><path d="M14 11v6"></path>' +
@@ -3933,7 +3969,7 @@ function addRow(name, url, type, enabled, group, channelId) {
       : (isChannel || isCustomList || isPremade)
         ? ''
         : '<button type="button" class="secondary add-source-btn" data-act="addSourceRow" data-act-args="[&quot;@self&quot;]">+ Add another source (merge into one catalog)</button>') +
-    '<div class="live-preview-shelf" style="padding:0; margin:0; border:none; background:transparent;"><div class="live-preview-shelf-title"><span class="shelf-drag-handle" title="Drag to reorder catalog">&#x2630;</span><span class="shelf-title-text">' + escapeHtml(name || 'Unnamed') + ' - ' + (type === 'series' ? 'Series' : 'Movies') + '</span><span class="live-preview-shelf-status"></span><button type="button" class="text-action-btn" disabled>See All &rsaquo;</button></div><div class="live-preview-posters"><p style="color:var(--muted); font-size:0.88rem; text-align:center; padding: 20px;"><small>Click "Refresh Preview" above to load posters.</small></p></div></div>';
+    '<div class="live-preview-shelf"><div class="live-preview-shelf-title"><span class="shelf-drag-handle" title="Drag to reorder catalog"><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span><span class="shelf-title-text">' + escapeHtml(name || 'Unnamed') + ' - ' + (type === 'series' ? 'Series' : 'Movies') + '</span><span class="live-preview-shelf-status"></span><button type="button" class="text-action-btn" disabled>See All &rsaquo;</button></div><div class="live-preview-posters"><p style="color:var(--muted); font-size:0.88rem; text-align:center; padding: 20px;"><small>Click "Refresh Preview" above to load posters.</small></p></div></div>';
   container.appendChild(div);
   // Every custom-list row this browser owns gets a live server-side copy
   // (see withLiveListToken): the token is stamped into the row's URL here,

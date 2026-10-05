@@ -595,7 +595,14 @@ function collectKeys() {
     })(),
     hideNonDigitalReleases: document.getElementById('hideNonDigitalReleasesCheckbox') ? document.getElementById('hideNonDigitalReleasesCheckbox').checked : false,
     adultContentFilter: typeof isAdultContentFilterEnabled === 'function' ? isAdultContentFilterEnabled() : (localStorage.getItem('myListAddon:adultContentFilter') === '1'),
-    dedupeAcrossLists: document.getElementById('dedupeAcrossListsCheckbox') ? document.getElementById('dedupeAcrossListsCheckbox').checked : (localStorage.getItem('myListAddon:dedupeAcrossLists') === '1'),
+    dedupeAcrossLists: (function() {
+      const cb1 = document.getElementById('catalogsDedupeCheckbox');
+      const cb2 = document.getElementById('dedupeAcrossListsCheckbox');
+      if (cb1 && cb1.checked) return true;
+      if (cb2 && cb2.checked) return true;
+      if (cb1 || cb2) return false;
+      try { return localStorage.getItem('myListAddon:dedupeAcrossLists') === '1'; } catch (e) { return false; }
+    })(),
     syncTraktHistory: localStorage.getItem('myListAddon:syncTraktHistory') === 'true',
     syncMdblistHistory: localStorage.getItem('myListAddon:syncMdblistHistory') === 'true',
     syncSimklHistory: localStorage.getItem('myListAddon:syncSimklHistory') === 'true',

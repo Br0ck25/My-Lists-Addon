@@ -3,7 +3,7 @@
 // Shown at the top of /admin and in the answer of the "Counts missing" tool,
 // so the owner can see which pasted file is live (docs/RELEASES.md). Change it
 // with every release.
-const WORKER_RELEASE = "21";
+const WORKER_RELEASE = "22";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -96,7 +96,7 @@ function isSecretFieldName(name) {
 }
 
 const ADDON_ID = "app.my-list";
-const ADDON_VERSION = "1.5.5";
+const ADDON_VERSION = "1.5.6";
 const ADDON_NAME = "My Lists";
 
 // How many items a "Recommended Movies"/"Recommended Shows" list holds --
@@ -1616,7 +1616,7 @@ const APP_SHELL_TABS = [
   { id: "channels", label: "Channels", path: "/channels", subs: ["my-channels", "storylines", "quickadd", "explore", "import", "build"] },
   { id: "discover", label: "Discover", path: "/discover", subs: ["movie", "all", "series", "popular", "curated", "gems", "kids", "holidays", "genres"] },
   { id: "search", label: "Search", path: "/search", subs: [] },
-  { id: "settings", label: "Settings", path: "/settings", subs: ["account", "external", "backup", "feedback"] },
+  { id: "settings", label: "Settings", path: "/settings", subs: ["account", "display", "scrobble", "external", "backup", "feedback"] },
 ];
 
 // The paths the shell answers on. Exact matches only: /lists/<slug> and

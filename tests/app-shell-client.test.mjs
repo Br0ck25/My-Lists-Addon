@@ -16,7 +16,7 @@ const VIEWS = [
   { tab: "channels", path: "/channels", subs: ["my-channels", "storylines", "quickadd", "explore", "import", "build"] },
   { tab: "discover", path: "/discover", subs: ["movie", "all", "series", "popular", "curated", "gems", "kids", "holidays", "genres"] },
   { tab: "search", path: "/search", subs: [] },
-  { tab: "settings", path: "/settings", subs: ["account", "external", "backup", "feedback"] },
+  { tab: "settings", path: "/settings", subs: ["account", "display", "scrobble", "external", "backup", "feedback"] },
 ];
 
 // Values that cross the vm boundary have another realm's prototypes, so
@@ -251,22 +251,6 @@ describe("the shell's shared state", () => {
     unsubscribe();
     client.call("appShellState.set", { route: { tab: "search", sub: "" } });
     assert.equal(seen.length, 2, "unsubscribing must stop the notifications");
-  });
-});
-
-describe("the shell's install bar", () => {
-  it("knows nothing, current and stale apart", () => {
-    const client = loadClient();
-    assert.deepEqual(plain(client.call("appShellInstallLinkState")), { state: "none", link: "" });
-
-    client.call("appShellRecordInstallLink", "https://example.com/abc/manifest.json");
-    const live = client.call("appShellInstallLinkState");
-    assert.equal(live.state, "live");
-    assert.equal(live.link, "https://example.com/abc/manifest.json");
-
-    // A link generated from a different configuration is not current.
-    client.localStorage.setItem("myListAddon:installLink", JSON.stringify({ url: "https://example.com/abc/manifest.json", hash: "something-else" }));
-    assert.equal(client.call("appShellInstallLinkState").state, "unsaved");
   });
 });
 

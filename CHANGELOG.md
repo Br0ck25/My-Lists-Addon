@@ -6,6 +6,29 @@ All notable changes to **My Lists Addon** ([mylistsaddon.com](https://mylistsadd
 
 ## [Unreleased]
 
+---
+
+## [1.5.6] - 2026-10-05
+
+### 🎨 The design system, phase 1 (Release 22)
+
+- **One look across the app.** Shared design tokens, buttons, toggles and form controls, a six-dot drag handle, soft-tinted **+ Add** and **Remove** pills, two-line poster titles, and a bottom bar that fits a phone.
+- **Settings is split into six tabs**: Account & Security, Catalog & Display, Scrobble, External Accounts & API Keys, Presets & Backup, and Feedback & Support. Two new addresses, `/settings/display` and `/settings/scrobble`, open on their tab, also after a reload. Presets get a ⋯ menu, and Backup keeps its Advanced JSON box.
+- **One Refresh button** (Discover's look) on Catalogs, Lists, Channels and Discover, drawn by one shared function.
+- **Lists:** a title search in the custom list editor (with Better Posters artwork), and the **Import List** and **Import Channel** windows.
+- **Quick Add** groups networks into categories, with a search and an "added" mark on the ones already in your lineup.
+- **Discover → All** names rows "X: Movies" and "X: Shows"; Customize opens one named "X".
+- **Removed:** Channels' **New channel** template panel, and Settings → Account & Security's **Devices** and **Install link** cards (Your Account holds the sign-in controls; Catalogs still has Generate Install Link).
+- **Fixed before release:** the service worker broke Connect Trakt / Simkl / MDBList / TMDB for returning visitors (page loads are handed to the network untouched again); "Trending: Movies" was not shortened to "Trending" on Customize; the custom list search marked a title "Added" by name alone, so a remake could not be added (it now compares type, title and year); and Quick Add marked a network added when any catalog had the same name.
+- The service worker's cache names changed (`v4`): each browser drops its old page cache once.
+
+### 🧹 One page; unused screens deleted (Release 21)
+
+- **The classic page is retired.** Every visitor gets the new interface; the `FF_NEW_UI` cookie and variable are no longer read, and an old `?ff_new_ui=` link is sent to the same address without it.
+- **Settings → Backup no longer offers "Import from Install / Configure Link".** An install id hands back connected accounts' tokens (SECURITY_AUDIT.md S-02); a backup file does the same job safely.
+- **Fixed:** a page opened at a view's own address (`/settings`, `/channels`, `/search`, `/catalogs`) came up on Discover.
+- Screens with no place left on the page were deleted (Discover's Explore section, the Lists view's "Your lists" cards, Settings' Account and Connections cards). About 1,800 lines of source and 90 KB of Worker were removed.
+
 ### ⚠️ Deploy notes for this release (operator)
 
 Do these in order. Details are in `docs/OPERATIONS.md`.
