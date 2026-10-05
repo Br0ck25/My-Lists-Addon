@@ -6,6 +6,10 @@ All notable changes to **My Lists Addon** ([mylistsaddon.com](https://mylistsadd
 
 ## [Unreleased]
 
+### 🐛 Liking this add-on's own charts
+
+- **"Could Not Update Like – That URL can't be liked" is fixed for the add-on's own lists.** Most Watched, New on Streaming, the Better Posters lists, and combined charts (Trending, Streaming Top 10 (All Services) and the like) are now likeable. The like check only knew provider links and a short list of built-in chart IDs, so these were refused. A combined chart can be liked when every line of it can be. Personal shelves (Watchlist, History, Continue Watching) still can't be, since they are a different list for everyone.
+
 ### 🖼️ Better Posters lists, ordering the Today tags, Pictorium, metadata off, and combining channels
 
 - **Channels → My Channels → "Combine into one channel".** Check two or more saved channels, name the result and press the new button next to "Merge into catalog": you get a new channel with every pick from the checked channels, and a pick that two of them share (same show and episode, or the same movie) counted once. The first channel's copy is kept and the order is the channels' order. Quick Add network channels use their full lineup, not the small copy saved on the device. Rotation options any of the channels has on stay on; story locks, hand-made pairs, Live Cloud Sync and the network link are not carried over. The original channels are left as they are, a channel holds at most 5,000 picks, and Next Up can't be combined because it has no picks of its own.

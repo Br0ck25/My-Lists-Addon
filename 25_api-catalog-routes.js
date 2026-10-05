@@ -7762,7 +7762,7 @@ function generateSearchVariations(query) {
       // unbounded attacker-controlled keyspace.
       const normalizedUrl = normalizeExternalListUrl(rawUrl);
       if (!normalizedUrl) {
-        return json({ ok: false, error: "That URL can't be liked -- only MDBList, Trakt, TMDB, Simkl, and Letterboxd list links are supported." }, 400);
+        return json({ ok: false, error: "That URL can't be liked -- only MDBList, Trakt, TMDB, Simkl and Letterboxd list links and this add-on's own charts are supported." }, 400);
       }
       const unlike = body.action === "unlike";
 

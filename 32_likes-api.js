@@ -64,7 +64,7 @@ async function resolveLikeTarget(env, type, rawId) {
   }
   const normalized = normalizeExternalListUrl(decoded);
   if (!normalized) {
-    return { error: "That URL can't be liked -- only MDBList, Trakt, TMDB, Simkl, and Letterboxd list links are supported.", status: 400 };
+    return { error: "That URL can't be liked -- only MDBList, Trakt, TMDB, Simkl and Letterboxd list links and this add-on's own charts are supported.", status: 400 };
   }
   return { type, targetId: await hashStringForKey(normalized), table: null, key: null };
 }

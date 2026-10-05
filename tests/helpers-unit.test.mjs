@@ -35,7 +35,7 @@ function loadHelpers() {
     chunks.push(src02.slice(start, i));
   }
   const consts = [];
-  for (const name of ["CREATOR_DISPLAY_NAME_MAX", "EXTERNAL_LIKE_HOSTS", "LIKEABLE_SENTINEL_PREFIXES", "LIKEABLE_SENTINEL_EXACT", "AIR_TIME_ZONE_LABELS"]) {
+  for (const name of ["CREATOR_DISPLAY_NAME_MAX", "EXTERNAL_LIKE_HOSTS", "LIKEABLE_SENTINEL_PREFIXES", "LIKEABLE_SENTINEL_EXACT", "LIKEABLE_COMBINED_LINES_MAX", "LIKEABLE_COMBINED_URL_MAX", "AIR_TIME_ZONE_LABELS"]) {
     const re = new RegExp(`const ${name}[\\s\\S]*?;`);
     const m = src02.match(re);
     if (m) consts.push(m[0]);
@@ -90,6 +90,34 @@ describe("URL allowlists", () => {
     assert.equal(H.normalizeExternalListUrl("simkl:chart:anime"), "simkl:chart:anime");
     // Case-insensitive, matching the real chart sentinels' own casing.
     assert.equal(H.normalizeExternalListUrl("TMDB:CHART:popular"), "tmdb:chart:popular");
+  });
+
+  it("like-external accepts this add-on's own charts: Most Watched, New on Streaming, Better Posters", () => {
+    assert.equal(H.normalizeExternalListUrl("mylists:most-watched:today"), "mylists:most-watched:today");
+    assert.equal(H.normalizeExternalListUrl("mylists:most-watched:7"), "mylists:most-watched:7");
+    assert.equal(H.normalizeExternalListUrl("tmdb:new-on-streaming"), "tmdb:new-on-streaming");
+    assert.equal(H.normalizeExternalListUrl("mylists:better-posters:today"), "mylists:better-posters:today");
+    assert.equal(H.normalizeExternalListUrl("tmdb:chart:returning"), "tmdb:chart:returning");
+  });
+
+  it("like-external accepts a combined chart when every line of it is likeable", () => {
+    const trending = "tmdb:chart:trending\ntrakt:chart:trending\nsimkl:chart:today\nsimkl:chart:week\nsimkl:chart:month";
+    assert.equal(H.normalizeExternalListUrl(trending), trending);
+    const top10 = [
+      "https://mdblist.com/lists/ahmed2250/apple-tv-top-10-movies-today",
+      "https://mdblist.com/lists/andykai/disney-top-10-no-hulu",
+      "https://www.mdblist.com/lists/hdlists/netflix-top-10-trending-movies/",
+    ].join("\n");
+    assert.equal(H.normalizeExternalListUrl(top10), [
+      "https://mdblist.com/lists/ahmed2250/apple-tv-top-10-movies-today",
+      "https://mdblist.com/lists/andykai/disney-top-10-no-hulu",
+      "https://mdblist.com/lists/hdlists/netflix-top-10-trending-movies",
+    ].join("\n"));
+    // One bad line spoils it, and so does a personal one.
+    assert.equal(H.normalizeExternalListUrl("tmdb:chart:trending\nhttps://evil.example/x"), null);
+    assert.equal(H.normalizeExternalListUrl("tmdb:chart:trending\nmdblist:watchlist"), null);
+    assert.equal(H.normalizeExternalListUrl("tmdb:chart:trending\n"), "tmdb:chart:trending");
+    assert.equal(H.normalizeExternalListUrl(Array.from({ length: 13 }, () => "tmdb:chart:popular").join("\n")), null);
   });
 
   it("like-external still rejects session/account-relative sentinels (no single shared list to like)", () => {
