@@ -1629,6 +1629,7 @@ ${seoHeadHtml}
     border-width: 0;
   }
   #discoverListsFeedHeader,
+  #listsSubLiked .shelf-header,
   #discoverSubPopular .shelf-header,
   #discoverSubCurated .shelf-header {
     display: flex;
@@ -1640,6 +1641,7 @@ ${seoHeadHtml}
     min-height: 32px;
   }
   #discoverListsFeedDesc,
+  #listsSubLiked .shelf-header p,
   #discoverSubPopular .shelf-header p,
   #discoverSubCurated .shelf-header p {
     margin: 0;
@@ -2547,6 +2549,20 @@ ${seoHeadHtml}
     .shelf-header > div {
       width: 100%;
       min-width: 0;
+    }
+    /* A Quick Add card keeps its title and "+ Add all" on one row on a
+       phone, the button at the far right, instead of stacking it full width
+       under the title like the other headers. */
+    .qa-shelf-card .shelf-header {
+      flex-direction: row !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      flex-wrap: nowrap !important;
+    }
+    .qa-shelf-card .shelf-header .qa-add-all-btn {
+      width: auto !important;
+      flex: none;
+      white-space: nowrap;
     }
     .list-card-header {
       display: flex !important;

@@ -4532,9 +4532,11 @@ describe("Lists -> Liked: the feed loads without being asked twice", () => {
   it("puts the panel in a card like every other Lists sub-panel", () => {
     const liked = markup.slice(markup.indexOf('id="listsSubLiked"'), markup.indexOf('id="listsSubCreateList"'));
     assert.match(liked, /<div class="panel">/, "Lists -> Liked must be a card");
-    assert.match(liked, /class="shelf-title">Lists You Liked</);
-    assert.match(liked, /<p style="margin:0 0 10px; color:var\(--muted\)/,
-      "and carry the same one-line description its siblings do");
+    assert.match(liked, /class="shelf-title sr-only">Lists You Liked</);
+    // The description sits inside the header, before the Refresh button, as on
+    // Discover's pages.
+    assert.match(liked, /<p>Lists you've saved with the heart[^<]*<\/p>\s*\$\{refreshButtonHtml\(/,
+      "and carry the same one-line description its siblings do, with Refresh after it");
     // The card has to close after the feed, not before it.
     assert.ok(liked.indexOf('id="likedListsFeed"') < liked.lastIndexOf("</div>"),
       "the feed must be inside the card");

@@ -6,6 +6,13 @@ All notable changes to **My Lists Addon** ([mylistsaddon.com](https://mylistsadd
 
 ## [Unreleased]
 
+### 🐛 Quick Add, Lists and Discover fixes
+
+- **Quick Add: "+ Add all" sits beside the title** at the far right on a phone too, instead of stretching full width under it.
+- **Lists → Liked** has its refresh button where the other pages have it (after the description), and each liked list says who it is by: "My Lists Addon" for the add-on's own charts, the service for a provider's chart (TMDB, Trakt, Simkl), or the owner of an MDBList, Trakt or Letterboxd list. It said "Community" for all of them. Charts of ours now show their real names.
+- **Discover → All: adding "New on Streaming: Movies" no longer turns the Shows button into Remove.** Both share one link, and the add buttons treated a list as added in any type. Each button now follows its own type, and Remove removes only that one.
+- **Discover reopens on the tab you were on** (All, Shows and so on) when you come back from another page, instead of always Movies.
+
 ### 🐛 Liking this add-on's own charts
 
 - **"Could Not Update Like – That URL can't be liked" is fixed for the add-on's own lists.** Most Watched, New on Streaming, the Better Posters lists, and combined charts (Trending, Streaming Top 10 (All Services) and the like) are now likeable. The like check only knew provider links and a short list of built-in chart IDs, so these were refused. A combined chart can be liked when every line of it can be. Personal shelves (Watchlist, History, Continue Watching) still can't be, since they are a different list for everyone.

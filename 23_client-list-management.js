@@ -3211,7 +3211,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
         [...row.querySelectorAll('.url')].some((u) => u.value.includes(chId))
       );
     } else {
-      isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(listUrl, type) || isListAddedToConfig(null, type, listUrl) || isListAddedToConfig(listUrl, 'movie') || isListAddedToConfig(listUrl, 'series') || isListAddedToConfig(listUrl)) : false;
+      isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(listUrl, type) || isListAddedToConfig(null, type, listUrl)) : false;
     }
     if (isAdded) {
       addBtn.textContent = 'Remove';
@@ -3431,7 +3431,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
       }
       return;
     }
-    const isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(listUrl, type) || isListAddedToConfig(null, type, listUrl) || isListAddedToConfig(listUrl, 'movie') || isListAddedToConfig(listUrl, 'series') || isListAddedToConfig(listUrl)) : false;
+    const isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(listUrl, type) || isListAddedToConfig(null, type, listUrl)) : false;
     if (isAdded) {
       if (typeof removeListFromConfig === 'function') {
         removeListFromConfig(listUrl, type);

@@ -30683,6 +30683,7 @@ ${seoHeadHtml}
     border-width: 0;
   }
   #discoverListsFeedHeader,
+  #listsSubLiked .shelf-header,
   #discoverSubPopular .shelf-header,
   #discoverSubCurated .shelf-header {
     display: flex;
@@ -30694,6 +30695,7 @@ ${seoHeadHtml}
     min-height: 32px;
   }
   #discoverListsFeedDesc,
+  #listsSubLiked .shelf-header p,
   #discoverSubPopular .shelf-header p,
   #discoverSubCurated .shelf-header p {
     margin: 0;
@@ -31601,6 +31603,20 @@ ${seoHeadHtml}
     .shelf-header > div {
       width: 100%;
       min-width: 0;
+    }
+    /* A Quick Add card keeps its title and "+ Add all" on one row on a
+       phone, the button at the far right, instead of stacking it full width
+       under the title like the other headers. */
+    .qa-shelf-card .shelf-header {
+      flex-direction: row !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      flex-wrap: nowrap !important;
+    }
+    .qa-shelf-card .shelf-header .qa-add-all-btn {
+      width: auto !important;
+      flex: none;
+      white-space: nowrap;
     }
     .list-card-header {
       display: flex !important;
@@ -35212,11 +35228,11 @@ if ('serviceWorker' in navigator) {
   <!-- Submenu 2: Liked Lists Feed -->
   <div class="lists-subpanel" id="listsSubLiked" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="shelf-title">Lists You Liked</h2>
+      <div class="shelf-header">
+        <h2 class="shelf-title sr-only">Lists You Liked</h2>
+        <p>Lists you've saved with the heart, from the community directory and from your connected accounts.</p>
         ${refreshButtonHtml('renderLikedListsFeed', 'Refresh liked lists', [true])}
       </div>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Lists you've saved with the heart, from the community directory and from your connected accounts.</p>
       <!-- The placeholder here is the pre-JS state only. renderLikedListsFeed
            overwrites it on every switch to this tab and is authoritative for
            the empty case -- nothing may read this element's children to decide
@@ -37823,7 +37839,7 @@ function updateAllListAddButtons() {
   document.querySelectorAll('.list-search-add-btn, .searchAddBtn').forEach((btn) => {
     const url = btn.dataset.url;
     const type = btn.dataset.type;
-    const isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(url, type) || isListAddedToConfig(url, 'movie') || isListAddedToConfig(url, 'series') || isListAddedToConfig(url)) : false;
+    const isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(url, type)) : false;
     btn.classList.toggle('is-added', isAdded);
     btn.classList.toggle('secondary', isAdded);
     btn.classList.toggle('primary', !isAdded);
@@ -46316,7 +46332,7 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
     const addedMovie = alreadyAdded.has(item.url + '|movie');
     const addedSeries = alreadyAdded.has(item.url + '|series');
     const addedDirect = typeof isListAddedToConfig === 'function'
-      ? (isListAddedToConfig(item.url, item.type) || isListAddedToConfig(item.url, 'movie') || isListAddedToConfig(item.url, 'series') || isListAddedToConfig(item.url))
+      ? (isListAddedToConfig(item.url, item.type))
       : (alreadyAdded.has(item.url + '|' + item.type) || addedMovie || addedSeries);
     const alreadyLikedExt = getLikedListsSet().has(item.url);
 
@@ -46847,15 +46863,18 @@ document.addEventListener('click', async (e) => {
     const listName = rawName.replace(/:\\s*(Movies|Shows)$/i, '').trim();
     const listUrl = addBtn.dataset.url || '';
     const listType = addBtn.dataset.type || 'movie';
-    const isAdded = addBtn.classList.contains('is-added') || (typeof isListAddedToConfig === 'function' && (isListAddedToConfig(listUrl, listType) || isListAddedToConfig(listUrl, 'movie') || isListAddedToConfig(listUrl, 'series') || isListAddedToConfig(listUrl)));
+    const isAdded = addBtn.classList.contains('is-added') || (typeof isListAddedToConfig === 'function' && (isListAddedToConfig(listUrl, listType)));
     if (isAdded) {
       if (typeof removeListFromConfig === 'function') {
+        // This button's own type only: New on Streaming's Movies and Shows
+        // share one link, and removing one must leave the other. A mixed list
+        // is the one that is added as both.
         removeListFromConfig(listUrl, listType);
-        removeListFromConfig(listUrl, 'movie');
-        removeListFromConfig(listUrl, 'series');
-        removeListFromConfig(listUrl, 'mixed');
-        removeListFromConfig(listUrl);
         removeListFromConfig(null, listType, listUrl);
+        if (listType === 'mixed' || listType === 'unknown') {
+          removeListFromConfig(listUrl, 'movie');
+          removeListFromConfig(listUrl, 'series');
+        }
       }
       addBtn.classList.remove('is-added', 'secondary');
       addBtn.classList.add('primary');
@@ -47598,13 +47617,13 @@ async function renderLikedListsFeed(forceRefresh) {
           return placeholder;
         }
       }
-      const name = guessNameFromUrl(u);
+      const info = likedListInfo(u);
       const isSeries = u.toLowerCase().includes('show') || u.toLowerCase().includes('series') || u.toLowerCase().includes('tv');
       return {
         url: u,
-        name: name,
-        user: 'Community',
-        type: isSeries ? 'series' : 'movie',
+        name: info.name || guessNameFromUrl(u),
+        user: info.user,
+        type: info.type || (isSeries ? 'series' : 'movie'),
         items: 50,
         likes: 1
       };
@@ -47651,6 +47670,53 @@ async function renderLikedListsFeed(forceRefresh) {
   } catch (e) {
     container.innerHTML = '<p class="testresult err">&#x2717; Error loading liked lists.</p>';
   }
+}
+
+// Who a liked list is by, and what it is called, from its link alone. This
+// app's own charts (and a combined chart, which is several links, one per
+// line) are "My Lists Addon"; a provider's chart is the provider; a list on a
+// provider's site is its owner, from the link. Only when nothing says is it
+// "Community". Plain string work: no backslashes in here (the outer template
+// literal would eat them).
+function likedListInfo(link) {
+  const whole = String(link || '').trim();
+  const info = { user: 'Community', name: '', type: '' };
+  if (!whole) return info;
+  if (typeof CHART_SLUG_ENTRIES !== 'undefined' && Array.isArray(CHART_SLUG_ENTRIES)) {
+    const hit = CHART_SLUG_ENTRIES.find(function(e) { return e.movieUrl === whole || e.showUrl === whole; });
+    if (hit) {
+      info.name = hit.name;
+      info.type = (hit.showUrl === whole && hit.movieUrl !== whole) ? 'series' : 'movie';
+    }
+  }
+  if (whole.indexOf(String.fromCharCode(10)) >= 0) { info.user = 'My Lists Addon'; return info; }
+  const lower = whole.toLowerCase();
+  if (lower.indexOf('mylists:') === 0 || lower.indexOf('tmdb:new-on-streaming') === 0) { info.user = 'My Lists Addon'; return info; }
+  if (lower.indexOf('tmdb:') === 0) { info.user = 'TMDB'; return info; }
+  if (lower.indexOf('trakt:') === 0) { info.user = 'Trakt'; return info; }
+  if (lower.indexOf('simkl:') === 0) { info.user = 'Simkl'; return info; }
+  let u = null;
+  try { u = new URL(whole); } catch (e) { return info; }
+  const host = u.hostname.toLowerCase().replace(/^www[.]/, '');
+  const parts = u.pathname.split('/').filter(Boolean).map(function(p) { try { return decodeURIComponent(p); } catch (e) { return p; } });
+  if (host === 'themoviedb.org') { info.user = 'TMDB'; return info; }
+  if (host === 'simkl.com') { info.user = 'Simkl'; return info; }
+  if (host === 'mdblist.com') {
+    // mdblist.com/lists/<owner>/<list>, or lists/official/... for MDBList's own.
+    const owner = parts[0] === 'lists' ? parts[1] : '';
+    info.user = (!owner || owner.toLowerCase() === 'official') ? 'MDBList' : owner;
+    return info;
+  }
+  if (host === 'trakt.tv') {
+    const owner = parts[0] === 'users' ? parts[1] : '';
+    info.user = owner || 'Trakt';
+    return info;
+  }
+  if (host === 'letterboxd.com') {
+    info.user = parts[0] || 'Letterboxd';
+    return info;
+  }
+  return info;
 }
 
 function render5PosterListsFeed(container, lists) {
@@ -78970,7 +79036,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
         [...row.querySelectorAll('.url')].some((u) => u.value.includes(chId))
       );
     } else {
-      isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(listUrl, type) || isListAddedToConfig(null, type, listUrl) || isListAddedToConfig(listUrl, 'movie') || isListAddedToConfig(listUrl, 'series') || isListAddedToConfig(listUrl)) : false;
+      isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(listUrl, type) || isListAddedToConfig(null, type, listUrl)) : false;
     }
     if (isAdded) {
       addBtn.textContent = 'Remove';
@@ -79190,7 +79256,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
       }
       return;
     }
-    const isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(listUrl, type) || isListAddedToConfig(null, type, listUrl) || isListAddedToConfig(listUrl, 'movie') || isListAddedToConfig(listUrl, 'series') || isListAddedToConfig(listUrl)) : false;
+    const isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(listUrl, type) || isListAddedToConfig(null, type, listUrl)) : false;
     if (isAdded) {
       if (typeof removeListFromConfig === 'function') {
         removeListFromConfig(listUrl, type);
@@ -83360,7 +83426,13 @@ function appShellApplyRoute(route) {
   if (tab.id === 'discover') {
     if (rawSub === 'movies') rawSub = 'movie';
     if (rawSub === 'shows') rawSub = 'series';
-    if (!rawSub) rawSub = 'movie';
+    // No tab named (the bottom bar, Back from a list): the one the person was
+    // on, in this visit, else the one last used -- not always Movies.
+    if (!rawSub) {
+      let remembered = '';
+      try { remembered = localStorage.getItem('myListAddon:discoverSubmenu') || ''; } catch (e) {}
+      rawSub = (typeof window !== 'undefined' && window._currentDiscoverFilter) || remembered || 'movie';
+    }
   }
   const sub = (rawSub && tab.subs.indexOf(rawSub) !== -1) ? rawSub : '';
   appShellApplyingRoute = true;

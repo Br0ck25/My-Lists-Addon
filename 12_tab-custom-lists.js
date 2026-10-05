@@ -72,11 +72,11 @@
   <!-- Submenu 2: Liked Lists Feed -->
   <div class="lists-subpanel" id="listsSubLiked" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="shelf-title">Lists You Liked</h2>
+      <div class="shelf-header">
+        <h2 class="shelf-title sr-only">Lists You Liked</h2>
+        <p>Lists you've saved with the heart, from the community directory and from your connected accounts.</p>
         ${refreshButtonHtml('renderLikedListsFeed', 'Refresh liked lists', [true])}
       </div>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Lists you've saved with the heart, from the community directory and from your connected accounts.</p>
       <!-- The placeholder here is the pre-JS state only. renderLikedListsFeed
            overwrites it on every switch to this tab and is authoritative for
            the empty case -- nothing may read this element's children to decide

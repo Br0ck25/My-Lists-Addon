@@ -3774,7 +3774,13 @@ function appShellApplyRoute(route) {
   if (tab.id === 'discover') {
     if (rawSub === 'movies') rawSub = 'movie';
     if (rawSub === 'shows') rawSub = 'series';
-    if (!rawSub) rawSub = 'movie';
+    // No tab named (the bottom bar, Back from a list): the one the person was
+    // on, in this visit, else the one last used -- not always Movies.
+    if (!rawSub) {
+      let remembered = '';
+      try { remembered = localStorage.getItem('myListAddon:discoverSubmenu') || ''; } catch (e) {}
+      rawSub = (typeof window !== 'undefined' && window._currentDiscoverFilter) || remembered || 'movie';
+    }
   }
   const sub = (rawSub && tab.subs.indexOf(rawSub) !== -1) ? rawSub : '';
   appShellApplyingRoute = true;
