@@ -2144,10 +2144,59 @@ async function fetchCuratedCatalog(entry, skip = 0, keys = {}) {
 // further down this file) -- since any of the three could be the first to
 // run after this split shipped, and whichever runs first must not
 // silently lose whatever was already saved the old way.
-// P10-4 (BE-M19): ensureTrackingMigrated is obsolete since all accounts
-// are migrated to DB_ACTIVITY under FF_EVENT_TRACKING.
+//
+// P10-4 emptied this on the grounds that every account had moved to
+// DB_ACTIVITY. Not so: an account that has not written anything since the
+// split still has its tracking only inside creatorsync:{username}, and
+// /api/creator/sync/save rewrites that record WITHOUT the tracking fields --
+// so with this empty, such an account's first autosave erased its watch
+// history. The activity copy (readLegacyActivity, 37_activity-backfill.js)
+// also relies on this. Restored as it was; it costs one KV read when the
+// tracking key already exists.
 async function ensureTrackingMigrated(env, username) {
-  return;
+  const existing = await env.CONFIGS.get(`creatorsynctracking:${username}`);
+  if (existing !== null) return; // already migrated (or already using the new key)
+  const oldRaw = await env.CONFIGS.get(`creatorsync:${username}`);
+  if (!oldRaw) return;
+  try {
+    const oldBlob = JSON.parse(oldRaw);
+    const hasTrackingData = (Array.isArray(oldBlob.watchHistory) && oldBlob.watchHistory.length) ||
+      (Array.isArray(oldBlob.continueWatching) && oldBlob.continueWatching.length) ||
+      (Array.isArray(oldBlob.watchlist) && oldBlob.watchlist.length) ||
+      (Array.isArray(oldBlob.fullyWatchedShowIds) && oldBlob.fullyWatchedShowIds.length) ||
+      (oldBlob.dismissedContinueWatching && Object.keys(oldBlob.dismissedContinueWatching).length) ||
+      typeof oldBlob.trackPlayback === "boolean";
+    if (!hasTrackingData) return;
+    await env.CONFIGS.put(`creatorsynctracking:${username}`, JSON.stringify({
+      watchHistory: Array.isArray(oldBlob.watchHistory) ? oldBlob.watchHistory : [],
+      continueWatching: Array.isArray(oldBlob.continueWatching) ? oldBlob.continueWatching : [],
+      watchlist: Array.isArray(oldBlob.watchlist) ? oldBlob.watchlist : [],
+      fullyWatchedShowIds: Array.isArray(oldBlob.fullyWatchedShowIds) ? oldBlob.fullyWatchedShowIds : [],
+      dismissedContinueWatching: oldBlob.dismissedContinueWatching && typeof oldBlob.dismissedContinueWatching === "object" ? oldBlob.dismissedContinueWatching : {},
+      trackPlayback: typeof oldBlob.trackPlayback === "boolean" ? oldBlob.trackPlayback : false,
+      updatedAt: Date.now(),
+    }));
+  } catch {
+    // old blob unreadable -- nothing to migrate
+  }
+}
+
+// The Continue Watching entries of one show still ahead of the furthest episode
+// watched. The playback ping and the media server webhook keep a show's old
+// entry when TMDB has nothing newer (it may only have failed), but an entry at
+// or before what was just watched offers an episode already seen, and kept it
+// for good: the show was not marked fully watched, so the episode sweep never
+// looked at it again (the shelf comparison found 93 of them, 2026-10-04).
+// Storyline suggestions and movies are kept as they are.
+function cwEntriesStillAhead(items, season, episode) {
+  const s = Number(season);
+  const e = Number(episode);
+  return (Array.isArray(items) ? items : []).filter((it) => {
+    if (!it || it.isCompanion || it.type === "movie" || it.seasonNum == null || it.episodeNum == null) return true;
+    const iS = Number(it.seasonNum);
+    const iE = Number(it.episodeNum);
+    return iS > s || (iS === s && iE > e);
+  });
 }
 
 async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
@@ -2345,7 +2394,11 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
       }
     }
     if (!items) {
-      const trackingRaw = await env.CONFIGS.get('creatorsynctracking:' + username);
+      let trackingRaw = await env.CONFIGS.get('creatorsynctracking:' + username);
+      if (!trackingRaw) {
+        await ensureTrackingMigrated(env, username);
+        trackingRaw = await env.CONFIGS.get('creatorsynctracking:' + username);
+      }
       if (trackingRaw) {
         const trackingBlob = JSON.parse(trackingRaw);
         items = slug === 'watch-history' ? trackingBlob.watchHistory : (slug === 'continue-watching' ? trackingBlob.continueWatching : (slug === 'airing-next' ? trackingBlob.airingNext : (trackingBlob.watchlist || [])));

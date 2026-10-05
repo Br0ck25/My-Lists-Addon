@@ -70,20 +70,10 @@
         </div>
       </details>
 
-      <!-- Importing from an install link is not offered in the new UI: an
-           install id is an unrevocable bearer credential that returns connected
-           accounts' tokens (SECURITY_AUDIT.md S-02), and a backup file does the
-           same job safely. The legacy page keeps it until P6-8 removes the old
-           markup for good. -->
-${newUi ? '' : `      <div style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px;">
-        <p style="margin:0 0 6px; font-weight:700; font-size:0.88rem;">Import from Install / Configure Link:</p>
-        <div class="row">
-          <input type="text" id="importLinkInput" placeholder="Paste an install or configure link here">
-          <button type="button" class="secondary lc-btn" data-act="importFromLink">Import link</button>
-          <button type="button" class="secondary lc-btn" data-act="restoreListsFromLink" title="Rebuild and restore custom lists &amp; channels from this link into My Lists without altering your catalog shelves">Restore Lists</button>
-        </div>
-      </div>
-`}
+      <!-- Importing from an install link is not offered: an install id is an
+           unrevocable bearer credential that returns connected accounts'
+           tokens (SECURITY_AUDIT.md S-02), and a backup file does the same job
+           safely. The classic page had it until it was retired (Release 21). -->
     </div>
 
     <!-- Export Lists & History (Universal CSV / Trakt / Letterboxd / MDBList / Simkl) -->

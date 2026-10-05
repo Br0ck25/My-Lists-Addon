@@ -28,7 +28,7 @@ async function fetchAllItemsForList(listUrl, type, btn, progressLabel) {
     // creatorName AND the key: an autotrack: source is this account's private
     // shelf and the server now requires proof rather than a claimed name.
     Object.assign(body, previewCreatorAuth());
-    const res = await fetch(ORIGIN + '/api/preview', {
+    const res = await creatorApiFetch(ORIGIN + '/api/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -173,7 +173,7 @@ async function saveItemsAsNewCustomList(name, type, items, visibility, extraProp
       };
       if (lastSyncedAt !== undefined) payload.lastSyncedAt = lastSyncedAt;
       if (baseItemIds !== undefined) payload.baseItemIds = baseItemIds;
-      const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+      const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -456,7 +456,7 @@ async function syncCustomListWithExternalSource(slug, btn, options) {
           baseItemIds: mergeResult.newBaseItemIds,
         };
         if (Number.isFinite(listMeta.updatedAt)) body.expectedUpdatedAt = listMeta.updatedAt;
-        const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+        const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),

@@ -36,10 +36,9 @@
   <div class="channels-subpanel" id="channelsSubMyChannels">
     <!-- The shell's own channel templates (P6-7): choose a template, look at
          what is playing today, then add the channel to the home screen.
-         Emitted only for a browser with the FF_NEW_UI cookie; every panel
-         below is unchanged, and the Custom template hands off to the legacy
-         builder itself until that is rewritten. -->
-${newUi ? '    <div id="appShellChannels"></div>' : ''}
+         Every panel below is unchanged, and the Custom template hands off to
+         the older builder itself until that is rewritten. -->
+    <div id="appShellChannels"></div>
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px; align-items:center; justify-content:space-between; gap:12px;">
         <div>
@@ -463,7 +462,7 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
         <button type="button" id="catalogSearchResetFiltersBtn" class="secondary lc-btn" data-act="resetSearchFilters" style="font-size:0.8rem; padding:4px 10px; min-height:30px; height:30px; border-radius:var(--radius-pill); display:none;">Reset</button>
       </div>
     </div>
-${newUi ? `    <!-- Where the lists come from, and in what order (new UI only): the chips
+    <!-- Where the lists come from, and in what order: the chips
          Discover's Explore section had, on Search's own list results. See
          setCatalogListSearchChip (19_client-search-and-likes.js). -->
     <div id="catalogListSearchChips" class="catalog-list-chips" style="display:none;">
@@ -480,7 +479,7 @@ ${newUi ? `    <!-- Where the lists come from, and in what order (new UI only): 
         <button type="button" class="catalog-list-chip" data-chip-kind="sort" data-chip-value="added" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;sort&quot;,&quot;added&quot;]">Most added</button>
       </div>
     </div>
-` : ''}
+
 
     <div id="catalogSearchResult" style="margin-top:14px;"></div>
   </div>

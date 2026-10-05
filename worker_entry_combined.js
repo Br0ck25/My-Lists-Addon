@@ -21,6 +21,13 @@
  * NEXT_VERSION_ARCHITECTURE.md.
  */
 
+// --- Which release this is ---------------------------------------------------
+//
+// Shown at the top of /admin and in the answer of the "Counts missing" tool,
+// so the owner can see which pasted file is live (docs/RELEASES.md). Change it
+// with every release.
+const WORKER_RELEASE = "21";
+
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
 // Every console call in the Worker goes through here. This top-level `console`
@@ -1606,12 +1613,10 @@ const BETTER_POSTER_PREWARM_FETCHES_PER_TICK = 8;
 
 // --- The new UI shell (Phase 6, P6-1) ----------------------------------------
 //
-// The frontend rebuild is chosen per browser through a cookie (`?ff_new_ui=1`
-// or `=0` sets it), and the FF_NEW_UI Worker variable sets what a browser that
-// has not chosen gets: off, the classic page; 1, the new interface for
-// everyone. The Worker decides once per request (isNewUiRequest,
-// 02_http-and-creator-utils.js) and renders the same page with the shell's
-// chrome around the existing views.
+// Every visitor gets the new interface: the page with the shell's chrome
+// around the existing views. The classic page, and the cookie and FF_NEW_UI
+// variable that chose between the two, were retired in Release 21
+// (appShellSwitchResponse, 02_http-and-creator-utils.js).
 //
 // This table is the ONE list of the site's top-level views. The Worker renders
 // the shell's navigation from it (buildAppShellNavHtml, 09_page-shell.js) and
@@ -1624,6 +1629,7 @@ const BETTER_POSTER_PREWARM_FETCHES_PER_TICK = 8;
 // inventing a second set of names. The first sub is that view's default.
 // A route whose sub is not in this list falls back to the view itself, so a
 // stale URL can never open a panel that does not exist.
+// The retired switch's cookie: only cleared now, never read.
 const NEW_UI_COOKIE = "FF_NEW_UI";
 
 
@@ -3455,6 +3461,13 @@ async function withSecurityHeaders(response, privatePath = false, extraSetCookie
   }
   const extra = securityHeaders(nonce, env);
   for (const key in extra) {
+    // Not on a 304. A browser keeps the page it already has and takes the
+    // 304's headers in place of the stored ones -- so a fresh nonce here
+    // stopped every script of that stored page, whose tags carry the nonce
+    // it was first sent with. Seen in Chromium on a reload: the page loaded
+    // with none of its scripts running (2026-10-04). Without the header on
+    // the 304, the stored policy, which matches the stored page, stays.
+    if (response.status === 304 && /^content-security-policy/i.test(key)) continue;
     if (!headers.has(key)) headers.set(key, extra[key]);
   }
   if (extraSetCookie && !headers.has("Set-Cookie")) {
@@ -3736,15 +3749,23 @@ function isD1ReplicaReadRequest(request) {
   // Exclude admin, session, auth, me, save, create, and maintenance routes
   if (/^\/(admin|api\/(session|me|creator|save|imports))\b/.test(pathname)) return false;
 
-  // Stremio / Nuvio catalog and install paths (including v2 /i/{token}/...)
-  if (/\/(manifest\.json|catalog\/|meta\/|subtitles\/)/.test(pathname)) return true;
+  // Stremio / Nuvio catalog and install paths (including v2 /i/{token}/...).
+  // Not /subtitles/: with a tracking install it is the playback ping, which
+  // reads the account's tracking and writes it back (handleSubtitlesTrack).
+  // Read from a replica that has not caught up, it writes the old state over
+  // the new one -- a title just removed from Continue Watching comes back.
+  if (/\/subtitles\//.test(pathname)) return false;
+  if (/\/(manifest\.json|catalog\/|meta\/)/.test(pathname)) return true;
 
   // Directory and search
   if (pathname === "/lists/public.json" || pathname === "/api/public-lists.json" || pathname === "/api/search-published-lists") return true;
 
   // Public lists and channels
   if (/^\/(lists|channel|channels)\//.test(pathname)) return true;
-  if (/^\/api\/lists\/[^/]+(\/items)?$/.test(pathname)) return true;
+  // Not /api/lists/:id: its owner reads it right after a change (PATCH, items)
+  // and sends the ETag back with the next one. No client sends the bookmark
+  // that would keep that read on a replica that has the change, so it could
+  // see the old list and get a 412 on its next write.
   if (pathname === "/api/channel-lineup" || pathname === "/api/channel-preset") return true;
 
   return false;
@@ -4331,6 +4352,23 @@ async function isCreatorAuthMemoized(key, storedHash, username) {
 function invalidateCreatorAuthMemo() {
   CREATOR_AUTH_MEMO.clear();
 }
+
+// The /api/creator/ routes the page signs with its session instead of the
+// Account Key (Release 19; CREATOR_SESSION_ROUTES in 16_ is the page's copy).
+const CREATOR_SESSION_PATH_PREFIXES = [
+  "/api/creator/sync/",
+  "/api/creator/lists",
+  "/api/creator/track-status",
+  "/api/creator/scrobble-token",
+  "/api/creator/scrobble-seen-users",
+  "/api/creator/restore",
+  "/api/preview",
+  "/api/save",
+  "/api/feedback",
+  "/api/lists/like",
+  "/api/channel/like",
+  "/api/channel/unpublish",
+];
 
 // --- Session management (P3a-4) -------------------------------------------
 const SESSION_COOKIE_NAME = "mla_session";
@@ -5240,26 +5278,6 @@ async function hashStringForKey(s) {
 // sent when the browser already holds a byte-identical copy.
 const BUILDER_PAGE_MEMO = new Map();
 
-// --- The new UI shell's cookie (Phase 6, P6-1) -------------------------------
-//
-// The shell (see APP_SHELL_TABS, 00_constants.js) is opt-in per BROWSER, not
-// per deployment: the Worker reads NEW_UI_COOKIE from the page request's own
-// headers. That is what lets the owner walk the new interface on their device
-// while everyone else keeps the page they know, and lets a rollback be a
-// cookie rather than a deploy.
-//
-// `?ff_new_ui=1` on any link sets it and `?ff_new_ui=0` clears it
-// (appShellSwitchResponse below), so nobody has to open developer tools.
-function readCookieValue(cookieHeader, name) {
-  const m = String(cookieHeader || "").match(new RegExp("(?:^|;\\s*)" + name + "=([^;]*)"));
-  if (!m) return "";
-  try {
-    return decodeURIComponent(m[1]);
-  } catch {
-    return m[1];
-  }
-}
-
 // --- Scrobble auth sunset (Phase 7, P7-6) --------------------------------------
 //
 // Webhooks originally carried the Creator Key in the query string (?creator=&key=),
@@ -5356,42 +5374,16 @@ function getLegacySunsetNotices(env) {
   ];
 }
 
-// The site's default for a browser that has not chosen: the FF_NEW_UI Worker
-// variable. Set to 1, every visitor gets the new interface; a browser that
-// chose (the cookie, `?ff_new_ui=0` or `=1`) keeps its choice either way.
-// handleFetch (25_) stamps it on the request, so every page route -- most of
-// which see the request but not env -- decides the same way.
-function newUiDefaultOn(env) {
-  const v = env ? env.FF_NEW_UI : undefined;
-  return v === "1" || v === "true" || v === true;
-}
-
-function isNewUiRequest(request) {
-  try {
-    const raw = readCookieValue(request && request.headers ? request.headers.get("Cookie") : "", NEW_UI_COOKIE).trim().toLowerCase();
-    if (raw === "1" || raw === "on" || raw === "true") return true;
-    if (raw === "0" || raw === "off" || raw === "false") return false;
-    return !!(request && request.newUiDefault === true);
-  } catch {
-    return false;
-  }
-}
-
-// "Off" is remembered as 0 rather than by clearing the cookie: with the new
-// interface the site's default, a browser with no cookie gets it, so clearing
-// would have undone the choice to keep the classic page.
-function appShellCookieHeader(on) {
-  return `${NEW_UI_COOKIE}=${on ? "1" : "0"}; Path=/; Max-Age=31536000; SameSite=Lax`;
-}
-
-// The one place the cookie is written. Returns null for every request that is
-// not asking to switch, so the caller can fall through to its normal routing.
-// The redirect drops the parameter, so the address people see and share never
-// carries it.
+// --- The classic page, retired (Release 21) ----------------------------------
+//
+// Until Release 21 the new interface (the shell, APP_SHELL_TABS in
+// 00_constants.js) was chosen per browser: a cookie, set by `?ff_new_ui=1` or
+// `=0`, and the FF_NEW_UI Worker variable for a browser that had not chosen.
+// Every visitor gets the shell now, and neither is read. Links that still carry
+// the parameter (bookmarks, old posts) are sent to the same address without
+// it, and the cookie is cleared, so nobody keeps a stale switch around.
 function appShellSwitchResponse(url) {
-  const raw = url.searchParams.get("ff_new_ui");
-  if (raw === null) return null;
-  const on = !(raw === "0" || raw === "off" || raw === "false" || raw === "");
+  if (url.searchParams.get("ff_new_ui") === null) return null;
   const clean = new URL(url.href);
   clean.searchParams.delete("ff_new_ui");
   const qs = clean.searchParams.toString();
@@ -5403,47 +5395,33 @@ function appShellSwitchResponse(url) {
     status: 302,
     headers: {
       Location: samePath + (qs ? "?" + qs : "") + (clean.hash || ""),
-      "Set-Cookie": appShellCookieHeader(on),
+      "Set-Cookie": `${NEW_UI_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`,
       "Cache-Control": "no-store",
     },
   });
 }
 
-// Every render of the page goes through this, so the shell and the page it
-// wraps can never disagree about which variant was asked for. A false
-// `newUi` is dropped rather than passed on, so the flag-off variants stay
-// exactly the renders they were before this existed (same memo key, same
-// bytes).
-function newUiPageOpts(request, opts) {
-  const out = Object.assign({}, opts || {});
-  if (isNewUiRequest(request)) out.newUi = true;
-  return out;
-}
-
 // Every page route renders through these two instead of calling renderBuilder
-// itself, so the variant is decided in exactly one place: the request.
+// itself. `request` is no longer read (it chose the variant while there were
+// two); the callers keep passing it.
 function renderPage(request, origin, opts) {
-  return renderBuilder(origin, newUiPageOpts(request, opts));
+  return renderBuilder(origin, opts || {});
 }
 
 function renderPageCached(request, origin, opts) {
-  return renderBuilderCached(origin, newUiPageOpts(request, opts));
+  return renderBuilderCached(origin, opts || {});
 }
 
 function renderBuilderCached(origin, opts) {
   // Only the argument-free variants are stable enough to memoize; anything
-  // carrying entries, keys or a deep link is rendered fresh. The shell is a
-  // variant of the same two: same arguments otherwise, different chrome, so
-  // it is memoized under its own key rather than re-rendering 1.6MB a load.
-  const shellOpts = Object.assign({}, opts || {});
-  const isShell = shellOpts.newUi === true;
-  if (!isShell) delete shellOpts.newUi;
-  const isDefault = Object.keys(shellOpts).length === 0;
-  const isBareConfigure = !!(shellOpts.isConfigureMode === true && Object.keys(shellOpts).length === 1);
+  // carrying entries, keys or a deep link is rendered fresh.
+  const o = opts || {};
+  const isDefault = Object.keys(o).length === 0;
+  const isBareConfigure = !!(o.isConfigureMode === true && Object.keys(o).length === 1);
   if (!isDefault && !isBareConfigure) {
-    return renderBuilder(origin, opts || {});
+    return renderBuilder(origin, o);
   }
-  const memoKey = `${origin}::${isBareConfigure ? "configure" : "default"}${isShell ? ":shell" : ""}`;
+  const memoKey = `${origin}::${isBareConfigure ? "configure" : "default"}`;
   const hit = BUILDER_PAGE_MEMO.get(memoKey);
   if (hit) return hit;
   const html = renderBuilder(origin, opts || {});
@@ -10176,14 +10154,11 @@ async function d1BumpStat(env, kind, buckets, amount) {
 async function bumpStat(env, kind) {
   if (!env || !env.CONFIGS) return;
   try {
-    if (env.ANALYTICS && typeof env.ANALYTICS.writeDataPoint === "function") {
-      env.ANALYTICS.writeDataPoint({
-        blobs: ["stat", String(kind), statsToday()],
-        doubles: [1],
-        indexes: [String(kind).slice(0, 96)],
-      });
-      return;
-    }
+    // D1 is where every counter is read from (readStatCount, loadStatsByDay,
+    // the leaderboards), so it is where every counter is written. From
+    // 2026-10-02 to the fix these went to Analytics Engine only, which
+    // nothing reads, and the admin dashboard froze at zero
+    // (recoverStatsFromAnalyticsEngine puts those days back).
     if (env.DB) {
       await d1BumpStat(env, kind, ["total", statsToday()], 1);
       return;
@@ -10223,22 +10198,6 @@ async function bumpStatBy(env, kind, amount) {
   if (!env || !env.CONFIGS || !amount) return;
   try {
     const totalKey = `stats:${kind}:total`;
-    
-    if (env.ANALYTICS && typeof env.ANALYTICS.writeDataPoint === "function") {
-      env.ANALYTICS.writeDataPoint({
-        blobs: ["stat", String(kind), "total"],
-        doubles: [Number(amount) || 1],
-        indexes: [String(kind).slice(0, 96)],
-      });
-      if (env.DB && kind.startsWith("sourcegroup:")) {
-        const groupName = kind.slice("sourcegroup:".length);
-        await env.DB.prepare(
-          "INSERT INTO source_groups (id, name, install_count) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET install_count = source_groups.install_count + excluded.install_count"
-        ).bind(groupName, groupName, amount).run();
-      }
-      return;
-    }
-
     if (env.DB && kind.startsWith("sourcegroup:")) {
       // Left exactly as it was: source groups have their own table, their
       // own read path in renderAdminDashboard, and their own branch in
@@ -10545,15 +10504,6 @@ async function recordTrackedEvent(env, eventType, id, title, mediaType) {
   if (!env || !env.CONFIGS || !id || isJunkTrackedId(id)) return;
   try {
     const day = statsToday();
-    if (env.ANALYTICS && typeof env.ANALYTICS.writeDataPoint === "function") {
-      env.ANALYTICS.writeDataPoint({
-        blobs: ["event", String(eventType), String(id), String(title || "").slice(0, 80), String(mediaType || "")],
-        doubles: [1],
-        indexes: [`evt:${eventType}:${id}`.slice(0, 96)],
-      });
-      await writeEventMetaIfChanged(env, eventType, id, title, mediaType);
-      return;
-    }
     // With D1 bound the counts go there and cost ZERO KV writes, the same way
     // bumpStat's counters already did. This function was the biggest consumer
     // of the free plan's 1,000-writes-a-day budget that bumpStat's move left
@@ -10744,75 +10694,6 @@ async function d1LeaderboardCounts(env, eventType, window, candidateCap) {
   return rows.map((r) => ({ id: r.key, count: r.count }));
 }
 
-// P8-2: Reads Most Watched from title_daily_stats (populated by rollup.daily)
-// joined with media table, avoiding table scans over stats.
-async function d1MostWatchedFromTitleDailyStats(env, window, mediaTypeFilter, candidateCap) {
-  if (!env || !env.DB) return null;
-  try {
-    const wantType = mediaTypeFilter === "movie" || mediaTypeFilter === "series" ? mediaTypeFilter : null;
-    let rows;
-    if (window === "alltime") {
-      const sql = wantType
-        ? `SELECT m.imdb_id, m.tmdb_id, m.kind AS media_type, m.title, SUM(t.n) AS total
-           FROM title_daily_stats t
-           JOIN media m ON m.id = t.media_id
-           WHERE (t.event_type = 'play' OR t.event_type = 'watched') AND m.kind = ?
-           GROUP BY t.media_id
-           ORDER BY total DESC
-           LIMIT ?`
-        : `SELECT m.imdb_id, m.tmdb_id, m.kind AS media_type, m.title, SUM(t.n) AS total
-           FROM title_daily_stats t
-           JOIN media m ON m.id = t.media_id
-           WHERE (t.event_type = 'play' OR t.event_type = 'watched')
-           GROUP BY t.media_id
-           ORDER BY total DESC
-           LIMIT ?`;
-      const stmt = wantType ? env.DB.prepare(sql).bind(wantType, candidateCap) : env.DB.prepare(sql).bind(candidateCap);
-      const res = await stmt.all();
-      rows = res && res.results ? res.results : [];
-    } else {
-      const days = window === "today" ? 1 : parseInt(window, 10) || 7;
-      const nowMs = Date.now();
-      const oldest = easternDateKey(new Date(nowMs - (days - 1) * 86400000));
-      const newest = easternDateKey(new Date(nowMs));
-      const sql = wantType
-        ? `SELECT m.imdb_id, m.tmdb_id, m.kind AS media_type, m.title, SUM(t.n) AS total
-           FROM title_daily_stats t
-           JOIN media m ON m.id = t.media_id
-           WHERE (t.event_type = 'play' OR t.event_type = 'watched') AND t.day >= ? AND t.day <= ? AND m.kind = ?
-           GROUP BY t.media_id
-           ORDER BY total DESC
-           LIMIT ?`
-        : `SELECT m.imdb_id, m.tmdb_id, m.kind AS media_type, m.title, SUM(t.n) AS total
-           FROM title_daily_stats t
-           JOIN media m ON m.id = t.media_id
-           WHERE (t.event_type = 'play' OR t.event_type = 'watched') AND t.day >= ? AND t.day <= ?
-           GROUP BY t.media_id
-           ORDER BY total DESC
-           LIMIT ?`;
-      const stmt = wantType
-        ? env.DB.prepare(sql).bind(oldest, newest, wantType, candidateCap)
-        : env.DB.prepare(sql).bind(oldest, newest, candidateCap);
-      const res = await stmt.all();
-      rows = res && res.results ? res.results : [];
-    }
-    if (rows && rows.length > 0) {
-      return rows.map((r) => {
-        const id = r.imdb_id || (r.tmdb_id ? `tmdb:${r.tmdb_id}` : "");
-        return {
-          id,
-          count: Number(r.total) || 0,
-          title: r.title || id,
-          mediaType: r.media_type,
-        };
-      }).filter((e) => e.id);
-    }
-  } catch (err) {
-    // Graceful fallback if title_daily_stats is not ready or throws
-  }
-  return null;
-}
-
 async function computeLeaderboard(env, eventType, window, mediaTypeFilter) {
   if (!env || !env.CONFIGS) return [];
   const prefix = `evtcount:${eventType}:`;
@@ -10832,16 +10713,11 @@ async function computeLeaderboard(env, eventType, window, mediaTypeFilter) {
   let dropZero = false;
 
   if (env.DB) {
-    if (eventType === "watched") {
-      const dailyStatsRows = await d1MostWatchedFromTitleDailyStats(env, window, wantType, CANDIDATE_CAP);
-      if (dailyStatsRows && dailyStatsRows.length > 0) {
-        candidates = dailyStatsRows;
-      } else {
-        candidates = await d1LeaderboardCounts(env, eventType, window, CANDIDATE_CAP);
-      }
-    } else {
-      candidates = await d1LeaderboardCounts(env, eventType, window, CANDIDATE_CAP);
-    }
+    // Every watch is counted in `stats` (recordTrackedEvent). title_daily_stats
+    // holds only the plays of accounts on event tracking, by UTC day, up to
+    // yesterday: reading it instead (as P8-2 did) dropped everyone else's
+    // watches and today's.
+    candidates = await d1LeaderboardCounts(env, eventType, window, CANDIDATE_CAP);
   } else if (window === "alltime") {
     const listResult = await listAllKeys(env.CONFIGS, prefix);
     const alltimeKeys = listResult.keys
@@ -10987,14 +10863,6 @@ async function recordSearchQuery(env, query) {
   if (q.length < 2) return;
   try {
     const day = statsToday();
-    if (env.ANALYTICS && typeof env.ANALYTICS.writeDataPoint === "function") {
-      env.ANALYTICS.writeDataPoint({
-        blobs: ["search", q, day],
-        doubles: [1],
-        indexes: ["search:" + q.slice(0, 88)],
-      });
-      return;
-    }
     // Same move as recordTrackedEvent above, and the same reason: three KV
     // writes per search, none of which the free plan's write budget can
     // afford. Nothing but counts here, so there is no meta to keep.
@@ -11525,62 +11393,171 @@ function recordListCopySlug(rawId, origin) {
   return /^[a-z0-9][a-z0-9-]{0,80}$/.test(slug) ? slug : null;
 }
 
-// Analytics Engine SQL API query helper (P8-2).
-// Queries the Analytics Engine SQL API using CF_ANALYTICS_TOKEN (or CLOUDFLARE_API_TOKEN)
-// and CF_ANALYTICS_ACCOUNT_ID (or CLOUDFLARE_ACCOUNT_ID).
-async function queryAnalyticsEngine(env, query) {
+// --- Putting back the counts Analytics Engine took (2026-10-02 onward) ----------
+//
+// From the P8-2 deploy (2026-10-02) to its fix, bumpStat, bumpStatBy,
+// recordTrackedEvent and recordSearchQuery wrote to Analytics Engine INSTEAD
+// of D1. Nothing reads Analytics Engine, so the admin dashboard and Most
+// Watched froze. Those writes are still in the dataset (it keeps 90 days), and
+// they are the only rows there whose blob1 is "stat", "event" or "search":
+// the per-request metrics (writeRequestMetrics) put a route family there.
+//
+// This adds them to D1 the way the counters would have. Each source row
+// (counter, day) is recorded as `aerecovery:<counter>` in the same batch --
+// one transaction -- as the additions, and an addition only happens while that
+// record is absent: a second run, or a run after a failed one, adds nothing
+// twice. Needs the Analytics Engine SQL API: CF_ANALYTICS_TOKEN (an API token
+// with Account Analytics: Read) and CF_ANALYTICS_ACCOUNT_ID.
+const AE_RECOVERY_LEDGER_PREFIX = "aerecovery:";
+const AE_RECOVERY_ROW_LIMIT = 50000;
+
+async function analyticsEngineRows(env, sql) {
   const token = env && (env.CF_ANALYTICS_TOKEN || env.CLOUDFLARE_API_TOKEN);
   const accountId = env && (env.CF_ANALYTICS_ACCOUNT_ID || env.CLOUDFLARE_ACCOUNT_ID);
-  if (!token || !accountId || !query) return null;
+  if (!token || !accountId) return { ok: false, error: "Set CF_ANALYTICS_TOKEN (Account Analytics: Read) and CF_ANALYTICS_ACCOUNT_ID first." };
+  let res;
   try {
-    const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/analytics_engine/sql`;
-    const resp = await fetch(url, {
+    res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/analytics_engine/sql`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: query,
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "text/plain" },
+      body: sql + " FORMAT JSON",
     });
-    if (!resp.ok) return null;
-    const json = await resp.json();
-    return json && Array.isArray(json.data) ? json.data : null;
-  } catch {
-    return null;
+  } catch (err) {
+    return { ok: false, error: "Analytics Engine could not be reached: " + safeErrorMessage(err) };
   }
+  const text = await res.text().catch(() => "");
+  if (!res.ok) return { ok: false, error: `Analytics Engine answered ${res.status}: ${text.slice(0, 200)}` };
+  let body = null;
+  try { body = JSON.parse(text); } catch {}
+  if (!body || !Array.isArray(body.data)) return { ok: false, error: "Analytics Engine sent an answer this could not read." };
+  return { ok: true, rows: body.data };
 }
 
-// P8-2: Backfill title_daily_stats from legacy stats table
-async function backfillTitleDailyStatsFromStats(env) {
-  if (!env || !env.DB) return { ok: false, error: "No DB binding" };
-  try {
-    let rowsWritten = 0;
-    // 1. Items with IMDb id (tt...)
-    const r1 = await env.DB.prepare(
-      `INSERT INTO title_daily_stats (day, event_type, media_id, n)
-       SELECT s.day, 'watched', m.id, s.n
-       FROM stats s
-       JOIN media m ON m.imdb_id = substr(s.kind, 13)
-       WHERE s.day != 'total' AND s.kind >= 'evt:watched:tt' AND s.kind < 'evt:watched:tu'
-       ON CONFLICT(day, event_type, media_id) DO UPDATE SET n = max(excluded.n, title_daily_stats.n)`
-    ).run();
-    rowsWritten += (r1?.meta?.changes || 0);
-
-    // 2. Items with TMDB id (tmdb:...)
-    const r2 = await env.DB.prepare(
-      `INSERT INTO title_daily_stats (day, event_type, media_id, n)
-       SELECT s.day, 'watched', m.id, s.n
-       FROM stats s
-       JOIN media m ON m.tmdb_id = CAST(substr(s.kind, 17) AS INTEGER)
-       WHERE s.day != 'total' AND s.kind >= 'evt:watched:tmdb:' AND s.kind < 'evt:watched:tmdb;'
-       ON CONFLICT(day, event_type, media_id) DO UPDATE SET n = max(excluded.n, title_daily_stats.n)`
-    ).run();
-    rowsWritten += (r2?.meta?.changes || 0);
-
-    return { ok: true, rowsWritten };
-  } catch (err) {
-    return { ok: false, error: err && err.message ? err.message : String(err) };
+// What there is to put back, per counter and day. `day` is "total" for a
+// counter bumpStatBy keeps as an all-time total only.
+async function readAnalyticsEngineCounts(env) {
+  const dataset = String((env && env.CF_ANALYTICS_DATASET) || "mylists_events");
+  if (!/^[A-Za-z0-9_]+$/.test(dataset)) return { ok: false, error: "CF_ANALYTICS_DATASET is not a dataset name." };
+  const limit = ` LIMIT ${AE_RECOVERY_ROW_LIMIT}`;
+  // Kept inside what the live API accepts (it refused both of these, 422):
+  //  - only functions its SQL reference lists. There is no concat ("unknown
+  //    function call: CONCAT"), so each query returns the raw blobs and the
+  //    counter names are put together here;
+  //  - GROUP BY takes column names only ("in the GROUP BY clause you may only
+  //    provide column names: formatDateTime(...)"). A name given with AS
+  //    counts: Cloudflare's own example groups "intDiv(...) * 60 AS t" by `t`.
+  //    Not `hour` or `day`, which the SQL also has as keywords (INTERVAL).
+  const sum = "SUM(_sample_interval * double1) AS n";
+  // An event carries no day of its own: the day is when it was written, in
+  // the Eastern time statsToday() counts in. Asked for by the hour, as a plain
+  // number, and turned into the Eastern day here (an hour never straddles two
+  // Eastern days), so the query needs no time zone support from the service.
+  const hourOf = "toUnixTimestamp(toStartOfHour(timestamp))";
+  const queries = {
+    stat: {
+      label: "Reading page views and other counters",
+      sql: `SELECT blob2, blob3, ${sum} FROM ${dataset} WHERE blob1 = 'stat' GROUP BY blob2, blob3${limit}`,
+      kindOf: (row) => String(row.blob2 || ""),
+      dayOf: (row) => String(row.blob3 || ""),
+    },
+    event: {
+      label: "Reading Most Watched and list adds",
+      sql: `SELECT blob2, blob3, ${hourOf} AS event_hour, ${sum} FROM ${dataset} WHERE blob1 = 'event' GROUP BY blob2, blob3, event_hour${limit}`,
+      kindOf: (row) => (row.blob2 && row.blob3 ? `evt:${row.blob2}:${row.blob3}` : ""),
+      dayOf: (row) => {
+        const seconds = Number(row.event_hour);
+        return Number.isFinite(seconds) && seconds > 0 ? easternDateKey(new Date(seconds * 1000)) : "";
+      },
+    },
+    search: {
+      label: "Reading searches",
+      sql: `SELECT blob2, blob3, ${sum} FROM ${dataset} WHERE blob1 = 'search' GROUP BY blob2, blob3${limit}`,
+      kindOf: (row) => (row.blob2 ? `searchq:${row.blob2}` : ""),
+      dayOf: (row) => String(row.blob3 || ""),
+    },
+  };
+  // Rows that end up on the same counter and day (none expected) are added
+  // together, so the ledger has one entry for each.
+  const merged = new Map();
+  const truncated = [];
+  for (const [source, q] of Object.entries(queries)) {
+    const r = await analyticsEngineRows(env, q.sql);
+    if (!r.ok) return { ...r, error: `${q.label}: ${r.error}` };
+    if (r.rows.length >= AE_RECOVERY_ROW_LIMIT) truncated.push(source);
+    for (const row of r.rows) {
+      const kind = q.kindOf(row);
+      const day = q.dayOf(row);
+      const n = Number(row.n) || 0;
+      if (!kind || n <= 0 || kind.length > 300) continue;
+      if (day !== "total" && !/^\d{4}-\d{2}-\d{2}$/.test(day)) continue;
+      // bumpStatBy kept writing source groups to D1 all along.
+      if (kind.startsWith("sourcegroup:")) continue;
+      const key = kind + "\u0000" + day;
+      const prev = merged.get(key);
+      if (prev) prev.n += n;
+      else merged.set(key, { source, kind, day, n });
+    }
   }
+  const out = [];
+  for (const r of merged.values()) {
+    const n = Math.round(r.n);
+    if (n > 0) out.push({ ...r, n });
+  }
+  return { ok: true, rows: out, truncated };
+}
+
+// Preview (apply false) or put back (apply true).
+async function recoverStatsFromAnalyticsEngine(env, { apply = false } = {}) {
+  if (!env || !env.DB) return { ok: false, error: "No database binding." };
+  const read = await readAnalyticsEngineCounts(env);
+  if (!read.ok) return read;
+  const rows = read.rows;
+  // Which of them were put back already.
+  const done = new Set();
+  for (let i = 0; i < rows.length; i += 50) {
+    const chunk = rows.slice(i, i + 50);
+    const { results } = await env.DB.prepare(
+      `SELECT kind, day FROM stats WHERE (kind, day) IN (${chunk.map(() => "(?, ?)").join(", ")})`
+    ).bind(...chunk.flatMap((r) => [AE_RECOVERY_LEDGER_PREFIX + r.kind, r.day])).all();
+    for (const x of results || []) done.add(x.kind + "\u0000" + x.day);
+  }
+  const todo = rows.filter((r) => !done.has(AE_RECOVERY_LEDGER_PREFIX + r.kind + "\u0000" + r.day));
+  const summary = { stat: 0, event: 0, search: 0 };
+  for (const r of todo) summary[r.source] += r.n;
+  const byKind = {};
+  for (const r of todo.filter((x) => x.source === "stat")) byKind[r.kind] = (byKind[r.kind] || 0) + r.n;
+  const result = {
+    ok: true,
+    applied: false,
+    rows: rows.length,
+    alreadyPutBack: rows.length - todo.length,
+    toPutBack: todo.length,
+    totals: summary,
+    counters: Object.fromEntries(Object.entries(byKind).sort((a, b) => b[1] - a[1]).slice(0, 25)),
+    truncated: read.truncated,
+  };
+  if (!apply || !todo.length) return result;
+
+  // One row = its additions plus its ledger record, all conditional on that
+  // record being absent; 15 rows (45 statements) per batch.
+  const ledgerAbsent = "WHERE NOT EXISTS (SELECT 1 FROM stats WHERE kind = ? AND day = ?)";
+  for (let i = 0; i < todo.length; i += 15) {
+    const stmts = [];
+    for (const r of todo.slice(i, i + 15)) {
+      const ledgerKind = AE_RECOVERY_LEDGER_PREFIX + r.kind;
+      const buckets = r.day === "total" ? ["total"] : ["total", r.day];
+      for (const bucket of buckets) {
+        stmts.push(env.DB.prepare(
+          `INSERT INTO stats (kind, day, n) SELECT ?, ?, ? ${ledgerAbsent} ON CONFLICT(kind, day) DO UPDATE SET n = n + excluded.n`
+        ).bind(r.kind, bucket, r.n, ledgerKind, r.day));
+      }
+      stmts.push(env.DB.prepare(
+        "INSERT INTO stats (kind, day, n) VALUES (?, ?, ?) ON CONFLICT(kind, day) DO NOTHING"
+      ).bind(ledgerKind, r.day, r.n));
+    }
+    await env.DB.batch(stmts);
+  }
+  return { ...result, applied: true };
 }
 
 // --- Counter reads -----------------------------------------------------------
@@ -11595,18 +11572,6 @@ async function backfillTitleDailyStatsFromStats(env) {
 // Deliberately NOT "D1 + KV summed": /admin/api/migrate-d1 COPIES the KV
 // value into D1, so summing would double every migrated counter.
 async function readStatCount(env, kind, bucket) {
-  if (env && (env.CF_ANALYTICS_TOKEN || env.CLOUDFLARE_API_TOKEN) && (env.CF_ANALYTICS_ACCOUNT_ID || env.CLOUDFLARE_ACCOUNT_ID)) {
-    try {
-      const sanitizedKind = String(kind || "").replace(/'/g, "''");
-      const sql = bucket === "total"
-        ? `SELECT SUM(_sample_interval * double1) AS total FROM mylists_events WHERE blob1 = 'stat' AND blob2 = '${sanitizedKind}'`
-        : `SELECT SUM(_sample_interval * double1) AS total FROM mylists_events WHERE blob1 = 'stat' AND blob2 = '${sanitizedKind}' AND blob3 = '${String(bucket || "").replace(/'/g, "''")}'`;
-      const rows = await queryAnalyticsEngine(env, sql);
-      if (rows && rows.length && rows[0].total != null) {
-        return Number(rows[0].total) || 0;
-      }
-    } catch {}
-  }
   if (env && env.DB) {
     try {
       const { results } = await env.DB.prepare(
@@ -12107,7 +12072,7 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/migrate-accounts": "admin.migrate.accounts",
   "/admin/api/migrate-day-counts": "admin.migrate.day-counts",
   "/admin/api/backfill-trending": "admin.backfill.trending",
-  "/admin/api/backfill-title-daily-stats": "admin.backfill.title-daily-stats",
+  "/admin/api/recover-stats-from-analytics": "admin.recover.stats-from-analytics",
   "/admin/api/new-on-streaming/sweep": "admin.new-on-streaming.sweep",
   "/admin/api/new-on-streaming/add": "admin.new-on-streaming.add",
   "/admin/api/installs/restore": "admin.installs.undo-move",
@@ -12116,6 +12081,7 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/activity-backfill/step": "admin.backfill.activity",
   "/admin/api/activity-backfill/restart": "admin.backfill.activity.restart",
   "/admin/api/jobs/ping": "admin.jobs.test",
+  "/admin/api/jobs/shelf-shadow-now": "admin.jobs.shelf-compare",
   "/admin/api/revoke-admin-session": "admin.session.revoke",
   "/admin/api/revoke-all-admin-sessions": "admin.session.revoke-all",
 };
@@ -12449,7 +12415,7 @@ async function renderAdminDashboard(env) {
   const [
     totalPV, todayPV, totalIN, todayIN, totalPP, todayPP,
     pvByDay, inByDay, ppByDay,
-    creatorResult, sourceGroupResult
+    creatorResult, sourceGroupResult, authKeyByDay
   ] = await Promise.all([
     readStatCount(env, "pageviews", "total"),
     readStatCount(env, "pageviews", today),
@@ -12465,7 +12431,13 @@ async function renderAdminDashboard(env) {
     // so this can't accidentally sweep those in as if they were accounts.
     listAllKeys(env.CONFIGS, "creator:"),
     listAllKeys(env.CONFIGS, "stats:sourcegroup:"),
+    loadStatsByDay(env, "authkey"),
   ]);
+  // Requests that still sent the Account Key where the session would do
+  // (Release 19): today, and the last 7 days.
+  let authKeyWeek = 0;
+  for (let i = 0; i < 7; i++) authKeyWeek += Number(authKeyByDay[easternDateKey(new Date(Date.now() - i * 86400000))]) || 0;
+  const authKeyToday = Number(authKeyByDay[today]) || 0;
 
   // Walks the last 30 calendar days explicitly (rather than just listing
   // whatever KV happens to have) so days with zero activity still show up
@@ -12737,7 +12709,7 @@ async function renderAdminDashboard(env) {
 </style></head>
 <body>
   <h1>Admin Dashboard</h1>
-  <p style="color:#8E8E93; margin-top:0;">My Lists Addon usage stats.</p>
+  <p style="color:#8E8E93; margin-top:0;">My Lists Addon usage stats. <span id="workerRelease">Release ${WORKER_RELEASE}</span></p>
   ${isD1Bound ? '' : '<div style="background:rgba(255,59,48,0.12); border:1px solid #FF3B30; border-radius:8px; padding:12px 16px; margin:0 0 18px; color:#FF3B30; font-size:0.88rem; line-height:1.4;"><strong>Warning: No D1 database bound.</strong> D1 is required for authoritative accounts, lists, full-text search, likes, feedback, and tracking. Please bind your D1 database as <code>DB</code> in the Cloudflare Dashboard (Worker Settings &rarr; Bindings).</div>'}
 
   <!-- Not a tablist: these three buttons do not reveal panels, they choose
@@ -12791,6 +12763,8 @@ async function renderAdminDashboard(env) {
   <div class="admin-tab-panel" data-admin-panel="creators">
     <div class="stat-cards">
       <div class="stat-card"><div class="stat-value">${totalCreatorCount}</div><div class="stat-label">Creator accounts${creatorTruncatedNote}</div></div>
+      <div class="stat-card"><div class="stat-value">${authKeyToday}</div><div class="stat-label">Saves that sent the Account Key today</div></div>
+      <div class="stat-card"><div class="stat-value">${authKeyWeek}</div><div class="stat-label">... in the last 7 days</div></div>
     </div>
     <div class="table-wrap">
       <table>
@@ -13157,6 +13131,10 @@ async function renderAdminDashboard(env) {
       <button type="button" class="admin-select" style="cursor:pointer;" id="jobsStatusBtn" data-act="runJobsStatus" ${isD1Bound ? '' : 'disabled'}>Check jobs</button>
       <span id="jobsStatusStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
       <div id="jobsStatusResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
+      <p style="color:#8E8E93; margin:12px 0 8px; font-size:0.8rem;"><strong>Compare shelves now</strong> runs the whole Continue Watching and Airing Next comparison (<code>shelf.shadow</code>) from this page, a few minutes instead of the hourly job's 15 hours, and shows why each difference is there. Keep the page open until it says Done. It only reads.</p>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="shelfCompareBtn" data-act="runShelfCompareNow" ${isD1Bound ? '' : 'disabled'}>Compare shelves now</button>
+      <span id="shelfCompareStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <div id="shelfCompareResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93; white-space:pre-wrap; word-break:break-word;"></div>
     </div>
 
     <div class="panel" style="margin:0; padding:14px 16px;">
@@ -13165,6 +13143,23 @@ async function renderAdminDashboard(env) {
       <button type="button" class="admin-select" style="cursor:pointer;" id="schemaCheckBtn" data-act="runSchemaCheck">Check schema</button>
       <span id="schemaCheckStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
       <div id="schemaCheckResult" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="panel" style="margin:0; padding:14px 16px;">
+      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Counts missing since 2 October</div>
+      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">From 2 October until the fix, page views, install links, playback pings, Most Watched, list adds and searches were counted in Cloudflare Analytics instead of here, so this dashboard showed zeros. This puts them back. It needs the secret <code>CF_ANALYTICS_TOKEN</code> (an API token with <em>Account Analytics: Read</em>) and the variable <code>CF_ANALYTICS_ACCOUNT_ID</code>. <strong>Preview</strong> shows what would be added; <strong>Put them back</strong> adds it. Running it again adds nothing twice.</p>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="statsRecoveryPreviewBtn" data-act="runStatsRecovery" data-act-args="${adminActArgs([false])}">Preview</button>
+      <button type="button" class="admin-select" style="cursor:pointer;" id="statsRecoveryApplyBtn" data-act="runStatsRecovery" data-act-args="${adminActArgs([true])}">Put them back</button>
+      <span id="statsRecoveryStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <div id="statsRecoveryResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
+    </div>
+
+    <div class="panel" style="margin:0; padding:14px 16px;">
+      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Export old data to R2 (a copy)</div>
+      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Copies every KV key that starts with the text below into the <code>BLOBS</code> bucket, under <code>kv-archive/</code>, a batch at a time, then writes a <code>manifest.json</code> when the copy is complete. It deletes nothing. Type the prefix exactly, with no <code>*</code> (for example <code>stats:</code>). Deleting old data is not safe yet: see docs/CUTOVER.md.</p>
+      <input type="text" id="kvExportPrefix" class="admin-select" placeholder="creator:" style="min-width:180px;">
+      <button type="button" class="admin-select" style="cursor:pointer;" id="kvExportBtn" data-act="runKvExport">Export</button>
+      <span id="kvExportStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
     </div>
 
     <div class="panel" style="margin:0; padding:14px 16px;">
@@ -14244,7 +14239,18 @@ async function renderAdminDashboard(env) {
             lines.push(line + '.');
             if (j.type === 'shelf.shadow' && j.last) {
               const t = j.last;
-              lines.push('  Last full comparison (' + t.accounts + ' accounts, finished ' + jobsAgo(t.finishedAt) + '): ' + (t.rate * 100).toFixed(2) + '% different. Continue Watching: ' + t.cw.both + ' the same, ' + t.cw.legacyOnly + ' only in the old, ' + t.cw.v2Only + ' only in the new, ' + t.cw.unknown + ' shows not known yet. Airing Next: ' + t.an.both + ' the same, ' + t.an.legacyOnly + ' only in the old, ' + t.an.v2Only + ' only in the new, ' + t.an.unknown + ' not known yet.' + (t.examples && t.examples.length ? ' Examples: ' + JSON.stringify(t.examples.slice(0, 3)) : ''));
+              lines.push('  Last full comparison (' + t.accounts + ' accounts, finished ' + jobsAgo(t.finishedAt) + '): ' + (t.rate * 100).toFixed(2) + '% different' + (t.rateNew != null ? ' (' + (t.rateNew * 100).toFixed(2) + '% leaving out mistakes in the old list)' : '') + '. Continue Watching: ' + t.cw.both + ' the same, ' + t.cw.legacyOnly + ' only in the old, ' + t.cw.v2Only + ' only in the new, ' + t.cw.unknown + ' shows not known yet. Airing Next: ' + t.an.both + ' the same, ' + t.an.legacyOnly + ' only in the old, ' + t.an.v2Only + ' only in the new, ' + t.an.unknown + ' not known yet.' + (t.examples && t.examples.length ? ' Examples: ' + JSON.stringify(t.examples.slice(0, 3)) : ''));
+              if (t.verdict) {
+                lines.push('  If FF_SHOW_SCHEDULE were on: ' + t.verdict.lost + ' lost, ' + t.verdict.changed + ' at another episode, ' + t.verdict.added + ' added, ' + t.verdict.oldWrong + ' old-list mistakes put right.');
+              }
+              // Why each difference is there (47_shelf-shadow.js), most common first.
+              if (t.cw.whyOld) {
+                const whyText = function (w) {
+                  const keys = Object.keys(w || {}).sort(function (a, b) { return w[b] - w[a]; });
+                  return keys.length ? keys.map(function (k) { return k + ' ' + w[k]; }).join(', ') : 'none';
+                };
+                lines.push('  Why: Continue Watching only in the old: ' + whyText(t.cw.whyOld) + '; only in the new: ' + whyText(t.cw.whyNew) + '. Airing Next only in the old: ' + whyText(t.an.whyOld) + '; only in the new: ' + whyText(t.an.whyNew) + '.');
+              }
             }
           });
           Object.keys(d.jobs.durable || {}).forEach(function (type) {
@@ -14739,6 +14745,113 @@ async function renderAdminDashboard(env) {
     // and what each omission silently costs. The consequence text is the
     // useful part: "creator_tombstones is missing" is not something an
     // operator can act on.
+    // The whole shelf comparison, a batch per request (runShelfShadowNow).
+    function shelfCompareWhy(w) {
+      const keys = Object.keys(w || {}).sort(function (a, b) { return w[b] - w[a]; });
+      return keys.length ? keys.map(function (k) { return k + ' ' + w[k]; }).join(', ') : 'none';
+    }
+
+    async function runShelfCompareNow() {
+      const btn = document.getElementById('shelfCompareBtn');
+      const status = document.getElementById('shelfCompareStatus');
+      const out = document.getElementById('shelfCompareResult');
+      btn.disabled = true;
+      out.textContent = '';
+      status.textContent = 'Starting...';
+      let state = { afterId: 0, round: null };
+      let total = null;
+      let scanned = 0;
+      try {
+        for (let i = 0; i < 2000; i++) {
+          const res = await fetch('/admin/api/jobs/shelf-shadow-now', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state) });
+          const data = await res.json();
+          if (!data.ok) { status.textContent = 'Stopped: ' + (data.error || 'unknown error'); break; }
+          if (data.total != null) total = data.total;
+          scanned += Number(data.scanned) || 0;
+          if (data.done) {
+            const t = data.last;
+            status.textContent = 'Done: ' + t.accounts + ' accounts compared.';
+            out.textContent = [
+              (t.rate * 100).toFixed(2) + '% different' + (t.rateNew != null ? '; ' + (t.rateNew * 100).toFixed(2) + '% leaving out mistakes in the old list.' : '.'),
+              t.verdict ? 'If FF_SHOW_SCHEDULE were on now: ' + t.verdict.lost + ' entries lost' + (t.verdict.lost ? ' (' + shelfCompareWhy(t.verdict.lostWhy) + ')' : '') + ', ' + t.verdict.changed + ' shown at another episode, ' + t.verdict.added + ' added; ' + t.verdict.oldWrong + ' mistakes in the old list put right. Shows not known yet keep their current entry.' : '',
+              'Continue Watching: ' + t.cw.both + ' the same, ' + t.cw.legacyOnly + ' only in the old, ' + t.cw.v2Only + ' only in the new, ' + t.cw.unknown + ' shows not known yet.',
+              '  Why only in the old: ' + shelfCompareWhy(t.cw.whyOld),
+              '  Why only in the new: ' + shelfCompareWhy(t.cw.whyNew),
+              'Airing Next: ' + t.an.both + ' the same, ' + t.an.legacyOnly + ' only in the old, ' + t.an.v2Only + ' only in the new, ' + t.an.unknown + ' not known yet.',
+              '  Why only in the old: ' + shelfCompareWhy(t.an.whyOld),
+              '  Why only in the new: ' + shelfCompareWhy(t.an.whyNew),
+              'Examples: ' + JSON.stringify(t.examples || []),
+            ].join(String.fromCharCode(10));
+            break;
+          }
+          status.textContent = 'Comparing... ' + scanned + (total ? ' of ' + total : '') + ' accounts so far.';
+          state = { afterId: data.afterId, round: data.round };
+        }
+      } catch (e) {
+        status.textContent = 'Stopped: network error. Press it again to start over.';
+      }
+      btn.disabled = false;
+    }
+
+    async function runKvExport() {
+      const btn = document.getElementById('kvExportBtn');
+      const status = document.getElementById('kvExportStatus');
+      const prefix = String(document.getElementById('kvExportPrefix').value || '').trim();
+      if (!prefix) { status.textContent = 'Type a prefix first.'; return; }
+      btn.disabled = true;
+      let state = { prefix: prefix };
+      try {
+        for (let i = 0; i < 5000; i++) {
+          const res = await fetch('/admin/api/export-kv-to-r2', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state) });
+          const data = await res.json();
+          if (!data.ok) { status.textContent = 'Stopped: ' + (data.error || 'unknown error') + ' (nothing is marked complete).'; break; }
+          if (data.done) { status.textContent = 'Done: ' + data.keysSoFar + ' keys copied, manifest at ' + data.manifestKey + '.'; break; }
+          status.textContent = 'Copying\u2026 ' + data.keysSoFar + ' keys so far.';
+          state = { prefix: prefix, runId: data.runId, part: data.part + 1, keysSoFar: data.keysSoFar, cursor: data.cursor };
+        }
+      } catch (e) {
+        status.textContent = 'Stopped: network error (nothing is marked complete).';
+      }
+      btn.disabled = false;
+    }
+
+    async function runStatsRecovery(apply) {
+      const status = document.getElementById('statsRecoveryStatus');
+      const out = document.getElementById('statsRecoveryResult');
+      const buttons = [document.getElementById('statsRecoveryPreviewBtn'), document.getElementById('statsRecoveryApplyBtn')];
+      buttons.forEach(function (b) { if (b) b.disabled = true; });
+      status.textContent = apply ? 'Putting the counts back\u2026' : 'Reading Cloudflare Analytics\u2026';
+      out.textContent = '';
+      try {
+        const res = await fetch('/admin/api/recover-stats-from-analytics', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apply: apply === true }),
+        });
+        const data = await res.json();
+        if (!data.ok) {
+          status.textContent = 'Failed: ' + (data.error || 'unknown error') + (data.release ? ' (Release ' + data.release + ')' : '');
+        } else {
+          status.textContent = data.applied
+            ? 'Done: ' + data.toPutBack + ' counts put back.'
+            : (data.toPutBack ? data.toPutBack + ' counts to put back' : 'Nothing left to put back') + (data.alreadyPutBack ? ' (' + data.alreadyPutBack + ' already back).' : '.');
+          const lines = [
+            'Page views, installs, pings and other counters: ' + data.totals.stat + '. Watched and list adds: ' + data.totals.event + '. Searches: ' + data.totals.search + '.',
+          ];
+          Object.keys(data.counters || {}).forEach(function (k) { lines.push(k + ': ' + data.counters[k]); });
+          if (data.truncated && data.truncated.length) lines.push('More rows than one pass reads (' + data.truncated.join(', ') + '): run it again.');
+          lines.forEach(function (line) {
+            const div = document.createElement('div');
+            div.textContent = line;
+            out.appendChild(div);
+          });
+        }
+      } catch (e) {
+        status.textContent = 'Failed: network error.';
+      }
+      buttons.forEach(function (b) { if (b) b.disabled = false; });
+    }
+
     async function runSchemaCheck() {
       const btn = document.getElementById('schemaCheckBtn');
       const status = document.getElementById('schemaCheckStatus');
@@ -18928,10 +19041,59 @@ async function fetchCuratedCatalog(entry, skip = 0, keys = {}) {
 // further down this file) -- since any of the three could be the first to
 // run after this split shipped, and whichever runs first must not
 // silently lose whatever was already saved the old way.
-// P10-4 (BE-M19): ensureTrackingMigrated is obsolete since all accounts
-// are migrated to DB_ACTIVITY under FF_EVENT_TRACKING.
+//
+// P10-4 emptied this on the grounds that every account had moved to
+// DB_ACTIVITY. Not so: an account that has not written anything since the
+// split still has its tracking only inside creatorsync:{username}, and
+// /api/creator/sync/save rewrites that record WITHOUT the tracking fields --
+// so with this empty, such an account's first autosave erased its watch
+// history. The activity copy (readLegacyActivity, 37_activity-backfill.js)
+// also relies on this. Restored as it was; it costs one KV read when the
+// tracking key already exists.
 async function ensureTrackingMigrated(env, username) {
-  return;
+  const existing = await env.CONFIGS.get(`creatorsynctracking:${username}`);
+  if (existing !== null) return; // already migrated (or already using the new key)
+  const oldRaw = await env.CONFIGS.get(`creatorsync:${username}`);
+  if (!oldRaw) return;
+  try {
+    const oldBlob = JSON.parse(oldRaw);
+    const hasTrackingData = (Array.isArray(oldBlob.watchHistory) && oldBlob.watchHistory.length) ||
+      (Array.isArray(oldBlob.continueWatching) && oldBlob.continueWatching.length) ||
+      (Array.isArray(oldBlob.watchlist) && oldBlob.watchlist.length) ||
+      (Array.isArray(oldBlob.fullyWatchedShowIds) && oldBlob.fullyWatchedShowIds.length) ||
+      (oldBlob.dismissedContinueWatching && Object.keys(oldBlob.dismissedContinueWatching).length) ||
+      typeof oldBlob.trackPlayback === "boolean";
+    if (!hasTrackingData) return;
+    await env.CONFIGS.put(`creatorsynctracking:${username}`, JSON.stringify({
+      watchHistory: Array.isArray(oldBlob.watchHistory) ? oldBlob.watchHistory : [],
+      continueWatching: Array.isArray(oldBlob.continueWatching) ? oldBlob.continueWatching : [],
+      watchlist: Array.isArray(oldBlob.watchlist) ? oldBlob.watchlist : [],
+      fullyWatchedShowIds: Array.isArray(oldBlob.fullyWatchedShowIds) ? oldBlob.fullyWatchedShowIds : [],
+      dismissedContinueWatching: oldBlob.dismissedContinueWatching && typeof oldBlob.dismissedContinueWatching === "object" ? oldBlob.dismissedContinueWatching : {},
+      trackPlayback: typeof oldBlob.trackPlayback === "boolean" ? oldBlob.trackPlayback : false,
+      updatedAt: Date.now(),
+    }));
+  } catch {
+    // old blob unreadable -- nothing to migrate
+  }
+}
+
+// The Continue Watching entries of one show still ahead of the furthest episode
+// watched. The playback ping and the media server webhook keep a show's old
+// entry when TMDB has nothing newer (it may only have failed), but an entry at
+// or before what was just watched offers an episode already seen, and kept it
+// for good: the show was not marked fully watched, so the episode sweep never
+// looked at it again (the shelf comparison found 93 of them, 2026-10-04).
+// Storyline suggestions and movies are kept as they are.
+function cwEntriesStillAhead(items, season, episode) {
+  const s = Number(season);
+  const e = Number(episode);
+  return (Array.isArray(items) ? items : []).filter((it) => {
+    if (!it || it.isCompanion || it.type === "movie" || it.seasonNum == null || it.episodeNum == null) return true;
+    const iS = Number(it.seasonNum);
+    const iE = Number(it.episodeNum);
+    return iS > s || (iS === s && iE > e);
+  });
 }
 
 async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
@@ -19129,7 +19291,11 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
       }
     }
     if (!items) {
-      const trackingRaw = await env.CONFIGS.get('creatorsynctracking:' + username);
+      let trackingRaw = await env.CONFIGS.get('creatorsynctracking:' + username);
+      if (!trackingRaw) {
+        await ensureTrackingMigrated(env, username);
+        trackingRaw = await env.CONFIGS.get('creatorsynctracking:' + username);
+      }
       if (trackingRaw) {
         const trackingBlob = JSON.parse(trackingRaw);
         items = slug === 'watch-history' ? trackingBlob.watchHistory : (slug === 'continue-watching' ? trackingBlob.continueWatching : (slug === 'airing-next' ? trackingBlob.airingNext : (trackingBlob.watchlist || [])));
@@ -27312,6 +27478,7 @@ async function checkForNewEpisodes(env, maxShowChecks) {
     // It is skipped rather than retried because the next full cycle will come
     // back to it anyway.
     try {
+    await ensureTrackingMigrated(env, username);
     let blob = null;
     if (env.DB) {
       blob = await readCreatorTrackingD1(env, username);
@@ -28423,13 +28590,9 @@ function resolveCuratedSlug(slug) {
 
 // --- The new UI shell's chrome (Phase 6, P6-1) ------------------------------
 //
-// Everything here is emitted only for a browser carrying the FF_NEW_UI cookie
-// (isNewUiRequest, 02_http-and-creator-utils.js), so the page every other
-// visitor gets is byte-for-byte the page they got before. The client bundle is
-// shared by both variants -- it is one content-hashed file (splitAppBundle,
-// 02_) -- so the shell's behaviour is not emitted from here: it lives in
-// 24_client-backup-restore-presets.js and keys off the NEW_UI flag in the
-// per-request preamble.
+// Every visitor gets this chrome (the classic page was retired in Release 21).
+// The shell's behaviour is not emitted from here: it lives in the shared,
+// content-hashed bundle (24_client-backup-restore-presets.js).
 //
 // The tabs are real links. Middle-click, copy-link, open-in-a-new-tab and the
 // back button all work with no JavaScript at all; the client intercepts a
@@ -28506,7 +28669,7 @@ function appActArgsServer(values) {
 
 function renderBuilder(
   origin,
-  { initialEntries = [], initialKeys = {}, isConfigureMode = false, deepLinkList = null, newUi = false } = {}
+  { initialEntries = [], initialKeys = {}, isConfigureMode = false, deepLinkList = null } = {}
 ) {
   const initialTmdbKey = initialKeys.tmdbKey || "";
   const initialMdblistKey = initialKeys.mdblistKey || "";
@@ -28605,15 +28768,14 @@ function renderBuilder(
     hasInitial ? initialEntries : STARTER_PACK_ENTRIES
   );
 
-  // The shell variant of the chrome. Both navs keep the legacy wrappers
-  // (`.tab-bar`, `.bottom-nav`) so the existing CSS -- including the mobile
-  // bottom bar -- applies to them unchanged; only the items differ, from
-  // buttons to links.
-  const appShellDesktopNavHtml = newUi ? buildAppShellNavHtml("desktop") : "";
-  const appShellMobileNavHtml = newUi ? buildAppShellNavHtml("mobile") : "";
+  // The shell's chrome. Both navs keep the old wrappers (`.tab-bar`,
+  // `.bottom-nav`) so the existing CSS -- including the mobile bottom bar --
+  // applies to them unchanged; the items are links rather than buttons.
+  const appShellDesktopNavHtml = buildAppShellNavHtml("desktop");
+  const appShellMobileNavHtml = buildAppShellNavHtml("mobile");
 
   return `<!DOCTYPE html>
-<html lang="en"${newUi ? ' data-app-shell="1"' : ''}>
+<html lang="en" data-app-shell="1">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -28633,7 +28795,7 @@ ${seoHeadHtml}
      on Android), so the page has no third-party origin at all and paints
      without waiting on one. See docs/DECISIONS.md D-20. -->
 <script nonce="${CSP_NONCE_PLACEHOLDER}">
-  ${newUi ? `var APP_SHELL_HEAD_ROUTES = ${jsonForScript(buildAppShellHeadRoutes())};` : ""}
+  var APP_SHELL_HEAD_ROUTES = ${jsonForScript(buildAppShellHeadRoutes())};
   if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
     document.documentElement.classList.add('dark-theme');
     try {
@@ -28657,13 +28819,7 @@ ${seoHeadHtml}
     // The new UI shell routes on real paths (/catalogs, /settings, ...), so
     // there the path -- not the last tab this browser used -- decides which
     // view opens. Same table the Worker rendered the nav from.
-    // APP_SHELL_HEAD_ROUTES is declared just above only on a shell page; this
-    // script is shared by both variants, so it must not name it unconditionally
-    // -- scope_check.mjs catches exactly that, and a legacy page would throw.
-    var shellRoute = null;
-    if (document.documentElement.getAttribute('data-app-shell') === '1' && typeof APP_SHELL_HEAD_ROUTES !== 'undefined') {
-      shellRoute = APP_SHELL_HEAD_ROUTES[p] || null;
-    }
+    var shellRoute = APP_SHELL_HEAD_ROUTES[p] || null;
     if (isDeep) {
       tab = h.startsWith('#/item?') ? 'item-details' : 'list-details';
     } else if (shellRoute) {
@@ -33684,10 +33840,6 @@ ${seoHeadHtml}
   }
   html[data-app-shell="1"] .catalog-list-chip:hover { border-color: var(--accent); color: var(--accent); }
   html[data-app-shell="1"] .catalog-list-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-  /* The floating "Unsaved changes to install link" banner is never shown on
-     a shell page: Catalogs' Generate Install Link button and Settings' Install
-     links card are where the link is made. */
-  html[data-app-shell="1"] #unsavedInstallBanner { display: none !important; }
 
   /* The shell's Settings cards (P6-2). The card itself is the ordinary
      .panel; these are the rows, the small action row and the status chip
@@ -33740,9 +33892,8 @@ ${seoHeadHtml}
   html[data-app-shell="1"] .app-shell-dedupe .app-shell-muted { margin: 4px 0 0; }
   html[data-app-shell="1"] .app-shell-dedupe input { margin-top: 2px; cursor: pointer; width: 16px; height: 16px; }
 
-  /* A visibility choice (P6-4) is a chip you can press: Private, Unlisted,
-     Public. The chosen one is highlighted; the one that needs the new list
-     service is disabled and says why. */
+  /* A chip you can press (the Imports and Channels screens). The chosen one
+     is highlighted; a disabled one is dimmed. */
   html[data-app-shell="1"] button.app-shell-chip {
     background: none; font: inherit; cursor: pointer;
   }
@@ -33750,17 +33901,6 @@ ${seoHeadHtml}
     color: var(--accent); border-color: var(--accent);
   }
   html[data-app-shell="1"] button.app-shell-chip[disabled] { cursor: not-allowed; opacity: 0.55; }
-
-  /* What is actually in a list, previewed before it is added (P6-5). */
-  html[data-app-shell="1"] .app-shell-explore-preview { padding: 2px 0 10px; }
-  html[data-app-shell="1"] .app-shell-explore-posters {
-    display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 8px;
-  }
-  html[data-app-shell="1"] .app-shell-explore-poster {
-    width: 58px; height: 87px; object-fit: cover; border-radius: 6px;
-    background: var(--panel-strong); border: 1px solid var(--border);
-  }
-  html[data-app-shell="1"] .app-shell-explore-poster-none { display: block; }
 
   /* Import progress (P6-6): how far the server has got, and a heading for the
      blocks under it. */
@@ -33820,88 +33960,6 @@ ${seoHeadHtml}
     border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size: 0.95rem;
   }
 
-  /* --- Floating Unsaved Changes to Install Link Banner -------------------- */
-  .unsaved-install-banner {
-    position: fixed;
-    bottom: calc(72px + env(safe-area-inset-bottom));
-    left: 50%;
-    transform: translateX(-50%) translateY(30px);
-    background: var(--surface);
-    color: var(--text);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-pill);
-    padding: 8px 14px 8px 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    box-shadow: var(--shadow-md);
-    z-index: 999;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-    white-space: nowrap;
-    max-width: calc(100vw - 24px);
-    font-size: 0.86rem;
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-  }
-  .unsaved-install-banner.show {
-    opacity: 1;
-    pointer-events: auto;
-    transform: translateX(-50%) translateY(0);
-  }
-  .unsaved-install-banner-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--warn);
-    box-shadow: 0 0 0 3px rgba(255, 149, 0, 0.2);
-    flex-shrink: 0;
-    animation: pulseDot 2s infinite ease-in-out;
-  }
-  .unsaved-install-banner-dot.up-to-date {
-    background: var(--success);
-    box-shadow: 0 0 0 3px rgba(52, 199, 89, 0.2);
-    animation: none;
-  }
-  @keyframes pulseDot {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.55; transform: scale(0.85); }
-  }
-  .unsaved-install-banner-btn {
-    background: var(--accent);
-    color: #ffffff;
-    border: none;
-    border-radius: var(--radius-pill);
-    padding: 5px 12px;
-    font-size: 0.80rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: background 0.15s ease, transform 0.1s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    flex-shrink: 0;
-  }
-  /* The label is what gives way when the banner runs out of room, not the
-     button. The banner is a nowrap flex row capped at calc(100vw - 24px),
-     and a flex item's default min-width:auto will not shrink below its
-     content -- which under white-space:nowrap is the full sentence. So the
-     line overflowed the banner's own box and pushed the button (flex-shrink:0)
-     past it: at 320px only 37px of the 111px "Update Link" button was on
-     screen, with .page's overflow-x:hidden leaving no way to reach the rest.
-     min-width:0 lets the text shrink; the ellipsis keeps it readable. */
-  #unsavedInstallText {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .unsaved-install-banner-btn:hover {
-    background: var(--accent-hover);
-  }
-  .unsaved-install-banner-btn:active {
-    transform: scale(0.96);
-  }
 /*MYLISTS_APP_CSS_END*/</style>
 <!-- fflate, for reading Trakt/Letterboxd export .zips entirely client-side.
      It used to be a cdn.jsdelivr.net script with an SRI hash: a third-party
@@ -33959,59 +34017,10 @@ ${seoHeadHtml}
   </header>
 
   <!-- Top Tab Bar (Desktop View) -->
-${newUi ? appShellDesktopNavHtml : `  <div class="tab-bar" role="tablist" aria-label="Main navigation">
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-catalogs" aria-controls="content-catalogs" aria-selected="false" tabindex="-1" data-tab="catalogs" data-act="switchTab" data-act-args="[&quot;catalogs&quot;]">Catalogs</button>
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-lists" aria-controls="content-lists" aria-selected="false" tabindex="-1" data-tab="lists" data-act="switchTab" data-act-args="[&quot;lists&quot;]">Lists</button>
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-channels" aria-controls="content-channels" aria-selected="false" tabindex="-1" data-tab="channels" data-act="switchTab" data-act-args="[&quot;channels&quot;]">Channels</button>
-    <button type="button" class="tab-btn active" role="tab" id="tab-desktop-discover" aria-controls="content-discover" aria-selected="true" tabindex="0" data-tab="discover" data-act="switchTab" data-act-args="[&quot;discover&quot;]">Discover</button>
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-search" aria-controls="content-search" aria-selected="false" tabindex="-1" data-tab="search" data-act="switchTab" data-act-args="[&quot;search&quot;]">Search</button>
-    <button type="button" class="tab-btn" role="tab" id="tab-desktop-settings" aria-controls="content-settings" aria-selected="false" tabindex="-1" data-tab="settings" data-act="switchTab" data-act-args="[&quot;settings&quot;]">Settings</button>
-  </div>`}
-
-  <!-- Unsaved Changes Floating Banner -->
-  <div id="unsavedInstallBanner" class="unsaved-install-banner">
-    <span id="unsavedInstallText" style="font-weight:600;">Unsaved changes to install link</span>
-    <button type="button" class="unsaved-install-banner-btn" id="unsavedInstallBtn" data-act="updateInstallLinkFromBanner">Update Link</button>
-  </div>
+${appShellDesktopNavHtml}
 
   <!-- Bottom Nav Bar (Mobile View - Persistent Glassmorphism) -->
-${newUi ? appShellMobileNavHtml : `  <nav class="bottom-nav" role="tablist" aria-label="Main navigation">
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-catalogs" aria-controls="content-catalogs" aria-selected="false" tabindex="-1" data-tab="catalogs" data-act="switchTab" data-act-args="[&quot;catalogs&quot;]" title="Catalogs">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
-      </svg>
-      Catalogs
-    </button>
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-lists" aria-controls="content-lists" aria-selected="false" tabindex="-1" data-tab="lists" data-act="switchTab" data-act-args="[&quot;lists&quot;]" title="Lists">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line>
-        <line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line>
-        <line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line>
-      </svg>
-      Lists
-    </button>
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-channels" aria-controls="content-channels" aria-selected="false" tabindex="-1" data-tab="channels" data-act="switchTab" data-act-args="[&quot;channels&quot;]" title="Channels">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>
-        <polyline points="17 2 12 7 7 2"></polyline>
-      </svg>
-      Channels
-    </button>
-    <button type="button" class="bottom-nav-item active" role="tab" id="tab-mobile-discover" aria-controls="content-discover" aria-selected="true" tabindex="0" data-tab="discover" data-act="switchTab" data-act-args="[&quot;discover&quot;]" title="Discover">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect>
-        <rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect>
-      </svg>
-      Discover
-    </button>
-    <button type="button" class="bottom-nav-item" role="tab" id="tab-mobile-settings" aria-controls="content-settings" aria-selected="false" tabindex="-1" data-tab="settings" data-act="switchTab" data-act-args="[&quot;settings&quot;]" title="Settings">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="3"></circle>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-      </svg>
-      Settings
-    </button>
-  </nav>`}
+${appShellMobileNavHtml}
 
   <script nonce="${CSP_NONCE_PLACEHOLDER}">
     (function() {
@@ -34392,19 +34401,9 @@ if ('serviceWorker' in navigator) {
     <!-- Reorderable Catalog Shelves -->
     <div id="lists"></div>
 
-    <!-- Duplicate rows toggle right above the Daily Randomizer -->
-${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-top:16px; padding:12px 16px; background:var(--surface); border-radius:12px; border:1px solid var(--border);">' +
-      '<div class="settings-toggle-row" style="padding:0;">' +
-        '<div style="flex:1; min-width:0; padding-right:12px;">' +
-          '<span style="font-weight:600; font-size:0.88rem; color:var(--text);">Hide titles already shown in rows above</span>' +
-          '<p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">The top row keeps everything; lower rows drop titles already shown above.</p>' +
-        '</div>' +
-        '<label class="ui-toggle" aria-label="Hide titles already shown in rows above">' +
-          '<input type="checkbox" id="catalogsDedupeCheckbox"' + (initialDedupeAcrossLists ? ' checked' : '') + ' data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:dedupeAcrossLists&quot;,&quot;@checked&quot;]">' +
-          '<span class="ui-toggle-slider"></span>' +
-        '</label>' +
-      '</div>' +
-    '</div>')}
+    <!-- The shell's "Hide titles already shown in rows above" toggle (P6-3),
+         right above the Daily Randomizer. -->
+    <div id="appShellHomeEditor"></div>
 
     <!-- 24-Hour Randomizer Controls -->
     <div style="margin-top:16px; padding:12px 16px; background:var(--surface); border-radius:12px; border:1px solid var(--border);">
@@ -34781,7 +34780,7 @@ ${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-t
   <div class="lists-subpanel" id="listsSubCreateList" style="display:none;">
     <!-- Inline "Add titles" search (P6-4), shell only: type, tap Add, and the
          title is in the draft this panel already saves. -->
-${newUi ? '    <div id="appShellAddTitles"></div>' : ''}
+    <div id="appShellAddTitles"></div>
 
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
@@ -34919,9 +34918,8 @@ ${newUi ? '    <div id="appShellAddTitles"></div>' : ''}
 
     <!-- The shell's own importer (P6-6): choose a Letterboxd, IMDb or Trakt
          file and the server does the matching, with real progress, a review
-         step, and the result saved as a list. Emitted only for a browser with
-         the FF_NEW_UI cookie, below the link importer. -->
-${newUi ? '    <div id="appShellImports"></div>' : ''}
+         step, and the result saved as a list. Below the link importer. -->
+    <div id="appShellImports"></div>
   </div>
 
 
@@ -34965,10 +34963,9 @@ ${newUi ? '    <div id="appShellImports"></div>' : ''}
   <div class="channels-subpanel" id="channelsSubMyChannels">
     <!-- The shell's own channel templates (P6-7): choose a template, look at
          what is playing today, then add the channel to the home screen.
-         Emitted only for a browser with the FF_NEW_UI cookie; every panel
-         below is unchanged, and the Custom template hands off to the legacy
-         builder itself until that is rewritten. -->
-${newUi ? '    <div id="appShellChannels"></div>' : ''}
+         Every panel below is unchanged, and the Custom template hands off to
+         the older builder itself until that is rewritten. -->
+    <div id="appShellChannels"></div>
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px; align-items:center; justify-content:space-between; gap:12px;">
         <div>
@@ -35392,7 +35389,7 @@ ${newUi ? '    <div id="appShellChannels"></div>' : ''}
         <button type="button" id="catalogSearchResetFiltersBtn" class="secondary lc-btn" data-act="resetSearchFilters" style="font-size:0.8rem; padding:4px 10px; min-height:30px; height:30px; border-radius:var(--radius-pill); display:none;">Reset</button>
       </div>
     </div>
-${newUi ? `    <!-- Where the lists come from, and in what order (new UI only): the chips
+    <!-- Where the lists come from, and in what order: the chips
          Discover's Explore section had, on Search's own list results. See
          setCatalogListSearchChip (19_client-search-and-likes.js). -->
     <div id="catalogListSearchChips" class="catalog-list-chips" style="display:none;">
@@ -35409,7 +35406,7 @@ ${newUi ? `    <!-- Where the lists come from, and in what order (new UI only): 
         <button type="button" class="catalog-list-chip" data-chip-kind="sort" data-chip-value="added" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;sort&quot;,&quot;added&quot;]">Most added</button>
       </div>
     </div>
-` : ''}
+
 
     <div id="catalogSearchResult" style="margin-top:14px;"></div>
   </div>
@@ -35486,20 +35483,10 @@ ${newUi ? `    <!-- Where the lists come from, and in what order (new UI only): 
         </div>
       </details>
 
-      <!-- Importing from an install link is not offered in the new UI: an
-           install id is an unrevocable bearer credential that returns connected
-           accounts' tokens (SECURITY_AUDIT.md S-02), and a backup file does the
-           same job safely. The legacy page keeps it until P6-8 removes the old
-           markup for good. -->
-${newUi ? '' : `      <div style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px;">
-        <p style="margin:0 0 6px; font-weight:700; font-size:0.88rem;">Import from Install / Configure Link:</p>
-        <div class="row">
-          <input type="text" id="importLinkInput" placeholder="Paste an install or configure link here">
-          <button type="button" class="secondary lc-btn" data-act="importFromLink">Import link</button>
-          <button type="button" class="secondary lc-btn" data-act="restoreListsFromLink" title="Rebuild and restore custom lists &amp; channels from this link into My Lists without altering your catalog shelves">Restore Lists</button>
-        </div>
-      </div>
-`}
+      <!-- Importing from an install link is not offered: an install id is an
+           unrevocable bearer credential that returns connected accounts'
+           tokens (SECURITY_AUDIT.md S-02), and a backup file does the same job
+           safely. The classic page had it until it was retired (Release 21). -->
     </div>
 
     <!-- Export Lists & History (Universal CSV / Trakt / Letterboxd / MDBList / Simkl) -->
@@ -35541,8 +35528,11 @@ ${newUi ? '' : `      <div style="margin-top:16px; border-top:1px solid var(--bo
     </div>
     <!-- The shell's own Settings cards (P6-2), filled by
          24_client-backup-restore-presets.js: this account's devices and this
-         browser's install link. Emitted only for a browser carrying the FF_NEW_UI cookie. -->
-${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
+         browser's install link. Its account and connections cards are gone:
+         Your Account above and External Accounts & API Keys already have both,
+         and the owner found every button twice. The older panels below are
+         unchanged. -->
+    <div id="appShellSettingsHome"></div>
   </div>
 
   <!-- Subpanel 2: Catalog & Display -->
@@ -36224,12 +36214,103 @@ ${newUi ? '    <div id="appShellSettingsHome"></div>' : ''}
 -->
 <script nonce="${CSP_NONCE_PLACEHOLDER}">
 const ORIGIN = (typeof location !== 'undefined' && location.origin) ? location.origin : ${jsonForScript(origin)};
+
+// --- Requests signed by the session, not the Account Key (Release 19) ---------
+//
+// Since sign-in sessions (FF_SESSIONS), a request that carries the Account Key
+// to an /api/creator/ route also gives this browser a 30-day session cookie,
+// and the routes that read and save the account's data accept that session in
+// place of the key. The server says on every /api/creator/ answer whose
+// session this browser holds (the X-MLA-Session header: the page cannot read
+// the HttpOnly cookie). Once it has said so for the account, those requests
+// go without the key: it no longer travels with every autosave and list edit.
+// When the session is gone (expired, or signed out elsewhere) the server
+// answers 401, and the request is sent once more exactly as before, key
+// included, which also starts a new session -- nobody is signed out by this.
+// Until a session is known (a fresh browser, a server without sessions),
+// nothing changes. Signing in, creating an account, recovery, key resets and
+// deleting always send the key: there the key is what is being checked. (A key
+// reset ends every session of the account, so a browser left with the old key
+// is signed out by the retry, as before.)
+const CREATOR_SESSION_ROUTES = [
+  '/api/creator/sync/',
+  '/api/creator/lists',
+  '/api/creator/track-status',
+  '/api/creator/scrobble-token',
+  '/api/creator/scrobble-seen-users',
+  // Release 20: the sign-in check every page load makes, previews and install
+  // links with personal rows, feedback, likes, and unpublishing a channel.
+  '/api/creator/restore',
+  '/api/preview',
+  '/api/save',
+  '/api/feedback',
+  '/api/lists/like',
+  '/api/channel/like',
+  '/api/channel/unpublish',
+];
+const CREATOR_SESSION_SEEN_KEY = 'myListAddon:sessionFor';
+
+function creatorRouteUsesSession(url) {
+  let path = '';
+  try {
+    path = new URL(String(url), ORIGIN).pathname;
+  } catch (e) {
+    return false;
+  }
+  return CREATOR_SESSION_ROUTES.some(function (p) { return path.indexOf(p) === 0; });
+}
+
+function creatorSessionHeldFor() {
+  try {
+    return localStorage.getItem(CREATOR_SESSION_SEEN_KEY) || '';
+  } catch (e) {
+    return '';
+  }
+}
+
+function noteCreatorSession(res) {
+  const who = res && res.headers && typeof res.headers.get === 'function' ? res.headers.get('X-MLA-Session') : null;
+  if (!who) return;
+  try {
+    localStorage.setItem(CREATOR_SESSION_SEEN_KEY, String(who).toLowerCase());
+  } catch (e) {}
+}
+
+function forgetCreatorSession() {
+  try {
+    localStorage.removeItem(CREATOR_SESSION_SEEN_KEY);
+  } catch (e) {}
+}
+
+async function creatorApiFetch(url, init) {
+  const opts = init || {};
+  let body = null;
+  if (typeof opts.body === 'string' && creatorRouteUsesSession(url)) {
+    try {
+      body = JSON.parse(opts.body);
+    } catch (e) {
+      body = null;
+    }
+  }
+  const name = body && typeof body === 'object' && !Array.isArray(body) && body.creatorName ? String(body.creatorName).toLowerCase() : '';
+  if (!name || !body.creatorKey || creatorSessionHeldFor() !== name) {
+    const res = await fetch(url, init);
+    noteCreatorSession(res);
+    return res;
+  }
+  const withoutKey = Object.assign({}, body);
+  delete withoutKey.creatorKey;
+  const res = await fetch(url, Object.assign({}, opts, { body: JSON.stringify(withoutKey), credentials: 'same-origin' }));
+  if (res.status !== 401) {
+    noteCreatorSession(res);
+    return res;
+  }
+  forgetCreatorSession();
+  const again = await fetch(url, init);
+  noteCreatorSession(again);
+  return again;
+}
 const IS_CONFIGURE = ${isConfigureMode};
-// Whether this page was served as the new UI shell (Phase 6, P6-1). It is a
-// cookie, so it differs per browser rather than per deploy -- everything that
-// depends on it lives in the bundle and reads this flag, because the bundle
-// itself is one shared, content-hashed file (splitAppBundle, 02_).
-const NEW_UI = ${newUi ? "true" : "false"};
 // Populated by the /lists/<slug> route (25_api-catalog-routes.js) when this
 // exact page load resolved a known chart slug -- e.g. loading
 // /lists/TMDB-Trending directly (a bookmark, a shared link, a refresh)
@@ -37265,11 +37346,6 @@ function navigateBackFromDetail() {
   } else {
     const targetTab = window._originTab || window._previousTab || localStorage.getItem('myListAddon:activeTab') || 'discover';
     const cleanTab = (targetTab === 'list-details' || targetTab === 'item-details') ? 'discover' : targetTab;
-    if (!appShellActive && (location.pathname.startsWith('/lists/') || location.pathname.startsWith('/channels/'))) {
-      try {
-        history.replaceState({ view: 'tab', tab: cleanTab }, '', '/');
-      } catch (e) {}
-    }
     switchTab(cleanTab);
     if (cleanTab === 'catalogs') {
       const targetSubmenu = window._previousCatalogsSubmenu || localStorage.getItem('myListAddon:catalogsSubmenu') || 'all';
@@ -37294,11 +37370,10 @@ function navigateBackFromDetail() {
 // Global state variables
 var suppressSave = false;
 // True once initAppShell (24_client-backup-restore-presets.js) has taken over
-// navigation on a shell page. While it is true the shell's router owns the
-// address bar: the legacy tab and sub-tab switchers still do all their DOM
-// work, but they route through the shell (appShellHandleNav) and skip their own
-// history writes, which all point at "/". Declared here because 16_ is the
-// first file whose functions read it.
+// navigation. From then on the tab and sub-tab switchers still do all their
+// DOM work, but route through the shell (appShellHandleNav). Before it, at
+// startup, they only draw: the address bar is the shell router's alone.
+// Declared here because 16_ is the first file whose functions read it.
 var appShellActive = false;
 var activeCreator = (function() {
   try {
@@ -37471,20 +37546,11 @@ function switchTab(name) {
     try {
       localStorage.setItem('myListAddon:activeTab', name);
     } catch (e) {}
-    // On a shell page the router wrote the URL (a real path per view) before
-    // calling this, so rewriting it to "/" here would undo that.
-    const isAppShell = appShellActive || (typeof document !== 'undefined' && document.documentElement && document.documentElement.getAttribute('data-app-shell') === '1');
-    if (!isAppShell) {
-      const hash = location.hash || '';
-      const isDetailUrl = hash.startsWith('#/item?') || hash.startsWith('#/list?') || (location.pathname.startsWith('/lists/') && location.pathname !== '/lists');
-      try {
-        if (isDetailUrl) {
-          history.pushState({ view: 'tab', tab: name, fromCatalogsSubmenu: window._currentCatalogsSubmenu }, '', '/');
-        } else {
-          history.replaceState({ view: 'tab', tab: name, fromCatalogsSubmenu: window._currentCatalogsSubmenu }, '', '/');
-        }
-      } catch (e) {}
-    }
+    // The address bar belongs to the shell's router (a real path per view).
+    // The classic page rewrote it to "/" here; that went with the classic page
+    // in Release 21. It also ran at startup, before the router had read the
+    // path, so a page opened at /settings (a bookmark, a reload) came up on
+    // Discover.
   }
 
   if (name === 'catalogs') {
@@ -38928,7 +38994,7 @@ async function loadUserFeedbackThreads() {
   const creatorKey = creatorName ? (localStorage.getItem('myListAddon:creatorKey') || '') : '';
 
   try {
-    const res = await fetch(ORIGIN + '/api/feedback/threads', {
+    const res = await creatorApiFetch(ORIGIN + '/api/feedback/threads', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -39068,7 +39134,7 @@ async function sendUserFeedbackReply() {
   const creatorAuth = feedbackCreatorAuth();
 
   try {
-    const res = await fetch(ORIGIN + '/api/feedback', {
+    const res = await creatorApiFetch(ORIGIN + '/api/feedback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -39111,7 +39177,7 @@ async function submitFeedback() {
   if (btn) btn.disabled = true;
   if (statusEl) { statusEl.textContent = 'Sending\u2026'; statusEl.style.color = 'var(--muted)'; }
   try {
-    const res = await fetch(ORIGIN + '/api/feedback', {
+    const res = await creatorApiFetch(ORIGIN + '/api/feedback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -39427,13 +39493,7 @@ function switchCatalogsSubmenu(filter, btn) {
   try {
     localStorage.setItem('myListAddon:catalogsSubmenu', filter || 'all');
   } catch (e) {}
-  const hash = location.hash || '';
-  const isDetailUrl = hash.startsWith('#/item?') || hash.startsWith('#/list?') || (location.pathname.startsWith('/lists/') && location.pathname !== '/lists');
-  if (!isDetailUrl && !appShellActive) {
-    try {
-      history.replaceState({ view: 'tab', tab: 'catalogs', fromCatalogsSubmenu: filter || 'all' }, '', '/');
-    } catch (e) {}
-  }
+  // No address-bar write here: the shell's router owns it (see switchTab).
   if (!btn) {
     const selector = filter === 'quickadd' ? '#catalogsFilterBar button:nth-child(2)' : (filter === 'bulk' ? '#catalogsFilterBar button:nth-child(3)' : '#catalogsFilterBar button:nth-child(1)');
     btn = document.querySelector(selector);
@@ -42952,7 +43012,7 @@ async function fetchAllItemsForList(listUrl, type, btn, progressLabel) {
     // creatorName AND the key: an autotrack: source is this account's private
     // shelf and the server now requires proof rather than a claimed name.
     Object.assign(body, previewCreatorAuth());
-    const res = await fetch(ORIGIN + '/api/preview', {
+    const res = await creatorApiFetch(ORIGIN + '/api/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -43097,7 +43157,7 @@ async function saveItemsAsNewCustomList(name, type, items, visibility, extraProp
       };
       if (lastSyncedAt !== undefined) payload.lastSyncedAt = lastSyncedAt;
       if (baseItemIds !== undefined) payload.baseItemIds = baseItemIds;
-      const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+      const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -43380,7 +43440,7 @@ async function syncCustomListWithExternalSource(slug, btn, options) {
           baseItemIds: mergeResult.newBaseItemIds,
         };
         if (Number.isFinite(listMeta.updatedAt)) body.expectedUpdatedAt = listMeta.updatedAt;
-        const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+        const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
@@ -44741,7 +44801,7 @@ function guessNameFromUrl(u) {
 async function detectListType(url, mdblistKey) {
   async function checkType(type) {
     try {
-      const res = await fetch(ORIGIN + '/api/preview', {
+      const res = await creatorApiFetch(ORIGIN + '/api/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(Object.assign({ url: url, type: type, mdblistKey: mdblistKey || '' }, previewCreatorAuth())),
@@ -45859,7 +45919,7 @@ async function fetchListPreviewOnce(listUrl, type, sample) {
   payload.simklKey = (skInput && skInput.value ? skInput.value.trim() : '') || readProviderSecret('myListAddon:simklKey') || '';
 
   try {
-    const res = await fetch(ORIGIN + '/api/preview', {
+    const res = await creatorApiFetch(ORIGIN + '/api/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -46328,7 +46388,7 @@ document.addEventListener('click', async (e) => {
 
     likeBtn.disabled = true;
     try {
-      const res = await fetch(ORIGIN + '/api/lists/like', {
+      const res = await creatorApiFetch(ORIGIN + '/api/lists/like', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // Likes need an account (checked above): one like per account,
@@ -46383,7 +46443,7 @@ document.addEventListener('click', async (e) => {
       }
       if (activeCreator) {
         const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-        fetch(ORIGIN + '/api/creator/sync/like', {
+        creatorApiFetch(ORIGIN + '/api/creator/sync/like', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, usernameSlug: usernameSlug, liked: !wasLiked }),
@@ -46413,7 +46473,7 @@ document.addEventListener('click', async (e) => {
 
     likeExternalBtn.disabled = true;
     try {
-      const res = await fetch(ORIGIN + '/api/lists/like-external', {
+      const res = await creatorApiFetch(ORIGIN + '/api/lists/like-external', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -46473,7 +46533,7 @@ document.addEventListener('click', async (e) => {
       }
       if (activeCreator) {
         const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-        fetch(ORIGIN + '/api/creator/sync/like', {
+        creatorApiFetch(ORIGIN + '/api/creator/sync/like', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, usernameSlug: listUrl, liked: !wasLiked }),
@@ -49511,7 +49571,7 @@ const CATALOG_LIST_SEARCH_SOURCES = {
 };
 
 function catalogListSearchChipsOn() {
-  return !!document.getElementById('catalogListSearchChips') && typeof NEW_UI !== 'undefined' && !!NEW_UI;
+  return !!document.getElementById('catalogListSearchChips');
 }
 
 function catalogListSearchWants(sourceId) {
@@ -62726,7 +62786,7 @@ async function toggleChannelDirectoryLike(code, btn) {
       body.creatorName = activeCreator.creatorName;
       body.creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
     }
-    const res = await fetch(ORIGIN + '/api/channel/like', {
+    const res = await creatorApiFetch(ORIGIN + '/api/channel/like', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -63134,7 +63194,7 @@ async function publishChannelToDirectory(channelId, btn) {
 // listing all do exactly the same thing.
 async function unpublishChannelByCode(code) {
   if (!code) return { ok: false, error: 'No code.' };
-  const res = await fetch(ORIGIN + '/api/channel/unpublish', {
+  const res = await creatorApiFetch(ORIGIN + '/api/channel/unpublish', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -64306,7 +64366,7 @@ function saveCustomList() {
     const visibility = getCustomListDraftVisibility();
     if (activeCreator) {
       const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-      fetch(ORIGIN + '/api/creator/lists/save', {
+      creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -64463,7 +64523,7 @@ async function saveCreatorListEdit(name) {
       if (cached.baseItemIds) body.baseItemIds = cached.baseItemIds;
     }
     if (baseline !== null) body.expectedUpdatedAt = baseline;
-    const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -68471,12 +68531,12 @@ function saveLocalCustomList(sourceRow, urlInput, payload, name) {
 // stays in the local store rather than being deleted, so it isn't lost.
 // --- Browser-only lists, and how one gets to an account (P6-9) --------------
 //
-// A list made while signed out lives in this browser alone (D-8). That is a
-// deliberate mode, not a bug -- but it is invisible, which is UX-H10, and
-// nothing in the old UI would move one to an account afterwards. The shell's
-// Lists view now says "Saved in this browser only" on every one of them and
-// offers two ways out: **Save to an account** and **Export** (a small JSON
-// file the same page can restore -- see appShellExportList in 24_).
+// A list made while signed out lives in this browser alone (D-8). Creating an
+// account moves every one of them up (migrateLocalCustomListsToAccount). The
+// shell's Lists view used to add a per-list "Save to an account" and "Export";
+// that view was taken off the page at the owner's request and deleted in
+// Release 21, along with the queue that carried a signed-out press of the
+// button through sign-in.
 //
 // What "browser only" means in code: an entry in the local custom-lists map
 // with no creatorSlug. Every list the account owns gets one -- it is stamped on
@@ -68485,13 +68545,10 @@ function saveLocalCustomList(sourceRow, urlInput, payload, name) {
 // answer to "does the account have this list".
 //
 // The push itself is the same request migrateLocalCustomListsToAccount has
-// always made; it is one function now so the sign-up migration and the per-list
-// button cannot drift apart.
+// always made.
 
 // The request, and nothing else: hand this list's payload to the account. The
-// caller decides what happens to the browser's copy afterwards, because the two
-// callers differ -- sign-up deletes it, the sign-in flush has nothing to delete
-// (signing in already cleared this browser's store).
+// caller decides what happens to the browser's copy afterwards.
 async function uploadLocalListPayloadToAccount(payload) {
   if (!activeCreator || !activeCreator.creatorName) return { ok: false, error: 'signed-out' };
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
@@ -68511,7 +68568,7 @@ async function uploadLocalListPayloadToAccount(payload) {
   if (list.lastSyncedAt != null) body.lastSyncedAt = list.lastSyncedAt;
   if (list.baseItemIds) body.baseItemIds = list.baseItemIds;
   try {
-    const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -68548,10 +68605,8 @@ function repointLocalListRowsToCreator(localSlug, result, visibility) {
   });
 }
 
-// One list, by the slug it has in this browser's store. Used by the shell's
-// "Save to an account" button (signed in) -- the signed-out path remembers the
-// payload instead, because signing in clears this browser's store before the
-// push can happen.
+// One list, by the slug it has in this browser's store (the sign-up
+// migration, below).
 async function saveLocalListToAccount(slug, opts) {
   const want = String(slug || '');
   const map = loadLocalCustomLists();
@@ -68577,99 +68632,9 @@ async function saveLocalListToAccount(slug, opts) {
   }
   // The account's list cache no longer describes reality (this list was not in
   // it). Re-fetching is the caller's job: the migration below moves several
-  // lists and refreshes once at the end, and the shell's card refreshes before
-  // it re-renders, so neither shows a list that has just moved as missing.
+  // lists and refreshes once at the end.
   if (typeof resetCreatorListsCache === 'function') resetCreatorListsCache();
   return result;
-}
-
-// A press of "Save to an account" while signed out. The payload is copied here
-// rather than looked up later on purpose: signing in calls
-// clearLocalAccountData(), which empties this browser's list store, so by the
-// time there is an account to save to there would be nothing left to read.
-let _pendingListSaves = [];
-function rememberPendingListSave(slug) {
-  const want = String(slug || '');
-  const map = loadLocalCustomLists();
-  const list = map[want];
-  if (!list || typeof list !== 'object') return false;
-  if (_pendingListSaves.some((p) => p && p.slug === want)) return true;
-  _pendingListSaves.push({
-    slug: want,
-    name: list.name || want,
-    type: list.type || 'movie',
-    items: Array.isArray(list.items) ? list.items : [],
-    visibility: 'private',
-  });
-  return true;
-}
-
-function pendingListSaves() {
-  return _pendingListSaves.slice();
-}
-
-// Runs right after a sign-in completes (submitRestoreProfile) and after an
-// account is created (submitCreateProfile -- where the whole-store migration
-// has usually already taken them, so this finds nothing to do). Every list
-// somebody asked to save is pushed, and the result is said out loud: a silent
-// failure here would leave a list in a store this page no longer shows.
-//
-// Signing in to an account that already has lists (opts.avoidExistingSlugs,
-// submitRestoreProfile) is the one case where a queued list's slug can already
-// be taken -- by a DIFFERENT list: the queue only ever holds lists the account
-// had never been told about, and /api/creator/lists/save treats a named slug as
-// "edit that list". A "Favorites" built signed out would have replaced the
-// account's own "Favorites". Such a list goes up without a slug and gets a free
-// one; and if the account's lists cannot be read, every one does -- a second
-// list can be deleted, an overwritten one cannot be brought back. Sign-up keeps
-// the slug: the account is new, and the migration has just uploaded the same
-// list under it, so re-using it is what keeps the flush from adding a copy.
-async function accountListSlugsForFlush() {
-  try {
-    const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-    if (!creatorKey || typeof fetchCreatorListsOnce !== 'function') return null;
-    const data = await fetchCreatorListsOnce(creatorKey);
-    if (!data || !data.ok || !Array.isArray(data.lists)) return null;
-    const taken = {};
-    data.lists.forEach((l) => { if (l && l.slug) taken[String(l.slug)] = true; });
-    return taken;
-  } catch (e) {
-    return null;
-  }
-}
-
-async function flushPendingListSaves(opts) {
-  if (!_pendingListSaves.length) return 0;
-  if (!activeCreator || !activeCreator.creatorName) return 0;
-  const waiting = _pendingListSaves;
-  _pendingListSaves = [];
-  const avoidExisting = !!(opts && opts.avoidExistingSlugs);
-  const taken = avoidExisting ? await accountListSlugsForFlush() : null;
-  let saved = 0;
-  let failed = 0;
-  for (const pending of waiting) {
-    const clash = avoidExisting && (!taken || taken[String(pending.slug)]);
-    const result = await uploadLocalListPayloadToAccount(clash ? Object.assign({}, pending, { slug: '' }) : pending);
-    if (result.ok) saved++; else failed++;
-  }
-  if (saved && typeof showToast === 'function') {
-    showToast(saved === 1
-      ? 'Saved "' + (waiting[0].name || 'your list') + '" to your account.'
-      : 'Saved ' + saved + ' lists to your account.', 'success');
-  }
-  if (failed && typeof showToast === 'function') {
-    showToast(failed === 1
-      ? 'One list could not be saved to your account -- press Save to an account on it to try again.'
-      : failed + ' lists could not be saved to your account -- press Save to an account on each to try again.', 'error');
-  }
-  if (saved && typeof resetCreatorListsCache === 'function') resetCreatorListsCache();
-  if (saved && typeof renderCreatorDashboard === 'function') { try { renderCreatorDashboard({ silent: true }); } catch (e) {} }
-  // The shell's Lists view is showing these as browser-only; it needs to hear
-  // that they moved.
-  if (saved && typeof appShellRenderListsHome === 'function') {
-    try { appShellRenderListsHome(); } catch (e) {}
-  }
-  return saved;
 }
 
 async function migrateLocalCustomListsToAccount() {
@@ -68879,7 +68844,7 @@ async function submitSetRecoveryAnswer() {
   if (!endSubmit) return;
 
   try {
-    const res = await fetch(ORIGIN + '/api/creator/recovery-answer', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/recovery-answer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -68945,7 +68910,7 @@ async function openResetAccountModal() {
       try {
         if (typeof clearLocalAccountData === 'function') clearLocalAccountData();
 
-        const res = await fetch(ORIGIN + '/api/creator/account/reset', {
+        const res = await creatorApiFetch(ORIGIN + '/api/creator/account/reset', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ creatorName: creatorName, creatorKey: creatorKey, confirm: 'RESET' }),
@@ -69021,7 +68986,7 @@ async function handleDeleteAccount() {
   if (status) status.innerHTML = '<p style="color:var(--muted); font-size:0.85rem;">Deleting account and all data\u2026</p>';
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
   try {
-    const res = await fetch(ORIGIN + '/api/creator/delete-account', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/delete-account', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       // The server requires confirm:"DELETE" on this specific irreversible
@@ -69473,7 +69438,7 @@ async function fetchScrobbleToken(rotate) {
   try { creatorKey = localStorage.getItem('myListAddon:creatorKey') || ''; } catch (e) {}
   if (!creatorKey) return '';
   try {
-    const res = await fetch(ORIGIN + '/api/creator/scrobble-token', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/scrobble-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, rotate: rotate === true }),
@@ -69586,7 +69551,7 @@ async function loadScrobbleSeenUsers() {
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
   box.innerHTML = '<span style="color:var(--muted); font-size:0.8rem;">Checking detected users\u2026</span>';
   try {
-    const res = await fetch(ORIGIN + '/api/creator/scrobble-seen-users', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/scrobble-seen-users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey }),
@@ -69673,7 +69638,7 @@ async function refreshTrackPlaybackStatus() {
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
   statusBox.innerHTML = '<small style="color:var(--muted);">Checking scrobble status\u2026</small>';
   try {
-    const res = await fetch(ORIGIN + '/api/creator/track-status', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/track-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey }),
@@ -69853,7 +69818,7 @@ function clearLocalAccountData() {
   // Clear form inputs
   const inputIds = [
     'tmdbKeyInput', 'mdblistKeyInput', 'traktKeyInput', 'traktUsernameInput', 'simklKeyInput',
-    'presetNameInput', 'channelNameInput', 'customListNameInput', 'bulkPasteBox', 'importLinkInput',
+    'presetNameInput', 'channelNameInput', 'customListNameInput', 'bulkPasteBox',
     'configJsonBox', 'customListSearchInput', 'channelSearchInput'
   ];
   inputIds.forEach((id) => {
@@ -69921,6 +69886,7 @@ async function switchCreatorProfile() {
       headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
     });
   } catch (e) {}
+  if (typeof forgetCreatorSession === 'function') forgetCreatorSession();
   clearLocalAccountData();
   if (typeof appShellState !== 'undefined' && appShellState && typeof appShellState.set === 'function') {
     appShellState.set({ account: null });
@@ -69964,7 +69930,7 @@ async function submitRestoreProfile() {
   if (!endSubmit) return;
 
   try {
-    const res = await fetch(ORIGIN + '/api/creator/restore', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/restore', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: name, creatorKey: key }),
@@ -69997,11 +69963,6 @@ async function submitRestoreProfile() {
     await loadCreatorSync();
     // After the sync load, so tokens this account keeps in sync are included.
     if (data.session && typeof importLocalConnectionsOnce === 'function') importLocalConnectionsOnce(data.creatorName);
-    // P6-9: a list marked "Save to an account" while signed out was copied out
-    // of the store before this sign-in (clearLocalAccountData empties it), and
-    // is pushed now -- which is the only moment it can be. This account may
-    // already have lists, so a clashing slug is not re-used (see the function).
-    await flushPendingListSaves({ avoidExistingSlugs: true });
   } catch (e) {
     errBox.innerHTML = '<p class="testresult err">Network error.</p>';
   } finally {
@@ -70045,7 +70006,7 @@ async function submitForgotKey() {
   if (!endSubmit) return;
 
   try {
-    const res = await fetch(ORIGIN + '/api/creator/reset-key', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/reset-key', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: name, recoveryAnswer: answer }),
@@ -70108,7 +70069,7 @@ async function submitForgotUsername() {
   if (!endSubmit) return;
 
   try {
-    const res = await fetch(ORIGIN + '/api/creator/forgot-username', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/forgot-username', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorKey: key, recoveryAnswer: answer || undefined }),
@@ -70158,7 +70119,7 @@ async function tryAutoRestoreCreatorProfile() {
   const key = localStorage.getItem('myListAddon:creatorKey');
   if (!name || !key) return;
   try {
-    const res = await fetch(ORIGIN + '/api/creator/restore', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/restore', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: name, creatorKey: key }),
@@ -70251,6 +70212,23 @@ function currentSyncAccountName() {
 // re-uploads every local list the account is missing. So a reset undid itself
 // as soon as another device woke up.
 //
+// What the server is retiring (P10-2, getLegacySunsetNotices; empty until
+// SUNSET_60DAY_START_DATE is set). Most entries name API routes this page
+// itself calls, which nobody visiting can do anything about, so only the one
+// a person acts on -- the media server webhook address -- is shown, once per
+// browser session.
+function showSunsetNoticesOnce(notices) {
+  if (!Array.isArray(notices) || !notices.length) return;
+  const forPeople = notices.filter((n) => n && n.feature === 'scrobble-legacy-auth' && typeof n.message === 'string');
+  if (!forPeople.length) return;
+  try {
+    if (sessionStorage.getItem('myListAddon:sunsetShown')) return;
+    sessionStorage.setItem('myListAddon:sunsetShown', '1');
+  } catch (e) {}
+  const n = forPeople[0];
+  if (typeof showToast === 'function') showToast(n.message, n.urgency === 'urgent' ? 'error' : 'info', { duration: 12000 });
+}
+
 // The server now stamps the reset and hands it back on /sync/load and
 // /sync/meta. This is the device's side: the last reset it has SEEN. A stamp
 // newer than this one means the account was emptied while this browser was not
@@ -70676,7 +70654,7 @@ async function pushChannelsSync() {
   try {
     const localChannels = channelsForCloudSync((typeof loadLocalChannels === 'function') ? loadLocalChannels() : {});
     const localMerged = (typeof loadLocalMergedChannels === 'function') ? loadLocalMergedChannels() : {};
-    const res = await fetch(ORIGIN + '/api/creator/sync/save-channels', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/sync/save-channels', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -70749,7 +70727,7 @@ async function pushCreatorSync() {
   // where "my list rows came back after opening the phone" came from.
   if (!creatorSyncGateOpen()) { deferSyncPush('config'); return; }
   try {
-    const res = await fetch(ORIGIN + '/api/creator/sync/save', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/sync/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -70997,7 +70975,7 @@ async function pushTrackingSync(opts) {
       'continue-watching': Number((localMap['continue-watching'] || {}).updatedAt) || 0,
       'watchlist': wlUpdatedAt,
     };
-    const res = await fetch(ORIGIN + '/api/creator/sync/save-tracking', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/sync/save-tracking', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -71167,7 +71145,7 @@ async function loadCreatorSync(opts) {
   const loadingFor = activeCreator.creatorName;
   const isStale = () => !activeCreator || activeCreator.creatorName !== loadingFor;
   try {
-    const res = await fetch(ORIGIN + '/api/creator/sync/load', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/sync/load', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey }),
@@ -71183,6 +71161,7 @@ async function loadCreatorSync(opts) {
       return;
     }
     window._lastCreatorSyncLoadedAt = Date.now();
+    showSunsetNoticesOnce(data.sunset_notices);
     // Before anything below adopts local state or pushes it up: was this
     // account emptied while this browser was asleep? If so its copy is stale by
     // definition, and uploading it is exactly how a reset used to undo itself.
@@ -72084,7 +72063,7 @@ async function submitCreateProfile() {
   if (!endSubmit) return;
 
   try {
-    const res = await fetch(ORIGIN + '/api/creator/create', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: name, displayName: displayName || undefined, recoveryAnswer: recoveryAnswer || undefined }),
@@ -72127,15 +72106,11 @@ async function submitCreateProfile() {
     renderTrackPlaybackSection();
     showKeyRevealModal(data.displayName, data.creatorKey);
     loadCreatorSync();
-    // A list somebody pressed "Save to an account" on while signed out is in
-    // the queue. The whole-store migration above uploads every hand-built list
-    // and usually takes it first, so the flush waits for the migration (which
-    // is not awaited here) and then clears the queue either way -- see
-    // flushPendingListSaves.
+    // Every hand-built list in this browser goes up to the new account. Not
+    // awaited: the key is already on screen.
     Promise.resolve()
       .then(function () { return migrateLocalCustomListsToAccount(); })
-      .catch(function () {})
-      .then(function () { return flushPendingListSaves(); });
+      .catch(function () {});
   } catch (e) {
     errBox.innerHTML = '<p class="testresult err">Network error.</p>';
   } finally {
@@ -72283,7 +72258,7 @@ async function confirmSaveAsCreator() {
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
   closeModal();
   try {
-    const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -72423,7 +72398,7 @@ async function hydrateCreatorListItems(data, creatorKey) {
     try {
       for (let i = 0; i < stale.length; i += ${CREATOR_LIST_ITEMS_BATCH_MAX}) {
         const slice = stale.slice(i, i + ${CREATOR_LIST_ITEMS_BATCH_MAX});
-        const res = await fetch(ORIGIN + '/api/creator/lists/items', {
+        const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/items', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -72471,7 +72446,7 @@ async function fetchCreatorListsOnce(creatorKey) {
   if (_creatorListsInFlight) return await _creatorListsInFlight;
   const p = (async () => {
     const askFor = async (offset, knownVersion, includeItems) => {
-      const res = await fetch(ORIGIN + '/api/creator/lists', {
+      const res = await creatorApiFetch(ORIGIN + '/api/creator/lists', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -72802,7 +72777,7 @@ async function uploadMissingLocalListsToAccount(lists, creatorKey) {
         if (l.synced != null) uploadBody.synced = l.synced;
         if (l.lastSyncedAt != null) uploadBody.lastSyncedAt = l.lastSyncedAt;
         if (l.baseItemIds) uploadBody.baseItemIds = l.baseItemIds;
-        const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+        const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(uploadBody),
@@ -72929,7 +72904,7 @@ async function renderCreatorDashboard(options) {
           const previousCount = sList.itemCount;
           sList.items = rowPayload.items;
           sList.itemCount = rowPayload.items.length;
-          fetch(ORIGIN + '/api/creator/lists/save', {
+          creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -73703,7 +73678,7 @@ if (_creatorDashEl) {
       const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
       recordCreatorListDeletion(slug);
       try {
-        const res = await fetch(ORIGIN + '/api/creator/lists/delete', {
+        const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/delete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, slug: slug }),
@@ -73849,7 +73824,7 @@ if (_creatorDashEl) {
           // account while being gone locally, which is precisely what the
           // backfill must not undo.
           recordCreatorListDeletion(slug);
-          fetch(ORIGIN + '/api/creator/lists/delete', {
+          creatorApiFetch(ORIGIN + '/api/creator/lists/delete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, slug: slug }),
@@ -74141,7 +74116,7 @@ async function persistCreatorListOrderFromDom() {
   if (activeCreator) {
     const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
     try {
-      await fetch(ORIGIN + '/api/creator/lists/reorder', {
+      await creatorApiFetch(ORIGIN + '/api/creator/lists/reorder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, order: order }),
@@ -74324,7 +74299,7 @@ async function submitCreateListModal() {
       const payload = { listId: generateChannelId(), type: type, items: initialItems, shuffle: false };
       if (activeCreator) {
         const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-        const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+        const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -74643,7 +74618,7 @@ async function saveCreatorListWithBaseline(list, removeItem, toastMessage) {
     // no updatedAt, and inventing one (0, Date.now()) would either reject
     // every save or assert a version this browser never saw.
     if (Number.isFinite(target.updatedAt)) body.expectedUpdatedAt = target.updatedAt;
-    return await fetch(ORIGIN + '/api/creator/lists/save', {
+    return await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -75018,7 +74993,7 @@ async function handleForegroundResumeSync() {
       const known = window._syncMetaStamps;
       if (known) {
         try {
-          const metaRes = await fetch(ORIGIN + '/api/creator/sync/meta', {
+          const metaRes = await creatorApiFetch(ORIGIN + '/api/creator/sync/meta', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey }),
@@ -75379,7 +75354,7 @@ async function testSourceRow(btn) {
     const previewKey = previewCreatorKey(url);
     if (previewKey) body.creatorKey = previewKey;
     if (keys.adultContentFilter || (typeof isAdultContentFilterEnabled === 'function' && isAdultContentFilterEnabled())) body.adultContentFilter = true;
-    const res = await fetch(ORIGIN + '/api/preview', {
+    const res = await creatorApiFetch(ORIGIN + '/api/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -76298,7 +76273,7 @@ async function renderLivePreview() {
         if (previewKey) body.creatorKey = previewKey;
         if (keys.hideNonDigitalReleases) body.hideNonDigitalReleases = true;
         if (keys.adultContentFilter) body.adultContentFilter = true;
-        const res = await fetch(ORIGIN + '/api/preview', {
+        const res = await creatorApiFetch(ORIGIN + '/api/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
@@ -78764,7 +78739,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
       if (keys.simklAccessToken) body.simklAccessToken = keys.simklAccessToken;
       if (creatorName) body.creatorName = creatorName;
       if (keys.adultContentFilter || (typeof isAdultContentFilterEnabled === 'function' && isAdultContentFilterEnabled())) body.adultContentFilter = true;
-      const res = await fetch(ORIGIN + '/api/preview', {
+      const res = await creatorApiFetch(ORIGIN + '/api/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -79568,294 +79543,6 @@ function applyImportedConfig(data) {
   else showToast('Your setup, lists, watch history, channels, and settings have been restored successfully.', 'success');
 }
 
-// --- import from an existing link -------------------------------------------
-//
-// Reads this add-on's own install link / configure link / stremio:// /
-// wako:// link back into rows, via the server's /api/resolve (same
-// resolveConfig() the manifest/configure routes use, so it works whether
-// the link is a short KV id or a legacy self-contained base64 blob). This
-// can only work for THIS add-on's own links -- a manifest from a different
-// Stremio add-on, or a screenshot of one, doesn't carry the original list
-// URLs anywhere recoverable, so there's no reliable way to reconstruct rows
-// from either of those; Bulk Add below is the practical fallback there.
-async function resolveInstallLinkData(raw) {
-  const cleaned = raw.replace(/^(?:stremio|nuvio|wako):\\/\\//i, 'https://');
-  const m = cleaned.match(/^(https?:\\/\\/[^/]+)?\\/([^/]+)\\/(?:manifest\\.json|configure)(?:[/?#]|$)/i);
-  let targetOrigin = null;
-  let config = null;
-  if (m) {
-    if (m[1]) targetOrigin = m[1];
-    config = m[2];
-  } else if (/^[A-Za-z0-9_-]{6,}$/.test(cleaned)) {
-    config = cleaned;
-  }
-  if (!config) {
-    return { ok: false, error: 'Could not find a config in that link -- paste the full install link (ending in /manifest.json) or a configure link.' };
-  }
-
-  // Only this site's own install links can be imported. This used to fetch
-  // /api/resolve (and, failing that, the manifest) from whatever origin the
-  // pasted link named, so one self-hosted deployment could import another's
-  // links -- which also pulled a stranger's provider tokens into this page.
-  // The hosted site is the only deployment now.
-  if (targetOrigin && targetOrigin.toLowerCase() !== ORIGIN.toLowerCase() && !/^https:\\/\\/(www\\.)?mylistsaddon\\.com$/i.test(targetOrigin)) {
-    return { ok: false, error: 'Only My Lists install links can be imported here.' };
-  }
-
-  try {
-    const res = await fetch(ORIGIN + '/api/resolve?config=' + encodeURIComponent(config));
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.ok && Array.isArray(data.entries) && data.entries.length) {
-        return data;
-      }
-      if (data && data.ok === false && data.error) {
-        return data;
-      }
-    }
-  } catch (e) {}
-
-  return { ok: false, error: 'That link has no lists in it.' };
-}
-
-async function importFromLink() {
-  const raw = document.getElementById('importLinkInput').value.trim();
-  if (!raw) {
-    if (typeof showAppAlert === 'function') showAppAlert('Link Required', 'Paste an install link, configure link, or stremio:// / wako:// link first.', false);
-    else showToast('Paste an install link, configure link, or stremio://\\/wako:// link first.', 'error');
-    return;
-  }
-  try {
-    const data = await resolveInstallLinkData(raw);
-    if (!data || !data.ok) {
-      if (typeof showAppAlert === 'function') showAppAlert('Link Error', 'Could not load that link: ' + ((data && data.error) || 'unknown error'), false);
-      else showToast('Could not load that link: ' + ((data && data.error) || 'unknown error'), 'error');
-      return;
-    }
-    restoreRows(data.entries);
-    // A link carries no provider keys or tokens any more (/api/resolve): the
-    // accounts connected in this browser, or synced to the signed-in account,
-    // are the ones used.
-    if (data.traktUsername) document.getElementById('traktUsernameInput').value = data.traktUsername;
-    renumber();
-    checkAllDuplicateUrls();
-    saveState();
-    renderChannelMergeList();
-
-    // Rebuild & restore custom lists and channels from the imported link
-    // The link path never went through validateAndRepairBackup, so the same
-    // id check has to happen here: the payload came from a pasted link and
-    // is treated as untrusted JSON.
-    const unsafeFromLink = dropUnsafeImportedIds(data);
-    const { lists: extractedLists, channels: extractedChannels } = extractCustomListsAndChannelsFromPreset(data);
-    const listSlugs = Object.keys(extractedLists);
-    const channelIds = Object.keys(extractedChannels);
-
-    let restoredListsCount = 0;
-    const restoredListNames = [];
-    let hasTrackingChanges = false;
-    if (listSlugs.length > 0) {
-      let localCustomListsMap = (typeof loadLocalCustomLists === 'function') ? loadLocalCustomLists() : {};
-      listSlugs.forEach((slug) => {
-        const rebuilt = extractedLists[slug];
-        if (!localCustomListsMap[slug]) {
-          localCustomListsMap[slug] = rebuilt;
-          restoredListsCount++;
-          restoredListNames.push(rebuilt.name || slug);
-          if (slug === 'watch-history' || slug === 'continue-watching' || slug === 'watchlist') {
-            hasTrackingChanges = true;
-          }
-        } else {
-          const existing = localCustomListsMap[slug];
-          const seenKeys = new Set((existing.items || []).map((it) => String(it.id || it.imdbId || it.tmdbId || it.title || '')));
-          let addedItems = 0;
-          (rebuilt.items || []).forEach((it) => {
-            const key = String(it.id || it.imdbId || it.tmdbId || it.title || '');
-            if (!seenKeys.has(key)) {
-              if (!existing.items) existing.items = [];
-              existing.items.push(it);
-              seenKeys.add(key);
-              addedItems++;
-            }
-          });
-          if (addedItems > 0) {
-            existing.updatedAt = Date.now();
-            restoredListsCount++;
-            restoredListNames.push((existing.name || slug) + ' (+' + addedItems + ' items)');
-            if (slug === 'watch-history' || slug === 'continue-watching' || slug === 'watchlist') {
-              hasTrackingChanges = true;
-            }
-          }
-        }
-      });
-      if (typeof saveLocalCustomListsMap === 'function') saveLocalCustomListsMap(localCustomListsMap);
-      if (localCustomListsMap['watch-history'] && Array.isArray(localCustomListsMap['watch-history'].items)) {
-        window._rawWatchHistoryItems = localCustomListsMap['watch-history'].items;
-        window._watchedItemIds = new Set((window._rawWatchHistoryItems || []).map((it) => String(it.id || it.imdbId || (it.tmdbId ? 'tmdb:' + it.tmdbId : '') || '')));
-      }
-    }
-
-    if (channelIds.length > 0) {
-      let localChannelsMap = (typeof loadLocalChannels === 'function') ? loadLocalChannels() : {};
-      channelIds.forEach((chId) => {
-        if (!localChannelsMap[chId]) localChannelsMap[chId] = extractedChannels[chId];
-      });
-      if (typeof saveLocalChannelsMap === 'function') saveLocalChannelsMap(localChannelsMap);
-    }
-
-    if (hasTrackingChanges) {
-      if (typeof pushTrackingSync === 'function') pushTrackingSync();
-      if (typeof renderWatchHistoryGrid === 'function') renderWatchHistoryGrid();
-    }
-
-    if (listSlugs.length > 0 || channelIds.length > 0) {
-      if (typeof renderCreatorDashboard === 'function') renderCreatorDashboard();
-      if (typeof renderMyCustomListsList === 'function') renderMyCustomListsList();
-      if (typeof renderChannelsList === 'function') renderChannelsList();
-      if (typeof renderMyCreatedChannelsList === 'function') renderMyCreatedChannelsList();
-      if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
-      if (typeof activeCreator !== 'undefined' && activeCreator) {
-        if (typeof scheduleCreatorSyncSave === 'function') scheduleCreatorSyncSave();
-        if (typeof pushCreatorSync === 'function') pushCreatorSync();
-        if (typeof pushChannelsSync === 'function') pushChannelsSync();
-      }
-    }
-
-    document.getElementById('importLinkInput').value = '';
-    let msg = 'Imported ' + data.entries.length + ' list' + (data.entries.length === 1 ? '' : 's') + ' from that link.';
-    if (listSlugs.length > 0 || channelIds.length > 0) {
-      const parts = [];
-      if (listSlugs.length) parts.push(listSlugs.length + ' custom list' + (listSlugs.length === 1 ? '' : 's'));
-      if (channelIds.length) parts.push(channelIds.length + ' channel' + (channelIds.length === 1 ? '' : 's'));
-      msg += '\\n\\nRestored ' + parts.join(' and ') + ' to your My Lists tab.';
-      if (restoredListNames.length) msg += '\\n\\n• ' + restoredListNames.join('\\n• ');
-    }
-    if (unsafeFromLink.length) {
-      msg += '\\n\\nSkipped ' + unsafeFromLink.length + ' item(s) whose id contained characters this app never produces. A link from this app cannot contain those.';
-    }
-    if (typeof showAppAlert === 'function') showAppAlert('Import Complete', msg, true);
-    else showToast(msg, 'error');
-  } catch (e) {
-    if (typeof showAppAlert === 'function') showAppAlert('Network Error', 'Network error while resolving that link.', false);
-    else showToast('Network error while resolving that link.', 'error');
-  }
-}
-
-async function restoreListsFromLink() {
-  const raw = document.getElementById('importLinkInput').value.trim();
-  if (!raw) {
-    if (typeof showAppAlert === 'function') showAppAlert('Link Required', 'Paste an install link, configure link, or stremio:// / wako:// link first.', false);
-    else showToast('Paste an install link, configure link, or stremio://\\/wako:// link first.', 'error');
-    return;
-  }
-  try {
-    const data = await resolveInstallLinkData(raw);
-    if (!data || !data.ok) {
-      if (typeof showAppAlert === 'function') showAppAlert('Link Error', 'Could not load that link: ' + ((data && data.error) || 'unknown error'), false);
-      else showToast('Could not load that link: ' + ((data && data.error) || 'unknown error'), 'error');
-      return;
-    }
-
-    // The link path never went through validateAndRepairBackup, so the same
-    // id check has to happen here: the payload came from a pasted link and
-    // is treated as untrusted JSON.
-    const unsafeFromLink = dropUnsafeImportedIds(data);
-    const { lists: extractedLists, channels: extractedChannels } = extractCustomListsAndChannelsFromPreset(data);
-    const listSlugs = Object.keys(extractedLists);
-    const channelIds = Object.keys(extractedChannels);
-
-    if (!listSlugs.length && !channelIds.length) {
-      if (typeof showAppAlert === 'function') showAppAlert('No Custom Lists Found', 'That link does not contain any custom lists or custom channels.', false);
-      else showToast('That link does not contain any custom lists or custom channels.', 'error');
-      return;
-    }
-
-    let localCustomListsMap = (typeof loadLocalCustomLists === 'function') ? loadLocalCustomLists() : {};
-    let restoredListsCount = 0;
-    const restoredListNames = [];
-    let hasTrackingChanges = false;
-    listSlugs.forEach((slug) => {
-      const rebuilt = extractedLists[slug];
-      if (!localCustomListsMap[slug]) {
-        localCustomListsMap[slug] = rebuilt;
-        restoredListsCount++;
-        restoredListNames.push(rebuilt.name || slug);
-        if (slug === 'watch-history' || slug === 'continue-watching' || slug === 'watchlist') {
-          hasTrackingChanges = true;
-        }
-      } else {
-        const existing = localCustomListsMap[slug];
-        const seenKeys = new Set((existing.items || []).map((it) => String(it.id || it.imdbId || it.tmdbId || it.title || '')));
-        let addedItems = 0;
-        (rebuilt.items || []).forEach((it) => {
-          const key = String(it.id || it.imdbId || it.tmdbId || it.title || '');
-          if (!seenKeys.has(key)) {
-            if (!existing.items) existing.items = [];
-            existing.items.push(it);
-            seenKeys.add(key);
-            addedItems++;
-          }
-        });
-        if (addedItems > 0) {
-          existing.updatedAt = Date.now();
-          restoredListsCount++;
-          restoredListNames.push((existing.name || slug) + ' (+' + addedItems + ' items)');
-          if (slug === 'watch-history' || slug === 'continue-watching' || slug === 'watchlist') {
-            hasTrackingChanges = true;
-          }
-        }
-      }
-    });
-    if (typeof saveLocalCustomListsMap === 'function') saveLocalCustomListsMap(localCustomListsMap);
-    if (localCustomListsMap['watch-history'] && Array.isArray(localCustomListsMap['watch-history'].items)) {
-      window._rawWatchHistoryItems = localCustomListsMap['watch-history'].items;
-      window._watchedItemIds = new Set((window._rawWatchHistoryItems || []).map((it) => String(it.id || it.imdbId || (it.tmdbId ? 'tmdb:' + it.tmdbId : '') || '')));
-    }
-
-    if (channelIds.length > 0) {
-      let localChannelsMap = (typeof loadLocalChannels === 'function') ? loadLocalChannels() : {};
-      channelIds.forEach((chId) => {
-        if (!localChannelsMap[chId]) localChannelsMap[chId] = extractedChannels[chId];
-      });
-      if (typeof saveLocalChannelsMap === 'function') saveLocalChannelsMap(localChannelsMap);
-    }
-
-    if (hasTrackingChanges) {
-      if (typeof pushTrackingSync === 'function') pushTrackingSync();
-      if (typeof renderWatchHistoryGrid === 'function') renderWatchHistoryGrid();
-    }
-
-    if (typeof renderCreatorDashboard === 'function') renderCreatorDashboard();
-    if (typeof renderMyCustomListsList === 'function') renderMyCustomListsList();
-    if (typeof renderChannelsList === 'function') renderChannelsList();
-    if (typeof renderMyCreatedChannelsList === 'function') renderMyCreatedChannelsList();
-    if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
-    if (typeof activeCreator !== 'undefined' && activeCreator) {
-      if (typeof scheduleCreatorSyncSave === 'function') scheduleCreatorSyncSave();
-      if (typeof pushCreatorSync === 'function') pushCreatorSync();
-      if (typeof pushChannelsSync === 'function') pushChannelsSync();
-    }
-
-    document.getElementById('importLinkInput').value = '';
-    let msg = 'Restored ' + listSlugs.length + ' custom list' + (listSlugs.length === 1 ? '' : 's');
-    if (channelIds.length) {
-      msg += ' and ' + channelIds.length + ' channel' + (channelIds.length === 1 ? '' : 's');
-    }
-    msg += ' from that link into your My Lists tab.';
-    if (restoredListNames.length) {
-      msg += '\\n\\n• ' + restoredListNames.join('\\n• ');
-    }
-    if (unsafeFromLink.length) {
-      msg += '\\n\\nSkipped ' + unsafeFromLink.length + ' item(s) whose id contained characters this app never produces. A link from this app cannot contain those.';
-    }
-    if (typeof showAppAlert === 'function') showAppAlert('Custom Lists Rebuilt', msg, true);
-    else showToast(msg, 'error');
-  } catch (e) {
-    if (typeof showAppAlert === 'function') showAppAlert('Network Error', 'Network error while resolving that link.', false);
-    else showToast('Network error while resolving that link.', 'error');
-  }
-}
-
 // --- personal presets --------------------------------------------------------
 //
 // Named local saves of a row selection, for reuse ("my usual setup") or
@@ -80069,7 +79756,7 @@ async function pushPresetsDirectly(presetsMap) {
     const src = presetSourceMaps();
     const leanPresets = dereferencePresetsMap(presetsMap, src.lists, src.chans);
     const presetsB64 = await compressJsonToBase64(leanPresets);
-    const res = await fetch(ORIGIN + '/api/creator/sync/save-presets', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/sync/save-presets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -80924,16 +80611,10 @@ function computeConfigStateHash() {
   }
 }
 
-// Called by saveState() after every change to the rows or the settings. On a
-// shell page this is what keeps the install bar honest; on the legacy page the
-// call stays the no-op it has been (the shell replaces the floating banner).
+// Called by saveState() after every change to the rows or the settings: keeps
+// the install link's state (live / unsaved) current for Settings.
 function checkUnsavedInstallLink() {
   if (typeof appShellActive !== 'undefined' && appShellActive) appShellRefreshInstallBar();
-}
-
-// The legacy banner's Update Link button. The shell's bar uses the same work.
-function updateInstallLinkFromBanner() {
-  if (typeof appShellActive !== 'undefined' && appShellActive) appShellInstallBarAction();
 }
 
 // myListAddon:state is this browser's copy of the rows and settings, and it
@@ -81098,7 +80779,7 @@ async function generate() {
   let config = null;
   let saveErrorMessage = null;
   try {
-    const res = await fetch(ORIGIN + '/api/save', {
+    const res = await creatorApiFetch(ORIGIN + '/api/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(withAccountProof(installSaveBody(entries, keys))),
@@ -81210,8 +80891,6 @@ async function generate() {
   // rows, so bring the result into view rather than leaving it rendered
   // off-screen above the fold the person's currently scrolled past.
   lastGeneratedConfigHash = computeConfigStateHash();
-  const banner = document.getElementById('unsavedInstallBanner');
-  if (banner) banner.classList.remove('show');
   box.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -81750,11 +81429,8 @@ window.addEventListener('popstate', (e) => {
 //   * the install bar: what this browser's install link currently is, and the
 //     one action that changes it.
 //
-// Everything here is inert unless NEW_UI (the per-request preamble flag) is
-// true, so a browser without the cookie runs the legacy page exactly as it did.
-// The bundle itself is shared and content-hashed (splitAppBundle, 02_), which
-// is why this lives in the bundle and branches on NEW_UI rather than being
-// emitted from the server.
+// Every visitor gets the shell since the classic page was retired (Release
+// 21); it used to be switched on per browser by a flag in the page preamble.
 
 // The last install link this browser generated, and the configuration it was
 // generated from. Browser state, not account state: the Worker cannot know it,
@@ -82047,32 +81723,12 @@ function appShellRecordInstallLink(url) {
   } catch (e) {}
 }
 
+// The bar itself was taken off the page at the owner's request (its drawing
+// code was deleted in Release 21); Settings' Install link card still reads
+// this state.
 function appShellRefreshInstallBar() {
   const info = appShellInstallLinkState();
-  // Kept whether or not the bar is on the page: the bar was taken off the
-  // shell at the owner's request, and Settings still reads this state.
   appShellState.set({ install: { state: info.state, link: info.link } });
-  const bar = document.getElementById('appShellInstallBar');
-  if (!bar) return;
-  bar.setAttribute('data-state', info.state);
-  const text = document.getElementById('appShellInstallText');
-  const btn = document.getElementById('appShellInstallBtn');
-  const words = {
-    none: 'Not installed yet',
-    unsaved: 'Unsaved changes to your install link',
-    live: 'Install link up to date',
-  };
-  const actions = {
-    none: { action: 'install', label: 'Get install link' },
-    unsaved: { action: 'update', label: 'Update link' },
-    live: { action: 'copy', label: 'Copy link' },
-  };
-  const a = actions[info.state] || actions.none;
-  if (text) text.textContent = words[info.state] || words.none;
-  if (btn) {
-    btn.setAttribute('data-action', a.action);
-    btn.textContent = a.label;
-  }
 }
 
 // Builds the install link through the builder's own generate() (which renders
@@ -82127,27 +81783,17 @@ async function appShellRefreshAccount() {
 
 // --- Settings (P6-2) ---------------------------------------------------------
 //
-// The Settings view in the shell, in one place: the account, its devices, its
-// connected accounts and its install links. It is additive -- the legacy panels
-// below it are untouched -- and it exists only on a shell page: the container it
-// renders into is emitted by the server (15_tab-settings-html.js) when, and only
-// when, the request carries the FF_NEW_UI cookie.
+// The Settings view's own cards: the account's devices and this browser's
+// install link. It is additive -- the older panels below it are untouched --
+// and renders into the container the server emits (15_tab-settings-html.js).
+// The account and connections cards it started with were deleted in Release
+// 21: Your Account (renderAccountKeySection, 22_) and External Accounts & API
+// Keys hold the same buttons, and the owner found every one of them twice.
 //
 // Everything here talks to the account APIs over the session cookie
 // (appShellApiFetch), and every control is wired with a data-app-shell-action
 // attribute instead of an inline handler: new UI code adds none of those
 // (P6-8 removes the rest of the page's).
-
-// The providers the site can hold a sign-in for. The start and stop entries are
-// the legacy functions that already do the OAuth dance and the local clean-up,
-// so this screen cannot drift from the rest of the page about how a connection
-// is made, or dropped.
-const APP_SHELL_CONNECTIONS = [
-  { id: 'trakt', label: 'Trakt', what: 'Watchlist, history and your personal Trakt rows.', start: startTraktConnect, stop: disconnectTrakt },
-  { id: 'mdblist', label: 'MDBList', what: 'Your MDBList lists, watchlist and charts.', start: startMdblistConnect, stop: disconnectMdblist },
-  { id: 'simkl', label: 'Simkl', what: 'Watchlist, history and Airing Next.', start: startSimklConnect, stop: disconnectSimkl },
-  { id: 'tmdb', label: 'TMDB', what: 'Personal lists, favorites and watchlist, plus unlimited requests.', start: startTmdbConnect, stop: disconnectTmdb },
-];
 
 function appShellSettingsHost() {
   return document.getElementById('appShellSettingsHome');
@@ -82195,31 +81841,6 @@ function appShellWhen(ms) {
   }
 }
 
-function appShellProvider(id) {
-  const want = String(id || '');
-  for (let i = 0; i < APP_SHELL_CONNECTIONS.length; i++) {
-    if (APP_SHELL_CONNECTIONS[i].id === want) return APP_SHELL_CONNECTIONS[i];
-  }
-  return null;
-}
-
-function appShellConnectionWords(conn) {
-  const status = String((conn && conn.status) || '');
-  const who = conn && conn.username ? '@' + conn.username : '';
-  if (status === 'ok') return who ? 'Connected as ' + who : 'Connected';
-  if (status === 'reauth_required') return who ? 'Reconnect as ' + who : 'Reconnect needed';
-  if (status === 'invalid') return who ? 'Sign-in expired (' + who + ')' : 'Sign-in expired';
-  if (status === 'unreachable') return 'Could not be checked';
-  return 'Not connected';
-}
-
-function appShellConnectionTone(conn) {
-  const status = String((conn && conn.status) || '');
-  if (status === 'ok') return 'ok';
-  if (status === 'reauth_required' || status === 'invalid' || status === 'unreachable') return 'warn';
-  return '';
-}
-
 function appShellDeviceLabel(session) {
   const ua = String((session && session.userAgent) || '');
   if (!ua) return 'Unknown device';
@@ -82254,25 +81875,6 @@ function appShellInstallLinkStateSafe() {
 
 // --- the panels --------------------------------------------------------------
 
-function appShellAccountBody(account) {
-  if (!account) {
-    return '<p class="app-shell-muted">You are not signed in. What you build right now is kept in this browser only.</p>' +
-      '<div class="app-shell-actions">' +
-      appShellSettingsButton('account-signin', 'Sign in or restore') +
-      appShellSettingsButton('account-import-backup', 'Import a backup file') +
-      '</div>' +
-      '<p class="app-shell-muted">Signing in restores your lists, channels, connections and install links from your account. Lost your Account Key? Use "Forgot your key?" under Your Account below: the site has no email recovery, so keep the key somewhere safe.</p>';
-  }
-  const name = account.displayName || account.username || '';
-  return '<p class="app-shell-kv"><strong>' + appShellSettingsEscape(name) + '</strong>' +
-    (account.username ? ' <span class="app-shell-muted">@' + appShellSettingsEscape(account.username) + '</span>' : '') + '</p>' +
-    '<p class="app-shell-muted">Signed in. Your lists, channels, connections and install links are kept on your account and follow you to any device.</p>' +
-    '<div class="app-shell-actions">' +
-    appShellSettingsButton('account-signout', 'Sign out') +
-    appShellSettingsButton('account-delete', 'Delete account', '', 'secondary lc-btn app-shell-danger') +
-    '</div>';
-}
-
 function appShellDevicesBody(res, sessions) {
   if (!res || !res.ok) {
     if (res && res.signInRequired) return '<p class="app-shell-muted">Sign in to see the devices using your account.</p>';
@@ -82292,32 +81894,6 @@ function appShellDevicesBody(res, sessions) {
   if (list.length > 1) {
     html += '<div class="app-shell-actions">' + appShellSettingsButton('devices-signout-others', 'Sign out my other devices') + '</div>';
   }
-  return html;
-}
-
-function appShellConnectionsBody(res, byProvider) {
-  if (res && res.signInRequired) {
-    return '<p class="app-shell-muted">Sign in to connect Trakt, MDBList, Simkl or TMDB. A connection is kept on your account, so your personal rows keep working without a new install link.</p>';
-  }
-  if (res && !res.ok) {
-    return '<p class="app-shell-muted">' + appShellSettingsEscape(res.error || 'Could not load your connected accounts.') + '</p>' +
-      '<div class="app-shell-actions">' + appShellSettingsButton('settings-refresh', 'Try again') + '</div>';
-  }
-  const map = byProvider || {};
-  let html = APP_SHELL_CONNECTIONS.map(function (p) {
-    const conn = map[p.id] || null;
-    const connected = Boolean(conn) && conn.status === 'ok';
-    const control = (connected || conn)
-      ? appShellSettingsButton('connection-disconnect', connected ? 'Disconnect' : 'Reconnect', p.id)
-      : appShellSettingsButton('connection-connect', 'Connect', p.id);
-    const who = conn && conn.username ? ' <span class="app-shell-muted">@' + appShellSettingsEscape(conn.username) + '</span>' : '';
-    return appShellSettingsRow(
-      '<strong>' + appShellSettingsEscape(p.label) + '</strong>' + who + '<br><span class="app-shell-muted">' + appShellSettingsEscape(p.what) + '</span>',
-      control,
-      appShellChip(appShellConnectionWords(conn), appShellConnectionTone(conn))
-    );
-  }).join('');
-  html += '<div class="app-shell-actions">' + appShellSettingsButton('settings-refresh', 'Refresh') + '</div>';
   return html;
 }
 
@@ -82365,30 +81941,16 @@ function appShellInstallsBody(linkState, res, installs) {
 
 // --- loading -----------------------------------------------------------------
 
-function appShellSettingsHeadline() {
-  return {
-    account: 'Loading...',
-    devices: 'Loading...',
-    connections: 'Loading...',
-    installs: 'Loading...',
-  };
-}
-
 function appShellRenderSettingsSkeleton() {
   const loading = '<p class="app-shell-muted">Loading...</p>';
   appShellSettingsBody('devices', loading);
   appShellSettingsBody('installs', loading);
 }
 
-// Devices and the install link only. The account and connections cards this
-// view used to start with are no longer drawn: Your Account (just above,
-// renderAccountKeySection, 22_) and External Accounts & API Keys hold the same
-// sign-in, sign-out, delete and connect buttons, and the owner found every one
-// of them twice. appShellAccountBody, appShellConnectionsBody and their actions
-// are left in place, unreached.
+// Devices and the install link (see the top of this section).
 async function appShellRefreshSettingsHome() {
   const host = appShellSettingsHost();
-  if (!host || !NEW_UI) return false;
+  if (!host) return false;
   appShellRenderSettingsSkeleton();
   const account = await appShellRefreshAccount();
   if (!account) {
@@ -82408,7 +81970,7 @@ async function appShellRefreshSettingsHome() {
 // action that changes what it shows.
 function appShellRenderSettingsHome() {
   const host = appShellSettingsHost();
-  if (!host || !NEW_UI) return false;
+  if (!host) return false;
   host.innerHTML =
     appShellSettingsPanel('devices', 'Devices', '<p class="app-shell-muted">Loading...</p>') +
     appShellSettingsPanel('installs', 'Install link', '<p class="app-shell-muted">Loading...</p>');
@@ -82431,16 +81993,6 @@ function appShellFocusSignIn() {
   return true;
 }
 
-function appShellImportBackup() {
-  const input = document.getElementById('configFileInput');
-  if (input && input.click) {
-    input.click();
-    return true;
-  }
-  appShellGo(appShellPathFor('settings', 'backup'));
-  return true;
-}
-
 async function appShellCopyText(text, message) {
   const value = String(text || '');
   if (!value) return false;
@@ -82453,61 +82005,6 @@ async function appShellCopyText(text, message) {
   } catch (e) {}
   showToast('Select the link and copy it by hand.', 'info');
   return false;
-}
-
-async function appShellSignOut() {
-  const res = await appShellApiFetch('/api/session', { method: 'DELETE' });
-  if (!res.ok) {
-    showToast(res.error || 'Could not sign out just now.', 'error');
-    return false;
-  }
-  if (typeof clearLocalAccountData === 'function') {
-    try { clearLocalAccountData(); } catch (e) {}
-  }
-  appShellState.set({ account: null });
-  showToast('Signed out.', 'success');
-  await appShellRefreshSettingsHome();
-  return true;
-}
-
-async function appShellDeleteAccount() {
-  const confirmed = await appShellDialog({
-    title: 'Delete your account?',
-    message: 'Everything on your account is deleted: your lists, channels, connections and install links. This cannot be undone.',
-    confirmLabel: 'Delete everything',
-    cancelLabel: 'Keep my account',
-  });
-  if (!confirmed) return false;
-  const res = await appShellApiFetch('/api/me', { method: 'DELETE', body: { confirm: 'DELETE' } });
-  if (!res.ok) {
-    showToast(res.error || 'Could not delete the account just now.', 'error');
-    return false;
-  }
-  if (typeof clearLocalAccountData === 'function') {
-    try { clearLocalAccountData(); } catch (e) {}
-  }
-  appShellState.set({ account: null });
-  showToast('Your account and its data have been deleted.', 'success');
-  await appShellRefreshSettingsHome();
-  return true;
-}
-
-function appShellConnectProvider(id) {
-  const provider = appShellProvider(id);
-  if (!provider || typeof provider.start !== 'function') return false;
-  provider.start();
-  return true;
-}
-
-async function appShellDisconnectProvider(id) {
-  const provider = appShellProvider(id);
-  if (!provider || typeof provider.stop !== 'function') return false;
-  try {
-    provider.stop();
-  } catch (e) {}
-  showToast(provider.label + ' disconnected.', 'success');
-  await appShellRefreshSettingsHome();
-  return true;
 }
 
 async function appShellRevokeSession(id) {
@@ -82555,13 +82052,7 @@ async function appShellRevokeInstall(id) {
 // no inline handlers.
 async function appShellSettingsAction(action, id) {
   const what = String(action || '');
-  if (what === 'account-signin') return appShellFocusSignIn();
-  if (what === 'account-import-backup') return appShellImportBackup();
-  if (what === 'account-signout') return appShellSignOut();
-  if (what === 'account-delete') return appShellDeleteAccount();
   if (what === 'settings-refresh') return appShellRefreshSettingsHome();
-  if (what === 'connection-connect') return appShellConnectProvider(id);
-  if (what === 'connection-disconnect') return appShellDisconnectProvider(id);
   if (what === 'device-signout') return appShellRevokeSession(id);
   if (what === 'devices-signout-others') return appShellRevokeOtherSessions();
   if (what === 'install-revoke') return appShellRevokeInstall(id);
@@ -82600,7 +82091,7 @@ function appShellDedupeOn() {
 
 function appShellRenderHomeEditor() {
   const host = document.getElementById('appShellHomeEditor');
-  if (!host || !NEW_UI) return false;
+  if (!host) return false;
   const dedupe = appShellDedupeOn();
 
   // Just the duplicate toggle now, in its own box right above the Daily
@@ -82658,7 +82149,6 @@ function appShellSetDedupe(on) {
 // initialization". Same trap, same fix, as appShellDialogClose.
 var appShellPreviewTimer = null;
 function appShellSchedulePreview() {
-  if (!NEW_UI) return false;
   if (typeof renderLivePreview !== 'function') return false;
   if (appShellPreviewTimer) clearTimeout(appShellPreviewTimer);
   appShellPreviewTimer = setTimeout(function () {
@@ -82668,397 +82158,27 @@ function appShellSchedulePreview() {
   return true;
 }
 
-// --- the Lists view (P6-4) ---------------------------------------------------
+// --- the inline "Add titles" search (P6-4) -----------------------------------
 //
-// Your lists, as cards you can act on: open one, add titles to it without
-// leaving the page, put it on the home screen, and share it. It is additive --
-// the dashboard the page already has stays underneath -- and it exists only on
-// a shell page: the containers it fills are emitted by the server (12_) when,
-// and only when, the request carries the FF_NEW_UI cookie.
+// In the list editor (12_), so creating a list and editing one are the same
+// thing: type, tap Add, and the title is in the draft. Save (the panel's own
+// button) writes it, which is where "Saved" comes from. The search is
+// /api/title-search, the same endpoint the Search tab uses, and adding is
+// addToCustomListDraft (21_).
 //
-// Everything reuses the page's own machinery rather than re-implementing it:
-// editing a list is editCreatorList(slug)/editLocalCustomList(slug) (the same
-// entry points the dashboard's Edit button uses), adding a title is
-// addToCustomListDraft (21_), putting a list on the home screen builds the same
-// customlist:v1: snapshot the dashboard's "+ Add" builds, and the search is
-// /api/title-search -- the same endpoint the Search tab uses.
+// The rest of the Lists view (the "Your lists" cards, with Share, Show on home
+// screen, Save to an account and Export) was taken off the page at the
+// owner's request and deleted in Release 21. The list dashboard underneath has
+// all of it.
 
-// E2E 7 wants one share control with three states. The legacy list store only
-// knows private and public: normalizeListVisibility (02_) maps anything that is
-// not "public" to "private", so offering Unlisted there would quietly save a
-// private list. Unlisted is part of the next list service (31_lists-api.js,
-// PUT /api/lists/:publicId/visibility), which is behind FF_V2_LISTS_API and is
-// off until reads move to the new tables. It is therefore shown, with what it
-// means, and disabled with the reason -- and turning it on is this one flag.
-const APP_SHELL_UNLISTED_READY = false;
-
-const APP_SHELL_LIST_VISIBILITIES = [
-  { id: 'private', label: 'Private', what: 'Only you can open it. Not reachable by link.' },
-  { id: 'unlisted', label: 'Unlisted', what: 'Anyone with the link can open it; it is not listed in Explore.' },
-  { id: 'public', label: 'Public', what: 'Anyone can find it in Explore, and it can be liked.' },
-];
-
-// Which list's share panel is open, and the results of the last title search.
-let appShellShareSlug = null;
+// The results of the last title search.
 let appShellTitleResults = [];
 let appShellTitleSearchSeq = 0;
 var appShellTitleSearchTimer = null;
 
-function appShellListsHomeHost() {
-  return document.getElementById('appShellListsHome');
-}
-
 function appShellListsEscape(value) {
   return escapeHtml(String(value === null || value === undefined ? '' : value));
 }
-
-// The lists this browser can act on: the account's, when it is signed in, and
-// the ones kept in this browser on their own (D-8).
-//
-// P6-9: both, not either. Until this task the signed-in branch returned the
-// account's lists and nothing else, so a list built while signed out -- which
-// survives signing in, because nothing migrates it then -- was simply not on
-// screen anywhere in the new UI, and there was no way to save it. A list the
-// account does not have is marked local, which is what the card's "Saved in
-// this browser only" line, its Save/Export buttons and the Share control all
-// read.
-function appShellOwnLists() {
-  const out = [];
-  const signedIn = (typeof activeCreator !== 'undefined' && !!activeCreator && !!activeCreator.creatorName);
-  const accountSlugs = {};
-  if (signedIn && typeof lastCreatorListsData !== 'undefined' && Array.isArray(lastCreatorListsData)) {
-    lastCreatorListsData.forEach(function (l) {
-      if (l && l.slug) {
-        out.push(l);
-        accountSlugs[String(l.slug)] = true;
-      }
-    });
-  }
-  const map = (typeof loadLocalCustomLists === 'function') ? (loadLocalCustomLists() || {}) : {};
-  Object.keys(map).forEach(function (key) {
-    const l = map[key];
-    if (!l) return;
-    // The auto-tracked lists are not hand-built ones and are not "browser
-    // only" in the sense this view means: their content travels in the
-    // account's own tracking record (pushTrackingSync, 22_), and the sign-up
-    // migration deliberately leaves them out of the per-list upload for that
-    // reason. Offering "Save to an account" on one would either duplicate it
-    // as a second list or, signed out, pretend a generated shelf is something
-    // the person built.
-    if (APP_SHELL_AUTO_TRACKED_SLUGS.indexOf(String(l.slug || key)) !== -1) return;
-    const slug = String(l.slug || key);
-    // While signed in, this store is also the account's own copy: every list
-    // the account has is mirrored into it with a creatorSlug (backfill /
-    // upload), so an entry carrying one is not browser-only, it is the
-    // account's list seen through the cache. An entry without one is a list
-    // the account has never been told about.
-    if (signedIn && (l.creatorSlug || accountSlugs[slug])) return;
-    out.push(Object.assign({}, l, { slug: slug, local: true }));
-  });
-  return out;
-}
-
-// The generated lists that live in the same browser store but are not
-// browser-only lists -- see appShellOwnLists.
-const APP_SHELL_AUTO_TRACKED_SLUGS = ['watchlist', 'watch-history', 'continue-watching', 'airing-next'];
-
-// A list the account does not have. See appShellOwnLists.
-function appShellListIsLocal(list) {
-  return !!(list && list.local);
-}
-
-function appShellListBySlug(slug) {
-  const want = String(slug || '');
-  const all = appShellOwnLists();
-  for (let i = 0; i < all.length; i++) {
-    if (String(all[i].slug) === want) return all[i];
-  }
-  return null;
-}
-
-function appShellListCount(list) {
-  if (!list) return 0;
-  if (Array.isArray(list.items)) return list.items.length;
-  if (typeof list.itemCount === 'number') return list.itemCount;
-  if (typeof list.count === 'number') return list.count;
-  return 0;
-}
-
-function appShellListKind(list) {
-  const t = list && list.type;
-  if (t === 'series') return 'Shows';
-  if (t === 'movie') return 'Movies';
-  return 'Movies and Shows';
-}
-
-function appShellListVisibility(list) {
-  const v = list && list.visibility;
-  if (v === 'public' || v === 'unlisted' || v === 'private') return v;
-  return 'private';
-}
-
-// The link to a list as other people would open it: the published address when
-// the list has one, otherwise the account's own /lists/<you>/<slug>.
-function appShellListShareUrl(list) {
-  if (!list) return '';
-  if (list.url) return String(list.url);
-  const who = (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) ? activeCreator.creatorName : '';
-  const slug = String(list.slug || '');
-  if (who && slug) return location.origin + '/lists/' + encodeURIComponent(who) + '/' + encodeURIComponent(slug);
-  return location.origin + '/lists/' + encodeURIComponent(slug);
-}
-
-function appShellListOnHomeScreen(slug) {
-  const want = String(slug || '');
-  // The page's own answer first: isListAddedToConfig (16_) is what the
-  // dashboard's own "+ Add" / "Remove" buttons read, so the card and those
-  // buttons can never disagree about whether a list is on the home screen.
-  const list = appShellListBySlug(slug);
-  if (typeof isListAddedToConfig === 'function' && list) {
-    if (isListAddedToConfig(null, list.type, want)) return true;
-    if (isListAddedToConfig(null, 'movie', want) || isListAddedToConfig(null, 'series', want)) return true;
-  }
-  const rows = document.querySelectorAll('#lists .entry');
-  for (let i = 0; i < rows.length; i++) {
-    const urlInput = rows[i].querySelector ? rows[i].querySelector('.url') : null;
-    if (!urlInput) continue;
-    const payload = (typeof parseCustomListPayloadClient === 'function') ? parseCustomListPayloadClient(urlInput.value) : null;
-    if (payload && (String(payload.localSlug || '') === want || String(payload.listSlug || '') === want)) return true;
-  }
-  return false;
-}
-
-// The card's home-screen button, doing exactly what the dashboard's own
-// "+ Add" / "Remove" does for the same list (see 22_client-creator-profile.js).
-function appShellListToggleHomeScreen(slug) {
-  const list = appShellListBySlug(slug);
-  if (!list) {
-    showToast('Could not find that list -- try refreshing.', 'error');
-    return false;
-  }
-  if (appShellListOnHomeScreen(slug)) {
-    if (typeof removeListFromConfig === 'function') {
-      removeListFromConfig(null, list.type, slug);
-      removeListFromConfig(null, 'movie', slug);
-      removeListFromConfig(null, 'series', slug);
-    }
-    const rows = document.querySelectorAll('#lists .entry');
-    for (let i = 0; i < rows.length; i++) {
-      const urlInput = rows[i].querySelector ? rows[i].querySelector('.url') : null;
-      if (!urlInput) continue;
-      const payload = (typeof parseCustomListPayloadClient === 'function') ? parseCustomListPayloadClient(urlInput.value) : null;
-      if (payload && (String(payload.localSlug || '') === String(slug) || String(payload.listSlug || '') === String(slug))) rows[i].remove();
-    }
-    if (typeof renumber === 'function') renumber();
-    if (typeof saveState === 'function') saveState();
-    appShellRenderListsHome();
-    showToast('"' + list.name + '" removed from your home screen.', 'success');
-    return true;
-  }
-  const items = (typeof normalizeSnapshotItemsForCatalog === 'function') ? normalizeSnapshotItemsForCatalog(list.items || []) : (list.items || []);
-  const snapshot = { listId: generateChannelId(), localSlug: slug, listSlug: slug, type: list.type || 'movie', items: items, shuffle: false };
-  addRow(list.name, 'customlist:v1:' + JSON.stringify(snapshot), list.type || 'movie', true, 'My Lists');
-  if (typeof renumber === 'function') renumber();
-  if (typeof saveState === 'function') saveState();
-  appShellRenderListsHome();
-  showToast('"' + list.name + '" added to your home screen.', 'success');
-  return true;
-}
-
-function appShellListChoiceHtml(slug, choice, current) {
-  const on = choice.id === current;
-  const ready = choice.id !== 'unlisted' || APP_SHELL_UNLISTED_READY;
-  return '<button type="button" class="app-shell-chip' + (on ? ' is-on' : '') + '"' +
-    ' data-app-shell-action="list-visibility" data-app-shell-id="' + appShellListsEscape(slug) + '|' + choice.id + '"' +
-    (ready ? '' : ' disabled title="' + appShellListsEscape(choice.what + ' This needs the new list service, which is not switched on yet.') + '"') +
-    '>' + appShellListsEscape(choice.label) + '</button>';
-}
-
-function appShellListShareHtml(list) {
-  const slug = String(list.slug || '');
-  const current = appShellListVisibility(list);
-  let html = '<div class="app-shell-actions" style="margin:6px 0 6px;">';
-  APP_SHELL_LIST_VISIBILITIES.forEach(function (choice) {
-    html += appShellListChoiceHtml(slug, choice, current);
-  });
-  html += '</div>';
-  const chosen = APP_SHELL_LIST_VISIBILITIES.filter(function (c) { return c.id === current; })[0];
-  if (chosen) html += '<p class="app-shell-muted">' + appShellListsEscape(chosen.what) + '</p>';
-  if (!APP_SHELL_UNLISTED_READY) {
-    html += '<p class="app-shell-muted">Unlisted needs the new list service, which is not switched on yet -- until then a list is private or public.</p>';
-  }
-  const url = appShellListShareUrl(list);
-  html += '<p class="app-shell-kv"><span class="app-shell-review-url">' + appShellListsEscape(url) + '</span></p>';
-  html += '<div class="app-shell-actions">' +
-    '<button type="button" class="secondary lc-btn" data-app-shell-action="list-copy" data-app-shell-id="' + appShellListsEscape(slug) + '">Copy link</button>' +
-    (current === 'private' ? '' : '<button type="button" class="secondary lc-btn" data-app-shell-action="list-preview" data-app-shell-id="' + appShellListsEscape(slug) + '">Open the page</button>') +
-    '</div>';
-  return html;
-}
-
-function appShellListCardHtml(list) {
-  const slug = String(list.slug || '');
-  const onHome = appShellListOnHomeScreen(slug);
-  const vis = appShellListVisibility(list);
-  const local = appShellListIsLocal(list);
-  const count = appShellListCount(list);
-  const meta = (local ? 'Saved in this browser only' : appShellListsEscape(vis.charAt(0).toUpperCase() + vis.slice(1))) +
-    ' &middot; ' + appShellListsEscape(appShellListKind(list)) + ' &middot; ' + count + (count === 1 ? ' title' : ' titles');
-  let html = '<div class="app-shell-row">' +
-    '<div class="app-shell-row-main"><strong>' + appShellListsEscape(list.name || slug) + '</strong>' +
-    '<br><span class="app-shell-muted">' + meta + '</span>' +
-    (local ? '<br><span class="app-shell-muted">It lives in this browser alone, so clearing this browser\u2019s data loses it. Save it to an account to keep it, or Export a copy.</span>' : '') +
-    '</div>' +
-    '<div class="app-shell-row-controls">' +
-    '<button type="button" class="secondary lc-btn" data-app-shell-action="list-open" data-app-shell-id="' + appShellListsEscape(slug) + '">Open</button>' +
-    '<button type="button" class="secondary lc-btn" data-app-shell-action="list-edit" data-app-shell-id="' + appShellListsEscape(slug) + '">Add titles</button>' +
-    '<button type="button" class="' + (onHome ? 'secondary lc-btn' : 'primary lc-btn') + '" data-app-shell-action="list-home" data-app-shell-id="' + appShellListsEscape(slug) + '">' +
-    (onHome ? 'On your home screen' : 'Show on home screen') + '</button>' +
-    (local
-      ? '<button type="button" class="primary lc-btn" data-app-shell-action="list-save-account" data-app-shell-id="' + appShellListsEscape(slug) + '">Save to an account</button>' +
-        '<button type="button" class="secondary lc-btn" data-app-shell-action="list-export" data-app-shell-id="' + appShellListsEscape(slug) + '">Export</button>'
-      : '<button type="button" class="secondary lc-btn" data-app-shell-action="list-share" data-app-shell-id="' + appShellListsEscape(slug) + '">Share</button>') +
-    '</div></div>';
-  if (!local && appShellShareSlug === slug) html += appShellListShareHtml(list);
-  return html;
-}
-
-// --- browser-only lists (P6-9) ----------------------------------------------
-//
-// The Lists view shows the lists this browser keeps on its own (D-8) beside the
-// account's, says which is which, and gives each of those two ways out. Both
-// end up in 22_client-creator-profile.js: the push is the same request the
-// sign-up migration makes (saveLocalListToAccount), and the export is a file
-// this same page can restore.
-
-// The button on a card. Signed in, it saves the list and the browser's copy
-// goes (the account has it now). Signed out, it copies the list out of the
-// store first and asks the person to sign in -- signing in empties this
-// browser's store (clearLocalAccountData), so the push happens right after it
-// completes, from that copy (flushPendingListSaves). Without the copy the list
-// would be gone by the time there was an account to save it to.
-async function appShellSaveLocalListToAccount(slug) {
-  const list = appShellListBySlug(slug);
-  if (!list) {
-    showToast('Could not find that list -- try refreshing.', 'error');
-    return false;
-  }
-  const signedIn = (typeof activeCreator !== 'undefined' && !!activeCreator && !!activeCreator.creatorName);
-  if (!signedIn) {
-    if (typeof rememberPendingListSave !== 'function' || !rememberPendingListSave(slug)) {
-      showToast('Could not read that list -- try refreshing.', 'error');
-      return false;
-    }
-    showToast('"' + (list.name || slug) + '" will be saved to the account you sign in to.', 'info', { duration: 8000 });
-    if (typeof openRestoreModal === 'function') openRestoreModal();
-    return true;
-  }
-  if (typeof saveLocalListToAccount !== 'function') return false;
-  const result = await saveLocalListToAccount(slug, { visibility: 'private' });
-  if (!result || !result.ok) {
-    showToast(result && result.error === 'signed-out'
-      ? 'Sign in to save this list to an account.'
-      : 'Could not save that list to your account -- try again.', 'error');
-    return false;
-  }
-  // Ask the account what it has before re-rendering: the list has just changed
-  // hands, and the card must come back from the account's own answer rather
-  // than flicker out because the cache predates the save.
-  if (typeof renderCreatorDashboard === 'function') {
-    try { await renderCreatorDashboard({ silent: true }); } catch (e) {}
-  }
-  showToast('"' + (list.name || slug) + '" is saved to your account now. It is private until you share it.', 'success');
-  appShellRenderListsHome();
-  return true;
-}
-
-// Export one list as the small JSON file this page's own restore reads
-// (Settings -> Backups -> Restore, which merges customLists into the browser's
-// store). Deliberately not the whole-library file: the point of the button is
-// that one list is only in this browser, and the person wants a copy of it.
-function appShellExportList(slug) {
-  const list = appShellListBySlug(slug);
-  if (!list) {
-    showToast('Could not find that list -- try refreshing.', 'error');
-    return false;
-  }
-  const key = String(list.slug || slug);
-  const payload = {
-    version: BACKUP_FORMAT_VERSION,
-    exportedAt: new Date().toISOString(),
-    exportedFrom: 'My Lists Addon (a list saved in one browser)',
-    customLists: {},
-  };
-  payload.customLists[key] = {
-    slug: key,
-    name: list.name || key,
-    type: list.type || 'movie',
-    items: Array.isArray(list.items) ? list.items : [],
-    visibility: appShellListVisibility(list),
-    updatedAt: Number(list.updatedAt) || Date.now(),
-  };
-  const filename = (slugify(list.name || key) || key) + '-list.json';
-  if (typeof downloadJsonFile !== 'function') return false;
-  downloadJsonFile(filename, payload);
-  showToast('Exported "' + (list.name || key) + '" as ' + filename + '.', 'success');
-  return true;
-}
-
-// Whether this view has already asked the page to fetch the account's lists.
-// One ask only: an account with no lists must end up on the empty state, not
-// on a loop of requests.
-var appShellListsLoadRequested = false;
-
-function appShellRenderListsHome() {
-  const host = appShellListsHomeHost();
-  if (!host || !NEW_UI) return false;
-  const lists = appShellOwnLists();
-  const signedIn = (typeof activeCreator !== 'undefined' && !!activeCreator && !!activeCreator.creatorName);
-  // P6-9: "no lists" and "the account's lists have not arrived yet" are
-  // different states, and only the second one is worth waiting for. The
-  // browser's own store is a *cache* of the account's lists while signed in, so
-  // rendering from it before the account answers would label an account list as
-  // browser-only for as long as the request takes.
-  const accountKnown = !signedIn || (typeof lastCreatorListsData !== 'undefined' && Array.isArray(lastCreatorListsData));
-  if (!accountKnown && !appShellListsLoadRequested) {
-    appShellListsLoadRequested = true;
-    host.innerHTML = '<div class="panel" style="margin-bottom:12px;">' +
-      '<h2 class="panel-title">Your lists</h2>' +
-      '<p class="app-shell-muted">Loading your lists...</p></div>';
-    appShellListsRefresh();
-    return true;
-  }
-  if (!lists.length) {
-    host.innerHTML = '<div class="panel" style="margin-bottom:12px;">' +
-      '<h2 class="panel-title">Your lists</h2>' +
-      '<p class="app-shell-muted">' + (signedIn
-        ? 'No lists yet. Start one below, then add titles to it right here.'
-        : 'No lists in this browser yet. Sign in to keep them on your account, or start one below -- it is saved in this browser until then.') + '</p>' +
-      '<div class="app-shell-actions"><button type="button" class="primary lc-btn" data-app-shell-action="list-new">+ New list</button></div>' +
-      '</div>';
-    return true;
-  }
-  let html = '<div class="panel" style="margin-bottom:12px;">' +
-    '<h2 class="panel-title">Your lists</h2>' +
-    '<p class="app-shell-muted">Open one, add titles to it, put it on your home screen, or share it. ' +
-    (signedIn
-      ? 'Each list says where it is saved. Anything marked "Saved in this browser only" is not on your account yet.'
-      : 'Everything here is saved in this browser only. Save a list to an account to keep it, or export a copy.') + '</p>';
-  lists.forEach(function (list) {
-    html += appShellListCardHtml(list);
-  });
-  html += '<div class="app-shell-actions" style="margin-top:10px;">' +
-    '<button type="button" class="primary lc-btn" data-app-shell-action="list-new">+ New list</button>' +
-    '<button type="button" class="secondary lc-btn" data-app-shell-action="lists-refresh">Refresh</button></div></div>';
-  host.innerHTML = html;
-  return true;
-}
-
-// --- the inline "Add titles" search -----------------------------------------
-//
-// In the list editor (12_), so creating a list and editing one are the same
-// thing: type, tap Add, and the title is in the draft. Save (the panel's own
-// button) writes it, which is where "Saved" comes from.
 
 function appShellAddTitlesHost() {
   return document.getElementById('appShellAddTitles');
@@ -83074,7 +82194,7 @@ function appShellTitleResultHtml(result, index) {
 
 function appShellRenderAddTitles(message) {
   const host = appShellAddTitlesHost();
-  if (!host || !NEW_UI) return false;
+  if (!host) return false;
   let html = '<div class="panel" style="margin-bottom:12px;">' +
     '<h2 class="panel-title">Add titles</h2>' +
     '<p class="app-shell-muted">Search for a movie or a show and add it straight to this list.</p>' +
@@ -83133,581 +82253,12 @@ async function appShellAddTitle(index) {
   return true;
 }
 
-// --- actions -----------------------------------------------------------------
-
-function appShellStartListEdit(slug) {
-  const list = appShellListBySlug(slug);
-  if (!list) {
-    showToast('Could not find that list -- try refreshing.', 'error');
-    return false;
-  }
-  if (list.local && typeof editLocalCustomList === 'function') {
-    editLocalCustomList(slug);
-  } else if (typeof editCreatorList === 'function') {
-    editCreatorList(slug);
-  }
-  if (typeof switchListsSubmenu === 'function') switchListsSubmenu('create-list');
-  appShellRenderAddTitles('');
-  const input = document.getElementById('appShellAddTitlesInput');
-  if (input && input.focus) {
-    try { input.focus(); } catch (e) {}
-  }
-  return true;
-}
-
-async function appShellSetListVisibility(slug, visibility) {
-  const list = appShellListBySlug(slug);
-  if (!list) return false;
-  const want = String(visibility || '');
-  if (want !== 'private' && want !== 'public') {
-    showToast('Unlisted is not switched on yet -- a list is private or public for now.', 'info');
-    return false;
-  }
-  if (appShellListVisibility(list) === want) {
-    appShellRenderListsHome();
-    return true;
-  }
-  const body = {
-    creatorName: (activeCreator && activeCreator.creatorName) || '',
-    creatorKey: localStorage.getItem('myListAddon:creatorKey') || '',
-    name: list.name,
-    type: list.type || 'movie',
-    items: list.items || [],
-    visibility: want,
-  };
-  const res = await appShellApiFetch('/api/creator/lists/save', { method: 'POST', body: body });
-  if (!res.ok) {
-    showToast(res.error || 'Could not save that change.', 'error');
-    return false;
-  }
-  list.visibility = want;
-  appShellRenderListsHome();
-  showToast(want === 'public' ? 'Anyone with the link can open it, and it is listed in Explore.' : 'Now private -- only you can open it.', 'success');
-  return true;
-}
-
-async function appShellListsRefresh() {
-  if (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) {
-    if (typeof loadCreatorSync === 'function') {
-      try { await loadCreatorSync(); } catch (e) {}
-    } else if (typeof renderCreatorDashboard === 'function') {
-      try { await renderCreatorDashboard(); } catch (e) {}
-    }
-  }
-  return appShellRenderListsHome();
-}
-
-// Which of the three dispatchers an action belongs to (see appShellOnClick).
-const APP_SHELL_LISTS_ACTION = /^(list-|lists-|title-)/;
-const APP_SHELL_EXPLORE_ACTION = /^explore-/;
+// Which of the dispatchers an action belongs to (see appShellOnClick).
+const APP_SHELL_LISTS_ACTION = /^title-/;
 const APP_SHELL_IMPORTS_ACTION = /^import-/;
 
 async function appShellListsAction(action, id) {
-  const what = String(action || '');
-  const slug = String(id || '');
-  if (what === 'list-new') {
-    if (typeof openCreateListModal === 'function') openCreateListModal('custom');
-    return true;
-  }
-  if (what === 'lists-refresh') return appShellListsRefresh();
-  if (what === 'list-open') {
-    const list = appShellListBySlug(slug);
-    if (!list) return false;
-    if (typeof openListDetailsPage === 'function') {
-      openListDetailsPage(list.name, list.type || 'movie', 'custom:' + slug);
-      return true;
-    }
-    return false;
-  }
-  if (what === 'list-edit') return appShellStartListEdit(slug);
-  if (what === 'list-home') return appShellListToggleHomeScreen(slug);
-  if (what === 'list-share') {
-    appShellShareSlug = (appShellShareSlug === slug) ? null : slug;
-    appShellRenderListsHome();
-    return true;
-  }
-  if (what === 'list-copy') {
-    const list = appShellListBySlug(slug);
-    if (!list) return false;
-    return appShellCopyText(appShellListShareUrl(list), 'List link copied.');
-  }
-  if (what === 'list-preview') {
-    const list = appShellListBySlug(slug);
-    if (!list) return false;
-    if (typeof openListDetailsPage === 'function') {
-      openListDetailsPage(list.name, list.type || 'movie', 'custom:' + slug);
-      return true;
-    }
-    return false;
-  }
-  if (what === 'list-visibility') {
-    const parts = slug.split('|');
-    return appShellSetListVisibility(parts[0], parts[1]);
-  }
-  if (what === 'list-save-account') return appShellSaveLocalListToAccount(slug);
-  if (what === 'list-export') return appShellExportList(slug);
-  if (what === 'title-add') return appShellAddTitle(id);
-  return false;
-}
-
-// --- Explore (P6-5) ----------------------------------------------------------
-//
-// Somebody else's public lists, in one place: pick where to look, type, and see
-// what comes back with one button to put it on your home screen. It is additive
-// -- the Discover feeds underneath are untouched -- and it exists only on a
-// shell page: the container comes from the server (11_tab-quick-add.js) when,
-// and only when, the request carries the FF_NEW_UI cookie.
-//
-// Every source here is one the page already talks to, with the page's own
-// helpers where they exist:
-//
-//   My Lists community   /lists/public.json (browse) and
-//                        /api/search-published-lists (search)
-//   MDBList              /api/toplists -- cached by ensureMdblistPopularLoaded
-//                        (19_), which is also what the legacy list search
-//                        matches MDBList against: MDBList has no list search of
-//                        its own, so this filters the popular set by name.
-//   Trakt                /api/trakt-popular-lists (browse) and
-//                        /api/trakt-search (search)
-//   TMDB                 /api/tmdb-search-lists -- search only; TMDB publishes
-//                        no list directory to browse.
-
-// What the sort chips can honestly do today. Most liked works everywhere: it is
-// the order the server sends and every source reports likes. Newest works for
-// the lists that report when they changed, which is this site's own; the
-// providers do not, so those are kept and shown after the dated ones rather
-// than pretending they are new. "Most added" counts how many people put a list
-// on a home screen -- a column that exists only in the next list service
-// (add_count, 33_lists-directory.js, /lists/public.json?sort=added), which is
-// behind FF_V2_LISTS_READ and must stay off until reads move to the new tables.
-const APP_SHELL_EXPLORE_SORTS = [
-  { id: 'popular', label: 'Most liked', ready: true },
-  { id: 'new', label: 'Newest', ready: true },
-  { id: 'added', label: 'Most added', ready: false, why: 'Counting how many people put a list on their home screen needs the new list service, which is not switched on yet.' },
-];
-
-const APP_SHELL_EXPLORE_SOURCES = [
-  { id: 'mylists', label: 'My Lists community' },
-  { id: 'mdblist', label: 'MDBList' },
-  { id: 'trakt', label: 'Trakt' },
-  { id: 'tmdb', label: 'TMDB' },
-];
-
-const APP_SHELL_EXPLORE_MAX = 24;
-
-let appShellExploreSource = 'all';
-let appShellExploreSort = 'popular';
-let appShellExploreQuery = '';
-let appShellExploreResults = [];
-let appShellExploreNote = '';
-let appShellExplorePreview = -1;
-let appShellExplorePreviewData = null;
-let appShellExploreSeq = 0;
-var appShellExploreTimer = null;
-var appShellExploreLoaded = false;
-
-function appShellExploreHost() {
-  return document.getElementById('appShellExplore');
-}
-
-// Whether the Discover view is the one currently on screen. A shell page can be
-// served straight at /discover (or at /, which is Discover), and then the view
-// is worth its fetch at boot; served at any other view it is not, and the fetch
-// waits until somebody opens Discover.
-function appShellDiscoverIsOpen() {
-  const panel = document.getElementById('content-discover');
-  return !!(panel && !panel.hidden);
-}
-
-function appShellExploreEscape(value) {
-  return escapeHtml(String(value === null || value === undefined ? '' : value));
-}
-
-// Every source's own idea of a list, in one shape. The timestamp field is
-// only ever set by a source that actually reports one.
-function appShellExploreNormalize(entry, source) {
-  const e = entry || {};
-  const items = (typeof e.items === 'number') ? e.items : (typeof e.itemCount === 'number' ? e.itemCount : 0);
-  return {
-    name: e.name || 'Untitled list',
-    url: e.url || '',
-    type: e.type || e.contentType || 'movie',
-    items: items,
-    likes: Number(e.likes) || 0,
-    by: e.creatorName || e.creator || e.user || '',
-    source: source,
-    when: Number(e.updatedAt) || 0,
-  };
-}
-
-function appShellExploreSortRows(rows) {
-  const list = rows.slice();
-  if (appShellExploreSort === 'new') {
-    // Dated first, newest first; a source that does not say when a list
-    // changed keeps its place after them rather than being guessed at.
-    list.sort(function (a, b) {
-      if (!!a.when !== !!b.when) return a.when ? -1 : 1;
-      if (a.when !== b.when) return b.when - a.when;
-      return b.likes - a.likes;
-    });
-    return list;
-  }
-  list.sort(function (a, b) {
-    if (b.likes !== a.likes) return b.likes - a.likes;
-    return b.items - a.items;
-  });
-  return list;
-}
-
-function appShellExploreDedupe(rows) {
-  const seen = {};
-  const out = [];
-  rows.forEach(function (row) {
-    const key = String(row.url || '').toLowerCase() || (String(row.name).toLowerCase() + '|' + row.source);
-    if (seen[key]) return;
-    seen[key] = true;
-    out.push(row);
-  });
-  return out;
-}
-
-function appShellExploreWants(source) {
-  return appShellExploreSource === 'all' || appShellExploreSource === source;
-}
-
-// --- fetching ----------------------------------------------------------------
-
-async function appShellExploreMdbList() {
-  if (typeof ensureMdblistPopularLoaded !== 'function') return [];
-  const rows = await ensureMdblistPopularLoaded();
-  return (Array.isArray(rows) ? rows : []).map(function (r) { return appShellExploreNormalize(r, 'mdblist'); });
-}
-
-async function appShellExploreTraktBrowse() {
-  if (typeof ensureTraktPopularLoaded !== 'function') return [];
-  const rows = await ensureTraktPopularLoaded();
-  return (Array.isArray(rows) ? rows : []).map(function (r) { return appShellExploreNormalize(r, 'trakt'); });
-}
-
-async function appShellExploreMyListsBrowse() {
-  const res = await appShellApiFetch('/lists/public.json?limit=' + APP_SHELL_EXPLORE_MAX);
-  if (!res.ok) return null;
-  const rows = (res.data && res.data.lists) || [];
-  return rows.map(function (r) { return appShellExploreNormalize(r, 'mylists'); });
-}
-
-async function appShellExploreMyListsSearch(q) {
-  const res = await appShellApiFetch('/api/search-published-lists?q=' + encodeURIComponent(q));
-  if (!res.ok) return null;
-  const rows = (res.data && res.data.lists) || [];
-  return rows.map(function (r) { return appShellExploreNormalize(r, 'mylists'); });
-}
-
-async function appShellExploreTraktSearch(q) {
-  const key = (document.getElementById('traktKeyInput') ? document.getElementById('traktKeyInput').value.trim() : '') || readProviderSecret('myListAddon:traktKey') || '';
-  const res = await appShellApiFetch('/api/trakt-search?q=' + encodeURIComponent(q) + (key ? '&traktKey=' + encodeURIComponent(key) : ''));
-  if (!res.ok) return null;
-  return ((res.data && res.data.lists) || []).map(function (r) { return appShellExploreNormalize(r, 'trakt'); });
-}
-
-async function appShellExploreTmdbSearch(q) {
-  const key = (document.getElementById('tmdbKeyInput') ? document.getElementById('tmdbKeyInput').value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
-  const adult = (typeof isAdultContentFilterEnabled === 'function' && isAdultContentFilterEnabled()) ? '&adultContentFilter=1' : '';
-  const res = await appShellApiFetch('/api/tmdb-search-lists?q=' + encodeURIComponent(q) + (key ? '&tmdbKey=' + encodeURIComponent(key) : '') + adult);
-  if (!res.ok) return null;
-  return ((res.data && res.data.lists) || []).map(function (r) { return appShellExploreNormalize(r, 'tmdb'); });
-}
-
-// The provider lists in the popular sets, narrowed to the words somebody typed.
-// MDBList has no list search (see the note at the top of this module), so this
-// is what the legacy search does too -- said out loud in the note below.
-function appShellExploreFilterByName(rows, q) {
-  const words = String(q || '').toLowerCase().split(/\\s+/).filter(Boolean);
-  if (!words.length) return rows;
-  return rows.filter(function (row) {
-    const text = (String(row.name) + ' ' + String(row.by)).toLowerCase();
-    return words.every(function (w) { return text.indexOf(w) !== -1; });
-  });
-}
-
-async function appShellExploreRun() {
-  const q = String(appShellExploreQuery || '').trim();
-  const seq = ++appShellExploreSeq;
-  const want = appShellExploreSource;
-  const results = [];
-  const notes = [];
-  const jobs = [];
-
-  // This site's own lists: the directory when nothing has been typed, its
-  // search when something has.
-  if (appShellExploreWants('mylists')) {
-    jobs.push((q ? appShellExploreMyListsSearch(q) : appShellExploreMyListsBrowse()).then(function (rows) {
-      if (rows) results.push.apply(results, rows);
-      else notes.push('The My Lists directory could not be reached.');
-    }));
-  }
-  if (appShellExploreWants('mdblist')) {
-    jobs.push(appShellExploreMdbList().then(function (rows) {
-      const matching = appShellExploreFilterByName(rows, q);
-      results.push.apply(results, q ? matching.slice(0, APP_SHELL_EXPLORE_MAX) : matching);
-      if (q && want !== 'mylists') notes.push('MDBList has no list search of its own, so the MDBList results are the popular ones matching your words.');
-    }));
-  }
-  if (appShellExploreWants('trakt')) {
-    jobs.push((q ? appShellExploreTraktSearch(q) : appShellExploreTraktBrowse()).then(function (rows) {
-      if (rows) results.push.apply(results, rows);
-      else if (q) notes.push('trakt.tv could not be searched just now.');
-    }));
-  }
-  if (appShellExploreWants('tmdb')) {
-    jobs.push((q ? appShellExploreTmdbSearch(q) : Promise.resolve(null)).then(function (rows) {
-      if (rows) results.push.apply(results, rows);
-      else if (q) notes.push('TMDB could not be searched just now.');
-      else if (want === 'tmdb') notes.push('TMDB publishes no list directory to browse -- search for one by name.');
-    }));
-  }
-
-  await Promise.all(jobs);
-  // A newer search already went out while this one was running: drop this
-  // answer rather than landing it on top of the newer one.
-  if (seq !== appShellExploreSeq) return appShellExploreResults;
-
-  appShellExploreResults = appShellExploreSortRows(appShellExploreDedupe(results)).slice(0, APP_SHELL_EXPLORE_MAX);
-  appShellExploreNote = notes.join(' ');
-  appShellExploreLoaded = true;
-  appShellExplorePreview = -1;
-  appShellExplorePreviewData = null;
-  appShellRenderExplore(true);
-  return appShellExploreResults;
-}
-
-// The preview: what is actually in the list, fetched the way the home editor
-// fetches it, so nothing is added before it has been seen.
-async function appShellExplorePreviewRow(index) {
-  const row = appShellExploreResults[Number(index)];
-  if (!row) return null;
-  if (appShellExplorePreview === Number(index)) {
-    appShellExplorePreview = -1;
-    appShellExploreRenderPreview();
-    return null;
-  }
-  appShellExplorePreview = Number(index);
-  appShellExplorePreviewData = { loading: true };
-  appShellExploreRenderPreview();
-  const auth = (typeof previewCreatorAuth === 'function') ? previewCreatorAuth() : {};
-  const body = Object.assign({ url: row.url, type: row.type === 'series' ? 'series' : 'movie', sample: 6 }, auth);
-  const res = await appShellApiFetch('/api/preview', { method: 'POST', body: body });
-  if (appShellExplorePreview !== Number(index)) return null;
-  appShellExplorePreviewData = res.ok
-    ? { sample: (res.data && res.data.sample) || [], count: Number(res.data && (res.data.totalItems || res.data.count)) || 0, error: '' }
-    : { sample: [], count: 0, error: res.error || 'That list could not be read.' };
-  appShellExploreRenderPreview();
-  return appShellExplorePreviewData;
-}
-
-function appShellExplorePosterHtml(item) {
-  const poster = item && (item.poster || item.showPoster);
-  if (!poster) return '<div class="app-shell-explore-poster app-shell-explore-poster-none"></div>';
-  return '<img class="app-shell-explore-poster" loading="lazy" alt="" src="' + appShellExploreEscape(poster) + '">';
-}
-
-function appShellExploreOnHomeScreen(row) {
-  if (typeof isListAddedToConfig !== 'function') return false;
-  const type = row.type === 'series' ? 'series' : (row.type === 'movie' ? 'movie' : null);
-  if (isListAddedToConfig(row.url, type)) return true;
-  return isListAddedToConfig(row.url, 'movie') || isListAddedToConfig(row.url, 'series');
-}
-
-// Exactly what the legacy search's own "+ Add" does for a result list (19_,
-// the .searchAddBtn handler), including the two rows a mixed list becomes.
-function appShellExploreToggleHomeScreen(index) {
-  const row = appShellExploreResults[Number(index)];
-  if (!row) return false;
-  if (appShellExploreOnHomeScreen(row)) {
-    if (typeof removeListFromConfig === 'function') {
-      removeListFromConfig(row.url, row.type);
-      removeListFromConfig(row.url, 'movie');
-      removeListFromConfig(row.url, 'series');
-      removeListFromConfig(row.url, null);
-    }
-    const rows = document.querySelectorAll('#lists .entry');
-    for (let i = 0; i < rows.length; i++) {
-      const urlInput = rows[i].querySelector ? rows[i].querySelector('.url') : null;
-      if (urlInput && String(urlInput.value).indexOf(row.url) !== -1) rows[i].remove();
-    }
-    if (typeof renumber === 'function') renumber();
-    if (typeof saveState === 'function') saveState();
-    appShellRenderExplore(false);
-    showToast('Removed "' + row.name + '" from your Catalogs.', 'success');
-    return true;
-  }
-  if (row.type === 'mixed' || row.type === 'unknown') {
-    addRow(row.name + ' (Movies)', row.url, 'movie', true, 'Custom');
-    addRow(row.name + ' (Shows)', row.url, 'series', true, 'Custom');
-  } else {
-    addRow(row.name, row.url, row.type, true, 'Custom');
-  }
-  if (typeof renumber === 'function') renumber();
-  if (typeof saveState === 'function') saveState();
-  appShellRenderExplore(false);
-  showToast('Added "' + row.name + '" to your home screen.', 'success');
-  return true;
-}
-
-function appShellExploreSourceLabel(id) {
-  for (let i = 0; i < APP_SHELL_EXPLORE_SOURCES.length; i++) {
-    if (APP_SHELL_EXPLORE_SOURCES[i].id === id) return APP_SHELL_EXPLORE_SOURCES[i].label;
-  }
-  return id === 'mylists' ? 'My Lists community' : id;
-}
-
-function appShellExploreCardHtml(row, index) {
-  const meta = appShellExploreEscape(appShellExploreSourceLabel(row.source)) +
-    ' &middot; ' + appShellExploreEscape(row.type === 'series' ? 'Shows' : (row.type === 'movie' ? 'Movies' : 'Movies and Shows')) +
-    (row.items ? ' &middot; ' + row.items + (row.items === 1 ? ' title' : ' titles') : '') +
-    (row.likes ? ' &middot; &#9829; ' + row.likes : '') +
-    (row.by ? ' &middot; ' + appShellExploreEscape(row.by) : '');
-  const onHome = appShellExploreOnHomeScreen(row);
-  const open = appShellExplorePreview === index;
-  return '<div class="app-shell-row">' +
-    '<div class="app-shell-row-main"><strong>' + appShellExploreEscape(row.name) + '</strong>' +
-    '<br><span class="app-shell-muted">' + meta + '</span>' +
-    '<br><span class="app-shell-muted app-shell-review-url">' + appShellExploreEscape(row.url) + '</span></div>' +
-    '<div class="app-shell-row-controls">' +
-    '<button type="button" class="secondary lc-btn" data-app-shell-action="explore-preview" data-app-shell-id="' + index + '">' + (open ? 'Hide preview' : 'Preview') + '</button>' +
-    '<button type="button" class="' + (onHome ? 'secondary lc-btn' : 'primary lc-btn') + '" data-app-shell-action="explore-add" data-app-shell-id="' + index + '">' + (onHome ? 'On your home screen' : 'Add to home screen') + '</button>' +
-    '</div></div>' +
-    (open ? '<div class="app-shell-explore-preview" id="appShellExplorePreviewArea-' + index + '"></div>' : '');
-}
-
-function appShellExplorePreviewInnerHtml(index) {
-  const row = appShellExploreResults[index];
-  const data = appShellExplorePreviewData;
-  if (!row || !data) return '';
-  if (data.loading) return '<p class="app-shell-muted">Looking inside...</p>';
-  if (data.error) return '<p class="app-shell-muted app-shell-review-bad">' + appShellExploreEscape(data.error) + '</p>';
-  const sample = data.sample || [];
-  const count = data.count || sample.length;
-  let html = '<div class="app-shell-explore-posters">' + sample.map(appShellExplorePosterHtml).join('') + '</div>';
-  html += '<p class="app-shell-muted">' + (count ? 'First ' + Math.min(sample.length, count) + ' of ' + count + (count === 1 ? ' title' : ' titles') : 'This list is empty.') + '</p>';
-  html += '<div class="app-shell-actions">' +
-    '<button type="button" class="primary lc-btn" data-app-shell-action="explore-add" data-app-shell-id="' + index + '">Add to home screen</button>' +
-    '</div>';
-  return html;
-}
-
-// Rewrites just the open preview in place, the same way the settings panels
-// refresh without rebuilding the screen around them.
-function appShellExploreRenderPreview() {
-  const area = document.getElementById('appShellExplorePreviewArea-' + appShellExplorePreview);
-  if (!area) return false;
-  area.innerHTML = appShellExplorePreviewInnerHtml(appShellExplorePreview);
-  return true;
-}
-
-function appShellExploreChips(rows, current, action) {
-  return rows.map(function (row) {
-    const on = row.id === current;
-    const ready = row.ready !== false;
-    return '<button type="button" class="app-shell-chip' + (on ? ' is-on' : '') + '"' +
-      ' data-app-shell-action="' + action + '" data-app-shell-id="' + appShellExploreEscape(row.id) + '"' +
-      (ready ? '' : ' disabled title="' + appShellExploreEscape(row.why || '') + '"') +
-      '>' + appShellExploreEscape(row.label) + '</button>';
-  }).join('');
-}
-
-function appShellRenderExplore(scrollToResults) {
-  const host = appShellExploreHost();
-  if (!host || !NEW_UI) return false;
-  const sources = [{ id: 'all', label: 'All sources', ready: true }].concat(APP_SHELL_EXPLORE_SOURCES);
-  let html = '<div class="panel" style="margin-bottom:12px;">' +
-    '<h2 class="panel-title">Explore</h2>' +
-    '<p class="app-shell-muted">Community lists from this site and from MDBList, Trakt and TMDB. Preview one, then put it on your home screen.</p>' +
-    '<div class="app-shell-actions" style="margin-bottom:8px;">' + appShellExploreChips(sources, appShellExploreSource, 'explore-source') + '</div>' +
-    '<div class="app-shell-actions" style="margin-bottom:8px;">' + appShellExploreChips(APP_SHELL_EXPLORE_SORTS, appShellExploreSort, 'explore-sort') + '</div>' +
-    '<div class="row"><input type="text" id="appShellExploreSearch" placeholder="Search lists\u2026" aria-label="Search public lists" spellcheck="false" value="' + appShellExploreEscape(appShellExploreQuery) + '"></div>';
-
-  if (!appShellExploreLoaded) {
-    html += '<p class="app-shell-muted" id="appShellExploreStatus">Loading\u2026</p>';
-  } else if (!appShellExploreResults.length) {
-    html += '<p class="app-shell-muted" id="appShellExploreStatus">' +
-      (appShellExploreQuery ? 'Nothing found for those words.' : 'Nothing to show right now.') + '</p>';
-  } else {
-    html += '<p class="app-shell-muted" id="appShellExploreStatus">' + appShellExploreResults.length +
-      (appShellExploreResults.length === 1 ? ' list' : ' lists') +
-      (appShellExploreQuery ? ' matching "' + appShellExploreEscape(appShellExploreQuery) + '"' : '') + '.</p>';
-    html += '<div class="app-shell-review" id="appShellExploreResults">' +
-      appShellExploreResults.map(appShellExploreCardHtml).join('') + '</div>';
-  }
-  if (appShellExploreNote) html += '<p class="app-shell-muted" id="appShellExploreNote">' + appShellExploreEscape(appShellExploreNote) + '</p>';
-  html += '<p class="app-shell-muted">Most added is not offered yet: it counts how many people put a list on their home screen, which the new list service keeps and which is not switched on yet.</p>';
-  html += '</div>';
-  host.innerHTML = html;
-
-  const input = document.getElementById('appShellExploreSearch');
-  if (input && input.addEventListener) {
-    input.addEventListener('input', function () {
-      appShellExploreQuery = input.value || '';
-      if (appShellExploreTimer) clearTimeout(appShellExploreTimer);
-      appShellExploreTimer = setTimeout(function () {
-        appShellExploreTimer = null;
-        appShellExploreRun();
-      }, 300);
-    });
-  }
-  // Results are fetched in full, so a card's own re-render keeps the open
-  // preview; only its placeholder needs filling.
-  if (appShellExplorePreview >= 0) appShellExploreRenderPreview();
-  if (scrollToResults) {
-    const box = document.getElementById('appShellExploreResults');
-    if (box && box.scrollIntoView) {
-      try { box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {}
-    }
-  }
-  return true;
-}
-
-// Opening the view: render the frame, then fetch once. Coming back to the tab
-// keeps what is already there.
-function appShellOpenExplore() {
-  // No section, no fetch: Explore was taken off Discover at the owner's
-  // request (its source and sort chips are on Search -> Lists now), and
-  // opening Discover must not ask four providers for lists nobody will see.
-  if (!NEW_UI || !appShellExploreHost()) return false;
-  const first = !appShellExploreLoaded;
-  appShellRenderExplore(false);
-  if (first) {
-    appShellExploreRun();
-  } else {
-    appShellRenderExplore(false);
-  }
-  return true;
-}
-
-async function appShellExploreAction(action, id) {
-  const what = String(action || '');
-  if (what === 'explore-source') {
-    appShellExploreSource = String(id || 'all');
-    return appShellExploreRun();
-  }
-  if (what === 'explore-sort') {
-    const want = String(id || 'popular');
-    const sort = APP_SHELL_EXPLORE_SORTS.filter(function (s) { return s.id === want && s.ready !== false; })[0];
-    if (!sort) {
-      showToast('That order is not switched on yet.', 'info');
-      return false;
-    }
-    appShellExploreSort = sort.id;
-    appShellExploreResults = appShellExploreSortRows(appShellExploreResults);
-    appShellRenderExplore(false);
-    return true;
-  }
-  if (what === 'explore-preview') return appShellExplorePreviewRow(id);
-  if (what === 'explore-add') return appShellExploreToggleHomeScreen(id);
-  if (what === 'explore-refresh') {
-    appShellExploreLoaded = false;
-    return appShellExploreRun();
-  }
+  if (String(action || '') === 'title-add') return appShellAddTitle(id);
   return false;
 }
 
@@ -84073,7 +82624,7 @@ async function appShellImportSaveList() {
   }
   const name = appShellImportListName();
   const type = (appShellImportJob && appShellImportJob.kind === 'series') ? 'series' : (appShellImportKind === 'series' ? 'series' : 'movie');
-  // Same authentication as the Lists view's own save (appShellSetListVisibility):
+  // The list save's own authentication:
   // the route checks creatorName + creatorKey, and empty strings let a session
   // cookie stand in for them when the browser has one.
   const saveBody = {
@@ -84251,7 +82802,7 @@ function appShellImportKindChip(kind, label, count) {
 
 function appShellRenderImports() {
   const host = appShellImportsHost();
-  if (!host || !NEW_UI) return false;
+  if (!host) return false;
   const typed = document.getElementById('appShellImportName');
   const typedValue = typed ? typed.value : '';
   let html = '<div class="panel" style="margin-bottom:12px;">' +
@@ -84360,7 +82911,6 @@ async function appShellImportReadFiles(files) {
 // at it. The remembered import is looked up only for a screen that is actually
 // being shown, and only once per page load.
 async function appShellResumeImport() {
-  if (!NEW_UI) return false;
   if (appShellImportsResumed) return true;
   appShellImportsResumed = true;
   const id = appShellImportRemembered();
@@ -85132,7 +83682,7 @@ function appShellChannelFlowHtml() {
 
 function appShellRenderChannels() {
   const host = appShellChannelsHost();
-  if (!host || !NEW_UI) return false;
+  if (!host) return false;
   let html = '<div class="panel">' +
     '<h2 class="panel-title">New channel</h2>' +
     '<p class="app-shell-muted">Choose a template, look at what is playing today, then add it to your home screen. The full builder is still there under Custom.</p>';
@@ -85195,7 +83745,6 @@ async function appShellChannelsAction(action, id) {
 // Called when the view is opened, and once at boot for a page served straight
 // at Channels.
 function appShellOpenChannels() {
-  if (!NEW_UI) return false;
   if (!appShellChannelsHost() || !appShellChannelsIsOpen()) return false;
   return appShellRenderChannels();
 }
@@ -85251,14 +83800,12 @@ function appShellApplyRoute(route) {
   if (tab.id === 'settings') appShellRenderSettingsHome();
   if (tab.id === 'catalogs') appShellRenderHomeEditor();
   if (tab.id === 'lists') {
-    appShellRenderListsHome();
     if (sub === 'create-list') appShellRenderAddTitles('');
     if (sub === 'import') {
       appShellRenderImports();
       appShellResumeImport();
     }
   }
-  if (tab.id === 'discover') appShellOpenExplore();
   if (tab.id === 'channels') appShellOpenChannels();
   return true;
 }
@@ -85291,7 +83838,7 @@ function appShellGo(path, options) {
 // when the shell has taken the navigation, false to leave both the switcher and
 // the address bar exactly as they were.
 function appShellHandleNav(kind, a, b) {
-  if (!appShellActive || appShellApplyingRoute || !NEW_UI) return false;
+  if (!appShellActive || appShellApplyingRoute) return false;
   if (kind === 'tab') {
     const route = appShellRouteForName(a);
     if (!route) return false;   // list-details, item-details: not shell views
@@ -85319,12 +83866,11 @@ function appShellOnClick(e) {
     e.preventDefault();
     const action = actionEl.getAttribute('data-app-shell-action');
     const id = actionEl.getAttribute('data-app-shell-id') || '';
-    // The Lists view (P6-4) and the Settings view (P6-2) share this one
+    // The Add titles search (P6-4) and the Settings view (P6-2) share this one
     // listener, so the action names decide which module answers. The prefix
     // test is here rather than a truthy return because appShellSettingsAction
     // is async -- its promise is truthy for every action, handled or not.
     if (APP_SHELL_LISTS_ACTION.test(action)) appShellListsAction(action, id);
-    else if (APP_SHELL_EXPLORE_ACTION.test(action)) appShellExploreAction(action, id);
     else if (APP_SHELL_IMPORTS_ACTION.test(action)) appShellImportsAction(action, id);
     else if (APP_SHELL_CHANNELS_ACTION.test(action)) appShellChannelsAction(action, id);
     else appShellSettingsAction(action, id);
@@ -85356,36 +83902,29 @@ function appShellRenderFromLocation() {
 // --- boot --------------------------------------------------------------------
 
 function initAppShell() {
-  if (!NEW_UI) return;
   appShellActive = true;
   document.addEventListener('click', appShellOnClick);
   window.addEventListener('popstate', appShellOnPopState);
 
-  const bar = document.getElementById('appShellInstallBar');
-  if (bar) {
-    bar.addEventListener('click', function (e) {
-      const target = e.target;
-      if (!target || !target.closest) return;
-      if (!target.closest('#appShellInstallBtn')) return;
-      e.preventDefault();
-      appShellInstallBarAction();
-    });
-  }
-
   // The server already opened the right view (data-initial-tab in the head
-  // script). This only settles the address bar: a real path for the view, and
-  // "/" becomes the Discover path so every view has one.
+  // script). This only settles the address bar: a real path for the view.
+  // "/" opens the view this browser used last (the head script reads it), so
+  // it becomes that view's path -- not always Discover's, which left the bar
+  // naming one view while the page showed another. A "/#/item?..." or
+  // "/#/list?..." share link keeps its address as it is.
   const route = appShellRouteFromPath(location.pathname);
   if (route) {
     appShellApplyRoute(route);
-  } else if (appShellTrimSlashes(location.pathname) === '/') {
-    try { history.replaceState({ appShell: true }, '', appShellPathFor('discover', '')); } catch (e) {}
-    appShellApplyRoute({ tab: 'discover', sub: 'movie' });
+  } else if (appShellTrimSlashes(location.pathname) === '/' && !location.hash) {
+    const open = appShellRouteForName(window._originTab || '') || { tab: 'discover', sub: '' };
+    try { history.replaceState({ appShell: true }, '', appShellPathFor(open.tab, '')); } catch (e) {}
+    // ...and the page is then the page at that path, with the view's own
+    // cards drawn (Settings' were missing when "/" reopened Settings).
+    appShellApplyRoute({ tab: open.tab, sub: '' });
   }
 
   appShellRefreshInstallBar();
   appShellRenderHomeEditor();
-  if (typeof appShellExploreHost === 'function' && appShellExploreHost() && appShellDiscoverIsOpen()) appShellOpenExplore();
   if (typeof appShellImportsHost === 'function' && appShellImportsHost() && appShellImportsIsOpen()) {
     appShellRenderImports();
     appShellResumeImport();
@@ -86435,9 +84974,41 @@ function isAllowedPosterUrl(raw) {
   return POSTER_IMAGE_HOSTS.has(u.hostname.toLowerCase());
 }
 
-// Bounded isolate cache for badged poster SVGs (P8-4)
-const BADGED_POSTER_CACHE_MAX = 500;
+// Finished badged posters, per isolate (P8-4). Each one carries its poster's
+// bytes (see /api/poster-badge on why), so the cache is bounded by size, not
+// by count: 500 of them was up to ~150 MB, past an isolate's 128 MB. The key
+// is the request's query string, which carries the day (`d=`), so a date
+// pill never outlives its day.
+const BADGED_POSTER_CACHE_MAX_BYTES = 24 * 1024 * 1024;
+const BADGED_POSTER_CACHE_ENTRY_MAX_BYTES = 1024 * 1024;
 const BADGED_POSTER_CACHE = new Map();
+let badgedPosterCacheBytes = 0;
+
+function rememberBadgedPoster(key, svg) {
+  const size = svg.length;
+  if (size > BADGED_POSTER_CACHE_ENTRY_MAX_BYTES) return;
+  if (BADGED_POSTER_CACHE.has(key)) {
+    badgedPosterCacheBytes -= BADGED_POSTER_CACHE.get(key).length;
+    BADGED_POSTER_CACHE.delete(key);
+  }
+  while (BADGED_POSTER_CACHE.size && badgedPosterCacheBytes + size > BADGED_POSTER_CACHE_MAX_BYTES) {
+    const oldest = BADGED_POSTER_CACHE.keys().next().value;
+    badgedPosterCacheBytes -= BADGED_POSTER_CACHE.get(oldest).length;
+    BADGED_POSTER_CACHE.delete(oldest);
+  }
+  BADGED_POSTER_CACHE.set(key, svg);
+  badgedPosterCacheBytes += size;
+}
+
+// Bytes -> base64 a chunk at a time, not a character at a time.
+function bytesToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
 
 
 // The service worker, hoisted to module scope for one reason: a string inside
@@ -86602,13 +85173,10 @@ async function handleFetch(request, env, ctx) {
     // token as its config segment (see v2InstallPath, 27_installs.js).
     const path = v2InstallPath(url.pathname) || url.pathname;
 
-    // Whether a browser that has not chosen gets the new interface
-    // (FF_NEW_UI; isNewUiRequest, 02_).
-    request.newUiDefault = newUiDefaultOn(env);
-
-    // ?ff_new_ui=1 (or 0) turns the new UI shell on or off for this browser,
-    // then bounces to the same address without the parameter (P6-1). Handled
-    // before anything else so it works from any page of the site.
+    // ?ff_new_ui=1 (or 0) used to switch between the classic page and the new
+    // interface. The classic page is retired (Release 21): a link that still
+    // carries it bounces to the same address without it (appShellSwitchResponse,
+    // 02_). Handled before anything else so it works from any page of the site.
     if (request.method === "GET" || request.method === "HEAD") {
       const shellSwitch = appShellSwitchResponse(url);
       if (shellSwitch) return shellSwitch;
@@ -86683,24 +85251,20 @@ async function handleFetch(request, env, ctx) {
 
     // The new UI shell's own paths (Phase 6, P6-1): /catalogs, /lists,
     // /channels, /discover, /search, /settings and a sub-tab below any of them
-    // (/settings/connections, /catalogs/quickadd). Served only to a browser
-    // that gets the new interface (its cookie, or the FF_NEW_UI variable);
-    // for any other these addresses 404, as they always did.
+    // (/settings/connections, /catalogs/quickadd).
     //
     // Exact paths only: /lists/<slug> and /channels/<user>/<slug> are share
     // links and keep their own routes below.
-    if (APP_SHELL_PATHS.has(path) && isNewUiRequest(request)) {
+    if (APP_SHELL_PATHS.has(path)) {
       ctx.waitUntil(bumpStat(env, "pageviews"));
       return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
     }
-    if (isNewUiRequest(request)) {
-      for (const shellTab of APP_SHELL_TABS) {
-        if (path.indexOf(shellTab.path + "/") !== 0) continue;
-        const shellSub = path.slice(shellTab.path.length + 1);
-        if (shellTab.subs.indexOf(shellSub) === -1) continue;
-        ctx.waitUntil(bumpStat(env, "pageviews"));
-        return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
-      }
+    for (const shellTab of APP_SHELL_TABS) {
+      if (path.indexOf(shellTab.path + "/") !== 0) continue;
+      const shellSub = path.slice(shellTab.path.length + 1);
+      if (shellTab.subs.indexOf(shellSub) === -1) continue;
+      ctx.waitUntil(bumpStat(env, "pageviews"));
+      return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
     }
 
     // add-on icon, served straight from this Worker using precomputed bytes (P8-4)
@@ -86894,28 +85458,39 @@ async function handleFetch(request, env, ctx) {
         });
       }
 
-      // If ownBetterPoster is present, inline the stored image bytes directly as a data URI
-      // because a Worker fetching its own hostname does not reliably reach itself.
-      // External posters (TMDB, Metahub, etc.) bypass all downloads and base64 encoding (P8-4).
-      let embeddedPoster = posterUrl;
-      if (ownBetterPoster) {
-        try {
+      // The poster goes INTO the SVG, as a data URI. An SVG shown as an image
+      // -- an <img>, a Stremio tile -- may not load anything from outside
+      // itself, so an SVG that only links to the poster shows the badge on a
+      // blank card. P8-4 did that for TMDB and Metahub posters (2026-10-02);
+      // every badged Airing Next tile lost its picture. A Better Poster of
+      // this Worker's own is read from storage, because a Worker fetching its
+      // own hostname does not reliably reach itself.
+      let embeddedPoster = "";
+      try {
+        let contentType = "";
+        let buffer = null;
+        if (ownBetterPoster) {
           const found = await getBetterPoster(env, ctx, ownBetterPoster, url.origin, { waitMs: BETTER_POSTER_PAGE_WAIT_MS });
           if (found && found.bytes) {
-            const bytes = new Uint8Array(found.bytes);
-            let binary = "";
-            const len = bytes.byteLength;
-            for (let i = 0; i < len; i++) {
-              binary += String.fromCharCode(bytes[i]);
-            }
-            embeddedPoster = `data:${found.contentType || "image/jpeg"};base64,${btoa(binary)}`;
-          } else {
-            return Response.redirect(posterUrl, 302);
+            contentType = found.contentType;
+            buffer = found.bytes;
           }
-        } catch (e) {
-          return Response.redirect(posterUrl, 302);
+        } else {
+          const imgRes = await fetch(posterUrl, {
+            headers: { "User-Agent": "my-list-addon/1.14" },
+            cf: { cacheTtl: 86400, cacheEverything: true },
+          });
+          if (imgRes.ok) {
+            contentType = imgRes.headers.get("content-type") || "image/jpeg";
+            buffer = await imgRes.arrayBuffer();
+          }
         }
-      }
+        if (buffer && String(contentType || "image/jpeg").startsWith("image/")) {
+          embeddedPoster = `data:${contentType || "image/jpeg"};base64,${bytesToBase64(buffer)}`;
+        }
+      } catch (e) {}
+      // Without the bytes, the plain poster is better than a blank badge.
+      if (!embeddedPoster) return Response.redirect(posterUrl, 302);
 
       // Format air date tag text (e.g. WED, SEP 16)
       let airDateText = "";
@@ -86973,9 +85548,6 @@ async function handleFetch(request, env, ctx) {
         bottomColor = "#ffd166";
       }
 
-      // P8-4: SVG overlay directly references the allowlisted poster URL rather than
-      // downloading the whole image and base64-inlining it into a massive data URI.
-      // (For ownBetterPoster, embeddedPoster contains the inlined local copy).
       const svg = generateBadgedPosterSvg({
         posterUrl: embeddedPoster,
         airDateText,
@@ -86985,11 +85557,7 @@ async function handleFetch(request, env, ctx) {
         bottomColor,
       });
 
-      if (BADGED_POSTER_CACHE.size >= BADGED_POSTER_CACHE_MAX) {
-        const oldest = BADGED_POSTER_CACHE.keys().next().value;
-        BADGED_POSTER_CACHE.delete(oldest);
-      }
-      BADGED_POSTER_CACHE.set(cacheKey, svg);
+      rememberBadgedPoster(cacheKey, svg);
 
       return new Response(svg, {
         headers: {
@@ -94337,6 +92905,10 @@ function generateSearchVariations(query) {
 
       const v = validateCreatorUsername(creatorNameRaw);
       if (!v.ok) return { ok: false, error: "Username or Key is incorrect." };
+      // No key and no live session for the account: the page signing with a
+      // session that has ended (it then sends the key). Nothing to verify --
+      // an empty key cannot match -- so no PBKDF2 run and no throttle spent.
+      if (!creatorKey) return { ok: false, error: "Username or Key is incorrect.", noKey: true };
       // A username being deleted right now stops authenticating, whatever the
       // record says. Two things this catches that the record cannot: a request
       // arriving mid-purge, which would otherwise write its key back after the
@@ -94401,6 +92973,12 @@ function generateSearchVariations(query) {
       // full PBKDF2 run every single time.
       const valid = await verifyCreatorKeyMemoized(creatorKey || "", keyHash, v.normalized);
       if (!valid) return { ok: false, error: "Username or Key is incorrect." };
+      // How many requests still sign with the key on the routes the page now
+      // signs with its session (CREATOR_SESSION_PATH_PREFIXES): the count the
+      // 60-day sunset waits on (Release 19, /admin -> Creators).
+      if (typeof path === "string" && CREATOR_SESSION_PATH_PREFIXES.some((p) => path.startsWith(p))) {
+        ctx.waitUntil(bumpStat(env, "authkey"));
+      }
       // Fire-and-forget, not awaited -- see touchCreatorLastSeen's own
       // comment for why this is throttled and safe to never wait on.
       touchCreatorLastSeen(env, v.normalized);
@@ -94618,6 +93196,7 @@ function generateSearchVariations(query) {
       let matched = "no";
 
       try {
+        await ensureTrackingMigrated(env, auth.username);
         const syncKey = `creatorsynctracking:${auth.username}`;
 
         // Resolve what we're actually recording (TMDB lookups) exactly
@@ -94773,10 +93352,12 @@ function generateSearchVariations(query) {
                   } else if (!blob.fullyWatchedShowIds.includes(imdbId)) {
                     // TMDB either had no next episode (show is finished) OR the fetch failed (rate limit/timeout).
                     // If it was a network failure, we don't want to completely lose the show from Continue Watching,
-                    // so we restore the old state just in case. If it truly is finished, it will stay in the old state
-                    // (which is fine, the user can manually dismiss it) or they will naturally fall off.
-                    if (oldCwItems && oldCwItems.length > 0) {
-                      blob.continueWatching = [...oldCwItems, ...blob.continueWatching];
+                    // so we restore the old state just in case -- but only entries still ahead of what was just
+                    // watched (cwEntriesStillAhead). Otherwise the show is marked fully watched, and the episode
+                    // sweep adds the next episode when it airs.
+                    const stillAhead = cwEntriesStillAhead(oldCwItems, latest.seasonNum, latest.episodeNum);
+                    if (stillAhead.length > 0) {
+                      blob.continueWatching = [...stillAhead, ...blob.continueWatching];
                     } else {
                       blob.fullyWatchedShowIds.push(imdbId);
                     }
@@ -95036,6 +93617,9 @@ function generateSearchVariations(query) {
       // tokens existed are sitting in people's media servers, and breaking
       // them would silently stop their history syncing with no error anyone
       // would see. The dashboard only ever shows the token form now, so
+      // these age out as people re-copy the URL.
+      await ensureTrackingMigrated(env, authUser);
+
       // P7-6: Log usage of legacy scrobble authentication forms
       if (authForm !== "st") {
         console.warn(`[scrobble] legacy auth form '${authForm}' used by user '${authUser}'`);
@@ -95523,8 +94107,11 @@ function generateSearchVariations(query) {
               });
               blob.fullyWatchedShowIds = blob.fullyWatchedShowIds.filter((s) => s !== resolvedShowId && s !== imdbId);
             } else if (!blob.fullyWatchedShowIds.includes(resolvedShowId)) {
-              if (oldCwItems && oldCwItems.length > 0) {
-                blob.continueWatching = [...oldCwItems, ...blob.continueWatching];
+              // Only what is still ahead of the episode just watched (see the
+              // ping above, and cwEntriesStillAhead).
+              const stillAhead = cwEntriesStillAhead(oldCwItems, latestSeason, latestEpisode);
+              if (stillAhead.length > 0) {
+                blob.continueWatching = [...stillAhead, ...blob.continueWatching];
               } else {
                 blob.fullyWatchedShowIds.push(resolvedShowId);
               }
@@ -96488,7 +95075,8 @@ function generateSearchVariations(query) {
       }
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) {
-        if (auth.error !== "no-kv") {
+        // A request without a key guessed nothing (see noKey above).
+        if (auth.error !== "no-kv" && !auth.noKey) {
           await noteAuthFailure(env, restoreFailScope, restoreFailDay);
           await noteRateLimit(env, ctx, "creatorrestore", ip, 60);
         }
@@ -97904,6 +96492,18 @@ function generateSearchVariations(query) {
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) return authFailureResponse(auth);
 
+      // Same one-time forward migration, this time for tracking data
+      // (watchHistory/continueWatching/fullyWatchedShowIds/
+      // dismissedContinueWatching/trackPlayback) -- see
+      // ensureTrackingMigrated's own comment. Critical to run here
+      // specifically: this endpoint is the most frequent write to
+      // creatorsync:{username} of any of them (any routine autosave), and
+      // the blob built below no longer includes tracking fields at all --
+      // without migrating first, the very next autosave after this
+      // shipped would silently erase anyone's tracking data before
+      // save-tracking ever got a chance to run for them.
+      await ensureTrackingMigrated(env, auth.username);
+
       // One-time forward migration: presets used to live embedded in this
       // same blob, but as of this endpoint no longer accepts them here at
       // all (see /api/creator/sync/save-presets below) -- an updated client
@@ -98817,7 +97417,10 @@ function generateSearchVariations(query) {
       }
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) return authFailureResponse(auth);
+      await ensureTrackingMigrated(env, auth.username);
       // These reads are independent of one another and awaited in parallel.
+      // (ensureTrackingMigrated above runs first on purpose: it can WRITE the
+      // tracking key, so reading it alongside would be a race.)
       const [raw, presetsRawInit, channelsRawInit, trackingRawInit, orderRawInit, d1Tracking, d1UserLists, syncResetAt] = await Promise.all([
         env.CONFIGS.get(`creatorsync:${auth.username}`),
         env.CONFIGS.get(`creatorsyncpresets:${auth.username}`),
@@ -100009,18 +98612,15 @@ function generateSearchVariations(query) {
       return json({ ok: true, done: false, accountsThisCall: 1, titlesThisCall, username });
     }
 
-    // /admin/api/backfill-title-daily-stats  (POST) -> { ok, rowsWritten }
-    // P8-2: Backfills title_daily_stats from legacy stats table
-    if (path === "/admin/api/backfill-title-daily-stats" && request.method === "POST") {
+    // /admin/api/recover-stats-from-analytics  (POST) { apply } -> what was
+    // (or would be) put back. See recoverStatsFromAnalyticsEngine (03_admin.js).
+    if (path === "/admin/api/recover-stats-from-analytics" && request.method === "POST") {
       const authed = await isAdminRequest(request, env);
       if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
-      if (!env || !env.DB) return json({ ok: false, error: "No database binding." }, 500);
-
-      const result = await backfillTitleDailyStatsFromStats(env);
-      if (!result.ok) {
-        return json({ ok: false, error: result.error }, 500, { "Cache-Control": "no-store" });
-      }
-      return json({ ok: true, rowsWritten: result.rowsWritten }, 200, { "Cache-Control": "no-store" });
+      let body = {};
+      try { body = await request.json(); } catch {}
+      const result = await recoverStatsFromAnalyticsEngine(env, { apply: body && body.apply === true });
+      return json({ ...result, release: WORKER_RELEASE }, result.ok ? 200 : 400, { "Cache-Control": "no-store" });
     }
 
     // /admin/api/migrate-d1 (POST) -> { ok, done, results, thisCall, scanned }
@@ -101469,15 +100069,27 @@ function generateSearchVariations(query) {
       return json({ ok: true, done, keysMigratedThisCall, prefix, prefixDone });
     }
 
-    // /admin/api/export-kv-to-r2  (POST) { prefix, cursor? }
-    //   -> { ok, done, keysExported, totalKeysInArchive, archiveKey, cursor? }
+    // /admin/api/export-kv-to-r2  (POST) { prefix, runId?, part?, cursor? }
+    //   -> { ok, done, runId, part, keysExported, keysSoFar, partKey, manifestKey?, cursor? }
     //
-    // P10-3: Exports one KV prefix in batches of up to 100 keys to the BLOBS
-    // R2 bucket under kv-archive/{sanitisedPrefix}/{YYYY-MM-DD}.json.gz.  The
-    // caller loops until done:true, then deletes the KV keys.  Each batch
-    // appends to the running archive so the final file is a single complete
-    // snapshot of all keys under the prefix for today.  Idempotent: running
-    // again for the same prefix+date rewrites the same R2 key.
+    // P10-3: copies one KV prefix to the BLOBS bucket, a batch per call. The
+    // page calls it until done:true (Maintenance -> Export old data).
+    //
+    //   kv-archive/<prefix>/<runId>/part-00001.json.gz   one per batch
+    //   kv-archive/<prefix>/<runId>/manifest.json        written last
+    //
+    // Each batch is its own object, so no call reads, merges or rewrites what
+    // an earlier one wrote: a storage error fails that call alone, and the
+    // work per call does not grow with the export. A run keeps one runId from
+    // its first call to its last, whatever the clock does. The manifest exists
+    // only once every batch is written, so its presence is what "complete"
+    // means. Values are read as bytes and kept as text when they are UTF-8,
+    // as base64 otherwise (Better Poster images), with each key's expiration
+    // and metadata. The prefix is matched literally: "stats:*" is refused,
+    // because KV would look for keys starting with a star and find none.
+    //
+    // It only copies. Deleting the old data is not safe yet: see
+    // docs/CUTOVER.md P10-3.
     if (path === "/admin/api/export-kv-to-r2" && request.method === "POST") {
       const authed = await isAdminRequest(request, env);
       if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
@@ -101488,80 +100100,67 @@ function generateSearchVariations(query) {
       try { body = await request.json(); } catch { body = {}; }
       const prefix = typeof body.prefix === "string" ? body.prefix.trim() : "";
       if (!prefix) return json({ ok: false, error: "prefix is required." }, 400);
-
-      // Sanitise the prefix for use as an R2 key segment.
-      const safePrefix = prefix.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
-      const dateStr = new Date().toISOString().slice(0, 10);
-      const archiveKey = `kv-archive/${safePrefix}/${dateStr}.json.gz`;
-
-      const BATCH = 100;
-      const listOpts = { prefix, limit: BATCH };
-      if (body.cursor) listOpts.cursor = body.cursor;
-
-      const listResult = await env.CONFIGS.list(listOpts);
-      const keys = listResult.keys.map((k) => k.name);
-
-      // Fetch existing archive (previous batches) plus the new values.
-      const [existingArchiveR2, ...values] = await Promise.all([
-        env.BLOBS.get(archiveKey).catch(() => null),
-        ...keys.map((k) => env.CONFIGS.get(k)),
-      ]);
-
-      let existingEntries = {};
-      if (existingArchiveR2) {
-        try {
-          const ab = await existingArchiveR2.arrayBuffer();
-          const ds = new DecompressionStream("gzip");
-          const dw = ds.writable.getWriter();
-          dw.write(new Uint8Array(ab));
-          dw.close();
-          const dr = ds.readable.getReader();
-          const parts = [];
-          for (;;) {
-            const { value, done: d } = await dr.read();
-            if (value) parts.push(value);
-            if (d) break;
-          }
-          const len = parts.reduce((s, p) => s + p.length, 0);
-          const merged = new Uint8Array(len);
-          let off = 0;
-          for (const p of parts) { merged.set(p, off); off += p.length; }
-          existingEntries = JSON.parse(new TextDecoder().decode(merged));
-        } catch {
-          existingEntries = {};
-        }
+      if (/[*?]/.test(prefix)) {
+        return json({ ok: false, error: "A prefix is matched literally: leave out the * (\"stats:\", not \"stats:*\")." }, 400);
       }
+      const runId = typeof body.runId === "string" && /^[0-9TZ-]{10,30}$/.test(body.runId)
+        ? body.runId
+        : new Date().toISOString().replace(/[:.]/g, "-");
+      const part = Number.isInteger(body.part) && body.part > 0 ? body.part : 1;
+      const keysBefore = Number.isInteger(body.keysSoFar) && body.keysSoFar >= 0 ? body.keysSoFar : 0;
 
-      keys.forEach((k, i) => { existingEntries[k] = values[i]; });
+      const safePrefix = prefix.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "") || "_";
+      const base = `kv-archive/${safePrefix}/${runId}`;
+      const partKey = `${base}/part-${String(part).padStart(5, "0")}.json.gz`;
+
+      const listOpts = { prefix, limit: 50 };
+      if (body.cursor) listOpts.cursor = body.cursor;
+      const listResult = await env.CONFIGS.list(listOpts);
+      const listed = listResult.keys || [];
+
+      const utf8 = new TextDecoder("utf-8", { fatal: true });
+      const entries = [];
+      for (const k of listed) {
+        const buf = await env.CONFIGS.get(k.name, { type: "arrayBuffer" });
+        if (buf === null) continue;   // deleted since it was listed
+        const entry = { key: k.name };
+        try {
+          entry.text = utf8.decode(buf);
+        } catch {
+          entry.base64 = bytesToBase64(buf);
+        }
+        if (k.expiration) entry.expiration = k.expiration;
+        if (k.metadata !== undefined && k.metadata !== null) entry.metadata = k.metadata;
+        entries.push(entry);
+      }
 
       const cs = new CompressionStream("gzip");
-      const cw = cs.writable.getWriter();
-      cw.write(new TextEncoder().encode(JSON.stringify(existingEntries)));
-      cw.close();
-      const cr = cs.readable.getReader();
-      const gzChunks = [];
-      for (;;) {
-        const { value, done: d } = await cr.read();
-        if (value) gzChunks.push(value);
-        if (d) break;
-      }
-      const totalLen = gzChunks.reduce((s, c) => s + c.length, 0);
-      const gzipped = new Uint8Array(totalLen);
-      let gzOff = 0;
-      for (const c of gzChunks) { gzipped.set(c, gzOff); gzOff += c.length; }
-
-      await env.BLOBS.put(archiveKey, gzipped, {
+      const gzipped = new Uint8Array(await new Response(
+        new Blob([JSON.stringify({ prefix, runId, part, entries })]).stream().pipeThrough(cs)
+      ).arrayBuffer());
+      await env.BLOBS.put(partKey, gzipped, {
         httpMetadata: { contentType: "application/json", contentEncoding: "gzip" },
-        customMetadata: { kvPrefix: prefix, exportDate: dateStr, keyCount: String(Object.keys(existingEntries).length) },
+        customMetadata: { kvPrefix: prefix, runId, part: String(part), keyCount: String(entries.length) },
       });
 
+      const keysSoFar = keysBefore + entries.length;
       const done = listResult.list_complete || !listResult.cursor;
+      let manifestKey;
+      if (done) {
+        manifestKey = `${base}/manifest.json`;
+        await env.BLOBS.put(manifestKey, JSON.stringify({
+          prefix, runId, parts: part, keys: keysSoFar, completedAt: new Date().toISOString(),
+        }), { httpMetadata: { contentType: "application/json" } });
+      }
       return json({
         ok: true,
         done,
-        keysExported: keys.length,
-        totalKeysInArchive: Object.keys(existingEntries).length,
-        archiveKey,
+        runId,
+        part,
+        keysExported: entries.length,
+        keysSoFar,
+        partKey,
+        manifestKey,
         cursor: done ? undefined : listResult.cursor,
       }, 200, { "Cache-Control": "no-store" });
     }
@@ -102626,7 +101225,20 @@ export default {
     if (effectiveEnv && effectiveEnv._d1Session && typeof effectiveEnv._d1Session.getBookmark === "function") {
       try { sessionBookmark = effectiveEnv._d1Session.getBookmark(); } catch {}
     }
-    return await withSecurityHeaders(response, privatePath, request ? request._sessionCookie : null, nonce, env, sessionBookmark);
+    const secured = await withSecurityHeaders(response, privatePath, request ? request._sessionCookie : null, nonce, env, sessionBookmark);
+    // Tells the page that this browser holds a live session for the account
+    // (one it sent, or one this response hands out), so its next requests can
+    // be signed with the session instead of the Account Key (creatorApiFetch,
+    // 16_; Release 19). The page cannot see the HttpOnly cookie itself.
+    try {
+      const p = new URL(request && request.url ? request.url : "https://x/").pathname;
+      if (request && request.account && (p.startsWith("/api/creator/") || CREATOR_SESSION_PATH_PREFIXES.some((x) => p.startsWith(x)))) {
+        secured.headers.set("X-MLA-Session", String(request.account.username || "").toLowerCase());
+      }
+    } catch {
+      // Never affects the response.
+    }
+    return secured;
   },
 
   // Runs on whatever schedule this Worker's owner configured under
@@ -109366,6 +107978,21 @@ async function runActivityBackfillStep(env, opts = {}) {
   try {
     const job = await loadActivityBackfillJob(menv, ACTIVITY_BACKFILL_RUN_KEY);
     run = !opts.restart && job && job.progress && job.progress.phase ? job.progress : null;
+    // Accounts made after the copy finished. Without this a finished run was
+    // finished for good, and with FF_EVENT_TRACKING on Start over is refused,
+    // so they could never be copied: their history stayed in the legacy
+    // stores (39 of 748 accounts, 2026-10-04). Account ids only grow, so they
+    // are the ones after where the run stopped; the hourly activity.copy-new
+    // job (58_) takes them on its own.
+    if (run && run.phase === "done") {
+      const newer = await menv.DB.prepare("SELECT count(*) AS n FROM accounts WHERE id > ? AND deleted_at IS NULL")
+        .bind(Number(run.afterAccountId) || 0).first();
+      const n = Number(newer && newer.n) || 0;
+      if (n > 0) {
+        run = { ...run, phase: "accounts", accountsTotal: (Number(run.accountsTotal) || 0) + n };
+        delete run.finishedAt;
+      }
+    }
     if (!run) {
       run = { phase: "accounts", afterAccountId: 0, accountsTotal: 0, accountsDone: 0, accountsFailed: 0, startedAt: Date.now() };
       if (opts.restart) {
@@ -109670,7 +108297,10 @@ async function recordActivityPlay(env, username, play, source) {
 // Nothing calls these yet: P3c-6 serves /sync/load and the personal rows
 // from them, behind FF_EVENT_TRACKING.
 
-const SHELF_PROGRESS_LIMIT = 200;
+// Shows read per account. 200 left a heavy watcher's older shows off Continue
+// Watching and Airing Next, which the stored shelves never did (the shelf
+// comparison, 2026-10-04); 1000 still bounds the read.
+const SHELF_PROGRESS_LIMIT = 1000;
 const SHELF_JOIN_CHUNK = 90;
 const SHELF_HISTORY_PAGE = 50;
 const SHELF_HISTORY_PAGE_MAX = 500;
@@ -109812,6 +108442,38 @@ async function shelfTitles(env, mediaIds) {
     for (const r of rows || []) out.set(r.id, { media: r, sched: r.s_media != null && (r.checked_at != null || r.s_status != null) ? r : null });
   }
   return out;
+}
+
+// The stored entries (as the legacy writers keep them) of the shows the
+// schedule does not know yet. With FF_SHOW_SCHEDULE on they are served as they
+// were instead of dropped: a show that was matched to a movie row never gets a
+// schedule row, and one TMDB cannot answer for stays unknown, so without this
+// it would vanish from the shelf (Release 18). Storyline suggestions are not
+// taken: they are kept whole in show_progress already.
+async function shelfStoredForUnknown(env, entries, mediaIds) {
+  const list = Array.isArray(entries) ? entries : [];
+  const ids = [...new Set((mediaIds || []).filter((m) => m != null))];
+  if (!list.length || !ids.length || !env || !env.DB) return [];
+  const keys = new Set();
+  for (let i = 0; i < ids.length; i += SHELF_JOIN_CHUNK) {
+    const part = ids.slice(i, i + SHELF_JOIN_CHUNK);
+    const { results } = await env.DB.prepare(
+      `SELECT imdb_id, tmdb_id, alt_id FROM media WHERE id IN (${part.map(() => "?").join(", ")})`
+    ).bind(...part).all();
+    for (const m of results || []) {
+      if (m.imdb_id) keys.add(String(m.imdb_id));
+      if (m.tmdb_id) {
+        keys.add(`tmdb:${m.tmdb_id}`);
+        keys.add(`tmdb:tv:${m.tmdb_id}`);
+      }
+      if (m.alt_id) keys.add(String(m.alt_id));
+    }
+  }
+  return list.filter((it) => {
+    if (!it || typeof it !== "object" || it.isCompanion) return false;
+    const id = String(it.showId || it.id || "");
+    return keys.has(id) || (id.startsWith("tt") && keys.has(id.split(":")[0]));
+  });
 }
 
 async function continueWatching(env, accountId, opts = {}) {
@@ -110129,8 +108791,15 @@ async function assembleTrackingRecord(env, rawKv, username, accountId) {
   const record = { ...rest, watchHistory: history };
   if (isShowScheduleEnabled(env)) {
     const [cw, an] = await Promise.all([continueWatching(env, accountId), airingNext(env, accountId)]);
-    record.continueWatching = cw.items.map(({ mediaId, ...it }) => it);
-    record.airingNext = an.items.map(({ mediaId, ...it }) => it);
+    // A show the schedule does not know yet keeps the entry it had
+    // (shelfStoredForUnknown, 39_) rather than dropping off the shelf.
+    const [keepCw, keepAn] = await Promise.all([
+      shelfStoredForUnknown(env, rest.continueWatching, cw.missingSchedule),
+      shelfStoredForUnknown(env, rest.airingNext, an.missingSchedule),
+    ]);
+    record.continueWatching = [...cw.items.map(({ mediaId, ...it }) => it), ...keepCw];
+    record.airingNext = [...an.items.map(({ mediaId, ...it }) => it), ...keepAn]
+      .sort((a, b) => String(a.airDate || "").localeCompare(String(b.airDate || "")));
   }
   return record;
 }
@@ -111271,6 +109940,8 @@ function newJobPingNonce() {
 //   GET  /admin/api/jobs/status          is JOBS bound; the job types known
 //   POST /admin/api/jobs/ping            send a test job -> { nonce }
 //   GET  /admin/api/jobs/ping?nonce=...  has it come back yet
+//   POST /admin/api/jobs/shelf-shadow-now  one batch of the shelf comparison
+//                                          (runShelfShadowNow, 47_shelf-shadow.js)
 async function handleJobsAdminApi(request, env, url, path) {
   if (!path.startsWith("/admin/api/jobs/")) return null;
   if (!(await isAdminRequest(request, env))) return json({ ok: false, error: "Not authorized." }, 401);
@@ -111304,6 +109975,16 @@ async function handleJobsAdminApi(request, env, url, path) {
       const sent = await enqueueJob(env, "jobs.ping", { nonce, sentAt: Date.now() });
       if (!sent.ok) return json({ ok: false, error: `Could not send to the queue (${sent.reason}). See the Worker's logs.` }, 502);
       return json({ ok: true, nonce });
+    }
+    if (path === "/admin/api/jobs/shelf-shadow-now" && request.method === "POST") {
+      let body = {};
+      try {
+        body = (await request.json()) || {};
+      } catch {
+        body = {};
+      }
+      const result = await runShelfShadowNow(env, { afterId: body.afterId, round: body.round });
+      return json(result, result.ok ? 200 : 400, { "Cache-Control": "no-store" });
     }
     if (path === "/admin/api/jobs/ping" && request.method === "GET") {
       const nonce = url.searchParams.get("nonce") || "";
@@ -112252,6 +110933,12 @@ defineJobType("show.refresh-batch", {
 // schedule does not know yet (missingSchedule) are counted apart, not as
 // differences: they mean show.refresh (P5-3) has not reached them.
 //
+// Every difference also gets a reason (shelfShadowWhy): a code, counted per
+// shelf in `whyOld` / `whyNew`, and a line of detail in the examples. The first
+// full comparison on the live site was 20% different with nothing to say why
+// (2026-10-04); "only in the old" can as well mean the stored shelf is stale
+// (an episode already watched, a show that ended) as that the new one is wrong.
+//
 // Each account also writes one Analytics Engine point per shelf, index
 // `shelf-shadow`: blobs ["shelf-shadow", "cw" | "an"], doubles [legacy, new,
 // both, legacy only, new only, not known yet].
@@ -112264,8 +110951,8 @@ const SHELF_SHADOW_EXAMPLES = 10;
 function shelfShadowEmpty() {
   return {
     accounts: 0,
-    cw: { legacy: 0, v2: 0, both: 0, legacyOnly: 0, v2Only: 0, unknown: 0 },
-    an: { legacy: 0, v2: 0, both: 0, legacyOnly: 0, v2Only: 0, unknown: 0 },
+    cw: { legacy: 0, v2: 0, both: 0, legacyOnly: 0, v2Only: 0, unknown: 0, whyOld: {}, whyNew: {} },
+    an: { legacy: 0, v2: 0, both: 0, legacyOnly: 0, v2Only: 0, unknown: 0, whyOld: {}, whyNew: {} },
     examples: [],
   };
 }
@@ -112274,6 +110961,52 @@ function shelfShadowRate(t) {
   const diff = t.cw.legacyOnly + t.cw.v2Only + t.an.legacyOnly + t.an.v2Only;
   const all = t.cw.both + t.an.both + diff;
   return all ? diff / all : 0;
+}
+
+// Differences that are the old list's own mistake, not the new one's, by the
+// rules both lists share (39_activity-shelves.js):
+//   already-watched     an episode offered although the history says it was watched
+//   not-aired-yet       an episode offered that has not aired and has no date
+//   dismissed, dropped  a show the person dismissed or dropped, still offered
+//   hidden              a show the person took off Airing Next, still listed
+//   no-upcoming, next-already-aired   an Airing Next entry with nothing coming
+//   replaces-old-mistake   the worked-out episode standing in for one of those
+// Left out of `rateNew`, and not counted as lost in the verdict.
+const SHELF_SHADOW_OLD_LIST_WRONG = new Set([
+  "already-watched", "not-aired-yet", "dismissed", "dropped", "hidden", "no-upcoming", "next-already-aired", "replaces-old-mistake",
+]);
+
+// What switching would do, from the round's reasons: entries only the old list
+// has that are not its mistakes (lost), shows offered at another episode
+// (changed, counted once, on the old side), and entries only the new list has
+// (added). Shows the schedule does not know yet keep their stored entry
+// (shelfStoredForUnknown), so they are not lost.
+function shelfShadowVerdict(t) {
+  const out = { lost: 0, changed: 0, added: 0, oldWrong: 0, lostWhy: {} };
+  for (const shelf of [t.cw, t.an]) {
+    for (const [code, n] of Object.entries(shelf.whyOld || {})) {
+      const k = Number(n) || 0;
+      if (SHELF_SHADOW_OLD_LIST_WRONG.has(code)) out.oldWrong += k;
+      else if (code === "different-episode") out.changed += k;
+      else {
+        out.lost += k;
+        out.lostWhy[code] = (out.lostWhy[code] || 0) + k;
+      }
+    }
+    for (const [code, n] of Object.entries(shelf.whyNew || {})) {
+      const k = Number(n) || 0;
+      if (SHELF_SHADOW_OLD_LIST_WRONG.has(code)) out.oldWrong += k;
+      else if (code !== "different-episode") out.added += k;
+    }
+  }
+  return out;
+}
+
+function shelfShadowRateNew(t) {
+  const { oldWrong } = shelfShadowVerdict(t);
+  const diff = t.cw.legacyOnly + t.cw.v2Only + t.an.legacyOnly + t.an.v2Only;
+  const all = t.cw.both + t.an.both + diff - oldWrong;
+  return all > 0 ? (diff - oldWrong) / all : 0;
 }
 
 // Media ids for legacy show ids ("tt…", "tmdb:N", "tmdb:tv:N").
@@ -112303,6 +111036,21 @@ async function shelfShadowMediaIds(env, showIds) {
   return out;
 }
 
+// The titles the account's progress rows name, by their ids too, so a stored
+// item is matched to its media row even when shelfShadowMediaIds did not find
+// it (and a show the schedule does not know yet is then recognized as such).
+function shelfShadowAddTitleIds(ids, titles) {
+  for (const [mediaId, t] of titles) {
+    const m = t && t.media;
+    if (!m) continue;
+    if (m.imdb_id && !ids.has(m.imdb_id)) ids.set(m.imdb_id, mediaId);
+    if (m.tmdb_id) {
+      if (!ids.has(`tmdb:${m.tmdb_id}`)) ids.set(`tmdb:${m.tmdb_id}`, mediaId);
+      if (!ids.has(`tmdb:tv:${m.tmdb_id}`)) ids.set(`tmdb:tv:${m.tmdb_id}`, mediaId);
+    }
+  }
+}
+
 function shelfShadowShowKey(showId, ids) {
   const id = String(showId || "");
   const m = ids.get(id.startsWith("tt") ? id.split(":")[0] : id);
@@ -112328,6 +111076,122 @@ function shelfShadowDiff(legacyKeys, v2Keys) {
   return { legacy: a.size, v2: b.size, both: a.size - legacyOnly.length, legacyOnly, v2Only };
 }
 
+// --- Why one shelf has an item the other has not -------------------------------
+
+function shelfShadowEp(season, episode) {
+  return `S${season}E${episode}`;
+}
+
+function shelfShadowScheduleText(sched) {
+  if (!sched) return "no schedule";
+  const last = sched.last_aired_season != null ? `last aired ${shelfShadowEp(sched.last_aired_season, sched.last_aired_episode)}` : "nothing aired";
+  const next = sched.next_season != null ? `next ${shelfShadowEp(sched.next_season, sched.next_episode)} ${sched.next_air_date || "(no date)"}` : "no next episode";
+  return `${last}, ${next}${sched.season_episode_counts ? "" : ", no episode counts"}${sched.s_status ? ` (${sched.s_status})` : ""}`;
+}
+
+// What the stored entry itself says beyond its episode, and how long ago the
+// schedule was last refreshed: enough to tell an entry the old list kept from
+// a schedule that has not caught up.
+function shelfShadowStoredText(item) {
+  const bits = [];
+  if (item && item.airDate) bits.push(`air date ${String(item.airDate).slice(0, 10)}`);
+  if (item && item.isUnaired) bits.push("marked unaired");
+  return bits.length ? ` (stored entry: ${bits.join(", ")})` : "";
+}
+
+function shelfShadowCheckedText(sched, today) {
+  const at = Number(sched && sched.checked_at);
+  if (!Number.isFinite(at) || at <= 1) return "";
+  const days = Math.floor((Date.parse(`${today}T12:00:00Z`) - at) / 86400000);
+  return days >= 1 ? `, schedule checked ${days} days ago` : ", schedule checked today";
+}
+
+function shelfShadowMediaIdOf(key) {
+  const m = /^m(\d+)(?::|$)/.exec(String(key || ""));
+  return m ? Number(m[1]) : null;
+}
+
+// Why a stored Continue Watching item is not on the worked-out shelf.
+function shelfShadowCwWhyOld(item, key, ctx) {
+  if (String(key).startsWith("c:")) {
+    return ["suggestion", "a storyline suggestion or movie the activity database does not keep"];
+  }
+  const mediaId = shelfShadowMediaIdOf(key);
+  if (mediaId == null) return ["no-title", `no media row for ${item && item.showId}`];
+  const row = ctx.rows.get(mediaId);
+  if (!row) return ["no-progress", "no show_progress row for the show"];
+  if (row.status === "dropped") return ["dropped", "the show is marked dropped"];
+  if (row.last_season == null || row.last_episode == null) return ["no-episode-progress", "show_progress has no episode"];
+  // The worked-out shelf reads only the account's SHELF_PROGRESS_LIMIT most
+  // recently watched shows.
+  if (!ctx.served.has(mediaId)) return ["beyond-limit", `the show is not among the account's ${SHELF_PROGRESS_LIMIT} most recently watched`];
+  const lastS = Number(row.last_season);
+  const lastE = Number(row.last_episode);
+  const S = Number(item.seasonNum);
+  const E = Number(item.episodeNum);
+  if (row.dismissed_at_season != null && shelfAtOrBefore(lastS, lastE, Number(row.dismissed_at_season), Number(row.dismissed_at_episode) || 0)) {
+    return ["dismissed", `dismissed at ${shelfShadowEp(row.dismissed_at_season, row.dismissed_at_episode)}, progress ${shelfShadowEp(lastS, lastE)}`];
+  }
+  // The old list's own mistake: it offers an episode the history says was
+  // watched (the ping and the webhook put the old entry back when TMDB had
+  // nothing newer, fixed in Release 17).
+  if (shelfAtOrBefore(S, E, lastS, lastE)) return ["already-watched", `stored ${shelfShadowEp(S, E)}, but progress is at ${shelfShadowEp(lastS, lastE)}`];
+  const t = ctx.titles.get(mediaId);
+  if (!t || !t.sched) return ["schedule-unknown", "the schedule does not know the show yet"];
+  const next = shelfEpisodeAfter(t.sched, lastS, lastE, ctx.today);
+  if (!next) {
+    // An episode past the last one aired, with no date: the old list offered
+    // an episode nobody can watch yet (the ping and webhook take TMDB's next
+    // episode whether or not it has aired). 44 of these on 2026-10-04, most of
+    // them next seasons of returning, ended or cancelled shows.
+    const lastAiredS = t.sched.last_aired_season;
+    const lastAiredE = t.sched.last_aired_episode;
+    const notAired = lastAiredS == null || !shelfAtOrBefore(S, E, Number(lastAiredS), Number(lastAiredE) || 0);
+    return [notAired ? "not-aired-yet" : "schedule-nothing-after", `nothing after ${shelfShadowEp(lastS, lastE)} (stored ${shelfShadowEp(S, E)}${shelfShadowStoredText(item)}): ${shelfShadowScheduleText(t.sched)}${shelfShadowCheckedText(t.sched, ctx.today)}`];
+  }
+  if (next.season !== S || next.episode !== E) return ["different-episode", `stored ${shelfShadowEp(S, E)}, worked out ${shelfShadowEp(next.season, next.episode)} after ${shelfShadowEp(lastS, lastE)}`];
+  const v2 = ctx.v2Keys.cw.filter((k) => k.split(":")[0] === `m${mediaId}`);
+  return ["other", `stored ${JSON.stringify({ id: item.id, showId: item.showId, seasonNum: item.seasonNum, episodeNum: item.episodeNum })}, progress ${shelfShadowEp(lastS, lastE)}, new shelf has ${v2.length ? v2.join(", ") : "nothing"} for it: ${shelfShadowScheduleText(t.sched)}`];
+}
+
+// Why a stored Airing Next show is not on the worked-out shelf.
+function shelfShadowAnWhyOld(item, key, ctx) {
+  const mediaId = shelfShadowMediaIdOf(key);
+  if (mediaId == null) return ["no-title", `no media row for ${item && (item.showId || item.id)}`];
+  const t = ctx.titles.get(mediaId);
+  if (t && t.media && t.media.kind !== "series") return ["not-a-series", `media row ${mediaId} is a ${t.media.kind}`];
+  const row = ctx.rows.get(mediaId);
+  if (!row) return ["no-progress", "no show_progress row for the show"];
+  if (row.status === "dropped") return ["dropped", "the show is marked dropped"];
+  if (row.last_season == null && row.status !== "completed") return ["nothing-watched", "no episode watched"];
+  if (row.airing_hidden_at_season != null) {
+    const stands = row.last_season == null
+      || shelfAtOrBefore(Number(row.last_season), Number(row.last_episode) || 0, Number(row.airing_hidden_at_season), Number(row.airing_hidden_at_episode) || 0);
+    if (stands) return ["hidden", `removed from Airing Next at ${shelfShadowEp(row.airing_hidden_at_season, row.airing_hidden_at_episode)}`];
+  }
+  if (!t || !t.sched) return ["schedule-unknown", "the schedule does not know the show yet"];
+  const s = t.sched;
+  if (!s.next_air_date || s.next_season == null || s.next_episode == null) return ["no-upcoming", `stored ${item && item.airDate ? item.airDate : "(no date)"}: ${shelfShadowScheduleText(s)}`];
+  if (shelfAired(s.next_air_date, ctx.today)) return ["next-already-aired", `${shelfShadowScheduleText(s)}, which is not after today`];
+  return ["other", shelfShadowScheduleText(s)];
+}
+
+// Why the worked-out shelf has an item the stored one has not. `whyOld` is
+// what was found for the stored side's own differences: a worked-out episode
+// standing in for a stored one the old list had wrong is that mistake put right.
+function shelfShadowWhyNew(shelf, key, ctx, whyOld = {}) {
+  const show = String(key).split(":")[0];
+  const stored = ctx.legacyKeys[shelf].filter((k) => k && k.split(":")[0] === show);
+  if (shelf === "cw" && stored.length) {
+    const codes = stored.map((k) => (whyOld[k] ? whyOld[k][0] : null)).filter(Boolean);
+    if (codes.length && codes.every((c) => SHELF_SHADOW_OLD_LIST_WRONG.has(c))) {
+      return ["replaces-old-mistake", `stored ${stored.join(", ")} (${codes.join(", ")})`];
+    }
+    return ["different-episode", `stored ${stored.join(", ")}`];
+  }
+  return ["not-stored", "the stored shelf does not have it"];
+}
+
 // Compares one account. Returns { cw, an } diffs, or null when it has no
 // stored record to compare with.
 async function compareAccountShelves(env, account, { now = Date.now() } = {}) {
@@ -112341,19 +111205,63 @@ async function compareAccountShelves(env, account, { now = Date.now() } = {}) {
   if (!legacy || typeof legacy !== "object") return null;
   const legacyCw = Array.isArray(legacy.continueWatching) ? legacy.continueWatching : [];
   const legacyAn = Array.isArray(legacy.airingNext) ? legacy.airingNext : [];
-  const [cw, an] = await Promise.all([continueWatching(env, account.id, { now }), airingNext(env, account.id, { now })]);
+  const [cw, an, progressRows] = await Promise.all([
+    continueWatching(env, account.id, { now }),
+    airingNext(env, account.id, { now }),
+    shelfProgressRows(env, account.id),
+  ]);
   const ids = await shelfShadowMediaIds(env, [...legacyCw, ...legacyAn].map((i) => i && (i.showId || i.id)));
+  const titles = await shelfTitles(env, progressRows.map((r) => r.media_id));
+  shelfShadowAddTitleIds(ids, titles);
   // A show the schedule does not know yet is left out of both sides.
   const unknown = new Set([...(cw.missingSchedule || []), ...(an.missingSchedule || [])].map((m) => `m${m}`));
   const known = (k) => k && !unknown.has(k.split(":")[0]);
-  const cwDiff = shelfShadowDiff(legacyCw.map((i) => shelfShadowCwKey(i, ids)).filter(known), cw.items.map((i) => shelfShadowCwKey(i, ids)));
-  const anDiff = shelfShadowDiff(legacyAn.map((i) => shelfShadowAnKey(i, ids)).filter(known), an.items.map((i) => shelfShadowAnKey(i, ids)));
+  const legacyCwKeyed = legacyCw.map((i) => [shelfShadowCwKey(i, ids), i]).filter(([k]) => known(k));
+  const legacyAnKeyed = legacyAn.map((i) => [shelfShadowAnKey(i, ids), i]).filter(([k]) => known(k));
+  const cwDiff = shelfShadowDiff(legacyCwKeyed.map(([k]) => k), cw.items.map((i) => shelfShadowCwKey(i, ids)));
+  const anDiff = shelfShadowDiff(legacyAnKeyed.map(([k]) => k), an.items.map((i) => shelfShadowAnKey(i, ids)));
   cwDiff.unknown = (cw.missingSchedule || []).length;
   anDiff.unknown = (an.missingSchedule || []).length;
+
+  // The reasons. Progress rows beyond the shelves' own limit, and titles no
+  // progress row names, are looked up for the items that need them.
+  if (cwDiff.legacyOnly.length || anDiff.legacyOnly.length || cwDiff.v2Only.length || anDiff.v2Only.length) {
+    const rows = new Map(progressRows.map((r) => [r.media_id, r]));
+    const wanted = [...cwDiff.legacyOnly, ...anDiff.legacyOnly].map(shelfShadowMediaIdOf).filter((m) => m != null);
+    const missingRows = [...new Set(wanted.filter((m) => !rows.has(m)))];
+    const actDb = activityDb(env, account.id);
+    for (let i = 0; actDb && i < missingRows.length; i += SHELF_JOIN_CHUNK) {
+      const part = missingRows.slice(i, i + SHELF_JOIN_CHUNK);
+      const { results } = await actDb.prepare(
+        `SELECT * FROM show_progress WHERE account_id = ? AND media_id IN (${part.map(() => "?").join(", ")})`
+      ).bind(account.id, ...part).all();
+      for (const r of results || []) rows.set(r.media_id, r);
+    }
+    const moreTitles = await shelfTitles(env, [...new Set(wanted.filter((m) => !titles.has(m)))]);
+    for (const [k, v] of moreTitles) titles.set(k, v);
+    const ctx = {
+      rows, titles, today: shelfToday(now),
+      served: new Set(progressRows.map((r) => r.media_id)),
+      legacyKeys: { cw: legacyCwKeyed.map(([k]) => k), an: legacyAnKeyed.map(([k]) => k) },
+      v2Keys: { cw: cw.items.map((i) => shelfShadowCwKey(i, ids)), an: an.items.map((i) => shelfShadowAnKey(i, ids)) },
+    };
+    const byKey = { cw: new Map(legacyCwKeyed), an: new Map(legacyAnKeyed) };
+    for (const [shelf, diff, whyOld] of [["cw", cwDiff, shelfShadowCwWhyOld], ["an", anDiff, shelfShadowAnWhyOld]]) {
+      diff.why = {};
+      for (const key of diff.legacyOnly) {
+        try {
+          diff.why[key] = whyOld(byKey[shelf].get(key) || {}, key, ctx);
+        } catch (err) {
+          diff.why[key] = ["error", jobErrorText(err)];
+        }
+      }
+      for (const key of diff.v2Only) diff.why[key] = shelfShadowWhyNew(shelf, key, ctx, diff.why);
+    }
+  }
   return { cw: cwDiff, an: anDiff };
 }
 
-async function runShelfShadow(env, job = {}) {
+async function runShelfShadow(env, job = {}, { accounts: batchSize = SHELF_SHADOW_ACCOUNTS } = {}) {
   if (!env || !env.DB || typeof activityDbs !== "function" || !activityDbs(env).length) return { progress: job.progress || {}, skipped: "no activity database" };
   const progress = { ...(job.progress || {}) };
   const round = progress.round || shelfShadowEmpty();
@@ -112363,7 +111271,7 @@ async function runShelfShadow(env, job = {}) {
     ({ results: accounts } = await env.DB.prepare(
       `SELECT a.id, a.username FROM jobs j JOIN accounts a ON a.id = j.account_id
        WHERE j.type = ? AND j.status = 'done' AND j.account_id > ? ORDER BY j.account_id LIMIT ?`
-    ).bind(ACTIVITY_BACKFILL_TYPE, afterId, SHELF_SHADOW_ACCOUNTS).all());
+    ).bind(ACTIVITY_BACKFILL_TYPE, afterId, batchSize).all());
   } catch (err) {
     if (/no such table/i.test(jobErrorText(err))) return { progress, skipped: "no 0016" };
     throw err;
@@ -112391,8 +111299,26 @@ async function runShelfShadow(env, job = {}) {
       t.legacyOnly += d.legacyOnly.length;
       t.v2Only += d.v2Only.length;
       t.unknown += d.unknown;
+      // A round started before the reasons existed has no tallies yet.
+      t.whyOld = t.whyOld || {};
+      t.whyNew = t.whyNew || {};
+      const why = d.why || {};
+      for (const key of d.legacyOnly) {
+        const code = (why[key] || ["other"])[0];
+        t.whyOld[code] = (t.whyOld[code] || 0) + 1;
+      }
+      for (const key of d.v2Only) {
+        const code = (why[key] || ["other"])[0];
+        t.whyNew[code] = (t.whyNew[code] || 0) + 1;
+      }
       if ((d.legacyOnly.length || d.v2Only.length) && round.examples.length < SHELF_SHADOW_EXAMPLES) {
-        round.examples.push({ accountId: account.id, shelf, legacyOnly: d.legacyOnly.slice(0, 5), v2Only: d.v2Only.slice(0, 5) });
+        const legacyOnly = d.legacyOnly.slice(0, 5);
+        const v2Only = d.v2Only.slice(0, 5);
+        const example = { accountId: account.id, shelf, legacyOnly, v2Only, why: {} };
+        for (const key of [...legacyOnly, ...v2Only]) {
+          if (why[key]) example.why[key] = `${why[key][0]}: ${why[key][1]}`;
+        }
+        round.examples.push(example);
       }
       if (analytics) {
         try {
@@ -112407,11 +111333,73 @@ async function runShelfShadow(env, job = {}) {
       }
     }
   }
-  if (!accounts || accounts.length < SHELF_SHADOW_ACCOUNTS) {
+  if (!accounts || accounts.length < batchSize) {
     // The round is over: keep its totals, start the next one.
-    return { progress: { afterId: 0, round: shelfShadowEmpty(), last: { ...round, rate: shelfShadowRate(round), finishedAt: Date.now() } } };
+    return { scanned: (accounts || []).length, progress: { afterId: 0, round: shelfShadowEmpty(), last: { ...round, rate: shelfShadowRate(round), rateNew: shelfShadowRateNew(round), verdict: shelfShadowVerdict(round), finishedAt: Date.now() } } };
   }
-  return { progress: { ...progress, afterId: lastId, round } };
+  return { scanned: accounts.length, progress: { ...progress, afterId: lastId, round } };
+}
+
+// --- Compare now (/admin -> Maintenance -> Check jobs, Release 16) -------------
+//
+// The hourly job compares 50 accounts an hour, so one full comparison takes
+// about 15 hours. The admin page can instead run the whole round itself, a
+// batch of SHELF_SHADOW_NOW_ACCOUNTS accounts per request, carrying the round
+// from one request to the next (POST /admin/api/jobs/shelf-shadow-now). It is
+// the same comparison: runShelfShadow, with the round kept by the page instead
+// of the jobs row. The finished round is also stored as the job's `last`, so
+// Check jobs shows it; the hourly job's own round carries on untouched.
+const SHELF_SHADOW_NOW_ACCOUNTS = 20;
+
+// A round as the page sends it back: only the known fields, as numbers.
+function shelfShadowRoundFrom(raw) {
+  const round = shelfShadowEmpty();
+  if (!raw || typeof raw !== "object") return round;
+  round.accounts = Math.max(0, Number(raw.accounts) || 0);
+  for (const shelf of ["cw", "an"]) {
+    const from = raw[shelf] && typeof raw[shelf] === "object" ? raw[shelf] : {};
+    for (const k of ["legacy", "v2", "both", "legacyOnly", "v2Only", "unknown"]) round[shelf][k] = Math.max(0, Number(from[k]) || 0);
+    for (const w of ["whyOld", "whyNew"]) {
+      const tally = from[w] && typeof from[w] === "object" ? from[w] : {};
+      for (const [code, n] of Object.entries(tally)) {
+        if (/^[a-z-]{1,40}$/.test(code) && Number(n) > 0) round[shelf][w][code] = Number(n);
+      }
+    }
+  }
+  if (Array.isArray(raw.examples)) round.examples = raw.examples.slice(0, SHELF_SHADOW_EXAMPLES);
+  return round;
+}
+
+async function runShelfShadowNow(env, { afterId = 0, round = null } = {}) {
+  if (!env || !env.DB || typeof activityDbs !== "function" || !activityDbs(env).length) {
+    return { ok: false, error: "Needs the activity database (DB_ACTIVITY)." };
+  }
+  const start = Math.max(0, Number(afterId) || 0);
+  let total = null;
+  if (!start) {
+    // How many accounts the round will cover, for the page's progress line.
+    try {
+      const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM jobs j JOIN accounts a ON a.id = j.account_id WHERE j.type = ? AND j.status = 'done'")
+        .bind(ACTIVITY_BACKFILL_TYPE).first();
+      total = row ? Number(row.n) || 0 : null;
+    } catch {
+      total = null;
+    }
+  }
+  const out = await runShelfShadow(env, { progress: { afterId: start, round: shelfShadowRoundFrom(round) } }, { accounts: SHELF_SHADOW_NOW_ACCOUNTS });
+  if (out.skipped) return { ok: false, error: `Not run: ${out.skipped}.` };
+  const last = out.progress && out.progress.last;
+  if (!last) return { ok: true, done: false, total, scanned: out.scanned, afterId: out.progress.afterId, round: out.progress.round };
+  // Check jobs reads the job's `last`. Not while the hourly run is mid-way:
+  // its own write at the end would replace this anyway.
+  try {
+    await env.DB.prepare(
+      "UPDATE jobs SET progress_json = json_set(COALESCE(progress_json, '{}'), '$.last', json(?)) WHERE dedupe_key = 'periodic:shelf.shadow' AND status != 'running'"
+    ).bind(JSON.stringify(last)).run();
+  } catch (err) {
+    console.warn(`[Jobs] shelf.shadow: could not store the comparison: ${jobErrorText(err)}`);
+  }
+  return { ok: true, done: true, total, scanned: out.scanned, last };
 }
 
 definePeriodicJob("shelf.shadow", {
@@ -114000,3 +112988,48 @@ async function titleDetailsWithoutTmdb(env, rawId, type, region) {
     notOnTmdb: true,
   };
 }
+
+// --- New accounts' history copy: activity.copy-new (Release 17) ------------------
+//
+// With FF_EVENT_TRACKING on, an account is served from the activity database
+// once its history copy (migrate.activity, 37_activity-backfill.js) is done.
+// The copy only ever ran when an operator pressed it, so an account made after
+// it finished stayed on the legacy stores (39 of 748 accounts, 2026-10-04).
+// This hourly job runs copy steps for them: runActivityBackfillStep picks up
+// accounts made after a finished run, and is a single cheap count when there
+// are none. Up to ACTIVITY_COPY_NEW_STEPS steps a run.
+//
+// Module level, after the Worker's exports, like 27_ onward.
+
+const ACTIVITY_COPY_NEW_EVERY_MS = 60 * 60 * 1000;
+const ACTIVITY_COPY_NEW_STEPS = 3;
+
+async function runActivityCopyNew(env, job = {}) {
+  const progress = { ...(job.progress || {}) };
+  if (!env || !env.DB || typeof isEventTrackingEnabled !== "function" || !isEventTrackingEnabled(env)) {
+    return { progress, skipped: "FF_EVENT_TRACKING is off" };
+  }
+  let out = null;
+  for (let i = 0; i < ACTIVITY_COPY_NEW_STEPS; i++) {
+    out = await runActivityBackfillStep(env, {});
+    if (!out || !out.ok || out.done) break;
+  }
+  return {
+    progress: {
+      ...progress,
+      lastRun: {
+        at: Date.now(),
+        ok: !!(out && out.ok),
+        done: !!(out && out.done),
+        accountsDone: out ? out.accountsDone : null,
+        accountsTotal: out ? out.accountsTotal : null,
+        error: out && !out.ok ? out.error || null : null,
+      },
+    },
+  };
+}
+
+definePeriodicJob("activity.copy-new", {
+  everyMs: ACTIVITY_COPY_NEW_EVERY_MS,
+  run: (env, payload, job) => runActivityCopyNew(env, job),
+});

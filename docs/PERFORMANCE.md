@@ -28,10 +28,9 @@ Phase 8 targeted the core throughput bottlenecks identified in the initial perfo
 - **Sequential Consistency:** Edge colos forward consistency tokens via the `x-d1-bookmark` response header.
 - **Safety:** Admin (`/admin`), session auth (`/api/session`, `/api/me`), scrobbles, and mutations bypass replicas and execute strictly against the primary database.
 
-### P8-2: Analytics Engine Stat Counters & Zero D1 Writes
-- **Implementation:** Telemetry calls (`bumpStat`, `bumpStatBy`, `recordTrackedEvent`, `recordSearchQuery`) stream non-blocking datapoints directly into Cloudflare Analytics Engine (`env.ANALYTICS`) when configured.
-- **D1 Row Churn Eliminated:** Completely removed D1 `stats` writes on pageviews and API counters.
-- **Most Watched Optimization:** `computeLeaderboard` queries `title_daily_stats` (aggregated daily by `rollup.daily`) joined with `media`, avoiding unbounded scans over the legacy `stats` table. Added `POST /admin/api/backfill-title-daily-stats` for historical backfills.
+### P8-2: Analytics Engine Stat Counters — reverted (2026-10-04)
+- **What it did:** sent `bumpStat`, `bumpStatBy`, `recordTrackedEvent` and `recordSearchQuery` to Analytics Engine instead of D1 when `ANALYTICS` was bound, and read Most Watched from `title_daily_stats`.
+- **Why it was reverted:** nothing reads Analytics Engine, so the admin counters showed zeros and Most Watched stopped moving; `title_daily_stats` holds only the plays of accounts on event tracking, by UTC day, up to yesterday. Counters are D1 writes again (one upsert per kind and day, as before P8-2); the missing days can be put back from Analytics Engine once (docs/OPERATIONS.md §30, docs/DECISIONS.md D-33).
 
 ### P8-3: Two-Tier Bundle Splitting & CI Budget Enforcement
 - **Implementation:** Partitioned client JavaScript into two separate assets:
@@ -82,11 +81,11 @@ Cross-reference of findings from `PERFORMANCE_AUDIT.md`:
 | **PF-B8** | `applyLikeVote` reads all voters (up to 5,000) | Full ledger rewritten per like | **Resolved (P3b-5):** Normalized `likes` table + atomic counter increments. |
 | **PF-B9** | Directory `json_array_length` + OFFSET paging | Quadratic table scans on deep pages | **Resolved (P3b-6):** Stored `item_count`, keyset cursor pagination (`33_lists-directory.js`). |
 | **PF-B10**| Stats `LIKE 'prefix%'` cannot use index | Full index scan per stat query | **Resolved (P2-10):** Range predicates (`kind >= ? AND kind < ?`) using primary key index. |
-| **PF-B11**| `attachEventMeta` binds 401 parameters | Exceeds D1 bound parameter limit | **Resolved (P8-2):** Leaderboard reads `title_daily_stats` joined with `media`. |
+| **PF-B11**| `attachEventMeta` binds 401 parameters | Exceeds D1 bound parameter limit | **Resolved:** the lookup is chunked at 90 ids per statement. |
 | **PF-B12**| FTS updates delete by unindexed column | Full FTS scan per save/delete | **Resolved (P3b-1):** External-content FTS table `lists_fts2` with `content_rowid=id`. |
 | **PF-B13**| `purgeCreatorData` on every account creation | 20+ KV keys and 12 D1 statements | **Resolved (P5-8):** Background `account.purge` job with soft delete. |
 | **PF-B14**| Monolithic cron sharing 30 s CPU budget | Overlapping tasks; timeout risks | **Resolved (P5-1, P5-10):** Cloudflare Queue (`JOBS`) distributes tasks across 15 min consumers. |
-| **PF-B15**| D1 `stats` write on every pageview | Lock contention and row churn | **Resolved (P8-2):** Telemetry writes to Cloudflare Analytics Engine; 0 D1 writes on visits. |
+| **PF-B15**| D1 `stats` write on every pageview | Lock contention and row churn | **Open:** P8-2 moved these to Analytics Engine, which nothing reads, and was reverted (D-33). Still one upsert per kind and day. |
 | **PF-B16**| `PER_USER_CACHE_MAP` unconstrained byte size | Memory pressure within 128 MB isolate | **Resolved (P8-4):** Bounded LRU caches (max 500 entries) with memory-safe sizing. |
 | **PF-B17**| Charts pre-warmed only for US page 0 | Cold responses for other regions | **Resolved (P5-5):** `chart.refresh` hourly refreshes snapshots per active region in KV. |
 

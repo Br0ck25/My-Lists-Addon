@@ -352,6 +352,13 @@ async function withSecurityHeaders(response, privatePath = false, extraSetCookie
   }
   const extra = securityHeaders(nonce, env);
   for (const key in extra) {
+    // Not on a 304. A browser keeps the page it already has and takes the
+    // 304's headers in place of the stored ones -- so a fresh nonce here
+    // stopped every script of that stored page, whose tags carry the nonce
+    // it was first sent with. Seen in Chromium on a reload: the page loaded
+    // with none of its scripts running (2026-10-04). Without the header on
+    // the 304, the stored policy, which matches the stored page, stays.
+    if (response.status === 304 && /^content-security-policy/i.test(key)) continue;
     if (!headers.has(key)) headers.set(key, extra[key]);
   }
   if (extraSetCookie && !headers.has("Set-Cookie")) {
@@ -633,15 +640,23 @@ function isD1ReplicaReadRequest(request) {
   // Exclude admin, session, auth, me, save, create, and maintenance routes
   if (/^\/(admin|api\/(session|me|creator|save|imports))\b/.test(pathname)) return false;
 
-  // Stremio / Nuvio catalog and install paths (including v2 /i/{token}/...)
-  if (/\/(manifest\.json|catalog\/|meta\/|subtitles\/)/.test(pathname)) return true;
+  // Stremio / Nuvio catalog and install paths (including v2 /i/{token}/...).
+  // Not /subtitles/: with a tracking install it is the playback ping, which
+  // reads the account's tracking and writes it back (handleSubtitlesTrack).
+  // Read from a replica that has not caught up, it writes the old state over
+  // the new one -- a title just removed from Continue Watching comes back.
+  if (/\/subtitles\//.test(pathname)) return false;
+  if (/\/(manifest\.json|catalog\/|meta\/)/.test(pathname)) return true;
 
   // Directory and search
   if (pathname === "/lists/public.json" || pathname === "/api/public-lists.json" || pathname === "/api/search-published-lists") return true;
 
   // Public lists and channels
   if (/^\/(lists|channel|channels)\//.test(pathname)) return true;
-  if (/^\/api\/lists\/[^/]+(\/items)?$/.test(pathname)) return true;
+  // Not /api/lists/:id: its owner reads it right after a change (PATCH, items)
+  // and sends the ETag back with the next one. No client sends the bookmark
+  // that would keep that read on a replica that has the change, so it could
+  // see the old list and get a 412 on its next write.
   if (pathname === "/api/channel-lineup" || pathname === "/api/channel-preset") return true;
 
   return false;
@@ -1228,6 +1243,23 @@ async function isCreatorAuthMemoized(key, storedHash, username) {
 function invalidateCreatorAuthMemo() {
   CREATOR_AUTH_MEMO.clear();
 }
+
+// The /api/creator/ routes the page signs with its session instead of the
+// Account Key (Release 19; CREATOR_SESSION_ROUTES in 16_ is the page's copy).
+const CREATOR_SESSION_PATH_PREFIXES = [
+  "/api/creator/sync/",
+  "/api/creator/lists",
+  "/api/creator/track-status",
+  "/api/creator/scrobble-token",
+  "/api/creator/scrobble-seen-users",
+  "/api/creator/restore",
+  "/api/preview",
+  "/api/save",
+  "/api/feedback",
+  "/api/lists/like",
+  "/api/channel/like",
+  "/api/channel/unpublish",
+];
 
 // --- Session management (P3a-4) -------------------------------------------
 const SESSION_COOKIE_NAME = "mla_session";
@@ -2137,26 +2169,6 @@ async function hashStringForKey(s) {
 // sent when the browser already holds a byte-identical copy.
 const BUILDER_PAGE_MEMO = new Map();
 
-// --- The new UI shell's cookie (Phase 6, P6-1) -------------------------------
-//
-// The shell (see APP_SHELL_TABS, 00_constants.js) is opt-in per BROWSER, not
-// per deployment: the Worker reads NEW_UI_COOKIE from the page request's own
-// headers. That is what lets the owner walk the new interface on their device
-// while everyone else keeps the page they know, and lets a rollback be a
-// cookie rather than a deploy.
-//
-// `?ff_new_ui=1` on any link sets it and `?ff_new_ui=0` clears it
-// (appShellSwitchResponse below), so nobody has to open developer tools.
-function readCookieValue(cookieHeader, name) {
-  const m = String(cookieHeader || "").match(new RegExp("(?:^|;\\s*)" + name + "=([^;]*)"));
-  if (!m) return "";
-  try {
-    return decodeURIComponent(m[1]);
-  } catch {
-    return m[1];
-  }
-}
-
 // --- Scrobble auth sunset (Phase 7, P7-6) --------------------------------------
 //
 // Webhooks originally carried the Creator Key in the query string (?creator=&key=),
@@ -2253,42 +2265,16 @@ function getLegacySunsetNotices(env) {
   ];
 }
 
-// The site's default for a browser that has not chosen: the FF_NEW_UI Worker
-// variable. Set to 1, every visitor gets the new interface; a browser that
-// chose (the cookie, `?ff_new_ui=0` or `=1`) keeps its choice either way.
-// handleFetch (25_) stamps it on the request, so every page route -- most of
-// which see the request but not env -- decides the same way.
-function newUiDefaultOn(env) {
-  const v = env ? env.FF_NEW_UI : undefined;
-  return v === "1" || v === "true" || v === true;
-}
-
-function isNewUiRequest(request) {
-  try {
-    const raw = readCookieValue(request && request.headers ? request.headers.get("Cookie") : "", NEW_UI_COOKIE).trim().toLowerCase();
-    if (raw === "1" || raw === "on" || raw === "true") return true;
-    if (raw === "0" || raw === "off" || raw === "false") return false;
-    return !!(request && request.newUiDefault === true);
-  } catch {
-    return false;
-  }
-}
-
-// "Off" is remembered as 0 rather than by clearing the cookie: with the new
-// interface the site's default, a browser with no cookie gets it, so clearing
-// would have undone the choice to keep the classic page.
-function appShellCookieHeader(on) {
-  return `${NEW_UI_COOKIE}=${on ? "1" : "0"}; Path=/; Max-Age=31536000; SameSite=Lax`;
-}
-
-// The one place the cookie is written. Returns null for every request that is
-// not asking to switch, so the caller can fall through to its normal routing.
-// The redirect drops the parameter, so the address people see and share never
-// carries it.
+// --- The classic page, retired (Release 21) ----------------------------------
+//
+// Until Release 21 the new interface (the shell, APP_SHELL_TABS in
+// 00_constants.js) was chosen per browser: a cookie, set by `?ff_new_ui=1` or
+// `=0`, and the FF_NEW_UI Worker variable for a browser that had not chosen.
+// Every visitor gets the shell now, and neither is read. Links that still carry
+// the parameter (bookmarks, old posts) are sent to the same address without
+// it, and the cookie is cleared, so nobody keeps a stale switch around.
 function appShellSwitchResponse(url) {
-  const raw = url.searchParams.get("ff_new_ui");
-  if (raw === null) return null;
-  const on = !(raw === "0" || raw === "off" || raw === "false" || raw === "");
+  if (url.searchParams.get("ff_new_ui") === null) return null;
   const clean = new URL(url.href);
   clean.searchParams.delete("ff_new_ui");
   const qs = clean.searchParams.toString();
@@ -2300,47 +2286,33 @@ function appShellSwitchResponse(url) {
     status: 302,
     headers: {
       Location: samePath + (qs ? "?" + qs : "") + (clean.hash || ""),
-      "Set-Cookie": appShellCookieHeader(on),
+      "Set-Cookie": `${NEW_UI_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`,
       "Cache-Control": "no-store",
     },
   });
 }
 
-// Every render of the page goes through this, so the shell and the page it
-// wraps can never disagree about which variant was asked for. A false
-// `newUi` is dropped rather than passed on, so the flag-off variants stay
-// exactly the renders they were before this existed (same memo key, same
-// bytes).
-function newUiPageOpts(request, opts) {
-  const out = Object.assign({}, opts || {});
-  if (isNewUiRequest(request)) out.newUi = true;
-  return out;
-}
-
 // Every page route renders through these two instead of calling renderBuilder
-// itself, so the variant is decided in exactly one place: the request.
+// itself. `request` is no longer read (it chose the variant while there were
+// two); the callers keep passing it.
 function renderPage(request, origin, opts) {
-  return renderBuilder(origin, newUiPageOpts(request, opts));
+  return renderBuilder(origin, opts || {});
 }
 
 function renderPageCached(request, origin, opts) {
-  return renderBuilderCached(origin, newUiPageOpts(request, opts));
+  return renderBuilderCached(origin, opts || {});
 }
 
 function renderBuilderCached(origin, opts) {
   // Only the argument-free variants are stable enough to memoize; anything
-  // carrying entries, keys or a deep link is rendered fresh. The shell is a
-  // variant of the same two: same arguments otherwise, different chrome, so
-  // it is memoized under its own key rather than re-rendering 1.6MB a load.
-  const shellOpts = Object.assign({}, opts || {});
-  const isShell = shellOpts.newUi === true;
-  if (!isShell) delete shellOpts.newUi;
-  const isDefault = Object.keys(shellOpts).length === 0;
-  const isBareConfigure = !!(shellOpts.isConfigureMode === true && Object.keys(shellOpts).length === 1);
+  // carrying entries, keys or a deep link is rendered fresh.
+  const o = opts || {};
+  const isDefault = Object.keys(o).length === 0;
+  const isBareConfigure = !!(o.isConfigureMode === true && Object.keys(o).length === 1);
   if (!isDefault && !isBareConfigure) {
-    return renderBuilder(origin, opts || {});
+    return renderBuilder(origin, o);
   }
-  const memoKey = `${origin}::${isBareConfigure ? "configure" : "default"}${isShell ? ":shell" : ""}`;
+  const memoKey = `${origin}::${isBareConfigure ? "configure" : "default"}`;
   const hit = BUILDER_PAGE_MEMO.get(memoKey);
   if (hit) return hit;
   const html = renderBuilder(origin, opts || {});

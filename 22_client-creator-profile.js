@@ -368,12 +368,12 @@ function saveLocalCustomList(sourceRow, urlInput, payload, name) {
 // stays in the local store rather than being deleted, so it isn't lost.
 // --- Browser-only lists, and how one gets to an account (P6-9) --------------
 //
-// A list made while signed out lives in this browser alone (D-8). That is a
-// deliberate mode, not a bug -- but it is invisible, which is UX-H10, and
-// nothing in the old UI would move one to an account afterwards. The shell's
-// Lists view now says "Saved in this browser only" on every one of them and
-// offers two ways out: **Save to an account** and **Export** (a small JSON
-// file the same page can restore -- see appShellExportList in 24_).
+// A list made while signed out lives in this browser alone (D-8). Creating an
+// account moves every one of them up (migrateLocalCustomListsToAccount). The
+// shell's Lists view used to add a per-list "Save to an account" and "Export";
+// that view was taken off the page at the owner's request and deleted in
+// Release 21, along with the queue that carried a signed-out press of the
+// button through sign-in.
 //
 // What "browser only" means in code: an entry in the local custom-lists map
 // with no creatorSlug. Every list the account owns gets one -- it is stamped on
@@ -382,13 +382,10 @@ function saveLocalCustomList(sourceRow, urlInput, payload, name) {
 // answer to "does the account have this list".
 //
 // The push itself is the same request migrateLocalCustomListsToAccount has
-// always made; it is one function now so the sign-up migration and the per-list
-// button cannot drift apart.
+// always made.
 
 // The request, and nothing else: hand this list's payload to the account. The
-// caller decides what happens to the browser's copy afterwards, because the two
-// callers differ -- sign-up deletes it, the sign-in flush has nothing to delete
-// (signing in already cleared this browser's store).
+// caller decides what happens to the browser's copy afterwards.
 async function uploadLocalListPayloadToAccount(payload) {
   if (!activeCreator || !activeCreator.creatorName) return { ok: false, error: 'signed-out' };
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
@@ -408,7 +405,7 @@ async function uploadLocalListPayloadToAccount(payload) {
   if (list.lastSyncedAt != null) body.lastSyncedAt = list.lastSyncedAt;
   if (list.baseItemIds) body.baseItemIds = list.baseItemIds;
   try {
-    const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -445,10 +442,8 @@ function repointLocalListRowsToCreator(localSlug, result, visibility) {
   });
 }
 
-// One list, by the slug it has in this browser's store. Used by the shell's
-// "Save to an account" button (signed in) -- the signed-out path remembers the
-// payload instead, because signing in clears this browser's store before the
-// push can happen.
+// One list, by the slug it has in this browser's store (the sign-up
+// migration, below).
 async function saveLocalListToAccount(slug, opts) {
   const want = String(slug || '');
   const map = loadLocalCustomLists();
@@ -474,99 +469,9 @@ async function saveLocalListToAccount(slug, opts) {
   }
   // The account's list cache no longer describes reality (this list was not in
   // it). Re-fetching is the caller's job: the migration below moves several
-  // lists and refreshes once at the end, and the shell's card refreshes before
-  // it re-renders, so neither shows a list that has just moved as missing.
+  // lists and refreshes once at the end.
   if (typeof resetCreatorListsCache === 'function') resetCreatorListsCache();
   return result;
-}
-
-// A press of "Save to an account" while signed out. The payload is copied here
-// rather than looked up later on purpose: signing in calls
-// clearLocalAccountData(), which empties this browser's list store, so by the
-// time there is an account to save to there would be nothing left to read.
-let _pendingListSaves = [];
-function rememberPendingListSave(slug) {
-  const want = String(slug || '');
-  const map = loadLocalCustomLists();
-  const list = map[want];
-  if (!list || typeof list !== 'object') return false;
-  if (_pendingListSaves.some((p) => p && p.slug === want)) return true;
-  _pendingListSaves.push({
-    slug: want,
-    name: list.name || want,
-    type: list.type || 'movie',
-    items: Array.isArray(list.items) ? list.items : [],
-    visibility: 'private',
-  });
-  return true;
-}
-
-function pendingListSaves() {
-  return _pendingListSaves.slice();
-}
-
-// Runs right after a sign-in completes (submitRestoreProfile) and after an
-// account is created (submitCreateProfile -- where the whole-store migration
-// has usually already taken them, so this finds nothing to do). Every list
-// somebody asked to save is pushed, and the result is said out loud: a silent
-// failure here would leave a list in a store this page no longer shows.
-//
-// Signing in to an account that already has lists (opts.avoidExistingSlugs,
-// submitRestoreProfile) is the one case where a queued list's slug can already
-// be taken -- by a DIFFERENT list: the queue only ever holds lists the account
-// had never been told about, and /api/creator/lists/save treats a named slug as
-// "edit that list". A "Favorites" built signed out would have replaced the
-// account's own "Favorites". Such a list goes up without a slug and gets a free
-// one; and if the account's lists cannot be read, every one does -- a second
-// list can be deleted, an overwritten one cannot be brought back. Sign-up keeps
-// the slug: the account is new, and the migration has just uploaded the same
-// list under it, so re-using it is what keeps the flush from adding a copy.
-async function accountListSlugsForFlush() {
-  try {
-    const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-    if (!creatorKey || typeof fetchCreatorListsOnce !== 'function') return null;
-    const data = await fetchCreatorListsOnce(creatorKey);
-    if (!data || !data.ok || !Array.isArray(data.lists)) return null;
-    const taken = {};
-    data.lists.forEach((l) => { if (l && l.slug) taken[String(l.slug)] = true; });
-    return taken;
-  } catch (e) {
-    return null;
-  }
-}
-
-async function flushPendingListSaves(opts) {
-  if (!_pendingListSaves.length) return 0;
-  if (!activeCreator || !activeCreator.creatorName) return 0;
-  const waiting = _pendingListSaves;
-  _pendingListSaves = [];
-  const avoidExisting = !!(opts && opts.avoidExistingSlugs);
-  const taken = avoidExisting ? await accountListSlugsForFlush() : null;
-  let saved = 0;
-  let failed = 0;
-  for (const pending of waiting) {
-    const clash = avoidExisting && (!taken || taken[String(pending.slug)]);
-    const result = await uploadLocalListPayloadToAccount(clash ? Object.assign({}, pending, { slug: '' }) : pending);
-    if (result.ok) saved++; else failed++;
-  }
-  if (saved && typeof showToast === 'function') {
-    showToast(saved === 1
-      ? 'Saved "' + (waiting[0].name || 'your list') + '" to your account.'
-      : 'Saved ' + saved + ' lists to your account.', 'success');
-  }
-  if (failed && typeof showToast === 'function') {
-    showToast(failed === 1
-      ? 'One list could not be saved to your account -- press Save to an account on it to try again.'
-      : failed + ' lists could not be saved to your account -- press Save to an account on each to try again.', 'error');
-  }
-  if (saved && typeof resetCreatorListsCache === 'function') resetCreatorListsCache();
-  if (saved && typeof renderCreatorDashboard === 'function') { try { renderCreatorDashboard({ silent: true }); } catch (e) {} }
-  // The shell's Lists view is showing these as browser-only; it needs to hear
-  // that they moved.
-  if (saved && typeof appShellRenderListsHome === 'function') {
-    try { appShellRenderListsHome(); } catch (e) {}
-  }
-  return saved;
 }
 
 async function migrateLocalCustomListsToAccount() {
@@ -776,7 +681,7 @@ async function submitSetRecoveryAnswer() {
   if (!endSubmit) return;
 
   try {
-    const res = await fetch(ORIGIN + '/api/creator/recovery-answer', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/recovery-answer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -842,7 +747,7 @@ async function openResetAccountModal() {
       try {
         if (typeof clearLocalAccountData === 'function') clearLocalAccountData();
 
-        const res = await fetch(ORIGIN + '/api/creator/account/reset', {
+        const res = await creatorApiFetch(ORIGIN + '/api/creator/account/reset', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ creatorName: creatorName, creatorKey: creatorKey, confirm: 'RESET' }),
@@ -918,7 +823,7 @@ async function handleDeleteAccount() {
   if (status) status.innerHTML = '<p style="color:var(--muted); font-size:0.85rem;">Deleting account and all data\u2026</p>';
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
   try {
-    const res = await fetch(ORIGIN + '/api/creator/delete-account', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/delete-account', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       // The server requires confirm:"DELETE" on this specific irreversible
@@ -1370,7 +1275,7 @@ async function fetchScrobbleToken(rotate) {
   try { creatorKey = localStorage.getItem('myListAddon:creatorKey') || ''; } catch (e) {}
   if (!creatorKey) return '';
   try {
-    const res = await fetch(ORIGIN + '/api/creator/scrobble-token', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/scrobble-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, rotate: rotate === true }),
@@ -1483,7 +1388,7 @@ async function loadScrobbleSeenUsers() {
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
   box.innerHTML = '<span style="color:var(--muted); font-size:0.8rem;">Checking detected users\u2026</span>';
   try {
-    const res = await fetch(ORIGIN + '/api/creator/scrobble-seen-users', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/scrobble-seen-users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey }),
@@ -1570,7 +1475,7 @@ async function refreshTrackPlaybackStatus() {
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
   statusBox.innerHTML = '<small style="color:var(--muted);">Checking scrobble status\u2026</small>';
   try {
-    const res = await fetch(ORIGIN + '/api/creator/track-status', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/track-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey }),
@@ -1750,7 +1655,7 @@ function clearLocalAccountData() {
   // Clear form inputs
   const inputIds = [
     'tmdbKeyInput', 'mdblistKeyInput', 'traktKeyInput', 'traktUsernameInput', 'simklKeyInput',
-    'presetNameInput', 'channelNameInput', 'customListNameInput', 'bulkPasteBox', 'importLinkInput',
+    'presetNameInput', 'channelNameInput', 'customListNameInput', 'bulkPasteBox',
     'configJsonBox', 'customListSearchInput', 'channelSearchInput'
   ];
   inputIds.forEach((id) => {
@@ -1818,6 +1723,7 @@ async function switchCreatorProfile() {
       headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
     });
   } catch (e) {}
+  if (typeof forgetCreatorSession === 'function') forgetCreatorSession();
   clearLocalAccountData();
   if (typeof appShellState !== 'undefined' && appShellState && typeof appShellState.set === 'function') {
     appShellState.set({ account: null });
@@ -1861,7 +1767,7 @@ async function submitRestoreProfile() {
   if (!endSubmit) return;
 
   try {
-    const res = await fetch(ORIGIN + '/api/creator/restore', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/restore', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: name, creatorKey: key }),
@@ -1894,11 +1800,6 @@ async function submitRestoreProfile() {
     await loadCreatorSync();
     // After the sync load, so tokens this account keeps in sync are included.
     if (data.session && typeof importLocalConnectionsOnce === 'function') importLocalConnectionsOnce(data.creatorName);
-    // P6-9: a list marked "Save to an account" while signed out was copied out
-    // of the store before this sign-in (clearLocalAccountData empties it), and
-    // is pushed now -- which is the only moment it can be. This account may
-    // already have lists, so a clashing slug is not re-used (see the function).
-    await flushPendingListSaves({ avoidExistingSlugs: true });
   } catch (e) {
     errBox.innerHTML = '<p class="testresult err">Network error.</p>';
   } finally {
@@ -1942,7 +1843,7 @@ async function submitForgotKey() {
   if (!endSubmit) return;
 
   try {
-    const res = await fetch(ORIGIN + '/api/creator/reset-key', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/reset-key', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: name, recoveryAnswer: answer }),
@@ -2005,7 +1906,7 @@ async function submitForgotUsername() {
   if (!endSubmit) return;
 
   try {
-    const res = await fetch(ORIGIN + '/api/creator/forgot-username', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/forgot-username', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorKey: key, recoveryAnswer: answer || undefined }),
@@ -2055,7 +1956,7 @@ async function tryAutoRestoreCreatorProfile() {
   const key = localStorage.getItem('myListAddon:creatorKey');
   if (!name || !key) return;
   try {
-    const res = await fetch(ORIGIN + '/api/creator/restore', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/restore', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: name, creatorKey: key }),
@@ -2148,6 +2049,23 @@ function currentSyncAccountName() {
 // re-uploads every local list the account is missing. So a reset undid itself
 // as soon as another device woke up.
 //
+// What the server is retiring (P10-2, getLegacySunsetNotices; empty until
+// SUNSET_60DAY_START_DATE is set). Most entries name API routes this page
+// itself calls, which nobody visiting can do anything about, so only the one
+// a person acts on -- the media server webhook address -- is shown, once per
+// browser session.
+function showSunsetNoticesOnce(notices) {
+  if (!Array.isArray(notices) || !notices.length) return;
+  const forPeople = notices.filter((n) => n && n.feature === 'scrobble-legacy-auth' && typeof n.message === 'string');
+  if (!forPeople.length) return;
+  try {
+    if (sessionStorage.getItem('myListAddon:sunsetShown')) return;
+    sessionStorage.setItem('myListAddon:sunsetShown', '1');
+  } catch (e) {}
+  const n = forPeople[0];
+  if (typeof showToast === 'function') showToast(n.message, n.urgency === 'urgent' ? 'error' : 'info', { duration: 12000 });
+}
+
 // The server now stamps the reset and hands it back on /sync/load and
 // /sync/meta. This is the device's side: the last reset it has SEEN. A stamp
 // newer than this one means the account was emptied while this browser was not
@@ -2573,7 +2491,7 @@ async function pushChannelsSync() {
   try {
     const localChannels = channelsForCloudSync((typeof loadLocalChannels === 'function') ? loadLocalChannels() : {});
     const localMerged = (typeof loadLocalMergedChannels === 'function') ? loadLocalMergedChannels() : {};
-    const res = await fetch(ORIGIN + '/api/creator/sync/save-channels', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/sync/save-channels', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2646,7 +2564,7 @@ async function pushCreatorSync() {
   // where "my list rows came back after opening the phone" came from.
   if (!creatorSyncGateOpen()) { deferSyncPush('config'); return; }
   try {
-    const res = await fetch(ORIGIN + '/api/creator/sync/save', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/sync/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2894,7 +2812,7 @@ async function pushTrackingSync(opts) {
       'continue-watching': Number((localMap['continue-watching'] || {}).updatedAt) || 0,
       'watchlist': wlUpdatedAt,
     };
-    const res = await fetch(ORIGIN + '/api/creator/sync/save-tracking', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/sync/save-tracking', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -3064,7 +2982,7 @@ async function loadCreatorSync(opts) {
   const loadingFor = activeCreator.creatorName;
   const isStale = () => !activeCreator || activeCreator.creatorName !== loadingFor;
   try {
-    const res = await fetch(ORIGIN + '/api/creator/sync/load', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/sync/load', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey }),
@@ -3080,6 +2998,7 @@ async function loadCreatorSync(opts) {
       return;
     }
     window._lastCreatorSyncLoadedAt = Date.now();
+    showSunsetNoticesOnce(data.sunset_notices);
     // Before anything below adopts local state or pushes it up: was this
     // account emptied while this browser was asleep? If so its copy is stale by
     // definition, and uploading it is exactly how a reset used to undo itself.
@@ -3981,7 +3900,7 @@ async function submitCreateProfile() {
   if (!endSubmit) return;
 
   try {
-    const res = await fetch(ORIGIN + '/api/creator/create', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creatorName: name, displayName: displayName || undefined, recoveryAnswer: recoveryAnswer || undefined }),
@@ -4024,15 +3943,11 @@ async function submitCreateProfile() {
     renderTrackPlaybackSection();
     showKeyRevealModal(data.displayName, data.creatorKey);
     loadCreatorSync();
-    // A list somebody pressed "Save to an account" on while signed out is in
-    // the queue. The whole-store migration above uploads every hand-built list
-    // and usually takes it first, so the flush waits for the migration (which
-    // is not awaited here) and then clears the queue either way -- see
-    // flushPendingListSaves.
+    // Every hand-built list in this browser goes up to the new account. Not
+    // awaited: the key is already on screen.
     Promise.resolve()
       .then(function () { return migrateLocalCustomListsToAccount(); })
-      .catch(function () {})
-      .then(function () { return flushPendingListSaves(); });
+      .catch(function () {});
   } catch (e) {
     errBox.innerHTML = '<p class="testresult err">Network error.</p>';
   } finally {
@@ -4180,7 +4095,7 @@ async function confirmSaveAsCreator() {
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
   closeModal();
   try {
-    const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -4320,7 +4235,7 @@ async function hydrateCreatorListItems(data, creatorKey) {
     try {
       for (let i = 0; i < stale.length; i += ${CREATOR_LIST_ITEMS_BATCH_MAX}) {
         const slice = stale.slice(i, i + ${CREATOR_LIST_ITEMS_BATCH_MAX});
-        const res = await fetch(ORIGIN + '/api/creator/lists/items', {
+        const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/items', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -4368,7 +4283,7 @@ async function fetchCreatorListsOnce(creatorKey) {
   if (_creatorListsInFlight) return await _creatorListsInFlight;
   const p = (async () => {
     const askFor = async (offset, knownVersion, includeItems) => {
-      const res = await fetch(ORIGIN + '/api/creator/lists', {
+      const res = await creatorApiFetch(ORIGIN + '/api/creator/lists', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -4699,7 +4614,7 @@ async function uploadMissingLocalListsToAccount(lists, creatorKey) {
         if (l.synced != null) uploadBody.synced = l.synced;
         if (l.lastSyncedAt != null) uploadBody.lastSyncedAt = l.lastSyncedAt;
         if (l.baseItemIds) uploadBody.baseItemIds = l.baseItemIds;
-        const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+        const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(uploadBody),
@@ -4826,7 +4741,7 @@ async function renderCreatorDashboard(options) {
           const previousCount = sList.itemCount;
           sList.items = rowPayload.items;
           sList.itemCount = rowPayload.items.length;
-          fetch(ORIGIN + '/api/creator/lists/save', {
+          creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -5600,7 +5515,7 @@ if (_creatorDashEl) {
       const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
       recordCreatorListDeletion(slug);
       try {
-        const res = await fetch(ORIGIN + '/api/creator/lists/delete', {
+        const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/delete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, slug: slug }),
@@ -5746,7 +5661,7 @@ if (_creatorDashEl) {
           // account while being gone locally, which is precisely what the
           // backfill must not undo.
           recordCreatorListDeletion(slug);
-          fetch(ORIGIN + '/api/creator/lists/delete', {
+          creatorApiFetch(ORIGIN + '/api/creator/lists/delete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, slug: slug }),
@@ -6038,7 +5953,7 @@ async function persistCreatorListOrderFromDom() {
   if (activeCreator) {
     const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
     try {
-      await fetch(ORIGIN + '/api/creator/lists/reorder', {
+      await creatorApiFetch(ORIGIN + '/api/creator/lists/reorder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, order: order }),
@@ -6221,7 +6136,7 @@ async function submitCreateListModal() {
       const payload = { listId: generateChannelId(), type: type, items: initialItems, shuffle: false };
       if (activeCreator) {
         const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-        const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+        const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -6540,7 +6455,7 @@ async function saveCreatorListWithBaseline(list, removeItem, toastMessage) {
     // no updatedAt, and inventing one (0, Date.now()) would either reject
     // every save or assert a version this browser never saw.
     if (Number.isFinite(target.updatedAt)) body.expectedUpdatedAt = target.updatedAt;
-    return await fetch(ORIGIN + '/api/creator/lists/save', {
+    return await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -6915,7 +6830,7 @@ async function handleForegroundResumeSync() {
       const known = window._syncMetaStamps;
       if (known) {
         try {
-          const metaRes = await fetch(ORIGIN + '/api/creator/sync/meta', {
+          const metaRes = await creatorApiFetch(ORIGIN + '/api/creator/sync/meta', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey }),

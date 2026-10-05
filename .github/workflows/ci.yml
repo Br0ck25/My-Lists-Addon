@@ -69,17 +69,9 @@ jobs:
           node render_check.js rendered.html
           python3 html_checks.py rendered.html ci
 
-      # The new UI shell (P6-1) is a different render of the same page: an extra
-      # inline script (the path -> view table the head script routes on), anchor
-      # navigation and the install bar. The step above only renders the legacy
-      # page, and the shell's head script is exactly where a bug hid once --
-      # a name the legacy page does not declare, which is a ReferenceError only
-      # on the shell page. Rendered and checked the same way.
-      - name: Render + validate the new UI shell page
-        run: |
-          node render_check.js rendered-shell.html --shell
-          python3 html_checks.py rendered-shell.html ci-shell
-          node scope_check.mjs page rendered-shell.html
+      # (The new UI shell used to be a second render, checked in its own step.
+      # It is the only page since the classic page was retired in Release 21,
+      # so the step above checks it.)
 
       # /admin is a template literal too, and got none of the above. A single
       # backslash inside one is eaten before the browser sees it, so '\n\n'

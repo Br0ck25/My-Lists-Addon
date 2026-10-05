@@ -3644,7 +3644,9 @@ describe("delete-account confirmation", () => {
       activeCreator: { creatorName: "alicedelete", displayName: "Alice" },
       document: { getElementById: () => null },
       localStorage: { getItem: () => "MYL-TEST-KEY1-KEY2" },
-      fetch: async (_url, opts) => {
+      // The page sends its /api/creator/ calls through creatorApiFetch (16_),
+      // which leaves delete-account as it is: the key is what it checks.
+      creatorApiFetch: async (_url, opts) => {
         capturedBody = JSON.parse(opts.body);
         return { json: async () => ({ ok: true }) };
       },
@@ -3660,6 +3662,7 @@ describe("delete-account confirmation", () => {
     // confirmed in the modal.
     assert.equal(capturedBody.confirm, "DELETE");
     assert.equal(capturedBody.creatorName, "alicedelete");
+    assert.equal(capturedBody.creatorKey, "MYL-TEST-KEY1-KEY2", "deleting still sends the key");
   });
 
   it("server rejects a delete-account request with no confirm field (HTTP level)", async () => {
@@ -3898,8 +3901,8 @@ describe("audit fix 3: the Continue Watching cron cannot revert a concurrent sav
       return J({ episodes: [] });
     };
 
-    // Park the cron right after ITS OWN read of the tracking blob (post P10-4,
-    // ensureTrackingMigrated is obsolete and does no KV read),
+    // Park the cron right after ITS OWN read of the tracking blob (the
+    // second read of that key -- the first belongs to ensureTrackingMigrated),
     // which stands in for the TMDB round-trips that make this window seconds wide.
     let release;
     const gate = new Promise((r) => { release = r; });
@@ -3908,7 +3911,7 @@ describe("audit fix 3: the Continue Watching cron cannot revert a concurrent sav
     const origGet = env.CONFIGS.get.bind(env.CONFIGS);
     env.CONFIGS.get = async (k, t) => {
       const v = await origGet(k, t);
-      if (k === TKEY && cronPhase && ++reads === 1) await gate;
+      if (k === TKEY && cronPhase && ++reads === 2) await gate;
       return v;
     };
 
@@ -4164,10 +4167,18 @@ describe("audit fix 5: shared-key fan-out endpoints are bounded", () => {
   it("gives bring-your-own-key callers more headroom on /api/recommendations, not an exemption", async () => {
     // Up to ~72 outbound subrequests per call, so this is the bigger
     // amplifier of the two.
+    //
+    // The limits are per minute (30 shared, 120 with a key). Each loop that
+    // must hit one sends twice the limit and some, so a run that crosses a
+    // minute boundary part-way still puts more than the limit into one of the
+    // two minutes. 140 against 120 failed when the minute turned after the
+    // first 20 or so.
+    const SHARED_CAP = 30;
+    const OWN_KEY_CAP = 120;
     const env = makeEnv();
     const sharedIp = nextIp();
     let sharedLimited = 0;
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 2 * SHARED_CAP + 15; i++) {
       const r = await call(env, "/api/recommendations", {
         method: "POST", ip: sharedIp, json: { movieIds: [], showIds: [] },
       });
@@ -4187,7 +4198,7 @@ describe("audit fix 5: shared-key fan-out endpoints are bounded", () => {
 
     const floodIp = nextIp();
     let floodLimited = 0;
-    for (let i = 0; i < 140; i++) {
+    for (let i = 0; i < 2 * OWN_KEY_CAP + 15; i++) {
       const r = await call(env, "/api/recommendations", {
         method: "POST", ip: floodIp, json: { movieIds: [], showIds: [], tmdbKey: "x" },
       });
@@ -8102,7 +8113,10 @@ describe("N11: verifying a Creator Key is bounded, not free", () => {
     await createUser(env, "n11user");
     const ip = "203.0.113.99";
     let throttled = 0;
-    for (let i = 0; i < CAP + 15; i++) {
+    // Twice the cap: the limit counts per clock minute, and CAP + 15 tries
+    // that happened to straddle a minute boundary split into two windows
+    // under the cap each, so the test failed about one run in fifty.
+    for (let i = 0; i < 2 * CAP + 15; i++) {
       const r = await call(env, "/api/creator/sync/load", { method: "POST", ip, json: {
         creatorName: "n11user", creatorKey: "MYL-AAAA-BBBB-" + String(i).padStart(4, "0"),
       }});
@@ -16365,6 +16379,9 @@ describe("P3a review: the accounts row follows the creator profile", () => {
         if (!/method\s*:\s*['"](POST|PUT|PATCH|DELETE)['"]/.test(line)) return;
         if (line.includes("appShellApiFetch(")) return;   // covered by the helper above
         const around = lines.slice(Math.max(0, i - 6), i + 10).join("\n");
+        // The Worker itself calling Cloudflare's API (analyticsEngineRows, 03_):
+        // server to server, no browser and no CSRF check involved.
+        if (around.includes("https://api.cloudflare.com/")) return;
         if (!around.includes("application/json")) offenders.push(`${f}:${i + 1}`);
       });
     }

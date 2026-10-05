@@ -1,3 +1,10 @@
+// --- Which release this is ---------------------------------------------------
+//
+// Shown at the top of /admin and in the answer of the "Counts missing" tool,
+// so the owner can see which pasted file is live (docs/RELEASES.md). Change it
+// with every release.
+const WORKER_RELEASE = "21";
+
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
 // Every console call in the Worker goes through here. This top-level `console`
@@ -1583,12 +1590,10 @@ const BETTER_POSTER_PREWARM_FETCHES_PER_TICK = 8;
 
 // --- The new UI shell (Phase 6, P6-1) ----------------------------------------
 //
-// The frontend rebuild is chosen per browser through a cookie (`?ff_new_ui=1`
-// or `=0` sets it), and the FF_NEW_UI Worker variable sets what a browser that
-// has not chosen gets: off, the classic page; 1, the new interface for
-// everyone. The Worker decides once per request (isNewUiRequest,
-// 02_http-and-creator-utils.js) and renders the same page with the shell's
-// chrome around the existing views.
+// Every visitor gets the new interface: the page with the shell's chrome
+// around the existing views. The classic page, and the cookie and FF_NEW_UI
+// variable that chose between the two, were retired in Release 21
+// (appShellSwitchResponse, 02_http-and-creator-utils.js).
 //
 // This table is the ONE list of the site's top-level views. The Worker renders
 // the shell's navigation from it (buildAppShellNavHtml, 09_page-shell.js) and
@@ -1601,6 +1606,7 @@ const BETTER_POSTER_PREWARM_FETCHES_PER_TICK = 8;
 // inventing a second set of names. The first sub is that view's default.
 // A route whose sub is not in this list falls back to the view itself, so a
 // stale URL can never open a panel that does not exist.
+// The retired switch's cookie: only cleared now, never read.
 const NEW_UI_COOKIE = "FF_NEW_UI";
 
 

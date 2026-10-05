@@ -39,9 +39,41 @@ function isAllowedPosterUrl(raw) {
   return POSTER_IMAGE_HOSTS.has(u.hostname.toLowerCase());
 }
 
-// Bounded isolate cache for badged poster SVGs (P8-4)
-const BADGED_POSTER_CACHE_MAX = 500;
+// Finished badged posters, per isolate (P8-4). Each one carries its poster's
+// bytes (see /api/poster-badge on why), so the cache is bounded by size, not
+// by count: 500 of them was up to ~150 MB, past an isolate's 128 MB. The key
+// is the request's query string, which carries the day (`d=`), so a date
+// pill never outlives its day.
+const BADGED_POSTER_CACHE_MAX_BYTES = 24 * 1024 * 1024;
+const BADGED_POSTER_CACHE_ENTRY_MAX_BYTES = 1024 * 1024;
 const BADGED_POSTER_CACHE = new Map();
+let badgedPosterCacheBytes = 0;
+
+function rememberBadgedPoster(key, svg) {
+  const size = svg.length;
+  if (size > BADGED_POSTER_CACHE_ENTRY_MAX_BYTES) return;
+  if (BADGED_POSTER_CACHE.has(key)) {
+    badgedPosterCacheBytes -= BADGED_POSTER_CACHE.get(key).length;
+    BADGED_POSTER_CACHE.delete(key);
+  }
+  while (BADGED_POSTER_CACHE.size && badgedPosterCacheBytes + size > BADGED_POSTER_CACHE_MAX_BYTES) {
+    const oldest = BADGED_POSTER_CACHE.keys().next().value;
+    badgedPosterCacheBytes -= BADGED_POSTER_CACHE.get(oldest).length;
+    BADGED_POSTER_CACHE.delete(oldest);
+  }
+  BADGED_POSTER_CACHE.set(key, svg);
+  badgedPosterCacheBytes += size;
+}
+
+// Bytes -> base64 a chunk at a time, not a character at a time.
+function bytesToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
 
 
 // The service worker, hoisted to module scope for one reason: a string inside
@@ -206,13 +238,10 @@ async function handleFetch(request, env, ctx) {
     // token as its config segment (see v2InstallPath, 27_installs.js).
     const path = v2InstallPath(url.pathname) || url.pathname;
 
-    // Whether a browser that has not chosen gets the new interface
-    // (FF_NEW_UI; isNewUiRequest, 02_).
-    request.newUiDefault = newUiDefaultOn(env);
-
-    // ?ff_new_ui=1 (or 0) turns the new UI shell on or off for this browser,
-    // then bounces to the same address without the parameter (P6-1). Handled
-    // before anything else so it works from any page of the site.
+    // ?ff_new_ui=1 (or 0) used to switch between the classic page and the new
+    // interface. The classic page is retired (Release 21): a link that still
+    // carries it bounces to the same address without it (appShellSwitchResponse,
+    // 02_). Handled before anything else so it works from any page of the site.
     if (request.method === "GET" || request.method === "HEAD") {
       const shellSwitch = appShellSwitchResponse(url);
       if (shellSwitch) return shellSwitch;
@@ -287,24 +316,20 @@ async function handleFetch(request, env, ctx) {
 
     // The new UI shell's own paths (Phase 6, P6-1): /catalogs, /lists,
     // /channels, /discover, /search, /settings and a sub-tab below any of them
-    // (/settings/connections, /catalogs/quickadd). Served only to a browser
-    // that gets the new interface (its cookie, or the FF_NEW_UI variable);
-    // for any other these addresses 404, as they always did.
+    // (/settings/connections, /catalogs/quickadd).
     //
     // Exact paths only: /lists/<slug> and /channels/<user>/<slug> are share
     // links and keep their own routes below.
-    if (APP_SHELL_PATHS.has(path) && isNewUiRequest(request)) {
+    if (APP_SHELL_PATHS.has(path)) {
       ctx.waitUntil(bumpStat(env, "pageviews"));
       return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
     }
-    if (isNewUiRequest(request)) {
-      for (const shellTab of APP_SHELL_TABS) {
-        if (path.indexOf(shellTab.path + "/") !== 0) continue;
-        const shellSub = path.slice(shellTab.path.length + 1);
-        if (shellTab.subs.indexOf(shellSub) === -1) continue;
-        ctx.waitUntil(bumpStat(env, "pageviews"));
-        return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
-      }
+    for (const shellTab of APP_SHELL_TABS) {
+      if (path.indexOf(shellTab.path + "/") !== 0) continue;
+      const shellSub = path.slice(shellTab.path.length + 1);
+      if (shellTab.subs.indexOf(shellSub) === -1) continue;
+      ctx.waitUntil(bumpStat(env, "pageviews"));
+      return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
     }
 
     // add-on icon, served straight from this Worker using precomputed bytes (P8-4)
@@ -498,28 +523,39 @@ async function handleFetch(request, env, ctx) {
         });
       }
 
-      // If ownBetterPoster is present, inline the stored image bytes directly as a data URI
-      // because a Worker fetching its own hostname does not reliably reach itself.
-      // External posters (TMDB, Metahub, etc.) bypass all downloads and base64 encoding (P8-4).
-      let embeddedPoster = posterUrl;
-      if (ownBetterPoster) {
-        try {
+      // The poster goes INTO the SVG, as a data URI. An SVG shown as an image
+      // -- an <img>, a Stremio tile -- may not load anything from outside
+      // itself, so an SVG that only links to the poster shows the badge on a
+      // blank card. P8-4 did that for TMDB and Metahub posters (2026-10-02);
+      // every badged Airing Next tile lost its picture. A Better Poster of
+      // this Worker's own is read from storage, because a Worker fetching its
+      // own hostname does not reliably reach itself.
+      let embeddedPoster = "";
+      try {
+        let contentType = "";
+        let buffer = null;
+        if (ownBetterPoster) {
           const found = await getBetterPoster(env, ctx, ownBetterPoster, url.origin, { waitMs: BETTER_POSTER_PAGE_WAIT_MS });
           if (found && found.bytes) {
-            const bytes = new Uint8Array(found.bytes);
-            let binary = "";
-            const len = bytes.byteLength;
-            for (let i = 0; i < len; i++) {
-              binary += String.fromCharCode(bytes[i]);
-            }
-            embeddedPoster = `data:${found.contentType || "image/jpeg"};base64,${btoa(binary)}`;
-          } else {
-            return Response.redirect(posterUrl, 302);
+            contentType = found.contentType;
+            buffer = found.bytes;
           }
-        } catch (e) {
-          return Response.redirect(posterUrl, 302);
+        } else {
+          const imgRes = await fetch(posterUrl, {
+            headers: { "User-Agent": "my-list-addon/1.14" },
+            cf: { cacheTtl: 86400, cacheEverything: true },
+          });
+          if (imgRes.ok) {
+            contentType = imgRes.headers.get("content-type") || "image/jpeg";
+            buffer = await imgRes.arrayBuffer();
+          }
         }
-      }
+        if (buffer && String(contentType || "image/jpeg").startsWith("image/")) {
+          embeddedPoster = `data:${contentType || "image/jpeg"};base64,${bytesToBase64(buffer)}`;
+        }
+      } catch (e) {}
+      // Without the bytes, the plain poster is better than a blank badge.
+      if (!embeddedPoster) return Response.redirect(posterUrl, 302);
 
       // Format air date tag text (e.g. WED, SEP 16)
       let airDateText = "";
@@ -577,9 +613,6 @@ async function handleFetch(request, env, ctx) {
         bottomColor = "#ffd166";
       }
 
-      // P8-4: SVG overlay directly references the allowlisted poster URL rather than
-      // downloading the whole image and base64-inlining it into a massive data URI.
-      // (For ownBetterPoster, embeddedPoster contains the inlined local copy).
       const svg = generateBadgedPosterSvg({
         posterUrl: embeddedPoster,
         airDateText,
@@ -589,11 +622,7 @@ async function handleFetch(request, env, ctx) {
         bottomColor,
       });
 
-      if (BADGED_POSTER_CACHE.size >= BADGED_POSTER_CACHE_MAX) {
-        const oldest = BADGED_POSTER_CACHE.keys().next().value;
-        BADGED_POSTER_CACHE.delete(oldest);
-      }
-      BADGED_POSTER_CACHE.set(cacheKey, svg);
+      rememberBadgedPoster(cacheKey, svg);
 
       return new Response(svg, {
         headers: {

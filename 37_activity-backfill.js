@@ -767,6 +767,21 @@ async function runActivityBackfillStep(env, opts = {}) {
   try {
     const job = await loadActivityBackfillJob(menv, ACTIVITY_BACKFILL_RUN_KEY);
     run = !opts.restart && job && job.progress && job.progress.phase ? job.progress : null;
+    // Accounts made after the copy finished. Without this a finished run was
+    // finished for good, and with FF_EVENT_TRACKING on Start over is refused,
+    // so they could never be copied: their history stayed in the legacy
+    // stores (39 of 748 accounts, 2026-10-04). Account ids only grow, so they
+    // are the ones after where the run stopped; the hourly activity.copy-new
+    // job (58_) takes them on its own.
+    if (run && run.phase === "done") {
+      const newer = await menv.DB.prepare("SELECT count(*) AS n FROM accounts WHERE id > ? AND deleted_at IS NULL")
+        .bind(Number(run.afterAccountId) || 0).first();
+      const n = Number(newer && newer.n) || 0;
+      if (n > 0) {
+        run = { ...run, phase: "accounts", accountsTotal: (Number(run.accountsTotal) || 0) + n };
+        delete run.finishedAt;
+      }
+    }
     if (!run) {
       run = { phase: "accounts", afterAccountId: 0, accountsTotal: 0, accountsDone: 0, accountsFailed: 0, startedAt: Date.now() };
       if (opts.restart) {

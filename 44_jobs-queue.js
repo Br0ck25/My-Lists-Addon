@@ -367,6 +367,8 @@ function newJobPingNonce() {
 //   GET  /admin/api/jobs/status          is JOBS bound; the job types known
 //   POST /admin/api/jobs/ping            send a test job -> { nonce }
 //   GET  /admin/api/jobs/ping?nonce=...  has it come back yet
+//   POST /admin/api/jobs/shelf-shadow-now  one batch of the shelf comparison
+//                                          (runShelfShadowNow, 47_shelf-shadow.js)
 async function handleJobsAdminApi(request, env, url, path) {
   if (!path.startsWith("/admin/api/jobs/")) return null;
   if (!(await isAdminRequest(request, env))) return json({ ok: false, error: "Not authorized." }, 401);
@@ -400,6 +402,16 @@ async function handleJobsAdminApi(request, env, url, path) {
       const sent = await enqueueJob(env, "jobs.ping", { nonce, sentAt: Date.now() });
       if (!sent.ok) return json({ ok: false, error: `Could not send to the queue (${sent.reason}). See the Worker's logs.` }, 502);
       return json({ ok: true, nonce });
+    }
+    if (path === "/admin/api/jobs/shelf-shadow-now" && request.method === "POST") {
+      let body = {};
+      try {
+        body = (await request.json()) || {};
+      } catch {
+        body = {};
+      }
+      const result = await runShelfShadowNow(env, { afterId: body.afterId, round: body.round });
+      return json(result, result.ok ? 200 : 400, { "Cache-Control": "no-store" });
     }
     if (path === "/admin/api/jobs/ping" && request.method === "GET") {
       const nonce = url.searchParams.get("nonce") || "";

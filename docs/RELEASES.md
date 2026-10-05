@@ -17,7 +17,27 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Release 10** (Phase 7 so far, PR #9) went live on 2026-09-30. The owner does not want Cloudflare Access on `/admin`.
 - **Release 11** went live on 2026-10-01 with migration `0020`, after the list copy's and the history copy's *Start over* (results under each). **`FF_V2_LISTS_ONLY` and `FF_EVENT_TRACKING` are both on** (2026-10-01, one-way: never delete either). The owner reports everything correct, and found one problem, fixed in Release 11b: a Search tile could show its poster and a "No poster" box under it.
 - **Release 12** (prepared, not yet live; it includes 11b) answers the owner's review of the new interface before it goes to everyone, and fixes New on Streaming titles too new for TMDB (details under Release 12).
-- **Release 13** (handed over 2026-10-01; the owner reports `FF_PROVIDER_BREAKER`, `FF_CHART_SNAPSHOTS` and `FF_NEW_UI` added, which implies 13 is deployed; still to confirm. The `shelf.shadow` numbers for `FF_SHOW_SCHEDULE` have not been sent yet; includes 12) adds the `FF_NEW_UI` switch, stronger hashing for recovery answers, and a daily backup that works. With it come the switches the owner asked for now: `FF_PROVIDER_BREAKER`, `FF_CHART_SNAPSHOTS`, then `FF_SHOW_SCHEDULE` once its comparison is read. The owner dropped one-time recovery codes (D-31).
+- **Release 13** is live: the owner added `FF_PROVIDER_BREAKER`, `FF_CHART_SNAPSHOTS` and `FF_NEW_UI`. It added the `FF_NEW_UI` switch, stronger hashing for recovery answers, and a daily backup that works. The owner dropped one-time recovery codes (D-31).
+- **`main` at `a6785d6`** is live (2026-10-02 onward): other assistants finished P7-6 and Phases 8–10 and merged everything into `main`, and the Worker was renamed from `wako` to **`my-lists-addon`**. The owner also added `FF_SCROBBLE_ST_ONLY`. The review of that work (2026-10-04) found the admin counters writing nowhere anyone reads, blank badged posters, and a cleanup guide that would have deleted live data: Release 14 fixes them.
+- **`shelf.shadow`** (sent 2026-10-04): last full comparison of 709 accounts, 20.36% different (Continue Watching 836 the same, 206 only in the old, 25 only in the new, 17 shows not known yet; Airing Next 212 / 15 / 22 / 3). Far above the 1% gate: **`FF_SHOW_SCHEDULE` stays off.**
+- **Release 14** (as 14c) went live on 2026-10-04. The counts missing since 2 October were put back (the owner: *done and it worked*). 14 and 14b each failed on a rule of Analytics Engine's SQL (details under Release 14).
+- **Release 15** (prepared 2026-10-04) — details under Release 15. Later on 2026-10-04 the owner's Check jobs still showed the comparison without reasons, so 15 was not yet running when that round finished.
+- **Release 16** went live on 2026-10-04 (includes 15). **Compare shelves now** ran over 709 accounts: 19.42% different, with a reason for every difference (under Release 17).
+- **Release 17** went live on 2026-10-04. Its comparison: 15.76% different, 9.22% leaving out `already-watched`; the 50 `other` were gone (the 200-show limit). Details under Release 18.
+- **Release 18** went live on 2026-10-04. Its comparison over 744 accounts:
+  - **verdict: 0 entries lost**, 5 shown at another episode, 45 added, and 156 old-list mistakes put right;
+  - 15.79% different, and 4.66% leaving out old-list mistakes;
+  - Continue Watching: 901 the same, 43 shows not known yet. Airing Next: 224 the same, 30 not known yet.
+
+  The 35 accounts added since the last comparison are those `activity.copy-new` copied. The "not known yet" counts grew with them, because their shows are not in the schedule until `show.watchers` (daily) and `show.refresh` (hourly) reach them. Meanwhile the safety net keeps their entries.
+- **`FF_SHOW_SCHEDULE` is on** (2026-10-04). The owner reports Continue Watching and Airing Next working correctly.
+- **Release 19** went live on 2026-10-04. The owner reports it working correctly. It is the first stage of the sign-in move, and fixes pages that loaded with no scripts running after a reload. Details under Release 19.
+- **Release 20** went live on 2026-10-05. The owner reports no issues. It is sign-in move stage 2, plus a daily check that each backup restores. Details under Release 20.
+- **`FF_MATERIALIZER` and `FF_CANONICAL_IDS` are on** (2026-10-05, owner's screenshot). `INSTALL_MIGRATION_PERCENT` is `10`. `CF_ANALYTICS_TOKEN` and `FF_SCROBBLE_ST_ONLY` are gone; `CF_ANALYTICS_ACCOUNT_ID` is still set and no longer needed (only the one-time recovery used it).
+- **`main`** is brought up to date by PR #12 (Releases 14–16), PR #13 (17–18), PR #14 (19) and PR #15 (20).
+- **Release 21** went live on 2026-10-05. The owner reports everything looks good, and deleted the `FF_NEW_UI` variable. The classic page is retired, and the screens taken off the new interface are deleted. Details under Release 21.
+- **Cloudflare Workers Builds was connected to this repository** (found 2026-10-04). The owner reports the Worker it was connected to has since been deleted, and merging PR #12 started no build. Every push makes Cloudflare try to build the Worker from GitHub. On `main` it would deploy to production. So far every attempt has failed, so nothing has been deployed that way: `main` at `a6785d6` on 2026-10-03, and this branch's preview with *Authentication error*. The `wrangler.toml` guard (Release 14: `keep_vars`, the `DB_ACTIVITY` placeholder) keeps such a deploy from replacing the dashboard's settings. Deploying stays manual (pasting) unless the owner decides otherwise.
+- **Backups work** (2026-10-04): the owner added the five GitHub secrets, and the first real backup ran (Actions run 37226668219). It copied both databases, encrypted: `my-lists-db` (9.3 MB, 709 accounts' settings, 1,147 lists, 53,082 list items) and `mylists-activity` (0.96 MB, 46,956 plays). From here it runs daily at 04:17 UTC.
 
 The owner decided to release the new version **one phase at a time, straight to the live site**, with no separate test site. Each release waits until the one before it has run cleanly for at least a day.
 
@@ -1026,3 +1046,485 @@ The owner asked for the recommended next steps, and for `FF_PROVIDER_BREAKER`, `
 6. Backups: the five GitHub secrets (`docs/OPERATIONS.md` §5), then Actions → **D1 backup** → **Run workflow**, choosing this branch.
 
 **Rollback:** paste the previous file and remove any switch that misbehaves. One thing does not roll back: a recovery answer set or used after Release 13 is stored in the new shape, which older code cannot read. On an older release that answer fails until Release 13 is back. Account Keys are unaffected.
+
+---
+
+## Release 14: the review of Phases 8–10 — counters, badged posters, and a cleanup that keeps data
+
+**Branch point:** `main` at `a6785d6`, which is what is live. Everything below is on top of it.
+
+The owner asked for every problem from the review to be fixed, and reported that the admin panel has missing and broken data.
+
+### What it changes
+
+- **The admin counters count again** (`03_`, D-33).
+  - Since 2026-10-02 (P8-2), page views, install links, playback pings, Most Watched, Most Added and the search log were sent to Analytics Engine **instead of** the database, because the `ANALYTICS` binding is set. Nothing reads Analytics Engine, so the dashboard showed zeros and Most Watched stopped moving.
+  - They are written to D1 again, and Most Watched reads them again (not `title_daily_stats`, which only has the plays of event-tracked accounts, up to yesterday).
+  - **The missing days can be put back**: `/admin` → Maintenance → **Counts missing since 2 October** reads them from Analytics Engine, shows a preview, and adds each one once. Pressing it again adds nothing. It needs a read-only API token (steps below).
+- **Badged posters show the poster again** (`25_`).
+  - P8-4 made a badged poster ("Season Premiere", an air date) link to the poster instead of containing it. An SVG shown as an image may not load anything from outside itself, so those tiles showed the badge on a blank card. Checked with a real browser and a real local server: no request was made.
+  - The poster is embedded again. When the poster cannot be fetched, or is not an image, the plain poster is sent instead of a blank badge. The memory cache that P8-4 added stays, now limited by size (24 MB, at most 1 MB per poster).
+- **Read replicas, for when they are switched on** (`02_`). Two kinds of request now always use the main database:
+  - `/subtitles/` — with playback tracking, this is the ping that reads Continue Watching and writes it back. From a replica that is behind, it would write old data over new, so a removed title would come back.
+  - `/api/lists/:id` — the owner reads a list just after changing it, and needs the change.
+- **Watch history of old accounts is protected again** (`05_`, `07_`, `26_`).
+  - P10-4 emptied `ensureTrackingMigrated`. An account that had not been used since watch history moved to its own record lost that history on its first autosave.
+  - Restored as it was, with all six of its calls.
+- **Copying old data to R2, without losing any** (`26_`, `03_`, docs/CUTOVER.md P10-3).
+  - The old tool wrote all the batches of an export to one file name, so each batch replaced the one before. It also turned images into text.
+  - Each batch is now its own file, images are kept byte for byte, and `manifest.json` is written last, once everything is in. `/admin` → Maintenance → **Export old data to R2 (a copy)** runs it.
+  - The cleanup guide (P10-3) is rewritten. Its delete list named data the site still uses: accounts, settings, history, likes, share codes, the counters, Better Posters. Its D1 list named 16 tables, all still in use. Deleting is now marked **do not run**, until a release removes what reads each one (D-34).
+- **The sunset notices are shown** (`22_`), but only the one a visitor can act on: the media server webhook address. The others name routes this page itself still uses. **Do not set `SUNSET_60DAY_START_DATE` yet** (docs/CUTOVER.md P10-2).
+- **`wrangler.toml` is safe to keep** (not used by a pasted deploy). It names the live Worker with its real ids, so a plain `wrangler deploy` would have:
+  - replaced every dashboard variable, including the two that must never be removed;
+  - dropped `DB_ACTIVITY`.
+
+  It now has `keep_vars = true`, a warning at the top, and a `DB_ACTIVITY` binding whose placeholder id makes such a deploy fail.
+
+### `FF_SCROBBLE_ST_ONLY` should come off
+
+With it on, a media server (Plex, Jellyfin, Emby) that still uses a webhook address from before scrobble tokens (`config=` or `creator=&key=`) is refused, and its plays are not recorded. Nobody is told: the server gets an error, not the person. The plan was to turn it on only at the end of the 60-day sunset. Deleting it changes nothing else, and it can be added again later.
+
+### Checked
+
+- `bash verify.sh` passes, and so does the suite with `MLA_TEST_V2_LISTS_READ=1` (counts in the commit).
+- New or rewritten tests:
+  - `tests/analytics-engine-stats.test.mjs`: counters in D1 with Analytics Engine bound; recovery preview, apply, apply again, no token, admin only.
+  - `tests/poster-optimization.test.mjs`: the poster's own bytes inside the SVG; plain poster when it cannot be had; the cache and its size limit.
+  - `tests/d1-read-replication.test.mjs`: `/subtitles/` and `/api/lists/:id` on the main database.
+  - `tests/phase10-cutover.test.mjs`: export parts, manifest last, metadata kept, images kept, a failed R2 write leaves no manifest, `*` refused.
+  - `tests/review-fixes-2026-10-04.test.mjs`: an old account's history survives an autosave (this test fails with the P10-4 version); the notice shown once; `wrangler.toml` guards.
+
+**Steps:**
+1. Keep the file now live as the rollback file.
+2. Deploy `release-14-NEW-worker.js`. No database step.
+3. Worker **my-lists-addon** → Settings → Variables and Secrets → delete `FF_SCROBBLE_ST_ONLY` → Deploy.
+4. Check: open the site, then `/admin`. Total page views should go up by one, and today's count should no longer be 0.
+5. Put the missing days back (docs/OPERATIONS.md §30):
+   1. Cloudflare → My Profile → API Tokens → **Create Token** → **Create Custom Token**. Give it the permission **Account → Account Analytics → Read**, for your account. Copy the token.
+   2. Worker **my-lists-addon** → Settings → Variables and Secrets:
+      - add a **Secret** `CF_ANALYTICS_TOKEN` = the token;
+      - add a **Text** variable `CF_ANALYTICS_ACCOUNT_ID` = your account id (the 32 letters and numbers in the dashboard's address, right after `dash.cloudflare.com/`).
+
+      Deploy.
+   3. `/admin` → Maintenance → **Counts missing since 2 October** → **Preview**. Send the result.
+   4. **Put them back**. Then delete `CF_ANALYTICS_TOKEN` and the token itself.
+6. Backups: if not done yet, add the five GitHub secrets (docs/OPERATIONS.md §5), then Actions → **D1 backup** → **Run workflow**.
+
+**Not yet:**
+- Do not switch on D1 read replication.
+- Do not set `SUNSET_60DAY_START_DATE`.
+- Do not run any deletion from docs/CUTOVER.md.
+- `FF_SHOW_SCHEDULE` stays off (20% different).
+
+**Rollback:** paste the previous file. Two things to know:
+- Counts recorded while Release 14 ran stay in D1.
+- Any days already put back stay put back.
+
+### Release 14b: the recovery query Analytics Engine refused
+
+**What happened:** the owner deployed Release 14 and followed its steps. Preview answered *Failed: Analytics Engine answered 422: Input was invalid: unknown function call: CONCAT*.
+
+**Why:** the query joined text with `concat`, and Analytics Engine's SQL has no such function. Its reference lists only `format` for joining text. The tests' stand-in for Analytics Engine accepted anything, so they could not see this.
+
+**Fix** (`03_admin.js`, `readAnalyticsEngineCounts`):
+- The three queries now return the stored values as they are, and the Worker builds the counter names itself.
+- The only functions they use are `SUM` and `formatDateTime`, both in Cloudflare's SQL reference.
+- `GROUP BY` repeats the expressions instead of relying on names given with `AS`.
+- The stand-in now refuses any function the reference does not list, with the same 422 the real service sent. Putting `concat` back makes 3 tests fail.
+
+Nothing was written by the failed Preview: it stops before touching the database.
+
+**Steps:**
+1. Deploy `release-14b-NEW-worker.js`. Keep `CF_ANALYTICS_TOKEN` and `CF_ANALYTICS_ACCOUNT_ID` as they are.
+2. `/admin` → Maintenance → **Counts missing since 2 October** → **Preview**. Send the result.
+3. If it looks right, **Put them back**. Then delete `CF_ANALYTICS_TOKEN` and the token itself.
+
+### Release 14c: the next rule Analytics Engine enforces
+
+**What happened:** Release 14b's Preview answered *Failed: Analytics Engine answered 422: Input was invalid: in the GROUP BY clause you may only provide column names: formatDateTime("timestamp", '%Y-%m-%d', 'America/New_York')*.
+
+**Why:** Analytics Engine groups only by a column. A worked-out value has to be named with `AS` first, as in Cloudflare's own example (`intDiv(...) * 60 AS t` … `GROUP BY blob1, t`). 14b grouped by the formula itself. The stand-in used by the tests accepted that too.
+
+**Fix** (`03_admin.js`, `readAnalyticsEngineCounts`):
+- Plays and list adds are now asked for by the hour: `toUnixTimestamp(toStartOfHour(timestamp)) AS event_hour`, grouped by `event_hour`. The Worker turns each hour into its Eastern day, so the service's time zone support is no longer needed.
+- `event_hour` rather than `hour` or `day`, which the SQL also uses as words of its own.
+- The other two queries already grouped by plain columns.
+- The stand-in now refuses anything in `GROUP BY` that is not a column or an `AS` name, with the same message. Grouping by the formula again makes 3 tests fail with exactly the error the owner saw.
+- `/admin` now shows **Release 14c** under its title, so it is plain which file is live.
+- A failure names the query that failed (page views, Most Watched, or searches) and the release that asked.
+
+The failed Preview wrote nothing.
+
+**Steps:**
+1. Deploy `release-14c-NEW-worker.js`. Check that `/admin` says **Release 14c** under "Admin Dashboard".
+2. `/admin` → Maintenance → **Counts missing since 2 October** → **Preview**. Send the result.
+3. If it looks right, **Put them back**. Then delete `CF_ANALYTICS_TOKEN` and the token itself.
+
+---
+
+## Release 15: why the shelf comparison differs, and a backup that cannot look fine while doing nothing
+
+**Branch point:** this branch after Release 14c, which is live.
+
+### What it changes
+
+- **The shelf comparison says why** (`47_shelf-shadow.js`, `03_admin.js`).
+  - The last full comparison was 20.36% different, which is far above the 1% that `FF_SHOW_SCHEDULE` waits for, and it gave no reason. An item "only in the old" Continue Watching can mean two things:
+    - the old list is stale, for example an episode already watched, or a show that has ended;
+    - or the new list is wrong.
+  - Every difference now gets a reason. `/admin` → Check jobs shows a **Why:** line under the `shelf.shadow` comparison, counting each reason, for example `already-watched 120, schedule-nothing-after 40, no-progress 12`. The examples carry one line of detail each.
+  - Reasons for Continue Watching, only in the old: `already-watched`, `schedule-nothing-after`, `different-episode`, `no-progress`, `dismissed`, `dropped`, `no-title`, `suggestion`, `schedule-unknown`.
+  - Reasons for Airing Next, only in the old: `no-upcoming`, `next-already-aired`, `hidden`, `no-progress`, `nothing-watched`, `not-a-series`.
+  - Reasons for anything only in the new: `different-episode`, `not-stored`.
+  - **One counting mistake fixed.** A stored show whose title record was not marked as a series was counted as a difference even when the schedule simply did not know it yet. That case belongs with "not known yet". The fix matches the stored show through the account's own progress rows.
+  - Nothing a visitor sees changes: the comparison only reads.
+- **The daily backup fails when it cannot run** (`.github/workflows/d1-backup.yml`).
+  - **No backup has been made so far.** Every daily run since 30 September skipped itself, because the repository secrets are not set, and showed a green tick anyway.
+  - It now fails (a red ✗, and GitHub sends an email) and names the missing secrets. The watch history database is required as well, since it is the only copy of watch history.
+  - The scheduled run uses the copy of the workflow on `main`, so this takes effect once this branch is merged into `main`.
+- `/admin` shows **Release 15**.
+
+`bash verify.sh` passes, and so does the suite with `MLA_TEST_V2_LISTS_READ=1` (counts in the commit). New tests are in `tests/shelf-shadow.test.mjs`:
+- each reason, on a stale entry, a show with nothing after the last episode watched, and an episode the new list works out differently;
+- the counting fix: this test fails without it.
+
+**Steps:**
+1. Deploy `release-15-NEW-worker.js`. Check that `/admin` says **Release 15**. There is no database step.
+2. Wait for one full comparison. `shelf.shadow` checks 50 accounts an hour, so 709 accounts take about 15 hours.
+3. Then `/admin` → **Check jobs**, and send the two `shelf.shadow` lines: "Last full comparison…" and "Why:…".
+4. Backups: add the five repository secrets (docs/OPERATIONS.md §5), then Actions → **D1 backup** → **Run workflow**, and check that the run made a file (under *Artifacts*).
+
+**Rollback:** paste the 14c file. Nothing is stored differently.
+
+---
+
+## Release 16: the shelf comparison in minutes, not days
+
+**Branch point:** this branch after Release 15. It includes 15: deploy this one if 15 is not live yet.
+
+The owner had been waiting days for the comparison. The hourly `shelf.shadow` job compares 50 accounts an hour, so a full pass over 709 accounts takes about 15 hours. The Check jobs output the owner sent still showed the same 20.36% with no reasons, because Release 15 was not running when that pass finished.
+
+### What it changes
+
+- **Compare shelves now** (`/admin` → Maintenance, under Check jobs; `03_admin.js`, `44_jobs-queue.js`, `47_shelf-shadow.js`).
+  - It runs the whole comparison from the page. Each request handles 20 accounts, and the page carries the running totals from one request to the next.
+  - It is the same comparison as the hourly job (`runShelfShadow`), with the Release 15 reasons. When it finishes, the page shows:
+    - the difference rate;
+    - the counts;
+    - why each difference is there;
+    - examples.
+  - The result is also stored where Check jobs reads it. The hourly job's own pass carries on as before.
+  - It only reads. Each batch is one line in the admin audit log (`admin.jobs.shelf-compare`).
+- `/admin` shows **Release 16**.
+
+### Checked
+
+- In a real browser, against a local copy of the Worker with 45 test accounts:
+  - signed in, opened Maintenance and pressed the button;
+  - 3 batches ran, and the page reported *Done: 45 accounts compared*;
+  - it named the 23 stale entries as `already-watched`;
+  - no page errors.
+- `tests/shelf-shadow.test.mjs` checks:
+  - one round spread over two batches;
+  - totals carried between batches;
+  - the result saved for Check jobs;
+  - admin-only access.
+- `bash verify.sh` and the `MLA_TEST_V2_LISTS_READ=1` run pass (counts in the commit).
+
+**Steps:**
+1. Deploy `release-16-NEW-worker.js`. Check that `/admin` says **Release 16**. There is no database step.
+2. `/admin` → **Maintenance** → **Compare shelves now**. Keep the page open until it says **Done** (a few minutes for 709 accounts).
+3. Send everything it shows under the button.
+
+**Rollback:** paste the previous file. Nothing is stored differently.
+
+---
+
+## Release 17: what the comparison's reasons showed
+
+**Branch point:** this branch after Release 16, which is live.
+
+The first comparison with reasons (Release 16, 709 accounts) read **19.42% different**:
+- **Continue Watching:** 840 the same, 198 only in the old, 26 only in the new, 26 not known yet.
+  - Only in the old: `already-watched` 93, `other` 50, `schedule-nothing-after` 44, `dismissed` 6, `different-episode` 5.
+  - Only in the new: `not-stored` 16, `different-episode` 10.
+- **Airing Next:** 218 the same, 6 only in the old, 25 only in the new, 11 not known yet.
+
+The owner also noted 748 accounts against the 709 compared.
+
+### What it changes
+
+- **The old Continue Watching kept offering an episode already watched** (`05_` `cwEntriesStillAhead`, `26_` playback ping and media server webhook). This is the 93 `already-watched` differences, and visitors can see it on the live site.
+  - After a play, the old code asks TMDB for the next episode. When there is none yet, it put the show's old entry back. After someone watched the newest episode, that entry was the episode they had just watched.
+  - The show was not marked as fully watched, so the episode sweep never looked at it again. The entry stayed until the person played that show again, even after the next episode aired.
+  - Now only an entry still ahead of what was watched is put back. Otherwise the show is marked fully watched, and the sweep adds the next episode when it airs.
+  - The worked-out shelves never had this mistake.
+  - Entries already stuck stay until the person's next play of that show, or until `FF_SHOW_SCHEDULE` replaces the old list.
+- **The comparison leaves out the old list's own mistakes when judging the new one** (`47_`).
+  - A second rate, `rateNew`, leaves out `already-watched`.
+  - That is the number the switch waits on (under 1%). `/admin` shows both rates.
+- **A heavy watcher's older shows were left off the new shelves** (`39_`).
+  - Continue Watching and Airing Next read at most 200 of an account's shows, the most recently watched first. The old list has no such limit.
+  - The limit is now 1000. A new reason, `beyond-limit`, names any show still past it.
+  - The 50 `other` differences were most likely this. If they were, they drop to about 0 on the next comparison.
+  - If `other` remains, its detail now shows the stored entry and what the new shelf has for that show.
+- **`schedule-nothing-after` (44) says more.** The detail now includes:
+  - the stored entry's own air date, and whether it was marked unaired;
+  - how long ago the schedule was last checked.
+
+  In the examples, most of these entries are for shows TMDB lists as Ended or Canceled, or for a next season with no date. They look like old entries the old list never removed, but the next comparison will show it.
+- **Accounts made after the history copy are now copied** (`37_`, new `58_activity-copy-new.js`).
+  - The copy only ran when pressed in `/admin`, and a finished run stayed finished. With `FF_EVENT_TRACKING` on, Start over is refused. So an account made since then could never be copied, and its watch history stayed in the old storage (748 − 709 = 39 accounts).
+  - **Copy history** now carries on with accounts made after a finished run.
+  - A new hourly job, `activity.copy-new`, does that on its own. It runs up to 3 copy steps an hour while `FF_EVENT_TRACKING` is on, and is one count query when there is nothing new.
+  - Each account is served from the activity database once its copy is done, exactly as the first 709 were.
+- `/admin` shows **Release 17**.
+
+### Checked
+
+Tests in `tests/review-fixes-2026-10-04.test.mjs`, `tests/activity.test.mjs` and `tests/shelf-shadow.test.mjs`. Each new test was also run against the code without its fix, and fails there.
+- **Continue Watching:** a ping for the newest episode no longer leaves that episode in Continue Watching, and marks the show fully watched. An entry still ahead of what was watched is kept.
+- **Newer accounts:** an account made after the copy finished is copied by Copy history and by the hourly job, then served from the activity database.
+- **The rates:** both rates on a known case.
+
+`bash verify.sh` and the `MLA_TEST_V2_LISTS_READ=1` run pass (counts in the commit).
+
+**Steps:**
+1. Deploy `release-17-NEW-worker.js`. Check that `/admin` says **Release 17**. There is no database step.
+2. `/admin` → Maintenance → **Compare shelves now**, and send everything it shows.
+3. Within a few hours `activity.copy-new` copies the newer accounts. Check jobs shows it under `activity.copy-new`.
+
+**Rollback:** paste the 16 file. Accounts already copied stay copied. That is correct: they are served from the activity database the same way as every other copied account.
+
+---
+
+## Release 18: what switching would lose, and a safety net for shows the schedule does not know
+
+**Branch point:** this branch after Release 17, which is live.
+
+Release 17's comparison (709 accounts):
+- **The rates:** 15.76% different, and 9.22% leaving out `already-watched`.
+- **The 50 `other` are gone.** "The same" rose from 840 to 892, which confirms the 200-show limit was their cause.
+- **Continue Watching, only in the old:**
+  - `already-watched` 95;
+  - `schedule-nothing-after` 44;
+  - `dismissed` 6;
+  - `different-episode` 5.
+- **Continue Watching, only in the new:** `not-stored` 16, `different-episode` 10.
+- **Airing Next:**
+  - only in the old: `no-upcoming` 4, `next-already-aired` 1;
+  - only in the new: `not-stored` 27.
+- 27 Continue Watching shows and 12 Airing Next shows were "not known yet".
+
+### Reading the remaining differences
+
+The 1% gate assumed the stored shelves were right. They are often not:
+- **`schedule-nothing-after` (44): each stored episode comes after TMDB's last aired episode, and has no date.** In the examples:
+  - S3E1 of a cancelled show;
+  - S25E1 and S3E1 premieres of returning shows that have no air date;
+  - S28E42 when TMDB's last aired is S28E41 and nothing is scheduled.
+
+  The playback ping and the webhook take TMDB's next episode whether or not it has aired, so the old list offered episodes nobody can watch yet. These are now `not-aired-yet`.
+- **`dismissed` (6):** the person dismissed the show, and has watched nothing since. By the rule both lists share, the dismissal stands.
+- **Airing Next `no-upcoming` / `next-already-aired` (5):** the old entry is for an episode that has already aired, or for a show with nothing coming.
+- **New list only, Airing Next `not-stored` (27):** the old Airing Next looks at only a person's 60 most recently watched shows (`AIRING_NEXT_SERVER_MAX_SHOWS`), and rebuilds each account at most every 6 hours. These are real upcoming episodes it missed.
+- **New list only, Continue Watching `not-stored` (16):** the next aired episode of a show in progress, which the old list does not have.
+- **New list only, `different-episode` (10):** most are the new list's correct episode standing in for an `already-watched` old one. They are now `replaces-old-mistake`.
+- **Shows "not known yet":** these would have dropped off the shelves with `FF_SHOW_SCHEDULE` on. The daily `show.watchers` job only makes schedule rows for titles stored as series, so a show matched to a movie row never gets one.
+
+### What it changes
+
+- **Safety net** (`39_` `shelfStoredForUnknown`, `40_`). With `FF_SHOW_SCHEDULE` on, a show the schedule does not know yet keeps the entry it had, in both Continue Watching and Airing Next, instead of dropping off. The switch had no test until now; it has one.
+- **A verdict on switching** (`47_`, `03_`). The comparison now ends with *If FF_SHOW_SCHEDULE were on now*:
+  - **lost:** entries the old list has that are not its mistakes;
+  - **changed:** shows offered at another episode;
+  - **added:** entries only the new list has;
+  - **old-list mistakes put right.**
+
+  Old-list mistakes, by the rules both lists share:
+  - `already-watched`;
+  - `not-aired-yet`;
+  - `dismissed`, `dropped`, `hidden`;
+  - `no-upcoming`, `next-already-aired`;
+  - `replaces-old-mistake`.
+
+  `rateNew` leaves all of these out.
+- `/admin` shows **Release 18**.
+
+### Recommendation
+
+From Release 17's numbers, the verdict should read about **0 lost, 5 changed, 43 added**:
+- the 5 changed are One Piece-style numbering, where the old entry had S23E1156 and the new list has S23E26;
+- the 43 added are upcoming or aired episodes the old lists missed.
+
+If Release 18's comparison shows 0 lost, turn `FF_SHOW_SCHEDULE` on. It is reversible: delete the variable to go back to the stored shelves. That replaces the 1% rule, which measured agreement with a list we now know to be wrong in about 160 places.
+
+### Checked
+
+- **`tests/shelf-shadow.test.mjs`:** the reasons, `rateNew`, and the verdict on a known case.
+- **`tests/activity.test.mjs`:** with `FF_SHOW_SCHEDULE` on, a show without a schedule keeps its stored entry; once its schedule arrives, the entry is worked out. This test fails without the safety net.
+- `bash verify.sh` and the `MLA_TEST_V2_LISTS_READ=1` run pass (counts in the commit).
+
+**Steps:**
+1. Deploy `release-18-NEW-worker.js`. Check that `/admin` says **Release 18**. There is no database step.
+2. `/admin` → Maintenance → **Compare shelves now**, and send the result. Mainly the line starting *If FF_SHOW_SCHEDULE were on now*.
+3. If it says 0 lost: Worker → Settings → Variables and Secrets → add Text `FF_SHOW_SCHEDULE` = `1` → Deploy. Look at your own Continue Watching and Airing Next in Stremio and on the site. To undo, delete the variable.
+
+**Rollback:** paste the 17 file, after deleting `FF_SHOW_SCHEDULE` if it was added.
+
+---
+
+## Release 19: the page signs with its session, and pages work after a reload
+
+**Branch point:** this branch after Release 18, which is live with `FF_SHOW_SCHEDULE` on.
+
+The owner chose the sign-in move as the next step. This is its first stage. Until now the page sent the Account Key in the body of every request that reads or saves the account (`/api/creator/*`). Every such request has also given the browser a 30-day session cookie since `FF_SESSIONS`, and the server already accepts that session in place of the key (`authenticateCreator`). So the page can stop sending the key.
+
+### What it changes
+
+- **`creatorApiFetch`** (`16_`; all 34 page calls to `/api/creator/` go through it).
+  - **Routes covered:** `sync/*`, `lists*`, `track-status`, `scrobble-token` and `scrobble-seen-users`.
+  - **When the key is left out:** once the server has confirmed that this browser holds a session for the account, requests to those routes go without the key. The confirmation is the new `X-MLA-Session` response header, needed because the page cannot read the HttpOnly cookie. The page remembers it per account in `localStorage` (`myListAddon:sessionFor`).
+  - **When the session is gone:** if it has expired, or the person signed out elsewhere, the server answers 401. The request is then sent once more with the key, exactly as before, and that also starts a new session. **Nobody is signed out by this.**
+  - **Before a session is known:** a fresh browser, or a server without sessions, works as before.
+  - **Routes that keep the key:** signing in (`restore`), creating an account, recovery, key resets and deleting. There, the key is what is being checked.
+- **Counter:** `/admin` → Creators shows *Saves that sent the Account Key today* and *… in the last 7 days* (stats kind `authkey`). It only counts the routes above. When it stays near zero, the next stage (the 60-day notice) can be planned.
+- **Pages loaded with no scripts running after a reload** (`02_` `withSecurityHeaders`). This is a bug that is live today, found while checking this release in a real browser.
+  - **Why:** a page answered with "not modified" (304) carried a new `Content-Security-Policy` nonce. The browser keeps its stored page but takes the 304's headers, so every script in the stored page, carrying the old nonce, was refused. That affected the classic page and the new interface alike: on a reload, or on a revisit the browser checked with the server, the page appeared but none of its scripts ran. It stayed like that until a page came back fresh.
+  - **Fix:** a 304 now carries no policy header, so the browser keeps the stored one, which matches the stored page.
+- `/admin` shows **Release 19**.
+
+### Checked in a real browser
+
+The test signs in as the page does, with the name and key in storage, against a local copy of the Worker, then reloads.
+- **First visit:** the 4 requests made before any session existed sent the key. Every request after that went without it: `sync/load`, `sync/save`, `lists`, `lists/items`, all answered 200.
+- **After a reload:** only the sign-in check (`restore`) sent the key, and every save went without it. No page errors, with the service worker on and off. Before the fix, the reload left the page with `ORIGIN is not defined` and no account requests at all.
+- **Tests** in `tests/session-signed-requests.test.mjs`:
+  - the server: session-only saves, another account refused, the header, the counter;
+  - the page: a fresh browser, a known session, another account, an expired session, the routes that keep the key, and that every page call goes through the helper;
+  - the 304 check. It fails without the fix.
+- `bash verify.sh` and the `MLA_TEST_V2_LISTS_READ=1` run pass (counts in the commit).
+
+**Steps:**
+1. Deploy `release-19-NEW-worker.js`. Check that `/admin` says **Release 19**. There is no database step.
+2. Use the site as normal: sign in, edit a list, mark something watched, then reload the page a couple of times. Everything should keep working.
+3. After a day, open `/admin` → **Creators**. *Saves that sent the Account Key today* should be small: one burst per browser that had no session yet.
+
+**Rollback:** paste the 18 file. Sessions and keys both keep working either way.
+
+---
+
+## Release 20: sign-in move stage 2, and backups that are checked every day
+
+**Branch point:** this branch after Release 19, which is live.
+
+The owner's answers to the next-steps list (2026-10-05):
+- They set `INSTALL_MIGRATION_PERCENT=10`.
+- They removed the Cloudflare app's GitHub access and `CF_ANALYTICS_TOKEN`.
+- They asked for:
+  - sign-in stage 2 (8);
+  - the backup check (15);
+  - Better Posters cleanup "if they keep working" (12);
+  - retiring the classic page (13);
+  - deleting the unused screens (14).
+
+### What it changes
+
+- **Sign-in move, stage 2** (`16_` `CREATOR_SESSION_ROUTES`, `02_` `CREATOR_SESSION_PATH_PREFIXES`; 14 more page calls go through `creatorApiFetch`).
+  - These requests are now signed by the session as well:
+    - the sign-in check every page load makes (`/api/creator/restore`);
+    - previews and install links with personal rows (`/api/preview`, `/api/save`);
+    - feedback;
+    - likes (`/api/lists/like`, `/api/channel/like`);
+    - unpublishing a channel.
+  - A key reset ends every session of the account, so a browser left with the old key is still signed out, through the retry.
+  - **A request with neither a key nor a live session is refused at once.** It used to run PBKDF2 on an empty key.
+  - **A keyless miss on `restore` is not noted as a failed attempt:** nothing was guessed.
+  - The `X-MLA-Session` header is now also sent on those routes.
+  - Real browser, after a reload: no request sends the key, the sign-in check included.
+- **Backups prove they restore** (`.github/scripts/d1-backup-verify.mjs`, `d1-backup.yml`). Before uploading, the daily job:
+  1. decrypts the file it keeps;
+  2. loads it into an empty database;
+  3. compares every table's row count with what it read from D1.
+
+  A backup that does not open fails the run that day, with the reason. Run by hand from this branch on 2026-10-05: both databases restored with every count matching. The daily run picks it up once this is on `main`.
+- **Better Posters (12): nothing removed yet, on purpose.** Production serves them from R2. The old KV copies (`bpimg:v1:`) expire by themselves 60 days after they were stored, so the last ones go by about 2026-11-29. The leftover KV code goes after that, when it can no longer serve anything.
+
+  `prewarmBetterPosters` stays: it is what has posters ready in R2 before anyone asks for them. Removing it would show the plain poster first for every title nobody had viewed yet.
+- `/admin` shows **Release 20**.
+
+### Checked
+
+- **`tests/session-signed-requests.test.mjs`:**
+  - `restore` with the session alone;
+  - a keyless miss not noted, while a wrong key still is;
+  - a personal-row preview;
+  - that every page call to these routes goes through the helper.
+- **`tests/d1-backup.test.mjs`:**
+  - a whole dump restores;
+  - a cut-short dump, wrong counts and garbage fail;
+  - both live schemas, whose CREATE statements span lines, restore when read from a file line by line. That case failed the first version of the check.
+- `bash verify.sh` and the `MLA_TEST_V2_LISTS_READ=1` run pass (counts in the commit).
+
+**Steps:**
+1. Deploy `release-20-NEW-worker.js`. Check that `/admin` says **Release 20**.
+2. Use the site as normal, including a reload or two.
+3. `INSTALL_MIGRATION_PERCENT`: if `/admin` → Maintenance → **Install links** looks fine a day after you set it to 10, raise it to `50`, then to `100` a day later.
+
+**Rollback:** paste the 19 file.
+
+## Release 21: one page, and the unused screens deleted
+
+**Branch point:** `main` after PR #15 (Release 20, live).
+
+The owner decided both on 2026-10-05: retire the classic page (13) and delete the screens nobody can reach (14).
+
+### What it changes
+
+- **The classic page is retired** (`02_`, `09_`–`16_`, `25_`).
+  - Every visitor gets the new interface. The `FF_NEW_UI` cookie and the `FF_NEW_UI` variable are no longer read. The variable can be deleted from the dashboard; leaving it does nothing.
+  - An old link with `?ff_new_ui=0` or `=1` is sent to the same address without it, and the old cookie is cleared.
+  - Deleted with it:
+    - the classic tab bar and bottom bar;
+    - the floating "Unsaved changes to install link" banner (it never showed on the new interface);
+    - Settings → Backup's "Import from Install / Configure Link" box. The new interface never offered it: an install id hands back connected accounts' tokens (SECURITY_AUDIT.md S-02).
+  - The page flag the browser code checked (`NEW_UI`) is gone, so there is one page to render, cache and test.
+- **`/api/bulk-resolve` stays.** The new interface still uses it: Settings → External Accounts & API Keys → **Import List** resolves titles through it. Only the classic page was expected to use it, and it was not the only one.
+- **Screens taken off the new interface are deleted** (`24_`, `22_`, `09_` CSS). Each had no place on the page any more:
+  - Discover's **Explore** section (its source and sort chips moved to Search → Lists, which stays);
+  - the Lists view's **Your lists** cards, with Share, Show on home screen, Save to an account and Export. The **Add titles** search in the list editor stays;
+  - the queue behind a signed-out "Save to an account" (`22_`). It could never be filled without the button. Creating an account still moves every browser-only list up;
+  - Settings' **Account** and **Connections** cards. Your Account and External Accounts & API Keys hold the same buttons. **Devices** and **Install link** stay;
+  - the install bar's drawing code. Its state stays: the Install link card reads it.
+- **Fixed: a page opened at a view's own address came up on Discover** (`16_` `switchTab` / `switchCatalogsSubmenu`, `24_` `initAppShell`). This is live today, found in a real browser while checking this release.
+  - Opening `/settings`, `/channels`, `/search` or `/catalogs` directly (a bookmark, a reload while on that view) showed Discover. At startup the classic page's tab code rewrote the address to `/` before the new interface's router read it.
+  - Those rewrites were classic-only and are deleted, so the router reads the address the page was opened at.
+  - Opening `/` reopens the view used last, as before. The address now names that view, not always `/discover`, and the view's own cards are drawn (Settings' Devices and Install link were missing).
+  - Real browser: every view's address opens that view; `/lists/<slug>` and `/#/item?...` share links still open the list or the title; Back returns to the previous view; no page errors.
+- About 1,800 lines of source removed; the Worker file is about 90 KB smaller.
+- A timing test that could fail when its run crossed a minute boundary (`/api/recommendations` limits) now sends twice the limit and some, like the other one fixed earlier.
+- `/admin` shows **Release 21**.
+
+### Checked
+
+- `tests/app-shell.test.mjs` is rewritten for one page:
+  - every combination of cookie and variable gets the new interface;
+  - none of the classic page's parts are left;
+  - an old `?ff_new_ui=` link is redirected and the cookie cleared, never off the site;
+  - the browser code reads no `NEW_UI`.
+- Tests for the deleted screens are deleted with them. That includes `app-shell-explore` and `app-shell-local-lists`, and the cases that checked a screen did nothing on the classic page.
+- The browser-side tests now load the one page. Two tests that counted every request a page makes now pass, because Explore no longer fetches lists at startup.
+- `verify.sh` renders and checks one page. Its separate "new UI shell page" step, and the CI step of the same name, are gone: that page is the one step 4 checks.
+- `tests/app-shell-client.test.mjs` adds two tests for the address fix. Both fail on Release 20 and pass on 21:
+  - nothing rewrites the address before the router reads it;
+  - `/` settles on the view used last, and draws it.
+- `bash verify.sh` and the `MLA_TEST_V2_LISTS_READ=1` run pass (counts in the commit).
+
+**Steps:**
+1. Deploy `release-21-NEW-worker.js`. Check that `/admin` says **Release 21**.
+2. Look around the site: Catalogs, Lists (make or edit a list, use Add titles), Search → Lists, Settings (Devices, Install link, External Accounts → Import List).
+3. Optional: delete the `FF_NEW_UI` variable. It does nothing now.
+
+**Rollback:** paste the 20 file. The classic page comes back for browsers that chose it, as before.
+

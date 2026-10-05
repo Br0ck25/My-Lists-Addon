@@ -53,7 +53,7 @@ function guessNameFromUrl(u) {
 async function detectListType(url, mdblistKey) {
   async function checkType(type) {
     try {
-      const res = await fetch(ORIGIN + '/api/preview', {
+      const res = await creatorApiFetch(ORIGIN + '/api/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(Object.assign({ url: url, type: type, mdblistKey: mdblistKey || '' }, previewCreatorAuth())),
@@ -1171,7 +1171,7 @@ async function fetchListPreviewOnce(listUrl, type, sample) {
   payload.simklKey = (skInput && skInput.value ? skInput.value.trim() : '') || readProviderSecret('myListAddon:simklKey') || '';
 
   try {
-    const res = await fetch(ORIGIN + '/api/preview', {
+    const res = await creatorApiFetch(ORIGIN + '/api/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -1640,7 +1640,7 @@ document.addEventListener('click', async (e) => {
 
     likeBtn.disabled = true;
     try {
-      const res = await fetch(ORIGIN + '/api/lists/like', {
+      const res = await creatorApiFetch(ORIGIN + '/api/lists/like', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // Likes need an account (checked above): one like per account,
@@ -1695,7 +1695,7 @@ document.addEventListener('click', async (e) => {
       }
       if (activeCreator) {
         const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-        fetch(ORIGIN + '/api/creator/sync/like', {
+        creatorApiFetch(ORIGIN + '/api/creator/sync/like', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, usernameSlug: usernameSlug, liked: !wasLiked }),
@@ -1725,7 +1725,7 @@ document.addEventListener('click', async (e) => {
 
     likeExternalBtn.disabled = true;
     try {
-      const res = await fetch(ORIGIN + '/api/lists/like-external', {
+      const res = await creatorApiFetch(ORIGIN + '/api/lists/like-external', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1785,7 +1785,7 @@ document.addEventListener('click', async (e) => {
       }
       if (activeCreator) {
         const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-        fetch(ORIGIN + '/api/creator/sync/like', {
+        creatorApiFetch(ORIGIN + '/api/creator/sync/like', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, usernameSlug: listUrl, liked: !wasLiked }),
@@ -4823,7 +4823,7 @@ const CATALOG_LIST_SEARCH_SOURCES = {
 };
 
 function catalogListSearchChipsOn() {
-  return !!document.getElementById('catalogListSearchChips') && typeof NEW_UI !== 'undefined' && !!NEW_UI;
+  return !!document.getElementById('catalogListSearchChips');
 }
 
 function catalogListSearchWants(sourceId) {

@@ -72,7 +72,7 @@ Adding a binding before the code that uses it is harmless. Removing a binding th
 
 - `NEW_ON_STREAMING_ENGINE` (optional; default `justwatch`).
 - `FF_SESSIONS` (optional): `1` turns on session sign-in for the `/api/creator/*` routes (P3a-6). **Leave unset** until the new sign-in screens ship.
-- `FF_NEW_UI` (optional): `1` makes the new interface the page for every browser that has not chosen (§20). Reversible.
+- `FF_NEW_UI`: **no longer read** (Release 21). The new interface is the only page; the variable can be deleted (§20).
 - `FF_INSTALLS` (optional): `1` turns on `/api/installs`, where a signed-in account creates, renames, rotates and removes `/i/{token}` install links (P3a-8). **Leave unset** until the screens for it ship. Links that already exist are served either way.
 - `FF_V2_LISTS_READ` (optional): `1` makes the site read lists and shared channels from the new tables: the dashboard, list pages, catalogs, the directory and search, shared channels and Explore Channels (P3b-6 to P3b-8). **Leave unset** until the copy (§9) has finished; §10 has the steps. Turning it off again is always safe, because every change is still written to the old storage.
 - `FF_V2_LISTS_API` (optional): `1` turns on `/api/lists`, the item-level list API, and `/api/likes`, the likes API, over the new list tables (P3b-4, P3b-5). **Leave unset.** What these APIs write goes to the new tables only. Until a later release stops writing the old storage (P3b-9), turning `FF_V2_LISTS_READ` off, or running the copy again, would lose it.
@@ -127,13 +127,14 @@ When it nears D1's size limit it can be split: create and bind `DB_ACTIVITY_1`, 
 - **Daily off-Cloudflare copy:** `.github/workflows/d1-backup.yml`, every day at 04:17 UTC, and on demand (Actions → *D1 backup* → *Run workflow*).
   - It reads every table of both databases with ordinary queries (`.github/scripts/d1-backup.mjs`) and writes SQL that recreates them, so the search tables are no obstacle and the site is never paused (an export blocks the database while it runs).
   - Each database's copy is compressed, encrypted and kept as an Actions artifact for 30 days.
+  - **Each kept file is checked before it is uploaded** (`.github/scripts/d1-backup-verify.mjs`, 2026-10-05). The check decrypts it with the passphrase, loads it into an empty database, and compares every table's row count with what was read from D1. A file that does not restore fails the run that day, with the reason.
   - It needs these repository secrets (GitHub → the repository → Settings → Secrets and variables → Actions):
     - `CLOUDFLARE_API_TOKEN`: an API token with *Account → D1 → Read* only;
     - `CLOUDFLARE_ACCOUNT_ID`;
     - `D1_DATABASE_ID`: `my-lists-db`'s id, shown on the database's overview page;
-    - `ACTIVITY_D1_DATABASE_ID`: `mylists-activity`'s id. Since `FF_EVENT_TRACKING`, Watch History lives only there. Optional for the job, not for you;
+    - `ACTIVITY_D1_DATABASE_ID`: `mylists-activity`'s id. Since `FF_EVENT_TRACKING`, Watch History lives only there;
     - `BACKUP_PASSPHRASE`: a long random string.
-  - Until the four required ones are set, the job skips itself with a warning.
+  - Until all five are set, the run **fails** (a red ✗, and GitHub emails the owner) and names the missing ones. It used to pass with only a warning, so from 2026-09-30 to 2026-10-04 every daily run showed a green tick while copying nothing.
   - Keep a copy of the passphrase outside GitHub. Without it no backup can be read.
   - The export is encrypted because this repository's Actions artifacts can be downloaded by other people, and the export holds every account's data.
   - The daily run uses the copy of the workflow on `main`. A run by hand can pick a branch (*Use workflow from*).
@@ -423,23 +424,13 @@ From Phase 5, background work (refreshing charts and show schedules, imports, cl
 
 ## 20. The new UI shell (P6-1)
 
-The frontend rebuild (Phase 6) is being built behind a **cookie**, not a Worker variable, so the owner can walk the new interface on their own device while everyone else keeps the page they know, and a rollback is one cookie rather than a deploy.
+**Since Release 21 the new interface is the only page.** The classic page, and the two switches that chose between them -- the `FF_NEW_UI` cookie (set by `?ff_new_ui=1` or `=0`) and the `FF_NEW_UI` Worker variable -- are retired. Nothing reads either one. The variable can be deleted from the dashboard at any time; leaving it does nothing.
 
-**What it changes:** with the cookie set, the six views have real addresses — `/catalogs`, `/catalogs/quickadd`, `/lists/liked`, `/channels/explore`, `/discover/movies`, `/search`, `/settings/account` and so on — the tabs are ordinary links (middle-click and open-in-a-new-tab work), every view keeps the same panels it has today, and an install bar above the tabs says whether this browser's install link is up to date. Settings → Account & Sync also gains four cards at the top -- account, devices, connections and install links -- which read and change things on the server (sign out, delete the account, sign devices out, connect a provider, revoke an install link).
+A link that still carries `?ff_new_ui=` (a bookmark, an old post) is sent to the same address without it, and the old cookie is cleared in the same answer (`appShellSwitchResponse`, `02_`).
 
-**What it needs on the server:** the screens that read or change *your account* -- Settings' four cards, and Imports below -- go through the session cookie (`/api/me`, `/api/imports`, ...), which is what `FF_SESSIONS=1` turns on. With it unset those screens say you are not signed in, and the import API answers 401; nothing else on the page is affected. Set it in the dashboard (Worker → Settings → Variables) before trying them, and remember that turning it off again signs every browser out.
+**What the page is:** the six views have real addresses -- `/catalogs`, `/catalogs/quickadd`, `/lists/liked`, `/channels/explore`, `/discover/movies`, `/search`, `/settings/account` and so on -- and the tabs are ordinary links (middle-click and open-in-a-new-tab work). Settings starts with two cards, Devices and Install link, which read and change things on the server (sign devices out, make or revoke an install link) over the session cookie (`FF_SESSIONS=1`).
 
-**Turning it on for yourself:** open
-
-```
-https://mylistsaddon.com/?ff_new_ui=1
-```
-
-You are bounced back to the page you asked for, without the parameter, and the cookie is set for a year. Do the same on your phone (or any browser) to try it there; the cookie is per browser.
-
-**Turning it off:** `https://mylistsaddon.com/?ff_new_ui=0` — same bounce, and the cookie now says "classic" (`FF_NEW_UI=0`) for a year rather than being cleared, so the choice holds when the new interface is everyone's default. Nothing is stored server-side either way, so no data is affected and nothing has to be undone.
-
-**For everyone at once:** Worker → Settings → Variables and Secrets → Add → type *Text*, name `FF_NEW_UI`, value `1` → Deploy. Every browser that has not chosen gets the new interface; one that chose keeps its choice (`?ff_new_ui=0` keeps the classic page). **To undo:** delete the variable and deploy. It is a choice of page only: no data moves, and both pages read and write the same account.
+**Taken out at the owner's request, and deleted in Release 21:** the install bar above the tabs, Discover's Explore section (its source and sort chips are on Search -> Lists), the Lists view's "Your lists" cards (the list dashboard has all of it) and Settings' Account and Connections cards (Your Account and External Accounts & API Keys have the same buttons).
 
 ## 21. What P6-8 changed for everyone
 
@@ -452,19 +443,10 @@ You are bounced back to the page you asked for, without the parameter, and the c
 
 ## 22. Lists that live in one browser (P6-9)
 
-**Nothing to configure.** Like P6-1 to P6-7 this screen is only reachable with the new-UI cookie (§20); no migration, no variable and no dashboard change. The old page is untouched, and the API call it makes (`POST /api/creator/lists/save`) is the one the sign-up migration has always used.
+**Deleted in Release 21.** P6-9 gave the Lists view's "Your lists" cards a **Save to an account** and an **Export** button for a list kept in this browser only. The cards were taken off the page at the owner's request, and Release 21 deleted them along with both buttons and the queue that carried a signed-out press through sign-in.
 
-**What changed:** Lists now shows the account's lists **and** the lists this browser keeps on its own (a list built while signed out lives in `myListAddon:localCustomLists` and stays there through a sign-in, because nothing migrates it at that moment). A list the account does not have is labelled **"Saved in this browser only"** and carries **Save to an account** and **Export** instead of Share.
+What remains: a list built while signed out still lives in this browser (`myListAddon:localCustomLists`), and **creating an account moves every one of them up** (`migrateLocalCustomListsToAccount`, `22_`). The whole-library backup (Settings → Backups) still exports them.
 
-- **How a list is known to be browser-only.** Every list the account owns is mirrored into the local map with a `creatorSlug`; an entry without one has never been sent to an account. That is a lookup, not a guess — which is why the view waits ("Loading your lists…") while signed in until the account's own list has arrived: the local map is a *cache* of the account's lists in that state, and rendering early would label an account's list as browser-only.
-- **Save to an account, signed in.** The list is posted as **private**, the row that pointed at the local copy is re-pointed at the account's, and the browser's copy is deleted *after* the account confirms it has the list. A failure leaves the browser's copy alone and says so.
-- **Save to an account, signed out.** Signing in runs `clearLocalAccountData()`, which empties this browser's list store, so the list is copied into a pending queue *before* the sign-in dialog opens and pushed the moment the sign-in completes (a new account pushes the queue after its one-time migration of everything else, so nothing is sent twice). Both outcomes are announced in a toast.
-- **Export** downloads that one list as the small JSON file Settings › Backups › Restore already reads (`version: "3.0"`, one entry in `customLists`), so it can be restored in any browser.
-- **Nothing merges by itself.** Signing in to an account that already has lists does not sweep the browser's lists into it; each one waits for its own button. That is deliberate: an automatic merge cannot tell a list the account already has from one it does not, and would duplicate it.
-- **Not offered for the generated shelves** (Watchlist, Watch History, Continue Watching, Airing Next): their content travels with the account's tracking record, and "saving" one would either duplicate it or invent a list.
-- **Nothing to undo** if the deploy is rolled back: the browser's store is the same store the old page uses, and a list moves only when someone presses the button.
-
-**If something looks wrong:** the console names the action that failed (`Action failed: <name>`), and a list that did not move is still in this browser — reload Lists and it is there.
 ## 23. What P6-10 changed for the admin dashboard
 
 **Nothing to configure.** The `/admin` page is the dashboard you use, not something visitors see: it is its own document, its own script and its own menu `/admin`, and none of it is behind a cookie, a variable or a migration. Deploying the new `worker_entry_combined.js` is the whole change.
@@ -582,29 +564,34 @@ Read replication is configured in Cloudflare's dashboard (no Worker environment 
 - **Immutable Caching & Service Worker:** Both bundles are served with content-addressed query strings (`?v=<hash>`), `Cache-Control: public, max-age=31536000, immutable`, and 304 revalidation support. The service worker (`sw.js`) caches both bundles as immutable assets for complete offline PWA reliability.
 - **CI Budget Enforcement:** `check_bundle_budget.mjs` runs on every pull request and push in GitHub Actions (`.github/workflows/ci.yml`) and local verification (`verify.sh`). The build automatically fails if `/app.js` exceeds 150 KB gzip.
 
-## 30. Analytics Engine Stat Counters & Zero D1 Writes (P8-2)
+## 30. Counters (D1) and Analytics Engine (P8-2, corrected 2026-10-04)
 
-### Cloudflare Dashboard Setup
+The admin dashboard's counters (page views, install links, playback pings), Most Watched, Most
+Added and the search log are written to the D1 `stats` table and read from it
+(docs/DECISIONS.md D-33). Analytics Engine (`ANALYTICS`, dataset `mylists_events`) keeps one data
+point per request for measuring (§ above) and is not read by the site.
 
-To stream telemetry and stat counters directly into Cloudflare Analytics Engine without writing to D1:
+### What went wrong, and the one-time repair
 
-1. In the **Cloudflare Dashboard**, navigate to **Workers & Pages**.
-2. Select your Worker (**wako** or **My Lists Addon**).
-3. Go to **Settings** → **Bindings** → **Add**.
-4. Choose **Analytics Engine** and enter:
-   - **Variable name**: `ANALYTICS`
-   - **Dataset**: `mylists_events`
-5. Click **Save and deploy**.
+P8-2 (live 2026-10-02) sent those counters to Analytics Engine **instead of** D1 whenever
+`ANALYTICS` was bound. Nothing reads Analytics Engine, so the dashboard showed zeros from that
+day and Most Watched stopped moving. Release 14 writes them to D1 again. The days in between are
+still in Analytics Engine (it keeps 90 days) and can be put back once:
 
-### How it works
+1. Cloudflare → My Profile → API Tokens → Create Token → Custom token: permission
+   **Account → Account Analytics → Read**, for this account. Copy the token.
+2. Worker **my-lists-addon** → Settings → Variables and Secrets:
+   - add the secret `CF_ANALYTICS_TOKEN` = the token;
+   - add the variable `CF_ANALYTICS_ACCOUNT_ID` = the account id (the 32 characters in the
+     dashboard address after `dash.cloudflare.com/`).
+   Deploy.
+3. `/admin` → Maintenance → **Counts missing since 2 October** → **Preview**. It lists what it
+   found, by kind, and writes nothing.
+4. **Put them back.** Each day's count is added to that day and to the running total, once:
+   a ledger row (`stats` kind `aerecovery:…`) records each one, so pressing it again adds nothing.
+5. The token is not needed after this; delete `CF_ANALYTICS_TOKEN` (and the token in My Profile).
 
-- **Zero D1 Writes on Page Views:** Telemetry calls (`bumpStat("pageviews")`, `bumpStatBy("apiuse:tmdb", ...)`, `recordSearchQuery`, and `recordTrackedEvent`) automatically write non-blocking datapoints to `env.ANALYTICS` whenever the binding is present. D1 database writes (`stats` table) are bypassed completely, removing write lock contention and row churn on user visits.
-- **Graceful Fallback:** If `ANALYTICS` is not yet bound, the Worker safely falls back to writing to D1 `stats` (or KV) so no telemetry data is dropped.
-- **Most Watched via `title_daily_stats`:** `computeLeaderboard` reads rankings directly from `title_daily_stats` (aggregated daily by `rollup.daily`) joined with `media`, avoiding expensive scans over the unbounded `stats` table.
-- **Backfill Tool:** Historical watch statistics can be backfilled into `title_daily_stats` via the authenticated admin endpoint `POST /admin/api/backfill-title-daily-stats`.
-- **Analytics Engine SQL API:** The admin dashboard can query Analytics Engine through `https://api.cloudflare.com/client/v4/accounts/{accountId}/analytics_engine/sql` if `CF_ANALYTICS_TOKEN` (or `CLOUDFLARE_API_TOKEN`) and `CLOUDFLARE_ACCOUNT_ID` are configured as Worker secrets.
-
-
-
-
+`CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` are accepted in place of the two names above.
+`CF_ANALYTICS_DATASET` is needed only if the binding uses a dataset other than `mylists_events`.
+Source groups (`sourcegroup:` counts) were never moved to Analytics Engine, so they are skipped.
 

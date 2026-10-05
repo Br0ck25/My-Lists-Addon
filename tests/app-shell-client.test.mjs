@@ -3,13 +3,12 @@ import assert from "node:assert/strict";
 import { loadClient, requestsTo } from "./client-harness.mjs";
 
 // The client half of the new UI shell (Phase 6, P6-1). These load the real
-// shell page -- the same bundle the legacy page gets, with `const NEW_UI =
-// true` in the preamble -- so what is tested is the code that ships, not a
-// copy of it.
+// page -- the only one since the classic page was retired (Release 21) -- so
+// what is tested is the code that ships, not a copy of it.
 //
-// Two things matter here that the server tests cannot see: the legacy switchers
+// Two things matter here that the server tests cannot see: the older switchers
 // still route through the shell (so a click anywhere in the old UI lands on a
-// real path), and they do not also rewrite the URL to "/" afterwards.
+// real path), and they never rewrite the URL to "/" themselves.
 
 const VIEWS = [
   { tab: "catalogs", path: "/catalogs", subs: ["all", "quickadd", "bulk"] },
@@ -42,7 +41,7 @@ function forgetBootNavigation(client) {
 
 describe("the new UI shell's routes", () => {
   it("reads a real path back into a view", () => {
-    const client = loadClient({ newUi: true });
+    const client = loadClient();
     assert.deepEqual(plain(client.call("appShellRouteFromPath", "/catalogs")), { tab: "catalogs", sub: "" });
     assert.deepEqual(plain(client.call("appShellRouteFromPath", "/catalogs/quickadd")), { tab: "catalogs", sub: "quickadd" });
     assert.deepEqual(plain(client.call("appShellRouteFromPath", "/settings/account/")), { tab: "settings", sub: "account" });
@@ -57,7 +56,7 @@ describe("the new UI shell's routes", () => {
   });
 
   it("builds the same paths back", () => {
-    const client = loadClient({ newUi: true });
+    const client = loadClient();
     for (const view of VIEWS) {
       assert.equal(client.call("appShellPathFor", view.tab, ""), view.path);
       for (const sub of view.subs) {
@@ -74,7 +73,7 @@ describe("the new UI shell's routes", () => {
   });
 
   it("routes the legacy aliases to the same view their own switcher would open", () => {
-    const client = loadClient({ newUi: true });
+    const client = loadClient();
     assert.deepEqual(plain(client.call("appShellRouteForName", "backup")), { tab: "settings", sub: "backup" });
     assert.deepEqual(plain(client.call("appShellRouteForName", "keys")), { tab: "settings", sub: "account" });
     assert.deepEqual(plain(client.call("appShellRouteForName", "quick-add")), { tab: "catalogs", sub: "quickadd" });
@@ -85,7 +84,7 @@ describe("the new UI shell's routes", () => {
   });
 
   it("settles the address bar on boot: / becomes the Discover path, an explicit path stays", () => {
-    const client = loadClient({ newUi: true });
+    const client = loadClient();
     // "/" is the whole site's home page, but every shell view has a real path,
     // so the home page becomes the Discover one. (The builder's own boot code
     // runs before the shell takes over and may write "/" once first; what
@@ -93,7 +92,7 @@ describe("the new UI shell's routes", () => {
     assert.equal(allPaths(client).pop(), "/discover");
     assert.deepEqual(plain(client.historyCalls[client.historyCalls.length - 1].args[0]), { appShell: true });
 
-    const deep = loadClient({ newUi: true });
+    const deep = loadClient();
     deep.location.pathname = "/settings/backup";
     forgetBootNavigation(deep);
     // Booting again at an explicit path must not rewrite it.
@@ -102,8 +101,38 @@ describe("the new UI shell's routes", () => {
     assert.equal(deep.localStorage.getItem("myListAddon:settingsSubmenu"), "backup");
   });
 
+  it("never rewrites the address before the shell has taken over (Release 21)", () => {
+    // At startup the page draws the view the address names before
+    // initAppShell runs. The classic page's switchers rewrote the address to
+    // "/" right then, so a page opened at /settings (a bookmark, a reload)
+    // came up on Discover once the router read "/".
+    const client = loadClient();
+    client.set("appShellActive", false);
+    forgetBootNavigation(client);
+    client.call("switchTab", "settings");
+    client.call("switchCatalogsSubmenu", "quickadd");
+    assert.deepEqual(allPaths(client), [], "nothing may touch the address before the router reads it");
+    assert.equal(client.localStorage.getItem("myListAddon:activeTab"), "settings", "the switcher still did its own work");
+  });
+
+  it("settles / on the view this browser used last, and draws that view (Release 21)", () => {
+    const client = loadClient();
+    client.set("window._originTab", "settings");
+    forgetBootNavigation(client);
+    client.call("initAppShell");
+    assert.deepEqual(allPaths(client), ["/settings"], "the address names the view that is open, not always Discover");
+    assert.deepEqual(plain(client.get("appShellState.get('route')")), { tab: "settings", sub: "" });
+
+    // A share link at "/" with a hash keeps its address.
+    const share = loadClient();
+    share.location.hash = "#/item?id=tt0137523&type=movie";
+    forgetBootNavigation(share);
+    share.call("initAppShell");
+    assert.deepEqual(allPaths(share), []);
+  });
+
   it("moves the address bar and the view together, and says which page is current", () => {
-    const client = loadClient({ newUi: true });
+    const client = loadClient();
     forgetBootNavigation(client);
     assert.equal(client.call("appShellGo", "/lists/liked"), true);
     assert.deepEqual(pushedPaths(client), ["/lists/liked"]);
@@ -115,7 +144,7 @@ describe("the new UI shell's routes", () => {
   });
 
   it("turns a legacy tab click into a path, once", () => {
-    const client = loadClient({ newUi: true });
+    const client = loadClient();
     forgetBootNavigation(client);
     client.call("switchTab", "settings");
     // One push, for the shell's route -- not the legacy replace that would
@@ -134,23 +163,11 @@ describe("the new UI shell's routes", () => {
     client.call("switchTab", "list-details");
     assert.equal(client.historyCalls.length, before, "list-details must not route through the shell");
   });
-
-  it("leaves the legacy page alone when the cookie is off", () => {
-    const client = loadClient();
-    assert.equal(client.get("NEW_UI"), false);
-    assert.equal(client.get("appShellActive"), false);
-    assert.equal(client.call("appShellHandleNav", "tab", "lists"), false);
-    client.call("switchTab", "lists");
-    // The legacy behaviour, unchanged: one replace to "/".
-    assert.equal(pushedPaths(client).length, 0);
-    assert.deepEqual(allPaths(client).pop(), "/");
-  });
 });
 
 describe("the shell's API client", () => {
   it("sends the session cookie, JSON, and no cache, and reads a JSON answer", async () => {
     const client = loadClient({
-      newUi: true,
       routes: {
         "/api/me": async () => ({ status: 200, json: { ok: true, account: { username: "alice", displayName: "Alice" } } }),
       },
@@ -166,7 +183,6 @@ describe("the shell's API client", () => {
 
   it("maps a failure to a sentence, keeping the status", async () => {
     const client = loadClient({
-      newUi: true,
       routes: {
         "/api/me": async () => ({ status: 401, json: { ok: false, error: "Authentication required." } }),
         "/api/save": async () => ({ status: 503, json: { ok: false, error: "Being updated." } }),
@@ -190,7 +206,7 @@ describe("the shell's API client", () => {
   });
 
   it("never throws when the network is gone", async () => {
-    const client = loadClient({ newUi: true });
+    const client = loadClient();
     const res = await client.call("appShellApiFetch", "/api/not-stubbed");
     assert.equal(res.ok, false);
     assert.equal(res.status, 0);
@@ -203,7 +219,6 @@ describe("the shell's API client", () => {
     // off had signing out answered with 403. Asserted here as well as through
     // the settings screen, because this is the one place that sets it.
     const client = loadClient({
-      newUi: true,
       routes: { "/api/session": async () => ({ status: 200, json: { ok: true } }) },
     });
     await client.call("appShellApiFetch", "/api/session", { method: "DELETE" });
@@ -215,7 +230,6 @@ describe("the shell's API client", () => {
 
   it("sends a JSON content type with a JSON body, and none for a GET", async () => {
     const client = loadClient({
-      newUi: true,
       routes: { "/api/lists": async () => ({ status: 200, json: { ok: true } }) },
     });
     await client.call("appShellApiFetch", "/api/lists", { method: "POST", body: { name: "Mine" } });
@@ -227,7 +241,7 @@ describe("the shell's API client", () => {
 
 describe("the shell's shared state", () => {
   it("notifies on a real change only", () => {
-    const client = loadClient({ newUi: true });
+    const client = loadClient();
     const seen = [];
     const unsubscribe = client.call("appShellState.subscribe", (s) => seen.push(s.route));
     client.call("appShellState.set", { route: { tab: "lists", sub: "" } });
@@ -242,7 +256,7 @@ describe("the shell's shared state", () => {
 
 describe("the shell's install bar", () => {
   it("knows nothing, current and stale apart", () => {
-    const client = loadClient({ newUi: true });
+    const client = loadClient();
     assert.deepEqual(plain(client.call("appShellInstallLinkState")), { state: "none", link: "" });
 
     client.call("appShellRecordInstallLink", "https://example.com/abc/manifest.json");
@@ -254,36 +268,11 @@ describe("the shell's install bar", () => {
     client.localStorage.setItem("myListAddon:installLink", JSON.stringify({ url: "https://example.com/abc/manifest.json", hash: "something-else" }));
     assert.equal(client.call("appShellInstallLinkState").state, "unsaved");
   });
-
-  it("renders its three states into the bar", () => {
-    const client = loadClient({ newUi: true });
-    const bar = client.__byId.get("appShellInstallBar");
-    client.call("appShellRefreshInstallBar");
-    assert.equal(bar.getAttribute("data-state"), "none");
-    assert.equal(client.__byId.get("appShellInstallText").textContent, "Not installed yet");
-    assert.equal(client.__byId.get("appShellInstallBtn").textContent, "Get install link");
-
-    client.call("appShellRecordInstallLink", "https://example.com/abc/manifest.json");
-    client.call("appShellRefreshInstallBar");
-    assert.equal(bar.getAttribute("data-state"), "live");
-    assert.equal(client.__byId.get("appShellInstallBtn").textContent, "Copy link");
-
-    client.localStorage.setItem("myListAddon:installLink", JSON.stringify({ url: "https://example.com/abc/manifest.json", hash: "old" }));
-    client.call("appShellRefreshInstallBar");
-    assert.equal(bar.getAttribute("data-state"), "unsaved");
-    assert.equal(client.__byId.get("appShellInstallBtn").textContent, "Update link");
-  });
-
-  it("does nothing at all on a legacy page", () => {
-    const client = loadClient();
-    client.call("appShellRefreshInstallBar");
-    assert.equal(client.get("appShellState.get('install')").state, "none");
-  });
 });
 
 describe("the shell's dialog", () => {
   it("resolves true on confirm and false when it is dismissed", async () => {
-    const client = loadClient({ newUi: true });
+    const client = loadClient();
     const confirmed = client.call("appShellDialog", { title: "Delete this list?", message: "It cannot be undone.", confirmLabel: "Delete", cancelLabel: "Keep" });
     client.__byId.get("appShellDialogConfirm").__fire("click");
     assert.equal(await confirmed, true);

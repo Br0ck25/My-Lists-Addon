@@ -1,6 +1,26 @@
+# ============================================================================
+# READ BEFORE RUNNING `wrangler deploy` (without --env staging)
+# ============================================================================
+# The live site (Worker "my-lists-addon") is deployed by pasting
+# worker_entry_combined.js into the Cloudflare dashboard, and its variables,
+# secrets and bindings are set there. This file names that same Worker with its
+# real KV and D1 ids, so a plain `wrangler deploy` from here would deploy over
+# it and make its settings match THIS file:
+#   - every dashboard variable would be replaced by the [vars] below (none),
+#     taking away the one-way flags FF_V2_LISTS_ONLY and FF_EVENT_TRACKING,
+#     which must never be removed (docs/OPERATIONS.md sections 11 and 13).
+#     keep_vars below stops that, but only for variables;
+#   - bindings would be exactly the ones listed here.
+# DB_ACTIVITY below carries a placeholder id on purpose: a deploy fails until
+# the real id of mylists-activity is filled in (Dashboard -> D1 ->
+# mylists-activity -> Database ID). That is the point -- do not comment it out
+# to get past the error. Keep deploying by pasting unless you mean to move.
 name = "my-lists-addon"
 main = "worker_entry_combined.js"
 compatibility_date = "2024-01-01"
+# Variables set in the dashboard survive a `wrangler deploy` (they would
+# otherwise be replaced by [vars]).
+keep_vars = true
 
 # --- KV (REQUIRED) -----------------------------------------------------------
 # Every stateful feature depends on this binding: Creator Profiles, cloud
@@ -32,16 +52,19 @@ binding = "DB"
 database_name = "my-lists-db"
 database_id = "24751b3f-e4c7-4df6-bbdf-51a3f2ba02c3"
 
-# --- Activity database (Phase 3c, not needed yet) ------------------------------
-# Watch history and progress, in their own database (36_activity-db.js).
-# Create it with:  npx wrangler d1 create mylists-activity
-# then run migrations/activity/A0001_activity.sql (or schema_activity.sql) in
-# ITS console, not the main one. Nothing uses it until later 3c tasks land.
+# --- Activity database (REQUIRED: live since FF_EVENT_TRACKING) ---------------
+# Watch history and progress, in their own database (36_activity-db.js). With
+# FF_EVENT_TRACKING on, accounts' history lives ONLY here, so a deploy without
+# this binding shows them empty. The id below is a placeholder that makes a
+# deploy fail until it is replaced (see the note at the top of this file).
+# A new database: npx wrangler d1 create mylists-activity, then run
+# migrations/activity/A0001_activity.sql (or schema_activity.sql) in ITS
+# console, not the main one.
 # Later, to split it: bind DB_ACTIVITY_1 ... and set ACTIVITY_SHARD_COUNT.
-# [[d1_databases]]
-# binding = "DB_ACTIVITY"
-# database_name = "mylists-activity"
-# database_id = "YOUR_ACTIVITY_DATABASE_ID"
+[[d1_databases]]
+binding = "DB_ACTIVITY"
+database_name = "mylists-activity"
+database_id = "FILL-IN-THE-MYLISTS-ACTIVITY-DATABASE-ID"
 
 # --- Analytics Engine (recommended) ------------------------------------------
 # One data point per request: route, status, duration, and the KV and D1
@@ -158,16 +181,24 @@ dead_letter_queue = "mylists-jobs-dlq"
 # CF_ACCESS_AUD = "0000000000000000000000000000000000000000000000000000000000000000"
 # FF_ADMIN_EMAILS = "you@example.com"
 # Optional, Phase 7 (P7-6): disallows legacy creator=&key= and config= forms on
-# scrobble webhooks, requiring the scoped scrobble token (?st=).
+# scrobble webhooks, requiring the scoped scrobble token (?st=). Turning it on
+# stops every media server still using an old webhook address, with no message
+# to its owner -- leave it off until the sunset (docs/RELEASES.md Release 14).
 # FF_SCROBBLE_ST_ONLY = "1"
 # Optional, Phase 7 (P7-6): date string (e.g. "2026-06-01") after which legacy
 # scrobble forms are automatically sunsetted even if FF_SCROBBLE_ST_ONLY is not set.
 # SCROBBLE_SUNSET_DATE = "2026-06-01"
-# Optional, Phase 10 (P10-2): date string (e.g. "2026-10-02") starting 60-day sunset notices
+# Optional, Phase 10 (P10-2): date string (e.g. "2026-10-02") starting 60-day
+# sunset notices. Leave unset: the site's own page still uses several of the
+# routes the notices say are going (docs/CUTOVER.md P10-2).
 # SUNSET_60DAY_START_DATE = "2026-10-02"
-# Optional, Phase 8 (P8-2): Cloudflare Account ID for Analytics Engine SQL API queries in /admin
+# Optional: the Cloudflare account id, for /admin -> "Counts missing since
+# 2 October", which reads Analytics Engine through its SQL API (with the
+# CF_ANALYTICS_TOKEN secret below). CF_ANALYTICS_DATASET only if the
+# ANALYTICS binding uses a dataset other than mylists_events.
 # CF_ANALYTICS_ACCOUNT_ID = "00000000000000000000000000000000"
 # CLOUDFLARE_ACCOUNT_ID = "00000000000000000000000000000000"
+# CF_ANALYTICS_DATASET = "mylists_events"
 
 # --- Cron trigger (REQUIRED for Continue Watching) ---------------------------
 # Drives the scheduled() export at the bottom of
@@ -221,7 +252,8 @@ crons = ["*/6 * * * *"]
 #   npx wrangler secret put TOKEN_ENCRYPTION_KEY    # k1:<32-bytes-base64> for AES-GCM token storage
 #   npx wrangler secret put LOOKUP_PEPPER           # Pepper for HMAC blind index lookups
 #
-# Phase 8 (P8-2) Analytics Engine SQL API querying token:
+# Analytics Engine SQL API token, for the one-time "Counts missing since
+# 2 October" tool in /admin (can be deleted once that has been run):
 #   npx wrangler secret put CF_ANALYTICS_TOKEN      # API token with Account Analytics: Read
 #   npx wrangler secret put CLOUDFLARE_API_TOKEN    # optional alias for CF_ANALYTICS_TOKEN
 

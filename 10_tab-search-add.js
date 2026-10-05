@@ -31,19 +31,9 @@
     <!-- Reorderable Catalog Shelves -->
     <div id="lists"></div>
 
-    <!-- Duplicate rows toggle right above the Daily Randomizer -->
-${newUi ? '    <div id="appShellHomeEditor"></div>' : ('    <div style="margin-top:16px; padding:12px 16px; background:var(--surface); border-radius:12px; border:1px solid var(--border);">' +
-      '<div class="settings-toggle-row" style="padding:0;">' +
-        '<div style="flex:1; min-width:0; padding-right:12px;">' +
-          '<span style="font-weight:600; font-size:0.88rem; color:var(--text);">Hide titles already shown in rows above</span>' +
-          '<p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">The top row keeps everything; lower rows drop titles already shown above.</p>' +
-        '</div>' +
-        '<label class="ui-toggle" aria-label="Hide titles already shown in rows above">' +
-          '<input type="checkbox" id="catalogsDedupeCheckbox"' + (initialDedupeAcrossLists ? ' checked' : '') + ' data-act="appActStoreSettingChecked" data-act-args="[&quot;myListAddon:dedupeAcrossLists&quot;,&quot;@checked&quot;]">' +
-          '<span class="ui-toggle-slider"></span>' +
-        '</label>' +
-      '</div>' +
-    '</div>')}
+    <!-- The shell's "Hide titles already shown in rows above" toggle (P6-3),
+         right above the Daily Randomizer. -->
+    <div id="appShellHomeEditor"></div>
 
     <!-- 24-Hour Randomizer Controls -->
     <div style="margin-top:16px; padding:12px 16px; background:var(--surface); border-radius:12px; border:1px solid var(--border);">

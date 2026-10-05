@@ -22,12 +22,103 @@
 -->
 <script nonce="${CSP_NONCE_PLACEHOLDER}">
 const ORIGIN = (typeof location !== 'undefined' && location.origin) ? location.origin : ${jsonForScript(origin)};
+
+// --- Requests signed by the session, not the Account Key (Release 19) ---------
+//
+// Since sign-in sessions (FF_SESSIONS), a request that carries the Account Key
+// to an /api/creator/ route also gives this browser a 30-day session cookie,
+// and the routes that read and save the account's data accept that session in
+// place of the key. The server says on every /api/creator/ answer whose
+// session this browser holds (the X-MLA-Session header: the page cannot read
+// the HttpOnly cookie). Once it has said so for the account, those requests
+// go without the key: it no longer travels with every autosave and list edit.
+// When the session is gone (expired, or signed out elsewhere) the server
+// answers 401, and the request is sent once more exactly as before, key
+// included, which also starts a new session -- nobody is signed out by this.
+// Until a session is known (a fresh browser, a server without sessions),
+// nothing changes. Signing in, creating an account, recovery, key resets and
+// deleting always send the key: there the key is what is being checked. (A key
+// reset ends every session of the account, so a browser left with the old key
+// is signed out by the retry, as before.)
+const CREATOR_SESSION_ROUTES = [
+  '/api/creator/sync/',
+  '/api/creator/lists',
+  '/api/creator/track-status',
+  '/api/creator/scrobble-token',
+  '/api/creator/scrobble-seen-users',
+  // Release 20: the sign-in check every page load makes, previews and install
+  // links with personal rows, feedback, likes, and unpublishing a channel.
+  '/api/creator/restore',
+  '/api/preview',
+  '/api/save',
+  '/api/feedback',
+  '/api/lists/like',
+  '/api/channel/like',
+  '/api/channel/unpublish',
+];
+const CREATOR_SESSION_SEEN_KEY = 'myListAddon:sessionFor';
+
+function creatorRouteUsesSession(url) {
+  let path = '';
+  try {
+    path = new URL(String(url), ORIGIN).pathname;
+  } catch (e) {
+    return false;
+  }
+  return CREATOR_SESSION_ROUTES.some(function (p) { return path.indexOf(p) === 0; });
+}
+
+function creatorSessionHeldFor() {
+  try {
+    return localStorage.getItem(CREATOR_SESSION_SEEN_KEY) || '';
+  } catch (e) {
+    return '';
+  }
+}
+
+function noteCreatorSession(res) {
+  const who = res && res.headers && typeof res.headers.get === 'function' ? res.headers.get('X-MLA-Session') : null;
+  if (!who) return;
+  try {
+    localStorage.setItem(CREATOR_SESSION_SEEN_KEY, String(who).toLowerCase());
+  } catch (e) {}
+}
+
+function forgetCreatorSession() {
+  try {
+    localStorage.removeItem(CREATOR_SESSION_SEEN_KEY);
+  } catch (e) {}
+}
+
+async function creatorApiFetch(url, init) {
+  const opts = init || {};
+  let body = null;
+  if (typeof opts.body === 'string' && creatorRouteUsesSession(url)) {
+    try {
+      body = JSON.parse(opts.body);
+    } catch (e) {
+      body = null;
+    }
+  }
+  const name = body && typeof body === 'object' && !Array.isArray(body) && body.creatorName ? String(body.creatorName).toLowerCase() : '';
+  if (!name || !body.creatorKey || creatorSessionHeldFor() !== name) {
+    const res = await fetch(url, init);
+    noteCreatorSession(res);
+    return res;
+  }
+  const withoutKey = Object.assign({}, body);
+  delete withoutKey.creatorKey;
+  const res = await fetch(url, Object.assign({}, opts, { body: JSON.stringify(withoutKey), credentials: 'same-origin' }));
+  if (res.status !== 401) {
+    noteCreatorSession(res);
+    return res;
+  }
+  forgetCreatorSession();
+  const again = await fetch(url, init);
+  noteCreatorSession(again);
+  return again;
+}
 const IS_CONFIGURE = ${isConfigureMode};
-// Whether this page was served as the new UI shell (Phase 6, P6-1). It is a
-// cookie, so it differs per browser rather than per deploy -- everything that
-// depends on it lives in the bundle and reads this flag, because the bundle
-// itself is one shared, content-hashed file (splitAppBundle, 02_).
-const NEW_UI = ${newUi ? "true" : "false"};
 // Populated by the /lists/<slug> route (25_api-catalog-routes.js) when this
 // exact page load resolved a known chart slug -- e.g. loading
 // /lists/TMDB-Trending directly (a bookmark, a shared link, a refresh)
@@ -1063,11 +1154,6 @@ function navigateBackFromDetail() {
   } else {
     const targetTab = window._originTab || window._previousTab || localStorage.getItem('myListAddon:activeTab') || 'discover';
     const cleanTab = (targetTab === 'list-details' || targetTab === 'item-details') ? 'discover' : targetTab;
-    if (!appShellActive && (location.pathname.startsWith('/lists/') || location.pathname.startsWith('/channels/'))) {
-      try {
-        history.replaceState({ view: 'tab', tab: cleanTab }, '', '/');
-      } catch (e) {}
-    }
     switchTab(cleanTab);
     if (cleanTab === 'catalogs') {
       const targetSubmenu = window._previousCatalogsSubmenu || localStorage.getItem('myListAddon:catalogsSubmenu') || 'all';
@@ -1092,11 +1178,10 @@ function navigateBackFromDetail() {
 // Global state variables
 var suppressSave = false;
 // True once initAppShell (24_client-backup-restore-presets.js) has taken over
-// navigation on a shell page. While it is true the shell's router owns the
-// address bar: the legacy tab and sub-tab switchers still do all their DOM
-// work, but they route through the shell (appShellHandleNav) and skip their own
-// history writes, which all point at "/". Declared here because 16_ is the
-// first file whose functions read it.
+// navigation. From then on the tab and sub-tab switchers still do all their
+// DOM work, but route through the shell (appShellHandleNav). Before it, at
+// startup, they only draw: the address bar is the shell router's alone.
+// Declared here because 16_ is the first file whose functions read it.
 var appShellActive = false;
 var activeCreator = (function() {
   try {
@@ -1269,20 +1354,11 @@ function switchTab(name) {
     try {
       localStorage.setItem('myListAddon:activeTab', name);
     } catch (e) {}
-    // On a shell page the router wrote the URL (a real path per view) before
-    // calling this, so rewriting it to "/" here would undo that.
-    const isAppShell = appShellActive || (typeof document !== 'undefined' && document.documentElement && document.documentElement.getAttribute('data-app-shell') === '1');
-    if (!isAppShell) {
-      const hash = location.hash || '';
-      const isDetailUrl = hash.startsWith('#/item?') || hash.startsWith('#/list?') || (location.pathname.startsWith('/lists/') && location.pathname !== '/lists');
-      try {
-        if (isDetailUrl) {
-          history.pushState({ view: 'tab', tab: name, fromCatalogsSubmenu: window._currentCatalogsSubmenu }, '', '/');
-        } else {
-          history.replaceState({ view: 'tab', tab: name, fromCatalogsSubmenu: window._currentCatalogsSubmenu }, '', '/');
-        }
-      } catch (e) {}
-    }
+    // The address bar belongs to the shell's router (a real path per view).
+    // The classic page rewrote it to "/" here; that went with the classic page
+    // in Release 21. It also ran at startup, before the router had read the
+    // path, so a page opened at /settings (a bookmark, a reload) came up on
+    // Discover.
   }
 
   if (name === 'catalogs') {
@@ -2726,7 +2802,7 @@ async function loadUserFeedbackThreads() {
   const creatorKey = creatorName ? (localStorage.getItem('myListAddon:creatorKey') || '') : '';
 
   try {
-    const res = await fetch(ORIGIN + '/api/feedback/threads', {
+    const res = await creatorApiFetch(ORIGIN + '/api/feedback/threads', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2866,7 +2942,7 @@ async function sendUserFeedbackReply() {
   const creatorAuth = feedbackCreatorAuth();
 
   try {
-    const res = await fetch(ORIGIN + '/api/feedback', {
+    const res = await creatorApiFetch(ORIGIN + '/api/feedback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2909,7 +2985,7 @@ async function submitFeedback() {
   if (btn) btn.disabled = true;
   if (statusEl) { statusEl.textContent = 'Sending\u2026'; statusEl.style.color = 'var(--muted)'; }
   try {
-    const res = await fetch(ORIGIN + '/api/feedback', {
+    const res = await creatorApiFetch(ORIGIN + '/api/feedback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -3225,13 +3301,7 @@ function switchCatalogsSubmenu(filter, btn) {
   try {
     localStorage.setItem('myListAddon:catalogsSubmenu', filter || 'all');
   } catch (e) {}
-  const hash = location.hash || '';
-  const isDetailUrl = hash.startsWith('#/item?') || hash.startsWith('#/list?') || (location.pathname.startsWith('/lists/') && location.pathname !== '/lists');
-  if (!isDetailUrl && !appShellActive) {
-    try {
-      history.replaceState({ view: 'tab', tab: 'catalogs', fromCatalogsSubmenu: filter || 'all' }, '', '/');
-    } catch (e) {}
-  }
+  // No address-bar write here: the shell's router owns it (see switchTab).
   if (!btn) {
     const selector = filter === 'quickadd' ? '#catalogsFilterBar button:nth-child(2)' : (filter === 'bulk' ? '#catalogsFilterBar button:nth-child(3)' : '#catalogsFilterBar button:nth-child(1)');
     btn = document.querySelector(selector);

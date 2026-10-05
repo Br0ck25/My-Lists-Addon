@@ -715,7 +715,7 @@ function saveCustomList() {
     const visibility = getCustomListDraftVisibility();
     if (activeCreator) {
       const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-      fetch(ORIGIN + '/api/creator/lists/save', {
+      creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -872,7 +872,7 @@ async function saveCreatorListEdit(name) {
       if (cached.baseItemIds) body.baseItemIds = cached.baseItemIds;
     }
     if (baseline !== null) body.expectedUpdatedAt = baseline;
-    const res = await fetch(ORIGIN + '/api/creator/lists/save', {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
