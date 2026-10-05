@@ -127,6 +127,7 @@ When it nears D1's size limit it can be split: create and bind `DB_ACTIVITY_1`, 
 - **Daily off-Cloudflare copy:** `.github/workflows/d1-backup.yml`, every day at 04:17 UTC, and on demand (Actions → *D1 backup* → *Run workflow*).
   - It reads every table of both databases with ordinary queries (`.github/scripts/d1-backup.mjs`) and writes SQL that recreates them, so the search tables are no obstacle and the site is never paused (an export blocks the database while it runs).
   - Each database's copy is compressed, encrypted and kept as an Actions artifact for 30 days.
+  - **Each kept file is checked before it is uploaded** (`.github/scripts/d1-backup-verify.mjs`, 2026-10-05). The check decrypts it with the passphrase, loads it into an empty database, and compares every table's row count with what was read from D1. A file that does not restore fails the run that day, with the reason.
   - It needs these repository secrets (GitHub → the repository → Settings → Secrets and variables → Actions):
     - `CLOUDFLARE_API_TOKEN`: an API token with *Account → D1 → Read* only;
     - `CLOUDFLARE_ACCOUNT_ID`;

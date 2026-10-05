@@ -77,6 +77,13 @@ jobs:
               --symmetric --cipher-algo AES256 "backup/${name}-${stamp}.sql.gz"
             # Only the encrypted file leaves this runner.
             rm -f "backup/${name}-${stamp}.sql.gz"
+            # Prove the kept file opens: decrypt it with the passphrase, load
+            # it into an empty database, and compare every table's row count.
+            mkdir -p check
+            gpg --batch --yes --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" \
+              --decrypt "backup/${name}-${stamp}.sql.gz.gpg" | gunzip > "check/${name}.sql"
+            node .github/scripts/d1-backup-verify.mjs "check/${name}.sql" "backup/${name}-${stamp}.sql.counts.json"
+            rm -f "check/${name}.sql" "backup/${name}-${stamp}.sql.counts.json"
           }
           dump my-lists-db "$D1_DATABASE_ID"
           dump mylists-activity "$ACTIVITY_D1_DATABASE_ID"

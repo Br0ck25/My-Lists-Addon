@@ -246,6 +246,8 @@ async function main() {
     const total = Object.values(counts).reduce((a, b) => a + b, 0);
     console.log(`Read ${Object.keys(counts).length} tables, ${total} rows.`);
     for (const [name, n] of Object.entries(counts)) console.log(`  ${name}: ${n}`);
+    // What d1-backup-verify.mjs checks the restored copy against.
+    fs.writeFileSync(`${output}.counts.json`, JSON.stringify(counts));
   } finally {
     fs.closeSync(fd);
   }
