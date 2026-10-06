@@ -26,14 +26,14 @@
 // Shown at the top of /admin and in the answer of the "Counts missing" tool,
 // so the owner can see which pasted file is live (docs/RELEASES.md). Change it
 // with every release.
-const WORKER_RELEASE = "22";
+const WORKER_RELEASE = "23";
 
 // A fingerprint of the exact sources this file was built from. build.py fills
 // in the placeholder below with the first 10 characters of the SHA-256 of
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "e9e1445b49";
+const WORKER_BUILD = "8032d9932e";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -37321,6 +37321,11 @@ const IS_CONFIGURE = ${isConfigureMode};
 // checks this before falling back to the older #/list?... hash format for
 // anything that isn't one of these known charts.
 const SERVER_DEEP_LINK_LIST = ${jsonForScript(deepLinkList)};
+// The site's Trakt app id. Public (it is in every trakt.tv sign-in address the
+// site sends people to); the page asks Trakt for a connect code with it
+// straight from the browser (requestTraktDeviceCode, 17_). It is the Worker's
+// variable, so it lives here and not in the shared bundle.
+const TRAKT_PUBLIC_CLIENT_ID = ${jsonForScript(TRAKT_CLIENT_ID)};
 // The signed-in person's OAuth tokens. These are the reason the preamble
 // exists at all: they are specific to one page load and must never end up
 // in the shared bundle below, which is cached publicly under a URL that is
@@ -42341,6 +42346,37 @@ function closeTraktDeviceModal() {
   if (modal) modal.style.display = 'none';
 }
 
+// The connect code, asked for from this browser first. Trakt answers the
+// code request without any secret, and from a page as well (it allows other
+// sites to call it), so the request goes out from the visitor's own
+// connection. Asked through the Worker it shares the site's one address with
+// every catalog the site loads from Trakt, and Trakt limits that address: the
+// "Trakt is busy (rate limit)" that stopped Connect with PIN on 2026-10-06.
+// The Worker route stays as the fallback (a browser that cannot reach Trakt,
+// or a page without the app id). Returns { status, data } like the route.
+async function requestTraktDeviceCode(traktKey) {
+  const clientId = traktKey || (typeof TRAKT_PUBLIC_CLIENT_ID === 'string' ? TRAKT_PUBLIC_CLIENT_ID : '');
+  if (clientId) {
+    try {
+      const direct = await fetch('https://api.trakt.tv/oauth/device/code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'trakt-api-version': '2', 'trakt-api-key': clientId },
+        body: JSON.stringify({ client_id: clientId }),
+      });
+      if (direct.ok) {
+        const data = await direct.json();
+        if (data && data.user_code && data.device_code) return { status: 200, data: Object.assign({ ok: true }, data) };
+      }
+    } catch (e) {}
+  }
+  const res = await fetch(ORIGIN + '/api/trakt/device/code', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ traktKey: traktKey }),
+  });
+  return { status: res.status, data: await res.json() };
+}
+
 async function startTraktDeviceLogin(retried) {
   if (!requireSignedInFor('connect your Trakt account')) return; // docs/DECISIONS.md D-8
   const modal = document.getElementById('traktDeviceModal');
@@ -42354,17 +42390,14 @@ async function startTraktDeviceLogin(retried) {
   if (statusEl) statusEl.innerText = 'Requesting activation code from Trakt...';
 
   try {
-    const res = await fetch(ORIGIN + '/api/trakt/device/code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ traktKey: traktKey }),
-    });
-    const data = await res.json();
+    const got = await requestTraktDeviceCode(traktKey);
+    const data = got.data || {};
     // Trakt rate-limits the code request now and then. The server hands the
-    // 429 straight back rather than sleeping inside the request; wait out its
-    // Retry-After once here and ask again.
-    if (res.status === 429 && !retried) {
-      const waitSec = Math.min(30, Math.max(1, Number(data.retryAfter) || 2));
+    // 429 straight back rather than sleeping inside the request; wait out a
+    // short Retry-After once here and ask again. A long one is said as it is
+    // (the server's message names the wait) rather than retried too early.
+    if (got.status === 429 && !retried && (Number(data.retryAfter) || 2) <= 30) {
+      const waitSec = Math.max(1, Number(data.retryAfter) || 2);
       if (statusEl) statusEl.innerText = 'Trakt is busy. Trying again in ' + waitSec + ' seconds...';
       setTimeout(() => { startTraktDeviceLogin(true); }, waitSec * 1000);
       return;
@@ -42432,7 +42465,10 @@ async function startTraktDeviceLogin(retried) {
         } else if (pollData.pending) {
           // Still waiting for user confirmation
         } else if (pollData.slowDown) {
-          // Slow down polling
+          // Trakt is limiting the Worker's checks. The code stays good for
+          // its ten minutes and the next check may get through, so keep
+          // going, but say why an approval has not shown up yet.
+          if (statusEl) statusEl.innerText = 'Trakt is answering slowly. If you have entered the code, this can take a minute or two to finish.';
         } else if (pollData.error && !pollData.pending) {
           clearInterval(_traktDevicePollTimer);
           _traktDevicePollTimer = null;
@@ -85169,6 +85205,22 @@ self.addEventListener('fetch', (e) => {
 });
 `.trim();
 
+// What Trakt said when it refused a request with 429, in a few words for the
+// person and for a screenshot: Cloudflare's own block (error 1015, on Trakt's
+// side, aimed at the address the request came from), or Trakt's limit by name
+// (its X-Ratelimit header), and how long it asked to wait.
+function traktLimitNote(res, text, retrySec) {
+  const parts = [];
+  if (/\b1015\b/.test(String(text || ""))) parts.push("Cloudflare 1015");
+  try {
+    const rl = JSON.parse((res && res.headers && res.headers.get("X-Ratelimit")) || "null");
+    if (rl && rl.name) parts.push(String(rl.name).slice(0, 60));
+  } catch {}
+  const wait = Number(retrySec) || 0;
+  parts.push(wait >= 120 ? `wait about ${Math.round(wait / 60)} minutes` : `wait ${wait || 2} seconds`);
+  return parts.join(", ");
+}
+
 async function handleFetch(request, env, ctx) {
     // Point the env-backed API key globals (00_constants.js) at whatever
     // this Worker owner configured, before anything can read them. A feature
@@ -88761,7 +88813,11 @@ function generateSearchVariations(query) {
         if (!tokenRes || !tokenRes.ok) {
           let detail = tokenRes ? `HTTP ${tokenRes.status}` : "Network failed";
           try {
-            if (tokenRes) {
+            if (tokenRes && tokenRes.status === 429) {
+              // A rate limit: say which one, not a page of Cloudflare HTML.
+              const retrySec = parseInt(tokenRes.headers.get("Retry-After") || "0", 10) || 0;
+              detail = `HTTP 429: ${traktLimitNote(tokenRes, await tokenRes.text().catch(() => ""), retrySec)}`;
+            } else if (tokenRes) {
               const text = await tokenRes.text();
               try {
                 const errBody = JSON.parse(text);
@@ -88829,7 +88885,9 @@ function generateSearchVariations(query) {
       }
     }
 
-    // /api/trakt/device/code -> starts Trakt device activation flow (bypasses browser redirects & 1015)
+    // /api/trakt/device/code -> starts Trakt device activation flow (bypasses browser redirects & 1015).
+    // The page asks Trakt itself first (requestTraktDeviceCode, 17_); this is
+    // the fallback.
     if (path === "/api/trakt/device/code" && request.method === "POST") {
       let body = {};
       try { body = await request.json(); } catch {}
@@ -88849,13 +88907,15 @@ function generateSearchVariations(query) {
         });
 
         // Rate limited: hand Trakt's wait straight back instead of sleeping
-        // inside the request. The page waits it out and asks once more (see
-        // startTraktDeviceLogin, 17_client-my-lists-and-trakt-oauth.js).
+        // inside the request. The page waits out a short one and asks once
+        // more (see startTraktDeviceLogin, 17_client-my-lists-and-trakt-oauth.js);
+        // a long one is said, with what Trakt said (traktLimitNote).
         if (res.status === 429) {
-          const retrySec = Math.min(30, Math.max(1, parseInt(res.headers.get("Retry-After") || "2", 10) || 2));
+          const retrySec = Math.min(3600, Math.max(1, parseInt(res.headers.get("Retry-After") || "2", 10) || 2));
+          const note = traktLimitNote(res, await res.text().catch(() => ""), retrySec);
           return json({
             ok: false,
-            error: "Trakt is busy (rate limit). Please wait a few seconds and try again.",
+            error: `Trakt is limiting requests from this site right now (${note}). Please try again later.`,
             retryAfter: retrySec,
           }, 429, { "Retry-After": String(retrySec) });
         }

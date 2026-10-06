@@ -891,6 +891,37 @@ function closeTraktDeviceModal() {
   if (modal) modal.style.display = 'none';
 }
 
+// The connect code, asked for from this browser first. Trakt answers the
+// code request without any secret, and from a page as well (it allows other
+// sites to call it), so the request goes out from the visitor's own
+// connection. Asked through the Worker it shares the site's one address with
+// every catalog the site loads from Trakt, and Trakt limits that address: the
+// "Trakt is busy (rate limit)" that stopped Connect with PIN on 2026-10-06.
+// The Worker route stays as the fallback (a browser that cannot reach Trakt,
+// or a page without the app id). Returns { status, data } like the route.
+async function requestTraktDeviceCode(traktKey) {
+  const clientId = traktKey || (typeof TRAKT_PUBLIC_CLIENT_ID === 'string' ? TRAKT_PUBLIC_CLIENT_ID : '');
+  if (clientId) {
+    try {
+      const direct = await fetch('https://api.trakt.tv/oauth/device/code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'trakt-api-version': '2', 'trakt-api-key': clientId },
+        body: JSON.stringify({ client_id: clientId }),
+      });
+      if (direct.ok) {
+        const data = await direct.json();
+        if (data && data.user_code && data.device_code) return { status: 200, data: Object.assign({ ok: true }, data) };
+      }
+    } catch (e) {}
+  }
+  const res = await fetch(ORIGIN + '/api/trakt/device/code', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ traktKey: traktKey }),
+  });
+  return { status: res.status, data: await res.json() };
+}
+
 async function startTraktDeviceLogin(retried) {
   if (!requireSignedInFor('connect your Trakt account')) return; // docs/DECISIONS.md D-8
   const modal = document.getElementById('traktDeviceModal');
@@ -904,17 +935,14 @@ async function startTraktDeviceLogin(retried) {
   if (statusEl) statusEl.innerText = 'Requesting activation code from Trakt...';
 
   try {
-    const res = await fetch(ORIGIN + '/api/trakt/device/code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ traktKey: traktKey }),
-    });
-    const data = await res.json();
+    const got = await requestTraktDeviceCode(traktKey);
+    const data = got.data || {};
     // Trakt rate-limits the code request now and then. The server hands the
-    // 429 straight back rather than sleeping inside the request; wait out its
-    // Retry-After once here and ask again.
-    if (res.status === 429 && !retried) {
-      const waitSec = Math.min(30, Math.max(1, Number(data.retryAfter) || 2));
+    // 429 straight back rather than sleeping inside the request; wait out a
+    // short Retry-After once here and ask again. A long one is said as it is
+    // (the server's message names the wait) rather than retried too early.
+    if (got.status === 429 && !retried && (Number(data.retryAfter) || 2) <= 30) {
+      const waitSec = Math.max(1, Number(data.retryAfter) || 2);
       if (statusEl) statusEl.innerText = 'Trakt is busy. Trying again in ' + waitSec + ' seconds...';
       setTimeout(() => { startTraktDeviceLogin(true); }, waitSec * 1000);
       return;
@@ -982,7 +1010,10 @@ async function startTraktDeviceLogin(retried) {
         } else if (pollData.pending) {
           // Still waiting for user confirmation
         } else if (pollData.slowDown) {
-          // Slow down polling
+          // Trakt is limiting the Worker's checks. The code stays good for
+          // its ten minutes and the next check may get through, so keep
+          // going, but say why an approval has not shown up yet.
+          if (statusEl) statusEl.innerText = 'Trakt is answering slowly. If you have entered the code, this can take a minute or two to finish.';
         } else if (pollData.error && !pollData.pending) {
           clearInterval(_traktDevicePollTimer);
           _traktDevicePollTimer = null;
