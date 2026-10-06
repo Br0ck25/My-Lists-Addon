@@ -9057,7 +9057,8 @@ function channelDraftSummary(items, settings) {
   list.forEach((it) => {
     if (!it) return;
     const key = channelDraftShowKey(it);
-    if (key) shows.add(key);
+    // A movie is not a show: counting it as one printed "11 shows · 11 movies".
+    if (key && it.kind !== 'movie') shows.add(key);
     if (it.kind === 'movie') movies++;
     else episodes++;
     const runtime = Number(it.runtime);
@@ -10576,7 +10577,9 @@ function renderMyCreatedChannelsList() {
     const orderLabel = channelPlayOrderLabel(ch);
     const metaBits = [];
     if (ch.dynamic === 'next-up') metaBits.push('fills itself in from Continue Watching');
-    else metaBits.push(totalEpisodes + ' episode' + (totalEpisodes === 1 ? '' : 's'));
+    // The counts (shows, episodes, movies) are the second line's job; repeating
+    // them here, as "episodes", was wrong for a movie-only channel.
+    else if (!totalEpisodes) metaBits.push('No items yet');
     if (ch.dailyRotate) {
       metaBits.push((ch.rotateShows || CHANNEL_DEFAULT_ROTATE_SHOWS) + ' shows \u00d7 ' +
         (ch.rotateEpisodes || CHANNEL_DEFAULT_ROTATE_EPISODES) + ' daily');
@@ -10698,9 +10701,7 @@ function renderMyCreatedChannelsList() {
             escapeHtml(ch.name) +
           '</div>' +
           (ch.description ? '<div class="u-fs-v_font_size_sm u-c-v_text u-mt-2px">' + escapeHtml(ch.description) + '</div>' : '') +
-          '<div class="list-card-meta">' +
-            '<span>' + metaText + '</span>' +
-          '</div>' +
+          (metaText ? '<div class="list-card-meta"><span>' + metaText + '</span></div>' : '') +
           (summaryLine ? '<div class="list-card-meta"><span>' + escapeHtml(summaryLine) + '</span></div>' : '') +
         '</div>' +
         '<div class="list-card-actions">' +
@@ -12588,7 +12589,8 @@ async function loadChannelDirectory(force) {
 function channelDirectoryMetaLine(entry) {
   const bits = [];
   if (entry.dynamic === 'next-up') bits.push('follows its owner’s watch history');
-  else bits.push(entry.itemCount + ' episode' + (entry.itemCount === 1 ? '' : 's'));
+  else if (entry.showCount === 0 && entry.itemCount > 0) bits.push(entry.itemCount + (entry.itemCount === 1 ? ' movie' : ' movies'));
+  else bits.push(entry.itemCount + (entry.itemCount === 1 ? ' item' : ' items'));
   if (entry.showCount > 1) bits.push(entry.showCount + ' shows');
   if (entry.dailyRotate) bits.push('daily lineup');
   else if (entry.shuffle) bits.push('shuffled daily');
@@ -12976,7 +12978,7 @@ function channelListingCardHtml(entry, actionsHtml, extraHtml) {
 function channelAsListingEntry(ch) {
   const items = ch.items || [];
   const showKeys = {};
-  items.forEach((it) => { const k = channelDraftShowKey(it); if (k) showKeys[k] = true; });
+  items.forEach((it) => { const k = channelDraftShowKey(it); if (k && it.kind !== 'movie') showKeys[k] = true; });
   let poster = ch.poster || null;
   let backdrop = ch.backdrop || null;
   if (!poster && !backdrop) {
@@ -13638,7 +13640,7 @@ function renderChannelMergeList() {
           ' <button type="button" class="lc-btn secondary u-p-2px_8px u-fs-v_font_size_xs u-ml-4px" data-act="appActGoToQuickAdd">+ Quick Add</button>';
         }
         
-        const countText = (merged.channelIds ? merged.channelIds.length : 0) + ' channels &middot; ' + totalEpisodes + ' episodes';
+        const countText = (merged.channelIds ? merged.channelIds.length : 0) + ' channels &middot; ' + totalEpisodes + (totalEpisodes === 1 ? ' item' : ' items');
         
         const addBtnHtml = '<button type="button" class="lc-btn list-add-btn channelAddBtn ' + (isAdded ? 'secondary is-added' : 'primary') + '" style="padding:6px 12px; font-size:var(--font-size-sm);' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleMergedChannelInCatalog" data-act-args="' + appActArgs([merged.mergedId]) + '">' +
           (isAdded ? 'Remove' : '+ Add') +

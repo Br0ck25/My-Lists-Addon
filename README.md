@@ -234,6 +234,12 @@ For system architecture details, operational checklists, deployment runbooks, an
 
 ---
 
+## Contributing: UI changes
+
+Anyone (human or AI) changing buttons, colours, spacing, text or wording follows [`AI_UI_RULES.md`](AI_UI_RULES.md) (one page) and [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) (full spec, with recipes for adding a button, card, modal or toast). The design tokens live in one place (`DESIGN_TOKENS_CSS` in `00_constants.js`), and `tests/design-system.test.mjs` fails the build when the rules are broken.
+
+---
+
 ## Support This Project
 
 My Lists Addon is a free community service with no ads or subscriptions. If you enjoy using the platform and want to help cover hosting and infrastructure costs or support ongoing development:

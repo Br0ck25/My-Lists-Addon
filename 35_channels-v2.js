@@ -291,7 +291,7 @@ async function writeChannelFromLegacy(env, code, record, index, budget, recon) {
   // A listing goes to the top of Newest whenever it is (re)published: the
   // legacy index moves it to the front on every share of a listed channel.
   const publishedAt = record.published ? updatedAt : (existing ? existing.published_at : null);
-  const showCount = new Set(items.map(channelItemShowKey)).size;
+  const showCount = new Set(items.filter((it) => !it || it.kind !== "movie").map(channelItemShowKey)).size;
   const legacyLikes = Math.max(Number(record.likes) || 0, Number(index && index.likes) || 0);
   const legacyAdds = Number(index && index.adds) || 0;
   const res = await env.DB.prepare(

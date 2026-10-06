@@ -120,3 +120,24 @@ describe("design system: helpers must not block colours that scripts set at runt
     assert.deepEqual(bad, []);
   });
 });
+
+describe("design system: the rules reach everyone who changes the UI", () => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const read = (f) => fs.readFileSync(path.join(root, f), "utf8");
+  it("CLAUDE.md, AGENTS.md and README.md point to the UI rules", () => {
+    for (const f of ["CLAUDE.md", "AGENTS.md", "README.md"]) {
+      const text = read(f);
+      assert.match(text, /AI_UI_RULES\.md/, `${f} must reference AI_UI_RULES.md`);
+      assert.match(text, /DESIGN_SYSTEM\.md/, `${f} must reference DESIGN_SYSTEM.md`);
+    }
+  });
+  it("AI_UI_RULES.md stays short enough to paste into a prompt", () => {
+    assert.ok(read("AI_UI_RULES.md").trimEnd().split("\n").length <= 40);
+  });
+  it("DESIGN_SYSTEM.md keeps its recipes for buttons and wording", () => {
+    const text = read("DESIGN_SYSTEM.md");
+    assert.match(text, /### 10\.1 Add a button/);
+    assert.match(text, /### 10\.6 Add or change text, labels and counts/);
+  });
+});
+

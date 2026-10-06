@@ -6835,6 +6835,25 @@ describe("client: what a channel adds up to", () => {
     const client = loadClient({ routes: {} });
     assert.equal(client.call("channelSummaryLine", client.call("channelDraftSummary", [], {})), "");
   });
+
+  it("does not call movies shows or episodes", () => {
+    const client = loadClient({ routes: {} });
+    const movie = (id, title) => ({ kind: "movie", imdbId: id, title, runtime: 120, airDate: "1999-05-19" });
+    const only = client.call("channelDraftSummary", [movie("tt1", "A"), movie("tt2", "B"), movie("tt3", "C")], {});
+    assert.equal(only.shows, 0);
+    assert.equal(only.episodes, 0);
+    assert.equal(only.movies, 3);
+    const line = client.call("channelSummaryLine", only);
+    assert.match(line, /3 movies/);
+    assert.doesNotMatch(line, /show|episode/);
+    // A mix still counts each kind under its own name.
+    const mixed = client.call("channelSummaryLine", client.call("channelDraftSummary", [
+      epOf("tt9", 1, "Rugrats", 30, "1991-08-11"), movie("tt1", "A"),
+    ], {}));
+    assert.match(mixed, /1 show\b/);
+    assert.match(mixed, /1 episode\b/);
+    assert.match(mixed, /1 movie\b/);
+  });
 });
 
 describe("client: adding something already in the channel", () => {
@@ -7367,7 +7386,7 @@ describe("client: one card shape for a channel listing", () => {
     }, "<button>Publish</button>", "");
     assert.match(html, /Saturday Morning 90s/);
     assert.match(html, /Cartoons, all morning\./);
-    assert.match(html, /300 episodes/);
+    assert.match(html, /300 items/);
     assert.match(html, /12 shows/);
     assert.match(html, /daily lineup/);
     assert.match(html, /img\/bd\.jpg/);

@@ -14,7 +14,9 @@ Full detail: `DESIGN_SYSTEM.md` (read it before adding or changing any UI). Main
 7. Layout: content in `.panel` inside `.tab-panel` inside `.page` (max 1200px). One breakpoint pair: mobile `≤640px`, desktop `≥641px`. Keep bottom padding clear of the mobile bottom nav.
 8. Copy: sentence case, verb-first buttons ("Save", "Remove all"), errors start "Could not …", success toasts end with a period and quote names `"Name" added.` No emoji; use `…` not `...`.
 9. Contrast ≥ 4.5:1. Never white text on `--color-brand/success/warn/danger`; use `--color-brand-fill` or the `*-text` tokens.
-10. Icons: inline SVG, 24×24 viewBox, `stroke="currentColor"`, `stroke-width="2"`, `aria-hidden="true"` if decorative.
+10. Adding a button: pick the variant, `<button type="button" data-act="…">`, `aria-label` if icon-only, all states (recipe: `DESIGN_SYSTEM.md` §10.1). Add/remove list buttons also carry `list-add-btn`.
+11. Wording: a movie is never a "show" or "episode"; state each count once (§10.6).
+12. Icons: inline SVG, 24×24 viewBox, `stroke="currentColor"`, `stroke-width="2"`, `aria-hidden="true"` if decorative.
 
 **Never**
 - `!important` (about 241 remain; don't add), `transition: all`, `outline: none` without a focus ring, new `z-index` numbers (use `--z-*`; modals sit above the bottom nav), a second set of `:root` variables in any page, new `style="…"` for anything repeated (inline only for properties a script toggles, e.g. `display`/`width`); never put a colour `u-*` helper on an element a script colours (`*Status`/`*Hint`/`*State`).
