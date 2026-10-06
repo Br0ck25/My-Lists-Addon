@@ -12,10 +12,10 @@ This repository (`My Lists Addon Website`) is a high-performance, single-deploy 
 ## 🚨 CRITICAL ARCHITECTURAL CONSTRAINTS (DO NOT VIOLATE)
 
 ### 1. The Build System Rule (NEVER EDIT `worker_entry_combined.js` DIRECTLY)
-- The codebase is split into numbered files: `header.js`, `00_constants.js` through `26_api-creator-and-admin-routes.js`.
+- The codebase is split into numbered files: `header.js`, `00_constants.js` through the highest-numbered file (currently `58_`; `build.py` picks up every `NN_*.js`).
 - `worker_entry_combined.js` is **AUTO-GENERATED** by `python build.py`.
 - **NEVER** edit `worker_entry_combined.js` directly! Any edits made there will be completely wiped out on the next build.
-- **ALWAYS** edit the numbered source files (`00_` through `26_`) or `header.js`.
+- **ALWAYS** edit the numbered source files (every `NN_*.js`, currently `00_` through `58_`) or `header.js`.
 - After making ANY code changes, you **MUST** run:
   ```bash
   python build.py
@@ -41,6 +41,15 @@ Every change to what the user sees (buttons, colours, spacing, text sizes, modal
 - **Wording:** a movie is never a "show" or an "episode"; each count is stated once.
 - **Check:** `node --test tests/*.test.mjs` includes `tests/design-system.test.mjs`, which fails on token, breakpoint, z-index, contrast-pairing, hex-literal and add-button drift. If you add a token or variant, update `DESIGN_SYSTEM.md` in the same change.
 - **Humans and AIs follow the same rules.** If a rule gets in the way, change the rule in `DESIGN_SYSTEM.md` and the test, not just your own file.
+
+---
+
+## Guardrails That Fail the Build (do not weaken them)
+- **New route:** add it to `tests/route-access.json` with its class. An `admin` or `account` route is called anonymously by `tests/route-access.test.mjs` and must answer 401/403. Admin routes check `isAdminRequest` themselves, so a new one without it fails that test.
+- **Build stamp:** `python build.py` fills in `WORKER_BUILD` (shown on `/admin`). Never write a value into it by hand; the owner compares it after pasting.
+- **Pre-commit hook:** `git config core.hooksPath .githooks` (once per clone).
+- **Release:** bump `WORKER_RELEASE` and add the entry to `docs/RELEASES.md`. Protection settings and the PR checklist: `docs/REPO_PROTECTION.md`, `.github/pull_request_template.md`.
+- Never skip, disable or loosen a test to get green. If a guard is wrong, change the guard and say why in the commit.
 
 ---
 

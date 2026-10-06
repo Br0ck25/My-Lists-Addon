@@ -5,6 +5,13 @@
 // with every release.
 const WORKER_RELEASE = "22";
 
+// A fingerprint of the exact sources this file was built from. build.py fills
+// in the placeholder below with the first 10 characters of the SHA-256 of
+// header.js plus the numbered files, so two pasted Workers carry the same
+// value only if they are the same code. /admin shows it beside the release:
+// after pasting, compare it with what `python build.py` printed.
+const WORKER_BUILD = "__BUILD_STAMP__";
+
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
 // Every console call in the Worker goes through here. This top-level `console`

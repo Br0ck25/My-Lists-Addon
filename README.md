@@ -129,7 +129,7 @@ This project is developed as a modular JavaScript application running on Cloudfl
 - **Python 3** (used by the bundle assembly and verification scripts)
 
 ### Building the Bundle
-The application source is modularized across ES modules (`00_constants.js` through `26_api-creator-and-admin-routes.js`). To compile them into `worker_entry_combined.js`:
+The application source is modularized across ES modules (`00_constants.js` through the highest-numbered file (currently `58_`; `build.py` picks up every `NN_*.js`)). To compile them into `worker_entry_combined.js`:
 
 ```bash
 # Using Python

@@ -4,6 +4,17 @@ on:
   push:
   pull_request:
 
+# CI only reads the repository; nothing here may write to it or to releases.
+permissions:
+  contents: read
+
+# A push and the pull request for the same branch both start a run; only the
+# newest one matters. A run on main is never cancelled, so every merge keeps a
+# finished result.
+concurrency:
+  group: ci-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   test:
     runs-on: ubuntu-latest

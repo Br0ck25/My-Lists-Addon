@@ -18,7 +18,7 @@ Copy and paste this into Claude Code before your credits completely run out:
 ### Prompt 2: When Starting in Antigravity
 When you open Antigravity (Gemini 3.8 Flash High) to continue the work, copy and paste this:
 
-> *"Read `HANDOFF.md` and `AGENTS.md` before making any changes. This is a Cloudflare Worker project written in pure Vanilla JavaScript (do NOT use Svelte or frameworks). Follow the next steps in `HANDOFF.md` exactly. Do not refactor existing code. Remember to edit only split files (`00_` through `26_`) and run `python build.py` after editing."*
+> *"Read `HANDOFF.md` and `AGENTS.md` before making any changes. This is a Cloudflare Worker project written in pure Vanilla JavaScript (do NOT use Svelte or frameworks). Follow the next steps in `HANDOFF.md` exactly. Do not refactor existing code. Remember to edit only split files (every `NN_*.js`, currently `00_` through `58_`) and run `python build.py` after editing."*
 
 ---
 
@@ -55,7 +55,7 @@ This instantly wipes out whatever broken edits were just made and restores your 
 
 | Problem | How This Setup Fixes It |
 |---|---|
-| **AI edits the wrong file** | `CLAUDE.md` and `AGENTS.md` explicitly forbid editing `worker_entry_combined.js` directly, forcing all AIs to edit split files `00_` to `26_` and run `python build.py`. |
+| **AI edits the wrong file** | `CLAUDE.md` and `AGENTS.md` explicitly forbid editing `worker_entry_combined.js` directly, forcing all AIs to edit split files every `NN_*.js` (currently `00_` to `58_`) and run `python build.py`. |
 | **Incoming AI has amnesia** | `HANDOFF.md` tells the next AI exactly what was finished, what was tested, and what to do next. |
 | **Style wars & unnecessary rewrites** | All AIs are strictly instructed not to refactor, rename variables, or convert code into frameworks (Svelte/React/TypeScript). |
 | **Broken code on credit exhaustion** | The low-credits prompt forces the AI to stop cleanly, test, commit, and document before credits hit zero. |
