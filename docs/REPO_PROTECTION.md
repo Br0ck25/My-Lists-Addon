@@ -12,17 +12,20 @@ Rules in documents are not enough: people and AI assistants forget them. Everyth
 | `tests/design-system.test.mjs` | pre-commit hook, CI | token, breakpoint, hex-colour, contrast, add-button drift |
 | `tests/route-access.test.mjs` + `tests/route-access.json` | pre-commit hook, CI | a route nobody classified; an admin or account route that answers an anonymous caller |
 | `tests/build-stamp.test.mjs` | pre-commit hook, CI | losing the build stamp that proves which file is live |
+| `tests/ui-contract.mjs` + `tests/ui-contract.json` (CI job **ui-contract**) | CI | a button, tab or input that changes size, padding, radius, font or colour (light, dark, phone, desktop) without the contract being updated on purpose |
 | `check_bundle_budget.mjs`, `gen_map.py` freshness | CI | a slow first page; a stale function map |
 | the full test suite, run twice (plain and `MLA_TEST_V2_LISTS_READ=1`) | CI | behaviour regressions |
 
 Turn the pre-commit hook on once in each clone: `git config core.hooksPath .githooks`.
+
+Changing how a shared component looks on purpose: edit the CSS, update `DESIGN_SYSTEM.md`, run `node tests/ui-contract.mjs --update` (needs `npm install --no-save playwright@1.56.1`), and look at the `tests/ui-contract.json` diff before committing: that diff is the review.
 
 ## GitHub settings to turn on (owner only, about 5 minutes)
 
 GitHub, repository **Settings -> Branches -> Add branch ruleset** (or classic branch protection) for `main`:
 
 1. **Require a pull request before merging.** Leave "required approvals" at **0**. You are the only reviewer, and AI sessions push under your account, so an approval requirement would only block you. The pull request is what gives CI a chance to run first.
-2. **Require status checks to pass**, and add the check named **test** (the job in `.github/workflows/ci.yml`). Tick "Require branches to be up to date".
+2. **Require status checks to pass**, and add the checks named **test** and **ui-contract** (the jobs in `.github/workflows/ci.yml`). Tick "Require branches to be up to date".
 3. **Block force pushes** and **block deletions** of `main`.
 4. Do **not** tick "Require review from Code Owners" unless a second person with write access joins: nobody can approve their own pull request, so it would lock you out. `.github/CODEOWNERS` still documents who owns what and starts applying the day a second reviewer exists.
 5. **Settings -> Actions -> General -> Workflow permissions:** set to **Read repository contents** (CI already asks for no more).

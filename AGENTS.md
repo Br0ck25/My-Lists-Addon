@@ -51,6 +51,7 @@ Every change to what the user sees (buttons, colours, spacing, text sizes, modal
 ## Guardrails That Fail the Build (do not weaken them)
 - **New route:** add it to `tests/route-access.json` with its class. An `admin` or `account` route is called anonymously by `tests/route-access.test.mjs` and must answer 401/403. Admin routes check `isAdminRequest` themselves, so a new one without it fails that test.
 - **Build stamp:** `python build.py` fills in `WORKER_BUILD` (shown on `/admin`). Never write a value into it by hand; the owner compares it after pasting.
+- **UI contract:** `node tests/ui-contract.mjs` (CI job `ui-contract`) fails when a shared component's computed look changes. Accept an intended change with `--update` and keep the `tests/ui-contract.json` diff in the commit.
 - **Pre-commit hook:** `git config core.hooksPath .githooks` (once per clone).
 - **Release:** bump `WORKER_RELEASE` and add the entry to `docs/RELEASES.md`. Protection settings and the PR checklist: `docs/REPO_PROTECTION.md`, `.github/pull_request_template.md`.
 - Never skip, disable or loosen a test to get green. If a guard is wrong, change the guard and say why in the commit.
