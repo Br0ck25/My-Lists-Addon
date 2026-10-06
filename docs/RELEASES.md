@@ -37,7 +37,9 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **`main`** is brought up to date by PR #12 (Releases 14–16), PR #13 (17–18), PR #14 (19) and PR #15 (20).
 - **Release 21** went live on 2026-10-05. The owner reports everything looks good, and deleted the `FF_NEW_UI` variable. The classic page is retired, and the screens taken off the new interface are deleted. Details under Release 21.
 - **Release 22** is live (the owner, 2026-10-06), and so is everything merged into `main` after it up to PR #21 (the UI consistency pass, Pictorium, RatingPosterDB, combined channels, the Ko-fi strip): `/admin` showed *Release 22 (build e9e1445b49)*, which is `main` at `b6c72a5`. Connect Trakt worked on 22, then the PIN / code window answered *Trakt is busy (rate limit)* every time: Release 23.
-- **Release 23** went live on 2026-10-06. The owner reports Trakt connects again. Connect Trakt with a code asks Trakt from the browser. Details under Release 23.
+- **Release 23** went live on 2026-10-06. The owner reports Trakt connects again. Connect Trakt with a code asks Trakt from the browser. Details under Release 23. Merged into `main` by PR #26.
+- **Compare shelves** (2026-10-06, before 23): 770 accounts, **0.00% different, 0 lost**. Continue Watching 954 the same and 26 shows not known yet; Airing Next 229 the same and 9 not known yet.
+- **Release 24** (prepared 2026-10-06, not yet live): Compare shelves says why each show is not known yet. Details under Release 24.
 - **Cloudflare Workers Builds was connected to this repository** (found 2026-10-04). The owner reports the Worker it was connected to has since been deleted, and merging PR #12 started no build. Every push makes Cloudflare try to build the Worker from GitHub. On `main` it would deploy to production. So far every attempt has failed, so nothing has been deployed that way: `main` at `a6785d6` on 2026-10-03, and this branch's preview with *Authentication error*. The `wrangler.toml` guard (Release 14: `keep_vars`, the `DB_ACTIVITY` placeholder) keeps such a deploy from replacing the dashboard's settings. Deploying stays manual (pasting) unless the owner decides otherwise.
 - **Backups work** (2026-10-04): the owner added the five GitHub secrets, and the first real backup ran (Actions run 37226668219). It copied both databases, encrypted: `my-lists-db` (9.3 MB, 709 accounts' settings, 1,147 lists, 53,082 list items) and `mylists-activity` (0.96 MB, 46,956 plays). From here it runs daily at 04:17 UTC.
 
@@ -1605,4 +1607,35 @@ The owner decided both on 2026-10-05: retire the classic page (13) and delete th
 3. If the window shows an error, send a screenshot: it now names what Trakt said.
 
 **Rollback:** paste the live `main` file (Release 22, build e9e1445b49).
+
+## Release 24: Compare shelves says why a show is not known yet
+
+**Branch point:** `main` after PR #26 (Release 23, live).
+
+**Why:** the comparison of 2026-10-06 found nothing different and nothing lost, so the next step is removing the legacy Continue Watching / Airing Next writers (P5-4, second half). Two numbers stand in the way: 26 Continue Watching and 9 Airing Next shows "not known yet" by the schedule. Those shows keep their stored entry (`shelfStoredForUnknown`), and only the legacy writers keep those entries current. The comparison counted them with no reason, and the site's database is not reachable from here, so the cause has to be reported by the comparison itself before it can be fixed.
+
+### What it changes
+
+- **Each "not known yet" show gets a reason** (`shelfShadowUnknownWhy`, `47_`), counted per shelf (`unknownWhy`), with up to 10 named examples (title, year, ids):
+  - `movie-row`: the title's media row is a movie, and only series get a schedule row (`recountShowWatchers`, `46_`);
+  - `no-schedule-row`: a series nobody has been counted for yet (`show.watchers` is daily);
+  - `not-counted`: its row says nobody watches it, so `show.refresh` never takes it;
+  - `refresh-tried`: `show.refresh` took it and kept no answer (TMDB failing for it, or a refresh under way), with when it is tried next;
+  - `waiting-refresh`: due, and the hourly `show.refresh` has not reached it, with for how long.
+- `/admin` → Maintenance → **Compare shelves now** prints *Why not known yet* under each shelf and *Not known yet, examples*.
+- It only reads, like the rest of the comparison. `/admin` shows **Release 24**.
+
+### Checked
+
+- `tests/shelf-shadow.test.mjs`:
+  - a new test with one show for each reason;
+  - the movie-row and refresh-tried shows of the existing fixture;
+  - the reasons surviving the page carrying the round between batches.
+- `bash verify.sh` and the `MLA_TEST_V2_LISTS_READ=1` run pass (counts in the commit).
+
+**Steps:**
+1. Deploy `release-24-NEW-worker.js`. Check that `/admin` says **Release 24**.
+2. `/admin` → Management & Tools → Maintenance → **Compare shelves now**. Send the whole result, including the *Why not known yet* lines and the examples.
+
+**Rollback:** paste the 23 file.
 

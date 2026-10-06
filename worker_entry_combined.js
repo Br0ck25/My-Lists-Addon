@@ -26,14 +26,14 @@
 // Shown at the top of /admin and in the answer of the "Counts missing" tool,
 // so the owner can see which pasted file is live (docs/RELEASES.md). Change it
 // with every release.
-const WORKER_RELEASE = "23";
+const WORKER_RELEASE = "24";
 
 // A fingerprint of the exact sources this file was built from. build.py fills
 // in the placeholder below with the first 10 characters of the SHA-256 of
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "8032d9932e";
+const WORKER_BUILD = "d25b5ad8cd";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -15674,9 +15674,12 @@ ${UTILITY_CSS}
               'Continue Watching: ' + t.cw.both + ' the same, ' + t.cw.legacyOnly + ' only in the old, ' + t.cw.v2Only + ' only in the new, ' + t.cw.unknown + ' shows not known yet.',
               '  Why only in the old: ' + shelfCompareWhy(t.cw.whyOld),
               '  Why only in the new: ' + shelfCompareWhy(t.cw.whyNew),
+              '  Why not known yet: ' + shelfCompareWhy(t.cw.unknownWhy),
               'Airing Next: ' + t.an.both + ' the same, ' + t.an.legacyOnly + ' only in the old, ' + t.an.v2Only + ' only in the new, ' + t.an.unknown + ' not known yet.',
               '  Why only in the old: ' + shelfCompareWhy(t.an.whyOld),
               '  Why only in the new: ' + shelfCompareWhy(t.an.whyNew),
+              '  Why not known yet: ' + shelfCompareWhy(t.an.unknownWhy),
+              'Not known yet, examples: ' + ((t.unknownExamples || []).length ? (t.unknownExamples || []).map(function (e) { return String.fromCharCode(10) + '  ' + (e.shelf === 'an' ? 'Airing Next' : 'Continue Watching') + ', media ' + e.mediaId + ': ' + e.why; }).join('') : 'none'),
               'Examples: ' + JSON.stringify(t.examples || []),
             ].join(String.fromCharCode(10));
             break;
@@ -111124,10 +111127,53 @@ const SHELF_SHADOW_EXAMPLES = 10;
 function shelfShadowEmpty() {
   return {
     accounts: 0,
-    cw: { legacy: 0, v2: 0, both: 0, legacyOnly: 0, v2Only: 0, unknown: 0, whyOld: {}, whyNew: {} },
-    an: { legacy: 0, v2: 0, both: 0, legacyOnly: 0, v2Only: 0, unknown: 0, whyOld: {}, whyNew: {} },
+    cw: { legacy: 0, v2: 0, both: 0, legacyOnly: 0, v2Only: 0, unknown: 0, whyOld: {}, whyNew: {}, unknownWhy: {} },
+    an: { legacy: 0, v2: 0, both: 0, legacyOnly: 0, v2Only: 0, unknown: 0, whyOld: {}, whyNew: {}, unknownWhy: {} },
     examples: [],
+    unknownExamples: [],
   };
+}
+
+// --- Why the schedule does not know a show yet ----------------------------------
+//
+// A show is "not known yet" when it has no refreshed show_schedule row
+// (shelfTitles, 39_). Those shows keep their stored entry while
+// FF_SHOW_SCHEDULE is on (shelfStoredForUnknown), and the legacy writers keep
+// those entries current, so the writers cannot be removed (P5-4) while there
+// are many. The comparison of 2026-10-06 had 26 on Continue Watching and 9 on
+// Airing Next, with nothing to say why; each now gets one of:
+//   movie-row        the title's media row is a movie, and only series get a
+//                    schedule row (recountShowWatchers, 46_)
+//   no-schedule-row  a series nobody has been counted for yet (show.watchers
+//                    is daily; a play adds the row at once)
+//   not-counted      the row says nobody watches it (watcher_count 0), so
+//                    show.refresh never takes it
+//   refresh-tried    show.refresh took it and kept no answer: TMDB failing for
+//                    it, or a refresh under way
+//   waiting-refresh  due, and the hourly show.refresh has not reached it
+async function shelfShadowUnknownWhy(env, mediaIds, now) {
+  const out = new Map();
+  const ids = [...new Set((mediaIds || []).filter((m) => m != null))];
+  for (let i = 0; i < ids.length; i += SHELF_JOIN_CHUNK) {
+    const part = ids.slice(i, i + SHELF_JOIN_CHUNK);
+    const { results } = await env.DB.prepare(
+      `SELECT m.id, m.kind, m.title, m.year, m.imdb_id, m.tmdb_id, m.alt_id,
+              s.media_id AS s_media, s.watcher_count, s.checked_at, s.next_check_at
+       FROM media m LEFT JOIN show_schedule s ON s.media_id = m.id WHERE m.id IN (${part.map(() => "?").join(", ")})`
+    ).bind(...part).all();
+    for (const m of results || []) {
+      const name = `${m.title || "untitled"}${m.year ? ` (${m.year})` : ""}`;
+      const ids2 = [m.imdb_id, m.tmdb_id ? `tmdb:${m.tmdb_id}` : null, m.alt_id].filter(Boolean).join(", ") || "no ids";
+      let why;
+      if (m.kind !== "series") why = ["movie-row", `${name} is a ${m.kind || "untyped"} row (${ids2})`];
+      else if (m.s_media == null) why = ["no-schedule-row", `${name} has no schedule row yet (${ids2})`];
+      else if (!(Number(m.watcher_count) > 0)) why = ["not-counted", `${name}: watcher_count is 0 (${ids2})`];
+      else if (Number(m.next_check_at) > now) why = ["refresh-tried", `${name}: taken by show.refresh, no answer kept, next try in ${Math.max(1, Math.round((Number(m.next_check_at) - now) / 60000))} min (${ids2})`];
+      else why = ["waiting-refresh", `${name}: due since ${Math.max(0, Math.round((now - Number(m.next_check_at)) / 3600000))} h, not refreshed yet (${ids2})`];
+      out.set(m.id, why);
+    }
+  }
+  return out;
 }
 
 function shelfShadowRate(t) {
@@ -111395,6 +111441,11 @@ async function compareAccountShelves(env, account, { now = Date.now() } = {}) {
   const anDiff = shelfShadowDiff(legacyAnKeyed.map(([k]) => k), an.items.map((i) => shelfShadowAnKey(i, ids)));
   cwDiff.unknown = (cw.missingSchedule || []).length;
   anDiff.unknown = (an.missingSchedule || []).length;
+  if (cwDiff.unknown || anDiff.unknown) {
+    const unknownWhy = await shelfShadowUnknownWhy(env, [...(cw.missingSchedule || []), ...(an.missingSchedule || [])], now);
+    cwDiff.unknownWhy = (cw.missingSchedule || []).map((m) => [m, unknownWhy.get(m) || ["no-title", "no media row"]]);
+    anDiff.unknownWhy = (an.missingSchedule || []).map((m) => [m, unknownWhy.get(m) || ["no-title", "no media row"]]);
+  }
 
   // The reasons. Progress rows beyond the shelves' own limit, and titles no
   // progress row names, are looked up for the items that need them.
@@ -111475,6 +111526,14 @@ async function runShelfShadow(env, job = {}, { accounts: batchSize = SHELF_SHADO
       // A round started before the reasons existed has no tallies yet.
       t.whyOld = t.whyOld || {};
       t.whyNew = t.whyNew || {};
+      t.unknownWhy = t.unknownWhy || {};
+      round.unknownExamples = round.unknownExamples || [];
+      for (const [mediaId, [code, text]] of d.unknownWhy || []) {
+        t.unknownWhy[code] = (t.unknownWhy[code] || 0) + 1;
+        if (round.unknownExamples.length < SHELF_SHADOW_EXAMPLES && !round.unknownExamples.some((e) => e.mediaId === mediaId)) {
+          round.unknownExamples.push({ mediaId, shelf, why: `${code}: ${text}` });
+        }
+      }
       const why = d.why || {};
       for (const key of d.legacyOnly) {
         const code = (why[key] || ["other"])[0];
@@ -111532,7 +111591,7 @@ function shelfShadowRoundFrom(raw) {
   for (const shelf of ["cw", "an"]) {
     const from = raw[shelf] && typeof raw[shelf] === "object" ? raw[shelf] : {};
     for (const k of ["legacy", "v2", "both", "legacyOnly", "v2Only", "unknown"]) round[shelf][k] = Math.max(0, Number(from[k]) || 0);
-    for (const w of ["whyOld", "whyNew"]) {
+    for (const w of ["whyOld", "whyNew", "unknownWhy"]) {
       const tally = from[w] && typeof from[w] === "object" ? from[w] : {};
       for (const [code, n] of Object.entries(tally)) {
         if (/^[a-z-]{1,40}$/.test(code) && Number(n) > 0) round[shelf][w][code] = Number(n);
@@ -111540,6 +111599,11 @@ function shelfShadowRoundFrom(raw) {
     }
   }
   if (Array.isArray(raw.examples)) round.examples = raw.examples.slice(0, SHELF_SHADOW_EXAMPLES);
+  if (Array.isArray(raw.unknownExamples)) {
+    round.unknownExamples = raw.unknownExamples.slice(0, SHELF_SHADOW_EXAMPLES)
+      .filter((e) => e && typeof e === "object")
+      .map((e) => ({ mediaId: Number(e.mediaId) || 0, shelf: e.shelf === "an" ? "an" : "cw", why: String(e.why || "").slice(0, 300) }));
+  }
   return round;
 }
 
