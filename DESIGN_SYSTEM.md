@@ -369,7 +369,7 @@ Still open. Do not copy these; fix them opportunistically:
 
 | # | Deviation | Where | Do instead |
 |---|---|---|---|
-| 1 | About 1,800 inline `style="…"` attributes (admin ≈385, settings HTML ≈275, creator profile ≈180, …) | `03_`, `1x_`, `2x_` files | CSS classes in `09_page-shell.js` |
+| 1 | About 1,800 inline `style="…"` attributes remain (admin ≈385, settings HTML ≈275, creator profile ≈180, …). Their **values** now use tokens (font sizes, radii, status colours; the admin `#8E8E93` grey is gone), but the structure is still inline | `03_`, `1x_`, `2x_` files | CSS classes in `09_page-shell.js`; never inline a colour, size or radius literal |
 | 2 | About 300 `!important` remain (add/remove buttons, shelf/poster overrides, initial-tab FOUC rules) | `09_page-shell.js` | Fix specificity |
 | 3 | A few hard-coded colours remain: provider brand colours (intentional), `.btn-stremio/-nuvio/-wako` gradients, date-badge hexes (`#2fa84f`, `#ffd166`), `.support-strip` colours, overlay `rgba(0,0,0,…)` | `09_page-shell.js` | tokens |
 | 4 | Add/remove list buttons share a 9–10 class `:is()` list with `!important` | `09_page-shell.js` (search "Soft Brand-Tinted") | `.btn-ghost` / `.btn-danger` |

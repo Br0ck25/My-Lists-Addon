@@ -2263,7 +2263,7 @@ ${DESIGN_TOKENS_CSS}
     <div class="panel">
       <h2 class="panel-title">Admin sign in</h2>
       ${accessOn
-        ? `<p style="color:var(--text-2); margin:0 0 14px; font-size:0.85rem; line-height:1.45;">Cloudflare Access is <strong>on</strong> for this dashboard. If you reached this page through Access, you are already signed in &mdash; <a href="/admin" style="color:var(--accent);">open the dashboard</a>.<br>If you are seeing this instead, Access did not let the request through (check the Access application&rsquo;s policy for <code>/admin</code>), or this hostname is not covered by it. The key below is the break-glass way in.</p>`
+        ? `<p style="color:var(--text-2); margin:0 0 14px; font-size:var(--font-size-sm); line-height:1.45;">Cloudflare Access is <strong>on</strong> for this dashboard. If you reached this page through Access, you are already signed in &mdash; <a href="/admin" style="color:var(--accent);">open the dashboard</a>.<br>If you are seeing this instead, Access did not let the request through (check the Access application&rsquo;s policy for <code>/admin</code>), or this hostname is not covered by it. The key below is the break-glass way in.</p>`
         : ""}
       <form method="POST" action="/admin/login">
         <div class="row">
@@ -2544,7 +2544,7 @@ async function renderAdminDashboard(env) {
         // attribute escaping here the same way it already does for the two
         // <td> values above; resetCreatorKey reads the values back off the
         // element at click time instead of receiving them as literals.
-        `<td><button type="button" class="lc-btn secondary" style="padding:4px 10px; font-size:0.8rem;" data-username="${escapeHtmlServer(c.username)}" data-displayname="${escapeHtmlServer(c.displayName)}" data-act="resetCreatorKey" data-act-args="${adminActArgs(['@self'])}">Reset Key</button></td></tr>`
+        `<td><button type="button" class="lc-btn secondary" style="padding:4px 10px; font-size:var(--font-size-sm);" data-username="${escapeHtmlServer(c.username)}" data-displayname="${escapeHtmlServer(c.displayName)}" data-act="resetCreatorKey" data-act-args="${adminActArgs(['@self'])}">Reset Key</button></td></tr>`
     )
     .join("");
   const creatorTruncatedNote = shownCreatorCount < totalCreatorCount
@@ -2696,8 +2696,8 @@ ${DESIGN_TOKENS_CSS}
 </style></head>
 <body>
   <h1>Admin Dashboard</h1>
-  <p style="color:#8E8E93; margin-top:0;">My Lists Addon usage stats. <span id="workerRelease">Release ${WORKER_RELEASE}</span></p>
-  ${isD1Bound ? '' : '<div style="background:rgba(255,59,48,0.12); border:1px solid #FF3B30; border-radius:8px; padding:12px 16px; margin:0 0 18px; color:#FF3B30; font-size:0.88rem; line-height:1.4;"><strong>Warning: No D1 database bound.</strong> D1 is required for authoritative accounts, lists, full-text search, likes, feedback, and tracking. Please bind your D1 database as <code>DB</code> in the Cloudflare Dashboard (Worker Settings &rarr; Bindings).</div>'}
+  <p style="color:var(--muted); margin-top:0;">My Lists Addon usage stats. <span id="workerRelease">Release ${WORKER_RELEASE}</span></p>
+  ${isD1Bound ? '' : '<div style="background:rgba(255,59,48,0.12); border:1px solid var(--color-danger); border-radius:var(--radius-sm); padding:12px 16px; margin:0 0 18px; color:var(--color-danger-text); font-size:var(--font-size-sm); line-height:1.4;"><strong>Warning: No D1 database bound.</strong> D1 is required for authoritative accounts, lists, full-text search, likes, feedback, and tracking. Please bind your D1 database as <code>DB</code> in the Cloudflare Dashboard (Worker Settings &rarr; Bindings).</div>'}
 
   <!-- Not a tablist: these three buttons do not reveal panels, they choose
        which row of sub-tabs is shown, and it is the sub-tab that selects
@@ -2763,7 +2763,7 @@ ${DESIGN_TOKENS_CSS}
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="sources">
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">Counted from each row's group at the moment an install link is generated -- one Custom List and one Channel in the same install still count as one of each, five MDBList Charts rows count as five.</p>
+    <p style="color:var(--muted); margin-top:0; font-size:var(--font-size-base);">Counted from each row's group at the moment an install link is generated -- one Custom List and one Channel in the same install still count as one of each, five MDBList Charts rows count as five.</p>
     <div class="table-wrap">
       <table>
         <tr><th>Source</th><th>Count</th><th>Share</th></tr>
@@ -2773,7 +2773,7 @@ ${DESIGN_TOKENS_CSS}
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="trending">
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">How many times each title has been marked watched or added to a list, across everyone using this add-on. The <strong>Most Watched</strong> counts for Today, Last 7 Days and Last 30 Days are what the public <strong>Most Watched Today / 7 Days / 30 Days</strong> charts show (top 25; Quick Add &rarr; My Lists Addon Charts, and Discover); those refresh hourly for Today and daily for 7/30 days. Entries recorded without a real title id (such as "null") are left out of both this table and those charts.</p>
+    <p style="color:var(--muted); margin-top:0; font-size:var(--font-size-base);">How many times each title has been marked watched or added to a list, across everyone using this add-on. The <strong>Most Watched</strong> counts for Today, Last 7 Days and Last 30 Days are what the public <strong>Most Watched Today / 7 Days / 30 Days</strong> charts show (top 25; Quick Add &rarr; My Lists Addon Charts, and Discover); those refresh hourly for Today and daily for 7/30 days. Entries recorded without a real title id (such as "null") are left out of both this table and those charts.</p>
     <div style="margin:12px 0;">
       <select class="admin-select" id="trendingTypeSelect" data-act="loadTrendingData">
         <option value="watched">Most Watched</option>
@@ -2792,13 +2792,13 @@ ${DESIGN_TOKENS_CSS}
         <option value="series">Shows Only</option>
       </select>
       <button type="button" class="admin-select" style="cursor:pointer;" id="backfillTrendingBtn" data-act="runBackfillTrending">Backfill Existing Data</button>
-      <span id="backfillTrendingStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <span id="backfillTrendingStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
     </div>
-    <p style="color:#8E8E93; margin:0 0 12px; font-size:0.8rem;">Backfill only adds to the <strong>All Time</strong> window (there's no historical date to bucket existing data into 7/30/90-day windows) -- it seeds counts from Watch History and Custom Lists that already existed before this feature shipped. Safe to run more than once; it only adds, never resets anything. Processes accounts a few at a time, so it may take a minute for larger sites.</p>
+    <p style="color:var(--muted); margin:0 0 12px; font-size:var(--font-size-sm);">Backfill only adds to the <strong>All Time</strong> window (there's no historical date to bucket existing data into 7/30/90-day windows) -- it seeds counts from Watch History and Custom Lists that already existed before this feature shipped. Safe to run more than once; it only adds, never resets anything. Processes accounts a few at a time, so it may take a minute for larger sites.</p>
     <div style="margin:0 0 12px;">
       <button type="button" class="admin-select" style="cursor:pointer;" id="migrateDayCountsBtn" data-act="runMigrateDayCounts">Migrate Historical Day Counts</button>
-      <span id="migrateDayCountsStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
-      <p style="color:#8E8E93; margin:6px 0 0; font-size:0.8rem;">One-time migration for the switch from one KV key per day to one JSON blob per title -- reads every old per-day count still sitting in KV and folds it into the new format, so 7/30/90-day windows reflect activity from before that switch instead of only counting forward from it. Safe to run more than once (adds, never subtracts); old keys are deleted once folded in, so re-running just confirms there's nothing left. Also covers the Search &amp; Queries leaderboard.</p>
+      <span id="migrateDayCountsStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
+      <p style="color:var(--muted); margin:6px 0 0; font-size:var(--font-size-sm);">One-time migration for the switch from one KV key per day to one JSON blob per title -- reads every old per-day count still sitting in KV and folds it into the new format, so 7/30/90-day windows reflect activity from before that switch instead of only counting forward from it. Safe to run more than once (adds, never subtracts); old keys are deleted once folded in, so re-running just confirms there's nothing left. Also covers the Search &amp; Queries leaderboard.</p>
     </div>
     <div class="table-wrap">
       <table>
@@ -2809,7 +2809,7 @@ ${DESIGN_TOKENS_CSS}
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="search">
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">Anonymous queries and search terms users have entered in the Discover and Search tabs.</p>
+    <p style="color:var(--muted); margin-top:0; font-size:var(--font-size-base);">Anonymous queries and search terms users have entered in the Discover and Search tabs.</p>
     <div style="margin:12px 0;">
       <select class="admin-select" id="searchWindowSelect" data-act="loadSearchData">
         <option value="today">Today</option>
@@ -2829,7 +2829,7 @@ ${DESIGN_TOKENS_CSS}
 
   <div class="admin-tab-panel" data-admin-panel="catalogs_lists">
     <h2 style="margin-top:0;">Most Installed Curated &amp; Provider Catalogs</h2>
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">Which built-in charts and provider catalogs users add to their Stremio configuration.</p>
+    <p style="color:var(--muted); margin-top:0; font-size:var(--font-size-base);">Which built-in charts and provider catalogs users add to their Stremio configuration.</p>
     <div class="table-wrap">
       <table>
         <thead><tr><th>#</th><th>Catalog / Chart Name</th><th>Times Installed</th></tr></thead>
@@ -2838,7 +2838,7 @@ ${DESIGN_TOKENS_CSS}
     </div>
 
     <h2 style="margin-top:28px;">Top Community &amp; Creator Lists</h2>
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">Ranked by community engagement (likes and list copies/imports).</p>
+    <p style="color:var(--muted); margin-top:0; font-size:var(--font-size-base);">Ranked by community engagement (likes and list copies/imports).</p>
     <div class="table-wrap">
       <table>
         <thead><tr><th>#</th><th>List Name</th><th>Creator</th><th>Type</th><th>Items</th><th>Likes</th><th>Copies</th></tr></thead>
@@ -2848,7 +2848,7 @@ ${DESIGN_TOKENS_CSS}
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="audience">
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">Audience viewing breakdown derived from Stremio stream playback pings.</p>
+    <p style="color:var(--muted); margin-top:0; font-size:var(--font-size-base);">Audience viewing breakdown derived from Stremio stream playback pings.</p>
     
     <div class="stat-cards">
       <div class="stat-card"><div class="stat-value" id="audienceTotalPlays">0</div><div class="stat-label">Total streams tracked</div></div>
@@ -2875,7 +2875,7 @@ ${DESIGN_TOKENS_CSS}
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="feedback">
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">Bug reports, improvement requests, and ideas submitted from Settings &gt; Feedback, newest first.</p>
+    <p style="color:var(--muted); margin-top:0; font-size:var(--font-size-base);">Bug reports, improvement requests, and ideas submitted from Settings &gt; Feedback, newest first.</p>
     <div class="feedback-card">
       <div style="font-weight:600; margin-bottom:8px;">Log something yourself</div>
       <select class="admin-select" id="newFeedbackCategory" style="margin-bottom:8px;">
@@ -2884,10 +2884,10 @@ ${DESIGN_TOKENS_CSS}
         <option value="idea">Idea</option>
         <option value="other">Other</option>
       </select>
-      <textarea id="newFeedbackMessage" placeholder="What did you find?" style="width:100%; min-height:70px; box-sizing:border-box; padding:10px 12px; border-radius:8px; border:1px solid rgba(0,0,0,0.15); font-family:inherit; font-size:0.9rem; resize:vertical;"></textarea>
+      <textarea id="newFeedbackMessage" placeholder="What did you find?" style="width:100%; min-height:70px; box-sizing:border-box; padding:10px 12px; border-radius:var(--radius-sm); border:1px solid rgba(0,0,0,0.15); font-family:inherit; font-size:var(--font-size-base); resize:vertical;"></textarea>
       <div style="margin-top:8px; display:flex; align-items:center; gap:10px;">
         <button type="button" class="admin-select" style="cursor:pointer;" id="newFeedbackSubmitBtn" data-act="submitAdminFeedback">Add to list</button>
-        <span id="newFeedbackStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
+        <span id="newFeedbackStatus" style="color:var(--muted); font-size:var(--font-size-sm);"></span>
       </div>
     </div>
     <div id="feedbackList">Loading\u2026</div>
@@ -2897,19 +2897,19 @@ ${DESIGN_TOKENS_CSS}
   <div id="editFeedbackModal" class="modal-overlay" style="display:none;">
     <div class="modal-card" style="max-width:500px;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h3 style="margin:0; font-size:1.15rem; font-weight:700; color:var(--text);">Edit Feedback</h3>
+        <h3 style="margin:0; font-size:var(--font-size-lg); font-weight:700; color:var(--text);">Edit Feedback</h3>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeEditFeedbackModal">&#x2715;</button>
       </div>
       <input type="hidden" id="editFeedbackId">
-      <label style="display:block; font-size:0.82rem; font-weight:600; color:var(--muted); margin-bottom:6px;">Category</label>
+      <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:6px;">Category</label>
       <select class="admin-select" id="editFeedbackCategory" style="margin-bottom:14px; width:100%; padding:10px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text);">
         <option value="bug">bug</option>
         <option value="improvement">improvement</option>
         <option value="idea">idea</option>
         <option value="other">other</option>
       </select>
-      <label style="display:block; font-size:0.82rem; font-weight:600; color:var(--muted); margin-bottom:6px;">Message</label>
-      <textarea id="editFeedbackMessage" style="width:100%; min-height:120px; box-sizing:border-box; padding:10px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-family:inherit; font-size:0.92rem; resize:vertical; margin-bottom:16px; outline:none;"></textarea>
+      <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:6px;">Message</label>
+      <textarea id="editFeedbackMessage" style="width:100%; min-height:120px; box-sizing:border-box; padding:10px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-family:inherit; font-size:var(--font-size-base); resize:vertical; margin-bottom:16px; outline:none;"></textarea>
       <div style="display:flex; justify-content:flex-end; gap:10px;">
         <button type="button" class="lc-btn secondary" data-act="closeEditFeedbackModal">Cancel</button>
         <button type="button" class="lc-btn primary" id="editFeedbackSaveBtn" data-act="saveEditFeedback">Save Changes</button>
@@ -2918,7 +2918,7 @@ ${DESIGN_TOKENS_CSS}
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="apiusage">
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">Requests made using this Worker's own shared API keys (the fallback used whenever a visitor hasn't supplied their own) -- not counting anyone's personal keys, which only they can rate-limit. Watch these against each provider's limit if catalogs start coming back empty or slow.</p>
+    <p style="color:var(--muted); margin-top:0; font-size:var(--font-size-base);">Requests made using this Worker's own shared API keys (the fallback used whenever a visitor hasn't supplied their own) -- not counting anyone's personal keys, which only they can rate-limit. Watch these against each provider's limit if catalogs start coming back empty or slow.</p>
     <div class="table-wrap">
       <table>
         <tr><th>Key</th><th>Last 24h</th><th>Last 7 days</th><th>Last 30 days</th><th>Provider limit</th></tr>
@@ -2929,86 +2929,86 @@ ${DESIGN_TOKENS_CSS}
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="netflixpreview">
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">A look at what a TMDB-discover-based shelf would actually contain for any streaming provider, before wiring it into Quick Add for real -- pulled live from TMDB, not a saved list. Counts are TMDB/JustWatch's own tracking, not the provider's real numbers, and typically run a bit under what trackers like FlixPatrol report.</p>
+    <p style="color:var(--muted); margin-top:0; font-size:var(--font-size-base);">A look at what a TMDB-discover-based shelf would actually contain for any streaming provider, before wiring it into Quick Add for real -- pulled live from TMDB, not a saved list. Counts are TMDB/JustWatch's own tracking, not the provider's real numbers, and typically run a bit under what trackers like FlixPatrol report.</p>
 
     <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Find a provider's id</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">TMDB sometimes has more than one entry for the same service (e.g. two separate "Disney Plus" ids) -- look the name up here rather than guessing, since a wrong id fails silently: it just quietly shows the wrong catalog under the right label.</p>
+      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Find a provider's id</div>
+      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">TMDB sometimes has more than one entry for the same service (e.g. two separate "Disney Plus" ids) -- look the name up here rather than guessing, since a wrong id fails silently: it just quietly shows the wrong catalog under the right label.</p>
       <div style="display:flex; gap:8px; align-items:center;">
         <input type="text" id="providerLookupQueryInput" class="admin-select" style="margin-right:0; flex:1; max-width:220px;" placeholder="e.g. disney, max, hulu" data-act="lookupProviderIds" data-act-keys="Enter" data-act-prevent>
         <button type="button" class="secondary lc-btn" data-act="lookupProviderIds">Search</button>
-        <span id="providerLookupStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
+        <span id="providerLookupStatus" style="color:var(--muted); font-size:var(--font-size-sm);"></span>
       </div>
       <div id="providerLookupResults" style="margin-top:10px;"></div>
     </div>
 
     <div style="display:flex; gap:8px; align-items:center; margin-bottom:16px; flex-wrap:wrap;">
-      <label style="font-size:0.85rem; color:#8E8E93;">Provider id
+      <label style="font-size:var(--font-size-sm); color:var(--muted);">Provider id
         <input type="text" id="netflixPreviewProviderIdInput" class="admin-select" style="margin-right:0; width:60px;" value="8" placeholder="8">
       </label>
-      <label style="font-size:0.85rem; color:#8E8E93;">Region
+      <label style="font-size:var(--font-size-sm); color:var(--muted);">Region
         <input type="text" id="netflixPreviewRegionInput" class="admin-select" style="margin-right:0; width:70px; text-transform:uppercase;" value="US" maxlength="2" placeholder="US">
       </label>
       <button type="button" class="secondary lc-btn" data-act="loadNetflixPreview">Load Preview</button>
-      <span id="netflixPreviewStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
+      <span id="netflixPreviewStatus" style="color:var(--muted); font-size:var(--font-size-sm);"></span>
     </div>
     <div id="netflixPreviewMovies"></div>
     <div id="netflixPreviewShows" style="margin-top:28px;"></div>
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="supportgoal">
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">The <strong>Ko-fi support strip</strong> at the top of Catalogs on the main site: a goal for the month's hosting bill and how much has been given toward it. It stays hidden until you turn it on. Visitors can hide it for the rest of the month with its &#x2715;; that only hides it for them.</p>
+    <p style="color:var(--muted); margin-top:0; font-size:var(--font-size-base);">The <strong>Ko-fi support strip</strong> at the top of Catalogs on the main site: a goal for the month's hosting bill and how much has been given toward it. It stays hidden until you turn it on. Visitors can hide it for the rest of the month with its &#x2715;; that only hides it for them.</p>
     <div class="panel" style="margin:0 0 18px; padding:14px 16px; max-width:520px;">
-      <label style="display:flex; align-items:center; gap:8px; font-weight:600; font-size:0.9rem; margin-bottom:14px;">
+      <label style="display:flex; align-items:center; gap:8px; font-weight:600; font-size:var(--font-size-base); margin-bottom:14px;">
         <input type="checkbox" id="supportGoalEnabled"> Show the strip on the site
       </label>
-      <label style="display:block; font-size:0.85rem; color:#8E8E93; margin-bottom:12px;">Monthly goal (US dollars)
+      <label style="display:block; font-size:var(--font-size-sm); color:var(--muted); margin-bottom:12px;">Monthly goal (US dollars)
         <input type="number" id="supportGoalAmount" class="admin-select" min="0" max="100000" step="1" style="display:block; margin:4px 0 0; width:160px;" placeholder="60">
       </label>
-      <label style="display:block; font-size:0.85rem; color:#8E8E93; margin-bottom:6px;">Given so far this month (US dollars)
+      <label style="display:block; font-size:var(--font-size-sm); color:var(--muted); margin-bottom:6px;">Given so far this month (US dollars)
         <input type="number" id="supportGoalRaised" class="admin-select" min="0" step="0.01" style="display:block; margin:4px 0 0; width:160px;" placeholder="0">
       </label>
-      <div style="font-size:0.8rem; color:#8E8E93; margin-bottom:14px;">Ko-fi adds each US-dollar donation and membership payment to this by itself (set up below); type a number here to correct it. It counts toward <span id="supportGoalMonth">this month</span> only and starts again at 0 on the 1st.</div>
+      <div style="font-size:var(--font-size-sm); color:var(--muted); margin-bottom:14px;">Ko-fi adds each US-dollar donation and membership payment to this by itself (set up below); type a number here to correct it. It counts toward <span id="supportGoalMonth">this month</span> only and starts again at 0 on the 1st.</div>
       <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
         <button type="button" class="primary lc-btn" data-act="saveSupportGoal">Save</button>
-        <span id="supportGoalStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
+        <span id="supportGoalStatus" style="color:var(--muted); font-size:var(--font-size-sm);"></span>
       </div>
     </div>
     <div class="panel" style="margin:0 0 18px; padding:14px 16px; max-width:520px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Automatic totals from Ko-fi</div>
-      <ol style="margin:0 0 12px 18px; padding:0; font-size:0.85rem; color:#8E8E93; line-height:1.5;">
+      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Automatic totals from Ko-fi</div>
+      <ol style="margin:0 0 12px 18px; padding:0; font-size:var(--font-size-sm); color:var(--muted); line-height:1.5;">
         <li>In Ko-fi, go to <strong>Settings &rarr; API &rarr; Webhooks</strong> and paste this as the Webhook URL, then press Update:
           <div><code id="supportGoalWebhookUrl" style="user-select:all;"></code></div></li>
         <li>Copy Ko-fi's <strong>verification token</strong> and add it to this Worker as a secret named <code>KOFI_VERIFICATION_TOKEN</code> (Cloudflare dashboard &rarr; Worker &rarr; Settings &rarr; Variables and Secrets).</li>
         <li>Use Ko-fi's <strong>Send a test</strong>. It shows up below.</li>
       </ol>
-      <div style="font-size:0.85rem;">Token: <span id="supportGoalTokenState" style="color:#8E8E93;">checking&hellip;</span></div>
-      <div style="font-size:0.85rem; margin-top:4px;">Last payment counted: <span id="supportGoalLastPayment" style="color:#8E8E93;">none yet</span></div>
-      <div style="font-size:0.78rem; color:#8E8E93; margin-top:10px;">Counts donations and membership payments made in US dollars. Other currencies, shop orders and commissions are skipped; type those in above if you want them counted. Who gave is never shown.</div>
+      <div style="font-size:var(--font-size-sm);">Token: <span id="supportGoalTokenState" style="color:var(--muted);">checking&hellip;</span></div>
+      <div style="font-size:var(--font-size-sm); margin-top:4px;">Last payment counted: <span id="supportGoalLastPayment" style="color:var(--muted);">none yet</span></div>
+      <div style="font-size:var(--font-size-xs); color:var(--muted); margin-top:10px;">Counts donations and membership payments made in US dollars. Other currencies, shop orders and commissions are skipped; type those in above if you want them counted. Who gave is never shown.</div>
     </div>
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="newonstreaming">
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">The <strong>New on Streaming</strong> catalog &mdash; what actually arrived on a streaming service, newest first, with a show pushed back to the top the day a new episode airs. It is a real catalog row right now and can be installed into Stremio or Nuvio from the URLs below; it is in the My Lists Addon Charts section of Quick Add and in Discover.</p>
-    <p style="color:#8E8E93; margin:0 0 16px; font-size:0.82rem;">Powered by RapidAPI's <strong>Streaming Availability API</strong> (/changes) to capture the exact date titles and new episodes are added to streaming services (not release dates), with new arrivals first and recent episodes bumping shows to the top within a rolling 30-day window.</p>
+    <p style="color:var(--muted); margin-top:0; font-size:var(--font-size-base);">The <strong>New on Streaming</strong> catalog &mdash; what actually arrived on a streaming service, newest first, with a show pushed back to the top the day a new episode airs. It is a real catalog row right now and can be installed into Stremio or Nuvio from the URLs below; it is in the My Lists Addon Charts section of Quick Add and in Discover.</p>
+    <p style="color:var(--muted); margin:0 0 16px; font-size:var(--font-size-sm);">Powered by RapidAPI's <strong>Streaming Availability API</strong> (/changes) to capture the exact date titles and new episodes are added to streaming services (not release dates), with new arrivals first and recent episodes bumping shows to the top within a rolling 30-day window.</p>
 
     <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Sweep status</div>
-      <div id="nosStatus" style="font-size:0.85rem; color:#8E8E93;">Loading&hellip;</div>
+      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Sweep status</div>
+      <div id="nosStatus" style="font-size:var(--font-size-sm); color:var(--muted);">Loading&hellip;</div>
       <div style="margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <button type="button" class="secondary lc-btn" data-act="loadNewOnStreaming">Refresh</button>
-        <label style="font-size:0.85rem; color:#8E8E93;">Pages
+        <label style="font-size:var(--font-size-sm); color:var(--muted);">Pages
           <input type="number" id="nosSweepUnits" class="admin-select" style="margin-right:0; width:70px;" value="30" min="1" max="100">
         </label>
         <button type="button" class="admin-select" style="cursor:pointer;" id="nosSweepBtn" data-act="runNewOnStreamingSweep" data-act-args="${adminActArgs([false])}">Run a sweep now</button>
-        <button type="button" class="secondary lc-btn" style="cursor:pointer; color:#FF9500; border-color:rgba(255,149,0,0.4);" id="nosResetBtn" data-act="runNewOnStreamingSweep" data-act-args="${adminActArgs([true])}">Clear &amp; pull fresh data</button>
-        <span id="nosSweepStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
+        <button type="button" class="secondary lc-btn" style="cursor:pointer; color:var(--color-warn-text); border-color:rgba(255,149,0,0.4);" id="nosResetBtn" data-act="runNewOnStreamingSweep" data-act-args="${adminActArgs([true])}">Clear &amp; pull fresh data</button>
+        <span id="nosSweepStatus" style="color:var(--muted); font-size:var(--font-size-sm);"></span>
       </div>
-      <p style="color:#8E8E93; margin:10px 0 0; font-size:0.8rem;">Each page fetches up to 25 changes from RapidAPI. Automated sweeps run every 6 hours via cron and read each change stream (new titles, new seasons, new episodes, removals) oldest-first from where the last sweep stopped, so a busy day is finished on the next run instead of being cut off. The per-run budget is the month&#39;s remaining quota spread over the runs left; a safety cap halts sweeps at 950 calls to ensure zero overages. "Run a sweep now" continues the same streams with the page count given. Older titles (&gt;30 days) are pruned automatically each sweep.</p>
+      <p style="color:var(--muted); margin:10px 0 0; font-size:var(--font-size-sm);">Each page fetches up to 25 changes from RapidAPI. Automated sweeps run every 6 hours via cron and read each change stream (new titles, new seasons, new episodes, removals) oldest-first from where the last sweep stopped, so a busy day is finished on the next run instead of being cut off. The per-run budget is the month&#39;s remaining quota spread over the runs left; a safety cap halts sweeps at 950 calls to ensure zero overages. "Run a sweep now" continues the same streams with the page count given. Older titles (&gt;30 days) are pruned automatically each sweep.</p>
     </div>
 
     <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Rows in 30-day window</div>
+      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Rows in 30-day window</div>
       <div class="table-wrap">
         <table>
           <tr><th>Service</th><th>Type</th><th>Titles</th><th>Removed</th><th>Newest Arrival</th></tr>
@@ -3018,8 +3018,8 @@ ${DESIGN_TOKENS_CSS}
     </div>
 
     <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Add / Sync Title to Catalog</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Directly add or bump any movie or series in New on Streaming by IMDb ID (e.g. <code>tt45851964</code>), TMDB ID (e.g. <code>324931</code>), or title name.</p>
+      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Add / Sync Title to Catalog</div>
+      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">Directly add or bump any movie or series in New on Streaming by IMDb ID (e.g. <code>tt45851964</code>), TMDB ID (e.g. <code>324931</code>), or title name.</p>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <input type="text" id="nosAddTitleInput" class="admin-select" placeholder="Title, IMDb ID (tt...) or TMDB ID" style="width:240px;">
         <select class="admin-select" id="nosAddServiceSelect">
@@ -3038,13 +3038,13 @@ ${DESIGN_TOKENS_CSS}
         </select>
         <input type="date" id="nosAddDateInput" class="admin-select" style="width:130px;" title="Optional arrival date (defaults to episode air date or today)">
         <button type="button" class="admin-select" style="cursor:pointer;" id="nosAddBtn" data-act="nosAddTitle">Add / Sync Title</button>
-        <span id="nosAddStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
+        <span id="nosAddStatus" style="color:var(--muted); font-size:var(--font-size-sm);"></span>
       </div>
     </div>
 
     <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Preview the catalog</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Read through the same code that serves the row to Stremio, so this is the actual shelf and not a second implementation of it. Order is always most recently arrived first.</p>
+      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Preview the catalog</div>
+      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">Read through the same code that serves the row to Stremio, so this is the actual shelf and not a second implementation of it. Order is always most recently arrived first.</p>
       <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap;">
         <select class="admin-select" id="nosPreviewType" data-act="nosResetAndPreview">
           <option value="all" selected>All (Movies &amp; Shows)</option>
@@ -3057,25 +3057,25 @@ ${DESIGN_TOKENS_CSS}
         <input type="text" id="nosPreviewSearch" class="admin-select" placeholder="Filter by title or ID…" style="width:180px;" data-act="onNosPreviewSearchInput" data-act-on="input">
         <button type="button" class="secondary lc-btn" data-act="nosResetAndPreview">Load preview</button>
         <button type="button" class="secondary lc-btn" id="nosPrevBtn" data-act="nosChangePage" data-act-args="${adminActArgs([-1])}" disabled>&larr; Prev</button>
-        <span id="nosPageLabel" style="font-size:0.85rem; color:#8E8E93; font-weight:600;">Page 1</span>
+        <span id="nosPageLabel" style="font-size:var(--font-size-sm); color:var(--muted); font-weight:600;">Page 1</span>
         <button type="button" class="secondary lc-btn" id="nosNextBtn" data-act="nosChangePage" data-act-args="${adminActArgs([1])}" disabled>Next &rarr;</button>
-        <span id="nosPreviewStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
+        <span id="nosPreviewStatus" style="color:var(--muted); font-size:var(--font-size-sm);"></span>
       </div>
-      <div style="margin-bottom:12px; font-size:0.82rem; color:#8E8E93;">Catalog URL: <code id="nosPreviewSource">tmdb:new-on-streaming</code> &mdash; paste this into <strong>Catalogs &rarr; + New Catalog</strong> on the main site to install this exact row into Stremio or Nuvio while it is still hidden.</div>
+      <div style="margin-bottom:12px; font-size:var(--font-size-sm); color:var(--muted);">Catalog URL: <code id="nosPreviewSource">tmdb:new-on-streaming</code> &mdash; paste this into <strong>Catalogs &rarr; + New Catalog</strong> on the main site to install this exact row into Stremio or Nuvio while it is still hidden.</div>
       <div id="nosPreviewResults"></div>
     </div>
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="channelpresets">
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">The shared pool behind every <strong>Quick Add Popular Networks</strong> channel (up to 5,000 episodes per network, cached 24h under <code>channel:preset:v2:&lt;networkId&gt;</code>) &mdash; every visitor who Quick Adds the same network reads this same cache. A daily cron rotation keeps it warm automatically, but a cache built under an older version of the build code keeps serving its old shape until that rotation reaches it again, which can take a few hours. Clear or rebuild a network here to skip the wait.</p>
+    <p style="color:var(--muted); margin-top:0; font-size:var(--font-size-base);">The shared pool behind every <strong>Quick Add Popular Networks</strong> channel (up to 5,000 episodes per network, cached 24h under <code>channel:preset:v2:&lt;networkId&gt;</code>) &mdash; every visitor who Quick Adds the same network reads this same cache. A daily cron rotation keeps it warm automatically, but a cache built under an older version of the build code keeps serving its old shape until that rotation reaches it again, which can take a few hours. Clear or rebuild a network here to skip the wait.</p>
 
     <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <button type="button" class="secondary lc-btn" data-act="loadChannelPresets">Refresh</button>
-        <button type="button" class="secondary lc-btn" style="cursor:pointer; color:#FF3B30; border-color:rgba(255,59,48,0.4);" id="cpClearAllBtn" data-act="clearAllChannelPresets">Clear all caches</button>
-        <span id="cpStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
+        <button type="button" class="secondary lc-btn" style="cursor:pointer; color:var(--color-danger-text); border-color:rgba(255,59,48,0.4);" id="cpClearAllBtn" data-act="clearAllChannelPresets">Clear all caches</button>
+        <span id="cpStatus" style="color:var(--muted); font-size:var(--font-size-sm);"></span>
       </div>
-      <p style="color:#8E8E93; margin:10px 0 0; font-size:0.8rem;">Clearing never touches anyone's already-saved channels -- each saved row carries its own small item sample as a fallback, so a cleared cache just means the next Quick Add click (or the cron rotation) rebuilds it fresh instead of serving what was cached before.</p>
+      <p style="color:var(--muted); margin:10px 0 0; font-size:var(--font-size-sm);">Clearing never touches anyone's already-saved channels -- each saved row carries its own small item sample as a fallback, so a cleared cache just means the next Quick Add click (or the cron rotation) rebuilds it fresh instead of serving what was cached before.</p>
     </div>
 
     <div class="panel" style="margin:0; padding:14px 16px;">
@@ -3089,116 +3089,116 @@ ${DESIGN_TOKENS_CSS}
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="maintenance">
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">One-off, click-to-run maintenance actions -- everything here is also reachable as a raw <code>POST</code> request for anyone using <code>wrangler</code>/curl, but these buttons are the point-and-click way to run the same thing entirely from this dashboard, no terminal required.</p>
+    <p style="color:var(--muted); margin-top:0; font-size:var(--font-size-base);">One-off, click-to-run maintenance actions -- everything here is also reachable as a raw <code>POST</code> request for anyone using <code>wrangler</code>/curl, but these buttons are the point-and-click way to run the same thing entirely from this dashboard, no terminal required.</p>
 
     <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">D1 database: ${isD1Bound
-        ? '<span style="color:#30d158;">bound</span>'
-        : '<span style="color:#FF3B30;">not bound (required)</span>'}</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">${isD1Bound
+      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">D1 database: ${isD1Bound
+        ? '<span style="color:var(--color-success-text);">bound</span>'
+        : '<span style="color:var(--color-danger-text);">not bound (required)</span>'}</div>
+      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">${isD1Bound
         ? 'This Worker has a D1 database bound as <code>DB</code>. Use the button below to backfill existing KV records into D1.'
         : 'This Worker has no D1 database bound (Settings &rarr; Bindings). D1 is required for authoritative accounts, lists, search, likes, feedback, and tracking. Bind a D1 database as <code>DB</code> to enable full functionality.'}</p>
       <button type="button" class="admin-select" style="cursor:pointer;" id="migrateD1Btn" data-act="runMigrateD1" ${isD1Bound ? '' : 'disabled'}>Migrate KV &rarr; D1</button>
-      <span id="migrateD1Status" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
-      <p style="color:#8E8E93; margin:10px 0 0; font-size:0.8rem;">Copies existing Creator Profiles, Custom Lists, likes, feedback, and tracking records from KV into D1. Safe to run more than once.</p>
+      <span id="migrateD1Status" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
+      <p style="color:var(--muted); margin:10px 0 0; font-size:var(--font-size-sm);">Copies existing Creator Profiles, Custom Lists, likes, feedback, and tracking records from KV into D1. Safe to run more than once.</p>
     </div>
 
     <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Unified accounts table (v2 identity)</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Backfills existing creator identities from D1 <code>creators</code> and KV <code>creator:*</code> into the unified <code>accounts</code> table. Newest key hash wins; D1 wins ties. Copies data only &mdash; safe to run more than once.</p>
+      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Unified accounts table (v2 identity)</div>
+      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">Backfills existing creator identities from D1 <code>creators</code> and KV <code>creator:*</code> into the unified <code>accounts</code> table. Newest key hash wins; D1 wins ties. Copies data only &mdash; safe to run more than once.</p>
       <button type="button" class="admin-select" style="cursor:pointer;" id="migrateAccountsBtn" data-act="runMigrateAccounts" ${isD1Bound ? '' : 'disabled'}>Migrate Accounts</button>
-      <span id="migrateAccountsStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <span id="migrateAccountsStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
     </div>
 
     <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Install links: keys moving to encrypted storage</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">The first time an existing install link is used, its provider keys, tokens and Creator Key move out of its KV record into encrypted D1 storage, for the share of links set in <code>INSTALL_MIGRATION_PERCENT</code>. Links keep their URL and serve exactly as before. Needs <code>TOKEN_ENCRYPTION_KEY</code> and migration 0015. Read-only: this button only reports progress.</p>
+      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Install links: keys moving to encrypted storage</div>
+      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">The first time an existing install link is used, its provider keys, tokens and Creator Key move out of its KV record into encrypted D1 storage, for the share of links set in <code>INSTALL_MIGRATION_PERCENT</code>. Links keep their URL and serve exactly as before. Needs <code>TOKEN_ENCRYPTION_KEY</code> and migration 0015. Read-only: this button only reports progress.</p>
       <button type="button" class="admin-select" style="cursor:pointer;" id="installsStatusBtn" data-act="runInstallsStatus" ${isD1Bound ? '' : 'disabled'}>Check progress</button>
-      <span id="installsStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
-      <p style="color:#8E8E93; margin:12px 0 8px; font-size:0.8rem;">Emergency only: puts every moved link's keys back into its KV record, exactly as they were, and empties the table. Set <code>INSTALL_MIGRATION_PERCENT</code> to <code>0</code> first. Links removed from an account stay removed.</p>
+      <span id="installsStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
+      <p style="color:var(--muted); margin:12px 0 8px; font-size:var(--font-size-sm);">Emergency only: puts every moved link's keys back into its KV record, exactly as they were, and empties the table. Set <code>INSTALL_MIGRATION_PERCENT</code> to <code>0</code> first. Links removed from an account stay removed.</p>
       <button type="button" class="admin-select" style="cursor:pointer;" id="installsRestoreBtn" data-act="runInstallsRestore" ${isD1Bound ? '' : 'disabled'}>Undo the move</button>
-      <span id="installsRestoreStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <span id="installsRestoreStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
     </div>
 
     <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Lists v2: copy existing lists</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Copies every account&rsquo;s lists, the old anonymous lists, shared and published channels (their episode lists go to the <code>BLOBS</code> R2 bucket when it is bound), and their likes into the new tables (migration 0016). It only copies: the lists and channels people use today are not changed, and nothing reads the copies until <code>FF_V2_LISTS_READ</code> is on. Run <strong>Migrate Accounts</strong> first, and back up D1 before the first run. It works in small steps and can be stopped and carried on; <strong>Start over</strong> runs it again from the first account, copying only what changed.</p>
+      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Lists v2: copy existing lists</div>
+      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">Copies every account&rsquo;s lists, the old anonymous lists, shared and published channels (their episode lists go to the <code>BLOBS</code> R2 bucket when it is bound), and their likes into the new tables (migration 0016). It only copies: the lists and channels people use today are not changed, and nothing reads the copies until <code>FF_V2_LISTS_READ</code> is on. Run <strong>Migrate Accounts</strong> first, and back up D1 before the first run. It works in small steps and can be stopped and carried on; <strong>Start over</strong> runs it again from the first account, copying only what changed.</p>
       <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillBtn" data-act="runListsBackfill" data-act-args="${adminActArgs([false])}" ${isD1Bound ? '' : 'disabled'}>Copy lists</button>
       <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillRestartBtn" data-act="runListsBackfill" data-act-args="${adminActArgs([true])}" ${isD1Bound ? '' : 'disabled'}>Start over</button>
       <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillStatusBtn" data-act="runListsBackfillStatus" ${isD1Bound ? '' : 'disabled'}>Check results</button>
-      <span id="listsBackfillStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
-      <div id="listsBackfillResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
+      <span id="listsBackfillStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
+      <div id="listsBackfillResult" style="margin-top:10px; font-size:var(--font-size-sm); color:var(--muted);"></div>
     </div>
 
     <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Activity: copy watch history</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Copies every account&rsquo;s Watch History, and where each show is up to (finished, hidden from Continue Watching or Airing Next, storyline suggestions), into the activity database (<code>DB_ACTIVITY</code>, migration A0001). It only copies: the history people see today is not changed, and nothing reads the copy yet. Needs <code>DB_ACTIVITY</code> bound, and <strong>Migrate Accounts</strong> and migration 0016 first. It works in small steps and can be stopped and carried on; <strong>Start over</strong> copies every account again from the start.</p>
+      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Activity: copy watch history</div>
+      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">Copies every account&rsquo;s Watch History, and where each show is up to (finished, hidden from Continue Watching or Airing Next, storyline suggestions), into the activity database (<code>DB_ACTIVITY</code>, migration A0001). It only copies: the history people see today is not changed, and nothing reads the copy yet. Needs <code>DB_ACTIVITY</code> bound, and <strong>Migrate Accounts</strong> and migration 0016 first. It works in small steps and can be stopped and carried on; <strong>Start over</strong> copies every account again from the start.</p>
       <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillBtn" data-act="runActivityBackfill" data-act-args="${adminActArgs([false])}" ${isActivityBound ? '' : 'disabled'}>Copy history</button>
       <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillRestartBtn" data-act="runActivityBackfill" data-act-args="${adminActArgs([true])}" ${isActivityBound ? '' : 'disabled'}>Start over</button>
       <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillStatusBtn" data-act="runActivityBackfillStatus" ${isActivityBound ? '' : 'disabled'}>Check results</button>
-      <span id="activityBackfillStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;">${isActivityBound ? '' : 'DB_ACTIVITY is not bound.'}</span>
-      <div id="activityBackfillResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
+      <span id="activityBackfillStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;">${isActivityBound ? '' : 'DB_ACTIVITY is not bound.'}</span>
+      <div id="activityBackfillResult" style="margin-top:10px; font-size:var(--font-size-sm); color:var(--muted);"></div>
     </div>
 
     <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Background jobs queue: ${isJobsBound
-        ? '<span style="color:#30d158;">bound</span>'
-        : '<span style="color:#8E8E93;">not bound yet</span>'}</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Background work moves onto the Cloudflare Queue <code>mylists-jobs</code>, which this Worker also reads (Phase 5). Setting it up: create the queues <code>mylists-jobs</code> and <code>mylists-jobs-dlq</code>, add this Worker as the consumer of <code>mylists-jobs</code> (batch size 25, 5 retries, dead-letter queue <code>mylists-jobs-dlq</code>), and bind <code>mylists-jobs</code> to this Worker as <code>JOBS</code>. See docs/OPERATIONS.md section 18. <strong>Send a test job</strong> puts one job on the queue and waits for this Worker to pick it up, which proves all three steps worked.</p>
+      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Background jobs queue: ${isJobsBound
+        ? '<span style="color:var(--color-success-text);">bound</span>'
+        : '<span style="color:var(--muted);">not bound yet</span>'}</div>
+      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">Background work moves onto the Cloudflare Queue <code>mylists-jobs</code>, which this Worker also reads (Phase 5). Setting it up: create the queues <code>mylists-jobs</code> and <code>mylists-jobs-dlq</code>, add this Worker as the consumer of <code>mylists-jobs</code> (batch size 25, 5 retries, dead-letter queue <code>mylists-jobs-dlq</code>), and bind <code>mylists-jobs</code> to this Worker as <code>JOBS</code>. See docs/OPERATIONS.md section 18. <strong>Send a test job</strong> puts one job on the queue and waits for this Worker to pick it up, which proves all three steps worked.</p>
       <button type="button" class="admin-select" style="cursor:pointer;" id="jobsPingBtn" data-act="runJobsPing" ${isJobsBound ? '' : 'disabled'}>Send a test job</button>
-      <span id="jobsPingStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;">${isJobsBound ? '' : 'JOBS is not bound.'}</span>
-      <p style="color:#8E8E93; margin:12px 0 8px; font-size:0.8rem;">Once the queue is bound, every cron tick only hands out the work that is due (the Continue Watching and Airing Next sweeps, New on Streaming, chart and poster warming, channel presets, housekeeping), and the queue does it. Without it, the tick does the work itself, as before. <strong>Check jobs</strong> shows when each one last ran. Needs migration 0016.</p>
+      <span id="jobsPingStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;">${isJobsBound ? '' : 'JOBS is not bound.'}</span>
+      <p style="color:var(--muted); margin:12px 0 8px; font-size:var(--font-size-sm);">Once the queue is bound, every cron tick only hands out the work that is due (the Continue Watching and Airing Next sweeps, New on Streaming, chart and poster warming, channel presets, housekeeping), and the queue does it. Without it, the tick does the work itself, as before. <strong>Check jobs</strong> shows when each one last ran. Needs migration 0016.</p>
       <button type="button" class="admin-select" style="cursor:pointer;" id="jobsStatusBtn" data-act="runJobsStatus" ${isD1Bound ? '' : 'disabled'}>Check jobs</button>
-      <span id="jobsStatusStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
-      <div id="jobsStatusResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
-      <p style="color:#8E8E93; margin:12px 0 8px; font-size:0.8rem;"><strong>Compare shelves now</strong> runs the whole Continue Watching and Airing Next comparison (<code>shelf.shadow</code>) from this page, a few minutes instead of the hourly job's 15 hours, and shows why each difference is there. Keep the page open until it says Done. It only reads.</p>
+      <span id="jobsStatusStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
+      <div id="jobsStatusResult" style="margin-top:10px; font-size:var(--font-size-sm); color:var(--muted);"></div>
+      <p style="color:var(--muted); margin:12px 0 8px; font-size:var(--font-size-sm);"><strong>Compare shelves now</strong> runs the whole Continue Watching and Airing Next comparison (<code>shelf.shadow</code>) from this page, a few minutes instead of the hourly job's 15 hours, and shows why each difference is there. Keep the page open until it says Done. It only reads.</p>
       <button type="button" class="admin-select" style="cursor:pointer;" id="shelfCompareBtn" data-act="runShelfCompareNow" ${isD1Bound ? '' : 'disabled'}>Compare shelves now</button>
-      <span id="shelfCompareStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
-      <div id="shelfCompareResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93; white-space:pre-wrap; word-break:break-word;"></div>
+      <span id="shelfCompareStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
+      <div id="shelfCompareResult" style="margin-top:10px; font-size:var(--font-size-sm); color:var(--muted); white-space:pre-wrap; word-break:break-word;"></div>
     </div>
 
     <div class="panel" style="margin:0; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Database schema</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Migrations are applied by hand and nothing records that it happened, so this Worker can end up running ahead of its own database. It degrades quietly when that happens rather than refusing to start &mdash; which is why this check exists. Run it after any deploy that shipped a new file under <code>migrations/</code>.</p>
+      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Database schema</div>
+      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">Migrations are applied by hand and nothing records that it happened, so this Worker can end up running ahead of its own database. It degrades quietly when that happens rather than refusing to start &mdash; which is why this check exists. Run it after any deploy that shipped a new file under <code>migrations/</code>.</p>
       <button type="button" class="admin-select" style="cursor:pointer;" id="schemaCheckBtn" data-act="runSchemaCheck">Check schema</button>
-      <span id="schemaCheckStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <span id="schemaCheckStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
       <div id="schemaCheckResult" style="margin-top:10px;"></div>
     </div>
 
     <div class="panel" style="margin:0; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Counts missing since 2 October</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">From 2 October until the fix, page views, install links, playback pings, Most Watched, list adds and searches were counted in Cloudflare Analytics instead of here, so this dashboard showed zeros. This puts them back. It needs the secret <code>CF_ANALYTICS_TOKEN</code> (an API token with <em>Account Analytics: Read</em>) and the variable <code>CF_ANALYTICS_ACCOUNT_ID</code>. <strong>Preview</strong> shows what would be added; <strong>Put them back</strong> adds it. Running it again adds nothing twice.</p>
+      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Counts missing since 2 October</div>
+      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">From 2 October until the fix, page views, install links, playback pings, Most Watched, list adds and searches were counted in Cloudflare Analytics instead of here, so this dashboard showed zeros. This puts them back. It needs the secret <code>CF_ANALYTICS_TOKEN</code> (an API token with <em>Account Analytics: Read</em>) and the variable <code>CF_ANALYTICS_ACCOUNT_ID</code>. <strong>Preview</strong> shows what would be added; <strong>Put them back</strong> adds it. Running it again adds nothing twice.</p>
       <button type="button" class="admin-select" style="cursor:pointer;" id="statsRecoveryPreviewBtn" data-act="runStatsRecovery" data-act-args="${adminActArgs([false])}">Preview</button>
       <button type="button" class="admin-select" style="cursor:pointer;" id="statsRecoveryApplyBtn" data-act="runStatsRecovery" data-act-args="${adminActArgs([true])}">Put them back</button>
-      <span id="statsRecoveryStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
-      <div id="statsRecoveryResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
+      <span id="statsRecoveryStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
+      <div id="statsRecoveryResult" style="margin-top:10px; font-size:var(--font-size-sm); color:var(--muted);"></div>
     </div>
 
     <div class="panel" style="margin:0; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Export old data to R2 (a copy)</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Copies every KV key that starts with the text below into the <code>BLOBS</code> bucket, under <code>kv-archive/</code>, a batch at a time, then writes a <code>manifest.json</code> when the copy is complete. It deletes nothing. Type the prefix exactly, with no <code>*</code> (for example <code>stats:</code>). Deleting old data is not safe yet: see docs/CUTOVER.md.</p>
+      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Export old data to R2 (a copy)</div>
+      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">Copies every KV key that starts with the text below into the <code>BLOBS</code> bucket, under <code>kv-archive/</code>, a batch at a time, then writes a <code>manifest.json</code> when the copy is complete. It deletes nothing. Type the prefix exactly, with no <code>*</code> (for example <code>stats:</code>). Deleting old data is not safe yet: see docs/CUTOVER.md.</p>
       <input type="text" id="kvExportPrefix" class="admin-select" placeholder="creator:" style="min-width:180px;">
       <button type="button" class="admin-select" style="cursor:pointer;" id="kvExportBtn" data-act="runKvExport">Export</button>
-      <span id="kvExportStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <span id="kvExportStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
     </div>
 
     <div class="panel" style="margin:0; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Public list directory &amp; search index</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">The public list directory and in-app search query D1 tables and the full-text search index (lists_fts). This button rebuilds the search index directly from creator_lists &mdash; useful after importing data or to recreate the index after a D1 database export.</p>
+      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Public list directory &amp; search index</div>
+      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">The public list directory and in-app search query D1 tables and the full-text search index (lists_fts). This button rebuilds the search index directly from creator_lists &mdash; useful after importing data or to recreate the index after a D1 database export.</p>
       <button type="button" class="admin-select" style="cursor:pointer;" id="rebuildIndexBtn" data-act="runRebuildPublicIndex">Rebuild Search Index</button>
-      <span id="rebuildIndexStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <span id="rebuildIndexStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
     </div>
 
     <div class="panel" style="margin:0; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Delete a creator&rsquo;s lists</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Removes specific lists belonging to one Creator Profile: the list itself, its likes, its place in that creator&rsquo;s order, and its directory entry. Use it for content a creator cannot or will not remove themselves. A slug whose list is already gone is still cleared from the directory, which is how you get rid of an entry that shows an item count but opens empty.</p>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Browse first: this reads the creator&rsquo;s actual stored records, including any the creator&rsquo;s own dashboard cannot see because they are missing from their display order &mdash; which is how an account ends up with dozens of copies of one list under slugs nobody could guess. Filter by name, select them all, then delete. Deleting also records the deletion on the account, so the creator&rsquo;s other signed-in browsers drop their copies instead of uploading them straight back.</p>
-      <p style="color:#FF9500; margin:0 0 10px; font-size:0.82rem;"><strong>This cannot be undone.</strong> There is no backup of a deleted list. Prefer &ldquo;Rebuild Public List Index&rdquo; above first &mdash; if the lists are only phantom directory entries, that fixes them without deleting anything.</p>
+      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Delete a creator&rsquo;s lists</div>
+      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">Removes specific lists belonging to one Creator Profile: the list itself, its likes, its place in that creator&rsquo;s order, and its directory entry. Use it for content a creator cannot or will not remove themselves. A slug whose list is already gone is still cleared from the directory, which is how you get rid of an entry that shows an item count but opens empty.</p>
+      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">Browse first: this reads the creator&rsquo;s actual stored records, including any the creator&rsquo;s own dashboard cannot see because they are missing from their display order &mdash; which is how an account ends up with dozens of copies of one list under slugs nobody could guess. Filter by name, select them all, then delete. Deleting also records the deletion on the account, so the creator&rsquo;s other signed-in browsers drop their copies instead of uploading them straight back.</p>
+      <p style="color:var(--color-warn-text); margin:0 0 10px; font-size:var(--font-size-sm);"><strong>This cannot be undone.</strong> There is no backup of a deleted list. Prefer &ldquo;Rebuild Public List Index&rdquo; above first &mdash; if the lists are only phantom directory entries, that fixes them without deleting anything.</p>
       <div class="row" style="margin-bottom:8px;">
         <input type="text" id="deleteListUserInput" class="admin-select" placeholder="Creator username" style="margin-right:6px;">
         <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="browseCreatorListsBtn" data-act="loadCreatorLists" data-act-args="${adminActArgs([true])}">Browse this creator&rsquo;s lists</button>
         <button type="button" class="admin-select" style="cursor:pointer;" id="browseCreatorListsMoreBtn" data-act="loadCreatorLists" data-act-args="${adminActArgs([false])}" hidden>Load more</button>
-        <span id="creatorListsStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+        <span id="creatorListsStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
       </div>
       <div class="row" style="margin-bottom:8px;">
         <input type="text" id="creatorListsFilterInput" class="admin-select" placeholder="Filter by name or slug (e.g. coming of age)" style="min-width:280px; margin-right:6px;" data-act="renderCreatorListsTable" data-act-on="input">
@@ -3209,30 +3209,30 @@ ${DESIGN_TOKENS_CSS}
       <div class="row" style="margin-bottom:8px;">
         <input type="text" id="deleteListSlugsInput" class="admin-select" placeholder="Slugs, comma or newline separated" style="min-width:320px;">
       </div>
-      <button type="button" class="admin-select" style="cursor:pointer; color:#FF3B30; border-color:rgba(255,59,48,0.35);" id="deleteListBtn" data-act="runDeleteCreatorLists">Delete these lists</button>
-      <span id="deleteListStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <button type="button" class="admin-select" style="cursor:pointer; color:var(--color-danger-text); border-color:rgba(255,59,48,0.35);" id="deleteListBtn" data-act="runDeleteCreatorLists">Delete these lists</button>
+      <span id="deleteListStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
     </div>
 
     <div class="panel" style="margin:0; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Anonymously published lists</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Lists published without a Creator Profile, under the shared <code>user</code> namespace. Anyone can create one and no owner exists to ask, so this is the only way to remove one. Browse to find a list, or type slugs directly if you already know them.</p>
-      <p style="color:#FF9500; margin:0 0 10px; font-size:0.82rem;"><strong>This cannot be undone.</strong> There is no backup of a deleted list.</p>
+      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Anonymously published lists</div>
+      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">Lists published without a Creator Profile, under the shared <code>user</code> namespace. Anyone can create one and no owner exists to ask, so this is the only way to remove one. Browse to find a list, or type slugs directly if you already know them.</p>
+      <p style="color:var(--color-warn-text); margin:0 0 10px; font-size:var(--font-size-sm);"><strong>This cannot be undone.</strong> There is no backup of a deleted list.</p>
       <div class="row" style="margin-bottom:8px;">
         <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="browseAnonBtn" data-act="loadPublishedLists" data-act-args="${adminActArgs([true])}">Browse</button>
         <button type="button" class="admin-select" style="cursor:pointer;" id="browseAnonMoreBtn" data-act="loadPublishedLists" data-act-args="${adminActArgs([false])}" hidden>Load more</button>
-        <span id="anonListStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+        <span id="anonListStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
       </div>
       <div id="anonListResults" style="margin-bottom:8px;"></div>
       <div class="row" style="margin-bottom:8px;">
         <input type="text" id="deleteAnonSlugsInput" class="admin-select" placeholder="Slugs, comma or newline separated" style="min-width:320px;">
       </div>
-      <button type="button" class="admin-select" style="cursor:pointer; color:#FF3B30; border-color:rgba(255,59,48,0.35);" id="deleteAnonBtn" data-act="runDeletePublishedLists">Delete these lists</button>
-      <span id="deleteAnonStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <button type="button" class="admin-select" style="cursor:pointer; color:var(--color-danger-text); border-color:rgba(255,59,48,0.35);" id="deleteAnonBtn" data-act="runDeletePublishedLists">Delete these lists</button>
+      <span id="deleteAnonStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
     </div>
 
     <div class="admin-card" style="margin-top:12px;">
-      <h3 style="margin:0 0 6px; font-size:0.95rem;">Published channels</h3>
-      <p style="margin:0 0 10px; color:#8E8E93; font-size:0.82rem;">
+      <h3 style="margin:0 0 6px; font-size:var(--font-size-base);">Published channels</h3>
+      <p style="margin:0 0 10px; color:var(--muted); font-size:var(--font-size-sm);">
         The Explore Channels directory. Publishing a channel is owner-only, so without this panel
         a channel could only be withdrawn by whoever put it there.
         <strong>Unlist</strong> removes it from the directory and leaves existing share links working &mdash;
@@ -3242,25 +3242,25 @@ ${DESIGN_TOKENS_CSS}
       <div class="row" style="margin-bottom:8px;">
         <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="browseChannelsBtn" data-act="loadPublishedChannels" data-act-args="${adminActArgs(['listed'])}">Browse the directory</button>
         <button type="button" class="admin-select" style="cursor:pointer;" id="browseChannelsAllBtn" data-act="loadPublishedChannels" data-act-args="${adminActArgs(['all'])}">Browse every stored channel</button>
-        <span id="publishedChannelStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+        <span id="publishedChannelStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
       </div>
       <div id="publishedChannelResults"></div>
     </div>
 
     <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Signed-in admin browsers</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Every browser signed in to this dashboard, newest activity first, with the address it signed in from. Before P7-2 there was no such list: the cookie was self-contained, so signing anyone out meant changing <code>ADMIN_KEY</code> and signing everyone out. <strong>Sign out</strong> ends one browser's session on its own &mdash; it stops working on the next request, not in seven days. Needs migration 0018. If you are signed in with Cloudflare Access, your browser may appear here too; closing its row does not stop Access from letting you back in.</p>
+      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Signed-in admin browsers</div>
+      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">Every browser signed in to this dashboard, newest activity first, with the address it signed in from. Before P7-2 there was no such list: the cookie was self-contained, so signing anyone out meant changing <code>ADMIN_KEY</code> and signing everyone out. <strong>Sign out</strong> ends one browser's session on its own &mdash; it stops working on the next request, not in seven days. Needs migration 0018. If you are signed in with Cloudflare Access, your browser may appear here too; closing its row does not stop Access from letting you back in.</p>
       <button type="button" class="admin-select" style="cursor:pointer;" id="adminSessionsBtn" data-act="loadAdminSessions">Load</button>
-      <button type="button" class="admin-select" style="cursor:pointer; margin-left:6px; color:#FF3B30; border-color:rgba(255,59,48,0.35);" id="adminSessionsRevokeAllBtn" data-act="revokeAllAdminSessions">Sign out every browser</button>
-      <span id="adminSessionsStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <button type="button" class="admin-select" style="cursor:pointer; margin-left:6px; color:var(--color-danger-text); border-color:rgba(255,59,48,0.35);" id="adminSessionsRevokeAllBtn" data-act="revokeAllAdminSessions">Sign out every browser</button>
+      <span id="adminSessionsStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
       <div id="adminSessionsResult" style="margin-top:10px;"></div>
     </div>
 
     <div class="panel" style="margin:0; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Audit log</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">What this dashboard has been used for: sign-ins, sign-outs, and every action that changes something &mdash; resetting a creator&rsquo;s key, deleting a list or a channel, running a migration, replying to feedback. Each row is written as the request is authorized, with the address it came from and the identifying details it named (never a key or a token). Newest first, and read-only: nothing in this dashboard can edit it. Needs migration 0018.</p>
+      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Audit log</div>
+      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">What this dashboard has been used for: sign-ins, sign-outs, and every action that changes something &mdash; resetting a creator&rsquo;s key, deleting a list or a channel, running a migration, replying to feedback. Each row is written as the request is authorized, with the address it came from and the identifying details it named (never a key or a token). Newest first, and read-only: nothing in this dashboard can edit it. Needs migration 0018.</p>
       <button type="button" class="admin-select" style="cursor:pointer;" id="adminAuditBtn" data-act="loadAdminAudit">Load recent activity</button>
-      <span id="adminAuditStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <span id="adminAuditStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
       <div id="adminAuditResult" style="margin-top:10px;"></div>
     </div>
   </div>
@@ -3454,10 +3454,10 @@ ${DESIGN_TOKENS_CSS}
       overlay.id = 'resetKeyOverlay';
       overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:9999;';
       overlay.innerHTML =
-        '<div style="background:#fff; border-radius:12px; padding:24px; max-width:380px; width:90%;">' +
+        '<div style="background:var(--color-on-brand); border-radius:var(--radius-md); padding:24px; max-width:380px; width:90%;">' +
           '<h3 style="margin-top:0;">New key for ' + escapeHtmlAdmin(displayName) + '</h3>' +
-          '<p style="color:#8E8E93; font-size:0.9rem;">This is shown once. Copy it now and send it to the creator yourself -- their old key no longer works.</p>' +
-          '<div id="resetKeyDisplay" style="font-family:monospace; font-size:1.1rem; background:#F2F2F7; border-radius:8px; padding:10px; text-align:center; margin:12px 0; user-select:all;">' + escapeHtmlAdmin(creatorKey) + '</div>' +
+          '<p style="color:var(--muted); font-size:var(--font-size-base);">This is shown once. Copy it now and send it to the creator yourself -- their old key no longer works.</p>' +
+          '<div id="resetKeyDisplay" style="font-family:monospace; font-size:var(--font-size-lg); background:#F2F2F7; border-radius:var(--radius-sm); padding:10px; text-align:center; margin:12px 0; user-select:all;">' + escapeHtmlAdmin(creatorKey) + '</div>' +
           '<div style="display:flex; gap:8px;">' +
             '<button type="button" class="lc-btn secondary" style="flex:1;" data-act="copyResetKey" data-act-args="' + adminActAttr(['@self', creatorKey]) + '">Copy Key</button>' +
             '<button type="button" class="lc-btn" style="flex:1;" data-act="closeResetKeyOverlay">Done</button>' +
@@ -3515,16 +3515,16 @@ ${DESIGN_TOKENS_CSS}
           return;
         }
         if (data.unavailable) {
-          box.innerHTML = '<p style="color:#8E8E93; font-size:0.82rem; margin:0;">No session list yet &mdash; apply migration 0018 (<code>migrations/0018_admin_sessions_audit.sql</code>). Until then, this dashboard signs in with the older cookie, which cannot be listed or revoked on its own.</p>';
+          box.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm); margin:0;">No session list yet &mdash; apply migration 0018 (<code>migrations/0018_admin_sessions_audit.sql</code>). Until then, this dashboard signs in with the older cookie, which cannot be listed or revoked on its own.</p>';
           return;
         }
         if (!data.sessions.length) {
-          box.innerHTML = '<p style="color:#8E8E93; font-size:0.82rem; margin:0;">No signed-in browsers.</p>';
+          box.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm); margin:0;">No signed-in browsers.</p>';
           return;
         }
         const rows = data.sessions.map((s) => {
-          const current = s.id === data.current ? ' <span style="color:#30d158;">(this browser)</span>' : '';
-          const state = s.revokedAt ? '<span style="color:#FF3B30;">signed out</span>' : (s.expired ? '<span style="color:#FF9500;">expired</span>' : '<span style="color:#30d158;">live</span>');
+          const current = s.id === data.current ? ' <span style="color:var(--color-success-text);">(this browser)</span>' : '';
+          const state = s.revokedAt ? '<span style="color:var(--color-danger-text);">signed out</span>' : (s.expired ? '<span style="color:var(--color-warn-text);">expired</span>' : '<span style="color:var(--color-success-text);">live</span>');
           return '<tr>' +
             '<td>' + escapeHtmlAdmin(s.actor) + current + '</td>' +
             '<td>' + state + '</td>' +
@@ -3532,7 +3532,7 @@ ${DESIGN_TOKENS_CSS}
             '<td>' + escapeHtmlAdmin(adminWhen(s.expiresAt)) + '</td>' +
             '<td>' + escapeHtmlAdmin(s.ip || '\u2014') + '</td>' +
             '<td style="max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escapeHtmlAdmin(s.userAgent || '\u2014') + '</td>' +
-            '<td>' + (s.revokedAt || s.expired ? '' : '<button type="button" class="admin-select" style="cursor:pointer; color:#FF3B30; border-color:rgba(255,59,48,0.35);" data-act="revokeAdminSession" data-act-args="' + adminActAttr([s.id]) + '">Sign out</button>') + '</td>' +
+            '<td>' + (s.revokedAt || s.expired ? '' : '<button type="button" class="admin-select" style="cursor:pointer; color:var(--color-danger-text); border-color:rgba(255,59,48,0.35);" data-act="revokeAdminSession" data-act-args="' + adminActAttr([s.id]) + '">Sign out</button>') + '</td>' +
             '</tr>';
         }).join('');
         box.innerHTML = '<table><tr><th>Signed in as</th><th>State</th><th>Last seen</th><th>Expires</th><th>IP</th><th>Browser</th><th></th></tr>' + rows + '</table>';
@@ -3600,11 +3600,11 @@ ${DESIGN_TOKENS_CSS}
           return;
         }
         if (data.unavailable) {
-          box.innerHTML = '<p style="color:#8E8E93; font-size:0.82rem; margin:0;">No log yet &mdash; apply migration 0018 (<code>migrations/0018_admin_sessions_audit.sql</code>). Until then, admin actions are not recorded.</p>';
+          box.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm); margin:0;">No log yet &mdash; apply migration 0018 (<code>migrations/0018_admin_sessions_audit.sql</code>). Until then, admin actions are not recorded.</p>';
           return;
         }
         if (!data.entries.length) {
-          box.innerHTML = '<p style="color:#8E8E93; font-size:0.82rem; margin:0;">Nothing recorded yet. Signing out and back in writes the first two rows.</p>';
+          box.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm); margin:0;">Nothing recorded yet. Signing out and back in writes the first two rows.</p>';
           return;
         }
         const rows = data.entries.map((e) =>
@@ -4383,7 +4383,7 @@ ${DESIGN_TOKENS_CSS}
       }
       const shown = shownCreatorLists();
       if (!shown.length) {
-        results.innerHTML = '<p style="color:#8E8E93; margin:0; font-size:0.82rem;">No list matches that filter.</p>';
+        results.innerHTML = '<p style="color:var(--muted); margin:0; font-size:var(--font-size-sm);">No list matches that filter.</p>';
       } else {
         const rows = shown.map(function (L) {
           const vis = L.visibility ? escapeHtmlAdmin(L.visibility) : 'unreadable';
@@ -4391,10 +4391,10 @@ ${DESIGN_TOKENS_CSS}
           // order entry was lost. These are the ones that get re-uploaded and
           // re-duplicated, so they are worth calling out rather than hiding.
           const orphan = L.inOrder ? '' :
-            '<span title="not in this creator\\'s display order" style="color:#FF9500;"> orphan</span>';
+            '<span title="not in this creator\\'s display order" style="color:var(--color-warn-text);"> orphan</span>';
           return '<tr>' +
             '<td style="padding:4px 8px 4px 0;"><button type="button" class="admin-select" data-creator-slug="' +
-              escapeHtmlAdmin(L.slug) + '" style="cursor:pointer; padding:2px 8px; font-size:0.78rem;">Select</button></td>' +
+              escapeHtmlAdmin(L.slug) + '" style="cursor:pointer; padding:2px 8px; font-size:var(--font-size-xs);">Select</button></td>' +
             '<td style="padding:4px 8px 4px 0;"><code>' + escapeHtmlAdmin(L.slug) + '</code>' + orphan + '</td>' +
             '<td style="padding:4px 8px 4px 0;">' + escapeHtmlAdmin(L.name) + '</td>' +
             '<td style="padding:4px 8px 4px 0; text-align:right;">' + (Number(L.itemCount) || 0) + '</td>' +
@@ -4402,8 +4402,8 @@ ${DESIGN_TOKENS_CSS}
             '<td style="padding:4px 0;"><a href="' + escapeHtmlAdmin(L.url) + '" target="_blank" rel="noopener">open</a></td>' +
             '</tr>';
         }).join('');
-        results.innerHTML = '<table style="width:100%; border-collapse:collapse; font-size:0.82rem;">' +
-          '<thead><tr style="color:#8E8E93; text-align:left;">' +
+        results.innerHTML = '<table style="width:100%; border-collapse:collapse; font-size:var(--font-size-sm);">' +
+          '<thead><tr style="color:var(--muted); text-align:left;">' +
           '<th></th><th style="padding-right:8px;">Slug</th><th style="padding-right:8px;">Name</th>' +
           '<th style="padding-right:8px; text-align:right;">Items</th>' +
           '<th style="padding-right:8px;">Visibility</th><th></th>' +
@@ -4456,7 +4456,7 @@ ${DESIGN_TOKENS_CSS}
         renderCreatorListsTable();
         if (!creatorListsLoaded.length) {
           document.getElementById('creatorListsResults').innerHTML =
-            '<p style="color:#8E8E93; margin:0; font-size:0.82rem;">This creator has no stored lists.</p>';
+            '<p style="color:var(--muted); margin:0; font-size:var(--font-size-sm);">This creator has no stored lists.</p>';
         }
       } catch (e) {
         status.textContent = 'Failed: network error.';
@@ -4613,13 +4613,13 @@ ${DESIGN_TOKENS_CSS}
         const lists = data.lists || [];
         anonListCount += lists.length;
         if (!anonListCount) {
-          results.innerHTML = '<p style="color:#8E8E93; margin:0; font-size:0.82rem;">No anonymously published lists.</p>';
+          results.innerHTML = '<p style="color:var(--muted); margin:0; font-size:var(--font-size-sm);">No anonymously published lists.</p>';
         } else {
           const rows = lists.map(function (L) {
             const vis = L.visibility ? escapeHtmlAdmin(L.visibility) : 'unreadable';
             return '<tr>' +
               '<td style="padding:4px 8px 4px 0;"><button type="button" class="admin-select" data-anon-slug="' +
-                escapeHtmlAdmin(L.slug) + '" style="cursor:pointer; padding:2px 8px; font-size:0.78rem;">Select</button></td>' +
+                escapeHtmlAdmin(L.slug) + '" style="cursor:pointer; padding:2px 8px; font-size:var(--font-size-xs);">Select</button></td>' +
               '<td style="padding:4px 8px 4px 0;"><code>' + escapeHtmlAdmin(L.slug) + '</code></td>' +
               '<td style="padding:4px 8px 4px 0;">' + escapeHtmlAdmin(L.name) + '</td>' +
               '<td style="padding:4px 8px 4px 0; text-align:right;">' + (Number(L.itemCount) || 0) + '</td>' +
@@ -4629,8 +4629,8 @@ ${DESIGN_TOKENS_CSS}
               '</tr>';
           }).join('');
           if (reset || !results.querySelector('tbody')) {
-            results.innerHTML = '<table style="width:100%; border-collapse:collapse; font-size:0.82rem;">' +
-              '<thead><tr style="color:#8E8E93; text-align:left;">' +
+            results.innerHTML = '<table style="width:100%; border-collapse:collapse; font-size:var(--font-size-sm);">' +
+              '<thead><tr style="color:var(--muted); text-align:left;">' +
               '<th></th><th style="padding-right:8px;">Slug</th><th style="padding-right:8px;">Name</th>' +
               '<th style="padding-right:8px; text-align:right;">Items</th>' +
               '<th style="padding-right:8px; text-align:right;">Likes</th>' +
@@ -4674,7 +4674,7 @@ ${DESIGN_TOKENS_CSS}
         }
         const channels = data.channels || [];
         if (!channels.length) {
-          results.innerHTML = '<p style="color:#8E8E93; margin:0; font-size:0.82rem;">Nothing to show.</p>';
+          results.innerHTML = '<p style="color:var(--muted); margin:0; font-size:var(--font-size-sm);">Nothing to show.</p>';
           status.textContent = '';
           if (btn) btn.disabled = false;
           return;
@@ -4690,13 +4690,13 @@ ${DESIGN_TOKENS_CSS}
             '<td style="padding:4px 8px 4px 0;">' + (C.listed ? 'listed' : 'unlisted') + '</td>' +
             '<td style="padding:4px 8px 4px 0;"><a href="' + escapeHtmlAdmin(C.url || '') + '" target="_blank" rel="noopener">open</a></td>' +
             '<td style="padding:4px 0; white-space:nowrap;">' +
-              '<button type="button" class="admin-select" data-channel-action="unlist" data-code="' + code + '" style="cursor:pointer; padding:2px 8px; font-size:0.78rem; margin-right:4px;">Unlist</button>' +
-              '<button type="button" class="admin-select" data-channel-action="delete" data-code="' + code + '" style="cursor:pointer; padding:2px 8px; font-size:0.78rem; color:#FF3B30; border-color:rgba(255,59,48,0.35);">Delete</button>' +
+              '<button type="button" class="admin-select" data-channel-action="unlist" data-code="' + code + '" style="cursor:pointer; padding:2px 8px; font-size:var(--font-size-xs); margin-right:4px;">Unlist</button>' +
+              '<button type="button" class="admin-select" data-channel-action="delete" data-code="' + code + '" style="cursor:pointer; padding:2px 8px; font-size:var(--font-size-xs); color:var(--color-danger-text); border-color:rgba(255,59,48,0.35);">Delete</button>' +
             '</td>' +
             '</tr>';
         }).join('');
-        results.innerHTML = '<table style="width:100%; border-collapse:collapse; font-size:0.82rem;">' +
-          '<thead><tr style="color:#8E8E93; text-align:left;">' +
+        results.innerHTML = '<table style="width:100%; border-collapse:collapse; font-size:var(--font-size-sm);">' +
+          '<thead><tr style="color:var(--muted); text-align:left;">' +
           '<th style="padding-right:8px;">Code</th><th style="padding-right:8px;">Name</th>' +
           '<th style="padding-right:8px;">Owner</th>' +
           '<th style="padding-right:8px; text-align:right;">Items</th>' +
@@ -4946,22 +4946,22 @@ ${DESIGN_TOKENS_CSS}
         if (idx) {
           var pct = idx.max ? Math.round((idx.entries / idx.max) * 100) : 0;
           indexNote = idx.truncated
-            ? '<p style="color:#FF9500; margin:10px 0 0; font-size:0.82rem;"><strong>The public list directory is full.</strong> ' +
+            ? '<p style="color:var(--color-warn-text); margin:10px 0 0; font-size:var(--font-size-sm);"><strong>The public list directory is full.</strong> ' +
               'It holds ' + idx.entries.toLocaleString() + ' of a maximum ' + idx.max.toLocaleString() +
               ' entries, so the least-liked lists past that point are no longer being advertised. ' +
               'They are still reachable by their own URL.</p>'
-            : '<p style="color:#8E8E93; margin:10px 0 0; font-size:0.82rem;">Public list directory: ' +
+            : '<p style="color:var(--muted); margin:10px 0 0; font-size:var(--font-size-sm);">Public list directory: ' +
               idx.entries.toLocaleString() + ' of ' + idx.max.toLocaleString() + ' entries (' + pct + '%).</p>';
         }
         if (!data.bound) {
           status.textContent = '';
-          out.innerHTML = '<p style="color:#FF3B30; margin:0; font-size:0.82rem;"><strong>Warning: No D1 database is bound.</strong> D1 is required for authoritative accounts, lists, search, likes, feedback, and tracking. Bind a D1 database as <code>DB</code> in Cloudflare Settings &rarr; Bindings.</p>' + indexNote;
+          out.innerHTML = '<p style="color:var(--color-danger-text); margin:0; font-size:var(--font-size-sm);"><strong>Warning: No D1 database is bound.</strong> D1 is required for authoritative accounts, lists, search, likes, feedback, and tracking. Bind a D1 database as <code>DB</code> in Cloudflare Settings &rarr; Bindings.</p>' + indexNote;
           btn.disabled = false;
           return;
         }
         if (!data.checked) {
           status.textContent = '';
-          out.innerHTML = '<p style="color:#FF9500; margin:0; font-size:0.82rem;">Could not read the database to check' +
+          out.innerHTML = '<p style="color:var(--color-warn-text); margin:0; font-size:var(--font-size-sm);">Could not read the database to check' +
             (data.error ? (': ' + escapeHtmlAdmin(data.error)) : '.') +
             ' This is not the same as a missing migration \u2014 try again.</p>' + indexNote;
           btn.disabled = false;
@@ -4972,15 +4972,15 @@ ${DESIGN_TOKENS_CSS}
         var ledger = data.ledger;
         var ledgerNote = '';
         if (ledger && ledger.behind) {
-          ledgerNote = '<p style="color:#FF3B30; margin:0 0 10px; font-size:0.82rem;"><strong>Writes are paused.</strong> ' +
+          ledgerNote = '<p style="color:var(--color-danger-text); margin:0 0 10px; font-size:var(--font-size-sm);"><strong>Writes are paused.</strong> ' +
             'The database is at migration ' + escapeHtmlAdmin(ledger.version) + ' and this Worker needs ' +
             escapeHtmlAdmin(ledger.required) + '. Visitors see &ldquo;My Lists is being updated&rdquo; on every save until the missing migrations are applied.</p>';
         } else if (ledger && ledger.readable && !ledger.version) {
-          ledgerNote = '<p style="color:#FF9500; margin:0 0 10px; font-size:0.82rem;">The migration ledger is empty.</p>';
+          ledgerNote = '<p style="color:var(--color-warn-text); margin:0 0 10px; font-size:var(--font-size-sm);">The migration ledger is empty.</p>';
         } else if (ledger && !ledger.readable) {
-          ledgerNote = '<p style="color:#FF9500; margin:0 0 10px; font-size:0.82rem;">No migration ledger yet. Apply <code>migrations/0014_add_schema_migrations.sql</code> so the Worker can tell which migrations have run.</p>';
+          ledgerNote = '<p style="color:var(--color-warn-text); margin:0 0 10px; font-size:var(--font-size-sm);">No migration ledger yet. Apply <code>migrations/0014_add_schema_migrations.sql</code> so the Worker can tell which migrations have run.</p>';
         } else if (ledger) {
-          ledgerNote = '<p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Database at migration ' +
+          ledgerNote = '<p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">Database at migration ' +
             escapeHtmlAdmin(ledger.version) + ' (this Worker needs ' + escapeHtmlAdmin(ledger.required) + ').</p>';
         }
         var dbStats = data.databaseStats;
@@ -4990,15 +4990,15 @@ ${DESIGN_TOKENS_CSS}
           var rowsStr = dbStats.rowCounts
             ? Object.entries(dbStats.rowCounts).map(function (e) { return e[0] + ': ' + e[1].toLocaleString(); }).join(', ')
             : '';
-          dbStatsNote = '<p style="color:#8E8E93; margin:8px 0 0; font-size:0.82rem;">Database size: ~' +
+          dbStatsNote = '<p style="color:var(--muted); margin:8px 0 0; font-size:var(--font-size-sm);">Database size: ~' +
             mb + ' MB (' + (dbStats.pageCount || 0).toLocaleString() + ' pages &times; ' +
             (dbStats.pageSize || 0).toLocaleString() + ' B).' +
-            (rowsStr ? ('<br><span style="font-size:0.78rem;">Rows: ' + escapeHtmlAdmin(rowsStr) + '</span>') : '') +
+            (rowsStr ? ('<br><span style="font-size:var(--font-size-xs);">Rows: ' + escapeHtmlAdmin(rowsStr) + '</span>') : '') +
             '</p>';
         }
         if (data.upToDate) {
           status.textContent = '';
-          out.innerHTML = ledgerNote + '<p style="color:#34C759; margin:0; font-size:0.82rem;">Up to date \u2014 every migration has been applied.</p>' + dbStatsNote + indexNote;
+          out.innerHTML = ledgerNote + '<p style="color:var(--color-success-text); margin:0; font-size:var(--font-size-sm);">Up to date \u2014 every migration has been applied.</p>' + dbStatsNote + indexNote;
           btn.disabled = false;
           return;
         }
@@ -5010,12 +5010,12 @@ ${DESIGN_TOKENS_CSS}
             '</tr>';
         }).join('');
         status.textContent = '';
-        out.innerHTML = ledgerNote + '<p style="color:#FF9500; margin:0 0 8px; font-size:0.82rem;"><strong>This Worker is running ahead of its database.</strong> ' +
+        out.innerHTML = ledgerNote + '<p style="color:var(--color-warn-text); margin:0 0 8px; font-size:var(--font-size-sm);"><strong>This Worker is running ahead of its database.</strong> ' +
           'Unapplied migration' + ((data.pendingMigrations || []).length === 1 ? '' : 's') + ': ' +
           escapeHtmlAdmin((data.pendingMigrations || []).join(', ')) +
           '. Apply the matching file(s) under <code>migrations/</code> in the D1 Console, in filename order.</p>' +
-          '<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:0.82rem;">' +
-          '<thead><tr style="color:#8E8E93; text-align:left;"><th style="padding-right:10px;">Migration</th><th style="padding-right:10px;">Missing</th><th>What does not work without it</th></tr></thead>' +
+          '<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:var(--font-size-sm);">' +
+          '<thead><tr style="color:var(--muted); text-align:left;"><th style="padding-right:10px;">Migration</th><th style="padding-right:10px;">Missing</th><th>What does not work without it</th></tr></thead>' +
           '<tbody>' + rows + '</tbody></table></div>' + dbStatsNote + indexNote;
       } catch (e) {
         status.textContent = 'Failed: network error.';
@@ -5070,11 +5070,11 @@ ${DESIGN_TOKENS_CSS}
         }
         body.innerHTML = data.keys.map((k) =>
           '<tr>' +
-            '<td>' + escapeHtmlAdmin(k.label) + (k.configured ? '' : ' <span style="color:#FF9500;">(not set)</span>') + '</td>' +
+            '<td>' + escapeHtmlAdmin(k.label) + (k.configured ? '' : ' <span style="color:var(--color-warn-text);">(not set)</span>') + '</td>' +
             '<td>' + k.last24h + '</td>' +
             '<td>' + k.last7d + '</td>' +
             '<td>' + k.last30d + '</td>' +
-            '<td style="color:#8E8E93;">' + escapeHtmlAdmin(k.limit) + '</td>' +
+            '<td style="color:var(--muted);">' + escapeHtmlAdmin(k.limit) + '</td>' +
           '</tr>'
         ).join('');
       } catch (e) {
@@ -5093,7 +5093,7 @@ ${DESIGN_TOKENS_CSS}
           (it.date ? '<div class="netflix-preview-year">' + escapeHtmlAdmin(it.date) + '</div>' : '') +
         '</div>'
       ).join('');
-      return '<h3 style="margin:0 0 4px; font-size:1.05rem;">' + label + ' <span style="color:#8E8E93; font-weight:400; font-size:0.85rem;">(~' + section.total.toLocaleString() + ' total on TMDB/JustWatch, showing first ' + section.items.length + ')</span></h3>' +
+      return '<h3 style="margin:0 0 4px; font-size:var(--font-size-md);">' + label + ' <span style="color:var(--muted); font-weight:400; font-size:var(--font-size-sm);">(~' + section.total.toLocaleString() + ' total on TMDB/JustWatch, showing first ' + section.items.length + ')</span></h3>' +
         '<div class="netflix-preview-grid">' + posters + '</div>';
     }
 
@@ -5149,12 +5149,12 @@ ${DESIGN_TOKENS_CSS}
         }
         statusEl.textContent = '';
         if (!data.results.length) {
-          resultsEl.innerHTML = '<p style="color:#8E8E93; font-size:0.85rem;">No matches.</p>';
+          resultsEl.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm);">No matches.</p>';
           return;
         }
         resultsEl.innerHTML = data.results.map((p) =>
           '<button type="button" class="admin-select" style="cursor:pointer; margin:0 6px 6px 0;" data-act="pickProviderId" data-act-args="' + adminActAttr([p.id]) + '">' +
-            escapeHtmlAdmin(p.name) + ' <span style="color:#8E8E93;">(' + p.id + ')</span>' +
+            escapeHtmlAdmin(p.name) + ' <span style="color:var(--muted);">(' + p.id + ')</span>' +
           '</button>'
         ).join('');
       } catch (e) {
@@ -5205,20 +5205,20 @@ ${DESIGN_TOKENS_CSS}
         const bits = [];
         bits.push('<div>D1: ' + (st.d1Bound
           ? (st.tableReady
-            ? '<span style="color:#30d158;">bound, streaming_events ready</span>'
-            : '<span style="color:#FF3B30;">bound, but the table is missing</span>')
-          : '<span style="color:#FF3B30;">not bound -- this catalog is D1-only</span>') + '</div>');
+            ? '<span style="color:var(--color-success-text);">bound, streaming_events ready</span>'
+            : '<span style="color:var(--color-danger-text);">bound, but the table is missing</span>')
+          : '<span style="color:var(--color-danger-text);">not bound -- this catalog is D1-only</span>') + '</div>');
         if (st.error) {
-          bits.push('<div style="color:#FF3B30;">' + escapeHtmlAdmin(st.error) + '</div>');
+          bits.push('<div style="color:var(--color-danger-text);">' + escapeHtmlAdmin(st.error) + '</div>');
         }
         if (st.engine === 'justwatch') {
-          bits.push('<div>Engine: <span style="color:#30d158; font-weight:600;">JustWatch &ldquo;new&rdquo; feed</span> &mdash; the same source mdblist.com/new-on-streaming uses. Last 3 days re-read every 2 hours; ' + (st.jwDaysDone || 0) + ' older days of the 30-day window fully read. (Set the Worker var NEW_ON_STREAMING_ENGINE=rapidapi to switch back.)</div>');
+          bits.push('<div>Engine: <span style="color:var(--color-success-text); font-weight:600;">JustWatch &ldquo;new&rdquo; feed</span> &mdash; the same source mdblist.com/new-on-streaming uses. Last 3 days re-read every 2 hours; ' + (st.jwDaysDone || 0) + ' older days of the 30-day window fully read. (Set the Worker var NEW_ON_STREAMING_ENGINE=rapidapi to switch back.)</div>');
         }
         if (st.engine === 'rapidapi') {
-          bits.push('<div>Engine: <span style="color:#30d158; font-weight:600;">RapidAPI Streaming Availability</span> &mdash; pulling direct streaming arrivals &amp; episode updates (previous 30 days)</div>');
+          bits.push('<div>Engine: <span style="color:var(--color-success-text); font-weight:600;">RapidAPI Streaming Availability</span> &mdash; pulling direct streaming arrivals &amp; episode updates (previous 30 days)</div>');
         }
         if (st.engine === 'rapidapi' && !st.rapidKeyConfigured) {
-          bits.push('<div style="color:#FF3B30;"><strong>RAPIDAPI_KEY is not set.</strong> Run <code>npx wrangler secret put RAPIDAPI_KEY</code> to enable sweeps.</div>');
+          bits.push('<div style="color:var(--color-danger-text);"><strong>RAPIDAPI_KEY is not set.</strong> Run <code>npx wrangler secret put RAPIDAPI_KEY</code> to enable sweeps.</div>');
         }
         const usage = st.monthlyUsage || { count: 0, limit: 1000, remaining: 1000, safetyCap: 950 };
         const quotaColor = usage.count >= usage.safetyCap ? '#FF3B30' : (usage.count >= 750 ? '#FF9500' : '#30d158');
@@ -5230,17 +5230,17 @@ ${DESIGN_TOKENS_CSS}
             const label = s.changeType === 'removed' ? 'removals' : (s.itemType === 'show' ? 'new titles' : 'new ' + s.itemType + 's');
             const upTo = s.readUpTo ? nosEpochToDay(s.readUpTo) + ' ' + new Date(s.readUpTo * 1000).toISOString().slice(11, 16) + ' UTC' : 'not started';
             return '<strong>' + escapeHtmlAdmin(label) + '</strong> read to ' + escapeHtmlAdmin(upTo) +
-              (s.catchingUp ? ' <span style="color:#FF9500;">(catching up)</span>' : '');
+              (s.catchingUp ? ' <span style="color:var(--color-warn-text);">(catching up)</span>' : '');
           }).join(' &middot; ') + '</div>');
         }
         bits.push('<div>Region: <strong>' + escapeHtmlAdmin(st.region || '') + '</strong> &mdash; 30-day rolling window</div>');
-        bits.push('<div>Visible to users: <span style="color:#30d158;">yes -- My Lists Addon Charts in Quick Add, and Discover</span></div>');
+        bits.push('<div>Visible to users: <span style="color:var(--color-success-text);">yes -- My Lists Addon Charts in Quick Add, and Discover</span></div>');
         const totals = st.totals || {};
         bits.push('<div>Active titles in 30d window: <strong>' + (totals.movie || 0) + '</strong> movies, <strong>' + (totals.series || 0) + '</strong> shows (' + (totals.removed || 0) + ' marked removed)</div>');
         if (st.lastSweep) {
           bits.push('<div>Last sweep: ' + nosEpochToDay(st.lastSweep.at) + ' &mdash; ' + (st.lastSweep.units || 0) + ' API calls, ' + (st.lastSweep.seen || 0) + ' changes seen, ' + (st.lastSweep.added || 0) + ' new arrivals, ' + (st.lastSweep.bumped || 0) + ' episodes bumped' + (st.lastSweep.pruned ? ', ' + st.lastSweep.pruned + ' pruned (>30d)' : '') + (st.lastSweep.errors ? ', ' + st.lastSweep.errors + ' errors' + (st.lastSweep.lastError ? ': ' + escapeHtmlAdmin(st.lastSweep.lastError) : '') : '') + (st.lastSweep.reason ? ' (' + escapeHtmlAdmin(st.lastSweep.reason) + ')' : '') + '</div>');
         } else {
-          bits.push('<div style="color:#FF9500;">No sweep has completed yet.</div>');
+          bits.push('<div style="color:var(--color-warn-text);">No sweep has completed yet.</div>');
         }
         statusEl.innerHTML = bits.join('');
 
@@ -5366,7 +5366,7 @@ ${DESIGN_TOKENS_CSS}
           statusEl.textContent = data.error || 'Failed to add title.';
         } else {
           const r = data.result || {};
-          statusEl.innerHTML = '<span style="color:#30d158; font-weight:600;">Added: ' + escapeHtmlAdmin(r.name) + ' (' + escapeHtmlAdmin(nosProviderLabel(r.service)) + ', ' + (r.eventKind === 'episode' ? 'Episode ' + r.season + 'x' + r.episode + ', ' : '') + nosEpochToDay(r.eventAt) + ')</span>';
+          statusEl.innerHTML = '<span style="color:var(--color-success-text); font-weight:600;">Added: ' + escapeHtmlAdmin(r.name) + ' (' + escapeHtmlAdmin(nosProviderLabel(r.service)) + ', ' + (r.eventKind === 'episode' ? 'Episode ' + r.season + 'x' + r.episode + ', ' : '') + nosEpochToDay(r.eventAt) + ')</span>';
           inputEl.value = '';
           await loadNewOnStreaming();
           nosResetAndPreview();
@@ -5413,7 +5413,7 @@ ${DESIGN_TOKENS_CSS}
         if (nextBtn) nextBtn.disabled = (nosCurrentPage + 1) * nosPageLimit >= total;
 
         if (!data.items || !data.items.length) {
-          resultsEl.innerHTML = '<p style="color:#8E8E93; font-size:0.85rem;">Empty -- no matching titles found.</p>';
+          resultsEl.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm);">Empty -- no matching titles found.</p>';
           return;
         }
         // Grouped by day like mdblist.com/new-on-streaming, so the two can be
@@ -5440,13 +5440,13 @@ ${DESIGN_TOKENS_CSS}
             }
 
             return dayHeader + '<tr><td>' + (skip + i + 1) + '</td>' +
-              '<td>' + (it.poster ? '<img src="' + escapeHtmlAdmin(it.poster) + '" alt="" style="width:38px; height:56px; object-fit:cover; border-radius:4px; display:block;">' : '') + '</td>' +
+              '<td>' + (it.poster ? '<img src="' + escapeHtmlAdmin(it.poster) + '" alt="" style="width:38px; height:56px; object-fit:cover; border-radius:var(--radius-xs); display:block;">' : '') + '</td>' +
               '<td><strong>' + escapeHtmlAdmin(it.name || '') + '</strong></td>' +
               '<td>' + typeBadge + '</td>' +
               '<td>' + svcBadges + '</td>' +
               '<td style="white-space:nowrap;">' + escapeHtmlAdmin(dateStr) + '</td>' +
               '<td>' + escapeHtmlAdmin(it.releaseInfo || '') + '</td>' +
-              '<td style="color:var(--muted); font-family:monospace; font-size:0.8rem;">' + escapeHtmlAdmin(it.id || '') + '</td></tr>';
+              '<td style="color:var(--muted); font-family:monospace; font-size:var(--font-size-sm);">' + escapeHtmlAdmin(it.id || '') + '</td></tr>';
           }).join('') +
           '</table></div>';
       } catch (e) {
@@ -5485,16 +5485,16 @@ ${DESIGN_TOKENS_CSS}
         statusEl.textContent = data.networks.length + ' networks';
         body.innerHTML = data.networks.map((net) => {
           const cachedBadge = net.cached
-            ? '<span class="admin-badge" style="background:rgba(52,199,89,0.15); color:#34C759;">cached</span>'
+            ? '<span class="admin-badge" style="background:rgba(52,199,89,0.15); color:var(--color-success-text);">cached</span>'
             : '<span style="color:var(--muted);">not cached</span>';
           return '<tr>' +
-            '<td><strong>' + escapeHtmlAdmin(net.name) + '</strong> <span style="color:var(--muted); font-family:monospace; font-size:0.78rem;">(' + escapeHtmlAdmin(net.id) + ')</span></td>' +
+            '<td><strong>' + escapeHtmlAdmin(net.name) + '</strong> <span style="color:var(--muted); font-family:monospace; font-size:var(--font-size-xs);">(' + escapeHtmlAdmin(net.id) + ')</span></td>' +
             '<td>' + cachedBadge + '</td>' +
             '<td>' + (net.cached ? net.itemCount : '--') + '</td>' +
             '<td style="white-space:nowrap;">' + cpAgoText(net.builtAt) + '</td>' +
             '<td style="white-space:nowrap;">' +
-              '<button type="button" class="secondary lc-btn" style="padding:4px 10px; font-size:0.8rem;" data-act="rebuildOneChannelPreset" data-act-args="' + adminActAttr([net.id, '@self']) + '">Rebuild</button> ' +
-              '<button type="button" class="secondary lc-btn" style="padding:4px 10px; font-size:0.8rem; color:#FF3B30;" data-act="clearOneChannelPreset" data-act-args="' + adminActAttr([net.id, '@self']) + '"' + (net.cached ? '' : ' disabled') + '>Clear</button>' +
+              '<button type="button" class="secondary lc-btn" style="padding:4px 10px; font-size:var(--font-size-sm);" data-act="rebuildOneChannelPreset" data-act-args="' + adminActAttr([net.id, '@self']) + '">Rebuild</button> ' +
+              '<button type="button" class="secondary lc-btn" style="padding:4px 10px; font-size:var(--font-size-sm); color:var(--color-danger-text);" data-act="clearOneChannelPreset" data-act-args="' + adminActAttr([net.id, '@self']) + '"' + (net.cached ? '' : ' disabled') + '>Clear</button>' +
             '</td>' +
           '</tr>';
         }).join('');
@@ -5578,14 +5578,14 @@ ${DESIGN_TOKENS_CSS}
         const res = await fetch('/admin/api/feedback');
         const data = await res.json();
         if (!data.ok) {
-          box.innerHTML = '<p style="color:#FF3B30;">Could not load feedback -- try again.</p>';
+          box.innerHTML = '<p style="color:var(--color-danger-text);">Could not load feedback -- try again.</p>';
           return;
         }
         feedbackEntries = data.entries || [];
         feedbackTruncated = !!data.truncated;
         renderFeedbackList();
       } catch (e) {
-        box.innerHTML = '<p style="color:#FF3B30;">Could not load feedback -- try again.</p>';
+        box.innerHTML = '<p style="color:var(--color-danger-text);">Could not load feedback -- try again.</p>';
       }
     }
 
@@ -5598,14 +5598,14 @@ ${DESIGN_TOKENS_CSS}
       const box = document.getElementById('feedbackList');
       if (!box) return;
       if (!feedbackEntries.length) {
-        box.innerHTML = '<p style="color:#8E8E93;">No feedback yet.</p>';
+        box.innerHTML = '<p style="color:var(--muted);">No feedback yet.</p>';
         return;
       }
       const open = feedbackEntries.filter((f) => !f.completed);
       const done = feedbackEntries.filter((f) => f.completed);
       box.innerHTML = open.map(feedbackCardHtml).join('') +
-        (done.length ? '<h3 style="margin:20px 0 4px; font-size:0.95rem; color:#8E8E93;">Completed</h3>' + done.map(feedbackCardHtml).join('') : '') +
-        (feedbackTruncated ? '<p style="color:#8E8E93; font-size:0.85rem;">Showing the most recent 300.</p>' : '');
+        (done.length ? '<h3 style="margin:20px 0 4px; font-size:var(--font-size-base); color:var(--muted);">Completed</h3>' + done.map(feedbackCardHtml).join('') : '') +
+        (feedbackTruncated ? '<p style="color:var(--muted); font-size:var(--font-size-sm);">Showing the most recent 300.</p>' : '');
       initFeedbackListEvents();
     }
 
@@ -5640,12 +5640,12 @@ ${DESIGN_TOKENS_CSS}
         const mTime = m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
         const bg = isAdmin ? 'rgba(0,122,255,0.08)' : 'rgba(255,255,255,0.04)';
         const border = isAdmin ? 'rgba(0,122,255,0.25)' : 'var(--border)';
-        return '<div style="margin-top:6px; padding:8px 12px; border-radius:8px; background:' + bg + '; border:1px solid ' + border + ';">' +
-          '<div style="display:flex; justify-content:space-between; font-size:0.75rem; font-weight:700; color:' + (isAdmin ? 'var(--accent)' : 'var(--text)') + ';">' +
+        return '<div style="margin-top:6px; padding:8px 12px; border-radius:var(--radius-sm); background:' + bg + '; border:1px solid ' + border + ';">' +
+          '<div style="display:flex; justify-content:space-between; font-size:var(--font-size-xs); font-weight:700; color:' + (isAdmin ? 'var(--accent)' : 'var(--text)') + ';">' +
             '<span>' + escapeHtmlAdmin(sender) + '</span>' +
             '<span style="color:var(--muted); font-weight:normal;">' + escapeHtmlAdmin(mTime) + '</span>' +
           '</div>' +
-          '<div style="margin-top:4px; font-size:0.88rem; white-space:pre-wrap; word-break:break-word; color:var(--text);">' + escapeHtmlAdmin(m.text || '') + '</div>' +
+          '<div style="margin-top:4px; font-size:var(--font-size-sm); white-space:pre-wrap; word-break:break-word; color:var(--text);">' + escapeHtmlAdmin(m.text || '') + '</div>' +
         '</div>';
       }).join('');
 
@@ -5661,7 +5661,7 @@ ${DESIGN_TOKENS_CSS}
             '<button type="button" class="admin-select fb-status-btn" data-id="' + escapeHtmlAdmin(f.id) + '" data-completed="' + (!completed) + '" style="margin:0; cursor:pointer;">' +
               (completed ? '\u21a9 Reopen' : '\u2713 Mark done') +
             '</button>' +
-            '<button type="button" class="admin-select fb-delete-btn" data-id="' + escapeHtmlAdmin(f.id) + '" style="margin:0; cursor:pointer; color:#FF3B30; border-color:rgba(255,59,48,0.3);">&#x2715; Delete</button>' +
+            '<button type="button" class="admin-select fb-delete-btn" data-id="' + escapeHtmlAdmin(f.id) + '" style="margin:0; cursor:pointer; color:var(--color-danger-text); border-color:rgba(255,59,48,0.3);">&#x2715; Delete</button>' +
           '</div>' +
         '</div>' +
         '<div style="margin-top:10px;">' + messagesHtml + '</div>' +
@@ -5669,7 +5669,7 @@ ${DESIGN_TOKENS_CSS}
         (!isSelfLogged ?
           '<div style="margin-top:10px; display:flex; gap:8px; align-items:center;">' +
             '<input type="text" id="adminReplyInput_' + escapeHtmlAdmin(f.id) + '" class="admin-select fb-reply-input" data-id="' + escapeHtmlAdmin(f.id) + '" style="flex:1; margin-right:0; padding:8px 10px;" placeholder="Type reply to ' + who + '...">' +
-            '<button type="button" class="secondary lc-btn fb-reply-btn" data-id="' + escapeHtmlAdmin(f.id) + '" style="padding:6px 14px; font-size:0.82rem;">Reply</button>' +
+            '<button type="button" class="secondary lc-btn fb-reply-btn" data-id="' + escapeHtmlAdmin(f.id) + '" style="padding:6px 14px; font-size:var(--font-size-sm);">Reply</button>' +
           '</div>' : ''
         ) +
       '</div>';
@@ -5849,13 +5849,13 @@ ${DESIGN_TOKENS_CSS}
       const iconColor = isSuccess ? 'var(--success, #34C759)' : 'var(--danger, #FF3B30)';
       const html =
         '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">' +
-          '<h3 style="margin:0; font-size:1.15rem; font-weight:700; display:flex; align-items:center; gap:8px; color:var(--text);">' +
-            '<span style="color:' + iconColor + '; font-weight:bold; font-size:1.2rem;">' + icon + '</span> ' +
+          '<h3 style="margin:0; font-size:var(--font-size-lg); font-weight:700; display:flex; align-items:center; gap:8px; color:var(--text);">' +
+            '<span style="color:' + iconColor + '; font-weight:bold; font-size:var(--font-size-lg);">' + icon + '</span> ' +
             escapeHtmlAdmin(title) +
           '</h3>' +
           '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeAdminModal">\u2715</button>' +
         '</div>' +
-        '<p style="margin:0 0 18px; color:var(--muted); font-size:0.92rem; line-height:1.45; white-space:pre-wrap;">' + escapeHtmlAdmin(message) + '</p>' +
+        '<p style="margin:0 0 18px; color:var(--muted); font-size:var(--font-size-base); line-height:1.45; white-space:pre-wrap;">' + escapeHtmlAdmin(message) + '</p>' +
         '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
           '<button type="button" class="lc-btn primary" data-act="closeAdminModal" style="min-width:80px;">OK</button>' +
         '</div>';
@@ -5868,13 +5868,13 @@ ${DESIGN_TOKENS_CSS}
       const btnClass = isDanger ? 'lc-btn danger' : 'lc-btn primary';
       const html =
         '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">' +
-          '<h3 style="margin:0; font-size:1.15rem; font-weight:700; display:flex; align-items:center; gap:8px; color:var(--text);">' +
-            '<span style="color:' + iconColor + '; font-weight:bold; font-size:1.2rem;">' + icon + '</span> ' +
+          '<h3 style="margin:0; font-size:var(--font-size-lg); font-weight:700; display:flex; align-items:center; gap:8px; color:var(--text);">' +
+            '<span style="color:' + iconColor + '; font-weight:bold; font-size:var(--font-size-lg);">' + icon + '</span> ' +
             escapeHtmlAdmin(title) +
           '</h3>' +
           '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeAdminModal">\u2715</button>' +
         '</div>' +
-        '<p style="margin:0 0 18px; color:var(--muted); font-size:0.92rem; line-height:1.45; white-space:pre-wrap;">' + escapeHtmlAdmin(message) + '</p>' +
+        '<p style="margin:0 0 18px; color:var(--muted); font-size:var(--font-size-base); line-height:1.45; white-space:pre-wrap;">' + escapeHtmlAdmin(message) + '</p>' +
         '<div style="display:flex; justify-content:flex-end; gap:10px;">' +
           '<button type="button" class="lc-btn secondary" data-act="closeAdminModal">Cancel</button>' +
           '<button type="button" class="' + btnClass + '" id="adminConfirmOkBtn">' + escapeHtmlAdmin(confirmBtnText || 'Confirm') + '</button>' +

@@ -1120,7 +1120,7 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
   let html = topCards.map(c => c.html).join('');
 
   if (topCards.length === 0) {
-    html = '<p style="color:var(--muted); font-size:0.9rem; padding:8px 0;"><small>No lists match that search.</small></p>';
+    html = '<p style="color:var(--muted); font-size:var(--font-size-base); padding:8px 0;"><small>No lists match that search.</small></p>';
   }
   if (traktError) {
     html += '<p class="testresult err" style="margin-top:8px;">&#10007; Trakt search: ' + escapeHtml(traktError) + '</p>';
@@ -2185,7 +2185,7 @@ async function loadCuratedListsFeed(forceRefresh) {
       const recommendedLists = scored.slice(0, 10).map(function(s) { return s.list; });
 
       if (recommendedLists.length) {
-        sectionsHtml += '<div style="margin-top:24px; margin-bottom:8px;"><h3 style="font-size:0.95rem; margin:0 0 2px;">Recommended Community Lists</h3><p style="margin:0; font-size:0.8rem; color:var(--muted);">Top community and curated lists you might like</p></div>';
+        sectionsHtml += '<div style="margin-top:24px; margin-bottom:8px;"><h3 style="font-size:var(--font-size-base); margin:0 0 2px;">Recommended Community Lists</h3><p style="margin:0; font-size:var(--font-size-sm); color:var(--muted);">Top community and curated lists you might like</p></div>';
         sectionsHtml += recommendedLists.map(l => {
           const type = l.type || 'movie';
           const added = alreadyAdded.has(l.url + '|' + type);
@@ -2229,7 +2229,7 @@ async function loadCuratedListsFeed(forceRefresh) {
       }).slice(0, 5);
 
       if (similarToCustom.length) {
-        sectionsHtml += '<div style="margin-top:24px; margin-bottom:8px;"><h3 style="font-size:0.95rem; margin:0 0 2px;">Lists Similar to Your Custom Lists</h3><p style="margin:0; font-size:0.8rem; color:var(--muted);">Public lists matching the themes of custom lists you created</p></div>';
+        sectionsHtml += '<div style="margin-top:24px; margin-bottom:8px;"><h3 style="font-size:var(--font-size-base); margin:0 0 2px;">Lists Similar to Your Custom Lists</h3><p style="margin:0; font-size:var(--font-size-sm); color:var(--muted);">Public lists matching the themes of custom lists you created</p></div>';
         const alreadyAdded = new Set();
         document.querySelectorAll('#lists .entry').forEach(function(entry) {
           const t = entry.querySelector('.type') ? entry.querySelector('.type').value : '';
@@ -2274,8 +2274,8 @@ async function loadCuratedListsFeed(forceRefresh) {
 
     if (!sectionsHtml) {
       container.innerHTML =
-        '<div style="text-align:center; padding:24px 16px; background:var(--card-bg); border:1px solid var(--border); border-radius:14px;">' +
-          '<p style="margin:0; font-size:0.88rem; color:var(--muted);">Watch more items or like community lists to build personalized recommendations.</p>' +
+        '<div style="text-align:center; padding:24px 16px; background:var(--card-bg); border:1px solid var(--border); border-radius:var(--radius);">' +
+          '<p style="margin:0; font-size:var(--font-size-sm); color:var(--muted);">Watch more items or like community lists to build personalized recommendations.</p>' +
         '</div>';
       return;
     }
@@ -2290,8 +2290,8 @@ async function loadCuratedListsFeed(forceRefresh) {
   } catch (err) {
     console.error('Curated lists error:', err);
     container.innerHTML =
-      '<div style="text-align:center; padding:24px 16px; background:var(--card-bg); border:1px solid var(--border); border-radius:14px;">' +
-        '<p style="margin:0 0 10px; font-size:0.88rem; color:var(--muted);">Watch more items or like community lists to build personalized recommendations.</p>' +
+      '<div style="text-align:center; padding:24px 16px; background:var(--card-bg); border:1px solid var(--border); border-radius:var(--radius);">' +
+        '<p style="margin:0 0 10px; font-size:var(--font-size-sm); color:var(--muted);">Watch more items or like community lists to build personalized recommendations.</p>' +
         '<button type="button" class="lc-btn primary" data-act="filterDiscoverShelves" data-act-args="[&quot;movie&quot;]">Explore Discover</button>' +
       '</div>';
   }
@@ -3031,13 +3031,13 @@ function openEpisodeDetails(epNum) {
     '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
     '<div style="display:flex; flex-direction:row; gap:32px; flex-wrap:wrap; margin-top:20px;">' +
       '<div style="flex: 0 0 300px; max-width: 100%;">' +
-        (still ? '<img src="' + still + '" style="width:100%; border-radius:8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">' : '') +
+        (still ? '<img src="' + still + '" style="width:100%; border-radius:var(--radius-sm); box-shadow: 0 4px 12px rgba(0,0,0,0.5);">' : '') +
       '</div>' +
       '<div style="flex: 1; min-width: 300px;">' +
         '<h1 style="margin:0 0 16px; font-size:2.5rem; font-family: serif;">E' + ep.episode_number + ' - ' + escapeHtml(ep.name) + '</h1>' +
           '<div style="margin-bottom:20px;">' + watchBtnHtml + '</div>' +
-        '<div style="margin-bottom:16px; color:var(--text); font-size:1.05rem;">' + infoHtml + '</div>' +
-        '<p style="font-size:1.05rem; line-height:1.6; color:var(--text); margin-bottom: 24px;">' + escapeHtml(ep.overview || 'No overview available.') + '</p>' +
+        '<div style="margin-bottom:16px; color:var(--text); font-size:var(--font-size-md);">' + infoHtml + '</div>' +
+        '<p style="font-size:var(--font-size-md); line-height:1.6; color:var(--text); margin-bottom: 24px;">' + escapeHtml(ep.overview || 'No overview available.') + '</p>' +
       '</div>' +
     '</div>';
     
@@ -3533,7 +3533,7 @@ function renderItemStorylinesWatchOrder(d, type) {
 
   return '<div class="item-storylines-section">' +
     '<div class="shelf-header" style="margin-bottom:12px;">' +
-      '<h3 style="margin: 0; font-family:serif; font-size:1.5rem;">Storylines, Sagas &amp; Universes</h3>' +
+      '<h3 style="margin: 0; font-family:serif; font-size:var(--font-size-2xl);">Storylines, Sagas &amp; Universes</h3>' +
     '</div>' +
     pillsHtml +
     '<div class="item-storylines-panels">' +
@@ -3670,14 +3670,14 @@ async function openItemDetailsModal(id, type, opts) {
     const infoHtml = pillParts.join('<span class="item-pill-sep" aria-hidden="true">\u2022</span>');
     
     const trailerHtml = d.trailerKey ? 
-      '<h3 style="margin: 0 0 16px; font-family:serif; font-size:1.5rem;">Trailer</h3>' +
-      '<div style="position:relative; padding-bottom:56.25%; height:0; overflow:hidden; border-radius:8px;">' +
+      '<h3 style="margin: 0 0 16px; font-family:serif; font-size:var(--font-size-2xl);">Trailer</h3>' +
+      '<div style="position:relative; padding-bottom:56.25%; height:0; overflow:hidden; border-radius:var(--radius-sm);">' +
       '<iframe style="position:absolute; top:0; left:0; width:100%; height:100%; border:0;" src="https://www.youtube.com/embed/' + escapeAttr(d.trailerKey) + '" allowfullscreen></iframe>' +
       '</div>' : '';
 
     let seasonsHtml = '';
     if (d.seasonsData && d.seasonsData.length > 0) {
-      seasonsHtml += '<h3 style="margin: 32px 0 16px; font-family:serif; font-size:1.5rem;">Seasons</h3>';
+      seasonsHtml += '<h3 style="margin: 32px 0 16px; font-family:serif; font-size:var(--font-size-2xl);">Seasons</h3>';
       seasonsHtml += '<div style="display:flex; flex-direction:column; gap:16px;">';
       // Specials (season 0) are real seasons too -- just listed last, below
       // every numbered season, since TMDB itself orders them first.
@@ -3873,11 +3873,11 @@ async function toggleSeasonEpisodes(headerEl, seasonNum, imdbId) {
       const still = ep.still_path ? escapeAttr(ep.still_path) : (fallbackStill ? escapeAttr(fallbackStill) : '');
       epsHtml +=
         '<div class="clickable-episode" data-id="' + ep.id + '" data-season="' + seasonNum + '" data-episode="' + ep.episode_number + '" data-show-id="' + escapeAttr(imdbId || '') + '" style="display:flex; flex-direction:column; gap:4px; cursor:pointer;" data-act="openEpisodeDetails" data-act-args="' + appActArgs([ep.episode_number]) + '">' +
-          '<div style="width:100%; aspect-ratio:16/9; background:#222; border-radius:6px; overflow:hidden; position:relative; box-shadow:0 2px 6px rgba(0,0,0,0.4);">' +
+          '<div style="width:100%; aspect-ratio:16/9; background:#222; border-radius:var(--radius-sm); overflow:hidden; position:relative; box-shadow:0 2px 6px rgba(0,0,0,0.4);">' +
             (still ? '<img src="' + still + '" style="width:100%; height:100%; object-fit:cover;">' : '') +
-            '<div class="episode-num-badge" style="position:absolute; bottom:4px; left:4px; background:var(--accent); color:#ffffff; padding:2px 6px; border-radius:4px; font-weight:bold; font-size:0.8rem; box-shadow:0 1px 4px rgba(0,0,0,0.4);">E' + ep.episode_number + '</div>' +
+            '<div class="episode-num-badge" style="position:absolute; bottom:4px; left:4px; background:var(--accent); color:var(--color-on-brand); padding:2px 6px; border-radius:var(--radius-xs); font-weight:bold; font-size:var(--font-size-sm); box-shadow:0 1px 4px rgba(0,0,0,0.4);">E' + ep.episode_number + '</div>' +
           '</div>' +
-          '<div style="font-size:0.9rem; color:var(--text); line-height:1.2; padding-top:4px;">' + escapeHtml(ep.name) + '</div>' +
+          '<div style="font-size:var(--font-size-base); color:var(--text); line-height:1.2; padding-top:4px;">' + escapeHtml(ep.name) + '</div>' +
         '</div>';
     });
     grid.innerHTML = epsHtml || '<div style="grid-column: 1 / -1; color:var(--muted);">No episodes found.</div>';
@@ -4187,7 +4187,7 @@ function openSelectListModal(id, type, title, poster) {
 
   // SECTION: Custom Lists
   if (customLists.length > 0) {
-    html += '<div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:4px 0 6px;">Custom Lists</div>';
+    html += '<div style="font-size:var(--font-size-sm); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:4px 0 6px;">Custom Lists</div>';
     customLists.forEach((list, idx) => {
       let isChecked = false;
       try {
@@ -4203,19 +4203,19 @@ function openSelectListModal(id, type, title, poster) {
       
       html += 
         '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-          '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+          '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
             '<input type="checkbox" class="list-select-cb" data-type="custom" data-idx="' + idx + '" data-initially-checked="' + (isChecked ? 'true' : 'false') + '" ' + (isChecked ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
             '<span style="font-weight:500;">' + escapeHtml(displayName) + '</span>' +
-            (isChecked ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+            (isChecked ? '<span class="in-list-badge" style="font-size:var(--font-size-xs); background:var(--color-success-subtle); color:var(--color-success-text); padding:2px 6px; border-radius:var(--radius-xs); font-weight:600;">In List</span>' : '') +
           '</label>' +
-          (isChecked ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleCustomItemDirect" data-act-args="' + appActArgs([idx, id, type, "@self"]) + '">Remove</button>' : '') +
+          (isChecked ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleCustomItemDirect" data-act-args="' + appActArgs([idx, id, type, "@self"]) + '">Remove</button>' : '') +
         '</div>';
     });
   }
 
   // SECTION: Trakt
   if (hasTrakt) {
-    html += '<div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:16px 0 6px; display:flex; align-items:center; gap:6px;">' +
+    html += '<div style="font-size:var(--font-size-sm); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:16px 0 6px; display:flex; align-items:center; gap:6px;">' +
       '<span style="color:#ed1c24; font-weight:bold;">\u25CF</span> Trakt ' + (traktUser ? '<small style="text-transform:none; font-weight:normal; opacity:0.8;">(@' + escapeHtml(traktUser) + ')</small>' : '') +
     '</div>';
 
@@ -4223,12 +4223,12 @@ function openSelectListModal(id, type, title, poster) {
     const inTraktWatchlist = isItemInExternalList('trakt', 'watchlist', 'watchlist', id, traktWl);
     html += 
       '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-        '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+        '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
           '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="trakt" data-target="watchlist" data-list-id="watchlist" data-name="Trakt Watchlist" data-initially-checked="' + (inTraktWatchlist ? 'true' : 'false') + '" ' + (inTraktWatchlist ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
           '<span>Trakt Watchlist</span>' +
-          (inTraktWatchlist ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+          (inTraktWatchlist ? '<span class="in-list-badge" style="font-size:var(--font-size-xs); background:var(--color-success-subtle); color:var(--color-success-text); padding:2px 6px; border-radius:var(--radius-xs); font-weight:600;">In List</span>' : '') +
         '</label>' +
-        (inTraktWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
+        (inTraktWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
 
     if (Array.isArray(window._myTraktLists)) {
@@ -4237,12 +4237,12 @@ function openSelectListModal(id, type, title, poster) {
         const inList = isItemInExternalList('trakt', 'custom', tl.id || tl.slug || '', id, tl);
         html += 
           '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-            '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+            '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
               '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="trakt" data-target="custom" data-list-id="' + escapeAttr(tl.id || tl.slug || '') + '" data-name="' + escapeAttr(tl.name) + '" data-initially-checked="' + (inList ? 'true' : 'false') + '" ' + (inList ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
               '<span>' + escapeHtml(tl.name || 'Trakt List') + '</span>' +
-              (inList ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+              (inList ? '<span class="in-list-badge" style="font-size:var(--font-size-xs); background:var(--color-success-subtle); color:var(--color-success-text); padding:2px 6px; border-radius:var(--radius-xs); font-weight:600;">In List</span>' : '') +
             '</label>' +
-            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", "custom", tl.id || tl.slug || '', id, type, "@self"]) + '">Remove</button>' : '') +
+            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", "custom", tl.id || tl.slug || '', id, type, "@self"]) + '">Remove</button>' : '') +
           '</div>';
       });
     }
@@ -4250,7 +4250,7 @@ function openSelectListModal(id, type, title, poster) {
 
   // SECTION: Simkl
   if (hasSimkl) {
-    html += '<div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:16px 0 6px; display:flex; align-items:center; gap:6px;">' +
+    html += '<div style="font-size:var(--font-size-sm); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:16px 0 6px; display:flex; align-items:center; gap:6px;">' +
       '<span style="color:#00e699; font-weight:bold;">\u25CF</span> Simkl ' + (simklUser ? '<small style="text-transform:none; font-weight:normal; opacity:0.8;">(@' + escapeHtml(simklUser) + ')</small>' : '') +
     '</div>';
 
@@ -4267,19 +4267,19 @@ function openSelectListModal(id, type, title, poster) {
       const isPresent = isItemInExternalList('simkl', 'status', st.key, id, foundList);
       html += 
         '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-          '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+          '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
             '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="simkl" data-target="status" data-status="' + st.key + '" data-list-id="' + st.key + '" data-name="Simkl ' + escapeAttr(st.label) + '" data-initially-checked="' + (isPresent ? 'true' : 'false') + '" ' + (isPresent ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
             '<span>' + escapeHtml(st.label) + '</span>' +
-            (isPresent ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+            (isPresent ? '<span class="in-list-badge" style="font-size:var(--font-size-xs); background:var(--color-success-subtle); color:var(--color-success-text); padding:2px 6px; border-radius:var(--radius-xs); font-weight:600;">In List</span>' : '') +
           '</label>' +
-          (isPresent ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["simkl", "status", st.key, id, type, "@self"]) + '">Remove</button>' : '') +
+          (isPresent ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["simkl", "status", st.key, id, type, "@self"]) + '">Remove</button>' : '') +
         '</div>';
     });
   }
 
   // SECTION: TMDB
   if (hasTmdb) {
-    html += '<div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:16px 0 6px; display:flex; align-items:center; gap:6px;">' +
+    html += '<div style="font-size:var(--font-size-sm); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:16px 0 6px; display:flex; align-items:center; gap:6px;">' +
       '<span style="color:#01b4e4; font-weight:bold;">\u25CF</span> TMDB ' + (tmdbUser ? '<small style="text-transform:none; font-weight:normal; opacity:0.8;">(@' + escapeHtml(tmdbUser) + ')</small>' : '') +
     '</div>';
 
@@ -4287,24 +4287,24 @@ function openSelectListModal(id, type, title, poster) {
     const inTmdbWatchlist = isItemInExternalList('tmdb', 'watchlist', 'watchlist', id, tmdbWl);
     html += 
       '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-        '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+        '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
           '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="tmdb" data-target="watchlist" data-list-id="watchlist" data-name="TMDB Watchlist" data-initially-checked="' + (inTmdbWatchlist ? 'true' : 'false') + '" ' + (inTmdbWatchlist ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
           '<span>TMDB Watchlist</span>' +
-          (inTmdbWatchlist ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+          (inTmdbWatchlist ? '<span class="in-list-badge" style="font-size:var(--font-size-xs); background:var(--color-success-subtle); color:var(--color-success-text); padding:2px 6px; border-radius:var(--radius-xs); font-weight:600;">In List</span>' : '') +
         '</label>' +
-        (inTmdbWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
+        (inTmdbWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
 
     const tmdbFav = Array.isArray(window._myTmdbLists) ? window._myTmdbLists.find(l => l.url && l.url.includes('favorites')) : null;
     const inTmdbFav = isItemInExternalList('tmdb', 'favorite', 'favorite', id, tmdbFav);
     html += 
       '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-        '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+        '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
           '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="tmdb" data-target="favorite" data-list-id="favorite" data-name="TMDB Favorites" data-initially-checked="' + (inTmdbFav ? 'true' : 'false') + '" ' + (inTmdbFav ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
           '<span>TMDB Favorites</span>' +
-          (inTmdbFav ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+          (inTmdbFav ? '<span class="in-list-badge" style="font-size:var(--font-size-xs); background:var(--color-success-subtle); color:var(--color-success-text); padding:2px 6px; border-radius:var(--radius-xs); font-weight:600;">In List</span>' : '') +
         '</label>' +
-        (inTmdbFav ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "favorite", "favorite", id, type, "@self"]) + '">Remove</button>' : '') +
+        (inTmdbFav ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "favorite", "favorite", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
 
     if (Array.isArray(window._myTmdbLists)) {
@@ -4313,12 +4313,12 @@ function openSelectListModal(id, type, title, poster) {
         const inList = isItemInExternalList('tmdb', 'custom', tml.id || '', id, tml);
         html += 
           '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-            '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+            '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
               '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="tmdb" data-target="custom" data-list-id="' + escapeAttr(tml.id || '') + '" data-name="' + escapeAttr(tml.name) + '" data-initially-checked="' + (inList ? 'true' : 'false') + '" ' + (inList ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
               '<span>' + escapeHtml(tml.name || 'TMDB List') + '</span>' +
-              (inList ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+              (inList ? '<span class="in-list-badge" style="font-size:var(--font-size-xs); background:var(--color-success-subtle); color:var(--color-success-text); padding:2px 6px; border-radius:var(--radius-xs); font-weight:600;">In List</span>' : '') +
             '</label>' +
-            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "custom", tml.id || '', id, type, "@self"]) + '">Remove</button>' : '') +
+            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "custom", tml.id || '', id, type, "@self"]) + '">Remove</button>' : '') +
           '</div>';
       });
     }
@@ -4326,7 +4326,7 @@ function openSelectListModal(id, type, title, poster) {
 
   // SECTION: MDBList
   if (hasMdblist) {
-    html += '<div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:16px 0 6px; display:flex; align-items:center; gap:6px;">' +
+    html += '<div style="font-size:var(--font-size-sm); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:16px 0 6px; display:flex; align-items:center; gap:6px;">' +
       '<span style="color:#f5c518; font-weight:bold;">\u25CF</span> MDBList ' + (mdbUser ? '<small style="text-transform:none; font-weight:normal; opacity:0.8;">(@' + escapeHtml(mdbUser) + ')</small>' : '') +
     '</div>';
 
@@ -4334,12 +4334,12 @@ function openSelectListModal(id, type, title, poster) {
     const inMdbWatchlist = isItemInExternalList('mdblist', 'watchlist', 'watchlist', id, mdbWl);
     html += 
       '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-        '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+        '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
           '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="mdblist" data-target="watchlist" data-list-id="watchlist" data-name="MDBList Watchlist" data-initially-checked="' + (inMdbWatchlist ? 'true' : 'false') + '" ' + (inMdbWatchlist ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
           '<span>MDBList Watchlist</span>' +
-          (inMdbWatchlist ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+          (inMdbWatchlist ? '<span class="in-list-badge" style="font-size:var(--font-size-xs); background:var(--color-success-subtle); color:var(--color-success-text); padding:2px 6px; border-radius:var(--radius-xs); font-weight:600;">In List</span>' : '') +
         '</label>' +
-        (inMdbWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
+        (inMdbWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
 
     if (Array.isArray(window._myMdblistLists)) {
@@ -4348,12 +4348,12 @@ function openSelectListModal(id, type, title, poster) {
         const inList = isItemInExternalList('mdblist', 'custom', ml.id || ml.slug || '', id, ml);
         html += 
           '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-            '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+            '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
               '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="mdblist" data-target="custom" data-list-id="' + escapeAttr(ml.id || ml.slug || '') + '" data-name="' + escapeAttr(ml.name) + '" data-initially-checked="' + (inList ? 'true' : 'false') + '" ' + (inList ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
               '<span>' + escapeHtml(ml.name || 'MDBList List') + '</span>' +
-              (inList ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+              (inList ? '<span class="in-list-badge" style="font-size:var(--font-size-xs); background:var(--color-success-subtle); color:var(--color-success-text); padding:2px 6px; border-radius:var(--radius-xs); font-weight:600;">In List</span>' : '') +
             '</label>' +
-            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", "custom", ml.id || ml.slug || '', id, type, "@self"]) + '">Remove</button>' : '') +
+            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", "custom", ml.id || ml.slug || '', id, type, "@self"]) + '">Remove</button>' : '') +
           '</div>';
       });
     }
@@ -4361,12 +4361,12 @@ function openSelectListModal(id, type, title, poster) {
 
   if (html) {
     html += '<div style="margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--border); text-align: center;">' +
-      '<button type="button" class="lc-btn secondary" style="width:100%; font-size:0.9rem;" data-act="closeSelectListModal" data-act-then="openCreateListModal">+ Create New List</button>' +
+      '<button type="button" class="lc-btn secondary" style="width:100%; font-size:var(--font-size-base);" data-act="closeSelectListModal" data-act-then="openCreateListModal">+ Create New List</button>' +
     '</div>';
   }
 
   if (html === '') {
-    html = '<p style="text-align:center; padding:20px; color:var(--muted); font-size:0.95rem;">You do not have any Custom Lists or connected external accounts yet.<br><br>' +
+    html = '<p style="text-align:center; padding:20px; color:var(--muted); font-size:var(--font-size-base);">You do not have any Custom Lists or connected external accounts yet.<br><br>' +
       '<a href="#" id="emptyCreateListLink" style="color:var(--accent); font-weight:600;">Create a Custom List</a> or connect Trakt/Simkl/TMDB/MDBList in <strong>Settings</strong>.</p>';
     document.getElementById('addSelectedListsBtn').style.display = 'none';
     setTimeout(() => {
@@ -4417,9 +4417,9 @@ function openSelectListModal(id, type, title, poster) {
               const row = cb.closest('.select-list-row');
               if (row && !row.querySelector('.in-list-badge')) {
                 const label = row.querySelector('label');
-                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>');
+                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:var(--font-size-xs); background:var(--color-success-subtle); color:var(--color-success-text); padding:2px 6px; border-radius:var(--radius-xs); font-weight:600;">In List</span>');
                 if (!row.querySelector('button')) {
-                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["simkl", "status", st, id, type, "@self"]) + '">Remove</button>');
+                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["simkl", "status", st, id, type, "@self"]) + '">Remove</button>');
                 }
               }
             }
@@ -4447,9 +4447,9 @@ function openSelectListModal(id, type, title, poster) {
               const row = cb.closest('.select-list-row');
               if (row && !row.querySelector('.in-list-badge')) {
                 const label = row.querySelector('label');
-                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>');
+                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:var(--font-size-xs); background:var(--color-success-subtle); color:var(--color-success-text); padding:2px 6px; border-radius:var(--radius-xs); font-weight:600;">In List</span>');
                 if (!row.querySelector('button')) {
-                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", target, listId, id, type, "@self"]) + '">Remove</button>');
+                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", target, listId, id, type, "@self"]) + '">Remove</button>');
                 }
               }
             }
@@ -4481,9 +4481,9 @@ function openSelectListModal(id, type, title, poster) {
               const row = cb.closest('.select-list-row');
               if (row && !row.querySelector('.in-list-badge')) {
                 const label = row.querySelector('label');
-                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>');
+                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:var(--font-size-xs); background:var(--color-success-subtle); color:var(--color-success-text); padding:2px 6px; border-radius:var(--radius-xs); font-weight:600;">In List</span>');
                 if (!row.querySelector('button')) {
-                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", target, listId, id, type, "@self"]) + '">Remove</button>');
+                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", target, listId, id, type, "@self"]) + '">Remove</button>');
                 }
               }
             }
@@ -4518,9 +4518,9 @@ function openSelectListModal(id, type, title, poster) {
               const row = cb.closest('.select-list-row');
               if (row && !row.querySelector('.in-list-badge')) {
                 const label = row.querySelector('label');
-                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>');
+                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:var(--font-size-xs); background:var(--color-success-subtle); color:var(--color-success-text); padding:2px 6px; border-radius:var(--radius-xs); font-weight:600;">In List</span>');
                 if (!row.querySelector('button')) {
-                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", target, listId, id, type, "@self"]) + '">Remove</button>');
+                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", target, listId, id, type, "@self"]) + '">Remove</button>');
                 }
               }
             }
@@ -5187,7 +5187,7 @@ function applySearchFilters() {
 
 function renderTitlePosterCards(items, totalCount, resEl) {
   if (!items || !items.length) {
-    resEl.innerHTML = '<p style="margin:16px 0; color:var(--muted); font-size:0.9rem;"><small>No titles match the selected filters.</small></p>';
+    resEl.innerHTML = '<p style="margin:16px 0; color:var(--muted); font-size:var(--font-size-base);"><small>No titles match the selected filters.</small></p>';
     return;
   }
 
@@ -5198,10 +5198,10 @@ function renderTitlePosterCards(items, totalCount, resEl) {
   let countBadge = '';
   if (q) {
     countBadge = (typeof totalCount === 'number' && totalCount > items.length)
-      ? '<div style="margin-bottom:12px; font-size:0.86rem; font-weight:600; color:var(--muted);">Showing ' + items.length + ' of ' + totalCount + ' results for "' + escapeHtml(q) + '"</div>'
-      : '<div style="margin-bottom:12px; font-size:0.86rem; font-weight:600; color:var(--muted);">' + items.length + ' results found for "' + escapeHtml(q) + '"</div>';
+      ? '<div style="margin-bottom:12px; font-size:var(--font-size-sm); font-weight:600; color:var(--muted);">Showing ' + items.length + ' of ' + totalCount + ' results for "' + escapeHtml(q) + '"</div>'
+      : '<div style="margin-bottom:12px; font-size:var(--font-size-sm); font-weight:600; color:var(--muted);">' + items.length + ' results found for "' + escapeHtml(q) + '"</div>';
   } else {
-    countBadge = '<div style="margin-bottom:12px; font-size:0.86rem; font-weight:600; color:var(--muted);">Top Trending ' + typeLabel + ' Right Now</div>';
+    countBadge = '<div style="margin-bottom:12px; font-size:var(--font-size-sm); font-weight:600; color:var(--muted);">Top Trending ' + typeLabel + ' Right Now</div>';
   }
 
   const postersHtml = items.map(m => {
@@ -5229,7 +5229,7 @@ function renderTitlePosterCards(items, totalCount, resEl) {
 
     const posterEl = resolvedCardPoster
       ? '<img class="live-preview-poster" src="' + escapeAttr(resolvedCardPoster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
-      : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
+      : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1"><small style="color:var(--muted); font-size:var(--font-size-xs);">No poster</small></div>';
     
     return '<div class="live-preview-poster-card clickable-poster" ' +
       'data-id="' + escapeAttr(id || '') + '" ' +

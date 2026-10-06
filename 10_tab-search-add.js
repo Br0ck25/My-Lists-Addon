@@ -12,7 +12,7 @@
     <div class="shelf-header" style="margin-bottom:12px; align-items:center; justify-content:space-between; gap:12px;">
       <div>
         <h2 class="shelf-title sr-only">Live Preview &amp; Editor</h2>
-        <p style="margin:0; color:var(--muted); font-size:0.85rem;">Catalogs and lists you've added to your add-on. Reorder, edit, and preview your active shelves.</p>
+        <p style="margin:0; color:var(--muted); font-size:var(--font-size-sm);">Catalogs and lists you've added to your add-on. Reorder, edit, and preview your active shelves.</p>
       </div>
       <div class="actions" style="flex-direction:row; flex-wrap:wrap; align-items:center; gap:6px; flex-shrink:0;">
         <button type="button" class="primary lc-btn" data-act="openAddShelfModal">+ New Catalog</button>
@@ -36,15 +36,15 @@
     <div id="appShellHomeEditor"></div>
 
     <!-- 24-Hour Randomizer Controls -->
-    <div style="margin-top:16px; padding:12px 16px; background:var(--surface); border-radius:12px; border:1px solid var(--border);">
-      <div style="font-weight:600; font-size:0.92rem; margin-bottom:4px; display:flex; align-items:center; gap:6px;">
+    <div style="margin-top:16px; padding:12px 16px; background:var(--surface); border-radius:var(--radius-md); border:1px solid var(--border);">
+      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:4px; display:flex; align-items:center; gap:6px;">
         <span>Daily Randomizer</span>
       </div>
       <div>
         <div class="settings-toggle-row">
           <div style="flex:1; min-width:0; padding-right:12px;">
-            <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Shuffle Catalogs daily (every 24h)</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Rotates the order of your catalog rows once every 24 hours.</p>
+            <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Shuffle Catalogs daily (every 24h)</span>
+            <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Rotates the order of your catalog rows once every 24 hours.</p>
           </div>
           <label class="ui-toggle" aria-label="Shuffle Catalogs daily (every 24h)">
             <input type="checkbox" id="shuffleShelvesCheckbox" data-act="saveState">
@@ -54,8 +54,8 @@
 
         <div class="settings-toggle-row">
           <div style="flex:1; min-width:0; padding-right:12px;">
-            <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Shuffle items in Catalogs daily (every 24h)</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Randomizes the order of titles inside each catalog row every 24 hours.</p>
+            <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Shuffle items in Catalogs daily (every 24h)</span>
+            <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Randomizes the order of titles inside each catalog row every 24 hours.</p>
           </div>
           <label class="ui-toggle" aria-label="Shuffle items in Catalogs daily (every 24h)">
             <input type="checkbox" id="shuffleItemsCheckbox" data-act="saveState">
@@ -79,7 +79,7 @@
   <div class="lists-subpanel" id="catalogsSubBulk" style="display:none;">
   <div class="panel bulk-panel">
     <h2 class="panel-title">Bulk Import Lists</h2>
-    <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem; line-height:1.45;">Paste multiple list URLs at once, one per line. Each list is automatically detected and added to your catalogs.</p>
+    <p style="margin:0 0 10px; color:var(--muted); font-size:var(--font-size-sm); line-height:1.45;">Paste multiple list URLs at once, one per line. Each list is automatically detected and added to your catalogs.</p>
     <div class="bulk-provider-badges">
       <span class="bulk-provider-label">Supported:</span>
       <span class="list-source-badge badge-mdblist">MDBList</span>

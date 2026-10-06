@@ -1653,7 +1653,7 @@ function formatRatingSpanHtml(item, options = {}) {
   }
 
   if (ratingNum == null || ratingNum <= 0) return '';
-  return '<span class="poster-rating" data-rating-type="tmdb" style="color:#f5c518; font-weight:700; font-size:0.75rem; margin-left:auto; flex-shrink:0;">&#9733; ' + ratingNum.toFixed(1) + '</span>';
+  return '<span class="poster-rating" data-rating-type="tmdb" style="color:#f5c518; font-weight:700; font-size:var(--font-size-xs); margin-left:auto; flex-shrink:0;">&#9733; ' + ratingNum.toFixed(1) + '</span>';
 }
 window.formatRatingSpanHtml = formatRatingSpanHtml;
 
@@ -1683,7 +1683,7 @@ function renderMediaCard(item, options = {}) {
 
   const posterImg = poster
     ? '<img class="live-preview-poster" src="' + escapeAttr(poster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
-    : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
+    : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1"><small style="color:var(--muted); font-size:var(--font-size-xs);">No poster</small></div>';
 
   const topLeft = options.topLeftHtml !== undefined ? options.topLeftHtml : '';
   const topRight = options.topRightHtml || '';
@@ -2365,19 +2365,19 @@ function openSupportGoal() {
   };
   const html =
     '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">' +
-      '<h3 style="margin:0; font-size:1.1rem;">Keeping My Lists Addon running</h3>' +
-      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+      '<h3 style="margin:0; font-size:var(--font-size-lg);">Keeping My Lists Addon running</h3>' +
+      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:var(--font-size-md); line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
     '</div>' +
-    '<p style="margin:0 0 12px; color:var(--muted); font-size:0.88rem; line-height:1.4;">It is free, with no ads. Donations only cover the hosting bill.</p>' +
-    '<div style="font-size:1.8rem; font-weight:800;">' + supportMoney(g.raised) + ' <small style="font-size:0.85rem; font-weight:600; color:var(--muted);">of ' + supportMoney(g.goal) + ' this month</small></div>' +
-    '<div style="height:10px; border-radius:10px; background:var(--border); overflow:hidden; margin:8px 0 12px;"><i style="display:block; height:100%; width:' + pct + '%; border-radius:10px; background:' + (g.raised >= g.goal ? '#34c759' : 'linear-gradient(90deg,#ffb020,#ff8a00)') + ';"></i></div>' +
-    '<div style="display:grid; gap:6px; font-size:0.88rem; color:var(--text); margin-bottom:14px;">' +
+    '<p style="margin:0 0 12px; color:var(--muted); font-size:var(--font-size-sm); line-height:1.4;">It is free, with no ads. Donations only cover the hosting bill.</p>' +
+    '<div style="font-size:var(--font-size-2xl); font-weight:800;">' + supportMoney(g.raised) + ' <small style="font-size:var(--font-size-sm); font-weight:600; color:var(--muted);">of ' + supportMoney(g.goal) + ' this month</small></div>' +
+    '<div style="height:10px; border-radius:var(--radius-md); background:var(--border); overflow:hidden; margin:8px 0 12px;"><i style="display:block; height:100%; width:' + pct + '%; border-radius:var(--radius-md); background:' + (g.raised >= g.goal ? '#34c759' : 'linear-gradient(90deg,#ffb020,#ff8a00)') + ';"></i></div>' +
+    '<div style="display:grid; gap:6px; font-size:var(--font-size-sm); color:var(--text); margin-bottom:14px;">' +
       row('Hosting this month', supportMoney(g.goal), false) +
       row('Given so far', supportMoney(g.raised), false) +
       row(left > 0 ? 'Still needed' : 'Covered', left > 0 ? supportMoney(left) : 'Thank you!', true) +
     '</div>' +
-    '<a href="' + escapeAttr(g.url) + '" target="_blank" rel="noopener noreferrer" style="display:block; text-align:center; background:var(--accent); color:#fff; border-radius:26px; padding:12px; font-weight:800; text-decoration:none;">&#9749; Support on Ko-fi</a>' +
-    '<p style="margin:10px 0 0; text-align:center; color:var(--muted); font-size:0.78rem;">Starts again on the 1st of each month.</p>';
+    '<a href="' + escapeAttr(g.url) + '" target="_blank" rel="noopener noreferrer" style="display:block; text-align:center; background:var(--accent); color:var(--color-on-brand); border-radius:var(--radius); padding:12px; font-weight:800; text-decoration:none;">&#9749; Support on Ko-fi</a>' +
+    '<p style="margin:10px 0 0; text-align:center; color:var(--muted); font-size:var(--font-size-xs);">Starts again on the 1st of each month.</p>';
   showModal(html);
 }
 
@@ -2391,13 +2391,13 @@ function showAppAlert(title, message, isSuccess = false) {
   const iconColor = isSuccess ? 'var(--accent-2, #00b4d8)' : 'var(--danger, #e63946)';
   const html =
     '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">' +
-      '<h3 style="margin:0; font-size:1.1rem; display:flex; align-items:center; gap:8px;">' +
-        '<span style="color:' + iconColor + '; font-weight:bold; font-size:1.2rem;">' + icon + '</span> ' +
+      '<h3 style="margin:0; font-size:var(--font-size-lg); display:flex; align-items:center; gap:8px;">' +
+        '<span style="color:' + iconColor + '; font-weight:bold; font-size:var(--font-size-lg);">' + icon + '</span> ' +
         escapeHtml(title) +
       '</h3>' +
-      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:var(--font-size-md); line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
     '</div>' +
-    '<p style="margin:0 0 16px; color:var(--muted); font-size:0.9rem; line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;">' + escapeHtml(message) + '</p>' +
+    '<p style="margin:0 0 16px; color:var(--muted); font-size:var(--font-size-base); line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;">' + escapeHtml(message) + '</p>' +
     '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
       '<button type="button" class="primary" data-act="closeModal" style="min-width:80px; padding:8px 16px;">OK</button>' +
     '</div>';
@@ -2437,11 +2437,11 @@ if (typeof window !== 'undefined') {
 // and the caller's own result dialog still arrives.
 function showAppBusy(title, message) {
   const html =
-    '<h3 style="margin:0 0 12px; font-size:1.1rem; display:flex; align-items:center; gap:10px;">' +
+    '<h3 style="margin:0 0 12px; font-size:var(--font-size-lg); display:flex; align-items:center; gap:10px;">' +
       '<span class="app-spinner" aria-hidden="true"></span> ' +
       escapeHtml(title) +
     '</h3>' +
-    '<p role="status" aria-live="polite" style="margin:0; color:var(--muted); font-size:0.9rem; line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;">' + escapeHtml(message || '') + '</p>';
+    '<p role="status" aria-live="polite" style="margin:0; color:var(--muted); font-size:var(--font-size-base); line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;">' + escapeHtml(message || '') + '</p>';
   showModal(html);
 }
 
@@ -2451,13 +2451,13 @@ function showAppConfirm(title, message, confirmBtnText, onConfirm, isDanger = tr
   const confirmBtnStyle = isDanger ? 'background:var(--danger, #e63946); color:#fff; border:none;' : '';
   const html =
     '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">' +
-      '<h3 style="margin:0; font-size:1.1rem; display:flex; align-items:center; gap:8px;">' +
-        '<span style="color:' + iconColor + '; font-weight:bold; font-size:1.2rem;">' + icon + '</span> ' +
+      '<h3 style="margin:0; font-size:var(--font-size-lg); display:flex; align-items:center; gap:8px;">' +
+        '<span style="color:' + iconColor + '; font-weight:bold; font-size:var(--font-size-lg);">' + icon + '</span> ' +
         escapeHtml(title) +
       '</h3>' +
-      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:var(--font-size-md); line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
     '</div>' +
-    '<p style="margin:0 0 16px; color:var(--muted); font-size:0.9rem; line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;">' + escapeHtml(message) + '</p>' +
+    '<p style="margin:0 0 16px; color:var(--muted); font-size:var(--font-size-base); line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;">' + escapeHtml(message) + '</p>' +
     '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
       '<button type="button" class="secondary" data-act="closeModal" style="min-width:80px; padding:8px 16px;">Cancel</button>' +
       '<button type="button" class="primary" id="appConfirmBtn" style="min-width:80px; padding:8px 16px; ' + confirmBtnStyle + '">' + escapeHtml(confirmBtnText || 'Confirm') + '</button>' +
@@ -2624,10 +2624,10 @@ function confirmDialog(message, title = 'Confirm Action', confirmBtnText = 'Conf
 function showAppPrompt(title, message, defaultValue, onConfirm) {
   const html =
     '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">' +
-      '<h3 style="margin:0; font-size:1.1rem;">' + escapeHtml(title) + '</h3>' +
-      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+      '<h3 style="margin:0; font-size:var(--font-size-lg);">' + escapeHtml(title) + '</h3>' +
+      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:var(--font-size-md); line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
     '</div>' +
-    (message ? '<p style="margin:0 0 12px; color:var(--muted); font-size:0.9rem;">' + escapeHtml(message) + '</p>' : '') +
+    (message ? '<p style="margin:0 0 12px; color:var(--muted); font-size:var(--font-size-base);">' + escapeHtml(message) + '</p>' : '') +
     '<input type="text" id="appPromptInput" class="input" style="width:100%; margin-bottom:16px;" value="' + escapeAttr(defaultValue || '') + '" />' +
     '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
       '<button type="button" class="secondary" data-act="closeModal" style="min-width:80px; padding:8px 16px;">Cancel</button>' +
@@ -3253,7 +3253,7 @@ function renderDiscoverChartsList(type, forceRefresh) {
     return;
   }
   window._currentDiscoverRenderedFilter = type;
-  container.innerHTML = '<p style="color:var(--muted); font-size:0.88rem;">Loading charts\u2026</p>';
+  container.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm);">Loading charts\u2026</p>';
 
   // Build list objects from all chart tables, filtered to the right type.
   const lists = [];
@@ -3372,7 +3372,7 @@ function renderDiscoverChartsList(type, forceRefresh) {
       }
     }, 400);
   } else {
-    container.innerHTML = '<p style="color:var(--muted); font-size:0.88rem;">Could not load chart lists.</p>';
+    container.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm);">Could not load chart lists.</p>';
   }
 }
 
@@ -3877,7 +3877,7 @@ function openAddShelfModal() {
   document.getElementById('addShelfModalName').value = '';
   document.getElementById('addShelfModalLinksContainer').innerHTML = 
     '<div class="add-shelf-link-row" style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">' +
-      '<input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd, MDBList)" style="flex:1; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
+      '<input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd, MDBList)" style="flex:1; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base);" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
     '</div>';
   document.getElementById('addShelfModalType').value = 'movie';
   validateAddShelfModal();
@@ -3894,7 +3894,7 @@ function addShelfModalAddLink() {
   div.style.gap = '8px';
   div.style.marginBottom = '8px';
   div.innerHTML = 
-    '<input type="url" class="addShelfModalLinkInput" placeholder="Additional URL" style="flex:1; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
+    '<input type="url" class="addShelfModalLinkInput" placeholder="Additional URL" style="flex:1; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base);" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
     '<button type="button" class="lc-btn secondary" aria-label="Remove this URL" style="padding: 6px 12px; height: 38px; min-height: 38px;" data-act="appActRemoveShelfLinkRow" data-act-args="[&quot;@self&quot;]">&#x2715;</button>';
   container.appendChild(div);
   validateAddShelfModal();
@@ -4055,7 +4055,7 @@ function addRow(name, url, type, enabled, group, channelId) {
       : (isChannel || isCustomList || isPremade)
         ? ''
         : '<button type="button" class="secondary add-source-btn" data-act="addSourceRow" data-act-args="[&quot;@self&quot;]">+ Add another source (merge into one catalog)</button>') +
-    '<div class="live-preview-shelf"><div class="live-preview-shelf-title"><span class="shelf-drag-handle" title="Drag to reorder catalog"><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span><span class="shelf-title-text">' + escapeHtml(name || 'Unnamed') + ' - ' + (type === 'series' ? 'Series' : 'Movies') + '</span><span class="live-preview-shelf-status"></span><button type="button" class="text-action-btn" disabled>See All &rsaquo;</button></div><div class="live-preview-posters"><p style="color:var(--muted); font-size:0.88rem; text-align:center; padding: 20px;"><small>Click "Refresh Preview" above to load posters.</small></p></div></div>';
+    '<div class="live-preview-shelf"><div class="live-preview-shelf-title"><span class="shelf-drag-handle" title="Drag to reorder catalog"><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span><span class="shelf-title-text">' + escapeHtml(name || 'Unnamed') + ' - ' + (type === 'series' ? 'Series' : 'Movies') + '</span><span class="live-preview-shelf-status"></span><button type="button" class="text-action-btn" disabled>See All &rsaquo;</button></div><div class="live-preview-posters"><p style="color:var(--muted); font-size:var(--font-size-sm); text-align:center; padding: 20px;"><small>Click "Refresh Preview" above to load posters.</small></p></div></div>';
   container.appendChild(div);
   // Every custom-list row this browser owns gets a live server-side copy
   // (see withLiveListToken): the token is stamped into the row's URL here,

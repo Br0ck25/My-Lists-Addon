@@ -231,7 +231,7 @@ async function runCustomListTitleSearch(query) {
     return [];
   }
   const seq = ++customListSearchSeq;
-  box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem; padding:8px 0;"><small>Searching\u2026</small></p>';
+  box.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm); padding:8px 0;"><small>Searching\u2026</small></p>';
 
   try {
     const isAdult = typeof isAdultContentFilterEnabled === 'function' ? isAdultContentFilterEnabled() : false;
@@ -272,7 +272,7 @@ async function runCustomListTitleSearch(query) {
     return results;
   } catch (e) {
     if (seq !== customListSearchSeq) return [];
-    box.innerHTML = '<p class="testresult err" style="margin:8px 0; font-size:0.85rem;">\u2717 Network error while searching.</p>';
+    box.innerHTML = '<p class="testresult err" style="margin:8px 0; font-size:var(--font-size-sm);">\u2717 Network error while searching.</p>';
     return [];
   }
 }
@@ -281,7 +281,7 @@ function renderCustomListSearchResults(results) {
   const box = document.getElementById('customListSearchResult');
   if (!box) return;
   if (!results.length) {
-    box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem; padding:8px 0;"><small>No titles found matching that search.</small></p>';
+    box.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm); padding:8px 0;"><small>No titles found matching that search.</small></p>';
     return;
   }
 
@@ -299,7 +299,7 @@ function renderCustomListSearchResults(results) {
     const rPoster = typeof resolveClientPoster === 'function' ? resolveClientPoster(r, r.poster || '') : r.poster;
     const posterImg = rPoster
       ? '<img class="custom-list-search-poster" src="' + escapeAttr(rPoster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
-      : '<div class="custom-list-search-poster live-preview-poster-placeholder" style="display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:0.72rem; text-align:center; padding:4px;" data-needs-fallback="1"><small style="color:var(--muted); font-size:0.72rem;">No poster</small></div>';
+      : '<div class="custom-list-search-poster live-preview-poster-placeholder" style="display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:var(--font-size-xs); text-align:center; padding:4px;" data-needs-fallback="1"><small style="color:var(--muted); font-size:var(--font-size-xs);">No poster</small></div>';
 
     const isAlreadyAdded = existingKeys.has(draftKey(itemKind, r.title, r.year));
     const btnText = isAlreadyAdded ? 'Added \u2713' : '+ Add';
@@ -323,7 +323,7 @@ function renderCustomListSearchResults(results) {
       '<div class="custom-list-search-meta">' +
         (r.year ? escapeHtml(r.year) + ' \u2022 ' : '') + typeLabel +
       '</div>' +
-      '<button type="button" class="' + btnClass + '" style="width:100%; padding:4px 6px; font-size:0.72rem; font-weight:600; border-radius:var(--radius-pill);"' +
+      '<button type="button" class="' + btnClass + '" style="width:100%; padding:4px 6px; font-size:var(--font-size-xs); font-weight:600; border-radius:var(--radius-pill);"' +
         disabledAttr +
         ' data-searchtype="' + itemType + '"' +
         ' data-tmdbid="' + escapeAttr(String(tmdbIdNum)) + '"' +
@@ -421,10 +421,10 @@ function renderCustomListDraftList() {
   const box = document.getElementById('customListDraftList');
   if (!box) return;
   if (!customListDraftItems.length) {
-    box.innerHTML = '<div style="text-align:center; padding:28px 16px; border:1.5px dashed var(--border); border-radius:10px; background:var(--surface); margin-top:8px;">' +
+    box.innerHTML = '<div style="text-align:center; padding:28px 16px; border:1.5px dashed var(--border); border-radius:var(--radius-md); background:var(--surface); margin-top:8px;">' +
       '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted); margin-bottom:8px; opacity:0.7;" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg>' +
-      '<div style="font-weight:600; font-size:0.9rem; color:var(--text); margin-bottom:4px;">No titles in this list yet</div>' +
-      '<p style="color:var(--muted); font-size:0.82rem; margin:0 auto; max-width:340px;">Search above to add movies or shows, or tap "+" on any title while browsing Discover, Charts, or Search.</p>' +
+      '<div style="font-weight:600; font-size:var(--font-size-base); color:var(--text); margin-bottom:4px;">No titles in this list yet</div>' +
+      '<p style="color:var(--muted); font-size:var(--font-size-sm); margin:0 auto; max-width:340px;">Search above to add movies or shows, or tap "+" on any title while browsing Discover, Charts, or Search.</p>' +
     '</div>';
     return;
   }
@@ -434,7 +434,7 @@ function renderCustomListDraftList() {
     const typeLabel = itType === 'series' ? 'Show' : 'Movie';
     const yearSub = (it.year ? it.year + ' \u2022 ' : '') + typeLabel;
     const posBox = '<div style="position:absolute; top:4px; left:4px; z-index:4;">' +
-      '<input type="number" class="pos customListPosInput" min="1" max="' + customListDraftItems.length + '" value="' + (i + 1) + '" title="Type position to move" style="width:34px; height:24px; min-height:unset; padding:2px; font-size:0.75rem; text-align:center; border-radius:6px; background:rgba(0,0,0,0.75); color:#fff; border:1px solid rgba(255,255,255,0.3); font-weight:700;">' +
+      '<input type="number" class="pos customListPosInput" min="1" max="' + customListDraftItems.length + '" value="' + (i + 1) + '" title="Type position to move" style="width:34px; height:24px; min-height:unset; padding:2px; font-size:var(--font-size-xs); text-align:center; border-radius:var(--radius-sm); background:rgba(0,0,0,0.75); color:var(--color-on-brand); border:1px solid rgba(255,255,255,0.3); font-weight:700;">' +
     '</div>';
     const removeBtn = '<button type="button" class="cw-remove-btn customListRemovePickBtn" title="Remove from list" aria-label="Remove from list" style="z-index:4;">\u2715</button>';
 
@@ -452,7 +452,7 @@ function renderCustomListDraftList() {
     const pickPoster = typeof resolveClientPoster === 'function' ? resolveClientPoster(it, it.poster || '') : it.poster;
     const posterEl = pickPoster
       ? '<img class="live-preview-poster" src="' + escapeAttr(pickPoster) + '" alt="" loading="lazy">'
-      : '<div class="live-preview-poster live-preview-poster-placeholder"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
+      : '<div class="live-preview-poster live-preview-poster-placeholder"><small style="color:var(--muted); font-size:var(--font-size-xs);">No poster</small></div>';
     
     return '<div class="live-preview-poster-card custom-list-pick" data-idx="' + i + '" style="position:relative; cursor:grab; user-select:none; touch-action:manipulation;">' +
       '<div style="position:relative; width:100%;">' +

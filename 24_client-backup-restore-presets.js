@@ -1335,7 +1335,7 @@ function renderPresetsList() {
   const names = Object.keys(map).sort();
   if (badge) badge.textContent = names.length ? '(' + names.length + ' saved)' : '';
   if (!names.length) {
-    container.innerHTML = '<p style="color:var(--muted); font-size:0.85rem; margin:8px 0;"><small>No saved presets yet.</small></p>';
+    container.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm); margin:8px 0;"><small>No saved presets yet.</small></p>';
     return;
   }
   container.innerHTML = names.map((n) => {
@@ -1355,7 +1355,7 @@ function renderPresetsList() {
             '<button type="button" class="preset-menu-item preset-download-btn">Download .json</button>' +
             '<button type="button" class="preset-menu-item preset-restore-lists-btn" title="Rebuild and restore custom lists &amp; channels from this preset into My Lists">Restore Lists</button>' +
             '<div class="preset-menu-divider"></div>' +
-            '<button type="button" class="preset-menu-item preset-delete-btn" style="color:var(--danger, #ff3b30);">Delete Preset</button>' +
+            '<button type="button" class="preset-menu-item preset-delete-btn" style="color:var(--danger, var(--color-danger));">Delete Preset</button>' +
           '</div>' +
         '</details>' +
       '</div>' +
@@ -2009,13 +2009,13 @@ async function generate() {
       \${sizeWarning}
 
       <div class="install-actions-bar" style="display:flex; flex-wrap:wrap; gap:10px;">
-        <a href="\${stremioInstallUrl}" class="btn-stremio" style="flex:1; min-width:140px; padding:10px 16px; font-weight:700; border-radius:var(--radius-pill); text-align:center; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; font-size:0.9rem;">
+        <a href="\${stremioInstallUrl}" class="btn-stremio" style="flex:1; min-width:140px; padding:10px 16px; font-weight:700; border-radius:var(--radius-pill); text-align:center; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; font-size:var(--font-size-base);">
           Install in Stremio
         </a>
-        <a href="\${nuvioInstallUrl}" class="btn-nuvio" style="flex:1; min-width:140px; padding:10px 16px; font-weight:700; border-radius:var(--radius-pill); text-align:center; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; font-size:0.9rem;">
+        <a href="\${nuvioInstallUrl}" class="btn-nuvio" style="flex:1; min-width:140px; padding:10px 16px; font-weight:700; border-radius:var(--radius-pill); text-align:center; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; font-size:var(--font-size-base);">
           Install in Nuvio
         </a>
-        <a href="\${stremioWebUrl}" target="_blank" rel="noopener noreferrer" class="secondary" style="display:inline-flex; align-items:center; justify-content:center; padding:10px 16px; font-weight:600; border-radius:var(--radius-pill); text-align:center; font-size:0.85rem; text-decoration:none;">
+        <a href="\${stremioWebUrl}" target="_blank" rel="noopener noreferrer" class="secondary" style="display:inline-flex; align-items:center; justify-content:center; padding:10px 16px; font-weight:600; border-radius:var(--radius-pill); text-align:center; font-size:var(--font-size-sm); text-decoration:none;">
           Stremio Web
         </a>
       </div>
@@ -2027,7 +2027,7 @@ async function generate() {
         </div>
         <div class="install-url-input-group" style="display:flex; align-items:stretch; gap:8px; width:100%; flex-wrap:wrap;">
           <div class="install-url-box" id="manifestLinkDisplay" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Click to copy" style="flex:1 1 220px; min-width:0; margin:0; display:flex; align-items:center;">\${installUrl}</div>
-          <button type="button" class="install-url-copy-btn primary lc-btn" id="copyUrlBtn" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Copy manifest link" style="flex:none; padding:0 16px; min-height:38px; height:auto; display:inline-flex; align-items:center; gap:6px; font-weight:600; font-size:0.85rem; border-radius:var(--radius-pill);">
+          <button type="button" class="install-url-copy-btn primary lc-btn" id="copyUrlBtn" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Copy manifest link" style="flex:none; padding:0 16px; min-height:38px; height:auto; display:inline-flex; align-items:center; gap:6px; font-weight:600; font-size:var(--font-size-sm); border-radius:var(--radius-pill);">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
             <span>Copy Link</span>
           </button>
@@ -2886,11 +2886,11 @@ function appShellRenderHomeEditor() {
   // Randomizer (10_tab-search-add.js). The paste box, the starter pack and
   // the check-links review that shared this panel were taken out at the
   // owner's request; + New Catalog and Catalogs -> Bulk Add do that job.
-  const html = '<div style="margin-top:16px; padding:12px 16px; background:var(--surface); border-radius:12px; border:1px solid var(--border);">' +
+  const html = '<div style="margin-top:16px; padding:12px 16px; background:var(--surface); border-radius:var(--radius-md); border:1px solid var(--border);">' +
     '<div class="settings-toggle-row" style="padding:0;">' +
       '<div style="flex:1; min-width:0; padding-right:12px;">' +
-        '<span style="font-weight:600; font-size:0.88rem; color:var(--text);">Hide titles already shown in rows above</span>' +
-        '<p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">The top row keeps everything; lower rows drop titles already shown above.</p>' +
+        '<span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Hide titles already shown in rows above</span>' +
+        '<p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">The top row keeps everything; lower rows drop titles already shown above.</p>' +
       '</div>' +
       '<label class="ui-toggle" aria-label="Hide titles already shown in rows above">' +
         '<input type="checkbox" id="appShellDedupeToggle"' + (dedupe ? ' checked' : '') + '>' +
@@ -4755,7 +4755,7 @@ ${DESIGN_TOKENS_CSS}
   <div class="footer-cta">
     <h3>Ready to Customize Your Home Screen?</h3>
     <p>Build your dream Stremio, Wako, and Nuvio catalog setup in under a minute with zero account required.</p>
-    <a href="${origin}/" class="btn btn-primary" style="font-size:1.05rem; padding:12px 28px;">Go to mylistsaddon.com &rarr;</a>
+    <a href="${origin}/" class="btn btn-primary" style="font-size:var(--font-size-md); padding:12px 28px;">Go to mylistsaddon.com &rarr;</a>
   </div>
 
   <!-- Footer Navigation -->

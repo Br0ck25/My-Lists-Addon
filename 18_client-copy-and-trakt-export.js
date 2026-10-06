@@ -1137,25 +1137,25 @@ function renderDiscoveredCategories() {
   if (globalNewWrap && discoveredImportCategories.length > 1) globalNewWrap.style.display = 'none';
 
   let html = '<div style="margin-top:10px; border-top:1px solid var(--border); padding-top:12px;">' +
-    '<p style="font-weight:600; font-size:0.9rem; margin-bottom:8px; color:var(--text);">Discovered Lists & Categories (' + discoveredImportCategories.length + '):</p>' +
+    '<p style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px; color:var(--text);">Discovered Lists & Categories (' + discoveredImportCategories.length + '):</p>' +
     '<div style="display:flex; flex-direction:column; gap:10px;">';
 
   discoveredImportCategories.forEach((cat, idx) => {
     const isWatchedOrDiary = cat.isWatchCategory || cat.id.includes('watch') || cat.id.includes('diary') || cat.id.includes('history');
     const watchToggle = isWatchedOrDiary
-      ? '<div style="margin-left:26px; margin-top:4px;"><label style="font-size:0.8rem; color:var(--muted); cursor:pointer; display:inline-flex; align-items:center; gap:5px;"><input type="checkbox" class="importCatAlsoMarkWatchedCheck" data-cat-index="' + idx + '" checked> Also add to Watch History (marks watched)</label></div>'
+      ? '<div style="margin-left:26px; margin-top:4px;"><label style="font-size:var(--font-size-sm); color:var(--muted); cursor:pointer; display:inline-flex; align-items:center; gap:5px;"><input type="checkbox" class="importCatAlsoMarkWatchedCheck" data-cat-index="' + idx + '" checked> Also add to Watch History (marks watched)</label></div>'
       : '';
 
-    html += '<div class="row" style="flex-direction:column; align-items:flex-start; padding:10px 12px; background:var(--bg-2, rgba(255,255,255,0.03)); border:1px solid var(--border); border-radius:8px;">' +
+    html += '<div class="row" style="flex-direction:column; align-items:flex-start; padding:10px 12px; background:var(--bg-2, rgba(255,255,255,0.03)); border:1px solid var(--border); border-radius:var(--radius-sm);">' +
       '<div style="display:flex; align-items:center; justify-content:space-between; width:100%; flex-wrap:wrap; gap:8px;">' +
-        '<label style="display:inline-flex; align-items:center; gap:8px; font-weight:600; font-size:0.9rem; cursor:pointer; color:var(--text);">' +
+        '<label style="display:inline-flex; align-items:center; gap:8px; font-weight:600; font-size:var(--font-size-base); cursor:pointer; color:var(--text);">' +
           '<input type="checkbox" class="importCatCheck" data-cat-index="' + idx + '" checked> ' +
           escapeHtml(cat.label) +
-          ' <span style="font-weight:normal; color:var(--muted); font-size:0.82rem;">(' + cat.items.length + ' entries)</span>' +
+          ' <span style="font-weight:normal; color:var(--muted); font-size:var(--font-size-sm);">(' + cat.items.length + ' entries)</span>' +
         '</label>' +
         '<div style="display:inline-flex; align-items:center; gap:6px;">' +
-          '<span style="font-size:0.8rem; color:var(--muted);">Destination:</span>' +
-          '<select class="importCatTargetSelect" data-cat-index="' + idx + '" style="padding:6px 10px; font-size:0.85rem; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">' +
+          '<span style="font-size:var(--font-size-sm); color:var(--muted);">Destination:</span>' +
+          '<select class="importCatTargetSelect" data-cat-index="' + idx + '" style="padding:6px 10px; font-size:var(--font-size-sm); border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--bg); color:var(--text);">' +
             buildCategoryTargetOptionsHtml(cat.defaultTarget, cat.defaultNewName) +
           '</select>' +
         '</div>' +
@@ -1190,7 +1190,7 @@ async function onUnifiedImportFilesSelected(input) {
   }
 
   if (box) {
-    box.innerHTML = '<p style="margin-top:10px; font-size:0.85rem; color:var(--muted);"><small>Scanning file(s)&hellip;</small></p>';
+    box.innerHTML = '<p style="margin-top:10px; font-size:var(--font-size-sm); color:var(--muted);"><small>Scanning file(s)&hellip;</small></p>';
   }
 
   const discovered = [];
@@ -1597,7 +1597,7 @@ async function runUnifiedListImport() {
     const rawItems = cat.items;
 
     if (resultBox) {
-      resultBox.innerHTML = '<p style="font-size:0.88rem; color:var(--muted);"><small>Processing ' + escapeHtml(cat.label) + ' (' + rawItems.length + ' items)&hellip;</small></p>';
+      resultBox.innerHTML = '<p style="font-size:var(--font-size-sm); color:var(--muted);"><small>Processing ' + escapeHtml(cat.label) + ' (' + rawItems.length + ' items)&hellip;</small></p>';
     }
 
     // Resolve missing IMDb / Poster metadata via TMDB bulk-resolve
@@ -1721,13 +1721,13 @@ async function runUnifiedListImport() {
     summaryHtml += '<p class="testresult ok">\u2713 Successfully imported:<br>' + createdSummary.map(escapeHtml).join('<br>') + '</p>';
   }
   if (totalWatchedAdded) {
-    summaryHtml += '<p style="margin-top:6px; font-size:0.85rem; color:#7ce7b6;">\u2713 Marked ' + totalWatchedAdded + ' item(s) as watched in Watch History.</p>';
+    summaryHtml += '<p style="margin-top:6px; font-size:var(--font-size-sm); color:var(--color-success-text);">\u2713 Marked ' + totalWatchedAdded + ' item(s) as watched in Watch History.</p>';
   }
   if (errors.length) {
     summaryHtml += '<p class="testresult err" style="margin-top:8px;">' + errors.map(escapeHtml).join('<br>') + '</p>';
   }
   if (!createdSummary.length && !errors.length) {
-    summaryHtml += '<p style="color:var(--muted); font-size:0.85rem;">No new items were added (items may already exist in the target lists).</p>';
+    summaryHtml += '<p style="color:var(--muted); font-size:var(--font-size-sm);">No new items were added (items may already exist in the target lists).</p>';
   }
   summaryHtml += '</div>';
 
