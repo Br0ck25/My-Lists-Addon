@@ -1636,7 +1636,7 @@ ${UTILITY_CSS}
     position: absolute;
     top: 6px;
     left: 6px;
-    padding: var(--space-0-5) var(--space-1-5);
+    padding: var(--space-0-5) var(--space-1);
     border-radius: var(--radius-xs);
     font-size: var(--font-size-2xs);
     font-weight: 800;
@@ -1660,7 +1660,7 @@ ${UTILITY_CSS}
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: var(--font-size-2xs);
+    font-size: var(--font-size-3xs);
     font-weight: 900;
     color: var(--color-on-brand);
   }
@@ -2830,9 +2830,9 @@ ${UTILITY_CSS}
     left: 4px;
     background: var(--color-brand-fill);
     color: var(--color-on-brand);
-    font-size: var(--font-size-2xs);
+    font-size: var(--font-size-3xs);
     font-weight: 800;
-    padding: var(--space-0-5) var(--space-1-5);
+    padding: var(--space-0-5) var(--space-1);
     border-radius: var(--radius-sm);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
     line-height: 1.15;
@@ -2861,7 +2861,9 @@ ${UTILITY_CSS}
     left: 50%;
     transform: translateX(-50%);
     max-width: calc(100% - 8px);
-    text-overflow: ellipsis;
+    /* Wraps to two lines (SEASON / PREMIERE) instead of being cut off */
+    white-space: normal;
+    text-align: center;
     overflow: hidden;
   }
   .cw-date-badge-finale {
@@ -2871,7 +2873,9 @@ ${UTILITY_CSS}
     left: 50%;
     transform: translateX(-50%);
     max-width: calc(100% - 8px);
-    text-overflow: ellipsis;
+    /* Wraps to two lines (SEASON / PREMIERE) instead of being cut off */
+    white-space: normal;
+    text-align: center;
     overflow: hidden;
   }
   .cw-date-badge-finale-date {
@@ -2885,7 +2889,7 @@ ${UTILITY_CSS}
     max-width: calc(100% - 8px);
     text-overflow: ellipsis;
     overflow: hidden;
-    font-size: var(--font-size-2xs);
+    font-size: var(--font-size-3xs);
     font-weight: 700;
   }
   .cw-date-badge-companion {
@@ -2896,7 +2900,9 @@ ${UTILITY_CSS}
     left: 50%;
     transform: translateX(-50%);
     max-width: calc(100% - 8px);
-    text-overflow: ellipsis;
+    /* Wraps to two lines (SEASON / PREMIERE) instead of being cut off */
+    white-space: normal;
+    text-align: center;
     overflow: hidden;
   }
   .episode-num-badge {
@@ -2990,7 +2996,7 @@ ${UTILITY_CSS}
     min-height: 2.5em;
   }
   .list-card-mini-poster-subtitle {
-    font-size: var(--font-size-2xs);
+    font-size: var(--font-size-3xs);
     color: var(--muted);
     line-height: 1.2;
     white-space: nowrap;
@@ -2998,7 +3004,7 @@ ${UTILITY_CSS}
     text-overflow: ellipsis;
   }
   .list-card-mini-poster-year {
-    font-size: var(--font-size-2xs);
+    font-size: var(--font-size-3xs);
     color: var(--muted);
     line-height: 1.2;
     white-space: nowrap;
@@ -4529,7 +4535,7 @@ ${UTILITY_CSS}
      anything without one (movies, shows, every other shelf on the site),
      so this never adds empty space to a normal poster card. */
   .live-preview-poster-subtitle {
-    font-size: var(--font-size-2xs);
+    font-size: var(--font-size-3xs);
     color: var(--muted);
     line-height: 1.25;
     padding: 0 var(--space-1) var(--space-0-5) var(--space-1);
@@ -4538,7 +4544,7 @@ ${UTILITY_CSS}
     text-overflow: ellipsis;
   }
   .live-preview-poster-year {
-    font-size: var(--font-size-2xs);
+    font-size: var(--font-size-3xs);
     color: var(--muted);
     line-height: 1.2;
     white-space: nowrap;
