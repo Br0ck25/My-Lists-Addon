@@ -103,3 +103,20 @@ describe("design system: add/remove list buttons share one class", () => {
     assert.deepEqual(missing, []);
   });
 });
+
+describe("design system: helpers must not block colours that scripts set at runtime", () => {
+  // Status and hint elements are coloured by scripts (el.style.color = ...). A
+  // u-* helper is !important, so a colour helper on one would stop that working.
+  // Keep the colour in the element's own style="" instead.
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  it("no *Status / *Hint / *State element carries a colour helper", () => {
+    const bad = [];
+    for (const f of fs.readdirSync(root).filter((n) => /^\d\d_.*\.js$/.test(n) && !n.startsWith("00_"))) {
+      const src = fs.readFileSync(path.join(root, f), "utf8");
+      for (const m of src.matchAll(/<[a-z0-9]+\s[^<>]*\sid="([A-Za-z0-9_]*(?:Status|Hint|State)|copyUrlBtn|detailAddBtn)"[^<>]*>/g)) {
+        if (/class="[^"]*\bu-(?:c|bg|bgc|bdc)-/.test(m[0])) bad.push(`${f}: #${m[1]}`);
+      }
+    }
+    assert.deepEqual(bad, []);
+  });
+});

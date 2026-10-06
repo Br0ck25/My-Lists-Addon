@@ -184,7 +184,7 @@
             <input type="password" id="rpdbKeyInput" value="${escapeHtmlServer(initialRpdbKey)}" placeholder="t1-..." autocomplete="off" spellcheck="false" data-act="toggleBetterPostersSetting" data-act-args="[&quot;rpdbKey&quot;,&quot;@value&quot;]" class="u-flex-1 u-minw-200px u-maxw-380px u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box">
             <button type="button" class="secondary lc-btn u-br-v_radius_pill" data-act="testRpdbKey" data-act-args="[&quot;@self&quot;]">Test key</button>
           </div>
-          <p id="rpdbKeyStatus" class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_xs">Your key starts with t1- to t4- and is in the email RatingPosterDB sent you, or at ratingposterdb.com after you log in with Patreon. Test key shows whether it works and how much of this month's limit is used.</p>
+          <p id="rpdbKeyStatus" class="u-m-4px_0_0 u-fs-v_font_size_xs" style="color:var(--muted);">Your key starts with t1- to t4- and is in the email RatingPosterDB sent you, or at ratingposterdb.com after you log in with Patreon. Test key shows whether it works and how much of this month's limit is used.</p>
         </div>
       </div>
     </div>
@@ -211,7 +211,7 @@
         <div>
           <label for="pictoriumUrlInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-4px" style="display:block;">Poster link</label>
           <input type="url" id="pictoriumUrlInput" value="${escapeHtmlServer(initialPictoriumUrl)}" placeholder="https://your-pictorium-host/api/poster/{type}/{tmdb_id|imdb_id}?u=..." autocomplete="off" spellcheck="false" data-act="toggleBetterPostersSetting" data-act-args="[&quot;pictoriumUrl&quot;,&quot;@value&quot;]" class="u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box" style="width:100%;">
-          <p id="pictoriumUrlHint" class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_xs">In your Pictorium space, copy the <strong>AIOMetadata</strong> poster link and paste it here as it is. It has to start with https:// and contain <code>/api/poster/</code>, <code>{type}</code> and <code>{tmdb_id|imdb_id}</code>.</p>
+          <p id="pictoriumUrlHint" class="u-m-4px_0_0 u-fs-v_font_size_xs" style="color:var(--muted);">In your Pictorium space, copy the <strong>AIOMetadata</strong> poster link and paste it here as it is. It has to start with https:// and contain <code>/api/poster/</code>, <code>{type}</code> and <code>{tmdb_id|imdb_id}</code>.</p>
         </div>
       </div>
     </div>
@@ -664,7 +664,7 @@
             <button type="button" class="primary lc-btn u-minh-44px u-p-0_20px" id="supportReplySendBtn" data-act="sendUserFeedbackReply">Send</button>
           </div>
           <div class="u-jc-space_between u-ai-center u-mt-6px" style="display:flex;">
-            <span id="supportChatStatus" class="u-fs-v_font_size_sm u-c-v_muted"></span>
+            <span id="supportChatStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
             <button type="button" class="secondary lc-btn u-p-2px_8px u-fs-v_font_size_xs u-bd-none u-bg-none u-c-v_muted u-cur-pointer" data-act="refreshUserFeedbackThreads">&#x21BB; Refresh</button>
           </div>
         </div>

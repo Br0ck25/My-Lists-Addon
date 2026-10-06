@@ -2794,12 +2794,12 @@ ${UTILITY_CSS}
         <option value="series">Shows Only</option>
       </select>
       <button type="button" class="admin-select u-cur-pointer" id="backfillTrendingBtn" data-act="runBackfillTrending">Backfill Existing Data</button>
-      <span id="backfillTrendingStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="backfillTrendingStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
     </div>
     <p class="u-c-v_muted u-m-0_0_12px u-fs-v_font_size_sm">Backfill only adds to the <strong>All Time</strong> window (there's no historical date to bucket existing data into 7/30/90-day windows) -- it seeds counts from Watch History and Custom Lists that already existed before this feature shipped. Safe to run more than once; it only adds, never resets anything. Processes accounts a few at a time, so it may take a minute for larger sites.</p>
     <div class="u-m-0_0_12px">
       <button type="button" class="admin-select u-cur-pointer" id="migrateDayCountsBtn" data-act="runMigrateDayCounts">Migrate Historical Day Counts</button>
-      <span id="migrateDayCountsStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="migrateDayCountsStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <p class="u-c-v_muted u-m-6px_0_0 u-fs-v_font_size_sm">One-time migration for the switch from one KV key per day to one JSON blob per title -- reads every old per-day count still sitting in KV and folds it into the new format, so 7/30/90-day windows reflect activity from before that switch instead of only counting forward from it. Safe to run more than once (adds, never subtracts); old keys are deleted once folded in, so re-running just confirms there's nothing left. Also covers the Search &amp; Queries leaderboard.</p>
     </div>
     <div class="table-wrap">
@@ -2889,7 +2889,7 @@ ${UTILITY_CSS}
       <textarea id="newFeedbackMessage" placeholder="What did you find?" class="u-minh-70px u-bs-border_box u-p-10px_12px u-br-v_radius_sm u-bd-1px_solid_rgba_0_0_0_0_15 u-ff-inherit u-fs-v_font_size_base u-rs-vertical" style="width:100%;"></textarea>
       <div class="u-mt-8px u-ai-center u-gap-10px" style="display:flex;">
         <button type="button" class="admin-select u-cur-pointer" id="newFeedbackSubmitBtn" data-act="submitAdminFeedback">Add to list</button>
-        <span id="newFeedbackStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
+        <span id="newFeedbackStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
       </div>
     </div>
     <div id="feedbackList">Loading\u2026</div>
@@ -2939,7 +2939,7 @@ ${UTILITY_CSS}
       <div class="u-gap-8px u-ai-center" style="display:flex;">
         <input type="text" id="providerLookupQueryInput" class="admin-select u-mr-0 u-flex-1 u-maxw-220px" placeholder="e.g. disney, max, hulu" data-act="lookupProviderIds" data-act-keys="Enter" data-act-prevent>
         <button type="button" class="secondary lc-btn" data-act="lookupProviderIds">Search</button>
-        <span id="providerLookupStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
+        <span id="providerLookupStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
       </div>
       <div id="providerLookupResults" class="u-mt-10px"></div>
     </div>
@@ -2952,7 +2952,7 @@ ${UTILITY_CSS}
         <input type="text" id="netflixPreviewRegionInput" class="admin-select u-mr-0 u-tt-uppercase" style="width:70px;" value="US" maxlength="2" placeholder="US">
       </label>
       <button type="button" class="secondary lc-btn" data-act="loadNetflixPreview">Load Preview</button>
-      <span id="netflixPreviewStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
+      <span id="netflixPreviewStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
     </div>
     <div id="netflixPreviewMovies"></div>
     <div id="netflixPreviewShows" class="u-mt-28px"></div>
@@ -2973,7 +2973,7 @@ ${UTILITY_CSS}
       <div class="u-fs-v_font_size_sm u-c-v_muted u-mb-14px">Ko-fi adds each US-dollar donation and membership payment to this by itself (set up below); type a number here to correct it. It counts toward <span id="supportGoalMonth">this month</span> only and starts again at 0 on the 1st.</div>
       <div class="u-gap-10px u-ai-center u-fw2-wrap" style="display:flex;">
         <button type="button" class="primary lc-btn" data-act="saveSupportGoal">Save</button>
-        <span id="supportGoalStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
+        <span id="supportGoalStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
       </div>
     </div>
     <div class="panel u-m-0_0_18px u-p-14px_16px u-maxw-520px">
@@ -2984,7 +2984,7 @@ ${UTILITY_CSS}
         <li>Copy Ko-fi's <strong>verification token</strong> and add it to this Worker as a secret named <code>KOFI_VERIFICATION_TOKEN</code> (Cloudflare dashboard &rarr; Worker &rarr; Settings &rarr; Variables and Secrets).</li>
         <li>Use Ko-fi's <strong>Send a test</strong>. It shows up below.</li>
       </ol>
-      <div class="u-fs-v_font_size_sm">Token: <span id="supportGoalTokenState" class="u-c-v_muted">checking&hellip;</span></div>
+      <div class="u-fs-v_font_size_sm">Token: <span id="supportGoalTokenState" style="color:var(--muted);">checking&hellip;</span></div>
       <div class="u-fs-v_font_size_sm u-mt-4px">Last payment counted: <span id="supportGoalLastPayment" class="u-c-v_muted">none yet</span></div>
       <div class="u-fs-v_font_size_xs u-c-v_muted u-mt-10px">Counts donations and membership payments made in US dollars. Other currencies, shop orders and commissions are skipped; type those in above if you want them counted. Who gave is never shown.</div>
     </div>
@@ -2996,7 +2996,7 @@ ${UTILITY_CSS}
 
     <div class="panel u-m-0_0_18px u-p-14px_16px">
       <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Sweep status</div>
-      <div id="nosStatus" class="u-fs-v_font_size_sm u-c-v_muted">Loading&hellip;</div>
+      <div id="nosStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);">Loading&hellip;</div>
       <div class="u-mt-12px u-gap-8px u-ai-center u-fw2-wrap" style="display:flex;">
         <button type="button" class="secondary lc-btn" data-act="loadNewOnStreaming">Refresh</button>
         <label class="u-fs-v_font_size_sm u-c-v_muted">Pages
@@ -3004,7 +3004,7 @@ ${UTILITY_CSS}
         </label>
         <button type="button" class="admin-select u-cur-pointer" id="nosSweepBtn" data-act="runNewOnStreamingSweep" data-act-args="${adminActArgs([false])}">Run a sweep now</button>
         <button type="button" class="secondary lc-btn u-cur-pointer u-c-v_color_warn_text u-bdc-rgba_255_149_0_0_4" id="nosResetBtn" data-act="runNewOnStreamingSweep" data-act-args="${adminActArgs([true])}">Clear &amp; pull fresh data</button>
-        <span id="nosSweepStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
+        <span id="nosSweepStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
       </div>
       <p class="u-c-v_muted u-m-10px_0_0 u-fs-v_font_size_sm">Each page fetches up to 25 changes from RapidAPI. Automated sweeps run every 6 hours via cron and read each change stream (new titles, new seasons, new episodes, removals) oldest-first from where the last sweep stopped, so a busy day is finished on the next run instead of being cut off. The per-run budget is the month&#39;s remaining quota spread over the runs left; a safety cap halts sweeps at 950 calls to ensure zero overages. "Run a sweep now" continues the same streams with the page count given. Older titles (&gt;30 days) are pruned automatically each sweep.</p>
     </div>
@@ -3040,7 +3040,7 @@ ${UTILITY_CSS}
         </select>
         <input type="date" id="nosAddDateInput" class="admin-select" style="width:130px;" title="Optional arrival date (defaults to episode air date or today)">
         <button type="button" class="admin-select u-cur-pointer" id="nosAddBtn" data-act="nosAddTitle">Add / Sync Title</button>
-        <span id="nosAddStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
+        <span id="nosAddStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
       </div>
     </div>
 
@@ -3061,7 +3061,7 @@ ${UTILITY_CSS}
         <button type="button" class="secondary lc-btn" id="nosPrevBtn" data-act="nosChangePage" data-act-args="${adminActArgs([-1])}" disabled>&larr; Prev</button>
         <span id="nosPageLabel" class="u-fs-v_font_size_sm u-c-v_muted u-fw-600">Page 1</span>
         <button type="button" class="secondary lc-btn" id="nosNextBtn" data-act="nosChangePage" data-act-args="${adminActArgs([1])}" disabled>Next &rarr;</button>
-        <span id="nosPreviewStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
+        <span id="nosPreviewStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
       </div>
       <div class="u-mb-12px u-fs-v_font_size_sm u-c-v_muted">Catalog URL: <code id="nosPreviewSource">tmdb:new-on-streaming</code> &mdash; paste this into <strong>Catalogs &rarr; + New Catalog</strong> on the main site to install this exact row into Stremio or Nuvio while it is still hidden.</div>
       <div id="nosPreviewResults"></div>
@@ -3075,7 +3075,7 @@ ${UTILITY_CSS}
       <div class="u-gap-8px u-ai-center u-fw2-wrap" style="display:flex;">
         <button type="button" class="secondary lc-btn" data-act="loadChannelPresets">Refresh</button>
         <button type="button" class="secondary lc-btn u-cur-pointer u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_4" id="cpClearAllBtn" data-act="clearAllChannelPresets">Clear all caches</button>
-        <span id="cpStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
+        <span id="cpStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
       </div>
       <p class="u-c-v_muted u-m-10px_0_0 u-fs-v_font_size_sm">Clearing never touches anyone's already-saved channels -- each saved row carries its own small item sample as a fallback, so a cleared cache just means the next Quick Add click (or the cron rotation) rebuilds it fresh instead of serving what was cached before.</p>
     </div>
@@ -3101,7 +3101,7 @@ ${UTILITY_CSS}
         ? 'This Worker has a D1 database bound as <code>DB</code>. Use the button below to backfill existing KV records into D1.'
         : 'This Worker has no D1 database bound (Settings &rarr; Bindings). D1 is required for authoritative accounts, lists, search, likes, feedback, and tracking. Bind a D1 database as <code>DB</code> to enable full functionality.'}</p>
       <button type="button" class="admin-select u-cur-pointer" id="migrateD1Btn" data-act="runMigrateD1" ${isD1Bound ? '' : 'disabled'}>Migrate KV &rarr; D1</button>
-      <span id="migrateD1Status" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="migrateD1Status" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <p class="u-c-v_muted u-m-10px_0_0 u-fs-v_font_size_sm">Copies existing Creator Profiles, Custom Lists, likes, feedback, and tracking records from KV into D1. Safe to run more than once.</p>
     </div>
 
@@ -3109,17 +3109,17 @@ ${UTILITY_CSS}
       <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Unified accounts table (v2 identity)</div>
       <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Backfills existing creator identities from D1 <code>creators</code> and KV <code>creator:*</code> into the unified <code>accounts</code> table. Newest key hash wins; D1 wins ties. Copies data only &mdash; safe to run more than once.</p>
       <button type="button" class="admin-select u-cur-pointer" id="migrateAccountsBtn" data-act="runMigrateAccounts" ${isD1Bound ? '' : 'disabled'}>Migrate Accounts</button>
-      <span id="migrateAccountsStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="migrateAccountsStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
     </div>
 
     <div class="panel u-m-0_0_18px u-p-14px_16px">
       <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Install links: keys moving to encrypted storage</div>
       <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">The first time an existing install link is used, its provider keys, tokens and Creator Key move out of its KV record into encrypted D1 storage, for the share of links set in <code>INSTALL_MIGRATION_PERCENT</code>. Links keep their URL and serve exactly as before. Needs <code>TOKEN_ENCRYPTION_KEY</code> and migration 0015. Read-only: this button only reports progress.</p>
       <button type="button" class="admin-select u-cur-pointer" id="installsStatusBtn" data-act="runInstallsStatus" ${isD1Bound ? '' : 'disabled'}>Check progress</button>
-      <span id="installsStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="installsStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <p class="u-c-v_muted u-m-12px_0_8px u-fs-v_font_size_sm">Emergency only: puts every moved link's keys back into its KV record, exactly as they were, and empties the table. Set <code>INSTALL_MIGRATION_PERCENT</code> to <code>0</code> first. Links removed from an account stay removed.</p>
       <button type="button" class="admin-select u-cur-pointer" id="installsRestoreBtn" data-act="runInstallsRestore" ${isD1Bound ? '' : 'disabled'}>Undo the move</button>
-      <span id="installsRestoreStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="installsRestoreStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
     </div>
 
     <div class="panel u-m-0_0_18px u-p-14px_16px">
@@ -3128,7 +3128,7 @@ ${UTILITY_CSS}
       <button type="button" class="admin-select u-cur-pointer" id="listsBackfillBtn" data-act="runListsBackfill" data-act-args="${adminActArgs([false])}" ${isD1Bound ? '' : 'disabled'}>Copy lists</button>
       <button type="button" class="admin-select u-cur-pointer" id="listsBackfillRestartBtn" data-act="runListsBackfill" data-act-args="${adminActArgs([true])}" ${isD1Bound ? '' : 'disabled'}>Start over</button>
       <button type="button" class="admin-select u-cur-pointer" id="listsBackfillStatusBtn" data-act="runListsBackfillStatus" ${isD1Bound ? '' : 'disabled'}>Check results</button>
-      <span id="listsBackfillStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="listsBackfillStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <div id="listsBackfillResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted"></div>
     </div>
 
@@ -3138,7 +3138,7 @@ ${UTILITY_CSS}
       <button type="button" class="admin-select u-cur-pointer" id="activityBackfillBtn" data-act="runActivityBackfill" data-act-args="${adminActArgs([false])}" ${isActivityBound ? '' : 'disabled'}>Copy history</button>
       <button type="button" class="admin-select u-cur-pointer" id="activityBackfillRestartBtn" data-act="runActivityBackfill" data-act-args="${adminActArgs([true])}" ${isActivityBound ? '' : 'disabled'}>Start over</button>
       <button type="button" class="admin-select u-cur-pointer" id="activityBackfillStatusBtn" data-act="runActivityBackfillStatus" ${isActivityBound ? '' : 'disabled'}>Check results</button>
-      <span id="activityBackfillStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px">${isActivityBound ? '' : 'DB_ACTIVITY is not bound.'}</span>
+      <span id="activityBackfillStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);">${isActivityBound ? '' : 'DB_ACTIVITY is not bound.'}</span>
       <div id="activityBackfillResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted"></div>
     </div>
 
@@ -3148,14 +3148,14 @@ ${UTILITY_CSS}
         : '<span class="u-c-v_muted">not bound yet</span>'}</div>
       <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Background work moves onto the Cloudflare Queue <code>mylists-jobs</code>, which this Worker also reads (Phase 5). Setting it up: create the queues <code>mylists-jobs</code> and <code>mylists-jobs-dlq</code>, add this Worker as the consumer of <code>mylists-jobs</code> (batch size 25, 5 retries, dead-letter queue <code>mylists-jobs-dlq</code>), and bind <code>mylists-jobs</code> to this Worker as <code>JOBS</code>. See docs/OPERATIONS.md section 18. <strong>Send a test job</strong> puts one job on the queue and waits for this Worker to pick it up, which proves all three steps worked.</p>
       <button type="button" class="admin-select u-cur-pointer" id="jobsPingBtn" data-act="runJobsPing" ${isJobsBound ? '' : 'disabled'}>Send a test job</button>
-      <span id="jobsPingStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px">${isJobsBound ? '' : 'JOBS is not bound.'}</span>
+      <span id="jobsPingStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);">${isJobsBound ? '' : 'JOBS is not bound.'}</span>
       <p class="u-c-v_muted u-m-12px_0_8px u-fs-v_font_size_sm">Once the queue is bound, every cron tick only hands out the work that is due (the Continue Watching and Airing Next sweeps, New on Streaming, chart and poster warming, channel presets, housekeeping), and the queue does it. Without it, the tick does the work itself, as before. <strong>Check jobs</strong> shows when each one last ran. Needs migration 0016.</p>
       <button type="button" class="admin-select u-cur-pointer" id="jobsStatusBtn" data-act="runJobsStatus" ${isD1Bound ? '' : 'disabled'}>Check jobs</button>
-      <span id="jobsStatusStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="jobsStatusStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <div id="jobsStatusResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted"></div>
       <p class="u-c-v_muted u-m-12px_0_8px u-fs-v_font_size_sm"><strong>Compare shelves now</strong> runs the whole Continue Watching and Airing Next comparison (<code>shelf.shadow</code>) from this page, a few minutes instead of the hourly job's 15 hours, and shows why each difference is there. Keep the page open until it says Done. It only reads.</p>
       <button type="button" class="admin-select u-cur-pointer" id="shelfCompareBtn" data-act="runShelfCompareNow" ${isD1Bound ? '' : 'disabled'}>Compare shelves now</button>
-      <span id="shelfCompareStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="shelfCompareStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <div id="shelfCompareResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted u-ws-pre_wrap u-wb-break_word"></div>
     </div>
 
@@ -3163,7 +3163,7 @@ ${UTILITY_CSS}
       <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Database schema</div>
       <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Migrations are applied by hand and nothing records that it happened, so this Worker can end up running ahead of its own database. It degrades quietly when that happens rather than refusing to start &mdash; which is why this check exists. Run it after any deploy that shipped a new file under <code>migrations/</code>.</p>
       <button type="button" class="admin-select u-cur-pointer" id="schemaCheckBtn" data-act="runSchemaCheck">Check schema</button>
-      <span id="schemaCheckStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="schemaCheckStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <div id="schemaCheckResult" class="u-mt-10px"></div>
     </div>
 
@@ -3172,7 +3172,7 @@ ${UTILITY_CSS}
       <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">From 2 October until the fix, page views, install links, playback pings, Most Watched, list adds and searches were counted in Cloudflare Analytics instead of here, so this dashboard showed zeros. This puts them back. It needs the secret <code>CF_ANALYTICS_TOKEN</code> (an API token with <em>Account Analytics: Read</em>) and the variable <code>CF_ANALYTICS_ACCOUNT_ID</code>. <strong>Preview</strong> shows what would be added; <strong>Put them back</strong> adds it. Running it again adds nothing twice.</p>
       <button type="button" class="admin-select u-cur-pointer" id="statsRecoveryPreviewBtn" data-act="runStatsRecovery" data-act-args="${adminActArgs([false])}">Preview</button>
       <button type="button" class="admin-select u-cur-pointer" id="statsRecoveryApplyBtn" data-act="runStatsRecovery" data-act-args="${adminActArgs([true])}">Put them back</button>
-      <span id="statsRecoveryStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="statsRecoveryStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <div id="statsRecoveryResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted"></div>
     </div>
 
@@ -3181,14 +3181,14 @@ ${UTILITY_CSS}
       <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Copies every KV key that starts with the text below into the <code>BLOBS</code> bucket, under <code>kv-archive/</code>, a batch at a time, then writes a <code>manifest.json</code> when the copy is complete. It deletes nothing. Type the prefix exactly, with no <code>*</code> (for example <code>stats:</code>). Deleting old data is not safe yet: see docs/CUTOVER.md.</p>
       <input type="text" id="kvExportPrefix" class="admin-select u-minw-180px" placeholder="creator:">
       <button type="button" class="admin-select u-cur-pointer" id="kvExportBtn" data-act="runKvExport">Export</button>
-      <span id="kvExportStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="kvExportStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
     </div>
 
     <div class="panel u-m-0 u-p-14px_16px">
       <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Public list directory &amp; search index</div>
       <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">The public list directory and in-app search query D1 tables and the full-text search index (lists_fts). This button rebuilds the search index directly from creator_lists &mdash; useful after importing data or to recreate the index after a D1 database export.</p>
       <button type="button" class="admin-select u-cur-pointer" id="rebuildIndexBtn" data-act="runRebuildPublicIndex">Rebuild Search Index</button>
-      <span id="rebuildIndexStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="rebuildIndexStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
     </div>
 
     <div class="panel u-m-0 u-p-14px_16px">
@@ -3200,7 +3200,7 @@ ${UTILITY_CSS}
         <input type="text" id="deleteListUserInput" class="admin-select u-mr-6px" placeholder="Creator username">
         <button type="button" class="admin-select u-cur-pointer u-mr-6px" id="browseCreatorListsBtn" data-act="loadCreatorLists" data-act-args="${adminActArgs([true])}">Browse this creator&rsquo;s lists</button>
         <button type="button" class="admin-select u-cur-pointer" id="browseCreatorListsMoreBtn" data-act="loadCreatorLists" data-act-args="${adminActArgs([false])}" hidden>Load more</button>
-        <span id="creatorListsStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+        <span id="creatorListsStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       </div>
       <div class="row u-mb-8px">
         <input type="text" id="creatorListsFilterInput" class="admin-select u-minw-280px u-mr-6px" placeholder="Filter by name or slug (e.g. coming of age)" data-act="renderCreatorListsTable" data-act-on="input">
@@ -3212,7 +3212,7 @@ ${UTILITY_CSS}
         <input type="text" id="deleteListSlugsInput" class="admin-select u-minw-320px" placeholder="Slugs, comma or newline separated">
       </div>
       <button type="button" class="admin-select u-cur-pointer u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_35" id="deleteListBtn" data-act="runDeleteCreatorLists">Delete these lists</button>
-      <span id="deleteListStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="deleteListStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
     </div>
 
     <div class="panel u-m-0 u-p-14px_16px">
@@ -3222,14 +3222,14 @@ ${UTILITY_CSS}
       <div class="row u-mb-8px">
         <button type="button" class="admin-select u-cur-pointer u-mr-6px" id="browseAnonBtn" data-act="loadPublishedLists" data-act-args="${adminActArgs([true])}">Browse</button>
         <button type="button" class="admin-select u-cur-pointer" id="browseAnonMoreBtn" data-act="loadPublishedLists" data-act-args="${adminActArgs([false])}" hidden>Load more</button>
-        <span id="anonListStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+        <span id="anonListStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       </div>
       <div id="anonListResults" class="u-mb-8px"></div>
       <div class="row u-mb-8px">
         <input type="text" id="deleteAnonSlugsInput" class="admin-select u-minw-320px" placeholder="Slugs, comma or newline separated">
       </div>
       <button type="button" class="admin-select u-cur-pointer u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_35" id="deleteAnonBtn" data-act="runDeletePublishedLists">Delete these lists</button>
-      <span id="deleteAnonStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="deleteAnonStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
     </div>
 
     <div class="admin-card u-mt-12px">
@@ -3244,7 +3244,7 @@ ${UTILITY_CSS}
       <div class="row u-mb-8px">
         <button type="button" class="admin-select u-cur-pointer u-mr-6px" id="browseChannelsBtn" data-act="loadPublishedChannels" data-act-args="${adminActArgs(['listed'])}">Browse the directory</button>
         <button type="button" class="admin-select u-cur-pointer" id="browseChannelsAllBtn" data-act="loadPublishedChannels" data-act-args="${adminActArgs(['all'])}">Browse every stored channel</button>
-        <span id="publishedChannelStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+        <span id="publishedChannelStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       </div>
       <div id="publishedChannelResults"></div>
     </div>
@@ -3254,7 +3254,7 @@ ${UTILITY_CSS}
       <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Every browser signed in to this dashboard, newest activity first, with the address it signed in from. Before P7-2 there was no such list: the cookie was self-contained, so signing anyone out meant changing <code>ADMIN_KEY</code> and signing everyone out. <strong>Sign out</strong> ends one browser's session on its own &mdash; it stops working on the next request, not in seven days. Needs migration 0018. If you are signed in with Cloudflare Access, your browser may appear here too; closing its row does not stop Access from letting you back in.</p>
       <button type="button" class="admin-select u-cur-pointer" id="adminSessionsBtn" data-act="loadAdminSessions">Load</button>
       <button type="button" class="admin-select u-cur-pointer u-ml-6px u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_35" id="adminSessionsRevokeAllBtn" data-act="revokeAllAdminSessions">Sign out every browser</button>
-      <span id="adminSessionsStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="adminSessionsStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <div id="adminSessionsResult" class="u-mt-10px"></div>
     </div>
 
@@ -3262,7 +3262,7 @@ ${UTILITY_CSS}
       <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Audit log</div>
       <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">What this dashboard has been used for: sign-ins, sign-outs, and every action that changes something &mdash; resetting a creator&rsquo;s key, deleting a list or a channel, running a migration, replying to feedback. Each row is written as the request is authorized, with the address it came from and the identifying details it named (never a key or a token). Newest first, and read-only: nothing in this dashboard can edit it. Needs migration 0018.</p>
       <button type="button" class="admin-select u-cur-pointer" id="adminAuditBtn" data-act="loadAdminAudit">Load recent activity</button>
-      <span id="adminAuditStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="adminAuditStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <div id="adminAuditResult" class="u-mt-10px"></div>
     </div>
   </div>

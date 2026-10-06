@@ -175,7 +175,7 @@
               <option value="shuffle-daily">Shuffle daily (reshuffles every 24h)</option>
             </select>
           </div>
-          <p id="customListPlayOrderHint" class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_xs">Picks play in the order you created above &mdash; drag one, or type a new position, to change it.</p>
+          <p id="customListPlayOrderHint" class="u-m-0_0_14px u-fs-v_font_size_xs" style="color:var(--muted);">Picks play in the order you created above &mdash; drag one, or type a new position, to change it.</p>
 
           <div class="u-jc-space_between u-ai-center u-gap-12px u-mt-12px u-pt-10px u-bdt-1px_solid_v_border_subtle_rgba_255_255_255_0_08" style="display:flex;">
             <div>

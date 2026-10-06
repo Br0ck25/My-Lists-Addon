@@ -1987,76 +1987,76 @@ const DESIGN_TOKENS_CSS = `
 const UTILITY_CSS = `
 .u-acc-v_accent{accent-color:var(--accent) !important}
 .u-acc-v_brand{accent-color:var(--brand) !important}
-.u-ai-center{align-items:center}
-.u-ai-flex_end{align-items:flex-end}
-.u-ai-flex_start{align-items:flex-start}
-.u-ai-stretch{align-items:stretch}
+.u-ai-center{align-items:center !important}
+.u-ai-flex_end{align-items:flex-end !important}
+.u-ai-flex_start{align-items:flex-start !important}
+.u-ai-stretch{align-items:stretch !important}
 .u-as-flex_start{align-self:flex-start !important}
 .u-aspectratio-16_9{aspect-ratio:16/9 !important}
-.u-bd-0{border:0}
-.u-bd-1_5px_dashed_v_border{border:1.5px dashed var(--border)}
-.u-bd-1_5px_solid_v_border_strong{border:1.5px solid var(--border-strong)}
-.u-bd-1px_solid_rgba_0_0_0_0_15{border:1px solid rgba(0,0,0,0.15)}
-.u-bd-1px_solid_rgba_0_122_255_0_2{border:1px solid rgba(0,122,255,0.2)}
-.u-bd-1px_solid_rgba_0_122_255_0_25{border:1px solid rgba(0,122,255,0.25)}
-.u-bd-1px_solid_rgba_0_122_255_0_3{border:1px solid rgba(0,122,255,0.3)}
-.u-bd-1px_solid_rgba_255_149_0_0_3{border:1px solid rgba(255,149,0,0.3)}
-.u-bd-1px_solid_rgba_255_149_0_0_35{border:1px solid rgba(255,149,0,0.35)}
-.u-bd-1px_solid_rgba_255_255_255_0_12{border:1px solid rgba(255,255,255,0.12)}
-.u-bd-1px_solid_rgba_255_255_255_0_3{border:1px solid rgba(255,255,255,0.3)}
-.u-bd-1px_solid_rgba_255_59_48_0_25{border:1px solid rgba(255,59,48,0.25)}
-.u-bd-1px_solid_rgba_255_59_48_0_3{border:1px solid rgba(255,59,48,0.3)}
-.u-bd-1px_solid_v_border{border:1px solid var(--border)}
-.u-bd-1px_solid_v_border_strong{border:1px solid var(--border-strong)}
-.u-bd-1px_solid_v_color_border_strong{border:1px solid var(--color-border-strong)}
-.u-bd-1px_solid_v_color_danger{border:1px solid var(--color-danger)}
-.u-bd-2px_dashed_v_accent{border:2px dashed var(--accent)}
-.u-bd-2px_solid_v_accent{border:2px solid var(--accent)}
-.u-bd-2px_solid_v_border{border:2px solid var(--border)}
-.u-bd-none{border:none}
+.u-bd-0{border:0 !important}
+.u-bd-1_5px_dashed_v_border{border:1.5px dashed var(--border) !important}
+.u-bd-1_5px_solid_v_border_strong{border:1.5px solid var(--border-strong) !important}
+.u-bd-1px_solid_rgba_0_0_0_0_15{border:1px solid rgba(0,0,0,0.15) !important}
+.u-bd-1px_solid_rgba_0_122_255_0_2{border:1px solid rgba(0,122,255,0.2) !important}
+.u-bd-1px_solid_rgba_0_122_255_0_25{border:1px solid rgba(0,122,255,0.25) !important}
+.u-bd-1px_solid_rgba_0_122_255_0_3{border:1px solid rgba(0,122,255,0.3) !important}
+.u-bd-1px_solid_rgba_255_149_0_0_3{border:1px solid rgba(255,149,0,0.3) !important}
+.u-bd-1px_solid_rgba_255_149_0_0_35{border:1px solid rgba(255,149,0,0.35) !important}
+.u-bd-1px_solid_rgba_255_255_255_0_12{border:1px solid rgba(255,255,255,0.12) !important}
+.u-bd-1px_solid_rgba_255_255_255_0_3{border:1px solid rgba(255,255,255,0.3) !important}
+.u-bd-1px_solid_rgba_255_59_48_0_25{border:1px solid rgba(255,59,48,0.25) !important}
+.u-bd-1px_solid_rgba_255_59_48_0_3{border:1px solid rgba(255,59,48,0.3) !important}
+.u-bd-1px_solid_v_border{border:1px solid var(--border) !important}
+.u-bd-1px_solid_v_border_strong{border:1px solid var(--border-strong) !important}
+.u-bd-1px_solid_v_color_border_strong{border:1px solid var(--color-border-strong) !important}
+.u-bd-1px_solid_v_color_danger{border:1px solid var(--color-danger) !important}
+.u-bd-2px_dashed_v_accent{border:2px dashed var(--accent) !important}
+.u-bd-2px_solid_v_accent{border:2px solid var(--accent) !important}
+.u-bd-2px_solid_v_border{border:2px solid var(--border) !important}
+.u-bd-none{border:none !important}
 .u-bdb-1px_solid_v_border{border-bottom:1px solid var(--border) !important}
 .u-bdb-none{border-bottom:none !important}
-.u-bdc-rgba_255_149_0_0_4{border-color:rgba(255,149,0,0.4)}
-.u-bdc-rgba_255_59_48_0_25{border-color:rgba(255,59,48,0.25)}
-.u-bdc-rgba_255_59_48_0_3{border-color:rgba(255,59,48,0.3)}
-.u-bdc-rgba_255_59_48_0_35{border-color:rgba(255,59,48,0.35)}
-.u-bdc-rgba_255_59_48_0_4{border-color:rgba(255,59,48,0.4)}
-.u-bdc-v_color_danger{border-color:var(--color-danger)}
-.u-bdc-v_danger{border-color:var(--danger)}
+.u-bdc-rgba_255_149_0_0_4{border-color:rgba(255,149,0,0.4) !important}
+.u-bdc-rgba_255_59_48_0_25{border-color:rgba(255,59,48,0.25) !important}
+.u-bdc-rgba_255_59_48_0_3{border-color:rgba(255,59,48,0.3) !important}
+.u-bdc-rgba_255_59_48_0_35{border-color:rgba(255,59,48,0.35) !important}
+.u-bdc-rgba_255_59_48_0_4{border-color:rgba(255,59,48,0.4) !important}
+.u-bdc-v_color_danger{border-color:var(--color-danger) !important}
+.u-bdc-v_danger{border-color:var(--danger) !important}
 .u-bdt-1px_dashed_v_border{border-top:1px dashed var(--border) !important}
 .u-bdt-1px_solid_v_border{border-top:1px solid var(--border) !important}
 .u-bdt-1px_solid_v_border_subtle_rgba_255_255_255_0_08{border-top:1px solid var(--border-subtle, rgba(255,255,255,0.08)) !important}
-.u-bg-222{background:#222}
-.u-bg-F2F2F7{background:#F2F2F7}
-.u-bg-linear_gradient_135deg_0b0d14_0_131726_50_06070a_100{background:linear-gradient(135deg,#0b0d14 0%,#131726 50%,#06070a 100%)}
-.u-bg-none{background:none}
-.u-bg-rgba_0_0_0_0_2{background:rgba(0,0,0,0.2)}
-.u-bg-rgba_0_0_0_0_3{background:rgba(0,0,0,0.3)}
-.u-bg-rgba_0_0_0_0_5{background:rgba(0,0,0,0.5)}
-.u-bg-rgba_0_0_0_0_75{background:rgba(0,0,0,0.75)}
-.u-bg-rgba_0_122_255_0_08{background:rgba(0,122,255,0.08)}
-.u-bg-rgba_255_149_0_0_05{background:rgba(255,149,0,0.05)}
-.u-bg-rgba_255_149_0_0_12{background:rgba(255,149,0,0.12)}
-.u-bg-rgba_255_255_255_0_03{background:rgba(255,255,255,0.03)}
-.u-bg-rgba_255_59_48_0_05{background:rgba(255,59,48,0.05)}
-.u-bg-rgba_255_59_48_0_08{background:rgba(255,59,48,0.08)}
-.u-bg-rgba_255_59_48_0_12{background:rgba(255,59,48,0.12)}
-.u-bg-rgba_52_199_89_0_15{background:rgba(52,199,89,0.15)}
-.u-bg-v_accent{background:var(--accent)}
-.u-bg-v_bg{background:var(--bg)}
-.u-bg-v_bg_2_rgba_255_255_255_0_03{background:var(--bg-2, rgba(255,255,255,0.03))}
-.u-bg-v_border{background:var(--border)}
-.u-bg-v_card_bg{background:var(--card-bg)}
-.u-bg-v_color_bg_elevated{background:var(--color-bg-elevated)}
-.u-bg-v_color_bg_overlay{background:var(--color-bg-overlay)}
-.u-bg-v_color_bg_sunken{background:var(--color-bg-sunken)}
-.u-bg-v_color_danger{background:var(--color-danger)}
-.u-bg-v_color_on_brand{background:var(--color-on-brand)}
-.u-bg-v_color_success_subtle{background:var(--color-success-subtle)}
-.u-bg-v_color_warn{background:var(--color-warn)}
-.u-bg-v_panel_strong{background:var(--panel-strong)}
-.u-bg-v_surface{background:var(--surface)}
-.u-bg-v_surface_2_rgba_255_255_255_0_04{background:var(--surface-2, rgba(255,255,255,0.04))}
+.u-bg-222{background:#222 !important}
+.u-bg-F2F2F7{background:#F2F2F7 !important}
+.u-bg-linear_gradient_135deg_0b0d14_0_131726_50_06070a_100{background:linear-gradient(135deg,#0b0d14 0%,#131726 50%,#06070a 100%) !important}
+.u-bg-none{background:none !important}
+.u-bg-rgba_0_0_0_0_2{background:rgba(0,0,0,0.2) !important}
+.u-bg-rgba_0_0_0_0_3{background:rgba(0,0,0,0.3) !important}
+.u-bg-rgba_0_0_0_0_5{background:rgba(0,0,0,0.5) !important}
+.u-bg-rgba_0_0_0_0_75{background:rgba(0,0,0,0.75) !important}
+.u-bg-rgba_0_122_255_0_08{background:rgba(0,122,255,0.08) !important}
+.u-bg-rgba_255_149_0_0_05{background:rgba(255,149,0,0.05) !important}
+.u-bg-rgba_255_149_0_0_12{background:rgba(255,149,0,0.12) !important}
+.u-bg-rgba_255_255_255_0_03{background:rgba(255,255,255,0.03) !important}
+.u-bg-rgba_255_59_48_0_05{background:rgba(255,59,48,0.05) !important}
+.u-bg-rgba_255_59_48_0_08{background:rgba(255,59,48,0.08) !important}
+.u-bg-rgba_255_59_48_0_12{background:rgba(255,59,48,0.12) !important}
+.u-bg-rgba_52_199_89_0_15{background:rgba(52,199,89,0.15) !important}
+.u-bg-v_accent{background:var(--accent) !important}
+.u-bg-v_bg{background:var(--bg) !important}
+.u-bg-v_bg_2_rgba_255_255_255_0_03{background:var(--bg-2, rgba(255,255,255,0.03)) !important}
+.u-bg-v_border{background:var(--border) !important}
+.u-bg-v_card_bg{background:var(--card-bg) !important}
+.u-bg-v_color_bg_elevated{background:var(--color-bg-elevated) !important}
+.u-bg-v_color_bg_overlay{background:var(--color-bg-overlay) !important}
+.u-bg-v_color_bg_sunken{background:var(--color-bg-sunken) !important}
+.u-bg-v_color_danger{background:var(--color-danger) !important}
+.u-bg-v_color_on_brand{background:var(--color-on-brand) !important}
+.u-bg-v_color_success_subtle{background:var(--color-success-subtle) !important}
+.u-bg-v_color_warn{background:var(--color-warn) !important}
+.u-bg-v_panel_strong{background:var(--panel-strong) !important}
+.u-bg-v_surface{background:var(--surface) !important}
+.u-bg-v_surface_2_rgba_255_255_255_0_04{background:var(--surface-2, rgba(255,255,255,0.04)) !important}
 .u-bordercollapse-collapse{border-collapse:collapse !important}
 .u-bordertopcolor-transparent{border-top-color:transparent !important}
 .u-bordertopcolor-v_accent{border-top-color:var(--accent) !important}
@@ -2074,25 +2074,25 @@ const UTILITY_CSS = `
 .u-bsh-0_4px_12px_rgba_0_0_0_0_5{box-shadow:0 4px 12px rgba(0,0,0,0.5) !important}
 .u-bsh-v_shadow_lg{box-shadow:var(--shadow-lg) !important}
 .u-bsh-v_shadow_sm{box-shadow:var(--shadow-sm) !important}
-.u-c-00e699{color:#00e699}
-.u-c-01b4e4{color:#01b4e4}
-.u-c-1C1C1E{color:#1C1C1E}
-.u-c-ed1c24{color:#ed1c24}
-.u-c-f5c518{color:#f5c518}
-.u-c-red{color:red}
-.u-c-v_accent{color:var(--accent)}
-.u-c-v_accent_2{color:var(--accent-2)}
-.u-c-v_brand{color:var(--brand)}
-.u-c-v_color_danger_text{color:var(--color-danger-text)}
-.u-c-v_color_on_brand{color:var(--color-on-brand)}
-.u-c-v_color_success_text{color:var(--color-success-text)}
-.u-c-v_color_warn_text{color:var(--color-warn-text)}
-.u-c-v_danger{color:var(--danger)}
-.u-c-v_danger_v_color_danger{color:var(--danger, var(--color-danger))}
-.u-c-v_muted{color:var(--muted)}
-.u-c-v_text{color:var(--text)}
-.u-c-v_text_2{color:var(--text-2)}
-.u-c-v_warning_v_color_warn{color:var(--warning, var(--color-warn))}
+.u-c-00e699{color:#00e699 !important}
+.u-c-01b4e4{color:#01b4e4 !important}
+.u-c-1C1C1E{color:#1C1C1E !important}
+.u-c-ed1c24{color:#ed1c24 !important}
+.u-c-f5c518{color:#f5c518 !important}
+.u-c-red{color:red !important}
+.u-c-v_accent{color:var(--accent) !important}
+.u-c-v_accent_2{color:var(--accent-2) !important}
+.u-c-v_brand{color:var(--brand) !important}
+.u-c-v_color_danger_text{color:var(--color-danger-text) !important}
+.u-c-v_color_on_brand{color:var(--color-on-brand) !important}
+.u-c-v_color_success_text{color:var(--color-success-text) !important}
+.u-c-v_color_warn_text{color:var(--color-warn-text) !important}
+.u-c-v_danger{color:var(--danger) !important}
+.u-c-v_danger_v_color_danger{color:var(--danger, var(--color-danger)) !important}
+.u-c-v_muted{color:var(--muted) !important}
+.u-c-v_text{color:var(--text) !important}
+.u-c-v_text_2{color:var(--text-2) !important}
+.u-c-v_warning_v_color_warn{color:var(--warning, var(--color-warn)) !important}
 .u-cur-default{cursor:default !important}
 .u-cur-grab{cursor:grab !important}
 .u-cur-not_allowed{cursor:not-allowed !important}
@@ -2130,17 +2130,17 @@ const UTILITY_CSS = `
 .u-fw-bold{font-weight:bold !important}
 .u-fw-normal{font-weight:normal !important}
 .u-fw2-wrap{flex-wrap:wrap !important}
-.u-gap-0{gap:0}
-.u-gap-10px{gap:10px}
-.u-gap-12px{gap:12px}
-.u-gap-16px{gap:16px}
-.u-gap-20px{gap:20px}
-.u-gap-24px{gap:24px}
-.u-gap-32px{gap:32px}
-.u-gap-4px{gap:4px}
-.u-gap-5px{gap:5px}
-.u-gap-6px{gap:6px}
-.u-gap-8px{gap:8px}
+.u-gap-0{gap:0 !important}
+.u-gap-10px{gap:10px !important}
+.u-gap-12px{gap:12px !important}
+.u-gap-16px{gap:16px !important}
+.u-gap-20px{gap:20px !important}
+.u-gap-24px{gap:24px !important}
+.u-gap-32px{gap:32px !important}
+.u-gap-4px{gap:4px !important}
+.u-gap-5px{gap:5px !important}
+.u-gap-6px{gap:6px !important}
+.u-gap-8px{gap:8px !important}
 .u-gridcolumn-1_1{grid-column:1 / -1 !important}
 .u-gtc-repeat_auto_fill_minmax_140px_1fr{grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)) !important}
 .u-gtc-repeat_auto_fill_minmax_90px_1fr{grid-template-columns:repeat(auto-fill, minmax(90px, 1fr)) !important}
@@ -2161,48 +2161,48 @@ const UTILITY_CSS = `
 .u-ls-0_05em{letter-spacing:0.05em !important}
 .u-ls-0_5px{letter-spacing:0.5px !important}
 .u-ls-4px{letter-spacing:4px !important}
-.u-m-0{margin:0}
-.u-m-0_0_10px{margin:0 0 10px}
-.u-m-0_0_12px{margin:0 0 12px}
-.u-m-0_0_12px_18px{margin:0 0 12px 18px}
-.u-m-0_0_14px{margin:0 0 14px}
-.u-m-0_0_16px{margin:0 0 16px}
-.u-m-0_0_18px{margin:0 0 18px}
-.u-m-0_0_2px{margin:0 0 2px}
-.u-m-0_0_4px{margin:0 0 4px}
-.u-m-0_0_6px{margin:0 0 6px}
-.u-m-0_0_8px{margin:0 0 8px}
-.u-m-0_6px_6px_0{margin:0 6px 6px 0}
-.u-m-0_auto{margin:0 auto}
-.u-m-10px_0{margin:10px 0}
-.u-m-10px_0_0{margin:10px 0 0}
-.u-m-10px_0_4px{margin:10px 0 4px}
-.u-m-12px_0{margin:12px 0}
-.u-m-12px_0_0{margin:12px 0 0}
-.u-m-12px_0_20px{margin:12px 0 20px}
-.u-m-12px_0_8px{margin:12px 0 8px}
-.u-m-14px_0_4px{margin:14px 0 4px}
-.u-m-16px_0{margin:16px 0}
-.u-m-16px_0_20px{margin:16px 0 20px}
-.u-m-16px_0_6px{margin:16px 0 6px}
-.u-m-20px_0_4px{margin:20px 0 4px}
-.u-m-2px_0_0{margin:2px 0 0}
-.u-m-2px_0_0_24px{margin:2px 0 0 24px}
-.u-m-2px_4px_2px_0{margin:2px 4px 2px 0}
-.u-m-32px_0_16px{margin:32px 0 16px}
-.u-m-3px_0_0{margin:3px 0 0}
-.u-m-4px_0_0{margin:4px 0 0}
-.u-m-4px_0_1px{margin:4px 0 1px}
-.u-m-4px_0_6px{margin:4px 0 6px}
-.u-m-6px_0_0{margin:6px 0 0}
-.u-m-6px_0_0_24px{margin:6px 0 0 24px}
-.u-m-6px_0_4px{margin:6px 0 4px}
-.u-m-8px_0{margin:8px 0}
-.u-m-8px_0_0{margin:8px 0 0}
-.u-m-8px_0_0_24px{margin:8px 0 0 24px}
-.u-m-8px_0_12px{margin:8px 0 12px}
-.u-m-8px_0_14px{margin:8px 0 14px}
-.u-m-8px_0_16px{margin:8px 0 16px}
+.u-m-0{margin:0 !important}
+.u-m-0_0_10px{margin:0 0 10px !important}
+.u-m-0_0_12px{margin:0 0 12px !important}
+.u-m-0_0_12px_18px{margin:0 0 12px 18px !important}
+.u-m-0_0_14px{margin:0 0 14px !important}
+.u-m-0_0_16px{margin:0 0 16px !important}
+.u-m-0_0_18px{margin:0 0 18px !important}
+.u-m-0_0_2px{margin:0 0 2px !important}
+.u-m-0_0_4px{margin:0 0 4px !important}
+.u-m-0_0_6px{margin:0 0 6px !important}
+.u-m-0_0_8px{margin:0 0 8px !important}
+.u-m-0_6px_6px_0{margin:0 6px 6px 0 !important}
+.u-m-0_auto{margin:0 auto !important}
+.u-m-10px_0{margin:10px 0 !important}
+.u-m-10px_0_0{margin:10px 0 0 !important}
+.u-m-10px_0_4px{margin:10px 0 4px !important}
+.u-m-12px_0{margin:12px 0 !important}
+.u-m-12px_0_0{margin:12px 0 0 !important}
+.u-m-12px_0_20px{margin:12px 0 20px !important}
+.u-m-12px_0_8px{margin:12px 0 8px !important}
+.u-m-14px_0_4px{margin:14px 0 4px !important}
+.u-m-16px_0{margin:16px 0 !important}
+.u-m-16px_0_20px{margin:16px 0 20px !important}
+.u-m-16px_0_6px{margin:16px 0 6px !important}
+.u-m-20px_0_4px{margin:20px 0 4px !important}
+.u-m-2px_0_0{margin:2px 0 0 !important}
+.u-m-2px_0_0_24px{margin:2px 0 0 24px !important}
+.u-m-2px_4px_2px_0{margin:2px 4px 2px 0 !important}
+.u-m-32px_0_16px{margin:32px 0 16px !important}
+.u-m-3px_0_0{margin:3px 0 0 !important}
+.u-m-4px_0_0{margin:4px 0 0 !important}
+.u-m-4px_0_1px{margin:4px 0 1px !important}
+.u-m-4px_0_6px{margin:4px 0 6px !important}
+.u-m-6px_0_0{margin:6px 0 0 !important}
+.u-m-6px_0_0_24px{margin:6px 0 0 24px !important}
+.u-m-6px_0_4px{margin:6px 0 4px !important}
+.u-m-8px_0{margin:8px 0 !important}
+.u-m-8px_0_0{margin:8px 0 0 !important}
+.u-m-8px_0_0_24px{margin:8px 0 0 24px !important}
+.u-m-8px_0_12px{margin:8px 0 12px !important}
+.u-m-8px_0_14px{margin:8px 0 14px !important}
+.u-m-8px_0_16px{margin:8px 0 16px !important}
 .u-maxh-340px{max-height:340px !important}
 .u-maxh-55vh{max-height:55vh !important}
 .u-maxh-85vh{max-height:85vh !important}
@@ -2219,18 +2219,18 @@ const UTILITY_CSS = `
 .u-maxw-520px{max-width:520px !important}
 .u-maxw-540px{max-width:540px !important}
 .u-maxw-680px{max-width:680px !important}
-.u-mb-0{margin-bottom:0}
-.u-mb-10px{margin-bottom:10px}
-.u-mb-12px{margin-bottom:12px}
-.u-mb-14px{margin-bottom:14px}
-.u-mb-16px{margin-bottom:16px}
-.u-mb-18px{margin-bottom:18px}
-.u-mb-20px{margin-bottom:20px}
-.u-mb-24px{margin-bottom:24px}
-.u-mb-2px{margin-bottom:2px}
-.u-mb-4px{margin-bottom:4px}
-.u-mb-6px{margin-bottom:6px}
-.u-mb-8px{margin-bottom:8px}
+.u-mb-0{margin-bottom:0 !important}
+.u-mb-10px{margin-bottom:10px !important}
+.u-mb-12px{margin-bottom:12px !important}
+.u-mb-14px{margin-bottom:14px !important}
+.u-mb-16px{margin-bottom:16px !important}
+.u-mb-18px{margin-bottom:18px !important}
+.u-mb-20px{margin-bottom:20px !important}
+.u-mb-24px{margin-bottom:24px !important}
+.u-mb-2px{margin-bottom:2px !important}
+.u-mb-4px{margin-bottom:4px !important}
+.u-mb-6px{margin-bottom:6px !important}
+.u-mb-8px{margin-bottom:8px !important}
 .u-minh-120px{min-height:120px !important}
 .u-minh-30px{min-height:30px !important}
 .u-minh-38px{min-height:38px !important}
@@ -2251,38 +2251,38 @@ const UTILITY_CSS = `
 .u-minw-80px{min-width:80px !important}
 .u-minw-90px{min-width:90px !important}
 .u-minw-auto{min-width:auto !important}
-.u-ml-26px{margin-left:26px}
-.u-ml-4px{margin-left:4px}
-.u-ml-6px{margin-left:6px}
-.u-ml-8px{margin-left:8px}
-.u-ml-auto{margin-left:auto}
-.u-mr-0{margin-right:0}
-.u-mr-4px{margin-right:4px}
-.u-mr-6px{margin-right:6px}
-.u-mr-8px{margin-right:8px}
-.u-mt-0{margin-top:0}
-.u-mt-10px{margin-top:10px}
-.u-mt-12px{margin-top:12px}
-.u-mt-14px{margin-top:14px}
-.u-mt-16px{margin-top:16px}
-.u-mt-18px{margin-top:18px}
-.u-mt-20px{margin-top:20px}
-.u-mt-24px{margin-top:24px}
-.u-mt-28px{margin-top:28px}
-.u-mt-2px{margin-top:2px}
-.u-mt-32px{margin-top:32px}
-.u-mt-3px{margin-top:3px}
-.u-mt-48px{margin-top:48px}
-.u-mt-4px{margin-top:4px}
-.u-mt-6px{margin-top:6px}
-.u-mt-8px{margin-top:8px}
+.u-ml-26px{margin-left:26px !important}
+.u-ml-4px{margin-left:4px !important}
+.u-ml-6px{margin-left:6px !important}
+.u-ml-8px{margin-left:8px !important}
+.u-ml-auto{margin-left:auto !important}
+.u-mr-0{margin-right:0 !important}
+.u-mr-4px{margin-right:4px !important}
+.u-mr-6px{margin-right:6px !important}
+.u-mr-8px{margin-right:8px !important}
+.u-mt-0{margin-top:0 !important}
+.u-mt-10px{margin-top:10px !important}
+.u-mt-12px{margin-top:12px !important}
+.u-mt-14px{margin-top:14px !important}
+.u-mt-16px{margin-top:16px !important}
+.u-mt-18px{margin-top:18px !important}
+.u-mt-20px{margin-top:20px !important}
+.u-mt-24px{margin-top:24px !important}
+.u-mt-28px{margin-top:28px !important}
+.u-mt-2px{margin-top:2px !important}
+.u-mt-32px{margin-top:32px !important}
+.u-mt-3px{margin-top:3px !important}
+.u-mt-48px{margin-top:48px !important}
+.u-mt-4px{margin-top:4px !important}
+.u-mt-6px{margin-top:6px !important}
+.u-mt-8px{margin-top:8px !important}
 .u-objectfit-cover{object-fit:cover !important}
 .u-ol-none{outline:none !important}
-.u-ov-auto{overflow:auto}
-.u-ov-hidden{overflow:hidden}
+.u-ov-auto{overflow:auto !important}
+.u-ov-hidden{overflow:hidden !important}
 .u-overflowwrap-anywhere{overflow-wrap:anywhere !important}
-.u-ovx-auto{overflow-x:auto}
-.u-ovy-auto{overflow-y:auto}
+.u-ovx-auto{overflow-x:auto !important}
+.u-ovy-auto{overflow-y:auto !important}
 .u-p-0{padding:0 !important}
 .u-p-0_0_10px{padding:0 0 10px !important}
 .u-p-0_0_12px{padding:0 0 12px !important}
@@ -2350,11 +2350,11 @@ const UTILITY_CSS = `
 .u-pb-56_25{padding-bottom:56.25% !important}
 .u-pl-18px{padding-left:18px !important}
 .u-pl-38px{padding-left:38px !important}
-.u-pr-10px{padding-right:10px}
-.u-pr-12px{padding-right:12px}
-.u-pr-38px{padding-right:38px}
-.u-pr-4px{padding-right:4px}
-.u-pr-8px{padding-right:8px}
+.u-pr-10px{padding-right:10px !important}
+.u-pr-12px{padding-right:12px !important}
+.u-pr-38px{padding-right:38px !important}
+.u-pr-4px{padding-right:4px !important}
+.u-pr-8px{padding-right:8px !important}
 .u-pt-10px{padding-top:10px !important}
 .u-pt-12px{padding-top:12px !important}
 .u-pt-14px{padding-top:14px !important}
@@ -2368,8 +2368,8 @@ const UTILITY_CSS = `
 .u-touchaction-manipulation{touch-action:manipulation !important}
 .u-tt-none{text-transform:none !important}
 .u-tt-uppercase{text-transform:uppercase !important}
-.u-us-all{user-select:all}
-.u-us-none{user-select:none}
+.u-us-all{user-select:all !important}
+.u-us-none{user-select:none !important}
 .u-va-middle{vertical-align:middle !important}
 .u-va-top{vertical-align:top !important}
 .u-wb-break_all{word-break:break-all !important}
@@ -13610,12 +13610,12 @@ ${UTILITY_CSS}
         <option value="series">Shows Only</option>
       </select>
       <button type="button" class="admin-select u-cur-pointer" id="backfillTrendingBtn" data-act="runBackfillTrending">Backfill Existing Data</button>
-      <span id="backfillTrendingStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="backfillTrendingStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
     </div>
     <p class="u-c-v_muted u-m-0_0_12px u-fs-v_font_size_sm">Backfill only adds to the <strong>All Time</strong> window (there's no historical date to bucket existing data into 7/30/90-day windows) -- it seeds counts from Watch History and Custom Lists that already existed before this feature shipped. Safe to run more than once; it only adds, never resets anything. Processes accounts a few at a time, so it may take a minute for larger sites.</p>
     <div class="u-m-0_0_12px">
       <button type="button" class="admin-select u-cur-pointer" id="migrateDayCountsBtn" data-act="runMigrateDayCounts">Migrate Historical Day Counts</button>
-      <span id="migrateDayCountsStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="migrateDayCountsStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <p class="u-c-v_muted u-m-6px_0_0 u-fs-v_font_size_sm">One-time migration for the switch from one KV key per day to one JSON blob per title -- reads every old per-day count still sitting in KV and folds it into the new format, so 7/30/90-day windows reflect activity from before that switch instead of only counting forward from it. Safe to run more than once (adds, never subtracts); old keys are deleted once folded in, so re-running just confirms there's nothing left. Also covers the Search &amp; Queries leaderboard.</p>
     </div>
     <div class="table-wrap">
@@ -13705,7 +13705,7 @@ ${UTILITY_CSS}
       <textarea id="newFeedbackMessage" placeholder="What did you find?" class="u-minh-70px u-bs-border_box u-p-10px_12px u-br-v_radius_sm u-bd-1px_solid_rgba_0_0_0_0_15 u-ff-inherit u-fs-v_font_size_base u-rs-vertical" style="width:100%;"></textarea>
       <div class="u-mt-8px u-ai-center u-gap-10px" style="display:flex;">
         <button type="button" class="admin-select u-cur-pointer" id="newFeedbackSubmitBtn" data-act="submitAdminFeedback">Add to list</button>
-        <span id="newFeedbackStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
+        <span id="newFeedbackStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
       </div>
     </div>
     <div id="feedbackList">Loading\u2026</div>
@@ -13755,7 +13755,7 @@ ${UTILITY_CSS}
       <div class="u-gap-8px u-ai-center" style="display:flex;">
         <input type="text" id="providerLookupQueryInput" class="admin-select u-mr-0 u-flex-1 u-maxw-220px" placeholder="e.g. disney, max, hulu" data-act="lookupProviderIds" data-act-keys="Enter" data-act-prevent>
         <button type="button" class="secondary lc-btn" data-act="lookupProviderIds">Search</button>
-        <span id="providerLookupStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
+        <span id="providerLookupStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
       </div>
       <div id="providerLookupResults" class="u-mt-10px"></div>
     </div>
@@ -13768,7 +13768,7 @@ ${UTILITY_CSS}
         <input type="text" id="netflixPreviewRegionInput" class="admin-select u-mr-0 u-tt-uppercase" style="width:70px;" value="US" maxlength="2" placeholder="US">
       </label>
       <button type="button" class="secondary lc-btn" data-act="loadNetflixPreview">Load Preview</button>
-      <span id="netflixPreviewStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
+      <span id="netflixPreviewStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
     </div>
     <div id="netflixPreviewMovies"></div>
     <div id="netflixPreviewShows" class="u-mt-28px"></div>
@@ -13789,7 +13789,7 @@ ${UTILITY_CSS}
       <div class="u-fs-v_font_size_sm u-c-v_muted u-mb-14px">Ko-fi adds each US-dollar donation and membership payment to this by itself (set up below); type a number here to correct it. It counts toward <span id="supportGoalMonth">this month</span> only and starts again at 0 on the 1st.</div>
       <div class="u-gap-10px u-ai-center u-fw2-wrap" style="display:flex;">
         <button type="button" class="primary lc-btn" data-act="saveSupportGoal">Save</button>
-        <span id="supportGoalStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
+        <span id="supportGoalStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
       </div>
     </div>
     <div class="panel u-m-0_0_18px u-p-14px_16px u-maxw-520px">
@@ -13800,7 +13800,7 @@ ${UTILITY_CSS}
         <li>Copy Ko-fi's <strong>verification token</strong> and add it to this Worker as a secret named <code>KOFI_VERIFICATION_TOKEN</code> (Cloudflare dashboard &rarr; Worker &rarr; Settings &rarr; Variables and Secrets).</li>
         <li>Use Ko-fi's <strong>Send a test</strong>. It shows up below.</li>
       </ol>
-      <div class="u-fs-v_font_size_sm">Token: <span id="supportGoalTokenState" class="u-c-v_muted">checking&hellip;</span></div>
+      <div class="u-fs-v_font_size_sm">Token: <span id="supportGoalTokenState" style="color:var(--muted);">checking&hellip;</span></div>
       <div class="u-fs-v_font_size_sm u-mt-4px">Last payment counted: <span id="supportGoalLastPayment" class="u-c-v_muted">none yet</span></div>
       <div class="u-fs-v_font_size_xs u-c-v_muted u-mt-10px">Counts donations and membership payments made in US dollars. Other currencies, shop orders and commissions are skipped; type those in above if you want them counted. Who gave is never shown.</div>
     </div>
@@ -13812,7 +13812,7 @@ ${UTILITY_CSS}
 
     <div class="panel u-m-0_0_18px u-p-14px_16px">
       <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Sweep status</div>
-      <div id="nosStatus" class="u-fs-v_font_size_sm u-c-v_muted">Loading&hellip;</div>
+      <div id="nosStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);">Loading&hellip;</div>
       <div class="u-mt-12px u-gap-8px u-ai-center u-fw2-wrap" style="display:flex;">
         <button type="button" class="secondary lc-btn" data-act="loadNewOnStreaming">Refresh</button>
         <label class="u-fs-v_font_size_sm u-c-v_muted">Pages
@@ -13820,7 +13820,7 @@ ${UTILITY_CSS}
         </label>
         <button type="button" class="admin-select u-cur-pointer" id="nosSweepBtn" data-act="runNewOnStreamingSweep" data-act-args="${adminActArgs([false])}">Run a sweep now</button>
         <button type="button" class="secondary lc-btn u-cur-pointer u-c-v_color_warn_text u-bdc-rgba_255_149_0_0_4" id="nosResetBtn" data-act="runNewOnStreamingSweep" data-act-args="${adminActArgs([true])}">Clear &amp; pull fresh data</button>
-        <span id="nosSweepStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
+        <span id="nosSweepStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
       </div>
       <p class="u-c-v_muted u-m-10px_0_0 u-fs-v_font_size_sm">Each page fetches up to 25 changes from RapidAPI. Automated sweeps run every 6 hours via cron and read each change stream (new titles, new seasons, new episodes, removals) oldest-first from where the last sweep stopped, so a busy day is finished on the next run instead of being cut off. The per-run budget is the month&#39;s remaining quota spread over the runs left; a safety cap halts sweeps at 950 calls to ensure zero overages. "Run a sweep now" continues the same streams with the page count given. Older titles (&gt;30 days) are pruned automatically each sweep.</p>
     </div>
@@ -13856,7 +13856,7 @@ ${UTILITY_CSS}
         </select>
         <input type="date" id="nosAddDateInput" class="admin-select" style="width:130px;" title="Optional arrival date (defaults to episode air date or today)">
         <button type="button" class="admin-select u-cur-pointer" id="nosAddBtn" data-act="nosAddTitle">Add / Sync Title</button>
-        <span id="nosAddStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
+        <span id="nosAddStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
       </div>
     </div>
 
@@ -13877,7 +13877,7 @@ ${UTILITY_CSS}
         <button type="button" class="secondary lc-btn" id="nosPrevBtn" data-act="nosChangePage" data-act-args="${adminActArgs([-1])}" disabled>&larr; Prev</button>
         <span id="nosPageLabel" class="u-fs-v_font_size_sm u-c-v_muted u-fw-600">Page 1</span>
         <button type="button" class="secondary lc-btn" id="nosNextBtn" data-act="nosChangePage" data-act-args="${adminActArgs([1])}" disabled>Next &rarr;</button>
-        <span id="nosPreviewStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
+        <span id="nosPreviewStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
       </div>
       <div class="u-mb-12px u-fs-v_font_size_sm u-c-v_muted">Catalog URL: <code id="nosPreviewSource">tmdb:new-on-streaming</code> &mdash; paste this into <strong>Catalogs &rarr; + New Catalog</strong> on the main site to install this exact row into Stremio or Nuvio while it is still hidden.</div>
       <div id="nosPreviewResults"></div>
@@ -13891,7 +13891,7 @@ ${UTILITY_CSS}
       <div class="u-gap-8px u-ai-center u-fw2-wrap" style="display:flex;">
         <button type="button" class="secondary lc-btn" data-act="loadChannelPresets">Refresh</button>
         <button type="button" class="secondary lc-btn u-cur-pointer u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_4" id="cpClearAllBtn" data-act="clearAllChannelPresets">Clear all caches</button>
-        <span id="cpStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
+        <span id="cpStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
       </div>
       <p class="u-c-v_muted u-m-10px_0_0 u-fs-v_font_size_sm">Clearing never touches anyone's already-saved channels -- each saved row carries its own small item sample as a fallback, so a cleared cache just means the next Quick Add click (or the cron rotation) rebuilds it fresh instead of serving what was cached before.</p>
     </div>
@@ -13917,7 +13917,7 @@ ${UTILITY_CSS}
         ? 'This Worker has a D1 database bound as <code>DB</code>. Use the button below to backfill existing KV records into D1.'
         : 'This Worker has no D1 database bound (Settings &rarr; Bindings). D1 is required for authoritative accounts, lists, search, likes, feedback, and tracking. Bind a D1 database as <code>DB</code> to enable full functionality.'}</p>
       <button type="button" class="admin-select u-cur-pointer" id="migrateD1Btn" data-act="runMigrateD1" ${isD1Bound ? '' : 'disabled'}>Migrate KV &rarr; D1</button>
-      <span id="migrateD1Status" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="migrateD1Status" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <p class="u-c-v_muted u-m-10px_0_0 u-fs-v_font_size_sm">Copies existing Creator Profiles, Custom Lists, likes, feedback, and tracking records from KV into D1. Safe to run more than once.</p>
     </div>
 
@@ -13925,17 +13925,17 @@ ${UTILITY_CSS}
       <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Unified accounts table (v2 identity)</div>
       <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Backfills existing creator identities from D1 <code>creators</code> and KV <code>creator:*</code> into the unified <code>accounts</code> table. Newest key hash wins; D1 wins ties. Copies data only &mdash; safe to run more than once.</p>
       <button type="button" class="admin-select u-cur-pointer" id="migrateAccountsBtn" data-act="runMigrateAccounts" ${isD1Bound ? '' : 'disabled'}>Migrate Accounts</button>
-      <span id="migrateAccountsStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="migrateAccountsStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
     </div>
 
     <div class="panel u-m-0_0_18px u-p-14px_16px">
       <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Install links: keys moving to encrypted storage</div>
       <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">The first time an existing install link is used, its provider keys, tokens and Creator Key move out of its KV record into encrypted D1 storage, for the share of links set in <code>INSTALL_MIGRATION_PERCENT</code>. Links keep their URL and serve exactly as before. Needs <code>TOKEN_ENCRYPTION_KEY</code> and migration 0015. Read-only: this button only reports progress.</p>
       <button type="button" class="admin-select u-cur-pointer" id="installsStatusBtn" data-act="runInstallsStatus" ${isD1Bound ? '' : 'disabled'}>Check progress</button>
-      <span id="installsStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="installsStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <p class="u-c-v_muted u-m-12px_0_8px u-fs-v_font_size_sm">Emergency only: puts every moved link's keys back into its KV record, exactly as they were, and empties the table. Set <code>INSTALL_MIGRATION_PERCENT</code> to <code>0</code> first. Links removed from an account stay removed.</p>
       <button type="button" class="admin-select u-cur-pointer" id="installsRestoreBtn" data-act="runInstallsRestore" ${isD1Bound ? '' : 'disabled'}>Undo the move</button>
-      <span id="installsRestoreStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="installsRestoreStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
     </div>
 
     <div class="panel u-m-0_0_18px u-p-14px_16px">
@@ -13944,7 +13944,7 @@ ${UTILITY_CSS}
       <button type="button" class="admin-select u-cur-pointer" id="listsBackfillBtn" data-act="runListsBackfill" data-act-args="${adminActArgs([false])}" ${isD1Bound ? '' : 'disabled'}>Copy lists</button>
       <button type="button" class="admin-select u-cur-pointer" id="listsBackfillRestartBtn" data-act="runListsBackfill" data-act-args="${adminActArgs([true])}" ${isD1Bound ? '' : 'disabled'}>Start over</button>
       <button type="button" class="admin-select u-cur-pointer" id="listsBackfillStatusBtn" data-act="runListsBackfillStatus" ${isD1Bound ? '' : 'disabled'}>Check results</button>
-      <span id="listsBackfillStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="listsBackfillStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <div id="listsBackfillResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted"></div>
     </div>
 
@@ -13954,7 +13954,7 @@ ${UTILITY_CSS}
       <button type="button" class="admin-select u-cur-pointer" id="activityBackfillBtn" data-act="runActivityBackfill" data-act-args="${adminActArgs([false])}" ${isActivityBound ? '' : 'disabled'}>Copy history</button>
       <button type="button" class="admin-select u-cur-pointer" id="activityBackfillRestartBtn" data-act="runActivityBackfill" data-act-args="${adminActArgs([true])}" ${isActivityBound ? '' : 'disabled'}>Start over</button>
       <button type="button" class="admin-select u-cur-pointer" id="activityBackfillStatusBtn" data-act="runActivityBackfillStatus" ${isActivityBound ? '' : 'disabled'}>Check results</button>
-      <span id="activityBackfillStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px">${isActivityBound ? '' : 'DB_ACTIVITY is not bound.'}</span>
+      <span id="activityBackfillStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);">${isActivityBound ? '' : 'DB_ACTIVITY is not bound.'}</span>
       <div id="activityBackfillResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted"></div>
     </div>
 
@@ -13964,14 +13964,14 @@ ${UTILITY_CSS}
         : '<span class="u-c-v_muted">not bound yet</span>'}</div>
       <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Background work moves onto the Cloudflare Queue <code>mylists-jobs</code>, which this Worker also reads (Phase 5). Setting it up: create the queues <code>mylists-jobs</code> and <code>mylists-jobs-dlq</code>, add this Worker as the consumer of <code>mylists-jobs</code> (batch size 25, 5 retries, dead-letter queue <code>mylists-jobs-dlq</code>), and bind <code>mylists-jobs</code> to this Worker as <code>JOBS</code>. See docs/OPERATIONS.md section 18. <strong>Send a test job</strong> puts one job on the queue and waits for this Worker to pick it up, which proves all three steps worked.</p>
       <button type="button" class="admin-select u-cur-pointer" id="jobsPingBtn" data-act="runJobsPing" ${isJobsBound ? '' : 'disabled'}>Send a test job</button>
-      <span id="jobsPingStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px">${isJobsBound ? '' : 'JOBS is not bound.'}</span>
+      <span id="jobsPingStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);">${isJobsBound ? '' : 'JOBS is not bound.'}</span>
       <p class="u-c-v_muted u-m-12px_0_8px u-fs-v_font_size_sm">Once the queue is bound, every cron tick only hands out the work that is due (the Continue Watching and Airing Next sweeps, New on Streaming, chart and poster warming, channel presets, housekeeping), and the queue does it. Without it, the tick does the work itself, as before. <strong>Check jobs</strong> shows when each one last ran. Needs migration 0016.</p>
       <button type="button" class="admin-select u-cur-pointer" id="jobsStatusBtn" data-act="runJobsStatus" ${isD1Bound ? '' : 'disabled'}>Check jobs</button>
-      <span id="jobsStatusStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="jobsStatusStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <div id="jobsStatusResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted"></div>
       <p class="u-c-v_muted u-m-12px_0_8px u-fs-v_font_size_sm"><strong>Compare shelves now</strong> runs the whole Continue Watching and Airing Next comparison (<code>shelf.shadow</code>) from this page, a few minutes instead of the hourly job's 15 hours, and shows why each difference is there. Keep the page open until it says Done. It only reads.</p>
       <button type="button" class="admin-select u-cur-pointer" id="shelfCompareBtn" data-act="runShelfCompareNow" ${isD1Bound ? '' : 'disabled'}>Compare shelves now</button>
-      <span id="shelfCompareStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="shelfCompareStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <div id="shelfCompareResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted u-ws-pre_wrap u-wb-break_word"></div>
     </div>
 
@@ -13979,7 +13979,7 @@ ${UTILITY_CSS}
       <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Database schema</div>
       <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Migrations are applied by hand and nothing records that it happened, so this Worker can end up running ahead of its own database. It degrades quietly when that happens rather than refusing to start &mdash; which is why this check exists. Run it after any deploy that shipped a new file under <code>migrations/</code>.</p>
       <button type="button" class="admin-select u-cur-pointer" id="schemaCheckBtn" data-act="runSchemaCheck">Check schema</button>
-      <span id="schemaCheckStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="schemaCheckStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <div id="schemaCheckResult" class="u-mt-10px"></div>
     </div>
 
@@ -13988,7 +13988,7 @@ ${UTILITY_CSS}
       <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">From 2 October until the fix, page views, install links, playback pings, Most Watched, list adds and searches were counted in Cloudflare Analytics instead of here, so this dashboard showed zeros. This puts them back. It needs the secret <code>CF_ANALYTICS_TOKEN</code> (an API token with <em>Account Analytics: Read</em>) and the variable <code>CF_ANALYTICS_ACCOUNT_ID</code>. <strong>Preview</strong> shows what would be added; <strong>Put them back</strong> adds it. Running it again adds nothing twice.</p>
       <button type="button" class="admin-select u-cur-pointer" id="statsRecoveryPreviewBtn" data-act="runStatsRecovery" data-act-args="${adminActArgs([false])}">Preview</button>
       <button type="button" class="admin-select u-cur-pointer" id="statsRecoveryApplyBtn" data-act="runStatsRecovery" data-act-args="${adminActArgs([true])}">Put them back</button>
-      <span id="statsRecoveryStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="statsRecoveryStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <div id="statsRecoveryResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted"></div>
     </div>
 
@@ -13997,14 +13997,14 @@ ${UTILITY_CSS}
       <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Copies every KV key that starts with the text below into the <code>BLOBS</code> bucket, under <code>kv-archive/</code>, a batch at a time, then writes a <code>manifest.json</code> when the copy is complete. It deletes nothing. Type the prefix exactly, with no <code>*</code> (for example <code>stats:</code>). Deleting old data is not safe yet: see docs/CUTOVER.md.</p>
       <input type="text" id="kvExportPrefix" class="admin-select u-minw-180px" placeholder="creator:">
       <button type="button" class="admin-select u-cur-pointer" id="kvExportBtn" data-act="runKvExport">Export</button>
-      <span id="kvExportStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="kvExportStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
     </div>
 
     <div class="panel u-m-0 u-p-14px_16px">
       <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Public list directory &amp; search index</div>
       <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">The public list directory and in-app search query D1 tables and the full-text search index (lists_fts). This button rebuilds the search index directly from creator_lists &mdash; useful after importing data or to recreate the index after a D1 database export.</p>
       <button type="button" class="admin-select u-cur-pointer" id="rebuildIndexBtn" data-act="runRebuildPublicIndex">Rebuild Search Index</button>
-      <span id="rebuildIndexStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="rebuildIndexStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
     </div>
 
     <div class="panel u-m-0 u-p-14px_16px">
@@ -14016,7 +14016,7 @@ ${UTILITY_CSS}
         <input type="text" id="deleteListUserInput" class="admin-select u-mr-6px" placeholder="Creator username">
         <button type="button" class="admin-select u-cur-pointer u-mr-6px" id="browseCreatorListsBtn" data-act="loadCreatorLists" data-act-args="${adminActArgs([true])}">Browse this creator&rsquo;s lists</button>
         <button type="button" class="admin-select u-cur-pointer" id="browseCreatorListsMoreBtn" data-act="loadCreatorLists" data-act-args="${adminActArgs([false])}" hidden>Load more</button>
-        <span id="creatorListsStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+        <span id="creatorListsStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       </div>
       <div class="row u-mb-8px">
         <input type="text" id="creatorListsFilterInput" class="admin-select u-minw-280px u-mr-6px" placeholder="Filter by name or slug (e.g. coming of age)" data-act="renderCreatorListsTable" data-act-on="input">
@@ -14028,7 +14028,7 @@ ${UTILITY_CSS}
         <input type="text" id="deleteListSlugsInput" class="admin-select u-minw-320px" placeholder="Slugs, comma or newline separated">
       </div>
       <button type="button" class="admin-select u-cur-pointer u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_35" id="deleteListBtn" data-act="runDeleteCreatorLists">Delete these lists</button>
-      <span id="deleteListStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="deleteListStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
     </div>
 
     <div class="panel u-m-0 u-p-14px_16px">
@@ -14038,14 +14038,14 @@ ${UTILITY_CSS}
       <div class="row u-mb-8px">
         <button type="button" class="admin-select u-cur-pointer u-mr-6px" id="browseAnonBtn" data-act="loadPublishedLists" data-act-args="${adminActArgs([true])}">Browse</button>
         <button type="button" class="admin-select u-cur-pointer" id="browseAnonMoreBtn" data-act="loadPublishedLists" data-act-args="${adminActArgs([false])}" hidden>Load more</button>
-        <span id="anonListStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+        <span id="anonListStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       </div>
       <div id="anonListResults" class="u-mb-8px"></div>
       <div class="row u-mb-8px">
         <input type="text" id="deleteAnonSlugsInput" class="admin-select u-minw-320px" placeholder="Slugs, comma or newline separated">
       </div>
       <button type="button" class="admin-select u-cur-pointer u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_35" id="deleteAnonBtn" data-act="runDeletePublishedLists">Delete these lists</button>
-      <span id="deleteAnonStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="deleteAnonStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
     </div>
 
     <div class="admin-card u-mt-12px">
@@ -14060,7 +14060,7 @@ ${UTILITY_CSS}
       <div class="row u-mb-8px">
         <button type="button" class="admin-select u-cur-pointer u-mr-6px" id="browseChannelsBtn" data-act="loadPublishedChannels" data-act-args="${adminActArgs(['listed'])}">Browse the directory</button>
         <button type="button" class="admin-select u-cur-pointer" id="browseChannelsAllBtn" data-act="loadPublishedChannels" data-act-args="${adminActArgs(['all'])}">Browse every stored channel</button>
-        <span id="publishedChannelStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+        <span id="publishedChannelStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       </div>
       <div id="publishedChannelResults"></div>
     </div>
@@ -14070,7 +14070,7 @@ ${UTILITY_CSS}
       <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Every browser signed in to this dashboard, newest activity first, with the address it signed in from. Before P7-2 there was no such list: the cookie was self-contained, so signing anyone out meant changing <code>ADMIN_KEY</code> and signing everyone out. <strong>Sign out</strong> ends one browser's session on its own &mdash; it stops working on the next request, not in seven days. Needs migration 0018. If you are signed in with Cloudflare Access, your browser may appear here too; closing its row does not stop Access from letting you back in.</p>
       <button type="button" class="admin-select u-cur-pointer" id="adminSessionsBtn" data-act="loadAdminSessions">Load</button>
       <button type="button" class="admin-select u-cur-pointer u-ml-6px u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_35" id="adminSessionsRevokeAllBtn" data-act="revokeAllAdminSessions">Sign out every browser</button>
-      <span id="adminSessionsStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="adminSessionsStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <div id="adminSessionsResult" class="u-mt-10px"></div>
     </div>
 
@@ -14078,7 +14078,7 @@ ${UTILITY_CSS}
       <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Audit log</div>
       <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">What this dashboard has been used for: sign-ins, sign-outs, and every action that changes something &mdash; resetting a creator&rsquo;s key, deleting a list or a channel, running a migration, replying to feedback. Each row is written as the request is authorized, with the address it came from and the identifying details it named (never a key or a token). Newest first, and read-only: nothing in this dashboard can edit it. Needs migration 0018.</p>
       <button type="button" class="admin-select u-cur-pointer" id="adminAuditBtn" data-act="loadAdminAudit">Load recent activity</button>
-      <span id="adminAuditStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <span id="adminAuditStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <div id="adminAuditResult" class="u-mt-10px"></div>
     </div>
   </div>
@@ -30657,10 +30657,10 @@ ${UTILITY_CSS}
     body { padding: calc(12px + env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) calc(96px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); }
     .bottom-nav {
       display: flex;
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
+      position: fixed !important;
+      bottom: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
       z-index: var(--z-nav);
       background: rgba(255,255,255,0.94);
       -webkit-backdrop-filter: saturate(180%) blur(20px);
@@ -30683,10 +30683,10 @@ ${UTILITY_CSS}
       gap: var(--space-1);
       padding: var(--space-1) var(--space-0-5);
       min-height: 62px;
-      background: transparent;
-      border: none;
-      border-radius: 0;
-      box-shadow: none;
+      background: transparent !important;
+      border: none !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
       color: var(--muted);
       font-size: var(--font-size-xs);
       font-weight: 600;
@@ -30849,14 +30849,14 @@ ${UTILITY_CSS}
     right: 12px;
     width: 22px;
     height: 22px;
-    min-height: 22px;
-    max-height: 22px;
-    padding: 0;
-    margin: 0;
-    border: none;
-    border-radius: 50%;
-    background: transparent;
-    box-shadow: none;
+    min-height: 22px !important;
+    max-height: 22px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    border-radius: 50% !important;
+    background: transparent !important;
+    box-shadow: none !important;
     color: var(--muted);
     opacity: 0.55;
     align-items: center;
@@ -30868,8 +30868,8 @@ ${UTILITY_CSS}
   .search-clear-btn:hover {
     opacity: 1;
     color: var(--text);
-    background: transparent;
-    border: none;
+    background: transparent !important;
+    border: none !important;
     transform: scale(1.12);
   }
   .search-clear-btn:active {
@@ -31130,20 +31130,20 @@ ${UTILITY_CSS}
     align-items: center;
   }
   .qa-add-all-btn {
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-    padding: var(--space-1) var(--space-3);
-    border-radius: var(--radius-pill);
-    color: var(--accent);
-    border: 1.5px solid var(--border-strong);
-    background: var(--surface);
-    box-shadow: var(--shadow-sm);
+    font-size: var(--font-size-sm) !important;
+    font-weight: 600 !important;
+    padding: var(--space-1) var(--space-3) !important;
+    border-radius: var(--radius-pill) !important;
+    color: var(--accent) !important;
+    border: 1.5px solid var(--border-strong) !important;
+    background: var(--surface) !important;
+    box-shadow: var(--shadow-sm) !important;
     transition: background-color var(--duration-base) ease, color var(--duration-base) ease, border-color var(--duration-base) ease, box-shadow var(--duration-base) ease;
   }
   .qa-add-all-btn:hover:not(:disabled) {
-    background: var(--color-brand-subtle);
-    border-color: var(--accent);
-    color: var(--accent-hover);
+    background: var(--color-brand-subtle) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent-hover) !important;
   }
   /* The line under a Quick Add card's title. Shared with Channels -> Quick
      Add, which is where the pattern comes from -- one class so a change to
@@ -31673,43 +31673,43 @@ ${UTILITY_CSS}
   }
   /* --- Soft Brand-Tinted Add/Remove Action Buttons (one shared selector list) --- */
   .list-add-btn:not(.is-added):not(:disabled) {
-    background: var(--color-brand-wash);
-    border-color: var(--color-brand-line);
-    color: var(--color-brand);
+    background: var(--color-brand-wash) !important;
+    border-color: var(--color-brand-line) !important;
+    color: var(--color-brand) !important;
     box-shadow: var(--shadow-sm);
   }
   .list-add-btn:not(.is-added):hover:not(:disabled) {
-    background: var(--color-brand-tint);
-    border-color: var(--color-brand);
-    color: var(--color-brand);
+    background: var(--color-brand-tint) !important;
+    border-color: var(--color-brand) !important;
+    color: var(--color-brand) !important;
   }
   .list-add-btn:not(.is-added):active:not(:disabled) {
     transform: scale(0.97);
-    background: var(--color-brand-tint);
+    background: var(--color-brand-tint) !important;
   }
   .list-add-btn.is-added {
-    color: var(--color-danger-text);
-    background: var(--color-danger-wash);
-    border-color: var(--color-danger-line);
+    color: var(--color-danger-text) !important;
+    background: var(--color-danger-wash) !important;
+    border-color: var(--color-danger-line) !important;
     box-shadow: var(--shadow-sm);
   }
   .list-add-btn.is-added:hover:not(:disabled) {
-    background: var(--color-danger-tint);
-    border-color: var(--color-danger);
-    color: var(--color-danger-text);
+    background: var(--color-danger-tint) !important;
+    border-color: var(--color-danger) !important;
+    color: var(--color-danger-text) !important;
   }
   .list-add-btn.is-added:active:not(:disabled) {
     transform: scale(0.97);
-    background: var(--color-danger-tint);
+    background: var(--color-danger-tint) !important;
   }
   .channelQuickAddBtn.is-added {
-    border-color: var(--color-brand);
-    color: var(--color-brand);
-    background: var(--color-brand-subtle);
+    border-color: var(--color-brand) !important;
+    color: var(--color-brand) !important;
+    background: var(--color-brand-subtle) !important;
     font-weight: 600;
   }
   .channelQuickAddBtn.is-added:hover:not(:disabled) {
-    background: var(--color-brand-tint);
+    background: var(--color-brand-tint) !important;
   }
   .lc-btn.view-btn {
     color: var(--color-brand);
@@ -32797,26 +32797,26 @@ ${UTILITY_CSS}
 
   /* --- Merged Channels Chips & Inline Add Selector ------------------------ */
   .merge-chip-remove-btn {
-    background: transparent;
-    border: none;
-    color: var(--muted);
-    font-size: var(--font-size-base);
-    font-weight: 700;
-    line-height: 1;
-    cursor: pointer;
-    padding: 0 0 0 var(--space-1);
-    margin: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    transition: color var(--duration-base);
-    border-radius: 0;
-    box-shadow: none;
-    width: auto;
-    height: auto;
+    background: transparent !important;
+    border: none !important;
+    color: var(--muted) !important;
+    font-size: var(--font-size-base) !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
+    cursor: pointer !important;
+    padding: 0 0 0 var(--space-1) !important;
+    margin: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: color var(--duration-base) !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    width: auto !important;
+    height: auto !important;
   }
   .merge-chip-remove-btn:hover {
-    color: var(--danger);
+    color: var(--danger) !important;
   }
   .merge-add-channel-select {
     padding: var(--space-1) var(--space-2);
@@ -34140,21 +34140,21 @@ ${UTILITY_CSS}
     line-height: inherit;
   }
   .live-preview-shelf-title .text-action-btn:hover:not(:disabled) {
-    background: transparent;
-    color: var(--accent);
+    background: transparent !important;
+    color: var(--accent) !important;
     text-decoration: underline;
-    box-shadow: none;
-    transform: none;
+    box-shadow: none !important;
+    transform: none !important;
   }
   .live-preview-shelf-title .text-action-btn:active:not(:disabled) {
-    background: transparent;
-    color: var(--accent);
-    transform: none;
+    background: transparent !important;
+    color: var(--accent) !important;
+    transform: none !important;
   }
   .live-preview-shelf-title .text-action-btn:disabled {
     opacity: 0.35;
     cursor: default;
-    background: transparent;
+    background: transparent !important;
     text-decoration: none;
   }
   .live-preview-posters {
@@ -34514,11 +34514,11 @@ ${UTILITY_CSS}
   }
   .custom-list-type-pill:has(input:checked),
   .custom-list-type-pill.active {
-    background: var(--color-brand-subtle);
-    border-color: var(--color-brand-line);
-    color: var(--accent);
-    font-weight: 700;
-    box-shadow: none;
+    background: var(--color-brand-subtle) !important;
+    border-color: var(--color-brand-line) !important;
+    color: var(--accent) !important;
+    font-weight: 700 !important;
+    box-shadow: none !important;
   }
   :root.dark-theme .custom-list-type-pill:has(input:checked),
   :root.dark-theme .custom-list-type-pill.active {
@@ -35048,7 +35048,7 @@ ${appShellMobileNavHtml}
       </div>
     </div>
     <div class="poster-grid-3" id="detailGrid"></div>
-    <p id="detailStatus" class="u-ta-center u-c-v_muted u-mt-14px"><small>Loading&hellip;</small></p>
+    <p id="detailStatus" class="u-ta-center u-mt-14px" style="color:var(--muted);"><small>Loading&hellip;</small></p>
   </div>
 
   <div class="tab-panel" data-tab-panel="item-details" id="content-item-details" hidden>
@@ -35267,7 +35267,7 @@ ${appShellMobileNavHtml}
         </a>
       </div>
 
-      <div id="traktDevicePollingStatus" class="u-fs-v_font_size_sm u-c-v_muted u-ai-center u-jc-center u-gap-8px" style="display:flex;">
+      <div id="traktDevicePollingStatus" class="u-fs-v_font_size_sm u-ai-center u-jc-center u-gap-8px" style="display:flex; color:var(--muted);">
         Waiting for authorization on Trakt...
       </div>
 
@@ -35781,7 +35781,7 @@ if ('serviceWorker' in navigator) {
               <option value="shuffle-daily">Shuffle daily (reshuffles every 24h)</option>
             </select>
           </div>
-          <p id="customListPlayOrderHint" class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_xs">Picks play in the order you created above &mdash; drag one, or type a new position, to change it.</p>
+          <p id="customListPlayOrderHint" class="u-m-0_0_14px u-fs-v_font_size_xs" style="color:var(--muted);">Picks play in the order you created above &mdash; drag one, or type a new position, to change it.</p>
 
           <div class="u-jc-space_between u-ai-center u-gap-12px u-mt-12px u-pt-10px u-bdt-1px_solid_v_border_subtle_rgba_255_255_255_0_08" style="display:flex;">
             <div>
@@ -36155,7 +36155,7 @@ if ('serviceWorker' in navigator) {
               <option value="shuffle-daily">Shuffle daily (reshuffles every 24h)</option>
             </select>
           </div>
-          <p id="channelPlayOrderHint" class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_xs">Picks play in the order you created above &mdash; drag one, or type a new position, to change it.</p>
+          <p id="channelPlayOrderHint" class="u-m-0_0_14px u-fs-v_font_size_xs" style="color:var(--muted);">Picks play in the order you created above &mdash; drag one, or type a new position, to change it.</p>
 
           <!-- Broadcast schedule & smart rules -->
           <div class="u-bdt-1px_solid_v_border u-pt-12px">
@@ -36181,7 +36181,7 @@ if ('serviceWorker' in navigator) {
                 </select>
               </label>
             </div>
-            <p id="channelDailyRotateHint" class="u-m-6px_0_0_24px u-c-v_muted u-fs-v_font_size_xs">Off &mdash; every pick in this channel plays, in the order above.</p>
+            <p id="channelDailyRotateHint" class="u-m-6px_0_0_24px u-fs-v_font_size_xs" style="color:var(--muted);">Off &mdash; every pick in this channel plays, in the order above.</p>
 
             <label class="channel-rule-row u-mt-10px">
               <input type="checkbox" id="channelHideWatchedCheck">
@@ -36193,7 +36193,7 @@ if ('serviceWorker' in navigator) {
               <input type="checkbox" id="channelPairPartsCheck" data-act="updateChannelBroadcastControls">
               <span>Keep multi-part episodes together</span>
             </label>
-            <p id="channelPairPartsHint" class="u-m-2px_0_0_24px u-c-v_muted u-fs-v_font_size_xs">Finds &ldquo;Part 1&rdquo; / &ldquo;Pt. II&rdquo; / &ldquo;(2)&rdquo; in episode titles. Whenever one part is on today, the rest play straight after it instead of turning up tomorrow.</p>
+            <p id="channelPairPartsHint" class="u-m-2px_0_0_24px u-fs-v_font_size_xs" style="color:var(--muted);">Finds &ldquo;Part 1&rdquo; / &ldquo;Pt. II&rdquo; / &ldquo;(2)&rdquo; in episode titles. Whenever one part is on today, the rest play straight after it instead of turning up tomorrow.</p>
 
             <label class="channel-rule-row u-mt-10px">
               <input type="checkbox" id="channelAutoNewEpisodesCheck" data-act="updateChannelBroadcastControls">
@@ -36205,14 +36205,14 @@ if ('serviceWorker' in navigator) {
                 <span>Put new episodes at the top</span>
               </label>
             </div>
-            <p id="channelAutoNewEpisodesHint" class="u-m-2px_0_0_24px u-c-v_muted u-fs-v_font_size_xs">Off &mdash; this channel plays the picks below and nothing else.</p>
+            <p id="channelAutoNewEpisodesHint" class="u-m-2px_0_0_24px u-fs-v_font_size_xs" style="color:var(--muted);">Off &mdash; this channel plays the picks below and nothing else.</p>
 
             <div id="channelLiveSyncRow" class="u-mt-10px" style="display:none;">
               <label class="channel-rule-row">
                 <input type="checkbox" id="channelLiveSyncCheck">
                 <span>Live Cloud Sync &mdash; refresh this channel from its source list</span>
               </label>
-              <p id="channelLiveSyncHint" class="u-m-2px_0_0_24px u-c-v_muted u-fs-v_font_size_xs"></p>
+              <p id="channelLiveSyncHint" class="u-m-2px_0_0_24px u-fs-v_font_size_xs" style="color:var(--muted);"></p>
             </div>
 
             <div id="channelStoryLockSection" class="u-mt-12px"></div>
@@ -36233,7 +36233,7 @@ if ('serviceWorker' in navigator) {
           </div>
           <div id="channelPosterUrlPreview" class="u-mt-8px u-ai-center u-gap-10px" style="display:none;">
             <img id="channelPosterUrlImg" src="" alt="Poster preview" class="u-objectfit-cover u-br-v_radius_xs u-bd-2px_solid_v_accent" style="width:54px; height:80px;" loading="lazy">
-            <span id="channelPosterUrlStatus" class="u-fs-v_font_size_xs u-c-v_muted"></span>
+            <span id="channelPosterUrlStatus" class="u-fs-v_font_size_xs" style="color:var(--muted);"></span>
           </div>
         </div>
       </div>
@@ -36632,7 +36632,7 @@ if ('serviceWorker' in navigator) {
             <input type="password" id="rpdbKeyInput" value="${escapeHtmlServer(initialRpdbKey)}" placeholder="t1-..." autocomplete="off" spellcheck="false" data-act="toggleBetterPostersSetting" data-act-args="[&quot;rpdbKey&quot;,&quot;@value&quot;]" class="u-flex-1 u-minw-200px u-maxw-380px u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box">
             <button type="button" class="secondary lc-btn u-br-v_radius_pill" data-act="testRpdbKey" data-act-args="[&quot;@self&quot;]">Test key</button>
           </div>
-          <p id="rpdbKeyStatus" class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_xs">Your key starts with t1- to t4- and is in the email RatingPosterDB sent you, or at ratingposterdb.com after you log in with Patreon. Test key shows whether it works and how much of this month's limit is used.</p>
+          <p id="rpdbKeyStatus" class="u-m-4px_0_0 u-fs-v_font_size_xs" style="color:var(--muted);">Your key starts with t1- to t4- and is in the email RatingPosterDB sent you, or at ratingposterdb.com after you log in with Patreon. Test key shows whether it works and how much of this month's limit is used.</p>
         </div>
       </div>
     </div>
@@ -36659,7 +36659,7 @@ if ('serviceWorker' in navigator) {
         <div>
           <label for="pictoriumUrlInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-4px" style="display:block;">Poster link</label>
           <input type="url" id="pictoriumUrlInput" value="${escapeHtmlServer(initialPictoriumUrl)}" placeholder="https://your-pictorium-host/api/poster/{type}/{tmdb_id|imdb_id}?u=..." autocomplete="off" spellcheck="false" data-act="toggleBetterPostersSetting" data-act-args="[&quot;pictoriumUrl&quot;,&quot;@value&quot;]" class="u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box" style="width:100%;">
-          <p id="pictoriumUrlHint" class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_xs">In your Pictorium space, copy the <strong>AIOMetadata</strong> poster link and paste it here as it is. It has to start with https:// and contain <code>/api/poster/</code>, <code>{type}</code> and <code>{tmdb_id|imdb_id}</code>.</p>
+          <p id="pictoriumUrlHint" class="u-m-4px_0_0 u-fs-v_font_size_xs" style="color:var(--muted);">In your Pictorium space, copy the <strong>AIOMetadata</strong> poster link and paste it here as it is. It has to start with https:// and contain <code>/api/poster/</code>, <code>{type}</code> and <code>{tmdb_id|imdb_id}</code>.</p>
         </div>
       </div>
     </div>
@@ -37112,7 +37112,7 @@ if ('serviceWorker' in navigator) {
             <button type="button" class="primary lc-btn u-minh-44px u-p-0_20px" id="supportReplySendBtn" data-act="sendUserFeedbackReply">Send</button>
           </div>
           <div class="u-jc-space_between u-ai-center u-mt-6px" style="display:flex;">
-            <span id="supportChatStatus" class="u-fs-v_font_size_sm u-c-v_muted"></span>
+            <span id="supportChatStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
             <button type="button" class="secondary lc-btn u-p-2px_8px u-fs-v_font_size_xs u-bd-none u-bg-none u-c-v_muted u-cur-pointer" data-act="refreshUserFeedbackThreads">&#x21BB; Refresh</button>
           </div>
         </div>

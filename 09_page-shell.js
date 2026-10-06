@@ -961,10 +961,10 @@ ${UTILITY_CSS}
     body { padding: calc(12px + env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) calc(96px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); }
     .bottom-nav {
       display: flex;
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
+      position: fixed !important;
+      bottom: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
       z-index: var(--z-nav);
       background: rgba(255,255,255,0.94);
       -webkit-backdrop-filter: saturate(180%) blur(20px);
@@ -987,10 +987,10 @@ ${UTILITY_CSS}
       gap: var(--space-1);
       padding: var(--space-1) var(--space-0-5);
       min-height: 62px;
-      background: transparent;
-      border: none;
-      border-radius: 0;
-      box-shadow: none;
+      background: transparent !important;
+      border: none !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
       color: var(--muted);
       font-size: var(--font-size-xs);
       font-weight: 600;
@@ -1153,14 +1153,14 @@ ${UTILITY_CSS}
     right: 12px;
     width: 22px;
     height: 22px;
-    min-height: 22px;
-    max-height: 22px;
-    padding: 0;
-    margin: 0;
-    border: none;
-    border-radius: 50%;
-    background: transparent;
-    box-shadow: none;
+    min-height: 22px !important;
+    max-height: 22px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    border-radius: 50% !important;
+    background: transparent !important;
+    box-shadow: none !important;
     color: var(--muted);
     opacity: 0.55;
     align-items: center;
@@ -1172,8 +1172,8 @@ ${UTILITY_CSS}
   .search-clear-btn:hover {
     opacity: 1;
     color: var(--text);
-    background: transparent;
-    border: none;
+    background: transparent !important;
+    border: none !important;
     transform: scale(1.12);
   }
   .search-clear-btn:active {
@@ -1434,20 +1434,20 @@ ${UTILITY_CSS}
     align-items: center;
   }
   .qa-add-all-btn {
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-    padding: var(--space-1) var(--space-3);
-    border-radius: var(--radius-pill);
-    color: var(--accent);
-    border: 1.5px solid var(--border-strong);
-    background: var(--surface);
-    box-shadow: var(--shadow-sm);
+    font-size: var(--font-size-sm) !important;
+    font-weight: 600 !important;
+    padding: var(--space-1) var(--space-3) !important;
+    border-radius: var(--radius-pill) !important;
+    color: var(--accent) !important;
+    border: 1.5px solid var(--border-strong) !important;
+    background: var(--surface) !important;
+    box-shadow: var(--shadow-sm) !important;
     transition: background-color var(--duration-base) ease, color var(--duration-base) ease, border-color var(--duration-base) ease, box-shadow var(--duration-base) ease;
   }
   .qa-add-all-btn:hover:not(:disabled) {
-    background: var(--color-brand-subtle);
-    border-color: var(--accent);
-    color: var(--accent-hover);
+    background: var(--color-brand-subtle) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent-hover) !important;
   }
   /* The line under a Quick Add card's title. Shared with Channels -> Quick
      Add, which is where the pattern comes from -- one class so a change to
@@ -1977,43 +1977,43 @@ ${UTILITY_CSS}
   }
   /* --- Soft Brand-Tinted Add/Remove Action Buttons (one shared selector list) --- */
   .list-add-btn:not(.is-added):not(:disabled) {
-    background: var(--color-brand-wash);
-    border-color: var(--color-brand-line);
-    color: var(--color-brand);
+    background: var(--color-brand-wash) !important;
+    border-color: var(--color-brand-line) !important;
+    color: var(--color-brand) !important;
     box-shadow: var(--shadow-sm);
   }
   .list-add-btn:not(.is-added):hover:not(:disabled) {
-    background: var(--color-brand-tint);
-    border-color: var(--color-brand);
-    color: var(--color-brand);
+    background: var(--color-brand-tint) !important;
+    border-color: var(--color-brand) !important;
+    color: var(--color-brand) !important;
   }
   .list-add-btn:not(.is-added):active:not(:disabled) {
     transform: scale(0.97);
-    background: var(--color-brand-tint);
+    background: var(--color-brand-tint) !important;
   }
   .list-add-btn.is-added {
-    color: var(--color-danger-text);
-    background: var(--color-danger-wash);
-    border-color: var(--color-danger-line);
+    color: var(--color-danger-text) !important;
+    background: var(--color-danger-wash) !important;
+    border-color: var(--color-danger-line) !important;
     box-shadow: var(--shadow-sm);
   }
   .list-add-btn.is-added:hover:not(:disabled) {
-    background: var(--color-danger-tint);
-    border-color: var(--color-danger);
-    color: var(--color-danger-text);
+    background: var(--color-danger-tint) !important;
+    border-color: var(--color-danger) !important;
+    color: var(--color-danger-text) !important;
   }
   .list-add-btn.is-added:active:not(:disabled) {
     transform: scale(0.97);
-    background: var(--color-danger-tint);
+    background: var(--color-danger-tint) !important;
   }
   .channelQuickAddBtn.is-added {
-    border-color: var(--color-brand);
-    color: var(--color-brand);
-    background: var(--color-brand-subtle);
+    border-color: var(--color-brand) !important;
+    color: var(--color-brand) !important;
+    background: var(--color-brand-subtle) !important;
     font-weight: 600;
   }
   .channelQuickAddBtn.is-added:hover:not(:disabled) {
-    background: var(--color-brand-tint);
+    background: var(--color-brand-tint) !important;
   }
   .lc-btn.view-btn {
     color: var(--color-brand);
@@ -3101,26 +3101,26 @@ ${UTILITY_CSS}
 
   /* --- Merged Channels Chips & Inline Add Selector ------------------------ */
   .merge-chip-remove-btn {
-    background: transparent;
-    border: none;
-    color: var(--muted);
-    font-size: var(--font-size-base);
-    font-weight: 700;
-    line-height: 1;
-    cursor: pointer;
-    padding: 0 0 0 var(--space-1);
-    margin: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    transition: color var(--duration-base);
-    border-radius: 0;
-    box-shadow: none;
-    width: auto;
-    height: auto;
+    background: transparent !important;
+    border: none !important;
+    color: var(--muted) !important;
+    font-size: var(--font-size-base) !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
+    cursor: pointer !important;
+    padding: 0 0 0 var(--space-1) !important;
+    margin: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: color var(--duration-base) !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    width: auto !important;
+    height: auto !important;
   }
   .merge-chip-remove-btn:hover {
-    color: var(--danger);
+    color: var(--danger) !important;
   }
   .merge-add-channel-select {
     padding: var(--space-1) var(--space-2);
@@ -4444,21 +4444,21 @@ ${UTILITY_CSS}
     line-height: inherit;
   }
   .live-preview-shelf-title .text-action-btn:hover:not(:disabled) {
-    background: transparent;
-    color: var(--accent);
+    background: transparent !important;
+    color: var(--accent) !important;
     text-decoration: underline;
-    box-shadow: none;
-    transform: none;
+    box-shadow: none !important;
+    transform: none !important;
   }
   .live-preview-shelf-title .text-action-btn:active:not(:disabled) {
-    background: transparent;
-    color: var(--accent);
-    transform: none;
+    background: transparent !important;
+    color: var(--accent) !important;
+    transform: none !important;
   }
   .live-preview-shelf-title .text-action-btn:disabled {
     opacity: 0.35;
     cursor: default;
-    background: transparent;
+    background: transparent !important;
     text-decoration: none;
   }
   .live-preview-posters {
@@ -4818,11 +4818,11 @@ ${UTILITY_CSS}
   }
   .custom-list-type-pill:has(input:checked),
   .custom-list-type-pill.active {
-    background: var(--color-brand-subtle);
-    border-color: var(--color-brand-line);
-    color: var(--accent);
-    font-weight: 700;
-    box-shadow: none;
+    background: var(--color-brand-subtle) !important;
+    border-color: var(--color-brand-line) !important;
+    color: var(--accent) !important;
+    font-weight: 700 !important;
+    box-shadow: none !important;
   }
   :root.dark-theme .custom-list-type-pill:has(input:checked),
   :root.dark-theme .custom-list-type-pill.active {
@@ -5352,7 +5352,7 @@ ${appShellMobileNavHtml}
       </div>
     </div>
     <div class="poster-grid-3" id="detailGrid"></div>
-    <p id="detailStatus" class="u-ta-center u-c-v_muted u-mt-14px"><small>Loading&hellip;</small></p>
+    <p id="detailStatus" class="u-ta-center u-mt-14px" style="color:var(--muted);"><small>Loading&hellip;</small></p>
   </div>
 
   <div class="tab-panel" data-tab-panel="item-details" id="content-item-details" hidden>
@@ -5571,7 +5571,7 @@ ${appShellMobileNavHtml}
         </a>
       </div>
 
-      <div id="traktDevicePollingStatus" class="u-fs-v_font_size_sm u-c-v_muted u-ai-center u-jc-center u-gap-8px" style="display:flex;">
+      <div id="traktDevicePollingStatus" class="u-fs-v_font_size_sm u-ai-center u-jc-center u-gap-8px" style="display:flex; color:var(--muted);">
         Waiting for authorization on Trakt...
       </div>
 

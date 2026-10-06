@@ -320,7 +320,7 @@
               <option value="shuffle-daily">Shuffle daily (reshuffles every 24h)</option>
             </select>
           </div>
-          <p id="channelPlayOrderHint" class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_xs">Picks play in the order you created above &mdash; drag one, or type a new position, to change it.</p>
+          <p id="channelPlayOrderHint" class="u-m-0_0_14px u-fs-v_font_size_xs" style="color:var(--muted);">Picks play in the order you created above &mdash; drag one, or type a new position, to change it.</p>
 
           <!-- Broadcast schedule & smart rules -->
           <div class="u-bdt-1px_solid_v_border u-pt-12px">
@@ -346,7 +346,7 @@
                 </select>
               </label>
             </div>
-            <p id="channelDailyRotateHint" class="u-m-6px_0_0_24px u-c-v_muted u-fs-v_font_size_xs">Off &mdash; every pick in this channel plays, in the order above.</p>
+            <p id="channelDailyRotateHint" class="u-m-6px_0_0_24px u-fs-v_font_size_xs" style="color:var(--muted);">Off &mdash; every pick in this channel plays, in the order above.</p>
 
             <label class="channel-rule-row u-mt-10px">
               <input type="checkbox" id="channelHideWatchedCheck">
@@ -358,7 +358,7 @@
               <input type="checkbox" id="channelPairPartsCheck" data-act="updateChannelBroadcastControls">
               <span>Keep multi-part episodes together</span>
             </label>
-            <p id="channelPairPartsHint" class="u-m-2px_0_0_24px u-c-v_muted u-fs-v_font_size_xs">Finds &ldquo;Part 1&rdquo; / &ldquo;Pt. II&rdquo; / &ldquo;(2)&rdquo; in episode titles. Whenever one part is on today, the rest play straight after it instead of turning up tomorrow.</p>
+            <p id="channelPairPartsHint" class="u-m-2px_0_0_24px u-fs-v_font_size_xs" style="color:var(--muted);">Finds &ldquo;Part 1&rdquo; / &ldquo;Pt. II&rdquo; / &ldquo;(2)&rdquo; in episode titles. Whenever one part is on today, the rest play straight after it instead of turning up tomorrow.</p>
 
             <label class="channel-rule-row u-mt-10px">
               <input type="checkbox" id="channelAutoNewEpisodesCheck" data-act="updateChannelBroadcastControls">
@@ -370,14 +370,14 @@
                 <span>Put new episodes at the top</span>
               </label>
             </div>
-            <p id="channelAutoNewEpisodesHint" class="u-m-2px_0_0_24px u-c-v_muted u-fs-v_font_size_xs">Off &mdash; this channel plays the picks below and nothing else.</p>
+            <p id="channelAutoNewEpisodesHint" class="u-m-2px_0_0_24px u-fs-v_font_size_xs" style="color:var(--muted);">Off &mdash; this channel plays the picks below and nothing else.</p>
 
             <div id="channelLiveSyncRow" class="u-mt-10px" style="display:none;">
               <label class="channel-rule-row">
                 <input type="checkbox" id="channelLiveSyncCheck">
                 <span>Live Cloud Sync &mdash; refresh this channel from its source list</span>
               </label>
-              <p id="channelLiveSyncHint" class="u-m-2px_0_0_24px u-c-v_muted u-fs-v_font_size_xs"></p>
+              <p id="channelLiveSyncHint" class="u-m-2px_0_0_24px u-fs-v_font_size_xs" style="color:var(--muted);"></p>
             </div>
 
             <div id="channelStoryLockSection" class="u-mt-12px"></div>
@@ -398,7 +398,7 @@
           </div>
           <div id="channelPosterUrlPreview" class="u-mt-8px u-ai-center u-gap-10px" style="display:none;">
             <img id="channelPosterUrlImg" src="" alt="Poster preview" class="u-objectfit-cover u-br-v_radius_xs u-bd-2px_solid_v_accent" style="width:54px; height:80px;" loading="lazy">
-            <span id="channelPosterUrlStatus" class="u-fs-v_font_size_xs u-c-v_muted"></span>
+            <span id="channelPosterUrlStatus" class="u-fs-v_font_size_xs" style="color:var(--muted);"></span>
           </div>
         </div>
       </div>
