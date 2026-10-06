@@ -122,7 +122,7 @@ transition: background-color var(--duration-base) var(--ease), color var(--durat
 
 ### 2.6 Helper classes (`u-*`)
 
-`UTILITY_CSS` (`00_constants.js`) holds generated one-declaration helpers named `u-<property>-<value>` (e.g. `u-mt-10px`, `u-c-v_muted`). They replaced repeated inline `style=""` in static markup. Reuse an existing helper for a one-off spacing/colour tweak; build a real component class for anything that recurs or has states. Never put layout-toggled properties (`display`, `visibility`, `width`, `height`, `transform`) in a helper: JS toggles those inline.
+`UTILITY_CSS` (`00_constants.js`) holds generated one-declaration helpers named `u-<property>-<value>` (e.g. `u-mt-10px`, `u-c-v_muted`). They replaced repeated inline `style=""` in page markup and in the JS-built markup. Each carries `!important` **on purpose**: an inline style beat every component rule (e.g. `input[readonly]`, `.modal-card input`), and a plain class would not. This is the one sanctioned use of `!important` for new code. Reuse an existing helper for a one-off spacing/colour tweak; build a real component class for anything that recurs or has states. Never put layout-toggled properties (`display`, `visibility`, `width`, `height`, `transform`) in a helper: JS toggles those inline.
 
 ### 2.7 Adding a token
 
