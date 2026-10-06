@@ -71,12 +71,6 @@
     </div>
   </div>
 
-  <!-- Undo Toast -->
-  <div id="undoToast" class="undo-toast" style="display:none;">
-    <span id="undoToastMsg"></span>
-    <button type="button" class="secondary" data-act="performUndo">Undo</button>
-  </div>
-
   <!-- Generated Install Link Result Box -->
   <div id="result"></div>
 

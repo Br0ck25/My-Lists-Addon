@@ -3861,7 +3861,7 @@ function renderGuidePage(origin) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#000000">
+<meta name="theme-color" content="#F2F2F7">
 <title>${title}</title>
 <meta name="description" content="${description}">
 <link rel="canonical" href="${origin}/guide">
@@ -3921,57 +3921,14 @@ function renderGuidePage(origin) {
      Inter and JetBrains Mono from Google Fonts. It now has no third-party
      origin at all. See docs/DECISIONS.md D-20. -->
 <style nonce="${CSP_NONCE_PLACEHOLDER}">
-  :root {
-    /* Same reason as the app shell's (09_page-shell.js): an installed PWA
-       paints the status bar and the home-indicator strip from the UA's own
-       surface color, and that surface stays white until the document says
-       it is dark. This page defaults to dark, so the default says dark. */
-    color-scheme: dark;
-    --bg: #000000;
-    --bg-surface: #1C1C1E;
-    --bg-card: #2C2C2E;
-    --bg-input: #3A3A3C;
-    --text: #FFFFFF;
-    --text-muted: #8E8E93;
-    --text-dim: #A1A1A6;
-    --border: rgba(255,255,255,0.12);
-    --border-strong: rgba(255,255,255,0.22);
-    --accent: #0A84FF;
-    --accent-hover: #0070E0;
-    --accent-bg: rgba(10, 132, 255, 0.15);
-    --success: #30D158;
-    --warning: #FFD60A;
-    --danger: #FF453A;
-    --radius-lg: 16px;
-    --radius-md: 12px;
-    --radius-sm: 8px;
-    --shadow: 0 4px 20px rgba(0,0,0,0.5);
-  }
-
-  :root.light-theme, .light-theme {
-    color-scheme: light;
-    --bg: #F2F2F7;
-    --bg-surface: #FFFFFF;
-    --bg-card: #E5E5EA;
-    --bg-input: #D1D1D6;
-    --text: #1C1C1E;
-    --text-muted: #6C6C70;
-    --text-dim: #48484A;
-    --border: rgba(0,0,0,0.08);
-    --border-strong: rgba(0,0,0,0.16);
-    --accent: #007AFF;
-    --accent-hover: #0062CC;
-    --accent-bg: rgba(0, 122, 255, 0.10);
-    --shadow: 0 2px 12px rgba(0,0,0,0.06);
-  }
-
+${DESIGN_TOKENS_CSS}
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; background: var(--bg); }
   body {
     background: var(--bg);
     color: var(--text);
     padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
+    font-family: var(--font-body);
     font-size: 16px;
     line-height: 1.65;
     -webkit-font-smoothing: antialiased;
@@ -4005,7 +3962,7 @@ function renderGuidePage(origin) {
     border-radius: 10px;
   }
   .brand-text {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
+    font-family: var(--font-body);
     font-weight: 800;
     font-size: 1.25rem;
     letter-spacing: -0.02em;
@@ -4032,9 +3989,9 @@ function renderGuidePage(origin) {
     background: var(--accent);
     color: #FFF;
   }
-  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-primary:hover { background: var(--color-brand-hover); }
   .btn-secondary {
-    background: var(--bg-surface);
+    background: var(--surface);
     color: var(--text);
     border: 1px solid var(--border-strong);
   }
@@ -4045,7 +4002,7 @@ function renderGuidePage(origin) {
     width: 38px;
     height: 38px;
     border-radius: 50%;
-    background: var(--bg-surface);
+    background: var(--surface);
     border: 1px solid var(--border);
     cursor: pointer;
     display: flex;
@@ -4061,10 +4018,10 @@ function renderGuidePage(origin) {
     height: 18px;
     transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
   }
-  .icon-sun { opacity: 1; transform: translate(-50%, -50%) rotate(0deg) scale(1); left: 50%; top: 50%; }
-  .icon-moon { opacity: 0; transform: translate(-50%, -50%) rotate(-90deg) scale(0.4); left: 50%; top: 50%; }
-  :root.light-theme .icon-sun, .light-theme .icon-sun { opacity: 0; transform: translate(-50%, -50%) rotate(90deg) scale(0.4); }
-  :root.light-theme .icon-moon, .light-theme .icon-moon { opacity: 1; transform: translate(-50%, -50%) rotate(0deg) scale(1); }
+  .icon-sun { opacity: 0; transform: translate(-50%, -50%) rotate(90deg) scale(0.4); left: 50%; top: 50%; }
+  .icon-moon { opacity: 1; transform: translate(-50%, -50%) rotate(0deg) scale(1); left: 50%; top: 50%; }
+  :root.dark-theme .icon-sun { opacity: 1; transform: translate(-50%, -50%) rotate(0deg) scale(1); }
+  :root.dark-theme .icon-moon { opacity: 0; transform: translate(-50%, -50%) rotate(-90deg) scale(0.4); }
 
   /* Hero */
   .hero-section {
@@ -4077,7 +4034,7 @@ function renderGuidePage(origin) {
     display: inline-block;
     padding: 4px 12px;
     border-radius: 999px;
-    background: var(--accent-bg);
+    background: var(--color-brand-subtle);
     color: var(--accent);
     font-size: 0.82rem;
     font-weight: 700;
@@ -4086,7 +4043,7 @@ function renderGuidePage(origin) {
     margin-bottom: 16px;
   }
   h1 {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
+    font-family: var(--font-body);
     font-size: 2.5rem;
     font-weight: 800;
     line-height: 1.15;
@@ -4095,7 +4052,7 @@ function renderGuidePage(origin) {
   }
   .hero-sub {
     font-size: 1.15rem;
-    color: var(--text-dim);
+    color: var(--text-2);
     line-height: 1.6;
     margin-bottom: 28px;
   }
@@ -4111,9 +4068,9 @@ function renderGuidePage(origin) {
   .toc-pill {
     padding: 7px 14px;
     border-radius: 999px;
-    background: var(--bg-surface);
+    background: var(--surface);
     border: 1px solid var(--border);
-    color: var(--text-dim);
+    color: var(--text-2);
     font-size: 0.85rem;
     font-weight: 600;
     text-decoration: none;
@@ -4122,12 +4079,12 @@ function renderGuidePage(origin) {
   .toc-pill:hover {
     color: var(--text);
     border-color: var(--accent);
-    background: var(--accent-bg);
+    background: var(--color-brand-subtle);
   }
 
   /* Guide Content Blocks */
   .guide-block {
-    background: var(--bg-surface);
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     padding: 32px 28px;
@@ -4146,7 +4103,7 @@ function renderGuidePage(origin) {
     width: 36px;
     height: 36px;
     border-radius: 10px;
-    background: var(--accent-bg);
+    background: var(--color-brand-subtle);
     color: var(--accent);
     display: flex;
     align-items: center;
@@ -4155,20 +4112,20 @@ function renderGuidePage(origin) {
     font-weight: 700;
   }
   h2 {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
+    font-family: var(--font-body);
     font-size: 1.5rem;
     font-weight: 700;
     letter-spacing: -0.02em;
   }
   h3 {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
+    font-family: var(--font-body);
     font-size: 1.15rem;
     font-weight: 700;
     margin: 24px 0 10px;
     color: var(--text);
   }
-  p { color: var(--text-dim); margin-bottom: 14px; }
-  ul, ol { color: var(--text-dim); padding-left: 24px; margin-bottom: 16px; }
+  p { color: var(--text-2); margin-bottom: 14px; }
+  ul, ol { color: var(--text-2); padding-left: 24px; margin-bottom: 16px; }
   li { margin-bottom: 8px; }
   strong { color: var(--text); font-weight: 600; }
 
@@ -4180,7 +4137,7 @@ function renderGuidePage(origin) {
     margin: 20px 0;
   }
   .step-card {
-    background: var(--bg-card);
+    background: var(--color-bg-sunken);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     padding: 18px 20px;
@@ -4214,7 +4171,7 @@ function renderGuidePage(origin) {
 
   /* Callout Tips */
   .tip-box {
-    background: var(--accent-bg);
+    background: var(--color-brand-subtle);
     border-left: 4px solid var(--accent);
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
     padding: 14px 18px;
@@ -4226,7 +4183,7 @@ function renderGuidePage(origin) {
 
   /* Code / Snippets */
   code {
-    background: var(--bg-card);
+    background: var(--color-bg-sunken);
     border: 1px solid var(--border);
     border-radius: 6px;
     padding: 2px 7px;
@@ -4235,7 +4192,7 @@ function renderGuidePage(origin) {
     color: var(--text);
   }
   .code-block {
-    background: var(--bg-card);
+    background: var(--color-bg-sunken);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     padding: 12px 16px;
@@ -4255,7 +4212,7 @@ function renderGuidePage(origin) {
     margin: 20px 0;
   }
   .provider-card {
-    background: var(--bg-card);
+    background: var(--color-bg-sunken);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     padding: 16px;
@@ -4274,7 +4231,7 @@ function renderGuidePage(origin) {
     display: inline-block;
     padding: 2px 8px;
     border-radius: 4px;
-    background: var(--accent-bg);
+    background: var(--color-brand-subtle);
     color: var(--accent);
     font-size: 0.75rem;
     font-weight: 700;
@@ -4294,12 +4251,12 @@ function renderGuidePage(origin) {
   }
   .faq-a {
     font-size: 0.95rem;
-    color: var(--text-dim);
+    color: var(--text-2);
   }
 
   /* Footer CTA */
   .footer-cta {
-    background: linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-card) 100%);
+    background: linear-gradient(135deg, var(--surface) 0%, var(--color-bg-sunken) 100%);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     padding: 36px 32px;
@@ -4321,7 +4278,7 @@ function renderGuidePage(origin) {
     padding-top: 20px;
     border-top: 1px solid var(--border);
     text-align: center;
-    color: var(--text-muted);
+    color: var(--muted);
     font-size: 0.85rem;
   }
   .footer-nav a { color: var(--accent); text-decoration: none; }
@@ -4334,25 +4291,14 @@ function renderGuidePage(origin) {
 </style>
 <script nonce="${CSP_NONCE_PLACEHOLDER}">
   function applyTheme(t) {
-    if (t === 'light') {
-      document.documentElement.classList.add('light-theme');
-      document.documentElement.classList.remove('dark-theme');
-      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#F2F2F7');
-    } else {
-      document.documentElement.classList.add('dark-theme');
-      document.documentElement.classList.remove('light-theme');
-      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#000000');
-    }
+    var dark = t === 'dark';
+    document.documentElement.classList.toggle('dark-theme', dark);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#000000' : '#F2F2F7');
   }
   const saved = localStorage.getItem('theme');
-  if (saved) {
-    applyTheme(saved);
-  } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
-    applyTheme('light');
-  }
+  applyTheme(saved || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
   function toggleTheme() {
-    const isLight = document.documentElement.classList.contains('light-theme');
-    const next = isLight ? 'dark' : 'light';
+    const next = document.documentElement.classList.contains('dark-theme') ? 'light' : 'dark';
     localStorage.setItem('theme', next);
     applyTheme(next);
   }

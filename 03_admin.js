@@ -2190,29 +2190,7 @@ function renderAdminLoginPage(errorMsg, accessOn) {
   }
 </script>
 <style nonce="${CSP_NONCE_PLACEHOLDER}">
-  :root {
-    --bg: #F2F2F7;
-    --surface: #FFFFFF;
-    --panel-strong: #E5E5EA;
-    --border: rgba(0,0,0,0.08);
-    --border-strong: rgba(0,0,0,0.15);
-    --text: #000000;
-    --text-2: #3A3A3C;
-    --muted: #8E8E93;
-    --accent: #007AFF;
-    --danger: #FF3B30;
-    --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
-    --shadow: 0 2px 10px rgba(0,0,0,0.08);
-    --radius: 14px;
-    --radius-sm: 10px;
-    --radius-pill: 999px;
-    --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
-  }
-  html.dark-theme {
-    --bg: #000000; --surface: #1C1C1E; --panel-strong: #2C2C2E;
-    --border: rgba(255,255,255,0.15); --border-strong: rgba(255,255,255,0.25);
-    --text: #FFFFFF; --text-2: #EBEBF5;
-  }
+${DESIGN_TOKENS_CSS}
   * { box-sizing: border-box; }
   body {
     font-family: var(--font-body);
@@ -2610,30 +2588,7 @@ async function renderAdminDashboard(env) {
   }
 </script>
 <style nonce="${CSP_NONCE_PLACEHOLDER}">
-  :root {
-    --bg: #F2F2F7;
-    --surface: #FFFFFF;
-    --panel-strong: #E5E5EA;
-    --border: rgba(0,0,0,0.08);
-    --border-strong: rgba(0,0,0,0.15);
-    --text: #000000;
-    --text-2: #3A3A3C;
-    --muted: #8E8E93;
-    --accent: #007AFF;
-    --danger: #FF3B30;
-    --success: #34C759;
-    --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
-    --shadow: 0 2px 10px rgba(0,0,0,0.08);
-    --shadow-md: 0 8px 30px rgba(0,0,0,0.18);
-    --radius: 14px;
-    --radius-sm: 10px;
-    --radius-pill: 999px;
-  }
-  html.dark-theme {
-    --bg: #000000; --surface: #1C1C1E; --panel-strong: #2C2C2E;
-    --border: rgba(255,255,255,0.15); --border-strong: rgba(255,255,255,0.25);
-    --text: #FFFFFF; --text-2: #EBEBF5;
-  }
+${DESIGN_TOKENS_CSS}
   * { box-sizing: border-box; }
   body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,system-ui,sans-serif; max-width:900px; margin:0 auto; padding:20px 14px; }
   h1 { margin-bottom:4px; font-size:1.6rem; color:var(--text); }

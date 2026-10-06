@@ -1710,3 +1710,236 @@ const STARTER_PACK_ENTRIES = [
   { name: "Streaming (All Services)", url: "tmdb:chart:appletv\ntmdb:chart:disney\ntmdb:chart:discovery\ntmdb:chart:hbomax\ntmdb:chart:hulu\ntmdb:chart:netflix\ntmdb:chart:netflixkids\ntmdb:chart:paramount\ntmdb:chart:primevideo\ntmdb:chart:peacock", type: "movie", enabled: true, group: "Combined Charts" },
   { name: "Streaming (All Services)", url: "tmdb:chart:appletv\ntmdb:chart:disney\ntmdb:chart:discovery\ntmdb:chart:hbomax\ntmdb:chart:hulu\ntmdb:chart:netflix\ntmdb:chart:netflixkids\ntmdb:chart:paramount\ntmdb:chart:primevideo\ntmdb:chart:peacock", type: "series", enabled: true, group: "Combined Charts" }
 ];
+
+// The design tokens (colours, radii, shadows, spacing, type, z-index layers,
+// motion) for light and dark, shared by every page that renders its own
+// <style>: the app shell (09_), the admin dashboard (03_) and the backup
+// guide (24_). One definition, so a colour is changed once. See DESIGN_SYSTEM.md.
+const DESIGN_TOKENS_CSS = `
+  :root {
+    /* Modern iOS/macOS human-interface design system tokens */
+    color-scheme: light;
+
+    /* Semantic Surfaces & Backgrounds */
+    --color-bg-canvas:      #F2F2F7;
+    --color-bg-surface:     #FFFFFF;
+    --color-bg-elevated:    #FFFFFF;
+    --color-bg-sunken:      #E5E5EA;
+    --color-bg-overlay:     rgba(0, 0, 0, 0.45);
+
+    /* Semantic Borders */
+    --color-border-subtle:  rgba(0, 0, 0, 0.08);
+    --color-border-strong:  rgba(0, 0, 0, 0.14);
+    --color-border-focus:   #0066D6;
+
+    /* Semantic Typography / Foreground */
+    --color-text-primary:   #1C1C1E;
+    --color-text-secondary: #3A3A3C;
+    --color-text-muted:     #636366;
+    --color-text-inverse:   #FFFFFF;
+
+    /* Brand & Accent */
+    --color-brand:          #0066D6;
+    --color-brand-hover:    #0055B8;
+    --color-brand-active:   #00459A;
+    --color-brand-subtle:   rgba(0, 102, 214, 0.12);
+    --color-brand-wash:     rgba(0, 102, 214, 0.08);
+    --color-brand-tint:     rgba(0, 102, 214, 0.16);
+    --color-brand-line:     rgba(0, 102, 214, 0.35);
+    --color-brand-2:        #34AADC;
+    /* Fill the brand colour behind white text (>= 4.5:1 in both themes);
+       --color-brand itself is for text, borders and focus. */
+    --color-brand-fill:         #0066D6;
+    --color-brand-fill-hover:   #0055B8;
+    --color-brand-fill-active:  #00459A;
+    --color-on-brand:           #FFFFFF;
+
+    /* Status & Feedback */
+    --color-danger:         #FF3B30;
+    --color-danger-hover:   #D70015;
+    --color-danger-subtle:  rgba(255, 59, 48, 0.12);
+    --color-danger-wash:    rgba(255, 59, 48, 0.08);
+    --color-danger-tint:    rgba(255, 59, 48, 0.16);
+    --color-danger-line:    rgba(255, 59, 48, 0.35);
+    --color-success:        #34C759;
+    --color-success-hover:  #248A3D;
+    --color-success-subtle: rgba(52, 199, 89, 0.12);
+    /* Coloured text on a tinted or white surface (>= 4.5:1) */
+    --color-success-text:   #1F7A35;
+    --color-warn-text:      #B25000;
+    --color-danger-text:    #D70015;
+    --color-badge-tmdb:     #00769E;
+    --color-badge-mylists:  #7B2FA8;
+    --color-badge-imdb:     #7A5C00;
+    --color-warn:           #FF9500;
+    --color-warn-hover:     #C97000;
+    --color-warn-subtle:    rgba(255, 149, 0, 0.12);
+
+    /* Rating Colors */
+    --color-rating-high:    #1F7A35;
+    --color-rating-mid:     #B25000;
+    --color-rating-low:     #C41E14;
+
+    /* Elevation & Shadows */
+    --shadow-sm:            0 1px 3px rgba(0, 0, 0, 0.06);
+    --shadow:               0 2px 10px rgba(0, 0, 0, 0.08);
+    --shadow-md:            0 4px 20px rgba(0, 0, 0, 0.10);
+    --shadow-lg:            0 8px 30px rgba(0, 0, 0, 0.16);
+    --shadow-focus:         0 0 0 3px rgba(0, 102, 214, 0.35);
+
+    /* Spacing Scale (8pt grid system with half-steps) */
+    --space-0-5:            2px;
+    --space-1:              4px;
+    --space-1-5:            6px;
+    --space-2:              8px;
+    --space-2-5:            10px;
+    --space-3:              12px;
+    --space-3-5:            14px;
+    --space-4:              16px;
+    --space-5:              20px;
+    --space-6:              24px;
+    --space-8:              32px;
+
+    /* Border Radius Scale */
+    --radius-xs:            4px;
+    --radius-sm:            8px;
+    --radius-md:            12px;
+    --radius-lg:            16px;
+    --radius-xl:            20px;
+    --radius-pill:          999px;
+
+    /* Stacking layers */
+    --z-sticky:             10;
+    --z-modal:              1000;
+    --z-nav:                900;
+    --z-toast:              99999;
+
+    /* Motion */
+    --duration-fast:        0.12s;
+    --duration-base:        0.15s;
+    --duration-slow:        0.25s;
+    --ease:                 ease;
+
+    /* Interactive Component Controls & Touch Targets */
+    --control-height-sm:    32px;
+    --control-height-md:    40px;
+    --control-height-lg:    48px;
+    --control-touch-min:    44px;
+
+    /* Typography Scale */
+    --font-display:         -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
+    --font-body:            -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
+    --font-mono:            ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    --font-size-2xs:        0.68rem;
+    --font-size-xs:         0.75rem;
+    --font-size-sm:         0.85rem;
+    --font-size-base:       0.925rem;
+    --font-size-md:         1rem;
+    --font-size-lg:         1.15rem;
+    --font-size-xl:         1.35rem;
+    --font-size-2xl:        1.6rem;
+
+    /* Scrollbars */
+    --sb-track:             transparent;
+    --sb-thumb:             rgba(0, 0, 0, 0.15);
+    --sb-thumb-hover:       rgba(0, 0, 0, 0.25);
+
+    /* Complete Backward-Compatibility Aliases */
+    --bg:                   var(--color-bg-canvas);
+    --surface:              var(--color-bg-surface);
+    --surface-2:            var(--color-bg-sunken);
+    --surface-3:            var(--color-border-strong);
+    --panel:                var(--color-bg-surface);
+    --panel-strong:         var(--color-bg-sunken);
+    --border:               var(--color-border-subtle);
+    --border-strong:        var(--color-border-strong);
+    --text:                 var(--color-text-primary);
+    --text-2:               var(--color-text-secondary);
+    --muted:                var(--color-text-muted);
+    --accent:               var(--color-brand);
+    --brand:                var(--color-brand);
+    --accent-hover:         var(--color-brand-hover);
+    --accent-2:             var(--color-brand-2);
+    --danger:               var(--color-danger);
+    --success:              var(--color-success);
+    --warn:                 var(--color-warn);
+    --rating-high:          var(--color-rating-high);
+    --rating-mid:           var(--color-rating-mid);
+    --rating-low:           var(--color-rating-low);
+    --radius:               14px;
+  }
+  :root.dark-theme {
+    color-scheme: dark;
+
+    /* Semantic Surfaces & Backgrounds (Dark Mode) */
+    --color-bg-canvas:      #000000;
+    --color-bg-surface:     #1C1C1E;
+    --color-bg-elevated:    #2C2C2E;
+    --color-bg-sunken:      #161618;
+    --color-bg-overlay:     rgba(0, 0, 0, 0.65);
+
+    /* Semantic Borders (Dark Mode) */
+    --color-border-subtle:  rgba(255, 255, 255, 0.14);
+    --color-border-strong:  rgba(255, 255, 255, 0.24);
+    --color-border-focus:   #0A84FF;
+
+    /* Semantic Typography / Foreground (Dark Mode) */
+    --color-text-primary:   #FFFFFF;
+    --color-text-secondary: #EBEBF5;
+    --color-text-muted:     #AEAEB2;
+    --color-text-inverse:   #000000;
+
+    /* Brand & Accent (Dark Mode) */
+    --color-brand:          #0A84FF;
+    --color-brand-hover:    #0071E3;
+    --color-brand-active:   #0056B3;
+    --color-brand-subtle:   rgba(10, 132, 255, 0.18);
+    --color-brand-wash:     rgba(10, 132, 255, 0.14);
+    --color-brand-tint:     rgba(10, 132, 255, 0.24);
+    --color-brand-line:     rgba(10, 132, 255, 0.40);
+    --color-brand-2:        #5AC8FA;
+    --color-brand-fill:         #0A64D8;
+    --color-brand-fill-hover:   #0B5FCC;
+    --color-brand-fill-active:  #0A54B3;
+
+    /* Status & Feedback (Dark Mode) */
+    --color-danger:         #FF453A;
+    --color-danger-hover:   #FF6961;
+    --color-danger-subtle:  rgba(255, 69, 58, 0.18);
+    --color-danger-wash:    rgba(255, 69, 58, 0.15);
+    --color-danger-tint:    rgba(255, 69, 58, 0.24);
+    --color-danger-line:    rgba(255, 69, 58, 0.40);
+    --color-success:        #30D158;
+    --color-success-hover:  #34C759;
+    --color-success-subtle: rgba(48, 209, 88, 0.18);
+    --color-success-text:   #30D158;
+    --color-warn-text:      #FF9F0A;
+    --color-danger-text:    #FF453A;
+    --color-badge-tmdb:     #5AC8FA;
+    --color-badge-mylists:  #BF5AF2;
+    --color-badge-imdb:     #F5C518;
+    --color-warn:           #FF9F0A;
+    --color-warn-hover:     #FFB340;
+    --color-warn-subtle:    rgba(255, 159, 10, 0.18);
+
+    /* Rating Colors (Dark Mode) */
+    --color-rating-high:    #1F7A35;
+    --color-rating-mid:     #B25000;
+    --color-rating-low:     #C41E14;
+
+    /* Shadows & Elevation (Dark Mode) */
+    --shadow-sm:            0 1px 3px rgba(0, 0, 0, 0.35);
+    --shadow:               0 2px 10px rgba(0, 0, 0, 0.45);
+    --shadow-md:            0 4px 20px rgba(0, 0, 0, 0.55);
+    --shadow-lg:            0 8px 30px rgba(0, 0, 0, 0.70);
+    --shadow-focus:         0 0 0 3px rgba(10, 132, 255, 0.45);
+
+    /* Scrollbars (Dark Mode) */
+    --sb-thumb:             rgba(255, 255, 255, 0.15);
+    --sb-thumb-hover:       rgba(255, 255, 255, 0.25);
+
+    /* Backward-Compatibility Aliases (Dark Mode) */
+    --surface-2:            var(--color-bg-sunken);
+    --surface-3:            var(--color-border-strong);
+  }
+`;

@@ -3416,10 +3416,8 @@ function switchCatalogsSubmenu(filter, btn) {
     }
   }
 
-  const undoToast = document.getElementById('undoToast');
   const resultDiv = document.getElementById('result');
   if (filter !== 'all') {
-    if (undoToast) undoToast.style.display = 'none';
     if (resultDiv) resultDiv.style.display = 'none';
     if (filter === 'bulk' && typeof updateBulkAddUi === 'function') updateBulkAddUi();
   } else {

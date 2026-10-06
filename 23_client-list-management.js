@@ -83,7 +83,6 @@ function initTouchDrag(handle) {
 // single most recent destructive action (not a full history) -- good enough
 // for "oops, changed my mind" without the complexity of a real undo stack.
 let undoSnapshot = null;
-let undoTimer = null;
 
 function captureUndoSnapshot() {
   undoSnapshot = { entries: collectEntries() };
@@ -92,26 +91,16 @@ function captureUndoSnapshot() {
 let activeUndoToast = null;
 
 function showUndoToast(message) {
-  if (typeof showToast === 'function') {
-    if (activeUndoToast && typeof activeUndoToast.dismiss === 'function') {
-      activeUndoToast.dismiss();
+  if (activeUndoToast && typeof activeUndoToast.dismiss === 'function') {
+    activeUndoToast.dismiss();
+  }
+  activeUndoToast = showToast(message, 'undo', {
+    duration: 8000,
+    actionText: 'Undo',
+    onAction: function() {
+      performUndo();
     }
-    activeUndoToast = showToast(message, 'undo', {
-      duration: 8000,
-      actionText: 'Undo',
-      onAction: function() {
-        performUndo();
-      }
-    });
-    return;
-  }
-  const toast = document.getElementById('undoToast');
-  if (toast) {
-    document.getElementById('undoToastMsg').textContent = message;
-    toast.style.display = 'flex';
-    clearTimeout(undoTimer);
-    undoTimer = setTimeout(hideUndoToast, 8000);
-  }
+  });
 }
 
 function hideUndoToast() {
@@ -119,9 +108,6 @@ function hideUndoToast() {
     activeUndoToast.dismiss();
     activeUndoToast = null;
   }
-  const toast = document.getElementById('undoToast');
-  if (toast) toast.style.display = 'none';
-  clearTimeout(undoTimer);
 }
 
 function performUndo() {
