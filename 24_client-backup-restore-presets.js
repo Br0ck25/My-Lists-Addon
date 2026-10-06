@@ -2779,7 +2779,8 @@ function appShellApiMessage(status) {
 
 // --- one accessible dialog ---------------------------------------------------
 //
-// For new code: a title, a message and buttons that resolve. It rides on
+// For new code: a title, a message and buttons that resolve. Pass
+// destructive: true for removals/resets so the confirm button is red. It rides on
 // showModal/closeModal (16_client-row-core.js), which already move focus in,
 // trap Tab, close on Escape, restore focus and lock the page behind it.
 function appShellDialog(options) {
@@ -2787,11 +2788,11 @@ function appShellDialog(options) {
   const confirmLabel = o.confirmLabel || 'OK';
   const cancelLabel = o.cancelLabel;
   let html = '';
-  if (o.title) html += '<h3 style="margin:0 0 10px; font-size:1.08rem;">' + escapeHtml(o.title) + '</h3>';
-  if (o.message) html += '<p style="margin:0 0 16px; color:var(--muted); font-size:0.9rem; line-height:1.45; white-space:pre-wrap;">' + escapeHtml(o.message) + '</p>';
+  if (o.title) html += '<h3 style="margin:0 0 10px; font-size:var(--font-size-md);">' + escapeHtml(o.title) + '</h3>';
+  if (o.message) html += '<p style="margin:0 0 16px; color:var(--muted); font-size:var(--font-size-sm); line-height:1.45; white-space:pre-wrap;">' + escapeHtml(o.message) + '</p>';
   html += '<div style="display:flex; justify-content:flex-end; gap:8px;">';
-  if (cancelLabel) html += '<button type="button" class="secondary" id="appShellDialogCancel" style="min-width:80px; padding:8px 16px;">' + escapeHtml(cancelLabel) + '</button>';
-  html += '<button type="button" class="primary" id="appShellDialogConfirm" style="min-width:80px; padding:8px 16px;">' + escapeHtml(confirmLabel) + '</button>';
+  if (cancelLabel) html += '<button type="button" class="btn-secondary" id="appShellDialogCancel" style="min-width:80px; padding:8px 16px;">' + escapeHtml(cancelLabel) + '</button>';
+  html += '<button type="button" class="' + (o.destructive ? 'btn-danger' : 'btn-primary') + '" id="appShellDialogConfirm" style="min-width:80px; padding:8px 16px;">' + escapeHtml(confirmLabel) + '</button>';
   html += '</div>';
 
   return new Promise(function (resolve) {

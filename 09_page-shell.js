@@ -314,7 +314,7 @@ ${DESIGN_TOKENS_CSS}
   :where(input:not([type="checkbox"]):not([type="radio"]), textarea):focus-visible {
     outline: none !important;
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--color-brand-subtle, rgba(0, 122, 255, 0.25)) !important;
+    box-shadow: 0 0 0 3px var(--color-brand-subtle, var(--color-brand-line)) !important;
   }
 
   /* The page has four @keyframes animations and 33 transitions and said
@@ -585,7 +585,7 @@ ${DESIGN_TOKENS_CSS}
     background: var(--color-brand-fill);
     color: var(--color-on-brand);
     border-color: var(--color-brand-fill);
-    box-shadow: 0 2px 10px rgba(0,122,255,0.30);
+    box-shadow: 0 2px 10px var(--color-brand-line);
   }
   .tab-btn:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
   .tab-panel { display: grid; gap: var(--space-3-5); width: 100%; max-width: 100%; min-width: 0; }
@@ -621,7 +621,7 @@ ${DESIGN_TOKENS_CSS}
     background: var(--color-brand-fill) !important;
     color: var(--color-on-brand) !important;
     border-color: var(--color-brand-fill) !important;
-    box-shadow: 0 2px 10px rgba(0,122,255,0.30) !important;
+    box-shadow: 0 2px 10px var(--color-brand-line) !important;
   }
   html[data-initial-tab="catalogs"] .bottom-nav-item[data-tab="catalogs"],
   html[data-initial-tab="lists"] .bottom-nav-item[data-tab="lists"],
@@ -661,9 +661,9 @@ ${DESIGN_TOKENS_CSS}
   html[data-initial-catalogs-sub="shelves"] #catalogsFilterBar .subnav-pill[data-sub="all"],
   html[data-initial-catalogs-sub="quickadd"] #catalogsFilterBar .subnav-pill[data-sub="quickadd"],
   html[data-initial-catalogs-sub="bulk"] #catalogsFilterBar .subnav-pill[data-sub="bulk"] {
-    background: rgba(0, 122, 255, 0.12) !important;
+    background: var(--color-brand-subtle) !important;
     color: var(--accent) !important;
-    border-color: rgba(0, 122, 255, 0.40) !important;
+    border-color: var(--color-brand-line) !important;
     box-shadow: none !important;
   }
 
@@ -700,9 +700,9 @@ ${DESIGN_TOKENS_CSS}
   html[data-initial-lists-sub="import"] #listsSubnavBar .subnav-pill[data-sub="import"],
   html[data-initial-lists-sub="bulk"] #listsSubnavBar .subnav-pill[data-sub="bulk"],
   html[data-initial-lists-sub="create-list"] #listsSubnavBar .subnav-pill[data-sub="create-list"] {
-    background: rgba(0, 122, 255, 0.12) !important;
+    background: var(--color-brand-subtle) !important;
     color: var(--accent) !important;
-    border-color: rgba(0, 122, 255, 0.40) !important;
+    border-color: var(--color-brand-line) !important;
     box-shadow: none !important;
   }
 
@@ -739,9 +739,9 @@ ${DESIGN_TOKENS_CSS}
   html[data-initial-channels-sub="storylines"] #channelsSubnavBar .subnav-pill[data-sub="storylines"],
   html[data-initial-channels-sub="quickadd"] #channelsSubnavBar .subnav-pill[data-sub="quickadd"],
   html[data-initial-channels-sub="import"] #channelsSubnavBar .subnav-pill[data-sub="import"] {
-    background: rgba(0, 122, 255, 0.12) !important;
+    background: var(--color-brand-subtle) !important;
     color: var(--accent) !important;
-    border-color: rgba(0, 122, 255, 0.40) !important;
+    border-color: var(--color-brand-line) !important;
     box-shadow: none !important;
   }
 
@@ -789,9 +789,9 @@ ${DESIGN_TOKENS_CSS}
   html[data-initial-settings-sub="external"] #settingsSubnavBar .subnav-pill[data-sub="external"],
   html[data-initial-settings-sub="backup"] #settingsSubnavBar .subnav-pill[data-sub="backup"],
   html[data-initial-settings-sub="feedback"] #settingsSubnavBar .subnav-pill[data-sub="feedback"] {
-    background: rgba(0, 122, 255, 0.12) !important;
+    background: var(--color-brand-subtle) !important;
     color: var(--accent) !important;
-    border-color: rgba(0, 122, 255, 0.40) !important;
+    border-color: var(--color-brand-line) !important;
     box-shadow: none !important;
   }
 
@@ -842,9 +842,9 @@ ${DESIGN_TOKENS_CSS}
   html[data-initial-discover-sub="kids"] #discoverSubnavBar .subnav-pill[data-sub="kids"],
   html[data-initial-discover-sub="holidays"] #discoverSubnavBar .subnav-pill[data-sub="holidays"],
   html[data-initial-discover-sub="genres"] #discoverSubnavBar .subnav-pill[data-sub="genres"] {
-    background: rgba(0, 122, 255, 0.12) !important;
+    background: var(--color-brand-subtle) !important;
     color: var(--accent) !important;
-    border-color: rgba(0, 122, 255, 0.40) !important;
+    border-color: var(--color-brand-line) !important;
     box-shadow: none !important;
   }
   /* Each direct child of .tab-panel (the subnav pill bar, each
@@ -1074,19 +1074,14 @@ ${DESIGN_TOKENS_CSS}
     font-family: inherit;
   }
   .subnav-pill.active {
-    background: rgba(0, 122, 255, 0.12);
+    background: var(--color-brand-subtle);
     color: var(--accent);
-    border-color: rgba(0, 122, 255, 0.40);
+    border-color: var(--color-brand-line);
     box-shadow: none;
     font-weight: 700;
   }
-  :root.dark-theme .subnav-pill.active {
-    background: rgba(10, 132, 255, 0.22);
-    color: var(--accent);
-    border-color: rgba(10, 132, 255, 0.50);
-  }
   .subnav-pill:hover:not(.active) {
-    border-color: rgba(0, 122, 255, 0.40);
+    border-color: var(--color-brand-line);
     color: var(--accent);
   }
   .subnav-pill .check-icon {
@@ -1408,7 +1403,7 @@ ${DESIGN_TOKENS_CSS}
     background: #ff8a00;
   }
   .support-strip.is-covered { border-color: #bfe8c9; }
-  .support-strip.is-covered .support-strip-bar i { background: #34c759; }
+  .support-strip.is-covered .support-strip-bar i { background: var(--color-success) }
   .support-strip .support-strip-x,
   .support-strip .support-strip-x:hover,
   .support-strip .support-strip-x:focus,
@@ -1976,7 +1971,7 @@ ${DESIGN_TOKENS_CSS}
   }
   .lc-btn.liked {
     color: var(--color-danger);
-    border-color: rgba(255,59,48,0.4);
+    border-color: var(--color-danger-line);
     background: var(--color-danger-subtle);
   }
   /* --- Soft Brand-Tinted Add/Remove Action Buttons (one shared selector list) --- */
@@ -2051,7 +2046,7 @@ ${DESIGN_TOKENS_CSS}
   .lc-btn.searchLikeBtn.liked,
   #detailLikeBtn.liked {
     color: var(--color-danger);
-    border-color: rgba(255,59,48,0.4);
+    border-color: var(--color-danger-line);
     background: var(--color-danger-subtle);
   }
 
@@ -2339,7 +2334,7 @@ ${DESIGN_TOKENS_CSS}
     transition: border-color var(--duration-base) ease;
   }
   .danger-zone-disclosure[open] {
-    border-color: rgba(255, 59, 48, 0.3);
+    border-color: var(--color-danger-line);
   }
   .danger-zone-summary {
     display: flex;
@@ -2680,7 +2675,7 @@ ${DESIGN_TOKENS_CSS}
   }
   .item-storyline-card.is-current .item-storyline-poster-wrap {
     border: 2px solid var(--accent);
-    box-shadow: 0 0 10px rgba(0, 122, 255, 0.4);
+    box-shadow: 0 0 10px var(--color-brand-line);
   }
   .item-storyline-poster-wrap img {
     width: 100%;
@@ -2869,7 +2864,7 @@ ${DESIGN_TOKENS_CSS}
     overflow: hidden;
   }
   .cw-date-badge-finale {
-    background: var(--warn, #FF9500);
+    background: var(--color-warn);
     top: auto;
     bottom: 4px;
     left: 50%;
@@ -2893,7 +2888,7 @@ ${DESIGN_TOKENS_CSS}
     font-weight: 700;
   }
   .cw-date-badge-companion {
-    background: var(--accent, #6366f1);
+    background: var(--color-brand-fill);
     color: var(--color-on-brand);
     top: auto;
     bottom: 4px;
@@ -3348,7 +3343,7 @@ ${DESIGN_TOKENS_CSS}
   }
   input:focus, select:focus, textarea:focus {
     border-color: var(--color-brand, var(--accent));
-    box-shadow: 0 0 0 3px var(--color-brand-subtle, rgba(0, 122, 255, 0.18));
+    box-shadow: 0 0 0 3px var(--color-brand-subtle, var(--color-brand-tint));
   }
   input[readonly]:focus, textarea[readonly]:focus {
     border-color: var(--border-strong);
@@ -3372,11 +3367,11 @@ ${DESIGN_TOKENS_CSS}
     user-select: none;
   }
   .channel-poster-choice:hover {
-    border-color: rgba(0, 122, 255, 0.4);
+    border-color: var(--color-brand-line);
   }
   .channel-poster-choice.selected {
     border-color: var(--accent);
-    background: rgba(0, 122, 255, 0.08);
+    background: var(--color-brand-wash);
   }
   .channel-poster-choice .channel-poster-thumb-wrap {
     position: relative;
@@ -3432,8 +3427,8 @@ ${DESIGN_TOKENS_CSS}
   }
   .channel-crossover-banner {
     position: relative;
-    background: linear-gradient(135deg, rgba(0, 122, 255, 0.12) 0%, rgba(88, 86, 214, 0.12) 100%);
-    border: 1px solid rgba(0, 122, 255, 0.35);
+    background: linear-gradient(135deg, var(--color-brand-subtle) 0%, rgba(88, 86, 214, 0.12) 100%);
+    border: 1px solid var(--color-brand-line);
     border-radius: var(--radius-md);
     padding: var(--space-3) var(--space-3-5);
     margin-bottom: var(--space-3);
@@ -3491,12 +3486,12 @@ ${DESIGN_TOKENS_CSS}
   .channel-crossover-chip.present {
     background: rgba(52, 199, 89, 0.15);
     border-color: rgba(52, 199, 89, 0.4);
-    color: #34C759;
+    color: var(--color-success-text);
   }
   .channel-crossover-chip.missing {
     background: rgba(255, 149, 0, 0.15);
     border-color: rgba(255, 149, 0, 0.4);
-    color: #FF9500;
+    color: var(--color-warn-text);
   }
   .channel-crossover-actions {
     display: flex;
@@ -3748,7 +3743,7 @@ ${DESIGN_TOKENS_CSS}
   .catalog-actions-bar button[data-act="removeAllLists"] {
     background: var(--color-danger-subtle);
     color: var(--color-danger);
-    border: 1.5px solid rgba(255, 59, 48, 0.3);
+    border: 1.5px solid var(--color-danger-line);
     box-shadow: var(--shadow-sm);
     min-height: var(--control-height-md, 40px);
     padding: var(--space-2) var(--space-4);
@@ -3894,8 +3889,8 @@ ${DESIGN_TOKENS_CSS}
     gap: var(--space-1-5);
     padding: var(--space-1) var(--space-2-5);
     border-radius: var(--radius-pill);
-    background: rgba(52, 199, 89, 0.12);
-    color: #34C759;
+    background: var(--color-success-subtle);
+    color: var(--color-success-text);
     font-weight: 700;
     font-size: var(--font-size-sm);
     letter-spacing: 0.01em;
@@ -3995,8 +3990,8 @@ ${DESIGN_TOKENS_CSS}
     gap: var(--space-2-5);
     padding: var(--space-3) var(--space-3-5);
     border-radius: var(--radius-md);
-    background: rgba(0, 122, 255, 0.05);
-    border: 1px solid rgba(0, 122, 255, 0.13);
+    background: var(--color-brand-wash);
+    border: 1px solid var(--color-brand-subtle);
     color: var(--muted);
     font-size: var(--font-size-sm);
     line-height: 1.45;
@@ -4176,9 +4171,9 @@ ${DESIGN_TOKENS_CSS}
   }
   .import-dropzone:hover,
   .import-dropzone.dragover {
-    border-color: var(--color-brand, #007aff);
-    background: var(--color-brand-subtle, rgba(0, 122, 255, 0.04));
-    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+    border-color: var(--color-brand);
+    background: var(--color-brand-subtle, var(--color-brand-wash));
+    box-shadow: 0 0 0 3px var(--color-brand-subtle);
   }
   .import-dropzone-icon {
     font-size: 2rem;
@@ -4327,18 +4322,18 @@ ${DESIGN_TOKENS_CSS}
   .ec-btn:hover:not(:disabled) { color: var(--text); background: var(--panel-strong); }
   .ec-btn.danger {
     color: var(--color-danger, #d70015);
-    border-color: rgba(255, 59, 48, 0.35);
-    background: rgba(255, 59, 48, 0.08);
+    border-color: var(--color-danger-line);
+    background: var(--color-danger-wash);
   }
   :root.dark-theme .ec-btn.danger {
     color: var(--color-danger, #ff453a);
-    border-color: rgba(255, 69, 58, 0.45);
-    background: rgba(255, 69, 58, 0.15);
+    border-color: var(--color-danger-line);
+    background: var(--color-danger-tint);
   }
   .ec-btn.danger:hover:not(:disabled) {
     color: var(--color-on-brand);
-    background: var(--color-danger, #ff3b30);
-    border-color: var(--color-danger, #ff3b30);
+    background: var(--color-danger);
+    border-color: var(--color-danger);
   }
   .ec-btn.danger svg {
     display: block;
@@ -4706,8 +4701,8 @@ ${DESIGN_TOKENS_CSS}
     gap: var(--space-3);
     padding: var(--space-2-5) var(--space-4);
     border-radius: var(--radius-pill);
-    background: rgba(255, 255, 255, 0.96);
-    color: var(--text);
+    background: var(--color-bg-elevated);
+    color: var(--color-text-primary);
     font-size: var(--font-size-sm);
     font-weight: 500;
     box-shadow: 0 4px 20px rgba(0,0,0,0.12);
@@ -4722,12 +4717,6 @@ ${DESIGN_TOKENS_CSS}
   .app-toast.show {
     opacity: 1;
     transform: translateY(0);
-  }
-  :root.dark-theme .app-toast {
-    background: #000000;
-    color: var(--color-on-brand);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.6);
   }
   .app-toast::before { flex: none; font-weight: 800; line-height: 1; }
   .app-toast--success { border-color: var(--color-success-text); }
@@ -4773,12 +4762,6 @@ ${DESIGN_TOKENS_CSS}
   }
   .app-toast-close:hover {
     color: var(--text);
-  }
-  :root.dark-theme .app-toast-close {
-    color: rgba(255, 255, 255, 0.6);
-  }
-  :root.dark-theme .app-toast-close:hover {
-    color: var(--color-on-brand);
   }
   .sortable-item {
     user-select: none;
@@ -4829,21 +4812,21 @@ ${DESIGN_TOKENS_CSS}
     font-family: inherit;
   }
   .custom-list-type-pill:hover:not(.active):not(:has(input:checked)) {
-    border-color: rgba(0, 122, 255, 0.40);
+    border-color: var(--color-brand-line);
     color: var(--accent);
   }
   .custom-list-type-pill:has(input:checked),
   .custom-list-type-pill.active {
-    background: rgba(0, 122, 255, 0.12) !important;
-    border-color: rgba(0, 122, 255, 0.40) !important;
+    background: var(--color-brand-subtle) !important;
+    border-color: var(--color-brand-line) !important;
     color: var(--accent) !important;
     font-weight: 700 !important;
     box-shadow: none !important;
   }
   :root.dark-theme .custom-list-type-pill:has(input:checked),
   :root.dark-theme .custom-list-type-pill.active {
-    background: rgba(10, 132, 255, 0.22) !important;
-    border-color: rgba(10, 132, 255, 0.50) !important;
+    background: var(--color-brand-line) !important;
+    border-color: var(--color-brand-line) !important;
     color: var(--accent) !important;
   }
   .custom-list-type-pill .check-icon {
@@ -4980,7 +4963,7 @@ ${DESIGN_TOKENS_CSS}
     width: 24px;
     height: 24px;
     border-radius: 50%;
-    background: #007aff;
+    background: var(--color-brand-fill);
     color: white;
     display: flex;
     align-items: center;
@@ -5131,7 +5114,7 @@ ${DESIGN_TOKENS_CSS}
   }
   html[data-app-shell="1"] .app-shell-chip-ok { color: var(--success); border-color: rgba(52, 199, 89, 0.45); }
   html[data-app-shell="1"] .app-shell-chip-warn { color: var(--warn); border-color: rgba(255, 149, 0, 0.45); }
-  html[data-app-shell="1"] .app-shell-danger { color: var(--danger); border-color: rgba(255, 59, 48, 0.35); }
+  html[data-app-shell="1"] .app-shell-danger { color: var(--danger); border-color: var(--color-danger-line); }
   html[data-app-shell="1"] .app-shell-details { margin-top: var(--space-2-5); font-size: var(--font-size-sm); }
   html[data-app-shell="1"] .app-shell-details summary { cursor: pointer; color: var(--text); }
 

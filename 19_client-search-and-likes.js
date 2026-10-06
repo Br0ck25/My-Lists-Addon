@@ -1858,7 +1858,7 @@ async function loadPopularListsFeed(forceRefresh) {
     traktPopularCache = null;
     if (window._listPreviewCache) window._listPreviewCache.clear();
   }
-  container.innerHTML = '<p style="color:var(--muted); font-size:0.88rem;">Loading popular public lists…</p>';
+  container.innerHTML = '<p class="app-shell-muted">Loading popular public lists…</p>';
   try {
     const [mdbLists, traktLists] = await Promise.all([
       ensureMdblistPopularLoaded(),
@@ -1867,7 +1867,7 @@ async function loadPopularListsFeed(forceRefresh) {
     const combined = [...(mdbLists || []), ...(traktLists || [])];
     combined.sort((a, b) => (b.likes || 0) - (a.likes || 0));
     if (!combined.length) {
-      container.innerHTML = '<p style="color:var(--muted); font-size:0.88rem;">No popular public lists found.</p>';
+      container.innerHTML = '<p class="app-shell-muted">No popular public lists found.</p>';
       return;
     }
     render5PosterListsFeed(container, combined);
@@ -1964,7 +1964,7 @@ async function loadCuratedListsFeed(forceRefresh) {
   if (curatedListsFeedLoaded && !forceRefresh && !historyChanged && container.children.length > 0) {
     return;
   }
-  container.innerHTML = '<p style="color:var(--muted); font-size:0.88rem;">Loading your personalized curated lists…</p>';
+  container.innerHTML = '<p class="app-shell-muted">Loading your personalized curated lists…</p>';
 
   try {
     let customListsMap = {};
@@ -2302,7 +2302,7 @@ async function renderLikedListsFeed(forceRefresh) {
   if (!container) return;
   const likedUrls = [...getLikedListsSet()];
   if (!likedUrls.length) {
-    container.innerHTML = '<p style="color:var(--muted); font-size:0.88rem;">No liked lists yet. Tap the heart &#x2661; on any list to save it here.</p>';
+    container.innerHTML = '<p class="app-shell-muted">No liked lists yet. Tap the heart &#x2661; on any list to save it here.</p>';
     container.dataset.likedCount = '0';
     return;
   }
@@ -2310,7 +2310,7 @@ async function renderLikedListsFeed(forceRefresh) {
     return;
   }
   container.dataset.likedCount = String(likedUrls.length);
-  container.innerHTML = '<p style="color:var(--muted); font-size:0.88rem;">Loading your ' + likedUrls.length + ' liked list(s)...</p>';
+  container.innerHTML = '<p class="app-shell-muted">Loading your ' + likedUrls.length + ' liked list(s)…</p>';
   try {
     const toplists = await ensureMdblistPopularLoaded();
     const topMap = new Map();

@@ -1,7 +1,7 @@
 # DESIGN_SYSTEM.md — My Lists Addon UI standard
 
 > **Audience: AI assistants (and humans) adding or changing UI.** Follow every rule here. Where this file says "legacy", do **not** copy it.
-> Source of truth for the CSS is the app stylesheet in `09_page-shell.js` (between `/*MYLISTS_APP_CSS_START*/` and `/*MYLISTS_APP_CSS_END*/`, roughly lines 293–5464). Line numbers below are from the audit date (2026-10-06) and drift; search for the selector.
+> Source of truth: the **tokens** are one constant, `DESIGN_TOKENS_CSS` in `00_constants.js`, shared by the app (`09_page-shell.js`), the admin pages (`03_admin.js`) and the backup guide (`24_…`). The component CSS is the app stylesheet in `09_page-shell.js` (between `/*MYLISTS_APP_CSS_START*/` and `/*MYLISTS_APP_CSS_END*/`). The 2026-10-06 audit's remediation has been applied (see §9 for what is left). Search for selectors; line numbers drift.
 > Edit the numbered source files only, never `worker_entry_combined.js`. After any change run `python build.py`, `python check_sync.py`, `node --check worker_entry_combined.js`, `node --test tests/*.test.mjs` (see `CLAUDE.md`).
 
 ---
@@ -12,7 +12,7 @@ My Lists Addon is a mobile-first web app for building and managing Stremio / Nuv
 
 Stack facts that constrain every change:
 - Vanilla JS in template literals; no framework, no build tool beyond `build.py`.
-- One shared stylesheet for the main app (`09_page-shell.js`). **Three other pages have their own separate `<style>` blocks and tokens**: admin (`03_admin.js` ×2), and the backup/restore page (`24_client-backup-restore-presets.js`). See §9.
+- One shared stylesheet for the main app (`09_page-shell.js`) and **one shared token constant** (`DESIGN_TOKENS_CSS`, `00_constants.js`) used by the app, the admin pages (`03_admin.js` ×2) and the backup/restore guide (`24_client-backup-restore-presets.js`).
 - Strict CSP: every inline `<style>`/`<script>` carries `nonce="${CSP_NONCE_PLACEHOLDER}"`. Never write `</script>` unescaped inside a script string.
 - Dark mode = class `dark-theme` on `<html>` (`document.documentElement`), set from `localStorage.theme` or `prefers-color-scheme`. There is no `@media (prefers-color-scheme)` CSS.
 - Icons are inline SVG. No icon font, no sprite file, no external fonts.
@@ -34,22 +34,25 @@ All tokens live in `:root` (light) and `:root.dark-theme` (dark) in `09_page-she
 | `--color-bg-overlay` | `rgba(0,0,0,.45)` | `rgba(0,0,0,.65)` | Modal backdrop |
 | `--color-border-subtle` | `rgba(0,0,0,.08)` | `rgba(255,255,255,.14)` | Panel/card outlines, dividers |
 | `--color-border-strong` | `rgba(0,0,0,.14)` | `rgba(255,255,255,.24)` | Control outlines (buttons, inputs, pills) |
-| `--color-border-focus` | `#007AFF` | `#0A84FF` | Focus border (defined, currently unused) |
+| `--color-border-focus` | `#0066D6` | `#0A84FF` | Focus border (defined, currently unused) |
 | `--color-text-primary` | `#1C1C1E` | `#FFFFFF` | Headings, body |
 | `--color-text-secondary` | `#3A3A3C` | `#EBEBF5` | Button labels, secondary body |
 | `--color-text-muted` | `#636366` | `#AEAEB2` | Meta text, hints, placeholders |
 | `--color-text-inverse` | `#FFFFFF` | `#000000` | Text on brand/danger fills |
-| `--color-brand` | `#007AFF` | `#0A84FF` | Primary actions, active tab, links, focus ring |
-| `--color-brand-hover` | `#0062CC` | `#0071E3` | Primary hover |
-| `--color-brand-active` | `#004FB3` | `#0056B3` | Primary pressed |
-| `--color-brand-subtle` | `rgba(0,122,255,.12)` | `rgba(10,132,255,.18)` | Tinted fills, ghost hover, focus glow |
+| `--color-brand` | `#0066D6` | `#0A84FF` | Brand **text**, borders, links, focus ring |
+| `--color-brand-hover` / `-active` | `#0055B8` / `#00459A` | `#0071E3` / `#0056B3` | Text/border hover states |
+| `--color-brand-fill` / `-fill-hover` / `-fill-active` | `#0066D6` / `#0055B8` / `#00459A` | `#0A64D8` / `#0B5FCC` / `#0A54B3` | **Backgrounds that carry white text** (primary button, active tab, badges). ≥ 5:1 with white |
+| `--color-on-brand` | `#FFFFFF` | `#FFFFFF` | Text/icons on any filled colour (never write `#fff`) |
+| `--color-brand-wash` / `-subtle` / `-tint` / `-line` | alpha `.08 / .12 / .16 / .35` | `.14 / .18 / .24 / .40` | Resting tint / soft fill / hover fill / tinted border. The same four exist for `--color-danger-*` |
 | `--color-brand-2` | `#34AADC` | `#5AC8FA` | Second gradient stop only (Wako button) |
 | `--color-danger` / `-hover` / `-subtle` | `#FF3B30` / `#D70015` / `rgba(255,59,48,.12)` | `#FF453A` / `#FF6961` / `rgba(255,69,58,.18)` | Destructive actions, errors |
 | `--color-success` / `-hover` / `-subtle` | `#34C759` / `#248A3D` / `rgba(52,199,89,.12)` | `#30D158` / `#34C759` / `rgba(48,209,88,.18)` | Success text/chips |
 | `--color-warn` / `-hover` / `-subtle` | `#FF9500` / `#C97000` / `rgba(255,149,0,.12)` | `#FF9F0A` / `#FFB340` / `rgba(255,159,10,.18)` | Warnings |
-| `--color-rating-high/mid/low` | `#34C759` / `#FF9500` / `#FF3B30` | `#30D158` / `#FF9F0A` / `#FF453A` | Rating badges only |
+| `--color-success-text` / `-warn-text` / `-danger-text` | `#1F7A35` / `#B25000` / `#D70015` | `#30D158` / `#FF9F0A` / `#FF453A` | Coloured **text** on white/tinted surfaces (≥ 4.5:1) |
+| `--color-badge-tmdb/-mylists/-imdb` | `#00769E` / `#7B2FA8` / `#7A5C00` | `#5AC8FA` / `#BF5AF2` / `#F5C518` | Source badge text |
+| `--color-rating-high/mid/low` | `#1F7A35` / `#B25000` / `#C41E14` | same | Rating badge fills (white text, ≥ 5:1) |
 
-**Contrast warnings (measured):** white on `--color-brand` light is **4.02:1** (below AA 4.5 for normal text); white on success `#34C759` is 2.2:1; white on warn `#FF9500` is 2.2:1; white on danger `#FF3B30` is 3.55:1. Existing primary buttons use 600-weight text at ≥14px, which is borderline. For *new* text on a green/orange fill use `--color-text-primary`-dark text or the `*-subtle` fill with the coloured text instead of white-on-colour. Never use `--muted` text colour `#8E8E93` on white (3.26:1) — it exists only in the admin pages (legacy).
+**Contrast rules.** Text on a filled colour: use `--color-brand-fill` (or a `--color-rating-*`) with `--color-on-brand`; never `--color-brand`, `--color-success`, `--color-warn` or `--color-danger` as a background behind white text (they measure 2.2–4.0:1). Coloured text on white: use the `*-text` tokens. Muted text is `--color-text-muted` (5.4:1 light).
 
 ### 2.2 Typography
 
@@ -64,8 +67,9 @@ Base: `body { font-size: 15px; -webkit-font-smoothing: antialiased; }`.
 
 | Role | Token / value | Weight | Where |
 |---|---|---|---|
-| Caption / badge / meta | `--font-size-xs` `0.75rem` | 600–800 | Badges, rating chips, list meta |
-| Compact control / secondary text | `--font-size-sm` `0.85rem` | 600 | Pills, `.lc-btn`, hints, toasts |
+| Micro badge | `--font-size-2xs` `0.68rem` | 700–800 | Rating/source badges, tiny labels |
+| Caption / compact control | `--font-size-xs` `0.75rem` | 600 | `.lc-btn`, bottom-nav labels |
+| Secondary text / pills | `--font-size-sm` `0.85rem` | 600 | Pills, hints, toasts, meta |
 | Body / control | `--font-size-base` `0.925rem` | 400–600 | Buttons, general body |
 | Large body | `--font-size-md` `1rem` | 600 | Dialog headings, app-shell h3 |
 | Panel title | `1.1rem` (≈ `--font-size-lg` `1.15rem`) | 700, `letter-spacing:-0.01em` | `.panel-title` |
@@ -76,7 +80,7 @@ Weights in use: 600 (×44), 700 (×28), 800 (×8), 500 (×8), 900 (×2), 400 (×
 
 ### 2.3 Spacing
 
-Defined scale (`--space-*`): `0-5:2px 1:4px 1-5:6px 2:8px 2-5:10px 3:12px 3-5:14px 4:16px 5:20px 6:24px 8:32px`. The scale is defined but **almost never used** (only `--space-1-5` once); the code hard-codes `4/6/8/10/12/14/16px`. Rule: **new code uses `--space-*` tokens; never invent values off this scale** (no 5px, 7px, 9px, 11px, 13px).
+Scale (`--space-*`): `0-5:2px 1:4px 1-5:6px 2:8px 2-5:10px 3:12px 3-5:14px 4:16px 5:20px 6:24px 8:32px`. All `padding`/`margin`/`gap` in the app stylesheet now use these tokens (off-scale values were snapped). **New code uses `--space-*`; never invent values off this scale** (no 5px, 7px, 9px, 11px, 13px). Negative margins and `calc()` with safe-area insets are the only raw-px exceptions.
 
 Layout rhythm in use: `.page` gap `12px`; `.tab-panel` gap `14px`; `.panel` padding `16px`; `.row`/`.actions` gap `8–10px`; poster grid gap `10px 8px` (mobile) / `12px 8px` (desktop).
 
@@ -105,28 +109,20 @@ Layout rhythm in use: `.page` gap `12px`; `.tab-panel` gap `14px`; `.panel` padd
 ```
 (Dark mode redefines all shadows, darker.)
 
-**z-index layers.** Values in use: 1, 2, 3, 5, 8, 10, 50, 100, 1000, 9999, 99999. Standard for new code (do not add other numbers):
+**z-index layers** (tokens `--z-*`): local stacking inside a card 1–8 (raw numbers allowed); `--z-sticky` 10 (dropdowns, menus, dragged items); `--z-nav` 900 (mobile bottom nav); `--z-modal` 1000 (modal overlay, **above** the bottom nav); `--z-toast` 99999. Never add other numbers.
 
-| Layer | z-index | Existing |
-|---|---|---|
-| Local stacking inside a card (overlays, badges, drag handle) | 1–3 | `.poster-add-overlay`, badges |
-| Sticky / dropdown / menu | 10 | `.preset-overflow-dropdown` area |
-| Modal overlay | 1000 | `.modal-overlay` |
-| Bottom nav (mobile) | 9999 | `.bottom-nav` — currently above modals, see §9 |
-| Toasts | 99999 | `.app-toast-container`, `.action-toast` |
-
-**Motion.** Durations in use: 0.1s, 0.12s, 0.15s, 0.2s, 0.25s, 0.35s. Standard: **0.12s** (colour-only micro, nav items), **0.15s** (default hover/focus: background, border, colour, shadow), **0.25s** (toggle, toast, slide). Easing `ease`; toasts/toggles use `cubic-bezier(0.16,1,0.3,1)` / `cubic-bezier(0.4,0,0.2,1)`. Press feedback: `transform: scale(0.98)`. `prefers-reduced-motion` is already handled globally (~line 502) — never override it.
+**Motion.** Tokens: `--duration-fast` 0.12s (press, nav items), `--duration-base` 0.15s (hover/focus: background, border, colour, shadow), `--duration-slow` 0.25s (toast, toggle, slide); `--ease: ease`. Never `transition: all`; always list properties. Easing `ease`; toasts/toggles use `cubic-bezier(0.16,1,0.3,1)` / `cubic-bezier(0.4,0,0.2,1)`. Press feedback: `transform: scale(0.98)`. `prefers-reduced-motion` is already handled globally (~line 502) — never override it.
 
 ```css
 /* copy-paste motion shorthands */
-transition: background-color .15s ease, color .15s ease, border-color .15s ease, box-shadow .15s ease, transform .1s ease;
+transition: background-color var(--duration-base) var(--ease), color var(--duration-base) var(--ease), border-color var(--duration-base) var(--ease), box-shadow var(--duration-base) var(--ease), transform var(--duration-fast) var(--ease);
 ```
 
-**Breakpoints.** The app has one real split: **mobile `max-width: 640px`** (bottom nav shown, tab bar hidden) vs **desktop `min-width: 641px`**. Use only these two. Others exist (360, 480, 520, 600, 720) — see §9. 360px is tolerated for the 6-item bottom nav only.
+**Breakpoints.** The app has one real split: **mobile `max-width: 640px`** (bottom nav shown, tab bar hidden) vs **desktop `min-width: 641px`**. Use only these two (the old 480/520/600/720 breakpoints were folded into 640). 360px is the one exception, for the 6-item bottom nav.
 
-### 2.6 Copy-paste `:root` additions
+### 2.6 Adding a token
 
-Add nothing to `:root` unless a token is genuinely missing. If one is, add it in **both** `:root` and `:root.dark-theme`, and add it here. Suggested missing tokens (not yet created — see Remediation): `--z-modal`, `--z-toast`, `--z-nav`, `--ease-fast/base/slow`, `--color-on-brand`.
+Edit `DESIGN_TOKENS_CSS` in `00_constants.js` (both `:root` and `:root.dark-theme`), then document it here. Do not define `:root` variables in any page's own `<style>`.
 
 ---
 
@@ -140,12 +136,12 @@ A bare `<button>` is **primary** by default (global rule `:where(button:not(.sec
 
 | Variant | Classes | Look | Min height / padding |
 |---|---|---|---|
-| Primary | `<button class="btn-primary">` (or plain `<button>`/`.primary`) | `--color-brand` fill, white text, hover `--color-brand-hover`, active `--color-brand-active` | 40px, `10px 18px` |
+| Primary | `<button class="btn-primary">` (or plain `<button>`/`.primary`) | `--color-brand-fill`, white text, hover `-fill-hover`, active `-fill-active` | 40px, `10px 18px` |
 | Secondary | `.btn-secondary` (also `.secondary`) | surface fill, 1.5px `--color-border-strong`, hover `--color-bg-sunken` | 40px, `9px 16px` |
 | Ghost / tertiary | `.btn-ghost` / `.btn-tertiary` | transparent, hover `--color-brand-subtle` + brand text | 40px, `8px 14px` |
 | Danger | `.btn-danger` (also `.danger`, `.btn-destructive`) | `--color-danger-subtle` fill, red text; hover solid red + white | 40px, `9px 16px` |
 | Sizes | `.btn-sm` / `.btn-md` / `.btn-lg` | | 32 / 40 / 48px |
-| **Compact (cards/rows)** | `.lc-btn` + optional `.primary` / `.secondary` / `.liked` / `.view-btn` | pill, `6px 12px`, `0.8rem` | ~30px (below touch min; legacy compact — see §9) |
+| **Compact (cards/rows)** | `.lc-btn` + optional `.primary` / `.secondary` / `.liked` / `.view-btn` | pill, `--space-1-5 --space-3`, `--font-size-xs` | ~30px visually; on phones it gets a 44px hit area (invisible `::after`) |
 | Icon (header) | `.header-icon-btn` | 36px circle, surface fill | 36×36 |
 | Modal close | `button.modal-close-x` | 32px circle | 32×32 |
 | Platform install | `.btn-stremio` / `.btn-nuvio` / `.btn-wako` | brand gradients, white text | — |
@@ -243,22 +239,21 @@ const ok = await appShellDialog({
 });
 if (!ok) return;
 ```
-*(Note: `appShellDialog` currently renders its confirm button as `primary` with inline styles even for destructive actions; for destructive confirmations prefer the undo-toast pattern in §5.)*
+Pass `destructive: true` for removals/resets: the confirm button becomes `.btn-danger`. For reversible list/catalog deletions prefer the undo toast (§5) over a dialog.
 
 ### 3.7 Toasts, alerts, banners
 
-- **Toast:** `showToast(message, type = 'info', { duration = 3000, actionText, onAction })` (`16_client-row-core.js` ~1483). Types in use: `'info' | 'success' | 'error' | 'undo'`. One toast at a time (container is cleared). `role="alert"` for errors, `status` otherwise. Container `.app-toast-container` is fixed, centred, `bottom: 72px + safe area`.
-- **Undo:** `showUndoToast(message)` (8s, "Undo" action) — the safety net for destructive list actions instead of a confirm dialog (`23_client-list-management.js` ~94).
+- **Toast:** `showToast(message, type = 'info', { duration = 3000, actionText, onAction })` (`16_client-row-core.js`). Types: `'info' | 'success' | 'error' | 'undo'`. Styled: `.app-toast--success` (green border + ✓), `--error` (red border + !), `--info` (blue "i"), `--undo` (plain, with an Undo button). Background is `--color-bg-elevated`, so it needs no dark override. One toast at a time. `role="alert"` for errors, `status` otherwise.
+- **Undo:** `showUndoToast(message)` (8s, "Undo" action) — the safety net for destructive list actions instead of a confirm dialog.
 - **Inline result text:** `.testresult.ok | .err | .pending`.
-- **Banners/notices:** `.channel-crossover-banner`, `.app-shell-muted` (muted hint paragraph), `.live-preview-shelf-status`. There is no generic alert/banner component.
-- ⚠ `.app-toast--success/--error/--info/--undo` modifier classes are emitted but **have no CSS**: every toast looks identical. Do not rely on colour to convey type.
-- Legacy: `.action-toast`, `.undo-toast` (CSS exists; undo falls back to it only if `showToast` is missing). Do not use.
+- **Banners/notices:** `.channel-crossover-banner`, `.app-shell-muted` (muted hint paragraph, also the loading-text style), `.live-preview-shelf-status`. There is no generic alert/banner component.
+- Removed: `.action-toast`, `.undo-toast` and the `#undoToast` / `#actionToast` markup. Do not recreate them.
 
 ### 3.8 Loading, skeleton, empty states
 
 - Spinner: `.app-spinner` (20px ring, brand top). Reduced-motion stops it, so always pair with words.
 - Skeleton: `.live-preview-skeleton-card` / `-poster` / `-line` with `livePreviewShimmer` keyframes (poster shelves only).
-- Loading text: muted paragraph `<p style="color:var(--muted); font-size:0.88rem;">Loading popular public lists…</p>` (inline-styled legacy; prefer `.app-shell-muted`).
+- Loading text: `<p class="app-shell-muted">Loading popular public lists…</p>`.
 - Empty: `.poster-preview-empty-msg` / `.list-card-posters.poster-preview-empty`; elsewhere ad-hoc muted `<p>`. Standard for new empty states: muted sentence stating what's missing + the action to fix it, e.g. "No lists yet. Use Import to add one."
 - Error: `.testresult.err` text or `showToast(msg, 'error')`.
 
@@ -368,25 +363,17 @@ Observed conventions (enforce for new copy):
 
 ## 9. Known deviations (do NOT copy these)
 
+Fixed in the consistency pass (2026-10-06): shared tokens for the admin and backup pages; darker brand fills and status-text tokens (contrast); toast type styling; dead `.action-toast`/`.undo-toast` removed; duplicate `.modal-close-x` merged; invalid `.list-card` transition and undefined variables fixed; `html.dark-theme`/`body.dark-theme` selectors removed; font sizes, radii and spacing snapped to tokens; z-index layers (modals now above the bottom nav); `transition: all` removed; breakpoints folded into 640/641; `!important` removed from `.lc-btn` and the Search button; 44px touch hit areas on phones; the backup page follows the system theme like the app.
+
+Still open. Do not copy these; fix them opportunistically:
+
 | # | Deviation | Where | Do instead |
 |---|---|---|---|
-| 1 | Admin pages define their **own** token set (`--bg`, `--surface`, `--text`, `--muted:#8E8E93`, `--radius-sm:10px`…) | `03_admin.js` ~2192, ~2612 | Use main tokens; `--muted` there fails contrast (3.26:1) |
-| 2 | Backup/restore page has a **third** token set (`--bg-surface`, `--bg-card`, `--bg-input`, `--text-muted`, `--accent-hover:#0070E0`, `--warning:#FFD60A`, defaults to dark) | `24_client-backup-restore-presets.js` ~3923–4334 | Use main tokens |
-| 3 | Dark-mode selectors in three spellings: `:root.dark-theme` (20), `html.dark-theme` (8), `body.dark-theme` (3) | `09_page-shell.js` | `:root.dark-theme` / token overrides |
-| 4 | Toasts: `.app-toast--success/--error/--info/--undo` have **no CSS**; `.action-toast` and `.undo-toast` are near-duplicate fallback toasts (`.undo-toast` still has a hidden markup stub in `10_tab-search-add.js:75`) with hard-coded `#000`/`#fff`/rgba | ~4913–5056 | `showToast()` only |
-| 5 | `.modal-close-x` defined twice (once as `float:right`, once as `button.modal-close-x` flex circle) | ~4028 and ~4907 | Use `button.modal-close-x` |
-| 6 | `.lc-btn` uses `!important` on padding/height/size and `.lc-btn` is ~30px tall; `#catalogSearchBtn` / `[data-act="runCatalogSearch"]` override with `!important` | ~2111, ~3978 | `.btn-sm` (32px) |
-| 7 | Add/remove soft-blue buttons share one 10-class `:is()` list with 18× repeated dark-mode `!important` overrides, hard-coded `rgba(0,122,255,…)` | ~2169–2235 | Use `.btn-ghost`/`.btn-secondary` + `.is-added` |
-| 8 | `.list-card` has an **invalid declaration** `transition: box-shadow: 0.15s;` (ignored by browsers) | ~2049 | `transition: box-shadow .15s ease;` |
-| 9 | Undefined variables used: `--surface-1` (×3), `--surface-light`, `--brand-glow` | `09_page-shell.js` | Use `--color-bg-surface`; these silently fall back |
-| 10 | Hard-coded colours: `#fff` ×28 / `#ffffff` ×12 / `#FFFFFF` ×9 for white, `rgba(0,122,255,…)` repeated instead of `--color-brand-subtle`, hex badge colours | throughout | tokens |
-| 11 | Bottom nav `z-index: 9999 !important` sits **above** `.modal-overlay` (1000) on mobile; verify visually before copying | ~1146 vs ~4875 | Use layer table |
-| 12 | Breakpoint outliers 360/480/520/600/720px | various | 640/641 only |
-| 13 | Tap targets below 44px: `.lc-btn` ≈30, `.subnav-pill` 31, `.header-icon-btn` 36, `.modal-close-x` 32, `.tab-btn` ≈34 | various | ≥44 on mobile where possible |
-| 14 | 42 distinct font-size values; 29 distinct border-radius values; spacing/space tokens unused | throughout | tokens |
-| 15 | ≈1,825 inline `style="…"` attributes (admin 385, settings HTML 275, creator profile 180…) incl. `appShellDialog` | numbered `1x_`/`2x_` files | CSS classes |
-| 16 | Contrast: white on rating green/orange badges 2.2:1; source-badge text colours 2.2–3.6:1; primary button 4.02:1 | `.rating-badge`, `.list-source-badge`, `.btn-primary` | see §2.1 |
-| 17 | Dead tokens (never referenced): `--color-border-focus`, `--color-success-hover/-subtle`, `--color-warn-hover/-subtle`, `--control-touch-min`, `--font-display`, `--font-size-md/lg/xl/2xl`, `--radius-lg`, `--shadow-focus`, `--sb-*`, most `--space-*` | `:root` | keep defined; start using them |
-| 18 | Inline-styled loading text and `...` vs `…` | `19_client-search-and-likes.js` ~1861, 1967, 2313 | `.app-shell-muted`, `…` |
-| 19 | `appShellDialog` confirm button is always primary blue even for destructive actions; default label `OK` | `24_…:2785` | pass `confirmLabel`; add danger option |
-| 20 | Native `title`/no tooltip component | — | `aria-label` + `title` |
+| 1 | About 1,800 inline `style="…"` attributes (admin ≈385, settings HTML ≈275, creator profile ≈180, …) | `03_`, `1x_`, `2x_` files | CSS classes in `09_page-shell.js` |
+| 2 | About 300 `!important` remain (add/remove buttons, shelf/poster overrides, initial-tab FOUC rules) | `09_page-shell.js` | Fix specificity |
+| 3 | A few hard-coded colours remain: provider brand colours (intentional), `.btn-stremio/-nuvio/-wako` gradients, date-badge hexes (`#2fa84f`, `#ffd166`), `.support-strip` colours, overlay `rgba(0,0,0,…)` | `09_page-shell.js` | tokens |
+| 4 | Add/remove list buttons share a 9–10 class `:is()` list with `!important` | `09_page-shell.js` (search "Soft Brand-Tinted") | `.btn-ghost` / `.btn-danger` |
+| 5 | Controls under 44px keep their look and rely on the invisible hit-area extension (≤640px) | `.lc-btn`, `.subnav-pill`, header icon buttons | — |
+| 6 | Unused tokens: `--color-border-focus`, `--shadow-focus`, `--control-touch-min`, `--font-display`, some `--space-*` | tokens | start using them |
+| 7 | No tooltip, generic alert/banner, empty-state or button-loading component | — | build once, add here |
+| 8 | The light primary blue is `#0066D6`, deliberately darker than Apple's `#007AFF`; any leftover `#007AFF` is legacy | — | tokens |
