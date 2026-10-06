@@ -1863,6 +1863,8 @@ const DESIGN_TOKENS_CSS = `
     --font-display:         -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
     --font-body:            -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
     --font-mono:            ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    --font-size-4xs:        0.58rem;
+    --font-size-3xs:        0.62rem;
     --font-size-2xs:        0.68rem;
     --font-size-xs:         0.75rem;
     --font-size-sm:         0.85rem;
@@ -2114,6 +2116,7 @@ const UTILITY_CSS = `
 .u-fs-2_5rem{font-size:2.5rem !important}
 .u-fs-2rem{font-size:2rem !important}
 .u-fs-v_font_size_2xl{font-size:var(--font-size-2xl) !important}
+.u-fs-v_font_size_3xs{font-size:var(--font-size-3xs) !important}
 .u-fs-v_font_size_2xs{font-size:var(--font-size-2xs) !important}
 .u-fs-v_font_size_base{font-size:var(--font-size-base) !important}
 .u-fs-v_font_size_lg{font-size:var(--font-size-lg) !important}
@@ -31332,7 +31335,7 @@ ${UTILITY_CSS}
     position: absolute;
     top: 6px;
     left: 6px;
-    padding: var(--space-0-5) var(--space-1-5);
+    padding: 2px 5px;
     border-radius: var(--radius-xs);
     font-size: var(--font-size-2xs);
     font-weight: 800;
@@ -31356,7 +31359,7 @@ ${UTILITY_CSS}
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: var(--font-size-2xs);
+    font-size: var(--font-size-3xs);
     font-weight: 900;
     color: var(--color-on-brand);
   }
@@ -32526,9 +32529,9 @@ ${UTILITY_CSS}
     left: 4px;
     background: var(--color-brand-fill);
     color: var(--color-on-brand);
-    font-size: var(--font-size-2xs);
+    font-size: var(--font-size-3xs);
     font-weight: 800;
-    padding: var(--space-0-5) var(--space-1-5);
+    padding: 2px 5px;
     border-radius: var(--radius-sm);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
     line-height: 1.15;
@@ -32581,7 +32584,7 @@ ${UTILITY_CSS}
     max-width: calc(100% - 8px);
     text-overflow: ellipsis;
     overflow: hidden;
-    font-size: var(--font-size-2xs);
+    font-size: var(--font-size-4xs);
     font-weight: 700;
   }
   .cw-date-badge-companion {
@@ -32686,7 +32689,7 @@ ${UTILITY_CSS}
     min-height: 2.5em;
   }
   .list-card-mini-poster-subtitle {
-    font-size: var(--font-size-2xs);
+    font-size: var(--font-size-3xs);
     color: var(--muted);
     line-height: 1.2;
     white-space: nowrap;
@@ -32694,7 +32697,7 @@ ${UTILITY_CSS}
     text-overflow: ellipsis;
   }
   .list-card-mini-poster-year {
-    font-size: var(--font-size-2xs);
+    font-size: var(--font-size-3xs);
     color: var(--muted);
     line-height: 1.2;
     white-space: nowrap;
@@ -34225,7 +34228,7 @@ ${UTILITY_CSS}
      anything without one (movies, shows, every other shelf on the site),
      so this never adds empty space to a normal poster card. */
   .live-preview-poster-subtitle {
-    font-size: var(--font-size-2xs);
+    font-size: var(--font-size-3xs);
     color: var(--muted);
     line-height: 1.25;
     padding: 0 var(--space-1) var(--space-0-5) var(--space-1);
@@ -34234,7 +34237,7 @@ ${UTILITY_CSS}
     text-overflow: ellipsis;
   }
   .live-preview-poster-year {
-    font-size: var(--font-size-2xs);
+    font-size: var(--font-size-3xs);
     color: var(--muted);
     line-height: 1.2;
     white-space: nowrap;
@@ -52536,7 +52539,7 @@ function renderChannelPosterPicker() {
         '<rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>' +
         '<polyline points="17 2 12 7 7 2"></polyline>' +
       '</svg>' +
-      '<span class="u-fs-v_font_size_2xs u-fw-700 u-c-v_color_on_brand u-tt-uppercase u-ls-0_5px u-ta-center">Custom</span>' +
+      '<span class="u-fs-v_font_size_3xs u-fw-700 u-c-v_color_on_brand u-tt-uppercase u-ls-0_5px u-ta-center">Custom</span>' +
     '</div>' +
     '<div class="channel-poster-check">\u2713</div>' +
     '<div class="channel-poster-title" title="Custom Channel Poster">Custom Poster</div>' +
@@ -61875,7 +61878,7 @@ function renderMyCreatedChannelsList() {
       
       const imgHtml = p
         ? '<img src="' + escapeAttr(p) + '" alt="" loading="lazy">'
-        : '<div class="u-ai-center u-jc-center u-c-v_muted u-fs-v_font_size_2xs u-ta-center u-p-4px" style="display:flex; height:100%;">No poster</div>';
+        : '<div class="u-ai-center u-jc-center u-c-v_muted u-fs-v_font_size_3xs u-ta-center u-p-4px" style="display:flex; height:100%;">No poster</div>';
       
       // Each tile opens that item's own details -- was previously
       // unclickable itself (only the shared container-level onclick below
@@ -64141,7 +64144,7 @@ function channelListingCardHtml(entry, actionsHtml, extraHtml) {
         const p = it.poster || it.thumbnail || it.showPoster || it.backdrop || entry.poster || entry.backdrop || '';
         const imgHtml = p
           ? '<img src="' + escapeAttr(p) + '" alt="" loading="lazy">'
-          : '<div class="u-ai-center u-jc-center u-c-v_muted u-fs-v_font_size_2xs u-ta-center u-p-4px" style="display:flex; height:100%;">No poster</div>';
+          : '<div class="u-ai-center u-jc-center u-c-v_muted u-fs-v_font_size_3xs u-ta-center u-p-4px" style="display:flex; height:100%;">No poster</div>';
         const itemId = it.id || it.imdbId || '';
         const itemType = (it.kind === 'movie' || it.type === 'movie') ? 'movie' : 'series';
         const posterClickAttr = itemId

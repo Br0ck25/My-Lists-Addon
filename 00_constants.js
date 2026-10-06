@@ -1840,6 +1840,8 @@ const DESIGN_TOKENS_CSS = `
     --font-display:         -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
     --font-body:            -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
     --font-mono:            ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    --font-size-4xs:        0.58rem;
+    --font-size-3xs:        0.62rem;
     --font-size-2xs:        0.68rem;
     --font-size-xs:         0.75rem;
     --font-size-sm:         0.85rem;
@@ -2091,6 +2093,7 @@ const UTILITY_CSS = `
 .u-fs-2_5rem{font-size:2.5rem !important}
 .u-fs-2rem{font-size:2rem !important}
 .u-fs-v_font_size_2xl{font-size:var(--font-size-2xl) !important}
+.u-fs-v_font_size_3xs{font-size:var(--font-size-3xs) !important}
 .u-fs-v_font_size_2xs{font-size:var(--font-size-2xs) !important}
 .u-fs-v_font_size_base{font-size:var(--font-size-base) !important}
 .u-fs-v_font_size_lg{font-size:var(--font-size-lg) !important}
