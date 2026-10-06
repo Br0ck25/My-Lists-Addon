@@ -15,6 +15,9 @@ All notable changes to **My Lists Addon** ([mylistsaddon.com](https://mylistsadd
 
 ### 🐛 Quick Add, Lists and Discover fixes
 
+- **The Ko-fi strip is flatter.** One plain bar with a thin progress line along its bottom edge and a plain ✕, and no blue highlight when tapped (the page's button styles were leaking in: a blue fill, and a round bordered pill around the ✕).
+- **Item details page, on a wide screen:** "+ Add to List" and "Mark as Watched" keep their natural width side by side at the left (both filled blue), instead of stretching across the page. Phones are unchanged.
+
 - **Lists → Liked is current when you come back to it.** A list liked from Discover or Search now shows there without pressing Refresh. Lists only redrew its page the first time you opened it in a visit, so coming back to a remembered Liked page showed the old list.
 - **Channel cards no longer say "24/7 TV Channel"** in their line of details.
 

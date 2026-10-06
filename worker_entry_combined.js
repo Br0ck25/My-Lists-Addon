@@ -30289,6 +30289,14 @@ ${seoHeadHtml}
     flex: 1 1 160px; justify-content: center;
     padding: 10px 16px; font-size: 0.95rem;
   }
+  /* On a wide screen the two buttons keep their natural width, side by side at
+     the left, instead of stretching across the page. A phone keeps the full-width
+     pair above. */
+  @media (min-width: 720px) {
+    .item-actions .lc-btn {
+      flex: 0 0 auto; min-height: 40px; padding: 0 22px;
+    }
+  }
   .item-genres { display: flex; flex-wrap: wrap; gap: 8px; }
   .item-genre-chip {
     padding: 5px 14px; min-height: unset; font-size: 0.85rem; font-weight: 600; font-family: inherit;
@@ -30696,73 +30704,91 @@ ${seoHeadHtml}
      needs. The larger gap is because these are now separate cards rather
      than headings on one continuous background -- at 8px they read as one
      block with lines through it. */
-  /* The Ko-fi support strip at the top of Catalogs (initSupportStrip). */
+  /* The Ko-fi support strip at the top of Catalogs (initSupportStrip): one flat
+     bar, a thin progress line along its bottom edge, and a plain X. Its two
+     buttons say what they look like here because the page's own button rules
+     (blue fill on hover, focus and press; a round, bordered pill) are written
+     to win over a bare class. */
   .support-strip {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 4px;
     margin: 0 0 10px;
+    padding: 0 2px 0 12px;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 14px;
-    box-shadow: var(--shadow-sm);
+    border-radius: 10px;
+    overflow: hidden;
   }
   .support-strip[hidden] { display: none; }
-  .support-strip-main {
+  .support-strip .support-strip-main,
+  .support-strip .support-strip-main:hover,
+  .support-strip .support-strip-main:focus,
+  .support-strip .support-strip-main:active {
     flex: 1;
     min-width: 0;
+    min-height: 0;
     display: flex;
     align-items: center;
+    justify-content: flex-start;
     gap: 9px;
-    padding: 7px 4px 8px 12px;
-    background: none;
+    padding: 9px 0 11px;
+    background: transparent;
     border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    transform: none;
     color: var(--text);
     text-align: left;
-    cursor: pointer;
+    white-space: normal;
     font: inherit;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
   }
-  .support-strip-cup { font-size: 17px; line-height: 1; }
+  .support-strip .support-strip-main:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .support-strip-cup { font-size: 16px; line-height: 1; }
   .support-strip-body { flex: 1; min-width: 0; display: block; }
-  .support-strip-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 6px;
-    font-size: 0.78rem;
-    line-height: 1.25;
-  }
+  .support-strip-row { display: flex; justify-content: space-between; gap: 8px; line-height: 1.25; }
   .support-strip-go { color: var(--accent); font-weight: 700; white-space: nowrap; }
   .support-strip-bar {
-    display: block;
-    height: 5px;
-    margin-top: 5px;
-    border-radius: 5px;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
     background: var(--border);
-    overflow: hidden;
   }
   .support-strip-bar i {
     display: block;
     height: 100%;
     width: 0;
-    border-radius: 5px;
-    background: linear-gradient(90deg, #ffb020, #ff8a00);
+    background: #ff8a00;
   }
   .support-strip.is-covered { border-color: #bfe8c9; }
   .support-strip.is-covered .support-strip-bar i { background: #34c759; }
-  .support-strip-x {
+  .support-strip .support-strip-x,
+  .support-strip .support-strip-x:hover,
+  .support-strip .support-strip-x:focus,
+  .support-strip .support-strip-x:active {
     flex: none;
-    width: 30px;
-    height: 30px;
-    margin-right: 4px;
-    padding: 0;
+    width: 28px;
+    height: 28px;
     min-height: 0;
+    padding: 0;
+    background: transparent;
     border: 0;
-    border-radius: 50%;
-    background: none;
+    border-radius: 6px;
+    box-shadow: none;
+    transform: none;
     color: var(--muted);
-    font-size: 0.85rem;
+    font-size: 0.8rem;
+    font-weight: 400;
     cursor: pointer;
   }
+  .support-strip .support-strip-x:hover { color: var(--text); }
+  .support-strip .support-strip-x:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .qa-shelf-card {
     margin-bottom: 16px;
     gap: 0;
